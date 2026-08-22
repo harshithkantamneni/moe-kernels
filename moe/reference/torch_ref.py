@@ -260,8 +260,12 @@ def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0):
     dt = torch_dtype(spec.dtype)
 
     def rnd(shape, std, dtype=dt):
-        return (torch.randn(shape, generator=g, device=device, dtype=torch.float32)
-                * (std * scale)).to(dtype)
+        # normal_ folds the scale into the RNG kernel. The previous
+        # randn(...) * std kept three tensors live at once (the draw, the
+        # scaled result, the cast), peaking at 75 GB while building
+        # DeepSeek-V3's w1 alone. Verified bit-identical to the old form.
+        return (torch.empty(shape, device=device, dtype=torch.float32)
+                .normal_(0.0, std * scale, generator=g).to(dtype))
 
     weights = MoEWeights(
         w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
