@@ -119,6 +119,12 @@ before the session, or the download fails after you have already started paying.
 
 ### What fits on one H200 (141 GB, bf16)
 
+Both H200 parts have 141 GB and 4.8 TB/s, so this table holds for SXM and NVL
+alike. They differ only in compute (989.5 vs 835.5 dense BF16), which is why
+there are two hardware profiles and why `plot.py` refuses to plot rows from one
+against the other's roof. An H100 NVL is 94 GB and would change every verdict
+below.
+
 | model | full model | capturable here |
 |---|---|---|
 | mixtral-8x7b | 93.4 GB | yes, comfortably |

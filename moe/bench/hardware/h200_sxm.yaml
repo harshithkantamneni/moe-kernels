@@ -1,0 +1,49 @@
+# H200 SXM peaks for the roofline.
+#
+# Verified against the NVIDIA H200 Tensor Core GPU Datasheet, document
+# 3512650.Nov24, the same source as h200_nvl.yaml.
+#
+# THE TRAP THIS FILE EXISTS FOR: SXM and NVL share memory exactly (141 GB
+# HBM3e, 4.8 TB/s) but NOT compute. SXM is 989.5 dense BF16 against NVL's
+# 835.5, a 18% difference, because NVL is a clock/power-cut PCIe part
+# (600 W vs 700 W). Using the wrong one moves the ridge point from 206 to 174
+# FLOP/byte and misstates every efficiency number. plot.py refuses to plot rows
+# against a profile whose name does not match the gpu_name in the rows.
+#
+# As with NVL: every tensor figure NVIDIA publishes for H200 is the SPARSE
+# number (datasheet footnote 2) and dense is exactly half. Footnote 1 marks all
+# H200 specifications preliminary.
+
+name: NVIDIA H200 SXM
+verified: true
+source: https://dam-cdn.nvd.orangelogic.com/AssetLink/5o2qgy5d2835ve2pm11i62kv8mphqta8.pdf
+source_note: >-
+  NVIDIA H200 Tensor Core GPU Datasheet, doc 3512650.Nov24. Dense values are the
+  published sparse figures halved, per datasheet footnote 2. All H200 specs are
+  marked preliminary per footnote 1. SM count and L2 come from NVIDIA's CUDA
+  Programming and Optimization deck, which is training material rather than a
+  datasheet; torch reports both at run time and the harness records them.
+checked_by: NVIDIA datasheet 3512650.Nov24
+checked_on: 2026-08-22
+
+memory:
+  capacity_gb: 141          # HBM3e, identical to NVL
+  bandwidth_tb_s: 4.8       # identical to NVL
+
+# DENSE tensor-core peaks, TFLOP/s.
+compute_dense_tflops:
+  fp32: null                # not used by the current sweep
+  bf16: 989.5               # published 1979 with sparsity
+  fp16: 989.5               # published 1979 with sparsity
+  fp8_e4m3: 1979.0          # published 3958 with sparsity; NVIDIA does not
+                            # break E4M3 out from E5M2, this is the unified rate
+
+# For contrast, so the lower-compute part is never pasted in here by accident.
+sibling_part_h200_nvl:
+  bandwidth_tb_s: 4.8
+  bf16_dense_tflops: 835.5
+  note: PCIe part, 600 W, ~84% of SXM tensor throughput
+
+observed:
+  sm_count: 132             # per NVIDIA training deck, not the datasheet
+  l2_bytes: 52428800        # 50 MiB

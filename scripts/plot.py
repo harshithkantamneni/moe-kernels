@@ -170,8 +170,19 @@ def main() -> int:
 
     if args.hardware is None:
         # Prefer measured ceilings: the CSV efficiency columns use them, so a
-        # datasheet-roofed plot would disagree with its own data.
-        args.hardware = "measured" if RL.load_measured() else "h200_nvl"
+        # datasheet-roofed plot would disagree with its own data. Otherwise pick
+        # the datasheet profile that actually describes the GPU the rows came
+        # from, rather than defaulting to one part.
+        if RL.load_measured():
+            args.hardware = "measured"
+        else:
+            seen = {r.get("gpu_name", "") for r in load_rows(args.results)} - {""}
+            args.hardware = RL.for_device(next(iter(seen))) if seen else None
+            if args.hardware is None:
+                print(f"[plot] no hardware profile matches {seen or 'these rows'}; "
+                      f"available: {RL.available_profiles()}. Run "
+                      "scripts/calibrate_hardware.py or pass --hardware.")
+                return 1
 
     rows = load_rows(args.results)
     if rows:

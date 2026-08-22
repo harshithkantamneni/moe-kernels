@@ -98,3 +98,41 @@ def test_h200_ridge_point_is_in_the_expected_range():
     hw = RL.load_hardware("h200_nvl")
     ridge = hw.ridge_point("bf16")
     assert 150 < ridge < 200, f"unexpected ridge point {ridge:.1f} FLOP/byte"
+
+
+# --- more than one part, selected by device rather than hardcoded -----------
+
+def test_sxm_and_nvl_are_distinct_profiles():
+    """Same memory, different compute. Using the wrong one moves the ridge
+    point by 18% and misstates every efficiency number."""
+    sxm = RL.load_hardware("h200_sxm")
+    nvl = RL.load_hardware("h200_nvl")
+    assert sxm.bandwidth_bytes_s == nvl.bandwidth_bytes_s
+    assert sxm.peak("bf16") > nvl.peak("bf16")
+    assert sxm.peak("bf16") == pytest.approx(989.5e12)
+    assert sxm.ridge_point("bf16") == pytest.approx(206.1, abs=1.0)
+    assert nvl.ridge_point("bf16") == pytest.approx(174.1, abs=1.0)
+
+
+def test_sxm_peaks_are_dense_not_sparsity():
+    sxm = RL.load_hardware("h200_sxm")
+    assert sxm.peak("bf16") < 1100e12, "1979 would be the sparsity figure"
+    assert sxm.peak("fp8_e4m3") == pytest.approx(2 * sxm.peak("bf16"), rel=1e-3)
+
+
+@pytest.mark.parametrize("device,expected", [
+    ("NVIDIA H200 SXM", "h200_sxm"),
+    ("NVIDIA H200 NVL", "h200_nvl"),
+    ("NVIDIA H100 NVL", None),
+    ("NVIDIA A100-SXM4-80GB", None),
+])
+def test_profile_is_selected_from_the_device_name(device, expected):
+    assert RL.for_device(device) == expected
+
+
+def test_device_mismatch_is_detected():
+    """The guard that stops an H200 run being plotted against an H100 roof."""
+    sxm = RL.load_hardware("h200_sxm")
+    assert RL.device_matches(sxm, "NVIDIA H200 SXM")
+    assert not RL.device_matches(sxm, "NVIDIA H100 NVL")
+    assert RL.device_matches(sxm, ""), "no gpu_name recorded means nothing to check"

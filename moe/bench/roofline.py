@@ -102,6 +102,28 @@ def device_matches(hw: Hardware, gpu_name: str) -> bool:
     return a in b or b in a
 
 
+def available_profiles() -> list[str]:
+    return sorted(p.stem for p in HARDWARE_DIR.glob("*.yaml"))
+
+
+def for_device(gpu_name: str) -> str | None:
+    """Pick the hardware profile describing this GPU, or None if none does.
+
+    Keeps the repo from being hardcoded to one part. Silence is the right answer
+    when nothing matches: a missing roof is recoverable, a wrong one is not.
+    """
+    for stem in available_profiles():
+        if stem == "measured":
+            continue
+        try:
+            hw = load_hardware(stem, allow_unverified=True)
+        except (ValueError, KeyError):
+            continue
+        if device_matches(hw, gpu_name):
+            return stem
+    return None
+
+
 def load_measured() -> Hardware | None:
     """Ceilings measured by scripts/calibrate_hardware.py, if it has been run.
 
