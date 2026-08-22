@@ -242,11 +242,47 @@ def test_both_timing_modes_produce_comparable_rows(tmp_path):
 
 def test_bandwidth_measurement_is_plausible():
     from moe.bench.calibrate import measure_bandwidth
-    results = measure_bandwidth(target_bytes=256 << 20, warmup=3, iters=10, trials=2)
-    assert {r.pattern for r in results} == {"copy", "triad", "write"}
+    results = measure_bandwidth(target_bytes=1 << 30, warmup=3, iters=10, trials=2)
+    assert {r.pattern for r in results} == {"read", "copy", "triad", "write"}
     for r in results:
         assert r.gbps > 50, f"{r.pattern} measured {r.gbps:.1f} GB/s, implausible"
-        assert r.ms_p50 > 0
+        assert 0 < r.ms_p50 and r.ms_min <= r.ms_p50
+
+
+def test_read_bandwidth_is_measured_and_not_optimised_away():
+    """A pure read is the closest analogue to streaming expert weights. If the
+    reduction were elided the reported figure would be absurd."""
+    from moe.bench.calibrate import measure_bandwidth
+    from moe.bench.roofline import load_hardware
+    read = next(r for r in measure_bandwidth(target_bytes=1 << 30, warmup=3,
+                                             iters=10, trials=2)
+                if r.pattern == "read")
+    peak = load_hardware("h200_sxm").bandwidth_bytes_s / 1e9
+    assert read.gbps < peak * 1.02, (
+        f"read measured {read.gbps:.0f} GB/s against a {peak:.0f} peak; the "
+        "reduction was probably optimised away")
+    assert read.gbps > peak * 0.4
+
+
+def test_calibration_names_its_ceiling_and_records_every_pattern():
+    """max() across patterns was indefensible: it reported whichever pattern the
+    hardware liked best. The choice must be explicit and the alternatives kept."""
+    from moe.bench.calibrate import calibrate
+    cal = calibrate(target_bytes=1 << 30, gemm_n=2048, ceiling="read")
+    assert cal.ceiling_pattern == "read"
+    assert cal.achieved_bandwidth_gbps == cal.pattern("read").gbps
+    assert {p.pattern for p in cal.bandwidth_patterns} == {"read", "copy",
+                                                           "triad", "write"}
+    # the ridge moves with the denominator, so every one is recorded
+    ridges = cal.as_dict()["ridge_by_pattern"]
+    assert set(ridges) == {"read", "copy", "triad", "write"}
+    assert all(v > 0 for v in ridges.values())
+
+
+def test_an_unknown_ceiling_is_rejected():
+    from moe.bench.calibrate import calibrate
+    with pytest.raises(ValueError, match="unknown ceiling"):
+        calibrate(target_bytes=1 << 28, gemm_n=1024, ceiling="nonsense")
 
 
 def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():

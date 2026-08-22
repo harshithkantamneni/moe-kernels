@@ -97,7 +97,9 @@ def device_matches(hw: Hardware, gpu_name: str) -> bool:
     """
     if not gpu_name:
         return True                      # nothing to check against
-    norm = lambda s: "".join(c for c in s.lower() if c.isalnum())
+    def norm(text: str) -> str:
+        return "".join(c for c in text.lower() if c.isalnum())
+
     a, b = norm(hw.name), norm(gpu_name)
     return a in b or b in a
 
