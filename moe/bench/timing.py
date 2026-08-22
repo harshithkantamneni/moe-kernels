@@ -24,7 +24,26 @@ from dataclasses import dataclass
 
 import torch
 
-DEFAULT_FLUSH_MB = 128  # comfortably larger than H200's L2
+#: Fallback when the device cannot be queried. Prefer flush_mb_for_device().
+DEFAULT_FLUSH_MB = 256
+
+
+def flush_mb_for_device(multiple: float = 4.0, minimum_mb: int = 128) -> int:
+    """Flush buffer sized from the device's actual L2, not a magic constant.
+
+    A single pass over a buffer only slightly larger than L2 does not reliably
+    evict it: replacement is not perfect LRU, and Hopper partitions its L2. The
+    previous fixed 128 MB was only 2.1x an H200's 60 MiB, which is tight;
+    Triton's do_bench uses 256 MB against smaller caches. 4x is comfortable
+    without wasting much memory.
+    """
+    try:
+        l2 = getattr(torch.cuda.get_device_properties(0), "L2_cache_size", 0)
+    except (RuntimeError, AssertionError):
+        return DEFAULT_FLUSH_MB
+    if not l2:
+        return DEFAULT_FLUSH_MB
+    return max(minimum_mb, int(l2 * multiple / 2 ** 20))
 
 
 def require_cuda() -> None:
@@ -160,6 +179,14 @@ class L2Flusher:
     sm_clock_start/end columns, which are recorded per timing mode for this
     reason. The confound shrinks as the kernel lengthens.
 
+    WHAT IT DOES NOT TOUCH. There is no user-level instruction to invalidate
+    L2 from CUDA, so this evicts by capacity: read a buffer several times L2 and
+    every line ends up holding flush data. It does NOT reset DRAM row buffers or
+    the TLB, and it does not need to touch L1 or shared memory: those are per-SM
+    and are invalidated at every kernel launch, so each launch already starts
+    with a cold L1. The exception is a persistent kernel, where one launch spans
+    many logical iterations and L1 state does carry across them.
+
     The flush READS rather than writes. A write flush (the common `buf.zero_()`
     idiom) leaves up to a full L2 of dirty lines, and those writebacks land
     inside the NEXT timed interval, stealing roughly 11 microseconds of HBM
@@ -168,8 +195,10 @@ class L2Flusher:
     small-batch regime this project studies.
     """
 
-    def __init__(self, megabytes: int = DEFAULT_FLUSH_MB, device: str = "cuda",
+    def __init__(self, megabytes: int | None = None, device: str = "cuda",
                  mode: str = "read"):
+        if megabytes is None:
+            megabytes = flush_mb_for_device()
         self.enabled = megabytes > 0
         self.mode = mode
         self.megabytes = megabytes if self.enabled else 0
