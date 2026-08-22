@@ -43,6 +43,13 @@ export HF_HOME="${HF_HOME:-$WORKSPACE/hf-cache}"
 export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-$WORKSPACE/triton-cache}"
 export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-$WORKSPACE/torchinductor-cache}"
 
+# The sweep generates random weights and must never reach a model hub. If some
+# future code path tries, this makes it fail in seconds rather than quietly
+# pulling tens of GB mid-session. scripts/capture_traces.py is run separately
+# and deliberately, so it is unaffected.
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+
 RESULTS_DIR="${MOE_RESULTS_DIR:-$WORKSPACE/results}"
 [[ -d "$WORKSPACE" ]] || RESULTS_DIR="$REPO_ROOT/results"
 
