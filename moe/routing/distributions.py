@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import heapq
 
+import numpy as np
 import torch
 
 from ..spec import BenchSpec, RoutingSpec
@@ -53,10 +54,16 @@ def expert_probs(routing: RoutingSpec, num_experts: int,
     if kind == "dirichlet":
         # Dirichlet(alpha) via normalised Gamma(alpha, 1) draws. Small alpha
         # concentrates nearly all mass on a few experts.
-        g = torch._standard_gamma(
-            torch.full((E,), float(param), dtype=torch.float32, device=device))
-        g = g.double().clamp_min(1e-12)
-        return g / g.sum()
+        #
+        # numpy rather than torch._standard_gamma, which takes no generator
+        # argument: it drew from the global torch RNG, so `seed` did not
+        # determine the distribution and every dirichlet cell in the sweep was
+        # unreproducible while its CSV row still claimed a seed.
+        seed = int(torch.randint(0, 2 ** 31 - 1, (1,), generator=generator,
+                                 device=device))
+        rng = np.random.default_rng(seed)
+        g = np.clip(rng.gamma(shape=float(param), scale=1.0, size=E), 1e-12, None)
+        return torch.tensor(g / g.sum(), dtype=torch.float64, device=device)
 
     raise ValueError(f"{kind!r} has no parametric form; use a trace")
 

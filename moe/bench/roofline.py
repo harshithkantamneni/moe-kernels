@@ -82,6 +82,11 @@ def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
     This is the honest efficiency number: a memory-bound kernel hitting 95% of
     its roofline is excellent even at 4% of peak compute, and reporting it as
     "4% of peak" would be misleading.
+
+    Direction of the modelling error, stated so a reader does not have to guess:
+    the intensity comes from COMPULSORY traffic, so it is an upper bound on true
+    intensity, so `attainable` is an upper bound on the true roof, so this
+    efficiency is UNDERSTATED. That is the conservative direction.
     """
     roof = hw.attainable(dtype, arithmetic_intensity)
     return achieved_flops_s / roof if roof > 0 else 0.0
@@ -107,14 +112,14 @@ def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
     # carries no timing and must never appear as a performance point.
     rows = [r for r in rows
             if r.get("dtype") == dtype
-            and str(r.get("correctness_passed", "True")) in ("True", "true", "1")
-            and _num(r, "arithmetic_intensity") > 0
+            and str(r.get("correctness_passed", "")) in ("True", "true", "1")
+            and _num(r, "arith_intensity_compulsory") > 0
             and _num(r, "tflops") > 0]
     if not rows:
         raise ValueError(
             f"no correctness-passing rows with dtype={dtype} and a positive intensity")
 
-    ai = np.array([_num(r, "arithmetic_intensity") for r in rows])
+    ai = np.array([_num(r, "arith_intensity_compulsory") for r in rows])
     tf = np.array([_num(r, "tflops") for r in rows])
 
     x = np.logspace(np.log10(max(ai.min() / 4, 1e-2)),
@@ -126,11 +131,31 @@ def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
     ax.axvline(hw.ridge_point(dtype), color="0.6", ls="--", lw=1,
                label=f"ridge {hw.ridge_point(dtype):.0f} FLOP/byte")
 
-    for label in sorted({r.get(label_col, "") for r in rows}):
-        m = [i for i, r in enumerate(rows) if r.get(label_col, "") == label]
-        ax.loglog(ai[m], tf[m], "o", ms=5, alpha=0.85, label=label)
+    # Series must not fold the timing modes together. The L2-flush axis moves
+    # small-batch results by more than most kernel optimisations do, so points
+    # measured with and without a flush sit at the SAME x with different y, and
+    # a single merged series would hide exactly the effect this harness exists
+    # to expose.
+    def series_key(r):
+        parts = [r.get(label_col, "")]
+        if str(r.get("l2_flush")) in ("True", "true", "1"):
+            parts.append("L2-flushed")
+        else:
+            parts.append("L2-warm")
+        if str(r.get("cuda_graph")) in ("True", "true", "1"):
+            parts.append("graph")
+        scope = r.get("scope", "")
+        if scope == "pipeline":
+            parts.append("full layer")
+        return " / ".join(p for p in parts if p)
 
-    ax.set_xlabel("arithmetic intensity (FLOP / byte, per tiling)")
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*"]
+    for i, label in enumerate(sorted({series_key(r) for r in rows})):
+        m = [j for j, r in enumerate(rows) if series_key(r) == label]
+        ax.loglog(ai[m], tf[m], markers[i % len(markers)], ms=5, alpha=0.85,
+                  label=label)
+
+    ax.set_xlabel("compulsory arithmetic intensity (FLOP / byte, UPPER bound)")
     ax.set_ylabel("achieved TFLOP/s")
     ax.set_title(f"MoE grouped GEMM roofline, {hw.name}, {dtype}")
     ax.grid(True, which="both", alpha=0.25)

@@ -49,26 +49,59 @@ def _nvidia_smi(query: str) -> list[str]:
         return []
 
 
-def gpu_info() -> dict:
-    require_cuda()
-    props = torch.cuda.get_device_properties(0)
-    driver = _nvidia_smi("driver_version")
+def runtime_info() -> dict:
+    """Machine and numerics facts that belong in every row.
+
+    The torch numerics switches matter twice over: their defaults have moved
+    between releases, and they change both the reference's numerics and the
+    speed of any torch-backed baseline. A published row that omits them is not
+    reproducible.
+    """
+    import platform
+    import sys
+
     try:
         import triton
         triton_version = triton.__version__
     except ImportError:
         triton_version = ""
-    return {
-        "gpu_name": props.name,
-        "gpu_count": torch.cuda.device_count(),
-        "driver_version": driver[0] if driver else "",
-        "cuda_version": torch.version.cuda or "",
+
+    info = {
         "torch_version": torch.__version__,
         "triton_version": triton_version,
+        "python_version": sys.version.split()[0],
+        "host_cpu": platform.processor() or platform.machine(),
+        "allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+        "allow_bf16_reduced_reduction": bool(
+            getattr(torch.backends.cuda.matmul,
+                    "allow_bf16_reduced_precision_reduction", False)),
+        "allow_fp16_reduced_reduction": bool(
+            getattr(torch.backends.cuda.matmul,
+                    "allow_fp16_reduced_precision_reduction", False)),
+    }
+    if not torch.cuda.is_available():
+        return info
+
+    index = torch.cuda.current_device()
+    props = torch.cuda.get_device_properties(index)
+    driver = _nvidia_smi("driver_version")
+    info.update({
+        "gpu_name": props.name,
+        "gpu_count": torch.cuda.device_count(),
+        "device_index": index,
+        "driver_version": driver[0] if driver else "",
+        "cuda_version": torch.version.cuda or "",
         "sm_count": props.multi_processor_count,
         "l2_bytes": getattr(props, "L2_cache_size", 0),
         "total_memory": props.total_memory,
-    }
+    })
+    return info
+
+
+def gpu_info() -> dict:
+    """Backwards-compatible alias; requires CUDA."""
+    require_cuda()
+    return runtime_info()
 
 
 @dataclass(frozen=True)
@@ -101,21 +134,87 @@ def clock_drift(start: ClockState, end: ClockState) -> tuple[float, bool]:
 # --------------------------------------------------------------------------
 
 class L2Flusher:
-    """Evicts L2 by writing a buffer larger than it between timed iterations."""
+    """Evicts L2 between timed iterations by touching a buffer larger than it.
 
-    def __init__(self, megabytes: int = DEFAULT_FLUSH_MB, device: str = "cuda"):
+    The flush READS rather than writes. A write flush (the common `buf.zero_()`
+    idiom) leaves up to a full L2 of dirty lines, and those writebacks land
+    inside the NEXT timed interval, stealing roughly 11 microseconds of HBM
+    bandwidth on a 50 MiB L2 at 4.8 TB/s. Irrelevant for a millisecond kernel,
+    a 10-30% inflation on a sub-100-microsecond span, which is exactly the
+    small-batch regime this project studies.
+    """
+
+    def __init__(self, megabytes: int = DEFAULT_FLUSH_MB, device: str = "cuda",
+                 mode: str = "read"):
         self.enabled = megabytes > 0
-        self.buf = (torch.empty(megabytes * 1024 * 1024, dtype=torch.int8, device=device)
-                    if self.enabled else None)
+        self.mode = mode
+        self.megabytes = megabytes if self.enabled else 0
+        if not self.enabled:
+            self.buf = None
+            self.out = None
+            return
+        elems = megabytes * 1024 * 1024 // 4
+        self.buf = torch.empty((elems, 1), dtype=torch.float32, device=device)
+        self.out = torch.zeros((1,), dtype=torch.float32, device=device)
 
     def flush(self) -> None:
-        if self.buf is not None:
+        if self.buf is None:
+            return
+        if self.mode == "write":
             self.buf.zero_()
+        else:
+            torch.sum(self.buf, dim=0, out=self.out)
 
 
 # --------------------------------------------------------------------------
 # timing
 # --------------------------------------------------------------------------
+
+class _EventPairs:
+    """Pre-created, pre-primed CUDA event pairs.
+
+    torch creates the underlying cudaEvent lazily on first record(). Creating
+    events inside the measured loop puts cudaEventCreateWithFlags between a
+    kernel enqueue and the closing record, and whenever the GPU has drained
+    ahead of the CPU (short spans, and always for graph replay) that CPU cost
+    lands INSIDE the measured interval. A fixed offset on both arms is not
+    harmless: it biases the eager/graph RATIO toward 1, which is precisely the
+    number this project would publish.
+    """
+
+    def __init__(self, n: int):
+        self.starts = [torch.cuda.Event(enable_timing=True) for _ in range(n)]
+        self.ends = [torch.cuda.Event(enable_timing=True) for _ in range(n)]
+        for e in (*self.starts, *self.ends):
+            e.record()          # forces creation of the underlying cudaEvent
+        torch.cuda.synchronize()
+
+    def elapsed(self, n: int) -> list[float]:
+        return [self.starts[i].elapsed_time(self.ends[i]) for i in range(n)]
+
+
+def calibrate_iters(fn: Callable[[], None], target_ms: float = 200.0,
+                    lo: int = 10, hi: int = 2000) -> int:
+    """Measure one warm iteration, then choose an iteration count.
+
+    Bucketing on FLOPs (the previous approach) is wrong for this sweep: these
+    cells are bandwidth bound, so at small token counts the time is set by
+    weight traffic and is nearly independent of the FLOP count. That heuristic
+    inverted its own goal, spending the most metered GPU time on the
+    cheapest-FLOP cells.
+    """
+    require_cuda()
+    fn()
+    torch.cuda.synchronize()
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+    start.record()
+    fn()
+    end.record()
+    torch.cuda.synchronize()
+    ms = max(start.elapsed_time(end), 1e-4)
+    return max(lo, min(hi, int(target_ms / ms)))
+
 
 @dataclass
 class TimingResult:
@@ -130,6 +229,8 @@ class TimingResult:
     l2_flush: bool
     cuda_graph: bool
     samples: int
+    flush_mb: int = 0
+    flush_mode: str = "read"
 
 
 def _summarise(samples: list[float], **meta) -> TimingResult:
@@ -151,33 +252,38 @@ def _summarise(samples: list[float], **meta) -> TimingResult:
 def time_eager(
     fn: Callable[[], None],
     warmup: int = 25,
-    iters: int = 100,
+    iters: int | None = None,
     trials: int = 3,
     l2_flush: bool = True,
     flush_mb: int = DEFAULT_FLUSH_MB,
+    flush_mode: str = "read",
+    target_ms: float = 200.0,
 ) -> TimingResult:
     """Per-iteration CUDA-event timing of an eagerly launched callable."""
     require_cuda()
-    flusher = L2Flusher(flush_mb if l2_flush else 0)
+    flusher = L2Flusher(flush_mb if l2_flush else 0, mode=flush_mode)
 
     for _ in range(warmup):
         fn()
     torch.cuda.synchronize()
 
+    if iters is None:
+        iters = calibrate_iters(fn, target_ms)
+    events = _EventPairs(iters)
+
     samples: list[float] = []
     for _ in range(trials):
-        starts = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
-        ends = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
         for i in range(iters):
             flusher.flush()
-            starts[i].record()
+            events.starts[i].record()
             fn()
-            ends[i].record()
+            events.ends[i].record()
         torch.cuda.synchronize()
-        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends, strict=True))
+        samples.extend(events.elapsed(iters))
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
-                      l2_flush=l2_flush, cuda_graph=False)
+                      l2_flush=l2_flush, cuda_graph=False,
+                      flush_mb=flusher.megabytes, flush_mode=flush_mode)
 
 
 class NotCapturable(RuntimeError):
@@ -192,10 +298,13 @@ class NotCapturable(RuntimeError):
 def time_graph(
     fn: Callable[[], None],
     warmup: int = 25,
-    iters: int = 100,
+    iters: int | None = None,
     trials: int = 3,
     l2_flush: bool = True,
     flush_mb: int = DEFAULT_FLUSH_MB,
+    flush_mode: str = "read",
+    target_ms: float = 200.0,
+    on_captured: Callable[[], None] | None = None,
 ) -> TimingResult:
     """Capture `fn` into a CUDA graph and time replays.
 
@@ -219,32 +328,42 @@ def time_graph(
     except RuntimeError as e:
         raise NotCapturable(str(e)) from None
 
-    flusher = L2Flusher(flush_mb if l2_flush else 0)
+    flusher = L2Flusher(flush_mb if l2_flush else 0, mode=flush_mode)
     for _ in range(warmup):
         graph.replay()
     torch.cuda.synchronize()
 
+    # A replay writes into graph-private buffers that every replay reuses, so a
+    # kernel leaving part of its output unwritten would show the PREVIOUS
+    # replay's correct values. The caller re-checks the replayed result here,
+    # while the graph is still the thing that produced it.
+    if on_captured is not None:
+        on_captured()
+
+    if iters is None:
+        iters = calibrate_iters(graph.replay, target_ms)
+    events = _EventPairs(iters)
+
     samples: list[float] = []
     for _ in range(trials):
-        starts = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
-        ends = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
         for i in range(iters):
             flusher.flush()
-            starts[i].record()
+            events.starts[i].record()
             graph.replay()
-            ends[i].record()
+            events.ends[i].record()
         torch.cuda.synchronize()
-        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends, strict=True))
+        samples.extend(events.elapsed(iters))
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
-                      l2_flush=l2_flush, cuda_graph=True)
+                      l2_flush=l2_flush, cuda_graph=True,
+                      flush_mb=flusher.megabytes, flush_mode=flush_mode)
 
 
 def iters_for(flops: float) -> int:
-    """Iteration count that keeps timed work roughly constant across shapes.
+    """Deprecated. Kept only so an explicit --iters override has a fallback.
 
-    Carried over from the A100 harness. Keeps a sweep's wall-clock predictable,
-    which matters when the box is metered.
+    Bucketing iteration count on FLOPs is wrong for a bandwidth-bound sweep;
+    `calibrate_iters` measures instead. See its docstring.
     """
     if flops < 1e10:
         return 500

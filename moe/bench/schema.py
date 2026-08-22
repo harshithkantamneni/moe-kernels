@@ -34,11 +34,23 @@ class Row:
     # --- machine ----------------------------------------------------------
     gpu_name: str = ""
     gpu_count: int = 0
+    device_index: int = 0
+    sm_count: int = 0
+    l2_bytes: int = 0
+    total_memory: int = 0
     driver_version: str = ""
     cuda_version: str = ""
     torch_version: str = ""
     triton_version: str = ""
     env_name: str = "base"          # base | vllm | sglang
+    env_version: str = ""           # version of the framework this env provides
+    host_cpu: str = ""
+    python_version: str = ""
+    # Numerics switches whose defaults have moved between torch releases. They
+    # change both the reference's numerics and any torch-backed baseline's speed.
+    allow_tf32: bool = False
+    allow_bf16_reduced_reduction: bool = False
+    allow_fp16_reduced_reduction: bool = False
 
     # --- cell -------------------------------------------------------------
     model: str = ""
@@ -79,7 +91,10 @@ class Row:
     # Recorded, never assumed. Most published MoE numbers omit these two and
     # are therefore not comparable to each other.
     l2_flush: bool = False
+    flush_mb: int = 0
+    flush_mode: str = ""            # read | write
     cuda_graph: bool = False
+    capture_status: str = ""        # captured | not_capturable | n/a
     warmup: int = 0
     iters: int = 0
     trials: int = 0
@@ -93,19 +108,30 @@ class Row:
 
     # --- derived ----------------------------------------------------------
     flops: float = 0.0
-    bytes_total: float = 0.0
+    # Compulsory minimum traffic from the tiling's own contracts. A real kernel
+    # re-reads tiles, so this is a LOWER bound on traffic and the derived
+    # intensity is an UPPER bound. Named accordingly so no reader mistakes
+    # compulsory_gbps for achieved HBM bandwidth.
+    compulsory_bytes: float = 0.0
     tflops: float = 0.0
-    gbps: float = 0.0
-    arithmetic_intensity: float = 0.0
+    compulsory_gbps: float = 0.0
+    arith_intensity_compulsory: float = 0.0
+
+    # --- input construction -----------------------------------------------
+    input_init: str = "fan_in"      # how weights/activations were generated
+    input_scale: float = 1.0
+    trace_sha: str = ""             # fingerprint of the replayed trace, if any
 
     # --- correctness gate -------------------------------------------------
-    # A timing row is only written when correctness_passed is True.
+    # A timing row is only written when correctness_passed is True. For a
+    # cuda_graph row the verdict is re-earned against the REPLAYED output.
     correctness_passed: bool = False
     max_abs_err: float = 0.0
-    max_rel_err: float = 0.0
+    # Scale-free: max|got-ref| / max|ref|. Compared against tol_rel_max.
+    rel_err: float = 0.0
+    tol_rel_max: float = 0.0
+    tol_calibrated: bool = False
     oracle: str = "golden_fp32"
-    atol: float = 0.0
-    rtol: float = 0.0
 
     # --- thermal / clock drift -------------------------------------------
     sm_clock_start_mhz: int = 0
@@ -162,6 +188,13 @@ class CsvWriter:
         self.close()
 
 
+#: Outcomes that are deterministic, so re-running would reproduce them exactly.
+#: Anything else (a CUDA OOM, a crash) is transient and MUST stay retryable, or
+#: a single bad moment permanently blanks that cell from every future run.
+TERMINAL_STATUSES = frozenset({"ok", "correctness_failed", "not_capturable",
+                               "invalid_pipeline", "unsupported"})
+
+
 class Manifest:
     """JSONL record of completed cell keys, for resuming an interrupted sweep."""
 
@@ -174,16 +207,22 @@ class Manifest:
                 if not line.strip():
                     continue
                 try:
-                    self.done.add(json.loads(line)["key"])
-                except (json.JSONDecodeError, KeyError):
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
                     continue  # a torn last line from a killed pod is not fatal
+                if "key" not in rec:
+                    continue
+                if rec.get("status", "ok") in TERMINAL_STATUSES:
+                    self.done.add(rec["key"])
         self._fh = self.path.open("a")
 
     def __contains__(self, key: str) -> bool:
         return key in self.done
 
     def record(self, key: str, status: str = "ok", detail: str = "") -> None:
-        self.done.add(key)
+        """Log an outcome. Only a deterministic outcome marks the cell done."""
+        if status in TERMINAL_STATUSES:
+            self.done.add(key)
         self._fh.write(json.dumps({"key": key, "status": status, "detail": detail}) + "\n")
         self._fh.flush()
 

@@ -1,11 +1,32 @@
-"""Numerical tolerances for comparing an implementation against golden fp32.
+"""Error budget for comparing an implementation against golden fp32.
 
-A tolerance pulled out of the air either hides real bugs or fails good kernels.
-The model below is explicit about where the error comes from, and
+The metric is deliberately SCALE FREE:
+
+    rel = max|got - ref| / max|ref|
+
+An absolute tolerance cannot work here. Layer outputs range over orders of
+magnitude with geometry and initialisation, so any fixed atol is either so loose
+that an all-zeros output passes or so tight that a correct kernel fails. An
+earlier version of this file used an atol floor derived from unit roundoff and
+was vacuous at bf16: it admitted zeroed outputs, sign flips and 3x scale errors
+on every model in the sweep.
+
+The budget itself:
+
+  input/output quantisation   the operands and the result are stored in the
+                              working dtype, so about `eps` relative error
+                              enters at each of the two GEMMs and the store
+  accumulation                tensor cores accumulate in fp32, so the dot
+                              product over K contributes eps_fp32 * sqrt(K),
+                              which is negligible next to bf16's eps but
+                              dominates at fp32
+  SwiGLU                      multiplies two projections, roughly doubling
+                              relative error, and the sigmoid's slope can
+                              amplify locally
+
 `scripts/calibrate_tolerance.py` measures the reference path's own error on the
-target hardware so these constants can be replaced by observation rather than
-left as guesses. Until that has been run on H200, `calibrated` stays False and
-the driver records it in the row so no result claims more rigour than it has.
+target hardware so these constants can be replaced by observation. Until that
+has run, `calibrated` stays False and the driver records it.
 """
 from __future__ import annotations
 
@@ -14,47 +35,52 @@ from dataclasses import dataclass
 
 from ..spec import BenchSpec
 
-# Unit-roundoff-scale constants per format. bf16 has 8 mantissa bits, fp16 has
-# 11, so bf16's per-operation error is roughly 8x fp16's.
-_EPS = {"fp32": 6e-8, "fp16": 5e-4, "bf16": 4e-3}
+# Unit roundoff per format: 2^-(mantissa_bits+1).
+# bf16 has 8 total mantissa bits, fp16 has 11, fp32 has 24.
+_EPS = {"fp32": 2 ** -24, "fp16": 2 ** -11, "bf16": 2 ** -8}
 
-# SwiGLU multiplies two projections together, so relative error roughly doubles
-# and a sigmoid's slope can locally amplify it further.
-_ACT_AMPLIFICATION = 2.5
+# Quantisation enters at both GEMM operands and the store, and SwiGLU roughly
+# doubles it. Four is the resulting order-of-magnitude coefficient; it is a
+# bound on the modelled terms, not a fudge factor, and calibration replaces it.
+_QUANT_TERMS = 4.0
+_ACT_AMPLIFICATION = 2.0
+_EPS_FP32 = 2 ** -24
 
 
 @dataclass(frozen=True)
 class Tolerance:
-    atol: float
-    rtol: float
+    """Maximum permitted `max|got-ref| / max|ref|`."""
+
+    rel_max: float
     calibrated: bool = False
     basis: str = "analytic"
 
+    def passes(self, rel: float) -> bool:
+        return rel <= self.rel_max
+
+
+def relative_error(got, ref) -> float:
+    """Scale-free error: worst elementwise deviation, normalised by the largest
+    magnitude in the reference. 1.0 means "as wrong as the answer is big"."""
+    ref = ref.float()
+    got = got.float()
+    denom = float(ref.abs().max())
+    if denom == 0.0:
+        # A genuinely all-zero reference: any nonzero output is infinitely wrong.
+        return 0.0 if float(got.abs().max()) == 0.0 else float("inf")
+    return float((got - ref).abs().max()) / denom
+
 
 def tolerance(spec: BenchSpec, calibration: dict | None = None) -> Tolerance:
-    """Error budget for a full MoE layer at this geometry and dtype.
-
-    Sources of error, in order of size:
-      - up-projection accumulation over K = hidden_size
-      - SwiGLU amplification
-      - down-projection accumulation over K = intermediate_size
-      - the top_k weighted combine, which sums k terms
-    """
     if calibration and spec.dtype in calibration:
-        c = calibration[spec.dtype]
-        return Tolerance(c["atol"], c["rtol"], calibrated=True, basis="measured")
+        return Tolerance(float(calibration[spec.dtype]["rel_max"]),
+                         calibrated=True, basis="measured")
 
     eps = _EPS.get(spec.dtype)
     if eps is None:
         raise ValueError(f"no tolerance model for dtype {spec.dtype!r}")
 
     cfg = spec.model
-    # Random-walk growth of rounding error through two accumulations.
-    gemm_growth = math.sqrt(cfg.hidden_size) + math.sqrt(cfg.intermediate_size)
-    rtol = eps * gemm_growth * _ACT_AMPLIFICATION * math.sqrt(cfg.top_k)
-
-    # make_inputs scales activations to about 0.02, and the layer output stays
-    # within roughly an order of magnitude of that, so an absolute floor keeps
-    # near-zero outputs from failing on relative error alone.
-    atol = max(rtol * 0.05, eps * 10.0)
-    return Tolerance(float(atol), float(rtol))
+    quant = _QUANT_TERMS * eps * _ACT_AMPLIFICATION
+    accum = _EPS_FP32 * (math.sqrt(cfg.hidden_size) + math.sqrt(cfg.intermediate_size))
+    return Tolerance(float(quant + accum))

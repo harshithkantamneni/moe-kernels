@@ -1,0 +1,5 @@
+# Isolated environment for the SGLang baseline. See requirements/vllm.txt for
+# why these two cannot share an environment.
+#
+# Do not add torch here; SGLang pins its own (2.13.0, same as vLLM).
+sglang==0.5.18

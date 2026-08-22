@@ -273,3 +273,34 @@ def test_missing_trace_names_what_exists(tmp_path):
     ts = TR.TraceSet.load(tmp_path)
     with pytest.raises(KeyError, match="capture_traces.py"):
         ts.get("nonexistent")
+
+
+@pytest.mark.parametrize("routing", [
+    RoutingSpec("uniform"),
+    RoutingSpec("zipf", 1.2),
+    RoutingSpec("hot", 0.6),
+    RoutingSpec("dirichlet", 0.3),
+])
+def test_every_routing_kind_is_reproducible_from_its_seed(routing):
+    """Regression: dirichlet drew from the global torch RNG, so two runs of the
+    same cell produced materially different imbalance while the CSV recorded the
+    same seed."""
+    a = sample_topk_ids(routing, 256, 32, 4, seed=11)
+    b = sample_topk_ids(routing, 256, 32, 4, seed=11)
+    assert torch.equal(a, b), f"{routing.label} is not reproducible from its seed"
+
+
+def test_dirichlet_is_not_perturbed_by_the_global_rng():
+    routing = RoutingSpec("dirichlet", 0.3)
+    torch.manual_seed(1234)
+    a = sample_topk_ids(routing, 128, 16, 4, seed=5)
+    torch.manual_seed(9999)
+    b = sample_topk_ids(routing, 128, 16, 4, seed=5)
+    assert torch.equal(a, b)
+
+
+def test_different_seeds_still_give_different_dirichlet_draws():
+    routing = RoutingSpec("dirichlet", 0.3)
+    a = sample_topk_ids(routing, 128, 16, 4, seed=1)
+    b = sample_topk_ids(routing, 128, 16, 4, seed=2)
+    assert not torch.equal(a, b)

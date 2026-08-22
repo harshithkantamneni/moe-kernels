@@ -1,0 +1,21 @@
+# Environment for YOUR kernels and the harness itself.
+#
+# torch and triton are deliberately NOT listed. The base venv is created with
+# --system-site-packages so it inherits the CUDA-matched torch already present
+# in the RunPod PyTorch image. Reinstalling torch here would mean guessing a
+# CUDA wheel tag, downloading several GB, and risking a build that does not
+# match the driver on the box.
+numpy
+pandas
+matplotlib
+pyyaml
+pytest
+ruff
+
+# For scripts/capture_traces.py only.
+transformers
+accelerate
+safetensors
+huggingface_hub
+sentencepiece
+datasets

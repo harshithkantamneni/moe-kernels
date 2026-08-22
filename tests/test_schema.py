@@ -99,5 +99,8 @@ def test_bools_survive_the_round_trip(tmp_path):
 def test_every_column_is_declared():
     assert "correctness_passed" in SC.COLUMNS
     assert "l2_flush" in SC.COLUMNS
-    assert "arithmetic_intensity" in SC.COLUMNS
+    assert "arith_intensity_compulsory" in SC.COLUMNS
+    assert "compulsory_gbps" in SC.COLUMNS
+    assert "capture_status" in SC.COLUMNS
+    assert "flush_mb" in SC.COLUMNS
     assert len(SC.COLUMNS) == len(set(SC.COLUMNS))

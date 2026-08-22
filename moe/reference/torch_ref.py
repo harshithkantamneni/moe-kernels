@@ -225,27 +225,34 @@ def golden_forward(spec: BenchSpec, weights: MoEWeights, x, forced_topk_ids=None
 
 
 @torch.no_grad()
-def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 0.02):
-    """Random weights and activations for one cell.
+def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0):
+    """Random weights and activations for one cell, initialised realistically.
 
-    `scale` keeps SwiGLU in a numerically sane range: a standard-normal init at
-    H=7168 pushes pre-activation magnitudes far enough that fp16 overflows and
-    bf16 loses most of its mantissa, which would make tolerance tuning
-    meaningless rather than informative.
+    Activations entering an MoE layer come out of a normalisation, so they are
+    close to unit variance. Weights use fan-in scaling, which is what real
+    checkpoints look like. Together these put the layer output at order 0.1,
+    the same place a real model's is.
+
+    This matters for more than realism. An earlier version scaled everything to
+    0.02, which drove outputs down to 1e-6 and made every absolute-tolerance
+    comparison meaningless. Correctness is now judged by a scale-free relative
+    metric, but keeping the numerics in a realistic range also keeps bf16 from
+    losing mantissa to underflow and keeps fp16 away from overflow.
     """
     cfg = spec.model
     g = torch.Generator(device=device).manual_seed(spec.seed)
     dt = torch_dtype(spec.dtype)
 
-    def rnd(shape, dtype=dt):
+    def rnd(shape, std, dtype=dt):
         return (torch.randn(shape, generator=g, device=device, dtype=torch.float32)
-                * scale).to(dtype)
+                * (std * scale)).to(dtype)
 
     weights = MoEWeights(
-        w1=rnd(cfg.w1_shape),
-        w2=rnd(cfg.w2_shape),
-        wg=rnd((cfg.num_experts, cfg.hidden_size), torch.float32),
+        w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
+        w2=rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5),
+        wg=rnd((cfg.num_experts, cfg.hidden_size), cfg.hidden_size ** -0.5,
+               torch.float32),
     )
     weights.validate(spec)
-    x = rnd((spec.num_tokens, cfg.hidden_size))
+    x = rnd((spec.num_tokens, cfg.hidden_size), 1.0)
     return x, weights

@@ -148,6 +148,8 @@ def group_sizes_from_offsets(expert_offsets) -> list[int]:
     """[E+1] CSR offsets -> per-expert row counts. Pure python, used by tests and
     by the roofline model, so it must not assume a torch tensor."""
     off = [int(v) for v in expert_offsets]
+    if not off:
+        raise ValueError("expert_offsets is empty; expected E+1 entries")
     if off[0] != 0:
         raise ValueError(f"expert_offsets must start at 0, got {off[0]}")
     sizes = [off[i + 1] - off[i] for i in range(len(off) - 1)]

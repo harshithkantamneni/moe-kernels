@@ -1,0 +1,18 @@
+# Isolated environment for the vLLM baseline.
+#
+# vLLM and SGLang agree on torch (2.13.0) and triton (3.7.1). They do NOT agree
+# on four exact pins, which is why this is a separate venv:
+#
+#   flashinfer-python     vllm 0.6.16.post3   vs  sglang 0.6.17
+#   nvidia-cutlass-dsl    vllm 4.6.0          vs  sglang 4.6.2
+#   quack-kernels         vllm 0.6.1          vs  sglang 0.6.4
+#   outlines_core         vllm 0.2.14         vs  sglang 0.1.26   <- major split
+#                                                                    of a compiled
+#                                                                    Rust extension
+#
+# `pip install vllm sglang` into one environment fails resolution. Even with
+# --no-deps, both ship compiled kernel packages built against different
+# flashinfer and cutlass-DSL. Do not merge these files.
+#
+# Do not add torch here; vLLM pins its own.
+vllm==0.27.1

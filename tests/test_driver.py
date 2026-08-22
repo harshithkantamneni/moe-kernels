@@ -4,6 +4,8 @@ Everything the driver promises (correctness gates timing, the timer wraps the
 span and not the layer, resume skips finished work, one bad cell does not kill
 a sweep) is verified here before any of it costs GPU minutes.
 """
+import itertools
+
 import pytest
 import torch
 
@@ -63,13 +65,22 @@ class CrashingUpGemm(StageSpan):
         raise ZeroDivisionError("kernel launch went sideways")
 
 
-def fake_timer(fn, warmup, iters, trials, l2_flush, flush_mb, graph=False):
+def fake_timer(fn, warmup=1, iters=2, trials=1, l2_flush=True, flush_mb=8,
+               flush_mode="read", target_ms=200.0, on_captured=None,
+               graph=False):
     for _ in range(3):
         fn()
+    if on_captured is not None:
+        on_captured()
     return T.TimingResult(ms_p50=1.0, ms_p90=1.2, ms_min=0.9, ms_std=0.05,
-                          jitter_p90_over_p50=1.2, warmup=warmup, iters=iters,
+                          jitter_p90_over_p50=1.2, warmup=warmup, iters=iters or 2,
                           trials=trials, l2_flush=l2_flush, cuda_graph=graph,
-                          samples=3)
+                          samples=3, flush_mb=flush_mb, flush_mode=flush_mode)
+
+
+def fake_graph_timer(fn, **kw):
+    kw.pop("graph", None)
+    return fake_timer(fn, graph=True, **kw)
 
 
 def not_capturable(fn, **kw):
@@ -85,7 +96,7 @@ def cfg_for(tmp_path, **kw):
         out_dir=tmp_path, device="cpu", warmup=1, trials=1, iters=2,
         l2_modes=(True,), graph_modes=(False,),
         timer_eager=fake_timer,
-        timer_graph=lambda fn, **k: fake_timer(fn, graph=True, **k),
+        timer_graph=fake_graph_timer,
         clock_sampler=lambda: T.ClockState(1980, 45),
     )
     base.update(kw)
@@ -185,7 +196,9 @@ def test_resume_skips_completed_work(tmp_path):
     D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
     rows = SC.read_csv(cfg.csv_path)
     assert len(rows) == 1, "resume must not duplicate a finished cell"
-    assert CALLS["count"] == 1, "only the correctness re-check should run"
+    assert CALLS["count"] == 0, (
+        "a fully completed cell must be skipped before the fp32 oracle runs; "
+        "re-running it to produce zero rows is the most expensive way to resume")
 
 
 def test_timing_modes_are_separate_units_of_work(tmp_path):
@@ -199,13 +212,18 @@ def test_timing_modes_are_separate_units_of_work(tmp_path):
                      ("True", "True"), ("False", "True")}
 
 
-def test_uncapturable_impl_is_recorded_without_a_row(tmp_path):
+def test_uncapturable_impl_still_gets_a_row(tmp_path):
+    """Non-capturability is a finding about the implementation, so it must reach
+    the CSV. Recording it only in a sidecar manifest would silently condition
+    every published aggregate on capture-friendliness."""
     cfg = cfg_for(tmp_path, graph_modes=(True,), timer_graph=not_capturable)
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
-    assert SC.read_csv(cfg.csv_path) == []
-    log = cfg.manifest_path.read_text()
-    assert "not_capturable" in log
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1
+    assert rows[0]["capture_status"] == "not_capturable"
+    assert float(rows[0]["ms_p50"]) == 0.0
+    assert "not_capturable" in cfg.manifest_path.read_text()
 
 
 def test_a_crashing_kernel_does_not_kill_the_sweep(tmp_path):
@@ -242,10 +260,106 @@ def test_forced_routing_is_reflected_in_the_load_columns(tmp_path):
 
 
 def test_clock_drift_is_recorded(tmp_path):
-    states = iter([T.ClockState(1980, 40), T.ClockState(1600, 84)])
+    states = itertools.cycle([T.ClockState(1980, 40), T.ClockState(1600, 84)])
     cfg = cfg_for(tmp_path, clock_sampler=lambda: next(states))
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
     r = SC.read_csv(cfg.csv_path)[0]
     assert r["throttled"] == "True"
     assert float(r["clock_drift_pct"]) > 5.0
+
+
+# --- a span covering the whole layer: the vLLM/SGLang fused_moe shape --------
+
+@register
+class FullLayerRef(StageSpan):
+    """One span covering all six stages, like vLLM's fused_moe. It never
+    materialises expert_offsets, which used to crash the driver's load metrics
+    and, via run_sweep's broad handler, silently produce zero rows for the
+    entire baseline."""
+
+    name = "t_full_layer"
+    covers = ("router", "permute", "up_gemm", "act", "down_gemm", "unpermute")
+    requires_cuda = False
+    dtypes = ("fp32", "bf16")
+
+    def __call__(self, st: MoEState) -> None:
+        st.y = R.golden_forward(st.spec, st.weights, st.x,
+                                forced_topk_ids=st.forced_topk_ids)
+
+
+def test_whole_layer_span_is_a_valid_tiling():
+    pipe = P.build(["t_full_layer"])
+    assert len(pipe.spans) == 1
+    assert pipe.spans[0].writes == {"y"}
+
+
+def test_whole_layer_span_benchmarks_without_crashing(tmp_path):
+    cfg = cfg_for(tmp_path)
+    D.run_sweep([(spec(), ["t_full_layer"], "t_full_layer")], cfg,
+                routing=lambda s: None, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1, cfg.manifest_path.read_text()
+    assert rows[0]["correctness_passed"] == "True"
+    assert "crash" not in cfg.manifest_path.read_text()
+
+
+def test_whole_layer_span_still_reports_expert_load(tmp_path):
+    """expert_offsets is unavailable, so the load must come from the forced
+    routing decision instead of silently reading as all-zero."""
+    s = spec()
+    forced = torch.zeros((s.num_tokens, s.model.top_k), dtype=torch.int32)
+    forced[:, 1] = 1
+    cfg = cfg_for(tmp_path)
+    D.run_sweep([(s, ["t_full_layer"], "t_full_layer")], cfg,
+                routing=lambda _: forced, info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert int(r["load_active_experts"]) == 2
+    assert int(r["load_total_rows"]) == s.rows
+    assert "derived from topk_ids" in r["notes"]
+
+
+def test_graph_row_revalidates_the_replayed_output(tmp_path):
+    """A graph row must earn its own correctness verdict against the replayed
+    output, not inherit the eager one."""
+    seen = {"verified": 0}
+
+    def counting_graph_timer(fn, on_captured=None, **kw):
+        if on_captured is not None:
+            seen["verified"] += 1
+        return fake_graph_timer(fn, on_captured=on_captured, **kw)
+
+    cfg = cfg_for(tmp_path, graph_modes=(True,), timer_graph=counting_graph_timer)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    assert seen["verified"] == 1
+    assert SC.read_csv(cfg.csv_path)[0]["capture_status"] == "captured"
+
+
+def test_transient_errors_stay_retryable(tmp_path):
+    """A CUDA OOM must not permanently blank the cell from every future run."""
+    calls = {"n": 0}
+
+    def flaky(fn, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("CUDA out of memory")
+        return fake_timer(fn, **kw)
+
+    cfg = cfg_for(tmp_path, timer_eager=flaky)
+    cells = [(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")]
+    D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
+    assert "error" in cfg.manifest_path.read_text()
+
+    D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    timed = [r for r in rows if float(r["ms_p50"]) > 0]
+    assert len(timed) == 1, "the retried cell should have produced a timing row"
+
+
+def test_correctness_failure_is_terminal_and_not_retried(tmp_path):
+    cfg = cfg_for(tmp_path)
+    cells = [(spec(), names_with("t_wrong_up_gemm"), "t_wrong_up_gemm")]
+    D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
+    D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
+    assert len(SC.read_csv(cfg.csv_path)) == 1
