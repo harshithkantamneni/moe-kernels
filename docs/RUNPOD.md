@@ -173,6 +173,33 @@ H200 and fails to stop it is the most expensive failure available here, and it
 is not worth the convenience. Start and stop from the RunPod console or
 `runpodctl` yourself.
 
+## Getting results off the pod
+
+Code flows one way (your machine -> GitHub -> pod) and results flow the other,
+but nothing does it automatically. After a run worth keeping:
+
+```bash
+bash scripts/publish_results.sh --label first-smoke
+```
+
+That copies the run's CSVs and manifests into `results/published/<date>-<label>/`,
+includes the `measured.yaml` the efficiency columns were quoted against, writes a
+readable `SUMMARY.md`, commits, and pushes.
+
+`results/` is gitignored on purpose: raw runs are large, machine-specific, and
+regenerable. `results/published/` is tracked on purpose. Publishing is a
+decision, not a side effect.
+
+**Pushing needs credentials on the pod.** A public clone over HTTPS can pull but
+not push. Once per pod:
+
+```bash
+gh auth login          # or set up a fine-grained PAT with contents:write
+```
+
+If push fails the commit is still made locally, so nothing is lost; you can push
+later or copy the directory off with `runpodctl send`.
+
 ## Profiling is not available, and what replaces it
 
 `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`. GPU performance counters
