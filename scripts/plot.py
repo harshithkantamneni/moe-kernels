@@ -174,6 +174,20 @@ def main() -> int:
         args.hardware = "measured" if RL.load_measured() else "h200_nvl"
 
     rows = load_rows(args.results)
+    if rows:
+        measured_on = {r.get("gpu_name", "") for r in rows} - {""}
+        try:
+            hw = RL.load_hardware(args.hardware, allow_unverified=True)
+            mismatched = [g for g in measured_on if not RL.device_matches(hw, g)]
+            if mismatched:
+                print(f"[plot] REFUSING: rows were measured on {mismatched} but "
+                      f"--hardware is {hw.name!r}. Plotting against the wrong "
+                      f"part misstates every efficiency number.")
+                print("[plot] run scripts/calibrate_hardware.py on the box, or "
+                      "pass --hardware explicitly.")
+                return 1
+        except (RL.UnverifiedHardware, FileNotFoundError, ValueError):
+            pass
     if not rows:
         print(f"[plot] no correctness-passing rows in {args.results}")
         return 1

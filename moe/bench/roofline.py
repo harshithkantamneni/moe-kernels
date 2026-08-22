@@ -86,6 +86,22 @@ def peak_bandwidth(name: str = "h200_nvl") -> float | None:
         return None
 
 
+def device_matches(hw: Hardware, gpu_name: str) -> bool:
+    """Does this hardware profile describe the GPU the rows were measured on?
+
+    Plotting an H100 run against an H200 roof would understate efficiency by
+    the ratio of their peaks and is exactly the kind of error this repo exists
+    not to make. Comparison is loose on purpose: datasheet names ("NVIDIA H200
+    NVL") and torch's device names ("NVIDIA H200 NVL") agree on the part but
+    not always on spacing or suffixes.
+    """
+    if not gpu_name:
+        return True                      # nothing to check against
+    norm = lambda s: "".join(c for c in s.lower() if c.isalnum())
+    a, b = norm(hw.name), norm(gpu_name)
+    return a in b or b in a
+
+
 def load_measured() -> Hardware | None:
     """Ceilings measured by scripts/calibrate_hardware.py, if it has been run.
 
