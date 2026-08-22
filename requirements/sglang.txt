@@ -3,3 +3,15 @@
 #
 # Do not add torch here; SGLang pins its own (2.13.0, same as vLLM).
 sglang==0.5.18
+
+# IF 0.5.18 WILL NOT RESOLVE: fall back to 0.5.17.
+#
+# 0.5.18 is the first SGLang to depend on cuTile, and it pins
+# cuda-tile==1.6.0rc5, which ships only an sdist (no wheels, any platform).
+# requirements/overrides-sglang.txt repoints that to 1.6.0rc8, which has the
+# cp312-manylinux2014_x86_64 wheel. If the override still fails, comment out the
+# line above and uncomment this one: 0.5.17 has no cuda-tile dependency at all,
+# and for grouped-GEMM baselining the kernel surface is unchanged.
+#
+# sglang==0.5.17
+
