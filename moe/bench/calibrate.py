@@ -314,8 +314,22 @@ def sustained_peak_tflops(sm_clock_mhz: float) -> float | None:
     return props.multi_processor_count * per_clk * sm_clock_mhz * 1e6 / 1e12
 
 
+@dataclass(frozen=True)
+class GemmResult:
+    """Named rather than a tuple on purpose.
+
+    This started as `(tflops, shape)`, grew a clock, and silently broke a caller
+    that unpacked two values — a failure that only shows up on the GPU, six
+    minutes into a run. A dataclass makes the next added field free.
+    """
+
+    tflops: float
+    shape: tuple[int, int, int]
+    sm_clock_mhz: int
+
+
 def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
-                      trials: int = 3) -> tuple[float, tuple[int, int, int], int]:
+                      trials: int = 3) -> GemmResult:
     """Achievable dense BF16 through cuBLAS: the compute roof this box gives.
 
     A square GEMM at n=8192 is comfortably compute bound and is what a tuned
@@ -331,7 +345,7 @@ def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     # normalised against, and it is not the boost clock.
     clk = T.ClockState.sample().sm_clock_mhz
     tflops = (2.0 * n * n * n) / (res.ms_p50 * 1e-3) / 1e12
-    return tflops, (n, n, n), clk
+    return GemmResult(tflops=tflops, shape=(n, n, n), sm_clock_mhz=clk)
 
 
 def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
@@ -351,7 +365,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # tensor cores need, so a compute roof measured after a bandwidth sweep is a
     # power-limited number, not a ceiling. The settle above is matmul work, so
     # the GPU is already in the right state for exactly this measurement.
-    tflops, shape, gemm_clk = measure_bf16_gemm(gemm_n)
+    gemm = measure_bf16_gemm(gemm_n)
     torch.cuda.empty_cache()
 
     # BANDWIDTH TWICE, keep the second. The first pass finishes ramping whatever
@@ -393,10 +407,10 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
         gpu_name=torch.cuda.get_device_properties(0).name,
         achieved_bandwidth_gbps=chosen.gbps,
         ceiling_pattern=ceiling,
-        achieved_bf16_tflops=tflops,
+        achieved_bf16_tflops=gemm.tflops,
         bandwidth_patterns=tuple(patterns),
-        gemm_shape=shape,
-        gemm_clock_mhz=gemm_clk,
+        gemm_shape=gemm.shape,
+        gemm_clock_mhz=gemm.sm_clock_mhz,
         buffer_bytes=target_bytes,
         clocks={"sm_start_mhz": before.sm_clock_mhz, "sm_end_mhz": after.sm_clock_mhz,
                 "temp_start_c": before.temp_c, "temp_end_c": after.temp_c,

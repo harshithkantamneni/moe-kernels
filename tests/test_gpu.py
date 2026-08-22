@@ -300,6 +300,7 @@ def test_both_timing_modes_produce_comparable_rows(tmp_path):
 
 # --- hardware calibration: the stand-in for unavailable counters -------------
 
+@pytest.mark.slow
 def test_bandwidth_measurement_is_plausible():
     from moe.bench.calibrate import measure_bandwidth
     results = measure_bandwidth(target_bytes=1 << 30, warmup=3, iters=10, trials=2)
@@ -309,6 +310,7 @@ def test_bandwidth_measurement_is_plausible():
         assert 0 < r.ms_p50 and r.ms_min <= r.ms_p50
 
 
+@pytest.mark.slow
 def test_read_bandwidth_is_measured_and_not_optimised_away():
     """A pure read is the closest analogue to streaming expert weights. If the
     reduction were elided the reported figure would be absurd."""
@@ -324,6 +326,7 @@ def test_read_bandwidth_is_measured_and_not_optimised_away():
     assert read.gbps > peak * 0.4
 
 
+@pytest.mark.slow
 def test_calibration_names_its_ceiling_and_records_every_pattern():
     """max() across patterns was indefensible: it reported whichever pattern the
     hardware liked best. The choice must be explicit and the alternatives kept."""
@@ -340,6 +343,7 @@ def test_calibration_names_its_ceiling_and_records_every_pattern():
     assert all(v > 0 for v in ridges.values())
 
 
+@pytest.mark.slow
 def test_an_unknown_ceiling_is_rejected():
     from moe.bench.calibrate import calibrate
     with pytest.raises(ValueError, match="unknown ceiling"):
@@ -347,6 +351,7 @@ def test_an_unknown_ceiling_is_rejected():
                   settle=False)
 
 
+@pytest.mark.slow
 def test_settling_reaches_a_stable_clock():
     """A ceiling measured while the clock is still climbing is not a ceiling.
     Measured on this box: idle 840 MHz, boost 1980 MHz, and a calibration
@@ -360,6 +365,7 @@ def test_settling_reaches_a_stable_clock():
         assert (max(recent) - min(recent)) / max(recent) * 100 <= 2.0, recent
 
 
+@pytest.mark.slow
 def test_calibration_records_per_pattern_clocks():
     """Each pattern carries the clock it was measured at, so a ramped run is
     detectable in the recorded data rather than only in a summary line."""
@@ -370,6 +376,7 @@ def test_calibration_records_per_pattern_clocks():
     assert isinstance(cal.clock_ramped, bool)
 
 
+@pytest.mark.slow
 def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
     """A measured ceiling above the spec peak means the buffer fit in cache and
     the number is not a DRAM measurement at all."""
@@ -385,15 +392,19 @@ def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
         f"measured only {best:.0f} of {peak_gbps:.0f} GB/s; something is wrong")
 
 
+@pytest.mark.slow
 def test_bf16_gemm_ceiling_is_plausible():
     from moe.bench.calibrate import measure_bf16_gemm
     from moe.bench.roofline import load_hardware
-    tflops, shape = measure_bf16_gemm(n=4096, warmup=3, iters=10, trials=2)
-    peak = load_hardware("h200_nvl").peak("bf16") / 1e12
-    assert shape == (4096, 4096, 4096)
-    assert 0 < tflops < peak * 1.02, f"{tflops:.1f} TFLOP/s against a {peak:.1f} peak"
+    gemm = measure_bf16_gemm(n=4096, warmup=3, iters=10, trials=2)
+    peak = load_hardware("h200_sxm").peak("bf16") / 1e12
+    assert gemm.shape == (4096, 4096, 4096)
+    assert gemm.sm_clock_mhz >= 0
+    assert 0 < gemm.tflops < peak * 1.02, (
+        f"{gemm.tflops:.1f} TFLOP/s against a {peak:.1f} datasheet peak")
 
 
+@pytest.mark.slow
 def test_full_calibration_runs(tmp_path):
     from moe.bench.calibrate import calibrate
     cal = calibrate(target_bytes=1 << 30, gemm_n=2048, settle=False)
@@ -404,6 +415,7 @@ def test_full_calibration_runs(tmp_path):
     assert cal.ridge_point() > 0
 
 
+@pytest.mark.slow
 def test_compute_ceiling_is_normalised_to_the_clock_it_was_measured_at():
     """The datasheet peak assumes a boost clock the part cannot hold under
     sustained dense tensor load. Measured on H200 SXM: it settles near 1455 MHz,
