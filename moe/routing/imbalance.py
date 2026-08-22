@@ -27,9 +27,35 @@ class ExpertLoad:
     entropy_norm: float      # 1.0 = perfectly uniform, 0.0 = one expert holds all
     gini: float
     top1_share: float        # fraction of all rows held by the hottest expert
+    # Useful rows divided by rows a fixed-BLOCK_M schedule must compute. This
+    # is the quantitative form of the limitation the project targets, so it is
+    # a column on every row rather than a thing you compute afterwards.
+    tile_eff_bm64: float = 1.0
+    tile_eff_bm128: float = 1.0
 
     def as_row(self) -> dict:
         return {f"load_{k}": v for k, v in asdict(self).items()}
+
+
+def padded_rows(counts, block_m: int) -> int:
+    """Rows a fixed-BLOCK_M grouped GEMM must actually compute.
+
+    Each expert's group is rounded up to a whole number of BLOCK_M tiles, so the
+    wasted work is the gap between this and the true row count. This single
+    function is the quantitative form of the TritonMoE limitation: it is why a
+    fixed BLOCK_M degrades under imbalance, and it predicts by how much.
+    """
+    if block_m <= 0:
+        raise ValueError("block_m must be positive")
+    return sum(((int(v) + block_m - 1) // block_m) * block_m for v in counts)
+
+
+def tile_efficiency(counts, block_m: int) -> float:
+    """Useful rows divided by computed rows. 1.0 means no padding waste."""
+    total = sum(int(v) for v in counts)
+    if total == 0:
+        return 0.0
+    return total / padded_rows(counts, block_m)
 
 
 def expert_load(counts) -> ExpertLoad:
@@ -82,30 +108,25 @@ def expert_load(counts) -> ExpertLoad:
         entropy_norm=entropy_norm,
         gini=max(0.0, gini),
         top1_share=max(c) / total,
+        tile_eff_bm64=tile_efficiency(c, 64),
+        tile_eff_bm128=tile_efficiency(c, 128),
     )
 
 
 def counts_from_offsets(expert_offsets) -> list[int]:
-    off = [int(v) for v in expert_offsets]
-    return [off[i + 1] - off[i] for i in range(len(off) - 1)]
+    """[E+1] CSR offsets -> per-expert row counts, validated.
 
-
-def padded_rows(counts, block_m: int) -> int:
-    """Rows a fixed-BLOCK_M grouped GEMM must actually compute.
-
-    Each expert's group is rounded up to a whole number of BLOCK_M tiles, so the
-    wasted work is the gap between this and the true row count. This single
-    function is the quantitative form of the TritonMoE limitation: it is why a
-    fixed BLOCK_M degrades under imbalance, and it predicts by how much.
+    Pure python, so it works on a list, a numpy array or a tensor, and the
+    roofline model can call it without importing torch. Validation is not
+    optional: malformed offsets would otherwise produce silently wrong load
+    columns rather than an error.
     """
-    if block_m <= 0:
-        raise ValueError("block_m must be positive")
-    return sum(((int(v) + block_m - 1) // block_m) * block_m for v in counts)
-
-
-def tile_efficiency(counts, block_m: int) -> float:
-    """Useful rows divided by computed rows. 1.0 means no padding waste."""
-    total = sum(int(v) for v in counts)
-    if total == 0:
-        return 0.0
-    return total / padded_rows(counts, block_m)
+    off = [int(v) for v in expert_offsets]
+    if not off:
+        raise ValueError("expert_offsets is empty; expected E+1 entries")
+    if off[0] != 0:
+        raise ValueError(f"expert_offsets must start at 0, got {off[0]}")
+    sizes = [off[i + 1] - off[i] for i in range(len(off) - 1)]
+    if any(s < 0 for s in sizes):
+        raise ValueError("expert_offsets must be non-decreasing")
+    return sizes

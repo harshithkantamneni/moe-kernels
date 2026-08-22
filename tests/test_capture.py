@@ -131,6 +131,7 @@ def test_reset_clears_between_batches():
         for _, m in gates:
             m(torch.randn(4, CFG.hidden_size))
     assert int(rec.counts.sum()) == first
+    assert rec.snapshot().sum() == first
     rec.detach()
 
 
@@ -143,11 +144,20 @@ def test_detach_removes_the_hooks():
     with torch.no_grad():
         for _, m in gates:
             m(torch.randn(4, CFG.hidden_size))
-    assert int(rec.counts.sum()) == 0
+    # snapshot() is the host view; it is all zeros because no hook ever fired,
+    # and it works before any allocation has happened.
+    assert rec.snapshot().sum() == 0
+    assert rec.snapshot().shape == (len(gates), CFG.num_experts)
 
 
 def test_every_builtin_corpus_is_usable():
-    for name, prompts in capture.CORPORA.items():
+    import importlib.util
+    from pathlib import Path
+    script = Path(__file__).resolve().parents[1] / "scripts" / "capture_traces.py"
+    spec_ = importlib.util.spec_from_file_location("capture_traces", script)
+    mod = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(mod)
+    for name, prompts in mod.CORPORA.items():
         assert prompts, name
         assert all(p.strip() for p in prompts), name
 

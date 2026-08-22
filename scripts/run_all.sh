@@ -118,7 +118,7 @@ log "summary"
 "$PY" - "$RESULTS_DIR" <<'PYEOF'
 import sys
 from pathlib import Path
-from moe.bench.schema import read_csv
+from moe.bench.schema import passed, read_csv
 
 results = Path(sys.argv[1])
 rows = []
@@ -128,15 +128,16 @@ for p in sorted(results.glob("*.csv")):
     except Exception as e:
         print(f"  {p.name}: unreadable ({e})")
 print(f"  rows            {len(rows)}")
-passed = [r for r in rows if r["correctness_passed"] == "True"]
-print(f"  correctness ok  {len(passed)}")
-failed = [r for r in rows if r["correctness_passed"] != "True"]
+ok = [r for r in rows if passed(r)]
+print(f"  correctness ok  {len(ok)}")
+failed = [r for r in rows if not passed(r)]
 if failed:
     print(f"  CORRECTNESS FAILURES {len(failed)}:")
     for r in failed[:10]:
         print(f"    {r['impl']:<28} {r['model']}/T{r['num_tokens']} "
               f"abs_err={float(r['max_abs_err']):.3e}")
-throttled = [r for r in rows if r.get("throttled") == "True"]
+from moe.bench.schema import row_bool
+throttled = [r for r in rows if row_bool(r, "throttled")]
 if throttled:
     print(f"  THROTTLED ROWS  {len(throttled)} (clocks dropped >5% mid-cell)")
 print(f"  results in      {results}")

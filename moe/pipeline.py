@@ -29,8 +29,7 @@ class Pipeline:
     @property
     def env(self) -> str:
         """The single venv this pipeline must execute in."""
-        envs = {s.env for s in self.spans if s.env != "base"}
-        return envs.pop() if envs else "base"
+        return S.resolve_env(self.spans)
 
     @property
     def requires_cuda(self) -> bool:
@@ -43,7 +42,6 @@ class Pipeline:
     def run(self, st: MoEState, validate_shapes: bool = False) -> MoEState:
         for span in self.spans:
             span(st)
-            st.mark_written(span.writes)
             if validate_shapes:
                 try:
                     st.validate(only=span.writes)

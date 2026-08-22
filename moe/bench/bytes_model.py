@@ -148,17 +148,35 @@ def pipeline_cost(spans, spec: BenchSpec, active_experts: int) -> PipelineCost:
     )
 
 
+@dataclass(frozen=True)
+class _BareStage:
+    """A canonical stage with no implementation, so pipeline_cost can be called
+    without a registered span. Duck-types the three attributes it reads."""
+
+    stage: str
+
+    @property
+    def name(self) -> str:
+        return self.stage
+
+    @property
+    def covers(self) -> tuple[str, ...]:
+        return (self.stage,)
+
+    @property
+    def reads(self) -> frozenset[str]:
+        return STAGE_CONTRACTS[self.stage].reads
+
+    @property
+    def writes(self) -> frozenset[str]:
+        return STAGE_CONTRACTS[self.stage].writes
+
+
 def grouped_gemm_only_cost(spec: BenchSpec, active_experts: int) -> PipelineCost:
     """Cost of just the two grouped GEMMs, unfused.
 
     The comparison point when you want to talk about the kernel rather than the
     layer, and the number to quote next to vLLM's fused_moe.
     """
-    class _Bare:
-        def __init__(self, stage):
-            self.name = stage
-            self.covers = (stage,)
-            self.reads = STAGE_CONTRACTS[stage].reads
-            self.writes = STAGE_CONTRACTS[stage].writes
-
-    return pipeline_cost([_Bare("up_gemm"), _Bare("down_gemm")], spec, active_experts)
+    return pipeline_cost([_BareStage("up_gemm"), _BareStage("down_gemm")],
+                         spec, active_experts)

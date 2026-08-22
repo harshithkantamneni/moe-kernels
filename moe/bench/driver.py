@@ -26,13 +26,15 @@ from pathlib import Path
 import torch
 
 from ..pipeline import Pipeline, PipelineError, build
-from ..reference.torch_ref import golden_forward, make_inputs
+from ..reference.torch_ref import expert_counts, golden_forward, make_inputs
 from ..routing.imbalance import counts_from_offsets, expert_load
 from ..spec import BenchSpec
+from ..stages import BASE_ENV
 from ..state import MoEState
 from . import bytes_model as BM
 from . import schema as SC
 from . import timing as T
+from .roofline import Hardware
 from .tolerance import relative_error, tolerance
 
 # Returns forced top-k expert ids for a cell, or None to let the router decide.
@@ -40,37 +42,6 @@ RoutingSource = Callable[[BenchSpec], "torch.Tensor | None"]
 
 #: `impl` value meaning "time the entire tiling end to end" rather than one span.
 PIPELINE_SCOPE = "__pipeline__"
-
-_BANDWIDTH_CACHE: dict[str, float | None] = {}
-
-
-def _bandwidth(cfg: RunConfig) -> float | None:
-    if cfg.peak_bandwidth_bytes_s is not None:
-        return cfg.peak_bandwidth_bytes_s
-    if "bw" not in _BANDWIDTH_CACHE:
-        from .roofline import peak_bandwidth
-        _BANDWIDTH_CACHE["bw"] = peak_bandwidth()
-    return _BANDWIDTH_CACHE["bw"]
-
-
-def _ridge_bf16(cfg: RunConfig) -> float | None:
-    """Ridge point in FLOP/byte, preferring measured ceilings over the datasheet.
-
-    Used only to classify a cell as memory bound before emitting the implied
-    traffic ratio, so a missing calibration simply suppresses that column rather
-    than producing a number resting on a spec peak.
-    """
-    bw = cfg.achieved_bw_bytes_s or _bandwidth(cfg)
-    if not bw:
-        return None
-    if cfg.achieved_bf16_tflops:
-        return (cfg.achieved_bf16_tflops * 1e12) / bw
-    try:
-        from .roofline import load_hardware
-        return load_hardware("h200_nvl").peak("bf16") / bw
-    except (FileNotFoundError, ValueError, KeyError):
-        return None
-
 
 def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
     """Is isolating launch overhead worth a doubled sweep for this cell?
@@ -82,7 +53,7 @@ def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
     """
     if cfg.graph_min_launch_share <= 0:
         return True, ""
-    bw = _bandwidth(cfg)
+    bw = cfg.hardware.bandwidth_bytes_s if cfg.hardware else None
     if not bw:
         return True, ""
     predicted_ms = (cost.bytes_total / bw) * 1e3
@@ -120,12 +91,11 @@ class RunConfig:
     #: measure a sub-1% effect. Set to 0.0 to always time both.
     graph_min_launch_share: float = 0.01
     launch_overhead_ms: float = 0.005
-    peak_bandwidth_bytes_s: float | None = None
-    #: Measured ceilings from scripts/calibrate_hardware.py. Without them the
-    #: efficiency columns stay zero rather than being quoted against a spec peak
-    #: this machine may never reach.
-    achieved_bw_bytes_s: float | None = None
-    achieved_bf16_tflops: float | None = None
+    #: Measured ceilings from scripts/calibrate_hardware.py, as a Hardware.
+    #: Without it the efficiency columns stay zero rather than being quoted
+    #: against a spec peak this machine may never reach. It already knows its
+    #: own ridge point and bound classification, so the driver does not.
+    hardware: Hardware | None = None
     validate_shapes: bool = True
     device: str = "cuda"
 
@@ -151,13 +121,12 @@ class CorrectnessResult:
     rel_err: float          # scale-free: max|got-ref| / max|ref|
     tol_rel_max: float
     calibrated: bool = False
-    detail: str = ""
 
 
 def compare(got, golden, tol) -> CorrectnessResult:
     max_abs = float((got.float() - golden.float()).abs().max())
     rel = relative_error(got, golden)
-    return CorrectnessResult(rel <= tol.rel_max, max_abs, rel, tol.rel_max,
+    return CorrectnessResult(tol.passes(rel), max_abs, rel, tol.rel_max,
                              tol.calibrated)
 
 
@@ -169,14 +138,15 @@ def check_correctness(spec: BenchSpec, pipe: Pipeline, x, weights, forced,
     Returns the populated state and the golden output as well. The state becomes
     the prologue for span-scoped timing, so the span under study is timed
     against real inputs produced by the real upstream stages; the golden output
-    is reused to re-validate a CUDA-graph replay.
+    is reused to re-validate a CUDA-graph replay, and the tolerance is returned
+    so callers do not rebuild it.
     """
     tol = tolerance(spec, cfg.calibration)
     st = MoEState(spec=spec, weights=weights, x=x)
     st.forced_topk_ids = forced
     pipe.run(st, validate_shapes=cfg.validate_shapes)
     golden = golden_forward(spec, weights, x, forced_topk_ids=forced)
-    return compare(st.y, golden, tol), st, golden
+    return compare(st.y, golden, tol), st, golden, tol
 
 
 def _downstream_of(pipe: Pipeline, span):
@@ -184,25 +154,32 @@ def _downstream_of(pipe: Pipeline, span):
     output that can be compared against golden."""
     if span is None:
         return []
-    idx = [i for i, s in enumerate(pipe.spans) if s is span][0]
-    return list(pipe.spans[idx + 1:])
+    return list(pipe.spans[pipe.spans.index(span) + 1:])
 
 
 def _expert_counts(st: MoEState, spec: BenchSpec, forced) -> tuple[list[int], str]:
-    """Per-expert row counts, however they can be obtained.
+    """Per-expert row counts, from the most independent source available.
 
-    A span covering all six stages is a legal tiling and is exactly the shape of
-    vLLM's and SGLang's fused_moe. Such a span never materialises
-    `expert_offsets`, so reading them unconditionally crashed the cell, and
-    run_sweep's broad handler turned that into a silent zero-row baseline.
+    Precedence matters and is not obvious. The forced routing decision is the
+    experimental INPUT; `topk_ids` and `expert_offsets` in state are OUTPUTS of
+    whatever implementation is under test. Reading state first meant a kernel
+    covering `router` or `permute` derived its own load metrics from its own
+    bug, and those metrics feed active_experts -> weight bytes ->
+    compulsory_bytes -> arithmetic intensity. A benchmark axis must never be
+    computed from the thing being measured while the ground truth is in hand.
+
+    A span covering all six stages (the vLLM/SGLang fused_moe shape) never
+    materialises `expert_offsets`, so no source is guaranteed and the chain has
+    to end in something. It ends loudly: zeros are reported with a source of
+    "unknown" so the row says the load is not known rather than saying it is 0.
     """
     E = spec.model.num_experts
+    if forced is not None:
+        return expert_counts(forced.cpu(), E).tolist(), "forced routing"
+    if st.topk_ids is not None:
+        return expert_counts(st.topk_ids.cpu(), E).tolist(), "topk_ids"
     if st.expert_offsets is not None:
         return counts_from_offsets(st.expert_offsets.cpu()), "expert_offsets"
-    ids = st.topk_ids if st.topk_ids is not None else forced
-    if ids is not None:
-        counts = torch.bincount(ids.reshape(-1).long().cpu(), minlength=E)
-        return counts.tolist(), "topk_ids"
     return [0] * E, "unknown"
 
 
@@ -271,22 +248,60 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
     if cfg is None:
         return
 
-    if cfg.achieved_bf16_tflops:
-        row.achieved_bf16_tflops = cfg.achieved_bf16_tflops
-    bw = cfg.achieved_bw_bytes_s
-    if not bw:
+    hw = cfg.hardware
+    if hw is None:
         return
-    row.achieved_bw_gbps = bw / 1e9
-    row.pct_of_achieved_bw = 100.0 * row.compulsory_gbps / row.achieved_bw_gbps
+    row.achieved_bw_gbps = hw.bandwidth_bytes_s / 1e9
+    try:
+        peak = hw.peak(row.dtype)
+    except ValueError:
+        peak = 0.0
+    if peak:
+        row.achieved_bf16_tflops = peak / 1e12
+        row.pct_of_achieved_tflops = 100.0 * row.tflops / row.achieved_bf16_tflops
 
     # Only sound when the cell is genuinely memory bound. Compulsory intensity
     # is an UPPER bound on true intensity, so compulsory < ridge implies true <
-    # ridge and the classification is conservative.
-    ridge = _ridge_bf16(cfg)
-    if ridge and cost.arithmetic_intensity < ridge:
+    # ridge and the classification is conservative. Hardware owns that call.
+    if peak and hw.bound(row.dtype, cost.arithmetic_intensity) == "memory":
         from .calibrate import implied_traffic_ratio
         row.implied_traffic_ratio = implied_traffic_ratio(
-            cost.bytes_total, ms, bw)
+            cost.bytes_total, ms, hw.bandwidth_bytes_s)
+
+
+#: Timing and derived columns, zeroed whenever a row did not earn them.
+_TIMED_FIELDS = ("ms_p50", "ms_p90", "ms_min", "ms_std", "jitter_p90_over_p50",
+                 "tflops", "compulsory_gbps", "pct_of_achieved_bw",
+                 "implied_traffic_ratio")
+
+
+def _apply_load(row: SC.Row, load) -> None:
+    for name, value in load.as_row().items():
+        setattr(row, name, value)
+
+
+def _apply_meta(row: SC.Row, meta: dict) -> None:
+    for name, value in meta.items():
+        if name in SC.COLUMNS:
+            setattr(row, name, value)
+
+
+def _emit(writer: SC.CsvWriter, manifest: SC.Manifest, row: SC.Row, key: str,
+          status: str = SC.STATUS_OK, detail: str = "") -> int:
+    """The single place a row reaches the CSV.
+
+    Enforces the harness's headline invariant structurally rather than by
+    convention: a row that did not pass the oracle leaves with its timing and
+    derived columns zeroed, so `correctness_passed == False` implies
+    `ms_p50 == 0` in the file itself. Consumer-side filters then become
+    redundancy instead of the only defence.
+    """
+    if not row.correctness_passed:
+        for name in _TIMED_FIELDS:
+            setattr(row, name, 0.0)
+    writer.write(row)
+    manifest.record(key, status, detail)
+    return 1
 
 
 @torch.no_grad()
@@ -297,6 +312,10 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     """Benchmark one (cell, tiling, target) across the configured timing modes."""
     pipe = build(pipeline_names, spec=spec)
     span = _resolve_target(pipe, impl)
+    if pipe.env not in (cfg.env_name, BASE_ENV):
+        raise PipelineError(
+            f"pipeline needs environment {pipe.env!r} but this process is "
+            f"{cfg.env_name!r}; rows would claim a framework that did not run")
 
     # Build every mode key up front. If they are all already done, skip the
     # cell entirely: re-running the fp32 python-loop oracle to produce zero
@@ -316,9 +335,8 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     if forced is not None:
         forced = forced.to(x.device)
 
-    correctness, st, golden = check_correctness(spec, pipe, x, weights, forced, cfg)
-    tol = tolerance(spec, cfg.calibration)
-
+    correctness, st, golden, tol = check_correctness(spec, pipe, x, weights,
+                                                     forced, cfg)
     routing_meta = cfg.routing_info(spec) if cfg.routing_info else {}
     counts, counts_source = _expert_counts(st, spec, forced)
     load = expert_load(counts)
@@ -326,29 +344,44 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     costed_spans = pipe.spans if span is None else [span]
     cost = BM.pipeline_cost(costed_spans, spec, active_experts=load.active_experts)
 
-    if not correctness.passed:
-        row = _base_row(spec, pipe, impl, span, cfg, info, sha, dirty)
-        _apply_correctness(row, correctness)
+    def prepare(row: SC.Row, verdict=None) -> SC.Row:
+        """Everything every row carries, regardless of which path emitted it."""
+        _apply_correctness(row, verdict or correctness)
+        _apply_load(row, load)
+        _apply_meta(row, routing_meta)
         _apply_cost(row, cost, None, cfg)
-        for k, v in load.as_row().items():
-            setattr(row, k, v)
+        if counts_source != "forced routing":
+            row.notes = f"expert load derived from {counts_source}"
+        return row
+
+    if not correctness.passed:
+        # One row, not four: none of the timing modes ran. capture_status says
+        # so explicitly, since the l2_flush/cuda_graph columns would otherwise
+        # read as a measured mode that happened to produce no numbers.
+        row = prepare(_base_row(spec, pipe, impl, span, cfg, info, sha, dirty))
+        row.capture_status = "not_timed"
         row.notes = (f"correctness failed (rel={correctness.rel_err:.3e} > "
                      f"{correctness.tol_rel_max:.3e}); not timed")
-        writer.write(row)
-        # None of the timing modes can be run, and re-running would reproduce
-        # this exact verdict, so every mode key for this cell is terminal.
+        written += _emit(writer, manifest, row, SC.cell_key(row),
+                         SC.STATUS_CORRECTNESS_FAILED,
+                         f"rel={correctness.rel_err:.3e}")
+        # Re-running would reproduce this verdict exactly, so every mode key
+        # for this cell is terminal.
         for _, _, _, key in keyed:
-            manifest.record(key, "correctness_failed",
+            manifest.record(key, SC.STATUS_CORRECTNESS_FAILED,
                             f"rel={correctness.rel_err:.3e}")
-        return 1
+        return written
 
     downstream = _downstream_of(pipe, span)
 
     if span is None:
+        # Built once, outside the timed region: allocating a MoEState per
+        # iteration would measure python bookkeeping that is not under study.
+        scratch = MoEState(spec=spec, weights=weights, x=x)
+        scratch.forced_topk_ids = forced
+
         def call():
-            s = MoEState(spec=spec, weights=weights, x=x)
-            s.forced_topk_ids = forced
-            pipe.run(s, validate_shapes=False)
+            pipe.run(scratch, validate_shapes=False)
     else:
         def call():
             span(st)
@@ -357,37 +390,29 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     # Graph replay reuses fixed, graph-private buffers, so a kernel that leaves
     # a tail tile or an empty-expert group unwritten sees the previous replay's
     # correct values still resident and would otherwise look fine.
-    replay_verdict: dict = {}
+    replay_verdict = None
 
     def verify_replay():
-        if span is None:
-            replay_verdict["result"] = compare(st.y, golden, tol) if st.y is not None \
-                else correctness
-            return
-        for later in downstream:
-            later(st)
-        replay_verdict["result"] = compare(st.y, golden, tol)
+        nonlocal replay_verdict
+        if span is not None:
+            for later in downstream:
+                later(st)
+        replay_verdict = compare(st.y, golden, tol) if st.y is not None \
+            else correctness
 
     graph_ok, graph_skip_reason = should_time_graph(cost, cfg)
 
     for use_graph, l2, row, key in keyed:
         if key in manifest:
             continue
-        for meta_key, meta_value in routing_meta.items():
-            if meta_key in SC.COLUMNS:
-                setattr(row, meta_key, meta_value)
+        prepare(row)
 
         if use_graph and not graph_ok:
-            _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None, cfg)
-            for k, v in load.as_row().items():
-                setattr(row, k, v)
             row.capture_status = "skipped"
             row.graph_skip_reason = graph_skip_reason
             row.notes = "graph timing skipped by cost policy"
-            writer.write(row)
-            manifest.record(key, "ok", "graph skipped by policy")
-            written += 1
+            written += _emit(writer, manifest, row, key, SC.STATUS_OK,
+                             "graph skipped by policy")
             continue
 
         clocks_start = cfg.clock_sampler()
@@ -408,37 +433,24 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
             # graph-captured cannot be used in real MoE inference. It belongs in
             # the CSV, not only in a sidecar manifest, or every aggregate over
             # the published data is silently conditioned on capturability.
-            _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None, cfg)
-            for k, v in load.as_row().items():
-                setattr(row, k, v)
             row.capture_status = "not_capturable"
             row.notes = f"not CUDA-graph capturable: {str(e)[:160]}"
-            writer.write(row)
-            manifest.record(key, "not_capturable", str(e)[:200])
-            written += 1
+            written += _emit(writer, manifest, row, key,
+                             SC.STATUS_NOT_CAPTURABLE, str(e)[:200])
             continue
         except RuntimeError as e:
-            manifest.record(key, "error", str(e)[:200])
-            _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None, cfg)
             row.notes = f"timing error: {str(e)[:160]}"
-            writer.write(row)
-            written += 1
+            written += _emit(writer, manifest, row, key, SC.STATUS_ERROR,
+                             str(e)[:200])
             continue
         clocks_end = cfg.clock_sampler()
         drift, throttled = T.clock_drift(clocks_start, clocks_end)
 
-        verdict = replay_verdict.get("result", correctness) if use_graph else correctness
+        verdict = replay_verdict if (use_graph and replay_verdict) else correctness
         _apply_correctness(row, verdict)
         row.capture_status = "captured" if use_graph else "n/a"
-        for k, v in load.as_row().items():
-            setattr(row, k, v)
-        if counts_source != "expert_offsets":
-            row.notes = f"expert load derived from {counts_source}"
         row.warmup, row.iters, row.trials = res.warmup, res.iters, res.trials
-        row.flush_mb = getattr(res, "flush_mb", 0)
-        row.flush_mode = getattr(res, "flush_mode", "")
+        row.flush_mb, row.flush_mode = res.flush_mb, res.flush_mode
         row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
         row.ms_min, row.ms_std = res.ms_min, res.ms_std
         row.jitter_p90_over_p50 = res.jitter_p90_over_p50
@@ -449,16 +461,15 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         row.clock_drift_pct, row.throttled = drift, throttled
 
         if not verdict.passed:
+            # _emit zeroes the timing columns, so the file never carries a
+            # measurement that failed the oracle.
             row.notes = (f"REPLAYED output failed the oracle "
-                         f"(rel={verdict.rel_err:.3e}); timing is not usable")
-            writer.write(row)
-            manifest.record(key, "correctness_failed", "graph replay")
-            written += 1
+                         f"(rel={verdict.rel_err:.3e}); timing discarded")
+            written += _emit(writer, manifest, row, key,
+                             SC.STATUS_CORRECTNESS_FAILED, "graph replay")
             continue
 
-        writer.write(row)
-        manifest.record(key)
-        written += 1
+        written += _emit(writer, manifest, row, key)
 
     return written
 
@@ -481,11 +492,11 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
                                       manifest, info, sha, dirty)
                 except PipelineError as e:
                     manifest.record(f"invalid|{spec.label}|{'+'.join(names)}|{impl}",
-                                    "invalid_pipeline", str(e)[:200])
+                                    SC.STATUS_INVALID_PIPELINE, str(e)[:200])
                     print(f"[warn] {spec.label} {impl}: {e}")
                 except Exception as e:  # noqa: BLE001
                     manifest.record(f"crash|{spec.label}|{'+'.join(names)}|{impl}",
-                                    "crash", traceback.format_exc()[-400:])
+                                    SC.STATUS_CRASH, traceback.format_exc()[-400:])
                     print(f"[warn] {spec.label} {impl}: {e}")
         finally:
             manifest.close()

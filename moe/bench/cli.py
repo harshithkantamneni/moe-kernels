@@ -17,7 +17,6 @@ from pathlib import Path
 
 import moe
 
-from ..pipeline import PipelineError, build
 from ..spec import MODEL_CONFIGS
 from . import profiles as PR
 from . import timing as T
@@ -70,25 +69,10 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
 
 
 def measured_ceilings() -> dict:
-    """Achievable bandwidth and dense BF16 from a prior calibration run.
-
-    Absent, the efficiency columns stay zero rather than being quoted against a
-    datasheet peak this machine will not reach.
-    """
-    from .roofline import HARDWARE_DIR
-    path = HARDWARE_DIR / "measured.yaml"
-    if not path.exists():
-        return {}
-    import yaml
-    data = yaml.safe_load(path.read_text())
-    bw = (data.get("memory") or {}).get("bandwidth_tb_s")
-    tf = (data.get("compute_dense_tflops") or {}).get("bf16")
-    out = {}
-    if bw:
-        out["achieved_bw_bytes_s"] = float(bw) * 1e12
-    if tf:
-        out["achieved_bf16_tflops"] = float(tf)
-    return out
+    """RunConfig kwargs carrying this machine's measured ceilings, if any."""
+    from .roofline import load_measured
+    hw = load_measured()
+    return {"hardware": hw} if hw is not None else {}
 
 
 def env_version(env: str) -> str:
@@ -150,61 +134,41 @@ def time_limited(cells, max_minutes: float | None):
 
 
 def dry_run(profile: PR.Profile, args, traces) -> int:
-    """Validate every tiling in the matrix without touching a GPU."""
-    specs = profile.specs()
-    impls = PR.candidate_impls(env=None, include_reference=args.include_reference)
-    if args.impl:
-        impls = [s for s in impls if s.name in args.impl]
+    """Print what a sweep would do. All computation lives in profiles.plan()."""
+    p = PR.plan(profile, env=args.env, impl_filter=tuple(args.impl),
+                include_reference=args.include_reference, traces=traces)
 
-    print(f"profile        {profile.name}")
-    print(f"models         {', '.join(profile.models)}")
-    print(f"token counts   {', '.join(str(t) for t in profile.token_counts)}")
-    print(f"dtypes         {', '.join(profile.dtypes)}")
-    print(f"routings       {', '.join(r.label for r in profile.routings)}")
-    print(f"seeds          {', '.join(str(s) for s in profile.seeds)}")
-    print(f"specs          {len(specs)}")
-    print(f"implementations{'':<1}{len(impls)}: "
-          f"{', '.join(s.name for s in impls) if impls else 'NONE REGISTERED'}")
-    modes = len(profile.l2_modes) * len(profile.graph_modes)
-    print(f"timing modes   {modes} "
+    print(f"profile         {profile.name}")
+    print(f"env             {args.env}")
+    print(f"models          {', '.join(profile.models)}")
+    print(f"token counts    {', '.join(str(t) for t in profile.token_counts)}")
+    print(f"dtypes          {', '.join(profile.dtypes)}")
+    print(f"routings        {', '.join(r.label for r in profile.routings)}")
+    print(f"seeds           {', '.join(str(s) for s in profile.seeds)}")
+    print(f"specs           {p.specs}")
+    print(f"implementations {len(p.impls)}: "
+          f"{', '.join(p.impls) if p.impls else 'NONE REGISTERED'}")
+    print(f"timing modes    {p.modes} "
           f"(l2_flush={list(profile.l2_modes)}, cuda_graph={list(profile.graph_modes)})")
+    print(f"\nplanned cells   {p.planned}")
+    print(f"timing rows     {p.timing_rows} (upper bound; a skipped or "
+          "uncapturable graph mode still writes one row)")
+    print(f"skipped         {p.unsupported} (implementation does not support the cell)")
 
-    problems: list[str] = []
-    unsupported = 0
-    planned = 0
-    for spec, names, impl in PR.cells(profile, impl_filter=tuple(args.impl),
-                                      include_reference=args.include_reference):
-        try:
-            build(names, spec=spec)
-            planned += 1
-        except PipelineError as e:
-            msg = str(e)
-            if "does not support" in msg:
-                unsupported += 1
-            else:
-                problems.append(f"  {spec.label} [{impl}]: {msg}")
-
-    needed = {s.routing.trace_id for s in specs if s.routing.kind == "trace"}
-    missing_traces = sorted(t for t in needed if t not in traces)
-
-    print(f"\nplanned cells  {planned}")
-    print(f"timing rows    {planned * modes} (upper bound; uncapturable "
-          "graph modes produce no row)")
-    print(f"skipped        {unsupported} (implementation does not support the cell)")
-    if missing_traces:
-        print(f"MISSING TRACES {missing_traces}")
-    if problems:
-        print(f"\nINVALID TILINGS ({len(problems)}):")
-        for line in problems[:20]:
-            print(line)
-        if len(problems) > 20:
-            print(f"  ... and {len(problems) - 20} more")
-
-    if not impls:
+    if p.missing_traces:
+        print(f"MISSING TRACES  {list(p.missing_traces)}")
+    if p.problems:
+        print(f"\nINVALID TILINGS ({len(p.problems)}):")
+        for line in p.problems[:20]:
+            print(f"  {line}")
+        if len(p.problems) > 20:
+            print(f"  ... and {len(p.problems) - 20} more")
+    if not p.impls:
         print("\nNothing to benchmark: no non-reference implementations are "
               "registered. Write a kernel in moe/kernels/ (see TEMPLATE.md).")
+
     print("\nNo GPU was used. Nothing was spent.")
-    return 1 if (problems or missing_traces) else 0
+    return 0 if p.ok else 1
 
 
 def main(argv=None) -> int:

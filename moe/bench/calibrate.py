@@ -61,8 +61,10 @@ def measure_bandwidth(target_bytes: int = 2 << 30, warmup: int = 5,
     """
     T.require_cuda()
     n = _buffer_elems(target_bytes)
-    a = torch.randn(n, device="cuda", dtype=torch.float32)
-    b = torch.randn(n, device="cuda", dtype=torch.float32)
+    # Contents are irrelevant to a bandwidth measurement, and randn would burn
+    # several GB of curand for nothing.
+    a = torch.empty(n, device="cuda", dtype=torch.float32).fill_(1.0)
+    b = torch.empty(n, device="cuda", dtype=torch.float32).fill_(2.0)
     c = torch.empty_like(a)
     nbytes = n * 4
 

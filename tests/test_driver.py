@@ -316,7 +316,56 @@ def test_whole_layer_span_still_reports_expert_load(tmp_path):
     r = SC.read_csv(cfg.csv_path)[0]
     assert int(r["load_active_experts"]) == 2
     assert int(r["load_total_rows"]) == s.rows
-    assert "derived from topk_ids" in r["notes"]
+    # The forced decision is available, so no fallback note is needed.
+    assert "derived from" not in r["notes"]
+
+
+@register
+class LyingPermute(StageSpan):
+    """Produces expert_offsets that disagree with the routing decision.
+
+    A kernel covering `permute` is exactly the kind of implementation that can
+    get this wrong, and the harness must not take its word for the load.
+    """
+
+    name = "t_lying_permute"
+    covers = ("permute",)
+    requires_cuda = False
+    dtypes = ("fp32", "bf16")
+
+    def __call__(self, st: MoEState) -> None:
+        cfg = st.spec.model
+        offsets, perm = R.build_permutation(st.topk_ids, cfg.num_experts)
+        st.perm_index = perm
+        st.x_perm = st.x[perm.long() // cfg.top_k]
+        # Wrong: claims every row went to expert 0.
+        bad = torch.zeros_like(offsets)
+        bad[1:] = st.spec.rows
+        st.expert_offsets = bad
+
+
+def test_load_columns_come_from_the_input_not_the_implementation(tmp_path):
+    """Regression: the load axis must not be derived from the thing under test.
+
+    Reading expert_offsets first meant a buggy permute kernel computed its own
+    load metrics, which feed active_experts -> weight bytes -> compulsory bytes
+    -> arithmetic intensity. The routing decision is the ground truth and it is
+    in hand, so it wins.
+    """
+    s = spec()
+    forced = torch.zeros((s.num_tokens, s.model.top_k), dtype=torch.int32)
+    forced[:, 1] = 1                       # two experts, evenly loaded
+    names = ["ref_router", "t_lying_permute", "ref_up_gemm", "ref_act",
+             "ref_down_gemm", "ref_unpermute"]
+    cfg = cfg_for(tmp_path)
+    D.run_sweep([(s, names, "t_lying_permute")], cfg,
+                routing=lambda _: forced, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1, cfg.manifest_path.read_text()
+    r = rows[0]
+    # The lying span claims 1 active expert; the routing decision says 2.
+    assert int(r["load_active_experts"]) == 2, "load was taken from the kernel"
+    assert int(r["load_max_rows"]) == s.num_tokens
 
 
 def test_graph_row_revalidates_the_replayed_output(tmp_path):
@@ -372,39 +421,43 @@ def cost_for(bytes_total):
     return PipelineCost(flops=1.0, bytes_total=bytes_total)
 
 
+def fake_hw(bw_bytes_s=4.8e12, bf16_tflops=835.5):
+    from moe.bench.roofline import Hardware
+    return Hardware(name="fake", bandwidth_bytes_s=bw_bytes_s,
+                    peak_flops={"bf16": bf16_tflops * 1e12, "fp32": 60e12},
+                    source="test")
+
+
 def test_graph_mode_is_skipped_when_launch_overhead_cannot_matter():
     """At DeepSeek geometry with a few tokens the roofline minimum is ~0.8 ms
     against a ~5 us launch. Timing that cell twice spends half a session
     measuring a sub-1% effect."""
-    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.01)
+    cfg = D.RunConfig(hardware=fake_hw(), graph_min_launch_share=0.01)
     ok, reason = D.should_time_graph(cost_for(3.76e9), cfg)   # ~0.78 ms
     assert not ok
     assert "0.6" in reason or "below" in reason
 
 
 def test_graph_mode_is_kept_when_launch_overhead_is_first_order():
-    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.01)
+    cfg = D.RunConfig(hardware=fake_hw(), graph_min_launch_share=0.01)
     ok, reason = D.should_time_graph(cost_for(4.8e5), cfg)     # ~0.0001 ms
     assert ok and reason == ""
 
 
 def test_policy_can_be_disabled():
-    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.0)
+    cfg = D.RunConfig(hardware=fake_hw(), graph_min_launch_share=0.0)
     assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
 
 
-def test_policy_errs_toward_measuring_when_bandwidth_is_unknown():
-    cfg = D.RunConfig(peak_bandwidth_bytes_s=None, graph_min_launch_share=0.01)
-    D._BANDWIDTH_CACHE["bw"] = None
-    try:
-        assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
-    finally:
-        D._BANDWIDTH_CACHE.pop("bw", None)
+def test_policy_errs_toward_measuring_when_hardware_is_unknown():
+    """No calibration means no prediction, so measure rather than guess."""
+    cfg = D.RunConfig(hardware=None, graph_min_launch_share=0.01)
+    assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
 
 
 def test_skipped_graph_row_is_written_not_dropped(tmp_path):
     cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,),
-                  peak_bandwidth_bytes_s=1.0, graph_min_launch_share=0.5)
+                  hardware=fake_hw(bw_bytes_s=1.0), graph_min_launch_share=0.5)
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
     rows = SC.read_csv(cfg.csv_path)

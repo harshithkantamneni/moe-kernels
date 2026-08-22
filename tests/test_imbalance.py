@@ -47,6 +47,27 @@ def test_counts_from_offsets_round_trip():
     assert counts_from_offsets([0, 3, 3, 10]) == [3, 0, 7]
 
 
+def test_counts_from_offsets_validates():
+    """One validating implementation, used in production. The unvalidated
+    duplicate that production used to call is gone."""
+    with pytest.raises(ValueError, match="must start at 0"):
+        counts_from_offsets([1, 4])
+    with pytest.raises(ValueError, match="non-decreasing"):
+        counts_from_offsets([0, 5, 2])
+    with pytest.raises(ValueError, match="empty"):
+        counts_from_offsets([])
+
+
+def test_tile_efficiency_is_carried_on_every_load():
+    """The padding waste this project targets is a column, not an afterthought."""
+    balanced = expert_load([128] * 8)
+    assert balanced.tile_eff_bm128 == 1.0 and balanced.tile_eff_bm64 == 1.0
+    pathological = expert_load([1] * 256)
+    assert pathological.tile_eff_bm128 == pytest.approx(1 / 128)
+    assert pathological.tile_eff_bm64 == pytest.approx(1 / 64)
+    assert "load_tile_eff_bm128" in pathological.as_row()
+
+
 # --- the quantitative form of the fixed-BLOCK_M limitation ------------------
 
 def test_balanced_load_wastes_nothing_when_aligned():

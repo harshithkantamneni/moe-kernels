@@ -6,7 +6,7 @@ because every span declares `reads`/`writes` over these field names, and
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass
 from typing import Any
 
 from .spec import BenchSpec
@@ -75,17 +75,6 @@ class MoEState:
     # independent of router cost, and makes trace replay exact.
     forced_topk_ids: Any = None
 
-    _written: set[str] = field(default_factory=set, repr=False)
-
-    # -- contract bookkeeping ------------------------------------------------
-
-    def mark_written(self, names) -> None:
-        self._written.update(names)
-
-    @property
-    def written(self) -> frozenset[str]:
-        return frozenset(self._written)
-
     def require(self, *names: str) -> tuple:
         """Fetch fields, raising a clear error if a span forgot to produce one."""
         out = []
@@ -130,29 +119,10 @@ class MoEState:
         """Shape-check every populated field. Cheap, and catches most kernel bugs
         before they surface as a confusing numerical mismatch."""
         expected = self.expected_shapes()
-        for f in fields(self):
-            if f.name not in STATE_FIELDS:
-                continue
-            if only is not None and f.name not in only:
-                continue
-            value = getattr(self, f.name)
+        for name in (only or STATE_FIELDS):
+            value = getattr(self, name)
             if value is None:
                 continue
-            got = tuple(value.shape)
-            want = expected[f.name]
+            got, want = tuple(value.shape), expected[name]
             if got != want:
-                raise ValueError(f"state.{f.name}: expected shape {want}, got {got}")
-
-
-def group_sizes_from_offsets(expert_offsets) -> list[int]:
-    """[E+1] CSR offsets -> per-expert row counts. Pure python, used by tests and
-    by the roofline model, so it must not assume a torch tensor."""
-    off = [int(v) for v in expert_offsets]
-    if not off:
-        raise ValueError("expert_offsets is empty; expected E+1 entries")
-    if off[0] != 0:
-        raise ValueError(f"expert_offsets must start at 0, got {off[0]}")
-    sizes = [off[i + 1] - off[i] for i in range(len(off) - 1)]
-    if any(s < 0 for s in sizes):
-        raise ValueError("expert_offsets must be non-decreasing")
-    return sizes
+                raise ValueError(f"state.{name}: expected shape {want}, got {got}")

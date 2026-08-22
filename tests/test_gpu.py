@@ -220,8 +220,9 @@ def test_reference_pipeline_is_not_capturable_and_says_so(tmp_path):
 def test_graph_policy_skips_a_long_kernel(tmp_path):
     """A cell whose predicted time dwarfs a kernel launch is not worth timing
     twice; the row must say so rather than silently vanishing."""
+    from moe.bench.roofline import load_hardware
     cfg = make_cfg(tmp_path, graph_modes=(True,), graph_min_launch_share=0.99,
-                   peak_bandwidth_bytes_s=4.8e12)
+                   hardware=load_hardware("h200_nvl"))
     D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
     r = SC.read_csv(cfg.csv_path)[0]
     assert r["capture_status"] == "skipped"

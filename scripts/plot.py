@@ -21,7 +21,13 @@ matplotlib.use("Agg")  # must precede pyplot; no display on a headless pod
 import matplotlib.pyplot as plt  # noqa: E402
 
 from moe.bench import roofline as RL  # noqa: E402
-from moe.bench.schema import read_csv  # noqa: E402
+from moe.bench.schema import passed, read_csv, row_bool  # noqa: E402
+from moe.bench.schema import row_float as read_float  # noqa: E402
+from moe.bench.schema import series_label as facet  # noqa: E402
+
+
+def _f(row, key, default=0.0):
+    return read_float(row, key, default)
 
 
 def load_rows(results: Path) -> list[dict]:
@@ -36,29 +42,7 @@ def load_rows(results: Path) -> list[dict]:
     merged = results / "merged.csv"
     if merged.exists() and not rows:
         rows = read_csv(merged)
-    return [r for r in rows if r.get("correctness_passed") == "True"]
-
-
-def facet(r) -> str:
-    """Series label that never folds incomparable timing methodologies together.
-
-    An L2-flushed measurement and an L2-warm one are different experiments. So
-    are eager and graph-replay. Merging them into one series would hide the very
-    effect the harness records these axes to expose.
-    """
-    bits = [r.get("impl", "")]
-    bits.append("L2-flushed" if str(r.get("l2_flush")) in ("True", "true", "1")
-                else "L2-warm")
-    if str(r.get("cuda_graph")) in ("True", "true", "1"):
-        bits.append("graph")
-    return " / ".join(b for b in bits if b)
-
-
-def _f(row, key, default=0.0):
-    try:
-        return float(row.get(key) or default)
-    except (TypeError, ValueError):
-        return default
+    return [r for r in rows if passed(r)]
 
 
 def plot_scaling(rows, out_dir: Path, dtype: str = "bf16"):
@@ -133,15 +117,15 @@ def plot_l2_absorption(rows, out_dir: Path, dtype: str = "bf16"):
     for r in rows:
         if r.get("dtype") != dtype or r.get("scope") != "span":
             continue
-        if str(r.get("cuda_graph")) in ("True", "true", "1"):
+        if row_bool(r, "cuda_graph"):
             continue
         key = (r["impl"], r["model"], r["num_tokens"], r["routing_kind"],
                r["routing_param"], r["seed"])
-        paired.setdefault(key, {})[str(r.get("l2_flush"))] = r
+        paired.setdefault(key, {})[row_bool(r, "l2_flush")] = r
 
     pts = []
     for key, both in paired.items():
-        cold, warm = both.get("True"), both.get("False")
+        cold, warm = both.get(True), both.get(False)
         if not cold or not warm:
             continue
         bw = _f(cold, "achieved_bw_gbps") * 1e9
@@ -178,9 +162,16 @@ def main() -> int:
     ap.add_argument("--results", type=Path, default=Path("results"))
     ap.add_argument("--out", type=Path, default=Path("plots"))
     ap.add_argument("--dtype", default="bf16")
-    ap.add_argument("--hardware", default="h200_nvl")
+    ap.add_argument("--hardware", default=None,
+                    help="hardware profile; defaults to the measured "
+                         "calibration when present, else the datasheet")
     ap.add_argument("--allow-unverified-roof", action="store_true")
     args = ap.parse_args()
+
+    if args.hardware is None:
+        # Prefer measured ceilings: the CSV efficiency columns use them, so a
+        # datasheet-roofed plot would disagree with its own data.
+        args.hardware = "measured" if RL.load_measured() else "h200_nvl"
 
     rows = load_rows(args.results)
     if not rows:

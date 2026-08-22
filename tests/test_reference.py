@@ -3,9 +3,10 @@ import torch
 
 from moe import pipeline as P
 from moe.reference import torch_ref as R
+from moe.routing.imbalance import counts_from_offsets
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec
 from moe.stages import StageSpan, register
-from moe.state import MoEState, group_sizes_from_offsets
+from moe.state import MoEState
 
 REF = P.reference_pipeline_names()
 
@@ -27,7 +28,7 @@ def test_reference_pipeline_runs_on_cpu(toy_spec):
 
 def test_offsets_are_valid_csr(toy_spec):
     st, _, _ = run(toy_spec)
-    sizes = group_sizes_from_offsets(st.expert_offsets)
+    sizes = counts_from_offsets(st.expert_offsets)
     assert sum(sizes) == toy_spec.rows
     assert int(st.expert_offsets[0]) == 0
     assert int(st.expert_offsets[-1]) == toy_spec.rows
@@ -73,7 +74,7 @@ def test_empty_experts_are_handled(toy_spec):
     forced = torch.zeros((T, k), dtype=torch.int32)
     forced[:, 1] = 1
     st, x, weights = run(toy_spec, forced=forced)
-    sizes = group_sizes_from_offsets(st.expert_offsets)
+    sizes = counts_from_offsets(st.expert_offsets)
     assert sizes[0] == T and sizes[1] == T
     assert sizes[2:] == [0] * (toy_spec.model.num_experts - 2)
     golden = R.golden_forward(toy_spec, weights, x, forced_topk_ids=forced)
@@ -85,7 +86,7 @@ def test_single_expert_receives_everything(toy_spec):
     T, k = toy_spec.num_tokens, toy_spec.model.top_k
     forced = torch.full((T, k), 3, dtype=torch.int32)
     st, _, _ = run(toy_spec, forced=forced)
-    sizes = group_sizes_from_offsets(st.expert_offsets)
+    sizes = counts_from_offsets(st.expert_offsets)
     assert sizes[3] == T * k
     assert torch.isfinite(st.y).all()
 

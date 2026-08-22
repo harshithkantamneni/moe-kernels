@@ -98,12 +98,6 @@ def runtime_info() -> dict:
     return info
 
 
-def gpu_info() -> dict:
-    """Backwards-compatible alias; requires CUDA."""
-    require_cuda()
-    return runtime_info()
-
-
 @dataclass(frozen=True)
 class ClockState:
     sm_clock_mhz: int
@@ -111,6 +105,19 @@ class ClockState:
 
     @classmethod
     def sample(cls) -> ClockState:
+        """Sample SM clock and temperature.
+
+        Prefers torch's NVML bindings, which cost tens of microseconds. The
+        nvidia-smi fallback below runs twice per timing mode, eight times per
+        cell, and a fork that initialises NVML costs tens of milliseconds on
+        Linux: tens of minutes of a large sweep spent on process startup.
+        """
+        if torch.cuda.is_available():
+            try:
+                return cls(int(torch.cuda.clock_rate()),
+                           int(torch.cuda.temperature()))
+            except (AttributeError, RuntimeError, ValueError):
+                pass  # older torch, or NVML unavailable inside this container
         vals = _nvidia_smi("clocks.current.sm,temperature.gpu")
         if not vals:
             return cls(0, 0)
@@ -357,20 +364,3 @@ def time_graph(
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=True,
                       flush_mb=flusher.megabytes, flush_mode=flush_mode)
-
-
-def iters_for(flops: float) -> int:
-    """Deprecated. Kept only so an explicit --iters override has a fallback.
-
-    Bucketing iteration count on FLOPs is wrong for a bandwidth-bound sweep;
-    `calibrate_iters` measures instead. See its docstring.
-    """
-    if flops < 1e10:
-        return 500
-    if flops < 5e10:
-        return 300
-    if flops < 2e11:
-        return 150
-    if flops < 8e11:
-        return 80
-    return 40

@@ -23,7 +23,6 @@ import numpy as np
 
 from ..spec import BenchSpec
 from .distributions import feasible, realize_counts
-from .imbalance import ExpertLoad, expert_load
 
 TRACE_DIR = Path(__file__).resolve().parents[2] / "traces"
 _SLICE_RE = re.compile(r"^(?P<base>.+?)@b(?P<batch>\d+)l(?P<layer>\d+)$")
@@ -54,14 +53,20 @@ class Trace:
                 f"{self.trace_id}: slice b{b}l{ln} outside shape {self.shape}")
         return self.counts[b, ln].astype(np.int64), b, ln
 
-    def load_of(self, batch: int | None = None, layer: int | None = None,
-                seed: int = 0) -> ExpertLoad:
-        counts, _, _ = self.select(batch, layer, seed)
-        return expert_load(counts.tolist())
 
-    def layer_loads(self, batch: int = 0) -> list[ExpertLoad]:
-        return [expert_load(self.counts[batch, ln].tolist())
-                for ln in range(self.shape[1])]
+def _largest_remainder(shares: np.ndarray, total: int) -> np.ndarray:
+    """Round `shares` to integers summing exactly to `total`.
+
+    Floor everything, then hand the leftover units to the largest fractional
+    parts. Naive rounding distorts the shape of a distribution; this does not,
+    which is why both the rescale and the redistribution below need it.
+    """
+    out = np.floor(shares).astype(np.int64)
+    left = total - int(out.sum())
+    if left > 0:
+        order = np.argsort(-(shares - out))
+        out[order[:left]] += 1
+    return out
 
 
 def rescale_counts(counts, num_tokens: int, top_k: int) -> list[int]:
@@ -87,13 +92,7 @@ def rescale_counts(counts, num_tokens: int, top_k: int) -> list[int]:
         for i in range(target - base * E):
             out[i] += 1
     else:
-        scaled = c * (target / c.sum())
-        out = np.floor(scaled).astype(np.int64)
-        remainder = target - int(out.sum())
-        if remainder > 0:
-            order = np.argsort(-(scaled - out))
-            out[order[:remainder]] += 1
-        out = out.tolist()
+        out = _largest_remainder(c * (target / c.sum()), target).tolist()
 
     out = _cap_and_redistribute(out, num_tokens, target)
     ok, why = feasible(out, num_tokens, top_k)
@@ -117,12 +116,7 @@ def _cap_and_redistribute(counts: list[int], cap: int, target: int) -> list[int]
                 f"cannot fit {target} rows into {len(out)} experts capped at {cap}")
         # Largest-remainder again, so the redistribution does not itself skew.
         share = np.array(headroom, dtype=np.float64) * (excess / total_head)
-        add = np.floor(share).astype(np.int64)
-        left = excess - int(add.sum())
-        if left > 0:
-            order = np.argsort(-(share - add))
-            for i in order[:left]:
-                add[i] += 1
+        add = _largest_remainder(share, excess)
         out = [v + int(a) for v, a in zip(out, add, strict=True)]
     else:  # pragma: no cover - the loop bound is generous
         raise ValueError("redistribution did not converge")

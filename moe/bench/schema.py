@@ -86,6 +86,9 @@ class Row:
     load_entropy_norm: float = 0.0
     load_gini: float = 0.0
     load_top1_share: float = 0.0
+    # Useful rows / rows a fixed-BLOCK_M schedule must compute.
+    load_tile_eff_bm64: float = 1.0
+    load_tile_eff_bm128: float = 1.0
 
     # --- timing method ----------------------------------------------------
     # Recorded, never assumed. Most published MoE numbers omit these two and
@@ -126,11 +129,17 @@ class Row:
     # peak it will never reach.
     achieved_bw_gbps: float = 0.0
     achieved_bf16_tflops: float = 0.0
-    pct_of_achieved_bw: float = 0.0
+    # Compute-side efficiency against the measured cuBLAS ceiling. Not
+    # derivable from the memory-side number, so both are carried.
+    pct_of_achieved_tflops: float = 0.0
     # Counter-free stand-in for measured DRAM traffic, which needs Nsight
     # Compute and a host permission a rented pod does not grant. Only emitted
-    # for memory-bound cells, and it is an UPPER bound on the re-read factor:
-    # it also absorbs occupancy and latency losses. See calibrate.py.
+    # for memory-bound cells; an UPPER bound on the re-read factor, since it
+    # also absorbs occupancy and latency losses. See calibrate.py.
+    #
+    # A pct_of_achieved_bw column was removed as exactly redundant with this:
+    # the two multiply to 100 for every input. Memory-side efficiency is
+    # 100 / implied_traffic_ratio.
     implied_traffic_ratio: float = 0.0
 
     # --- input construction -----------------------------------------------
@@ -161,6 +170,61 @@ class Row:
 
 
 COLUMNS: list[str] = [f.name for f in fields(Row)]
+
+
+#: How a bool is spelled once it has been through the CSV.
+TRUTHY = ("True", "true", "1")
+
+_FIELD_TYPES: dict[str, str] = {
+    f.name: (f.type if isinstance(f.type, str) else f.type.__name__)
+    for f in fields(Row)
+}
+
+
+def row_bool(row: dict, key: str, default: bool = False) -> bool:
+    """Read a bool from a CSV row. One spelling, everywhere.
+
+    Three separate open-codings of this test had already drifted: one accepted
+    "True"/"true"/"1" and another only "True", so two figures filtered the same
+    column differently.
+    """
+    value = row.get(key)
+    if value is None or value == "":
+        return default
+    return str(value) in TRUTHY
+
+
+def row_float(row: dict, key: str, default: float = 0.0) -> float:
+    try:
+        return float(row.get(key) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def passed(row: dict) -> bool:
+    """Did this row earn its timing numbers?
+
+    The driver also enforces this structurally by zeroing timing fields on a
+    failed row, so this is a second line of defence rather than the only one.
+    """
+    return row_bool(row, "correctness_passed")
+
+
+def series_label(row: dict, label_col: str = "impl") -> str:
+    """Plot series key that never folds incomparable methodologies together.
+
+    An L2-flushed measurement and an L2-warm one are different experiments, and
+    so are eager and graph replay. This lived in two files with two slightly
+    different answers, so the same row was labelled differently depending on
+    which figure it landed in.
+    """
+    bits = [row.get(label_col, "")]
+    bits.append("L2-flushed" if row_bool(row, "l2_flush") else "L2-warm")
+    if row_bool(row, "cuda_graph"):
+        bits.append("graph")
+    if row.get("scope") == "pipeline":
+        bits.append("full layer")
+    return " / ".join(b for b in bits if b)
 
 
 def cell_key(row: Row) -> str:
@@ -204,11 +268,21 @@ class CsvWriter:
         self.close()
 
 
+# Manifest outcome codes. Constants rather than bare literals at the call
+# sites: a typo'd status silently falls outside TERMINAL_STATUSES, and the cell
+# would then retry forever with nothing to indicate why.
+STATUS_OK = "ok"
+STATUS_CORRECTNESS_FAILED = "correctness_failed"
+STATUS_NOT_CAPTURABLE = "not_capturable"
+STATUS_INVALID_PIPELINE = "invalid_pipeline"
+STATUS_ERROR = "error"
+STATUS_CRASH = "crash"
+
 #: Outcomes that are deterministic, so re-running would reproduce them exactly.
 #: Anything else (a CUDA OOM, a crash) is transient and MUST stay retryable, or
 #: a single bad moment permanently blanks that cell from every future run.
-TERMINAL_STATUSES = frozenset({"ok", "correctness_failed", "not_capturable",
-                               "invalid_pipeline", "unsupported"})
+TERMINAL_STATUSES = frozenset({STATUS_OK, STATUS_CORRECTNESS_FAILED,
+                               STATUS_NOT_CAPTURABLE, STATUS_INVALID_PIPELINE})
 
 
 class Manifest:
@@ -291,10 +365,9 @@ def merge_csvs(paths: Iterable[str | os.PathLike], out_path: str | os.PathLike) 
 
 
 def _coerce(name: str, value: str):
-    field_type = {f.name: f.type for f in fields(Row)}[name]
-    t = field_type if isinstance(field_type, str) else field_type.__name__
+    t = _FIELD_TYPES[name]
     if t == "bool":
-        return value in ("True", "true", "1")
+        return value in TRUTHY
     if t == "int":
         return int(float(value)) if value != "" else 0
     if t == "float":

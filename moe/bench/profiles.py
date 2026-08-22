@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..spec import MODEL_CONFIGS, BenchSpec, RoutingSpec
-from ..stages import CANONICAL_STAGES, StageSpan, registry
+from ..pipeline import reference_pipeline_names
+from ..spec import MODEL_CONFIGS, BenchSpec, RoutingSpec, sweep
+from ..stages import BASE_ENV, CANONICAL_STAGES, StageSpan, registry
 
 
 @dataclass(frozen=True)
@@ -32,15 +33,9 @@ class Profile:
     notes: str = ""
 
     def specs(self) -> list[BenchSpec]:
-        out = []
-        for name in self.models:
-            cfg = MODEL_CONFIGS[name]
-            for tokens in self.token_counts:
-                for dtype in self.dtypes:
-                    for routing in self.routings:
-                        for seed in self.seeds:
-                            out.append(BenchSpec(cfg, tokens, dtype, routing, seed))
-        return out
+        return list(sweep([MODEL_CONFIGS[n] for n in self.models],
+                          list(self.token_counts), list(self.dtypes),
+                          list(self.routings), list(self.seeds)))
 
 
 SKEW_SWEEP = (
@@ -126,10 +121,79 @@ def cells(profile: Profile, env: str | None = None,
             if not span.supports(spec):
                 continue
             yield spec, tiling_for(span), span.name
-        if profile.include_pipeline_scope:
+        # The all-reference pipeline cell is framework-independent, so it is
+        # emitted once, under base. Yielding it for every env ran the slowest
+        # cells in the matrix three times over for identical rows.
+        if profile.include_pipeline_scope and env in (None, BASE_ENV):
             from .driver import PIPELINE_SCOPE
-            ref = [f"ref_{s}" for s in CANONICAL_STAGES]
-            yield spec, ref, PIPELINE_SCOPE
+            yield spec, reference_pipeline_names(), PIPELINE_SCOPE
+
+
+@dataclass(frozen=True)
+class Plan:
+    """What a sweep would do, computed without touching a GPU.
+
+    Separated from its presentation so the counting is testable. A dry run that
+    miscounts is exactly the failure the whole laptop-side design exists to
+    prevent, and it previously had no test at all.
+    """
+
+    profile: Profile
+    env: str | None
+    impls: tuple[str, ...]
+    specs: int
+    planned: int
+    unsupported: int
+    problems: tuple[str, ...]
+    missing_traces: tuple[str, ...]
+
+    @property
+    def modes(self) -> int:
+        return len(self.profile.l2_modes) * len(self.profile.graph_modes)
+
+    @property
+    def timing_rows(self) -> int:
+        return self.planned * self.modes
+
+    @property
+    def ok(self) -> bool:
+        return not self.problems and not self.missing_traces
+
+
+def plan(profile: Profile, env: str | None = None,
+         impl_filter: tuple[str, ...] = (), include_reference: bool = False,
+         traces=None) -> Plan:
+    """Build and validate every tiling in the matrix. No GPU, nothing spent."""
+    from ..pipeline import PipelineError, build
+
+    impls = candidate_impls(env=env, include_reference=include_reference)
+    if impl_filter:
+        impls = [s for s in impls if s.name in impl_filter]
+
+    specs = profile.specs()
+
+    # Counted directly. `cells()` filters unsupported spans before yielding, so
+    # inferring this from build failures always reported zero.
+    unsupported = sum(1 for spec in specs for span in impls
+                      if not span.supports(spec))
+
+    problems: list[str] = []
+    planned = 0
+    for spec, names, impl in cells(profile, env=env, impl_filter=impl_filter,
+                                   include_reference=include_reference):
+        try:
+            build(names, spec=spec)
+            planned += 1
+        except PipelineError as e:
+            problems.append(f"{spec.label} [{impl}]: {e}")
+
+    needed = {s.routing.trace_id for s in specs if s.routing.kind == "trace"}
+    missing = sorted(t for t in needed if traces is None or t not in traces)
+
+    return Plan(profile=profile, env=env,
+                impls=tuple(s.name for s in impls), specs=len(specs),
+                planned=planned, unsupported=unsupported,
+                problems=tuple(problems), missing_traces=tuple(missing))
 
 
 def get(name: str) -> Profile:

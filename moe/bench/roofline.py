@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import schema as SC
+
 HARDWARE_DIR = Path(__file__).parent / "hardware"
 
 
@@ -84,6 +86,20 @@ def peak_bandwidth(name: str = "h200_nvl") -> float | None:
         return None
 
 
+def load_measured() -> Hardware | None:
+    """Ceilings measured by scripts/calibrate_hardware.py, if it has been run.
+
+    That script writes measured.yaml in exactly load_hardware's schema, so this
+    is a one-line call rather than a second yaml parser. Returns None when the
+    calibration has not been run, so callers leave the efficiency columns empty
+    instead of quoting a datasheet peak.
+    """
+    try:
+        return load_hardware("measured")
+    except (FileNotFoundError, ValueError, KeyError, UnverifiedHardware):
+        return None
+
+
 def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
                achieved_flops_s: float) -> float:
     """Achieved FLOP/s as a fraction of what the roofline permits at this AI.
@@ -111,25 +127,20 @@ def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
 
     hw = load_hardware(hardware, allow_unverified=allow_unverified)
 
-    def _num(r, key):
-        try:
-            return float(r.get(key) or 0.0)
-        except (TypeError, ValueError):
-            return 0.0
-
     # Only correctness-passing rows are plotted. A row that failed the oracle
-    # carries no timing and must never appear as a performance point.
+    # leaves the driver with its timing zeroed, so this is redundancy rather
+    # than the only defence.
     rows = [r for r in rows
             if r.get("dtype") == dtype
-            and str(r.get("correctness_passed", "")) in ("True", "true", "1")
-            and _num(r, "arith_intensity_compulsory") > 0
-            and _num(r, "tflops") > 0]
+            and SC.passed(r)
+            and SC.row_float(r, "arith_intensity_compulsory") > 0
+            and SC.row_float(r, "tflops") > 0]
     if not rows:
         raise ValueError(
             f"no correctness-passing rows with dtype={dtype} and a positive intensity")
 
-    ai = np.array([_num(r, "arith_intensity_compulsory") for r in rows])
-    tf = np.array([_num(r, "tflops") for r in rows])
+    ai = np.array([SC.row_float(r, "arith_intensity_compulsory") for r in rows])
+    tf = np.array([SC.row_float(r, "tflops") for r in rows])
 
     x = np.logspace(np.log10(max(ai.min() / 4, 1e-2)),
                     np.log10(max(ai.max() * 4, hw.ridge_point(dtype) * 4)), 400)
@@ -140,27 +151,13 @@ def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
     ax.axvline(hw.ridge_point(dtype), color="0.6", ls="--", lw=1,
                label=f"ridge {hw.ridge_point(dtype):.0f} FLOP/byte")
 
-    # Series must not fold the timing modes together. The L2-flush axis moves
+    # Series must not fold the timing modes together: the L2-flush axis moves
     # small-batch results by more than most kernel optimisations do, so points
-    # measured with and without a flush sit at the SAME x with different y, and
-    # a single merged series would hide exactly the effect this harness exists
-    # to expose.
-    def series_key(r):
-        parts = [r.get(label_col, "")]
-        if str(r.get("l2_flush")) in ("True", "true", "1"):
-            parts.append("L2-flushed")
-        else:
-            parts.append("L2-warm")
-        if str(r.get("cuda_graph")) in ("True", "true", "1"):
-            parts.append("graph")
-        scope = r.get("scope", "")
-        if scope == "pipeline":
-            parts.append("full layer")
-        return " / ".join(p for p in parts if p)
-
+    # measured with and without a flush sit at the SAME x with different y.
     markers = ["o", "s", "^", "D", "v", "P", "X", "*"]
-    for i, label in enumerate(sorted({series_key(r) for r in rows})):
-        m = [j for j, r in enumerate(rows) if series_key(r) == label]
+    labels = sorted({SC.series_label(r, label_col) for r in rows})
+    for i, label in enumerate(labels):
+        m = [j for j, r in enumerate(rows) if SC.series_label(r, label_col) == label]
         ax.loglog(ai[m], tf[m], markers[i % len(markers)], ms=5, alpha=0.85,
                   label=label)
 

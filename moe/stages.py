@@ -8,7 +8,7 @@ pipeline, so they are benchmarked by one driver and checked against one oracle.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .spec import BenchSpec
@@ -25,6 +25,32 @@ CANONICAL_STAGES: tuple[str, ...] = (
 )
 
 STAGE_INDEX: dict[str, int] = {s: i for i, s in enumerate(CANONICAL_STAGES)}
+
+#: The environment that owns the harness and your kernels. Spans declaring this
+#: run in whatever process is executing, so they compose with any other env.
+BASE_ENV = "base"
+
+#: Environments the runner knows how to satisfy. Closed on purpose: an open
+#: string means a typo like env="vlllm" silently makes candidate_impls return
+#: nothing and the sweep benchmarks zero implementations without an error.
+KNOWN_ENVS: frozenset[str] = frozenset({BASE_ENV, "vllm", "sglang"})
+
+
+def resolve_env(spans) -> str:
+    """The single environment a set of spans must execute in.
+
+    `base` composes with anything, so the answer is the unique non-base env if
+    there is one. Raises if two frameworks are named, because no process can
+    satisfy both.
+    """
+    envs = {s.env for s in spans if s.env != BASE_ENV}
+    if len(envs) > 1:
+        owners = {s.name: s.env for s in spans if s.env != BASE_ENV}
+        raise ValueError(
+            f"spans mix incompatible environments {sorted(envs)}: {owners}. "
+            "Baselines from different frameworks cannot share one process; "
+            "benchmark them as separate pipelines.")
+    return envs.pop() if envs else BASE_ENV
 
 
 @dataclass(frozen=True)
@@ -157,6 +183,33 @@ class StageSpan(ABC):
         return f"<{self.name} covers={'+'.join(self.covers)} env={self.env}>"
 
 
+def load_package(package_path, package_name: str, kind: str,
+                 strict: bool = False) -> list[str]:
+    """Import every module in a package so its @register-ed spans appear.
+
+    A module that fails to import (a Triton kernel on a machine without CUDA, a
+    baseline whose framework is not installed in this venv) is skipped with a
+    warning rather than crashing the harness, so the laptop can still run the
+    CPU test suite.
+    """
+    import importlib
+    import pkgutil
+    import warnings
+
+    loaded = []
+    for mod in pkgutil.iter_modules(package_path):
+        if mod.name.startswith("_"):
+            continue
+        try:
+            importlib.import_module(f"{package_name}.{mod.name}")
+            loaded.append(mod.name)
+        except Exception as e:  # noqa: BLE001
+            if strict:
+                raise
+            warnings.warn(f"{kind} {mod.name!r} did not import: {e}", stacklevel=2)
+    return loaded
+
+
 # --------------------------------------------------------------------------
 # Registry
 # --------------------------------------------------------------------------
@@ -164,21 +217,20 @@ class StageSpan(ABC):
 _REGISTRY: dict[str, StageSpan] = {}
 
 
-def register(cls: type[StageSpan] | None = None, **overrides) -> Callable | type:
-    """Class decorator. Instantiates once and stores under `cls.name`."""
-
-    def _wrap(klass: type[StageSpan]):
-        inst = klass(**overrides) if overrides else klass()
-        if not inst.name:
-            raise ValueError(f"{klass.__name__} must set a non-empty `name`")
-        if inst.name in _REGISTRY:
-            raise ValueError(f"duplicate span name {inst.name!r}")
-        if not inst.covers:
-            raise ValueError(f"{inst.name} must set `covers`")
-        _REGISTRY[inst.name] = inst
-        return klass
-
-    return _wrap(cls) if cls is not None else _wrap
+def register(klass: type[StageSpan]) -> type[StageSpan]:
+    """Class decorator. Instantiates once and stores under `klass.name`."""
+    inst = klass()
+    if not inst.name:
+        raise ValueError(f"{klass.__name__} must set a non-empty `name`")
+    if inst.name in _REGISTRY:
+        raise ValueError(f"duplicate span name {inst.name!r}")
+    if not inst.covers:
+        raise ValueError(f"{inst.name} must set `covers`")
+    if inst.env not in KNOWN_ENVS:
+        raise ValueError(
+            f"{inst.name} declares env {inst.env!r}; known: {sorted(KNOWN_ENVS)}")
+    _REGISTRY[inst.name] = inst
+    return klass
 
 
 def get(name: str) -> StageSpan:
@@ -194,22 +246,3 @@ def registry() -> dict[str, StageSpan]:
     return dict(_REGISTRY)
 
 
-def find(
-    covers: tuple[str, ...] | None = None,
-    spec: BenchSpec | None = None,
-    env: str | None = None,
-) -> list[StageSpan]:
-    out = []
-    for span in _REGISTRY.values():
-        if covers is not None and span.covers != covers:
-            continue
-        if env is not None and span.env != env:
-            continue
-        if spec is not None and not span.supports(spec):
-            continue
-        out.append(span)
-    return sorted(out, key=lambda s: s.name)
-
-
-def _reset_registry_for_tests() -> None:
-    _REGISTRY.clear()

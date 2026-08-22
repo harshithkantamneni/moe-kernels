@@ -4,6 +4,7 @@ Nothing here touches CUDA. Everything is importable and testable on a laptop.
 """
 from __future__ import annotations
 
+import functools
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
 
@@ -36,18 +37,23 @@ def dtype_bytes(dtype: str) -> int:
         ) from None
 
 
-def torch_dtype(dtype: str):
-    """Resolve to a torch dtype. Imported lazily so this module stays CPU/laptop safe."""
+@functools.cache
+def _torch_dtypes() -> dict:
+    """Built once. torch is imported lazily so this module stays laptop-safe."""
     import torch
 
-    table = {
+    return {
         "fp32": torch.float32,
         "fp16": torch.float16,
         "bf16": torch.bfloat16,
         "fp8_e4m3": getattr(torch, "float8_e4m3fn", None),
         "fp8_e5m2": getattr(torch, "float8_e5m2", None),
     }
-    resolved = table.get(dtype)
+
+
+def torch_dtype(dtype: str):
+    """Resolve to a torch dtype."""
+    resolved = _torch_dtypes().get(dtype)
     if resolved is None:
         raise ValueError(f"dtype {dtype!r} is not supported by this torch build")
     return resolved
@@ -71,7 +77,6 @@ class MoEConfig:
     intermediate_size: int    # F, per routed expert
     num_experts: int          # E, routed experts only
     top_k: int                # k
-    act: str = "swiglu"
     gate_fn: str = "softmax"      # softmax | sigmoid (DeepSeek-V3 uses sigmoid)
     norm_topk_prob: bool = True   # renormalise the top-k gate probs to sum to 1
     routed_scaling_factor: float = 1.0  # applied AFTER renormalisation
@@ -277,10 +282,17 @@ def sweep(
     routings: list[RoutingSpec],
     seeds: list[int] | None = None,
 ) -> Iterator[BenchSpec]:
-    """Cartesian product of the benchmark axes, in a deterministic order."""
+    """Cartesian product of the benchmark axes, in a deterministic order.
+
+    Order is chosen, not incidental: (model, dtype, seed) determine the expert
+    weights, so those axes vary slowest and consecutive cells can reuse one
+    weight set. With seed innermost, consecutive cells alternated seeds and any
+    weight cache would thrash. Row order in the CSV follows from this; resume
+    is unaffected because manifest keys are content-derived.
+    """
     for model in models:
-        for tokens in token_counts:
-            for dtype in dtypes:
-                for routing in routings:
-                    for seed in (seeds or [0]):
+        for dtype in dtypes:
+            for seed in (seeds or [0]):
+                for tokens in token_counts:
+                    for routing in routings:
                         yield BenchSpec(model, tokens, dtype, routing, seed)

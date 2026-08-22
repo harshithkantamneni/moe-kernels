@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -29,6 +28,7 @@ import yaml  # noqa: E402
 
 from moe.bench.calibrate import calibrate  # noqa: E402
 from moe.bench.roofline import load_hardware  # noqa: E402
+from moe.bench.schema import git_provenance  # noqa: E402
 
 
 def main() -> int:
@@ -72,8 +72,9 @@ def main() -> int:
     except Exception as e:  # noqa: BLE001
         print(f"\n  (no spec comparison: {e})")
 
-    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                         text=True).stdout.strip()
+    # git_provenance runs with -C <repo root>, so it records the right SHA even
+    # when the script is invoked from elsewhere, and it will not hang.
+    sha, dirty = git_provenance()
     payload = {
         "name": f"{cal.gpu_name} (measured)",
         "verified": True,

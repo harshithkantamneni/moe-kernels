@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -35,6 +34,8 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from moe.bench.schema import git_provenance  # noqa: E402
+from moe.routing.capture import GateRecorder, find_gate_modules  # noqa: E402
 from moe.routing.imbalance import expert_load  # noqa: E402
 from moe.routing.traces import write_trace  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
@@ -76,69 +77,6 @@ CORPORA: dict[str, list[str]] = {
         "It rained for nine days. On the tenth, the river took the bridge.",
     ],
 }
-
-
-def find_gate_modules(model, num_experts: int):
-    """Locate every routed-expert gate, without hardcoding a model's layout.
-
-    Mixtral puts it at `block_sparse_moe.gate`, Qwen2 and DeepSeek at
-    `mlp.gate`. Rather than branch per architecture, find every Linear whose
-    output width equals the routed-expert count and whose FINAL path component
-    is exactly "gate".
-
-    The last-component match matters: a suffix match on "gate" also catches
-    `attn_gate` and Qwen2's `shared_expert_gate`, and hooking those would
-    capture counts that are not routed-expert counts at all.
-    """
-    found = []
-    for name, module in model.named_modules():
-        if name.rsplit(".", 1)[-1] != "gate":
-            continue
-        out = getattr(module, "out_features", None)
-        if out is None:
-            weight = getattr(module, "weight", None)
-            out = None if weight is None else weight.shape[0]
-        if out == num_experts:
-            found.append((name, module))
-    return found
-
-
-class GateRecorder:
-    """Accumulates per-layer expert counts for the current batch."""
-
-    def __init__(self, cfg, num_layers: int):
-        self.cfg = cfg
-        self.counts = torch.zeros((num_layers, cfg.num_experts), dtype=torch.long)
-        self.handles = []
-        self.index: dict[str, int] = {}
-
-    def attach(self, gates):
-        for i, (name, module) in enumerate(gates):
-            self.index[name] = i
-            self.handles.append(module.register_forward_hook(self._make_hook(i)))
-
-    def _make_hook(self, layer: int):
-        cfg = self.cfg
-
-        def hook(_module, _inputs, output):
-            logits = output[0] if isinstance(output, tuple) else output
-            logits = logits.detach().float().reshape(-1, cfg.num_experts)
-            scores = (torch.sigmoid(logits) if cfg.gate_fn == "sigmoid"
-                      else torch.softmax(logits, dim=-1))
-            ids = torch.topk(scores, cfg.top_k, dim=-1).indices
-            # Reduce on device, move one small vector to host per layer.
-            c = torch.bincount(ids.reshape(-1), minlength=cfg.num_experts)
-            self.counts[layer] += c.cpu().long()
-
-        return hook
-
-    def reset(self):
-        self.counts.zero_()
-
-    def detach(self):
-        for h in self.handles:
-            h.remove()
-        self.handles.clear()
 
 
 def main() -> int:
@@ -223,7 +161,7 @@ def main() -> int:
                                 use_cache=True)
                     past = out.past_key_values
                     next_tok = out.logits[:, -1:].argmax(-1)
-            all_counts[b] = recorder.counts.numpy().astype(np.int32)
+            all_counts[b] = recorder.snapshot()
             load = expert_load(all_counts[b].sum(axis=0).tolist())
             print(f"[capture] batch {b + 1}/{args.batches} "
                   f"max/mean={load.max_over_mean:.2f} "
@@ -232,8 +170,9 @@ def main() -> int:
     recorder.detach()
 
     trace_id = args.trace_id or f"{args.model}-{args.corpus}-{args.phase}"
-    sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                         text=True).stdout.strip()
+    # git_provenance runs with -C <repo root>, so it records the right SHA even
+    # when the script is invoked from elsewhere, and it will not hang.
+    sha, dirty = git_provenance()
     meta = {
         "trace_id": trace_id,
         "model": cfg.name,
@@ -253,6 +192,7 @@ def main() -> int:
         "dtype": args.dtype,
         "gpu": torch.cuda.get_device_name(0),
         "capture_commit": sha,
+        "capture_dirty": dirty,
         "captured_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
     path = write_trace(args.out / f"{trace_id}.npz", all_counts, meta)
