@@ -14,18 +14,6 @@ class _Noop(StageSpan):
 
 
 @register
-class _FusedDownScatter(_Noop):
-    name = "t_fused_down_scatter"
-    covers = ("down_gemm", "unpermute")
-
-
-@register
-class _FusedUpAct(_Noop):
-    name = "t_fused_up_act"
-    covers = ("up_gemm", "act")
-
-
-@register
 class _FusedPermuteUp(_Noop):
     name = "t_fused_permute_up"
     covers = ("permute", "up_gemm")
@@ -71,13 +59,13 @@ def test_all_reference_tiling_is_valid():
 
 def test_fused_tiling_is_valid_and_shorter():
     names = ["ref_router", "ref_permute", "ref_up_gemm", "ref_act",
-             "t_fused_down_scatter"]
+             "ref_fused_down_scatter"]
     pipe = P.build(names)
     assert len(pipe.spans) == 5
 
 
 def test_two_fusions_compose():
-    names = ["ref_router", "ref_permute", "t_fused_up_act", "t_fused_down_scatter"]
+    names = ["ref_router", "ref_permute", "ref_fused_up_act", "ref_fused_down_scatter"]
     assert len(P.build(names).spans) == 4
 
 
@@ -88,7 +76,7 @@ def test_missing_stage_names_the_gap():
 
 def test_overlapping_spans_named():
     names = ["ref_router", "ref_permute", "ref_up_gemm", "ref_act",
-             "t_fused_down_scatter", "ref_unpermute"]
+             "ref_fused_down_scatter", "ref_unpermute"]
     with pytest.raises(P.PipelineError, match="re-covers"):
         P.build(names)
 

@@ -1,0 +1,34 @@
+# Peak numbers for the roofline. NOTHING here is trusted until you check it
+# against the NVIDIA datasheet and flip `verified` to true. roofline.py refuses
+# to draw a roof from an unverified file, because an uncited roofline is worse
+# than no roofline: it looks authoritative and quietly misattributes efficiency.
+#
+# Two traps this file exists to avoid:
+#   1. NVIDIA headline TFLOP/s figures are usually the *sparsity* numbers.
+#      Dense is half. Use dense.
+#   2. H200 SXM and H200 NVL are different parts with different TDP and
+#      different peak compute. Do not copy an SXM number into an NVL roofline.
+
+name: NVIDIA H200 NVL
+verified: false
+source: https://www.nvidia.com/en-us/data-center/h200/
+checked_by: null
+checked_on: null
+
+memory:
+  capacity_gb: 141          # HBM3e
+  bandwidth_tb_s: 4.8       # DRAFT, verify
+
+# Dense tensor-core peaks, TFLOP/s. Halve any datasheet figure that is
+# annotated "with sparsity".
+compute_dense_tflops:
+  fp32: null                # verify; not used by the current sweep
+  bf16: 835.0               # DRAFT, verify
+  fp16: 835.0               # DRAFT, verify
+  fp8_e4m3: 1671.0          # DRAFT, verify
+
+# Filled in automatically from torch.cuda.get_device_properties at run time and
+# compared against the values above as a sanity check.
+observed:
+  sm_count: null
+  l2_bytes: null
