@@ -107,11 +107,18 @@ def available_profiles() -> list[str]:
 
 
 def for_device(gpu_name: str) -> str | None:
-    """Pick the hardware profile describing this GPU, or None if none does.
+    """Pick the hardware profile describing this GPU, or None if it is unclear.
 
-    Keeps the repo from being hardcoded to one part. Silence is the right answer
-    when nothing matches: a missing roof is recoverable, a wrong one is not.
+    AMBIGUITY MUST NOT RESOLVE SILENTLY. torch reports an H200 SXM as plain
+    "NVIDIA H200", which is a substring of both "NVIDIA H200 NVL" and
+    "NVIDIA H200 SXM". Returning the first match picked NVL, whose BF16 peak is
+    835.5 against SXM's 989.5, and every efficiency number would have been
+    understated by 18% with nothing to indicate it.
+
+    So: exactly one match is an answer; several is a question. A missing roof is
+    recoverable and loud; a wrong one is neither.
     """
+    matched = []
     for stem in available_profiles():
         if stem == "measured":
             continue
@@ -120,8 +127,23 @@ def for_device(gpu_name: str) -> str | None:
         except (ValueError, KeyError):
             continue
         if device_matches(hw, gpu_name):
-            return stem
-    return None
+            matched.append(stem)
+    return matched[0] if len(matched) == 1 else None
+
+
+def ambiguous_for_device(gpu_name: str) -> list[str]:
+    """Profiles that all match this device name. Non-empty means unresolvable."""
+    matched = []
+    for stem in available_profiles():
+        if stem == "measured":
+            continue
+        try:
+            hw = load_hardware(stem, allow_unverified=True)
+        except (ValueError, KeyError):
+            continue
+        if device_matches(hw, gpu_name):
+            matched.append(stem)
+    return matched if len(matched) > 1 else []
 
 
 def load_measured() -> Hardware | None:

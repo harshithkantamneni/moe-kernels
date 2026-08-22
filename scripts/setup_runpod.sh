@@ -184,10 +184,18 @@ else:
     print(f"[setup] SMs / L2            {props.multi_processor_count} / "
           f"{getattr(props, 'L2_cache_size', 0) / 2**20:.0f} MiB")
     try:
-        from moe.bench.roofline import available_profiles, for_device
+        from moe.bench.roofline import (ambiguous_for_device,
+                                         available_profiles, for_device)
         profile = for_device(props.name)
-        extra = "" if profile else f"  (have {available_profiles()}; run calibrate_hardware.py)"
-        print(f"[setup] roofline profile    {profile or 'NONE MATCHES'}{extra}")
+        if profile:
+            print(f"[setup] roofline profile    {profile}")
+        else:
+            tied = ambiguous_for_device(props.name)
+            why = (f"AMBIGUOUS between {tied}" if tied
+                   else f"NONE MATCHES (have {available_profiles()})")
+            print(f"[setup] roofline profile    {why}")
+            print("[setup]                     -> run scripts/calibrate_hardware.py;")
+            print("[setup]                        measured ceilings beat any datasheet")
     except ImportError:
         pass
 

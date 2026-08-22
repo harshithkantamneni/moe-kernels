@@ -136,3 +136,22 @@ def test_device_mismatch_is_detected():
     assert RL.device_matches(sxm, "NVIDIA H200 SXM")
     assert not RL.device_matches(sxm, "NVIDIA H100 NVL")
     assert RL.device_matches(sxm, ""), "no gpu_name recorded means nothing to check"
+
+
+def test_an_ambiguous_device_name_refuses_to_choose():
+    """torch reports an H200 SXM as plain "NVIDIA H200", which is a substring of
+    both H200 profiles. Picking the first match chose NVL and would have
+    understated every efficiency number by 18%."""
+    assert RL.for_device("NVIDIA H200") is None
+    assert RL.ambiguous_for_device("NVIDIA H200") == ["h200_nvl", "h200_sxm"]
+
+
+def test_an_unambiguous_name_still_resolves():
+    assert RL.for_device("NVIDIA H200 SXM") == "h200_sxm"
+    assert RL.for_device("NVIDIA H200 NVL") == "h200_nvl"
+    assert RL.ambiguous_for_device("NVIDIA H200 SXM") == []
+
+
+def test_no_match_is_distinguishable_from_ambiguity():
+    assert RL.for_device("NVIDIA H100 NVL") is None
+    assert RL.ambiguous_for_device("NVIDIA H100 NVL") == []

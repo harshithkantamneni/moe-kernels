@@ -45,5 +45,8 @@ sibling_part_h200_nvl:
   note: PCIe part, 600 W, ~84% of SXM tensor throughput
 
 observed:
-  sm_count: 132             # per NVIDIA training deck, not the datasheet
-  l2_bytes: 52428800        # 50 MiB
+  # Read from torch.cuda.get_device_properties on an actual H200 SXM,
+  # 2026-08-22. The SM count matches NVIDIA's training deck; the L2 does NOT
+  # (the deck says 50 MiB). The device is the authority here.
+  sm_count: 132
+  l2_bytes: 62914560        # 60 MiB, as reported by the device
