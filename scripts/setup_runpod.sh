@@ -186,7 +186,12 @@ else:
     try:
         from moe.bench.roofline import (ambiguous_for_device,
                                          available_profiles, for_device)
-        profile = for_device(props.name)
+        from moe.bench.roofline import power_limit_w
+        tdp = power_limit_w()
+        if tdp:
+            print(f"[setup] power limit         {tdp:.0f} W"
+                  + ("  (SXM)" if tdp > 650 else "  (NVL)"))
+        profile = for_device(props.name, tdp_w=tdp)
         if profile:
             print(f"[setup] roofline profile    {profile}")
         else:

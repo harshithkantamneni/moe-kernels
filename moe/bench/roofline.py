@@ -25,6 +25,9 @@ class Hardware:
     bandwidth_bytes_s: float
     peak_flops: dict[str, float]
     source: str
+    #: Board power limit in watts. The only cheap way to tell an H200 SXM
+    #: (700 W) from an H200 NVL (600 W): torch reports both as "NVIDIA H200".
+    tdp_w: float | None = None
     #: For a measured profile, which STREAM pattern defined the bandwidth.
     #: Empty for a datasheet profile, where the figure is a pin rate.
     ceiling_pattern: str = ""
@@ -78,6 +81,7 @@ def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
         peak_flops={k: v for k, v in peaks.items() if v},
         source=data.get("source", ""),
         ceiling_pattern=(data.get("detail") or {}).get("ceiling_pattern", ""),
+        tdp_w=data.get("tdp_w"),
     )
 
 
@@ -112,7 +116,20 @@ def available_profiles() -> list[str]:
     return sorted(p.stem for p in HARDWARE_DIR.glob("*.yaml"))
 
 
-def for_device(gpu_name: str) -> str | None:
+def power_limit_w() -> float | None:
+    """Board power limit, or None. Used to disambiguate same-named parts."""
+    from .timing import _nvidia_smi
+
+    vals = _nvidia_smi("power.limit")
+    if not vals:
+        return None
+    try:
+        return float(vals[0].split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def for_device(gpu_name: str, tdp_w: float | None = None) -> str | None:
     """Pick the hardware profile describing this GPU, or None if it is unclear.
 
     AMBIGUITY MUST NOT RESOLVE SILENTLY. torch reports an H200 SXM as plain
@@ -133,8 +150,17 @@ def for_device(gpu_name: str) -> str | None:
         except (ValueError, KeyError):
             continue
         if device_matches(hw, gpu_name):
-            matched.append(stem)
-    return matched[0] if len(matched) == 1 else None
+            matched.append((stem, hw))
+
+    # An ambiguous name is resolvable by power limit: an H200 SXM is 700 W and
+    # an H200 NVL is 600 W, and torch calls both "NVIDIA H200".
+    if len(matched) > 1 and tdp_w is not None:
+        by_power = [stem for stem, hw in matched
+                    if hw.tdp_w is not None and abs(hw.tdp_w - tdp_w) < 25]
+        if len(by_power) == 1:
+            return by_power[0]
+
+    return matched[0][0] if len(matched) == 1 else None
 
 
 def ambiguous_for_device(gpu_name: str) -> list[str]:

@@ -155,3 +155,32 @@ def test_an_unambiguous_name_still_resolves():
 def test_no_match_is_distinguishable_from_ambiguity():
     assert RL.for_device("NVIDIA H100 NVL") is None
     assert RL.ambiguous_for_device("NVIDIA H100 NVL") == []
+
+
+def test_power_limit_breaks_the_h200_name_tie():
+    """torch calls both parts "NVIDIA H200". Board power does not: SXM is
+    700 W, NVL is 600 W. One nvidia-smi field resolves what the name cannot."""
+    assert RL.for_device("NVIDIA H200") is None
+    assert RL.for_device("NVIDIA H200", tdp_w=700.0) == "h200_sxm"
+    assert RL.for_device("NVIDIA H200", tdp_w=600.0) == "h200_nvl"
+
+
+def test_an_unrecognised_power_limit_still_refuses():
+    assert RL.for_device("NVIDIA H200", tdp_w=350.0) is None
+
+
+def test_profiles_declare_their_tdp():
+    assert RL.load_hardware("h200_sxm").tdp_w == 700
+    assert RL.load_hardware("h200_nvl").tdp_w == 600
+
+
+def test_the_datasheet_figure_is_below_the_derived_pin_rate():
+    """Measured on the device: clocks.max.memory 3201 MHz, so the pin rate is
+    3201 x 2 (DDR) x 6144 / 8 = 4916.7 GB/s. NVIDIA publishes 4.8 TB/s, which is
+    2.4% lower, so the datasheet number is already derated. Any published
+    percentage must say which denominator it used."""
+    pin = 3201 * 2 * 6144 / 8 / 1000
+    assert pin == pytest.approx(4916.7, abs=0.1)
+    spec = RL.load_hardware("h200_sxm").bandwidth_bytes_s / 1e9
+    assert spec < pin
+    assert 100 * spec / pin == pytest.approx(97.6, abs=0.2)

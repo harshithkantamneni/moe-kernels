@@ -27,8 +27,46 @@ import torch  # noqa: E402
 import yaml  # noqa: E402
 
 from moe.bench.calibrate import DEFAULT_CEILING, calibrate  # noqa: E402
-from moe.bench.roofline import ambiguous_for_device, for_device, load_hardware  # noqa: E402
+from moe.bench.roofline import (ambiguous_for_device,  # noqa: E402
+                                for_device, load_hardware, power_limit_w)
 from moe.bench.schema import git_provenance  # noqa: E402
+
+
+def _device_facts() -> dict:
+    """Device facts that settle what a percentage is a percentage OF.
+
+    The memory clock is the important one. HBM is DDR, so the pin rate is
+    clk x 2 x bus_width / 8, and the doubling is mandatory: omitting it gives
+    exactly half, the same class of silent 2x error as the read-for-ownership
+    question. On this H200, 3201 MHz gives 4916.7 GB/s, which is 2.4% above
+    NVIDIA's published 4.8 TB/s -- so the datasheet figure is already derated
+    and is not a theoretical maximum.
+    """
+    import torch
+
+    from moe.bench.timing import _nvidia_smi
+
+    out: dict = {}
+    props = torch.cuda.get_device_properties(0)
+    out["l2_bytes"] = getattr(props, "L2_cache_size", 0)
+    out["sm_count"] = props.multi_processor_count
+
+    vals = _nvidia_smi("clocks.max.memory,clocks.current.memory,"
+                       "clocks_throttle_reasons.active")
+    if vals:
+        parts = [v.strip() for v in vals[0].split(",")]
+        try:
+            out["clocks_max_memory_mhz"] = float(parts[0].split()[0])
+            out["clocks_current_memory_mhz"] = float(parts[1].split()[0])
+            out["throttle_reasons"] = parts[2] if len(parts) > 2 else ""
+        except (ValueError, IndexError):
+            pass
+    clk = out.get("clocks_max_memory_mhz")
+    if clk:
+        # H200 is 6144-bit HBM3e. DDR doubles the transfer rate.
+        out["memory_bus_bits"] = 6144
+        out["pin_rate_gbps"] = round(clk * 2 * 6144 / 8 / 1000, 1)
+    return out
 
 
 def main() -> int:
@@ -63,10 +101,24 @@ def main() -> int:
     ratio = args.buffer_gb * 1024 / max(l2_mib, 1)
     print(f"  L2                {l2_mib:.0f} MiB   (buffers are {ratio:.0f}x larger)")
 
+    # The board power limit is what actually tells an H200 SXM (700 W) from an
+    # H200 NVL (600 W); torch reports both as "NVIDIA H200".
+    tdp = power_limit_w()
+    observed = _device_facts()
+    if tdp:
+        print(f"  power limit       {tdp:.0f} W"
+              + ("   (SXM)" if tdp > 650 else "   (NVL)"))
+    pin = observed.get("pin_rate_gbps")
+    if pin:
+        print(f"  memory clock      {observed['clocks_max_memory_mhz']:.0f} MHz"
+              f"  -> pin rate {pin:.1f} GB/s")
+        print("                    (clk x 2 for DDR x 6144 bits / 8; a "
+              "datasheet figure below this is already derated)")
+
     spec_bw = spec_tf = None
     profile = args.compare_to
     if profile is None:
-        profile = for_device(cal.gpu_name)
+        profile = for_device(cal.gpu_name, tdp_w=tdp)
         if profile is None:
             tied = ambiguous_for_device(cal.gpu_name)
             if tied:
@@ -80,13 +132,21 @@ def main() -> int:
         except Exception as e:  # noqa: BLE001
             print(f"  (no spec comparison: {e})")
 
-    print(f"\n  {'pattern':<8}{'GB/s':>10}{'of peak':>10}{'p50 ms':>10}"
-          f"{'min ms':>9}   note")
+    # Never print a bare "% of peak": the same figure is 97.0% of NVIDIA's
+    # published 4.8 TB/s and 94.7% of the real 4916.7 GB/s pin rate, and a
+    # reader cannot tell which unless the denominator is in the string.
+    print(f"\n  {'pattern':<8}{'GB/s':>10}{'of spec':>9}{'of pin':>9}"
+          f"{'p50 ms':>10}   note")
     for pat in cal.bandwidth_patterns:
-        pct = f"{100 * pat.gbps / spec_bw:>8.1f}%" if spec_bw else f"{'':>9}"
+        of_spec = f"{100 * pat.gbps / spec_bw:>7.1f}%" if spec_bw else f"{'':>8}"
+        of_pin = f"{100 * pat.gbps / pin:>7.1f}%" if pin else f"{'':>8}"
         mark = " <-- ceiling" if pat.pattern == cal.ceiling_pattern else ""
-        print(f"  {pat.pattern:<8}{pat.gbps:>10.1f}{pct}{pat.ms_p50:>10.3f}"
-              f"{pat.ms_min:>9.3f}   {pat.note}{mark}")
+        print(f"  {pat.pattern:<8}{pat.gbps:>10.1f}{of_spec}{of_pin}"
+              f"{pat.ms_p50:>10.3f}   {pat.note}{mark}")
+    if spec_bw and pin:
+        print(f"  {'':8}{'':10}{'^ vs':>9}{'^ vs':>9}")
+        print(f"  {'':8}{'':10}{spec_bw:>8.0f} {pin:>8.0f}  GB/s "
+              "(published, derived)")
 
     print(f"\n  achieved BW       {cal.achieved_bandwidth_gbps:8.1f} GB/s "
           f"(pattern: {cal.ceiling_pattern})")
@@ -99,7 +159,8 @@ def main() -> int:
     print("\n  ridge point by choice of denominator (FLOP/byte):")
     for pat in cal.bandwidth_patterns:
         mark = " <-- used" if pat.pattern == cal.ceiling_pattern else ""
-        print(f"    {pat.pattern:<8}{cal.ridge_point(pat.gbps):>8.0f}{mark}")
+        print(f"    {pat.pattern:<8}{cal.ridge_point(pat.gbps):>8.0f}"
+              f"  ({pat.pattern}){mark}")
     if spec_bw and spec_tf:
         print(f"    {'datasheet':<8}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
 
@@ -114,13 +175,15 @@ def main() -> int:
     # A write figure at or above datasheet peak means the byte accounting is
     # wrong (a read-for-ownership would make real traffic 2N), not that the
     # hardware exceeded its specification.
-    if spec_bw:
+    if pin:
         w = cal.pattern("write")
-        if w and w.gbps > spec_bw * 0.95:
-            print(f"\n  NOTE: write measured at {100 * w.gbps / spec_bw:.0f}% of "
-                  "datasheet peak. Either writes really are that efficient, or "
-                  "the 1N accounting misses a read-for-ownership. This is why "
-                  "write is not the default ceiling.")
+        if w and w.gbps > pin * 0.93:
+            print(f"\n  NOTE: write is {100 * w.gbps / pin:.1f}% of the derived "
+                  "pin rate. That is a REAL store rate, not an accounting error: "
+                  "a read-for-ownership would make it 2N, which would exceed the "
+                  "pin rate by ~94% and is impossible. Write is not the ceiling "
+                  "because it is the least representative pattern for a "
+                  "read-dominated workload.")
 
     sha, dirty = git_provenance()
     payload = {
@@ -143,6 +206,7 @@ def main() -> int:
         "compute_dense_tflops": {"bf16": cal.achieved_bf16_tflops,
                                  "fp16": cal.achieved_bf16_tflops},
         "detail": cal.as_dict(),
+        "observed": {**observed, "power_limit_w": tdp},
         "spec_comparison": {"profile": profile, "bandwidth_gbps": spec_bw,
                             "bf16_tflops": spec_tf},
     }

@@ -24,6 +24,11 @@ source_note: >-
 checked_by: NVIDIA datasheet 3512650.Nov24
 checked_on: 2026-08-21
 
+# torch reports both parts as plain "NVIDIA H200", so the name cannot tell them
+# apart. Power limit can: 600 W confirms NVL; SXM is 700 W. `nvidia-smi --query-gpu=power.limit` settles it
+# in one line, and roofline.for_device uses it to break the tie.
+tdp_w: 600
+
 memory:
   capacity_gb: 141          # HBM3e
   bandwidth_tb_s: 4.8       # identical on NVL and SXM
