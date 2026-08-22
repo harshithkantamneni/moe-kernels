@@ -216,7 +216,8 @@ def main(argv=None) -> int:
         args.max_minutes)
 
     info = T.runtime_info()
-    info["env_name"] = args.env
+    # NOT info["env_name"]: _base_row sets that from cfg.env_name, and passing
+    # both collides. env_version is not one of its arguments, so it belongs here.
     info["env_version"] = env_version(args.env)
     print(f"[cli] env={args.env} {info['env_version']} "
           f"gpu={info.get('gpu_name', 'none')}")

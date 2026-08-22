@@ -563,3 +563,37 @@ def test_a_failed_row_never_carries_derived_efficiency(tmp_path):
     assert all(f in SC.COLUMNS for f in D._TIMED_FIELDS), (
         "_TIMED_FIELDS must name real columns; a stray name silently zeroes "
         "nothing at all")
+
+
+def test_machine_info_cannot_collide_with_columns_the_row_owns(tmp_path):
+    """Regression: the CLI put env_name into the machine-info dict, which
+    _base_row also sets from cfg. Row() then raised "got multiple values for
+    keyword argument", run_sweep caught it as a crash, and an entire sweep
+    wrote zero rows while reporting only warnings."""
+    hostile = dict(FAKE_INFO)
+    # Every column _base_row sets itself, deliberately jammed into info.
+    for name in D._ROW_OWNED_BY_CALLER:
+        hostile[name] = "COLLIDE"
+    cfg = cfg_for(tmp_path)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=hostile)
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1, cfg.manifest_path.read_text()
+    # The row's own values win; the hostile ones are dropped.
+    assert rows[0]["impl"] == "t_counting_up_gemm"
+    assert rows[0]["env_name"] == "base"
+    assert rows[0]["model"] == "toy"
+
+
+def test_the_cli_builds_an_info_dict_the_row_accepts():
+    """Exercises the exact construction cli.main() uses. Nothing tested that
+    path before, which is why a one-line addition there broke every sweep."""
+    from moe.bench import cli
+
+    info = {"gpu_name": "FakeH200", "torch_version": "x", "sm_count": 132}
+    info["env_version"] = cli.env_version("base")
+    assert "env_name" not in info, (
+        "env_name belongs to _base_row; putting it in info collides")
+    for key in info:
+        assert key not in D._ROW_OWNED_BY_CALLER, key
+    assert "env_version" in SC.COLUMNS

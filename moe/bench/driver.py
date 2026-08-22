@@ -199,9 +199,24 @@ def _resolve_target(pipe: Pipeline, impl: str):
     )
 
 
+#: Columns _base_row sets from its own arguments. Anything the machine-info
+#: dict happens to carry under these names is dropped rather than colliding:
+#: passing both raises "got multiple values for keyword argument", which
+#: run_sweep catches as a crash and turns into a sweep that writes zero rows.
+_ROW_OWNED_BY_CALLER = frozenset({
+    "run_id", "timestamp", "git_sha", "git_dirty", "env_name", "model",
+    "hidden_size", "intermediate_size", "num_experts", "top_k", "num_tokens",
+    "rows", "dtype", "routing_kind", "routing_param", "trace_id", "seed",
+    "pipeline", "impl", "scope", "covers", "cuda_graph_safe", "input_init",
+    "input_scale",
+})
+
+
 def _base_row(spec: BenchSpec, pipe: Pipeline, impl: str, span, cfg: RunConfig,
               info: dict, sha: str, dirty: bool) -> SC.Row:
     m = spec.model
+    machine = {k: v for k, v in info.items()
+               if k in SC.COLUMNS and k not in _ROW_OWNED_BY_CALLER}
     return SC.Row(
         run_id=cfg.run_id,
         timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -228,7 +243,7 @@ def _base_row(spec: BenchSpec, pipe: Pipeline, impl: str, span, cfg: RunConfig,
                          else span.cuda_graph_safe),
         input_init="fan_in",
         input_scale=cfg.input_scale,
-        **{k: v for k, v in info.items() if k in SC.COLUMNS},
+        **machine,
     )
 
 
