@@ -61,6 +61,13 @@ else
   log "WARNING: no measured.yaml; efficiency columns will be uninterpretable"
 fi
 
+# Figures belong with the data they were drawn from, not in the repo root.
+if [[ -d plots ]]; then
+  mkdir -p "$DEST/plots"
+  cp plots/*.png "$DEST/plots/" 2>/dev/null && \
+    log "included $(ls "$DEST/plots" | wc -l | tr -d ' ') figure(s)" || true
+fi
+
 # A summary a human can read without opening the CSV.
 PY="${MOE_PYTHON:-$WORKSPACE/venvs/base/bin/python}"
 [[ -x "$PY" ]] || PY="python3"

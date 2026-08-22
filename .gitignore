@@ -28,6 +28,12 @@ results/*
 *.nsys-rep
 *.qdrep
 
+# --- plots ---------------------------------------------------------------
+# Regenerated from the CSVs on every run, so tracking them means binary churn
+# on each sweep. publish_results.sh copies the relevant ones into
+# results/published/<label>/ so a kept result set carries its own figures.
+plots/
+
 # --- traces --------------------------------------------------------------
 # Captured routing histograms ARE committed: they are kilobytes and they are
 # the point of the project. Raw router logits are not.
