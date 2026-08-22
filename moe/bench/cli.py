@@ -20,6 +20,7 @@ import moe
 from ..pipeline import PipelineError, build
 from ..spec import MODEL_CONFIGS
 from . import profiles as PR
+from . import timing as T
 from .driver import RunConfig, run_sweep
 
 
@@ -68,6 +69,26 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
     return replace(profile, **changes) if changes else profile
 
 
+def env_version(env: str) -> str:
+    """Version of the framework this environment provides.
+
+    Publishing "we beat vLLM's fused_moe" without the vLLM version in the row is
+    not reproducible, so the version is a column and not a footnote.
+    """
+    if env == "base":
+        try:
+            import torch
+            import triton
+            return f"torch {torch.__version__} / triton {triton.__version__}"
+        except ImportError:
+            return ""
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+        return version(env)
+    except (ImportError, PackageNotFoundError):
+        return ""
+
+
 def build_routing_source(args):
     """Resolve routing for each cell, loading traces only if a cell needs them."""
     from ..routing.distributions import routing_source
@@ -79,7 +100,10 @@ def build_routing_source(args):
     def source(spec):
         return routing_source(spec, device=args.device, traces=traces)
 
-    return source, traces
+    def provenance(spec):
+        return traces.provenance(spec)
+
+    return source, provenance, traces
 
 
 def time_limited(cells, max_minutes: float | None):
@@ -173,7 +197,7 @@ def main(argv=None) -> int:
         return 0
 
     profile = apply_overrides(PR.get(args.profile), args)
-    routing, traces = build_routing_source(args)
+    routing, routing_info, traces = build_routing_source(args)
 
     if args.dry_run:
         return dry_run(profile, args, traces)
@@ -181,7 +205,7 @@ def main(argv=None) -> int:
     cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
                   warmup=profile.warmup, trials=profile.trials,
                   iters=profile.iters, l2_modes=profile.l2_modes,
-                  graph_modes=profile.graph_modes)
+                  graph_modes=profile.graph_modes, routing_info=routing_info)
     if args.run_id:
         cfg_kw["run_id"] = args.run_id
     cfg = RunConfig(**cfg_kw)
@@ -191,8 +215,14 @@ def main(argv=None) -> int:
                  include_reference=args.include_reference),
         args.max_minutes)
 
+    info = T.runtime_info()
+    info["env_name"] = args.env
+    info["env_version"] = env_version(args.env)
+    print(f"[cli] env={args.env} {info['env_version']} "
+          f"gpu={info.get('gpu_name', 'none')}")
+
     started = time.time()
-    path = run_sweep(cells, cfg, routing)
+    path = run_sweep(cells, cfg, routing, info=info)
     print(f"[cli] run_id={cfg.run_id} elapsed={time.time() - started:.1f}s")
     print(json.dumps({"csv": str(path), "manifest": str(cfg.manifest_path),
                       "run_id": cfg.run_id}))

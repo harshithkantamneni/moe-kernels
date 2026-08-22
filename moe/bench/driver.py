@@ -41,6 +41,41 @@ RoutingSource = Callable[[BenchSpec], "torch.Tensor | None"]
 #: `impl` value meaning "time the entire tiling end to end" rather than one span.
 PIPELINE_SCOPE = "__pipeline__"
 
+_BANDWIDTH_CACHE: dict[str, float | None] = {}
+
+
+def _bandwidth(cfg: RunConfig) -> float | None:
+    if cfg.peak_bandwidth_bytes_s is not None:
+        return cfg.peak_bandwidth_bytes_s
+    if "bw" not in _BANDWIDTH_CACHE:
+        from .roofline import peak_bandwidth
+        _BANDWIDTH_CACHE["bw"] = peak_bandwidth()
+    return _BANDWIDTH_CACHE["bw"]
+
+
+def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
+    """Is isolating launch overhead worth a doubled sweep for this cell?
+
+    Predict the roofline-minimum time from compulsory traffic. If a kernel
+    launch is a smaller fraction of that than `graph_min_launch_share`, the
+    graph/eager delta cannot be a first-order effect and the cell is not worth
+    measuring twice. Errs toward measuring: an unknown bandwidth means yes.
+    """
+    if cfg.graph_min_launch_share <= 0:
+        return True, ""
+    bw = _bandwidth(cfg)
+    if not bw:
+        return True, ""
+    predicted_ms = (cost.bytes_total / bw) * 1e3
+    if predicted_ms <= 0:
+        return True, ""
+    share = cfg.launch_overhead_ms / predicted_ms
+    if share >= cfg.graph_min_launch_share:
+        return True, ""
+    return False, (f"launch overhead is {share * 100:.2f}% of the "
+                   f"{predicted_ms:.3f} ms roofline minimum, below the "
+                   f"{cfg.graph_min_launch_share * 100:.1f}% threshold")
+
 
 @dataclass
 class RunConfig:
@@ -56,6 +91,17 @@ class RunConfig:
     l2_modes: tuple[bool, ...] = (True, False)
     graph_modes: tuple[bool, ...] = (False, True)
     calibration: dict | None = None
+    #: Optional callable returning per-cell routing provenance, e.g. the trace
+    #: fingerprint and the resolved batch/layer slice.
+    routing_info: Callable[[BenchSpec], dict] | None = None
+    #: Skip CUDA-graph timing when predicted kernel time is so long that launch
+    #: overhead cannot matter. Graph mode doubles a metered sweep; at DeepSeek
+    #: geometry with a few tokens the roofline minimum is already ~0.8 ms
+    #: against a ~5 us launch, so the axis would cost half the session to
+    #: measure a sub-1% effect. Set to 0.0 to always time both.
+    graph_min_launch_share: float = 0.01
+    launch_overhead_ms: float = 0.005
+    peak_bandwidth_bytes_s: float | None = None
     validate_shapes: bool = True
     device: str = "cuda"
 
@@ -228,6 +274,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     correctness, st, golden = check_correctness(spec, pipe, x, weights, forced, cfg)
     tol = tolerance(spec, cfg.calibration)
 
+    routing_meta = cfg.routing_info(spec) if cfg.routing_info else {}
     counts, counts_source = _expert_counts(st, spec, forced)
     load = expert_load(counts)
 
@@ -276,8 +323,26 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
             later(st)
         replay_verdict["result"] = compare(st.y, golden, tol)
 
+    graph_ok, graph_skip_reason = should_time_graph(cost, cfg)
+
     for use_graph, l2, row, key in keyed:
         if key in manifest:
+            continue
+        for meta_key, meta_value in routing_meta.items():
+            if meta_key in SC.COLUMNS:
+                setattr(row, meta_key, meta_value)
+
+        if use_graph and not graph_ok:
+            _apply_correctness(row, correctness)
+            _apply_cost(row, cost, None)
+            for k, v in load.as_row().items():
+                setattr(row, k, v)
+            row.capture_status = "skipped"
+            row.graph_skip_reason = graph_skip_reason
+            row.notes = "graph timing skipped by cost policy"
+            writer.write(row)
+            manifest.record(key, "ok", "graph skipped by policy")
+            written += 1
             continue
 
         clocks_start = cfg.clock_sampler()

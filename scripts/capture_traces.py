@@ -83,11 +83,16 @@ def find_gate_modules(model, num_experts: int):
 
     Mixtral puts it at `block_sparse_moe.gate`, Qwen2 and DeepSeek at
     `mlp.gate`. Rather than branch per architecture, find every Linear whose
-    output width equals the routed-expert count and whose name ends in "gate".
+    output width equals the routed-expert count and whose FINAL path component
+    is exactly "gate".
+
+    The last-component match matters: a suffix match on "gate" also catches
+    `attn_gate` and Qwen2's `shared_expert_gate`, and hooking those would
+    capture counts that are not routed-expert counts at all.
     """
     found = []
     for name, module in model.named_modules():
-        if not name.endswith("gate"):
+        if name.rsplit(".", 1)[-1] != "gate":
             continue
         out = getattr(module, "out_features", None)
         if out is None:

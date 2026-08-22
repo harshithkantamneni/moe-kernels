@@ -363,3 +363,68 @@ def test_correctness_failure_is_terminal_and_not_retried(tmp_path):
     D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
     D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
     assert len(SC.read_csv(cfg.csv_path)) == 1
+
+
+# --- graph-mode cost policy -------------------------------------------------
+
+def cost_for(bytes_total):
+    from moe.bench.bytes_model import PipelineCost
+    return PipelineCost(flops=1.0, bytes_total=bytes_total)
+
+
+def test_graph_mode_is_skipped_when_launch_overhead_cannot_matter():
+    """At DeepSeek geometry with a few tokens the roofline minimum is ~0.8 ms
+    against a ~5 us launch. Timing that cell twice spends half a session
+    measuring a sub-1% effect."""
+    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.01)
+    ok, reason = D.should_time_graph(cost_for(3.76e9), cfg)   # ~0.78 ms
+    assert not ok
+    assert "0.6" in reason or "below" in reason
+
+
+def test_graph_mode_is_kept_when_launch_overhead_is_first_order():
+    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.01)
+    ok, reason = D.should_time_graph(cost_for(4.8e5), cfg)     # ~0.0001 ms
+    assert ok and reason == ""
+
+
+def test_policy_can_be_disabled():
+    cfg = D.RunConfig(peak_bandwidth_bytes_s=4.8e12, graph_min_launch_share=0.0)
+    assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
+
+
+def test_policy_errs_toward_measuring_when_bandwidth_is_unknown():
+    cfg = D.RunConfig(peak_bandwidth_bytes_s=None, graph_min_launch_share=0.01)
+    D._BANDWIDTH_CACHE["bw"] = None
+    try:
+        assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
+    finally:
+        D._BANDWIDTH_CACHE.pop("bw", None)
+
+
+def test_skipped_graph_row_is_written_not_dropped(tmp_path):
+    cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,),
+                  peak_bandwidth_bytes_s=1.0, graph_min_launch_share=0.5)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1
+    assert rows[0]["capture_status"] == "skipped"
+    assert rows[0]["graph_skip_reason"]
+    assert float(rows[0]["ms_p50"]) == 0.0
+
+
+def test_routing_provenance_lands_in_the_row(tmp_path):
+    cfg = cfg_for(tmp_path,
+                  routing_info=lambda s: {"trace_sha": "deadbeefcafe0001",
+                                          "trace_id": "toy4@b1l2"})
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert r["trace_sha"] == "deadbeefcafe0001"
+    assert r["trace_id"] == "toy4@b1l2"
+
+
+def test_fixed_routing_caveat_is_recorded(tmp_path):
+    _, path = sweep(tmp_path, "t_counting_up_gemm")
+    assert SC.read_csv(path)[0]["routing_fixed_across_iters"] == "True"

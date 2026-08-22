@@ -94,7 +94,12 @@ class Row:
     flush_mb: int = 0
     flush_mode: str = ""            # read | write
     cuda_graph: bool = False
-    capture_status: str = ""        # captured | not_capturable | n/a
+    capture_status: str = ""        # captured | not_capturable | n/a | skipped
+    graph_skip_reason: str = ""
+    # Every timed iteration replays ONE routing decision, so branch prediction
+    # and cache behaviour are best-case relative to production, where routing
+    # changes every step. Recorded rather than left for a reader to discover.
+    routing_fixed_across_iters: bool = True
     warmup: int = 0
     iters: int = 0
     trials: int = 0

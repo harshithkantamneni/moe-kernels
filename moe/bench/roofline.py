@@ -75,6 +75,15 @@ def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
     )
 
 
+def peak_bandwidth(name: str = "h200_nvl") -> float | None:
+    """Bandwidth for cost prediction. Returns None if unavailable rather than
+    guessing, and callers fall back to doing the measurement."""
+    try:
+        return load_hardware(name, allow_unverified=True).bandwidth_bytes_s
+    except (FileNotFoundError, ValueError, KeyError):
+        return None
+
+
 def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
                achieved_flops_s: float) -> float:
     """Achieved FLOP/s as a fraction of what the roofline permits at this AI.

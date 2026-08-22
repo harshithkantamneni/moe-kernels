@@ -5,6 +5,7 @@ so that the fusion accounting in bytes_model and the numerical equivalence of
 fused vs unfused tilings can both be tested on a laptop, without CUDA.
 """
 import pytest
+import torch
 
 import moe
 from moe.reference import torch_ref as R
@@ -63,3 +64,17 @@ def toy_spec():
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: requires a CUDA device")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-skip GPU tests off the box, so `pytest tests/` works everywhere.
+
+    On the H200 these run for real and are the only verification the CUDA
+    timing paths ever get.
+    """
+    if torch.cuda.is_available():
+        return
+    skip = pytest.mark.skip(reason="no CUDA device")
+    for item in items:
+        if "gpu" in item.keywords:
+            item.add_marker(skip)

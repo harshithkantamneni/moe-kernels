@@ -75,6 +75,8 @@ PY="$VENVS/base/bin/python"
 
 if [[ -z "$SKIP_TESTS" ]]; then
   log "test suite (a failure here stops the session before it costs anything)"
+  # tests/test_gpu.py auto-skips off a device, so on the box this is the first
+  # and only verification the CUDA timing paths get.
   "$PY" -m pytest tests/ -q -x
 fi
 

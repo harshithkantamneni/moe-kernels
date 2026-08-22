@@ -13,6 +13,7 @@ more uniform than any real layer ever is).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -33,6 +34,7 @@ class Trace:
     trace_id: str
     counts: np.ndarray          # int64 [n_batches, n_layers, num_experts]
     meta: dict
+    sha: str = ""               # sha256 of the .npz, first 16 hex chars
 
     @property
     def num_experts(self) -> int:
@@ -174,6 +176,19 @@ class TraceSet:
         _, b, ln = trace.select(batch, layer, seed=seed)
         return f"{trace.trace_id}@b{b}l{ln}"
 
+    def provenance(self, spec) -> dict:
+        """Row fields identifying exactly which slice of which file was replayed.
+
+        `trace_id` alone is not enough: the same id can name different file
+        contents, and an unsuffixed id resolves to a seed-dependent slice.
+        """
+        r = spec.routing
+        if r.kind != "trace" or not r.trace_id:
+            return {}
+        trace, _, _ = self.get(r.trace_id)
+        return {"trace_sha": trace.sha,
+                "trace_id": self.resolved_slice(r.trace_id, spec.seed)}
+
 
 def _parse_slice(trace_id: str) -> tuple[str, int | None, int | None]:
     m = _SLICE_RE.match(trace_id)
@@ -211,7 +226,9 @@ def write_trace(path: str | Path, counts: np.ndarray, meta: dict) -> Path:
 
 def load_trace(path: str | Path) -> Trace:
     path = Path(path)
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
     with np.load(path, allow_pickle=False) as z:
         counts = z["counts"]
         meta = json.loads(str(z["meta"]))
-    return Trace(trace_id=meta["trace_id"], counts=counts.astype(np.int64), meta=meta)
+    return Trace(trace_id=meta["trace_id"], counts=counts.astype(np.int64),
+                 meta=meta, sha=sha)
