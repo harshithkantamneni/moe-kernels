@@ -21,6 +21,16 @@ class PipelineError(ValueError):
 @dataclass(frozen=True)
 class Pipeline:
     spans: tuple[S.StageSpan, ...]
+    #: Per span, what it actually writes to memory in THIS tiling: the fields
+    #: something downstream reads, plus anything the implementation says it
+    #: stores anyway. Fusion accounting is therefore a property of the tiling,
+    #: which is what the cost model claims to be.
+    materialised: tuple[frozenset[str], ...] = ()
+
+    def materialised_for(self, span: S.StageSpan) -> frozenset[str]:
+        if not self.materialised:
+            return span.writes
+        return self.materialised[self.spans.index(span)]
 
     @property
     def label(self) -> str:
@@ -58,11 +68,14 @@ def build(names: list[str] | tuple[str, ...], spec: BenchSpec | None = None) -> 
     """
     spans = tuple(S.get(n) for n in names)
     _check_coverage(spans)
-    _check_dataflow(spans)
+    live = S.live_outputs(spans)
+    _check_dataflow(spans, live)
     _check_env(spans)
     if spec is not None:
         _check_support(spans, spec)
-    return Pipeline(spans)
+    materialised = tuple(fields | frozenset(span.materialises)
+                         for span, fields in zip(spans, live, strict=True))
+    return Pipeline(spans, materialised)
 
 
 # --------------------------------------------------------------------------
@@ -97,17 +110,31 @@ def _check_coverage(spans: tuple[S.StageSpan, ...]) -> None:
     )
 
 
-def _check_dataflow(spans: tuple[S.StageSpan, ...]) -> None:
+def _check_dataflow(spans: tuple[S.StageSpan, ...],
+                    live: list[frozenset[str]]) -> None:
+    """Every span's inputs must be produced by something upstream.
+
+    Availability is the computed live-out set, not a declaration, so a fused
+    permute+up_gemm is accepted without the author having to work out that
+    expert_offsets and perm_index still have to escape.
+    """
     # `x` is supplied by the harness before the first span runs.
     available: set[str] = {"x"}
-    for span in spans:
+    for span, produced in zip(spans, live, strict=True):
         missing = span.reads - available
         if missing:
             raise PipelineError(
                 f"{span.name} reads {sorted(missing)}, which no upstream span writes. "
                 f"available at this point: {sorted(available)}"
             )
-        available |= set(span.writes)
+        refused = produced & frozenset(span.cannot_materialise)
+        if refused:
+            raise PipelineError(
+                f"this tiling needs {sorted(refused)} from {span.name}, which "
+                f"declares it fuses those away. Use a tiling where nothing "
+                f"downstream reads them, or materialise them."
+            )
+        available |= produced
 
 
 def _check_env(spans: tuple[S.StageSpan, ...]) -> None:

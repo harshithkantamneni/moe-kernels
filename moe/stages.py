@@ -123,13 +123,37 @@ def contract_for(covers: tuple[str, ...]) -> Contract:
     return Contract(frozenset(reads), frozenset(writes))
 
 
-def exposed_writes(covers: tuple[str, ...]) -> frozenset[str]:
-    """Fields a span must actually materialise for later spans.
+#: Fields the harness itself consumes after the layer runs, so they must be
+#: materialised even though no downstream STAGE reads them.
+PIPELINE_OUTPUTS: frozenset[str] = frozenset({"y"})
 
-    The final stage's writes always escape. Intermediates only escape if the
-    span chose to materialise them, which the span declares via `materialises`.
+
+def exposed_writes(covers: tuple[str, ...]) -> frozenset[str]:
+    """Fields a span produces that could be visible outside it.
+
+    Only used when costing a span with no tiling context. Inside a pipeline,
+    what actually escapes is computed from liveness: see pipeline.live_outputs.
     """
     return STAGE_CONTRACTS[covers[-1]].writes
+
+
+def live_outputs(spans) -> list[frozenset[str]]:
+    """Per span, the fields it produces that something later actually reads.
+
+    This replaces a hand-written declaration, and the stage graph shows why it
+    can: every non-final field a span writes is either read by a span that must
+    be downstream, or unreadable because its only reader is the stage the
+    fusion swallowed. There is no third case, so a `materialises` tuple never
+    carried information that could not be derived, and forgetting it punished a
+    correct kernel while silently changing its published byte count.
+    """
+    out: list[frozenset[str]] = []
+    for i, span in enumerate(spans):
+        later: set[str] = set(PIPELINE_OUTPUTS)
+        for other in spans[i + 1:]:
+            later |= other.contract.reads
+        out.append(frozenset(span.contract.writes & later))
+    return out
 
 
 class StageSpan(ABC):
@@ -146,9 +170,15 @@ class StageSpan(ABC):
     cuda_graph_safe: bool = False
     #: dtypes this implementation accepts
     dtypes: tuple[str, ...] = ("bf16",)
-    #: intermediates this span materialises into state beyond its final stage's
-    #: writes. A fused span usually leaves this empty.
+    #: Fields this implementation writes to memory beyond what the tiling
+    #: requires. Affects the BYTES MODEL only, never availability: a reference
+    #: implementation that stores an intermediate nothing reads still pays for
+    #: the store, and the cost model should say so.
     materialises: tuple[str, ...] = ()
+    #: Fields this implementation physically cannot produce because it fuses
+    #: them into registers. If a tiling needs one of these, `pipeline.build`
+    #: rejects it by name instead of failing at run time with a None field.
+    cannot_materialise: tuple[str, ...] = ()
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -159,6 +189,11 @@ class StageSpan(ABC):
 
     @property
     def writes(self) -> frozenset[str]:
+        """What this span materialises when costed outside a tiling.
+
+        Inside a pipeline the real answer is per-tiling; see
+        `Pipeline.materialised_for`.
+        """
         return exposed_writes(self.covers) | frozenset(self.materialises)
 
     @property

@@ -121,26 +121,33 @@ class PipelineCost:
         return self.bytes_total / max(ms * 1e-3, 1e-12) / 1e9
 
 
-def span_cost(span: StageSpan, spec: BenchSpec, active_experts: int) -> SpanCost:
+def span_cost(span: StageSpan, spec: BenchSpec, active_experts: int,
+              materialised: frozenset[str] | None = None) -> SpanCost:
     """Minimum compulsory traffic for one span.
 
     Reads come from the span's derived contract, which already excludes anything
-    the span produces internally. Writes come from `span.writes`, which excludes
-    intermediates a fused span never materialises. That is the entire fusion
-    accounting, and it is driven by the same declarations the pipeline validates.
+    the span produces internally. Writes come from the tiling's materialised
+    set, which excludes intermediates the fusion swallowed. That is the entire
+    fusion accounting, and it is driven by the same liveness the pipeline
+    validates, so arithmetic intensity really is a property of the tiling.
     """
     fb = field_bytes(spec)
     flops_by_stage = stage_flops(spec)
 
     read_bytes = sum(fb[f] for f in span.reads)
-    write_bytes = sum(fb[f] for f in span.writes)
+    write_bytes = sum(fb[f] for f in (span.writes if materialised is None
+                                      else materialised))
     weights = sum(weight_bytes_for_stage(spec, s, active_experts) for s in span.covers)
     flops = sum(flops_by_stage[s] for s in span.covers)
     return SpanCost(span.name, span.covers, flops, read_bytes, write_bytes, weights)
 
 
-def pipeline_cost(spans, spec: BenchSpec, active_experts: int) -> PipelineCost:
-    costs = tuple(span_cost(s, spec, active_experts) for s in spans)
+def pipeline_cost(spans, spec: BenchSpec, active_experts: int,
+                  materialised=None) -> PipelineCost:
+    if materialised is None:
+        materialised = [None] * len(spans)
+    costs = tuple(span_cost(s, spec, active_experts, m)
+                  for s, m in zip(spans, materialised, strict=True))
     return PipelineCost(
         flops=sum(c.flops for c in costs),
         bytes_total=sum(c.bytes_total for c in costs),

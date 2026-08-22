@@ -20,13 +20,6 @@ class _FusedPermuteUp(_Noop):
 
 
 @register
-class _FusedPermuteUpMat(_Noop):
-    name = "t_fused_permute_up_materialising"
-    covers = ("permute", "up_gemm")
-    materialises = ("expert_offsets", "perm_index")
-
-
-@register
 class _VllmUpGemm(_Noop):
     name = "t_vllm_up_gemm"
     covers = ("up_gemm",)
@@ -88,21 +81,59 @@ def test_out_of_order_tiling_rejected():
         P.build(names)
 
 
-def test_fused_span_that_hides_a_needed_field_is_rejected():
-    # A fused permute+up_gemm computes expert_offsets internally. If it does not
-    # materialise them, the down GEMM later has no group boundaries to read.
-    # This is a real design mistake, and it must surface at build time.
+def test_fused_span_gets_its_live_outputs_computed_for_it():
+    """A fused permute+up_gemm computes expert_offsets and perm_index
+    internally and must expose both, because down_gemm and unpermute read them.
+    That is derivable from the stage graph, so the author does not declare it:
+    an earlier design required a `materialises` tuple and rejected the tiling
+    when it was forgotten, which punished a correct kernel."""
     names = ["ref_router", "t_fused_permute_up", "ref_act",
              "ref_down_gemm", "ref_unpermute"]
-    with pytest.raises(P.PipelineError, match=r"ref_down_gemm reads \['expert_offsets'\]"):
-        P.build(names)
-
-
-def test_materialises_declaration_fixes_it():
-    names = ["ref_router", "t_fused_permute_up_materialising", "ref_act",
-             "ref_down_gemm", "ref_unpermute"]
     pipe = P.build(names)
-    assert len(pipe.spans) == 5
+    live = pipe.materialised_for(P.S.get("t_fused_permute_up"))
+    assert live == {"expert_offsets", "perm_index", "h_up"}
+    # x_perm is consumed inside the span, so it never reaches memory.
+    assert "x_perm" not in live
+
+
+def test_a_swallowed_intermediate_is_not_materialised():
+    pipe = P.build(["ref_router", "ref_permute", "ref_fused_up_act",
+                    "ref_down_gemm", "ref_unpermute"])
+    live = pipe.materialised_for(P.S.get("ref_fused_up_act"))
+    assert live == {"h_act"}
+    assert "h_up" not in live
+
+
+def test_the_layer_output_is_always_materialised():
+    """No stage reads `y`, but the harness does, so liveness must keep it."""
+    pipe = P.build(REF)
+    assert pipe.materialised_for(P.S.get("ref_unpermute")) == {"y"}
+
+
+def test_declared_extra_materialisation_is_charged_but_not_available():
+    """ref_router stores logits nothing reads. That is traffic, not
+    availability: the bytes model charges for the store, and liveness alone
+    would not have."""
+    pipe = P.build(REF)
+    router = P.S.get("ref_router")
+    assert "router_logits" in pipe.materialised_for(router)
+    assert "router_logits" not in P.S.live_outputs(pipe.spans)[0]
+
+
+def test_a_span_that_cannot_materialise_a_needed_field_is_rejected():
+    """The opt-out for a kernel that physically fuses a field into registers.
+    The tiling is genuinely invalid, and it says so by name at build time."""
+
+    @register
+    class _FusesOffsetsAway(_Noop):
+        name = "t_fuses_offsets_away"
+        covers = ("permute", "up_gemm")
+        cannot_materialise = ("expert_offsets",)
+
+    names = ["ref_router", "t_fuses_offsets_away", "ref_act",
+             "ref_down_gemm", "ref_unpermute"]
+    with pytest.raises(P.PipelineError, match=r"needs \['expert_offsets'\]"):
+        P.build(names)
 
 
 def test_mixed_framework_envs_rejected():

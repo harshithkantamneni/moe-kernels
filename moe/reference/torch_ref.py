@@ -146,6 +146,10 @@ class _Ref(StageSpan):
 class RefRouter(_Ref):
     name = "ref_router"
     covers = ("router",)
+    # Nothing downstream reads the raw logits, so liveness would not charge for
+    # them. This implementation stores them anyway, and the bytes model should
+    # say so rather than flatter it.
+    materialises = ("router_logits",)
 
     def __call__(self, st: MoEState) -> None:
         cfg = st.spec.model
@@ -240,8 +244,20 @@ def golden_forward(spec: BenchSpec, weights: MoEWeights, x, forced_topk_ids=None
     return combine(y_perm, perm, w, spec.num_tokens, cfg.top_k)
 
 
+#: One entry, deliberately. Expert weights are the largest allocation in a
+#: cell (22.5 GB at DeepSeek-V3), and holding two models' worth would cost more
+#: memory than the regeneration costs time. `sweep()` varies model, dtype and
+#: seed slowest precisely so a single entry hits almost every cell.
+_WEIGHT_CACHE: dict[tuple, tuple] = {}
+
+
+def clear_weight_cache() -> None:
+    _WEIGHT_CACHE.clear()
+
+
 @torch.no_grad()
-def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0):
+def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0,
+                reuse_weights: bool = True):
     """Random weights and activations for one cell, initialised realistically.
 
     Activations entering an MoE layer come out of a normalisation, so they are
@@ -254,10 +270,28 @@ def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0):
     comparison meaningless. Correctness is now judged by a scale-free relative
     metric, but keeping the numerics in a realistic range also keeps bf16 from
     losing mantissa to underflow and keeps fp16 away from overflow.
+
+    Weights depend only on (model, dtype, seed, device, scale) and are drawn
+    BEFORE `x`, so consecutive cells that differ only in token count or routing
+    can reuse them. The generator state is cached alongside and restored, which
+    makes `x` bit-identical to the uncached path rather than merely equivalent.
+    Regenerating them costs 203 GB of traffic per DeepSeek-V3 cell.
+
+    The reuse contract is read-only: an implementation that writes to
+    `weights.w1` would leak into every later cell. Nothing in the harness does,
+    and `reuse_weights=False` opts out.
     """
     cfg = spec.model
-    g = torch.Generator(device=device).manual_seed(spec.seed)
     dt = torch_dtype(spec.dtype)
+    key = (cfg.name, spec.dtype, spec.seed, str(device), float(scale))
+
+    cached = _WEIGHT_CACHE.get(key) if reuse_weights else None
+    if cached is not None:
+        weights, state = cached
+        g = torch.Generator(device=device)
+        g.set_state(state)
+    else:
+        g = torch.Generator(device=device).manual_seed(spec.seed)
 
     def rnd(shape, std, dtype=dt):
         # normal_ folds the scale into the RNG kernel. The previous
@@ -267,12 +301,18 @@ def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0):
         return (torch.empty(shape, device=device, dtype=torch.float32)
                 .normal_(0.0, std * scale, generator=g).to(dtype))
 
-    weights = MoEWeights(
-        w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
-        w2=rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5),
-        wg=rnd((cfg.num_experts, cfg.hidden_size), cfg.hidden_size ** -0.5,
-               torch.float32),
-    )
-    weights.validate(spec)
+    if cached is None:
+        weights = MoEWeights(
+            w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
+            w2=rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5),
+            wg=rnd((cfg.num_experts, cfg.hidden_size), cfg.hidden_size ** -0.5,
+                   torch.float32),
+        )
+        weights.validate(spec)
+        if reuse_weights:
+            # Evict first: never hold two models' weights at once.
+            _WEIGHT_CACHE.clear()
+            _WEIGHT_CACHE[key] = (weights, g.get_state())
+
     x = rnd((spec.num_tokens, cfg.hidden_size), 1.0)
     return x, weights

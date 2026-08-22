@@ -78,6 +78,10 @@ class RunConfig:
     flush_mb: int = T.DEFAULT_FLUSH_MB
     flush_mode: str = "read"
     input_scale: float = 1.0
+    #: Reuse expert weights across cells that share (model, dtype, seed).
+    #: Values are bit-identical either way; the contract is that no
+    #: implementation writes to `weights`. Set False to opt out.
+    reuse_weights: bool = True
     l2_modes: tuple[bool, ...] = (True, False)
     graph_modes: tuple[bool, ...] = (False, True)
     calibration: dict | None = None
@@ -330,7 +334,8 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         return 0
 
     written = 0
-    x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale)
+    x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
+                             reuse_weights=cfg.reuse_weights)
     forced = routing(spec)
     if forced is not None:
         forced = forced.to(x.device)
@@ -341,8 +346,13 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     counts, counts_source = _expert_counts(st, spec, forced)
     load = expert_load(counts)
 
-    costed_spans = pipe.spans if span is None else [span]
-    cost = BM.pipeline_cost(costed_spans, spec, active_experts=load.active_experts)
+    # Cost is scoped to what the timer wraps, and materialisation is taken from
+    # THIS tiling rather than from the span in isolation.
+    if span is None:
+        costed_spans, materialised = list(pipe.spans), list(pipe.materialised)
+    else:
+        costed_spans, materialised = [span], [pipe.materialised_for(span)]
+    cost = BM.pipeline_cost(costed_spans, spec, load.active_experts, materialised)
 
     def prepare(row: SC.Row, verdict=None) -> SC.Row:
         """Everything every row carries, regardless of which path emitted it."""

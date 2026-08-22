@@ -140,3 +140,57 @@ def test_validate_with_an_empty_selection_checks_nothing(toy_spec):
     st.validate(only=frozenset())          # must not raise
     with pytest.raises(ValueError, match="state.h_up"):
         st.validate()
+
+
+# --- weight reuse across cells ----------------------------------------------
+
+def test_cached_weights_are_bit_identical_to_regenerating_them():
+    """Regenerating expert weights costs 203 GB of traffic per DeepSeek-V3
+    cell, and they depend only on (model, dtype, seed). Reuse must change
+    nothing, including `x`, which is drawn after them from the same stream."""
+    R.clear_weight_cache()
+    fresh = {T: R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], T, "fp32"),
+                              reuse_weights=False) for T in (8, 32, 64)}
+    R.clear_weight_cache()
+    reused = {T: R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], T, "fp32"))
+              for T in (8, 32, 64)}
+    for T, (xf, wf) in fresh.items():
+        xr, wr = reused[T]
+        assert torch.equal(xf, xr), f"x differs at T={T}"
+        assert torch.equal(wf.w1, wr.w1) and torch.equal(wf.w2, wr.w2)
+        assert torch.equal(wf.wg, wr.wg)
+
+
+def test_the_cache_actually_hits():
+    R.clear_weight_cache()
+    _, a = R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], 8, "fp32"))
+    _, b = R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], 64, "fp32"))
+    assert a.w1 is b.w1, "cells differing only in token count must share weights"
+
+
+@pytest.mark.parametrize("changed", [
+    {"seed": 1}, {"dtype": "bf16"},
+])
+def test_a_changed_weight_axis_evicts(changed):
+    R.clear_weight_cache()
+    base = BenchSpec(MODEL_CONFIGS["toy"], 32, "fp32")
+    _, a = R.make_inputs(base)
+    _, b = R.make_inputs(base.with_(**changed))
+    assert a.w1 is not b.w1
+    if changed.get("dtype") is None:
+        assert not torch.equal(a.w1, b.w1)
+
+
+def test_cache_holds_only_one_entry():
+    """Two models' expert weights at once would cost more memory than the
+    regeneration costs time."""
+    R.clear_weight_cache()
+    R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], 8, "fp32"))
+    R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], 8, "bf16"))
+    assert len(R._WEIGHT_CACHE) == 1
+
+
+def test_opting_out_bypasses_the_cache_entirely():
+    R.clear_weight_cache()
+    R.make_inputs(BenchSpec(MODEL_CONFIGS["toy"], 8, "fp32"), reuse_weights=False)
+    assert R._WEIGHT_CACHE == {}
