@@ -167,7 +167,17 @@ def main() -> int:
           f"(GEMM {args.gemm_n}^3)")
     if spec_tf:
         print(f"                    {100 * cal.achieved_bf16_tflops / spec_tf:8.1f}% "
-              f"of {spec_tf:.1f} datasheet")
+              f"of the {spec_tf:.1f} datasheet figure")
+    sustained = cal.sustained_peak_tflops
+    if sustained:
+        print(f"  measured at       {cal.gemm_clock_mhz} MHz, where the silicon "
+              f"can do {sustained:.1f} TFLOP/s")
+        print(f"                    {cal.gemm_efficiency_pct:8.1f}% of THAT "
+              "<-- the honest efficiency")
+        if spec_tf:
+            implied = spec_tf * 1e12 / (sustained * 1e12 / max(cal.gemm_clock_mhz, 1))
+            print(f"                    the datasheet assumes ~{implied:.0f} MHz, "
+                  "a boost clock this part does not hold under dense tensor load")
 
     print("\n  ridge point by choice of denominator (FLOP/byte):")
     for pat in cal.bandwidth_patterns:

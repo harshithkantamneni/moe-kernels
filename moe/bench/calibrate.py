@@ -88,7 +88,8 @@ class Calibration:
     achieved_bf16_tflops: float
     bandwidth_patterns: tuple[BandwidthResult, ...]
     gemm_shape: tuple[int, int, int]
-    buffer_bytes: int
+    gemm_clock_mhz: int = 0
+    buffer_bytes: int = 0
     clocks: dict = field(default_factory=dict)
     settle: dict = field(default_factory=dict)
     #: The discarded first bandwidth pass. Kept because the gap between it and
@@ -132,9 +133,27 @@ class Calibration:
         bw = bandwidth_gbps or self.achieved_bandwidth_gbps
         return (self.achieved_bf16_tflops * 1e12) / (bw * 1e9)
 
+    @property
+    def sustained_peak_tflops(self) -> float | None:
+        """Silicon ceiling at the clock the GEMM was actually measured at."""
+        return sustained_peak_tflops(self.gemm_clock_mhz)
+
+    @property
+    def gemm_efficiency_pct(self) -> float | None:
+        """cuBLAS as a fraction of what this clock can deliver.
+
+        The honest efficiency figure. Measuring against the datasheet instead
+        charges the kernel for a boost clock the part cannot sustain.
+        """
+        peak = self.sustained_peak_tflops
+        return round(100.0 * self.achieved_bf16_tflops / peak, 1) if peak else None
+
     def as_dict(self) -> dict:
         d = asdict(self)
         d["bandwidth_patterns"] = [p.as_dict() for p in self.bandwidth_patterns]
+        d["sustained_peak_tflops"] = (round(self.sustained_peak_tflops, 1)
+                                      if self.sustained_peak_tflops else None)
+        d["gemm_efficiency_pct"] = self.gemm_efficiency_pct
         # Ridge is the number that classifies every cell, and it moves with the
         # denominator. Record it for each pattern so the sensitivity is visible
         # rather than hidden behind one choice.
@@ -267,8 +286,36 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     return out
 
 
+#: Dense BF16 FLOP per SM per clock, by compute capability. The Hopper value
+#: is confirmed exactly against the datasheet: 132 SM x 4096 x 1830 MHz =
+#: 989.4 TFLOP/s, which is NVIDIA's published H200 SXM figure. That also reveals
+#: what the datasheet number assumes: a 1830 MHz boost clock.
+_DENSE_BF16_FLOP_PER_SM_CLK = {(9, 0): 4096}
+
+
+def sustained_peak_tflops(sm_clock_mhz: float) -> float | None:
+    """What the silicon can do AT THIS CLOCK, as opposed to at its boost clock.
+
+    The datasheet peak assumes a clock the part cannot hold under sustained
+    dense tensor load. Measured on an H200 SXM at 700 W: the clock settles at
+    ~1455 MHz under continuous BF16 GEMMs, not the 1830 MHz the 989.5 TFLOP/s
+    headline implies. Against the datasheet, cuBLAS then reads 71.5% and looks
+    poor; against what 1455 MHz can actually deliver it reads ~90%, which is the
+    honest number and is the whole reason this file measures rather than quotes.
+    """
+    import torch
+
+    if not torch.cuda.is_available() or not sm_clock_mhz:
+        return None
+    props = torch.cuda.get_device_properties(0)
+    per_clk = _DENSE_BF16_FLOP_PER_SM_CLK.get((props.major, props.minor))
+    if per_clk is None:
+        return None
+    return props.multi_processor_count * per_clk * sm_clock_mhz * 1e6 / 1e12
+
+
 def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
-                      trials: int = 3) -> tuple[float, tuple[int, int, int]]:
+                      trials: int = 3) -> tuple[float, tuple[int, int, int], int]:
     """Achievable dense BF16 through cuBLAS: the compute roof this box gives.
 
     A square GEMM at n=8192 is comfortably compute bound and is what a tuned
@@ -280,8 +327,11 @@ def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     out = torch.empty((n, n), device="cuda", dtype=torch.bfloat16)
     res = T.time_eager(lambda: torch.mm(a, b, out=out), warmup=warmup,
                        iters=iters, trials=trials, l2_flush=False)
+    # Sample the clock DURING the measurement: it is what the result should be
+    # normalised against, and it is not the boost clock.
+    clk = T.ClockState.sample().sm_clock_mhz
     tflops = (2.0 * n * n * n) / (res.ms_p50 * 1e-3) / 1e12
-    return tflops, (n, n, n)
+    return tflops, (n, n, n), clk
 
 
 def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
@@ -301,7 +351,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # tensor cores need, so a compute roof measured after a bandwidth sweep is a
     # power-limited number, not a ceiling. The settle above is matmul work, so
     # the GPU is already in the right state for exactly this measurement.
-    tflops, shape = measure_bf16_gemm(gemm_n)
+    tflops, shape, gemm_clk = measure_bf16_gemm(gemm_n)
     torch.cuda.empty_cache()
 
     # BANDWIDTH TWICE, keep the second. The first pass finishes ramping whatever
@@ -346,6 +396,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
         achieved_bf16_tflops=tflops,
         bandwidth_patterns=tuple(patterns),
         gemm_shape=shape,
+        gemm_clock_mhz=gemm_clk,
         buffer_bytes=target_bytes,
         clocks={"sm_start_mhz": before.sm_clock_mhz, "sm_end_mhz": after.sm_clock_mhz,
                 "temp_start_c": before.temp_c, "temp_end_c": after.temp_c,

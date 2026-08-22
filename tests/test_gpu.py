@@ -402,3 +402,34 @@ def test_full_calibration_runs(tmp_path):
     assert cal.gpu_name
     assert len(cal.bandwidth_patterns) == 4
     assert cal.ridge_point() > 0
+
+
+def test_compute_ceiling_is_normalised_to_the_clock_it_was_measured_at():
+    """The datasheet peak assumes a boost clock the part cannot hold under
+    sustained dense tensor load. Measured on H200 SXM: it settles near 1455 MHz,
+    where the silicon can do ~787 TFLOP/s, and cuBLAS reaches ~90% of that.
+    Against the 989.5 datasheet the same result reads 71.5% and looks poor."""
+    from moe.bench.calibrate import calibrate, sustained_peak_tflops
+    cal = calibrate(target_bytes=1 << 29, gemm_n=4096, settle=False)
+    assert cal.gemm_clock_mhz > 0, "the GEMM's clock must be recorded"
+    peak = cal.sustained_peak_tflops
+    assert peak and peak > 0
+    assert peak == pytest.approx(sustained_peak_tflops(cal.gemm_clock_mhz))
+    # cuBLAS cannot exceed what the clock allows, and should be respectably close.
+    assert cal.achieved_bf16_tflops < peak * 1.02
+    assert cal.gemm_efficiency_pct > 50.0
+
+
+def test_the_datasheet_clock_is_reproducible_from_first_principles():
+    """132 SM x 4096 dense BF16 FLOP/SM/clk x 1830 MHz = 989.4 TFLOP/s, which is
+    NVIDIA's published H200 SXM figure. That is what pins the FLOP/SM/clk
+    constant and reveals the boost clock the datasheet assumes."""
+    import torch
+
+    from moe.bench.calibrate import _DENSE_BF16_FLOP_PER_SM_CLK
+    props = torch.cuda.get_device_properties(0)
+    per_clk = _DENSE_BF16_FLOP_PER_SM_CLK.get((props.major, props.minor))
+    if per_clk is None:
+        pytest.skip(f"no FLOP/SM/clk constant for sm_{props.major}{props.minor}")
+    implied = props.multi_processor_count * per_clk * 1830e6 / 1e12
+    assert implied == pytest.approx(989.5, abs=1.0)
