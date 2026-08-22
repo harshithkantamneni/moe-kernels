@@ -111,8 +111,18 @@ setup_env() {
   # dependency explicitly asks for it or nothing else satisfies the graph, so
   # this does not quietly upgrade anything else to a release candidate. Our own
   # top-level versions stay exactly pinned either way.
+  # SGLang 0.5.18 pins a cuda-tile prerelease, so prereleases must be permitted
+  # at all. An overrides file, when present, additionally repoints a pin that
+  # upstream got wrong; see requirements/overrides-sglang.txt.
+  local override_args=()
+  local overrides="$REPO_ROOT/requirements/overrides-${env}.txt"
+  if [[ -f "$overrides" ]]; then
+    log "$env: applying dependency overrides from $(basename "$overrides")"
+    override_args=(--override "$overrides")
+  fi
+
   uv pip install --python "$VENVS/$env/bin/python" \
-    --prerelease=if-necessary-or-explicit -r "$req"
+    --prerelease=allow "${override_args[@]}" -r "$req"
   # Editable install so `moe` is importable in every environment and edits to
   # your kernels take effect without reinstalling.
   uv pip install --python "$VENVS/$env/bin/python" -e "$REPO_ROOT" --no-deps
@@ -128,10 +138,14 @@ targets=("$@")
 # with torch's, so it is opt-in via `bash scripts/setup_runpod.sh cutile`.
 if [[ ${#targets[@]} -eq 0 ]]; then targets=(base vllm sglang); fi
 
+# A framework that fails to install must not abort the run: base is what your
+# kernels need, and the baselines are independent of each other. Failures are
+# collected and reported at the end instead.
+failed=()
 for env in "${targets[@]}"; do
   case "$env" in
-    base) setup_env base --system-site-packages ;;
-    *)    setup_env "$env" ;;
+    base) setup_env base --system-site-packages || failed+=("$env") ;;
+    *)    setup_env "$env" || failed+=("$env") ;;
   esac
 done
 
@@ -183,5 +197,12 @@ print(f"[setup] grouped_mm baseline {'available' if ok else 'MISSING (torch too 
 REPORT
   printf '[setup] driver              %s\n' \
     "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
+fi
+if (( ${#failed[@]} )); then
+  log "--- ${#failed[@]} environment(s) FAILED: ${failed[*]} ---"
+  log "the rest are usable; re-run just the failed one after fixing, e.g."
+  log "  bash scripts/setup_runpod.sh ${failed[0]}"
+else
+  log "all environments ready"
 fi
 log "commit requirements/resolved-*.txt so later sessions install the exact set"

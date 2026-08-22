@@ -1,0 +1,13 @@
+# Dependency overrides for the SGLang environment.
+#
+# SGLang 0.5.18 pins cuda-tile==1.6.0rc5, and that release ships ONLY an sdist
+# (verified on PyPI 2026-08-22: 1 file, cuda_tile-1.6.0rc5.tar.gz). cuTile is a
+# compiler frontend with a native extension, so building it from source needs a
+# toolchain that is not present and would be slow and fragile if it were.
+#
+# 1.6.0rc8 ships 18 wheels including cp312-manylinux2014_x86_64, which is
+# exactly this environment. Same 1.6.0 line, three release candidates later.
+#
+# This is an upstream packaging bug, not a choice. Re-check on the next SGLang
+# release and delete this file if the pin moves.
+cuda-tile==1.6.0rc8
