@@ -4,17 +4,46 @@ The GPU meter runs only during execution. Everything else happens on a laptop.
 
 ## One-time setup
 
-**1. Create a network volume** in the region you will rent H200s in. Size it for
-roughly 250 GB: three virtualenvs, plus a 93 GB Mixtral download, plus a 115 GB
-Qwen2-57B download if you capture from it. Storage bills monthly whether or not
-a pod is running.
+**1. Create a NETWORK VOLUME** in the region you will rent H200s in.
+
+Network Volume, not the pod's Volume Disk. A Volume Disk survives stop/start but
+dies with the pod; a Network Volume survives termination and can be attached to
+a different pod later. Since the whole workflow is spin up, run, terminate, the
+distinction is the difference between paying for the environment once and paying
+for it every session.
+
+**Sizing.** Storage bills monthly whether or not a pod runs, and RunPod volumes
+can be grown but not shrunk, so start at the smallest size that unblocks you:
+
+| you need | size | what it holds |
+|---|---|---|
+| benchmarks only | **100 GB** | three venvs (~50 GB), uv/Triton caches (~15 GB), results |
+| + capture DeepSeek-V2-Lite | 150 GB | adds a 31 GB model |
+| + capture Mixtral | 250 GB | adds a 93 GB model |
+| + capture Qwen2-57B | 350 GB | adds a 115 GB model |
+
+**Start at 100 GB.** The sweeps generate random weights and download nothing at
+all: only `capture_traces.py` pulls a model. So tests, calibration, smoke and the
+standard sweep all fit in the first row, and you grow the volume on the session
+you actually capture traces.
+
+**2. Container disk: 50 GB.** This is ephemeral scratch, billed only while the
+pod runs. The caches are redirected onto the volume, but wheel extraction for
+vLLM and SGLang still needs several GB of temp space, and running out mid-install
+is a slow failure on a metered box. `setup_runpod.sh` now checks free space
+before building each environment and aborts early rather than dying halfway.
 
 The volume is **region-locked**. That region's H200 availability becomes your
 availability. If it is dry you either wait or lose the volume's benefit, so pick
 a region with depth rather than the cheapest hourly rate.
 
-**2. Launch a pod** from a RunPod PyTorch CUDA template, attach the volume at
-`/workspace`, pick H200 NVL.
+**3. Launch a pod** from the official RunPod PyTorch template (newest offered;
+2.8.0 + CUDA 12.8 at time of writing), attach the network volume at
+`/workspace`, and pick your H200.
+
+Note which H200: SXM and NVL share memory (141 GB, 4.8 TB/s) but not compute
+(989.5 vs 835.5 dense BF16). The repo carries a profile for each and selects by
+device name; `plot.py` refuses to plot rows from one against the other's roof.
 
 **3. Bootstrap.** Clone into the volume so the repo survives the pod:
 

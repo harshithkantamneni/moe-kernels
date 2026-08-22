@@ -35,6 +35,39 @@ command -v uv >/dev/null 2>&1 || { echo "[setup] uv is not on PATH" >&2; exit 1;
 
 hash_of() { sha256sum "$1" | cut -d' ' -f1; }
 
+free_gb() { df -BG --output=avail "$1" 2>/dev/null | tail -1 | tr -dc '0-9'; }
+
+# Running out of disk halfway through a vLLM install is a slow, expensive
+# failure: the wheels are large, the pod is metered, and the error surfaces
+# only after several minutes of downloading. Check before starting.
+require_space() {
+  local path="$1" need="$2" label="$3"
+  local avail; avail="$(free_gb "$path")"
+  if [[ -z "$avail" ]]; then
+    log "could not read free space on $path; continuing"
+    return 0
+  fi
+  log "$label: ${avail}G free on $path (want ~${need}G)"
+  if (( avail < need )); then
+    echo "[setup] ABORT: only ${avail}G free on $path, need about ${need}G." >&2
+    echo "[setup]   Network volumes can be grown in the RunPod console." >&2
+    echo "[setup]   Or install fewer environments: bash $0 base" >&2
+    return 1
+  fi
+  return 0
+}
+
+# Rough per-environment footprint, measured against the pinned requirement sets.
+space_for() {
+  case "$1" in
+    base)   echo 8 ;;    # more if MOE_BASE_TORCH pins its own CUDA torch
+    vllm)   echo 20 ;;   # vLLM plus its own torch and CUDA libraries
+    sglang) echo 20 ;;   # likewise
+    cutile) echo 6 ;;
+    *)      echo 5 ;;
+  esac
+}
+
 setup_env() {
   local env="$1"; shift
   local req="$REPO_ROOT/requirements/${env}.txt"
@@ -48,6 +81,8 @@ setup_env() {
     log "$env: unchanged, skipping"
     return 0
   fi
+
+  require_space "$VENVS" "$(space_for "$env")" "$env" || return 1
 
   log "$env: building (this is the part you only pay for once)"
   if [[ ! -x "$VENVS/$env/bin/python" ]]; then
@@ -92,7 +127,14 @@ for env in "${targets[@]}"; do
 done
 
 log "--- environment ---"
-log "workspace           $WORKSPACE"
+if mountpoint -q "$WORKSPACE" 2>/dev/null; then
+  log "workspace           $WORKSPACE (mounted volume, survives pod termination)"
+else
+  log "workspace           $WORKSPACE  *** NOT A MOUNTED VOLUME ***"
+  log "                    Everything here is lost when the pod is terminated,"
+  log "                    including the venvs you just paid to build."
+fi
+log "free on volume      $(free_gb "$WORKSPACE")G"
 log "venvs               $VENVS"
 log "HF_HOME             $HF_HOME"
 log "TRITON_CACHE_DIR    $TRITON_CACHE_DIR"
