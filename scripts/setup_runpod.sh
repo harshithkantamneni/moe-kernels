@@ -47,6 +47,9 @@ require_space() {
     log "could not read free space on $path; continuing"
     return 0
   fi
+  # On a RunPod network volume this reports the shared cluster, not your quota,
+  # so a huge number here is not evidence of anything. It still catches the case
+  # that actually bites: a local/container filesystem filling up.
   log "$label: ${avail}G free on $path (want ~${need}G)"
   if (( avail < need )); then
     echo "[setup] ABORT: only ${avail}G free on $path, need about ${need}G." >&2
@@ -103,7 +106,13 @@ setup_env() {
     fi
   fi
 
-  uv pip install --python "$VENVS/$env/bin/python" -r "$req"
+  # SGLang 0.5.18 pins cuda-tile==1.6.0rc5, a prerelease, and uv refuses
+  # prereleases by default. `if-necessary-or-explicit` permits one only when a
+  # dependency explicitly asks for it or nothing else satisfies the graph, so
+  # this does not quietly upgrade anything else to a release candidate. Our own
+  # top-level versions stay exactly pinned either way.
+  uv pip install --python "$VENVS/$env/bin/python" \
+    --prerelease=if-necessary-or-explicit -r "$req"
   # Editable install so `moe` is importable in every environment and edits to
   # your kernels take effect without reinstalling.
   uv pip install --python "$VENVS/$env/bin/python" -e "$REPO_ROOT" --no-deps

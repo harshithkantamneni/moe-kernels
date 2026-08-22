@@ -16,6 +16,13 @@
 #
 # The tileiras compiler is a RUNTIME dependency, not just build-time: cuTile
 # JIT-compiles by shelling out to it.
+#
+# NOTE, observed on the box 2026-08-22: SGLang 0.5.18 itself depends on
+# cuda-tile==1.6.0rc5. So venvs/sglang already contains cuTile, at a prerelease
+# newer than the 1.5.0 pinned here. If you only want to try cuTile, that venv is
+# the cheapest place to do it -- no extra install, and no fight with torch's
+# cuda-toolkit pin. This env remains useful for testing a SPECIFIC cuTile
+# version in isolation.
 cuda-tile==1.5.0
 
 # Pin the compiler explicitly. cuda-tile's own floor of >=13.2 also admits
