@@ -149,6 +149,17 @@ def clock_drift(start: ClockState, end: ClockState) -> tuple[float, bool]:
 class L2Flusher:
     """Evicts L2 between timed iterations by touching a buffer larger than it.
 
+    MEASURED HAZARD, H200 SXM, 2026-08-22. At microsecond scale the flush can
+    make a kernel FASTER: a 4 MB kernel ran 13.70 us unflushed and 7.07 us
+    flushed. No cache effect explains that. The flush is enough work to hold
+    clocks up, while a loop of ~10 us kernels lets the GPU settle.
+
+    So at small cell sizes the l2_flush axis is confounded with clock state, and
+    that is precisely the small-batch decode regime this project targets. Do not
+    read a flushed/warm delta as a cache effect without checking the
+    sm_clock_start/end columns, which are recorded per timing mode for this
+    reason. The confound shrinks as the kernel lengthens.
+
     The flush READS rather than writes. A write flush (the common `buf.zero_()`
     idiom) leaves up to a full L2 of dirty lines, and those writebacks land
     inside the NEXT timed interval, stealing roughly 11 microseconds of HBM

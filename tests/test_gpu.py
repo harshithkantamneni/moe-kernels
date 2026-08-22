@@ -107,16 +107,55 @@ def test_eager_timing_calibrates_when_iters_is_none():
     assert res.iters >= 10 and res.samples == res.iters
 
 
-def test_flushing_costs_time_for_a_memory_bound_kernel():
-    """Sanity check that the flush actually perturbs what it should: a kernel
-    whose working set fits L2 must get slower when L2 is evicted each iteration."""
-    n = 1024 * 1024  # 4 MB fp32, comfortably L2-resident
-    a = torch.randn(n, device="cuda")
-    warm = T.time_eager(lambda: a.mul(1.0001), warmup=10, iters=50, trials=2,
-                        l2_flush=False)
-    cold = T.time_eager(lambda: a.mul(1.0001), warmup=10, iters=50, trials=2,
-                        l2_flush=True, flush_mb=T.DEFAULT_FLUSH_MB)
-    assert cold.ms_p50 >= warm.ms_p50 * 0.9, (warm.ms_p50, cold.ms_p50)
+def test_flush_barely_moves_a_dram_bound_kernel():
+    """With a working set far larger than L2, nothing was cached, so evicting
+    the cache should not materially change the time.
+
+    This is the sound direction of the flush claim. The opposite direction (a
+    cache-resident kernel getting SLOWER when flushed) is confounded at small
+    sizes: see test_flush_can_appear_to_speed_up_a_tiny_kernel.
+    """
+    n = 512 * 1024 * 1024 // 4          # 512 MB, ~8x L2
+    a = torch.empty(n, device="cuda", dtype=torch.float32).fill_(1.0)
+    out = torch.empty_like(a)
+    warm = T.time_eager(lambda: torch.mul(a, 1.0001, out=out), warmup=10,
+                        iters=20, trials=2, l2_flush=False)
+    cold = T.time_eager(lambda: torch.mul(a, 1.0001, out=out), warmup=10,
+                        iters=20, trials=2, l2_flush=True,
+                        flush_mb=T.DEFAULT_FLUSH_MB)
+    ratio = cold.ms_p50 / warm.ms_p50
+    assert 0.7 < ratio < 1.4, (
+        f"flush changed a DRAM-bound kernel by {ratio:.2f}x "
+        f"(warm {warm.ms_p50:.4f} ms, cold {cold.ms_p50:.4f} ms); nothing was "
+        "cached, so this should be near 1.0")
+
+
+def test_flush_can_appear_to_speed_up_a_tiny_kernel():
+    """A real measurement hazard, pinned so it is not rediscovered as a bug.
+
+    Measured on H200 SXM: a 4 MB kernel ran at 13.70 us unflushed and 7.07 us
+    flushed. The flush made it FASTER, which no cache effect explains. The 128 MB
+    flush is enough work to hold clocks up, while a loop of ~10 us kernels lets
+    the GPU settle between iterations.
+
+    Consequence for this harness: at microsecond scale the l2_flush axis is
+    confounded with clock state, and that is exactly the small-batch decode
+    regime the project targets. Every row records sm_clock_start/end per timing
+    mode, so the confound is detectable in the data rather than invisible.
+
+    The assertion is deliberately loose: the point is that the direction is NOT
+    reliably "flushed is slower", so no analysis may assume it.
+    """
+    n = 1024 * 1024                      # 4 MB, comfortably L2-resident
+    a = torch.empty(n, device="cuda", dtype=torch.float32).fill_(1.0)
+    out = torch.empty_like(a)
+    warm = T.time_eager(lambda: torch.mul(a, 1.0001, out=out), warmup=10,
+                        iters=50, trials=2, l2_flush=False)
+    cold = T.time_eager(lambda: torch.mul(a, 1.0001, out=out), warmup=10,
+                        iters=50, trials=2, l2_flush=True,
+                        flush_mb=T.DEFAULT_FLUSH_MB)
+    assert warm.ms_p50 > 0 and cold.ms_p50 > 0
+    assert warm.ms_p50 < 0.5 and cold.ms_p50 < 0.5, "expected microsecond scale"
 
 
 # --- graph timing -----------------------------------------------------------
@@ -219,14 +258,35 @@ def test_reference_pipeline_is_not_capturable_and_says_so(tmp_path):
 
 def test_graph_policy_skips_a_long_kernel(tmp_path):
     """A cell whose predicted time dwarfs a kernel launch is not worth timing
-    twice; the row must say so rather than silently vanishing."""
-    from moe.bench.roofline import load_hardware
-    cfg = make_cfg(tmp_path, graph_modes=(True,), graph_min_launch_share=0.99,
-                   hardware=load_hardware("h200_nvl"))
+    twice; the row must say so rather than silently vanishing.
+
+    The policy triggers on PREDICTED time, so a toy cell on real H200 bandwidth
+    is predicted to be microseconds and the policy correctly says "measure it".
+    A deliberately slow hardware profile is what forces the skip branch.
+    """
+    from moe.bench.roofline import Hardware
+    slow = Hardware(name="slow", bandwidth_bytes_s=1.0,
+                    peak_flops={"bf16": 1e12, "fp32": 1e12}, source="test")
+    cfg = make_cfg(tmp_path, graph_modes=(True,), graph_min_launch_share=0.5,
+                   hardware=slow)
     D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
     r = SC.read_csv(cfg.csv_path)[0]
     assert r["capture_status"] == "skipped"
     assert "threshold" in r["graph_skip_reason"]
+
+
+def test_graph_policy_measures_a_short_kernel(tmp_path):
+    """The other side: on real bandwidth a toy cell IS launch-dominated, so the
+    policy must not skip it."""
+    from moe.bench.roofline import load_hardware
+    cfg = make_cfg(tmp_path, graph_modes=(True,),
+                   graph_min_launch_share=0.01,
+                   hardware=load_hardware("h200_sxm"))
+    D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
+    r = SC.read_csv(cfg.csv_path)[0]
+    # The reference pipeline is not capturable, which is itself the finding.
+    assert r["capture_status"] == "not_capturable"
+    assert r["graph_skip_reason"] == ""
 
 
 def test_both_timing_modes_produce_comparable_rows(tmp_path):
@@ -313,6 +373,6 @@ def test_full_calibration_runs(tmp_path):
     from moe.bench.calibrate import calibrate
     cal = calibrate(target_bytes=256 << 20, gemm_n=2048)
     assert cal.achieved_bandwidth_gbps > 0
-    assert cal.achieved_peak_tflops > 0
+    assert cal.achieved_bf16_tflops > 0
     assert cal.gpu_name
     assert len(cal.bandwidth_patterns) == 3
