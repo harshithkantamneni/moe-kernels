@@ -72,8 +72,12 @@ class MoEConfig:
     num_experts: int          # E, routed experts only
     top_k: int                # k
     act: str = "swiglu"
+    gate_fn: str = "softmax"      # softmax | sigmoid (DeepSeek-V3 uses sigmoid)
     norm_topk_prob: bool = True   # renormalise the top-k gate probs to sum to 1
+    routed_scaling_factor: float = 1.0  # applied AFTER renormalisation
     shared_experts: int = 0
+    num_layers: int = 0
+    first_moe_layer: int = 0      # layers below this index are dense
     hf_repo: str | None = None
     verified: bool = False
 
@@ -85,6 +89,12 @@ class MoEConfig:
         for field in ("hidden_size", "intermediate_size", "num_experts", "top_k"):
             if getattr(self, field) <= 0:
                 raise ValueError(f"{self.name}: {field} must be positive")
+        if self.gate_fn not in ("softmax", "sigmoid"):
+            raise ValueError(f"{self.name}: unknown gate_fn {self.gate_fn!r}")
+
+    @property
+    def num_moe_layers(self) -> int:
+        return max(0, self.num_layers - self.first_moe_layer)
 
     @property
     def w1_shape(self) -> tuple[int, int, int]:
@@ -108,28 +118,65 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
     "mixtral-8x7b": MoEConfig(
         name="mixtral-8x7b",
         hidden_size=4096,
+        # Mixtral has no moe_intermediate_size: the dense intermediate_size IS
+        # the per-expert FFN width.
         intermediate_size=14336,
         num_experts=8,
         top_k=2,
+        gate_fn="softmax",
+        # config.json has no norm_topk_prob key. MixtralSparseMoeBlock.forward
+        # renormalises unconditionally, so this is True by code, not by config.
+        norm_topk_prob=True,
+        shared_experts=0,
+        num_layers=32,
+        first_moe_layer=0,
         hf_repo="mistralai/Mixtral-8x7B-Instruct-v0.1",
+        verified=True,
     ),
     "qwen2-57b-a14b": MoEConfig(
         name="qwen2-57b-a14b",
         hidden_size=3584,
+        # moe_intermediate_size. The dense intermediate_size (18944) is a decoy
+        # and applies only to the shared expert path, which is 20480 wide.
         intermediate_size=2560,
         num_experts=64,
         top_k=8,
+        gate_fn="softmax",
+        norm_topk_prob=False,   # config.json says false
         shared_experts=1,
+        num_layers=28,
+        first_moe_layer=0,
         hf_repo="Qwen/Qwen2-57B-A14B-Instruct",
+        verified=True,
     ),
     "deepseek-v3": MoEConfig(
         name="deepseek-v3",
         hidden_size=7168,
-        intermediate_size=2048,
-        num_experts=256,
+        intermediate_size=2048,   # moe_intermediate_size
+        num_experts=256,          # n_routed_experts
         top_k=8,
+        gate_fn="sigmoid",        # scoring_func = sigmoid, not softmax
+        norm_topk_prob=True,
+        routed_scaling_factor=2.5,
         shared_experts=1,
+        num_layers=61,
+        first_moe_layer=3,        # first_k_dense_replace: 58 of 61 layers are MoE
         hf_repo="deepseek-ai/DeepSeek-V3",
+        verified=True,
+    ),
+    "deepseek-v2-lite": MoEConfig(
+        name="deepseek-v2-lite",
+        hidden_size=2048,
+        intermediate_size=1408,   # moe_intermediate_size
+        num_experts=64,
+        top_k=6,
+        gate_fn="softmax",
+        norm_topk_prob=False,
+        shared_experts=2,
+        num_layers=27,
+        first_moe_layer=1,
+        hf_repo="deepseek-ai/DeepSeek-V2-Lite",
+        verified=True,
     ),
     # Tiny synthetic geometry for CPU unit tests and laptop-side debugging.
     "toy": MoEConfig(
@@ -138,6 +185,7 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         intermediate_size=128,
         num_experts=4,
         top_k=2,
+        num_layers=2,
         verified=True,
     ),
 }

@@ -44,10 +44,11 @@ class Hardware:
         return "compute" if arithmetic_intensity >= self.ridge_point(dtype) else "memory"
 
 
-def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False) -> Hardware:
+def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
+                  directory: Path | None = None) -> Hardware:
     import yaml
 
-    path = HARDWARE_DIR / f"{name}.yaml"
+    path = (directory or HARDWARE_DIR) / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"no hardware file {path}")
     data = yaml.safe_load(path.read_text())

@@ -21,24 +21,56 @@ from ..state import MoEState, MoEWeights
 # helpers shared by the spans and by golden_forward
 # --------------------------------------------------------------------------
 
-def route(x, wg, top_k: int, norm_topk_prob: bool):
-    """[T,H] x [E,H] -> (logits [T,E], topk_ids [T,k] int32, topk_weights [T,k] fp32)."""
+def gate_scores(logits, cfg):
+    """Router logits -> per-expert scores, using the model's own gating function.
+
+    Mixtral, Qwen2 and DeepSeek-V2-Lite use softmax over experts. DeepSeek-V3
+    uses an independent sigmoid per expert, so its scores do not sum to 1.
+    """
+    if cfg.gate_fn == "sigmoid":
+        return torch.sigmoid(logits)
+    return torch.softmax(logits, dim=-1)
+
+
+def gate_weights(scores, ids, cfg):
+    """Combine weights for the chosen experts.
+
+    Order matters and is model-specific: gather, then renormalise if the model
+    does, then apply the routed scaling factor. DeepSeek-V3 multiplies by 2.5
+    AFTER renormalising, so its combine weights deliberately do not sum to 1.
+    Qwen2 and DeepSeek-V2-Lite set norm_topk_prob=false and do not renormalise
+    at all.
+    """
+    w = torch.gather(scores, 1, ids.long()) if ids is not None else scores
+    if cfg.norm_topk_prob:
+        # The 1e-20 matches DeepSeek's reference implementation and keeps an
+        # all-zero sigmoid row from producing NaN.
+        w = w / (w.sum(dim=-1, keepdim=True) + 1e-20)
+    if cfg.routed_scaling_factor != 1.0:
+        w = w * cfg.routed_scaling_factor
+    return w.float()
+
+
+def route(x, wg, cfg):
+    """[T,H] x [E,H] -> (logits [T,E], topk_ids [T,k] int32, topk_weights [T,k] fp32).
+
+    Deliberate simplification: DeepSeek-V3's group-limited (noaux_tc) expert
+    SELECTION is not modelled. Every benchmark cell forces expert selection from
+    a trace or a parametric distribution, so the selection rule never affects
+    the grouped GEMM under measurement; only the gate weights do, and those are
+    modelled faithfully above.
+    """
     logits = x.float() @ wg.float().t()
-    probs = torch.softmax(logits, dim=-1)
-    topk_weights, topk_ids = torch.topk(probs, top_k, dim=-1)
-    if norm_topk_prob:
-        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
-    return logits, topk_ids.to(torch.int32), topk_weights.float()
+    scores = gate_scores(logits, cfg)
+    _, topk_ids = torch.topk(scores, cfg.top_k, dim=-1)
+    topk_ids = topk_ids.to(torch.int32)
+    return logits, topk_ids, gate_weights(scores, topk_ids, cfg)
 
 
-def weights_for_forced_ids(logits, forced_ids, norm_topk_prob: bool):
+def weights_for_forced_ids(logits, forced_ids, cfg):
     """Replay path: expert choice comes from a trace, gate weights still come
     from the model's own logits so the combine step stays meaningful."""
-    probs = torch.softmax(logits, dim=-1)
-    w = torch.gather(probs, 1, forced_ids.long())
-    if norm_topk_prob:
-        w = w / w.sum(dim=-1, keepdim=True)
-    return w.float()
+    return gate_weights(gate_scores(logits, cfg), forced_ids, cfg)
 
 
 def build_permutation(topk_ids, num_experts: int):
@@ -106,10 +138,10 @@ class RefRouter(_Ref):
 
     def __call__(self, st: MoEState) -> None:
         cfg = st.spec.model
-        logits, ids, w = route(st.x, st.weights.wg, cfg.top_k, cfg.norm_topk_prob)
+        logits, ids, w = route(st.x, st.weights.wg, cfg)
         if st.forced_topk_ids is not None:
             ids = st.forced_topk_ids.to(torch.int32)
-            w = weights_for_forced_ids(logits, ids, cfg.norm_topk_prob)
+            w = weights_for_forced_ids(logits, ids, cfg)
         st.router_logits, st.topk_ids, st.topk_weights = logits, ids, w
 
 
@@ -180,10 +212,10 @@ def golden_forward(spec: BenchSpec, weights: MoEWeights, x, forced_topk_ids=None
     not against another low-precision implementation."""
     cfg = spec.model
     xf = x.float()
-    logits, ids, w = route(xf, weights.wg, cfg.top_k, cfg.norm_topk_prob)
+    logits, ids, w = route(xf, weights.wg, cfg)
     if forced_topk_ids is not None:
         ids = forced_topk_ids.to(torch.int32)
-        w = weights_for_forced_ids(logits, ids, cfg.norm_topk_prob)
+        w = weights_for_forced_ids(logits, ids, cfg)
     offsets, perm = build_permutation(ids, cfg.num_experts)
     x_perm = xf[perm.long() // cfg.top_k]
     h_up = grouped_gemm_loop(x_perm, weights.w1.float(), offsets, 2 * cfg.intermediate_size)

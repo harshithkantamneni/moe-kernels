@@ -1,0 +1,203 @@
+"""Command line entry point for benchmarking.
+
+Two audiences. On the GPU box, `run_all.sh` calls this to execute a profile.
+On a laptop, `--dry-run` builds and validates the entire matrix and reports what
+a session would cost, without CUDA and without spending anything.
+
+    python -m moe.bench.cli --profile standard --dry-run
+    python -m moe.bench.cli --profile smoke --out-dir /workspace/results
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import moe
+
+from ..pipeline import PipelineError, build
+from ..spec import MODEL_CONFIGS
+from . import profiles as PR
+from .driver import RunConfig, run_sweep
+
+
+def parse_args(argv=None):
+    p = argparse.ArgumentParser(prog="moe.bench.cli", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--profile", default="smoke", choices=sorted(PR.PROFILES))
+    p.add_argument("--dry-run", action="store_true",
+                   help="validate the matrix and report its size; no GPU needed")
+    p.add_argument("--out-dir", type=Path, default=Path("results"))
+    p.add_argument("--run-id", default=None,
+                   help="reuse a previous run id to resume its manifest")
+    p.add_argument("--env", default="base",
+                   help="which virtualenv this process is; recorded in every row")
+    p.add_argument("--impl", action="append", default=[],
+                   help="restrict to these implementations (repeatable)")
+    p.add_argument("--models", default=None,
+                   help="comma-separated model override, e.g. mixtral-8x7b,toy")
+    p.add_argument("--tokens", default=None,
+                   help="comma-separated token-count override")
+    p.add_argument("--max-minutes", type=float, default=None,
+                   help="stop cleanly at this wall-clock budget; resume later")
+    p.add_argument("--traces-dir", type=Path, default=None)
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--groups", default="reference,kernels",
+                   help="implementation groups to import: reference,kernels,baselines")
+    p.add_argument("--list-impls", action="store_true")
+    p.add_argument("--include-reference", action="store_true",
+                   help="also benchmark the reference spans; useful to size "
+                        "the matrix before any kernel exists, and to get a "
+                        "deliberately slow lower bound")
+    return p.parse_args(argv)
+
+
+def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
+    from dataclasses import replace
+    changes = {}
+    if args.models:
+        names = tuple(m.strip() for m in args.models.split(",") if m.strip())
+        unknown = [m for m in names if m not in MODEL_CONFIGS]
+        if unknown:
+            raise SystemExit(f"unknown model(s) {unknown}; known: {sorted(MODEL_CONFIGS)}")
+        changes["models"] = names
+    if args.tokens:
+        changes["token_counts"] = tuple(int(t) for t in args.tokens.split(","))
+    return replace(profile, **changes) if changes else profile
+
+
+def build_routing_source(args):
+    """Resolve routing for each cell, loading traces only if a cell needs them."""
+    from ..routing.distributions import routing_source
+    from ..routing.traces import TRACE_DIR, TraceSet
+
+    directory = args.traces_dir or TRACE_DIR
+    traces = TraceSet.load(directory) if Path(directory).exists() else TraceSet({})
+
+    def source(spec):
+        return routing_source(spec, device=args.device, traces=traces)
+
+    return source, traces
+
+
+def time_limited(cells, max_minutes: float | None):
+    """Stop yielding cells once the budget is spent.
+
+    The check happens between cells, so a running cell always finishes and its
+    row is written. The manifest makes the next session resume from here.
+    """
+    if not max_minutes:
+        yield from cells
+        return
+    deadline = time.monotonic() + max_minutes * 60.0
+    stopped = False
+    for cell in cells:
+        if time.monotonic() >= deadline:
+            stopped = True
+            break
+        yield cell
+    if stopped:
+        print(f"[cli] wall-clock budget of {max_minutes:g} min reached; "
+              "stopping cleanly. Re-run with the same --run-id to resume.")
+
+
+def dry_run(profile: PR.Profile, args, traces) -> int:
+    """Validate every tiling in the matrix without touching a GPU."""
+    specs = profile.specs()
+    impls = PR.candidate_impls(env=None, include_reference=args.include_reference)
+    if args.impl:
+        impls = [s for s in impls if s.name in args.impl]
+
+    print(f"profile        {profile.name}")
+    print(f"models         {', '.join(profile.models)}")
+    print(f"token counts   {', '.join(str(t) for t in profile.token_counts)}")
+    print(f"dtypes         {', '.join(profile.dtypes)}")
+    print(f"routings       {', '.join(r.label for r in profile.routings)}")
+    print(f"seeds          {', '.join(str(s) for s in profile.seeds)}")
+    print(f"specs          {len(specs)}")
+    print(f"implementations{'':<1}{len(impls)}: "
+          f"{', '.join(s.name for s in impls) if impls else 'NONE REGISTERED'}")
+    modes = len(profile.l2_modes) * len(profile.graph_modes)
+    print(f"timing modes   {modes} "
+          f"(l2_flush={list(profile.l2_modes)}, cuda_graph={list(profile.graph_modes)})")
+
+    problems: list[str] = []
+    unsupported = 0
+    planned = 0
+    for spec, names, impl in PR.cells(profile, impl_filter=tuple(args.impl),
+                                      include_reference=args.include_reference):
+        try:
+            build(names, spec=spec)
+            planned += 1
+        except PipelineError as e:
+            msg = str(e)
+            if "does not support" in msg:
+                unsupported += 1
+            else:
+                problems.append(f"  {spec.label} [{impl}]: {msg}")
+
+    needed = {s.routing.trace_id for s in specs if s.routing.kind == "trace"}
+    missing_traces = sorted(t for t in needed if t not in traces)
+
+    print(f"\nplanned cells  {planned}")
+    print(f"timing rows    {planned * modes} (upper bound; uncapturable "
+          "graph modes produce no row)")
+    print(f"skipped        {unsupported} (implementation does not support the cell)")
+    if missing_traces:
+        print(f"MISSING TRACES {missing_traces}")
+    if problems:
+        print(f"\nINVALID TILINGS ({len(problems)}):")
+        for line in problems[:20]:
+            print(line)
+        if len(problems) > 20:
+            print(f"  ... and {len(problems) - 20} more")
+
+    if not impls:
+        print("\nNothing to benchmark: no non-reference implementations are "
+              "registered. Write a kernel in moe/kernels/ (see TEMPLATE.md).")
+    print("\nNo GPU was used. Nothing was spent.")
+    return 1 if (problems or missing_traces) else 0
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    moe.bootstrap(*[g.strip() for g in args.groups.split(",") if g.strip()])
+
+    if args.list_impls:
+        for span in PR.candidate_impls(include_reference=True):
+            print(f"{span.name:<32} covers={'+'.join(span.covers):<24} "
+                  f"env={span.env:<8} graph_safe={span.cuda_graph_safe} "
+                  f"dtypes={','.join(span.dtypes)}")
+        return 0
+
+    profile = apply_overrides(PR.get(args.profile), args)
+    routing, traces = build_routing_source(args)
+
+    if args.dry_run:
+        return dry_run(profile, args, traces)
+
+    cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
+                  warmup=profile.warmup, trials=profile.trials,
+                  iters=profile.iters, l2_modes=profile.l2_modes,
+                  graph_modes=profile.graph_modes)
+    if args.run_id:
+        cfg_kw["run_id"] = args.run_id
+    cfg = RunConfig(**cfg_kw)
+
+    cells = time_limited(
+        PR.cells(profile, env=args.env, impl_filter=tuple(args.impl),
+                 include_reference=args.include_reference),
+        args.max_minutes)
+
+    started = time.time()
+    path = run_sweep(cells, cfg, routing)
+    print(f"[cli] run_id={cfg.run_id} elapsed={time.time() - started:.1f}s")
+    print(json.dumps({"csv": str(path), "manifest": str(cfg.manifest_path),
+                      "run_id": cfg.run_id}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

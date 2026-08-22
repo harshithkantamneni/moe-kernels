@@ -1,34 +1,51 @@
-# Peak numbers for the roofline. NOTHING here is trusted until you check it
-# against the NVIDIA datasheet and flip `verified` to true. roofline.py refuses
-# to draw a roof from an unverified file, because an uncited roofline is worse
-# than no roofline: it looks authoritative and quietly misattributes efficiency.
+# H200 NVL peaks for the roofline.
 #
-# Two traps this file exists to avoid:
-#   1. NVIDIA headline TFLOP/s figures are usually the *sparsity* numbers.
-#      Dense is half. Use dense.
-#   2. H200 SXM and H200 NVL are different parts with different TDP and
-#      different peak compute. Do not copy an SXM number into an NVL roofline.
+# Verified against the NVIDIA H200 Tensor Core GPU Datasheet, document
+# 3512650.Nov24. Two things that datasheet makes explicit and that are the
+# usual source of wrong rooflines:
+#
+#   1. Footnote 2 ("With sparsity") is attached to the TF32/BF16/FP16/FP8/INT8
+#      rows. Every tensor-core figure NVIDIA publishes for H200 is the SPARSE
+#      number. Dense is exactly half. The dense figures below are published/2.
+#   2. H200 NVL and H200 SXM share memory (141 GB, 4.8 TB/s) but NOT compute.
+#      NVL is a clock/power-cut part: 835.5 dense BF16 vs SXM's 989.5. Using an
+#      SXM number here would understate measured efficiency by about 16%.
+#
+# Footnote 1 of the same datasheet marks ALL H200 specifications "preliminary".
+# Carry that caveat into anything published from these numbers.
 
 name: NVIDIA H200 NVL
-verified: false
-source: https://www.nvidia.com/en-us/data-center/h200/
-checked_by: null
-checked_on: null
+verified: true
+source: https://dam-cdn.nvd.orangelogic.com/AssetLink/5o2qgy5d2835ve2pm11i62kv8mphqta8.pdf
+source_note: >-
+  NVIDIA H200 Tensor Core GPU Datasheet, doc 3512650.Nov24. Dense values are the
+  published sparse figures halved, per datasheet footnote 2. All H200 specs are
+  marked preliminary per footnote 1.
+checked_by: NVIDIA datasheet 3512650.Nov24
+checked_on: 2026-08-21
 
 memory:
   capacity_gb: 141          # HBM3e
-  bandwidth_tb_s: 4.8       # DRAFT, verify
+  bandwidth_tb_s: 4.8       # identical on NVL and SXM
 
-# Dense tensor-core peaks, TFLOP/s. Halve any datasheet figure that is
-# annotated "with sparsity".
+# DENSE tensor-core peaks, TFLOP/s.
 compute_dense_tflops:
-  fp32: null                # verify; not used by the current sweep
-  bf16: 835.0               # DRAFT, verify
-  fp16: 835.0               # DRAFT, verify
-  fp8_e4m3: 1671.0          # DRAFT, verify
+  fp32: null                # not used by the current sweep
+  bf16: 835.5               # published 1671 with sparsity
+  fp16: 835.5               # published 1671 with sparsity
+  fp8_e4m3: 1670.5          # published 3341 with sparsity; NVIDIA does not
+                            # break E4M3 out from E5M2, this is the unified rate
 
-# Filled in automatically from torch.cuda.get_device_properties at run time and
-# compared against the values above as a sanity check.
+# For contrast, so an SXM number is never pasted in here by accident.
+sibling_part_h200_sxm:
+  bandwidth_tb_s: 4.8
+  bf16_dense_tflops: 989.5
+  sm_count: 132
+  l2_mib: 50
+
+# NVIDIA does not publish these for the NVL part. Filled from
+# torch.cuda.get_device_properties at run time; until then they stay null so
+# nothing silently uses an SXM value.
 observed:
-  sm_count: null
-  l2_bytes: null
+  sm_count: null            # UNVERIFIED for NVL; SXM is 132
+  l2_bytes: null            # UNVERIFIED for NVL; GH100 die L2 is 50 MiB
