@@ -71,6 +71,10 @@ class BandwidthResult:
     gbps: float
     gbps_peak_min: float      # from ms_min: the optimistic bound
     note: str = ""
+    #: SM clock either side of THIS pattern. A ceiling measured while the clock
+    #: is still ramping is not a ceiling.
+    sm_clock_start_mhz: int = 0
+    sm_clock_end_mhz: int = 0
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -86,6 +90,20 @@ class Calibration:
     gemm_shape: tuple[int, int, int]
     buffer_bytes: int
     clocks: dict = field(default_factory=dict)
+    settle: dict = field(default_factory=dict)
+
+    @property
+    def clock_ramped(self) -> bool:
+        """Did the SM clock move materially across the bandwidth patterns?
+
+        True means the patterns were measured at different clocks and are not
+        comparable to each other, let alone publishable as ceilings.
+        """
+        clks = [p.sm_clock_start_mhz for p in self.bandwidth_patterns
+                if p.sm_clock_start_mhz > 0]
+        if len(clks) < 2:
+            return False
+        return (max(clks) - min(clks)) / max(clks) > 0.05
 
     def pattern(self, name: str) -> BandwidthResult | None:
         for p in self.bandwidth_patterns:
@@ -113,6 +131,50 @@ class Calibration:
 
 def _elems(target_bytes: int) -> int:
     return int(target_bytes // 4)
+
+
+def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
+                  poll_seconds: float = 1.5) -> dict:
+    """Hold the GPU under load until its clock stops climbing.
+
+    MEASURED, H200 SXM 2026-08-22: a calibration started from idle ran its first
+    pattern at 840 MHz and its last at 1980 MHz. Patterns are measured in a
+    fixed order, so every one of them sat at a different point on the ramp and
+    the later ones looked faster for a reason that has nothing to do with DRAM.
+    The same run's cuBLAS figure moved 795 -> 725 TFLOP/s against an earlier
+    one, which is the same artefact from the other side.
+
+    A ceiling measured mid-ramp is not a ceiling. So: run a sustained load,
+    poll the clock, and return only once consecutive samples agree within
+    `tol_pct` (or `max_seconds` elapses, which is itself worth recording).
+    """
+    import time
+
+    T.require_cuda()
+    a = torch.randn((4096, 4096), device="cuda", dtype=torch.bfloat16)
+    out = torch.empty_like(a)
+
+    history: list[int] = []
+    deadline = time.monotonic() + max_seconds
+    settled = False
+    while time.monotonic() < deadline:
+        stop = time.monotonic() + poll_seconds
+        while time.monotonic() < stop:
+            for _ in range(8):
+                torch.mm(a, a, out=out)
+            torch.cuda.synchronize()
+        clk = T.ClockState.sample().sm_clock_mhz
+        history.append(clk)
+        if len(history) >= 3 and history[-2] > 0:
+            recent = history[-3:]
+            spread = (max(recent) - min(recent)) / max(recent) * 100.0
+            if spread <= tol_pct:
+                settled = True
+                break
+
+    return {"settled": settled, "clock_history_mhz": history,
+            "final_mhz": history[-1] if history else 0,
+            "max_seconds": max_seconds}
 
 
 def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
@@ -151,12 +213,16 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     sink = torch.zeros((), device="cuda", dtype=torch.float32)
 
     def run(pattern, fn, moved, note="", flush=None):
+        before = T.ClockState.sample()
         res = T.time_eager(fn, warmup=warmup, iters=iters, trials=trials,
                            l2_flush=l2_flush if flush is None else flush)
+        after = T.ClockState.sample()
         return BandwidthResult(
             pattern=pattern, bytes_moved=moved, ms_p50=res.ms_p50,
             ms_min=res.ms_min, gbps=moved / (res.ms_p50 * 1e-3) / 1e9,
-            gbps_peak_min=moved / (res.ms_min * 1e-3) / 1e9, note=note)
+            gbps_peak_min=moved / (res.ms_min * 1e-3) / 1e9, note=note,
+            sm_clock_start_mhz=before.sm_clock_mhz,
+            sm_clock_end_mhz=after.sm_clock_mhz)
 
     out = [
         run("read", lambda: torch.sum(a, dim=0, out=sink), nbytes,
@@ -198,8 +264,14 @@ def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
 
 
 def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
-              ceiling: str = DEFAULT_CEILING) -> Calibration:
+              ceiling: str = DEFAULT_CEILING, settle: bool = True,
+              settle_seconds: float = 30.0) -> Calibration:
     T.require_cuda()
+    # Settle FIRST. Measuring from idle put this machine's first pattern at
+    # 840 MHz and its last at 1980, which is a bigger effect than anything the
+    # choice of pattern argues about.
+    settle_info = settle_clocks(settle_seconds) if settle else {"settled": False,
+                                                                "skipped": True}
     before = T.ClockState.sample()
     patterns = measure_bandwidth(target_bytes)
     torch.cuda.empty_cache()          # the buffers are now unreferenced
@@ -244,6 +316,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
         clocks={"sm_start_mhz": before.sm_clock_mhz, "sm_end_mhz": after.sm_clock_mhz,
                 "temp_start_c": before.temp_c, "temp_end_c": after.temp_c,
                 "drift_pct": round(drift, 2), "throttled": throttled},
+        settle=settle_info,
     )
 
 

@@ -328,9 +328,10 @@ def test_calibration_names_its_ceiling_and_records_every_pattern():
     """max() across patterns was indefensible: it reported whichever pattern the
     hardware liked best. The choice must be explicit and the alternatives kept."""
     from moe.bench.calibrate import calibrate
-    cal = calibrate(target_bytes=1 << 30, gemm_n=2048, ceiling="read")
-    assert cal.ceiling_pattern == "read"
-    assert cal.achieved_bandwidth_gbps == cal.pattern("read").gbps
+    cal = calibrate(target_bytes=1 << 30, gemm_n=2048, ceiling="triad",
+                    settle=False)
+    assert cal.ceiling_pattern == "triad"
+    assert cal.achieved_bandwidth_gbps == cal.pattern("triad").gbps
     assert {p.pattern for p in cal.bandwidth_patterns} == {"read", "copy",
                                                            "triad", "write"}
     # the ridge moves with the denominator, so every one is recorded
@@ -342,7 +343,31 @@ def test_calibration_names_its_ceiling_and_records_every_pattern():
 def test_an_unknown_ceiling_is_rejected():
     from moe.bench.calibrate import calibrate
     with pytest.raises(ValueError, match="unknown ceiling"):
-        calibrate(target_bytes=1 << 28, gemm_n=1024, ceiling="nonsense")
+        calibrate(target_bytes=1 << 28, gemm_n=1024, ceiling="nonsense",
+                  settle=False)
+
+
+def test_settling_reaches_a_stable_clock():
+    """A ceiling measured while the clock is still climbing is not a ceiling.
+    Measured on this box: idle 840 MHz, boost 1980 MHz, and a calibration
+    started cold walked the whole ramp across its four patterns."""
+    from moe.bench.calibrate import settle_clocks
+    info = settle_clocks(max_seconds=25.0)
+    assert info["clock_history_mhz"], "no clock samples taken"
+    assert info["final_mhz"] > 0
+    if info["settled"]:
+        recent = info["clock_history_mhz"][-3:]
+        assert (max(recent) - min(recent)) / max(recent) * 100 <= 2.0, recent
+
+
+def test_calibration_records_per_pattern_clocks():
+    """Each pattern carries the clock it was measured at, so a ramped run is
+    detectable in the recorded data rather than only in a summary line."""
+    from moe.bench.calibrate import calibrate
+    cal = calibrate(target_bytes=1 << 29, gemm_n=1024, settle=False)
+    for pat in cal.bandwidth_patterns:
+        assert pat.sm_clock_start_mhz >= 0 and pat.sm_clock_end_mhz >= 0
+    assert isinstance(cal.clock_ramped, bool)
 
 
 def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
@@ -371,8 +396,9 @@ def test_bf16_gemm_ceiling_is_plausible():
 
 def test_full_calibration_runs(tmp_path):
     from moe.bench.calibrate import calibrate
-    cal = calibrate(target_bytes=256 << 20, gemm_n=2048)
+    cal = calibrate(target_bytes=1 << 30, gemm_n=2048, settle=False)
     assert cal.achieved_bandwidth_gbps > 0
     assert cal.achieved_bf16_tflops > 0
     assert cal.gpu_name
-    assert len(cal.bandwidth_patterns) == 3
+    assert len(cal.bandwidth_patterns) == 4
+    assert cal.ridge_point() > 0

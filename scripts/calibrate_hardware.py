@@ -27,8 +27,12 @@ import torch  # noqa: E402
 import yaml  # noqa: E402
 
 from moe.bench.calibrate import DEFAULT_CEILING, calibrate  # noqa: E402
-from moe.bench.roofline import (ambiguous_for_device,  # noqa: E402
-                                for_device, load_hardware, power_limit_w)
+from moe.bench.roofline import (  # noqa: E402
+    ambiguous_for_device,
+    for_device,
+    load_hardware,
+    power_limit_w,
+)
 from moe.bench.schema import git_provenance  # noqa: E402
 
 
@@ -83,6 +87,11 @@ def main() -> int:
                     help="which pattern defines achieved bandwidth. triad is the "
                          "canonical STREAM metric; read is closest to streaming "
                          "expert weights at small batch")
+    ap.add_argument("--no-settle", dest="settle", action="store_false",
+                    help="skip the clock settle. Only for a quick smoke check: "
+                         "measuring from idle walks the clock ramp across the "
+                         "patterns and the ceilings are not comparable")
+    ap.add_argument("--settle-seconds", type=float, default=30.0)
     ap.add_argument("--compare-to", default=None,
                     help="datasheet profile to compare against; auto-detected "
                          "when the device name is unambiguous")
@@ -93,7 +102,11 @@ def main() -> int:
 
     print("[calibrate] measuring achievable bandwidth and dense BF16 ...")
     print(f"[calibrate] buffers {args.buffer_gb:g} GiB, L2 flushed between iterations")
-    cal = calibrate(int(args.buffer_gb * (1 << 30)), args.gemm_n, args.ceiling)
+    if args.settle:
+        print(f"[calibrate] settling clocks under load (up to "
+              f"{args.settle_seconds:g}s) before measuring anything")
+    cal = calibrate(int(args.buffer_gb * (1 << 30)), args.gemm_n, args.ceiling,
+                    settle=args.settle, settle_seconds=args.settle_seconds)
 
     props = torch.cuda.get_device_properties(0)
     print(f"\n  device            {cal.gpu_name}")
@@ -164,9 +177,28 @@ def main() -> int:
     if spec_bw and spec_tf:
         print(f"    {'datasheet':<8}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
 
+    st = cal.settle
+    if st.get("skipped"):
+        print("\n  settle            SKIPPED: ceilings may be mid-ramp")
+    else:
+        hist = st.get("clock_history_mhz") or []
+        print(f"\n  settle            "
+              f"{'reached' if st.get('settled') else 'TIMED OUT'} at "
+              f"{st.get('final_mhz', 0)} MHz   history {hist}")
+        if not st.get("settled"):
+            print("                    clocks still moving when the budget ran "
+                  "out; raise --settle-seconds")
+
+    if cal.clock_ramped:
+        print("\n  WARNING: SM clock differed by >5% ACROSS the patterns, so "
+              "they were measured in different states and are NOT comparable:")
+        for pat in cal.bandwidth_patterns:
+            print(f"    {pat.pattern:<8}{pat.sm_clock_start_mhz:>6} -> "
+                  f"{pat.sm_clock_end_mhz:<6} MHz")
+
     c = cal.clocks
     print(f"\n  clocks            {c['sm_start_mhz']} -> {c['sm_end_mhz']} MHz, "
-          f"{c['temp_start_c']} -> {c['temp_end_c']} C, drift {c['drift_pct']}%"
+          f"{c['temp_start_c']} -> {c['temp_end_c']} C"
           + ("  THROTTLED" if c["throttled"] else ""))
     if c["throttled"]:
         print("                    ceilings measured on a throttling GPU are low; "
