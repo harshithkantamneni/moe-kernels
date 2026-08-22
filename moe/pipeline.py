@@ -111,14 +111,10 @@ def _check_dataflow(spans: tuple[S.StageSpan, ...]) -> None:
 
 
 def _check_env(spans: tuple[S.StageSpan, ...]) -> None:
-    envs = {s.env for s in spans if s.env != "base"}
-    if len(envs) > 1:
-        owners = {s.name: s.env for s in spans if s.env != "base"}
-        raise PipelineError(
-            f"pipeline mixes incompatible environments {sorted(envs)}: {owners}. "
-            "Baselines from different frameworks cannot share one process; "
-            "benchmark them as separate pipelines."
-        )
+    try:
+        S.resolve_env(spans)
+    except ValueError as e:
+        raise PipelineError(f"pipeline {e}") from None
 
 
 def _check_support(spans: tuple[S.StageSpan, ...], spec: BenchSpec) -> None:

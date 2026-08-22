@@ -19,7 +19,10 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+# v2: dropped pct_of_achieved_bw (exactly reciprocal to implied_traffic_ratio),
+#     added pct_of_achieved_tflops, load_tile_eff_bm64, load_tile_eff_bm128,
+#     and renamed achieved_bf16_tflops -> achieved_peak_tflops.
 
 
 @dataclass
@@ -128,7 +131,8 @@ class Row:
     # quoted against what this machine actually delivers rather than a datasheet
     # peak it will never reach.
     achieved_bw_gbps: float = 0.0
-    achieved_bf16_tflops: float = 0.0
+    # The measured compute ceiling for THIS row's dtype, not necessarily bf16.
+    achieved_peak_tflops: float = 0.0
     # Compute-side efficiency against the measured cuBLAS ceiling. Not
     # derivable from the memory-side number, so both are carried.
     pct_of_achieved_tflops: float = 0.0
@@ -247,6 +251,18 @@ class CsvWriter:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         new = not self.path.exists() or self.path.stat().st_size == 0
+        if not new:
+            # Appending under a header from a different schema would write rows
+            # in the new field order beneath the old names, misaligning every
+            # column from that point on. Resume must refuse instead.
+            with self.path.open(newline="") as fh:
+                existing = next(csv.reader(fh), [])
+            if existing != COLUMNS:
+                raise ValueError(
+                    f"{self.path} has a header from a different schema "
+                    f"({len(existing)} columns, this code writes {len(COLUMNS)}). "
+                    "Start a new run id rather than appending; merge_csvs "
+                    "refuses mixed versions too.")
         self._fh = self.path.open("a", newline="")
         self._writer = csv.DictWriter(self._fh, fieldnames=COLUMNS)
         if new:

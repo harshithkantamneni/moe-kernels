@@ -119,3 +119,24 @@ def test_shape_validation_catches_a_wrong_output_shape(toy_spec):
     st = MoEState(spec=toy_spec, weights=weights, x=x)
     with pytest.raises(P.PipelineError, match="t_bad_up_gemm: state.h_up"):
         P.build(names, spec=toy_spec).run(st, validate_shapes=True)
+
+
+def test_validate_rejects_a_field_name_that_is_not_a_state_field(toy_spec):
+    """A typo in a span's `materialises` must raise the module's ValueError,
+    which pipeline.run turns into a named PipelineError, rather than an
+    AttributeError that escapes as an unclassified crash."""
+    x, weights = R.make_inputs(toy_spec)
+    st = MoEState(spec=toy_spec, weights=weights, x=x)
+    with pytest.raises(ValueError, match="not MoEState fields"):
+        st.validate(only=frozenset({"expert_offset"}))
+
+
+def test_validate_with_an_empty_selection_checks_nothing(toy_spec):
+    """`only or STATE_FIELDS` treated an empty writes set as 'check everything',
+    inverting the intent."""
+    x, weights = R.make_inputs(toy_spec)
+    st = MoEState(spec=toy_spec, weights=weights, x=x)
+    st.h_up = torch.zeros((3, 3))          # wrong shape, deliberately
+    st.validate(only=frozenset())          # must not raise
+    with pytest.raises(ValueError, match="state.h_up"):
+        st.validate()

@@ -257,8 +257,8 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
     except ValueError:
         peak = 0.0
     if peak:
-        row.achieved_bf16_tflops = peak / 1e12
-        row.pct_of_achieved_tflops = 100.0 * row.tflops / row.achieved_bf16_tflops
+        row.achieved_peak_tflops = peak / 1e12
+        row.pct_of_achieved_tflops = 100.0 * row.tflops / row.achieved_peak_tflops
 
     # Only sound when the cell is genuinely memory bound. Compulsory intensity
     # is an UPPER bound on true intensity, so compulsory < ridge implies true <
@@ -271,7 +271,7 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
 
 #: Timing and derived columns, zeroed whenever a row did not earn them.
 _TIMED_FIELDS = ("ms_p50", "ms_p90", "ms_min", "ms_std", "jitter_p90_over_p50",
-                 "tflops", "compulsory_gbps", "pct_of_achieved_bw",
+                 "tflops", "compulsory_gbps", "pct_of_achieved_tflops",
                  "implied_traffic_ratio")
 
 
@@ -377,12 +377,15 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     if span is None:
         # Built once, outside the timed region: allocating a MoEState per
         # iteration would measure python bookkeeping that is not under study.
-        scratch = MoEState(spec=spec, weights=weights, x=x)
-        scratch.forced_topk_ids = forced
+        timed_state = MoEState(spec=spec, weights=weights, x=x)
+        timed_state.forced_topk_ids = forced
 
         def call():
-            pipe.run(scratch, validate_shapes=False)
+            pipe.run(timed_state, validate_shapes=False)
     else:
+        # A span-scoped call mutates the prologue state in place.
+        timed_state = st
+
         def call():
             span(st)
 
@@ -393,12 +396,19 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     replay_verdict = None
 
     def verify_replay():
+        """Compare the output the REPLAY produced, not the prologue's.
+
+        `timed_state` is the state the timed callable actually writes into, and
+        for a whole-layer span that is not the state check_correctness left
+        behind. Comparing the wrong one made this a no-op for exactly the
+        implementation shape (vLLM/SGLang fused_moe) it most needed to check.
+        """
         nonlocal replay_verdict
         if span is not None:
             for later in downstream:
-                later(st)
-        replay_verdict = compare(st.y, golden, tol) if st.y is not None \
-            else correctness
+                later(timed_state)
+        replay_verdict = (compare(timed_state.y, golden, tol)
+                          if timed_state.y is not None else correctness)
 
     graph_ok, graph_skip_reason = should_time_graph(cost, cfg)
 

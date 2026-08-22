@@ -104,3 +104,29 @@ def test_every_column_is_declared():
     assert "capture_status" in SC.COLUMNS
     assert "flush_mb" in SC.COLUMNS
     assert len(SC.COLUMNS) == len(set(SC.COLUMNS))
+
+
+def test_appending_under_a_foreign_header_is_refused(tmp_path):
+    """Resuming with --run-id reopens the CSV in append mode. Writing new-order
+    rows beneath an old header would misalign every column from there on."""
+    path = tmp_path / "r.csv"
+    path.write_text("model,num_tokens,ms_p50\ntoy,32,1.0\n")
+    with pytest.raises(ValueError, match="different schema"):
+        SC.CsvWriter(path)
+
+
+def test_appending_under_a_matching_header_is_fine(tmp_path):
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row())
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(num_tokens=64))
+    assert len(SC.read_csv(path)) == 2
+
+
+def test_schema_version_tracks_the_column_set():
+    """A reminder in code: the version must move whenever COLUMNS does."""
+    assert SC.SCHEMA_VERSION == 2
+    assert "pct_of_achieved_bw" not in SC.COLUMNS
+    assert "pct_of_achieved_tflops" in SC.COLUMNS
+    assert "achieved_peak_tflops" in SC.COLUMNS

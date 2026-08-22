@@ -119,7 +119,16 @@ class MoEState:
         """Shape-check every populated field. Cheap, and catches most kernel bugs
         before they surface as a confusing numerical mismatch."""
         expected = self.expected_shapes()
-        for name in (only or STATE_FIELDS):
+        # `only` is a set of field names from a span's contract. An unknown
+        # name must raise the module's own ValueError (which pipeline.run turns
+        # into a PipelineError) rather than an AttributeError that escapes as
+        # an unclassified crash. And an EMPTY `only` means validate nothing,
+        # not everything, so test against None explicitly.
+        names = STATE_FIELDS if only is None else frozenset(only)
+        unknown = names - STATE_FIELDS
+        if unknown:
+            raise ValueError(f"not MoEState fields: {sorted(unknown)}")
+        for name in names:
             value = getattr(self, name)
             if value is None:
                 continue

@@ -60,7 +60,15 @@ class GateRecorder:
             self.handles.append(module.register_forward_hook(self._make_hook(i)))
 
     def _ensure(self, device) -> torch.Tensor:
-        if self.counts is None or self.counts.device != device:
+        """Allocate the accumulator once, on the first device that reports.
+
+        `device_map="auto"` can place later layers on a second GPU or offload
+        them to CPU. Reallocating on a device change would silently discard
+        everything accumulated so far and write a trace covering only the last
+        device's layers. So the buffer is pinned to the first device seen and
+        later contributions are moved to it.
+        """
+        if self.counts is None:
             self.counts = torch.zeros((self.num_layers, self.cfg.num_experts),
                                       dtype=torch.long, device=device)
         return self.counts
@@ -76,7 +84,8 @@ class GateRecorder:
             # needs a third scoring function.
             ids = torch.topk(gate_scores(logits, cfg), cfg.top_k, dim=-1).indices
             counts = self._ensure(logits.device)
-            counts[layer] += expert_counts(ids, cfg.num_experts)
+            contribution = expert_counts(ids, cfg.num_experts)
+            counts[layer] += contribution.to(counts.device)
 
         return hook
 

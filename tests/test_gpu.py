@@ -277,6 +277,6 @@ def test_full_calibration_runs(tmp_path):
     from moe.bench.calibrate import calibrate
     cal = calibrate(target_bytes=256 << 20, gemm_n=2048)
     assert cal.achieved_bandwidth_gbps > 0
-    assert cal.achieved_bf16_tflops > 0
+    assert cal.achieved_peak_tflops > 0
     assert cal.gpu_name
     assert len(cal.bandwidth_patterns) == 3

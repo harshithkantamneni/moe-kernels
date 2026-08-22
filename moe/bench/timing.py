@@ -116,8 +116,14 @@ class ClockState:
             try:
                 return cls(int(torch.cuda.clock_rate()),
                            int(torch.cuda.temperature()))
-            except (AttributeError, RuntimeError, ValueError):
-                pass  # older torch, or NVML unavailable inside this container
+            except Exception:  # noqa: BLE001
+                # Deliberately broad. torch routes this through pynvml, which
+                # raises ModuleNotFoundError when absent and its own
+                # NVMLError subclasses on vGPU or restricted containers.
+                # A narrow clause here let those escape into run_sweep, where
+                # every cell would be recorded as a crash and the sweep would
+                # produce no rows at all.
+                pass
         vals = _nvidia_smi("clocks.current.sm,temperature.gpu")
         if not vals:
             return cls(0, 0)

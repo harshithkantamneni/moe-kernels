@@ -47,7 +47,7 @@ def resolve_env(spans) -> str:
     if len(envs) > 1:
         owners = {s.name: s.env for s in spans if s.env != BASE_ENV}
         raise ValueError(
-            f"spans mix incompatible environments {sorted(envs)}: {owners}. "
+            f"mixes incompatible environments {sorted(envs)}: {owners}. "
             "Baselines from different frameworks cannot share one process; "
             "benchmark them as separate pipelines.")
     return envs.pop() if envs else BASE_ENV

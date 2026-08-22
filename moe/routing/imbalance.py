@@ -76,6 +76,11 @@ def expert_load(counts) -> ExpertLoad:
             num_experts=E, total_rows=0, active_experts=0, empty_experts=E,
             max_rows=0, min_rows=0, mean_rows=0.0, max_over_mean=0.0, cv=0.0,
             entropy_norm=0.0, gini=0.0, top1_share=0.0,
+            # Not 1.0. These rows are the ones where the load is unknown, and
+            # the dataclass default would have the CSV assert perfect tile
+            # efficiency exactly where nothing is known. tile_efficiency()
+            # returns 0.0 for an empty load; agree with it.
+            tile_eff_bm64=0.0, tile_eff_bm128=0.0,
         )
 
     var = sum((v - mean) ** 2 for v in c) / E

@@ -103,3 +103,13 @@ def test_empty_experts_cost_nothing():
 def test_block_m_must_be_positive():
     with pytest.raises(ValueError, match="must be positive"):
         padded_rows([4], 0)
+
+
+def test_unknown_load_does_not_claim_perfect_tile_efficiency():
+    """The zero-load row is where the load is UNKNOWN. Letting the dataclass
+    default stand would have the CSV assert 1.0, i.e. no padding waste at all,
+    exactly where nothing is known."""
+    load = expert_load([0, 0, 0, 0])
+    assert load.tile_eff_bm64 == 0.0
+    assert load.tile_eff_bm128 == 0.0
+    assert tile_efficiency([0, 0, 0, 0], 128) == 0.0

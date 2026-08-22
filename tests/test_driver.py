@@ -481,3 +481,85 @@ def test_routing_provenance_lands_in_the_row(tmp_path):
 def test_fixed_routing_caveat_is_recorded(tmp_path):
     _, path = sweep(tmp_path, "t_counting_up_gemm")
     assert SC.read_csv(path)[0]["routing_fixed_across_iters"] == "True"
+
+
+# --- regressions for the review findings ------------------------------------
+
+FLAKY = {"n": 0}
+
+
+@register
+class FlakyUpGemm(StageSpan):
+    """Correct on its first call, wrong afterwards.
+
+    Models the exact failure CUDA-graph re-validation exists to catch: an
+    implementation that looks right during the eager prologue but leaves output
+    unwritten on replay, where the graph's fixed buffers still hold the
+    previous correct values.
+    """
+
+    name = "t_flaky_up_gemm"
+    covers = ("up_gemm",)
+    requires_cuda = False
+    dtypes = ("fp32", "bf16")
+
+    def __call__(self, st: MoEState) -> None:
+        FLAKY["n"] += 1
+        h = R.grouped_gemm_loop(st.x_perm, st.weights.w1, st.expert_offsets,
+                                2 * st.spec.model.intermediate_size)
+        st.h_up = h if FLAKY["n"] == 1 else torch.zeros_like(h)
+
+
+def test_graph_replay_is_validated_for_pipeline_scoped_cells(tmp_path):
+    """Regression: for `scope=pipeline` the timed callable runs into a separate
+    state, but verify_replay compared the PROLOGUE's state, which the replays
+    never touch. That made the check a no-op for exactly the implementation
+    shape (a whole-layer fused_moe) it most needed to cover.
+    """
+    FLAKY["n"] = 0
+    cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,))
+    names = names_with("t_flaky_up_gemm")
+    D.run_sweep([(spec(), names, D.PIPELINE_SCOPE)], cfg,
+                routing=lambda s: None, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    assert len(rows) == 1, cfg.manifest_path.read_text()
+    r = rows[0]
+    assert r["scope"] == "pipeline"
+    assert FLAKY["n"] > 1, "the timed callable must actually have run"
+    assert r["correctness_passed"] == "False", (
+        "the replayed output was wrong and must fail the oracle")
+    assert "REPLAYED" in r["notes"]
+    # And the timing it did produce must not survive into the file.
+    assert float(r["ms_p50"]) == 0.0
+    assert float(r["tflops"]) == 0.0
+    assert float(r["pct_of_achieved_tflops"]) == 0.0
+
+
+def test_span_scoped_replay_is_still_validated(tmp_path):
+    """The span path shares the prologue state, so it was never affected; keep
+    it covered so a future refactor cannot break it silently."""
+    FLAKY["n"] = 0
+    cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,))
+    D.run_sweep([(spec(), names_with("t_flaky_up_gemm"), "t_flaky_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert r["scope"] == "span"
+    assert r["correctness_passed"] == "False"
+    assert float(r["ms_p50"]) == 0.0
+
+
+def test_a_failed_row_never_carries_derived_efficiency(tmp_path):
+    """_TIMED_FIELDS named a column that had been deleted and missed the one
+    that replaced it, so a discarded measurement still published its
+    efficiency."""
+    row = SC.Row(correctness_passed=False, ms_p50=1.0, tflops=5.0,
+                 pct_of_achieved_tflops=42.0, implied_traffic_ratio=2.5,
+                 compulsory_gbps=99.0, jitter_p90_over_p50=1.1)
+    written = D._emit(SC.CsvWriter(tmp_path / "x.csv"),
+                      SC.Manifest(tmp_path / "x.jsonl"), row, "k")
+    assert written == 1
+    for name in D._TIMED_FIELDS:
+        assert getattr(row, name) == 0.0, name
+    assert all(f in SC.COLUMNS for f in D._TIMED_FIELDS), (
+        "_TIMED_FIELDS must name real columns; a stray name silently zeroes "
+        "nothing at all")
