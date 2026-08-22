@@ -1,0 +1,27 @@
+[project]
+name = "moe-kernels"
+version = "0.1.0"
+description = "MoE grouped-GEMM kernel work on H200: span-tiled harness, real routing traces, roofline"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "matplotlib", "pyyaml"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+include = ["moe*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "gpu: requires a CUDA device (deselect on a laptop with -m 'not gpu')",
+  "slow: full-size geometry, minutes not seconds",
+]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

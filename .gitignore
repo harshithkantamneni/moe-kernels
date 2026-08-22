@@ -1,0 +1,41 @@
+# --- byte-compiled / env -------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.DS_Store
+
+# --- never commit model weights -----------------------------------------
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+hf_cache/
+models/
+
+# --- benchmark output ----------------------------------------------------
+# Raw runs are large and machine-specific. Only curated, committed-on-purpose
+# results under results/published/ enter git.
+results/*
+!results/published/
+!results/.gitkeep
+*.ncu-rep
+*.nsys-rep
+*.qdrep
+
+# --- traces --------------------------------------------------------------
+# Captured routing histograms ARE committed: they are kilobytes and they are
+# the point of the project. Raw router logits are not.
+traces/raw/
+*.logits.npz
+
+# --- triton / cuda caches ------------------------------------------------
+.triton/
+*.cubin
+*.ptx
+*.so
