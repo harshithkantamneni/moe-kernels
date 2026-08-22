@@ -27,6 +27,16 @@ from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
 
+# Fail at IMPORT time on a torch without grouped_mm, so `load_all` skips this
+# module with a warning and the sweep simply runs without the baseline. Failing
+# at call time instead would surface as a crashed cell partway through a paid
+# session. RunPod images ship a range of torch versions and the base venv
+# inherits the image's, so this is a real deployment case, not a hypothetical.
+if not hasattr(torch.nn.functional, "grouped_mm"):  # pragma: no cover
+    raise ImportError(
+        f"torch {torch.__version__} has no torch.nn.functional.grouped_mm; "
+        "this baseline needs a newer torch. The harness runs without it.")
+
 
 def _offs(st: MoEState) -> torch.Tensor:
     """CSR `[E+1]` offsets -> grouped_mm's `[E]` exclusive-end offsets."""

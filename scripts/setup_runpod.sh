@@ -85,16 +85,40 @@ log "venvs               $VENVS"
 log "HF_HOME             $HF_HOME"
 log "TRITON_CACHE_DIR    $TRITON_CACHE_DIR"
 if [[ -x "$VENVS/base/bin/python" ]]; then
-  "$VENVS/base/bin/python" - <<'PY' || true
+  "$VENVS/base/bin/python" - <<'REPORT' || true
 import torch
 print(f"[setup] torch               {torch.__version__}")
 print(f"[setup] cuda                {torch.version.cuda}")
-print(f"[setup] device              {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NONE'}")
 try:
     import triton
     print(f"[setup] triton              {triton.__version__}")
 except ImportError:
     print("[setup] triton              NOT INSTALLED")
-PY
+
+if not torch.cuda.is_available():
+    print("[setup] device              NONE")
+else:
+    props = torch.cuda.get_device_properties(0)
+    hopper = (props.major, props.minor) == (9, 0)
+    print(f"[setup] device              {props.name}")
+    print(f"[setup] capability          sm_{props.major}{props.minor}"
+          + ("  (build CUDA with sm_90a, not sm_90)" if hopper else ""))
+    print(f"[setup] memory              {props.total_memory / 1e9:.0f} GB")
+    print(f"[setup] SMs / L2            {props.multi_processor_count} / "
+          f"{getattr(props, 'L2_cache_size', 0) / 2**20:.0f} MiB")
+    try:
+        from moe.bench.roofline import available_profiles, for_device
+        profile = for_device(props.name)
+        extra = "" if profile else f"  (have {available_profiles()}; run calibrate_hardware.py)"
+        print(f"[setup] roofline profile    {profile or 'NONE MATCHES'}{extra}")
+    except ImportError:
+        pass
+
+# Decides whether the torch grouped_mm baseline exists at all.
+ok = hasattr(torch.nn.functional, "grouped_mm")
+print(f"[setup] grouped_mm baseline {'available' if ok else 'MISSING (torch too old)'}")
+REPORT
+  printf '[setup] driver              %s\n' \
+    "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
 fi
 log "commit requirements/resolved-*.txt so later sessions install the exact set"
