@@ -1,7 +1,14 @@
 import pytest
 
-from moe.spec import (MODEL_CONFIGS, ACTIVE_DTYPES, BenchSpec, MoEConfig,
-                      RoutingSpec, dtype_bytes, sweep)
+from moe.spec import (
+    ACTIVE_DTYPES,
+    MODEL_CONFIGS,
+    BenchSpec,
+    MoEConfig,
+    RoutingSpec,
+    dtype_bytes,
+    sweep,
+)
 
 
 def test_dtype_bytes_covers_active_set():

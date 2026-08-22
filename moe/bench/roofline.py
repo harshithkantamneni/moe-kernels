@@ -95,13 +95,26 @@ def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
     import numpy as np
 
     hw = load_hardware(hardware, allow_unverified=allow_unverified)
-    rows = [r for r in rows if r.get("dtype") == dtype
-            and float(r.get("arithmetic_intensity", 0)) > 0]
-    if not rows:
-        raise ValueError(f"no rows with dtype={dtype} and a positive intensity")
 
-    ai = np.array([float(r["arithmetic_intensity"]) for r in rows])
-    tf = np.array([float(r["tflops"]) for r in rows])
+    def _num(r, key):
+        try:
+            return float(r.get(key) or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Only correctness-passing rows are plotted. A row that failed the oracle
+    # carries no timing and must never appear as a performance point.
+    rows = [r for r in rows
+            if r.get("dtype") == dtype
+            and str(r.get("correctness_passed", "True")) in ("True", "true", "1")
+            and _num(r, "arithmetic_intensity") > 0
+            and _num(r, "tflops") > 0]
+    if not rows:
+        raise ValueError(
+            f"no correctness-passing rows with dtype={dtype} and a positive intensity")
+
+    ai = np.array([_num(r, "arithmetic_intensity") for r in rows])
+    tf = np.array([_num(r, "tflops") for r in rows])
 
     x = np.logspace(np.log10(max(ai.min() / 4, 1e-2)),
                     np.log10(max(ai.max() * 4, hw.ridge_point(dtype) * 4)), 400)

@@ -8,8 +8,8 @@ pipeline, so they are benchmarked by one driver and checked against one oracle.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Callable, Iterable
 
 from .spec import BenchSpec
 from .state import MoEState

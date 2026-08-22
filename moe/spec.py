@@ -4,9 +4,8 @@ Nothing here touches CUDA. Everything is importable and testable on a laptop.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
-from typing import Iterator
-
 
 # --------------------------------------------------------------------------
 # Numeric formats
@@ -219,7 +218,7 @@ class BenchSpec:
         return (f"{self.model.name}/T{self.num_tokens}/{self.dtype}/"
                 f"{self.routing.label}/s{self.seed}")
 
-    def with_(self, **kw) -> "BenchSpec":
+    def with_(self, **kw) -> BenchSpec:
         return replace(self, **kw)
 
 

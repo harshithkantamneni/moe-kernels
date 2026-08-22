@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import statistics
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import torch
 
@@ -77,7 +77,7 @@ class ClockState:
     temp_c: int
 
     @classmethod
-    def sample(cls) -> "ClockState":
+    def sample(cls) -> ClockState:
         vals = _nvidia_smi("clocks.current.sm,temperature.gpu")
         if not vals:
             return cls(0, 0)
@@ -174,7 +174,7 @@ def time_eager(
             fn()
             ends[i].record()
         torch.cuda.synchronize()
-        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends))
+        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends, strict=True))
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=False)
@@ -234,7 +234,7 @@ def time_graph(
             graph.replay()
             ends[i].record()
         torch.cuda.synchronize()
-        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends))
+        samples.extend(s.elapsed_time(e) for s, e in zip(starts, ends, strict=True))
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=True)

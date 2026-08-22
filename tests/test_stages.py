@@ -1,7 +1,6 @@
 import pytest
 
-from moe.stages import (CANONICAL_STAGES, contiguous, contract_for,
-                        exposed_writes, get, registry)
+from moe.stages import CANONICAL_STAGES, contiguous, contract_for, exposed_writes, get, registry
 
 
 def test_single_stage_contract_matches_declaration():

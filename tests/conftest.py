@@ -5,7 +5,6 @@ so that the fusion accounting in bytes_model and the numerical equivalence of
 fused vs unfused tilings can both be tested on a laptop, without CUDA.
 """
 import pytest
-import torch
 
 import moe
 from moe.reference import torch_ref as R

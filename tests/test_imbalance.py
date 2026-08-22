@@ -1,7 +1,6 @@
 import pytest
 
-from moe.routing.imbalance import (counts_from_offsets, expert_load,
-                                   padded_rows, tile_efficiency)
+from moe.routing.imbalance import counts_from_offsets, expert_load, padded_rows, tile_efficiency
 
 
 def test_uniform_load_is_maximally_balanced():

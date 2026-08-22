@@ -17,7 +17,6 @@ from ..spec import BenchSpec, torch_dtype
 from ..stages import StageSpan, register
 from ..state import MoEState, MoEWeights
 
-
 # --------------------------------------------------------------------------
 # helpers shared by the spans and by golden_forward
 # --------------------------------------------------------------------------

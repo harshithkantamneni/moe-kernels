@@ -14,9 +14,10 @@ import csv
 import json
 import os
 import subprocess
-from dataclasses import asdict, dataclass, field, fields
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -55,7 +56,8 @@ class Row:
 
     # --- what was measured ------------------------------------------------
     pipeline: str = ""              # full tiling label
-    impl: str = ""                  # the span under study
+    impl: str = ""                  # the span under study, or __pipeline__
+    scope: str = "span"             # span | pipeline: what the timer wrapped
     covers: str = ""                # e.g. "down_gemm+unpermute"
     cuda_graph_safe: bool = False
 
@@ -123,7 +125,8 @@ def cell_key(row: Row) -> str:
     """Identity of a unit of work, for resume. Excludes timing results."""
     parts = [row.model, str(row.num_tokens), row.dtype, row.routing_kind,
              f"{row.routing_param:g}", row.trace_id, str(row.seed),
-             row.pipeline, str(int(row.l2_flush)), str(int(row.cuda_graph))]
+             row.pipeline, row.impl, row.scope,
+             str(int(row.l2_flush)), str(int(row.cuda_graph))]
     return "|".join(parts)
 
 
@@ -230,9 +233,6 @@ def merge_csvs(paths: Iterable[str | os.PathLike], out_path: str | os.PathLike) 
                 w.write(row)
                 written += 1
     return written
-
-
-_BOOL_COLS = {f.name for f in fields(Row) if f.type is bool or f.type == "bool"}
 
 
 def _coerce(name: str, value: str):

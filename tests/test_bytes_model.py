@@ -2,7 +2,7 @@ import pytest
 
 from moe import pipeline as P
 from moe.bench import bytes_model as BM
-from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec
+from moe.spec import MODEL_CONFIGS, BenchSpec
 from moe.stages import get
 
 REF = P.reference_pipeline_names()
