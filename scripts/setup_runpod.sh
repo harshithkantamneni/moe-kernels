@@ -68,6 +68,8 @@ setup_env() {
 }
 
 targets=("$@")
+# cutile is deliberately NOT in the default set: its cuda-toolkit pin conflicts
+# with torch's, so it is opt-in via `bash scripts/setup_runpod.sh cutile`.
 if [[ ${#targets[@]} -eq 0 ]]; then targets=(base vllm sglang); fi
 
 for env in "${targets[@]}"; do

@@ -1,0 +1,26 @@
+# Isolated environment for NVIDIA cuTile.
+#
+# WHY SEPARATE: torch 2.13.0 pins cuda-toolkit==13.0.3, while cuda-tile[tileiras]
+# requires cuda-toolkit>=13.2,<13.4. That intersection is empty, so they cannot
+# be resolved together. The blast radius is narrower than it looks (the only
+# wheel genuinely displaced is nvidia-cuda-runtime, 13.0.96 -> 13.3.29, because
+# nvcc and nvvm sit behind extras torch does not request), but whether torch
+# 2.13.0 tolerates that at runtime is UNVERIFIED. Prove cuTile works alone
+# first; attempt coexistence second, and only after a --dry-run in a container.
+#
+# NAME TRAPS on PyPI:
+#   cuda-tile        <- CORRECT. Import namespace is `cuda.tile`.
+#   cutile           <- NVIDIA-owned 0.0.0a0 placeholder stub. Do not install.
+#   cutile-python    <- also a placeholder ON PYPI, but it IS the correct name
+#                       on conda-forge. Two ecosystems, opposite answers.
+#
+# The tileiras compiler is a RUNTIME dependency, not just build-time: cuTile
+# JIT-compiles by shelling out to it.
+cuda-tile==1.5.0
+
+# Pin the compiler explicitly. cuda-tile's own floor of >=13.2 also admits
+# 13.2.x, which has NO Hopper support and fails on sm_90. Hopper landed in
+# Tile IR 13.3 (2026-05-26).
+cuda-toolkit[tileiras,nvvm,nvcc]>=13.3,<13.4
+
+# Requires NVIDIA driver r580 or later. Check `nvidia-smi` BEFORE renting time.

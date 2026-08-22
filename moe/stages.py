@@ -33,7 +33,7 @@ BASE_ENV = "base"
 #: Environments the runner knows how to satisfy. Closed on purpose: an open
 #: string means a typo like env="vlllm" silently makes candidate_impls return
 #: nothing and the sweep benchmarks zero implementations without an error.
-KNOWN_ENVS: frozenset[str] = frozenset({BASE_ENV, "vllm", "sglang"})
+KNOWN_ENVS: frozenset[str] = frozenset({BASE_ENV, "vllm", "sglang", "cutile"})
 
 
 def resolve_env(spans) -> str:

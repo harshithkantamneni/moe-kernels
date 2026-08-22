@@ -104,17 +104,119 @@ the kernel, get a callable, launch it from `__call__`. Add it to
 `requirements/base.txt` if you want it in your own environment rather than
 borrowing a baseline's.
 
+## cuTile
+
+Real, generally available, and it supports your hardware. It is also the one
+option where the sequencing matters, so this section is longer than the others.
+
+**What it is.** NVIDIA's tile-based model. The naming stacks up as CUDA Tile
+(the model) / CUDA Tile IR (the MLIR-based virtual ISA) / cuTile Python (the
+frontend) / CUDA Tile C++ (new in CUDA 13.3). The Python frontend is an
+array-level DSL close in spirit to Triton: `@ct.kernel`, `ct.bid(0)` for the
+block id, `ct.load`/`ct.store`, `ct.mma`, launched with
+`ct.launch(stream, grid, kernel, args)`. Individual threads are not exposed and
+intra-block sync is not permitted; the compiler distributes tile ops onto
+threads.
+
+Two differences from Triton matter for a grouped GEMM. `ct.load` indexes in
+**tile space** with a `padding_mode` rather than pointer arithmetic plus an
+explicit mask. And `Array.slice(axis, start, stop)` accepts **device-resident
+0-D tiles as bounds**, which gives a ragged segment a real zero-copy sliced
+view. Triton has no direct equivalent.
+
+**Install.** The package is `cuda-tile`; the import namespace is `cuda.tile`.
+Two name traps: `pip install cutile` and `pip install cutile-python` both hit
+NVIDIA-owned `0.0.0a0` placeholder stubs on PyPI, yet `cutile-python` *is* the
+correct name on conda-forge. See `requirements/cutile.txt`, which pins the
+compiler explicitly because cuda-tile's own `>=13.2` floor also admits 13.2.x,
+which has no Hopper support and fails on sm_90.
+
+It gets its **own venv**, and is not in the default `setup_runpod.sh` set:
+torch 2.13.0 pins `cuda-toolkit==13.0.3` while `cuda-tile[tileiras]` wants
+`>=13.2,<13.4`. Empty intersection. Prove cuTile works alone before attempting
+coexistence.
+
+```bash
+bash scripts/setup_runpod.sh cutile
+python scripts/preflight_cutile.py
+```
+
+**Hopper support is real but recent.** It landed in cuTile 1.4.0 / Tile IR 13.3
+on 2026-05-26. Three sources will tell you otherwise and all three are stale:
+the `cutile-python` README on main (scoped to 13.2, true of 13.2), the original
+December 2025 launch blog, and arXiv 2604.23466 which says flatly that cuTile
+does not support sm_90 (it tested 1.1.0). Expect to meet all three; ignore them.
+
+**Torch interop is first-class and zero-copy.** Torch CUDA tensors pass straight
+into `ct.launch` through a dedicated `torch._C._to_dlpack` fast path, strides
+honoured, non-contiguous views fine. Pass `stream=torch.cuda.current_stream()`.
+
+**CUDA graphs: yes in practice, undocumented in theory.** NVIDIA's own
+`test/test_cudagraph.py` captures and replays both a trivial kernel and a
+`ct.mma` matmul. But the documentation is entirely silent on graph capture, so
+this is behaviour that could regress without a release note. Three constraints
+to design around:
+
+- **Python list arguments are explicitly rejected under capture.** This
+  disqualifies cuTile's own shipped grouped GEMM, which takes lists of tensors.
+- **The grid is a host-side tuple.** No device-side launch, no grid-from-tensor.
+  Oversize from static shapes and skip on device, exactly as with Triton.
+- **JIT and autotune must happen outside the capture region**, and each distinct
+  `ct.Constant` compiles a separate kernel.
+
+Note issue #80, "CuTile doesn't support graph mode", is CLOSED and is about
+torch.compile/Dynamo, not CUDA graphs. It is the first hit when you search.
+
+**A ragged GEMM is expressible.** Device scalars drive conditionals, loop trip
+counts, tile indices, and `Array.slice` bounds. NVIDIA's TileGym ships
+`ragged_bmm.py` taking a device `m_indptr`, plus a fully device-side
+`moe_align_block_size` — the piece that makes a device-offsets MoE capturable
+end to end. One gotcha worth internalising: `.item()` inside a cuTile *kernel*
+is **not** a host sync, it is `Tile.item()` returning a scalar tile, so a naive
+grep for sync patterns produces false positives.
+
+### Do the SASS gate before anything else
+
+There is **zero published cuTile performance data on Hopper, for any workload**.
+TileGym validates only Blackwell and Ampere, its autotune tables have no sm_90
+block, and every published number is tagged with a version predating Hopper
+support. You would not be benchmarking a known quantity; you would be producing
+the first datapoint, tuning included.
+
+So settle the decisive question in ten minutes rather than twenty pod-hours:
+
+```bash
+python scripts/preflight_cutile.py --kernel your_module:your_kernel
+# export a cubin at sm_90, then:
+cuobjdump -sass k.cubin | grep -oE '(HGMMA|GMMA|QGMMA|HMMA|IMMA)[^ ]*' | sort | uniq -c
+```
+
+GMMA or HGMMA present means the Hopper tensor-core fast path. Only `HMMA.16816`
+means you would be measuring codegen maturity rather than your kernel design —
+and "cuTile Hopper codegen is not yet on the WGMMA path" is itself a publishable
+finding that cost one pod-hour.
+
+Also budget for open `tileiras` SIGSEGV bugs (#94-#97) sitting on exactly the
+MMA-loop and advanced-index paths a hand-written grouped GEMM uses, and for
+NVIDIA's repo contradicting itself on whether TMA works on sliced arrays feeding
+`ct.mma`.
+
 ## Anything else
 
-If it can be called from Python and it reads and writes torch tensors, it works.
-That covers cuTile, CUDA Python, numba.cuda, a raw `cuLaunchKernel` through
-ctypes, or a compiled artifact wrapped in a torch custom op. I have not verified
-cuTile's current packaging on H200; if you want to use it, say so and I will
-check what the install and launch actually look like before writing a template
-rather than guessing at an API.
+If it can be called from Python and it reads and writes torch tensors, it works:
+CUDA Python, numba.cuda, a raw `cuLaunchKernel` through ctypes, or a compiled
+artifact wrapped in a torch custom op.
 
-The one thing that is NOT negotiable regardless of language is the CUDA-graph
-contract below.
+## Baselines worth having before you write anything
+
+Three mature Hopper grouped GEMMs exist today and need none of the above.
+`moe/baselines/torch_grouped_mm.py` is already wired and tested.
+
+| backend | install | notes |
+|---|---|---|
+| `torch.nn.functional.grouped_mm` | none, in torch 2.13.0 | CUTLASS sm90, device int32 offsets, no host sync, **no tile-alignment constraint on the ragged M dimension**. bf16, group_count < 1024. |
+| CUTLASS CuTe DSL grouped GEMM | `nvidia-cutlass-dsl` | WGMMA + TMA + persistent warp-specialized, Hopper-native. The mature Python path on sm_90 and the right ceiling. |
+| DeepGEMM masked grouped GEMM | `deep-gemm` | FP8. Its **masked** layout is documented for "CUDA graph enabled, CPU unaware of the number of tokens each expert receives". Avoid the contiguous variant, which needs per-expert M-block alignment. |
 
 ---
 
