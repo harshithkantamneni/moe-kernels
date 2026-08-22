@@ -189,6 +189,13 @@ def main() -> int:
             print("                    clocks still moving when the budget ran "
                   "out; raise --settle-seconds")
 
+    if cal.warmup_pass:
+        print(f"\n  warm-up pass      discarded; largest per-pattern change "
+              f"{cal.warmup_drift_pct:.1f}%")
+        if cal.warmup_drift_pct > 3.0:
+            print("                    >3% means the settle did not reach the "
+                  "state the measurement induces; raise --settle-seconds")
+
     if cal.clock_ramped:
         print("\n  WARNING: SM clock differed by >5% ACROSS the patterns, so "
               "they were measured in different states and are NOT comparable:")

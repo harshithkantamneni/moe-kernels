@@ -91,6 +91,22 @@ class Calibration:
     buffer_bytes: int
     clocks: dict = field(default_factory=dict)
     settle: dict = field(default_factory=dict)
+    #: The discarded first bandwidth pass. Kept because the gap between it and
+    #: the reported pass is the size of the warm-up effect, and a large gap
+    #: means the settle did not do its job.
+    warmup_pass: dict = field(default_factory=dict)
+
+    @property
+    def warmup_drift_pct(self) -> float:
+        """Largest per-pattern change between the discarded pass and this one."""
+        if not self.warmup_pass:
+            return 0.0
+        worst = 0.0
+        for pat in self.bandwidth_patterns:
+            was = self.warmup_pass.get(pat.pattern)
+            if was:
+                worst = max(worst, abs(pat.gbps - was) / was * 100.0)
+        return round(worst, 2)
 
     @property
     def clock_ramped(self) -> bool:
@@ -151,7 +167,7 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     import time
 
     T.require_cuda()
-    a = torch.randn((4096, 4096), device="cuda", dtype=torch.bfloat16)
+    a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
     out = torch.empty_like(a)
 
     history: list[int] = []
@@ -159,8 +175,13 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     settled = False
     while time.monotonic() < deadline:
         stop = time.monotonic() + poll_seconds
+        # Enqueue deep and sync once per poll. Syncing every few kernels leaves
+        # gaps the clock governor reacts to, and the settle then converges to a
+        # partial-load plateau BELOW what the real measurement induces. Measured
+        # on this box: settling this way reached 1575 MHz, and the bandwidth
+        # patterns immediately drove it to 1980.
         while time.monotonic() < stop:
-            for _ in range(8):
+            for _ in range(32):
                 torch.mm(a, a, out=out)
             torch.cuda.synchronize()
         clk = T.ClockState.sample().sm_clock_mhz
@@ -273,9 +294,22 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     settle_info = settle_clocks(settle_seconds) if settle else {"settled": False,
                                                                 "skipped": True}
     before = T.ClockState.sample()
-    patterns = measure_bandwidth(target_bytes)
-    torch.cuda.empty_cache()          # the buffers are now unreferenced
+
+    # COMPUTE FIRST. Measured on an H200 SXM, the cuBLAS figure fell 795 -> 725
+    # -> 687 TFLOP/s across three runs as each did more sustained memory work
+    # before it. On a 700 W part, heavy HBM traffic eats the power budget the
+    # tensor cores need, so a compute roof measured after a bandwidth sweep is a
+    # power-limited number, not a ceiling. The settle above is matmul work, so
+    # the GPU is already in the right state for exactly this measurement.
     tflops, shape = measure_bf16_gemm(gemm_n)
+    torch.cuda.empty_cache()
+
+    # BANDWIDTH TWICE, keep the second. The first pass finishes ramping whatever
+    # the settle did not, so pass one is warmup and pass two has all four
+    # patterns in the same state. Without this the first pattern measured is
+    # systematically different from the other three.
+    first_pass = measure_bandwidth(target_bytes)
+    patterns = measure_bandwidth(target_bytes)
     torch.cuda.empty_cache()
     after = T.ClockState.sample()
 
@@ -317,6 +351,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
                 "temp_start_c": before.temp_c, "temp_end_c": after.temp_c,
                 "drift_pct": round(drift, 2), "throttled": throttled},
         settle=settle_info,
+        warmup_pass={p.pattern: round(p.gbps, 1) for p in first_pass},
     )
 
 
