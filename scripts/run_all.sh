@@ -80,6 +80,14 @@ if [[ -z "$SKIP_TESTS" ]]; then
   "$PY" -m pytest tests/ -q -x
 fi
 
+# Nsight Compute cannot run on a rented pod (ERR_NVGPUCTRPERM), so the roofline
+# would otherwise rest on a datasheet peak. Measure the real ceilings once.
+if [[ ! -f moe/bench/hardware/measured.yaml ]]; then
+  log "calibrating achievable bandwidth and BF16 (once per pod type)"
+  "$PY" scripts/calibrate_hardware.py || \
+    echo "[run_all] calibration failed; efficiency columns will stay empty"
+fi
+
 log "smoke: correctness and plumbing"
 "$PY" -m moe.bench.cli --profile smoke --out-dir "$RESULTS_DIR" \
   --groups reference,kernels "${EXTRA[@]+"${EXTRA[@]}"}"

@@ -138,6 +138,58 @@ H200 and fails to stop it is the most expensive failure available here, and it
 is not worth the convenience. Start and stop from the RunPod console or
 `runpodctl` yourself.
 
+## Profiling is not available, and what replaces it
+
+`ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`. GPU performance counters
+are gated behind a host kernel-module flag
+(`NVreg_RestrictProfilingToAdminUsers=0`) that a container tenant cannot set,
+and RunPod containers are not privileged. Assume no counters and design around
+it rather than planning a session that discovers this at the console.
+
+That means **actual DRAM traffic cannot be measured**, so the compulsory-bytes
+model cannot be validated directly. Three substitutes, none of which need
+counters:
+
+**1. Measure the ceilings instead of quoting them.**
+
+```bash
+python scripts/calibrate_hardware.py
+```
+
+STREAM-style copy, triad and write on buffers far larger than L2, plus a large
+square BF16 GEMM through cuBLAS. Writes `moe/bench/hardware/measured.yaml`,
+which `run_all.sh` creates automatically on a pod that lacks it. Efficiency is
+then quoted against what this machine actually delivers rather than a datasheet
+peak it will never reach, which is both fairer to your kernel and far easier to
+defend in public. Expect roughly 75-90% of spec bandwidth and 70-85% of spec
+dense BF16; if you measure above spec, your buffer fit in cache and the number
+is not a DRAM measurement.
+
+**2. Bound the re-read factor arithmetically.** For a cell that is genuinely
+memory bound, `time x achievable_bandwidth` bounds the bytes that could have
+moved, and dividing by the compulsory minimum gives `implied_traffic_ratio`. A
+value near 1 is strong evidence the kernel moves close to the minimum traffic.
+It is an **upper** bound, not a measurement: it also absorbs low occupancy and
+latency stalls, so a large ratio says "something costs you", not specifically
+"you re-read". The column is only emitted when compulsory intensity is below the
+ridge, which is sound because compulsory intensity is itself an upper bound on
+true intensity.
+
+**3. Read cache behaviour off the flush axis.** Every cell is already timed with
+L2 flushed and with L2 warm. The difference, times achievable bandwidth,
+estimates the traffic the cache absorbed. `scripts/plot.py` draws this as
+`l2_absorption_<dtype>.png`. It is the counter-free stand-in for a hit-rate
+metric and it costs nothing extra, because the axis is swept anyway.
+
+**Worth one test at the start of your first session**: `nsys` uses CUDA tracing
+rather than performance counters and often works where `ncu` does not. It will
+not give you DRAM bytes, but it does give per-kernel timing attribution and
+launch overhead, which is exactly the evidence the eager-versus-graph question
+needs. If it runs, use it there.
+
+If direct traffic measurement ever becomes essential, it needs bare metal or a
+provider that grants privileged containers, not a different RunPod template.
+
 ## Clock discipline
 
 The harness samples SM clock and temperature before and after every cell and

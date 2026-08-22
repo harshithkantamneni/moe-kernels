@@ -119,6 +119,60 @@ def plot_imbalance(rows, out_dir: Path, dtype: str = "bf16"):
     return [path]
 
 
+def plot_l2_absorption(rows, out_dir: Path, dtype: str = "bf16"):
+    """Traffic the cache absorbed, inferred from the flush axis.
+
+    Nsight Compute is unavailable on a rented pod, so there is no cache hit-rate
+    counter to read. But every cell is already timed twice, once with L2 flushed
+    and once warm, and the time difference times achievable bandwidth estimates
+    the bytes L2 served instead of DRAM. Free, from an axis already swept.
+    """
+    from moe.bench.calibrate import l2_absorbed_bytes
+
+    paired = {}
+    for r in rows:
+        if r.get("dtype") != dtype or r.get("scope") != "span":
+            continue
+        if str(r.get("cuda_graph")) in ("True", "true", "1"):
+            continue
+        key = (r["impl"], r["model"], r["num_tokens"], r["routing_kind"],
+               r["routing_param"], r["seed"])
+        paired.setdefault(key, {})[str(r.get("l2_flush"))] = r
+
+    pts = []
+    for key, both in paired.items():
+        cold, warm = both.get("True"), both.get("False")
+        if not cold or not warm:
+            continue
+        bw = _f(cold, "achieved_bw_gbps") * 1e9
+        if bw <= 0:
+            continue
+        absorbed = l2_absorbed_bytes(_f(cold, "ms_p50"), _f(warm, "ms_p50"), bw)
+        pts.append((key[0], int(float(key[2])), absorbed,
+                    _f(cold, "compulsory_bytes")))
+    if not pts:
+        return []
+
+    fig, ax = plt.subplots(figsize=(7.5, 5))
+    by_impl = defaultdict(list)
+    for impl, tokens, absorbed, compulsory in pts:
+        by_impl[impl].append((tokens, absorbed / max(compulsory, 1)))
+    for impl, series in sorted(by_impl.items()):
+        series.sort()
+        ax.semilogx([t for t, _ in series], [v for _, v in series], "o-",
+                    ms=4, lw=1.3, label=impl)
+    ax.set_xlabel("tokens entering the layer")
+    ax.set_ylabel("L2-absorbed traffic / compulsory traffic")
+    ax.set_title(f"Cache absorption inferred from the flush axis, {dtype}")
+    ax.grid(True, which="both", alpha=0.25)
+    ax.legend(fontsize=7)
+    fig.tight_layout()
+    path = out_dir / f"l2_absorption_{dtype}.png"
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+    return [path]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, default=Path("results"))
@@ -144,6 +198,7 @@ def main() -> int:
 
     written += plot_scaling(rows, args.out, args.dtype)
     written += plot_imbalance(rows, args.out, args.dtype)
+    written += plot_l2_absorption(rows, args.out, args.dtype)
 
     for p in written:
         print(f"[plot] {p}")

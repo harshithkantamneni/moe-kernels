@@ -69,6 +69,28 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
     return replace(profile, **changes) if changes else profile
 
 
+def measured_ceilings() -> dict:
+    """Achievable bandwidth and dense BF16 from a prior calibration run.
+
+    Absent, the efficiency columns stay zero rather than being quoted against a
+    datasheet peak this machine will not reach.
+    """
+    from .roofline import HARDWARE_DIR
+    path = HARDWARE_DIR / "measured.yaml"
+    if not path.exists():
+        return {}
+    import yaml
+    data = yaml.safe_load(path.read_text())
+    bw = (data.get("memory") or {}).get("bandwidth_tb_s")
+    tf = (data.get("compute_dense_tflops") or {}).get("bf16")
+    out = {}
+    if bw:
+        out["achieved_bw_bytes_s"] = float(bw) * 1e12
+    if tf:
+        out["achieved_bf16_tflops"] = float(tf)
+    return out
+
+
 def env_version(env: str) -> str:
     """Version of the framework this environment provides.
 
@@ -205,7 +227,8 @@ def main(argv=None) -> int:
     cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
                   warmup=profile.warmup, trials=profile.trials,
                   iters=profile.iters, l2_modes=profile.l2_modes,
-                  graph_modes=profile.graph_modes, routing_info=routing_info)
+                  graph_modes=profile.graph_modes, routing_info=routing_info,
+                  **measured_ceilings())
     if args.run_id:
         cfg_kw["run_id"] = args.run_id
     cfg = RunConfig(**cfg_kw)

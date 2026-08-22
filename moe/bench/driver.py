@@ -53,6 +53,25 @@ def _bandwidth(cfg: RunConfig) -> float | None:
     return _BANDWIDTH_CACHE["bw"]
 
 
+def _ridge_bf16(cfg: RunConfig) -> float | None:
+    """Ridge point in FLOP/byte, preferring measured ceilings over the datasheet.
+
+    Used only to classify a cell as memory bound before emitting the implied
+    traffic ratio, so a missing calibration simply suppresses that column rather
+    than producing a number resting on a spec peak.
+    """
+    bw = cfg.achieved_bw_bytes_s or _bandwidth(cfg)
+    if not bw:
+        return None
+    if cfg.achieved_bf16_tflops:
+        return (cfg.achieved_bf16_tflops * 1e12) / bw
+    try:
+        from .roofline import load_hardware
+        return load_hardware("h200_nvl").peak("bf16") / bw
+    except (FileNotFoundError, ValueError, KeyError):
+        return None
+
+
 def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
     """Is isolating launch overhead worth a doubled sweep for this cell?
 
@@ -102,6 +121,11 @@ class RunConfig:
     graph_min_launch_share: float = 0.01
     launch_overhead_ms: float = 0.005
     peak_bandwidth_bytes_s: float | None = None
+    #: Measured ceilings from scripts/calibrate_hardware.py. Without them the
+    #: efficiency columns stay zero rather than being quoted against a spec peak
+    #: this machine may never reach.
+    achieved_bw_bytes_s: float | None = None
+    achieved_bf16_tflops: float | None = None
     validate_shapes: bool = True
     device: str = "cuda"
 
@@ -235,13 +259,34 @@ def _apply_correctness(row: SC.Row, c: CorrectnessResult) -> None:
     row.tol_calibrated = c.calibrated
 
 
-def _apply_cost(row: SC.Row, cost, ms: float | None) -> None:
+def _apply_cost(row: SC.Row, cost, ms: float | None,
+                cfg: RunConfig | None = None) -> None:
     row.flops = cost.flops
     row.compulsory_bytes = cost.bytes_total
     row.arith_intensity_compulsory = cost.arithmetic_intensity
-    if ms:
-        row.tflops = cost.tflops(ms)
-        row.compulsory_gbps = cost.gbps(ms)
+    if not ms:
+        return
+    row.tflops = cost.tflops(ms)
+    row.compulsory_gbps = cost.gbps(ms)
+    if cfg is None:
+        return
+
+    if cfg.achieved_bf16_tflops:
+        row.achieved_bf16_tflops = cfg.achieved_bf16_tflops
+    bw = cfg.achieved_bw_bytes_s
+    if not bw:
+        return
+    row.achieved_bw_gbps = bw / 1e9
+    row.pct_of_achieved_bw = 100.0 * row.compulsory_gbps / row.achieved_bw_gbps
+
+    # Only sound when the cell is genuinely memory bound. Compulsory intensity
+    # is an UPPER bound on true intensity, so compulsory < ridge implies true <
+    # ridge and the classification is conservative.
+    ridge = _ridge_bf16(cfg)
+    if ridge and cost.arithmetic_intensity < ridge:
+        from .calibrate import implied_traffic_ratio
+        row.implied_traffic_ratio = implied_traffic_ratio(
+            cost.bytes_total, ms, bw)
 
 
 @torch.no_grad()
@@ -284,7 +329,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     if not correctness.passed:
         row = _base_row(spec, pipe, impl, span, cfg, info, sha, dirty)
         _apply_correctness(row, correctness)
-        _apply_cost(row, cost, None)
+        _apply_cost(row, cost, None, cfg)
         for k, v in load.as_row().items():
             setattr(row, k, v)
         row.notes = (f"correctness failed (rel={correctness.rel_err:.3e} > "
@@ -334,7 +379,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
 
         if use_graph and not graph_ok:
             _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None)
+            _apply_cost(row, cost, None, cfg)
             for k, v in load.as_row().items():
                 setattr(row, k, v)
             row.capture_status = "skipped"
@@ -364,7 +409,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
             # the CSV, not only in a sidecar manifest, or every aggregate over
             # the published data is silently conditioned on capturability.
             _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None)
+            _apply_cost(row, cost, None, cfg)
             for k, v in load.as_row().items():
                 setattr(row, k, v)
             row.capture_status = "not_capturable"
@@ -376,7 +421,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         except RuntimeError as e:
             manifest.record(key, "error", str(e)[:200])
             _apply_correctness(row, correctness)
-            _apply_cost(row, cost, None)
+            _apply_cost(row, cost, None, cfg)
             row.notes = f"timing error: {str(e)[:160]}"
             writer.write(row)
             written += 1
@@ -397,7 +442,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
         row.ms_min, row.ms_std = res.ms_min, res.ms_std
         row.jitter_p90_over_p50 = res.jitter_p90_over_p50
-        _apply_cost(row, cost, res.ms_p50)
+        _apply_cost(row, cost, res.ms_p50, cfg)
         row.sm_clock_start_mhz = clocks_start.sm_clock_mhz
         row.sm_clock_end_mhz = clocks_end.sm_clock_mhz
         row.temp_start_c, row.temp_end_c = clocks_start.temp_c, clocks_end.temp_c

@@ -235,3 +235,47 @@ def test_both_timing_modes_produce_comparable_rows(tmp_path):
     assert len(rows) == 2
     assert {r["l2_flush"] for r in rows} == {"True", "False"}
     assert all(float(r["ms_p50"]) > 0 for r in rows)
+
+
+# --- hardware calibration: the stand-in for unavailable counters -------------
+
+def test_bandwidth_measurement_is_plausible():
+    from moe.bench.calibrate import measure_bandwidth
+    results = measure_bandwidth(target_bytes=256 << 20, warmup=3, iters=10, trials=2)
+    assert {r.pattern for r in results} == {"copy", "triad", "write"}
+    for r in results:
+        assert r.gbps > 50, f"{r.pattern} measured {r.gbps:.1f} GB/s, implausible"
+        assert r.ms_p50 > 0
+
+
+def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
+    """A measured ceiling above the spec peak means the buffer fit in cache and
+    the number is not a DRAM measurement at all."""
+    from moe.bench.calibrate import measure_bandwidth
+    from moe.bench.roofline import load_hardware
+    peak_gbps = load_hardware("h200_nvl").bandwidth_bytes_s / 1e9
+    best = max(r.gbps for r in measure_bandwidth(target_bytes=1 << 30,
+                                                 warmup=3, iters=10, trials=2))
+    assert best < peak_gbps * 1.02, (
+        f"measured {best:.0f} GB/s against a {peak_gbps:.0f} GB/s peak; "
+        "the working set was probably cache resident")
+    assert best > peak_gbps * 0.4, (
+        f"measured only {best:.0f} of {peak_gbps:.0f} GB/s; something is wrong")
+
+
+def test_bf16_gemm_ceiling_is_plausible():
+    from moe.bench.calibrate import measure_bf16_gemm
+    from moe.bench.roofline import load_hardware
+    tflops, shape = measure_bf16_gemm(n=4096, warmup=3, iters=10, trials=2)
+    peak = load_hardware("h200_nvl").peak("bf16") / 1e12
+    assert shape == (4096, 4096, 4096)
+    assert 0 < tflops < peak * 1.02, f"{tflops:.1f} TFLOP/s against a {peak:.1f} peak"
+
+
+def test_full_calibration_runs(tmp_path):
+    from moe.bench.calibrate import calibrate
+    cal = calibrate(target_bytes=256 << 20, gemm_n=2048)
+    assert cal.achieved_bandwidth_gbps > 0
+    assert cal.achieved_bf16_tflops > 0
+    assert cal.gpu_name
+    assert len(cal.bandwidth_patterns) == 3

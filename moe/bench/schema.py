@@ -121,6 +121,17 @@ class Row:
     tflops: float = 0.0
     compulsory_gbps: float = 0.0
     arith_intensity_compulsory: float = 0.0
+    # Measured ceilings from scripts/calibrate_hardware.py, so efficiency can be
+    # quoted against what this machine actually delivers rather than a datasheet
+    # peak it will never reach.
+    achieved_bw_gbps: float = 0.0
+    achieved_bf16_tflops: float = 0.0
+    pct_of_achieved_bw: float = 0.0
+    # Counter-free stand-in for measured DRAM traffic, which needs Nsight
+    # Compute and a host permission a rented pod does not grant. Only emitted
+    # for memory-bound cells, and it is an UPPER bound on the re-read factor:
+    # it also absorbs occupancy and latency losses. See calibrate.py.
+    implied_traffic_ratio: float = 0.0
 
     # --- input construction -----------------------------------------------
     input_init: str = "fan_in"      # how weights/activations were generated
