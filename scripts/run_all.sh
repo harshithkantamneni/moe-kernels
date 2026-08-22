@@ -96,8 +96,10 @@ if [[ ! -f moe/bench/hardware/measured.yaml ]]; then
 fi
 
 log "smoke: correctness and plumbing"
+# baselines included: until a kernel exists they are the only implementations
+# there are, and a smoke step that benchmarks nothing proves nothing.
 "$PY" -m moe.bench.cli --profile smoke --out-dir "$RESULTS_DIR" \
-  --groups reference,kernels "${EXTRA[@]+"${EXTRA[@]}"}"
+  --groups reference,kernels,baselines "${EXTRA[@]+"${EXTRA[@]}"}"
 
 log "sweep: profile=$PROFILE envs=$ENVS"
 ARGS=(--profile "$PROFILE" --out-dir "$RESULTS_DIR" --groups reference,kernels,baselines)
@@ -129,7 +131,9 @@ from moe.bench.schema import passed, read_csv
 
 results = Path(sys.argv[1])
 rows = []
-for p in sorted(results.glob("*.csv")):
+# NOT *.csv: merged.csv contains the same rows as the run_*.csv files it was
+# built from, so globbing both counts every row twice.
+for p in sorted(results.glob("run_*.csv")):
     try:
         rows.extend(read_csv(p))
     except Exception as e:
