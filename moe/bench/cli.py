@@ -155,6 +155,19 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
           "uncapturable graph mode still writes one row)")
     print(f"skipped         {p.unsupported} (implementation does not support the cell)")
 
+    from .footprint import worst_cell
+    spec, fp = worst_cell(profile.specs())
+    if fp is not None:
+        print(f"\npeak device memory for the heaviest cell ({spec.label}):")
+        print(f"  expert weights  {fp.weights / 1e9:7.1f} GB   (one MoE layer, "
+              f"random; nothing is downloaded)")
+        print(f"  activations     {fp.activations / 1e9:7.1f} GB")
+        print(f"  fp32 oracle     {(fp.oracle + fp.oracle_expert) / 1e9:7.1f} GB")
+        print(f"  PEAK            {fp.peak / 1e9:7.1f} GB")
+        for label, cap in (("H200 (141 GB)", 141e9), ("H100 NVL (94 GB)", 94e9),
+                           ("A100 (80 GB)", 80e9)):
+            print(f"    {label:<18} {'fits' if fp.fits_in(cap) else 'DOES NOT FIT'}")
+
     if p.missing_traces:
         print(f"MISSING TRACES  {list(p.missing_traces)}")
     if p.problems:
