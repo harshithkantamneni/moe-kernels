@@ -256,6 +256,7 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
     if hw is None:
         return
     row.achieved_bw_gbps = hw.bandwidth_bytes_s / 1e9
+    row.bw_ceiling_pattern = hw.ceiling_pattern
     try:
         peak = hw.peak(row.dtype)
     except ValueError:

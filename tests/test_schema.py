@@ -126,7 +126,10 @@ def test_appending_under_a_matching_header_is_fine(tmp_path):
 
 def test_schema_version_tracks_the_column_set():
     """A reminder in code: the version must move whenever COLUMNS does."""
-    assert SC.SCHEMA_VERSION == 2
+    assert SC.SCHEMA_VERSION == 3
     assert "pct_of_achieved_bw" not in SC.COLUMNS
     assert "pct_of_achieved_tflops" in SC.COLUMNS
     assert "achieved_peak_tflops" in SC.COLUMNS
+    # v3: which STREAM pattern produced achieved_bw_gbps. Two CSVs run with a
+    # different --ceiling are otherwise silently incomparable.
+    assert "bw_ceiling_pattern" in SC.COLUMNS

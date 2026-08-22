@@ -27,9 +27,24 @@ other people's numbers. Because all four are recorded, anyone (including you)
 can recompute a roofline against a different denominator without re-running.
 
 For a Mixture-of-Experts grouped GEMM at small batch, traffic is roughly 95%
-streaming reads of expert weights, so `read` is arguably the most representative
-denominator for that regime specifically. That is a judgement call, not a fact,
-which is exactly why the choice is recorded rather than baked in.
+streaming reads of expert weights, so a read-dominated denominator would be most
+representative of that regime. But `read` here is a torch.sum tree reduction,
+which reports ATen's reduction rate rather than the DRAM read rate, so it is
+measured and recorded and guarded against ever becoming the ceiling.
+
+HOW MUCH DOES THE CHOICE ACTUALLY MATTER
+----------------------------------------
+Across PROFILES['standard'] (105 specs) and PROFILES['full'] (882), zero cells
+change memory/compute classification anywhere in the 4252.8-4656.9 GB/s range
+measured on an H200 SXM: the highest memory-bound intensity is 162.6, the lowest
+compute-bound one is 224.9, and every candidate ridge (170.8-187.0) falls in
+that empty interval.
+
+The honest caveat: the interval is empty because the token grid steps by 2x
+straight through the ridge band, NOT because MoE arithmetic intensity is
+bimodal. Off-grid runs (`--tokens 640,768,1536`) land squarely in it, and
+nothing constrains the grid. The choice is real; the shipped sweeps happen not
+to exercise it.
 """
 from __future__ import annotations
 
@@ -113,10 +128,16 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
       copy   2N   one read plus one write per element
       triad  3N   two reads plus one write per element
 
-    The write figure is the one to distrust: if any fill path issues a
-    read-for-ownership, real traffic is 2N and the reported number is half the
-    truth. It is recorded with that caveat rather than dropped, because a write
-    figure implausibly close to datasheet peak is itself a useful signal.
+    The 1N write convention is PROVEN, not assumed. A read-for-ownership would
+    make real traffic 2N, which on an H200 would imply 9316 GB/s, or 194% of the
+    4.8 TB/s pin rate. Impossible, and the buffer is over 100x L2 so cache
+    cannot be absorbing it. `fill_kernel_cuda` also has no memset path for CUDA
+    tensors, and a warp of vectorised fp32 stores covers whole 128 B lines, so
+    no sector fill occurs.
+
+    Write is still not the ceiling: it is the least representative pattern for a
+    read-dominated workload, and the only one whose timed window can shed
+    writeback.
     """
     T.require_cuda()
     n = _elems(target_bytes)
@@ -129,9 +150,9 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     c = torch.empty_like(a)
     sink = torch.zeros((), device="cuda", dtype=torch.float32)
 
-    def run(pattern, fn, moved, note=""):
+    def run(pattern, fn, moved, note="", flush=None):
         res = T.time_eager(fn, warmup=warmup, iters=iters, trials=trials,
-                           l2_flush=l2_flush)
+                           l2_flush=l2_flush if flush is None else flush)
         return BandwidthResult(
             pattern=pattern, bytes_moved=moved, ms_p50=res.ms_p50,
             ms_min=res.ms_min, gbps=moved / (res.ms_p50 * 1e-3) / 1e9,
@@ -143,8 +164,15 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
         run("copy", lambda: c.copy_(a), 2 * nbytes, ""),
         run("triad", lambda: torch.add(a, b, alpha=2.0, out=c), 3 * nbytes,
             "canonical STREAM metric; the default ceiling"),
+        # Deliberately unflushed. The flusher runs BEFORE the start event, and
+        # in read mode it evicts the previous fill's dirty lines during untimed
+        # time, shedding writeback the timed window should have paid. That
+        # biases write HIGH, the wrong direction for the figure already at the
+        # top of the band. The flush is pointless here anyway: the buffer is
+        # over 100x L2.
         run("write", lambda: c.fill_(1.0), nbytes,
-            "distrust: counts 1N, but a read-for-ownership would make it 2N"),
+            "1N proven (2N would exceed the pin rate by 94%); unflushed so the "
+            "timed window cannot shed writeback", flush=False),
     ]
     # No `del` here: the timing lambdas close over these buffers, and unbinding
     # the names would leave those closures referring to deleted locals. They are
@@ -185,6 +213,25 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
             f"unknown ceiling pattern {ceiling!r}; "
             f"measured: {[p.pattern for p in patterns]}")
 
+    # A pure-read stream cannot legitimately be slower than 2R+1W at the DRAM
+    # level. If it is, torch.sum is reporting ATen's tree-reduction rate rather
+    # than the DRAM read rate, and it is not a valid denominator.
+    read = next((p for p in patterns if p.pattern == "read"), None)
+    triad = next((p for p in patterns if p.pattern == "triad"), None)
+    if read and triad and read.gbps < triad.gbps:
+        patterns = tuple(
+            BandwidthResult(**{**p.as_dict(),
+                               "note": "reduction-limited, not DRAM-limited; "
+                                       "not a valid ceiling"})
+            if p.pattern == "read" else p for p in patterns)
+        if ceiling == "read":
+            raise ValueError(
+                f"read measured {read.gbps:.0f} GB/s, below triad's "
+                f"{triad.gbps:.0f}. A pure read cannot be slower than 2R+1W at "
+                "the DRAM level, so that figure is ATen's reduction rate, not "
+                "bandwidth. Use --ceiling triad.")
+        chosen = next(p for p in patterns if p.pattern == ceiling)
+
     drift, throttled = T.clock_drift(before, after)
     return Calibration(
         gpu_name=torch.cuda.get_device_properties(0).name,
@@ -209,10 +256,21 @@ def implied_traffic_ratio(compulsory_bytes: float, ms: float,
     have moved in that time, and dividing by the compulsory minimum gives a
     bound on the re-read factor.
 
-    It is an UPPER bound, not a measurement: the same number also absorbs low
-    occupancy, latency stalls, and launch overhead. A ratio near 1 is strong
-    evidence the kernel is moving close to the minimum traffic; a large ratio
-    says "something is costing you", not specifically "you are re-reading".
+    It bounds traffic CONDITIONAL on all of it being served from DRAM at no more
+    than the named ceiling, and it is not a measurement: the same number absorbs
+    low occupancy, latency stalls, and launch overhead. A ratio near 1 is strong
+    evidence the kernel moves close to the minimum traffic; a large ratio says
+    "something is costing you", not specifically "you are re-reading".
+
+    Values BELOW 1.0 are legitimate, not violations: they mean L2 served part of
+    the traffic, so less than the compulsory minimum reached DRAM. Read them
+    against the row's l2_flush column and l2_absorbed_bytes.
+
+    Worth more than the choice of denominator: the ridge that gates this column
+    comes from a cuBLAS 8192-cubed peak, and an MoE grouped GEMM at 1-64 rows
+    per expert cannot approach that shape. An overstated ridge means more cells
+    qualify, and a launch- or latency-bound cell then shows a large ratio that
+    reads as re-reads.
 
     Sensitive to which bandwidth ceiling was chosen, which is why the
     calibration records every pattern and names the one it used.

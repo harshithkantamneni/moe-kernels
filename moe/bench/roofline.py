@@ -25,6 +25,9 @@ class Hardware:
     bandwidth_bytes_s: float
     peak_flops: dict[str, float]
     source: str
+    #: For a measured profile, which STREAM pattern defined the bandwidth.
+    #: Empty for a datasheet profile, where the figure is a pin rate.
+    ceiling_pattern: str = ""
 
     def peak(self, dtype: str) -> float:
         v = self.peak_flops.get(dtype)
@@ -74,6 +77,7 @@ def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
         bandwidth_bytes_s=float(bw) * 1e12,
         peak_flops={k: v for k, v in peaks.items() if v},
         source=data.get("source", ""),
+        ceiling_pattern=(data.get("detail") or {}).get("ceiling_pattern", ""),
     )
 
 
@@ -179,9 +183,16 @@ def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
     return achieved_flops_s / roof if roof > 0 else 0.0
 
 
-def plot(rows, out_path, hardware: str = "h200_nvl", dtype: str = "bf16",
+def plot(rows, out_path, hardware: str = "measured", dtype: str = "bf16",
          label_col: str = "impl", allow_unverified: bool = False):
-    """Scatter measured points against the roof. `rows` are schema.Row dicts."""
+    """Scatter measured points against the roof. `rows` are schema.Row dicts.
+
+    `hardware` defaults to the measured calibration, NOT to a datasheet part.
+    It previously defaulted to "h200_nvl", so any direct library call on an
+    H200 SXM roofed its rows against NVL's 835.5 TFLOP/s instead of 989.5 and
+    overstated compute efficiency by 18%. scripts/plot.py routes through
+    for_device and was never affected; a notebook calling plot() was.
+    """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

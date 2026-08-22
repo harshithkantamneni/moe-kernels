@@ -19,7 +19,10 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+# v3: added bw_ceiling_pattern. Without it, two CSVs run with a different
+#     --ceiling are silently incomparable, which defeats the point of naming a
+#     pattern instead of taking max() across them.
 # v2: dropped pct_of_achieved_bw (exactly reciprocal to implied_traffic_ratio),
 #     added pct_of_achieved_tflops, load_tile_eff_bm64, load_tile_eff_bm128,
 #     and renamed achieved_bf16_tflops -> achieved_peak_tflops.
@@ -131,6 +134,8 @@ class Row:
     # quoted against what this machine actually delivers rather than a datasheet
     # peak it will never reach.
     achieved_bw_gbps: float = 0.0
+    # Which STREAM pattern defined achieved_bw_gbps: read | copy | triad | write.
+    bw_ceiling_pattern: str = ""
     # The measured compute ceiling for THIS row's dtype, not necessarily bf16.
     achieved_peak_tflops: float = 0.0
     # Compute-side efficiency against the measured cuBLAS ceiling. Not

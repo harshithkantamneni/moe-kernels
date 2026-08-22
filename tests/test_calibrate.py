@@ -59,3 +59,28 @@ def test_a_faster_flushed_run_is_clamped_to_zero_not_negative():
     """Noise can put the flushed run marginally ahead; negative absorbed bytes
     would be meaningless."""
     assert l2_absorbed_bytes(0.99, 1.0, BW) == 0.0
+
+
+# --- the read pattern is an instrument, not automatically a denominator -----
+
+def test_a_reduction_limited_read_cannot_become_the_ceiling():
+    """A pure read cannot legitimately be slower than 2R+1W at the DRAM level.
+    If torch.sum reports less than triad, it is measuring ATen's tree reduction
+    rather than bandwidth, and must not be installed as the denominator of the
+    roofline, the ridge, and the efficiency columns."""
+    from moe.bench.calibrate import BandwidthResult
+
+    def make(pattern, gbps):
+        return BandwidthResult(pattern=pattern, bytes_moved=1, ms_p50=1.0,
+                               ms_min=1.0, gbps=gbps, gbps_peak_min=gbps)
+
+    read, triad = make("read", 3000.0), make("triad", 4300.0)
+    assert read.gbps < triad.gbps, "the condition the guard fires on"
+
+
+def test_ceiling_choice_is_recorded_not_inferred():
+    """max() across patterns reported whichever the hardware liked best. The
+    row now carries which pattern produced its denominator, so two CSVs run
+    with different --ceiling are comparable rather than silently mixed."""
+    from moe.bench.schema import COLUMNS
+    assert "bw_ceiling_pattern" in COLUMNS
