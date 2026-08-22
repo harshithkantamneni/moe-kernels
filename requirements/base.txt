@@ -5,6 +5,22 @@
 # in the RunPod PyTorch image. Reinstalling torch here would mean guessing a
 # CUDA wheel tag, downloading several GB, and risking a build that does not
 # match the driver on the box.
+#
+# WHEN TO OVERRIDE THAT. RunPod's newest official PyTorch image is torch 2.8,
+# while vLLM 0.27.1 and SGLang 0.5.18 both pin torch 2.13.0 (and Triton 3.7.1)
+# into their own venvs. Inheriting means your kernel is compiled by one Triton
+# and the baselines by another, which confounds the comparison you are trying to
+# publish: a difference could be your schedule or could be the compiler.
+#
+# To pin base to the same torch the baselines use:
+#
+#   MOE_BASE_TORCH='torch==2.13.0' \
+#   MOE_TORCH_INDEX='https://download.pytorch.org/whl/cu128' \
+#     bash scripts/setup_runpod.sh base
+#
+# Check `nvidia-smi` first: a cu13 wheel needs driver r580+. Pick the wheel index
+# that matches the driver, not the image name. The download is a few GB, once,
+# onto the persistent volume.
 numpy
 pandas
 matplotlib

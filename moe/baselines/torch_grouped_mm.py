@@ -27,15 +27,25 @@ from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
 
-# Fail at IMPORT time on a torch without grouped_mm, so `load_all` skips this
-# module with a warning and the sweep simply runs without the baseline. Failing
-# at call time instead would surface as a crashed cell partway through a paid
-# session. RunPod images ship a range of torch versions and the base venv
-# inherits the image's, so this is a real deployment case, not a hypothetical.
-if not hasattr(torch.nn.functional, "grouped_mm"):  # pragma: no cover
+# Resolve the entry point once, at import.
+#
+# `torch.nn.functional.grouped_mm` is the public API; `torch._grouped_mm` is the
+# same operator under its private name and exists on older builds. Verified to
+# accept the same call shape and return bit-identical results on torch 2.13.0,
+# so the fallback is a rename rather than a different code path. This matters
+# because RunPod's newest official PyTorch image is 2.8, and the base venv
+# inherits the image's torch.
+#
+# If neither exists, raise at IMPORT time so `load_all` skips this module with a
+# warning and the sweep runs without the baseline. Failing at call time instead
+# would surface as a crashed cell partway through a paid session.
+_GROUPED_MM = getattr(torch.nn.functional, "grouped_mm", None) or \
+    getattr(torch, "_grouped_mm", None)
+if _GROUPED_MM is None:  # pragma: no cover
     raise ImportError(
-        f"torch {torch.__version__} has no torch.nn.functional.grouped_mm; "
-        "this baseline needs a newer torch. The harness runs without it.")
+        f"torch {torch.__version__} has neither torch.nn.functional.grouped_mm "
+        "nor torch._grouped_mm; this baseline needs a newer torch. The harness "
+        "runs without it.")
 
 
 def _offs(st: MoEState) -> torch.Tensor:
@@ -77,8 +87,8 @@ class TorchGroupedMMUp(_GroupedMM):
 
     def __call__(self, st: MoEState) -> None:
         x_perm, _ = st.require("x_perm", "expert_offsets")
-        st.h_up = torch.nn.functional.grouped_mm(
-            x_perm, st.weights.w1.transpose(1, 2), offs=_offs(st))
+        st.h_up = _GROUPED_MM(x_perm, st.weights.w1.transpose(1, 2),
+                              offs=_offs(st))
 
 
 @register
@@ -90,5 +100,5 @@ class TorchGroupedMMDown(_GroupedMM):
 
     def __call__(self, st: MoEState) -> None:
         h_act, _ = st.require("h_act", "expert_offsets")
-        st.y_perm = torch.nn.functional.grouped_mm(
-            h_act, st.weights.w2.transpose(1, 2), offs=_offs(st))
+        st.y_perm = _GROUPED_MM(h_act, st.weights.w2.transpose(1, 2),
+                                offs=_offs(st))

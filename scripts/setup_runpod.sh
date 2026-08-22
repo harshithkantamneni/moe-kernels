@@ -56,6 +56,18 @@ setup_env() {
     uv venv "$@" "$VENVS/$env"
   fi
 
+  # Optional: pin base's torch so it matches the torch the baselines pin,
+  # rather than inheriting whatever the image ships. See requirements/base.txt.
+  if [[ "$env" == "base" && -n "${MOE_BASE_TORCH:-}" ]]; then
+    log "base: pinning ${MOE_BASE_TORCH} (overrides the image's torch)"
+    if [[ -n "${MOE_TORCH_INDEX:-}" ]]; then
+      uv pip install --python "$VENVS/$env/bin/python" \
+        --index-url "$MOE_TORCH_INDEX" "$MOE_BASE_TORCH"
+    else
+      uv pip install --python "$VENVS/$env/bin/python" "$MOE_BASE_TORCH"
+    fi
+  fi
+
   uv pip install --python "$VENVS/$env/bin/python" -r "$req"
   # Editable install so `moe` is importable in every environment and edits to
   # your kernels take effect without reinstalling.
