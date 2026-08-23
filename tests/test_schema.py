@@ -133,3 +133,29 @@ def test_schema_version_tracks_the_column_set():
     # v3: which STREAM pattern produced achieved_bw_gbps. Two CSVs run with a
     # different --ceiling are otherwise silently incomparable.
     assert "bw_ceiling_pattern" in SC.COLUMNS
+
+
+def test_a_retired_column_name_raises_instead_of_reading_as_zero():
+    """The bug this prevents, verbatim: an analysis of the first published
+    sweep asked for `pct_of_achieved_bw`, a column dropped in schema v2 as
+    redundant with implied_traffic_ratio. row_float returned 0.0 for all 840
+    rows and the table printed `0%` down the page, which reads as a finding
+    rather than a typo."""
+    row = {"tflops": "123.0"}
+    with pytest.raises(KeyError, match="pct_of_achieved_bw"):
+        SC.row_float(row, "pct_of_achieved_bw")
+    with pytest.raises(KeyError, match="not a column"):
+        SC.row_bool(row, "l2_flushed")          # real column is l2_flush
+
+
+def test_the_rejection_suggests_the_column_the_caller_probably_meant():
+    with pytest.raises(KeyError, match="did you mean.*l2_flush"):
+        SC.row_float({}, "l2_flushh")
+
+
+def test_a_valid_column_missing_from_an_older_csv_still_defaults():
+    """Schema evolution must stay backward compatible: v1 CSVs have no
+    load_tile_eff_bm128 column, and reading one is a default, not an error."""
+    assert SC.row_float({"impl": "x"}, "load_tile_eff_bm128") == 0.0
+    assert SC.row_float({"impl": "x"}, "load_tile_eff_bm128", default=-1.0) == -1.0
+    assert SC.row_bool({"impl": "x"}, "throttled") is False

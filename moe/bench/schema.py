@@ -190,6 +190,30 @@ _FIELD_TYPES: dict[str, str] = {
 }
 
 
+_COLUMN_SET = frozenset(COLUMNS)
+
+
+def _schema_key(key: str) -> str:
+    """Reject a column name this schema has never had.
+
+    A retired or mistyped column read through row_float() comes back as the
+    default, which is indistinguishable from a real measurement of zero.
+    `pct_of_achieved_bw` was dropped in v2 as redundant with
+    implied_traffic_ratio, and an analysis that still asked for it printed a
+    clean column of `0%` for every row without a single warning -- a number
+    that looked like a finding.
+
+    A missing VALUE still defaults, because an older CSV legitimately lacks a
+    newer column. A key that is not in the schema at all is a caller bug.
+    """
+    if key not in _COLUMN_SET:
+        import difflib
+        near = difflib.get_close_matches(key, COLUMNS, n=3)
+        hint = f"; did you mean {', '.join(near)}?" if near else ""
+        raise KeyError(f"{key!r} is not a column in schema v{SCHEMA_VERSION}{hint}")
+    return key
+
+
 def row_bool(row: dict, key: str, default: bool = False) -> bool:
     """Read a bool from a CSV row. One spelling, everywhere.
 
@@ -197,7 +221,7 @@ def row_bool(row: dict, key: str, default: bool = False) -> bool:
     "True"/"true"/"1" and another only "True", so two figures filtered the same
     column differently.
     """
-    value = row.get(key)
+    value = row.get(_schema_key(key))
     if value is None or value == "":
         return default
     return str(value) in TRUTHY
@@ -205,7 +229,7 @@ def row_bool(row: dict, key: str, default: bool = False) -> bool:
 
 def row_float(row: dict, key: str, default: float = 0.0) -> float:
     try:
-        return float(row.get(key) or default)
+        return float(row.get(_schema_key(key)) or default)
     except (TypeError, ValueError):
         return default
 

@@ -68,10 +68,16 @@ class _GroupedMM(StageSpan):
     # CUDA dispatch is bf16-only. Left as a single dtype rather than widened,
     # because a cell that only works on the laptop is not a baseline.
     dtypes = ("bf16",)
-    # Source inspection says there is no host sync in the CUDA path, so this is
-    # expected to capture. It stays False until a row actually reports
-    # capture_status=captured: the flag is a claim, the column is the fact.
-    cuda_graph_safe = False
+    # Source inspection said there is no host sync in the CUDA path, and the
+    # standard sweep of 2026-08-22 (run 92572c5216fb) confirmed it: 280 rows
+    # reported capture_status=captured, zero failed, and every one of them
+    # passed replay verification against the golden fp32 oracle. The flag was a
+    # claim; the column is now the fact, so the claim can follow it.
+    #
+    # Worth knowing before betting on graphs: on those same rows the replay
+    # beat eager by a median of 0.5 us (p10 -3.8, p90 +3.0). One grouped-GEMM
+    # launch against a 130 us - 7 ms kernel is not where the time goes.
+    cuda_graph_safe = True
 
     def supports(self, spec: BenchSpec) -> bool:
         # CUTLASS grouped GEMM caps the group count.
