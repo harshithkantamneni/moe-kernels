@@ -1,151 +1,220 @@
 # What the first standard sweep says
 
-840 rows, run `92572c5216fb`, commit `65ebea9`, one H200 SXM (700 W, 132 SMs, 60 MiB
-L2), all 840 correctness-passing against the fp32 oracle. Baseline under test is
-`torch.nn.functional.grouped_mm`, which on this build dispatches to CUTLASS
-`bf16bf16_grouped_gemm_impl_sm90_sm100` — a Hopper-native, WGMMA grouped GEMM, not a
-per-expert loop. Ceilings are the ones measured on this device the same afternoon
+840 rows, run `92572c5216fb`, commit `65ebea9`, one H200 SXM (700 W, 132 SMs, 60 MiB L2,
+torch 2.13.0+cu130, CUDA 13.0, driver 580.159.04, Triton 3.7.1). All 840 passed
+correctness against an fp32 oracle, bf16 throughout, seed 0, fan-in initialised.
+
+Sweep is six axes: 3 model geometries x 7 token counts (1..4096) x 5 routing
+distributions x {L2-cold, L2-warm} x {eager, CUDA-graph replay} x 2 stages (up, down).
+3 x 7 x 5 x 2 x 2 x 2 = 840.
+
+Baseline under test is `torch.nn.functional.grouped_mm`. On this build it dispatches to
+a CUTLASS Hopper grouped GEMM rather than a per-expert loop, per the torch source; that
+is a source-reading inference, not a profiled fact, because `ncu` is blocked on a rented
+pod (`ERR_NVGPUCTRPERM`). Ceilings are measured on this device the same afternoon
 (`measured.yaml`), never datasheet numbers.
 
-Sweep axes: 3 models x 7 token counts (1..4096) x 5 routing distributions x
-{L2-cold, L2-warm} x {eager, CUDA-graph replay} x 2 stages.
+**Denominator note, stated up front:** the CSV's own `achieved_bw_gbps` column uses the
+`triad` STREAM pattern (4375.57 GB/s). Sections below re-denominate against the `read`
+pattern (4390.29 GB/s), which the calibration explicitly labels as the analogue of
+streaming expert weights. The two differ by 0.34% and no conclusion here turns on the
+choice, but a reader recomputing from the shipped columns will get triad numbers.
+
+**DeepSeek-V3 caveat:** its 1369 GB of bf16 weights do not fit on one H200, so its
+routing is parametric rather than replayed from captured traces. Its geometry is real;
+its token distribution is synthetic. Mixtral and Qwen2 are the same way in this run.
 
 ---
 
-## 1. The starting thesis was wrong, and the data says so plainly
+## 1. The starting thesis was wrong
 
 Going in, the expected story was *"a fixed `BLOCK_M` degrades under skewed routing."*
-It does not. Within a `(model, stage, token count)` cell, where the routing
-distribution is the **only** thing that varies, skew makes the incumbent kernel
-**faster**, not slower — up to 2x faster:
+It does not. Within one cell, where routing is the only thing that varies
+(deepseek-v3, up-stage, T=16, L2-cold, eager):
 
-| model | T | routing | active experts | tile eff @128 | ms p50 | vs uniform |
-|---|---:|---|---:|---:|---:|---:|
-| deepseek-v3 | 16 | uniform | 100 | 0.010 | 1.9118 | 1.00x |
-| deepseek-v3 | 16 | zipf:0.6 | 88 | 0.011 | 1.7031 | 0.89x |
-| deepseek-v3 | 16 | dirichlet:0.3 | 68 | 0.015 | 1.3123 | 0.69x |
-| deepseek-v3 | 16 | zipf:1.2 | 49 | 0.020 | **0.9408** | **0.49x** |
-| deepseek-v3 | 16 | hot:0.5 | 94 | 0.011 | 1.7916 | 0.94x |
-
-Note `hot:0.5` — the most *imbalanced* distribution by `max/mean` (32.0, the maximum
-possible) — is nearly the *slowest*, while `zipf:1.2` at the same imbalance is the
-fastest. Imbalance does not predict time. One number does.
-
-## 2. The one number is active expert count, and it is a bandwidth law
-
-Divide each cell's time by its active expert count and the routing distribution stops
-mattering almost entirely:
-
-| model | stage | T | active experts | us per active expert | spread across 5 routings |
-|---|---|---:|---|---:|---:|
-| deepseek-v3 | up | 16 | 49–100 | 19.21 | **1.5%** |
-| deepseek-v3 | up | 64 | 118–225 | 18.46 | 5.1% |
-| deepseek-v3 | up | 256 | 171–256 | 18.26 | 2.6% |
-| qwen2-57b-a14b | up | 16 | 33–56 | 13.12 | 4.8% |
-| qwen2-57b-a14b | up | 64 | 44–64 | 12.49 | 6.8% |
-| qwen2-57b-a14b | up | 256 | 50–64 | 12.55 | 5.5% |
-
-Runtime varies 2x across those cells. Runtime *per active expert* varies 1.5–7%.
-
-The constant is not a scheduling cost — it is HBM. One DeepSeek expert's `w1` is
-7168 x 4096 x 2 B = 58.7 MB; 58.7 MB / 19.21 us = 3055 GB/s, against a measured read
-ceiling of 4390 GB/s. The same arithmetic lands in the same place for all three models
-and both stages. Independently, the harness's own compulsory-bytes model agrees with
-this hand calculation to within 2% on every row.
-
-**At decode-shaped batch sizes an MoE grouped GEMM is not a GEMM. It is a weight
-streaming problem.** Time is `(active experts x expert weight bytes) / achieved
-bandwidth`, and routing skew matters only through the first factor. Skew helps because
-concentrating tokens touches fewer experts, so fewer weight matrices cross the bus.
-
-## 3. Padding MACs are free; padding *bytes* are not
-
-Tile efficiency at `BLOCK_M=128` is **0.008 to 0.06** for T <= 256 — 94% to 99.2% of
-the rows a tile computes are padding. That sounds like the bug to fix. It is not,
-because it costs nothing measurable: across the cells in section 2, tile efficiency
-varies 2–4x while time per active expert holds to within 7%. The tensor cores doing
-127 rows of arithmetic on zeros are idle capacity that was going to be idle anyway,
-waiting on weights.
-
-Tile efficiency has a clean closed form here. When mean rows per expert is below
-`BLOCK_M`, uniform routing gives exactly `mean_rows / BLOCK_M`: DeepSeek at T=1024 has
-32 rows per expert on average and scores exactly 0.250 at `BLOCK_M=128` and 0.500 at 64.
-
-The sign of skew's effect on tiling flips at the tile boundary:
-
-| model | T | mean rows/expert | uniform eff@128 | hot:0.5 eff@128 |
+| routing | max/mean | active experts | ms p50 | vs uniform |
 |---|---:|---:|---:|---:|
-| deepseek-v3 | 1024 | 32 (< BLOCK_M) | 0.250 | 0.243 (worse) |
-| deepseek-v3 | 4096 | 128 (= BLOCK_M) | 0.692 | **0.853** (better) |
-| qwen2-57b-a14b | 1024 | 128 (= BLOCK_M) | 0.696 | **0.865** (better) |
+| uniform | 6.00 | 100 | 1.9118 | 1.000x |
+| zipf:0.6 | 12.00 | 88 | 1.7031 | 0.891x |
+| dirichlet:0.3 | 16.00 | 68 | 1.3123 | 0.686x |
+| zipf:1.2 | 30.00 | 49 | **0.9408** | **0.492x** |
+| hot:0.5 | **32.00** | 94 | 1.7916 | 0.937x |
 
-Below the boundary, skew strands more experts on 1–2 row tiles. At or above it,
-uniform routing is the *worst* case: every expert lands just over a tile boundary and
-pays for a second, nearly empty tile. That is the cliff to attack — but only once
-you are past the point where bandwidth sets the time.
+`hot:0.5` carries the maximum attainable imbalance at this geometry (32.00) and is the
+second *slowest*. `zipf:1.2` at nearly the same imbalance is the fastest. Imbalance does
+not order the times. Active expert count orders them perfectly: 49 < 68 < 88 < 94 < 100
+maps onto 0.94 < 1.31 < 1.70 < 1.79 < 1.91 ms. That is a rank correlation on one cell of
+five points (null probability 1/120), not a law.
 
-## 4. Where the headroom actually is
+## 2. What orders them is weight traffic, and the unit is the M-tile
 
-Against the measured read ceiling (4390.3 GB/s, the pattern explicitly calibrated as
-the analogue of streaming expert weights), the incumbent CUTLASS kernel in the decode
-regime runs at:
+The first version of this document claimed the explanatory variable was *active expert
+count*. That is right in the decode regime and wrong in general, and the difference
+matters. A tiled GEMM reads its weight matrix once per **M-tile**, not once per expert:
+for output tile `(m, n)` it reads `B[:, n]`, so summing over the `M/BLOCK_M` by
+`N/BLOCK_N` tile grid, `B` is streamed `M/BLOCK_M` times. When every expert holds fewer
+rows than `BLOCK_M`, M-tiles and active experts are the same number, which is why the
+simpler model appeared to work.
 
-| model | stage | T | measured ms | bandwidth floor ms | x floor | % of read BW |
-|---|---|---:|---:|---:|---:|---:|
-| deepseek-v3 | up | 1 | 0.1814 | 0.1070 | 1.70x | 59% |
-| deepseek-v3 | down | 1 | 0.1026 | 0.0535 | 1.92x | 52% |
-| qwen2-57b-a14b | down | 1 | 0.0770 | 0.0335 | **2.30x** | **43%** |
-| mixtral-8x7b | up | 16 | 0.7719 | 0.4285 | 1.80x | 56% |
-| deepseek-v3 | up | 64 | 4.0687 | 3.0120 | 1.35x | 74% |
+Testing both against the measured times, as `measured_ms / (predicted_bytes / 4390.29 GB/s)`
+(a correct model gives a *constant* ratio, so spread is the score):
 
-Across every T <= 64 cell the range is **1.35x to 2.30x the bandwidth floor**, and it
-is worst at T=1 — exactly the shape decode inference runs at. That gap is the target.
+| traffic model | mean ratio | CV, all T | CV, T >= 256 |
+|---|---:|---:|---:|
+| bytes = active_experts x W | 2.11x | 63.0% | 70.6% |
+| bytes = M_tiles x W, BLOCK_M=64 | 1.35x | 35.5% | 39.3% |
+| bytes = M_tiles x W, **BLOCK_M=128** | **1.49x** | **21.1%** | **18.3%** |
 
-Caveat stated up front: `ncu` is unavailable on a rented pod (`ERR_NVGPUCTRPERM`), so
-this cannot separate *"the kernel moves more bytes than compulsory"* from *"the kernel
-moves compulsory bytes at below-ceiling efficiency."* The harness reports this as
-`implied_traffic_ratio`, a conditional bound, and it is labelled as such rather than
-claimed as measured traffic. Either reading leaves the same headroom.
+`BLOCK_M=64` is not merely a worse fit, it is *unphysical*: at T >= 256 its mean ratio is
+0.903, which would have the kernel moving bytes faster than the measured ceiling. So the
+timing alone bounds the incumbent's effective M-tile at 128 rows, which is a fact `ncu`
+would normally be needed to establish. Per model the BLOCK_M=128 fit is 1.48x at 12.7% CV
+(deepseek), 1.53x at 22.7% (qwen2), 1.47x at 25.5% (mixtral).
+
+Absolute scale: one DeepSeek expert's `w1` is 7168 x 4096 x 2 B = 58.72 MB, and the
+measured cost is 19.21 us per active expert at T=16, so 58,720,256 / 19.21 us =
+3057 GB/s against a 4390 GB/s read ceiling.
+
+**Honest scoping of the per-expert constant.** Across all 18 `(model, stage, T)` cells at
+T in {16, 64, 256}, the spread of per-active-expert time across the five routings runs
+**1.5% to 26.4%**, not the 1.5-7% originally printed here. The tight end is deepseek and
+qwen2 up-stage (1.5-6.8%); mixtral is the loose end and supplies every large value
+(mixtral down T=256 at 26.4%, up T=256 at 19.7%). Runtime *within* a cell still varies
+about 2x while per-expert time varies far less, so the qualitative claim survives, but
+the original band was a six-cell subset presented as a general result.
+
+**Byte-model reconciliation.** The hand calculation above agrees with the harness's own
+`compulsory_bytes` column to within 0.8% at T <= 64 and 2.7% at T <= 256. Above that they
+diverge by up to 27.4%, because `bytes_model.py` counts activation traffic that the
+weights-only calculation omits and that traffic scales with T while weights do not. The
+deviation is one-signed on all 700 timed rows, which is the signature of exactly that
+missing term rather than an error.
+
+## 3. Padding costs weight reads, not MACs, and this sweep cannot fully separate them
+
+Tile efficiency at `BLOCK_M=128` runs 0.0078 to 0.125 at T <= 64, 0.0078 to 0.500 at
+T <= 256, and 0.0078 to 0.955 over the whole sweep. (An earlier version of this document
+said "0.008 to 0.06 for T <= 256", which was wrong by 8x on the upper bound.)
+
+The earlier version then argued that padding is free because tile efficiency varies while
+time-per-active-expert does not. **That argument was circular.** Whenever every expert
+holds fewer than `BLOCK_M` rows, tile efficiency is not an independent variable at all:
+
+```
+tile_eff = total_rows / (M_tiles * BLOCK_M) = (T * top_k) / (active * BLOCK_M)
+```
+
+Verified exactly, zero violations on all 134 rows with `max_rows <= 128`. At fixed T,
+tile efficiency is literally `1/active` rescaled, so it is perfectly anti-correlated with
+time by construction. Nothing about the cost of padding can be read off a sweep in which
+the two are the same variable.
+
+The cells that *can* answer it are the ones where active saturates and tile efficiency
+moves independently. Mixtral pins all 8 experts active from T=64 up:
+
+| T | routing | eff@128 | ms p50 | eff ratio | speed ratio |
+|---:|---|---:|---:|---:|---:|
+| 256 | dirichlet:0.3 | 0.400 | 0.7480 | 0.800 | 0.825 |
+| 256 | zipf:1.2 | 0.444 | 0.7225 | 0.889 | 0.855 |
+| 256 | hot:0.5 | 0.444 | 0.6853 | 0.889 | 0.901 |
+| 256 | uniform | 0.500 | 0.6174 | 1.000 | 1.000 |
+| 4096 | uniform | 0.928 | 3.2303 | 1.000 | 1.000 |
+| 4096 | zipf:1.2 | 0.941 | 3.1801 | 1.015 | 1.016 |
+| 4096 | hot:0.5 | 0.955 | 3.0515 | 1.030 | 1.059 |
+
+Speed tracks tile efficiency close to proportionally. So padding is **not** free. But the
+mechanism the data supports is the M-tile weight re-read of section 2, not wasted MACs:
+an extra M-tile costs another full pass over that expert's weight matrix. Padded
+arithmetic intensity is exactly `BLOCK_M` = 128 FLOP/byte regardless of model geometry,
+below the measured 166 ridge, so even a kernel that genuinely computed every padding row
+would still be memory bound. **Separating "wasted MACs" from "wasted weight reads"
+requires sweeping `BLOCK_M`, which needs a kernel with `BLOCK_M` as a knob.** That is
+the first experiment worth running, not an afterthought.
+
+## 4. Where the headroom is, after accounting for tile re-reads
+
+Decomposing the harness's `implied_traffic_ratio` (a conditional bound: it says what
+traffic *would* be implied if the kernel ran at the ceiling) into the M-tile factor and
+what remains, deepseek-v3 up-stage, uniform, L2-cold:
+
+| T | active | M-tiles | tiles/active | implied ratio | residual |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 8 | 8 | 1.00 | 1.69 | **1.69x** |
+| 16 | 100 | 100 | 1.00 | 1.42 | 1.42x |
+| 64 | 225 | 225 | 1.00 | 1.35 | 1.35x |
+| 256 | 256 | 256 | 1.00 | 1.35 | 1.35x |
+| 1024 | 256 | 256 | 1.00 | 1.31 | 1.31x |
+| 4096 | 256 | 370 | 1.45 | 1.86 | 1.28x |
+
+The residual is stable at 1.28-1.42x from T=16 up, and worst at T=1. That residual is
+the part tiling does not explain, and at T=1 tiles and experts are identical so tiling
+explains none of it.
+
+Against the read ceiling, over all 120 rows at T <= 64 with no routing filter, the ratio
+of measured time to the compulsory-bytes floor runs **1.351x** (deepseek up, T=64,
+uniform, 74% of read BW) to **2.312x** (qwen2 down, T=1, zipf, 43%). The four worst
+ratios are all T=1 rows. That gap is the target, and it is worst at exactly the shape
+decode inference runs at.
+
+What this cannot say, because `ncu` is blocked: whether that residual is extra bytes on
+the wire, or compulsory bytes moved at below-ceiling efficiency (wave quantisation,
+descriptor and TMA setup, memory-level parallelism at 8 concurrent groups). Both readings
+leave the same headroom; they imply different kernels.
 
 ## 5. Two things that are confirmed dead ends
 
-**CUDA graphs are not the lever.** 280 rows captured cleanly and passed replay
-verification against the oracle. Median eager-minus-replay was **0.5 us** (p10 -3.8,
-p90 +3.0) — noise. One grouped-GEMM launch against a 130 us to 7 ms kernel is not
-where the time goes. The harness declined to even time the remaining 140 graph cells,
-on the grounds that the launch overhead it could recover was under 1% of the roofline
-minimum, which is the same conclusion reached before spending the measurement.
+**CUDA graphs are not the lever.** 280 rows captured cleanly, zero capture failures, all
+replay-verified against the oracle. Over the 140 matched L2-cold pairs the eager-minus-replay
+median is **+0.54 us** (p10 -3.80, p90 +2.56) against kernels spanning 74.8 us to 1.614 ms.
+The harness declined to time the other 140 graph cells, each with an explicit
+`graph_skip_reason` recording that launch overhead was 0.14-0.93% of the roofline minimum,
+below its 1% threshold.
 
-**L2 absorbs nothing.** Cold/warm ratio is 1.00 at every point measured. The working
-set is 294 MB to 15 GB against a 60 MiB L2 — 5x to 250x oversubscribed. This is a
-useful negative: it means the compulsory-traffic model has no cache reuse hiding
-inside it, so the bandwidth arithmetic above is sound.
+**L2 absorbs nothing.** Over all 210 matched cold/warm pairs the ratio runs 0.9595 to
+1.0081, median 0.9993, with 28 pairs outside +/-1% **in both directions** (the extreme is a
+flushed run 4.05% *faster* than its warm twin, a sign impossible for a cache effect). That
+two-sided spread is the result: it is noise, not absorption. The working set runs 146.8 MB
+to 15.03 GB against a 60 MiB L2, 2.3x to 239x oversubscribed, so this is what theory
+predicts. It matters because it means the compulsory-traffic model has no cache reuse
+hiding inside it.
 
 ## 6. Measurement hygiene, recorded not hidden
 
-79 of 840 rows tripped the throttle detector (SM clock dropping >5% within a cell).
-They cluster entirely on token count — 0 rows at T <= 64, 14 at T=256, 31 at T=1024,
-34 at T=4096 — and are spread evenly across models and stages. That is sustained power
-draw on a 700 W board, not a model-specific artefact, and it affects only the
-compute-bound region, not the decode-regime conclusions above. Those rows carry
-`throttled=True` and stay in the CSV rather than being quietly dropped.
+79 of 840 rows tripped the throttle detector (SM clock dropping >5% within a cell). They
+cluster on token count: 0 at T <= 64, 14 at T=256, 31 at T=1024, 34 at T=4096. Across
+stages they are even (up 42, down 37); across models they are **not** (mixtral 34, qwen2
+25, deepseek 20), and 13 of the 14 rows at T=256 are mixtral. Sustained draw on a 700 W
+board, affecting only the compute-bound region. Every decode-regime conclusion above comes
+from rows at T <= 64, where zero rows throttled. Throttled rows carry `throttled=True` and
+stay in the CSV rather than being dropped.
 
-One caveat on the ridge point: the compute ceiling was measured at its settled
-1500 MHz while the bandwidth patterns ran at 1980 MHz, so the recorded 166 FLOP/byte
-ridge is conservative (185 if compute is clock-normalised to match). Everything in the
-decode regime sits at AI 1–32, two orders of magnitude below either figure, so the
-ambiguity does not touch any conclusion here.
+The compute ceiling was measured at its settled 1500 MHz while the bandwidth patterns ran
+at 1980 MHz, so the recorded 166 FLOP/byte ridge is conservative (185 if compute is
+clock-normalised to match). Everything in the decode regime sits at AI 1-32, far below
+either figure.
+
+Correctness gating is structural: the driver zeroes timing fields on a row that fails the
+oracle. It never fired here, since all 840 rows passed, so this run does not demonstrate
+the gate, only that nothing needed it.
 
 ---
 
 ## What this means for the kernel
 
-The problem statement changes shape. It is not *"schedule ragged tiles better."* It is:
+The problem statement:
 
-> Move `active_experts x expert_weight_bytes` from HBM at closer to 4390 GB/s than the
-> 43–74% the incumbent achieves, while the M dimension is 1–64 rows per group.
+> Move `M_tiles x expert_weight_bytes` from HBM at closer to 4390 GB/s than the 43-74%
+> the incumbent achieves, while M per group is 1-64 rows.
 
-Tiling still matters, but as a means to that end — the tile shape's job at T=1 is to
-keep the memory pipe saturated, not to keep the tensor cores fed. The `BLOCK_M`
-question only becomes a first-order question above the tile boundary (section 3),
-which is prefill, not decode.
+And the first experiment the incumbent cannot run, because its `BLOCK_M` is not a knob:
+sweep `BLOCK_M` at fixed routing and separate wasted MACs from wasted weight reads. Every
+number above is consistent with both, and they call for different kernels.
+
+---
+
+*Corrections: an earlier version of this file overstated the byte-model agreement (2% vs
+0.8% at T<=64 and 27% overall), understated tile efficiency's upper bound by 8x, presented
+a six-cell spread as an eighteen-cell result, called the cold/warm ratio "1.00 at every
+point" when it is 0.96-1.01, and argued from a circular decorrelation in section 3. The
+numbers were re-derived from the raw CSV; the three load-bearing conclusions (skew helps,
+graphs and L2 are dead ends, the decode gap is 1.35-2.31x) survived unchanged.*
