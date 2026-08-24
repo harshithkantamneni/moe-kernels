@@ -112,3 +112,34 @@ def test_group_count_limit_is_declared():
     span = get("torch_grouped_mm_up")
     assert not span.supports(BenchSpec(big, 8, "bf16"))
     assert span.supports(BenchSpec(MODEL_CONFIGS["deepseek-v3"], 8, "bf16"))
+
+
+# --- the incumbent does not exist on every architecture -----------------------
+
+def test_grouped_mm_support_is_reported_per_architecture():
+    """torch's grouped_mm dispatches to CUTLASS `bf16bf16_grouped_gemm_impl_
+    sm90_sm100`. On anything outside that range the baseline is not the kernel
+    the published numbers measured, and a sweep that silently timed a fallback
+    would compare a hand-written kernel against a different incumbent."""
+    from moe.baselines.torch_grouped_mm import grouped_mm_support
+
+    assert grouped_mm_support((9, 0)).supported       # H100 / H200
+    assert grouped_mm_support((10, 0)).supported      # B200
+    assert not grouped_mm_support((8, 0)).supported   # A100
+    assert not grouped_mm_support((12, 0)).supported  # RTX PRO 6000
+
+
+def test_unsupported_architecture_explains_itself():
+    """The reason is recorded so a row says why the baseline is absent, rather
+    than the baseline quietly not appearing in the registry."""
+    from moe.baselines.torch_grouped_mm import grouped_mm_support
+
+    why = grouped_mm_support((8, 0)).reason
+    assert "sm_80" in why
+    assert "sm_90" in why and "sm_100" in why
+
+
+def test_supported_architecture_has_no_complaint():
+    from moe.baselines.torch_grouped_mm import grouped_mm_support
+
+    assert grouped_mm_support((9, 0)).reason == ""

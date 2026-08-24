@@ -66,11 +66,12 @@ Two routes. JIT is the one to start with, because it needs no build system and
 from pathlib import Path
 from torch.utils.cpp_extension import load
 
+from moe.kernels import cuda_arch_flags
+
 _SRC = Path(__file__).parent / "csrc"
 _ext = load(name="moe_grouped_gemm",
             sources=[str(_SRC / "grouped_gemm.cu")],
-            extra_cuda_cflags=["-O3", "--use_fast_math",
-                               "-gencode=arch=compute_90a,code=sm_90a"],
+            extra_cuda_cflags=["-O3", "--use_fast_math", *cuda_arch_flags()],
             verbose=False)
 
 @register
@@ -83,9 +84,12 @@ class CudaGroupedGemm(StageSpan):
         st.h_up = out
 ```
 
-`sm_90a` rather than `sm_90`: H200 is Hopper, and the `a` variants are what
-expose wgmma and the TMA instructions. Without it you silently lose the
-instructions the architecture exists for.
+`cuda_arch_flags()` reads the attached device rather than hardcoding one. On an
+H200 it emits `-gencode=arch=compute_90a,code=sm_90a`, and the `a` matters: the
+`a` variants are what expose wgmma and the TMA instructions, so plain `sm_90`
+builds for the part but loses what the part exists for. Hardcoding Hopper is
+also wrong the moment a sweep runs on whatever GPU was available, since an A100
+is `sm_80` and RTX Blackwell is `sm_120a`.
 
 Because `moe/kernels/load_all()` catches import failures with a warning, a
 kernel whose extension fails to build does not break the harness or the CPU test

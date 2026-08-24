@@ -43,8 +43,26 @@ fi
 files=("$RESULTS_DIR"/run_"$RUN_ID"_*.csv)
 [[ -e "${files[0]}" ]] || { echo "[publish] nothing matches run_${RUN_ID}_*.csv" >&2; exit 1; }
 
+# The device is read from the ROWS, not from this machine: a result set belongs
+# to the GPU that produced it, and the same harness now runs on several. Each
+# device therefore gets its own published arm, with its own calibration beside
+# it. measured_slug is imported rather than reimplemented so the directory name
+# and the calibration filename cannot drift apart.
+device_field() { python3 -c '
+import csv, sys
+from moe.bench.roofline import measured_slug
+with open(sys.argv[1], newline="") as f:
+    row = next(csv.DictReader(f), None)
+gpu = (row or {}).get("gpu_name", "") or "unknown-device"
+print(measured_slug(gpu) if sys.argv[2] == "slug" else gpu)
+' "$1" "$2"; }
+
+GPU="$(device_field "${files[0]}" name)"
+SLUG="$(device_field "${files[0]}" slug)"
+log "rows were measured on $GPU"
+
 STAMP="$(date -u +%Y-%m-%d)"
-DEST="results/published/${STAMP}-${LABEL:-run-$RUN_ID}"
+DEST="results/published/${STAMP}-${SLUG#measured_}-${LABEL:-run-$RUN_ID}"
 mkdir -p "$DEST"
 
 log "copying $(ls "$RESULTS_DIR"/run_"$RUN_ID"_*.csv | wc -l) CSV(s) and manifest(s)"
@@ -54,11 +72,12 @@ cp "$RESULTS_DIR"/run_"$RUN_ID"_*.manifest.jsonl "$DEST"/ 2>/dev/null || true
 
 # The calibration is not optional context: every efficiency column in these rows
 # is quoted against it, so a result set without it cannot be interpreted later.
-if [[ -f moe/bench/hardware/measured.yaml ]]; then
-  cp moe/bench/hardware/measured.yaml "$DEST"/measured.yaml
-  log "included the hardware calibration these rows were measured against"
+CAL="moe/bench/hardware/${SLUG}.yaml"
+if [[ -f "$CAL" ]]; then
+  cp "$CAL" "$DEST"/measured.yaml
+  log "included $CAL, the calibration these rows were measured against"
 else
-  log "WARNING: no measured.yaml; efficiency columns will be uninterpretable"
+  log "WARNING: no $CAL; efficiency columns will be uninterpretable"
 fi
 
 # Figures belong with the data they were drawn from, not in the repo root.

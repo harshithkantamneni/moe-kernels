@@ -2,9 +2,9 @@
 
 This ships inside torch 2.13.0 and needs no install, no framework, and no venv
 of its own. On CUDA it dispatches to CUTLASS `bf16bf16_grouped_gemm_impl_sm90_sm100`,
-so on an H200 it is a Hopper-native, WGMMA-capable grouped GEMM: the right
-incumbent to measure a hand-written kernel against, and a far more honest
-baseline than the naive per-expert loop.
+so on an H200 it is a Hopper-native, WGMMA-capable grouped GEMM, which is the
+incumbent a hand-written kernel has to beat. A per-expert loop would be an
+easier baseline and would not be measuring the same thing.
 
 Two properties make it fit this harness exactly:
 
@@ -21,11 +21,46 @@ so the mapping is `expert_offsets[1:]`.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
+
+#: Compute capabilities the CUTLASS grouped GEMM covers, from the impl name
+#: `bf16bf16_grouped_gemm_impl_sm90_sm100`.
+_GROUPED_GEMM_ARCHS = ((9, 0), (10, 0))
+
+
+@dataclass(frozen=True)
+class GroupedMMSupport:
+    supported: bool
+    reason: str = ""
+
+
+def grouped_mm_support(capability: tuple[int, int] | None = None
+                       ) -> GroupedMMSupport:
+    """Does this architecture have the CUTLASS grouped GEMM behind grouped_mm?
+
+    The symbol exists on every build, so resolving it says nothing about the
+    device. Outside sm_90/sm_100 the call either falls back to something that
+    is not the incumbent the published numbers measured, or raises partway
+    through a paid sweep. Both are worth knowing before the sweep starts.
+    """
+    if capability is None:
+        capability = torch.cuda.get_device_capability()
+    major, minor = capability
+    if (major, 0) in _GROUPED_GEMM_ARCHS:
+        return GroupedMMSupport(True)
+    have = ", ".join(f"sm_{a}{b}" for a, b in _GROUPED_GEMM_ARCHS)
+    return GroupedMMSupport(
+        False,
+        f"torch's grouped_mm dispatches to a CUTLASS grouped GEMM built for "
+        f"{have}; this device is sm_{major}{minor}. Any timing here measures a "
+        "different implementation than the published rows, so the baseline is "
+        "not comparable on this part.")
 
 # Resolve the entry point once, at import.
 #

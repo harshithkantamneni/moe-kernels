@@ -11,7 +11,7 @@ them beside the cited spec file. Efficiency can then be quoted against what the
 machine actually delivers, which is both fairer to your kernel and more
 defensible in public.
 
-    python scripts/calibrate_hardware.py --out moe/bench/hardware/measured.yaml
+    python scripts/calibrate_hardware.py   # -> hardware/measured_<device>.yaml
 """
 from __future__ import annotations
 
@@ -76,8 +76,10 @@ def _device_facts() -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", type=Path,
-                    default=Path("moe/bench/hardware/measured.yaml"))
+    ap.add_argument("--out", type=Path, default=None,
+                    help="default: moe/bench/hardware/measured_<device>.yaml, "
+                         "so calibrating a second GPU does not overwrite the "
+                         "first")
     ap.add_argument("--buffer-gb", type=float, default=8.0,
                     help="STREAM buffer size; must dwarf L2 and run long enough "
                          "that launch and clock ramp do not matter")
@@ -173,7 +175,7 @@ def main() -> int:
         print(f"  measured at       {cal.gemm_clock_mhz} MHz, where the silicon "
               f"can do {sustained:.1f} TFLOP/s")
         print(f"                    {cal.gemm_efficiency_pct:8.1f}% of THAT "
-              "<-- the honest efficiency")
+              "<-- efficiency at the measured clock")
         if spec_tf:
             implied = spec_tf * 1e12 / (sustained * 1e12 / max(cal.gemm_clock_mhz, 1))
             print(f"                    the datasheet assumes ~{implied:.0f} MHz, "
@@ -259,9 +261,16 @@ def main() -> int:
         "spec_comparison": {"profile": profile, "bandwidth_gbps": spec_bw,
                             "bf16_tflops": spec_tf},
     }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(yaml.safe_dump(payload, sort_keys=False))
-    print(f"\n[calibrate] wrote {args.out}")
+    # One calibration file per device. A single shared measured.yaml meant
+    # calibrating a second GPU overwrote the first, and a later re-plot of an
+    # earlier sweep then scored it against the wrong roof.
+    out = args.out
+    if out is None:
+        from moe.bench.roofline import HARDWARE_DIR, measured_slug
+        out = HARDWARE_DIR / f"{measured_slug(cal.gpu_name)}.yaml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(yaml.safe_dump(payload, sort_keys=False))
+    print(f"\n[calibrate] wrote {out}")
     print("  commit it; plots and efficiency columns then use measured ceilings")
     print(json.dumps({"achieved_bw_gbps": cal.achieved_bandwidth_gbps,
                       "ceiling_pattern": cal.ceiling_pattern,

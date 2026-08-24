@@ -89,7 +89,7 @@ fi
 
 # Nsight Compute cannot run on a rented pod (ERR_NVGPUCTRPERM), so the roofline
 # would otherwise rest on a datasheet peak. Measure the real ceilings once.
-if [[ ! -f moe/bench/hardware/measured.yaml ]]; then
+if ! compgen -G "moe/bench/hardware/measured_*.yaml" >/dev/null; then
   log "calibrating achievable bandwidth and BF16 (once per pod type)"
   "$PY" scripts/calibrate_hardware.py || \
     echo "[run_all] calibration failed; efficiency columns will stay empty"

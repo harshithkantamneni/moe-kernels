@@ -597,3 +597,39 @@ def test_the_cli_builds_an_info_dict_the_row_accepts():
     for key in info:
         assert key not in D._ROW_OWNED_BY_CALLER, key
     assert "env_version" in SC.COLUMNS
+
+
+# --- the sweep refuses another machine's ceilings -----------------------------
+
+def test_measured_ceilings_refuse_a_calibration_from_another_device(tmp_path,
+                                                                    monkeypatch):
+    """Before this check, cli.measured_ceilings() loaded the committed H200
+    measured.yaml unconditionally. A sweep on any other GPU scored every row
+    against 4375 GB/s and 730 TFLOP/s it could not reach, and nothing noticed
+    until plot time, after the GPU hours were spent."""
+    from moe.bench import cli
+    from moe.bench import roofline as RL
+
+    (tmp_path / "measured.yaml").write_text(
+        "name: NVIDIA H200 (measured)\n"
+        "verified: true\n"
+        "source: calibrate_hardware.py\n"
+        "memory:\n  bandwidth_tb_s: 4.3756\n"
+        "compute_dense_tflops:\n  bf16: 729.99\n")
+    monkeypatch.setattr(RL, "HARDWARE_DIR", tmp_path)
+    monkeypatch.setattr(RL, "current_gpu_name", lambda: "NVIDIA A100-SXM4-80GB")
+
+    with pytest.raises(RL.HardwareMismatch, match="calibrate_hardware"):
+        cli.measured_ceilings()
+
+
+def test_measured_ceilings_are_empty_when_no_calibration_exists(tmp_path,
+                                                                monkeypatch):
+    """Absent calibration is not an error: the efficiency columns stay zero
+    rather than being quoted against a datasheet peak."""
+    from moe.bench import cli
+    from moe.bench import roofline as RL
+
+    monkeypatch.setattr(RL, "HARDWARE_DIR", tmp_path)
+    monkeypatch.setattr(RL, "current_gpu_name", lambda: "NVIDIA A100-SXM4-80GB")
+    assert cli.measured_ceilings() == {}

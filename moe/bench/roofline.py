@@ -15,6 +15,10 @@ from . import schema as SC
 HARDWARE_DIR = Path(__file__).parent / "hardware"
 
 
+class HardwareMismatch(RuntimeError):
+    """A calibration file describes a different GPU than the one attached."""
+
+
 class UnverifiedHardware(RuntimeError):
     pass
 
@@ -143,7 +147,7 @@ def for_device(gpu_name: str, tdp_w: float | None = None) -> str | None:
     """
     matched = []
     for stem in available_profiles():
-        if stem == "measured":
+        if is_measured_profile(stem):
             continue
         try:
             hw = load_hardware(stem, allow_unverified=True)
@@ -167,7 +171,7 @@ def ambiguous_for_device(gpu_name: str) -> list[str]:
     """Profiles that all match this device name. Non-empty means unresolvable."""
     matched = []
     for stem in available_profiles():
-        if stem == "measured":
+        if is_measured_profile(stem):
             continue
         try:
             hw = load_hardware(stem, allow_unverified=True)
@@ -178,27 +182,84 @@ def ambiguous_for_device(gpu_name: str) -> list[str]:
     return matched if len(matched) > 1 else []
 
 
-def load_measured() -> Hardware | None:
-    """Ceilings measured by scripts/calibrate_hardware.py, if it has been run.
+def measured_slug(gpu_name: str) -> str:
+    """Filename stem for this device's calibration.
 
-    That script writes measured.yaml in exactly load_hardware's schema, so this
-    is a one-line call rather than a second yaml parser. Returns None when the
-    calibration has not been run, so callers leave the efficiency columns empty
-    instead of quoting a datasheet peak.
+    One harness, one calibration per device. A single shared `measured.yaml`
+    meant calibrating on a second GPU overwrote the first, and a later re-plot
+    of the published sweep then scored it against the wrong roof.
     """
+    safe = "".join(c if c.isalnum() else "_" for c in gpu_name.lower())
+    while "__" in safe:
+        safe = safe.replace("__", "_")
+    return f"measured_{safe.strip('_')}"
+
+
+def is_measured_profile(stem: str) -> bool:
+    """Is this yaml a calibration of a machine rather than a datasheet?
+
+    `for_device` searches DATASHEET profiles. A measured file is this box's own
+    calibration, and its name is "<device> (measured)", which contains the
+    device name as a substring. Letting one into that search makes a device
+    ambiguous with itself the moment it is calibrated.
+    """
+    return stem == "measured" or stem.startswith("measured_")
+
+
+def current_gpu_name() -> str:
+    """torch's name for the attached GPU, or "" when there is no CUDA device."""
     try:
-        return load_hardware("measured")
-    except (FileNotFoundError, ValueError, KeyError, UnverifiedHardware):
-        return None
+        import torch
+        if not torch.cuda.is_available():
+            return ""
+        return torch.cuda.get_device_properties(0).name
+    except Exception:  # noqa: BLE001  - absent torch, driver error, no device
+        return ""
+
+
+def load_measured(gpu_name: str | None = None,
+                  directory: Path | None = None) -> Hardware | None:
+    """Ceilings measured by scripts/calibrate_hardware.py for THIS device.
+
+    calibrate_hardware.py writes its yaml in exactly load_hardware's schema, so
+    this is a lookup rather than a second parser. Returns None when no
+    calibration has been run, so callers leave the efficiency columns empty
+    instead of quoting a datasheet peak.
+
+    Prefers the per-device file. Falls back to a bare `measured.yaml` only when
+    it describes this device, and raises otherwise: scoring an A100 run against
+    a committed H200 calibration produces rows that look entirely plausible and
+    are wrong by the ratio of two machines' ceilings.
+    """
+    if gpu_name is None:
+        gpu_name = current_gpu_name()
+
+    names = [measured_slug(gpu_name)] if gpu_name else []
+    names.append("measured")
+    for name in names:
+        try:
+            hw = load_hardware(name, directory=directory)
+        except (FileNotFoundError, ValueError, KeyError, UnverifiedHardware):
+            continue
+        if device_matches(hw, gpu_name):
+            return hw
+        raise HardwareMismatch(
+            f"{name}.yaml was measured on {hw.name!r} but this machine reports "
+            f"{gpu_name!r}. Those ceilings are not this machine's, and every "
+            "efficiency column derived from them would be wrong by the ratio "
+            "of the two parts. Run:\n"
+            f"    python scripts/calibrate_hardware.py\n"
+            f"which writes {measured_slug(gpu_name)}.yaml for this device.")
+    return None
 
 
 def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
                achieved_flops_s: float) -> float:
     """Achieved FLOP/s as a fraction of what the roofline permits at this AI.
 
-    This is the honest efficiency number: a memory-bound kernel hitting 95% of
-    its roofline is excellent even at 4% of peak compute, and reporting it as
-    "4% of peak" would be misleading.
+    The denominator is the roof AT THIS INTENSITY, not peak compute. A
+    memory-bound kernel at 95% of its roofline is also at ~4% of peak compute,
+    and only the first of those two numbers says anything about the kernel.
 
     Direction of the modelling error, stated so a reader does not have to guess:
     the intensity comes from COMPULSORY traffic, so it is an upper bound on true

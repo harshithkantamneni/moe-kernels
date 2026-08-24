@@ -182,9 +182,12 @@ but nothing does it automatically. After a run worth keeping:
 bash scripts/publish_results.sh --label first-smoke
 ```
 
-That copies the run's CSVs and manifests into `results/published/<date>-<label>/`,
-includes the `measured.yaml` the efficiency columns were quoted against, writes a
-readable `SUMMARY.md`, commits, and pushes.
+That copies the run's CSVs and manifests into
+`results/published/<date>-<device>-<label>/`, includes the per-device calibration
+the efficiency columns were quoted against, writes a readable `SUMMARY.md`,
+commits, and pushes. The device comes from the rows' own `gpu_name` column, not
+from the machine you happen to be publishing from, so each GPU keeps a separate
+published arm off the one shared harness.
 
 `results/` is gitignored on purpose: raw runs are large, machine-specific, and
 regenerable. `results/published/` is tracked on purpose. Publishing is a
@@ -219,11 +222,14 @@ python scripts/calibrate_hardware.py
 ```
 
 STREAM-style copy, triad and write on buffers far larger than L2, plus a large
-square BF16 GEMM through cuBLAS. Writes `moe/bench/hardware/measured.yaml`,
-which `run_all.sh` creates automatically on a pod that lacks it. Efficiency is
-then quoted against what this machine actually delivers rather than a datasheet
-peak it will never reach, which is both fairer to your kernel and far easier to
-defend in public. Expect roughly 75-90% of spec bandwidth and 70-85% of spec
+square BF16 GEMM through cuBLAS. Writes
+`moe/bench/hardware/measured_<device>.yaml`, which `run_all.sh` creates
+automatically on a pod that lacks it. One file per device, so calibrating a
+second GPU does not overwrite the first and an earlier sweep can still be
+re-plotted against its own roof. A sweep refuses to start against a calibration
+measured on a different part. Efficiency is then quoted against what this
+machine actually delivers rather than a datasheet peak it will never reach,
+which is both fairer to your kernel and far easier to defend in public. Expect roughly 75-90% of spec bandwidth and 70-85% of spec
 dense BF16; if you measure above spec, your buffer fit in cache and the number
 is not a DRAM measurement.
 

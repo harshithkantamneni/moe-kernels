@@ -184,3 +184,82 @@ def test_the_datasheet_figure_is_below_the_derived_pin_rate():
     spec = RL.load_hardware("h200_sxm").bandwidth_bytes_s / 1e9
     assert spec < pin
     assert 100 * spec / pin == pytest.approx(97.6, abs=0.2)
+
+
+# --- device-aware calibration -------------------------------------------------
+#
+# One harness, one calibration file per device. `measured.yaml` was a single
+# committed file, so calibrating on a second GPU overwrote the first and any
+# later re-plot of the published sweep silently used the wrong roof.
+
+MEASURED_A100 = """
+name: NVIDIA A100-SXM4-80GB (measured)
+verified: true
+source: measured on this machine by scripts/calibrate_hardware.py
+memory:
+  bandwidth_tb_s: 1.935
+compute_dense_tflops:
+  bf16: 267.1
+"""
+
+MEASURED_H200 = """
+name: NVIDIA H200 (measured)
+verified: true
+source: measured on this machine by scripts/calibrate_hardware.py
+memory:
+  bandwidth_tb_s: 4.3756
+compute_dense_tflops:
+  bf16: 729.99
+"""
+
+
+def test_measured_slug_is_a_filesystem_safe_per_device_name():
+    assert RL.measured_slug("NVIDIA H200") == "measured_nvidia_h200"
+    assert RL.measured_slug("NVIDIA A100-SXM4-80GB") == "measured_nvidia_a100_sxm4_80gb"
+
+
+def test_measured_prefers_the_file_for_this_device(tmp_path):
+    (tmp_path / "measured_nvidia_a100_sxm4_80gb.yaml").write_text(MEASURED_A100)
+    (tmp_path / "measured.yaml").write_text(MEASURED_H200)
+    hw = RL.load_measured("NVIDIA A100-SXM4-80GB", directory=tmp_path)
+    assert hw is not None
+    assert "A100" in hw.name, "picked the H200 file for an A100 run"
+
+
+def test_measured_refuses_a_calibration_from_another_device(tmp_path):
+    """The gap that would have tainted a whole sweep: measured.yaml ships with
+    H200 ceilings, so an A100 run would have been scored against 4375 GB/s."""
+    (tmp_path / "measured.yaml").write_text(MEASURED_H200)
+    with pytest.raises(RL.HardwareMismatch, match="A100"):
+        RL.load_measured("NVIDIA A100-SXM4-80GB", directory=tmp_path)
+
+
+def test_measured_accepts_the_bare_file_when_it_matches_this_device(tmp_path):
+    (tmp_path / "measured.yaml").write_text(MEASURED_H200)
+    hw = RL.load_measured("NVIDIA H200", directory=tmp_path)
+    assert hw is not None and "H200" in hw.name
+
+
+def test_measured_is_none_when_no_calibration_has_been_run(tmp_path):
+    assert RL.load_measured("NVIDIA H200", directory=tmp_path) is None
+
+
+def test_per_device_calibrations_are_not_datasheet_profiles(tmp_path):
+    """`for_device` picks a DATASHEET profile. A measured file is this machine's
+    own calibration, not a spec sheet, and letting one into that search makes
+    every device ambiguous with itself the moment it is calibrated."""
+    (tmp_path / "h200_sxm.yaml").write_text(
+        "name: NVIDIA H200 SXM\nverified: true\nsource: nvidia.com\n"
+        "tdp_w: 700\nmemory:\n  bandwidth_tb_s: 4.8\n"
+        "compute_dense_tflops:\n  bf16: 989.5\n")
+    (tmp_path / "measured_nvidia_h200.yaml").write_text(MEASURED_H200)
+    import moe.bench.roofline as _RL
+    old, _RL.HARDWARE_DIR = _RL.HARDWARE_DIR, tmp_path
+    try:
+        # torch reports an H200 SXM as plain "NVIDIA H200", which is a substring
+        # of "NVIDIA H200 (measured)". Without an explicit skip, calibrating the
+        # box makes its own datasheet profile unresolvable.
+        assert RL.for_device("NVIDIA H200", tdp_w=700.0) == "h200_sxm"
+        assert RL.ambiguous_for_device("NVIDIA H200") == []
+    finally:
+        _RL.HARDWARE_DIR = old
