@@ -127,7 +127,7 @@ weights-only calculation omits and that traffic scales with T while weights do n
 deviation is one-signed on all 700 timed rows, which is the signature of exactly that
 missing term rather than an error.
 
-## 3. Padding costs weight reads, not MACs, and this sweep cannot fully separate them
+## 3. Padding is not free, and nothing in this sweep can say what it costs
 
 Tile efficiency at `BLOCK_M=128` runs 0.0078 to 0.125 at T <= 64, 0.0078 to 0.500 at
 T <= 256, and 0.0078 to 0.955 over the whole sweep. (An earlier version of this document
@@ -161,17 +161,51 @@ moves independently. Mixtral pins all 8 experts active from T=64 up:
 
 Speed tracks tile efficiency close to proportionally. So padding is **not** free, and
 this is the same effect section 1 called tile alignment: with active saturated, what is
-left to move the time is where the group boundaries fall relative to `BLOCK_M`. Note the
-regime split inside this table. The T=256 block sits at 64 rows per active expert and is
-memory bound, while the T=4096 block sits at 1024 and is compute bound, so the two halves
-cannot be attributing the cost to the same thing. The mechanism section 2 offers is the
-M-tile weight re-read, not wasted MACs:
-an extra M-tile costs another full pass over that expert's weight matrix. Padded
-arithmetic intensity is exactly `BLOCK_M` = 128 FLOP/byte regardless of model geometry,
-below the measured 166 ridge, so even a kernel that genuinely computed every padding row
-would still be memory bound. **Separating "wasted MACs" from "wasted weight reads"
-requires sweeping `BLOCK_M`, which needs a kernel with `BLOCK_M` as a knob.** That is
-the first experiment worth running, not an afterthought.
+left to move the time is where the group boundaries fall relative to `BLOCK_M`.
+
+**But an earlier version of this section then named the mechanism, and it had no right
+to.** It said the cost is the M-tile weight re-read rather than wasted MACs. Those two
+make the *same prediction here*, and not approximately:
+
+```
+wasted MACs      -> padded rows = M_tiles * BLOCK_M
+wasted weight reads -> traffic  = M_tiles * W
+```
+
+Both are linear in `M_tiles`, so at fixed model and stage they are one variable scaled by
+the constant `W / BLOCK_M`. Predicting the table from either gives an identical column:
+
+| T | routing | eff@128 | padded rows vs uniform | traffic vs uniform | ms vs uniform |
+|---:|---|---:|---:|---:|---:|
+| 256 | dirichlet:0.3 | 0.400 | 1.250x | 1.250x | 1.211x |
+| 256 | zipf:1.2 | 0.444 | 1.125x | 1.125x | 1.170x |
+| 256 | hot:0.5 | 0.444 | 1.125x | 1.125x | 1.110x |
+| 4096 | zipf:1.2 | 0.941 | 0.986x | 0.986x | 0.984x |
+| 4096 | hot:0.5 | 0.955 | 0.971x | 0.971x | 0.945x |
+
+This is the same shape of error as the circular argument in the first version of this
+document: two quantities that are the same variable, presented as a test between them.
+
+The regimes make it worse rather than better. The T=256 block sits at 64 rows per active
+expert and is memory bound at the mean, though its largest expert runs 77 to 209 rows and
+so straddles the 166 ridge; the T=4096 block sits at 1024 rows and is entirely compute
+bound. The two halves agreeing is not corroboration, because in one of them `M_tiles`
+tracks arithmetic and in the other it tracks bytes.
+
+What survives: padding costs something, and its size is roughly the tile-efficiency
+ratio, moving a little less than predicted at T=256 and a little more at T=4096.
+
+**Only a `BLOCK_M` sweep separates the two, and that is exactly why it works.** Changing
+`BLOCK_M` breaks the proportionality that makes them indistinguishable here: padded rows
+go as `M_tiles * BLOCK_M` while traffic goes as `M_tiles * W`, so their ratio `W/BLOCK_M`
+stops being a constant and the two models finally predict different columns. The incumbent
+cannot run that experiment because its `BLOCK_M` is not a knob. That is the first
+experiment worth running, not an afterthought.
+
+One more thing the sweep does settle, which is not about the mechanism: padded arithmetic
+intensity is exactly `BLOCK_M` = 128 FLOP/byte regardless of model geometry, below the
+measured 166 ridge. So even a kernel that genuinely computed every padding row would still
+be memory bound while it did so.
 
 ## 4. Where the headroom is, after accounting for tile re-reads
 
@@ -272,8 +306,11 @@ and compute-bound rows; split by regime the two models tie on the 180 memory-bou
 the published 63% -> 21% gap turns out to have come entirely from 30 compute-bound rows
 where a traffic model has no business being fitted. Section 1 read as a general result when
 it is a small-batch one: skew reverses sign once uniform routing saturates the experts, at
-`T` of order `E/k`. And the closing problem statement counted `M_tiles`, which the sweep
+`T` of order `E/k`. The closing problem statement counted `M_tiles`, which the sweep
 only pins down in the decode regime where it is identical to `active_experts`; it now counts
-the latter. The numbers were re-derived from the raw CSV. Two of the three load-bearing
+the latter. And section 3 named a mechanism it could not test: wasted MACs and wasted
+weight reads are both linear in `M_tiles`, so at fixed model and stage they are one
+variable, and the table offered as evidence between them predicts an identical column for
+each. That is the same circularity the previous revision fixed elsewhere in this file. The numbers were re-derived from the raw CSV. Two of the three load-bearing
 conclusions survive unchanged (graphs and L2 are dead ends, the decode gap is 1.35-2.31x);
 "skew helps" is now scoped to below saturation.*

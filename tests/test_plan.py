@@ -116,3 +116,19 @@ def test_every_shipped_profile_plans_cleanly(name):
     p = PR.plan(PR.get(name), impl_filter=REF_IMPLS, include_reference=True)
     assert p.problems == (), p.problems
     assert p.planned > 0
+
+
+def test_profile_cell_isolates_one_launch_for_counter_profiling():
+    """`ncu` profiles a launch, not a sweep. The two open questions each need
+    exactly one cell, one routing, one timing mode, so that --launch-count 1
+    lands on the kernel the question is about rather than whichever cell the
+    matrix happened to order first."""
+    p = PR.get("profile-cell")
+    assert p.l2_modes == (True,), "cold only: two modes means two launches"
+    assert p.graph_modes == (False,), "eager only: graph replay is a dead end"
+    assert len(p.routings) == 1 and p.routings[0].kind == "uniform"
+    assert p.models == ("deepseek-v3",)
+    assert p.trials == 1
+    plan = PR.plan(p, env="base")
+    assert plan.specs == 1, "more than one spec means ncu cannot pick the cell"
+    assert plan.modes == 1, "one timing mode, so --launch-count 1 is unambiguous"

@@ -68,6 +68,22 @@ PROFILES: dict[str, Profile] = {
         routings=SKEW_SWEEP,
         notes="the working sweep: decode through prefill, uniform through severe skew",
     ),
+    # Counter profiling wants ONE launch, not a matrix: `ncu --launch-count 1`
+    # takes whichever kernel runs first, so the cell has to be the only cell.
+    # Token count is supplied per question with --tokens.
+    "profile-cell": Profile(
+        name="profile-cell",
+        models=("deepseek-v3",),
+        token_counts=(4096,),
+        dtypes=("bf16",),
+        routings=(RoutingSpec("uniform"),),
+        l2_modes=(True,),
+        graph_modes=(False,),
+        warmup=5,
+        trials=1,
+        iters=1,
+        notes="one cell, one launch: the shape ncu can read a counter off",
+    ),
     "full": Profile(
         name="full",
         models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v3"),

@@ -24,7 +24,9 @@ Under skewed routing it stops being. Arithmetic intensity works out to
 rows-per-expert, so on this H200 an expert crosses the roofline ridge at ~166
 rows, and a skewed launch contains experts on both sides of it at once: at
 `zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
-rows while 221 are memory-bound. Under uniform routing that mix never occurs at
+rows while 221 are memory-bound. That is one draw, and a typical one: over 40
+resamples of the same distribution the split runs 31-36 compute-bound experts
+holding 70.5-73.5% of the rows. Under uniform routing the mix never occurs at
 any batch size measured.
 
 So: measure on real routing, on the hardware, and see where it actually breaks.
