@@ -2,9 +2,9 @@
 
 FLOPs are tiling-invariant. Bytes are not: a span that fuses up_gemm with act
 never materialises h_up, so neither the store nor the reload appears in the
-model. Arithmetic intensity is therefore a property of the pipeline, which is
-what makes "should this fusion help here" a roofline prediction you can check
-against measurement instead of a claim.
+model. Arithmetic intensity is therefore a property of the pipeline, which turns
+"should this fusion help here" into a roofline prediction that a measured row
+can confirm or contradict.
 
 Everything here is pure arithmetic over the contract declarations in stages.py.
 No torch, no CUDA, testable on a laptop.

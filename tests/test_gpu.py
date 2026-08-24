@@ -328,8 +328,9 @@ def test_read_bandwidth_is_measured_and_not_optimised_away():
 
 @pytest.mark.slow
 def test_calibration_names_its_ceiling_and_records_every_pattern():
-    """max() across patterns was indefensible: it reported whichever pattern the
-    hardware liked best. The choice must be explicit and the alternatives kept."""
+    """max() across patterns reported whichever pattern the hardware liked best,
+    which is a property of the benchmark. The choice must be explicit and the
+    alternatives kept."""
     from moe.bench.calibrate import calibrate
     cal = calibrate(target_bytes=1 << 30, gemm_n=2048, ceiling="triad",
                     settle=False)
@@ -420,7 +421,8 @@ def test_compute_ceiling_is_normalised_to_the_clock_it_was_measured_at():
     """The datasheet peak assumes a boost clock the part cannot hold under
     sustained dense tensor load. Measured on H200 SXM: it settles near 1455 MHz,
     where the silicon can do ~787 TFLOP/s, and cuBLAS reaches ~90% of that.
-    Against the 989.5 datasheet the same result reads 71.5% and looks poor."""
+    Against the 989.5 datasheet the same result reads 71.5%, and the difference
+    is the clock rather than the library."""
     from moe.bench.calibrate import calibrate, sustained_peak_tflops
     cal = calibrate(target_bytes=1 << 29, gemm_n=4096, settle=False)
     assert cal.gemm_clock_mhz > 0, "the GEMM's clock must be recorded"

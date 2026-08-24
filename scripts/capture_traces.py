@@ -18,8 +18,8 @@ Which models can be captured on ONE H200 (141 GB), bf16:
                                 parametric routing and say so.
 
 Decode is the interesting phase: single-token steps with many experts is the
-memory-bound weight-loading regime this project targets, and decode-time routing
-traces are what almost nobody publishes.
+memory-bound weight-loading regime this project targets, and a captured decode
+histogram is the input the parametric distributions are standing in for.
 """
 from __future__ import annotations
 

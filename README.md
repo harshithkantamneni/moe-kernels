@@ -13,15 +13,19 @@ whole tile of a single global `BLOCK_M`. That is where the open problems are.
 This repository exists to find a specific weakness by measurement, then attack
 it. The measurement half is built. The kernels are being written.
 
-**The gap this is aimed at.** Across vLLM, SGLang, PyTorch's persistent
-cache-aware grouped GEMM, MegaBlocks, and OpenAI's `triton_kernels`, no
-implementation publishes a **skewed-routing sweep**. Every published grouped-GEMM
-number is measured on balanced or synthetic routing. Meanwhile the padding tax
-is `E * (BLOCK_M - 1)` rows: at 256 experts with `BLOCK_M=64` that is 16,128
-phantom rows, which at 2048 real rows is 8x the actual work. SGLang's
-`tuning_fused_moe_triton_sep.py` is the only tuner in the field that measures
-against captured routing, and even it emits one global `BLOCK_M` shared by every
-expert. Nobody varies tile height per expert under skew.
+**What this is aimed at.** Every MoE grouped-GEMM implementation I looked at
+selects its tile height from the *mean* tokens per expert: Inductor gates on
+`m_avg = m // g`, `triton_kernels` derives from `expected_slice_size`,
+MegaBlocks fixes `BLOCK_M = 128`, and vLLM and SGLang ship configs keyed by
+batch size with a single global `BLOCK_M`. Under balanced routing the mean is
+the right statistic, since every expert is the mean.
+
+Under skewed routing it stops being. Arithmetic intensity works out to
+rows-per-expert, so on this H200 an expert crosses the roofline ridge at ~166
+rows, and a skewed launch contains experts on both sides of it at once: at
+`zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
+rows while 221 are memory-bound. Under uniform routing that mix never occurs at
+any batch size measured.
 
 So: measure on real routing, on the hardware, and see where it actually breaks.
 
@@ -103,14 +107,14 @@ numbers omit them and are therefore not comparable to each other:
 
 ## Routing traces
 
-The differentiator. Stored as per-layer expert-count histograms, not token logs:
+Stored as per-layer expert-count histograms, not token logs:
 only the multiset of group sizes affects the grouped GEMM, so a histogram is
 sufficient, it is kilobytes, and it can live in git. Replay reconstructs a
 concrete top-k assignment whose histogram matches the capture **exactly**.
 
 Capture runs at both prefill and **decode**. Decode is single-token steps, which
-is the memory-bound many-expert regime this project targets, and decode-time
-routing traces are what almost nobody publishes.
+is the memory-bound many-expert regime this project targets. A captured decode
+histogram is what the parametric distributions in the sweep stand in for.
 
 **DeepSeek-V3 routing is not captured and is not claimed.** At 1369 GB in bf16
 it does not fit on one H200, or five. Its geometry is benchmarked with

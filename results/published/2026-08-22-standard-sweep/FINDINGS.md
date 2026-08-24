@@ -46,30 +46,67 @@ not order the times. Active expert count orders them perfectly: 49 < 68 < 88 < 9
 maps onto 0.94 < 1.31 < 1.70 < 1.79 < 1.91 ms. That is a rank correlation on one cell of
 five points (null probability 1/120), not a law.
 
-## 2. What orders them is weight traffic, and the unit is the M-tile
+**This is a small-batch result and it reverses.** What orders the times is active-expert
+count, and a skewed routing moves that count in either direction. At qwen2 T=16,
+`dirichlet:0.3` activates 33 of 64 and runs 0.650x, while `hot:0.5` activates 56 and runs
+**1.074x**, slower than uniform, in the same cell. Concentration on one expert is not the
+same thing as fewer experts.
+
+Once uniform routing itself activates every expert, no routing can reduce the count and
+the lever is gone. That happens at `T` of order `E/k`: mixtral (E/k=4) at T=16, qwen2 (8)
+at T=64, deepseek (32) at T=256. Above it, the routings that tie uniform on active count
+split both ways:
+
+| cell | routings tied with uniform on active experts | spread vs uniform |
+|---|---|---|
+| mixtral T=256 | all four, 8 of 8 | 0.995x to **1.211x** |
+| qwen2 T=256 | three of four, 64 of 64 | 1.003x to **1.052x** |
+| deepseek T=1024 | three of four, 256 of 256 | 1.032x to **1.096x** |
+| deepseek T=4096 | three of four, 256 of 256 | **0.796x** to 1.076x |
+
+What is left once the count is tied is tile alignment. deepseek at T=4096 is the clearest
+case: uniform lands on exactly 128 rows per expert, one whole `BLOCK_M`, so `hot:0.5`
+beats it at 0.796x while `zipf:1.2` loses at 1.076x on the same 256 active experts. Read
+"skew is fast" as "skew is fast while it keeps experts idle".
+
+## 2. What orders them is weight traffic; which unit it counts in is not resolved
 
 The first version of this document claimed the explanatory variable was *active expert
-count*. That is right in the decode regime and wrong in general, and the difference
-matters. A tiled GEMM reads its weight matrix once per **M-tile**, not once per expert:
-for output tile `(m, n)` it reads `B[:, n]`, so summing over the `M/BLOCK_M` by
-`N/BLOCK_N` tile grid, `B` is streamed `M/BLOCK_M` times. When every expert holds fewer
-rows than `BLOCK_M`, M-tiles and active experts are the same number, which is why the
-simpler model appeared to work.
+count*. The second replaced it with the **M-tile**, on the reasoning that a tiled GEMM
+reads its weight matrix once per M-tile: for output tile `(m, n)` it reads `B[:, n]`, so
+summing over the `M/BLOCK_M` by `N/BLOCK_N` tile grid, `B` is streamed `M/BLOCK_M` times.
+When every expert holds fewer rows than `BLOCK_M`, M-tiles and active experts are the
+same number, which is why the simpler model appeared to work.
 
-Testing both against the measured times, as `measured_ms / (predicted_bytes / 4390.29 GB/s)`
-(a correct model gives a *constant* ratio, so spread is the score):
+**That replacement was decided on a contaminated comparison.** Scoring each model as
+`measured_ms / (predicted_bytes / 4390.29 GB/s)` (a correct model gives a *constant*
+ratio, so spread is the score) over the 210 L2-cold eager rows pools two regimes that
+answer different questions. Splitting them by `rows / active_experts` against the
+measured 166 FLOP/byte ridge:
 
-| traffic model | mean ratio | CV, all T | CV, T >= 256 |
-|---|---:|---:|---:|
-| bytes = active_experts x W | 2.11x | 63.0% | 70.6% |
-| bytes = M_tiles x W, BLOCK_M=64 | 1.35x | 35.5% | 39.3% |
-| bytes = M_tiles x W, **BLOCK_M=128** | **1.49x** | **21.1%** | **18.3%** |
+| traffic model | mean, all 210 | CV, all 210 | CV, 180 memory-bound | CV, 30 compute-bound |
+|---|---:|---:|---:|---:|
+| bytes = active_experts x W | 2.11x | 63.1% | **14.3%** | 44.2% |
+| bytes = M_tiles x W, BLOCK_M=64 | 1.35x | 35.6% | 24.0% | 10.7% |
+| bytes = M_tiles x W, **BLOCK_M=128** | 1.49x | 21.1% | **14.5%** | 7.2% |
 
-`BLOCK_M=64` is not merely a worse fit, it is *unphysical*: at T >= 256 its mean ratio is
-0.903, which would have the kernel moving bytes faster than the measured ceiling. So the
-timing alone bounds the incumbent's effective M-tile at 128 rows, which is a fact `ncu`
-would normally be needed to establish. Per model the BLOCK_M=128 fit is 1.48x at 12.7% CV
-(deepseek), 1.53x at 22.7% (qwen2), 1.47x at 25.5% (mixtral).
+**On the memory-bound rows the two models tie**: 1.67x at 14.3% CV counting active
+experts, 1.59x at 14.5% counting M-tiles. The whole of the published 63% -> 21% gap came
+from the 30 compute-bound rows, and on those an M-tile traffic model reads **0.93x**,
+below 1, which would have the kernel moving bytes faster than the measured read ceiling.
+A traffic model that beats the ceiling is not describing traffic. Above the ridge the
+time is set by arithmetic, and M-tiles track arithmetic there because padded MACs are
+exactly what M-tiles count, so those rows fit well for a reason that has nothing to do
+with bytes. With them removed, this sweep does not separate the two units.
+
+**`BLOCK_M=128` survives the split, on clean rows.** 54 of the 180 memory-bound rows have
+an expert crossing a 64-row boundary, so the two tile counts differ and the row
+discriminates. On those 54, `BLOCK_M=64` puts **20 rows below the measured read ceiling**
+(minimum 0.67x), which is unphysical, at 23.6% CV; `BLOCK_M=128` puts **none** below it
+(minimum 1.25x) at **5.6%** CV. So the timing alone still bounds the incumbent's effective
+M-tile at 128 rows, which is a fact `ncu` would normally be needed to establish. Per model,
+over memory-bound rows, the `BLOCK_M=128` fit is 1.48x at 12.7% CV (deepseek), 1.63x at
+16.6% (qwen2), 1.68x at 10.1% (mixtral).
 
 Absolute scale: one DeepSeek expert's `w1` is 7168 x 4096 x 2 B = 58.72 MB, and the
 measured cost is 19.21 us per active expert at T=16, so 58,720,256 / 19.21 us =
@@ -122,8 +159,13 @@ moves independently. Mixtral pins all 8 experts active from T=64 up:
 | 4096 | zipf:1.2 | 0.941 | 3.1801 | 1.015 | 1.016 |
 | 4096 | hot:0.5 | 0.955 | 3.0515 | 1.030 | 1.059 |
 
-Speed tracks tile efficiency close to proportionally. So padding is **not** free. But the
-mechanism the data supports is the M-tile weight re-read of section 2, not wasted MACs:
+Speed tracks tile efficiency close to proportionally. So padding is **not** free, and
+this is the same effect section 1 called tile alignment: with active saturated, what is
+left to move the time is where the group boundaries fall relative to `BLOCK_M`. Note the
+regime split inside this table. The T=256 block sits at 64 rows per active expert and is
+memory bound, while the T=4096 block sits at 1024 and is compute bound, so the two halves
+cannot be attributing the cost to the same thing. The mechanism section 2 offers is the
+M-tile weight re-read, not wasted MACs:
 an extra M-tile costs another full pass over that expert's weight matrix. Padded
 arithmetic intensity is exactly `BLOCK_M` = 128 FLOP/byte regardless of model geometry,
 below the measured 166 ridge, so even a kernel that genuinely computed every padding row
@@ -203,8 +245,16 @@ the gate, only that nothing needed it.
 
 The problem statement:
 
-> Move `M_tiles x expert_weight_bytes` from HBM at closer to 4390 GB/s than the 43-74%
-> the incumbent achieves, while M per group is 1-64 rows.
+> Move `active_experts x expert_weight_bytes` from HBM at closer to 4390 GB/s than the
+> 43-74% the incumbent achieves, while M per group is 1-64 rows.
+
+`active_experts`, not `M_tiles`, and in this regime the choice is free: across all 120
+rows at T <= 64 no expert holds more than 64 rows, so every active expert is exactly one
+M-tile at any `BLOCK_M >= 64` and the two counts are the same number, zero violations. `active_experts` is the one that stays physical when the regime changes,
+since it counts weight matrices that must reach the SMs, while `M_tiles` counts a
+scheduling decision the kernel is free to make differently. Section 2 is why the
+distinction is stated rather than assumed: outside this regime the sweep does not
+resolve which of the two the traffic actually scales with.
 
 And the first experiment the incumbent cannot run, because its `BLOCK_M` is not a knob:
 sweep `BLOCK_M` at fixed routing and separate wasted MACs from wasted weight reads. Every
@@ -215,6 +265,15 @@ number above is consistent with both, and they call for different kernels.
 *Corrections: an earlier version of this file overstated the byte-model agreement (2% vs
 0.8% at T<=64 and 27% overall), understated tile efficiency's upper bound by 8x, presented
 a six-cell spread as an eighteen-cell result, called the cold/warm ratio "1.00 at every
-point" when it is 0.96-1.01, and argued from a circular decorrelation in section 3. The
-numbers were re-derived from the raw CSV; the three load-bearing conclusions (skew helps,
-graphs and L2 are dead ends, the decode gap is 1.35-2.31x) survived unchanged.*
+point" when it is 0.96-1.01, and argued from a circular decorrelation in section 3.*
+
+*This revision fixes three more. The section 2 traffic-model comparison pooled memory-bound
+and compute-bound rows; split by regime the two models tie on the 180 memory-bound rows and
+the published 63% -> 21% gap turns out to have come entirely from 30 compute-bound rows
+where a traffic model has no business being fitted. Section 1 read as a general result when
+it is a small-batch one: skew reverses sign once uniform routing saturates the experts, at
+`T` of order `E/k`. And the closing problem statement counted `M_tiles`, which the sweep
+only pins down in the decode regime where it is identical to `active_experts`; it now counts
+the latter. The numbers were re-derived from the raw CSV. Two of the three load-bearing
+conclusions survive unchanged (graphs and L2 are dead ends, the decode gap is 1.35-2.31x);
+"skew helps" is now scoped to below saturation.*

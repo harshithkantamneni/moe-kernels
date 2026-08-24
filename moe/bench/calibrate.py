@@ -7,18 +7,17 @@ directly.
 
 What can be measured without any counter access is the machine's *achievable*
 ceilings, using ordinary kernels and a clock. That turns the roofline from a
-datasheet claim into a measured one, which is strictly better: a kernel at 92%
-of achievable bandwidth is a fact about your kernel, while the same number
-against a spec peak silently blames your kernel for the 10-20% the hardware was
-never going to give you.
+datasheet claim into a measured one. 92% of achievable bandwidth is a statement
+about the kernel; 92% of a spec peak also carries whatever gap the part was
+never going to close, and afterwards the two cannot be told apart.
 
 WHICH BANDWIDTH NUMBER IS "THE" BANDWIDTH
 -----------------------------------------
 There isn't one. Read, write, copy and triad all measure real bandwidth and all
 give different answers, because reads, writes and mixed traffic hit DRAM
-differently. An earlier version of this file took `max()` across patterns, which
-is indefensible: it reports whichever pattern the hardware happens to like best,
-which is a property of the benchmark rather than of the workload.
+differently. An earlier version of this file took `max()` across patterns. That
+reports whichever pattern the hardware happens to like best, which is a property
+of the benchmark rather than of the workload.
 
 So every pattern is measured and recorded, and one is *named* as the ceiling
 with the reason written down. The default is `triad`, the canonical STREAM
@@ -142,8 +141,9 @@ class Calibration:
     def gemm_efficiency_pct(self) -> float | None:
         """cuBLAS as a fraction of what this clock can deliver.
 
-        The honest efficiency figure. Measuring against the datasheet instead
-        charges the kernel for a boost clock the part cannot sustain.
+        The denominator is the clock the GEMM was measured at. Against the
+        datasheet instead, the figure also carries a boost clock the part does
+        not sustain, which is not a property of the kernel.
         """
         peak = self.sustained_peak_tflops
         return round(100.0 * self.achieved_bf16_tflops / peak, 1) if peak else None
@@ -222,8 +222,9 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
                       l2_flush: bool = True) -> list[BandwidthResult]:
     """STREAM-style patterns on buffers far larger than L2.
 
-    All four are measured because they genuinely differ, and reporting only one
-    hides that. Byte counts are the compulsory traffic each pattern must move:
+    All four are measured because they genuinely differ, and a single figure
+    would not show that. Byte counts are the compulsory traffic each pattern
+    must move:
 
       read   1N   a full reduction; reads every element, writes one scalar
       write  1N   a fill; writes every element, reads none
@@ -299,9 +300,9 @@ def sustained_peak_tflops(sm_clock_mhz: float) -> float | None:
     The datasheet peak assumes a clock the part cannot hold under sustained
     dense tensor load. Measured on an H200 SXM at 700 W: the clock settles at
     ~1455 MHz under continuous BF16 GEMMs, not the 1830 MHz the 989.5 TFLOP/s
-    headline implies. Against the datasheet, cuBLAS then reads 71.5% and looks
-    poor; against what 1455 MHz can actually deliver it reads ~90%, which is the
-    honest number and is the whole reason this file measures rather than quotes.
+    headline implies. Against the datasheet cuBLAS reads 71.5%; against what
+    1455 MHz can deliver it reads ~90%. That 18 point difference is the clock,
+    not the library, which is why this file records the clock it measured at.
     """
     import torch
 
