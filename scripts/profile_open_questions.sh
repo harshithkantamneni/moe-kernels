@@ -60,13 +60,24 @@ mkdir -p "$OUT"
 #   MOE_BASE_TORCH='torch==2.13.0' \
 #   MOE_TORCH_INDEX='https://download.pytorch.org/whl/cu130' \
 #     bash scripts/setup_runpod.sh base
-WANT_TORCH="$(python - <<'PY'
+# Same convention as run_all.sh. Bare `python` on a RunPod pod is the image's
+# torch (2.8 on runpod-torch-v280), not the pinned venv, so resolving it here is
+# what makes the version guard below check the right interpreter instead of
+# refusing a correctly-pinned workspace.
+WORKSPACE="${WORKSPACE:-/workspace}"
+VENVS="${MOE_VENV_ROOT:-$WORKSPACE/venvs}"
+PY="${MOE_PYTHON:-$VENVS/base/bin/python}"
+[[ -x "$PY" ]] || PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.venv/bin/python"
+[[ -x "$PY" ]] || PY="python3"
+echo "[python] $PY"
+
+WANT_TORCH="$("$PY" - <<'PY'
 import csv, glob
 rows = [next(csv.DictReader(open(p))) for p in sorted(glob.glob("results/published/*/merged.csv"))]
 print(rows[-1]["torch_version"] if rows else "")
 PY
 )"
-GOT_TORCH="$(python -c 'import torch; print(torch.__version__)' 2>/dev/null || echo none)"
+GOT_TORCH="$("$PY" -c 'import torch; print(torch.__version__)' 2>/dev/null || echo none)"
 echo "[torch] published=$WANT_TORCH  here=$GOT_TORCH"
 if [[ -n "$WANT_TORCH" && "$GOT_TORCH" != "$WANT_TORCH" ]]; then
   if [[ "${MOE_ALLOW_TORCH_MISMATCH:-0}" == "1" ]]; then
@@ -102,7 +113,7 @@ NCU="${NCU:-$(command -v ncu)}"
 # wrong kernel. Token count is the only thing that varies between the two
 # questions. `--groups baselines` keeps the reference python loop out.
 cell() {  # tokens
-  echo python -m moe.bench.cli --profile profile-cell --tokens "$1" \
+  echo "$PY" -m moe.bench.cli --profile profile-cell --tokens "$1" \
     --groups baselines --impl torch_grouped_mm_up --out-dir "$OUT/rows"
 }
 
