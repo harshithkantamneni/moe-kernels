@@ -143,3 +143,32 @@ def test_supported_architecture_has_no_complaint():
     from moe.baselines.torch_grouped_mm import grouped_mm_support
 
     assert grouped_mm_support((9, 0)).reason == ""
+
+
+def test_baseline_declines_an_architecture_without_the_cutlass_kernel(monkeypatch):
+    """The guard has to be WIRED, not merely available. Unwired, a sweep on an
+    A100 benchmarks whatever torch falls back to and writes rows under the same
+    impl name as the published H200 rows."""
+    from moe.baselines import torch_grouped_mm as B
+    from moe.spec import MODEL_CONFIGS, BenchSpec
+
+    spec = BenchSpec(MODEL_CONFIGS["toy"], num_tokens=8)
+    span = B.TorchGroupedMMUp()
+
+    monkeypatch.setattr(B, "_device_support",
+                        lambda: B.GroupedMMSupport(False, "sm_80 has no such kernel"))
+    assert not span.supports(spec)
+    assert "sm_80" in span.why_unsupported(spec)
+
+    monkeypatch.setattr(B, "_device_support", lambda: B.GroupedMMSupport(True))
+    assert span.supports(spec)
+
+
+def test_baseline_still_plans_off_device(monkeypatch):
+    """--dry-run runs on a laptop with no CUDA. An unknown capability must not
+    silently empty the matrix; the plan is built before you rent anything."""
+    from moe.baselines import torch_grouped_mm as B
+    from moe.spec import MODEL_CONFIGS, BenchSpec
+
+    monkeypatch.setattr(B, "_device_support", lambda: None)   # no CUDA device
+    assert B.TorchGroupedMMUp().supports(BenchSpec(MODEL_CONFIGS["toy"], num_tokens=8))

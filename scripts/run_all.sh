@@ -89,7 +89,21 @@ fi
 
 # Nsight Compute cannot run on a rented pod (ERR_NVGPUCTRPERM), so the roofline
 # would otherwise rest on a datasheet peak. Measure the real ceilings once.
-if ! compgen -G "moe/bench/hardware/measured_*.yaml" >/dev/null; then
+#
+# Ask the harness, rather than globbing. A glob for measured_*.yaml matches a
+# calibration committed for a DIFFERENT device: on an H100 the repo's
+# measured_nvidia_h200.yaml satisfied it, the gate was skipped, and the sweep
+# then ran with no ceilings at all and silently empty efficiency columns.
+# load_measured() is the same resolution the sweep itself uses, so the gate and
+# the run cannot disagree about whether this machine is calibrated.
+if ! "$PY" -c "
+import sys
+from moe.bench.roofline import HardwareMismatch, load_measured
+try:
+    sys.exit(0 if load_measured() is not None else 1)
+except HardwareMismatch:
+    sys.exit(1)
+" 2>/dev/null; then
   log "calibrating achievable bandwidth and BF16 (once per pod type)"
   "$PY" scripts/calibrate_hardware.py || \
     echo "[run_all] calibration failed; efficiency columns will stay empty"

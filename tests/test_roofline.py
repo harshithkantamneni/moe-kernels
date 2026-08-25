@@ -263,3 +263,12 @@ def test_per_device_calibrations_are_not_datasheet_profiles(tmp_path):
         assert RL.ambiguous_for_device("NVIDIA H200") == []
     finally:
         _RL.HARDWARE_DIR = old
+
+
+def test_another_devices_calibration_does_not_count_as_this_ones(tmp_path):
+    """The contract run_all.sh depends on: a repo carrying measured_<other>.yaml
+    must still report 'no calibration' on this device. Returning None rather
+    than raising matters, because an absent calibration is a normal first-run
+    state while a MISMATCHED one is an error."""
+    (tmp_path / "measured_nvidia_h200.yaml").write_text(MEASURED_H200)
+    assert RL.load_measured("NVIDIA H100 80GB HBM3", directory=tmp_path) is None

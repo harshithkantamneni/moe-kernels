@@ -62,6 +62,22 @@ def grouped_mm_support(capability: tuple[int, int] | None = None
         "different implementation than the published rows, so the baseline is "
         "not comparable on this part.")
 
+def _device_support() -> GroupedMMSupport | None:
+    """This machine's verdict, or None when there is no device to ask.
+
+    None is not "unsupported". `--dry-run` builds and validates the whole matrix
+    on a laptop, and a plan that silently drops the only registered baseline
+    because no GPU was attached would report an empty sweep as if that were the
+    answer.
+    """
+    if not torch.cuda.is_available():
+        return None
+    try:
+        return grouped_mm_support()
+    except (RuntimeError, AssertionError):
+        return None
+
+
 # Resolve the entry point once, at import.
 #
 # `torch.nn.functional.grouped_mm` is the public API; `torch._grouped_mm` is the
@@ -116,7 +132,22 @@ class _GroupedMM(StageSpan):
 
     def supports(self, spec: BenchSpec) -> bool:
         # CUTLASS grouped GEMM caps the group count.
-        return super().supports(spec) and spec.model.num_experts < 1024
+        if not (super().supports(spec) and spec.model.num_experts < 1024):
+            return False
+        # And it only exists on some architectures. Unwired, the guard was
+        # merely available: a sweep on an A100 would time whatever torch falls
+        # back to and write it under the same `impl` name as the published H200
+        # rows, which is the silent substitution this harness exists to refuse.
+        verdict = _device_support()
+        return True if verdict is None else verdict.supported
+
+    def why_unsupported(self, spec: BenchSpec) -> str:
+        verdict = _device_support()
+        if verdict is not None and not verdict.supported:
+            return verdict.reason
+        if spec.model.num_experts >= 1024:
+            return f"grouped_mm caps the group count; {spec.model.num_experts} experts"
+        return super().why_unsupported(spec)
 
 
 @register
