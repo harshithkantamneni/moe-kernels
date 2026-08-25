@@ -38,6 +38,50 @@ from sglang.srt.layers.moe.topk import (  # noqa: E402  isort:skip
     StandardTopKOutput,
 )
 
+def _publish_runtime_context() -> None:
+    """SGLang is a server, and its MoE path reads process-wide config.
+
+    `fused_experts` reaches `get_exec().moe.*`, which raises
+    "config namespace 'exec' not published" until a server has published one.
+    Called as a library there is no server, so every cell crashed before
+    reaching a kernel.
+
+    Publishing DEFAULT ServerArgs is not a stub standing in for a real config.
+    The MoE path reads exactly four leaves, and on SGLang 0.5.18 all four come
+    out of the defaults at their single-GPU values, which is what a one-GPU
+    grouped-GEMM benchmark wants:
+
+        moe.enable_waterfill          False
+        moe.enable_eplb               False
+        moe.init_expert_location      "trivial"
+        moe.ep_num_redundant_experts  0
+
+    `model_path` is the only required field and nothing loads a model from it.
+    The role is "test", which is a real entry in ROLE_NAMESPACE_SETS and is
+    honest about what this process is; with SGLANG_ROLE_NAMESPACES off it is
+    provenance only.
+
+    CAVEAT worth carrying into any published comparison: a default publish is
+    not identical to what a running SGLang server would publish. If some other
+    default steers kernel selection differently from a real deployment, this
+    measures a path production would not take. The four leaves above are the
+    ones the MoE code actually reads, which is the evidence for that being a
+    narrow risk rather than an open one.
+
+    Idempotent, and never clobbers an existing context: publish is
+    last-publish-wins, so re-publishing over a live engine would replace its
+    config.
+    """
+    import sglang.srt.runtime_context as rc
+    from sglang.srt.server_args import ServerArgs
+
+    if rc._CONTEXT.is_config_namespace_published("exec"):
+        return
+    rc.publish(ServerArgs(model_path="moe-kernels-benchmark"), role="test")
+
+
+_publish_runtime_context()
+
 
 def runner_kwargs(spec: BenchSpec) -> dict:
     """Re-exported from `_framework_config`, which a laptop can import."""
