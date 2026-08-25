@@ -20,6 +20,17 @@ pattern (4390.29 GB/s), which the calibration explicitly labels as the analogue 
 streaming expert weights. The two differ by 0.34% and no conclusion here turns on the
 choice, but a reader recomputing from the shipped columns will get triad numbers.
 
+**What `throttled` means, since two sections below lean on rows that carry it:** the
+detector is two point samples, not an average and not a time series. The SM clock is read
+once before a cell's timing call and once after, and `throttled` is set when the second is
+more than 5% below the first. It is directional, so a clock RAMPING UP can never trip it,
+and it is blind to a dip that recovers before the second sample. A throttled row is not a
+failed row: all 79 passed the fp32 oracle and none had its timing zeroed, which only
+happens on a correctness failure. It means the measurement was taken across a moving
+clock, so an absolute time from it is softer than one from a pinned-clock row. Ratios
+taken WITHIN a cell are much less affected, because every routing in that cell was
+measured under the same thermal conditions. Section 6 has the counts.
+
 **DeepSeek-V3 caveat:** its 1369 GB of bf16 weights do not fit on one H200, so its
 routing is parametric rather than replayed from captured traces. Its geometry is real;
 its token distribution is synthetic. Mixtral and Qwen2 are the same way in this run.
@@ -69,6 +80,23 @@ case: uniform lands on exactly 128 rows per expert, one whole `BLOCK_M`, so `hot
 beats it at 0.796x while `zipf:1.2` loses at 1.076x on the same 256 active experts. Read
 "skew is fast" as "skew is fast while it keeps experts idle".
 
+**Two of those four cells are entirely throttled, and it has to be said before the table is
+used.** qwen2 T=256 has no throttled rows and mixtral T=256 has three of five, but deepseek
+T=1024 and T=4096 are 5 of 5, the latter drifting 26.9% to 33.6% with clocks falling from
+1965 MHz to as low as 1305. Two things keep the rows usable. The claim is a ratio taken
+WITHIN a cell against that cell's own uniform baseline, which was throttled to the same
+degree, so it is like-for-like in a way an absolute time would not be. And at T=1024 three
+of the five routings were measured at bit-identical clocks, 1965 MHz to 1710 MHz at both
+ends, and still spread 0.891x, 1.000x and 1.032x: a spread that appears at a fixed clock is
+not a clock artefact.
+
+The weak cell is T=4096, where the ordering partly tracks the drift. `hot:0.5` is fastest
+and drifts least (26.9%); `dirichlet:0.3` is nearly slowest and drifts most (33.6%), which
+is the direction a clock artefact would produce. Taking the midpoint clock of each, those
+two differ by about 3%, against a 33% spread in time, so the clock accounts for a few
+points of it and not the effect. The tile-alignment reading survives, but this particular
+cell should be re-measured on a settled clock before it carries weight on its own.
+
 ## 2. What orders them is weight traffic; which unit it counts in is not resolved
 
 The first version of this document claimed the explanatory variable was *active expert
@@ -99,14 +127,23 @@ time is set by arithmetic, and M-tiles track arithmetic there because padded MAC
 exactly what M-tiles count, so those rows fit well for a reason that has nothing to do
 with bytes. With them removed, this sweep does not separate the two units.
 
-**`BLOCK_M=128` survives the split, on clean rows.** 54 of the 180 memory-bound rows have
-an expert crossing a 64-row boundary, so the two tile counts differ and the row
-discriminates. On those 54, `BLOCK_M=64` puts **20 rows below the measured read ceiling**
-(minimum 0.67x), which is unphysical, at 23.6% CV; `BLOCK_M=128` puts **none** below it
-(minimum 1.25x) at **5.6%** CV. So the timing alone still bounds the incumbent's effective
-M-tile at 128 rows, which is a fact `ncu` would normally be needed to establish. Per model,
-over memory-bound rows, the `BLOCK_M=128` fit is 1.48x at 12.7% CV (deepseek), 1.63x at
-16.6% (qwen2), 1.68x at 10.1% (mixtral).
+**`BLOCK_M=128` survives the split.** 54 of the 180 memory-bound rows have an expert
+crossing a 64-row boundary, so the two tile counts differ and the row discriminates. Half
+of those 54 are throttled, and the throttling inflates the argument, so the honest version
+is the 27 that are not:
+
+| rows | `BLOCK_M=64` | `BLOCK_M=128` |
+|---|---|---|
+| all 54 discriminating | 1.07x, 23.6% CV, **20 below the ceiling** (min 0.67x) | 1.38x, 5.6% CV, none below (min 1.25x) |
+| 27 unthrottled | 1.21x, 17.0% CV, **4 below the ceiling** (min 0.73x) | 1.42x, **5.2%** CV, none below (min 1.28x) |
+
+An earlier version of this section quoted the 20 without the split. On clean rows it is 4,
+and the argument is unchanged in kind rather than in degree: a single row below the
+measured read ceiling is already unphysical, `BLOCK_M=64` produces some on either subset,
+and `BLOCK_M=128` produces none while fitting tighter. So the timing alone still bounds the
+incumbent's effective M-tile at 128 rows, which is a fact `ncu` would normally be needed to
+establish. Per model, over the 151 unthrottled memory-bound rows, the `BLOCK_M=128` fit is
+1.55x at 12.0% CV (deepseek), 1.66x at 15.9% (qwen2), 1.70x at 9.5% (mixtral).
 
 Absolute scale: one DeepSeek expert's `w1` is 7168 x 4096 x 2 B = 58.72 MB, and the
 measured cost is 19.21 us per active expert at T=16, so 58,720,256 / 19.21 us =
@@ -256,7 +293,9 @@ hiding inside it.
 
 ## 6. Measurement hygiene, recorded not hidden
 
-79 of 840 rows tripped the throttle detector (SM clock dropping >5% within a cell). They
+79 of 840 rows tripped the throttle detector (SM clock dropping >5% between the sample
+before a cell's timing call and the sample after it; see the note at the top for what that
+does and does not mean). They
 cluster on token count: 0 at T <= 64, 14 at T=256, 31 at T=1024, 34 at T=4096. Across
 stages they are even (up 42, down 37); across models they are **not** (mixtral 34, qwen2
 25, deepseek 20), and 13 of the 14 rows at T=256 are mixtral. Sustained draw on a 700 W
@@ -268,6 +307,15 @@ The compute ceiling was measured at its settled 1500 MHz while the bandwidth pat
 at 1980 MHz, so the recorded 166 FLOP/byte ridge is conservative (185 if compute is
 clock-normalised to match). Everything in the decode regime sits at AI 1-32, far below
 either figure.
+
+The detector's blind spot is worth stating: two samples cannot see a dip that recovers
+between them, so the 79 is a lower bound on rows measured across a moving clock. 75 rows
+went the other way and ended FASTER than they started, 65 of them at T >= 256, which is
+recovery from a previous heavy cell rather than a warm-up. At T <= 64 there is almost no
+headroom to ramp into: 412 of those 436 rows read 1980 MHz at both samples, the end clock
+never falls below 1905, and not one row is throttled. The 24 exceptions start as low as
+1500 MHz and finish at 1980, which is the ramp itself, and drift NEGATIVE so they cannot
+trip a detector that only looks for a drop.
 
 Correctness gating is structural: the driver zeroes timing fields on a row that fails the
 oracle. It never fired here, since all 840 rows passed, so this run does not demonstrate
@@ -314,3 +362,10 @@ variable, and the table offered as evidence between them predicts an identical c
 each. That is the same circularity the previous revision fixed elsewhere in this file. The numbers were re-derived from the raw CSV. Two of the three load-bearing
 conclusions survive unchanged (graphs and L2 are dead ends, the decode gap is 1.35-2.31x);
 "skew helps" is now scoped to below saturation.*
+
+*A later pass added the throttling audit. The `BLOCK_M=64` count of rows below the read
+ceiling was 20 of 54 with throttled rows included and is 4 of 27 without them, so the
+figure now carries both. The traffic-model tie is unaffected: dropping throttled rows moves
+it from 1.67x/14.3% versus 1.59x/14.5% to 1.67x/13.1% versus 1.64x/13.4%. Section 1's
+sign-reversal table draws two of its four cells entirely from throttled rows and now says
+so.*
