@@ -22,6 +22,8 @@ the kind of undeclared dependency `pipeline.build` exists to reject.
 from __future__ import annotations
 
 import atexit
+import os
+import sys
 
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
@@ -43,6 +45,25 @@ from sglang.srt.layers.moe.moe_runner.base import (  # noqa: E402  isort:skip
 from sglang.srt.layers.moe.topk import (  # noqa: E402  isort:skip
     StandardTopKOutput,
 )
+
+def _ensure_venv_bin_on_path() -> None:
+    """SGLang shells out to `ninja` to JIT-compile a CUDA extension.
+
+    The ninja wheel installs a console script into the venv's bin directory,
+    but running `venv/bin/python` directly does NOT put `venv/bin` on PATH the
+    way activating the venv would. So the package is installed, importable, and
+    still invisible to a subprocess that resolves `ninja` through PATH, which
+    surfaces as FileNotFoundError from inside a compile step and looks like a
+    missing dependency rather than a missing path entry.
+
+    `sys.executable`'s directory is that bin directory by construction, so this
+    needs no knowledge of where the venv lives.
+    """
+    bindir = os.path.dirname(sys.executable)
+    parts = os.environ.get("PATH", "").split(os.pathsep)
+    if bindir and bindir not in parts:
+        os.environ["PATH"] = os.pathsep.join([bindir, *parts])
+
 
 def _publish_runtime_context() -> None:
     """SGLang is a server, and its MoE path reads process-wide config.
@@ -149,6 +170,10 @@ def _destroy_process_group() -> None:
             pass
 
 
+# PATH before anything that might compile, config before the process group:
+# that is the order a server starts in, and initialize_model_parallel reads
+# config that publish projects.
+_ensure_venv_bin_on_path()
 # Config first, then the process group: that is the order a server starts in,
 # and initialize_model_parallel reads config that publish projects.
 _publish_runtime_context()
