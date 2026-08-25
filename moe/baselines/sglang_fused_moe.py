@@ -56,7 +56,12 @@ def _publish_runtime_context() -> None:
         moe.init_expert_location      "trivial"
         moe.ep_num_redundant_experts  0
 
-    `model_path` is the only required field and nothing loads a model from it.
+    `model_path` is the only required field of 472, and "dummy" is SGLang's own
+    sentinel for "no real model": verified to construct with HF_HUB_OFFLINE=1,
+    so it is special-cased rather than resolved over the network. Any other
+    string is checked for real. A plausible name fails as a Hub lookup, and a
+    genuine local directory carrying a valid config.json fails deeper still, in
+    tokenizer resolution. "dummy" is the supported path, not a lucky one.
     The role is "test", which is a real entry in ROLE_NAMESPACE_SETS and is
     honest about what this process is; with SGLANG_ROLE_NAMESPACES off it is
     provenance only.
@@ -77,7 +82,7 @@ def _publish_runtime_context() -> None:
 
     if rc._CONTEXT.is_config_namespace_published("exec"):
         return
-    rc.publish(ServerArgs(model_path="moe-kernels-benchmark"), role="test")
+    rc.publish(ServerArgs(model_path="dummy"), role="test")
 
 
 _publish_runtime_context()
