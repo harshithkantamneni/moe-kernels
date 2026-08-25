@@ -4,6 +4,12 @@
 # Do not add torch here; SGLang pins its own (2.13.0, same as vLLM).
 sglang==0.5.18
 
+# SGLang JIT-compiles a CUDA extension on the first fused_moe call and shells
+# out to ninja to do it. It is not a declared dependency of the wheel, so
+# without this the call dies with FileNotFoundError: 'ninja' and every cell is
+# recorded as a crash. vLLM needs no equivalent.
+ninja
+
 # IF 0.5.18 WILL NOT RESOLVE: fall back to 0.5.17.
 #
 # 0.5.18 is the first SGLang to depend on cuTile, and it pins
