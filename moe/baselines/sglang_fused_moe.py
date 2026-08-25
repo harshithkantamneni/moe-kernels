@@ -21,6 +21,12 @@ the kind of undeclared dependency `pipeline.build` exists to reject.
 """
 from __future__ import annotations
 
+import atexit
+
+#: True only when this module created the process group, so teardown never
+#: touches one a real distributed run owns.
+_OWNS_PROCESS_GROUP = False
+
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
@@ -113,6 +119,9 @@ def _init_single_process_parallel() -> None:
 
     if dist.is_initialized():
         return
+    # Only tear down a group this module created. Without the flag an atexit
+    # handler would destroy a group a real distributed run owns.
+    global _OWNS_PROCESS_GROUP
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -124,6 +133,20 @@ def _init_single_process_parallel() -> None:
         backend="nccl",
     )
     initialize_model_parallel(tensor_model_parallel_size=1)
+    _OWNS_PROCESS_GROUP = True
+    atexit.register(_destroy_process_group)
+
+
+def _destroy_process_group() -> None:
+    """torch warns about a leaked group on every exit otherwise, which would be
+    noise on every row of every sweep."""
+    import torch.distributed as dist
+
+    if _OWNS_PROCESS_GROUP and dist.is_initialized():
+        try:
+            dist.destroy_process_group()
+        except Exception:  # noqa: BLE001  - teardown must not mask a real error
+            pass
 
 
 # Config first, then the process group: that is the order a server starts in,
