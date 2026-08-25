@@ -50,6 +50,10 @@ def describe_type(tp, depth: int = 0) -> None:
             print(f"{pad}  {f.name}: {f.type}{d}")
         return
 
+    fields = getattr(tp, "_fields", None)          # NamedTuple
+    if fields:
+        print(f"{pad}  NamedTuple fields: {list(fields)}")
+        return
     try:
         sig = inspect.signature(tp)
         print(f"{pad}  __init__{sig}")
@@ -76,14 +80,28 @@ def main() -> int:
         except (TypeError, ValueError):
             print("  <no signature>")
             continue
+        # Under `from __future__ import annotations` every annotation is a
+        # STRING, so isinstance(ann, type) is False and nothing gets expanded.
+        # Resolve through the defining module's globals, which is where those
+        # names are guaranteed to be bound.
+        g = getattr(fn, "__globals__", {})
         for pname, p in hints.items():
             ann = p.annotation
             if ann is inspect.Parameter.empty:
                 continue
             print(f"  param {pname}: {ann}")
-            for tp in (getattr(ann, "__args__", None) or [ann]):
-                if isinstance(tp, type):
-                    describe_type(tp)
+            candidates = []
+            if isinstance(ann, str):
+                base = ann.replace("Optional[", "").replace("]", "").strip()
+                for piece in base.split("|"):
+                    resolved = g.get(piece.strip())
+                    if isinstance(resolved, type):
+                        candidates.append(resolved)
+            else:
+                candidates = [tp for tp in (getattr(ann, "__args__", None) or [ann])
+                              if isinstance(tp, type)]
+            for tp in candidates:
+                describe_type(tp)
 
         print("\n  --- source of fused_experts (weight layout lives here) ---")
         try:
