@@ -41,15 +41,71 @@ from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec
 from moe.stages import get as get_span
 from moe.state import MoEState
 
-#: CUTLASS spells its tile as MxNxK somewhere in the mangled name.
-_TILE = re.compile(r"\b(\d{2,4})x(\d{2,4})x(\d{1,4})\b")
+#: CUTLASS 3.x carries the tile as cute::C<N> template parameters, and torch
+#: hands us the MANGLED name, where those are Li<N>E. Demangling first is what
+#: makes this readable; the fallbacks below cover a box without c++filt.
+_MMA_ATOM = re.compile(r"MMA_(\d+)x(\d+)x(\d+)")
+_TILE_TUPLE = re.compile(
+    r"cute::tuple<\s*cute::C<(\d+)>\s*,\s*cute::C<(\d+)>\s*,\s*cute::C<(\d+)>")
+#: Mangled form of tuple<C<a>, C<b>, ...>, for when demangling is unavailable.
+_TILE_MANGLED = re.compile(r"ILi(\d+)EEEN\w\w?_ILi(\d+)EEE")
+
+
+def demangle(name: str) -> str:
+    """Best effort. Returns the input unchanged if nothing can demangle it."""
+    if not name.startswith("_Z"):
+        return name
+    try:
+        import subprocess
+        out = subprocess.run(["c++filt", "-n", name], capture_output=True,
+                             text=True, timeout=10)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return name
+
+
+def describe_tile(name: str) -> str:
+    """What tile shape does this kernel name carry, if any.
+
+    Order matters in the mangled form. `Li<N>E` pairs appear for the CLUSTER
+    shape before the TILE shape, so taking the first match reports the cluster
+    and calls it BLOCK_M. Anchor on the kernel-schedule token, which sits
+    between them, and read the pair after it.
+    """
+    plain = demangle(name)
+    bits = []
+
+    m = _TILE_TUPLE.search(plain)
+    if m:
+        bits.append(f"TileShape M,N,K = {m.group(1)},{m.group(2)},{m.group(3)}")
+    else:
+        # Demangling unavailable or the tuple is spelled some other way.
+        sched_at = max(plain.find("Pingpong"), plain.find("Cooperative"))
+        tail = plain[sched_at:] if sched_at >= 0 else plain
+        g = _TILE_MANGLED.search(tail)
+        if g:
+            bits.append(f"TileShape M,N = {g.group(1)},{g.group(2)}")
+
+    # Literal in both the mangled and demangled name, so search the raw one.
+    a = _MMA_ATOM.search(name) or _MMA_ATOM.search(plain)
+    if a:
+        bits.append(f"MMA atom = {a.group(1)}x{a.group(2)}x{a.group(3)}")
+
+    for sched in ("Cooperative", "Pingpong"):
+        if sched in plain:
+            bits.append(f"schedule = {sched}")
+    return "  |  ".join(bits)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default="deepseek-v3", choices=sorted(MODEL_CONFIGS))
-    ap.add_argument("--tokens", type=int, default=1)
+    ap.add_argument("--tokens", default="1",
+                    help="comma-separated. CUTLASS picks a tile per problem "
+                         "shape, so one token count answers for one shape only")
     ap.add_argument("--impl", default="torch_grouped_mm_up")
     ap.add_argument("--routing", default="uniform")
     args = ap.parse_args()
@@ -59,13 +115,19 @@ def main() -> int:
         return 1
 
     moe.bootstrap("reference", "baselines")
-    spec = BenchSpec(MODEL_CONFIGS[args.model], num_tokens=args.tokens,
+    for tokens in (int(v) for v in str(args.tokens).split(",") if v.strip()):
+        run_one(args, tokens)
+    return 0
+
+
+def run_one(args, tokens: int) -> None:
+    spec = BenchSpec(MODEL_CONFIGS[args.model], num_tokens=tokens,
                      routing=RoutingSpec(args.routing))
     cfg = spec.model
     span = get_span(args.impl)
     pipe = build(tiling_for(span), spec=spec)
 
-    print(f"[cell]   {spec.label}")
+    print(f"\n[cell]   {spec.label}")
     print(f"[impl]   {span.name} covers={'+'.join(span.covers)}")
     print(f"[torch]  {torch.__version__}  device={torch.cuda.get_device_properties(0).name}")
 
@@ -90,22 +152,21 @@ def main() -> int:
               and e.self_device_time_total > 0]
     events.sort(key=lambda e: -e.self_device_time_total)
 
-    print(f"\n{'us':>10}  kernel")
-    print("-" * 100)
-    for e in events:
-        print(f"{e.self_device_time_total:10.1f}  {e.key}")
+    # Only the grouped GEMM answers the question. Everything else in this
+    # tiling is the reference path around it.
+    gemms = [e for e in events if "cutlass" in e.key.lower()
+             and "prepare_grouped" not in e.key]
+    if not gemms:
+        print("  NO CUTLASS KERNEL FOUND. The baseline may have fallen back;")
+        print("  check grouped_mm_support() for this architecture.")
+        return
 
-    print("\n[tiles] shapes found in kernel names, hottest first:")
-    hits = [(e.key, _TILE.findall(e.key)) for e in events]
-    found = False
-    for key, tiles in hits:
-        for m, n, k in tiles:
-            found = True
-            print(f"  {m}x{n}x{k}   in  {key[:80]}")
-    if not found:
-        print("  none. The name may not carry a tile; check the full names above.")
-    print("\nBLOCK_M is the M of the tile. FINDINGS section 2 infers 128 from timing.")
-    return 0
+    for e in gemms:
+        print(f"  {e.self_device_time_total:9.1f} us  grouped GEMM")
+        tile = describe_tile(e.key)
+        print(f"  {'':9s}      {tile if tile else 'no tile shape in the name'}")
+    top = [f"{e.self_device_time_total:.1f}us" for e in events[:3]]
+    print(f"  (hottest kernels overall: {', '.join(top)})")
 
 
 if __name__ == "__main__":
