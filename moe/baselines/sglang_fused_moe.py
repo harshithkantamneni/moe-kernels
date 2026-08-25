@@ -23,14 +23,14 @@ from __future__ import annotations
 
 import atexit
 
-#: True only when this module created the process group, so teardown never
-#: touches one a real distributed run owns.
-_OWNS_PROCESS_GROUP = False
-
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
 from ._framework_config import sglang_runner_kwargs
+
+#: True only when this module created the process group, so teardown never
+#: touches one a real distributed run owns.
+_OWNS_PROCESS_GROUP = False
 
 # Module-scope import: baselines.load_all() skips this file with a warning
 # wherever SGLang is absent.
