@@ -85,7 +85,51 @@ def _publish_runtime_context() -> None:
     rc.publish(ServerArgs(model_path="dummy"), role="test")
 
 
+def _init_single_process_parallel() -> None:
+    """SGLang's MoE path asserts a tensor-model-parallel group exists.
+
+    `parallel_state.py:1951` is a bare assert, so with no group the call dies
+    before any kernel. A server initialises this at startup; a library caller
+    has to do it. Every parallel size defaults to 1 in
+    `initialize_model_parallel`, so the single-GPU case is the default case and
+    nothing here invents a topology.
+
+    A free port is taken by binding to port 0 and reading back what the kernel
+    assigned, rather than picking a number and hoping. There is a small race
+    between closing that socket and torch binding it; acceptable for a
+    single-process init, and it fails loudly rather than silently if lost.
+
+    Guarded on torch.distributed.is_initialized(), because a second
+    init_process_group raises and because a real distributed run must not have
+    its group replaced by this one.
+    """
+    import socket
+
+    import torch.distributed as dist
+    from sglang.srt.distributed.parallel_state import (
+        init_distributed_environment,
+        initialize_model_parallel,
+    )
+
+    if dist.is_initialized():
+        return
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    init_distributed_environment(
+        world_size=1,
+        rank=0,
+        local_rank=0,
+        distributed_init_method=f"tcp://127.0.0.1:{port}",
+        backend="nccl",
+    )
+    initialize_model_parallel(tensor_model_parallel_size=1)
+
+
+# Config first, then the process group: that is the order a server starts in,
+# and initialize_model_parallel reads config that publish projects.
 _publish_runtime_context()
+_init_single_process_parallel()
 
 
 def runner_kwargs(spec: BenchSpec) -> dict:
