@@ -132,3 +132,23 @@ def test_profile_cell_isolates_one_launch_for_counter_profiling():
     plan = PR.plan(p, env="base")
     assert plan.specs == 1, "more than one spec means ncu cannot pick the cell"
     assert plan.modes == 1, "one timing mode, so --launch-count 1 is unambiguous"
+
+
+def test_pipeline_scope_can_be_turned_off():
+    """`full` sets include_pipeline_scope, which adds one whole-layer reference
+    cell per spec. Those time a python loop over every expert and dominate the
+    run, so a kernel comparison wants full's token grid and routings WITHOUT
+    them. There was no way to say so, which pushed callers into rebuilding full
+    out of standard plus overrides."""
+    from argparse import Namespace
+
+    from moe.bench.cli import apply_overrides
+
+    full = PR.get("full")
+    assert full.include_pipeline_scope, "fixture must exercise this"
+
+    args = Namespace(models=None, tokens=None, no_pipeline_scope=True)
+    assert apply_overrides(full, args).include_pipeline_scope is False
+
+    args = Namespace(models=None, tokens=None, no_pipeline_scope=False)
+    assert apply_overrides(full, args).include_pipeline_scope is True

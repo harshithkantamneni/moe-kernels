@@ -47,6 +47,12 @@ def parse_args(argv=None):
     p.add_argument("--groups", default="reference,kernels",
                    help="implementation groups to import: reference,kernels,baselines")
     p.add_argument("--list-impls", action="store_true")
+    p.add_argument("--no-pipeline-scope", action="store_true",
+                   help="drop the whole-layer reference cells `full` adds. They "
+                        "time a python loop over every expert and dominate the "
+                        "run, and they measure the reference rather than any "
+                        "kernel, so a kernel comparison wants full's token grid "
+                        "and routings without them")
     p.add_argument("--include-reference", action="store_true",
                    help="also benchmark the reference spans; useful to size "
                         "the matrix before any kernel exists, and to get a "
@@ -65,6 +71,8 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
         changes["models"] = names
     if args.tokens:
         changes["token_counts"] = tuple(int(t) for t in args.tokens.split(","))
+    if getattr(args, "no_pipeline_scope", False):
+        changes["include_pipeline_scope"] = False
     return replace(profile, **changes) if changes else profile
 
 
