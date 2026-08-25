@@ -152,19 +152,29 @@ def run_one(args, tokens: int) -> None:
               and e.self_device_time_total > 0]
     events.sort(key=lambda e: -e.self_device_time_total)
 
-    # Only the grouped GEMM answers the question. Everything else in this
-    # tiling is the reference path around it.
-    gemms = [e for e in events if "cutlass" in e.key.lower()
+    # The GEMM answers the question; the rest of the tiling is the reference
+    # path around it. Match on markers rather than on "cutlass" alone: vLLM and
+    # SGLang dispatch Triton kernels, which carry none of CUTLASS's vocabulary.
+    markers = ("cutlass", "fused_moe", "grouped_gemm", "gemm")
+    gemms = [e for e in events
+             if any(m in e.key.lower() for m in markers)
              and "prepare_grouped" not in e.key]
     if not gemms:
-        print("  NO CUTLASS KERNEL FOUND. The baseline may have fallen back;")
-        print("  check grouped_mm_support() for this architecture.")
+        print("  NO GEMM KERNEL MATCHED. Either the baseline fell back, or its")
+        print("  kernel is named unlike any marker. Hottest kernels were:")
+        for e in events[:5]:
+            print(f"    {e.self_device_time_total:9.1f} us  {e.key[:110]}")
         return
 
-    for e in gemms:
-        print(f"  {e.self_device_time_total:9.1f} us  grouped GEMM")
+    for e in gemms[:5]:
+        print(f"  {e.self_device_time_total:9.1f} us  {e.key[:100]}")
         tile = describe_tile(e.key)
-        print(f"  {'':9s}      {tile if tile else 'no tile shape in the name'}")
+        if tile:
+            print(f"  {'':9s}      {tile}")
+        elif not e.key.startswith("_Z"):
+            # A Triton kernel keeps its tile in a compile-time constexpr, not
+            # in the symbol, so absence here is expected rather than a failure.
+            print(f"  {'':9s}      no tile in the name (Triton keeps it in a constexpr)")
     top = [f"{e.self_device_time_total:.1f}us" for e in events[:3]]
     print(f"  (hottest kernels overall: {', '.join(top)})")
 
