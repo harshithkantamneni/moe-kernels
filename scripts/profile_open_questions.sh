@@ -92,9 +92,25 @@ if [[ -n "$WANT_TORCH" && "$GOT_TORCH" != "$WANT_TORCH" ]]; then
   fi
 fi
 
+# PRESENT IS NOT USABLE. Installing nsight-systems on a RunPod pod pulls in
+# nvidia-profiler, which brings `ncu` along with it. Branching on presence then
+# routed Q2 down the counter path on a machine whose counters are blocked, and
+# it died with ERR_NVGPUCTRPERM instead of falling back to the tracer that would
+# have answered it. So probe what ncu can actually DO: attach it to a trivial
+# kernel and look for the permission error. Costs a couple of seconds, once.
 HAVE_NCU=0; HAVE_NSYS=0
-command -v ncu  >/dev/null 2>&1 && HAVE_NCU=1
 command -v nsys >/dev/null 2>&1 && HAVE_NSYS=1
+if command -v ncu >/dev/null 2>&1; then
+  probe="$(ncu --metrics gpu__time_duration.sum --target-processes all --launch-count 1 \
+      -- "$PY" -c 'import torch; t=torch.zeros(8, device="cuda"); t.add_(1); torch.cuda.synchronize()' \
+      2>&1 || true)"
+  if grep -q "ERR_NVGPUCTRPERM" <<<"$probe"; then
+    echo "[tools] ncu is installed but its counters are blocked (ERR_NVGPUCTRPERM)"
+    echo "        this is a host kernel-module flag a container tenant cannot set"
+  else
+    HAVE_NCU=1
+  fi
+fi
 echo "[tools] ncu=$HAVE_NCU nsys=$HAVE_NSYS"
 if [[ "$HAVE_NCU" == "0" && "$HAVE_NSYS" == "0" ]]; then
   echo "neither ncu nor nsys is on PATH; install one:" >&2
