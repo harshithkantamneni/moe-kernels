@@ -115,8 +115,8 @@ measured 166 FLOP/byte ridge:
 | traffic model | mean, all 210 | CV, all 210 | CV, 180 memory-bound | CV, 30 compute-bound |
 |---|---:|---:|---:|---:|
 | bytes = active_experts x W | 2.11x | 63.1% | **14.3%** | 44.2% |
-| bytes = M_tiles x W, BLOCK_M=64 | 1.35x | 35.6% | 24.0% | 10.7% |
-| bytes = M_tiles x W, **BLOCK_M=128** | 1.49x | 21.1% | **14.5%** | 7.2% |
+| bytes = M_tiles x W, BLOCK_M=64 (the real tile) | 1.35x | 35.6% | 24.0% | 10.7% |
+| bytes = M_tiles x W, BLOCK_M=128 (not the tile) | 1.49x | 21.1% | **14.5%** | 7.2% |
 
 **On the memory-bound rows the two models tie**: 1.67x at 14.3% CV counting active
 experts, 1.59x at 14.5% counting M-tiles. The whole of the published 63% -> 21% gap came
@@ -127,23 +127,46 @@ time is set by arithmetic, and M-tiles track arithmetic there because padded MAC
 exactly what M-tiles count, so those rows fit well for a reason that has nothing to do
 with bytes. With them removed, this sweep does not separate the two units.
 
-**`BLOCK_M=128` survives the split.** 54 of the 180 memory-bound rows have an expert
-crossing a 64-row boundary, so the two tile counts differ and the row discriminates. Half
-of those 54 are throttled, and the throttling inflates the argument, so the honest version
-is the 27 that are not:
+**`BLOCK_M` is 64, and an earlier version of this section inferred 128.** The tile is
+no longer inferred at all. torch's profiler records the CUTLASS kernel name, CUTLASS
+carries its tile in that name, and the name is the same at every shape measured:
 
-| rows | `BLOCK_M=64` | `BLOCK_M=128` |
-|---|---|---|
-| all 54 discriminating | 1.07x, 23.6% CV, **20 below the ceiling** (min 0.67x) | 1.38x, 5.6% CV, none below (min 1.25x) |
-| 27 unthrottled | 1.21x, 17.0% CV, **4 below the ceiling** (min 0.73x) | 1.42x, **5.2%** CV, none below (min 1.28x) |
+| tokens | tile | MMA atom | schedule |
+|---:|---|---|---|
+| 1, 16, 256, 1024, 4096 | `TileShape M,N = 64,128` | `MMA_64x128x16_F32BF16BF16_SS` | `Pingpong` |
 
-An earlier version of this section quoted the 20 without the split. On clean rows it is 4,
-and the argument is unchanged in kind rather than in degree: a single row below the
-measured read ceiling is already unphysical, `BLOCK_M=64` produces some on either subset,
-and `BLOCK_M=128` produces none while fitting tighter. So the timing alone still bounds the
-incumbent's effective M-tile at 128 rows, which is a fact `ncu` would normally be needed to
-establish. Per model, over the 151 unthrottled memory-bound rows, the `BLOCK_M=128` fit is
-1.55x at 12.0% CV (deepseek), 1.66x at 15.9% (qwen2), 1.70x at 9.5% (mixtral).
+Constant across a 4096x range in token count, so there is no shape-dependent selection,
+and the schedule never becomes `Cooperative`, so there is no case where two warpgroups
+share a tile and the effective M doubles to 128.
+
+**Why the timing argument reached 128.** It scored `M_tiles x W` at each candidate
+BLOCK_M and rejected 64 because that model puts rows below the measured read ceiling,
+which is unphysical. But that model assumes every M-tile re-reads the whole weight
+matrix. The argument therefore had two unknowns, the tile size and the re-read factor,
+and one equation, and it resolved the ambiguity by moving the tile when the re-read
+factor was what was wrong.
+
+With BLOCK_M known, the re-read factor can be fitted instead. Writing traffic as
+`(active + alpha x (M_tiles - active)) x W` over the 151 unthrottled memory-bound rows:
+
+| model | mean ratio | CV | min | below the ceiling |
+|---|---:|---:|---:|---:|
+| `active_experts x W`  (alpha = 0) | 1.67x | 13.1% | 1.35 | 0 / 151 |
+| `M_tiles(64) x W`  (alpha = 1) | 1.60x | 17.5% | **0.73** | **4 / 151** |
+| **alpha = 0.10** | 1.65x | **12.8%** | 1.35 | 0 / 151 |
+
+**alpha = 0.10.** An extra M-tile on the same expert costs about a tenth of a fresh
+weight read, not a whole one. That is what the ceiling violations were telling us, and
+reading them as evidence about the tile size instead is the mistake this correction
+undoes. Note what survives: alpha = 1 is still refuted, still by rows that would beat the
+read ceiling, and 27 of those 151 rows have `M_tiles(64) != active` so they genuinely
+discriminate.
+
+So the traffic is close to `active_experts x W`, with a small per-tile increment, which is
+also the answer section 2 could not reach from the memory-bound rows alone. The counter
+reading still settles it outright: on deepseek-v3 up at T=4096, `active x W` is 15.03 GB
+and `M_tiles(64) x W` is 36.76 GB, a factor of 2.45 rather than the 1.45 the wrong tile
+implied.
 
 Absolute scale: one DeepSeek expert's `w1` is 7168 x 4096 x 2 B = 58.72 MB, and the
 measured cost is 19.21 us per active expert at T=16, so 58,720,256 / 19.21 us =
@@ -240,8 +263,8 @@ cannot run that experiment because its `BLOCK_M` is not a knob. That is the firs
 experiment worth running, not an afterthought.
 
 One more thing the sweep does settle, which is not about the mechanism: padded arithmetic
-intensity is exactly `BLOCK_M` = 128 FLOP/byte regardless of model geometry, below the
-measured 166 ridge. So even a kernel that genuinely computed every padding row would still
+intensity is exactly `BLOCK_M` = 64 FLOP/byte regardless of model geometry, well below
+the measured 166 ridge. So even a kernel that genuinely computed every padding row would still
 be memory bound while it did so.
 
 ## 4. Where the headroom is, after accounting for tile re-reads
@@ -362,6 +385,13 @@ variable, and the table offered as evidence between them predicts an identical c
 each. That is the same circularity the previous revision fixed elsewhere in this file. The numbers were re-derived from the raw CSV. Two of the three load-bearing
 conclusions survive unchanged (graphs and L2 are dead ends, the decode gap is 1.35-2.31x);
 "skew helps" is now scoped to below saturation.*
+
+*The BLOCK_M=128 inference was later REFUTED by reading the kernel name, which says the
+tile is 64x128 at every shape from T=1 to T=4096. Section 2 is rewritten accordingly: the
+timing argument had two unknowns and one equation, and moved the tile when the re-read
+factor was what was wrong. Refitting with the observed tile gives alpha = 0.10, so an
+extra M-tile costs about a tenth of a fresh weight read. Section 3's padded arithmetic
+intensity becomes 64 FLOP/byte, still far below the ridge, so its conclusion is unchanged.*
 
 *A later pass added the throttling audit. The `BLOCK_M=64` count of rows below the read
 ceiling was 20 of 54 with throttled rows included and is 4 of 27 without them, so the
