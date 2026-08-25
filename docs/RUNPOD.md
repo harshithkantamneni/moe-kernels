@@ -45,6 +45,39 @@ Note which H200: SXM and NVL share memory (141 GB, 4.8 TB/s) but not compute
 (989.5 vs 835.5 dense BF16). The repo carries a profile for each and selects by
 device name; `plot.py` refuses to plot rows from one against the other's roof.
 
+**The template's torch is not the published torch, and for profiling that
+matters.** `runpod-torch-v280` ships torch 2.8; the published rows were measured
+on 2.13.0+cu130 with Triton 3.7.1. The baseline still resolves on 2.8, via the
+private `torch._grouped_mm` name, so a sweep runs. But a different torch ships a
+different CUTLASS, so the grouped GEMM you would profile is not the one the
+published rows describe, and `scripts/profile_open_questions.sh` refuses to run
+against a mismatch rather than answering a different question confidently. Pin
+the base venv:
+
+```bash
+# edit scripts/setup_runpod.sh: setup_env base --system-site-packages
+#                           ->  setup_env base --python 3.12
+MOE_BASE_TORCH='torch==2.13.0' \
+MOE_TORCH_INDEX='https://download.pytorch.org/whl/cu130' \
+  bash scripts/setup_runpod.sh base
+```
+
+Drop `--system-site-packages` when pinning the python version: inheriting the
+image's site-packages into a differently-versioned venv is incoherent. Check
+`nvidia-smi` first, since a cu130 wheel needs driver r580+; if the image is
+older, use the `cu128` index instead. The index must match the driver, not the
+image name.
+
+**Recalibrate on each new pod.** `measured_nvidia_h200.yaml` matches by device
+NAME, so a second H200 pod silently reuses the first one's ceilings. Same part,
+so they should be close, but "measure this machine" is the whole methodology and
+the run takes about a minute:
+
+```bash
+python scripts/calibrate_hardware.py     # -> measured_nvidia_h200.yaml
+git diff moe/bench/hardware/             # did the ceilings actually move?
+```
+
 **3. Bootstrap.** Clone into the volume so the repo survives the pod:
 
 ```bash

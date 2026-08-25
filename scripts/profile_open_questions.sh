@@ -48,6 +48,39 @@ WHICH="${1:-both}"
 OUT="${MOE_PROFILE_DIR:-profiles}"
 mkdir -p "$OUT"
 
+# Both questions are about ONE kernel: the CUTLASS grouped GEMM that torch
+# 2.13.0 dispatched to when the published rows were measured. A different torch
+# ships a different CUTLASS, so profiling under one and quoting the answer
+# against rows measured under the other silently answers a different question.
+# The expected version is READ FROM the published CSV rather than hardcoded, so
+# it cannot drift away from the run it is defending.
+#
+# RunPod's stock template is runpod-torch-v280, i.e. torch 2.8, which is exactly
+# the mismatch this catches. Pin the venv instead:
+#   MOE_BASE_TORCH='torch==2.13.0' \
+#   MOE_TORCH_INDEX='https://download.pytorch.org/whl/cu130' \
+#     bash scripts/setup_runpod.sh base
+WANT_TORCH="$(python - <<'PY'
+import csv, glob
+rows = [next(csv.DictReader(open(p))) for p in sorted(glob.glob("results/published/*/merged.csv"))]
+print(rows[-1]["torch_version"] if rows else "")
+PY
+)"
+GOT_TORCH="$(python -c 'import torch; print(torch.__version__)' 2>/dev/null || echo none)"
+echo "[torch] published=$WANT_TORCH  here=$GOT_TORCH"
+if [[ -n "$WANT_TORCH" && "$GOT_TORCH" != "$WANT_TORCH" ]]; then
+  if [[ "${MOE_ALLOW_TORCH_MISMATCH:-0}" == "1" ]]; then
+    echo "[torch] MISMATCH overridden; whatever you learn describes $GOT_TORCH, not the published rows"
+  else
+    echo "REFUSING: this venv runs torch $GOT_TORCH, the published rows were" >&2
+    echo "measured on $WANT_TORCH. A different torch ships a different CUTLASS," >&2
+    echo "so the kernel you would profile is not the kernel being explained." >&2
+    echo "Pin it (see the comment above), or set MOE_ALLOW_TORCH_MISMATCH=1 to" >&2
+    echo "profile this torch on its own terms." >&2
+    exit 2
+  fi
+fi
+
 HAVE_NCU=0; HAVE_NSYS=0
 command -v ncu  >/dev/null 2>&1 && HAVE_NCU=1
 command -v nsys >/dev/null 2>&1 && HAVE_NSYS=1
