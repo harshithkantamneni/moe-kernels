@@ -157,14 +157,13 @@ if [[ "$WHICH" == "both" || "$WHICH" == "tile" ]]; then
          -- $(cell 1) \
       | tee "$OUT/q2_kernel_names.txt"
   else
-    # Tracing is enough: the answer is in the NAME, not in a counter.
-    echo "     using nsys (no counters needed for a kernel name)"
-    nsys profile --trace=cuda --force-overwrite=true \
-         --output "$OUT/q2_tile" \
-         -- $(cell 1)
-    # Report name has moved between nsys versions; try the current one first.
-    nsys stats --report cuda_gpu_kern_sum "$OUT/q2_tile.nsys-rep" \
-      2>/dev/null || nsys stats --report gpukernsum "$OUT/q2_tile.nsys-rep" \
+    # torch's own profiler, not an external tracer. The answer is a kernel
+    # NAME, torch records those, and doing it in-process means no permissions
+    # and no command line to get wrong: Ubuntu ships nsight-systems 2022.4,
+    # which rejects `--` as an end-of-options separator, and a tool that has to
+    # agree with you about its own flags is a dependency this does not need.
+    echo "     using torch.profiler (no counters, no external tracer)"
+    "$PY" scripts/kernel_name.py --tokens 1 \
       | tee "$OUT/q2_kernel_names.txt"
   fi
   echo "     grep the name for a tile shape, e.g. cutlass...128x128x64..."
