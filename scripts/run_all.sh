@@ -55,11 +55,24 @@ RESULTS_DIR="${MOE_RESULTS_DIR:-$WORKSPACE/results}"
 
 log() { printf '\n[run_all] %s\n' "$*"; }
 
+# A SWEEP IS ONE EXPERIMENT, SO IT GETS ONE ID. run_env hands identical cli_args
+# to every venv, so a --run-id given here reaches all of them and the arms stay
+# findable together afterwards. Left empty, each venv falls through to
+# driver.RunConfig's own uuid4 default and one sweep lands as three unrelated
+# run ids: that is why publishing the 2026-08-26 three-way took three commits.
+# Same 12-hex shape as the driver default, so nothing downstream can tell which
+# side generated it.
+if [[ -z "$RUN_ID" ]]; then
+  RUN_ID="$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')"
+fi
+
 # The laptop path: validate the whole matrix without a GPU and stop.
 if [[ -n "$DRY_RUN" ]]; then
   PY="${MOE_PYTHON:-$REPO_ROOT/.venv/bin/python}"
   [[ -x "$PY" ]] || PY="python3"
   log "dry run (no GPU, nothing spent)"
+  printf '[run_all] sweep run id  %s  (every venv writes run_%s_<env>.csv)\n' \
+    "$RUN_ID" "$RUN_ID"
   exec "$PY" -m moe.bench.cli --profile "$PROFILE" --dry-run "${EXTRA[@]+"${EXTRA[@]}"}"
 fi
 
@@ -118,7 +131,7 @@ log "smoke: correctness and plumbing"
 log "sweep: profile=$PROFILE envs=$ENVS"
 ARGS=(--profile "$PROFILE" --out-dir "$RESULTS_DIR" --groups reference,kernels,baselines)
 [[ -n "$MAX_MINUTES" ]] && ARGS+=(--max-minutes "$MAX_MINUTES")
-[[ -n "$RUN_ID" ]] && ARGS+=(--run-id "$RUN_ID")
+ARGS+=(--run-id "$RUN_ID")   # never empty: see the sweep-id note above
 ARGS+=("${EXTRA[@]+"${EXTRA[@]}"}")
 
 "$PY" - "$ENVS" "$RESULTS_DIR" "${ARGS[@]}" <<'PYEOF'
