@@ -398,9 +398,23 @@ def read_csv(path: str | os.PathLike) -> list[dict[str, Any]]:
 
 
 def merge_csvs(paths: Iterable[str | os.PathLike], out_path: str | os.PathLike) -> int:
-    """Concatenate result CSVs from separate venv subprocesses into one file."""
+    """Concatenate result CSVs from separate venv subprocesses into one file.
+
+    REBUILDS out_path. CsvWriter is append-only because a run CSV must survive a
+    killed pod and be resumable, but a merge is derived: everything in it comes
+    from `paths`, so appending to a previous merge can only add rows that no
+    longer have an input to justify them. run_all.sh merges into
+    `results/merged.csv` once per sweep and results/ outlives a session, so under
+    the old behaviour every sweep silently inherited every sweep before it. The
+    2026-08-26 published arm carried 872 such rows, 840 of them from a sweep
+    measured against a different calibration, which makes an efficiency column
+    read against the wrong ceiling with nothing in the row to say so.
+    """
     written = 0
-    with CsvWriter(out_path) as w:
+    out = Path(out_path)
+    if out.exists():
+        out.unlink()
+    with CsvWriter(out) as w:
         for p in paths:
             for r in read_csv(p):
                 row = Row(**{k: _coerce(k, v) for k, v in r.items() if k in COLUMNS})

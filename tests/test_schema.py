@@ -159,3 +159,42 @@ def test_a_valid_column_missing_from_an_older_csv_still_defaults():
     assert SC.row_float({"impl": "x"}, "load_tile_eff_bm128") == 0.0
     assert SC.row_float({"impl": "x"}, "load_tile_eff_bm128", default=-1.0) == -1.0
     assert SC.row_bool({"impl": "x"}, "throttled") is False
+
+
+def test_merge_replaces_an_existing_merge_rather_than_appending(tmp_path):
+    """merged.csv is DERIVED, so re-merging must rebuild it, not grow it.
+
+    CsvWriter is append-only on purpose: a run CSV must survive a killed pod,
+    and resume appends to it. merged.csv is the opposite kind of file. run_all.sh
+    merges into `results/merged.csv`, and results/ outlives a session, so an
+    appending merge silently accumulates every sweep ever run on the pod. That is
+    where the 872 foreign rows in the 2026-08-26 published arm came from,
+    including all 840 rows of the August-22 sweep, which were measured against a
+    different calibration and so make every efficiency column in that file
+    unreadable without knowing which run a row belongs to.
+    """
+    a, b = tmp_path / "a.csv", tmp_path / "b.csv"
+    with SC.CsvWriter(a) as w:
+        w.write(make_row(run_id="first", env_name="base"))
+    with SC.CsvWriter(b) as w:
+        w.write(make_row(run_id="second", env_name="vllm"))
+
+    out = tmp_path / "merged.csv"
+    assert SC.merge_csvs([a], out) == 1
+    assert SC.merge_csvs([b], out) == 1, "the return value counts rows merged"
+
+    rows = SC.read_csv(out)
+    assert len(rows) == 1, f"the earlier merge was appended to, not replaced: {rows}"
+    assert {r["run_id"] for r in rows} == {"second"}
+
+
+def test_merging_the_same_inputs_twice_is_idempotent(tmp_path):
+    """Re-publishing an arm must not double it."""
+    a = tmp_path / "a.csv"
+    with SC.CsvWriter(a) as w:
+        w.write(make_row(run_id="x"))
+        w.write(make_row(run_id="x", num_tokens=64))
+    out = tmp_path / "merged.csv"
+    SC.merge_csvs([a], out)
+    SC.merge_csvs([a], out)
+    assert len(SC.read_csv(out)) == 2
