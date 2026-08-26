@@ -173,6 +173,8 @@ def main() -> int:
         # datasheet-roofed plot would disagree with its own data. Otherwise pick
         # the datasheet profile that actually describes the GPU the rows came
         # from, rather than defaulting to one part.
+        # "measured" is a sentinel, not a filename: hardware_for_rows resolves
+        # it against the device the ROWS were measured on.
         if RL.load_measured():
             args.hardware = "measured"
         else:
@@ -188,7 +190,7 @@ def main() -> int:
     if rows:
         measured_on = {r.get("gpu_name", "") for r in rows} - {""}
         try:
-            hw = RL.load_hardware(args.hardware, allow_unverified=True)
+            hw = RL.hardware_for_rows(args.hardware, rows, allow_unverified=True)
             mismatched = [g for g in measured_on if not RL.device_matches(hw, g)]
             if mismatched:
                 print(f"[plot] REFUSING: rows were measured on {mismatched} but "
@@ -197,8 +199,13 @@ def main() -> int:
                 print("[plot] run scripts/calibrate_hardware.py on the box, or "
                       "pass --hardware explicitly.")
                 return 1
-        except (RL.UnverifiedHardware, FileNotFoundError, ValueError):
-            pass
+        except (RL.UnverifiedHardware, FileNotFoundError, ValueError) as e:
+            # This guard exists to REFUSE a mismatched roof, so a failure to
+            # resolve one at all must not pass silently: that is how a missing
+            # calibration got past here and killed the script forty lines later,
+            # after a three-hour sweep.
+            print(f"[plot] could not resolve {args.hardware!r} for the "
+                  f"device-match check: {e}")
     if not rows:
         print(f"[plot] no correctness-passing rows in {args.results}")
         return 1

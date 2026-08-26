@@ -253,6 +253,33 @@ def load_measured(gpu_name: str | None = None,
     return None
 
 
+def hardware_for_rows(name: str, rows, allow_unverified: bool = False,
+                      directory: Path | None = None) -> Hardware:
+    """Resolve a hardware NAME against the rows it will be scored against.
+
+    "measured" stopped being a filename when calibrations went per device, and
+    every caller passing that literal broke. scripts/plot.py died on it after a
+    three-hour sweep, with all the rows already on disk, which is the worst
+    moment to discover a rename.
+
+    Resolution uses the device the ROWS record, not the device running this
+    process: figures get drawn on a laptop from a committed CSV, and a published
+    result set must keep being plottable against its own roof.
+    """
+    if name != "measured":
+        return load_hardware(name, allow_unverified=allow_unverified,
+                             directory=directory)
+    gpu = next((r.get("gpu_name", "") for r in rows if r.get("gpu_name")), "")
+    hw = load_measured(gpu, directory=directory)
+    if hw is None:
+        raise FileNotFoundError(
+            f"no calibration for {gpu or 'the device these rows name'}; expected "
+            f"{measured_slug(gpu) if gpu else 'measured_<device>'}.yaml. Run "
+            "scripts/calibrate_hardware.py on that machine, or pass an explicit "
+            "--hardware profile.")
+    return hw
+
+
 def efficiency(hw: Hardware, dtype: str, arithmetic_intensity: float,
                achieved_flops_s: float) -> float:
     """Achieved FLOP/s as a fraction of what the roofline permits at this AI.
@@ -285,7 +312,7 @@ def plot(rows, out_path, hardware: str = "measured", dtype: str = "bf16",
     import matplotlib.pyplot as plt
     import numpy as np
 
-    hw = load_hardware(hardware, allow_unverified=allow_unverified)
+    hw = hardware_for_rows(hardware, rows, allow_unverified=allow_unverified)
 
     # Only correctness-passing rows are plotted. A row that failed the oracle
     # leaves the driver with its timing zeroed, so this is redundancy rather

@@ -272,3 +272,30 @@ def test_another_devices_calibration_does_not_count_as_this_ones(tmp_path):
     state while a MISMATCHED one is an error."""
     (tmp_path / "measured_nvidia_h200.yaml").write_text(MEASURED_H200)
     assert RL.load_measured("NVIDIA H100 80GB HBM3", directory=tmp_path) is None
+
+
+def test_measured_resolves_against_the_rows_being_plotted(tmp_path):
+    """"measured" stopped being a filename when calibrations went per-device,
+    and every caller passing that literal broke. plot.py died on it AFTER a
+    three-hour sweep, with all the rows already on disk.
+
+    Resolution has to use the device the ROWS were measured on, not the device
+    running the plot: figures get drawn on a laptop from a committed CSV."""
+    (tmp_path / "measured_nvidia_h200.yaml").write_text(MEASURED_H200)
+    rows = [{"gpu_name": "NVIDIA H200", "impl": "x"}]
+    hw = RL.hardware_for_rows("measured", rows, directory=tmp_path)
+    assert "H200" in hw.name
+
+
+def test_a_named_profile_still_loads_directly(tmp_path):
+    (tmp_path / "h200_sxm.yaml").write_text(
+        "name: NVIDIA H200 SXM\nverified: true\nsource: nvidia.com\ntdp_w: 700\n"
+        "memory:\n  bandwidth_tb_s: 4.8\ncompute_dense_tflops:\n  bf16: 989.5\n")
+    hw = RL.hardware_for_rows("h200_sxm", [], directory=tmp_path)
+    assert hw.peak("bf16") == 989.5e12
+
+
+def test_missing_measured_calibration_names_the_device(tmp_path):
+    rows = [{"gpu_name": "NVIDIA A100-SXM4-80GB"}]
+    with pytest.raises(FileNotFoundError, match="A100"):
+        RL.hardware_for_rows("measured", rows, directory=tmp_path)
