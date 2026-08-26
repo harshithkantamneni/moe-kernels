@@ -166,10 +166,17 @@ rows are unthrottled.
 
 Three things are now measured rather than assumed, and they point the same way.
 
-`BLOCK_M` is **64**, read from the kernel name at every shape from T=1 to T=8192, not
-inferred from timing. The published claim of 128 in three write-ups is refuted. Refitting
-the re-read cost against the observed tile gives alpha = 0.10: an extra M-tile costs
-about a tenth of a fresh weight read.
+`BLOCK_M` is **64**, read from the kernel name rather than inferred from timing.
+`scripts/kernel_name.py` was run at T = 1, 16, 256, 1024 and 4096 and the name is
+identical at all five: `TileShape M,N = 64,128`, MMA atom
+`MMA_64x128x16_F32BF16BF16_SS`, schedule `Pingpong` and never `Cooperative`, so no two
+warpgroups share a tile and the effective M never doubles. That is a 4096x range in
+token count with no shape-dependent selection. It was NOT re-run at the 8192 this sweep
+added, so the constancy is established over 1..4096 and assumed above it. The published
+claim of 128 is refuted. Refitting the re-read cost against the observed tile over the
+151 unthrottled memory-bound rows gives alpha = 0.10 (mean ratio 1.65x, CV 12.8%),
+against 1.67x / 13.1% at alpha = 0 and 1.60x / 17.5% at alpha = 1: an extra M-tile on
+the same expert costs about a tenth of a fresh weight read, not a whole one.
 
 Arithmetic intensity is rows per active expert, section 4 measures it, and every
 realistic serving point is on the memory side of the ridge. A kernel that wins here wins
