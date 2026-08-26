@@ -1,0 +1,110 @@
+name: NVIDIA H200 (measured)
+verified: true
+source: measured on this machine by scripts/calibrate_hardware.py
+source_note: Achievable ceilings, not datasheet peaks. Nsight Compute is unavailable
+  on a rented pod (ERR_NVGPUCTRPERM), so DRAM traffic cannot be measured directly;
+  these ceilings are what make the efficiency columns meaningful without counters.
+  Bandwidth is the 'triad' pattern; every pattern measured is under `detail` so a
+  different denominator can be applied without re-running.
+checked_by: scripts/calibrate_hardware.py
+checked_on: '2026-08-25'
+measured_commit: 11555d997e7af71f6747361ac49685962659115a
+measured_dirty: true
+memory:
+  bandwidth_tb_s: 4.374691681271392
+compute_dense_tflops:
+  bf16: 701.6487461856873
+  fp16: 701.6487461856873
+detail:
+  gpu_name: NVIDIA H200
+  achieved_bandwidth_gbps: 4374.691681271392
+  ceiling_pattern: triad
+  achieved_bf16_tflops: 701.6487461856873
+  bandwidth_patterns:
+  - pattern: read
+    bytes_moved: 8589934592
+    ms_p50: 1.9569759964942932
+    ms_min: 1.9525760412216187
+    gbps: 4389.3919022961545
+    gbps_peak_min: 4399.283003916074
+    note: closest analogue to streaming expert weights
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: copy
+    bytes_moved: 17179869184
+    ms_p50: 3.981663942337036
+    ms_min: 3.978624105453491
+    gbps: 4314.746154572824
+    gbps_peak_min: 4318.042802900528
+    note: ''
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: triad
+    bytes_moved: 25769803776
+    ms_p50: 5.890655994415283
+    ms_min: 5.884575843811035
+    gbps: 4374.691681271392
+    gbps_peak_min: 4379.211766486583
+    note: canonical STREAM metric; the default ceiling
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  - pattern: write
+    bytes_moved: 8589934592
+    ms_p50: 1.8334399461746216
+    ms_min: 1.831936001777649
+    gbps: 4685.1464155793365
+    gbps_peak_min: 4688.992728820557
+    note: 1N proven (2N would exceed the pin rate by 94%); unflushed so the timed
+      window cannot shed writeback
+    sm_clock_start_mhz: 1980
+    sm_clock_end_mhz: 1980
+  gemm_shape:
+  - 8192
+  - 8192
+  - 8192
+  gemm_clock_mhz: 1485
+  buffer_bytes: 8589934592
+  clocks:
+    sm_start_mhz: 1470
+    sm_end_mhz: 1980
+    temp_start_c: 64
+    temp_end_c: 52
+    drift_pct: -34.69
+    throttled: false
+  settle:
+    settled: true
+    clock_history_mhz:
+    - 1485
+    - 1425
+    - 1485
+    - 1440
+    - 1455
+    - 1470
+    - 1470
+    final_mhz: 1470
+    max_seconds: 30.0
+  warmup_pass:
+    read: 4385.6
+    copy: 4314.6
+    triad: 4374.6
+    write: 4684.9
+  sustained_peak_tflops: 802.9
+  gemm_efficiency_pct: 87.4
+  ridge_by_pattern:
+    read: 159.9
+    copy: 162.6
+    triad: 160.4
+    write: 149.8
+observed:
+  l2_bytes: 62914560
+  sm_count: 132
+  clocks_max_memory_mhz: 3201.0
+  clocks_current_memory_mhz: 3201.0
+  throttle_reasons: '0x0000000000000000'
+  memory_bus_bits: 6144
+  pin_rate_gbps: 4916.7
+  power_limit_w: 700.0
+spec_comparison:
+  profile: h200_sxm
+  bandwidth_gbps: 4800.0
+  bf16_tflops: 989.5
