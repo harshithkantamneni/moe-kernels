@@ -258,9 +258,17 @@ ratio, moving a little less than predicted at T=256 and a little more at T=4096.
 **Only a `BLOCK_M` sweep separates the two, and that is exactly why it works.** Changing
 `BLOCK_M` breaks the proportionality that makes them indistinguishable here: padded rows
 go as `M_tiles * BLOCK_M` while traffic goes as `M_tiles * W`, so their ratio `W/BLOCK_M`
-stops being a constant and the two models finally predict different columns. The incumbent
-cannot run that experiment because its `BLOCK_M` is not a knob. That is the first
-experiment worth running, not an afterthought.
+stops being a constant and the two models finally predict different columns. That is the
+first experiment worth running, not an afterthought.
+
+It is also already runnable. vLLM and SGLang expose `BLOCK_SIZE_M` in their fused_moe
+config JSONs, so sweeping it at fixed routing is a config edit, not a new kernel; an
+earlier version of this file claimed the tile "is not a knob", which is true only of
+`torch.nn.functional.grouped_mm`, whose tile is fixed in the CUTLASS template. A DRAM
+counter would separate the two directly and is blocked here for unrelated reasons. The
+limitation that no config reaches is a **per-expert** tile: `moe_align_block_size` emits
+one padded expert-sorted array with a single block size that both GEMMs consume, so one
+launch is one tile height for every expert in it.
 
 One more thing the sweep does settle, which is not about the mechanism: padded arithmetic
 intensity is exactly `BLOCK_M` = 64 FLOP/byte regardless of model geometry, well below
@@ -361,9 +369,10 @@ scheduling decision the kernel is free to make differently. Section 2 is why the
 distinction is stated rather than assumed: outside this regime the sweep does not
 resolve which of the two the traffic actually scales with.
 
-And the first experiment the incumbent cannot run, because its `BLOCK_M` is not a knob:
-sweep `BLOCK_M` at fixed routing and separate wasted MACs from wasted weight reads. Every
-number above is consistent with both, and they call for different kernels.
+And the first experiment worth running: sweep `BLOCK_M` at fixed routing and separate
+wasted MACs from wasted weight reads. Every number above is consistent with both, and they
+call for different kernels. This needs no new kernel, only a `BLOCK_SIZE_M` edit in a vLLM
+or SGLang fused_moe config, and it has not been done.
 
 ---
 

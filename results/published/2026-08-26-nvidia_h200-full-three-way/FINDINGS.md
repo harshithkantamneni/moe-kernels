@@ -185,8 +185,20 @@ by moving fewer weight bytes, not by doing arithmetic faster.
 And the incumbents are already close to that floor while covering five stages. 1.16x is
 not a lot of room. The honest read is that the remaining win is not in the grouped GEMM
 as a GEMM; it is in not streaming a weight matrix per active expert when the expert holds
-two rows. That is a routing-shaped and scheduling-shaped problem, and it is the one
-experiment the incumbent cannot run, because its `BLOCK_M` is not a knob.
+two rows. That is a routing-shaped and scheduling-shaped problem.
+
+The tile-height sweep that would separate wasted MACs from wasted weight reads is
+**runnable today, and needs no new kernel**: vLLM and SGLang both ship tuned
+`BLOCK_SIZE_M` per batch size in their fused_moe config JSONs, so it is a config edit and
+a rerun. It has not been run here, and saying otherwise would be wrong. A DRAM counter
+would settle the same question directly, which is the other route this pod blocks.
+
+What no shipped implementation offers is a tile that varies **per expert within a
+launch**. `moe_align_block_size` emits one padded, expert-sorted token array with a
+single block size, and both GEMMs consume it, so every expert in a launch is served by
+the same tile height. Under skew that puts experts on both sides of the ridge under one
+tile. `torch.nn.functional.grouped_mm` is stricter still: its tile is fixed in the
+CUTLASS template and the API exposes no parameter at all.
 
 ---
 
