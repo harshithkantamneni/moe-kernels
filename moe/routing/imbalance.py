@@ -135,3 +135,50 @@ def counts_from_offsets(expert_offsets) -> list[int]:
     if any(s < 0 for s in sizes):
         raise ValueError("expert_offsets must be non-decreasing")
     return sizes
+
+
+class TileEfficiencyUndetermined(ValueError):
+    """The stored columns do not pin down tile efficiency at this block_m."""
+
+
+def tile_efficiency_for_row(row: dict, block_m: int) -> float:
+    """Tile efficiency at ANY `block_m`, from a published row's own columns.
+
+    The schema stores `tile_eff_bm64` and `tile_eff_bm128`, and neither is the
+    tile the Triton baselines run: vLLM's tuned H200 config sets BLOCK_SIZE_M to
+    16 for every batch size from 1 to 256, the whole decode range. Adding a bm16
+    column is not the fix, because `schema.read_csv` refuses an unrecognised
+    schema_version, so a new column would make every already-published row
+    unreadable by the code meant to analyse it.
+
+    Regenerating the routing is not the fix either. `cli.build_routing_source`
+    passes `device=args.device`, so on a GPU run the sampler uses a CUDA
+    generator, and CUDA and CPU RNG produce different streams from the same
+    seed. Published routing therefore cannot be reproduced off the GPU at all.
+
+    What IS available: while every expert fits inside one tile, each active
+    expert contributes exactly `block_m` padded rows, so
+
+        tile_eff = total_rows / (active_experts * block_m)
+
+    which needs only columns the row already carries. Verified exact against
+    `tile_eff_bm64` on all 2356 published rows where `max_rows <= 64`.
+
+    Above that threshold an expert spans several tiles and the answer depends on
+    the full per-expert distribution, which is not stored. That case raises
+    rather than returning a plausible number.
+    """
+    if block_m <= 0:
+        raise ValueError("block_m must be positive")
+    active = int(float(row["load_active_experts"]))
+    total = float(row["load_total_rows"])
+    max_rows = float(row["load_max_rows"])
+    if active == 0 or total == 0:
+        return 0.0
+    if max_rows > block_m:
+        raise TileEfficiencyUndetermined(
+            f"max_rows={max_rows:g} exceeds block_m={block_m}, so at least one "
+            "expert spans several tiles and the per-expert distribution is "
+            "needed. It is neither stored nor reproducible off-GPU."
+        )
+    return total / (active * block_m)

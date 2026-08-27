@@ -200,7 +200,76 @@ Sources: Yun et al., *Rethinking LLM Inference Bottlenecks: Insights from Latent
 Attention and Mixture-of-Experts*, arXiv:2507.15465v3 [cs.AR], 2026-01-29.
 DeepSeek-V3/R1 Inference System Overview, deepseek-ai/open-infra-index, 2025-02.
 
-## 5. Throttling
+## 5. The tile is not a tuning choice, and 64 is not the tile that runs
+
+Two facts settle what `BLOCK_M` means on this hardware, and they point in
+opposite directions for the two implementations under test.
+
+**`torch.nn.functional.grouped_mm` is pinned at 64 by the instruction set.**
+Hopper's warpgroup MMA is `wgmma.mma_async.m64nNk16`: N is any multiple of 8 from
+8 to 256, K is 16 for 16-bit operands, and **M is fixed at 64**. It is issued
+collectively by a warpgroup, four warps, 128 threads. So the `TileShape M,N =
+64,128` read out of the kernel name was never a selection. There is no shape at
+which CUTLASS could have chosen otherwise, which is why the name is identical at
+T = 1, 16, 256, 1024 and 4096.
+
+It also means a `BLOCK_M` sweep cannot go BELOW 64 on that path. The tile is not
+a knob there in the strict sense, unlike the Triton path.
+
+**vLLM's tuned config runs 16 through the entire decode range.** From the shipped
+`E=128,N=512,device_name=NVIDIA_H200.json`:
+
+| batch | 1..256 | 512 | 1024..1536 | 2048+ |
+|---|---:|---:|---:|---:|
+| `BLOCK_SIZE_M` | **16** | 32 | 64 | 128 |
+
+Above batch 256 the tuner tracks rows-per-expert exactly, one tile per expert,
+zero padding waste. Below it, 16 is the floor and the tile is larger than the
+work. (The rows-per-expert reading assumes `top_k=8` for that config, which the
+filename does not state; the fit across four batch sizes is exact, but it is an
+inference.)
+
+**The consequence, stated as an inference and not a measurement.** 16 is below
+WGMMA's fixed M of 64, so that path cannot be using Hopper's warpgroup tensor
+core at decode. If so, vLLM's MoE decode runs on the older `mma.sync` path on
+Hopper silicon, and correctly so: the tensor core is idle waiting on weights
+either way, while a small tile buys occupancy and therefore more memory requests
+in flight. **This has not been verified.** Triton might pad 16 up to 64
+internally. The decisive check is `TRITON_KERNEL_DUMP=1` on a real cell and a
+grep for `wgmma` against `mma.sync`; it is ten minutes and it has not been run.
+
+**And there is no `E=256` H200 config in vLLM's tree at all**, so deepseek-v3 on
+this card falls through to `get_default_config()`, whose bf16 ladder is 16 for
+M<=32, 32 for M<=96, 64 for M<=512, 128 above. Nothing tuned ever ran for the
+geometry this sweep measures.
+
+### Routing is not reproducible off the GPU
+
+Found while trying to recompute tile efficiency at other tile sizes.
+`cli.build_routing_source` passes `device=args.device` into `routing_source`, so
+a GPU run draws its Gumbel keys from a **CUDA** generator. CUDA and CPU RNG
+produce different streams from the same seed, so the exact expert assignment
+behind every published row cannot be regenerated on a laptop, and a `--device
+cpu` run of the "same" cell gets different routing from a `--device cuda` one.
+
+Row totals still match, since `T x k` is fixed; the distribution across experts
+does not. Observed directly: mixtral T=2 uniform seed 0 records 4 active experts,
+and the same call on CPU yields 2.
+
+Routing is a specification of the experiment rather than part of the measured
+work, and the forced ids are built once outside every timed region, so generating
+them on CPU and copying a `[T, k]` int32 tensor to the device would cost nothing
+and make the experiment reproducible anywhere. **Not changed here**, because it
+would alter the routing of any future run relative to the published rows, and
+that is a decision to take deliberately rather than as a side effect.
+
+`routing/imbalance.tile_efficiency_for_row` works around it without regenerating
+anything: while `max_rows <= block_m` every active expert is exactly one tile, so
+`tile_eff = total_rows / (active_experts * block_m)` follows from columns the row
+already carries. Verified exact against `tile_eff_bm64` on all 2,356 published
+rows meeting that condition. Above the threshold it raises rather than guessing.
+
+## 6. Throttling
 
 1,663 of 17,640 rows carry `throttled` (9.4%). The detector is unchanged and still two
 point samples, not a time series: SM clock read once before a cell's timing call and
@@ -213,7 +282,7 @@ Excluding them moves the PyTorch median from 1.59 to 1.62 and leaves vLLM and SG
 within 0.01. Section 3's finding survives the exclusion outright: 56 of the 83 impossible
 rows are unthrottled.
 
-## 6. What this sweep does not establish
+## 7. What this sweep does not establish
 
 - **DRAM traffic is still modelled, not counted.** `ncu` needs a host module flag a
   container tenant cannot set (`ERR_NVGPUCTRPERM`), so every byte figure here is
