@@ -270,6 +270,20 @@ limitation that no config reaches is a **per-expert** tile: `moe_align_block_siz
 one padded expert-sorted array with a single block size that both GEMMs consume, so one
 launch is one tile height for every expert in it.
 
+**Two conditions the sweep has to meet, neither of which this file originally stated.**
+`M_tiles = active_experts` independent of `BLOCK_M` holds only while EVERY expert fits in
+one tile, so the precondition is on the MAXIMUM rows per expert, not the mean. Under skew
+that fails: deepseek-v3 at T=64 `hot:0.5` puts 64 rows on its top expert, so any smaller
+tile spills it and weight traffic stops being flat. Uniform routing at T <= 64 holds the
+maximum at 3 to 7 rows and is where the sweep is clean. Second, `BLOCK_M` sizes the
+register accumulator and therefore occupancy, so a change in time cannot be attributed to
+padded MACs rather than to latency hiding: only a FLAT result is clean evidence.
+
+A cheaper and less confounded route exists, since the Triton kernel is editable Python:
+replace the weight `tl.load` with `tl.zeros` to drop weight traffic while keeping the
+MACs, and no-op the dot to drop the MACs while keeping the traffic. Watch for dead-code
+elimination in both directions. Both routes suggested in GPU MODE; neither run yet.
+
 One more thing the sweep does settle, which is not about the mechanism: padded arithmetic
 intensity is exactly `BLOCK_M` = 64 FLOP/byte regardless of model geometry, well below
 the measured 166 ridge. So even a kernel that genuinely computed every padding row would still

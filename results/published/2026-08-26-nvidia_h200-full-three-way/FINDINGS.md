@@ -92,10 +92,29 @@ figure by 2.5% while staying 9% under the physical pin rate is what a slightly w
 byte model looks like, not what a broken timer looks like.
 
 The regime narrows it further. deepseek-v3 at T=16..64 activates 54..225 of 256 experts
-with 1.2..2.3 rows each. The compulsory model charges a full weight matrix per active
-expert. If vLLM's kernel skips or truncates weight reads for experts holding almost no
-rows, the model over-charges exactly there and nowhere else. That is a testable claim
-and this sweep does not test it: it needs a counter, and see section 6.
+with 1.2..2.3 rows each.
+
+**The obvious explanation has been ruled out.** This section previously argued that
+vLLM's kernel might skip or truncate weight reads for experts holding almost no rows,
+which would make the compulsory model over-charge exactly here and nowhere else. Asked
+directly in GPU MODE, the answer was that `fused_experts` reads the entire w1 and w2 for
+an expert holding two rows. The byte model is therefore correct and the anomaly is not
+the kernel doing less work than charged.
+
+**The surviving explanation is that the ceiling is mis-set, not the numerator.** The same
+reply pointed out that decode is effectively pure weight streaming, so the `read` pattern
+is the right denominator rather than `triad`. Agreed, and the calibration already
+annotates `read` that way, but it only moves the figure from 102.5% to 102.1%: this
+card's MEASURED read is 4389.39 GB/s. The 4.8 TB/s that makes the anomaly vanish (93.4%)
+is the datasheet number, not a measurement of this device.
+
+That points somewhere more interesting than a kernel quirk. If a production kernel
+sustains 4483.4 GB/s on pure weight streaming while `scripts/calibrate_hardware.py`
+reaches only 4389.4 GB/s on a STREAM read, then the calibration is not measuring a
+ceiling, it is measuring its own achieved rate, and every "percent of ceiling" figure in
+this file is pessimistic by that margin. A TMA-driven kernel plausibly beats a naive
+read loop. **Open action: harden the calibration read kernel and see whether it climbs
+past 4483.4.** That needs no counters and is the cheapest test available.
 
 ## 4. Arithmetic intensity is rows per active expert, and it is measured
 
@@ -123,10 +142,63 @@ Where each geometry crosses the 160.4 FLOP/byte ridge, from the measured points:
 - **qwen2** (8) between T=1024 and T=4096
 - **deepseek** (32) between T=4096 and T=8192, interpolating to roughly T = 5500
 
-Every serving batch size anyone actually runs sits on the memory side of all three. The
-dilution is `E/k`: the more experts a model has per token routed, the further right its
-crossing moves, so the models with the most experts are the ones least able to reach
+The dilution is `E/k`: the more experts a model has per token routed, the further right
+its crossing moves, so the models with the most experts are the ones least able to reach
 their own compute ceiling.
+
+**Why the identity holds, and why no expert architecture escapes it.** Every weight
+element is used exactly once per row, contributing 2 FLOPs, and costs `b` bytes read
+once. So for an expert holding any weight tensors at all, with `N` elements in total
+across however many layers:
+
+```
+    FLOPs (R rows) = 2 N R          bytes (weights) = N b
+    AI = 2NR / Nb  = 2R / b
+```
+
+`N` is a SUM over layers and appears identically top and bottom, so it cancels for any
+layer count and any shapes: square, rectangular, mismatched, five layers or one. For bf16
+that is `AI = R` exactly. Verified numerically against deliberately lopsided synthetic
+architectures (layers of 7168x2048, 2048x999, 999x31, 31x4096, 4096x123 gives the same AI
+as two equal 4096x4096 layers). Shapes enter only the second-order activation term, which
+is why mixtral at `F/H = 3.50` deviates most (ratio 0.64 at R=2048) and deepseek-v3 at
+`F/H = 0.29` least (0.91 at R=256).
+
+The consequence is worth stating plainly: **arithmetic intensity is weight reuse times
+`2/b`, and nothing else.** Restructuring the expert cannot move it. The only levers are
+`R` (batch and routing) and `b` (fp8 doubles AI and halves the crossing).
+
+**This agrees with published analysis, and the sweep is an independent check on it.**
+Yun et al. derive expert-layer intensity as `Γ_imb · B · n_k/n_e` and the compute-bound
+threshold as `B_MoE = RP_acc · (n_e/n_k)`, which is the same relation reached here from
+measurement rather than from a model. Their Table I gives H200 SXM5 a ridge of 206.15
+Op/B in BF16. Their thresholds land inside every bracket measured above:
+
+| model | E/k | `B_MoE` at 206.15 | `B_MoE` at 160.4 | measured bracket |
+|---|---:|---:|---:|---|
+| mixtral-8x7b | 4 | 825 | 642 | 256 - 1024 |
+| qwen2-57b-a14b | 8 | 1649 | 1283 | 1024 - 4096 |
+| deepseek-v3 | 32 | 6597 | 5133 | 4096 - 8192 |
+
+The 206.15 is datasheet-derived (989.4 TFLOP/s over 4.8 TB/s). This card measures 160.4,
+because achieved bandwidth reaches 91.1% of spec while achieved bf16 reaches only 70.9%.
+Compute falls further short than bandwidth does, so the real ridge is LOWER and the
+crossing arrives EARLIER than the published figure implies.
+
+**Scope, stated because an earlier draft of this section overreached.** The claim is
+about a single GPU holding every expert. It is not a claim about how frontier MoE is
+served. DeepSeek's own decode deployment is DP144+EP144 across 18 nodes, and expert
+parallelism exists precisely to scale the aggregate batch: rows-per-expert is
+`T_aggregate * k / E` regardless of sharding, so 144 GPUs' worth of KV cache can push
+`T_aggregate` past 5,133 and over this ridge. Yun et al. describe what replaces the
+bottleneck there: "as the batch size increases, the interconnect bandwidth and `Γ_imb`
+become the most critical factors." The defensible statement is therefore narrow:
+**single-GPU MoE decode with all experts resident is memory-bound at any batch that
+fits**, and escaping it costs a network.
+
+Sources: Yun et al., *Rethinking LLM Inference Bottlenecks: Insights from Latent
+Attention and Mixture-of-Experts*, arXiv:2507.15465v3 [cs.AR], 2026-01-29.
+DeepSeek-V3/R1 Inference System Overview, deepseek-ai/open-infra-index, 2025-02.
 
 ## 5. Throttling
 
@@ -156,6 +228,22 @@ rows are unthrottled.
 - **Nothing here separates a kernel-quality gap from a span-extent gap.** Section 2 is
   reported per span for that reason. Settling it needs the fused implementations run at
   a single-stage extent, or the harness's own spans fused, and neither exists yet.
+- **The MACs-vs-weight-reads separation has a cheaper route than a tile sweep.** Because
+  the Triton `fused_moe` kernel is editable Python, replacing the weight `tl.load` with
+  `tl.zeros` removes weight traffic while keeping the MACs, and no-oping the dot removes
+  the MACs while keeping the traffic. Two ablations isolate the terms directly, with no
+  occupancy confound. The hazard is dead-code elimination: zeroing the weights may let
+  the compiler fold the dot away, and no-oping the dot may let it delete the loads, so
+  the data dependency to the store has to be kept alive and the result checked rather
+  than assumed. Suggested in GPU MODE and not yet run.
+- **The tile sweep described below needs a precondition this file did not state.** It
+  assumes `M_tiles = active_experts` independent of `BLOCK_M`, which holds only while
+  EVERY expert fits in one tile. `load_max_rows` says that fails under skew: deepseek-v3
+  at T=64 `hot:0.5` puts 64 rows on the top expert, exactly one tile, so any smaller
+  `BLOCK_M` spills it and traffic stops being flat. Uniform routing at T <= 64 keeps the
+  maximum at 3 to 7 rows, and is where the sweep is clean. Separately, `BLOCK_M` sizes
+  the register accumulator and therefore occupancy, so a change in time is ambiguous
+  between padded MACs and latency hiding: only a FLAT result is clean evidence.
 - **The 1.16x floor is a ratio against a model, not against a counter.** If the
   compulsory model is wrong in the direction section 3 suggests, it is wrong for these
   numbers too, and the true figure is closer to 1.00 than reported.
