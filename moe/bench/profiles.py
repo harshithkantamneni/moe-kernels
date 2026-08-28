@@ -29,7 +29,14 @@ class Profile:
     warmup: int = 25
     trials: int = 3
     iters: int | None = None
+    #: Add an ALL-REFERENCE whole-layer cell per spec: a python loop over every
+    #: expert. Measured 7.337 ms against vLLM's 0.588 at mixtral/T=512, so it is
+    #: a 12.5x ceiling rather than a target. Real, but slow and about no kernel.
     include_pipeline_scope: bool = False
+    #: Add a whole-layer cell per framework span: ref_router plus that span,
+    #: timed as one. The only way to price a FULL MoE layer, since every
+    #: framework span covers five of six stages and omits the router.
+    include_framework_pipeline: bool = False
     notes: str = ""
 
     def specs(self) -> list[BenchSpec]:
@@ -115,7 +122,12 @@ PROFILES: dict[str, Profile] = {
         dtypes=("bf16",),
         routings=SKEW_SWEEP + (RoutingSpec("zipf", 2.0), RoutingSpec("hot", 0.8)),
         seeds=(0, 1, 2),
-        include_pipeline_scope=True,
+        # The all-reference whole layer is OFF here as of 2026-08-28. It was
+        # switched on in ffaf154 with no stated reason, and its 882 cells were
+        # the several-hour part of this profile while measuring no kernel.
+        # `--include-reference`-style use can still ask for it explicitly.
+        include_pipeline_scope=False,
+        include_framework_pipeline=True,
         notes="publication sweep; hours, not minutes",
     ),
 }
@@ -167,6 +179,15 @@ def cells(profile: Profile, env: str | None = None,
         if profile.include_pipeline_scope and env in (None, BASE_ENV):
             from .driver import PIPELINE_SCOPE
             yield spec, reference_pipeline_names(), PIPELINE_SCOPE
+        # Whole-layer cells around a real kernel. Not in base: there is no
+        # framework span there to wrap, and the all-reference layer is the
+        # other flag's job.
+        if profile.include_framework_pipeline and env != BASE_ENV:
+            from .driver import pipeline_scope_for
+            for span in impls:
+                if span.env == BASE_ENV or not span.supports(spec):
+                    continue
+                yield spec, tiling_for(span), pipeline_scope_for(span.name)
 
 
 @dataclass(frozen=True)

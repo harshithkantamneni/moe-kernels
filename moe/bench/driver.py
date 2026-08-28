@@ -41,7 +41,25 @@ from .tolerance import relative_error, tolerance
 RoutingSource = Callable[[BenchSpec], "torch.Tensor | None"]
 
 #: `impl` value meaning "time the entire tiling end to end" rather than one span.
+#: Bare, this is the ALL-REFERENCE whole layer, and 3,528 rows in each published
+#: bf16 arm carry exactly this string. It must not be renamed.
 PIPELINE_SCOPE = "__pipeline__"
+
+
+def pipeline_scope_for(span_name: str) -> str:
+    """The whole-layer `impl` name for a layer built around `span_name`.
+
+    Distinct from the bare marker on purpose. Analyses key on the `impl` column
+    -- compare.py builds by[(tokens, impl)] -- so an all-reference whole layer
+    and a vLLM whole layer sharing one label would average a 7.3 ms python loop
+    into a 0.588 ms kernel series.
+    """
+    return f"{PIPELINE_SCOPE}:{span_name}"
+
+
+def is_pipeline_scope(impl: str) -> bool:
+    """Does this `impl` mean "time the whole tiling" rather than one span?"""
+    return impl == PIPELINE_SCOPE or impl.startswith(PIPELINE_SCOPE + ":")
 
 def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
     """Is isolating launch overhead worth a doubled sweep for this cell?
@@ -188,7 +206,7 @@ def _expert_counts(st: MoEState, spec: BenchSpec, forced) -> tuple[list[int], st
 
 
 def _resolve_target(pipe: Pipeline, impl: str):
-    if impl == PIPELINE_SCOPE:
+    if is_pipeline_scope(impl):
         return None
     for s in pipe.spans:
         if s.name == impl:
