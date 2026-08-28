@@ -21,13 +21,21 @@ batch size with a single global `BLOCK_M`. Under balanced routing the mean is
 the right statistic, since every expert is the mean.
 
 Under skewed routing it stops being. Arithmetic intensity works out to
-rows-per-expert, so on this H200 an expert crosses the roofline ridge at ~166
-rows, and a skewed launch contains experts on both sides of it at once: at
+rows-per-expert, so on this H200 an expert crosses the roofline ridge somewhere
+between 160 and 176 rows, and a skewed launch contains experts on both sides of
+it at once: at
 `zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
 rows while 221 are memory-bound. That is one draw, and a typical one: over 40
 resamples of the same distribution the split runs 31-36 compute-bound experts
 holding 70.5-73.5% of the rows. Under uniform routing the mix never occurs at
 any batch size measured.
+
+The ridge is a range rather than a value because its compute term is. Two
+calibrations of this same H200 gave 4377.2 and 4374.5 GB/s of bandwidth, 0.06%
+apart, but 701.6 and 770.9 TFLOP/s of dense bf16, 9.9% apart, because the GEMM
+runs at whatever clock the thermal state allows. An earlier draft of this
+paragraph said ~166 rows, which was one measurement quoted as though it were
+the number.
 
 So: measure on real routing, on the hardware, and see where it actually breaks.
 
