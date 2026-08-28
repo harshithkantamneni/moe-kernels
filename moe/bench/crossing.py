@@ -60,12 +60,22 @@ def local_slopes(points: list[tuple[float, float]]) -> list[tuple[float, float]]
 
 
 def crossing_from_points(points: list[tuple[float, float]],
-                         threshold: float = DEFAULT_THRESHOLD) -> float | None:
+                         threshold: float = DEFAULT_THRESHOLD,
+                         min_tokens: float = 0.0) -> float | None:
     """The token count where the measured slope first crosses `threshold`.
+
+    `min_tokens` discards points below it. Pass the model's saturation batch:
+    below `E/k` tokens a batch does not reach every expert, so active experts
+    and weight traffic grow WITH the batch and time rises nearly linearly. That
+    slope crosses the threshold for a reason that has nothing to do with the
+    ridge, and without the floor mixtral reported a crossing at 5 tokens against
+    a predicted 641. `2R/b` assumes all E experts are active, so those points
+    are outside the claim's domain rather than evidence against it.
 
     None when the grid does not bracket it, which is a real answer: it says the
     sweep needs different token counts, not that the crossing does not exist.
     """
+    points = [(t, ms) for t, ms in points if t >= min_tokens]
     slopes = local_slopes(points)
     if len(slopes) < 2:
         return None

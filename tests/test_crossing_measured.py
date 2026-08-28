@@ -111,3 +111,40 @@ def test_a_genuinely_tiny_time_is_kept():
 def test_a_malformed_time_is_dropped_rather_than_crashing():
     from moe.bench.crossing import timed_rows
     assert timed_rows([{"ms_p50": "n/a"}, {"ms_p50": None}]) == []
+
+
+# --- below saturation, `2R/b` does not apply --------------------------------
+
+def test_the_expert_filling_regime_is_not_the_ridge():
+    """MEASURED, H200 2026-08-28. mixtral bf16 reported a crossing at 5 tokens
+    against a predicted 641, and deepseek-v3 at 25 against 5130.
+
+    Below `E/k` tokens, a batch does not touch every expert. Active experts, and
+    so weight traffic, grow WITH the batch, and time rises nearly linearly. The
+    slope is high, crosses 0.5, and the detector stopped there.
+
+    `2R/b` assumes all E experts are active -- R = T*k/E is only the rows per
+    expert once each expert has rows. So points below saturation are outside the
+    claim's domain, not evidence against it.
+    """
+    # Flat-then-linear as before, but with a rising head below saturation.
+    pts = [(1, 0.19), (2, 0.28), (4, 0.35),          # experts still filling
+           (8, 0.50), (16, 0.51), (32, 0.52),        # weight-bound plateau
+           (64, 0.55), (128, 0.60), (256, 0.70),
+           (512, 1.10), (1024, 2.00), (2048, 3.90)]  # compute-bound
+    naive = crossing_from_points(pts)
+    floored = crossing_from_points(pts, min_tokens=8)
+    assert naive is not None and naive < 8, (
+        "fixture must reproduce the bug: a spurious early crossing")
+    assert floored is not None and floored > 200, (
+        f"with the floor the ridge should be found late, got {floored}")
+
+
+def test_the_floor_defaults_to_off_so_existing_callers_are_unchanged():
+    pts = [(t, max(1.0, t / 512)) for t in (64, 128, 256, 512, 1024, 2048)]
+    assert crossing_from_points(pts) == crossing_from_points(pts, min_tokens=0)
+
+
+def test_a_floor_above_every_point_finds_nothing_rather_than_guessing():
+    pts = [(t, max(1.0, t / 512)) for t in (64, 128, 256, 512, 1024, 2048)]
+    assert crossing_from_points(pts, min_tokens=100_000) is None

@@ -26,14 +26,20 @@ from moe.bench.crossing import (  # noqa: E402
     local_slopes,
     timed_rows,
 )
-from moe.bench.ridge import crossing_batch  # noqa: E402
+from moe.bench.ridge import (  # noqa: E402
+    crossing_batch,
+    ridge_for_dtype,
+    saturation_batch,
+)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("csvs", nargs="+", type=Path)
     ap.add_argument("--ridge", type=float, required=True,
-                    help="measured FLOP/byte, from the calibration")
+                    help="measured bf16 FLOP/byte from the calibration; other "
+                         "dtypes are scaled by their FLOP rate, since a format "
+                         "changes the peak as well as the bytes")
     ap.add_argument("--impl", default=None, help="restrict to one implementation")
     ap.add_argument("--routing", default=None, help="restrict to one routing kind")
     ap.add_argument("--include-throttled", action="store_true")
@@ -101,9 +107,15 @@ def main() -> int:
             print(f"  {t:>6} {ms:>9.4f} {'' if s is None else f'{s:>7.3f}'}   {tag}")
             prev = t
 
-        measured = crossing_from_points(points)
-        predicted = crossing_batch(model, args.ridge, dtype)
-        print(f"\n  predicted (2R/b, ridge {args.ridge}): {predicted:8.0f} tokens")
+        # Below E/k a batch misses experts, so weight traffic grows with the
+        # batch and the slope crosses for a reason unrelated to the ridge.
+        sat = saturation_batch(model)
+        measured = crossing_from_points(points, min_tokens=sat)
+        dtype_ridge = ridge_for_dtype(args.ridge, dtype)
+        predicted = crossing_batch(model, dtype_ridge, dtype)
+        print(f"\n  saturation (E/k, floor):             {sat:8.0f} tokens")
+        print(f"  ridge for {dtype:<9}                  {dtype_ridge:8.1f} FLOP/byte")
+        print(f"  predicted (2R/b at that ridge):      {predicted:8.0f} tokens")
         if measured is None:
             print("  measured:                            not bracketed by this "
                   "token grid")

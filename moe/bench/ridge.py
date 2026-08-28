@@ -66,6 +66,45 @@ def saturation_batch(model: str, fraction: float = SATURATION_FRACTION) -> float
     return math.log(1.0 - fraction) / math.log(miss)
 
 
+#: FLOP rate relative to bf16 on the same silicon. Hopper and Blackwell run fp8
+#: tensor cores at twice the bf16 rate and fp32 at half, so a format changes
+#: BOTH sides of the roofline: the bytes it moves and the peak it can reach.
+_FLOP_RATE_VS_BF16 = {
+    "fp32": 0.5,
+    "fp16": 1.0,
+    "bf16": 1.0,
+    "fp8_e4m3": 2.0,
+    "fp8_e5m2": 2.0,
+}
+
+
+def ridge_for_dtype(ridge_bf16: float, dtype: str) -> float:
+    """The ridge a given format sees, from the measured bf16 one.
+
+    THE CORRECTION THIS FUNCTION EXISTS FOR. The fp8 sweep was launched to test
+    a "2x crossing shift": halve the weight bytes, halve the crossing batch.
+    That came from holding the ridge at its bf16 value while changing the
+    format, which is not what C2 says.
+
+        crossing where AI = ridge,  AI = 2R/b,  ridge = peak_FLOPS / bandwidth
+        fp8 halves b AND doubles peak_FLOPS
+        fp8:   2R/1 = 2*ridge_bf16  ->  R = ridge_bf16
+        bf16:  2R/2 =   ridge_bf16  ->  R = ridge_bf16
+
+    The same rows per expert, so the same crossing. Both sides of the roofline
+    scale together and the intersection does not move. The H200 sweep of
+    2026-08-28 agrees: deepseek-v2-lite crossed at 922 tokens in bf16 and 976 in
+    fp8, against the naive prediction of 1710 and 855.
+    """
+    try:
+        return ridge_bf16 * _FLOP_RATE_VS_BF16[dtype]
+    except KeyError:
+        raise ValueError(
+            f"no FLOP rate known for {dtype!r}; known: "
+            f"{sorted(_FLOP_RATE_VS_BF16)}. Defaulting to bf16 would silently "
+            "predict the wrong crossing.") from None
+
+
 def crossing_batch(model: str, ridge: float, dtype: str = "bf16") -> float:
     """Batch size at which this model reaches `ridge` FLOP/byte.
 
