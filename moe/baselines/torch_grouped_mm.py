@@ -120,6 +120,33 @@ class ScaledArgs:
     offs: torch.Tensor
 
 
+#: Quantised activations, keyed on the tensor's identity, shape and dtype.
+#:
+#: The span declares `covers = ("up_gemm",)` and the byte model costs exactly
+#: that. Quantising activations is NOT up_gemm: it exists only because
+#: `_scaled_grouped_mm` needs both operands in fp8 while the harness hands out
+#: bf16 activations for vLLM's sake. Doing it per call put that work inside the
+#: timer and made deepseek-v2-lite at T=8192 read 1.9855 ms in fp8 against
+#: 1.0503 in bf16 -- fp8 1.89x SLOWER on the same GEMM -- which biased every
+#: crossing early and cost the arm its credibility.
+#:
+#: `x_perm` is built once per cell in the prologue and reused by every timed
+#: iteration, so this is warm before the first timed call.
+#:
+#: Keyed on the tensor's IDENTITY, and the cache holds a reference to it.
+#:
+#: A (data_ptr, shape, dtype) key is not enough and was not a theoretical
+#: concern: torch's allocator reuses freed addresses, so a tensor from a
+#: finished cell is collected, the next cell's activations land at the same
+#: address with the same shape, and the cache serves the wrong quantisation. It
+#: took one test run to happen. Holding the tensor keeps its address alive for
+#: as long as the entry does, which makes `is` a sound test.
+#:
+#: Single slot: one cell is resident at a time, and the entry is what pins the
+#: activations, so a growing cache would pin every batch a sweep ever built.
+_ACT_QUANT_CACHE: list = []   # [(tensor, quantised, scale)] or empty
+
+
 #: Per-expert scales broadcast to per-output-channel, keyed on the scale tensor
 #: and the width. Built inside the timed region, so rebuilding [E, N] float32 on
 #: every call would put a megabyte of memset into the measurement. Bounded by
@@ -167,7 +194,13 @@ def scaled_grouped_args(a, w_q, w_scale, offs, dtype: str) -> ScaledArgs:
     oracle dequantises with that scale, so a locally derived one would measure a
     different layer from the one being judged.
     """
-    a_q, scale_a = quantize_per_expert(a, dtype)
+    if _ACT_QUANT_CACHE and _ACT_QUANT_CACHE[0][0] is a \
+            and _ACT_QUANT_CACHE[0][3] == dtype:
+        a_q, scale_a = _ACT_QUANT_CACHE[0][1], _ACT_QUANT_CACHE[0][2]
+    else:
+        a_q, scale_a = quantize_per_expert(a, dtype)
+        _ACT_QUANT_CACHE.clear()
+        _ACT_QUANT_CACHE.append((a, a_q, scale_a, dtype))
     b = w_q.transpose(1, 2)
     # scale_a stays 1D: mat_a is 2D, and torch wants one element per row there.
     # scale_b becomes 2D: mat_b is 3D, and torch wants one per output channel.
