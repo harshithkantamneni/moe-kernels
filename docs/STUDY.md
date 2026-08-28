@@ -63,15 +63,39 @@ A production kernel sustained 4483.4 GB/s where `calibrate_hardware.py` reaches
 4389.4 GB/s on a pure read. If the calibration is measuring its own achieved rate
 rather than a ceiling, every percent-of-ceiling figure computed that way is
 pessimistic, ours and everyone else's.
-STATUS: **RESOLVED, measured 2026-08-27.** The best of five plain torch
-formulations reaches 4475.6 GB/s, 0.17% short of the 4483.4 the anomalous rows
-imply, and closer than the 0.28% spread between two formulations that should be
-identical. Separately `torch.sum(dim=0)` measures 4463.0 here against the 4389.4
-`calibrate.py` records for the identical call, because the calibration ran while
-the SM clock was ramping (`sm_start 1470 -> sm_end 1980`). The ceiling is low for
-two reasons, a reduction standing in for a stream and a cold clock. **The 83-row
-anomaly is a calibration artifact**, and every percent-of-ceiling figure is
-pessimistic by at least 2%.
+STATUS: **CONFIRMED and closed, 2026-08-28.** The cause was the SHAPE of the
+read, not the clock. `calibrate.py` measured it as `torch.sum(a, dim=0)` on a 1-D
+buffer into a scalar: a full tree reduction, which bounds on ATen's reduction
+rather than on DRAM. Reducing a 2-D view along the contiguous axis instead gives
+thousands of independent reductions and no global combine.
+
+Measured on the same card before and after the fix:
+
+    read ceiling   4389.3  ->  4470.7 GB/s     +1.85%
+
+That closes the anomaly. The 83 rows implied 4483.4 GB/s, which is 102.4% of the
+named `triad` ceiling and looked impossible, but is **100.28% of the corrected
+read ceiling**: at the ceiling within three parts in a thousand, not above it.
+Those kernels were running at essentially 100% of achievable read bandwidth on
+pure weight streaming, which is a strong result rather than a broken one.
+
+A clock hypothesis was tested first and REFUTED. Settling under a memory load
+instead of a matmul is correct in itself, and the memory settle converges at
+1980 MHz as designed, but it moved triad by +0.05% and read by -0.00%: the
+existing two-pass warmup had already handled the clock.
+
+Confirmed independently on an A100, where the flaw is unmissable: the same
+benchmark reports read at 1770 GB/s against triad's 1798, and triad moves three
+times the bytes. `calibrate.py` detects that case and refuses to name read as a
+ceiling. On the H200 it hid, because read landed just above triad.
+
+**Caveat on the ridge.** Bandwidth is stable to 0.005% across three
+calibrations (4377.0 / 4377.0 / 4377.2). The GEMM is not: it lands at 1560 or
+1845 MHz depending on the run, giving 701.6 or 712.4 TFLOP/s and a ridge of
+160.3 or 162.8. The clock normalisation works, but the ridge is a +/-1.5%
+quantity and should be quoted as approximate. Mixtral's predicted crossing spans
+641 to 651 across that range, all inside the same measured bracket, so C2 is
+unaffected.
 
 ## Supporting results, already measured
 
