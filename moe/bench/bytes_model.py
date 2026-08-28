@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..spec import BenchSpec, dtype_bytes
+from ..spec import BenchSpec, activation_dtype, dtype_bytes
 from ..stages import STAGE_CONTRACTS, StageSpan
 
 # Fields whose element size does not follow the working dtype.
@@ -48,7 +48,10 @@ def field_elements(spec: BenchSpec) -> dict[str, int]:
 
 def field_bytes(spec: BenchSpec) -> dict[str, int]:
     elems = field_elements(spec)
-    act_b = dtype_bytes(spec.dtype)
+    # NOT spec.dtype: that names the WEIGHT format. In an fp8 cell the
+    # activations are bf16, so charging them at 1 byte would report an
+    # arithmetic intensity built on traffic that was never moved.
+    act_b = dtype_bytes(activation_dtype(spec.dtype))
     return {name: n * _FIXED_WIDTH.get(name, act_b) for name, n in elems.items()}
 
 

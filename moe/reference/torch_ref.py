@@ -14,7 +14,7 @@ import torch
 import torch.nn.functional as tF
 
 from ..quant import FP8_DTYPES, dequantize_per_expert, quantize_per_expert
-from ..spec import BenchSpec, torch_dtype
+from ..spec import BenchSpec, activation_dtype, torch_dtype
 from ..stages import StageSpan, register
 from ..state import MoEState, MoEWeights
 
@@ -371,5 +371,10 @@ def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0,
             _WEIGHT_CACHE.clear()
             _WEIGHT_CACHE[key] = (weights, g.get_state())
 
-    x = rnd((spec.num_tokens, cfg.hidden_size), 1.0)
+    # At the ACTIVATION dtype, which differs from spec.dtype only for fp8.
+    # vLLM's fused_experts asserts hidden_states is fp32/fp16/bf16 and does the
+    # activation quantisation itself, from a scale it can only compute at run
+    # time. 147 cells died on that assertion before this line was written.
+    x = rnd((spec.num_tokens, cfg.hidden_size), 1.0,
+            torch_dtype(activation_dtype(spec.dtype)))
     return x, weights

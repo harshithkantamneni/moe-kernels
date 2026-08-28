@@ -27,6 +27,35 @@ DTYPE_BYTES: dict[str, int] = {
 # not in the active set yet (see docs/DECISIONS.md).
 ACTIVE_DTYPES: tuple[str, ...] = ("bf16",)
 
+#: `spec.dtype` names the WEIGHT format. In an fp8 cell the activations stay at
+#: the compute dtype, for two independent reasons that happen to agree.
+#:
+#: The kernel demands it. vLLM's `fused_experts` asserts
+#: `hidden_states.dtype in [float32, float16, bfloat16]` and quantises the
+#: activations itself, because their scale depends on the values and is only
+#: known at run time. 147 cells died on that assertion.
+#:
+#: The experiment wants it. C2 says `AI = 2R/b` with b the WEIGHT width, because
+#: weights are E*H*I bytes against the activations' T*H: for mixtral at T=512
+#: the weights outweigh them by over 300x. Halving the weight width is what
+#: moves the ridge crossing; halving the activation width moves nothing
+#: measurable and changes what the kernel is asked to do.
+_FP8_ACTIVATION_DTYPE = "bf16"
+
+
+def activation_dtype(dtype: str) -> str:
+    """The dtype activations are drawn in for a cell whose WEIGHTS are `dtype`.
+
+    Identity for every float format, bf16 for the fp8 ones.
+    """
+    dtype_bytes(dtype)   # reject unknown formats here rather than downstream
+    return _FP8_ACTIVATION_DTYPE if dtype in FP8_WEIGHT_DTYPES else dtype
+
+
+#: Kept here rather than imported from moe.quant: spec.py is the bottom of the
+#: import graph and must not depend on a module that imports torch.
+FP8_WEIGHT_DTYPES: frozenset[str] = frozenset({"fp8_e4m3", "fp8_e5m2"})
+
 
 def dtype_bytes(dtype: str) -> int:
     try:

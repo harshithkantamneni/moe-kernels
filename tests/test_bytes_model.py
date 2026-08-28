@@ -89,10 +89,27 @@ def test_large_batch_is_compute_dominated_by_comparison():
     assert ai_large > 20 * ai_small
 
 
-def test_fp8_halves_the_dtype_dependent_traffic():
+def test_fp8_halves_the_WEIGHT_traffic_and_leaves_activations_alone():
+    """This test used to assert that fp8 halved `bytes_total` outright, which
+    was true only while fp8 was hypothetical and every tensor shared one dtype.
+
+    Running it for real, activations must stay bf16: vLLM's fused_experts
+    asserts hidden_states is fp32/fp16/bf16 and quantises them itself. So the
+    total falls by slightly LESS than half, and the shortfall is exactly the
+    activation traffic that did not shrink.
+    """
     a = BM.grouped_gemm_only_cost(mixtral(dtype="bf16"), 8).bytes_total
     b = BM.grouped_gemm_only_cost(mixtral(dtype="fp8_e4m3"), 8).bytes_total
-    assert b == pytest.approx(a / 2, rel=0.01)
+    assert a / 2 < b < a, f"bf16 {a}, fp8 {b}: expected between half and all"
+
+    # The gap is the activations, which are identical in both cells.
+    act = BM.field_bytes(mixtral(dtype="bf16"))["x"]
+    assert act == BM.field_bytes(mixtral(dtype="fp8_e4m3"))["x"]
+
+    # Weights, the part that does halve, still dominate: the total is within a
+    # few percent of half. That is why C2 predicts a 2x crossing shift even
+    # though the traffic does not halve exactly.
+    assert b == pytest.approx(a / 2, rel=0.05)
 
 
 def test_derived_rates_are_consistent():
