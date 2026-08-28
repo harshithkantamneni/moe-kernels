@@ -307,7 +307,12 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     a = torch.empty(n, device="cuda", dtype=torch.float32).fill_(1.0)
     b = torch.empty(n, device="cuda", dtype=torch.float32).fill_(2.0)
     c = torch.empty_like(a)
-    sink = torch.zeros((), device="cuda", dtype=torch.float32)
+    # A view, not a copy: same memory, so copy and triad are unaffected. Rows
+    # are chosen to divide n exactly; a remainder would silently shorten the
+    # read and overstate its bandwidth.
+    _rows = next((r for r in (4096, 2048, 1024, 512, 64, 8, 1) if n % r == 0), 1)
+    a2d = a.view(_rows, n // _rows)
+    sink_col = torch.zeros(_rows, device="cuda", dtype=torch.float32)
 
     def run(pattern, fn, moved, note="", flush=None):
         before = T.ClockState.sample()
@@ -322,8 +327,16 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
             sm_clock_end_mhz=after.sm_clock_mhz)
 
     out = [
-        run("read", lambda: torch.sum(a, dim=0, out=sink), nbytes,
-            "closest analogue to streaming expert weights"),
+        # MEASURED 2026-08-27. This was `torch.sum(a, dim=0, out=scalar_sink)`
+        # on a 1-D buffer: a full tree reduction to ONE value, which is the most
+        # reduction-limited shape available and 1.7% below what the same op
+        # reaches on a 2-D buffer. Reducing a [rows, n/rows] view along the
+        # CONTIGUOUS axis instead gives `rows` independent reductions with no
+        # global combine, and measures DRAM rather than ATen's reduction tree.
+        # Traffic is still 1N: the output is `rows` floats against n read.
+        run("read", lambda: torch.sum(a2d, dim=1, out=sink_col), nbytes,
+            "closest analogue to streaming expert weights; reduced along the "
+            "contiguous axis so the tree does not bound it"),
         run("copy", lambda: c.copy_(a), 2 * nbytes, ""),
         run("triad", lambda: torch.add(a, b, alpha=2.0, out=c), 3 * nbytes,
             "canonical STREAM metric; the default ceiling"),
