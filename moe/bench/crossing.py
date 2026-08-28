@@ -23,6 +23,26 @@ import math
 DEFAULT_THRESHOLD = 0.5
 
 
+def timed_rows(rows: list[dict]) -> list[dict]:
+    """Rows that carry a real timing.
+
+    A skipped or uncapturable graph mode still writes a row, with `ms_p50` left
+    at its 0.0 default. Those are not measurements of zero, and a median or a
+    slope taken over them reports whatever the absent rows dictate. The first
+    fp8 crossing report concluded deepseek-v3 crossed at 2 tokens because of it.
+
+    Rejects "never ran", not "ran fast": any strictly positive time is kept.
+    """
+    out = []
+    for r in rows:
+        try:
+            if float(r.get("ms_p50") or 0.0) > 0.0:
+                out.append(r)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def local_slopes(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
     """`d(log ms)/d(log T)` between each adjacent pair, at the geometric mid.
 

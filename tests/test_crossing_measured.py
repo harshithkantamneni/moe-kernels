@@ -76,3 +76,38 @@ def test_duplicate_token_counts_are_rejected_not_averaged():
     picking one would hide it."""
     with pytest.raises(ValueError, match="duplicate"):
         crossing_from_points([(128, 1.0), (128, 2.0), (256, 1.0), (512, 2.0)])
+
+
+# --- rows that were never timed --------------------------------------------
+
+def test_an_untimed_row_is_not_a_measurement_of_zero():
+    """MEASURED, H200 2026-08-28. The first fp8 crossing report printed
+    `ms_p50 0.0000` for most of deepseek-v3 and concluded its crossing was at
+    2 tokens.
+
+    A skipped or uncapturable graph mode still writes a row, with ms_p50 left at
+    its 0.0 default. Feeding those to a median drags it toward zero, and feeding
+    them to a slope produces whatever the zeros dictate. Exactly the failure
+    `schema.py::_schema_key` exists to warn about: a value that is absent read as
+    a measurement of nothing.
+    """
+    from moe.bench.crossing import timed_rows
+    rows = [
+        {"ms_p50": "0.5", "capture_status": "eager"},
+        {"ms_p50": "0.0", "capture_status": "graph_skipped"},
+        {"ms_p50": "", "capture_status": "not_timed"},
+        {"ms_p50": "0.7", "capture_status": "captured"},
+    ]
+    kept = timed_rows(rows)
+    assert [r["ms_p50"] for r in kept] == ["0.5", "0.7"]
+
+
+def test_a_genuinely_tiny_time_is_kept():
+    """The filter must reject 'never ran', not 'ran fast'."""
+    from moe.bench.crossing import timed_rows
+    assert len(timed_rows([{"ms_p50": "0.0001"}])) == 1
+
+
+def test_a_malformed_time_is_dropped_rather_than_crashing():
+    from moe.bench.crossing import timed_rows
+    assert timed_rows([{"ms_p50": "n/a"}, {"ms_p50": None}]) == []

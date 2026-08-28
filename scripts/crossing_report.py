@@ -13,6 +13,7 @@ The measured side never consults the byte model, so the prediction can be wrong.
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import statistics
 import sys
@@ -20,7 +21,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from moe.bench.crossing import crossing_from_points, local_slopes  # noqa: E402
+from moe.bench.crossing import (  # noqa: E402
+    crossing_from_points,
+    local_slopes,
+    timed_rows,
+)
 from moe.bench.ridge import crossing_batch  # noqa: E402
 
 
@@ -32,13 +37,21 @@ def main() -> int:
     ap.add_argument("--impl", default=None, help="restrict to one implementation")
     ap.add_argument("--routing", default=None, help="restrict to one routing kind")
     ap.add_argument("--include-throttled", action="store_true")
+    ap.add_argument("--l2-flush", choices=["true", "false"], default=None,
+                    help="restrict to one L2 mode; default mixes both")
+    ap.add_argument("--cuda-graph", choices=["true", "false"], default=None,
+                    help="restrict to one capture mode; default mixes both")
     args = ap.parse_args()
 
     cells: dict[tuple[str, str], dict[int, list[float]]] = {}
-    kept = skipped = 0
+    modes: collections.Counter = collections.Counter()
+    kept = skipped = untimed = 0
     for path in args.csvs:
         with path.open(newline="") as fh:
-            for r in csv.DictReader(fh):
+            rows = list(csv.DictReader(fh))
+            timed = timed_rows(rows)
+            untimed += len(rows) - len(timed)
+            for r in timed:
                 if args.impl and r["impl"] != args.impl:
                     continue
                 if args.routing and r["routing_kind"] != args.routing:
@@ -49,6 +62,13 @@ def main() -> int:
                 if not args.include_throttled and r.get("throttled") in ("True", "true", "1"):
                     skipped += 1
                     continue
+                if args.l2_flush is not None and \
+                        str(r.get("l2_flush", "")).lower() != args.l2_flush:
+                    continue
+                if args.cuda_graph is not None and \
+                        str(r.get("cuda_graph", "")).lower() != args.cuda_graph:
+                    continue
+                modes[(str(r.get("l2_flush")), str(r.get("cuda_graph")))] += 1
                 try:
                     t, ms = int(r["num_tokens"]), float(r["ms_p50"])
                 except (ValueError, KeyError):
@@ -56,7 +76,15 @@ def main() -> int:
                 cells.setdefault((r["model"], r["dtype"]), {}).setdefault(t, []).append(ms)
                 kept += 1
 
-    print(f"kept {kept} rows, skipped {skipped} (throttled or failed)\n")
+    print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
+          f"{untimed} never timed (skipped graph mode: ms_p50 is 0.0, "
+          f"which is not a measurement)")
+    if len(modes) > 1:
+        print("  timing modes mixed into each median (l2_flush, cuda_graph): "
+              + ", ".join(f"{k}x{v}" for k, v in sorted(modes.items())))
+        print("  pass --l2-flush/--cuda-graph to isolate one; the crossing is a "
+              "slope, so mixing adds spread rather than bias")
+    print()
     if not cells:
         print("nothing to report")
         return 1
