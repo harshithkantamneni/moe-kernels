@@ -360,7 +360,13 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
 #: is confirmed exactly against the datasheet: 132 SM x 4096 x 1830 MHz =
 #: 989.4 TFLOP/s, which is NVIDIA's published H200 SXM figure. That also reveals
 #: what the datasheet number assumes: a 1830 MHz boost clock.
-_DENSE_BF16_FLOP_PER_SM_CLK = {(9, 0): 4096}
+# Dense BF16 FLOP per SM per clock, by compute capability. Each is pinned by
+# reproducing the vendor's headline figure from SM count and boost clock:
+#   sm_90  132 SM x 4096 x 1830 MHz = 989.4 TFLOP/s   (H200 SXM)
+#   sm_80  108 SM x 2048 x 1410 MHz = 311.8 TFLOP/s   (A100 SXM, published 312)
+# Ampere does half of Hopper's bf16 per SM per clock. Absent entries return None
+# rather than a guess, since the whole point is to normalise against silicon.
+_DENSE_BF16_FLOP_PER_SM_CLK = {(9, 0): 4096, (8, 0): 2048}
 
 
 def sustained_peak_tflops(sm_clock_mhz: float) -> float | None:

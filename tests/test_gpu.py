@@ -278,10 +278,9 @@ def test_graph_policy_skips_a_long_kernel(tmp_path):
 def test_graph_policy_measures_a_short_kernel(tmp_path):
     """The other side: on real bandwidth a toy cell IS launch-dominated, so the
     policy must not skip it."""
-    from moe.bench.roofline import load_hardware
     cfg = make_cfg(tmp_path, graph_modes=(True,),
                    graph_min_launch_share=0.01,
-                   hardware=load_hardware("h200_sxm"))
+                   hardware=device_reference())
     D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
     r = SC.read_csv(cfg.csv_path)[0]
     # The reference pipeline is not capturable, which is itself the finding.
@@ -310,16 +309,31 @@ def test_bandwidth_measurement_is_plausible():
         assert 0 < r.ms_p50 and r.ms_min <= r.ms_p50
 
 
+def device_reference():
+    """Ceilings for the card actually attached, or skip.
+
+    These tests used `load_hardware("h200_sxm")` as their reference, which is a
+    sanity bound against a DIFFERENT GPU. On an A100 that asks a card with a
+    2447 GB/s pin rate to clear 40% of an H200's 4800, and the suite fails on
+    hardware that is working perfectly. Since run_all.sh stops the session on a
+    failing test, that blocked an entire sweep.
+    """
+    from moe.bench.roofline import load_measured
+    hw = load_measured()
+    if hw is None:
+        pytest.skip("no measured calibration for this device; "
+                    "run scripts/calibrate_hardware.py first")
+    return hw
+
 @pytest.mark.slow
 def test_read_bandwidth_is_measured_and_not_optimised_away():
     """A pure read is the closest analogue to streaming expert weights. If the
     reduction were elided the reported figure would be absurd."""
     from moe.bench.calibrate import measure_bandwidth
-    from moe.bench.roofline import load_hardware
     read = next(r for r in measure_bandwidth(target_bytes=1 << 30, warmup=3,
                                              iters=10, trials=2)
                 if r.pattern == "read")
-    peak = load_hardware("h200_sxm").bandwidth_bytes_s / 1e9
+    peak = device_reference().bandwidth_bytes_s / 1e9
     assert read.gbps < peak * 1.02, (
         f"read measured {read.gbps:.0f} GB/s against a {peak:.0f} peak; the "
         "reduction was probably optimised away")
@@ -382,8 +396,7 @@ def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
     """A measured ceiling above the spec peak means the buffer fit in cache and
     the number is not a DRAM measurement at all."""
     from moe.bench.calibrate import measure_bandwidth
-    from moe.bench.roofline import load_hardware
-    peak_gbps = load_hardware("h200_nvl").bandwidth_bytes_s / 1e9
+    peak_gbps = device_reference().bandwidth_bytes_s / 1e9
     best = max(r.gbps for r in measure_bandwidth(target_bytes=1 << 30,
                                                  warmup=3, iters=10, trials=2))
     assert best < peak_gbps * 1.02, (
@@ -396,9 +409,8 @@ def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
 @pytest.mark.slow
 def test_bf16_gemm_ceiling_is_plausible():
     from moe.bench.calibrate import measure_bf16_gemm
-    from moe.bench.roofline import load_hardware
     gemm = measure_bf16_gemm(n=4096, warmup=3, iters=10, trials=2)
-    peak = load_hardware("h200_sxm").peak("bf16") / 1e12
+    peak = device_reference().peak("bf16") / 1e12
     assert gemm.shape == (4096, 4096, 4096)
     assert gemm.sm_clock_mhz >= 0
     assert 0 < gemm.tflops < peak * 1.02, (

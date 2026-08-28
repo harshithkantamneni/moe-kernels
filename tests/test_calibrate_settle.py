@@ -68,3 +68,34 @@ def test_an_unknown_workload_is_refused():
     from moe.bench.calibrate import settle_clocks
     with pytest.raises(KeyError):
         settle_clocks(load="magnetic-tape", max_seconds=0.0)
+
+
+def test_the_dense_bf16_rate_reproduces_each_vendor_headline():
+    """The per-SM-per-clock constants are pinned by reproducing the published
+    figure from SM count and boost clock, so a wrong entry is caught here rather
+    than silently normalising a ceiling against the wrong silicon.
+
+    sm_80 was added when the A100 run found the table had only sm_90, which made
+    `sustained_peak_tflops` return None and failed a test on hardware that was
+    working correctly."""
+    from moe.bench.calibrate import _DENSE_BF16_FLOP_PER_SM_CLK as TBL
+
+    # (capability, SMs, boost MHz, published dense BF16 TFLOP/s)
+    published = [
+        ((9, 0), 132, 1830, 989.4),    # H200 SXM
+        ((8, 0), 108, 1410, 312.0),    # A100 SXM4-80GB
+    ]
+    for cap, sms, mhz, headline in published:
+        per_clk = TBL.get(cap)
+        assert per_clk is not None, f"no constant for sm_{cap[0]}{cap[1]}"
+        implied = sms * per_clk * mhz * 1e6 / 1e12
+        assert implied == pytest.approx(headline, rel=0.01), (
+            f"sm_{cap[0]}{cap[1]}: {sms} SM x {per_clk} x {mhz} MHz = "
+            f"{implied:.1f} TFLOP/s, published {headline}")
+
+
+def test_ampere_does_half_of_hopper_per_sm_per_clock():
+    """Not a coincidence worth losing: it is the generational tensor-core step,
+    and a table entry that broke it would be a typo."""
+    from moe.bench.calibrate import _DENSE_BF16_FLOP_PER_SM_CLK as TBL
+    assert TBL[(9, 0)] == 2 * TBL[(8, 0)]
