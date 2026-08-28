@@ -191,16 +191,31 @@ else:
         if tdp:
             print(f"[setup] power limit         {tdp:.0f} W"
                   + ("  (SXM)" if tdp > 650 else "  (NVL)"))
-        profile = for_device(props.name, tdp_w=tdp)
-        if profile:
-            print(f"[setup] roofline profile    {profile}")
+        # Report the MEASURED profile first when one exists. `for_device`
+        # answers "which datasheet part is this" and deliberately skips measured
+        # ones, so on a card with no datasheet entry -- the A100 has none in this
+        # repo -- it said NONE MATCHES and advised running the calibration that
+        # had in fact already produced the profile sitting right there.
+        measured = None
+        try:
+            from moe.bench.roofline import load_measured
+            measured = load_measured()
+        except Exception:
+            measured = None
+        if measured is not None:
+            print(f"[setup] roofline profile    measured, for {props.name}")
         else:
-            tied = ambiguous_for_device(props.name)
-            why = (f"AMBIGUOUS between {tied}" if tied
-                   else f"NONE MATCHES (have {available_profiles()})")
-            print(f"[setup] roofline profile    {why}")
-            print("[setup]                     -> run scripts/calibrate_hardware.py;")
-            print("[setup]                        measured ceilings beat any datasheet")
+            profile = for_device(props.name, tdp_w=tdp)
+            if profile:
+                print(f"[setup] roofline profile    {profile}  (datasheet)")
+            else:
+                tied = ambiguous_for_device(props.name)
+                why = (f"AMBIGUOUS between {tied}" if tied
+                       else f"NO MEASURED PROFILE, and no datasheet entry either "
+                            f"(have {available_profiles()})")
+                print(f"[setup] roofline profile    {why}")
+                print("[setup]                     -> run scripts/calibrate_hardware.py;")
+                print("[setup]                        measured ceilings beat any datasheet")
     except ImportError:
         pass
 
