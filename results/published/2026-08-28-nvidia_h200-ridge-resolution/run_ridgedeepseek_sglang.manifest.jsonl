@@ -1,0 +1,420 @@
+{"key": "deepseek-v3|4096|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||1|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4096|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|4608|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5120|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|5632|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|uniform|0||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|0.6||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|1.2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.5||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|dirichlet|0.3||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|zipf|2||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|0", "status": "ok", "detail": ""}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|1", "status": "ok", "detail": "graph skipped by policy"}
+{"key": "deepseek-v3|6144|bf16|hot|0.8||2|ref_router -> sglang_fused_experts|sglang_fused_experts|span|0|1", "status": "ok", "detail": "graph skipped by policy"}
