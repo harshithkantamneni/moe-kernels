@@ -334,8 +334,13 @@ def test_read_bandwidth_is_measured_and_not_optimised_away():
                                              iters=10, trials=2)
                 if r.pattern == "read")
     peak = device_reference().bandwidth_bytes_s / 1e9
-    assert read.gbps < peak * 1.02, (
-        f"read measured {read.gbps:.0f} GB/s against a {peak:.0f} peak; the "
+    # A pure read legitimately exceeds the triad ceiling: 1N against 2R+1W.
+    # With the read measured on a 2-D view it reaches ~4472 where triad is
+    # 4377, so a 1.02 bound fails on correct hardware. What this guards against
+    # is the reduction being elided entirely, which gives a figure several times
+    # too high, so the bound is generous on purpose.
+    assert read.gbps < peak * 2.0, (
+        f"read measured {read.gbps:.0f} GB/s against a {peak:.0f} ceiling; the "
         "reduction was probably optimised away")
     assert read.gbps > peak * 0.4
 
@@ -417,13 +422,24 @@ def test_measured_bandwidth_does_not_exceed_the_datasheet_peak():
 
 @pytest.mark.slow
 def test_bf16_gemm_ceiling_is_plausible():
-    from moe.bench.calibrate import measure_bf16_gemm
+    from moe.bench.calibrate import measure_bf16_gemm, sustained_peak_tflops
     gemm = measure_bf16_gemm(n=4096, warmup=3, iters=10, trials=2)
-    peak = device_reference().peak("bf16") / 1e12
     assert gemm.shape == (4096, 4096, 4096)
     assert gemm.sm_clock_mhz >= 0
-    assert 0 < gemm.tflops < peak * 1.02, (
-        f"{gemm.tflops:.1f} TFLOP/s against a {peak:.1f} datasheet peak")
+
+    # The bound is the SILICON at the clock this measurement ran at, not another
+    # measurement taken at a different shape and clock. Measured on an H200: a
+    # 4096 GEMM runs at 1980 MHz and reaches 782.9 TFLOP/s, while the
+    # calibration's 712.4 came from an 8192 GEMM at 1845 MHz. Comparing them as
+    # a hard ceiling failed on a card that was working perfectly.
+    silicon = sustained_peak_tflops(gemm.sm_clock_mhz)
+    if silicon is None:
+        pytest.skip("no FLOP/SM/clk constant for this architecture")
+    assert 0 < gemm.tflops < silicon * 1.02, (
+        f"{gemm.tflops:.1f} TFLOP/s at {gemm.sm_clock_mhz} MHz, where the "
+        f"silicon ceiling is {silicon:.1f}")
+    assert gemm.tflops > silicon * 0.3, (
+        f"only {gemm.tflops:.1f} of {silicon:.1f} TFLOP/s; something is wrong")
 
 
 @pytest.mark.slow
