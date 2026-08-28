@@ -99,3 +99,36 @@ def test_ampere_does_half_of_hopper_per_sm_per_clock():
     and a table entry that broke it would be a typo."""
     from moe.bench.calibrate import _DENSE_BF16_FLOP_PER_SM_CLK as TBL
     assert TBL[(9, 0)] == 2 * TBL[(8, 0)]
+
+
+@pytest.mark.parametrize("name,clk_mhz,published_gbps", [
+    ("NVIDIA H200", 3201, 4800),                # spec 4.8 TB/s, already derated
+    ("NVIDIA A100-SXM4-80GB", 1593, 2039),      # spec 2039 GB/s
+    ("NVIDIA H100 80GB HBM3", 2619, 3350),      # spec 3.35 TB/s
+])
+def test_the_pin_rate_reproduces_each_vendor_bandwidth(name, clk_mhz, published_gbps):
+    """The pin rate is the only hard physical bound in the calibration, and
+    every "nothing exceeded it" argument rests on it. It hardcoded 6144 bits for
+    every device, which is the H200's bus, so an A100 was reported at 2446.8
+    GB/s instead of 2038.8: 20% high, on the one number that cannot be wrong.
+
+    Each width is checked by reproducing the vendor figure. The derived rate
+    should sit at or slightly above the published one, since published numbers
+    are already derated.
+    """
+    from scripts.calibrate_hardware import _memory_bus_bits
+
+    bits = _memory_bus_bits(name)
+    assert bits is not None, f"no bus width for {name!r}"
+    derived = clk_mhz * 2 * bits / 8 / 1000
+    assert published_gbps <= derived <= published_gbps * 1.05, (
+        f"{name}: {clk_mhz} MHz x 2 x {bits} bits / 8 = {derived:.1f} GB/s "
+        f"against a published {published_gbps}")
+
+
+def test_an_unknown_device_gets_no_pin_rate_rather_than_a_guess():
+    """Returning the H200's width for an unrecognised card is how the A100 bug
+    happened. None is the correct answer, and the caller records that."""
+    from scripts.calibrate_hardware import _memory_bus_bits
+    assert _memory_bus_bits("NVIDIA GeForce RTX 5090") is None
+    assert _memory_bus_bits("") is None

@@ -66,11 +66,41 @@ def _device_facts() -> dict:
         except (ValueError, IndexError):
             pass
     clk = out.get("clocks_max_memory_mhz")
-    if clk:
-        # H200 is 6144-bit HBM3e. DDR doubles the transfer rate.
-        out["memory_bus_bits"] = 6144
-        out["pin_rate_gbps"] = round(clk * 2 * 6144 / 8 / 1000, 1)
+    bits = _memory_bus_bits(props.name)
+    if clk and bits:
+        # DDR doubles the transfer rate, hence the factor of two.
+        out["memory_bus_bits"] = bits
+        out["pin_rate_gbps"] = round(clk * 2 * bits / 8 / 1000, 1)
+    elif clk:
+        # No width, no pin rate. A wrong one is worse than none: it is the
+        # only hard physical bound in this file, and every "nothing exceeded
+        # the pin rate" argument rests on it.
+        out["memory_bus_bits_unknown_for"] = props.name
     return out
+
+
+#: Memory bus width in bits, by substring of the device name. nvidia-smi has no
+#: query for this and torch does not expose cudaDeviceProp.memoryBusWidth, so it
+#: is a table. Each entry is checked by reproducing the vendor bandwidth figure:
+#:   H200  3201 MHz x 2 x 6144 / 8 = 4916.7 GB/s  (spec 4.8 TB/s, derated)
+#:   A100  1593 MHz x 2 x 5120 / 8 = 2038.8 GB/s  (spec 2039 GB/s)
+#:   H100  2619 MHz x 2 x 5120 / 8 = 3352.3 GB/s  (spec 3.35 TB/s)
+#: An earlier version hardcoded 6144 for every device, which reported an A100's
+#: pin rate as 2446.8 instead of 2038.8: 20% high, on the one number that is
+#: supposed to be a hard physical bound.
+_MEMORY_BUS_BITS = {
+    "H200": 6144,
+    "H100": 5120,
+    "A100": 5120,
+    "B200": 8192,
+}
+
+
+def _memory_bus_bits(gpu_name: str) -> int | None:
+    for key, bits in _MEMORY_BUS_BITS.items():
+        if key in gpu_name:
+            return bits
+    return None
 
 
 def main() -> int:
