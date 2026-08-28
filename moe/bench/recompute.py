@@ -103,9 +103,11 @@ def ceiling_columns(row: dict, hw: Hardware) -> dict:
 
     ai = _f(row, "arith_intensity_compulsory")
     if peak and hw.bound(dtype, ai) == "memory":
-        # bytes_total is not a column, but compulsory_gbps is it divided by the
-        # same time, so the product recovers it exactly.
-        compulsory_bytes = _f(row, "compulsory_gbps") * 1e9 * (ms * 1e-3)
+        # compulsory_bytes IS a column. An earlier version reconstructed it as
+        # compulsory_gbps * time, which is algebraically the same and passed the
+        # identity test, but it recomputed a value the row already carried and
+        # its comment claimed the column did not exist.
+        compulsory_bytes = _f(row, "compulsory_bytes")
         out["implied_traffic_ratio"] = implied_traffic_ratio(
             compulsory_bytes, ms, hw.bandwidth_bytes_s)
     return out
