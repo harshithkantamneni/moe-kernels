@@ -289,6 +289,65 @@ this card falls through to `get_default_config()`, whose bf16 ladder is 16 for
 M<=32, 32 for M<=96, 64 for M<=512, 128 above. Nothing tuned ever ran for the
 geometry this sweep measures.
 
+### Forcing the bigger tile: measured, and it never helps
+
+`scripts/tile_sweep.py` uses vLLM's own `override_config` hook to force
+`BLOCK_SIZE_M` while holding N, K, warps and stages at the tuned values, on
+uniform routing at small T so every expert stays inside one tile and weight
+traffic is identical across the sweep. deepseek-v3, 50 timed iterations:
+
+| T | active | BLOCK_M=16 | 32 | 64 | 128 |
+|---:|---:|---:|---:|---:|---:|
+| 16 | 100 | 2.2194 ms | **0.996x** | 1.017x | **1.270x** |
+| 64 | 225 | 4.8127 ms | **1.002x** | 1.054x | **1.290x** |
+| 256 | 256 | 5.6687 ms | **1.000x** | 1.090x | **1.298x** |
+
+Three things, in order of how much they matter.
+
+**16 -> 32 does not move the clock.** Padded arithmetic doubles and the time is
+flat to within 0.4%. That is the direct measurement of "wasted MACs are free",
+previously only an inference from a byte model that section 3 had put under
+suspicion. It no longer depends on the byte model at all.
+
+**Reaching WGMMA costs rather than pays.** M >= 64 is where Hopper's warpgroup
+MMA becomes expressible, and 64 is 1.7% to 9.0% SLOWER than 16 at every token
+count. The chip's headline tensor-core instruction is not merely unnecessary
+here; taking it is a small loss. vLLM's autotuner picking 16 across the whole
+decode range is correct, and this is the measurement that says so.
+
+**128 costs 27-30%**, which is the interesting part, because it locates the
+boundary. Padded arithmetic is not free in general, only while it hides. Against
+the memory time for the same cell:
+
+| BLOCK_M | padded MAC time | as % of the weight read | excess over BLOCK_M=16 |
+|---:|---:|---:|---:|
+| 16 | 0.20 / 0.45 ms | 10% | baseline |
+| 32 | 0.40 / 0.90 ms | 20% | +0.00 / +0.01 ms |
+| 64 | 0.80 / 1.81 ms | 41% | +0.04 / +0.26 ms |
+| 128 | 1.61 / 3.62 ms | 82% | **+0.60 / +1.40 ms** |
+
+(T=16 / T=64; weight read is 1.97 ms and 4.43 ms respectively, at the 4475.6
+GB/s the read-variant script measured.)
+
+**Padded arithmetic hides while it stays around 20% of the memory time and
+starts costing above 40%.** That is a usable rule rather than a slogan, and it
+explains the autotuner's choice quantitatively: 16 keeps padded MACs at 10% of
+the weight read, with the whole margin to spare.
+
+Two caveats, both real. The occupancy confound named before the run is NOT
+separated: `BLOCK_SIZE_M` sizes the register accumulator, so a larger tile loses
+resident blocks at the same time as it gains padded work, and this experiment
+cannot say which of the two the 27-30% is. It does not need to, because the
+claim being tested was that going bigger would HELP, and it does not. Second,
+`tile_sweep.py` labels M >= 64 "wgmma reachable" but does not verify what was
+emitted; confirming that the instruction actually changed needs
+`check_mma_path.sh` re-run under the override, and that has not been done.
+
+The T=256 row carries one more caveat of its own: max rows per expert is 18,
+above the smallest tile, so at BLOCK_M=16 a few experts spill to two tiles and
+weight traffic is not perfectly flat there. The script warns when this happens.
+T=16 and T=64, at max 3 and 7 rows, are clean.
+
 ### Routing is not reproducible off the GPU
 
 Found while trying to recompute tile efficiency at other tile sizes.

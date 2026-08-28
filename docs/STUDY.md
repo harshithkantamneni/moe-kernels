@@ -131,7 +131,14 @@ work is already done and unused.
    patterns in `calibrate.py`, and stop naming a tree reduction as the read
    ceiling. Both change the ruler every published number used, so they are a
    deliberate re-baseline rather than a patch.
-3. The ablation, using the GPU MODE method: alias B by taking the tile offset
+3. ~~Tile sweep~~ DONE 2026-08-27. Forcing BLOCK_SIZE_M never helps: 16->32 is
+   flat (padded MACs are free, MEASURED not modelled), 64 is 1.7-9% slower even
+   though it reaches WGMMA, 128 is 27-30% slower. Padded arithmetic hides while
+   it is ~20% of the memory time and costs above 40%. Occupancy confound not
+   separated, and it does not need to be: the hypothesis was that bigger would
+   help. Loose end: confirm the instruction actually switched by re-running
+   check_mma_path.sh under the override.
+4. The ablation, using the GPU MODE method: alias B by taking the tile offset
    modulo so every iteration reloads the same tile (loads execute, L2 hits, no
    HBM traffic, nothing folds since values are runtime); `acc += tl.sum(b) +
    tl.sum(a)` to keep loads live on the compute side. Settles critical path
