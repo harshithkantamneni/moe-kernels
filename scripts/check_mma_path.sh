@@ -69,6 +69,7 @@ for f in "${ptx[@]}"; do
   w=$(grep -c 'wgmma' "$f" || true)
   m=$(grep -c 'mma\.sync' "$f" || true)
   l=$(grep -c 'ld\.global' "$f" || true)
+  : "${w:=0}" "${m:=0}" "${l:=0}"
   (( w == 0 && m == 0 )) && continue
   printf '  %-52s wgmma=%-6s mma.sync=%-6s ld.global=%s\n' \
     "$(basename "$f")" "$w" "$m" "$l"
@@ -80,8 +81,12 @@ grep -ohE 'wgmma\.[a-z0-9_.]*|mma\.sync\.[a-z0-9_.]*' "${ptx[@]}" \
   | sort | uniq -c | sort -rn | head -20
 
 echo
-total_w=$(grep -l 'wgmma' "${ptx[@]}" 2>/dev/null | wc -l | tr -d ' ')
-total_m=$(grep -l 'mma\.sync' "${ptx[@]}" 2>/dev/null | wc -l | tr -d ' ')
+# `|| true` is load-bearing: grep exits 1 when it matches nothing, and under
+# `set -o pipefail` that fails the pipeline, fails the assignment, and aborts the
+# script before the verdict prints. Which is exactly what happened on the first
+# real run, where wgmma=0 was the whole answer.
+total_w=$( { grep -l 'wgmma' "${ptx[@]}" 2>/dev/null || true; } | wc -l | tr -d ' ')
+total_m=$( { grep -l 'mma\.sync' "${ptx[@]}" 2>/dev/null || true; } | wc -l | tr -d ' ')
 echo "=== verdict ==="
 echo "  kernels containing wgmma   : $total_w"
 echo "  kernels containing mma.sync: $total_m"

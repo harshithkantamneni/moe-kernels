@@ -108,13 +108,39 @@ annotates `read` that way, but it only moves the figure from 102.5% to 102.1%: t
 card's MEASURED read is 4389.39 GB/s. The 4.8 TB/s that makes the anomaly vanish (93.4%)
 is the datasheet number, not a measurement of this device.
 
-That points somewhere more interesting than a kernel quirk. If a production kernel
-sustains 4483.4 GB/s on pure weight streaming while `scripts/calibrate_hardware.py`
-reaches only 4389.4 GB/s on a STREAM read, then the calibration is not measuring a
-ceiling, it is measuring its own achieved rate, and every "percent of ceiling" figure in
-this file is pessimistic by that margin. A TMA-driven kernel plausibly beats a naive
-read loop. **Open action: harden the calibration read kernel and see whether it climbs
-past 4483.4.** That needs no counters and is the cheapest test available.
+**MEASURED, 2026-08-27, and the ceiling was the problem.**
+`scripts/calibrate_read_variants.py` times five plain torch formulations that each
+read the same 8 GiB buffer once, on the same card:
+
+| formulation | GB/s | vs calibration |
+|---|---:|---:|
+| `torch.sum(dim=1)` | **4475.6** | 1.020x |
+| `torch.sum(dim=0)` (what `calibrate.py` uses) | 4463.0 | 1.017x |
+| `a.sum()` | 4383.8 | 0.999x |
+| `a.amax()` | 4378.0 | 0.997x |
+| `a.count_nonzero()` | 679.3 | 0.155x |
+
+Two things follow, and the second is the sharper one.
+
+The best formulation reaches 4475.6 GB/s, which is **0.17% short of the 4483.4 the
+anomalous rows imply**. That gap is smaller than the 0.28% spread between two
+formulations that ought to be equivalent, and none of the five uses vectorised loads
+or TMA, so 4475.6 is a lower bound on what the card can do on a pure read. The
+83 rows are not impossible. They sit just above one under-performing measurement.
+
+And `torch.sum(dim=0)` measures **4463.0** here against the **4389.4**
+`calibrate.py` records for the identical call: 74 GB/s, 1.7%, between two
+measurements of the same operation on the same hardware. The calibration's own
+`clocks` block says why it is the low one: `sm_start_mhz: 1470`,
+`sm_end_mhz: 1980`, `drift_pct: -34.69`. It measured the read pattern while the
+SM clock was still ramping.
+
+So the read ceiling is low for two independent reasons, a reduction standing in
+for a stream and a cold clock, and every percent-of-ceiling figure in this file
+is pessimistic by at least 2%. **The 83-row anomaly is a calibration artifact.**
+`calibrate.py` should settle clocks before the bandwidth patterns and should not
+name a tree reduction as its read ceiling. Neither is fixed here, because both
+change the ruler every published number was measured against.
 
 ## 4. Arithmetic intensity is rows per active expert, and it is measured
 
@@ -229,14 +255,34 @@ work. (The rows-per-expert reading assumes `top_k=8` for that config, which the
 filename does not state; the fit across four batch sizes is exact, but it is an
 inference.)
 
-**The consequence, stated as an inference and not a measurement.** 16 is below
-WGMMA's fixed M of 64, so that path cannot be using Hopper's warpgroup tensor
-core at decode. If so, vLLM's MoE decode runs on the older `mma.sync` path on
-Hopper silicon, and correctly so: the tensor core is idle waiting on weights
-either way, while a small tile buys occupancy and therefore more memory requests
-in flight. **This has not been verified.** Triton might pad 16 up to 64
-internally. The decisive check is `TRITON_KERNEL_DUMP=1` on a real cell and a
-grep for `wgmma` against `mma.sync`; it is ten minutes and it has not been run.
+**MEASURED, 2026-08-27: vLLM's decode path does not use Hopper's tensor core.**
+`scripts/check_mma_path.sh` dumps the PTX Triton generates for a real
+`fused_experts` cell (deepseek-v3, T=16) and counts instructions. Both compiled
+`fused_moe_kernel` variants:
+
+| kernel | `wgmma` | `mma.sync` | `ld.global` |
+|---|---:|---:|---:|
+| `fused_moe_kernel.ptx` | **0** | 16 | 5 |
+| `fused_moe_kernel.ptx` | **0** | 16 | 9 |
+
+Every one of the 32 tensor-core instructions is the same shape:
+
+```
+mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+```
+
+Zero warpgroup MMA. `m16n8k16` is the Ampere-era instruction. So on an H200,
+with `BLOCK_SIZE_M = 16` chosen by vLLM's own autotuner for every batch size
+through the decode range, the MoE path runs on the previous generation of tensor
+core on brand new silicon.
+
+That is the correct trade rather than a defect, and it is the strongest single
+piece of evidence in this file for the study's thesis. The tensor core idles
+waiting on weights whichever instruction it is, so its throughput is irrelevant;
+a 16-row tile instead buys occupancy, and occupancy buys memory requests in
+flight, which is the only quantity that helps when you are memory-bound. An
+autotuner with no theory searched the space and gave away Hopper's headline
+feature because it does not matter here.
 
 **And there is no `E=256` H200 config in vLLM's tree at all**, so deepseek-v3 on
 this card falls through to `get_default_config()`, whose bf16 ladder is 16 for

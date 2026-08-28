@@ -50,14 +50,28 @@ below WGMMA's fixed M of 64. If Triton therefore falls back to `mma.sync`, then
 the decode path runs on Ampere-era tensor cores on Hopper silicon, and correctly
 so: the tensor core idles waiting on weights either way, while a small tile buys
 occupancy and more memory requests in flight.
-STATUS: **INFERRED, NOT VERIFIED.** See `scripts/check_mma_path.sh`.
+STATUS: **ESTABLISHED, measured 2026-08-27.** `scripts/check_mma_path.sh` on a
+real deepseek-v3 T=16 cell: both compiled `fused_moe_kernel` variants show
+`wgmma=0`, `mma.sync=16`, and every one of the 32 tensor-core instructions is
+`mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`. No warpgroup MMA anywhere.
+The strongest single piece of evidence for the hypothesis: an autotuner with no
+theory gave away Hopper's headline feature because, memory-bound, it does not
+matter.
 
 **C4. STREAM-style calibration may understate achievable read bandwidth.**
 A production kernel sustained 4483.4 GB/s where `calibrate_hardware.py` reaches
 4389.4 GB/s on a pure read. If the calibration is measuring its own achieved rate
 rather than a ceiling, every percent-of-ceiling figure computed that way is
 pessimistic, ours and everyone else's.
-STATUS: **INFERRED, NOT VERIFIED.** See `scripts/calibrate_read_variants.py`.
+STATUS: **RESOLVED, measured 2026-08-27.** The best of five plain torch
+formulations reaches 4475.6 GB/s, 0.17% short of the 4483.4 the anomalous rows
+imply, and closer than the 0.28% spread between two formulations that should be
+identical. Separately `torch.sum(dim=0)` measures 4463.0 here against the 4389.4
+`calibrate.py` records for the identical call, because the calibration ran while
+the SM clock was ramping (`sm_start 1470 -> sm_end 1980`). The ceiling is low for
+two reasons, a reduction standing in for a stream and a cold clock. **The 83-row
+anomaly is a calibration artifact**, and every percent-of-ceiling figure is
+pessimistic by at least 2%.
 
 ## Supporting results, already measured
 
@@ -111,8 +125,12 @@ work is already done and unused.
 
 ## Order of work
 
-1. `check_mma_path.sh` on the pod. Ten minutes, closes or kills C3.
-2. `calibrate_read_variants.py`. An hour, closes or kills C4.
+1. ~~`check_mma_path.sh`~~ DONE 2026-08-27. C3 established.
+2. ~~`calibrate_read_variants.py`~~ DONE 2026-08-27. C4 resolved: the anomaly was
+   the ruler. Follow-up, not yet done: settle clocks before the bandwidth
+   patterns in `calibrate.py`, and stop naming a tree reduction as the read
+   ceiling. Both change the ruler every published number used, so they are a
+   deliberate re-baseline rather than a patch.
 3. The ablation, using the GPU MODE method: alias B by taking the tile offset
    modulo so every iteration reloads the same tile (loads execute, L2 hits, no
    HBM traffic, nothing folds since values are runtime); `acc += tl.sum(b) +
