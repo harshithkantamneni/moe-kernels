@@ -102,10 +102,49 @@ the offset is not the kernel falling short of datasheet peak -- it belongs to th
 extra stages, whose permute, activation and unpermute traffic the weights-only
 model never counted.
 
-Note the spreads. 0.63 +/- 0.06 across four models and two vendors is a
-constant. 1.13 +/- 0.24 is not, and mixtral's two one-stage spans disagree
-outright (1.46 against 0.64), so the one-stage figure says "near prediction"
-rather than any precise value.
+READ THOSE ABSOLUTES WITH THE RIDGE BAND, NOT AS FIXED. Two calibrations of the
+same H200 give:
+
+    bandwidth   4377.2 -> 4374.5 GB/s       0.06% apart
+    bf16 GEMM    701.6 ->  770.9 TFLOP/s    9.9% apart
+    ridge        160.3 ->  176.2 FLOP/byte  9.9% apart
+
+The bandwidth reproduces; the compute term does not, because the GEMM runs at
+whatever clock the thermal state allows -- 1530 MHz on the second run against a
+1830 MHz datasheet boost. So the ridge is a RANGE, wider than the +/-1.5% this
+document previously quoted, and the whole table moves with it: at ridge 176.2 the
+means are 0.58 and 1.03 rather than 0.63 and 1.13.
+
+WHAT SURVIVES THE BAND is the comparison between span extents. Both sides divide
+by the same predicted crossing, so the ridge cancels ALGEBRAICALLY: five-stage
+over one-stage is 0.561 at ridge 160.3, at 176.2, and at any other value
+(`tests/test_ridge_band.py`). A five-stage span crosses at 56% of the batch a
+one-stage span does, and no calibration uncertainty touches that.
+
+So the claim is the SEPARATION, and the absolutes are quoted with their band.
+
+THE fp8 RIDGE RATIO IS MEASURED NOW, AND IT IS NOT 2. The `ridge_fp8 =
+2 x ridge_bf16` above is the datasheet relationship. Measured on the H200:
+
+    bf16    770.9 TFLOP/s at 1530 MHz   93.2% of that clock's peak
+    fp8    1409.2 TFLOP/s at 1740 MHz   74.9% of that clock's peak
+
+The two GEMMs ran at different clocks, so the 1.828 the calibration records
+conflates format with clock. Per clock it is 1.607: fp8 reaches materially less
+of its own peak than bf16 does of its.
+
+That makes C2's prediction WORSE, not better, and the honest statement is that
+this calibration cannot discriminate:
+
+    ridge ratio 2.000 (datasheet)          predicts crossing_fp8/bf16 = 1.000
+    ridge ratio 1.828 (this calibration)   predicts 0.914
+    ridge ratio 2.008 (vs the older bf16)  predicts 1.004
+    MEASURED, two production kernels                1.150 +/- 0.07
+
+The prediction spans 0.914 to 1.004 across two measurements of one machine,
+because the bf16 denominator moves 9.9%. Measured is 1.150. Dtype-invariance
+holds against the naive 0.50 by a wide margin either way; the ARITHMETIC is not
+pinned down to better than about 10% until the GEMM clock is controlled.
 
 NOT CLAIMED. An earlier reading had the one-stage deviation ordered by expert
 shape (`F/H`), matching `ridge.py`'s prediction that mixtral would deviate most.
