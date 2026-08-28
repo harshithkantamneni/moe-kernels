@@ -1,0 +1,125 @@
+name: NVIDIA A100-SXM4-80GB (measured)
+verified: true
+source: measured on this machine by scripts/calibrate_hardware.py
+source_note: Achievable ceilings, not datasheet peaks. Nsight Compute is unavailable
+  on a rented pod (ERR_NVGPUCTRPERM), so DRAM traffic cannot be measured directly;
+  these ceilings are what make the efficiency columns meaningful without counters.
+  Bandwidth is the 'triad' pattern; every pattern measured is under `detail` so a
+  different denominator can be applied without re-running.
+checked_by: scripts/calibrate_hardware.py
+checked_on: '2026-08-28'
+measured_commit: ''
+measured_dirty: false
+memory:
+  bandwidth_tb_s: 1.7984902071091922
+compute_dense_tflops:
+  bf16: 262.0450496125275
+  fp16: 262.0450496125275
+detail:
+  gpu_name: NVIDIA A100-SXM4-80GB
+  achieved_bandwidth_gbps: 1798.4902071091922
+  ceiling_pattern: triad
+  achieved_bf16_tflops: 262.0450496125275
+  bandwidth_patterns:
+  - pattern: read
+    bytes_moved: 8589934592
+    ms_p50: 4.900511980056763
+    ms_min: 4.877408027648926
+    gbps: 1752.8647265750594
+    gbps_peak_min: 1761.1679283967217
+    note: reduction-limited, not DRAM-limited; not a valid ceiling
+    sm_clock_start_mhz: 1410
+    sm_clock_end_mhz: 1410
+  - pattern: copy
+    bytes_moved: 17179869184
+    ms_p50: 9.776031970977783
+    ms_min: 9.751168251037598
+    gbps: 1757.3458469655247
+    gbps_peak_min: 1761.8267618520408
+    note: ''
+    sm_clock_start_mhz: 1410
+    sm_clock_end_mhz: 1410
+  - pattern: triad
+    bytes_moved: 25769803776
+    ms_p50: 14.32857608795166
+    ms_min: 14.319328308105469
+    gbps: 1798.4902071091922
+    gbps_peak_min: 1799.651717002185
+    note: canonical STREAM metric; the default ceiling
+    sm_clock_start_mhz: 1410
+    sm_clock_end_mhz: 1410
+  - pattern: write
+    bytes_moved: 8589934592
+    ms_p50: 4.595200061798096
+    ms_min: 4.57260799407959
+    gbps: 1869.3276628828146
+    gbps_peak_min: 1878.5635250434473
+    note: 1N proven (2N would exceed the pin rate by 94%); unflushed so the timed
+      window cannot shed writeback
+    sm_clock_start_mhz: 1410
+    sm_clock_end_mhz: 1410
+  gemm_shape:
+  - 8192
+  - 8192
+  - 8192
+  gemm_clock_mhz: 1245
+  buffer_bytes: 8589934592
+  clocks:
+    sm_start_mhz: 1395
+    sm_end_mhz: 1410
+    temp_start_c: 45
+    temp_end_c: 40
+    drift_pct: -1.08
+    throttled: false
+  settle:
+    settled: true
+    clock_history_mhz:
+    - 1230
+    - 1260
+    - 1365
+    - 1260
+    - 1335
+    - 1260
+    - 1260
+    - 1305
+    - 1335
+    - 1260
+    - 1260
+    - 1260
+    final_mhz: 1260
+    max_seconds: 30.0
+    load: compute
+    bandwidth_settle:
+      settled: true
+      clock_history_mhz:
+      - 1410
+      - 1410
+      - 1410
+      final_mhz: 1410
+      max_seconds: 30.0
+      load: memory
+  warmup_pass:
+    read: 1753.0
+    copy: 1757.0
+    triad: 1798.4
+    write: 1870.2
+  sustained_peak_tflops: 275.4
+  gemm_efficiency_pct: 95.2
+  ridge_by_pattern:
+    read: 149.5
+    copy: 149.1
+    triad: 145.7
+    write: 140.2
+observed:
+  l2_bytes: 41943040
+  sm_count: 108
+  clocks_max_memory_mhz: 1593.0
+  clocks_current_memory_mhz: 1593.0
+  throttle_reasons: '0x0000000000000000'
+  memory_bus_bits: 5120
+  pin_rate_gbps: 2039.0
+  power_limit_w: 400.0
+spec_comparison:
+  profile: null
+  bandwidth_gbps: null
+  bf16_tflops: null
