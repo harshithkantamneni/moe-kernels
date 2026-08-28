@@ -426,10 +426,23 @@ work is already done and unused.
 | `scripts/calibrate_read_variants.py` | pod | **C4**: naive vs vectorised read, is our ceiling too low |
 | `scripts/check_mma_path.sh` | pod | **C3**: dumps PTX, greps wgmma against mma.sync |
 | `scripts/kernel_name.py` | pod | **C1**: reads the CUTLASS tile out of the profiler |
+| `scripts/tile_sweep.py` | pod | **C3**: forces BLOCK_M past 64 and dumps the PTX it emits |
 | `scripts/compare.py` | anywhere | span-aware comparison, refuses to hide the extent |
+| `scripts/crossing_report.py` | anywhere | **C2/C5**: reads the crossing off measured TIME |
+| `scripts/efficiency_report.py` | anywhere | is the crossing offset achieved-versus-peak? |
+| `scripts/recompute_ceilings.py` | anywhere | re-derives a published arm's ceiling columns |
+| `scripts/plot.py` | anywhere | figures, one set per dtype present in the rows |
 | `scripts/publish_results.sh` | pod | commits a result set back to the repo |
+| `scripts/setup_runpod.sh` | pod | builds the venvs and reports what the card is |
+| `scripts/sweep_progress.py` | pod | how far a running sweep has got, and its real rate |
+| `scripts/capture_traces.py` | pod | real routing distributions from a real MoE model |
+| `scripts/probe_baseline_api.py` | pod | what MoE entry points this venv's framework exposes |
+| `scripts/probe_baseline_types.py` | pod | and the argument types of the one it exposes |
+| `scripts/profile_open_questions.sh` | pod | the two questions the first sweep could not answer |
+| `scripts/preflight_cutile.py` | pod | whether cuTile is worth more of this pod's time |
 | `moe/bench/ridge.py` | anywhere | predicts the crossing per model from a calibration |
-| `tests/` | anywhere | 358 tests, all green off-GPU |
+| `moe/bench/published.py` | anywhere | which published arms an analysis should read |
+| `tests/` | anywhere | 539 tests, all green off-GPU |
 
 ## Order of work
 

@@ -45,3 +45,9 @@ traces/raw/
 *.cubin
 *.ptx
 *.so
+
+# --- stray notebooks ------------------------------------------------------
+# An empty Untitled.ipynb was committed by accident in 66d4d53 and lived in the
+# repo root for a week. Jupyter names them this by default, so the default name
+# is the one to catch.
+Untitled*.ipynb
