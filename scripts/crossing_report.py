@@ -26,6 +26,10 @@ from moe.bench.crossing import (  # noqa: E402
     local_slopes,
     timed_rows,
 )
+from moe.bench.published import (  # noqa: E402
+    filter_superseded,
+    superseded_reason,
+)
 from moe.bench.ridge import (  # noqa: E402
     crossing_batch,
     ridge_for_dtype,
@@ -49,10 +53,22 @@ def main() -> int:
                     help="restrict to one capture mode; default mixes both")
     args = ap.parse_args()
 
+    # A superseded arm holds the SAME measurements as the one that replaced it,
+    # so reading both weights every one of its rows twice. Announced rather than
+    # silent: a dropped input nobody sees is the same class of error.
+    csvs, dropped = filter_superseded(args.csvs)
+    for d in dropped:
+        print(f"[skip] {d.parent.name}: {superseded_reason(d).splitlines()[0]}")
+    if dropped:
+        print()
+    if not csvs:
+        print("every input was superseded; nothing to report")
+        return 1
+
     cells: dict[tuple[str, str], dict[int, list[float]]] = {}
     modes: collections.Counter = collections.Counter()
     kept = skipped = untimed = 0
-    for path in args.csvs:
+    for path in csvs:
         with path.open(newline="") as fh:
             rows = list(csv.DictReader(fh))
             timed = timed_rows(rows)

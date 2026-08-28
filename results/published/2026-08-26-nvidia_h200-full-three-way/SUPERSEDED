@@ -1,0 +1,10 @@
+superseded by: 2026-08-26-nvidia_h200-full-three-way-recalibrated
+
+Same measurements. All 17,640 ms_p50 values are identical between the two arms;
+the recalibrated one recomputed the four calibration-dependent ceiling columns
+after the read-bandwidth correction of C4, which changed achieved_bw_gbps on
+12,034 rows.
+
+Kept rather than deleted because it is what the published FINDINGS.md in this
+directory was written against. Analyses read the recalibrated arm; this one is
+here for provenance.

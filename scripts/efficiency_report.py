@@ -24,6 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from moe.bench.crossing import crossing_from_points, timed_rows  # noqa: E402
 from moe.bench.efficiency import efficiency_from_rows  # noqa: E402
+from moe.bench.published import (  # noqa: E402
+    filter_superseded,
+    superseded_reason,
+)
 from moe.bench.ridge import (  # noqa: E402
     crossing_batch,
     ridge_for_dtype,
@@ -40,8 +44,20 @@ def main() -> int:
     ap.add_argument("--include-throttled", action="store_true")
     args = ap.parse_args()
 
+    # A superseded arm holds the SAME measurements as the one that replaced it,
+    # so reading both weights every one of its rows twice. Announced rather than
+    # silent: a dropped input nobody sees is the same class of error.
+    csvs, dropped = filter_superseded(args.csvs)
+    for d in dropped:
+        print(f"[skip] {d.parent.name}: {superseded_reason(d).splitlines()[0]}")
+    if dropped:
+        print()
+    if not csvs:
+        print("every input was superseded; nothing to report")
+        return 1
+
     groups: dict[tuple[str, str, str], list[dict]] = {}
-    for path in args.csvs:
+    for path in csvs:
         with path.open(newline="") as fh:
             for r in timed_rows(list(csv.DictReader(fh))):
                 if args.impl and r["impl"] != args.impl:
