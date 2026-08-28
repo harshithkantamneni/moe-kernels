@@ -75,6 +75,24 @@ agree with EACH OTHER on absolute bf16 crossings to within a few percent (454 vs
 464, 810 vs 819, 3240 vs 3048). The traffic reduction is real and appears in the
 TIME rather than the crossing: mixtral at T=512 goes 1.1567 -> 0.6383 ms, 0.55x.
 
+A CONFOUND ON THE 1.15, found 2026-08-28 while rescoping C3. vLLM's tuned
+configs pick a DIFFERENT TILE for the two dtypes on the same shape. The mixtral
+sweep loaded `E=8,N=14336,dtype=fp8_w8a8`, which sets `BLOCK_SIZE_M = 64` from
+M=1, while its bf16 twin sets 16 to 32 at low M. So the fp8 arm ran on taller
+tiles than the bf16 arm throughout, and the dtype comparison silently varied the
+tile as well.
+
+The direction of the bias is known and matches. A taller tile is 3.1 to 3.6x
+faster above the ridge (fewer weight re-reads, `alpha ~ 0.21` per extra tile),
+which speeds the compute-bound side and pushes the crossing LATER. Measured
+fp8/bf16 is 1.15 against a predicted 1.00, later, so some unknown part of that
+0.15 is tile rather than dtype.
+
+Dtype-invariance survives it: the retracted alternative needs 0.50, and no tile
+effect of this size closes a gap that wide. But 1.15 is not a pure dtype
+measurement, and separating them needs a run with `BLOCK_SIZE_M` pinned equal
+across both dtypes, which `override_config` can do and this study has not done.
+
 THE THIRD KERNEL IS RETRACTED. `torch_scaled_grouped_mm_*` gives 0.44 +/- 0.13,
 which looks like a confirmation of the 2x prediction and is not. It is an
 artefact of this harness: the span quantises activations INSIDE the timed region,
