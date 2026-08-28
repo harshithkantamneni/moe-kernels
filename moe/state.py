@@ -39,6 +39,17 @@ class MoEWeights:
     w2: Any  # [E, H, F]  down
     wg: Any  # [E, H]     router gate, kept fp32
 
+    #: Per-expert dequantisation scales, [E] fp32, set only for fp8 dtypes.
+    #: The contract is `q * scale == original`, which is the direction vLLM's
+    #: fused_experts reconstructs in. None for every float dtype, so a bf16 run
+    #: is bit-identical to what it was before fp8 existed.
+    w1_scale: Any = None
+    w2_scale: Any = None
+
+    @property
+    def quantised(self) -> bool:
+        return self.w1_scale is not None
+
     def validate(self, spec: BenchSpec) -> None:
         cfg = spec.model
         checks = [

@@ -28,7 +28,7 @@ from __future__ import annotations
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
-from ._framework_config import vllm_call_kwargs
+from ._framework_config import vllm_call_kwargs, vllm_quant_spec
 
 # Import at module scope on purpose. `baselines.load_all()` catches the failure
 # and skips this module with a warning, so on a laptop or in the base venv the
@@ -40,6 +40,36 @@ from vllm.model_executor.layers.fused_moe import (  # noqa: E402  isort:skip
 from vllm.model_executor.layers.fused_moe.activation import (  # noqa: E402  isort:skip
     MoEActivation,
 )
+
+
+def quant_config(spec: BenchSpec, weights):
+    """vLLM's quant config for this cell, or None for a float dtype.
+
+    None is correct rather than lazy: `fused_experts` resolves it internally to
+    FUSED_MOE_UNQUANTIZED_CONFIG, which is what bf16 wants.
+
+    For fp8 the scales come from `MoEWeights`, which quantised them per expert
+    with the contract `q * scale == original`. That is the direction this helper
+    reconstructs in, so passing the reciprocal would produce a call that runs,
+    returns the right shape, and computes a different layer.
+    """
+    q = vllm_quant_spec(spec)
+    if q is None:
+        return None
+    if not weights.quantised:
+        raise ValueError(
+            f"{spec.dtype} cell but the weights carry no scales; make_inputs "
+            "should have quantised them")
+    from vllm.model_executor.layers.fused_moe.config import (
+        fp8_w8a8_moe_quant_config,
+    )
+    return fp8_w8a8_moe_quant_config(
+        w1_scale=weights.w1_scale,
+        w2_scale=weights.w2_scale,
+        per_act_token_quant=q["per_act_token_quant"],
+        per_out_ch_quant=q["per_out_ch_quant"],
+        block_shape=q["block_shape"],
+    )
 
 
 def call_kwargs(spec: BenchSpec) -> dict:
@@ -64,15 +94,24 @@ class VllmFusedExperts(StageSpan):
     #: Unverified. The harness records capture_status per row, so this starts
     #: false and follows the evidence rather than leading it.
     cuda_graph_safe = False
-    dtypes = ("bf16",)
+    #: fp8_e4m3 only among the 8-bit formats: vLLM's w8a8 path is built on the
+    #: e4m3 dtype, and e5m2 would be a different kernel. SGLang stays bf16-only
+    #: because its runner takes a different config object and has not been
+    #: probed for this.
+    dtypes = ("bf16", "fp8_e4m3")
 
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")
+        kw = call_kwargs(st.spec)
+        kw["quant_config"] = quant_config(st.spec, st.weights)
+        # Activations stay in the compute dtype. This is w8a8 in vLLM's naming
+        # but the harness quantises WEIGHTS only, so `x` is handed over as
+        # drawn; per_act_token_quant is False for exactly that reason.
         st.y = fused_experts(
             hidden_states=x,
             w1=st.weights.w1,
             w2=st.weights.w2,
             topk_weights=topk_weights,
             topk_ids=topk_ids,
-            **call_kwargs(st.spec),
+            **kw,
         )

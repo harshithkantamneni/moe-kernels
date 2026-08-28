@@ -13,6 +13,7 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as tF
 
+from ..quant import FP8_DTYPES, dequantize_per_expert, quantize_per_expert
 from ..spec import BenchSpec, torch_dtype
 from ..stages import StageSpan, register
 from ..state import MoEState, MoEWeights
@@ -139,7 +140,12 @@ class _Ref(StageSpan):
     env = "base"
     requires_cuda = False
     cuda_graph_safe = False   # python loop over experts, host-side offsets
-    dtypes = ("fp32", "fp16", "bf16")
+    # fp8 is here because the reference fills every stage a baseline does not
+    # cover, so without it an fp8 sweep plans zero cells: vLLM covers five of
+    # six and the sixth has nowhere to run. The spans dequantise per expert,
+    # which is the same value the kernel reconstructs, so the reference stays
+    # the oracle rather than becoming a second low-precision implementation.
+    dtypes = ("fp32", "fp16", "bf16", "fp8_e4m3", "fp8_e5m2")
 
 
 @register
@@ -180,7 +186,8 @@ class RefUpGemm(_Ref):
     def __call__(self, st: MoEState) -> None:
         cfg = st.spec.model
         st.h_up = grouped_gemm_loop(
-            st.x_perm, st.weights.w1, st.expert_offsets, 2 * cfg.intermediate_size
+            st.x_perm, _weight(st.weights, "w1"), st.expert_offsets,
+            2 * cfg.intermediate_size
         )
 
 
@@ -201,7 +208,8 @@ class RefDownGemm(_Ref):
     def __call__(self, st: MoEState) -> None:
         cfg = st.spec.model
         st.y_perm = grouped_gemm_loop(
-            st.h_act, st.weights.w2, st.expert_offsets, cfg.hidden_size
+            st.h_act, _weight(st.weights, "w2"), st.expert_offsets,
+            cfg.hidden_size
         )
 
 
@@ -219,6 +227,20 @@ class RefUnpermute(_Ref):
 # --------------------------------------------------------------------------
 # golden path and input construction
 # --------------------------------------------------------------------------
+
+def _weight(weights: MoEWeights, which: str):
+    """`w1`/`w2`, dequantised if the cell is fp8.
+
+    Reconstructing `q * scale` is what the kernel does too, so the reference
+    computes the same function and remains an oracle. Handing it raw fp8 would
+    make it a second low-precision implementation and the correctness gate would
+    compare two approximations to each other.
+    """
+    w = getattr(weights, which)
+    if not weights.quantised:
+        return w
+    return dequantize_per_expert(w, getattr(weights, f"{which}_scale"))
+
 
 @torch.no_grad()
 def golden_forward(spec: BenchSpec, weights: MoEWeights, x, forced_topk_ids=None):
@@ -238,9 +260,20 @@ def golden_forward(spec: BenchSpec, weights: MoEWeights, x, forced_topk_ids=None
     # whole tensor converted it twice, and at DeepSeek-V3 geometry allocated a
     # 45 GB fp32 transient on a 141 GB card for every cell. Verified
     # bit-identical, and 72-99% faster across the token range.
-    h_up = grouped_gemm_loop(x_perm, weights.w1, offsets, 2 * cfg.intermediate_size)
+    # fp8 weights are DEQUANTISED before the oracle sees them. If the reference
+    # used the original fp32 draw while the kernel used `q * scale`, the
+    # correctness gate would be measuring quantisation error, which is ~2.6% RMS,
+    # a property of the format, and identical for every implementation. That is
+    # not what the gate is for: it exists to catch a kernel computing the wrong
+    # thing. Dequantising here makes both sides compute the same function and
+    # differ only in arithmetic precision.
+    #
+    # grouped_gemm_loop converts per expert, so this is not a whole-tensor
+    # pre-cast; it reconstructs the value the kernel will also reconstruct.
+    w1, w2 = _weight(weights, "w1"), _weight(weights, "w2")
+    h_up = grouped_gemm_loop(x_perm, w1, offsets, 2 * cfg.intermediate_size)
     h_act = swiglu(h_up)
-    y_perm = grouped_gemm_loop(h_act, weights.w2, offsets, cfg.hidden_size)
+    y_perm = grouped_gemm_loop(h_act, w2, offsets, cfg.hidden_size)
     return combine(y_perm, perm, w, spec.num_tokens, cfg.top_k)
 
 
@@ -298,16 +331,40 @@ def make_inputs(spec: BenchSpec, device: str = "cpu", scale: float = 1.0,
         # randn(...) * std kept three tensors live at once (the draw, the
         # scaled result, the cast), peaking at 75 GB while building
         # DeepSeek-V3's w1 alone. Verified bit-identical to the old form.
-        return (torch.empty(shape, device=device, dtype=torch.float32)
-                .normal_(0.0, std * scale, generator=g).to(dtype))
+        drawn = (torch.empty(shape, device=device, dtype=torch.float32)
+                 .normal_(0.0, std * scale, generator=g))
+        if dtype is torch.float32 or drawn.ndim < 2:
+            return drawn.to(dtype)
+        return drawn.to(dtype)
 
     if cached is None:
-        weights = MoEWeights(
-            w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
-            w2=rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5),
-            wg=rnd((cfg.num_experts, cfg.hidden_size), cfg.hidden_size ** -0.5,
-                   torch.float32),
-        )
+        # fp8 is drawn in fp32 and quantised per expert, not cast. A bare cast
+        # would leave 27.6% of fan-in scaled elements subnormal, and vLLM
+        # requires the scales regardless: fp8_w8a8_moe_quant_config takes
+        # w1_scale and w2_scale and reconstructs as `q * scale`.
+        #
+        # The GATE stays fp32 on purpose. Routing decides which experts run, so
+        # quantising it would change the experiment rather than the arithmetic
+        # under test, and the two dtypes would no longer be the same cells.
+        if spec.dtype in FP8_DTYPES:
+            w1f = rnd(cfg.w1_shape, cfg.hidden_size ** -0.5, torch.float32)
+            w2f = rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5, torch.float32)
+            w1q, w1s = quantize_per_expert(w1f, spec.dtype)
+            w2q, w2s = quantize_per_expert(w2f, spec.dtype)
+            del w1f, w2f
+            weights = MoEWeights(
+                w1=w1q, w2=w2q,
+                wg=rnd((cfg.num_experts, cfg.hidden_size),
+                       cfg.hidden_size ** -0.5, torch.float32),
+                w1_scale=w1s, w2_scale=w2s,
+            )
+        else:
+            weights = MoEWeights(
+                w1=rnd(cfg.w1_shape, cfg.hidden_size ** -0.5),
+                w2=rnd(cfg.w2_shape, cfg.intermediate_size ** -0.5),
+                wg=rnd((cfg.num_experts, cfg.hidden_size), cfg.hidden_size ** -0.5,
+                       torch.float32),
+            )
         weights.validate(spec)
         if reuse_weights:
             # Evict first: never hold two models' weights at once.

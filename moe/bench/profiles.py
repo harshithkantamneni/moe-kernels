@@ -71,6 +71,25 @@ PROFILES: dict[str, Profile] = {
     # Counter profiling wants ONE launch, not a matrix: `ncu --launch-count 1`
     # takes whichever kernel runs first, so the cell has to be the only cell.
     # Token count is supplied per question with --tokens.
+    # C2's prediction test. Same grid as `full` so the crossings are directly
+    # comparable, one dtype changed. AI = 2R/b, so halving bytes must HALVE the
+    # crossing: deepseek-v3 from ~5,100 tokens to ~2,570, mixtral 642 -> 321.
+    # That is a 2x shift, which this powers-of-two grid separates without any
+    # narrow runs, where the A100's 0.913x ridge ratio does not.
+    #
+    # Only vLLM and the reference cover fp8: torch's grouped_mm is bf16-only and
+    # SGLang's runner takes a different config object that has not been probed.
+    # Those spans decline the cell rather than being silently skipped.
+    "fp8": Profile(
+        name="fp8",
+        models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite",
+                "deepseek-v3"),
+        token_counts=(1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048,
+                      4096, 8192),
+        dtypes=("fp8_e4m3",),
+        routings=SKEW_SWEEP + (RoutingSpec("zipf", 2.0), RoutingSpec("hot", 0.8)),
+        seeds=(0, 1, 2),
+    ),
     "profile-cell": Profile(
         name="profile-cell",
         models=("deepseek-v3",),

@@ -13,6 +13,7 @@ suite, so they live in a module a laptop can import.
 """
 from __future__ import annotations
 
+from ..quant import FP8_DTYPES
 from ..spec import BenchSpec
 
 
@@ -72,4 +73,34 @@ def sglang_runner_kwargs(spec: BenchSpec) -> dict:
         "no_combine": False,
         "routed_scaling_factor": None,
         "gate_up_interleaved": False,
+    }
+
+
+def vllm_quant_spec(spec: BenchSpec) -> dict | None:
+    """What kind of quant config this cell needs, with no vLLM import.
+
+    Returns None for float dtypes, which is what `fused_experts` wants: a
+    `quant_config` of None resolves internally to FUSED_MOE_UNQUANTIZED_CONFIG.
+
+    For fp8 the span builds `fp8_w8a8_moe_quant_config(w1_scale=..., w2_scale=...,
+    **rest)`. The two flags below are stated rather than defaulted because both
+    describe the quantisation this harness actually performed:
+
+    per_act_token_quant  False. Activations are NOT quantised here, only weights.
+        True would have vLLM expect a per-token activation scale that does not
+        exist, and the shapes would be wrong rather than merely different.
+    block_shape          None. Scales are per expert, one number for the whole
+        tensor, not per [128, 128] block. A block shape sends the kernel down a
+        blocked path expecting a 2-D scale grid.
+
+    The scales themselves are tensors and so live on MoEWeights, not here; this
+    module stays import-free so it can be tested on a laptop.
+    """
+    if spec.dtype not in FP8_DTYPES:
+        return None
+    return {
+        "kind": "fp8_w8a8",
+        "per_act_token_quant": False,
+        "per_out_ch_quant": False,
+        "block_shape": None,
     }
