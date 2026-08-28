@@ -79,7 +79,12 @@ def main() -> int:
                     t, ms = int(r["num_tokens"]), float(r["ms_p50"])
                 except (ValueError, KeyError):
                     continue
-                cells.setdefault((r["model"], r["dtype"]), {}).setdefault(t, []).append(ms)
+                # `impl` is in the key, not just an optional filter. Rows from
+                # different implementations measure different SCOPES -- one
+                # stage against five against a whole layer, 16.7x apart on the
+                # published sweep -- so a median across them describes nothing.
+                key = (r["model"], r["dtype"], r["impl"])
+                cells.setdefault(key, {}).setdefault(t, []).append(ms)
                 kept += 1
 
     print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
@@ -95,9 +100,9 @@ def main() -> int:
         print("nothing to report")
         return 1
 
-    for (model, dtype), by_t in sorted(cells.items()):
+    for (model, dtype, impl), by_t in sorted(cells.items()):
         points = [(t, statistics.median(v)) for t, v in sorted(by_t.items())]
-        print(f"=== {model} / {dtype} ===")
+        print(f"=== {model} / {dtype} / {impl} ===")
         slopes = dict(local_slopes(points))
         print(f"  {'T':>6} {'ms_p50':>9} {'slope':>7}   regime")
         prev = None
