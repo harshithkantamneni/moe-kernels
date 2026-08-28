@@ -241,11 +241,21 @@ git -c user.email="${GIT_AUTHOR_EMAIL:-hkantamneni2@wisc.edu}" \
 log "committed $DEST"
 
 if (( PUSH )); then
-  if git push -q origin HEAD 2>/dev/null; then
+  # Show git's own error rather than guessing. The previous version discarded
+  # it and blamed credentials, which sent someone hunting for a token when the
+  # actual cause was a non-fast-forward: two pods and a laptop push to this
+  # repo, so a diverged branch is the normal state, not an exception.
+  if err="$(git push origin HEAD 2>&1)"; then
     log "pushed. The result set is now on GitHub."
   else
-    log "push FAILED (no credentials on this pod?)"
-    log "  run: gh auth login    then: git push origin HEAD"
+    log "push failed. git said:"
+    printf '%s\n' "$err" | sed 's/^/[publish]   /'
+    if printf '%s' "$err" | grep -qi 'non-fast-forward\|fetch first\|rejected'; then
+      log "  the branch has diverged. run:"
+      log "    git pull --rebase origin main && git push origin HEAD"
+    elif printf '%s' "$err" | grep -qi 'authentication\|could not read\|permission'; then
+      log "  no credentials. run: gh auth login"
+    fi
     log "  the commit is safe locally either way"
   fi
 fi
