@@ -40,64 +40,80 @@ so for `N` weight elements across any number of layers, `AI = 2NR / Nb = 2R/b`.
 `N` is a SUM over layers and cancels, so shapes and layer counts are irrelevant.
 For bf16 that is `AI = rows per expert`.
 
-STATUS: **ESTABLISHED, and tested against a prediction that could have refuted
-it, measured 2026-08-28.** Previously verified numerically against deliberately
-lopsided synthetic architectures, and matches Yun et al. arXiv:2507.15465, whose
-`B_MoE = RP_acc * (n_e/n_k)` lands inside all three of our measured brackets.
+STATUS: **ESTABLISHED, on a prediction that could have refuted it. Measured
+2026-08-28, 19,908 fp8 rows across three kernels, published at
+`results/published/2026-08-28-nvidia_h200-h200-fp8-three-kernel/`.**
 
-The fp8 sweep (4,704 rows, H200, `run_h200fp8full`) was run to test a "2x
-crossing shift": halve the weight bytes, halve the batch at which a model
-crosses its ridge. **That prediction was wrong, and the error was in its
-derivation rather than in C2.** The ridge is `peak_FLOPS / bandwidth`, and going
-bf16 -> fp8 halves `b` AND doubles `peak_FLOPS`, because the same silicon runs
-fp8 tensor cores at twice the bf16 rate:
+THE PREDICTION THAT WAS WRONG WAS MINE, NOT C2'S. The fp8 sweep was built to
+test a "2x crossing shift": halve the weight bytes, halve the batch at which a
+model crosses its ridge. But the ridge is `peak_FLOPS / bandwidth`, and bf16 ->
+fp8 halves `b` AND doubles `peak_FLOPS`, because the same silicon runs fp8
+tensor cores at twice the bf16 rate:
 
     fp8:   2R/1 = 2 * ridge_bf16   ->   R = ridge_bf16
     bf16:  2R/2 =     ridge_bf16   ->   R = ridge_bf16
 
-The same rows per expert, so the same crossing batch. Both sides of the roofline
-scale together and their intersection does not move. The 2x figure came from
-holding the ridge at its bf16 value while changing the format.
+The same rows per expert, so the same crossing. Both sides of the roofline scale
+together and their intersection does not move. The 2x figure came from holding
+the ridge at its bf16 value while changing the format.
 
-MEASURED, crossing recovered from TIME (`moe/bench/crossing.py`, slope of
-`log ms` against `log T` passing 0.5), never from the byte model:
+MEASURED. Crossings are recovered from TIME (`moe/bench/crossing.py`: the slope
+of `log ms` against `log T` passing 0.5, floored at the saturation batch), never
+from the byte model, so the prediction is refutable.
 
-| model            | bf16 |  fp8 | fp8/bf16 |
-|------------------|-----:|-----:|---------:|
-| mixtral-8x7b     |  454 |  568 |     1.25 |
-| qwen2-57b-a14b   |  810 |  900 |     1.11 |
-| deepseek-v2-lite |  922 |  976 |     1.06 |
-| deepseek-v3      | 3240 | 3459 |     1.07 |
+fp8/bf16 crossing ratio -- corrected theory says 1.00, the retracted 2x says 0.50:
 
-Corrected theory predicts 1.00; measured 1.12 +/- 0.09 across four models. The
-original 2x prediction requires 0.50 and is refuted. The traffic reduction is
-real and shows up in the TIME rather than the crossing: mixtral at T=512 goes
-1.1567 ms -> 0.6383 ms, 0.55x.
+| model            | vLLM | SGLang |
+|------------------|-----:|-------:|
+| mixtral-8x7b     | 1.25 |   1.16 |
+| qwen2-57b-a14b   | 1.11 |   1.15 |
+| deepseek-v2-lite | 1.06 |   1.16 |
+| deepseek-v3      | 1.07 |   1.23 |
 
-OPEN, and structured rather than noisy. Measured crossings sit BELOW the
-prediction by a consistent factor:
+**1.15 +/- 0.07** over eight measurements from two unrelated kernels, which also
+agree with EACH OTHER on absolute bf16 crossings to within a few percent (454 vs
+464, 810 vs 819, 3240 vs 3048). The traffic reduction is real and appears in the
+TIME rather than the crossing: mixtral at T=512 goes 1.1567 -> 0.6383 ms, 0.55x.
 
-    bf16   0.539  0.632  0.708  0.632     mean 0.63
-    fp8    0.571  0.674  0.886  0.702     mean 0.71
+THE THIRD KERNEL IS RETRACTED. `torch_scaled_grouped_mm_*` gives 0.44 +/- 0.13,
+which looks like a confirmation of the 2x prediction and is not. It is an
+artefact of this harness: the span quantises activations INSIDE the timed region,
+because `_scaled_grouped_mm` needs both operands in fp8 while the harness hands
+out bf16 activations for vLLM's sake. The giveaway is direct -- deepseek-v2-lite
+`torch_scaled_grouped_mm_up` at T=8192 is 1.9855 ms against bf16's 1.0503, so
+fp8 is 1.89x SLOWER on the same GEMM. That cannot be a dtype effect. The added
+work scales with tokens, which biases the crossing early. Fixable by hoisting
+the quantisation into the prologue; until then this span cannot test C2.
 
-A single multiplicative offset across four models and two dtypes reads as the
-kernel reaching about 63% of the ideal ridge. Two candidate mechanisms, pushing
-opposite ways:
+WHERE THE REMAINING OFFSET LIVES, and it is not the hardware. bf16
+measured/predicted, split by how much of the layer the span covers:
 
-  1. ACTIVATION TRAFFIC. `crossing_batch` uses weights-only `2R/b`, but real
-     traffic includes activations, which lowers AI and moves the crossing
-     earlier. `ridge.py` predicts exactly this. It should hit fp8 HARDER, since
-     activations stayed bf16 and are now a larger share of the bytes.
-  2. ACHIEVED VERSUS PEAK. No kernel reaches datasheet peak. Reaching fraction
-     `f` of peak FLOPs and `g` of peak bandwidth gives an effective ridge of
-     `(f/g) * 160.3`.
+| model            |  F/H | vLLM | SGLang | torch_up | torch_down |
+|------------------|-----:|-----:|-------:|---------:|-----------:|
+| mixtral-8x7b     | 3.50 | 0.71 |   0.72 |     1.46 |       0.64 |
+| qwen2-57b-a14b   | 0.71 | 0.63 |   0.64 |     1.00 |       1.18 |
+| deepseek-v2-lite | 0.69 | 0.54 |   0.60 |     1.05 |       1.19 |
+| deepseek-v3      | 0.29 | 0.63 |   0.59 |     1.26 |       1.27 |
+| **mean**         |      | **0.63 +/- 0.06** || **1.13 +/- 0.24** ||
 
-fp8's ratio is HIGHER than bf16's for all four models, the opposite of what (1)
-alone predicts, so (2) dominates. Backing the offset out gives effective ridges
-of ~101 (bf16) and ~227 (fp8), a 2.25x ratio.
+The FIVE-STAGE kernels sit at 0.63 with a tight spread. The ONE-STAGE grouped
+GEMM sits at 1.13: `2R/b` predicts it about right. Same hardware, same ridge, so
+the offset is not the kernel falling short of datasheet peak -- it belongs to the
+extra stages, whose permute, activation and unpermute traffic the weights-only
+model never counted.
 
-Settling it needs no new sweep: `pct_of_achieved_tflops` and `achieved_bw_gbps`
-are already on every row.
+Note the spreads. 0.63 +/- 0.06 across four models and two vendors is a
+constant. 1.13 +/- 0.24 is not, and mixtral's two one-stage spans disagree
+outright (1.46 against 0.64), so the one-stage figure says "near prediction"
+rather than any precise value.
+
+NOT CLAIMED. An earlier reading had the one-stage deviation ordered by expert
+shape (`F/H`), matching `ridge.py`'s prediction that mixtral would deviate most.
+That ordering came from an input set that double-counted a superseded arm. On
+the canonical set it is 1.05, 1.09, 1.12, 1.27 against F/H of 3.50, 0.71, 0.69,
+0.29 -- monotonic in the means, but mixtral's internal disagreement makes its
+mean unreliable and the effect is too weak to assert. See
+`moe/bench/published.py` for why the input set now defends itself.
 
 **C3. vLLM's decode path may not use Hopper's tensor core at all.**
 vLLM's tuned H200 config sets `BLOCK_SIZE_M = 16` for every batch size from 1 to
