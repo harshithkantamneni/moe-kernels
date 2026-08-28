@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 import torch
 
+from ..quant import quantize_per_expert
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
@@ -104,6 +105,44 @@ def _offs(st: MoEState) -> torch.Tensor:
     return st.expert_offsets[1:].to(torch.int32)
 
 
+_SCALED_GROUPED_MM = getattr(torch, "_scaled_grouped_mm", None)
+
+
+@dataclass(frozen=True)
+class ScaledArgs:
+    """Exactly what `_scaled_grouped_mm` is called with, built separately so it
+    can be checked without an sm_90 device to run the kernel on."""
+
+    a: torch.Tensor
+    b: torch.Tensor
+    scale_a: torch.Tensor
+    scale_b: torch.Tensor
+    offs: torch.Tensor
+
+
+def scaled_grouped_args(a, w_q, w_scale, offs, dtype: str) -> ScaledArgs:
+    """Build the fp8 grouped-GEMM call.
+
+    `_scaled_grouped_mm` needs BOTH operands in fp8, while the harness hands out
+    bf16 activations because vLLM asserts on anything else. So the activations
+    are quantised here, per row, inside the timed region. That is the fair
+    comparison rather than a handicap: vLLM's kernel quantises activations
+    internally too, so both implementations are charged for the same work.
+
+    `quantize_per_expert` quantises along dim 0 with one scale per slice, which
+    for `[Ntot, K]` activations is one scale per token. Per-token rather than
+    per-tensor because a single outlier token would otherwise crush the
+    resolution of every other row.
+
+    The WEIGHT scale is the one `make_inputs` produced, never recomputed. The
+    oracle dequantises with that scale, so a locally derived one would measure a
+    different layer from the one being judged.
+    """
+    a_q, scale_a = quantize_per_expert(a, dtype)
+    return ScaledArgs(a=a_q, b=w_q.transpose(1, 2), scale_a=scale_a,
+                      scale_b=w_scale, offs=offs)
+
+
 class _GroupedMM(StageSpan):
     """Shared plumbing. The weight transpose is a view, not a copy.
 
@@ -174,3 +213,60 @@ class TorchGroupedMMDown(_GroupedMM):
         h_act, _ = st.require("h_act", "expert_offsets")
         st.y_perm = _GROUPED_MM(h_act, st.weights.w2.transpose(1, 2),
                                 offs=_offs(st))
+
+
+class _ScaledGroupedMM(_GroupedMM):
+    """fp8 grouped GEMM: the same CUTLASS shape, half the weight bytes.
+
+    A SECOND independent test of C2. Through vLLM alone a 2x crossing shift
+    cannot be told apart from a property of vLLM's kernel; through two unrelated
+    kernels it is a statement about traffic, which is what C2 claims. This span
+    is the cleanest of the three for it, covering one stage rather than five, so
+    the byte model applies with nothing folded in.
+    """
+
+    #: fp8 only. The bf16 path is torch_grouped_mm_*, and keeping one span per
+    #: dtype keeps the `impl` column meaning exactly one thing.
+    dtypes = ("fp8_e4m3",)
+    #: Unverified until a row says otherwise, same as every other span here.
+    cuda_graph_safe = False
+
+    def supports(self, spec: BenchSpec) -> bool:
+        return _SCALED_GROUPED_MM is not None and super().supports(spec)
+
+    def why_unsupported(self, spec: BenchSpec) -> str:
+        if _SCALED_GROUPED_MM is None:
+            return f"torch {torch.__version__} has no _scaled_grouped_mm"
+        return super().why_unsupported(spec)
+
+
+@register
+class TorchScaledGroupedMMUp(_ScaledGroupedMM):
+    """fp8 up-projection: [Ntot, H] x [E, H, 2F] -> [Ntot, 2F]."""
+
+    name = "torch_scaled_grouped_mm_up"
+    covers = ("up_gemm",)
+
+    def __call__(self, st: MoEState) -> None:
+        x_perm, _ = st.require("x_perm", "expert_offsets")
+        a = scaled_grouped_args(x_perm, st.weights.w1, st.weights.w1_scale,
+                                _offs(st), st.spec.dtype)
+        st.h_up = _SCALED_GROUPED_MM(
+            a.a, a.b, a.scale_a, a.scale_b, offs=a.offs,
+            out_dtype=x_perm.dtype)
+
+
+@register
+class TorchScaledGroupedMMDown(_ScaledGroupedMM):
+    """fp8 down-projection: [Ntot, F] x [E, F, H] -> [Ntot, H]."""
+
+    name = "torch_scaled_grouped_mm_down"
+    covers = ("down_gemm",)
+
+    def __call__(self, st: MoEState) -> None:
+        h_act, _ = st.require("h_act", "expert_offsets")
+        a = scaled_grouped_args(h_act, st.weights.w2, st.weights.w2_scale,
+                                _offs(st), st.spec.dtype)
+        st.y_perm = _SCALED_GROUPED_MM(
+            a.a, a.b, a.scale_a, a.scale_b, offs=a.offs,
+            out_dtype=h_act.dtype)
