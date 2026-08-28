@@ -510,6 +510,23 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     return written
 
 
+def describe_exception(e: BaseException, limit: int = 300) -> str:
+    """A one-line, never-empty rendering of an exception.
+
+    `f"{e}"` is the empty string for any exception carrying no args, and vLLM
+    validates its fused_moe arguments with bare `assert` statements. An fp8
+    sweep printed 147 lines ending in a colon because of it, on a machine that
+    bills by the second.
+
+    One line because a sweep prints one per failing cell, and bounded because a
+    shape mismatch can carry a very long repr.
+    """
+    kind = type(e).__name__
+    msg = " ".join(str(e).split())
+    out = f"{kind}: {msg}" if msg else kind
+    return out if len(out) <= limit else out[: limit - 3] + "..."
+
+
 def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
               cfg: RunConfig, routing: RoutingSource,
               info: dict | None = None) -> Path:
@@ -528,12 +545,13 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
                                       manifest, info, sha, dirty)
                 except PipelineError as e:
                     manifest.record(f"invalid|{spec.label}|{'+'.join(names)}|{impl}",
-                                    SC.STATUS_INVALID_PIPELINE, str(e)[:200])
-                    print(f"[warn] {spec.label} {impl}: {e}")
+                                    SC.STATUS_INVALID_PIPELINE,
+                                    describe_exception(e, 200))
+                    print(f"[warn] {spec.label} {impl}: {describe_exception(e)}")
                 except Exception as e:  # noqa: BLE001
                     manifest.record(f"crash|{spec.label}|{'+'.join(names)}|{impl}",
                                     SC.STATUS_CRASH, traceback.format_exc()[-400:])
-                    print(f"[warn] {spec.label} {impl}: {e}")
+                    print(f"[warn] {spec.label} {impl}: {describe_exception(e)}")
         finally:
             manifest.close()
     print(f"[driver] wrote {total} rows -> {cfg.csv_path}")
