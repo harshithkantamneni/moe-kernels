@@ -56,11 +56,85 @@ def test_a_path_that_does_not_exist_is_not_superseded(tmp_path):
     assert not is_superseded(tmp_path / "nope" / "merged.csv")
 
 
-def test_the_real_repo_marks_exactly_one_arm():
-    """The state this exists for. If a second arm is ever superseded, this test
-    is the place to say so deliberately."""
+def test_the_real_repo_marks_exactly_two_arms():
+    """The state this exists for, and the place a new superseding gets declared
+    on purpose rather than noticed later.
+
+    Two now, and they are different KINDS:
+
+      full-three-way        WHOLE arm, replaced by its recalibrated twin
+      fp8-three-kernel      PARTIAL, only its two torch spans, replaced by
+                            fp8-refixed
+    """
+    from moe.bench.published import superseded_impls
     pub = Path(__file__).resolve().parent.parent / "results" / "published"
     if not pub.exists():
         return
     marked = sorted(p.parent.name for p in pub.glob(f"*/{SUPERSEDED_MARKER}"))
-    assert marked == ["2026-08-26-nvidia_h200-full-three-way"], marked
+    assert marked == ["2026-08-26-nvidia_h200-full-three-way",
+                      "2026-08-28-nvidia_h200-h200-fp8-three-kernel"], marked
+    assert superseded_impls(pub / marked[0] / "merged.csv") is None
+    assert superseded_impls(pub / marked[1] / "merged.csv") == {
+        "torch_scaled_grouped_mm_up", "torch_scaled_grouped_mm_down"}
+
+
+# --- an arm can be superseded only in PART -----------------------------------
+
+def test_an_arm_can_supersede_only_some_implementations(tmp_path):
+    """MEASURED, 2026-08-28. `2026-08-28-nvidia_h200-h200-fp8-three-kernel` holds
+    valid vLLM and SGLang fp8 rows alongside two torch spans that measured a
+    quantisation pass inside the timed region. `-fp8-refixed` replaces only the
+    torch ones: deepseek-v2-lite at T=8192 went 1.9855 ms to 0.7659.
+
+    A directory-level marker would throw away 9,576 good rows to retract 9,408
+    bad ones. A whole-arm rule is the wrong granularity for a partial retraction.
+    """
+    d = tmp_path / "arm"
+    d.mkdir()
+    (d / "merged.csv").write_text("x")
+    (d / SUPERSEDED_MARKER).write_text(
+        "superseded by: the-refixed-arm\n"
+        "impls: torch_scaled_grouped_mm_up, torch_scaled_grouped_mm_down\n")
+    from moe.bench.published import superseded_impls
+    assert superseded_impls(d / "merged.csv") == {
+        "torch_scaled_grouped_mm_up", "torch_scaled_grouped_mm_down"}
+
+
+def test_no_impls_line_still_means_the_WHOLE_arm(tmp_path):
+    """The existing full-three-way marker has no impls line and must keep
+    meaning what it meant."""
+    d = tmp_path / "arm"
+    d.mkdir()
+    (d / "merged.csv").write_text("x")
+    (d / SUPERSEDED_MARKER).write_text("superseded by: the recalibrated arm\n")
+    from moe.bench.published import superseded_impls
+    assert superseded_impls(d / "merged.csv") is None      # None = all of it
+
+
+def test_an_unmarked_arm_supersedes_nothing(tmp_path):
+    d = tmp_path / "arm"
+    d.mkdir()
+    (d / "merged.csv").write_text("x")
+    from moe.bench.published import superseded_impls
+    assert superseded_impls(d / "merged.csv") == set()     # empty = drop none
+
+
+def test_a_partially_superseded_arm_is_not_dropped_wholesale(tmp_path):
+    """filter_superseded must keep it, because most of its rows are good."""
+    d = tmp_path / "arm"
+    d.mkdir()
+    (d / "merged.csv").write_text("x")
+    (d / SUPERSEDED_MARKER).write_text("superseded by: x\nimpls: a_span\n")
+    kept, dropped = filter_superseded([d / "merged.csv"])
+    assert kept == [d / "merged.csv"] and dropped == []
+
+
+def test_the_real_repo_marks_the_fp8_torch_spans():
+    """The state this exists for."""
+    from moe.bench.published import superseded_impls
+    pub = Path(__file__).resolve().parent.parent / "results" / "published"
+    arm = pub / "2026-08-28-nvidia_h200-h200-fp8-three-kernel" / "merged.csv"
+    if not arm.exists():
+        return
+    assert superseded_impls(arm) == {
+        "torch_scaled_grouped_mm_up", "torch_scaled_grouped_mm_down"}

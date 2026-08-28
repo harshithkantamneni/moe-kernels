@@ -34,6 +34,32 @@ def superseded_reason(csv_path: Path | str) -> str:
         return ""
 
 
+def superseded_impls(csv_path: Path | str) -> set[str] | None:
+    """Which implementations in this arm a later one replaced.
+
+    `set()`   nothing is superseded, the arm is current
+    `None`    the WHOLE arm is superseded
+    `{...}`   only these implementations are
+
+    The middle case is the original one. The third exists because
+    `2026-08-28-nvidia_h200-h200-fp8-three-kernel` holds valid vLLM and SGLang
+    fp8 rows next to two torch spans that timed a quantisation pass by mistake,
+    and `-fp8-refixed` replaces only the torch ones. Retiring the directory
+    would discard 9,576 good rows to retract 9,408 bad ones.
+
+    The marker declares it with a line `impls: name, name`. Without that line it
+    means the whole arm, so existing markers keep their meaning.
+    """
+    marker = Path(csv_path).parent / SUPERSEDED_MARKER
+    if not marker.exists():
+        return set()
+    for line in marker.read_text().splitlines():
+        if line.lower().startswith("impls:"):
+            names = {n.strip() for n in line.split(":", 1)[1].split(",")}
+            return {n for n in names if n}
+    return None
+
+
 def filter_superseded(paths) -> tuple[list[Path], list[Path]]:
     """`(kept, dropped)`.
 
@@ -42,5 +68,8 @@ def filter_superseded(paths) -> tuple[list[Path], list[Path]]:
     """
     kept, dropped = [], []
     for p in paths:
-        (dropped if is_superseded(p) else kept).append(Path(p))
+        # A PARTIALLY superseded arm is kept: its remaining rows are current,
+        # and the caller drops the named implementations row by row.
+        whole = is_superseded(p) and superseded_impls(p) is None
+        (dropped if whole else kept).append(Path(p))
     return kept, dropped

@@ -28,6 +28,7 @@ from moe.bench.crossing import (  # noqa: E402
 )
 from moe.bench.published import (  # noqa: E402
     filter_superseded,
+    superseded_impls,
     superseded_reason,
 )
 from moe.bench.ridge import (  # noqa: E402
@@ -59,7 +60,14 @@ def main() -> int:
     csvs, dropped = filter_superseded(args.csvs)
     for d in dropped:
         print(f"[skip] {d.parent.name}: {superseded_reason(d).splitlines()[0]}")
-    if dropped:
+    partial = {}
+    for c in csvs:
+        names = superseded_impls(c)
+        if names:
+            partial[c] = names
+            print(f"[skip] {c.parent.name}: {', '.join(sorted(names))} "
+                  f"({superseded_reason(c).splitlines()[0]})")
+    if dropped or partial:
         print()
     if not csvs:
         print("every input was superseded; nothing to report")
@@ -73,7 +81,11 @@ def main() -> int:
             rows = list(csv.DictReader(fh))
             timed = timed_rows(rows)
             untimed += len(rows) - len(timed)
+            skip_impls = partial.get(path, set())
             for r in timed:
+                if r["impl"] in skip_impls:
+                    skipped += 1
+                    continue
                 if args.impl and r["impl"] != args.impl:
                     continue
                 if args.routing and r["routing_kind"] != args.routing:

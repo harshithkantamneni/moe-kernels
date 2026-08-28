@@ -1,0 +1,16 @@
+superseded by: 2026-08-28-nvidia_h200-h200-fp8-refixed
+impls: torch_scaled_grouped_mm_up, torch_scaled_grouped_mm_down
+
+PARTIAL. Only the two torch spans are retracted. This arm's vLLM and SGLang fp8
+rows are current and are the measurement behind C2's dtype-invariance result.
+
+Why the torch spans are wrong: they quantised activations INSIDE the timed
+region, because _scaled_grouped_mm needs both operands in fp8 while the harness
+hands out bf16 activations for vLLM's sake. The giveaway is that fp8 came out
+SLOWER than bf16 on the same GEMM -- deepseek-v2-lite at T=8192 measured
+1.9855 ms against bf16's 1.0503. fp8 moves half the weight bytes and cannot be
+slower.
+
+Fixed in 6652c66 by caching the quantisation, and re-measured in the -fp8-refixed
+arm: the same cell is now 0.7659 ms, 0.73x of bf16. A 2.59x difference, and it
+scaled with tokens, so it biased every crossing this arm reported.

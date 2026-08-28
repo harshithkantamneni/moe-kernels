@@ -93,15 +93,45 @@ effect of this size closes a gap that wide. But 1.15 is not a pure dtype
 measurement, and separating them needs a run with `BLOCK_SIZE_M` pinned equal
 across both dtypes, which `override_config` can do and this study has not done.
 
-THE THIRD KERNEL IS RETRACTED. `torch_scaled_grouped_mm_*` gives 0.44 +/- 0.13,
-which looks like a confirmation of the 2x prediction and is not. It is an
-artefact of this harness: the span quantises activations INSIDE the timed region,
-because `_scaled_grouped_mm` needs both operands in fp8 while the harness hands
-out bf16 activations for vLLM's sake. The giveaway is direct -- deepseek-v2-lite
-`torch_scaled_grouped_mm_up` at T=8192 is 1.9855 ms against bf16's 1.0503, so
-fp8 is 1.89x SLOWER on the same GEMM. That cannot be a dtype effect. The added
-work scales with tokens, which biases the crossing early. Fixable by hoisting
-the quantisation into the prologue; until then this span cannot test C2.
+THE THIRD KERNEL: ITS TIMINGS ARE FIXED, ITS CROSSINGS ARE UNUSABLE.
+`torch_scaled_grouped_mm_*` first reported 0.44 +/- 0.13, which looks like
+support for the retracted 2x prediction and was an artefact: the span quantised
+activations INSIDE the timed region, because `_scaled_grouped_mm` needs both
+operands in fp8 while the harness hands out bf16 activations for vLLM's sake.
+The giveaway was direct -- deepseek-v2-lite at T=8192 measured 1.9855 ms in fp8
+against bf16's 1.0503, and fp8 moves half the weight bytes so it cannot be
+slower.
+
+FIXED AND RE-MEASURED (`6652c66`, arm `-fp8-refixed`, 9,408 rows). The same cell
+is now 0.7659 ms, 0.73x of bf16, reproducing the smoke's 0.7666 to 0.3%. A 2.59x
+change, and it scaled with tokens. The timings from this span are now sound.
+
+BUT THE CROSSINGS FROM IT STILL ARE NOT:
+
+| model            |   up | down |
+|------------------|-----:|-----:|
+| mixtral-8x7b     | 0.87 | 1.99 |
+| qwen2-57b-a14b   | 0.88 | 0.61 |
+| deepseek-v2-lite | 0.63 | 0.41 |
+| deepseek-v3      | 0.52 | 1.23 |
+| **mean**         | **0.89 +/- 0.51** ||
+
+The mean moved from 0.44 to 0.89, toward the corrected theory's 1.00, which is
+what removing a token-scaling bias should do. But 0.41 to 1.99 is a five-fold
+range, against 1.15 +/- 0.07 from the two production kernels. Nothing can be
+concluded from a spread that wide.
+
+The likely cause is the method, not the span. A single GEMM's time-against-T
+curve is flatter and less structured than a fused layer's, so the slope has less
+to cross and the 0.5 threshold lands wherever local noise puts it. `up` and
+`down` are the same arithmetic on the same cells and disagree by 2.3x on mixtral,
+which is not a property either dtype has.
+
+SO: dtype-invariance rests on vLLM and SGLang. The one-stage span contributes its
+TIMES, which is what the five-stage/one-stage separation below uses, and does not
+contribute a third crossing measurement. Getting one needs a token grid dense
+enough to locate a shallow slope change, which this profile's powers of two are
+not.
 
 WHERE THE REMAINING OFFSET LIVES, and it is not the hardware. bf16
 measured/predicted, split by how much of the layer the span covers:

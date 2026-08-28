@@ -26,6 +26,7 @@ from moe.bench.crossing import crossing_from_points, timed_rows  # noqa: E402
 from moe.bench.efficiency import efficiency_from_rows  # noqa: E402
 from moe.bench.published import (  # noqa: E402
     filter_superseded,
+    superseded_impls,
     superseded_reason,
 )
 from moe.bench.ridge import (  # noqa: E402
@@ -50,7 +51,14 @@ def main() -> int:
     csvs, dropped = filter_superseded(args.csvs)
     for d in dropped:
         print(f"[skip] {d.parent.name}: {superseded_reason(d).splitlines()[0]}")
-    if dropped:
+    partial = {}
+    for c in csvs:
+        names = superseded_impls(c)
+        if names:
+            partial[c] = names
+            print(f"[skip] {c.parent.name}: {', '.join(sorted(names))} "
+                  f"({superseded_reason(c).splitlines()[0]})")
+    if dropped or partial:
         print()
     if not csvs:
         print("every input was superseded; nothing to report")
@@ -59,7 +67,10 @@ def main() -> int:
     groups: dict[tuple[str, str, str], list[dict]] = {}
     for path in csvs:
         with path.open(newline="") as fh:
+            skip_impls = partial.get(path, set())
             for r in timed_rows(list(csv.DictReader(fh))):
+                if r["impl"] in skip_impls:
+                    continue
                 if args.impl and r["impl"] != args.impl:
                     continue
                 if r.get("correctness_passed") not in ("True", "true", "1", ""):
