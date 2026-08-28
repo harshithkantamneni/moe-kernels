@@ -1,8 +1,0 @@
-{"key": "toy|1|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "toy|1|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "toy|128|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "toy|128|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "mixtral-8x7b|1|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "mixtral-8x7b|1|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "mixtral-8x7b|128|bf16|uniform|0||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
-{"key": "mixtral-8x7b|128|bf16|zipf|1.2||0|ref_router -> sglang_fused_experts|sglang_fused_experts|span|1|0", "status": "ok", "detail": ""}
