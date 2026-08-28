@@ -3,6 +3,7 @@
 
     python scripts/tile_sweep.py
     python scripts/tile_sweep.py --model deepseek-v3 --tokens 16,64,256
+    python scripts/tile_sweep.py --dump-ptx /workspace/ptx-tiles   # verify the ISA
 
 WHY THIS EXISTS. `check_mma_path.sh` measured that vLLM's decode path emits zero
 `wgmma` and 32 `mma.sync.aligned.m16n8k16`, because its tuned config picks
@@ -38,6 +39,7 @@ flat, which is the objection raised in GPU MODE against the original design.
 from __future__ import annotations
 
 import argparse
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -83,6 +85,51 @@ def find_override():
           "it via get_config(), so the hook exists under some name.")
 
 
+def arm_ptx_dump(directory: Path) -> None:
+    """Make Triton write its generated PTX, and guarantee it recompiles.
+
+    Both halves matter. TRITON_KERNEL_DUMP/TRITON_DUMP_DIR ask for the dump, but
+    Triton does not recompile a kernel it has already cached, and a cache hit
+    dumps nothing. Pointing TRITON_CACHE_DIR at a fresh directory forces every
+    specialisation to be built, so every tile setting produces a file.
+
+    Called before vLLM is imported, since Triton reads these at compile time and
+    the first compile happens on the first fused_experts call.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_KERNEL_DUMP"] = "1"
+    os.environ["TRITON_DUMP_DIR"] = str(directory)
+    os.environ["TRITON_CACHE_DIR"] = str(directory / "_cache")
+
+
+def scan_new_ptx(directory: Path, seen: set[Path]) -> tuple[int, int, list[str]]:
+    """Instructions in PTX files that appeared since the last call.
+
+    Returns (wgmma count, mma.sync count, distinct shapes). Each BLOCK_SIZE_M is
+    a different Triton specialisation and therefore a different cache entry, so
+    the files that appear after a setting ran belong to that setting.
+    """
+    import re
+    fresh = [q for q in directory.rglob("*.ptx") if q not in seen]
+    seen.update(fresh)
+    w = m = 0
+    shapes: set[str] = set()
+    for q in fresh:
+        try:
+            text = q.read_text(errors="ignore")
+        except OSError:
+            continue
+        w += len(re.findall(r"wgmma\.", text))
+        m += len(re.findall(r"mma\.sync\.", text))
+        # Not `wgmma\.aligned`: the real mnemonics are
+        #   mma.sync.aligned.m16n8k16...      and
+        #   wgmma.mma_async.sync.aligned.m64n128k16...
+        # so the shape is reached through a variable middle section.
+        shapes.update(re.findall(
+            r"(?:wgmma|mma\.sync)[a-z0-9_.]*?\.m\d+n\d+k\d+", text))
+    return w, m, sorted(shapes)
+
+
 def _make_call(fused_experts, x, weights, w, ids, kw):
     """Bind the arguments explicitly rather than closing over loop variables.
 
@@ -122,10 +169,18 @@ def main() -> int:
     ap.add_argument("--iters", type=int, default=50)
     ap.add_argument("--warmup", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--dump-ptx", type=Path, default=None,
+                    help="dump and count the emitted ISA per tile setting, so "
+                         "the wgmma claim is verified rather than labelled")
     args = ap.parse_args()
 
     if not torch.cuda.is_available():
         raise SystemExit("needs the GPU box")
+
+    # Before find_override(), which imports vLLM: Triton reads these at compile
+    # time and the first compile happens on the first fused_experts call.
+    if args.dump_ptx:
+        arm_ptx_dump(args.dump_ptx)
 
     override_config, where = find_override()
     from vllm.model_executor.layers.fused_moe import fused_experts
@@ -156,7 +211,10 @@ def main() -> int:
         print(f"T={tok}: {active} active experts, max {mx} rows on one expert"
               + ("   <-- WARNING: max >= smallest tile, traffic will not be flat"
                  if mx >= min(tiles) else ""))
-        print(f"  {'BLOCK_SIZE_M':>13} {'ms p50':>10} {'stdev':>8} {'vs first':>9}   note")
+        head = f"  {'BLOCK_SIZE_M':>13} {'ms p50':>10} {'stdev':>8} {'vs first':>9}   "
+        head += "EMITTED" if args.dump_ptx else "note"
+        print(head)
+        seen_ptx: set[Path] = set()
         base = None
         for bm in tiles:
             conf = dict(FIXED, BLOCK_SIZE_M=bm)
@@ -168,15 +226,31 @@ def main() -> int:
                     print(f"  {bm:13d} {'FAILED':>10}   {type(exc).__name__}: {exc}")
                     continue
             base = base if base is not None else ms
-            note = "mma.sync (M<64)" if bm < 64 else "wgmma reachable (M>=64)"
-            print(f"  {bm:13d} {ms:10.4f} {sd:8.4f} {ms / base:7.3f}x   {note}")
+            if args.dump_ptx:
+                # Each BLOCK_SIZE_M is a distinct Triton specialisation and so a
+                # distinct cache entry, which is why files appearing after this
+                # setting ran belong to it.
+                w_n, m_n, shapes = scan_new_ptx(args.dump_ptx, seen_ptx)
+                note = f"wgmma={w_n} mma.sync={m_n}"
+                if shapes:
+                    note += "  " + ",".join(shapes)
+                elif w_n == 0 and m_n == 0:
+                    note += "  (no new PTX; cache hit or dump not armed)"
+            else:
+                note = "mma.sync (M<64)" if bm < 64 else "wgmma reachable (M>=64)"
+            print(f"  {bm:13d} {ms:10.4f} {sd:8.4f} {ms / base:8.3f}x   {note}")
         print()
 
     print("READING IT. Flat across all four confirms the thesis: neither the")
     print("padded arithmetic nor the tensor-core instruction is on the critical")
     print("path, because the weight read is. An improvement at 64 refutes it.")
-    print("Confirm the instruction actually changed with check_mma_path.sh; this")
-    print("script asserts nothing about what was emitted, only what it cost.")
+    if args.dump_ptx:
+        print(f"ISA counted per setting from {args.dump_ptx}. If wgmma stays 0 at")
+        print("M>=64 then Triton is not reaching the warpgroup instruction even when")
+        print("the tile allows it, which is a finding in its own right.")
+    else:
+        print("Re-run with --dump-ptx to verify the instruction actually changed;")
+        print("without it this asserts nothing about what was emitted, only cost.")
     return 0
 
 
