@@ -168,8 +168,61 @@ def _elems(target_bytes: int) -> int:
     return int(target_bytes // 4)
 
 
+def clocks_settled(history: list[int], tol_pct: float) -> bool:
+    """Have the last three clock samples stopped moving?
+
+    Pure so it can be tested without a GPU, which matters because the failure it
+    guards against is silent: a ceiling measured mid-ramp is not a ceiling, and
+    nothing in the number says so.
+
+    A zero is not a plateau. `nvidia-smi` returns 0 when the query fails, and
+    three zeros have a spread of zero, which would otherwise read as the most
+    settled clock imaginable.
+    """
+    if len(history) < 3:
+        return False
+    recent = history[-3:]
+    if min(recent) <= 0:
+        return False
+    return (max(recent) - min(recent)) / max(recent) * 100.0 <= tol_pct
+
+
+def _load_compute():
+    """Dense bf16 matmul: saturates tensor cores, high power, LOW clock."""
+    a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
+    out = torch.empty_like(a)
+
+    def step():
+        for _ in range(32):
+            torch.mm(a, a, out=out)
+    return step
+
+
+def _load_memory():
+    """Streaming copy over a buffer far larger than L2: low power, HIGH clock.
+
+    This is the load the bandwidth patterns actually impose, and its steady
+    state is 500 MHz above the compute one on an H200 SXM, which is why
+    settling under `_load_compute` and then measuring bandwidth measures the
+    wrong plateau.
+    """
+    n = DEFAULT_BUFFER_BYTES // 4
+    a = torch.empty(n, dtype=torch.float32, device="cuda").uniform_(0.0, 1.0)
+    b = torch.empty_like(a)
+
+    def step():
+        for _ in range(8):
+            b.copy_(a)
+    return step
+
+
+#: Which sustained load to hold while waiting for the clock to plateau. The
+#: right choice is whichever resembles the measurement about to be taken.
+SETTLE_LOADS = {"compute": _load_compute, "memory": _load_memory}
+
+
 def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
-                  poll_seconds: float = 1.5) -> dict:
+                  poll_seconds: float = 1.5, load: str = "compute") -> dict:
     """Hold the GPU under load until its clock stops climbing.
 
     MEASURED, H200 SXM 2026-08-22: a calibration started from idle ran its first
@@ -182,12 +235,20 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     A ceiling measured mid-ramp is not a ceiling. So: run a sustained load,
     poll the clock, and return only once consecutive samples agree within
     `tol_pct` (or `max_seconds` elapses, which is itself worth recording).
+
+    MEASURED, 2026-08-27, and the reason `load` exists. Settling under the
+    matmul above converged at 1470 MHz and 64 C; the bandwidth patterns then ran
+    at 1980 MHz and 52 C. The chip COOLED and BOOSTED, because streaming draws
+    less power than saturating tensor cores. The settle was real, it was just
+    the steady state of the wrong workload, and the read ceiling it produced was
+    1.7% low. Settle under `memory` before bandwidth and `compute` before the
+    GEMM.
     """
     import time
 
+    step = SETTLE_LOADS[load]   # KeyError for an unknown load, before any work
     T.require_cuda()
-    a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
-    out = torch.empty_like(a)
+    step = step()
 
     history: list[int] = []
     deadline = time.monotonic() + max_seconds
@@ -200,21 +261,16 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
         # on this box: settling this way reached 1575 MHz, and the bandwidth
         # patterns immediately drove it to 1980.
         while time.monotonic() < stop:
-            for _ in range(32):
-                torch.mm(a, a, out=out)
+            step()
             torch.cuda.synchronize()
-        clk = T.ClockState.sample().sm_clock_mhz
-        history.append(clk)
-        if len(history) >= 3 and history[-2] > 0:
-            recent = history[-3:]
-            spread = (max(recent) - min(recent)) / max(recent) * 100.0
-            if spread <= tol_pct:
-                settled = True
-                break
+        history.append(T.ClockState.sample().sm_clock_mhz)
+        if clocks_settled(history, tol_pct):
+            settled = True
+            break
 
     return {"settled": settled, "clock_history_mhz": history,
             "final_mhz": history[-1] if history else 0,
-            "max_seconds": max_seconds}
+            "max_seconds": max_seconds, "load": load}
 
 
 def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
@@ -356,8 +412,8 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # Settle FIRST. Measuring from idle put this machine's first pattern at
     # 840 MHz and its last at 1980, which is a bigger effect than anything the
     # choice of pattern argues about.
-    settle_info = settle_clocks(settle_seconds) if settle else {"settled": False,
-                                                                "skipped": True}
+    settle_info = (settle_clocks(settle_seconds, load="compute") if settle
+                   else {"settled": False, "skipped": True})
     before = T.ClockState.sample()
 
     # COMPUTE FIRST. Measured on an H200 SXM, the cuBLAS figure fell 795 -> 725
@@ -368,6 +424,21 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # the GPU is already in the right state for exactly this measurement.
     gemm = measure_bf16_gemm(gemm_n)
     torch.cuda.empty_cache()
+
+    # SETTLE AGAIN, UNDER A MEMORY LOAD. The settle above converged on the
+    # matmul's steady state, which is the right one for the GEMM and the wrong
+    # one for what follows: measured 2026-08-27 on an H200 SXM, the compute
+    # plateau is 1470 MHz at 64 C and the bandwidth patterns then run at 1980
+    # MHz and 52 C. The chip COOLS and BOOSTS, because streaming draws less
+    # power than saturating tensor cores.
+    #
+    # The two-pass warmup below does not fix it. Both passes agreed with each
+    # other (read 4385.6 then 4389.4) and both were 1.7% under what the same
+    # torch.sum(dim=0) call measures on a chip that has not just run a GEMM.
+    # Agreement between two measurements in the same wrong state is not
+    # convergence on the right one.
+    settle_mem = (settle_clocks(settle_seconds, load="memory") if settle
+                  else {"settled": False, "skipped": True})
 
     # BANDWIDTH TWICE, keep the second. The first pass finishes ramping whatever
     # the settle did not, so pass one is warmup and pass two has all four
@@ -416,7 +487,7 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
         clocks={"sm_start_mhz": before.sm_clock_mhz, "sm_end_mhz": after.sm_clock_mhz,
                 "temp_start_c": before.temp_c, "temp_end_c": after.temp_c,
                 "drift_pct": round(drift, 2), "throttled": throttled},
-        settle=settle_info,
+        settle={**settle_info, "bandwidth_settle": settle_mem},
         warmup_pass={p.pattern: round(p.gbps, 1) for p in first_pass},
     )
 
