@@ -478,9 +478,24 @@ def test_the_datasheet_clock_is_reproducible_from_first_principles():
     import torch
 
     from moe.bench.calibrate import _DENSE_BF16_FLOP_PER_SM_CLK
+
+    # (boost MHz, published dense BF16 TFLOP/s) for the part this test knows.
+    # The 1830 and the 989.5 are BOTH H200 SXM figures, so running this on any
+    # other device compares that card's silicon to Hopper's headline: an A100
+    # gives 108 x 2048 x 1830 MHz = 404.8 against an expected 989.5.
+    #
+    # Adding an sm_80 constant is what exposed it, because the `per_clk is None`
+    # skip below used to catch every non-Hopper card by accident rather than by
+    # intent. The device-independent version of this check, covering every entry
+    # in the table against its own vendor figure, is
+    # test_calibrate_settle.py::test_the_dense_bf16_rate_reproduces_each_vendor_headline.
+    DATASHEET = {(9, 0): (1830e6, 989.5)}
+
     props = torch.cuda.get_device_properties(0)
-    per_clk = _DENSE_BF16_FLOP_PER_SM_CLK.get((props.major, props.minor))
-    if per_clk is None:
-        pytest.skip(f"no FLOP/SM/clk constant for sm_{props.major}{props.minor}")
-    implied = props.multi_processor_count * per_clk * 1830e6 / 1e12
+    cap = (props.major, props.minor)
+    per_clk = _DENSE_BF16_FLOP_PER_SM_CLK.get(cap)
+    if per_clk is None or cap not in DATASHEET:
+        pytest.skip(f"no datasheet figure recorded here for sm_{cap[0]}{cap[1]}")
+    boost, _published = DATASHEET[cap]
+    implied = props.multi_processor_count * per_clk * boost / 1e12
     assert implied == pytest.approx(989.5, abs=1.0)
