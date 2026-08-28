@@ -136,6 +136,63 @@ def arithmetic_intensity(model: str, num_tokens: int, dtype: str = "bf16") -> fl
     return 2.0 * rows_per_expert(model, num_tokens) / dtype_bytes(dtype)
 
 
+#: Widest batch the solver will consider. Beyond this a "crossing" is not a
+#: statement about any MoE deployment.
+_MAX_SEARCH_TOKENS = 1 << 22
+
+
+def crossing_batch_full(model: str, ridge: float, dtype: str = "bf16"
+                        ) -> float | None:
+    """The crossing solved from the FULL byte model, not from `2R/b`.
+
+    THE INCONSISTENCY THIS CLOSES. Every CSV row scores itself with
+    `arith_intensity_compulsory`, which `bytes_model` computes from weights AND
+    activations. Every prediction came from `crossing_batch`, which solves the
+    weight-dominated limit. Two different models on the two sides of the same
+    comparison.
+
+    `2R/b` is a limit rather than an error: for `C[M,N] = A[M,K] B[K,N]`,
+
+        AI = 2MNK / ((MK + KN + MN) b)   ->   2M/b   when KN dominates
+
+    which is exact to under 2% at decode and drifts as the batch grows. Measured
+    against the byte model it overstates AI by ~4% for mixtral at its crossing
+    and ~7% for deepseek-v3, and overstating AI understates the batch needed to
+    reach the ridge. So every predicted crossing was systematically low, and the
+    error is larger for wide experts, whose activations are a bigger share.
+
+    Bisection rather than algebra: AI is monotonic in T but the byte model is
+    not a closed form worth inverting, and a solver cannot drift out of step
+    with it the way a second expression would.
+
+    None when no batch under `_MAX_SEARCH_TOKENS` reaches the ridge, rather than
+    a number off the end of any real deployment.
+    """
+    if ridge <= 0:
+        raise ValueError("ridge must be positive FLOP/byte")
+    cfg = _cfg(model)
+
+    def ai(tokens: int) -> float:
+        from ..spec import BenchSpec, RoutingSpec
+        from .bytes_model import grouped_gemm_only_cost
+        spec = BenchSpec(cfg, num_tokens=max(1, tokens), dtype=dtype,
+                         routing=RoutingSpec("uniform"), seed=0)
+        return grouped_gemm_only_cost(spec, cfg.num_experts).arithmetic_intensity
+
+    if ai(_MAX_SEARCH_TOKENS) < ridge:
+        return None
+    lo, hi = 1, _MAX_SEARCH_TOKENS
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if ai(int(mid)) < ridge:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < 0.5:
+            break
+    return (lo + hi) / 2.0
+
+
 def predict_table(ridge: float, dtype: str = "bf16",
                   models: tuple[str, ...] | None = None) -> list[dict]:
     """One row per model: what to expect from a sweep on this device."""

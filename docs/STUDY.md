@@ -121,6 +121,28 @@ over one-stage is 0.561 at ridge 160.3, at 176.2, and at any other value
 (`tests/test_ridge_band.py`). A five-stage span crosses at 56% of the batch a
 one-stage span does, and no calibration uncertainty touches that.
 
+AND IT SURVIVES A BETTER BYTE MODEL TOO. The predictions above solve `2R/b`,
+which is the weight-dominated LIMIT of the general GEMM intensity
+
+    AI = 2MNK / ((MK + KN + MN) b)   ->   2M/b   when KN dominates
+
+while every measured row is scored with the full model, activations included.
+Two models on the two sides of one comparison. `2R/b` overstates AI by ~4% for
+mixtral at its crossing and ~7% for deepseek-v3, and overstating AI understates
+the batch needed, so every prediction here is systematically low by 5 to 18%.
+`crossing_batch_full` solves the same byte model the rows use:
+
+    |                     | five-stage | one-stage | separation |
+    |---------------------|-----------:|----------:|-----------:|
+    | 2R/b,  ridge 160.3  |       0.63 |      1.13 |      0.561 |
+    | full,  ridge 160.3  |       0.58 |      1.03 |      0.563 |
+    | full,  ridge 176.2  |       0.52 |      0.92 |      0.563 |
+
+The one-stage span lands within about 10% of prediction under every combination,
+0.92 to 1.13, which is the agreement `2R/b` was reaching for. The five-stage span
+sits at 0.52 to 0.63 whatever is done to the model. And the separation is 0.563
+throughout.
+
 So the claim is the SEPARATION, and the absolutes are quoted with their band.
 
 THE fp8 RIDGE RATIO IS MEASURED NOW, AND IT IS NOT 2. The `ridge_fp8 =
