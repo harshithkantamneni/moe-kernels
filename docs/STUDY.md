@@ -176,20 +176,49 @@ the canonical set it is 1.05, 1.09, 1.12, 1.27 against F/H of 3.50, 0.71, 0.69,
 mean unreliable and the effect is too weak to assert. See
 `moe/bench/published.py` for why the input set now defends itself.
 
-**C3. vLLM's decode path may not use Hopper's tensor core at all.**
-vLLM's tuned H200 config sets `BLOCK_SIZE_M = 16` for every batch size from 1 to
-256, the whole decode range, and tracks rows-per-expert exactly above it. 16 is
-below WGMMA's fixed M of 64. If Triton therefore falls back to `mma.sync`, then
-the decode path runs on Ampere-era tensor cores on Hopper silicon, and correctly
-so: the tensor core idles waiting on weights either way, while a small tile buys
-occupancy and more memory requests in flight.
-STATUS: **ESTABLISHED, measured 2026-08-27.** `scripts/check_mma_path.sh` on a
-real deepseek-v3 T=16 cell: both compiled `fused_moe_kernel` variants show
-`wgmma=0`, `mma.sync=16`, and every one of the 32 tensor-core instructions is
-`mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`. No warpgroup MMA anywhere.
-The strongest single piece of evidence for the hypothesis: an autotuner with no
-theory gave away Hopper's headline feature because, memory-bound, it does not
-matter.
+**C3. Below roughly 100 rows per expert, and in bf16, vLLM emits no warpgroup MMA.**
+Hopper's `wgmma.mma_async.m64nNk16` has M fixed at 64, so any tile shorter than
+that runs on `mma.sync`, the Ampere-era instruction. The question is when vLLM's
+chosen tile is shorter than 64, and what it costs when it is not.
+
+STATUS: **ESTABLISHED, measured 2026-08-27/28, and RESCOPED twice since.**
+
+THE MEASUREMENT. `scripts/check_mma_path.sh` on a real deepseek-v3 T=16 cell:
+both compiled `fused_moe_kernel` variants show `wgmma=0`, `mma.sync=16`, and
+every one of the 32 tensor-core instructions is
+`mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`. Forcing `BLOCK_M >= 64`
+does reach `wgmma.mma_async.sync.aligned.m64n32k16` and `m64n64k16`, and is
+1.7 to 9% SLOWER: the capability is there and declining it is correct, because
+the tensor core idles waiting on weights either way while a short tile buys
+occupancy.
+
+FIRST RESCOPE: IT IS NOT ABOUT "DECODE". The kernel sees M, the rows entering
+the layer, and cannot tell whether they came from one prefill or from a thousand
+concurrent decodes. A serving system with enough concurrency is in decode AND at
+large M simultaneously, and there the tuned config picks a taller tile and does
+emit wgmma. The claim is about a REGIME, in rows per expert, which batching can
+leave. Reading the tuned H200 configs: `E=1,N=3072` steps 16 -> 32 -> 64 -> 128
+by M=128, while `E=128,N=1024` stays on 16 until M=1536. That spread is the
+`E/k` dilution appearing in someone else's grid search, since a constant
+rows-per-expert threshold means `M_switch` scales with `E/k`.
+
+SECOND RESCOPE: IT IS bf16-SPECIFIC. The same shapes tuned for fp8 pick a
+warpgroup tile at M=1:
+
+    E=8,N=14336   fp8   1:64, 2:64, 4:64, 8:64, 16:64 ...
+    E=8,N=14336   bf16  1:16, 2:32, 4:16, 8:16, 16:16 ...
+    E=64,N=2560   fp8   1:64, 2:64, 4:64 ...
+    E=64,N=2560   bf16  1:16, 2:16, 4:16 ...
+
+So at fp8 decode vLLM reaches wgmma immediately, and C3 describes the bf16 path.
+
+AND THE MEASURED CELL WAS RUNNING A FALLBACK, NOT A TUNED CONFIG. deepseek-v3 is
+`E=256,N=2048`, and no tuned H200 config exists for it: the run log prints
+`Using default MoE config. Performance might be sub-optimal!`. So the 16 in that
+PTX comes from `get_default_config`'s hardcoded small-M branch rather than from
+a grid search. A GPU MODE reader raised exactly this, and was right. It does not
+weaken the measurement, since a fallback is what deepseek-v3 actually runs, but
+it changes what the 16 is EVIDENCE of: a default, not a tuned optimum.
 
 **C4. STREAM-style calibration may understate achievable read bandwidth.**
 A production kernel sustained 4483.4 GB/s where `calibrate_hardware.py` reaches
