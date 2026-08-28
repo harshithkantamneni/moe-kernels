@@ -157,11 +157,30 @@ def plot_l2_absorption(rows, out_dir: Path, dtype: str = "bf16"):
     return [path]
 
 
+def dtypes_present(rows, requested: str | None = None) -> list[str]:
+    """Which dtypes to draw figures for.
+
+    `requested` wins when given. Otherwise every dtype actually in the rows,
+    sorted for stable filenames.
+
+    The default used to be a bare "bf16", and run_all.sh never overrode it, so
+    an all-fp8 sweep published eight `*_bf16.png` figures drawn from whatever
+    bf16 rows were left in the results directory. Nothing crashed and the names
+    were honest; the reader just found charts about a different format sitting
+    inside an fp8 result set.
+    """
+    have = sorted({r["dtype"] for r in rows if r.get("dtype")})
+    if requested is None:
+        return have
+    return [requested] if requested in have else []
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, default=Path("results"))
     ap.add_argument("--out", type=Path, default=Path("plots"))
-    ap.add_argument("--dtype", default="bf16")
+    ap.add_argument("--dtype", default=None,
+                    help="one dtype; default draws every dtype in the rows")
     ap.add_argument("--hardware", default=None,
                     help="hardware profile; defaults to the measured "
                          "calibration when present, else the datasheet")
@@ -212,16 +231,24 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     written = []
 
-    try:
-        written.append(RL.plot(rows, args.out / f"roofline_{args.dtype}.png",
-                               hardware=args.hardware, dtype=args.dtype,
-                               allow_unverified=args.allow_unverified_roof))
-    except (RL.UnverifiedHardware, ValueError) as e:
-        print(f"[plot] roofline skipped: {e}")
+    draw = dtypes_present(rows, args.dtype)
+    if not draw:
+        print(f"[plot] no rows in dtype {args.dtype!r}; nothing to draw")
+        return 1
+    if args.dtype is None and len(draw) > 1:
+        print(f"[plot] drawing every dtype present: {', '.join(draw)}")
 
-    written += plot_scaling(rows, args.out, args.dtype)
-    written += plot_imbalance(rows, args.out, args.dtype)
-    written += plot_l2_absorption(rows, args.out, args.dtype)
+    for dtype in draw:
+        try:
+            written.append(RL.plot(rows, args.out / f"roofline_{dtype}.png",
+                                   hardware=args.hardware, dtype=dtype,
+                                   allow_unverified=args.allow_unverified_roof))
+        except (RL.UnverifiedHardware, ValueError) as e:
+            print(f"[plot] roofline skipped for {dtype}: {e}")
+
+        written += plot_scaling(rows, args.out, dtype)
+        written += plot_imbalance(rows, args.out, dtype)
+        written += plot_l2_absorption(rows, args.out, dtype)
 
     for p in written:
         print(f"[plot] {p}")
