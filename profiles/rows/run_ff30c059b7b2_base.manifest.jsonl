@@ -1,0 +1,1 @@
+{"key": "deepseek-v3|1|bf16|uniform|0||0|ref_router -> ref_permute -> torch_grouped_mm_up -> ref_act -> ref_down_gemm -> ref_unpermute|torch_grouped_mm_up|span|1|0", "status": "ok", "detail": ""}
