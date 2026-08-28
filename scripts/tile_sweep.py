@@ -190,6 +190,13 @@ def main() -> int:
 
     cfg = MODEL_CONFIGS[args.model]
     tiles = [int(v) for v in args.tiles.split(",")]
+    # Across ALL token counts, not per block. Triton specialises the kernel on
+    # the tile constants, and T only sizes the grid at runtime, so each setting
+    # compiles exactly once and every later token block is a legitimate cache
+    # hit. Resetting per block made the first row of each later block re-count
+    # every file the earlier blocks had produced.
+    seen_ptx: set[Path] = set()
+    isa_by_tile: dict[int, str] = {}
     print(f"override hook: {where}.override_config")
     print(f"model {args.model}  E={cfg.num_experts} k={cfg.top_k}  "
           f"fixed {FIXED}\n")
@@ -214,7 +221,6 @@ def main() -> int:
         head = f"  {'BLOCK_SIZE_M':>13} {'ms p50':>10} {'stdev':>8} {'vs first':>9}   "
         head += "EMITTED" if args.dump_ptx else "note"
         print(head)
-        seen_ptx: set[Path] = set()
         base = None
         for bm in tiles:
             conf = dict(FIXED, BLOCK_SIZE_M=bm)
@@ -231,11 +237,16 @@ def main() -> int:
                 # distinct cache entry, which is why files appearing after this
                 # setting ran belong to it.
                 w_n, m_n, shapes = scan_new_ptx(args.dump_ptx, seen_ptx)
-                note = f"wgmma={w_n} mma.sync={m_n}"
                 if shapes:
-                    note += "  " + ",".join(shapes)
-                elif w_n == 0 and m_n == 0:
-                    note += "  (no new PTX; cache hit or dump not armed)"
+                    note = f"wgmma={w_n} mma.sync={m_n}  " + ",".join(shapes)
+                    isa_by_tile[bm] = note
+                elif bm in isa_by_tile:
+                    # Same specialisation, already built and already counted.
+                    note = isa_by_tile[bm] + "   [same kernel as an earlier T]"
+                else:
+                    note = ("no PTX emitted and none recorded for this tile; "
+                            "dump not armed, or the kernel was cached before "
+                            "TRITON_CACHE_DIR was redirected")
             else:
                 note = "mma.sync (M<64)" if bm < 64 else "wgmma reachable (M>=64)"
             print(f"  {bm:13d} {ms:10.4f} {sd:8.4f} {ms / base:8.3f}x   {note}")

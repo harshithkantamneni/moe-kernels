@@ -334,14 +334,39 @@ starts costing above 40%.** That is a usable rule rather than a slogan, and it
 explains the autotuner's choice quantitatively: 16 keeps padded MACs at 10% of
 the weight read, with the whole margin to spare.
 
-Two caveats, both real. The occupancy confound named before the run is NOT
-separated: `BLOCK_SIZE_M` sizes the register accumulator, so a larger tile loses
-resident blocks at the same time as it gains padded work, and this experiment
-cannot say which of the two the 27-30% is. It does not need to, because the
-claim being tested was that going bigger would HELP, and it does not. Second,
-`tile_sweep.py` labels M >= 64 "wgmma reachable" but does not verify what was
-emitted; confirming that the instruction actually changed needs
-`check_mma_path.sh` re-run under the override, and that has not been done.
+**The instruction switch is verified, not assumed.** `--dump-ptx` counts the ISA
+Triton emitted for each tile setting, with a fresh `TRITON_CACHE_DIR` so every
+specialisation is forced to build rather than served from cache:
+
+| BLOCK_M | ms (T=16) | emitted |
+|---:|---:|---|
+| 16 | 2.2317 | `wgmma=0  mma.sync=16` &nbsp; `mma.sync.aligned.m16n8k16` |
+| 32 | 2.2092 | `wgmma=0  mma.sync=32` &nbsp; `mma.sync.aligned.m16n8k16` |
+| 64 | 2.2820 | `wgmma=32 mma.sync=0` &nbsp; `wgmma.mma_async.sync.aligned.m64n32k16` |
+| 128 | 2.8141 | `wgmma=32 mma.sync=0` &nbsp; `wgmma.mma_async.sync.aligned.m64n64k16` |
+
+So Hopper's warpgroup MMA is genuinely reached at M >= 64 and genuinely
+abandoned below it, and the timing column is unchanged by that: 64 is still
+slower than 16. **The chip's headline tensor-core instruction, verified engaged,
+makes this kernel slower.** Note the emitted N is 32 at BLOCK_M=64 and 64 at
+BLOCK_M=128 while `BLOCK_SIZE_N` was pinned at 64 throughout, and M is 64 in
+both because the instruction fixes it; a 128-row tile is therefore two warpgroup
+operations rather than one wider one.
+
+The ISA is a property of the tile constants, not of the token count, so it is
+measured once. T only sizes the grid at runtime, which means every setting
+compiles during the first token block and every later block is a legitimate
+cache hit. An earlier version of the script reset its seen-file set per token
+block and consequently re-counted the first block's files, printing
+`wgmma=64 mma.sync=48` with three shapes for a single setting. That row was a
+reporting artifact and is not evidence of anything.
+
+One caveat remains and is not resolved. The occupancy confound named before the
+run is NOT separated: `BLOCK_SIZE_M` sizes the register accumulator, so a larger
+tile loses resident blocks at the same time as it gains padded work and switches
+instruction, and this experiment cannot say which of the three the 26-30% at 128
+belongs to. It does not need to, because the claim under test was that going
+bigger would HELP.
 
 The T=256 row carries one more caveat of its own: max rows per expert is 18,
 above the smallest tile, so at BLOCK_M=16 a few experts spill to two tiles and
