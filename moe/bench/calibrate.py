@@ -88,6 +88,11 @@ class Calibration:
     bandwidth_patterns: tuple[BandwidthResult, ...]
     gemm_shape: tuple[int, int, int]
     gemm_clock_mhz: int = 0
+    #: Achieved dense fp8, and the clock it was measured at. None on hardware
+    #: without fp8 tensor cores, which is not a failure: the A100 cannot run the
+    #: format and a number here would be a peak for silicon that does not exist.
+    achieved_fp8_tflops: float | None = None
+    fp8_gemm_clock_mhz: int = 0
     buffer_bytes: int = 0
     clocks: dict = field(default_factory=dict)
     settle: dict = field(default_factory=dict)
@@ -154,6 +159,14 @@ class Calibration:
         d["sustained_peak_tflops"] = (round(self.sustained_peak_tflops, 1)
                                       if self.sustained_peak_tflops else None)
         d["gemm_efficiency_pct"] = self.gemm_efficiency_pct
+        d["sustained_peak_fp8_tflops"] = (
+            round(sustained_peak_tflops_fp8(self.fp8_gemm_clock_mhz), 1)
+            if self.achieved_fp8_tflops and self.fp8_gemm_clock_mhz else None)
+        # The number STUDY.md assumes is 2.0. Recording the measured ratio makes
+        # the assumption checkable instead of inherited from a datasheet.
+        d["fp8_over_bf16_achieved"] = (
+            round(self.achieved_fp8_tflops / self.achieved_bf16_tflops, 3)
+            if self.achieved_fp8_tflops and self.achieved_bf16_tflops else None)
         # Ridge is the number that classifies every cell, and it moves with the
         # denominator. Record it for each pattern so the sensitivity is visible
         # rather than hidden behind one choice.
@@ -368,6 +381,16 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
 # rather than a guess, since the whole point is to normalise against silicon.
 _DENSE_BF16_FLOP_PER_SM_CLK = {(9, 0): 4096, (8, 0): 2048}
 
+#: The same table for fp8. Hopper and Blackwell run fp8 tensor cores at twice
+#: the bf16 rate; Ampere has none, so sm_80 is ABSENT rather than zero. An entry
+#: there would imply a peak for silicon that cannot run the format.
+#:
+#: This ratio is what STUDY.md's C2 currently assumes when it derives
+#: ridge_fp8 = 2 * ridge_bf16. The constant is the datasheet relationship; the
+#: MEASURED fp8 GEMM below is what can disagree with it, the way the bf16 GEMM
+#: already disagrees with its own headline (701.6 achieved against 989.4).
+_DENSE_FP8_FLOP_PER_SM_CLK = {(9, 0): 8192, (10, 0): 16384}
+
 
 def sustained_peak_tflops(sm_clock_mhz: float) -> float | None:
     """What the silicon can do AT THIS CLOCK, as opposed to at its boost clock.
@@ -402,6 +425,57 @@ class GemmResult:
     tflops: float
     shape: tuple[int, int, int]
     sm_clock_mhz: int
+
+
+def sustained_peak_tflops_fp8(sm_clock_mhz: float) -> float | None:
+    """fp8 silicon ceiling at this clock, or None where there is no fp8.
+
+    None on Ampere is the point: the A100 has no fp8 tensor cores, and a number
+    here would be a peak for a format the part cannot execute.
+    """
+    if not torch.cuda.is_available():
+        return None
+    per_clk = _DENSE_FP8_FLOP_PER_SM_CLK.get(torch.cuda.get_device_capability())
+    if per_clk is None:
+        return None
+    props = torch.cuda.get_device_properties(0)
+    return props.multi_processor_count * per_clk * sm_clock_mhz * 1e6 / 1e12
+
+
+def measure_fp8_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
+                     trials: int = 3) -> GemmResult | None:
+    """Achievable dense fp8 through cuBLAS, or None where fp8 is unavailable.
+
+    `torch._scaled_mm`, not `torch.mm`: fp8 tensors carry a scale and the plain
+    path takes none.
+
+    Per-tensor scales of 1.0, because this measures the RATE, not accuracy. The
+    inputs are drawn small enough to stay in range, so no scaling is needed and
+    none is charged to the timing.
+
+    The result is what lets C2 stop assuming. STUDY.md derives
+    ridge_fp8 = 2 * ridge_bf16 from the datasheet ratio; this measures whether
+    fp8 reaches the same fraction of its peak that bf16 reaches of its own.
+    """
+    T.require_cuda()
+    if sustained_peak_tflops_fp8(1000.0) is None:
+        return None
+    dt = torch.float8_e4m3fn
+    # Small values so a unit scale is honest: fp8_e4m3 saturates at 448.
+    a = (torch.randn((n, n), device="cuda") * 0.1).to(dt)
+    b = (torch.randn((n, n), device="cuda") * 0.1).to(dt).t()
+    one = torch.tensor(1.0, device="cuda")
+    try:
+        res = T.time_eager(
+            lambda: torch._scaled_mm(a, b, one, one,
+                                     out_dtype=torch.bfloat16),
+            warmup=warmup, iters=iters, trials=trials, l2_flush=False)
+    except RuntimeError as e:
+        print(f"[calibrate] fp8 GEMM unavailable: {e}")
+        return None
+    clk = T.ClockState.sample().sm_clock_mhz
+    tflops = (2.0 * n * n * n) / (res.ms_p50 * 1e-3) / 1e12
+    return GemmResult(tflops=tflops, shape=(n, n, n), sm_clock_mhz=clk)
 
 
 def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
@@ -442,6 +516,18 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # power-limited number, not a ceiling. The settle above is matmul work, so
     # the GPU is already in the right state for exactly this measurement.
     gemm = measure_bf16_gemm(gemm_n)
+    torch.cuda.empty_cache()
+
+    # fp8 IMMEDIATELY AFTER, for the reason the comment above gives: the GPU is
+    # still in its compute steady state, and any bandwidth work before a compute
+    # roof turns it into a power-limited number rather than a ceiling.
+    #
+    # This is what lets C2 stop assuming. STUDY.md derives
+    # ridge_fp8 = 2 * ridge_bf16 from the datasheet ratio; measuring both says
+    # whether fp8 reaches the same fraction of ITS peak that bf16 reaches of its
+    # own. The bf16 figure is already 701.6 against a 989.4 headline, so the
+    # datasheet ratio surviving to the achieved numbers is a claim, not a given.
+    fp8_gemm = measure_fp8_gemm(gemm_n)
     torch.cuda.empty_cache()
 
     # SETTLE AGAIN, UNDER A MEMORY LOAD. The settle above converged on the
@@ -499,6 +585,8 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
         achieved_bandwidth_gbps=chosen.gbps,
         ceiling_pattern=ceiling,
         achieved_bf16_tflops=gemm.tflops,
+        achieved_fp8_tflops=(fp8_gemm.tflops if fp8_gemm else None),
+        fp8_gemm_clock_mhz=(fp8_gemm.sm_clock_mhz if fp8_gemm else 0),
         bandwidth_patterns=tuple(patterns),
         gemm_shape=gemm.shape,
         gemm_clock_mhz=gemm.sm_clock_mhz,

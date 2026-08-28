@@ -284,8 +284,16 @@ def main() -> int:
         "measured_commit": sha,
         "measured_dirty": dirty,
         "memory": {"bandwidth_tb_s": cal.achieved_bandwidth_gbps / 1000.0},
-        "compute_dense_tflops": {"bf16": cal.achieved_bf16_tflops,
-                                 "fp16": cal.achieved_bf16_tflops},
+        # fp8 keys appear ONLY when the card measured one. Absent is the right
+        # answer on Ampere, which has no fp8 tensor cores; a key there would
+        # give `roofline` a verified peak for a format the silicon cannot run.
+        "compute_dense_tflops": {
+            "bf16": cal.achieved_bf16_tflops,
+            "fp16": cal.achieved_bf16_tflops,
+            **({"fp8_e4m3": cal.achieved_fp8_tflops,
+                "fp8_e5m2": cal.achieved_fp8_tflops}
+               if cal.achieved_fp8_tflops else {}),
+        },
         "detail": cal.as_dict(),
         "observed": {**observed, "power_limit_w": tdp},
         "spec_comparison": {"profile": profile, "bandwidth_gbps": spec_bw,
