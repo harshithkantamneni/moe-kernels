@@ -104,3 +104,46 @@ def vllm_quant_spec(spec: BenchSpec) -> dict | None:
         "per_out_ch_quant": False,
         "block_shape": None,
     }
+
+
+#: SGLang's fp8 support, probed on 0.5.18 / H200 / 2026-08-28. e4m3 only: its
+#: w8a8 path is built on that dtype, and e5m2 weights under an e4m3 flag would
+#: run and compute a different layer.
+SGLANG_DTYPES: tuple[str, ...] = ("bf16", "fp8_e4m3")
+
+
+def sglang_quant_kwargs(spec: BenchSpec) -> dict:
+    """Quantisation keyword arguments for SGLang's `fused_experts`.
+
+    Empty for a float dtype, which is what every published SGLang row used.
+
+    Simpler than vLLM's equivalent: `fused_experts` takes flat keywords rather
+    than a config object, and `use_fp8_w8a8` is a plain bool. The scales
+    themselves are attached by the span, since only it holds the weights.
+
+    Three fields are stated rather than defaulted, each because the default
+    describes a layout this harness did not produce:
+
+    per_channel_quant  the harness quantises one scale per EXPERT. True would
+        send the kernel looking for a scale per output channel.
+    block_shape        block-wise scaling is a third layout again.
+    a1_scale/a2_scale  left None so SGLang quantises activations itself, which
+        is what vLLM does internally. Supplying them would charge the two
+        implementations differently for identical work.
+    """
+    if spec.dtype not in ("fp8_e4m3", "fp8_e5m2"):
+        return {}
+    if spec.dtype != "fp8_e4m3":
+        raise ValueError(
+            f"SGLang's w8a8 path is e4m3; {spec.dtype!r} would run under an "
+            "e4m3 flag and compute a different layer")
+    return {
+        "use_fp8_w8a8": True,
+        "use_int8_w8a8": False,
+        "use_int8_w8a16": False,
+        "use_int4_w4a16": False,
+        "per_channel_quant": False,
+        "block_shape": None,
+        "a1_scale": None,
+        "a2_scale": None,
+    }

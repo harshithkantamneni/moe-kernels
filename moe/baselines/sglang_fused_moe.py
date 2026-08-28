@@ -28,7 +28,11 @@ import sys
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
-from ._framework_config import sglang_runner_kwargs
+from ._framework_config import (
+    SGLANG_DTYPES,
+    sglang_quant_kwargs,
+    sglang_runner_kwargs,
+)
 
 #: True only when this module created the process group, so teardown never
 #: touches one a real distributed run owns.
@@ -195,7 +199,10 @@ class SglangFusedExperts(StageSpan):
     requires_cuda = True
     #: Unverified; the capture_status column decides this, not this line.
     cuda_graph_safe = False
-    dtypes = ("bf16",)
+    #: fp8_e4m3 alongside bf16 as of 2026-08-28. The third independent kernel
+    #: for the dtype-invariance result, and the closest comparison to vLLM since
+    #: it covers the same five stages.
+    dtypes = SGLANG_DTYPES
 
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")
@@ -205,10 +212,22 @@ class SglangFusedExperts(StageSpan):
             # Discarded by fused_experts, and outside this span's contract.
             router_logits=None,
         )
+        quant = sglang_quant_kwargs(st.spec)
+        if quant and not st.weights.quantised:
+            raise ValueError(
+                f"{st.spec.dtype} cell but the weights carry no scales; "
+                "make_inputs should have quantised them")
+        if quant:
+            # Per expert, the same tensors the oracle dequantises with. A
+            # locally derived scale would measure a different layer from the
+            # one being judged.
+            quant["w1_scale"] = st.weights.w1_scale
+            quant["w2_scale"] = st.weights.w2_scale
         st.y = fused_experts(
             hidden_states=x,
             w1=st.weights.w1,
             w2=st.weights.w2,
             topk_output=topk_output,
             moe_runner_config=MoeRunnerConfig(**runner_kwargs(st.spec)),
+            **quant,
         )
