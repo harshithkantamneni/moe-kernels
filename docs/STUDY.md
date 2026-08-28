@@ -208,6 +208,51 @@ quantity and should be quoted as approximate. Mixtral's predicted crossing spans
 641 to 651 across that range, all inside the same measured bracket, so C2 is
 unaffected.
 
+## What a whole MoE layer costs, and how much of it is routing
+
+MEASURED 2026-08-28, `results/published/2026-08-28-nvidia_h200-h200-whole-layer/`,
+9,408 rows. The first complete-layer measurement in this project: every framework
+span covers five of six stages and leaves the router out, so until now the study
+could not say what a full layer costs. `__pipeline__:vllm_fused_experts` times
+`ref_router` plus the fused kernel as one cell.
+
+THE ROUTER IS A FIXED COST, and at decode it is a third of the layer:
+
+| model            | T=1 layer | router | share | T=4096 share |
+|------------------|----------:|-------:|------:|-------------:|
+| mixtral-8x7b     |    0.2707 | 0.0814 | 30.1% |         1.7% |
+| qwen2-57b-a14b   |    0.2019 | 0.0773 | 38.3% |         3.4% |
+| deepseek-v2-lite |    0.1591 | 0.0762 | 47.9% |         7.1% |
+| deepseek-v3      |    0.2867 | 0.0974 | 34.0% |         4.9% |
+
+The absolute cost barely moves with batch -- roughly 0.05 to 0.10 ms everywhere,
+which is launch and dispatch overhead for a matmul and a top-k, not work. So its
+SHARE collapses as the batch grows while the number itself does not. At T=1,
+between 30% and 48% of an MoE layer is deciding which experts to use.
+
+That is the same story the rest of the study tells from the other end: at decode
+nothing is FLOP-bound, and what dominates is whatever does not scale.
+
+CAVEAT, and it bounds the claim. This is `ref_router`: a PyTorch matmul plus a
+top-k, the harness's reference. A production router is fused and faster, so 30
+to 48% is an UPPER bound on the share, not a measurement of what vLLM spends. It
+does establish that a whole-layer number is not the fused span's number, and how
+much is missing.
+
+THE CROSSING IS UNMOVED, which is the confirmation. Same run, ridge 176.2:
+
+| model            | predicted | span | whole layer |
+|------------------|----------:|-----:|------------:|
+| mixtral-8x7b     |       705 |  543 |         549 |
+| qwen2-57b-a14b   |      1410 |  914 |         960 |
+| deepseek-v2-lite |      1879 |  897 |        1006 |
+| deepseek-v3      |      5638 | 3474 |        3375 |
+
+One to twelve percent apart, mostly under five. A fixed cost added to a
+bandwidth-driven turning point should not move it, and it does not. The
+five-stage ratio here (0.63 mean) also reproduces the 0.58 to 0.63 seen in the
+earlier sweeps, which is the run-to-run spread the ridge band predicts.
+
 ## Two analysis bugs that had to be fixed before any of this was readable
 
 Both produced confident, wrong numbers rather than errors, which is the failure
