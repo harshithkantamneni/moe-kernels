@@ -25,6 +25,7 @@ import atexit
 import os
 import sys
 
+from ..quant import fp8_cell_supported, fp8_hardware_support
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
@@ -203,6 +204,20 @@ class SglangFusedExperts(StageSpan):
     #: for the dtype-invariance result, and the closest comparison to vLLM since
     #: it covers the same five stages.
     dtypes = SGLANG_DTYPES
+
+    def supports(self, spec: BenchSpec) -> bool:
+        """fp8 needs fp8 silicon. Ampere has none, and SGLang would accept the
+        cell anyway, most likely dequantise to bf16, and write a row labelled
+        fp8_e4m3 that never touched an fp8 unit. Merged with the H200's it would
+        be indistinguishable."""
+        return super().supports(spec) and fp8_cell_supported(spec)
+
+    def why_unsupported(self, spec: BenchSpec) -> str:
+        if not fp8_cell_supported(spec):
+            verdict = fp8_hardware_support()
+            if verdict is not None:
+                return verdict.reason
+        return super().why_unsupported(spec)
 
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")

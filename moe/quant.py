@@ -23,6 +23,8 @@ for every implementation, while kernel error is what the gate exists to catch.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 
 #: Names this module quantises to, mapped to the torch dtype. Closed on purpose:
@@ -93,3 +95,59 @@ def round_trip_error(original: torch.Tensor, reconstructed: torch.Tensor) -> flo
     if denom == 0:
         return 0.0
     return float((reconstructed.float() - ref).pow(2).mean().sqrt() / denom)
+
+
+# --- does this silicon actually have fp8 tensor cores? ----------------------
+
+#: fp8 tensor cores arrived with Ada (sm_89) and Hopper (sm_90). Ampere has
+#: none: the A100 is sm_80.
+_FP8_MIN_CAPABILITY = (8, 9)
+
+
+@dataclass(frozen=True)
+class Fp8Support:
+    supported: bool
+    reason: str = ""
+
+
+def fp8_hardware_support(capability: tuple[int, int] | None = None
+                         ) -> Fp8Support | None:
+    """Whether this device has fp8 tensor cores, or None when there is no device.
+
+    None is not "unsupported". `--dry-run` builds the whole matrix on a laptop,
+    and answering "unsupported" with nothing to ask would silently empty the
+    plan. Same shape as `grouped_mm_support`, and for the same reason.
+
+    Without this, `--profile fp8` on an A100 would run: the framework spans
+    declare fp8_e4m3, vLLM would accept the cell, most likely dequantise to bf16
+    and issue a bf16 GEMM, and write rows labelled fp8_e4m3 that never touched
+    an fp8 unit. Merged with the H200's they would be indistinguishable. That is
+    the silent substitution this harness exists to refuse.
+    """
+    if capability is None:
+        import torch
+        if not torch.cuda.is_available():
+            return None
+        capability = torch.cuda.get_device_capability()
+    if capability >= _FP8_MIN_CAPABILITY:
+        return Fp8Support(True)
+    major, minor = capability
+    lo_major, lo_minor = _FP8_MIN_CAPABILITY
+    return Fp8Support(
+        False,
+        f"fp8 tensor cores require sm_{lo_major}{lo_minor} or newer; this "
+        f"device is sm_{major}{minor}. A cell timed here would measure an fp8 "
+        "path emulated in another format and record it under the same impl and "
+        "dtype as hardware fp8 rows.")
+
+
+def fp8_cell_supported(spec) -> bool:
+    """Can this cell's dtype run on this machine's tensor cores?
+
+    True for every float dtype and for fp8 wherever the silicon has it, and for
+    fp8 on a machine with no device at all, so a laptop can still plan.
+    """
+    if spec.dtype not in FP8_DTYPES:
+        return True
+    verdict = fp8_hardware_support()
+    return True if verdict is None else verdict.supported
