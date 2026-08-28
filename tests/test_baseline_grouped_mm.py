@@ -8,6 +8,7 @@ import torch
 
 import moe
 from moe import pipeline as P
+from moe.baselines.torch_grouped_mm import grouped_mm_support
 from moe.bench import driver as D
 from moe.reference import torch_ref as R
 from moe.spec import MODEL_CONFIGS, BenchSpec, MoEConfig, RoutingSpec
@@ -16,9 +17,33 @@ from moe.state import MoEState
 
 moe.bootstrap("baselines")
 
-pytestmark = pytest.mark.skipif(
-    not hasattr(torch.nn.functional, "grouped_mm"),
-    reason="this torch has no grouped_mm")
+def _unavailable() -> str:
+    """Why this module cannot be run here, or "" if it can.
+
+    Two independent reasons, and the second one bit on an A100. The symbol
+    exists in every torch build, so `hasattr` says nothing about the device:
+    grouped_mm dispatches to a CUTLASS kernel built for sm_90/sm_100, and on
+    sm_80 the span correctly refuses to run. That refusal is the harness working
+    as designed, but this module asserts grouped_mm MATCHES THE ORACLE, which is
+    a question with no answer on hardware that cannot dispatch to it.
+
+    Without this the whole suite fails on an Ampere box, and `run_all.sh` stops
+    the session on a failing test, so a sweep that should simply have omitted
+    one baseline never starts at all.
+    """
+    if not hasattr(torch.nn.functional, "grouped_mm"):
+        return "this torch has no grouped_mm"
+    if torch.cuda.is_available():
+        try:
+            support = grouped_mm_support()
+        except (RuntimeError, AssertionError):
+            return ""      # cannot ask; let the tests speak for themselves
+        if not support.supported:
+            return support.reason
+    return ""
+
+
+pytestmark = pytest.mark.skipif(bool(_unavailable()), reason=_unavailable())
 
 # Deliberately awkward: non-power-of-two F, group sizes that will not be
 # multiples of any tile size, and enough experts to leave some empty.
