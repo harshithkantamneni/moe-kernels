@@ -39,9 +39,65 @@ Every weight element is used once per row (2 FLOPs) and read once (`b` bytes),
 so for `N` weight elements across any number of layers, `AI = 2NR / Nb = 2R/b`.
 `N` is a SUM over layers and cancels, so shapes and layer counts are irrelevant.
 For bf16 that is `AI = rows per expert`.
-STATUS: **established.** Verified numerically against deliberately lopsided
-synthetic architectures, and matches Yun et al. arXiv:2507.15465, whose
+
+STATUS: **ESTABLISHED, and tested against a prediction that could have refuted
+it, measured 2026-08-28.** Previously verified numerically against deliberately
+lopsided synthetic architectures, and matches Yun et al. arXiv:2507.15465, whose
 `B_MoE = RP_acc * (n_e/n_k)` lands inside all three of our measured brackets.
+
+The fp8 sweep (4,704 rows, H200, `run_h200fp8full`) was run to test a "2x
+crossing shift": halve the weight bytes, halve the batch at which a model
+crosses its ridge. **That prediction was wrong, and the error was in its
+derivation rather than in C2.** The ridge is `peak_FLOPS / bandwidth`, and going
+bf16 -> fp8 halves `b` AND doubles `peak_FLOPS`, because the same silicon runs
+fp8 tensor cores at twice the bf16 rate:
+
+    fp8:   2R/1 = 2 * ridge_bf16   ->   R = ridge_bf16
+    bf16:  2R/2 =     ridge_bf16   ->   R = ridge_bf16
+
+The same rows per expert, so the same crossing batch. Both sides of the roofline
+scale together and their intersection does not move. The 2x figure came from
+holding the ridge at its bf16 value while changing the format.
+
+MEASURED, crossing recovered from TIME (`moe/bench/crossing.py`, slope of
+`log ms` against `log T` passing 0.5), never from the byte model:
+
+| model            | bf16 |  fp8 | fp8/bf16 |
+|------------------|-----:|-----:|---------:|
+| mixtral-8x7b     |  454 |  568 |     1.25 |
+| qwen2-57b-a14b   |  810 |  900 |     1.11 |
+| deepseek-v2-lite |  922 |  976 |     1.06 |
+| deepseek-v3      | 3240 | 3459 |     1.07 |
+
+Corrected theory predicts 1.00; measured 1.12 +/- 0.09 across four models. The
+original 2x prediction requires 0.50 and is refuted. The traffic reduction is
+real and shows up in the TIME rather than the crossing: mixtral at T=512 goes
+1.1567 ms -> 0.6383 ms, 0.55x.
+
+OPEN, and structured rather than noisy. Measured crossings sit BELOW the
+prediction by a consistent factor:
+
+    bf16   0.539  0.632  0.708  0.632     mean 0.63
+    fp8    0.571  0.674  0.886  0.702     mean 0.71
+
+A single multiplicative offset across four models and two dtypes reads as the
+kernel reaching about 63% of the ideal ridge. Two candidate mechanisms, pushing
+opposite ways:
+
+  1. ACTIVATION TRAFFIC. `crossing_batch` uses weights-only `2R/b`, but real
+     traffic includes activations, which lowers AI and moves the crossing
+     earlier. `ridge.py` predicts exactly this. It should hit fp8 HARDER, since
+     activations stayed bf16 and are now a larger share of the bytes.
+  2. ACHIEVED VERSUS PEAK. No kernel reaches datasheet peak. Reaching fraction
+     `f` of peak FLOPs and `g` of peak bandwidth gives an effective ridge of
+     `(f/g) * 160.3`.
+
+fp8's ratio is HIGHER than bf16's for all four models, the opposite of what (1)
+alone predicts, so (2) dominates. Backing the offset out gives effective ridges
+of ~101 (bf16) and ~227 (fp8), a 2.25x ratio.
+
+Settling it needs no new sweep: `pct_of_achieved_tflops` and `achieved_bw_gbps`
+are already on every row.
 
 **C3. vLLM's decode path may not use Hopper's tensor core at all.**
 vLLM's tuned H200 config sets `BLOCK_SIZE_M = 16` for every batch size from 1 to
@@ -96,6 +152,26 @@ calibrations (4377.0 / 4377.0 / 4377.2). The GEMM is not: it lands at 1560 or
 quantity and should be quoted as approximate. Mixtral's predicted crossing spans
 641 to 651 across that range, all inside the same measured bracket, so C2 is
 unaffected.
+
+## Two analysis bugs that had to be fixed before any of this was readable
+
+Both produced confident, wrong numbers rather than errors, which is the failure
+mode this project is most exposed to.
+
+**A row that was never timed is not a measurement of zero.** A skipped or
+uncapturable graph mode still writes a row, with `ms_p50` left at its 0.0
+default; `run_all.sh --dry-run` says so in as many words. Feeding those to a
+median dragged it toward zero and the first fp8 report concluded deepseek-v3
+crossed at 2 tokens. 2,356 of 11,264 rows were untimed. `crossing.timed_rows`
+now drops them and the report states how many, rather than silently using fewer.
+
+**Below `E/k`, a batch does not touch every expert.** mixtral at T=1 reaches 2
+of 8, so active experts and weight traffic grow WITH the batch and time rises
+nearly linearly. That slope crosses 0.5 for a reason unrelated to the ridge, and
+the detector stopped there: mixtral reported 5 tokens, deepseek-v3 reported 25.
+`2R/b` assumes all E experts are active, so those points are outside the claim's
+domain rather than evidence against it. `crossing_from_points` now floors at the
+saturation batch, which `ridge.saturation_batch` already computed.
 
 ## Supporting results, already measured
 
