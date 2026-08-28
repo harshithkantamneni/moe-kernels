@@ -42,11 +42,34 @@ def test_older_architectures_do_not_either():
     assert not fp8_hardware_support((7, 0)).supported
 
 
-def test_no_device_is_not_the_same_as_unsupported():
+def test_no_device_is_not_the_same_as_unsupported(monkeypatch):
     """--dry-run builds the whole matrix on a laptop. Returning "unsupported"
     with no device would silently empty the plan, which is how the grouped_mm
-    guard is written and for the same reason."""
+    guard is written and for the same reason.
+
+    The absence of a device is SIMULATED. The first version asserted this
+    against whatever the host happened to have, so it passed on a laptop and
+    failed on the H200 -- where `fp8_hardware_support(None)` correctly queries
+    the card and answers `supported`. A test whose result depends on the machine
+    running it gates every sweep on that machine, and this one did: it stopped
+    an H200 run after six minutes of suite.
+    """
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert fp8_hardware_support(None) is None
+
+
+def test_with_a_device_present_it_asks_the_device(monkeypatch):
+    """The other half, also simulated, so both branches are covered wherever
+    the suite runs."""
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (8, 0))
+    v = fp8_hardware_support(None)
+    assert v is not None and not v.supported and "sm_80" in v.reason
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda: (9, 0))
+    assert fp8_hardware_support(None).supported
 
 
 @pytest.mark.parametrize("span", ["vllm_fused_experts", "sglang_fused_experts"])
