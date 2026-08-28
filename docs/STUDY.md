@@ -24,7 +24,7 @@ something in the results argues for filling it.
 
 Each claim below is one probe at that.
 
-## The four claims
+## The claims
 
 **C1. The CUTLASS tile is 64, not 128, and it was never a choice.**
 `torch.nn.functional.grouped_mm` on Hopper reports `TileShape M,N = 64,128`,
@@ -276,6 +276,45 @@ calibrations (4377.0 / 4377.0 / 4377.2). The GEMM is not: it lands at 1560 or
 quantity and should be quoted as approximate. Mixtral's predicted crossing spans
 641 to 651 across that range, all inside the same measured bracket, so C2 is
 unaffected.
+
+**C5. The crossing scales with the ridge across architectures, where the model
+has enough experts to fill the machine.**
+`AI = 2R/b` says the crossing is at a fixed rows-per-expert set by the ridge, so
+two cards with different ridges should cross at rows-per-expert in the same
+proportion. H200 ridge 176.2, A100 ridge 146.6.
+
+STATUS: **PARTIAL, measured 2026-08-28. Confirmed on the largest model, refuted
+on the smallest, and the failure is ordered.** Same profile, same kernel, one run
+per card, `vllm_fused_experts` bf16.
+
+Crossings converted to rows per expert, which is the quantity `2R/b` says is
+universal:
+
+| model            |   E | A100 | H200 | agree |
+|------------------|----:|-----:|-----:|------:|
+| mixtral-8x7b     |   8 |   58 |  136 |  0.43 |
+| qwen2-57b-a14b   |  64 |   81 |  114 |  0.71 |
+| deepseek-v2-lite |  64 |   74 |   84 |  0.88 |
+| deepseek-v3      | 256 |  110 |  109 |  1.01 |
+
+deepseek-v3 agrees to 1% across two architectures, three years apart, with
+different SM counts, bandwidths and tensor cores. mixtral is off by 2.3x. The
+agreement is monotonic in EXPERT COUNT, which is not a term in the model.
+
+THE HYPOTHESIS, STATED AS UNTESTED. Expert count sets how many thread blocks a
+launch has. With 8 experts there may not be enough to fill 108 SMs (A100) or 132
+(H200) until T is large, so the time-against-T curve is shaped by an occupancy
+ramp rather than by the roofline, and what the detector finds is not the ridge.
+With 256 experts there are always enough blocks. The A100 has fewer SMs, so any
+block-count effect should hit it harder, which is the direction observed. Four
+points and a plausible story are not evidence, and this is recorded as a
+hypothesis with an experiment attached: sweep expert count at FIXED
+rows-per-expert and see whether the deviation follows blocks or follows E.
+
+WHAT DOES TRANSFER. The five-stage offset is a property of the fused span on
+both cards: measured/predicted is 0.55 +/- 0.15 on the A100 against 0.63 +/- 0.12
+on the H200. Two machines, same result, which supports that half of the finding
+independently of the ridge scaling.
 
 ## What a whole MoE layer costs, and how much of it is routing
 
