@@ -120,6 +120,35 @@ class ScaledArgs:
     offs: torch.Tensor
 
 
+#: Per-expert scales broadcast to per-output-channel, keyed on the scale tensor
+#: and the width. Built inside the timed region, so rebuilding [E, N] float32 on
+#: every call would put a megabyte of memset into the measurement. Bounded by
+#: the weight cache above it, which holds one model at a time.
+_CHANNEL_SCALE_CACHE: dict[tuple[int, int], torch.Tensor] = {}
+
+
+def _per_channel_scale(w_scale: torch.Tensor, n: int) -> torch.Tensor:
+    """`[E]` -> `[E, N]`, materialised.
+
+    torch's check_scale takes its rule from mat_b's dimensionality: a 3D
+    `[E, K, N]` weight wants a 2D `[E, N]` scale, one per output channel. The
+    harness quantises per expert, so every channel of an expert carries the same
+    value; the arithmetic is identical and only the layout differs.
+
+    Materialised rather than expanded because torch also requires
+    `scale.stride(-1) == 1`, and an expand leaves stride 0 there: it would pass
+    a shape check and fail at the call.
+    """
+    key = (w_scale.data_ptr(), n)
+    hit = _CHANNEL_SCALE_CACHE.get(key)
+    if hit is not None and hit.shape == (w_scale.shape[0], n):
+        return hit
+    built = w_scale.reshape(-1, 1).expand(-1, n).contiguous()
+    _CHANNEL_SCALE_CACHE.clear()   # one model resident at a time, as above
+    _CHANNEL_SCALE_CACHE[key] = built
+    return built
+
+
 def scaled_grouped_args(a, w_q, w_scale, offs, dtype: str) -> ScaledArgs:
     """Build the fp8 grouped-GEMM call.
 
@@ -139,8 +168,12 @@ def scaled_grouped_args(a, w_q, w_scale, offs, dtype: str) -> ScaledArgs:
     different layer from the one being judged.
     """
     a_q, scale_a = quantize_per_expert(a, dtype)
-    return ScaledArgs(a=a_q, b=w_q.transpose(1, 2), scale_a=scale_a,
-                      scale_b=w_scale, offs=offs)
+    b = w_q.transpose(1, 2)
+    # scale_a stays 1D: mat_a is 2D, and torch wants one element per row there.
+    # scale_b becomes 2D: mat_b is 3D, and torch wants one per output channel.
+    # Making both the same shape trades one RuntimeError for the other.
+    return ScaledArgs(a=a_q, b=b, scale_a=scale_a,
+                      scale_b=_per_channel_scale(w_scale, b.shape[2]), offs=offs)
 
 
 class _GroupedMM(StageSpan):

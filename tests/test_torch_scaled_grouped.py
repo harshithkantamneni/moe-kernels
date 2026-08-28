@@ -56,12 +56,48 @@ def test_there_is_one_activation_scale_per_ROW_not_per_tensor(cell):
     assert args.scale_a.dtype is torch.float32
 
 
-def test_the_weight_scale_is_the_one_make_inputs_produced(cell):
-    """Recomputing it here would silently measure a different layer from the
-    one the oracle judges, since the oracle dequantises with ITS scale."""
+def test_the_weight_scale_is_broadcast_to_per_output_channel(cell):
+    """MEASURED, H200 2026-08-28: `RuntimeError: scale must be a 2D tensor, but
+    got 1D for arg 1`, on all 84 cells of the smoke.
+
+    torch's check_scale takes mat_b's dimensionality: for a 3D `[E, K, N]`
+    weight it wants a 2D `[E, N]` scale, one per output channel. The harness
+    quantises per expert, so the same value is repeated across N. Same
+    arithmetic, the layout torch demands.
+    """
     a, wq, ws, offs = cell
     args = scaled_grouped_args(a, wq, ws, offs, "fp8_e4m3")
-    assert torch.equal(args.scale_b, ws)
+    E, _, N = args.b.shape
+    assert args.scale_b.shape == (E, N)
+    # Every channel of an expert carries that expert's scale, unchanged.
+    for e in range(E):
+        assert torch.allclose(args.scale_b[e], ws[e].expand(N))
+
+
+def test_the_weight_scale_is_materialised_not_expanded(cell):
+    """An `expand` gives stride 0 in the last dimension and torch requires
+    `scale.stride(-1) == 1`. It would pass a shape check and fail at the call."""
+    a, wq, ws, offs = cell
+    args = scaled_grouped_args(a, wq, ws, offs, "fp8_e4m3")
+    assert args.scale_b.stride(-1) == 1
+
+
+def test_the_activation_scale_stays_1D(cell):
+    """The other half of the same rule: mat_a is 2D, so torch wants a 1D scale
+    with one element per row. Making both 2D would trade one error for another."""
+    a, wq, ws, offs = cell
+    args = scaled_grouped_args(a, wq, ws, offs, "fp8_e4m3")
+    assert args.scale_a.dim() == 1
+    assert args.scale_a.shape[0] == args.a.shape[0]
+
+
+def test_the_broadcast_scale_is_cached_across_calls(cell):
+    """It is built inside the timed region, so allocating [E, N] float32 on
+    every call would put a megabyte of memset into the measurement."""
+    a, wq, ws, offs = cell
+    first = scaled_grouped_args(a, wq, ws, offs, "fp8_e4m3").scale_b
+    second = scaled_grouped_args(a, wq, ws, offs, "fp8_e4m3").scale_b
+    assert first.data_ptr() == second.data_ptr(), "rebuilt instead of cached"
 
 
 def test_the_weight_is_transposed_as_a_VIEW_not_copied(cell):
