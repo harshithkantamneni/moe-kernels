@@ -37,7 +37,14 @@ from ..spec import BenchSpec
 
 # Unit roundoff per format: 2^-(mantissa_bits+1).
 # bf16 has 8 total mantissa bits, fp16 has 11, fp32 has 24.
-_EPS = {"fp32": 2 ** -24, "fp16": 2 ** -11, "bf16": 2 ** -8}
+# Unit roundoff, 2^-(mantissa bits + 1). fp8 is here because C2's prediction,
+# that halving bytes-per-element halves the ridge crossing, is tested by an fp8
+# sweep, and `tolerance()` raises for any dtype it does not know: the sweep would
+# have died on its first cell rather than run with a wrong budget.
+#   e4m3  3 explicit mantissa bits -> 2^-4
+#   e5m2  2                        -> 2^-3
+_EPS = {"fp32": 2 ** -24, "fp16": 2 ** -11, "bf16": 2 ** -8,
+        "fp8_e4m3": 2 ** -4, "fp8_e5m2": 2 ** -3}
 
 # Quantisation enters at both GEMM operands and the store, and SwiGLU roughly
 # doubles it. Four is the resulting order-of-magnitude coefficient; it is a

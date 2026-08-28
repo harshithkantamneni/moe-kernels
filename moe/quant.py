@@ -1,0 +1,95 @@
+"""Per-expert fp8 quantisation, in the form vLLM's fused_moe expects.
+
+WHY fp8 IS IN THIS STUDY, and why it beats a second GPU as a test. Claim C2 says
+arithmetic intensity is `2R/b`, so halving bytes-per-element must double
+intensity and halve the batch at which a model crosses its ridge. For
+deepseek-v3 that is ~5,100 tokens down to ~2,570: a **2x** prediction, which the
+existing powers-of-two token grid separates without any custom sweep. The A100's
+lower ridge predicts a 1.1x shift, and that lands both predictions inside a
+single bin of the same grid, resolving nothing.
+
+THE CONVENTION IS NOT A CHOICE. `fp8_w8a8_moe_quant_config(w1_scale, w2_scale,
+...)` requires the scales, and the kernel reconstructs the weight as
+`q * scale`. So that is the contract here, one scale per expert. It also happens
+to be marginally more accurate than an unscaled cast on realistic fan-in
+weights, because 27.6% of elements would otherwise be subnormal in e4m3, but
+that is a bonus rather than the reason.
+
+WHAT THE ORACLE MUST COMPARE AGAINST. The reference has to compute from the
+DEQUANTISED weights, not the original bf16 ones. Otherwise the correctness gate
+is measuring quantisation error rather than kernel error, and the two are not
+the same question: quantisation error is a property of the format and identical
+for every implementation, while kernel error is what the gate exists to catch.
+"""
+from __future__ import annotations
+
+import torch
+
+#: Names this module quantises to, mapped to the torch dtype. Closed on purpose:
+#: an unrecognised string must raise rather than silently fall through to a cast.
+FP8_DTYPES: dict[str, str] = {
+    "fp8_e4m3": "float8_e4m3fn",
+    "fp8_e5m2": "float8_e5m2",
+}
+
+
+def torch_fp8_dtype(dtype: str):
+    """Resolve a harness dtype name to a torch fp8 dtype, or raise."""
+    name = FP8_DTYPES.get(dtype)
+    if name is None:
+        raise ValueError(
+            f"{dtype!r} is not an fp8 format; known: {sorted(FP8_DTYPES)}")
+    resolved = getattr(torch, name, None)
+    if resolved is None:
+        raise ValueError(f"this torch build has no {name}")
+    return resolved
+
+
+def quantize_per_expert(w: torch.Tensor, dtype: str
+                        ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Quantise `[E, ...]` weights to fp8 with one scale per expert.
+
+    Returns `(q, scale)` obeying `q.float() * scale == dequantised`, which is
+    the direction vLLM's kernel reconstructs in. Getting that backwards would
+    produce a call that runs, returns the right shape, and computes a different
+    layer, which is exactly the failure `_framework_config` exists to prevent
+    elsewhere.
+
+    An all-zero expert would give a zero scale and then a division by zero, so
+    its scale is clamped to 1.0: the quantised values are zero either way, and a
+    finite scale keeps the tensor usable.
+    """
+    resolved = torch_fp8_dtype(dtype)
+    if w.ndim < 2:
+        raise ValueError(f"expected [E, ...] weights, got shape {tuple(w.shape)}")
+    fmax = torch.finfo(resolved).max
+
+    flat = w.reshape(w.shape[0], -1).float()
+    amax = flat.abs().amax(dim=1)
+    scale = (amax / fmax).clamp_min(torch.finfo(torch.float32).tiny)
+    scale = torch.where(amax > 0, scale, torch.ones_like(scale))
+
+    shaped = scale.reshape(-1, *([1] * (w.ndim - 1)))
+    q = (w.float() / shaped).to(resolved)
+    return q, scale.to(torch.float32)
+
+
+def dequantize_per_expert(q: torch.Tensor, scale: torch.Tensor) -> torch.Tensor:
+    """`q * scale`, in fp32. The reference computes from this, not from the
+    original weights, so the correctness gate measures the kernel rather than
+    the format."""
+    return q.float() * scale.reshape(-1, *([1] * (q.ndim - 1))).float()
+
+
+def round_trip_error(original: torch.Tensor, reconstructed: torch.Tensor) -> float:
+    """RMS relative error, which is what sets the fp8 correctness budget.
+
+    Not max-absolute: that is dominated by the largest elements, which sit in
+    the normal range and quantise well, and it therefore hides the subnormal
+    behaviour that motivates scaling in the first place.
+    """
+    ref = original.float()
+    denom = ref.pow(2).mean().sqrt()
+    if denom == 0:
+        return 0.0
+    return float((reconstructed.float() - ref).pow(2).mean().sqrt() / denom)

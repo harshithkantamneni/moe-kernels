@@ -49,9 +49,43 @@ def test_measured_calibration_overrides_and_is_flagged():
     assert t.rel_max == 1e-3 and t.calibrated is True and t.basis == "measured"
 
 
-def test_unknown_dtype_is_an_error():
+def test_every_dtype_the_harness_accepts_has_a_tolerance_model():
+    """This test used to assert that `fp8_e4m3` RAISED, because spec.py knew it
+    and tolerance.py did not. Adding fp8 for the C2 sweep closed that gap and
+    left no dtype in the one and not the other, so the old assertion could no
+    longer be written.
+
+    The gap itself was the real hazard, and it is now the thing under test: add
+    a format to DTYPE_BYTES without an entry here and every cell using it dies
+    on the first correctness check, mid-sweep, on the expensive machine."""
+    from moe.bench.tolerance import _EPS
+    from moe.spec import DTYPE_BYTES
+    missing = set(DTYPE_BYTES) - set(_EPS)
+    assert not missing, (
+        f"spec.py accepts {sorted(missing)} but tolerance.py has no error "
+        "budget for them; a sweep using one would die on its first cell")
+
+
+def test_an_unmodelled_dtype_still_raises_rather_than_guessing(monkeypatch):
+    """The guard the old test provided, kept alive.
+
+    The table is emptied of one real entry rather than a hook being added to
+    production code for the test's benefit; the code path exercised is exactly
+    the one a genuinely unmodelled format would take."""
+    import moe.bench.tolerance as TOL
+    monkeypatch.setitem(TOL._EPS, "bf16", None)
     with pytest.raises(ValueError, match="no tolerance model"):
-        tolerance(spec(dtype="fp8_e4m3"))
+        tolerance(spec(dtype="bf16"))
+
+
+def test_fp8_is_modelled_and_looser_than_bf16():
+    """The other half of the change: fp8 must be known, and known to be worse.
+    Equal-or-tighter would mean the table is not modelling the format."""
+    for dt in ("fp8_e4m3", "fp8_e5m2"):
+        assert tolerance(spec(dtype=dt)).rel_max > tolerance(spec(dtype="bf16")).rel_max
+    # e5m2 has one fewer mantissa bit than e4m3, so its budget must be wider.
+    assert (tolerance(spec(dtype="fp8_e5m2")).rel_max
+            > tolerance(spec(dtype="fp8_e4m3")).rel_max)
 
 
 # --- the metric itself ------------------------------------------------------
