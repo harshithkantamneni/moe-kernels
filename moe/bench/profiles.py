@@ -86,7 +86,12 @@ PROFILES: dict[str, Profile] = {
     ),
     "full": Profile(
         name="full",
-        models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v3"),
+        # deepseek-v2-lite is here for its E/k of 10.7, which fills the gap
+        # between qwen2's 8 and deepseek-v3's 32 and gives the dilution law a
+        # fourth point. It is also the cheapest model in the set at 1.11 GB of
+        # weights, so it costs the least of any axis that could be widened.
+        models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite",
+                "deepseek-v3"),
         token_counts=(1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192),
         dtypes=("bf16",),
         routings=SKEW_SWEEP + (RoutingSpec("zipf", 2.0), RoutingSpec("hot", 0.8)),
