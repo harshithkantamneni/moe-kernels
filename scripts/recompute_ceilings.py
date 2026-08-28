@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from moe.bench.recompute import (  # noqa: E402
+    CEILING_COLUMNS,
     load_calibration_hardware,
     rewrite_csv,
 )
@@ -65,11 +66,29 @@ def main() -> int:
         print(f"  {src.name:44} {info['rows']:6d} rows  "
               + (", ".join(f"{k}:{v}" for k, v in moved.items()) or "unchanged"))
 
-    # Everything that is not a CSV describes the run and travels with it.
+    # Only the manifests travel. FINDINGS.md is a human analysis of the arm it
+    # was written for and quotes ratios against the ruler of that day; copying
+    # it here puts prose that disagrees with the rows right beside them.
+    # SUMMARY.md is generated and would be equally stale.
     for extra in args.arm.iterdir():
-        if extra.suffix != ".csv" and extra.is_file():
+        if extra.is_file() and extra.name.endswith(".manifest.jsonl"):
             shutil.copy2(extra, out / extra.name)
     shutil.copy2(args.calibration, out / "measured.yaml")
+
+    (out / "README.md").write_text(
+        f"# {out.name}\n\n"
+        f"Derived from `{args.arm.name}` by `scripts/recompute_ceilings.py`.\n"
+        f"The measurements are identical: `ms_p50`, `tflops`, `compulsory_gbps`\n"
+        f"and `arith_intensity_compulsory` come from the timing and the byte\n"
+        f"model and were never affected by the calibration. Only the four\n"
+        f"calibration-derived columns differ:\n\n"
+        + "".join(f"  - `{c}`\n" for c in CEILING_COLUMNS) +
+        f"\nRecomputed against **{hw.name}**, {hw.bandwidth_bytes_s / 1e9:.1f} "
+        f"GB/s (pattern `{hw.ceiling_pattern or 'unnamed'}`).\n\n"
+        f"No FINDINGS.md here on purpose. The analysis in `{args.arm.name}` was\n"
+        f"written against the ruler of that day, and the two arms together are\n"
+        f"the evidence that the ruler moved. Read that one, and treat these rows\n"
+        f"as the corrected numbers.\n")
     print(f"\nwrote {out}")
     print("The original arm is untouched: it is what was measured against the")
     print("ruler of the day, and the pair is the evidence that the ruler moved.")
