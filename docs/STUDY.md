@@ -2,6 +2,11 @@
 
 Written 2026-08-27. Read this first if you have been away from the project.
 
+This file is the working state: how each claim got where it is, what was
+retracted, what runs where, what to do next. The RESULTS are in
+`docs/FINDINGS.md`, organised around C1-C5 and regenerated from the published
+rows.
+
 ## What changed
 
 This started as a kernel project: build a grouped GEMM that beats the incumbent
@@ -113,10 +118,16 @@ BUT THE CROSSINGS FROM IT STILL ARE NOT:
 | mixtral-8x7b     | 0.87 | 1.99 |
 | qwen2-57b-a14b   | 0.88 | 0.61 |
 | deepseek-v2-lite | 0.63 | 0.41 |
-| deepseek-v3      | 0.52 | 1.23 |
-| **mean**         | **0.89 +/- 0.51** ||
+| deepseek-v3      |   -- | 0.52 |
+| **mean of 7**    | **0.84 +/- 0.53** ||
 
-The mean moved from 0.44 to 0.89, toward the corrected theory's 1.00, which is
+CORRECTED 2026-08-31. This table previously read `0.52 | 1.23` on the last row
+and `0.89 +/- 0.51` for the mean. deepseek-v3's fp8 `up` span has NO crossing:
+its slope peaks at 0.497 at T=8192 and never reaches the threshold, under every
+filter including `--include-throttled`. The 0.52 is the `down` value, and the
+1.23 does not reproduce from either the refixed arm or the superseded one.
+
+The mean moved from 0.44 to 0.84, toward the corrected theory's 1.00, which is
 what removing a token-scaling bias should do. But 0.41 to 1.99 is a five-fold
 range, against 1.15 +/- 0.07 from the two production kernels. Nothing can be
 concluded from a spread that wide.
@@ -157,11 +168,15 @@ same H200 give:
     bf16 GEMM    701.6 ->  770.9 TFLOP/s    9.9% apart
     ridge        160.3 ->  176.2 FLOP/byte  9.9% apart
 
-The bandwidth reproduces; the compute term does not, because the GEMM runs at
-whatever clock the thermal state allows -- 1530 MHz on the second run against a
-1830 MHz datasheet boost. So the ridge is a RANGE, wider than the +/-1.5% this
-document previously quoted, and the whole table moves with it: at ridge 176.2 the
-means are 0.58 and 1.03 rather than 0.63 and 1.13.
+The bandwidth reproduces; the compute term does not. THE CLOCK IS NOT THE
+EXPLANATION, corrected 2026-08-31: across the three H200 calibrations the GEMM
+clock moves 20.6% and the achieved rate moves 9.9% the OTHER WAY. 1845 MHz
+reached 71.4% of its own clock's peak, 1560 MHz reached 83.2%, 1530 MHz reached
+93.2%. Clock normalisation does not collapse the band; the spread lives in
+achieved efficiency, and what drives that is not established. So the ridge is a
+RANGE, wider than the +/-1.5% this document previously quoted, and the whole
+table moves with it: at ridge 176.2 the means are 0.58 and 1.03 rather than 0.63
+and 1.13.
 
 WHAT SURVIVES THE BAND is the comparison between span extents. Both sides divide
 by the same predicted crossing, so the ridge cancels ALGEBRAICALLY: five-stage
@@ -307,29 +322,39 @@ quantity and should be quoted as approximate. Mixtral's predicted crossing spans
 641 to 651 across that range, all inside the same measured bracket, so C2 is
 unaffected.
 
-**C5. The crossing scales with the ridge across architectures, where the model
-has enough experts to fill the machine.**
+**C5. Does the crossing scale with the ridge across architectures?**
 `AI = 2R/b` says the crossing is at a fixed rows-per-expert set by the ridge, so
 two cards with different ridges should cross at rows-per-expert in the same
-proportion. H200 ridge 176.2, A100 ridge 146.6.
+proportion. H200 ridge 176.2, A100 ridge 145.7.
 
-STATUS: **PARTIAL, measured 2026-08-28. Confirmed on the largest model, refuted
-on the smallest, and the failure is ordered.** Same profile, same kernel, one run
-per card, `vllm_fused_experts` bf16.
+STATUS: **PARTIAL, measured 2026-08-28, RESCORED 2026-08-31.** Same profile, same
+kernel, one run per card, `vllm_fused_experts` bf16.
 
-Crossings converted to rows per expert, which is the quantity `2R/b` says is
-universal:
+THE TARGET IS 0.83, NOT 1.00, AND THIS SECTION PREVIOUSLY USED 1.00. For bf16
+`b = 2`, so `2R/b = ridge` puts the crossing at `R = ridge` rows per expert, a
+DIFFERENT R on each card. The ratio the two cards should show is
+145.7 / 176.2 = 0.83, or 0.91 if the H200 ridge is taken at the low end of its
+band. A measured ratio of 1.00 means the two cards crossed at the same rows per
+expert, which is what NO ridge scaling looks like.
 
-| model            |   E | A100 | H200 | agree |
-|------------------|----:|-----:|-----:|------:|
-| mixtral-8x7b     |   8 |   58 |  136 |  0.43 |
-| qwen2-57b-a14b   |  64 |   81 |  114 |  0.71 |
-| deepseek-v2-lite |  64 |   74 |   84 |  0.88 |
-| deepseek-v3      | 256 |  110 |  109 |  1.01 |
+| model            |   E | A100 | H200 | ratio | vs target 0.83 |
+|------------------|----:|-----:|-----:|------:|---------------:|
+| mixtral-8x7b     |   8 |   58 |  136 |  0.43 |           0.52 |
+| qwen2-57b-a14b   |  64 |   81 |  114 |  0.71 |           0.86 |
+| deepseek-v2-lite |  64 |   74 |   84 |  0.88 |       **1.06** |
+| deepseek-v3      | 256 |  110 |  109 |  1.01 |           1.22 |
 
-deepseek-v3 agrees to 1% across two architectures, three years apart, with
-different SM counts, bandwidths and tensor cores. mixtral is off by 2.3x. The
-agreement is monotonic in EXPERT COUNT, which is not a term in the model.
+So deepseek-v2-lite is the model that scales with the ridge, within 6% and inside
+the band. deepseek-v3 overshoots by 22%. This section previously reported
+deepseek-v3 as agreeing "to 1% across two architectures, three years apart",
+which was agreement with the null. No model confirms cleanly and none refutes by
+an order of magnitude.
+
+WHAT SURVIVES: the deviation is monotonic in EXPERT COUNT either way, 0.52, 0.86,
+1.06, 1.22 against E of 8, 64, 64, 256, and expert count is not a term in the
+model. Correcting the target moves the deviation from "approaches agreement from
+below" to "crosses agreement between 64 and 256 experts" without changing its
+ordering, and the ordering is what needs explaining.
 
 THE HYPOTHESIS, STATED AS UNTESTED. Expert count sets how many thread blocks a
 launch has. With 8 experts there may not be enough to fill 108 SMs (A100) or 132
@@ -343,8 +368,9 @@ rows-per-expert and see whether the deviation follows blocks or follows E.
 
 WHAT DOES TRANSFER. The five-stage offset is a property of the fused span on
 both cards: measured/predicted is 0.55 +/- 0.15 on the A100 against 0.63 +/- 0.12
-on the H200. Two machines, same result, which supports that half of the finding
-independently of the ridge scaling.
+on the H200. The means differ by 13% and the spreads overlap heavily, so read it
+as consistent across two machines rather than as the same number. The 13% is the
+C5 discrepancy appearing in another coordinate.
 
 ## What a whole MoE layer costs, and how much of it is routing
 
@@ -434,14 +460,14 @@ saturation batch, which `ridge.saturation_batch` already computed.
 The sweep is 3 models x 14 token counts x 7 routings x 3 seeds, and **1 dtype,
 1 device**. Both degenerate axes are where the value is.
 
-**A. fp8 — a prediction test.** C2 says `AI = 2R/b`. Halving `b` must double
+**A. fp8 -- a prediction test.** C2 says `AI = 2R/b`. Halving `b` must double
 arithmetic intensity and halve the ridge crossing: deepseek-v3 from ~5,500 tokens
 to ~2,750. That is falsifiable, quantitative, and derived before being measured.
 Needs the baselines to declare and support fp8; `spec.py` already knows
 `fp8_e4m3` and `fp8_e5m2` at 1 byte and the byte model is already
 dtype-parametric.
 
-**B. A second device — a generalisation test.** The crossing scales with the
+**B. A second device -- a generalisation test.** The crossing scales with the
 ridge. An A100's ridge is 153.02 Op/B against the H200's 206.15 (Yun et al.
 Table I). Running the same sweep on an A100 and checking the crossings move as
 predicted is the cheapest possible falsification test, and the device-agnostic
@@ -472,7 +498,7 @@ work is already done and unused.
 | `scripts/preflight_cutile.py` | pod | whether cuTile is worth more of this pod's time |
 | `moe/bench/ridge.py` | anywhere | predicts the crossing per model from a calibration |
 | `moe/bench/published.py` | anywhere | which published arms an analysis should read |
-| `tests/` | anywhere | 539 tests, all green off-GPU |
+| `tests/` | anywhere | 549 tests, all green off-GPU |
 
 ## Order of work
 
@@ -496,7 +522,12 @@ work is already done and unused.
    without relying on the byte model, which C4 puts under suspicion.
 4. fp8 baselines, then re-sweep. Tests C2's prediction.
 5. A100 hour, same sweep. Tests C2's generality.
-6. Rewrite FINDINGS around C1-C4, scoped to "single GPU, all experts resident".
+6. ~~Rewrite FINDINGS around C1-C4~~ DONE 2026-08-31, around C1-C5, at
+   `docs/FINDINGS.md`. Study-level rather than arm-level: the arm-local
+   FINDINGS in the superseded three-way directory is now banner-marked as
+   historical. Every table in the new file names the command that regenerates
+   it, and every number in it was recomputed from the rows rather than carried
+   forward, which is how the two corrections above were found.
 
 ## Standing scope limit
 

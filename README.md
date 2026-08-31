@@ -11,7 +11,11 @@ implementations handle the ragged shape by padding each expert's group up to a
 whole tile of a single global `BLOCK_M`. That is where the open problems are.
 
 This repository exists to find a specific weakness by measurement, then attack
-it. The measurement half is built. The kernels are being written.
+it. The measurement half is built and has run: 96,448 rows on an H200 and an
+A100. It killed the original premise, so this is a measurement study and
+`moe/kernels/` stays empty unless a result argues for filling it. What it found
+is in [docs/FINDINGS.md](docs/FINDINGS.md); the working state, including what
+was retracted and why, is in [docs/STUDY.md](docs/STUDY.md).
 
 **What this is aimed at.** Every MoE grouped-GEMM implementation I looked at
 selects its tile height from the *mean* tokens per expert: Inductor gates on
@@ -159,5 +163,10 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete and tested on CPU. Traces not yet captured. Kernels not yet
-written. No performance numbers have been produced, and none are claimed.
+Harness complete, 549 tests green off-GPU. Ten published arms in
+`results/published/`, 96,448 rows, 69,064 of them current. Five claims: C1, C2
+and C3 established, C4 confirmed and closed, C5 partial. Kernels not written,
+and the padding-tax premise that motivated them is dead. Read
+[docs/FINDINGS.md](docs/FINDINGS.md) before quoting any number from this
+repository: several published figures have been retracted, and that file says
+which.

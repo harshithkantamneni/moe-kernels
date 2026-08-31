@@ -88,8 +88,11 @@ class CudaGroupedGemm(StageSpan):
 H200 it emits `-gencode=arch=compute_90a,code=sm_90a`, and the `a` matters: the
 `a` variants are what expose wgmma and the TMA instructions, so plain `sm_90`
 builds for the part but loses what the part exists for. Hardcoding Hopper is
-also wrong the moment a sweep runs on whatever GPU was available, since an A100
-is `sm_80` and RTX Blackwell is `sm_120a`.
+also wrong the moment a sweep runs on whatever GPU was available. An A100 is
+`sm_80`, and there the warpgroup instructions do not exist at ANY tile size:
+hand-written wgmma PTX will not assemble, and Triton drops silently to
+`mma.sync`, because `getMMAVersionSafe` offers only `{2}` below compute
+capability 9.0. RTX Blackwell is `sm_120a`.
 
 Because `moe/kernels/load_all()` catches import failures with a warning, a
 kernel whose extension fails to build does not break the harness or the CPU test
@@ -102,7 +105,7 @@ metered path at all.
 ## CUTLASS / CuTe DSL
 
 `nvidia-cutlass-dsl` is already in the vLLM and SGLang environments (they pin
-4.6.0 and 4.6.2 respectively — one of the four conflicts that forced the
+4.6.0 and 4.6.2 respectively, one of the four conflicts that forced the
 separate venvs). It is a Python DSL, so it plugs in exactly like Triton: build
 the kernel, get a callable, launch it from `__call__`. Add it to
 `requirements/base.txt` if you want it in your own environment rather than
@@ -174,7 +177,7 @@ torch.compile/Dynamo, not CUDA graphs. It is the first hit when you search.
 **A ragged GEMM is expressible.** Device scalars drive conditionals, loop trip
 counts, tile indices, and `Array.slice` bounds. NVIDIA's TileGym ships
 `ragged_bmm.py` taking a device `m_indptr`, plus a fully device-side
-`moe_align_block_size` — the piece that makes a device-offsets MoE capturable
+`moe_align_block_size`, the piece that makes a device-offsets MoE capturable
 end to end. One gotcha worth internalising: `.item()` inside a cuTile *kernel*
 is **not** a host sync, it is `Tile.item()` returning a scalar tile, so a naive
 grep for sync patterns produces false positives.
@@ -195,9 +198,14 @@ python scripts/preflight_cutile.py --kernel your_module:your_kernel
 cuobjdump -sass k.cubin | grep -oE '(HGMMA|GMMA|QGMMA|HMMA|IMMA)[^ ]*' | sort | uniq -c
 ```
 
-GMMA or HGMMA present means the Hopper tensor-core fast path. Only `HMMA.16816`
-means you would be measuring codegen maturity rather than your kernel design —
-and "cuTile Hopper codegen is not yet on the WGMMA path" is itself a publishable
+GMMA or HGMMA present means the Hopper tensor-core fast path; `HMMA.16816` is
+the Ampere-era `mma.sync.aligned.m16n8k16` that both Triton and CUTLASS fall back
+to. Read the answer against the tile you compiled, because a short tile cannot
+reach the warpgroup path on any toolchain: the instruction fixes M at 64, and
+Triton's own predicate is `BLOCK_M % 64 == 0 && num_warps % 4 == 0`, not
+`BLOCK_M >= 64`. Only with an M that is a multiple of 64 is `HMMA.16816`
+evidence about cuTile's codegen rather than about your tile choice. That result,
+"cuTile Hopper codegen is not yet on the WGMMA path", is itself a publishable
 finding that cost one pod-hour.
 
 Also budget for open `tileiras` SIGSEGV bugs (#94-#97) sitting on exactly the
@@ -257,8 +265,8 @@ size the grid from **tensor shapes**, which are static, and exit early on the
 device.
 
 vLLM's `moe_align_block_size` allocates
-`sorted_token_ids` of size `topk_ids.numel() + num_experts * (BLOCK_M - 1)` —
-a shape that depends only on other shapes — launches
+`sorted_token_ids` of size `topk_ids.numel() + num_experts * (BLOCK_M - 1)`,
+a shape that depends only on other shapes, launches
 `cdiv(that, BLOCK_M) * cdiv(N, BLOCK_N)` blocks, and then has each block do
 
 ```
@@ -279,8 +287,8 @@ every replay reuses those exact buffers.
 
 Point 3 has a nasty consequence, and it is the reason for a specific piece of
 machinery in `driver.py`. Because replay writes into the same buffers every
-time, a kernel that leaves part of its output unwritten — a tail tile, an
-empty-expert group — sees the **previous replay's correct values still
+time, a kernel that leaves part of its output unwritten (a tail tile, an
+empty-expert group) sees the **previous replay's correct values still
 resident**. It looks right. It is fast, because it is doing less work.
 
 So `time_graph` takes an `on_captured` callback, and the driver uses it to
@@ -302,7 +310,7 @@ because the eager arm re-enters Python every iteration and the graph arm does
 not. It is not a pure launch-overhead measurement, and the README says so.
 
 Graph mode is skipped by cost policy when the predicted roofline minimum makes
-launch overhead a sub-1% term — at DeepSeek-V3 with 8 tokens that minimum is
+launch overhead a sub-1% term. At DeepSeek-V3 with 8 tokens that minimum is
 already ~0.78 ms against a ~5 µs launch. The skipped row records
 `graph_skip_reason` with the arithmetic rather than vanishing.
 
@@ -312,8 +320,11 @@ already ~0.78 ms against a ~5 µs launch. The skipped row records
 - Build indirection tables (`sorted_token_ids`, `expert_ids`,
   `num_tokens_post_padded`) with device kernels, never a host loop.
 - Do not assume every expert is non-empty; under real skew most are.
-- Do not assume group sizes are multiples of `BLOCK_M`. That assumption is the
-  thing this project exists to attack.
+- Do not assume group sizes are multiples of `BLOCK_M`. Correctness depends on
+  that: nothing aligns a routing histogram to a tile. Do not expect the padding
+  to cost much, though. The C3 tile sweep doubled the padded arithmetic going
+  from 16 to 32 and moved the time by 0.4%, and "padding is either zero or free"
+  is the measurement that killed this project's original premise.
 - Write every output element you claim to write, including the tail.
 - Warm the autotune cache before capture.
 - Set `cuda_graph_safe = True` only after you have seen `capture_status=captured`

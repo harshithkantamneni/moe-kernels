@@ -1,3 +1,17 @@
+> **This file is arm-scoped and historical.** It analyses the 17,640 rows of the
+> 2026-08-26 three-way sweep against the calibration of that day (read ceiling
+> 4389.4 GB/s, ridge 160.4), and it predates C5, the fp8 arms, the A100 arm, the
+> whole-layer arm and the ridge band. The study-level results are in
+> [`docs/FINDINGS.md`](../../../docs/FINDINGS.md), organised around C1-C5 and
+> regenerated from the current rows.
+>
+> Kept otherwise unedited because it is the analysis this directory's `SUPERSEDED` marker
+> refers to: the pair of arms, one written against each ruler, is the evidence
+> that the ruler moved. Two numbers here have since changed with the
+> calibration, and both are noted in `docs/FINDINGS.md`: the 83 sub-floor rows
+> are 82 on the corrected ceiling, and the read-variant section's conclusion was
+> subsequently confirmed and closed.
+
 # What the three-way sweep says
 
 17,640 rows, one H200 SXM (700 W, 132 SMs, 60 MiB L2, driver 580.159.04, CUDA 13.0).

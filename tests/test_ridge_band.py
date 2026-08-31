@@ -6,9 +6,11 @@ MEASURED, H200, two calibrations of the SAME machine:
     bf16 GEMM    701.6 ->  770.9 TFLOP/s   9.9% apart
     ridge        160.3 ->  176.2 FLOP/byte 9.9% apart
 
-The bandwidth is reproducible; the compute term is not, because the GEMM runs at
-whatever clock the thermal state allows (1530 MHz on the second run). So the
-ridge is a range, not the single 160.3 that STUDY's predicted crossings were
+The bandwidth is reproducible; the compute term is not. Not because of the clock:
+the three calibrations ran the GEMM at 1845, 1560 and 1530 MHz and reached 71.4%,
+83.2% and 93.2% of their own clock's peak, so the clock moves 20.6% and the
+achieved rate moves 9.9% the other way. The spread is in achieved efficiency. So
+the ridge is a range, not the single 160.3 that STUDY's predicted crossings were
 computed against, and every absolute measured/predicted figure carries it.
 
 WHAT DOES NOT CARRY IT is the comparison between spans of different extent. Both

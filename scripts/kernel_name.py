@@ -12,9 +12,20 @@ runs inside the same process that dispatched the kernel. So a rented pod where
     python scripts/kernel_name.py --impl torch_grouped_mm_down
 
 T=1 is the default because there every active expert holds exactly one row, so
-M-tiles and active experts are the same number and nothing else is moving. The
-BLOCK_M=128 claim in FINDINGS section 2 was inferred from timing alone; a tile
-shape in the kernel name confirms or kills it.
+M-tiles and active experts are the same number and nothing else is moving. This
+was written to settle a `BLOCK_M = 128` figure that had been inferred from timing
+alone, and it killed it: FINDINGS C1 now records `TileShape M,N = 64,128` with
+MMA atom `MMA_64x128x16_F32BF16BF16_SS` and schedule `Pingpong`, identical at
+T = 1, 16, 256, 1024 and 4096. Re-run it when a new shape, dtype or card enters
+the study, because the tile belongs to the cell rather than to the project.
+
+The tile this reports is CUTLASS's, reached through
+`torch.nn.functional.grouped_mm`, and it is NOT vLLM's Triton `BLOCK_SIZE_M`.
+Different mechanisms, different values in the same cell: CUTLASS is pinned at
+M=64 by the wgmma instruction shape, while vLLM reads a tuned JSON keyed on
+(E, N, device, dtype) if one exists and otherwise takes a hardcoded ladder off
+the token count. Only 2 of this study's 8 (model x card) cells have such a JSON.
+Reading one number as the other is how a wrong tile survived days of analysis.
 
 Why not nsys: an external tracer has to agree with you about its own command
 line, and the version a pod happens to ship may not. Ubuntu's nsight-systems

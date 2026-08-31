@@ -5,11 +5,23 @@
     python scripts/tile_sweep.py --model deepseek-v3 --tokens 16,64,256
     python scripts/tile_sweep.py --dump-ptx /workspace/ptx-tiles   # verify the ISA
 
-WHY THIS EXISTS. `check_mma_path.sh` measured that vLLM's decode path emits zero
-`wgmma` and 32 `mma.sync.aligned.m16n8k16`, because its tuned config picks
-`BLOCK_SIZE_M = 16` and Hopper's warpgroup MMA has M fixed at 64. So the obvious
-question is whether that costs anything. Force 64, reach the warpgroup
-instruction, and see.
+WHY THIS EXISTS. `check_mma_path.sh` measured, on a real deepseek-v3 T=16 cell,
+that vLLM emits zero `wgmma` and 32 `mma.sync.aligned.m16n8k16`. That 16 is not a
+tuned choice, and saying so matters: deepseek-v3 is E=256,N=2048 and vLLM
+v0.27.1 ships no config file for it on any card or dtype, so the cell fell to
+`get_default_config`'s hardcoded bf16 ladder, M<=32 -> 16 / M<=96 -> 32 /
+M<=512 -> 64 / else 128. Only 2 of the 8 (model x card) cells in this study have
+a tuned file at all, both H200: E=8,N=14336 (mixtral-8x7b) and E=64,N=2560
+(qwen2-57b-a14b), and in bf16 both of those pick 16 at the T=16 cell this was
+measured on. Not "16 all the way up from M=1": mixtral's file reads
+1:16 2:32 4:16 8:16 16:16 24:16 32:16 48:32, so it takes 32 at M=2 and again
+from M=48, and check_mma_path.sh prints both ladders in full. Stated to the
+entry rather than to a range because a ladder summarised as a range is how the
+16-through-256 figure that belongs to E=128,N=512 got attached to a model that
+never ran it. So at the measured cell the tile is 16 either way, by two
+different mechanisms, and Hopper's warpgroup MMA needs BLOCK_M % 64 == 0. The
+obvious question is whether declining it costs anything. Force 64, reach the
+warpgroup instruction, and see.
 
 THE PREDICTION, stated before the run so it can fail. If the study's thesis is
 right and this regime is memory-bound, then:
@@ -52,7 +64,19 @@ from moe.reference.torch_ref import make_inputs  # noqa: E402
 from moe.routing.distributions import sample_topk_ids  # noqa: E402
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec  # noqa: E402
 
-#: Held fixed so only M varies. Taken from vLLM's tuned H200 entry at batch 16.
+#: Held fixed so only M varies, which is the whole design: any time difference
+#: has to be attributable to BLOCK_SIZE_M and to nothing else. These values are
+#: NOT copied from a shipped config. An earlier comment here said "taken from
+#: vLLM's tuned H200 entry at batch 16", and that was wrong: of the two study
+#: shapes with a tuned bf16 H200 file, E=8,N=14336 holds
+#: {M 16, N 64, K 256, GROUP 16, warps 4, stages 3} at batch 16 and E=64,N=2560
+#: holds {M 16, N 128, K 128, GROUP 16, warps 4, stages 5}, so only BLOCK_SIZE_N
+#: agrees with either. This sweep therefore prices the tile in isolation and does
+#: not reproduce what vLLM would run at any batch. num_warps=8 is the
+#: load-bearing entry: Triton takes the warpgroup path only when
+#: BLOCK_M % 64 == 0 AND num_warps % 4 == 0, so pinning warps at 8 satisfies the
+#: warp half at every setting and leaves BLOCK_SIZE_M as the only thing that can
+#: flip the instruction.
 FIXED = {"BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 1,
          "num_warps": 8, "num_stages": 4}
 
@@ -248,6 +272,14 @@ def main() -> int:
                             "dump not armed, or the kernel was cached before "
                             "TRITON_CACHE_DIR was redirected")
             else:
+                # A label, not a measurement, and only correct for the default
+                # 16/32/64/128 grid. The real predicate is BLOCK_M % 64 == 0 AND
+                # num_warps % 4 == 0 (supportMMA, triton release/3.7.x
+                # lib/Analysis/Utility.cpp), so `--tiles 80,96` would print
+                # "reachable" here and still compile to mma.sync. On an A100 it
+                # would be wrong at every tile, since getMMAVersionSafe offers
+                # only {2} below compute capability 9.0. Use --dump-ptx to make
+                # this column evidence.
                 note = "mma.sync (M<64)" if bm < 64 else "wgmma reachable (M>=64)"
             print(f"  {bm:13d} {ms:10.4f} {sd:8.4f} {ms / base:8.3f}x   {note}")
         print()
