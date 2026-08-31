@@ -48,6 +48,8 @@ to exercise it.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import date
+from pathlib import Path
 
 import torch
 
@@ -418,7 +420,7 @@ class GemmResult:
     """Named rather than a tuple on purpose.
 
     This started as `(tflops, shape)`, grew a clock, and silently broke a caller
-    that unpacked two values — a failure that only shows up on the GPU, six
+    that unpacked two values -- a failure that only shows up on the GPU, six
     minutes into a run. A dataclass makes the next added field free.
     """
 
@@ -642,3 +644,145 @@ def l2_absorbed_bytes(ms_flushed: float, ms_warm: float,
     metric, and it comes free from an axis that is already swept.
     """
     return max(0.0, ms_flushed - ms_warm) * 1e-3 * achieved_bw_bytes_s
+
+
+# --- what a calibration FILE says about itself --------------------------------
+#
+# Everything above measures a machine. Everything below is about the file that
+# measurement is written to, and specifically about telling one such file from
+# another after both have left the pod.
+
+
+@dataclass(frozen=True)
+class CalibrationStamp:
+    """The identifying half of a written calibration: which session produced it.
+
+    `scripts/calibrate_hardware.py` writes `checked_on`, `measured_commit` and
+    `measured_dirty` beside the ceilings, and until 2026-08-31 nothing read them
+    back. They matter because `moe/bench/hardware/measured_<device>.yaml` is ONE
+    FILE PER DEVICE that every new calibration overwrites, and
+    `publish_results.sh` copies whatever is in it at publish time. A sweep that
+    finishes before a recalibration and publishes after one therefore ships a
+    ruler it never used, and nothing about the copied file looks wrong.
+
+    THAT HAPPENED, and this is the file it happened to. Reconstructed from git,
+    all times UTC:
+
+        18:08-19:21  2026-08-28-...-h200-whole-layer sweeps at commit 873183a,
+                     its rows stamped 701.61 TFLOP/s and 4377.21 GB/s from the
+                     calibration then on disk (committed 04:12 as a6ee65d)
+        19:29        89f9f7a overwrites measured_nvidia_h200.yaml with a fresh
+                     calibration, 770.92 TFLOP/s and 4374.49 GB/s
+        19:35        the arm is published and copies the NEW file
+
+    The result is an arm whose measured.yaml is byte-identical to the one beside
+    a different arm, `-fp8-refixed`, whose sweep started at 19:49. Nobody noticed
+    for three days. The cost is claim C5: its target is the band 0.81-0.91
+    instead of a number, because 176.2 and 160.3 are both defensible rulers for
+    that arm and neither was measured in its session.
+
+    A stamp only means something next to rows, so the comparison lives in
+    `moe.bench.published.calibration_provenance`. This is the half that reads the
+    file, and it is here because this module is what a calibration IS.
+    """
+    #: Where it was read from, so a verdict can name the file it judged.
+    path: str
+    name: str
+    gpu_name: str
+    #: `None` when absent or unparseable. Day resolution, which is why it did
+    #: NOT catch the whole-layer swap: both sessions ran on 2026-08-28.
+    checked_on: date | None
+    #: Empty when the file records none. The A100 calibration is exactly that,
+    #: so nothing in it can be compared against the sha its rows carry.
+    measured_commit: str
+    measured_dirty: bool
+    bandwidth_gbps: float
+    peak_tflops: dict[str, float]
+    ceiling_pattern: str
+
+    def peak_for(self, dtype: str) -> float | None:
+        """TFLOP/s claimed for `dtype`, or None when the file claims none.
+
+        None rather than 0.0, because absence is real: the A100 file has no fp8
+        key at all, its silicon having no fp8 tensor cores, and a zero there
+        would read as a measured zero. Rows swept in a dtype their calibration
+        does not cover carry `achieved_peak_tflops = 0.0` for the same reason --
+        all 19,908 of `-fp8-three-kernel` do.
+        """
+        value = self.peak_tflops.get(dtype)
+        return float(value) if value else None
+
+    def ridge(self, dtype: str) -> float | None:
+        """FLOP per byte above which `dtype` can be compute bound on this ruler."""
+        return ridge_flop_per_byte(self.peak_for(dtype), self.bandwidth_gbps)
+
+
+def ridge_flop_per_byte(peak_tflops: float | None,
+                        bandwidth_gbps: float | None) -> float | None:
+    """The roofline ridge in the units the yaml and the CSV both already use.
+
+    `roofline.Hardware.ridge_point` is the same quantity in SI: FLOP/s over
+    byte/s. Both the calibration file and every published row hold TFLOP/s and
+    GB/s instead, so converting each pair to SI just to divide them introduces
+    two multiplications and a chance to drop one. The factor of 1000 is
+    1e12 / 1e9.
+
+    None when either term is missing or non-positive, so a caller that has no
+    ridge is handed nothing rather than a zero it might quote.
+    """
+    if not peak_tflops or not bandwidth_gbps:
+        return None
+    if peak_tflops <= 0 or bandwidth_gbps <= 0:
+        return None
+    return peak_tflops * 1000.0 / bandwidth_gbps
+
+
+def read_stamp(path) -> CalibrationStamp:
+    """Read the identifying fields out of a calibration yaml.
+
+    Tolerant where `recompute.load_calibration_hardware` is strict, and for the
+    opposite reason. That function is about to divide every efficiency column by
+    the bandwidth, so a missing field there is fatal. This one is about to report
+    what can and cannot be established, so a missing field is an ANSWER -- the
+    `unknown` verdict -- and raising would turn "I cannot tell" into "the file is
+    broken". The A100 calibration ships an empty `measured_commit` and is read
+    here without complaint.
+    """
+    import yaml
+
+    doc = yaml.safe_load(Path(path).read_text())
+    if not isinstance(doc, dict):
+        raise ValueError(f"{path}: not a mapping")
+    detail = doc.get("detail") or {}
+    memory = doc.get("memory") or {}
+    peaks = {}
+    for dtype, value in (doc.get("compute_dense_tflops") or {}).items():
+        if value:
+            peaks[str(dtype)] = float(value)
+    bw_tb_s = memory.get("bandwidth_tb_s") or 0.0
+    return CalibrationStamp(
+        path=str(path),
+        name=str(doc.get("name", "")),
+        gpu_name=str(detail.get("gpu_name") or doc.get("name") or ""),
+        checked_on=_as_date(doc.get("checked_on")),
+        measured_commit=str(doc.get("measured_commit") or ""),
+        measured_dirty=bool(doc.get("measured_dirty")),
+        bandwidth_gbps=float(bw_tb_s) * 1000.0,
+        peak_tflops=peaks,
+        ceiling_pattern=str(detail.get("ceiling_pattern") or ""),
+    )
+
+
+def _as_date(value) -> date | None:
+    """`checked_on` is written quoted, but a hand-edited file may not be.
+
+    PyYAML resolves an unquoted 2026-08-28 to a `datetime.date` and a quoted one
+    to a string, so both shapes reach here from files that look identical in a
+    diff.
+    """
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None

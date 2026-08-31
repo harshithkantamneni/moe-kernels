@@ -15,6 +15,15 @@ wide, not three hours long. The timings were never wrong.
 Writes a NEW arm rather than editing in place. The original is the record of
 what was measured against the ruler of the day, and overwriting it would erase
 the evidence that the ruler moved.
+
+AND IT DECLARES ITSELF. The arm this produces is the one legitimate case of a
+published result whose calibration comes from a later session than its rows --
+that is the whole point of it -- and `publish_results.sh` now refuses exactly
+that shape, because an undeclared instance of it cost claim C5 its target. So a
+`DERIVED_FROM` marker goes in beside the rows, the same way `SUPERSEDED` does,
+and `moe.bench.published.derived_from` reads it. The README keeps saying so too:
+prose for a human, a marker for the check, and the marker is authoritative
+because a README gets hand-edited and this one already has been.
 """
 from __future__ import annotations
 
@@ -25,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from moe.bench.published import DERIVED_MARKER  # noqa: E402
 from moe.bench.recompute import (  # noqa: E402
     CEILING_COLUMNS,
     load_calibration_hardware,
@@ -75,6 +85,16 @@ def main() -> int:
             shutil.copy2(extra, out / extra.name)
     shutil.copy2(args.calibration, out / "measured.yaml")
 
+    # The declaration the publish gate reads. First line is the source arm, so
+    # `derived_from` can name it without parsing prose.
+    (out / DERIVED_MARKER).write_text(
+        f"{args.arm.name}\n"
+        f"recomputed by scripts/recompute_ceilings.py against "
+        f"{args.calibration}\n"
+        f"Its measured.yaml is deliberately from a different session than its\n"
+        f"rows: only the ceiling columns were re-derived, and the timings are\n"
+        f"the source arm's untouched.\n")
+
     (out / "README.md").write_text(
         f"# {out.name}\n\n"
         f"Derived from `{args.arm.name}` by `scripts/recompute_ceilings.py`.\n"
@@ -92,6 +112,8 @@ def main() -> int:
     print(f"\nwrote {out}")
     print("The original arm is untouched: it is what was measured against the")
     print("ruler of the day, and the pair is the evidence that the ruler moved.")
+    print(f"Dropped a {DERIVED_MARKER} marker, so the publish gate knows this")
+    print("arm's calibration is from a later session on purpose.")
     return 0
 
 

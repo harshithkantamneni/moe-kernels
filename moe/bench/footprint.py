@@ -63,9 +63,16 @@ def download_bytes(cfg: MoEConfig, dtype: str = "bf16") -> int:
     Scales with the number of MoE layers, which is what makes DeepSeek-V3
     uncapturable on any single GPU while its geometry stays perfectly cheap to
     benchmark.
+
+    `full_intermediate_size`, not `intermediate_size`, and the distinction only
+    appeared when tensor-parallel configs did. A checkpoint holds the whole
+    expert; a rank holds a slice of it. Charging the slice would report
+    `deepseek-v3-tp8`'s checkpoint at an eighth of its true size, and this
+    number exists to say what will not fit.
     """
-    per_layer = (cfg.num_experts * 2 * cfg.intermediate_size * cfg.hidden_size
-                 + cfg.num_experts * cfg.hidden_size * cfg.intermediate_size)
+    F = cfg.full_intermediate_size
+    per_layer = (cfg.num_experts * 2 * F * cfg.hidden_size
+                 + cfg.num_experts * cfg.hidden_size * F)
     return per_layer * max(cfg.num_moe_layers, 1) * dtype_bytes(dtype)
 
 
@@ -77,3 +84,25 @@ def worst_cell(specs) -> tuple[BenchSpec, Footprint] | tuple[None, None]:
         if worst is None or fp.peak > worst[1].peak:
             worst = (spec, fp)
     return worst if worst else (None, None)
+
+
+def worst_cell_by_model(specs) -> dict[str, tuple[BenchSpec, Footprint]]:
+    """`worst_cell` per model name, so a mixed profile answers per shape.
+
+    THE QUESTION THIS ANSWERS THAT `worst_cell` CANNOT. A profile that mixes
+    geometries has one global worst cell, and knowing it fits says nothing about
+    the other shapes: a sharded entry is an eighth of the weights of the model
+    it is named after, so `deepseek-v3` dominates every profile it appears in
+    and would hide a shard that did not fit. The rent is committed per profile,
+    but the OOM happens per shape.
+
+    Keyed by name rather than by config so the answer reads like the CSV's
+    `model` column, which is what a reader will be holding.
+    """
+    out: dict[str, tuple[BenchSpec, Footprint]] = {}
+    for spec in specs:
+        fp = cell_footprint(spec)
+        seen = out.get(spec.model.name)
+        if seen is None or fp.peak > seen[1].peak:
+            out[spec.model.name] = (spec, fp)
+    return out

@@ -99,13 +99,42 @@ class MoEConfig:
     `verified` is False until scripts/verify_model_configs.py has diffed these
     numbers against the upstream config.json. Do not publish benchmark numbers
     labelled with a model name while its config is unverified.
+
+    `intermediate_size` IS THE PER-SHARD WIDTH, always. At `tensor_parallel = 1`
+    that is the model's own `moe_intermediate_size` and nothing has changed; at
+    TP=8 it is that number over eight, and `full_intermediate_size` recovers what
+    the checkpoint holds. The unsharded width is derived rather than stored so
+    the two can never disagree.
+
+    WHY THE SHARD WIDTH LIVES HERE AND NOT ON `BenchSpec`, which is the other
+    plausible home. Two reasons, and the second is the decisive one.
+
+    Eight modules read `cfg.intermediate_size` and every one of them means "the
+    width the kernel sees": `state.py` allocates it, `bytes_model.py` charges
+    traffic for it, `torch_ref.py` shapes the oracle from it, `tolerance.py`
+    sizes the error budget on it, and `_framework_config.py` hands it to SGLang
+    under the name `intermediate_size_per_partition`. A shard width carried on
+    the spec would leave all eight at the unsharded width, silently, and the
+    only symptom would be a benchmark labelled TP=8 that ran the TP=1 kernel.
+
+    And the analysis layer addresses a model BY NAME. `ridge.crossing_batch`
+    takes a string and looks it up in `MODEL_CONFIGS`; `--models` validates
+    against the same dict; the CSV records `model` and nothing else that could
+    carry a shard factor without a schema change, and the schema is at v4. A
+    shard width on the spec would be invisible to every prediction and
+    unrecoverable from a published row. As a named config it is both.
     """
 
     name: str
     hidden_size: int          # H
-    intermediate_size: int    # F, per routed expert
-    num_experts: int          # E, routed experts only
+    intermediate_size: int    # F PER SHARD, per routed expert
+    num_experts: int          # E, routed experts only. TP does not shard these
     top_k: int                # k
+    #: Tensor-parallel width this geometry describes. Pure TP shards the expert
+    #: intermediate dimension and leaves E and H whole, which is why `E` above
+    #: carries a comment and this field does not divide it. Expert parallelism
+    #: would be the other axis and this study does not model it.
+    tensor_parallel: int = 1
     gate_fn: str = "softmax"      # softmax | sigmoid (DeepSeek-V3 uses sigmoid)
     norm_topk_prob: bool = True   # renormalise the top-k gate probs to sum to 1
     routed_scaling_factor: float = 1.0  # applied AFTER renormalisation
@@ -120,7 +149,8 @@ class MoEConfig:
             raise ValueError(
                 f"{self.name}: top_k={self.top_k} exceeds num_experts={self.num_experts}"
             )
-        for field in ("hidden_size", "intermediate_size", "num_experts", "top_k"):
+        for field in ("hidden_size", "intermediate_size", "num_experts", "top_k",
+                      "tensor_parallel"):
             if getattr(self, field) <= 0:
                 raise ValueError(f"{self.name}: {field} must be positive")
         if self.gate_fn not in ("softmax", "sigmoid"):
@@ -129,6 +159,18 @@ class MoEConfig:
     @property
     def num_moe_layers(self) -> int:
         return max(0, self.num_layers - self.first_moe_layer)
+
+    @property
+    def full_intermediate_size(self) -> int:
+        """`moe_intermediate_size` as the upstream config.json states it.
+
+        The width of the WHOLE expert, across every shard. Use it for anything
+        that talks about the model rather than about this process's slice of it:
+        a checkpoint's size, a diff against config.json. `download_bytes` is the
+        one caller today, and it was wrong for a sharded config before this
+        existed, reporting a TP=8 entry's checkpoint at an eighth of its size.
+        """
+        return self.intermediate_size * self.tensor_parallel
 
     @property
     def w1_shape(self) -> tuple[int, int, int]:
@@ -223,6 +265,77 @@ MODEL_CONFIGS: dict[str, MoEConfig] = {
         verified=True,
     ),
 }
+
+
+def tensor_parallel_shard(base: MoEConfig, tensor_parallel: int,
+                          name: str | None = None) -> MoEConfig:
+    """One tensor-parallel rank's slice of `base`, as its own named geometry.
+
+    Pure TP splits each expert's intermediate dimension across ranks and leaves
+    the expert COUNT and the hidden size whole, so `E` and `H` are copied and
+    only `F` divides. That is not an assumption: vLLM keys its tuned kernel
+    configs on `E, _, N = w2_shape`, so a shard shows up in the lookup as the
+    same `E` at a smaller `N`, and the configs it ships for DeepSeek-V3 are
+    `E=256,N=256` and `E=256,N=512` -- the same 256 experts at 2048/8 and
+    2048/4.
+
+    THE LIMITATION THIS EXISTS TO CLOSE. Every published cell in this study is
+    TP=1, and `E=256,N=2048` is the UNSHARDED DeepSeek-V3 shape, whose 58 MoE
+    layers hold 1.3 TB of bf16 weights and which no vLLM config ships for on any
+    device.
+    So the sweep's headline model has been running the hardcoded fallback tile
+    ladder rather than a tuned config, and the reason is that nobody serves the
+    shape being benchmarked. See the C5 section of docs/FINDINGS.md.
+
+    Derived rather than hand-entered so a shard cannot drift from its base: a
+    second literal `intermediate_size=256` next to `hidden_size=7168` is a
+    number with nothing checking it, and the first thing anyone would do with it
+    is copy it to the next model and forget the divisor.
+
+    Refuses a width that does not divide, rather than flooring it. `F // TP`
+    silently produces a geometry no rank ever holds, and every downstream byte,
+    crossing and footprint would then describe a layer that does not exist.
+    """
+    if tensor_parallel < 1:
+        raise ValueError(f"tensor_parallel must be at least 1, got {tensor_parallel}")
+    if base.intermediate_size % tensor_parallel:
+        raise ValueError(
+            f"{base.name}: intermediate_size {base.intermediate_size} is not "
+            f"divisible by tensor_parallel {tensor_parallel}; that shard width "
+            "is not a shape any rank holds")
+    return replace(
+        base,
+        name=name or f"{base.name}-tp{tensor_parallel}",
+        intermediate_size=base.intermediate_size // tensor_parallel,
+        tensor_parallel=base.tensor_parallel * tensor_parallel,
+    )
+
+
+#: Deployment widths worth benchmarking, as `(base model, TP)`. Each one is a
+#: shape vLLM ships a tuned config for on some device at v0.27.1, which is the
+#: whole point of the list: TP=1 DeepSeek-V3 is a shape nobody serves and nobody
+#: tunes, and its neighbours in this table are the ones that are.
+#:
+#: deepseek-v3 at 4 and 8 are the widths named in FINDINGS: N=512 and N=256, both
+#: shipped for H200 under `dtype=fp8_w8a8,block_shape=[128,128]`.
+#: mixtral and qwen2 at 8 are here because they are the only shards among these
+#: models with a tuned H200 config in BOTH bf16 and plain `fp8_w8a8`, so they
+#: are the only pair that can be measured tuned-against-tuned across a shard
+#: without first teaching the harness block-wise scales.
+#: deepseek-v2-lite has no shard on the list because vLLM ships nothing for
+#: `E=64` at 1408 or any divisor of it on any device.
+_TENSOR_PARALLEL_SHARDS: tuple[tuple[str, int], ...] = (
+    ("deepseek-v3", 4),
+    ("deepseek-v3", 8),
+    ("mixtral-8x7b", 8),
+    ("qwen2-57b-a14b", 8),
+)
+
+MODEL_CONFIGS.update({
+    shard.name: shard for shard in (
+        tensor_parallel_shard(MODEL_CONFIGS[base], tp)
+        for base, tp in _TENSOR_PARALLEL_SHARDS)
+})
 
 
 # --------------------------------------------------------------------------

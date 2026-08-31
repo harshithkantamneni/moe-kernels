@@ -6,6 +6,7 @@
 #   bash scripts/publish_results.sh --run-id a --run-id b    # exactly these
 #   bash scripts/publish_results.sh --label first-smoke      # name the directory
 #   bash scripts/publish_results.sh --dry-run                # stage it, touch no git
+#   bash scripts/publish_results.sh --allow-foreign-calibration   # see below
 #
 # results/ is gitignored on purpose: raw runs are large, machine-specific, and
 # regenerable. results/published/ is tracked on purpose: it is where a run you
@@ -17,6 +18,23 @@
 # experiment. This used to publish the newest CSV, which published a third of
 # the result and looked complete; the base and vLLM arms of the 2026-08-26
 # three-way had to be committed by hand afterwards. It now refuses to guess.
+#
+# THE CALIBRATION IS COPIED FROM ONE FILE PER DEVICE, AND IT MOVES UNDER YOU.
+# `moe/bench/hardware/measured_<device>.yaml` is overwritten by every new
+# calibration, and the copy below takes whatever is in it right now -- not what
+# the rows were measured against. On 2026-08-28 the whole-layer sweep ran
+# 18:08-19:21 UTC, a recalibration overwrote that file at 19:29, and this script
+# published the arm at 19:35 with the new ruler beside rows stamped from the old
+# one. The two disagree by 9.9% on the compute ceiling, nothing downstream could
+# tell, and claim C5 lost its target for three days.
+#
+# So the copy is now CHECKED against the ceilings the rows themselves carry, and
+# a mismatch stops the publish. `--allow-foreign-calibration` is for the one case
+# where a foreign calibration is the point: `scripts/recompute_ceilings.py`
+# derives an arm by restamping old rows against a NEW calibration, and its output
+# declares itself derived so it needs no flag at all. The flag exists for a
+# deliberate case that has not declared itself yet, and it writes the admission
+# into the published arm rather than letting it pass in silence.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,6 +57,7 @@ ALL=0
 LABEL=""
 PUSH=1
 DRY=0
+FOREIGN_CAL=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --run-id)  RUN_IDS+=("$2"); shift 2 ;;
@@ -46,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --label)   LABEL="$2"; shift 2 ;;
     --no-push) PUSH=0; shift ;;
     --dry-run) DRY=1; shift ;;
+    --allow-foreign-calibration) FOREIGN_CAL=1; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -156,9 +176,65 @@ MERGE
 CAL="moe/bench/hardware/${SLUG}.yaml"
 if [[ -f "$CAL" ]]; then
   cp "$CAL" "$DEST"/measured.yaml
-  log "included $CAL, the calibration these rows were measured against"
+  # Deliberately NOT "the calibration these rows were measured against". That is
+  # what this copy is supposed to be and what it silently was not for the
+  # whole-layer arm; the check below is what turns it into a claim worth making.
+  log "included $CAL, the calibration currently on disk for this device"
 else
   log "WARNING: no $CAL; efficiency columns will be uninterpretable"
+fi
+
+# Does the file just copied actually belong to this sweep? The rows carry the
+# ceilings they were computed against, so they can answer that themselves.
+if ! "$PY" - "$DEST" "$FOREIGN_CAL" <<'PROVENANCE'
+import pathlib, sys
+from moe.bench.published import calibration_provenance, entitled_ridge
+
+dest, override = pathlib.Path(sys.argv[1]), sys.argv[2] == "1"
+prov = calibration_provenance(dest)
+ridge, why = entitled_ridge(dest)
+
+print(f"[publish] calibration provenance: {prov.verdict}")
+for key in ("ceilings", "commit", "date", "device"):
+    if key in prov.evidence:
+        print(f"[publish]   {key:9} {prov.evidence[key]}")
+print(f"[publish]   ridge     {why}")
+
+# The verdict goes INTO the arm, pass or fail, so the next reader inherits it
+# instead of re-deriving it from md5sums three days later.
+lines = [f"# Calibration provenance: {dest.name}", "",
+         f"Verdict: **{prov.verdict}**", ""]
+if prov.derived_from:
+    lines += [f"Declared derived from `{prov.derived_from}`, so a calibration "
+              f"from a later session is expected here.", ""]
+for key, value in prov.evidence.items():
+    lines.append(f"- `{key}`: {value}")
+lines += ["", f"Ridge: {why}", ""]
+if prov.blocking_reason:
+    lines += [f"BLOCKING: {prov.blocking_reason}", ""]
+    if override:
+        lines += ["Published anyway with `--allow-foreign-calibration`. Every "
+                  "efficiency column in these rows is quoted against a ruler "
+                  "that is not the one they were measured with.", ""]
+(dest / "CALIBRATION_PROVENANCE.md").write_text("\n".join(lines))
+
+if prov.blocking_reason and not override:
+    sys.exit(f"[publish] REFUSING TO PUBLISH: {prov.blocking_reason}\n"
+             "[publish] The rows and the calibration beside them disagree, so\n"
+             "[publish] every efficiency column in this arm would be quoted\n"
+             "[publish] against a ruler it was not measured with. Either copy in\n"
+             "[publish] the calibration these rows actually used, or re-derive\n"
+             "[publish] the arm with scripts/recompute_ceilings.py, which\n"
+             "[publish] restamps the rows and declares itself. Pass\n"
+             "[publish] --allow-foreign-calibration only if the mismatch is the\n"
+             "[publish] point and you want it recorded in the arm.")
+if prov.blocking_reason:
+    print("[publish] OVERRIDDEN with --allow-foreign-calibration; the admission "
+          "is in CALIBRATION_PROVENANCE.md")
+PROVENANCE
+then
+  log "$DEST is staged on disk and was NOT committed"
+  exit 1
 fi
 
 # Figures belong with the data they were drawn from, not in the repo root.
