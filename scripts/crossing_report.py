@@ -9,12 +9,18 @@ The measured side never consults the byte model, so the prediction can be wrong.
 
     python scripts/crossing_report.py /workspace/results/run_h200fp8b_vllm.csv \
         --ridge 160.3 --impl vllm_fused_experts
+
+`--uncertainty` adds a 90% band, propagated from the replicate spread each token
+count already carries. Off by default so existing output is unchanged, but every
+crossing this study has quoted was quoted bare, and on a flat curve the
+interpolation multiplies a 6% timing wobble into a 35% move in the answer.
 """
 from __future__ import annotations
 
 import argparse
 import collections
 import csv
+import itertools
 import statistics
 import sys
 from pathlib import Path
@@ -22,8 +28,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from moe.bench.crossing import (  # noqa: E402
+    DEFAULT_DRAWS,
+    ROUTING_COLUMN,
     crossing_from_points,
+    crossing_interval,
     local_slopes,
+    routing_domain,
     timed_rows,
 )
 from moe.bench.published import (  # noqa: E402
@@ -52,6 +62,11 @@ def main() -> int:
                     help="restrict to one L2 mode; default mixes both")
     ap.add_argument("--cuda-graph", choices=["true", "false"], default=None,
                     help="restrict to one capture mode; default mixes both")
+    ap.add_argument("--uncertainty", action="store_true",
+                    help="add a 90%% band to each measured crossing, Monte "
+                         "Carlo'd from the replicate spread of each token "
+                         "count. Off by default so existing output is byte for "
+                         "byte what it was")
     args = ap.parse_args()
 
     # A superseded arm holds the SAME measurements as the one that replaced it,
@@ -74,6 +89,11 @@ def main() -> int:
         return 1
 
     cells: dict[tuple[str, str], dict[int, list[float]]] = {}
+    # One tiny mapping per kept row, so `routing_domain` sees rows and the
+    # census is of what actually reached a median rather than of what the file
+    # holds. Only the routing column is kept: the full rows are 200 columns
+    # wide and there are up to 70k of them across the published arms.
+    routing_rows: dict[tuple[str, str, str], list[dict]] = {}
     modes: collections.Counter = collections.Counter()
     kept = skipped = untimed = 0
     for path in csvs:
@@ -113,6 +133,8 @@ def main() -> int:
                 # published sweep -- so a median across them describes nothing.
                 key = (r["model"], r["dtype"], r["impl"])
                 cells.setdefault(key, {}).setdefault(t, []).append(ms)
+                routing_rows.setdefault(key, []).append(
+                    {ROUTING_COLUMN: r.get(ROUTING_COLUMN, "")})
                 kept += 1
 
     print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
@@ -123,13 +145,35 @@ def main() -> int:
               + ", ".join(f"{k}x{v}" for k, v in sorted(modes.items())))
         print("  pass --l2-flush/--cuda-graph to isolate one; the crossing is a "
               "slope, so mixing adds spread rather than bias")
+    if args.uncertainty:
+        print(f"  bands are {DEFAULT_DRAWS} draws per cell, each token count "
+              f"shaken by its own replicate spread; the crossing interpolates "
+              f"between")
+        print("  two slopes with leverage 1/(s1-s0), so it is widest exactly "
+              "where the curve is flattest")
+    # Louder than the timing-mode note above, and deliberately not a change of
+    # default: pooled rows do not make the crossing noisier, they make it a
+    # crossing of nothing. Silently switching to `--routing uniform` here would
+    # make this report answer differently than it did yesterday with no flag
+    # changed, which is its own failure mode -- so it warns and names the flag.
+    routing = routing_domain(itertools.chain.from_iterable(routing_rows.values()))
+    banner = routing.warning_lines()
+    if banner:
+        print()
+        for line in banner:
+            print(line)
     print()
     if not cells:
         print("nothing to report")
         return 1
 
-    for (model, dtype, impl), by_t in sorted(cells.items()):
-        points = [(t, statistics.median(v)) for t, v in sorted(by_t.items())]
+    for key_, by_t in sorted(cells.items()):
+        model, dtype, impl = key_
+        # The replicate lists survive to here rather than being medianed away at
+        # the top of the loop: the band needs each token count's own scatter,
+        # and a median has thrown that away.
+        replicates = sorted(by_t.items())
+        points = [(t, statistics.median(v)) for t, v in replicates]
         print(f"=== {model} / {dtype} / {impl} ===")
         slopes = dict(local_slopes(points))
         print(f"  {'T':>6} {'ms_p50':>9} {'slope':>7}   regime")
@@ -157,6 +201,26 @@ def main() -> int:
             ratio = measured / predicted
             print(f"  measured (slope crosses 0.5):        {measured:8.0f} tokens"
                   f"   {ratio:.2f}x predicted")
+            # Beside the number, not only in the header. A banner forty lines
+            # up does not stop this figure being quoted on its own, and every
+            # crossing this study has retracted was quoted on its own.
+            for line in routing_domain(routing_rows[key_]).crossing_note():
+                print(f"  {line}")
+            if args.uncertainty:
+                band = crossing_interval(replicates, min_tokens=sat)
+                if band is None:
+                    # The medians bracket the crossing and no perturbed draw
+                    # does, so the number above is an artefact of the spread it
+                    # was quoted without.
+                    print("  90% band (replicate noise):          no draw kept "
+                          "the bracket; the crossing does not survive its own "
+                          "noise")
+                else:
+                    _, lo, hi = band
+                    print(f"  90% band (replicate noise):          {lo:8.0f} - "
+                          f"{hi:.0f} tokens"
+                          f"   {lo / predicted:.2f}-{hi / predicted:.2f}x "
+                          f"predicted")
         print()
     return 0
 

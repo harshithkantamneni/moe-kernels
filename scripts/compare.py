@@ -18,6 +18,9 @@ the others need a normalised metric or a caveat.
 Rows are filtered to ONE set of conditions rather than averaged over them,
 because L2-cold and L2-warm are different experiments and so are eager and graph
 replay. Averaging across those is how two methodologies become one number.
+
+Routing is one of those conditions, which is why `--routing` defaults to uniform
+and `--routing any` announces itself. See `crossing.routing_domain`.
 """
 from __future__ import annotations
 
@@ -28,6 +31,8 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from moe.bench.crossing import routing_domain  # noqa: E402
 
 RIDGE_DEFAULT = 166.0
 
@@ -91,6 +96,23 @@ def main() -> int:
             f"L2={'warm' if args.l2_warm else 'cold'} "
             f"{'graph' if args.graph else 'eager'}  metric={args.metric}")
     print(cond)
+
+    # `--routing any` pools regimes into one table, and the `regime` column is a
+    # roofline statement that only holds under uniform routing. Warned rather
+    # than filtered: the default already IS uniform, so anything else was asked
+    # for on purpose, and quietly overriding a flag the caller typed is worse
+    # than printing a number next to what it is.
+    domain = routing_domain(sel)
+    banner = domain.warning_lines()
+    if banner:
+        print()
+        for line in banner:
+            print(line)
+        print("  the `regime` column below scores each row's MEAN rows/expert "
+              "against the")
+        print("  ridge, so it is a uniform-routing statement as well, and under "
+              "skew no")
+        print("  expert is at the mean")
 
     covers: dict[str, str] = {}
     for r in sel:
