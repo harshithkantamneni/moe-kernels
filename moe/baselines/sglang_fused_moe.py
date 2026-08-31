@@ -219,6 +219,22 @@ class SglangFusedExperts(StageSpan):
                 return verdict.reason
         return super().why_unsupported(spec)
 
+    def observe_tile_config(self, st: MoEState) -> dict:
+        """Names the selector, records no numbers.
+
+        SGLang picks its Triton tile through its own tuning path, and this
+        harness has not probed where that decision is readable from the way it
+        probed vLLM's try_get_optimal_moe_config. So the row says "sglang" and
+        leaves every tile_* int at 0, which `tile_field` refuses to hand back as
+        a measurement.
+
+        That is the entire point of the column set: an honest hole beats a
+        plausible number. Copying vLLM's tuned values across would produce rows
+        that look complete, plot without complaint, and describe a kernel this
+        one is not.
+        """
+        return {"tile_config_source": "sglang"}
+
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")
         topk_output = StandardTopKOutput(

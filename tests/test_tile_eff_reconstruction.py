@@ -1,17 +1,24 @@
 """Tile efficiency at any BLOCK_M, from a published row's own columns.
 
-The schema stores `load_tile_eff_bm64` and `load_tile_eff_bm128`, and neither is
-the tile the Triton baselines actually run: vLLM's tuned H200 config sets
-`BLOCK_SIZE_M` to 16 for every batch size from 1 to 256, which is the whole
-decode range. So every stored tile-efficiency figure describes a configuration
-vLLM does not use at decode.
+The schema stores `load_tile_eff_bm64` and `load_tile_eff_bm128`, and on the
+measured decode cells neither is the tile the Triton baselines actually run:
+those cells ran `BLOCK_SIZE_M` 16. So every stored tile-efficiency figure
+describes a configuration those rows did not use.
+
+This docstring used to attribute that 16 to "vLLM's tuned H200 config, for every
+batch size from 1 to 256". Wrong, and worth keeping as a warning: that ladder
+belongs to E=128,N=512, which is no model in this study, while the cells measured
+here have no tuned file and took `get_default_config`'s M<=32 -> 16 fallback. The
+number was right and the mechanism was not, which is undetectable from a
+published row because v3 recorded no column saying which tile ran.
 
 Two fixes were rejected before this one. Adding a `bm16` column fails because
-`schema.read_csv` refuses an unrecognised schema_version, so it would make all
-17,640 published rows unreadable. Regenerating the routing fails because
-`cli.build_routing_source` passes `device=args.device`, so a GPU run samples with
-a CUDA generator, and CUDA and CPU RNG differ for the same seed. Published
-routing is not reproducible off the GPU.
+regenerating v3 rows is impossible, not because a column cannot be added: v4
+added the tile_* block and v3 arms still load with it stamped UNRECORDED, so the
+missing efficiency has to be reconstructed rather than re-measured. Regenerating
+the routing fails because `cli.build_routing_source` passes `device=args.device`,
+so a GPU run samples with a CUDA generator, and CUDA and CPU RNG differ for the
+same seed. Published routing is not reproducible off the GPU.
 
 What works is arithmetic on columns the row already carries, valid exactly while
 every expert fits one tile. Outside that range it raises instead of guessing.

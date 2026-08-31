@@ -7,6 +7,11 @@ year later.
 
 Bump SCHEMA_VERSION on any column change and leave old CSVs alone. The plotting
 code checks the version and refuses to mix incompatible files.
+
+Old CSVs stay READABLE (see READABLE_VERSIONS) as long as the change is
+additive, because a published arm is a measurement that cannot be re-taken
+cheaply. What an old row must never do is answer a question it has no data for,
+so every column added after a row was written reads back as UNRECORDED.
 """
 from __future__ import annotations
 
@@ -19,13 +24,68 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
+# v4: added the tile_* block and sm_capability, i.e. the tile configuration that
+#     ACTUALLY ran. Until v4 the only tile columns were load_tile_eff_bm64 and
+#     load_tile_eff_bm128, which are HYPOTHETICAL efficiencies computed from the
+#     routing histogram at ASSUMED block sizes; nothing in a row said which tile
+#     Triton chose. A wrong BLOCK_SIZE_M therefore sat unchallenged in an
+#     analysis for days. Probing vLLM 0.27.1 directly settled it: only 2 of 8
+#     (model x card) cells ran a TUNED config, nothing ships for
+#     NVIDIA_A100-SXM4-80GB at any of the four shapes, and the tuned lookup uses
+#     NEAREST key rather than floor -- so the A100 and the H200 ran DIFFERENT
+#     tiles at the measured crossings, which no published row could have shown.
 # v3: added bw_ceiling_pattern. Without it, two CSVs run with a different
 #     --ceiling are silently incomparable, which defeats the point of naming a
 #     pattern instead of taking max() across them.
 # v2: dropped pct_of_achieved_bw (exactly reciprocal to implied_traffic_ratio),
 #     added pct_of_achieved_tflops, load_tile_eff_bm64, load_tile_eff_bm128,
 #     and renamed achieved_bf16_tflops -> achieved_peak_tflops.
+
+#: Versions this code can still READ. Ten published arms were measured under v3
+#: and cost real GPU hours; a version gate that refuses them retires the DATA
+#: rather than the code, which is why `tile_efficiency_for_row` had to
+#: reconstruct a missing tile column from stored ones instead of a new column
+#: being added. Reading an old arm is safe here only because every v4 column is
+#: NEW: no v3 column changed meaning, so a v3 row is a v4 row with a known hole
+#: in it, and `read_csv` marks the hole rather than filling it.
+#:
+#: WRITING is still single-version. CsvWriter refuses to append under a header
+#: from another schema, so a v3 run cannot be resumed by v4 code, and
+#: merge_csvs refuses to mix versions in one output file.
+READABLE_VERSIONS = frozenset({3, 4})
+
+#: What a v4-only column reads as on a row that predates it.
+#:
+#: NOT 0, and this is the entire point of the column set. `tile_block_m == 0`
+#: is a number: it survives a float(), it plots, it averages, and it reads as
+#: "BLOCK_M was zero" -- the same shape of silent-default bug that
+#: `pct_of_achieved_bw` printed as a clean column of 0% down a page. A string
+#: that no numeric path accepts forces every reader to make a decision.
+UNRECORDED = "<unrecorded>"
+
+#: Which columns each schema version ADDED. Used to stamp UNRECORDED into the
+#: columns an older row could not have carried, so "this row predates the
+#: column" stays distinguishable from "this row measured zero".
+COLUMNS_ADDED_IN: dict[int, tuple[str, ...]] = {
+    4: ("tile_block_m", "tile_block_n", "tile_block_k", "tile_group_m",
+        "tile_num_warps", "tile_num_stages", "tile_config_source",
+        "tile_config_key", "sm_capability"),
+}
+
+#: Legal values of tile_config_source. Closed, and validated where a row is
+#: populated, for the reason TERMINAL_STATUSES is closed: a typo'd source is not
+#: a loud failure, it is a value no analysis matches, so those rows quietly
+#: disappear from every group-by that keys on the source.
+TILE_SOURCES: frozenset[str] = frozenset({
+    "vllm_tuned",      # vLLM found a tuned JSON for this (E, N, dtype, device)
+    "vllm_default",    # no tuned file: the hardcoded M<=32/96/512 fallback ladder
+    "vllm_override",   # an override_config context was active, e.g. tile_sweep.py
+    "sglang",          # SGLang's own selection, not read out of the process
+    "cutlass_static",  # torch grouped_mm: CUTLASS picks its tile, not Triton
+    "unrecorded",      # the hook did not run or could not observe
+    "n/a",             # this span has no tile configuration to record
+})
 
 
 @dataclass
@@ -42,6 +102,12 @@ class Row:
     gpu_count: int = 0
     device_index: int = 0
     sm_count: int = 0
+    #: torch.cuda.get_device_capability as "9.0" / "8.0". The gpu_name column
+    #: names the card but nothing derived the ARCHITECTURE from it, and that is
+    #: the exact discriminator the wgmma question needed: an H200 is sm90 and
+    #: emits wgmma at BLOCK_M % 64 == 0 with num_warps % 4 == 0, while an A100
+    #: is sm80 and can never emit it whatever tile it runs.
+    sm_capability: str = ""
     l2_bytes: int = 0
     total_memory: int = 0
     driver_version: str = ""
@@ -92,9 +158,33 @@ class Row:
     load_entropy_norm: float = 0.0
     load_gini: float = 0.0
     load_top1_share: float = 0.0
-    # Useful rows / rows a fixed-BLOCK_M schedule must compute.
+    # Useful rows / rows a fixed-BLOCK_M schedule must compute. HYPOTHETICAL:
+    # both are computed from the routing histogram at an ASSUMED block size, and
+    # neither is evidence about the tile the kernel ran. The tile_* block below
+    # is the observed one.
     load_tile_eff_bm64: float = 1.0
     load_tile_eff_bm128: float = 1.0
+
+    # --- tile configuration that actually ran (v4) ------------------------
+    # Observed from the implementation itself, outside every timed region. 0
+    # means UNRECORDED, never "the kernel used a block size of zero", and
+    # `tile_field` refuses to hand a 0 back as a measurement for that reason.
+    # Read them through `tile_field`, not through row_float.
+    tile_block_m: int = 0
+    tile_block_n: int = 0
+    tile_block_k: int = 0
+    tile_group_m: int = 0
+    tile_num_warps: int = 0
+    tile_num_stages: int = 0
+    #: One of TILE_SOURCES. Defaults to "unrecorded" so a span with no observer
+    #: says so, rather than a plausible-looking source being assumed for it.
+    tile_config_source: str = "unrecorded"
+    #: The M key the tuned file's NEAREST-key rule selected, 0 when there is no
+    #: tuned file to key into. Load-bearing and non-obvious: vLLM resolves the
+    #: entry with `min(configs.keys(), key=lambda x: abs(x - M))`, so M=787
+    #: selects the key 1024, NOT 512. A floor reading of that lookup is how a
+    #: wrong BLOCK_SIZE_M gets attributed to a row that never ran it.
+    tile_config_key: int = 0
 
     # --- timing method ----------------------------------------------------
     # Recorded, never assumed. Most published MoE numbers omit these two and
@@ -214,6 +304,26 @@ def _schema_key(key: str) -> str:
     return key
 
 
+class TileConfigUnrecorded(LookupError):
+    """This row does not say which tile ran, and nothing may stand in for it.
+
+    Raised rather than returning 0 because the whole reason the tile_* columns
+    exist is that a plausible-looking number with no measurement behind it is
+    indistinguishable from a real one, and one such number steered an analysis
+    for days.
+    """
+
+
+def _reject_sentinel(key: str, value) -> None:
+    """A column stamped UNRECORDED is never a number, never a bool, never a
+    default. Checked in every reader, so no path can quietly coerce it."""
+    if value == UNRECORDED:
+        raise TileConfigUnrecorded(
+            f"{key!r} is not recorded on this row: it comes from a CSV written "
+            f"under an older schema, which had no such column. Filter these "
+            f"rows out with has_tile_config(row) instead of reading them.")
+
+
 def row_bool(row: dict, key: str, default: bool = False) -> bool:
     """Read a bool from a CSV row. One spelling, everywhere.
 
@@ -222,16 +332,103 @@ def row_bool(row: dict, key: str, default: bool = False) -> bool:
     column differently.
     """
     value = row.get(_schema_key(key))
+    _reject_sentinel(key, value)
     if value is None or value == "":
         return default
     return str(value) in TRUTHY
 
 
 def row_float(row: dict, key: str, default: float = 0.0) -> float:
+    value = row.get(_schema_key(key))
+    # Before the try: float("<unrecorded>") is a ValueError, which the clause
+    # below would turn into the default -- exactly the silent substitution the
+    # sentinel exists to prevent.
+    _reject_sentinel(key, value)
     try:
-        return float(row.get(_schema_key(key)) or default)
+        return float(value or default)
     except (TypeError, ValueError):
         return default
+
+
+def has_tile_config(row: dict) -> bool:
+    """Did this row record the tile the kernel actually ran?
+
+    The predicate to filter on BEFORE grouping by BLOCK_M, so an analysis never
+    has to catch TileConfigUnrecorded row by row.
+
+    False for every v3 row, since the column did not exist; false for a v4 row
+    whose span had no observer or whose observer could not read the config back;
+    false for torch's CUTLASS grouped GEMM and for SGLang, which record a source
+    and no numbers.
+
+    Keyed on tile_block_m rather than on the source, because those are two
+    different questions. A row can know the tile it ran and not know where the
+    tile came from, and such a row is usable for everything except a
+    tuned-versus-default split.
+    """
+    value = row.get("tile_block_m")
+    if value in (None, "", UNRECORDED):
+        return False
+    return (_int_or_none(value) or 0) != 0
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def tile_field(row: dict, key: str) -> int | str:
+    """Read a v4 tile-provenance column, or raise. Never a usable default.
+
+    The three ways this raises are the three ways the previous analysis went
+    wrong, and each one has to be a stop rather than a value:
+
+      - the row predates v4, so the column is stamped UNRECORDED;
+      - the row is v4 but the observer never ran or could not read the config
+        back, so tile_config_source is "unrecorded" and the ints are 0;
+      - the field does not apply to this implementation (a CUTLASS grouped GEMM
+        has no Triton BLOCK_SIZE_M, and a vllm_default row has no tuned-file
+        key), so the int is 0 while the SOURCE is a real answer.
+
+    tile_config_source comes back as a STRING on any row that carries the
+    column, including "unrecorded" and "n/a": those are honest answers to "where
+    did this configuration come from", so the second and third cases above raise
+    for the tile ints and not for the source. On a v3 row it raises with the
+    rest, because that row predates the column entirely and there is no answer to
+    return -- "the source is unrecorded" and "this file is older than the
+    concept of a source" are different facts, and only the sentinel keeps them
+    apart.
+
+    sm_capability is read through here too: it is not a tile field, but it is
+    the sm80-vs-sm90 discriminator the tile question needs, it arrived in the
+    same version, and an empty string from a v3 row would read as "no CUDA
+    device" rather than "this file is older than the column".
+    """
+    _schema_key(key)
+    if key not in COLUMNS_ADDED_IN[4]:
+        raise ValueError(
+            f"{key!r} is not a v4 provenance column; read it with row_float, "
+            f"row_bool or row.get. tile_field covers "
+            f"{', '.join(COLUMNS_ADDED_IN[4])}.")
+    value = row.get(key)
+    _reject_sentinel(key, value)
+    if value is None or value == "":
+        raise TileConfigUnrecorded(
+            f"{key!r} is empty on this row; nothing observed the tile "
+            f"configuration when it was written.")
+    if key in ("tile_config_source", "sm_capability"):
+        return str(value)
+    parsed = _int_or_none(value)
+    if parsed is None:
+        raise TileConfigUnrecorded(f"{key!r} is {value!r}, which is not an int")
+    if parsed == 0:
+        raise TileConfigUnrecorded(
+            f"{key!r} is 0, which means UNRECORDED and not a measured zero "
+            f"(tile_config_source={row.get('tile_config_source')!r}). "
+            f"A block size of zero does not exist.")
+    return parsed
 
 
 def passed(row: dict) -> bool:
@@ -383,17 +580,43 @@ def git_provenance(repo_root: str | os.PathLike | None = None) -> tuple[str, boo
         return "", False
 
 
+def _stamp_unrecorded(row: dict, version: int) -> None:
+    """Mark the columns a row of this version could not have carried.
+
+    Called on every read rather than on the write side, so the mark is derived
+    from schema_version and cannot drift out of sync with it: a row that
+    round-trips through merge_csvs comes back stamped the same way, because the
+    version travels with the row.
+    """
+    for added_in, names in COLUMNS_ADDED_IN.items():
+        if version >= added_in:
+            continue
+        for name in names:
+            row[name] = UNRECORDED
+
+
 def read_csv(path: str | os.PathLike) -> list[dict[str, Any]]:
-    """Read a results CSV, refusing to load a schema version this code cannot read."""
+    """Read a results CSV, refusing a schema version this code cannot read.
+
+    A version in READABLE_VERSIONS but older than SCHEMA_VERSION loads with the
+    columns it predates stamped UNRECORDED. That is the whole reason the gate
+    widened: the ten published v3 arms have no tile_* columns, and the choice is
+    between loading them with the hole marked or not loading them at all. It is
+    NOT a choice between marking the hole and filling it -- filling it with the
+    dataclass defaults would say every published row ran BLOCK_M 0.
+    """
     with Path(path).open(newline="") as fh:
         rows = list(csv.DictReader(fh))
     for r in rows:
         v = int(r.get("schema_version", -1))
-        if v != SCHEMA_VERSION:
+        if v not in READABLE_VERSIONS:
             raise ValueError(
-                f"{path}: schema_version {v}, this code reads {SCHEMA_VERSION}. "
+                f"{path}: schema_version {v}, this code reads "
+                f"{sorted(READABLE_VERSIONS)}. "
                 "Re-run the benchmark or read it with the matching commit."
             )
+        if v != SCHEMA_VERSION:
+            _stamp_unrecorded(r, v)
     return rows
 
 
@@ -412,11 +635,24 @@ def merge_csvs(paths: Iterable[str | os.PathLike], out_path: str | os.PathLike) 
     """
     written = 0
     out = Path(out_path)
+    versions: set[int] = set()
     if out.exists():
         out.unlink()
     with CsvWriter(out) as w:
         for p in paths:
             for r in read_csv(p):
+                versions.add(int(r.get("schema_version", -1)))
+                if len(versions) > 1:
+                    # One file, one header, one column set. read_csv accepts v3
+                    # and v4 so the published arms stay loadable, but a merge
+                    # writes them under a SINGLE header, and a v3 row sitting
+                    # under v4 column names would claim tile columns it never
+                    # had. Refuse instead: analyse the arms separately.
+                    raise ValueError(
+                        f"{out_path}: inputs mix schema versions "
+                        f"{sorted(versions)}. Merge each version into its own "
+                        "file; the tile_* columns exist in one and not the "
+                        "other, and one header cannot describe both.")
                 row = Row(**{k: _coerce(k, v) for k, v in r.items() if k in COLUMNS})
                 w.write(row)
                 written += 1
@@ -425,6 +661,13 @@ def merge_csvs(paths: Iterable[str | os.PathLike], out_path: str | os.PathLike) 
 
 def _coerce(name: str, value: str):
     t = _FIELD_TYPES[name]
+    if value == UNRECORDED:
+        # Back to the typed zero rather than into the dataclass as a string.
+        # Nothing is lost: the row keeps its schema_version, so read_csv stamps
+        # the sentinel back on the way out and the hole stays marked. Keeping
+        # the string here would put a str in an int column and every consumer
+        # of a merged file would have to know that.
+        return {"bool": False, "int": 0, "float": 0.0}.get(t, "")
     if t == "bool":
         return value in TRUTHY
     if t == "int":

@@ -29,7 +29,14 @@ from ..quant import fp8_cell_supported, fp8_hardware_support
 from ..spec import BenchSpec
 from ..stages import StageSpan, register
 from ..state import MoEState
-from ._framework_config import vllm_call_kwargs, vllm_quant_spec
+from ._framework_config import (
+    TileCapture,
+    recording_tile_config,
+    tile_meta_from_capture,
+    vllm_call_kwargs,
+    vllm_override_active,
+    vllm_quant_spec,
+)
 
 # Import at module scope on purpose. `baselines.load_all()` catches the failure
 # and skips this module with a warning, so on a laptop or in the base venv the
@@ -114,6 +121,31 @@ class VllmFusedExperts(StageSpan):
             if verdict is not None:
                 return verdict.reason
         return super().why_unsupported(spec)
+
+    def observe_tile_config(self, st: MoEState) -> dict:
+        """Which tile this span actually runs, read out of vLLM rather than
+        predicted from the routing histogram.
+
+        The driver calls this from its untimed prologue, next to the correctness
+        check, so the extra call below can never land inside a timed region.
+        ONE call, and it is the same call the correctness check just made: this
+        span writes only `st.y`, so re-running it recomputes a value already
+        there rather than advancing any state.
+
+        What the row gains that no v3 row could carry: BLOCK_SIZE_M as chosen,
+        and whether it came from a TUNED file or the hardcoded fallback ladder.
+        Verified against vLLM 0.27.1, only 2 of 8 (model x card) cells in this
+        study ran a tuned config -- nothing ships for NVIDIA_A100-SXM4-80GB at
+        any of the four shapes -- so the A100 and the H200 ran different tiles at
+        the measured crossings, and until this column existed no analysis could
+        have noticed.
+        """
+        capture = TileCapture()
+        with recording_tile_config(capture):
+            self(st)
+        # Asked after the recorder is restored, and asked rather than inferred:
+        # a forced tile can be identical to the one vLLM would have chosen.
+        return tile_meta_from_capture(capture, vllm_override_active())
 
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")

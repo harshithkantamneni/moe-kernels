@@ -171,6 +171,90 @@ def check_correctness(spec: BenchSpec, pipe: Pipeline, x, weights, forced,
     return compare(st.y, golden, tol), st, golden, tol
 
 
+#: Method a span may define to report the tile configuration it actually runs.
+#: Optional: a span without one contributes nothing and its rows say
+#: "unrecorded", which is the honest answer and not a gap to be filled in.
+TILE_OBSERVER = "observe_tile_config"
+
+#: What a row says when nothing observed its tile. An explicit source rather
+#: than an empty column: "unrecorded" is a claim about the row, "" is a column
+#: nobody got round to.
+_TILE_UNOBSERVED = {"tile_config_source": "unrecorded"}
+
+
+def _validated_tile_meta(meta: dict, where: str) -> dict:
+    """Reject a tile record that would vanish silently on its way to the CSV.
+
+    `_apply_meta` drops any key that is not a column, so a typo'd `tile_blockm`
+    is written nowhere and reads back as unrecorded -- an observer that appears
+    to work and records nothing, which is precisely the failure the tile columns
+    were added to end. Same reason TERMINAL_STATUSES is a closed set: a value no
+    consumer matches does not fail loudly, it just disappears from every
+    group-by.
+
+    Restricted to the v4 provenance columns as well. An observer is not a second
+    route into the timing or load columns, and a span that could set `ms_p50`
+    from outside the timer is a hole in the harness's headline invariant.
+    """
+    if not meta:
+        return {}
+    allowed = set(SC.COLUMNS_ADDED_IN[4])
+    stray = sorted(set(meta) - allowed)
+    if stray:
+        raise ValueError(
+            f"{where}.{TILE_OBSERVER} returned {stray}: an observer may only "
+            f"set the v4 tile provenance columns {sorted(allowed)}. A key "
+            f"outside that set is dropped by _apply_meta and the row reads back "
+            f"as unrecorded, which is the failure this whole column set exists "
+            f"to end.")
+    source = meta.get("tile_config_source")
+    if source not in SC.TILE_SOURCES:
+        raise ValueError(
+            f"{where}.{TILE_OBSERVER} reported tile_config_source={source!r}; "
+            f"legal values are {sorted(SC.TILE_SOURCES)}")
+    return dict(meta)
+
+
+def observe_tile_config(pipe: Pipeline, span, st: MoEState) -> dict:
+    """Ask the implementation which tile it runs, outside every timed region.
+
+    UNTIMED BY CONSTRUCTION, which is the point of it living here. run_cell
+    calls this from the prologue block that already runs the correctness check
+    and the fp32 oracle, above the line where the timed `call` is even defined,
+    so an observation cannot drift inside a measured interval in a later edit.
+    An observer that needs a real call (vLLM's does: it rebinds
+    try_get_optimal_moe_config for the duration of one invocation) therefore
+    costs one extra call in a prologue that already runs a python-loop fp32
+    reference, and nothing in the timed loop.
+
+    For a whole-layer row the target is the pipeline, so every span is asked and
+    the first that answers wins. In practice exactly one span in a tiling has an
+    observer -- the framework kernel -- and the reference stages around it have
+    no tile to report.
+
+    Never raises. A broken observer must not cost a metered cell: the failure is
+    printed and the row records "unrecorded", which is true.
+    """
+    targets = [span] if span is not None else list(pipe.spans)
+    for target in targets:
+        hook = getattr(target, TILE_OBSERVER, None)
+        if hook is None:
+            continue
+        try:
+            meta = _validated_tile_meta(hook(st), target.name)
+        except Exception as e:  # noqa: BLE001
+            # Deliberately broad. An observer reaches into a framework's
+            # internals by design, so it can fail in ways no narrow clause
+            # predicts -- a moved import path, a changed signature, a vLLM
+            # version that returns something other than a dict.
+            print(f"[warn] {target.name}: tile observation failed: "
+                  f"{describe_exception(e)}")
+            return dict(_TILE_UNOBSERVED)
+        if meta:
+            return meta
+    return dict(_TILE_UNOBSERVED)
+
+
 def _downstream_of(pipe: Pipeline, span):
     """Spans that run after `span`, needed to turn its output back into a layer
     output that can be compared against golden."""
@@ -380,6 +464,13 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     counts, counts_source = _expert_counts(st, spec, forced)
     load = expert_load(counts)
 
+    # In the prologue, beside the correctness check and above the line where the
+    # timed callable is defined, so an observation cannot land inside a timed
+    # region. AFTER the load columns are taken, because an observer that needs a
+    # real call re-runs the span, and a span covering `router` or `permute`
+    # would rewrite the very state _expert_counts reads.
+    tile_meta = observe_tile_config(pipe, span, st)
+
     # Cost is scoped to what the timer wraps, and materialisation is taken from
     # THIS tiling rather than from the span in isolation.
     if span is None:
@@ -393,6 +484,7 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         _apply_correctness(row, verdict or correctness)
         _apply_load(row, load)
         _apply_meta(row, routing_meta)
+        _apply_meta(row, tile_meta)
         _apply_cost(row, cost, None, cfg)
         if counts_source != "forced routing":
             row.notes = f"expert load derived from {counts_source}"

@@ -41,6 +41,17 @@ def test_read_refuses_a_foreign_schema_version(tmp_path):
         SC.read_csv(path)
 
 
+def test_read_refuses_a_version_older_than_the_readable_window(tmp_path):
+    """READABLE_VERSIONS widened to keep the published v3 arms loadable, not to
+    accept anything. v2 renamed achieved_bf16_tflops, so its columns do not mean
+    what these names mean and no stamping can repair that."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(schema_version=2))
+    with pytest.raises(ValueError, match="schema_version 2"):
+        SC.read_csv(path)
+
+
 def test_cell_key_ignores_timing_results():
     a = make_row(ms_p50=1.0)
     b = make_row(ms_p50=999.0)
@@ -126,13 +137,21 @@ def test_appending_under_a_matching_header_is_fine(tmp_path):
 
 def test_schema_version_tracks_the_column_set():
     """A reminder in code: the version must move whenever COLUMNS does."""
-    assert SC.SCHEMA_VERSION == 3
+    assert SC.SCHEMA_VERSION == 4
     assert "pct_of_achieved_bw" not in SC.COLUMNS
     assert "pct_of_achieved_tflops" in SC.COLUMNS
     assert "achieved_peak_tflops" in SC.COLUMNS
     # v3: which STREAM pattern produced achieved_bw_gbps. Two CSVs run with a
     # different --ceiling are otherwise silently incomparable.
     assert "bw_ceiling_pattern" in SC.COLUMNS
+    # v4: the tile that actually ran, and the architecture that ran it. Before
+    # these the only tile columns were hypothetical efficiencies at ASSUMED
+    # block sizes, so no row could contradict a wrong BLOCK_SIZE_M.
+    for name in SC.COLUMNS_ADDED_IN[4]:
+        assert name in SC.COLUMNS, name
+    assert "tile_block_m" in SC.COLUMNS
+    assert "tile_config_source" in SC.COLUMNS
+    assert "sm_capability" in SC.COLUMNS
 
 
 def test_a_retired_column_name_raises_instead_of_reading_as_zero():

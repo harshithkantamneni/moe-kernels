@@ -144,12 +144,27 @@ class TileEfficiencyUndetermined(ValueError):
 def tile_efficiency_for_row(row: dict, block_m: int) -> float:
     """Tile efficiency at ANY `block_m`, from a published row's own columns.
 
-    The schema stores `tile_eff_bm64` and `tile_eff_bm128`, and neither is the
-    tile the Triton baselines run: vLLM's tuned H200 config sets BLOCK_SIZE_M to
-    16 for every batch size from 1 to 256, the whole decode range. Adding a bm16
-    column is not the fix, because `schema.read_csv` refuses an unrecognised
-    schema_version, so a new column would make every already-published row
-    unreadable by the code meant to analyse it.
+    The schema stores `tile_eff_bm64` and `tile_eff_bm128`, and on the measured
+    decode cells neither is the tile the Triton baselines run: those cells ran
+    BLOCK_SIZE_M 16. Two earlier versions of this paragraph are worth recording
+    because both were wrong in ways this function's callers inherited.
+
+    It said the 16 came from "vLLM's tuned H200 config, for every batch size
+    from 1 to 256". That ladder is real and belongs to E=128,N=512, which is no
+    model in this study; the cells measured here have no tuned file at all
+    (2 of 8 model x card cells do, and deepseek-v3 is not one) and took
+    `get_default_config`'s M<=32 -> 16 ladder instead. Same number, different
+    mechanism, and the wrong mechanism generalises wrongly.
+
+    It also said a bm16 COLUMN could not be added, because read_csv refused an
+    unrecognised schema_version and a new column would strand every published
+    row. That is no longer true and was the narrower half of the problem:
+    READABLE_VERSIONS is {3, 4}, v4 added the tile_* block, and a v3 row now
+    loads with those columns stamped UNRECORDED. What has not changed is why
+    this function still exists: the ten published arms were measured under v3
+    and cannot be re-taken cheaply, so their tile efficiency has to be
+    RECONSTRUCTED from columns they already carry. A v4 row does not need this
+    at all -- it records the tile it ran.
 
     Regenerating the routing is not the fix either. `cli.build_routing_source`
     passes `device=args.device`, so on a GPU run the sampler uses a CUDA

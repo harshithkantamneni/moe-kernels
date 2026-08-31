@@ -111,6 +111,14 @@ def runtime_info() -> dict:
         "driver_version": driver[0] if driver else "",
         "cuda_version": torch.version.cuda or "",
         "sm_count": props.multi_processor_count,
+        # The ARCHITECTURE, not just the card name. Every consumer that needed
+        # sm80-vs-sm90 -- whether wgmma can be emitted at all, whether torch's
+        # grouped_mm reaches its CUTLASS sm90/sm100 kernel -- had to infer it
+        # from gpu_name, and gpu_name is a marketing string. props.major/minor
+        # is exactly what torch.cuda.get_device_capability returns, which is
+        # the pair torch_grouped_mm's own support check already tests against.
+        "sm_capability": ".".join(
+            str(v) for v in torch.cuda.get_device_capability(index)),
         "l2_bytes": getattr(props, "L2_cache_size", 0),
         "total_memory": props.total_memory,
     })
