@@ -110,6 +110,52 @@ to scale the aggregate batch past this ridge, and at that scale all-to-all
 communication dominates rather than the GEMM. Half the corrections in this
 project came from stating a single-node result as universal.
 
+### And a second scope limit, added 2026-09-01: MoE decode is NOT universally memory-bound
+
+This project has repeatedly said "decode is memory-bound" as though it were a
+property of MoE. It is a property of a REGIME, and the study's own measured
+crossings say where that regime ends. Tokens entering the layer, H200, uniform
+routing, `vllm_fused_experts`:
+
+| model | crossing | | 1 | 256 | 512 | 1024 | 4096 | 8192 |
+|---|---:|---|---|---|---|---|---|---|
+| mixtral-8x7b | 316 | | . | . | X | X | X | X |
+| qwen2-57b-a14b | 787 | | . | . | . | X | X | X |
+| deepseek-v2-lite | 931 | | . | . | . | X | X | X |
+| deepseek-v3 | 3010 | | . | . | . | . | X | X |
+
+`.` memory-bound, `X` compute-bound. **At a few thousand tokens per forward,
+three of four models are compute-bound.** Chunked prefill routinely puts that many
+tokens in one pass, prefill is compute-bound on its own, and with expert
+parallelism rows-per-expert is `T_aggregate k / E` regardless of sharding, so a
+DP144+EP144 decode deployment is deliberately engineered to be on the compute side.
+
+In PURE decode each sequence contributes one token, so crossing over requires 316
+concurrent sequences for mixtral and 3,010 for deepseek-v3. Hyperscale serving
+reaches that; most deployments do not.
+
+SO THE REGIME THIS STUDY CHARACTERISES IS: pure decode at modest concurrency,
+single-user and on-prem deployment, and latency-bound serving where batching is
+deliberately capped. It is NOT high-throughput production serving, and every
+finding here should be read against that.
+
+Two things this sharpens rather than weakens. The measured crossings arrive at
+0.5-0.6x of what `2R/b` predicts, because the weights-only model omits the
+permute, activation and unpermute traffic, so real systems cross into
+compute-bound EARLIER than the standard analysis says. And the `E/k` dilution law
+means the crossing moves right with every generation: mixtral crosses at 316
+tokens and deepseek-v3 at 3,010, a 10x spread driven purely by expert count at
+fixed `top_k`. Architectures keep adding experts, so each generation stays
+memory-bound at batch sizes where the previous one was already compute-bound.
+
+NOT COVERED AT ALL: the offload regime, where experts do not fit in HBM and stream
+over PCIe. The roofline extends to it in principle -- PCIe at ~64 GB/s puts the
+ridge near 12,000 FLOP/byte, so the crossing would sit around 385,000 tokens for
+deepseek-v3 and that regime is never compute-bound -- but this project has never
+measured a host-to-device transfer, has no offload path in the byte model, and has
+no rows there. Any statement about offload is an extrapolation from a model, not a
+measurement.
+
 ---
 
 ## C1. The CUTLASS tile is 64, and it was never a choice
@@ -605,7 +651,60 @@ In order, cheapest first. Steps 1 and 2 are prerequisites, not options.
    roofline, and A100-vs-H200 never could: its SM ratio 0.818 sits within 1% of
    its ridge ratio 0.827, so the two hypotheses make the same prediction.
 
-## The most robust number in the study: 0.563
+## The five-stage over one-stage separation: 0.563, and it is probably an artefact
+
+**DOWNGRADED 2026-09-01, from "the most robust number in the study".** Read the
+staircase section below before quoting any figure here.
+
+THE DETECTOR RETURNS THE FIRST UPCROSSING OF 0.5, AND 8 OF 16 CANONICAL UNIFORM
+CELLS CROSS TWICE. Taking the last instead moves the separation from 0.5602 to
+0.8889, and mixtral and qwen2 go from 0.56 and 0.46 to 1.01 and 1.00, meaning the
+two spans cross at the SAME batch.
+
+    mixtral vLLM      313 then 800        qwen2 vLLM      730 then 1573
+    deepseek-v3 vLLM 2925 then 6391       mixtral SGLang  313 then 778
+
+WHY THE CURVE CROSSES TWICE: M-TILE QUANTISATION. M-tiles per expert is
+`ceil(rows_per_expert / BLOCK_M)` and each extra tile is another pass over that
+expert's weight matrix. mixtral with `BLOCK_M = 128` held CONSTANT across the
+whole band (checked against the shipped tuned JSON, the config does not change
+here):
+
+    T=512   128 rows/expert   12 M-tiles   1.2224 ms
+    T=576   144              16           1.3323   slope 0.731   tiles JUMP
+    T=640   160              16           1.3991   slope 0.464
+    T=704   176              16           1.4292   slope 0.223
+    T=768   192              16           1.4437   slope 0.116   tiles FLAT
+    T=1024  256              19           1.9088   slope 0.971   tiles JUMP
+
+Time JUMPS at a tile step and FLATLINES between, so the slope spikes above 0.5 at
+every step. A first-passage detector reads a tile step, not a roofline transition.
+
+AND THE TWO SPANS USE DIFFERENT TILES. The one-stage span is CUTLASS with
+`BLOCK_M` fixed at 64 by the instruction set; the five-stage span is Triton with
+`BLOCK_M` varying 16 to 128. Different tile heights put their steps in different
+places, so 0.563 compared where two staircases have their first step rather than
+anything about span extent. The CUTLASS-versus-Triton confound named below is not
+a nuisance variable here, it is the whole effect.
+
+WHICH READING IS RIGHT IS NOT SETTLED. Rows-per-expert at the LAST crossing is
+mean 175.8 with CV 21%, against a measured ridge band of 160.3 to 176.2, which is
+exactly what `2R/b` says R should equal. At the FIRST it is 123.4 with CV 40%.
+That favours the last, but the dip is only visible because one arm added
+T=576/640/704/768: on powers of two alone the slopes read 0.175, 0.587, 0.643,
+0.791, perfectly monotone, staircase invisible. Four points revealed structure the
+coarse grid hid, and whether more steps exist needs the dense sweep.
+
+THE EXPERIMENT THAT DECIDES IT is not a denser grid alone. Pin `BLOCK_M` and sweep
+it: if the measured crossing MOVES with the tile it is the ladder, and every
+empirical MoE crossing including this one is measuring kernel configuration; if it
+STAYS it is the roofline and the staircase is a wobble on top of a real transition.
+`override_config` already does this in `scripts/tile_sweep.py`.
+
+Everything below is the ORIGINAL analysis, retained because its arithmetic is
+correct given the first-crossing reading, and because the contrast is the point.
+
+### The original reading, first-crossing basis
 
 A five-stage fused span crosses the ridge at **56% of the batch a one-stage
 grouped GEMM does**, and no calibration uncertainty touches that figure.
@@ -728,17 +827,31 @@ top-k, the harness's reference. A production router is fused and faster, so 30 t
 does establish that a whole-layer number is not the fused span's number, and how
 much is missing.
 
-**The crossing is unmoved, which is the confirmation.** Same run, ridge 176.2:
+**The crossing is unmoved, which is the confirmation.** RE-SCORED 2026-09-01 on
+two counts. The ridge is 160.3, not 176.2: `entitled_ridge` refuses this arm
+because its shipped `measured.yaml` is byte-identical to a calibration recorded
+28 minutes AFTER the sweep ended, and the arm's own rows carry 701.6 TFLOP/s over
+4377.2 GB/s. And the routing is uniform only, since pooling is invalid for a
+crossing.
 
-| model | predicted | five-stage span | whole layer |
+| model | predicted (160.3) | five-stage span | whole layer |
 |---|---:|---:|---:|
-| mixtral-8x7b | 705 | 543 | 549 |
-| qwen2-57b-a14b | 1410 | 914 | 960 |
-| deepseek-v2-lite | 1879 | 897 | 1006 |
-| deepseek-v3 | 5638 | 3474 | 3375 |
+| mixtral-8x7b | 641 | 316 | 327 |
+| qwen2-57b-a14b | 1282 | 787 | 828 |
+| deepseek-v2-lite | 1710 | 931 | 1020 |
+| deepseek-v3 | 5130 | 3010 | 2888 |
 
-One to twelve percent apart, mostly under five. A fixed cost added to a
-bandwidth-driven turning point should not move it, and it does not.
+Three to ten percent apart. A fixed cost added to a bandwidth-driven turning point
+should not move it, and it does not. (The previous table read 705/1410/1879/5638
+predicted and 543/914/897/3474 measured: the wrong ridge and the pooled-routing
+crossings, both now retracted. The conclusion is unchanged, which is why it is
+worth stating that the conclusion survived both corrections.)
+
+THE ROUTER SHARE ABOVE IS UNAFFECTED BY EITHER CORRECTION. It is
+`(pipeline - fused) / pipeline` within one run, so no calibration ceiling enters
+it, and it is routing-robust: 30.1 / 38.3 / 47.9 / 34.0 pooled against
+30.3 / 38.3 / 47.9 / 34.2 uniform. It is the one result this arm contributes that
+does not depend on the ridge it is not entitled to quote.
 
 ---
 
@@ -762,8 +875,27 @@ are memory-bound and therefore carry the column.
 | torch `grouped_mm` | 1 of 6 | 1053 | 1.35 | **1.62** | 2.31 |
 | reference pipeline | 6 of 6 | 714 | 9.50 | **12.43** | 24.66 |
 
+THE 1.16 IS NOT THE NUMBER THAT MATTERS, corrected 2026-09-01. That median is
+taken over the whole token grid, so it is pulled up by the compute-bound
+transition where the ratio climbs (mixtral reaches 1.910 at T=512). Restricted to
+uniform routing and to the MEMORY-BOUND regime a kernel would actually target:
+
+| T | deepseek-v3 | mixtral | qwen2 |
+|---:|---:|---:|---:|
+| 1 | 1.176 | 1.172 | 1.254 |
+| 8 | 1.124 | 1.080 | 1.046 |
+| **16** | **0.981** | 1.035 | 1.039 |
+| **32** | **0.977** | 1.083 | 1.029 |
+| **64** | **0.984** | 1.057 | 1.055 |
+| 512 | 1.083 | 1.910 | 1.293 |
+
+median over T <= 64, uniform: **1.106**, and deepseek-v3 sits at 0.98, at or
+below the compulsory floor. The 82 sub-floor rows are exactly these cells. So in
+the regime this project cares about the incumbent has roughly ZERO headroom, not
+15%. "Roughly 15%" was an artefact of averaging the compute-bound side in.
+
 The two production kernels move about 1.16x the bytes their arithmetic requires
-while covering five stages. That gap against `grouped_mm`'s 1.62x is not
+while covering five stages, ACROSS THE WHOLE GRID. That gap against `grouped_mm`'s 1.62x is not
 straightforwardly a kernel-quality gap: a fused span amortises permute and combine
 traffic that the single-stage span pays separately and the compulsory model counts
 separately too. What it does support is narrower and still useful. The fused
@@ -794,6 +926,98 @@ experts does not. Observed directly: mixtral T=2 uniform seed 0 records 4 active
 experts on the GPU and 2 on the CPU. **Not fixed**, because fixing it changes the
 routing of any future run relative to the published rows, and that is a decision
 to take deliberately rather than as a side effect.
+
+---
+
+## Three results the study measured and never reported
+
+Added 2026-09-01. `cuda_graph` and `l2_flush` are FULLY SWEPT axes with measured
+columns, and before today neither appeared once in this file or in STUDY.md. The
+first is the largest single effect in the dataset.
+
+### CUDA-graph replay is worth up to 2.87x at decode, and nothing at all to a single kernel
+
+14,050 matched pairs, same cell, same L2 mode, both timed, neither throttled.
+Median `ms_p50(graph) / ms_p50(eager)`:
+
+| implementation | T=1 | 2 | 8 | 32 | 256 | 4096 |
+|---|---:|---:|---:|---:|---:|---:|
+| `sglang_fused_experts` | **0.349** | 0.565 | 0.749 | 0.963 | 0.983 | 0.996 |
+| `__pipeline__:vllm_fused_experts` | **0.608** | 0.851 | 0.948 | 0.935 | 0.961 | 0.994 |
+| `vllm_fused_experts` | **0.678** | 0.929 | 0.980 | 0.983 | 0.984 | 0.996 |
+| `torch_grouped_mm_up` | 0.997 | 0.997 | 0.999 | 1.000 | 1.000 | 1.005 |
+| `torch_grouped_mm_down` | 0.997 | 0.998 | 0.997 | 0.999 | 1.001 | 1.002 |
+
+Per-call launch overhead, `eager - graph`, spans a HUNDREDFOLD across
+implementations that compute the same thing:
+
+    __pipeline__:vllm_fused_experts   36.2 us median   208.8 p90
+    sglang_fused_experts              18.1            243.9
+    vllm_fused_experts                 6.7            120.4
+    torch_grouped_mm_down              0.3              2.7
+    torch_grouped_mm_up                0.2              2.8
+
+This is the study's own thesis measured on a different axis. At decode what
+dominates is whatever does not scale, and here it is CPU dispatch rather than
+weight traffic. The single-kernel CUTLASS span has nothing to remove, which is
+the control that makes the fused numbers mean something.
+
+The crossings are unaffected: graph rows survive the cost policy only at small T,
+below the crossing, so they carry no weight where the slope turns.
+
+### L2 residency helps only where the working set fits, and that is a cliff
+
+CUDA-GRAPH ROWS ONLY. Eager rows are unusable for this question: the 256 MB flush
+kernel is itself sustained work that keeps the launch queue busy, so flushing
+makes an eager cell FASTER, and that artefact swamps the cache effect. Bucketed by
+weight footprint (`active_experts x 3FH x b`) over `l2_bytes`:
+
+| footprint / L2 | n | median cold/warm | max |
+|---|---:|---:|---:|
+| **under 1x, FITS** | 84 | **1.0871** | 1.1710 |
+| 1-2x | 213 | 0.9993 | 1.1419 |
+| 2-4x | 403 | 0.9979 | 1.0721 |
+| 4-8x | 894 | 0.9980 | 1.0408 |
+| over 16x | 4122 | 0.9974 | 2.2420 |
+
+Above 1.0 means warm L2 helped. It is a CLIFF at exactly 1x capacity, not a
+gradient: a cyclic stream through a too-small LRU cache has near-zero hit rate,
+because LRU evicts precisely what is needed next. Effective capacity is closer to
+33 MiB than the nominal 60, so halve any bound computed from the datasheet.
+
+### AND THE BENEFIT IS UNREACHABLE, which is the actual finding
+
+Residency benefit and bandwidth utilisation are exactly anticorrelated. The cells
+whose weights fit run at about 25% of achievable bandwidth; the 83 rows at 100.3%
+of the read ceiling have footprints 20 to 1000x L2.
+
+**The only cells where the weights fit are the cells that do not need the
+bandwidth.** That is structural, not a sampling accident: saturating HBM needs
+many waves, many waves needs many active experts, and many active experts is
+hundreds of MiB. The two regimes cannot be occupied at once, which retires
+hot-expert L2 caching with a mechanism rather than a null result.
+
+### One expert can never hold most of the rows
+
+    top1_share = max_rows / (T k),  and max_rows <= T,  so  top1_share <= 1/k
+
+A token routes to k DISTINCT experts, so it contributes at most one row to any
+one of them. Verified exactly on 64,669 published rows, zero exceedances, every
+model hitting its bound:
+
+    mixtral      k=2  ->  max observed 0.5000   bound 0.5000
+    v2-lite      k=6  ->  0.1667                0.1667
+    deepseek-v3  k=8  ->  0.1250                0.1250
+    qwen2        k=8  ->  0.1250                0.1250
+
+So for a high-`k` model there IS no dominant expert, however skewed the router.
+Any argument of the form "cache the hot expert, it carries most of the traffic"
+is arithmetically impossible above `k = 2`. And it is doubly wrong, because cost
+tracks ACTIVE EXPERTS rather than rows: a cold expert holding one row still costs
+a full weight read, so row share is the wrong ranking regardless.
+
+This bounds the whole family of skew-exploiting designs, including several
+proposed and discarded in this project.
 
 ---
 

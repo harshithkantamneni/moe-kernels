@@ -240,13 +240,38 @@ def test_the_crossing_profile_has_enough_replicates_to_survive_throttling():
 
 
 def test_the_crossing_profile_measures_one_timing_mode():
-    """Every crossing in docs/FINDINGS.md is on the L2-cold eager basis, and
-    `crossing_report` medians across all four modes by default, mixing L2-warm
-    and graph-replay rows into a number reported as one basis. One mode costs a
-    quarter as much AND removes the confound."""
+    """`crossing_report` medians across all four modes by default, mixing
+    L2-warm and graph-replay rows into a number reported as one basis. Measuring
+    one mode removes the confound as well as most of the cost."""
     prof = PR.get("crossing-uniform")
-    assert prof.l2_modes == (True,)
-    assert prof.graph_modes == (False,)
+    assert len(prof.l2_modes) == 1 and len(prof.graph_modes) == 1
+    assert prof.graph_modes == (False,), "graph replay is not the study's basis"
+
+
+#: How many of the sixteen (model x implementation) cells of the canonical bf16
+#: pool report a crossing at all, uniform routing, ridge 160.3, eager rows only.
+#: Counted from `scripts/crossing_report.py` over the four canonical arms with
+#: `--routing uniform --cuda-graph false --l2-flush true`, and again with
+#: `--l2-flush false`. Keyed by `l2_flush`, valued `(five_stage, one_stage)`.
+_MEASURED_CROSSING_COVERAGE = {True: (6, 3), False: (8, 8)}
+
+
+def test_the_crossing_profile_runs_the_basis_that_reports_a_crossing():
+    """THE L2-COLD BASIS DELETES FIVE OF THE EIGHT ONE-STAGE CROSSINGS, so a
+    profile that ran it would rent a box to produce the emptier table.
+
+    The cause is not the cache. A 256 MB flush between every pair of timed
+    iterations is sustained load, it holds the clocks up, `clock_drift` sets
+    `throttled`, and `crossing.timed_rows` drops those rows: 48-75% of L2-cold
+    eager rows at T>=2048 against 5-8% warm. The deletions are what move the
+    answer, and the fingerprint is that they move a ONE-stage span's crossing
+    2.3-2.4x while moving a five-stage span's by 3-13%, which no L2 effect over
+    the same rows can do."""
+    cold_five, cold_one = _MEASURED_CROSSING_COVERAGE[True]
+    warm_five, warm_one = _MEASURED_CROSSING_COVERAGE[False]
+    assert (warm_five, warm_one) == (8, 8), "warm is the full-coverage basis"
+    assert cold_one < warm_one and cold_five < warm_five
+    assert PR.get("crossing-uniform").l2_modes == (False,)
 
 
 def test_the_crossing_profile_keeps_the_published_grid_inside_it():
@@ -286,7 +311,148 @@ def test_the_deployment_profile_runs_both_dtypes():
     assert PR.get("deployment").dtypes == ("bf16", "fp8_e4m3")
 
 
-@pytest.mark.parametrize("name", ["crossing-uniform", "deployment"])
+# --------------------------------------------------------------------------
+# The trace axis, which the repo calls its differentiator and never swept
+# --------------------------------------------------------------------------
+
+def test_a_profile_finally_consumes_a_captured_trace():
+    """`RoutingSpec` has supported `kind='trace'` from the start and no profile
+    ever named one, so `scripts/capture_traces.py` wrote a .npz that nothing in
+    the matrix could read. Every published row is parametric routing."""
+    kinds = {r.kind for p in PR.PROFILES.values() for r in p.routings}
+    assert "trace" in kinds
+    prof = PR.get("trace-replay")
+    assert any(r.kind == "trace" for r in prof.routings)
+    assert any(r.kind != "trace" for r in prof.routings), \
+        "a trace measured with no parametric control is a number with nothing " \
+        "to be different from"
+
+
+def test_the_trace_profile_names_only_models_that_fit_on_one_card():
+    """DeepSeek-V3 is 1,369 GB of bf16 weights and needs five H200s, so its
+    routing has never been captured and no profile may imply it has."""
+    prof = PR.get("trace-replay")
+    assert "deepseek-v3" not in prof.models
+    for routing in prof.routings:
+        if routing.kind == "trace":
+            assert PR.trace_model(routing.trace_id) in prof.models
+
+
+def test_a_trace_is_only_swept_on_the_model_it_was_captured_from():
+    """A sweep is a cartesian product, so three models against three traces asks
+    for six invalid cells. `Profile.specs` drops them rather than letting the
+    run discover them one by one."""
+    prof = PR.get("trace-replay")
+    for spec in prof.specs():
+        if spec.routing.kind == "trace":
+            assert PR.trace_model(spec.routing.trace_id) == spec.model.name
+
+    seen = {(s.model.name, s.routing.label) for s in prof.specs()
+            if s.routing.kind == "trace"}
+    assert len(seen) == len(prof.models), "each model replays its own capture"
+
+
+def test_the_pairing_rule_catches_the_collision_the_run_time_check_cannot():
+    """`TraceSet.forced_ids` compares expert counts, which stops mixtral's
+    8-expert capture reaching a 64-expert model. It does NOT stop
+    deepseek-v2-lite's capture reaching qwen2-57b-a14b: both have exactly 64
+    experts, so that cell runs, passes correctness, and publishes a row labelled
+    qwen2 whose expert load came from another network."""
+    from moe.spec import MODEL_CONFIGS
+
+    assert MODEL_CONFIGS["deepseek-v2-lite"].num_experts == \
+        MODEL_CONFIGS["qwen2-57b-a14b"].num_experts
+    v2lite = PR.RoutingSpec("trace", trace_id="deepseek-v2-lite-chat-decode")
+    assert PR.trace_belongs_to(v2lite, "deepseek-v2-lite")
+    assert not PR.trace_belongs_to(v2lite, "qwen2-57b-a14b")
+
+
+def test_a_slice_suffix_and_a_shard_suffix_both_resolve_to_one_model():
+    """`@bNlM` pins a batch and layer, and a longest-match rule is what keeps
+    `deepseek-v3-tp4-...` off the unsharded model."""
+    assert PR.trace_model("mixtral-8x7b-chat-decode@b3l17") == "mixtral-8x7b"
+    assert PR.trace_model("deepseek-v3-tp4-chat-decode") == "deepseek-v3-tp4"
+    assert PR.trace_model("captured-on-a-friday") is None
+    # An id naming no known model belongs to whatever the caller pairs it with:
+    # a hand-supplied --trace-id is nobody else's business.
+    unknown = PR.RoutingSpec("trace", trace_id="captured-on-a-friday")
+    assert PR.trace_belongs_to(unknown, "mixtral-8x7b")
+
+
+def test_the_trace_profile_replays_real_layers_rather_than_their_average():
+    """Seeds pick the (batch, layer) slice, so three seeds are three real
+    layers. Averaging skewed layers with different hot experts produces a
+    histogram flatter than any layer that ever ran."""
+    assert len(PR.get("trace-replay").seeds) >= 3
+
+
+# --------------------------------------------------------------------------
+# Overriding the matrix without editing this file on the box
+# --------------------------------------------------------------------------
+
+def _args(argv):
+    from moe.bench.cli import parse_args
+    return parse_args(argv)
+
+
+def test_a_routing_can_be_overridden_from_the_command_line():
+    """Until this existed the only way to point a sweep at a capture was to edit
+    `profiles.py` on the rented box, which stamps `git_dirty` on every row of
+    the run and makes the arm unpublishable."""
+    from moe.bench.cli import apply_overrides
+
+    prof = apply_overrides(PR.get("standard"),
+                           _args(["--routings", "uniform,zipf:2.0"]))
+    assert [r.label for r in prof.routings] == ["uniform", "zipf:2"]
+    assert prof.models == PR.get("standard").models, "one axis, not all of them"
+
+
+def test_the_command_line_spells_a_routing_the_way_everything_prints_it():
+    """`RoutingSpec.label` is the format, so what a dry run printed or a
+    published CSV recorded pastes straight back in. Two spellings of a routing
+    would be two chances to record the wrong one."""
+    from moe.bench.cli import parse_routing
+
+    for text in ("uniform", "zipf:1.2", "dirichlet:0.3", "hot:0.5",
+                 "trace:mixtral-8x7b-chat-decode",
+                 "trace:mixtral-8x7b-chat-decode@b3l17"):
+        assert parse_routing(text).label == text
+
+
+def test_a_misspelt_routing_exits_instead_of_raising():
+    """This runs during argument parsing, where a traceback is noise."""
+    from moe.bench.cli import parse_routing
+
+    for bad in ("zipf:banana", "trace:", "gaussian:1.0", "hot:2.0"):
+        with pytest.raises(SystemExit):
+            parse_routing(bad)
+
+
+def test_an_override_that_empties_the_matrix_says_so_before_the_run():
+    """A trace belongs to the model it was captured from, so an override can ask
+    for a matrix whose every cell is dropped. Finding that out from a sweep that
+    writes no rows is the expensive way."""
+    from moe.bench.cli import apply_overrides
+
+    args = _args(["--models", "qwen2-57b-a14b",
+                  "--routings", "trace:deepseek-v2-lite-chat-decode"])
+    with pytest.raises(SystemExit, match="no cells"):
+        apply_overrides(PR.get("trace-replay"), args)
+
+
+def test_overrides_reach_the_trace_profile_without_touching_the_file():
+    from moe.bench.cli import apply_overrides
+
+    args = _args(["--models", "deepseek-v2-lite", "--tokens", "1,4096",
+                  "--routings", "uniform,trace:deepseek-v2-lite-chat-decode@b3l17"])
+    prof = apply_overrides(PR.get("trace-replay"), args)
+    assert prof.token_counts == (1, 4096)
+    assert len(prof.specs()) == 2 * 2 * len(prof.seeds)
+    assert PR.plan(prof).missing_traces == ("deepseek-v2-lite-chat-decode@b3l17",)
+
+
+@pytest.mark.parametrize("name", ["crossing-uniform", "deployment",
+                                  "trace-replay"])
 def test_the_new_profiles_plan_cleanly(name):
     ref = tuple(f"ref_{s}" for s in
                 __import__("moe.stages", fromlist=["x"]).CANONICAL_STAGES)
@@ -344,25 +510,80 @@ def test_the_cost_model_reproduces_an_fp8_arm():
 
 
 def test_the_reference_whole_layer_is_priced_apart_from_a_real_span():
-    """It is 1.7x a span and measures no kernel, which is why it was switched
-    off. Folding it into the base rate over-estimated every profile that has it
-    off, which is now all of them."""
-    assert PR.REFERENCE_PIPELINE_SECONDS_PER_ROW > \
-        1.5 * PR.MEASURED_SECONDS_PER_ROW[("base", "bf16")]
+    """It is 3.2x a span per eager row and measures no kernel, which is why it
+    was switched off. Folding it into the base rate over-estimated every profile
+    that has it off, which is now all of them."""
+    assert PR.REFERENCE_PIPELINE_COST.eager > \
+        3.0 * PR.MEASURED_CELL_COST[("base", "bf16")].eager
     with_it = replace(PR.get("full"), include_pipeline_scope=True)
     assert PR.estimated_hours(with_it)["base"] > \
         1.5 * PR.estimated_hours(PR.get("full"))["base"]
 
 
-def test_fp8_is_costed_separately_because_it_is_not_a_small_correction():
-    """fp8 costs vLLM and SGLang about 30% more per row, which is larger than
-    the gap between the two frameworks and larger than the gap between cards."""
+def test_fp8_costs_more_per_cell_and_not_in_the_timed_loop():
+    """An fp8 vLLM CELL costs 1.30x a bf16 one, which is the "about 30% more"
+    the flat per-row rate recorded. Where it comes from is the opposite of what
+    that rate implied: the eager ROW is cheaper (0.555 against 0.608), because
+    halving the weight bytes makes the kernel faster while `calibrate_iters`
+    targets a fixed 200 ms either way. The cost is in the prologue, which
+    carries quantisation, and in the graph column, because `should_time_graph`
+    prices launch overhead against a roofline minimum computed from compulsory
+    BYTES -- halve them and it stops skipping."""
     for env in ("vllm", "sglang"):
-        assert PR.MEASURED_SECONDS_PER_ROW[(env, "fp8")] > \
-            1.25 * PR.MEASURED_SECONDS_PER_ROW[(env, "bf16")]
+        bf16, fp8 = (PR.MEASURED_CELL_COST[(env, f)] for f in ("bf16", "fp8"))
+        assert fp8.eager < bf16.eager, env
+        assert fp8.graph > 1.5 * bf16.graph, env
+        def four_mode(c):
+            return c.prologue + 2 * c.eager + 2 * c.graph
+        # 1.30x for vLLM, 1.23x for SGLang, and the sign is what matters: the
+        # per-row rate this replaced would now report fp8 as CHEAPER.
+        assert four_mode(fp8) > 1.20 * four_mode(bf16), env
+
     bf16 = replace(PR.get("full"), dtypes=("bf16",))
     fp8 = replace(PR.get("full"), dtypes=("fp8_e4m3",))
     assert PR.estimated_hours(fp8)["vllm"] > 1.25 * PR.estimated_hours(bf16)["vllm"]
+
+
+def test_a_one_mode_profile_is_not_a_quarter_of_a_four_mode_one():
+    """THE BUG THIS COST MODEL EXISTS TO FIX. Dropping three of four timing
+    modes drops three of four TIMING ROWS, but the per-cell prologue -- weights,
+    forced routing, the fp32 oracle, the correctness compare -- is paid once
+    whatever runs after it. So a one-eager-mode cell is 38-42% of a four-mode
+    cell, not 25%, and the flat per-row rate under-priced `crossing-uniform` and
+    `deployment` by about 1.6x each."""
+    for env in ("base", "vllm", "sglang"):
+        cost = PR.MEASURED_CELL_COST[(env, "bf16")]
+        one = cost.prologue + cost.eager
+        four = cost.prologue + 2 * cost.eager + 2 * cost.graph
+        assert 1.5 < one / (0.25 * four) < 1.8, env
+
+    one_mode = replace(PR.get("full"), l2_modes=(False,), graph_modes=(False,))
+    assert PR.estimated_hours(one_mode)["total"] > \
+        0.35 * PR.estimated_hours(PR.get("full"))["total"]
+
+
+def test_the_l2_axis_multiplies_both_modes_and_the_graph_axis_selects():
+    """`len(l2_modes) * len(graph_modes)` was one number, and one number cannot
+    say which KIND of row it is counting: it priced an eager-only profile at a
+    graph profile's rate and the other way round."""
+    both = replace(PR.get("full"), l2_modes=(True, False),
+                   graph_modes=(False, True))
+    assert PR._mode_rows(both) == (2, 2)
+    assert PR._mode_rows(replace(both, graph_modes=(False,))) == (2, 0)
+    assert PR._mode_rows(replace(both, graph_modes=(True,))) == (0, 2)
+    assert PR._mode_rows(replace(both, l2_modes=(False,))) == (1, 1)
+
+
+def test_a_graph_row_costs_the_same_everywhere_and_the_spread_is_the_skip_rate():
+    """Every published arm timed a graph row at 0.657-0.674 s whatever the env
+    or dtype. The `graph` column spreads 0.233 to 0.560 because it is per
+    PLANNED row with `should_time_graph`'s skip policy already inside it, and
+    that policy fires on bytes. Reading it as a per-timed-row rate would say
+    SGLang replays graphs twice as fast as vLLM, which is not a thing."""
+    graph = [c.graph for c in PR.MEASURED_CELL_COST.values()]
+    eager = [c.eager for c in PR.MEASURED_CELL_COST.values()]
+    assert max(graph) / min(graph) > 2.0, "the skip rate is the whole spread"
+    assert max(eager) / min(eager) < 1.25, "an eager row is always timed"
 
 
 def test_the_impl_counts_do_not_come_from_the_registry():
@@ -375,7 +596,8 @@ def test_the_impl_counts_do_not_come_from_the_registry():
 
 
 @pytest.mark.parametrize("name,budget", [("crossing-uniform", 1.0),
-                                         ("deployment", 0.75)])
+                                         ("deployment", 0.75),
+                                         ("trace-replay", 0.75)])
 def test_the_new_profiles_are_affordable(name, budget):
     """A profile nobody can afford to run is not a contribution. Both of these
     have to come in well under `full`'s four hours across all three

@@ -76,25 +76,91 @@ PY="${MOE_PYTHON:-$WORKSPACE/venvs/$ENV_NAME/bin/python}"
 
 log() { printf '[mma] %s\n' "$*"; }
 
+#: Dropped inside a dump directory so a later run can recognise its own output.
+DUMP_MARKER=".moe-ptx-dump"
+
+# DUMP_DIR arrives from MOE_PTX_DIR or --out and is handed straight to `rm -rf`,
+# so it is checked before it is deleted. MOE_PTX_DIR="" collapses the default,
+# `--out` with a missing value swallows the next flag, and MOE_PTX_DIR=$HOME on a
+# rented pod is one keystroke from a path whose recursive removal cannot be
+# undone. A blacklist alone is not enough, so an EXISTING directory must also be
+# empty or carry this script's own marker: that is what "clearly a dump
+# directory" means here, and nothing else is deleted.
+refuse() { echo "[mma] refusing to rm -rf '$DUMP_DIR': $*" >&2; exit 2; }
+case "$DUMP_DIR" in
+  "") refuse "empty path" ;;
+  /*) : ;;
+  *)  refuse "not an absolute path" ;;
+esac
+case "${DUMP_DIR%/}" in
+  ""|"/"|"/root"|"/home"|"/tmp"|"/usr"|"/etc"|"/var"|"/workspace"|"$HOME"|"$WORKSPACE"|"$REPO_ROOT")
+    refuse "that is a root, home, workspace or repo directory" ;;
+esac
+if [[ -e "$DUMP_DIR" ]]; then
+  [[ -d "$DUMP_DIR" ]] || refuse "it exists and is not a directory"
+  if [[ ! -e "$DUMP_DIR/$DUMP_MARKER" && -n "$(ls -A "$DUMP_DIR")" ]]; then
+    refuse "it is not empty and carries no $DUMP_MARKER, so this script did not write it"
+  fi
+fi
+
+DUMP_DIR="${DUMP_DIR%/}"   # so the -prune path below matches find's output exactly
+
 rm -rf "$DUMP_DIR"
 mkdir -p "$DUMP_DIR"
+: > "$DUMP_DIR/$DUMP_MARKER"
 log "dumping Triton IR and PTX to $DUMP_DIR"
+
+# A CACHE HIT DUMPS NO PTX, and that is the failure this line exists to prevent.
+# TRITON_KERNEL_DUMP asks for the dump, but Triton does not recompile a kernel it
+# has already built, and setup_runpod.sh exports a SHARED
+# TRITON_CACHE_DIR=$WORKSPACE/triton-cache that every earlier sweep on the pod has
+# already populated with this exact fused_moe specialisation. Inheriting it means
+# nothing compiles, nothing is written, and the script exits 1 reporting that the
+# kernel never compiled -- which is very likely why the A100 was never
+# successfully dumped. A per-run cache forces every specialisation to be built,
+# exactly as scripts/tile_sweep.py arm_ptx_dump does.
+CACHE_DIR="$DUMP_DIR/_cache"
 
 # TRITON_KERNEL_DUMP=1 writes every compilation stage; TRITON_DUMP_DIR says where.
 # A smoke-sized cell is enough: the instruction selection does not depend on how
 # many times the kernel runs, only on the tile shape it was compiled for.
-TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$DUMP_DIR" \
+#
+# TEE'd rather than piped to `tail -5`, and with no `|| true`. The discarded
+# lines were the evidence: vLLM logs "Using configuration from FILE for MoE
+# layer." on a tuned hit and "Using default MoE config. Performance might be
+# sub-optimal!" on a miss, and that single line is what turns every tile
+# statement in FINDINGS C3 and C5 from DERIVED into OBSERVED. `|| true` also
+# meant a sweep that died -- OOM, missing vLLM, a bad --model -- still reached
+# the PTX scan and reported on whatever stale files were lying around.
+LOG="$DUMP_DIR/run.log"
+TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$DUMP_DIR" TRITON_CACHE_DIR="$CACHE_DIR" \
   "$PY" -m moe.bench.cli --env "$ENV_NAME" --profile smoke \
         --groups baselines --models "$MODEL" --tokens "$TOKENS" \
-        --out-dir "$WORKSPACE/results-ptx" 2>&1 | tail -5 || true
+        --out-dir "$WORKSPACE/results-ptx" 2>&1 | tee "$LOG"
 
-shopt -s nullglob globstar
-ptx=("$DUMP_DIR"/**/*.ptx)
+echo
+echo "=== which config vLLM resolved (quote this, do not derive it) ==="
+grep -E 'Using configuration from|Using default MoE config' "$LOG" \
+  || echo "  NEITHER LINE IN $LOG. vLLM logs one of them once per (E,N,dtype,device)
+  via logger.info_once/warning_once, so a second cell in the same process is
+  silent; check that this run was the first fused_experts call, and that the log
+  level lets info through."
+
+# `find` rather than `shopt -s globstar`, which is bash 4+ and therefore cannot
+# be exercised on a macOS bash 3.2 laptop before the pod is rented. The -prune
+# is load-bearing: the per-run Triton cache now lives UNDER the dump directory
+# and a cache entry stores its own .ptx beside the cubin, so without it every
+# kernel is counted twice, once under a hash-named path.
+ptx=()
+while IFS= read -r -d '' f; do
+  ptx+=("$f")
+done < <(find "$DUMP_DIR" -path "$CACHE_DIR" -prune -o -name '*.ptx' -print0)
 if (( ${#ptx[@]} == 0 )); then
-  echo "[mma] no .ptx under $DUMP_DIR." >&2
-  echo "[mma] Triton only dumps kernels it COMPILES; a cached kernel is not" >&2
-  echo "[mma] recompiled. Clear the cache and retry:" >&2
-  echo "[mma]   rm -rf \${TRITON_CACHE_DIR:-~/.triton/cache}" >&2
+  echo "[mma] no .ptx under $DUMP_DIR (excluding $CACHE_DIR)." >&2
+  echo "[mma] A stale cache is no longer a possible cause: TRITON_CACHE_DIR is" >&2
+  echo "[mma] per-run and was empty a moment ago, so every kernel recompiled." >&2
+  echo "[mma] What is left: the span never ran (check $LOG), vLLM is absent from" >&2
+  echo "[mma] this env, or the cell fell back to a non-Triton path." >&2
   exit 1
 fi
 log "found ${#ptx[@]} PTX file(s)"
@@ -137,4 +203,6 @@ else
   echo "     actually compiled, and that the right env was used."
 fi
 echo
-echo "  PTX kept at $DUMP_DIR for the writeup."
+echo "  PTX kept at $DUMP_DIR, run log at $LOG."
+echo "  Both are transient pod output until they are committed; FINDINGS lists"
+echo "  that as the reason C1 and C3 cannot be checked without a GPU."

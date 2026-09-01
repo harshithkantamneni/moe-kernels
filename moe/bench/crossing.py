@@ -15,6 +15,13 @@ Returning None when the sweep does not bracket the transition is the point. A
 grid that is entirely flat, or entirely linear, contains no crossing, and
 producing a number from it would be inventing the result C2 is judged on.
 
+THE CURVE CROSSES MORE THAN ONCE, and for eight of the sixteen canonical
+uniform cells it does. `crossing_from_points` returns the FIRST one and the
+first one is usually a tile step rather than the ridge, so
+`all_crossings_from_points` is what an analysis should reach for.
+`m_tiles_for_row` puts the tile count beside the token count, which is what
+makes a staircase visible instead of arguable.
+
 A crossing read this way inherits the noise of the two slopes it interpolates
 between, amplified by `1/(s1 - s0)`, which is small exactly where the curve is
 flat. `crossing_interval` pushes the measured replicate spread through the same
@@ -35,7 +42,8 @@ import statistics
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from .schema import UNRECORDED
+from ..routing.imbalance import TileEfficiencyUndetermined, tile_efficiency_for_row
+from .schema import UNRECORDED, TileConfigUnrecorded, has_tile_config, row_float, tile_field
 
 #: Halfway between the weight-bound regime (0) and the compute-bound one (1).
 DEFAULT_THRESHOLD = 0.5
@@ -252,10 +260,125 @@ def local_slopes(points: list[tuple[float, float]]) -> list[tuple[float, float]]
     return out
 
 
-def crossing_from_points(points: list[tuple[float, float]],
-                         threshold: float = DEFAULT_THRESHOLD,
-                         min_tokens: float = 0.0) -> float | None:
-    """The token count where the measured slope first crosses `threshold`.
+@dataclass(frozen=True)
+class Upcrossing:
+    """One upward crossing, with the grid interval whose slope produced it.
+
+    `step_lo` and `step_hi` are the two token counts bounding the interval whose
+    slope rose through the threshold, and they are NOT the pair the crossing
+    sits between. A slope is stamped at the geometric mid of its interval, so a
+    crossing interpolated between two adjacent slopes straddles the grid POINT
+    they share, and can land on either side of it: qwen2's first crossing is 730
+    tokens and the tile step that caused it is the 1024-to-1152 interval, which
+    starts 294 tokens later. An annotation that read the interval off the
+    crossing's own value would name 512-to-1024 there and point at the wrong
+    step.
+
+    The slopes are kept because their separation is the crossing's leverage:
+    `crossing_interval` amplifies timing noise by `1/(slope_above -
+    slope_below)`, and a reader deciding whether to trust one of several
+    crossings wants that number without recomputing it.
+    """
+
+    tokens: float
+    step_lo: float
+    step_hi: float
+    slope_below: float
+    slope_above: float
+
+
+def upcrossings(points: list[tuple[float, float]],
+                threshold: float = DEFAULT_THRESHOLD,
+                min_tokens: float = 0.0) -> list[Upcrossing]:
+    """Every upward crossing, each with the interval that produced it.
+
+    The mechanism, the eight multi-crossing cells and the reason first-passage
+    is the wrong reduction are all in `all_crossings_from_points`, which is this
+    with the annotation dropped.
+    """
+    spans = _slope_spans([(t, ms) for t, ms in points if t >= min_tokens])
+    found = []
+    for (_, _, mid0, s0), (lo1, hi1, mid1, s1) in zip(spans, spans[1:],
+                                                      strict=False):
+        if not s0 < threshold <= s1:
+            continue
+        if s1 == s0:                           # pragma: no cover - guarded above
+            tokens = mid1
+        else:
+            f = (threshold - s0) / (s1 - s0)   # interpolate in log T
+            tokens = math.exp(math.log(mid0) + f * (math.log(mid1) - math.log(mid0)))
+        # The interval annotated is the one the RISING slope spans, not the one
+        # the crossing's own value falls in. See `Upcrossing`.
+        found.append(Upcrossing(tokens, lo1, hi1, s0, s1))
+    return found
+
+
+def _slope_spans(points: list[tuple[float, float]]
+                 ) -> list[tuple[float, float, float, float]]:
+    """`(t_lo, t_hi, geometric mid, slope)` per adjacent pair.
+
+    `local_slopes` drops a pair with a non-positive time WITHOUT dropping the
+    point, so its output cannot be indexed back onto the token grid: one skipped
+    pair and every interval an annotation names is off by one. This keeps the
+    endpoints attached instead. The arithmetic is `local_slopes`', and
+    `tests/test_multiple_crossings.py` pins the two equal on real rows so the
+    duplication cannot drift.
+    """
+    pts = _clean(points)
+    spans = []
+    for (t0, m0), (t1, m1) in zip(pts, pts[1:], strict=False):
+        if m0 <= 0 or m1 <= 0:
+            continue
+        spans.append((t0, t1, math.sqrt(t0 * t1),
+                      math.log(m1 / m0) / math.log(t1 / t0)))
+    return spans
+
+
+def all_crossings_from_points(points: list[tuple[float, float]],
+                              threshold: float = DEFAULT_THRESHOLD,
+                              min_tokens: float = 0.0) -> list[float]:
+    """EVERY token count where the measured slope crosses `threshold` upward.
+
+    THE BUG THIS PREVENTS, and it moved this study's headline by 59%. The curve
+    is not a single transition from flat to linear. It is a STAIRCASE, and a
+    first-passage detector reads the first step of the staircase rather than the
+    ridge. 8 of the 16 canonical uniform cells cross 0.5 going up more than once:
+
+        mixtral-8x7b  vllm     313 then  800     qwen2  vllm   730 then 1573
+        deepseek-v3   vllm    2925 then 6391     mixtral sglang 313 then  778
+
+    THE MECHANISM IS M-TILE QUANTISATION, not the roofline. M-tiles per expert
+    is `ceil(rows_per_expert / BLOCK_M)`, and each extra tile is another pass
+    over that expert's weight matrix, so time steps up when a tile is added and
+    flatlines while the tile count holds. mixtral, `vllm_fused_experts`,
+    uniform, tiles at BLOCK_M 128 read off the rows' own load columns:
+
+        T=512   128 rows/expert   12 tiles   1.2224 ms
+        T=576   144              15-16       1.3323   slope 0.731   tiles JUMP
+        T=640   160              16          1.3991   slope 0.464
+        T=704   176              16          1.4292   slope 0.223
+        T=768   192              16          1.4437   slope 0.116   tiles FLAT
+        T=1024  256              19-21       1.9088   slope 0.971   tiles JUMP
+
+    The slope therefore spikes above 0.5 at EVERY step and sags below it on
+    every tread, and which step the detector lands on is set by where the token
+    grid happens to sample, not by the hardware. Across the 78 intervals of the
+    eight five-stage Triton cells the measured slope tracks the tile-growth
+    exponent `d(log tiles)/d(log T)` at r = 0.88.
+
+    128 is an ASSUMPTION, not a measurement: every published arm is schema v3
+    and none of them records the tile that ran. It is not load-bearing here.
+    The same rows counted at 64 read 20, 23, 24, 25, 28 then 37 tiles, which
+    steps in the same places -- the staircase is a property of quantising rows
+    into tiles at all, not of the particular block.
+
+    WHICH CROSSING IS THE RIDGE IS NOT SETTLED HERE, and this function
+    deliberately does not choose. What is on the record is that taking the LAST
+    moves the five-stage over one-stage separation from 0.5602 to 0.8889, and
+    that rows per expert at the last crossing (mean 175.8, CV 21.2%) sit inside
+    the measured ridge band of 160.3-176.2 where the first (mean 123.4, CV
+    40.0%) does not. A dense token grid is what settles it; reporting both is
+    what stops a number being quoted before it is settled.
 
     `min_tokens` discards points below it. Pass the model's saturation batch:
     below `E/k` tokens a batch does not reach every expert, so active experts
@@ -265,20 +388,117 @@ def crossing_from_points(points: list[tuple[float, float]],
     a predicted 641. `2R/b` assumes all E experts are active, so those points
     are outside the claim's domain rather than evidence against it.
 
-    None when the grid does not bracket it, which is a real answer: it says the
-    sweep needs different token counts, not that the crossing does not exist.
+    Empty when the grid does not bracket a crossing at all, which is a real
+    answer: it says the sweep needs different token counts, not that the
+    crossing does not exist. Downward crossings are not returned -- the
+    transition being measured runs flat to linear, and a slope falling back
+    through 0.5 is the top of a step, not a regime change.
     """
-    points = [(t, ms) for t, ms in points if t >= min_tokens]
-    slopes = local_slopes(points)
-    if len(slopes) < 2:
+    return [u.tokens for u in upcrossings(points, threshold, min_tokens)]
+
+
+def crossing_from_points(points: list[tuple[float, float]],
+                         threshold: float = DEFAULT_THRESHOLD,
+                         min_tokens: float = 0.0) -> float | None:
+    """The FIRST token count where the measured slope crosses `threshold`.
+
+    Kept because published figures and pinned tests were read off it, and
+    because `crossing_interval` bands the number those figures quote. It is not
+    what a new analysis should call: on half the canonical uniform cells the
+    first upcrossing is a tile step and there is a later one, so this function
+    answers a question the data does not have a single answer to. Reach for
+    `all_crossings_from_points`, whose docstring carries the staircase.
+
+    None rather than an empty list, so the existing callers keep their shape.
+    """
+    found = all_crossings_from_points(points, threshold, min_tokens)
+    return found[0] if found else None
+
+
+# --- the staircase, overlaid on the slope table ------------------------------
+
+#: The tile efficiencies the schema already stores, keyed by the BLOCK_M each
+#: was computed at. Preferred over reconstruction because they were written from
+#: the full per-expert distribution, which the CSV does not otherwise keep: above
+#: `load_max_rows > block_m` an expert spans several tiles and the stored number
+#: is the only thing that still knows how many.
+STORED_TILE_EFF = {64: "load_tile_eff_bm64", 128: "load_tile_eff_bm128"}
+
+
+def recorded_block_m(row: Mapping) -> int | None:
+    """The tile the kernel ACTUALLY ran, or None when the row does not say.
+
+    None for every v3 row, where the column did not exist and reads back as the
+    UNRECORDED sentinel, and None for a v4 row whose observer never ran. The ten
+    published arms are all v3, so in practice a caller has to name a BLOCK_M and
+    own that choice -- which is the honest position, since `m_tiles_for_row`
+    otherwise reports the staircase of a schedule that may not be the one timed.
+    """
+    if not has_tile_config(row):
         return None
-    for (t0, s0), (t1, s1) in zip(slopes, slopes[1:], strict=False):
-        if s0 < threshold <= s1:
-            if s1 == s0:                       # pragma: no cover - guarded above
-                return t1
-            f = (threshold - s0) / (s1 - s0)   # interpolate in log T
-            return math.exp(math.log(t0) + f * (math.log(t1) - math.log(t0)))
-    return None
+    value = tile_field(row, "tile_block_m")
+    return int(value) or None
+
+
+def m_tiles_for_row(row: Mapping, block_m: int | None = None) -> float:
+    """M-tiles this row's routing forces, summed over its active experts.
+
+    THE NUMBER THE SLOPE TABLE IS MISSING. `ceil(rows_per_expert / BLOCK_M)`
+    tiles per expert, each one another pass over that expert's weights, so the
+    tile count is the staircase `all_crossings_from_points` describes and this
+    is how it gets printed beside the token count. mixtral holds 16 tiles from
+    T=576 to T=768 and its time moves 8% across that whole band, then gains
+    three tiles by T=1024 and jumps 32%.
+
+    `tile_eff = useful_rows / padded_rows` and `padded_rows = tiles * block_m`,
+    so `tiles = total_rows / (tile_eff * block_m)` -- an exact integer, not an
+    estimate, whenever `tile_eff` came from the real per-expert counts.
+
+    Prefers the stored `load_tile_eff_bm{64,128}` column, because it was written
+    from a distribution the CSV does not keep and stays right where an expert
+    spans several tiles. Falls back to `tile_efficiency_for_row`, which
+    reconstructs any block size while every expert still fits in one tile and
+    raises `TileEfficiencyUndetermined` rather than guessing once one does not.
+
+    `block_m = None` asks the row which tile it ran, and raises when the row
+    predates the v4 column rather than reading the sentinel as a number. That
+    refusal is the same rule the whole tile_* block exists for: a plausible
+    number with no measurement behind it steered this study for days.
+    """
+    if block_m is not None and block_m <= 0:
+        raise ValueError("block_m must be positive")
+    if block_m is None:
+        block_m = recorded_block_m(row)
+        if block_m is None:
+            raise TileConfigUnrecorded(
+                "this row does not record the tile it ran (v3 predates the "
+                "column), so name the BLOCK_M to overlay -- e.g. --block-m 128 "
+                "-- rather than letting a default stand in for a measurement")
+    total = row_float(row, "load_total_rows")
+    if total <= 0.0:
+        raise TileEfficiencyUndetermined(
+            "load_total_rows is 0 or absent, so this row carries no routing "
+            "realisation to count tiles over")
+    eff = 0.0
+    column = STORED_TILE_EFF.get(block_m)
+    if column is not None:
+        # `row_float` raises TileConfigUnrecorded on the sentinel rather than
+        # coercing it, which is what makes a v3 row loaded through read_csv
+        # fall through to reconstruction instead of reading a hole as a number.
+        try:
+            eff = row_float(row, column)
+        except TileConfigUnrecorded:
+            eff = 0.0
+    if eff <= 0.0:
+        eff = tile_efficiency_for_row(row, block_m)
+    if eff <= 0.0:
+        # `tile_efficiency_for_row` returns 0.0 for a row with rows but no
+        # active experts. That is a malformed load column set, not a schedule
+        # that computes nothing, and dividing by it would report inf tiles.
+        raise TileEfficiencyUndetermined(
+            f"tile efficiency at block_m={block_m} is 0, which means "
+            "UNRECORDED and not a schedule that computes nothing")
+    return total / (eff * block_m)
 
 
 def _clean(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -360,6 +580,12 @@ def crossing_interval(points_with_replicates: list[tuple[float, list[float]]],
     `MIN_RELATIVE_SPREAD`) before the crossing is recomputed. Lognormal because a
     time cannot go negative and the slopes are taken in log space, so the noise
     belongs there too.
+
+    BANDS THE FIRST CROSSING, because that is the number published figures
+    quote. On a staircase cell the first crossing is a tile step, and a tight
+    band around a tile step says the step is well measured -- which it is --
+    and nothing at all about whether it is the ridge. Check
+    `all_crossings_from_points` before reading a band as a band on the answer.
 
     `random.Random(seed)` rather than the module-level `random`, so a report is
     reproducible and calling this does not move any other stream.

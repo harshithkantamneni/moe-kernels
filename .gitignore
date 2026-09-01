@@ -32,7 +32,11 @@ results/*
 # Regenerated from the CSVs on every run, so tracking them means binary churn
 # on each sweep. publish_results.sh copies the relevant ones into
 # results/published/<label>/ so a kept result set carries its own figures.
-plots/
+# Anchored. Unanchored `plots/` matches at ANY depth, so it silently swallowed
+# results/published/<arm>/plots/*.png on every publish: publish_results.sh copies
+# the figures in and logs "included N figure(s)", then git add drops every one.
+# Zero .png files are tracked under results/published/ across all ten arms.
+/plots/
 
 # --- traces --------------------------------------------------------------
 # Captured routing histograms ARE committed: they are kilobytes and they are

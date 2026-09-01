@@ -19,11 +19,21 @@ committed so a reader without a network can check the claim:
 vllm/model_executor/layers/fused_moe/configs?ref=v0.27.1&per_page=100" \\
       | python3 -c "import json,sys; [print(e['name']) for e in json.load(sys.stdin)]"
 
-327 files at v0.27.1. Reproduced here are every `E=256` name (27 of them, the
-whole DeepSeek-V3 expert count across all devices) plus the H200 names at the
-`E=8` and `E=64` widths this study's other two models shard to. Nothing else is
-asserted about, so nothing else is copied.
+327 files at v0.27.1, and ALL 327 are now copied below as `SHIPPED_V0_27_1`.
+The two curated subsets that came first -- every `E=256` name, and the H200 names
+at the `E=8` and `E=64` widths this study's other two models shard to -- are kept
+beside it because their docstrings say what each is for, and a test asserts they
+agree with the full listing.
+
+Copying the whole tree rather than the interesting corner of it is what makes a
+NEGATIVE answer available. "This file ships" needs one name; "NO file ships for
+this shape" needs all of them, and that is the direction
+tests/test_tile_source_crosscheck.py checks a recorded `tile_config_source`
+against. Under the partial listing every A100 cell was undecidable, and the four
+A100 cells are the ones C5 turns on.
 """
+import re
+
 import pytest
 
 from moe.bench import profiles as PR
@@ -83,7 +93,352 @@ SHIPPED_H200_OTHER = frozenset({
     "E=64,N=320,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
 })
 
-SHIPPED = SHIPPED_E256 | SHIPPED_H200_OTHER
+#: EVERY config file vLLM ships at v0.27.1, all 327, taken by running the curl
+#: above on 2026-09-01. The two curated subsets below predate it and are kept
+#: because their docstrings explain what each one is FOR; a test asserts they are
+#: consistent with this listing, so a transcription slip in either is loud.
+#:
+#: The complete set is what makes a NEGATIVE decidable. A partial listing can say
+#: "this file ships"; only a complete one can say "no file ships for this shape",
+#: and that is the direction tests/test_tile_source_crosscheck.py needs in order
+#: to catch a row claiming tile_config_source="vllm_tuned" on a shape vLLM has
+#: nothing tuned for. A partial listing would have made every A100 cell in this
+#: study undecidable, which is exactly the four cells C5 turns on.
+SHIPPED_V0_27_1 = frozenset({
+    "E=1,N=14336,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=1,N=14336,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=1,N=1792,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=1,N=1792,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=1,N=1792,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=1,N=3072,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=1,N=3072,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=1,N=3072,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=1,N=3072,device_name=NVIDIA_H200,dtype=int8_w8a16.json",
+    "E=1,N=3584,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=1,N=3584,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=1,N=3584,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=1,N=7168,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=1,N=7168,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=1,N=7168,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=128,N=1024,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=128,N=1024,device_name=AMD_Instinct_MI300X.json",
+    "E=128,N=1024,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=128,N=1024,device_name=NVIDIA_H100,dtype=fp8_w8a8.json",
+    "E=128,N=1024,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=128,N=1024,device_name=NVIDIA_H200.json",
+    "E=128,N=1856,device_name=NVIDIA_B200.json",
+    "E=128,N=1856,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=1856,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=128,N=1856,device_name=NVIDIA_L40S.json",
+    "E=128,N=192,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=128,N=192,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=192,device_name=NVIDIA_H20-3e.json",
+    "E=128,N=192,device_name=NVIDIA_H20.json",
+    "E=128,N=192,device_name=NVIDIA_H200.json",
+    "E=128,N=192,device_name=NVIDIA_H800,dtype=fp8_w8a8.json",
+    "E=128,N=2880,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=352,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=128,N=384,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=384,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_H20-3e,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_H20-3e.json",
+    "E=128,N=384,device_name=NVIDIA_H20.json",
+    "E=128,N=384,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=384,device_name=NVIDIA_H200.json",
+    "E=128,N=512,device_name=AMD_Radeon_R9700,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=512,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=512,device_name=NVIDIA_B200,dtype=fp8_w8a8.json",
+    "E=128,N=512,device_name=NVIDIA_B200.json",
+    "E=128,N=512,device_name=NVIDIA_GB200,dtype=fp8_w8a8.json",
+    "E=128,N=512,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=512,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=512,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=128,N=512,device_name=NVIDIA_H200.json",
+    "E=128,N=704,device_name=NVIDIA_B200,dtype=fp8_w8a8.json",
+    "E=128,N=704,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=128,N=704,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Workstation_Edition,dtype=fp8_w8a8.json",
+    "E=128,N=768,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=AMD_Instinct_MI308X.json",
+    "E=128,N=768,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=NVIDIA_B200.json",
+    "E=128,N=768,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=NVIDIA_H20-3e,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=NVIDIA_H20.json",
+    "E=128,N=768,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=128,N=768,device_name=NVIDIA_H200.json",
+    "E=128,N=768,device_name=Radeon_8060S_Graphics,dtype=int4_w4a16.json",
+    "E=128,N=8960,device_name=NVIDIA_H100_80GB_HBM3,dtype=bf16.json",
+    "E=128,N=8960,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=128,N=928,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=128,N=928,device_name=NVIDIA_L40S.json",
+    "E=128,N=96,device_name=NVIDIA_H20.json",
+    "E=128,N=96,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=128,N=96,device_name=NVIDIA_H200.json",
+    "E=129,N=704,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Workstation_Edition,dtype=fp8_w8a8.json",
+    "E=16,N=1024,device_name=AMD_Instinct_MI300X.json",
+    "E=16,N=1024,device_name=NVIDIA_B200,dtype=fp8_w8a8.json",
+    "E=16,N=1024,device_name=NVIDIA_B200.json",
+    "E=16,N=1024,device_name=NVIDIA_H100.json",
+    "E=16,N=1024,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=16,N=1024,device_name=NVIDIA_H200.json",
+    "E=16,N=1344,device_name=NVIDIA_A100-SXM4-40GB.json",
+    "E=16,N=1344,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=1344,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=16,N=14336,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=16,N=14336,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=14336,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=16,N=1792,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=16,N=1792,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=1792,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=16,N=1792,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=16,N=2048,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=16,N=2048,device_name=NVIDIA_H200.json",
+    "E=16,N=2688,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=2688,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=16,N=3072,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=16,N=3072,device_name=NVIDIA_H100_80GB_HBM3,dtype=float8.json",
+    "E=16,N=3072,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=16,N=3072,device_name=NVIDIA_H200,dtype=int8_w8a16.json",
+    "E=16,N=3200,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=16,N=3584,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=16,N=3584,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=3584,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=16,N=4096,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=16,N=4096,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=16,N=6400,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=16,N=7168,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a16.json",
+    "E=16,N=7168,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=16,N=7168,device_name=NVIDIA_H100_80GB_HBM3,dtype=float8.json",
+    "E=16,N=7168,device_name=NVIDIA_H100_80GB_HBM3,dtype=int8_w8a16.json",
+    "E=16,N=800,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=160,N=192,device_name=AMD_Instinct_MI300X.json",
+    "E=160,N=192,device_name=AMD_Instinct_MI350_OAM,dtype=fp8_w8a8.json",
+    "E=160,N=192,device_name=NVIDIA_A800-SXM4-80GB.json",
+    "E=160,N=192,device_name=NVIDIA_B300_SXM6_AC,dtype=fp8_w8a8.json",
+    "E=160,N=192,device_name=NVIDIA_H20-3e.json",
+    "E=160,N=192,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=160,N=320,device_name=NVIDIA_H20-3e.json",
+    "E=160,N=384,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=160,N=384,device_name=AMD_Instinct_MI350_OAM,dtype=fp8_w8a8.json",
+    "E=160,N=384,device_name=AMD_Instinct_MI355_OAM,dtype=fp8_w8a8.json",
+    "E=160,N=384,device_name=NVIDIA_B200,dtype=fp8_w8a8.json",
+    "E=160,N=384,device_name=NVIDIA_B300_SXM6_AC,dtype=fp8_w8a8.json",
+    "E=160,N=640,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=160,N=640,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=160,N=640,device_name=NVIDIA_H100,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=160,N=768,device_name=NVIDIA_B300_SXM6_AC,dtype=fp8_w8a8.json",
+    "E=20,N=1536,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition,dtype=fp8_w8a8.json",
+    "E=20,N=2560,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=20,N=2560,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=20,N=2560,device_name=NVIDIA_H100,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=20,N=2560,device_name=NVIDIA_H20-3e,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=1024,device_name=AMD_Instinct_MI325X,block_shape=[128,128].json",
+    "E=256,N=1024,device_name=AMD_Instinct_MI325_OAM,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=128,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a8,block_shape=[128,128].json",
+    "E=256,N=128,device_name=NVIDIA_A100-SXM4-80GB,dtype=int8_w8a8.json",
+    "E=256,N=128,device_name=NVIDIA_A800-SXM4-80GB,dtype=int8_w8a8,block_shape=[128,128].json",
+    "E=256,N=128,device_name=NVIDIA_A800-SXM4-80GB,dtype=int8_w8a8.json",
+    "E=256,N=128,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=128,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=128,device_name=NVIDIA_L20Y,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=AMD_Instinct_MI325_OAM,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_H20,dtype=int8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_H20-3e,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_H20.json",
+    "E=256,N=256,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=256,device_name=NVIDIA_L20,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=384,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=384,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=512,device_name=AMD_Instinct_MI325_OAM,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=512,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=512,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=256,N=512,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=512,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=256,N=64,device_name=NVIDIA_A800-SXM4-80GB.json",
+    "E=32,N=1408,device_name=NVIDIA_B200.json",
+    "E=32,N=1792,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=32,N=2048,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=32,N=2048,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=128,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=128,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=128,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=256,device_name=AMD_Instinct_MI350X,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI350X,dtype=int4_w4a16.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI350_OAM,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI350_OAM,dtype=int4_w4a16.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI355X,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI355X,dtype=int4_w4a16.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI355_OAM,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=256,device_name=AMD_Instinct_MI355_OAM,dtype=int4_w4a16.json",
+    "E=384,N=256,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=256,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=384,N=512,device_name=AMD_Instinct_MI350X,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=512,device_name=AMD_Instinct_MI350_OAM,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=512,device_name=AMD_Instinct_MI355X,dtype=int4_w4a16,backend=flydsl.json",
+    "E=384,N=512,device_name=AMD_Instinct_MI355_OAM,dtype=int4_w4a16,backend=flydsl.json",
+    "E=40,N=1536,device_name=NVIDIA_B200,dtype=fp8_w8a8.json",
+    "E=40,N=2560,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=40,N=2560,device_name=NVIDIA_GB200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=40,N=2560,device_name=NVIDIA_H100,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=128,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=512,N=128,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=128,device_name=NVIDIA_B200.json",
+    "E=512,N=128,device_name=NVIDIA_GB200,dtype=fp8_w8a8.json",
+    "E=512,N=128,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=128,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=512,N=128,device_name=NVIDIA_H20-3e.json",
+    "E=512,N=128,device_name=NVIDIA_H200.json",
+    "E=512,N=1344,device_name=NVIDIA_B200.json",
+    "E=512,N=256,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=256,device_name=NVIDIA_B200.json",
+    "E=512,N=256,device_name=NVIDIA_GB200,dtype=fp8_w8a8.json",
+    "E=512,N=256,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=256,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=512,N=256,device_name=NVIDIA_H20-3e.json",
+    "E=512,N=256,device_name=NVIDIA_H200.json",
+    "E=512,N=512,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=512,N=512,device_name=NVIDIA_B200.json",
+    "E=512,N=512,device_name=NVIDIA_GB200,dtype=fp8_w8a8.json",
+    "E=512,N=512,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=512,N=512,device_name=NVIDIA_H20-3e.json",
+    "E=512,N=512,device_name=NVIDIA_H200.json",
+    "E=512,N=64,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=512,N=64,device_name=NVIDIA_B200.json",
+    "E=512,N=64,device_name=NVIDIA_H20-3e.json",
+    "E=512,N=64,device_name=NVIDIA_H200.json",
+    "E=512,N=672,device_name=NVIDIA_B200.json",
+    "E=60,N=1408,device_name=AMD_Instinct_MI300X.json",
+    "E=60,N=176,device_name=AMD_Instinct_MI300X.json",
+    "E=60,N=352,device_name=AMD_Instinct_MI300X.json",
+    "E=60,N=704,device_name=AMD_Instinct_MI300X.json",
+    "E=62,N=128,device_name=AMD_Instinct_MI300X.json",
+    "E=62,N=256,device_name=AMD_Instinct_MI300X.json",
+    "E=62,N=256,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=62,N=512,device_name=AMD_Instinct_MI300X.json",
+    "E=62,N=512,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=64,N=1280,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=64,N=1280,device_name=NVIDIA_A800-SXM4-80GB.json",
+    "E=64,N=1280,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=64,N=1280,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=64,N=1280,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=64,N=1280,device_name=NVIDIA_H200.json",
+    "E=64,N=1408,device_name=NVIDIA_B200.json",
+    "E=64,N=1536,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=64,N=1536,device_name=NVIDIA_H20,dtype=fp8_w8a8.json",
+    "E=64,N=1536,device_name=NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=64,N=2560,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=64,N=2560,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=64,N=2560,device_name=NVIDIA_H200.json",
+    "E=64,N=3072,device_name=NVIDIA_H20,dtype=fp8_w8a8.json",
+    "E=64,N=3072,device_name=NVIDIA_H20.json",
+    "E=64,N=320,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=64,N=320,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=64,N=320,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=64,N=320,device_name=NVIDIA_H200.json",
+    "E=64,N=384,device_name=NVIDIA_H20,dtype=fp8_w8a8.json",
+    "E=64,N=384,device_name=NVIDIA_H20.json",
+    "E=64,N=512,device_name=NVIDIA_B200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=64,N=640,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=64,N=640,device_name=NVIDIA_A800-SXM4-80GB.json",
+    "E=64,N=640,device_name=NVIDIA_GeForce_RTX_4090,dtype=fp8_w8a8.json",
+    "E=64,N=640,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=64,N=640,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=64,N=640,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=64,N=640,device_name=NVIDIA_H200.json",
+    "E=64,N=768,device_name=AMD_Radeon_R9700,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=64,N=768,device_name=NVIDIA_H100_PCIe,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=64,N=768,device_name=NVIDIA_H20,dtype=fp8_w8a8.json",
+    "E=64,N=768,device_name=NVIDIA_H20.json",
+    "E=64,N=896,device_name=NVIDIA_H20.json",
+    "E=64,N=8960,device_name=NVIDIA_H100_80GB_HBM3,dtype=bf16.json",
+    "E=64,N=8960,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=72,N=192,device_name=AMD_Instinct_MI300X.json",
+    "E=72,N=384,device_name=AMD_Instinct_MI300X.json",
+    "E=72,N=384,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=72,N=768,device_name=AMD_Instinct_MI300X.json",
+    "E=72,N=768,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=14336,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=14336,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=14336,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=14336,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=14336,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=14336,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=14336,device_name=NVIDIA_H200.json",
+    "E=8,N=16384,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=16384,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=16384,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=16384,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=1792,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=1792,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=1792,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=1792,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=1792,device_name=NVIDIA_A100-SXM4-40GB.json",
+    "E=8,N=1792,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=8,N=1792,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=1792,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=1792,device_name=NVIDIA_H200.json",
+    "E=8,N=2048,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=2048,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=2048,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=2048,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=2048,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=8,N=2048,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=2048,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=2048,device_name=NVIDIA_H200,dtype=fp8_w8a8,block_shape=[128,128].json",
+    "E=8,N=2048,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=2048,device_name=NVIDIA_H200.json",
+    "E=8,N=3584,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=3584,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=3584,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=3584,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=3584,device_name=NVIDIA_A100-SXM4-40GB.json",
+    "E=8,N=3584,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=8,N=3584,device_name=NVIDIA_GeForce_RTX_4090,dtype=fp8_w8a8.json",
+    "E=8,N=3584,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=3584,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=3584,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=3584,device_name=NVIDIA_H200.json",
+    "E=8,N=3584,device_name=NVIDIA_L40S.json",
+    "E=8,N=4096,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=4096,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=4096,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=4096,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=4096,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=8,N=4096,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=4096,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=4096,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=4096,device_name=NVIDIA_H200.json",
+    "E=8,N=7168,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=7168,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=7168,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=7168,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=7168,device_name=NVIDIA_A100-SXM4-80GB.json",
+    "E=8,N=7168,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=7168,device_name=NVIDIA_H100_80GB_HBM3.json",
+    "E=8,N=7168,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "E=8,N=7168,device_name=NVIDIA_H200.json",
+    "E=8,N=8192,device_name=AMD_Instinct_MI300X,dtype=fp8_w8a8.json",
+    "E=8,N=8192,device_name=AMD_Instinct_MI300X.json",
+    "E=8,N=8192,device_name=AMD_Instinct_MI325X,dtype=fp8_w8a8.json",
+    "E=8,N=8192,device_name=AMD_Instinct_MI325X.json",
+    "E=8,N=8192,device_name=NVIDIA_H100_80GB_HBM3,dtype=fp8_w8a8.json",
+    "E=8,N=8192,device_name=NVIDIA_H200,dtype=fp8_w8a8.json",
+    "README",
+})
+
+#: The name every membership test in this repo asks against. It is the COMPLETE
+#: listing rather than the union of the two curated subsets, because the subsets
+#: were only ever complete within their own scope: `asked not in SHIPPED` over a
+#: partial set is a statement about what was copied, not about what vLLM ships.
+SHIPPED = SHIPPED_V0_27_1
 
 
 def config_key(model: str) -> tuple[int, int]:
@@ -97,6 +452,25 @@ def config_key(model: str) -> tuple[int, int]:
     return E, N
 
 
+def vllm_device_file_name(gpu_name: str) -> str:
+    r"""The `device_name=` selector vLLM builds from a torch device name.
+
+    Two steps, both from v0.27.1 source, and both able to silently mis-predict a
+    filename if guessed. `get_device_name_as_file_name` is
+    `re.sub(r"[\s/]+", "_", name)`, so it collapses RUNS of whitespace and also
+    rewrites a slash -- a plain `.replace(" ", "_")` differs on both. Then
+    `get_config_file_name` folds the whole H200 family onto the single name
+    `NVIDIA_H200` when any underscore-separated token is exactly "H200", which is
+    why an `NVIDIA H200 NVL` pod reads the plain H200 configs.
+
+    Takes the `gpu_name` a CSV row records, which is torch's name verbatim.
+    """
+    name = re.sub(r"[\s/]+", "_", gpu_name.strip())
+    if "H200" in name.split("_"):
+        name = "NVIDIA_H200"
+    return name
+
+
 def config_file_name(model: str, dtype: str | None = None,
                      block_shape: list[int] | None = None,
                      device_name: str = "NVIDIA_H200") -> str:
@@ -106,6 +480,40 @@ def config_file_name(model: str, dtype: str | None = None,
     block_selector = ("" if not block_shape or not all(block_shape)
                       else f",block_shape={block_shape}").replace(" ", "")
     return f"E={E},N={N},device_name={device_name}{dtype_selector}{block_selector}.json"
+
+
+# --------------------------------------------------------------------------
+# the listing itself
+# --------------------------------------------------------------------------
+
+def test_the_full_listing_and_the_two_curated_subsets_agree():
+    """Two transcriptions of the same tree, so a slip in either is loud.
+
+    The count is asserted because the failure mode of a hand-pasted listing is
+    truncation, and a truncated listing does not error -- it answers "no file
+    ships" for everything that fell off the end, which is the exact wrong answer
+    in the exact direction the cross-check trusts.
+    """
+    assert len(SHIPPED_V0_27_1) == 327
+    # The E=256 subset claims to be EVERY E=256 name, so equality, not subset.
+    assert SHIPPED_E256 == {n for n in SHIPPED_V0_27_1 if n.startswith("E=256,")}
+    assert SHIPPED_H200_OTHER <= SHIPPED_V0_27_1
+
+
+def test_the_device_selector_is_built_the_way_vllm_builds_it():
+    """The H200 family fold is not cosmetic: without it an `NVIDIA H200 NVL` row
+    predicts a filename that ships for nobody, so every tuned row on such a pod
+    would be scored as a lie."""
+    assert vllm_device_file_name("NVIDIA H200") == "NVIDIA_H200"
+    assert vllm_device_file_name("NVIDIA H200 NVL") == "NVIDIA_H200"
+    assert vllm_device_file_name("NVIDIA A100-SXM4-80GB") == "NVIDIA_A100-SXM4-80GB"
+    # Not an H200: the fold matches a whole token, never a substring.
+    assert vllm_device_file_name("NVIDIA GH200 480GB") == "NVIDIA_GH200_480GB"
+    # And the names it produces are the ones the shipped files actually use.
+    assert any(f"device_name={vllm_device_file_name('NVIDIA A100-SXM4-80GB')},"
+               in n or n.endswith(
+                   f"device_name={vllm_device_file_name('NVIDIA A100-SXM4-80GB')}.json")
+               for n in SHIPPED_V0_27_1)
 
 
 # --------------------------------------------------------------------------

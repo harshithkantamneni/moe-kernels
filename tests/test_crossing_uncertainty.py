@@ -25,6 +25,7 @@ import pytest
 
 from moe.bench.crossing import (
     MIN_RELATIVE_SPREAD,
+    all_crossings_from_points,
     crossing_from_points,
     crossing_interval,
     relative_spread,
@@ -144,6 +145,52 @@ def test_the_h200_and_a100_mixtral_bands_do_not_overlap():
         published(H200, "mixtral-8x7b"), min_tokens=saturation_batch("mixtral-8x7b"))
     assert round(a_point) == 229 and round(h_point) == 316
     assert a_hi < h_lo, (a_hi, h_lo)
+
+
+# -------------------------------------------- what the band is a band AROUND
+
+
+@needs_published
+def test_the_band_is_a_band_around_the_first_crossing_and_the_a100_mixtral_cell_has_two():
+    """The caveat every band in this file carries, and the one above it most.
+
+    `crossing_interval` bands `crossing_from_points`, which is the FIRST
+    upcrossing, and the A100 mixtral cell crosses twice: at 229 tokens and again
+    at 776. Its curve dips back to a slope of 0.479 over T=512 to 1024 before
+    rising to 0.689, which is a tread between two tile steps rather than a
+    single flat-to-linear transition.
+
+    So 229 +/- 12 says the first step is well measured, and says nothing about
+    whether the first step is the ridge -- a tight band on the wrong quantity is
+    the more dangerous kind. `crossing.all_crossings_from_points` reports both,
+    and `tests/test_multiple_crossings.py` carries the mechanism.
+    """
+    points = published(A100, "mixtral-8x7b")
+    found = all_crossings_from_points(
+        [(t, statistics.median(v)) for t, v in points],
+        min_tokens=saturation_batch("mixtral-8x7b"))
+    assert [round(x) for x in found] == [229, 776]
+    banded, _, _ = crossing_interval(points,
+                                     min_tokens=saturation_batch("mixtral-8x7b"))
+    assert banded == found[0]
+
+
+@needs_published
+def test_the_cross_card_comparison_puts_a_first_crossing_against_a_lone_one():
+    """Which makes the non-overlap above narrower than it reads. The A100 cell
+    supplies two crossings and the H200 cell one, on the SAME octave token grid,
+    so "229 against 316, bands disjoint" is comparing the A100's first step with
+    the H200's only one. Taking the A100's last instead gives 776 against 316
+    and reverses the sign of the difference. Nothing here says which is right;
+    it says the claim needs the grid that settles it."""
+    a100 = all_crossings_from_points(
+        [(t, statistics.median(v)) for t, v in published(A100, "mixtral-8x7b")],
+        min_tokens=saturation_batch("mixtral-8x7b"))
+    h200 = all_crossings_from_points(
+        [(t, statistics.median(v)) for t, v in published(H200, "mixtral-8x7b")],
+        min_tokens=saturation_batch("mixtral-8x7b"))
+    assert len(a100) == 2 and len(h200) == 1
+    assert a100[0] < h200[0] < a100[-1]
 
 
 # ------------------------------------------------------- the spread estimate

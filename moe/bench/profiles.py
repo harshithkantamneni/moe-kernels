@@ -9,16 +9,21 @@ Token counts deliberately start at 1. A single token is the decode regime, and
 decode with many experts is the memory-bound weight-loading wall this project
 targets. A sweep that starts at 512 tokens would miss the entire phenomenon.
 
-TWO PROFILES ANSWER FAULTS IN THE MATRIX RATHER THAN IN THE HARDWARE.
+THREE PROFILES ANSWER FAULTS IN THE MATRIX RATHER THAN IN THE HARDWARE.
 `crossing-uniform` exists because the study's central measurement, the ridge
-crossing, has never been made on a grid that could resolve one or with enough
-replicates to survive one throttled row. `deployment` exists because every
-published cell is TP=1 bf16, and TP=1 DeepSeek-V3 is a shape vLLM ships no tuned
-config for on any device, because nobody serves it.
+crossing, has never been made on a grid that could resolve one, with enough
+replicates to survive one throttled row, or on a timing basis that reports one
+for every span. `deployment` exists because every published cell is TP=1 bf16,
+and TP=1 DeepSeek-V3 is a shape vLLM ships no tuned config for on any device,
+because nobody serves it. `trace-replay` exists because `kind="trace"` is the
+axis this repo calls its differentiator and no profile had ever named one, so a
+captured routing histogram was a file nothing could sweep.
 
 `estimated_hours` prices any of them from the published arms' measured rates, so
 "can we afford this" is answered on the laptop it is written on rather than by
-starting it on a rented box and watching.
+starting it on a rented box and watching. It prices a CELL and then its timing
+rows, because those two do not scale together and a flat per-row rate mispriced
+every profile that runs one timing mode by about 1.6x.
 """
 from __future__ import annotations
 
@@ -55,9 +60,47 @@ class Profile:
     notes: str = ""
 
     def specs(self) -> list[BenchSpec]:
-        return list(sweep([MODEL_CONFIGS[n] for n in self.models],
-                          list(self.token_counts), list(self.dtypes),
-                          list(self.routings), list(self.seeds)))
+        return [s for s in sweep([MODEL_CONFIGS[n] for n in self.models],
+                                 list(self.token_counts), list(self.dtypes),
+                                 list(self.routings), list(self.seeds))
+                if trace_belongs_to(s.routing, s.model.name)]
+
+
+def trace_model(trace_id: str) -> str | None:
+    """Which model a trace id names, or None if it names none of them.
+
+    `scripts/capture_traces.py` ids a capture `<model>-<corpus>-<phase>` by
+    default, and `traces.TraceSet` accepts a `@bNlM` slice suffix on top of
+    that. So a default-named trace carries the model it came from, and this
+    reads it back. A hand-supplied `--trace-id` that does not start with a
+    known model name returns None and is nobody's business but the caller's.
+
+    Longest match wins, or `deepseek-v3-tp4-chat-decode` would resolve to
+    `deepseek-v3` and a TP=4 capture would be paired with the unsharded model.
+    """
+    base = trace_id.split("@", 1)[0]
+    named = [n for n in MODEL_CONFIGS if base == n or base.startswith(n + "-")]
+    return max(named, key=len) if named else None
+
+
+def trace_belongs_to(routing: RoutingSpec, model: str) -> bool:
+    """May this routing be replayed on this model?
+
+    THE BUG THIS PREVENTS IS SILENT. `TraceSet.forced_ids` refuses a trace whose
+    expert count differs from the model's, which catches mixtral's 8-expert
+    capture on a 64-expert model. It does NOT catch deepseek-v2-lite's capture
+    replayed on qwen2-57b-a14b, because both have exactly 64 experts: that cell
+    runs, passes correctness, and publishes a row labelled `qwen2-57b-a14b`
+    whose expert load came from a different network. A sweep is a cartesian
+    product, so a profile listing three models and three traces asks for six
+    such cells and only some of them raise.
+
+    Non-trace routings are parametric and belong to every model.
+    """
+    if routing.kind != "trace" or not routing.trace_id:
+        return True
+    named = trace_model(routing.trace_id)
+    return named is None or named == model
 
 
 SKEW_SWEEP = (
@@ -267,6 +310,16 @@ DEPLOYMENT_MODELS: tuple[str, ...] = (
     "mixtral-8x7b", "mixtral-8x7b-tp8",
     "qwen2-57b-a14b", "qwen2-57b-a14b-tp8")
 
+#: The three models `scripts/capture_traces.py` can capture on ONE H200, with
+#: the trace id that script writes by default for a chat/decode capture.
+#: DeepSeek-V3 is absent and cannot be added: 1,369 GB of bf16 weights needs
+#: five cards, so its routing has never been captured and this repo must not
+#: imply otherwise. Decode is the phase worth replaying, since single-token
+#: steps across many experts are the regime the whole study is about.
+CAPTURED_ROUTINGS: tuple[RoutingSpec, ...] = tuple(
+    RoutingSpec("trace", trace_id=f"{m}-chat-decode")
+    for m in ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite"))
+
 PROFILES: dict[str, Profile] = {
     "smoke": Profile(
         name="smoke",
@@ -345,9 +398,9 @@ PROFILES: dict[str, Profile] = {
         notes="publication sweep; hours, not minutes",
     ),
     # The crossing is the study's central measurement and it has never been
-    # measured well. Three faults, all of them in the matrix rather than in the
-    # hardware, and this profile fixes all three at once because fixing one at a
-    # time costs three rentals.
+    # measured well. Four faults, all of them in the matrix rather than in the
+    # hardware, and this profile fixes all four at once because fixing one at a
+    # time costs four rentals.
     #
     # 1. THE GRID. Powers of two interpolate a crossing across a 2x gap, and the
     #    grid ends at 8192 so no crossing above 5793 can be reported at all --
@@ -366,12 +419,51 @@ PROFILES: dict[str, Profile] = {
     #    seven regimes is invalid rather than noisy, and moves the answer by up
     #    to 4.3x. Uniform only, so no report can pool by accident.
     #
-    # ONE TIMING MODE, not four, and this is what pays for the rest. Every
-    # crossing in docs/FINDINGS.md is on the L2-cold eager basis, but the sweep
-    # measures four modes and `crossing_report` medians across all of them by
-    # default, mixing L2-warm and graph-replay rows into a number that is
-    # reported as one basis. Dropping the other three cuts the cost 4x AND
-    # removes a confound.
+    # 4. THE BASIS. ONE TIMING MODE, not four. The sweep measures four and
+    #    `crossing_report` medians across all of them by default, mixing L2-warm
+    #    and graph-replay rows into a number reported as one basis. Dropping
+    #    three of the four removes that confound; what it saves is smaller than
+    #    it looks, see `estimated_hours`.
+    #
+    #    The one mode kept is L2-WARM eager, not the L2-cold eager basis every
+    #    crossing in docs/FINDINGS.md is quoted on, and that is a correction
+    #    rather than a preference. On the canonical bf16 pool, under uniform
+    #    routing at ridge 160.3, eager only, how many of the sixteen
+    #    (model x implementation) cells report a crossing at all:
+    #
+    #        basis        five-stage spans   one-stage spans
+    #        L2-cold           6 of 8             3 of 8
+    #        L2-warm           8 of 8             8 of 8
+    #
+    #    Five of eight one-stage crossings DO NOT EXIST on the cold basis --
+    #    including every DeepSeek-V3 one, which is the model the whole grid
+    #    extension was built for. A profile that runs cold only would rent a box
+    #    to produce the emptier of the two tables.
+    #
+    #    THE CAUSE IS NOT CACHE. The flush is a 256 MB read run between every
+    #    pair of timed iterations, thousands of times per row, and that is
+    #    sustained load: it holds the clocks up, `T.clock_drift` sees the drift
+    #    and sets `throttled`, and `crossing.timed_rows` then drops exactly the
+    #    replicates that bracket the crossing. Same pool, same slice, share of
+    #    eager rows carrying `throttled`:
+    #
+    #        T=2048   cold 48% (29/60)   warm  8% (5/60)
+    #        T=4096   cold 62% (50/81)   warm  6% (5/81)
+    #        T=8192   cold 75% (45/60)   warm  5% (3/60)
+    #
+    #    And the deletions, not the cache, are what move the answer: switching
+    #    basis moves a five-stage crossing by 3-13% (mixtral vLLM 290 -> 315,
+    #    qwen2 vLLM 700 -> 732) but moves the one-stage ones by 2.3-2.4x (qwen2
+    #    `torch_grouped_mm_up` 687 -> 1577, mixtral 333 -> 787). An L2 effect
+    #    cannot be twenty times larger for a span covering one stage than for a
+    #    span covering five of the same stages on the same rows; a filter that
+    #    removes a span's top points can, because a one-stage span reaches 0.5
+    #    later and its crossing lives where the throttling is worst.
+    #
+    #    Reproduce both tables with:
+    #      python scripts/crossing_report.py <the four canonical arms> \
+    #        --ridge 160.3 --routing uniform --cuda-graph false --l2-flush true
+    #    and again with --l2-flush false.
     "crossing-uniform": Profile(
         name="crossing-uniform",
         models=CROSSING_MODELS,
@@ -379,14 +471,16 @@ PROFILES: dict[str, Profile] = {
         dtypes=("bf16",),
         routings=(RoutingSpec("uniform"),),
         seeds=(0, 1, 2, 3, 4, 5, 6),
-        l2_modes=(True,),
+        l2_modes=(False,),
         graph_modes=(False,),
         include_pipeline_scope=False,
         include_framework_pipeline=False,
-        notes=("uniform only, 7 seeds, 2^(1/4) grid over the ridge band. "
-               "READ IT WITH octave_ladders: fed whole to crossing_from_points "
-               "this grid is biased 4-18% LOW and twice as wide as the "
-               "powers-of-two grid it extends, and half as wide read properly"),
+        notes=("uniform only, 7 seeds, 2^(1/4) grid over the ridge band, "
+               "L2-WARM eager: the cold basis loses 5 of 8 one-stage crossings "
+               "to throttle exclusion. READ IT WITH octave_ladders: fed whole "
+               "to crossing_from_points this grid is biased 4-18% LOW and twice "
+               "as wide as the powers-of-two grid it extends, half as wide "
+               "read properly"),
     ),
     # Shapes that actually get served. Every published cell is TP=1 bf16, and
     # `E=256,N=2048` -- unsharded DeepSeek-V3 -- is a shape no vLLM config ships
@@ -422,42 +516,131 @@ PROFILES: dict[str, Profile] = {
                "published powers-of-two grid so the controls line up with every "
                "existing arm"),
     ),
+    # THE AXIS THE REPO CALLS ITS DIFFERENTIATOR AND HAS NEVER SWEPT. `traces/`
+    # holds a `.gitkeep` and nothing else, `RoutingSpec` has supported
+    # `kind="trace"` since the beginning, and no profile has ever named one --
+    # so a capture made on the pod is a .npz that nothing in the matrix can
+    # consume. Every published row is parametric routing, and "zipf 1.2 stands
+    # in for a real decode layer" is an assumption this study has asserted and
+    # never tested.
+    #
+    # What it tests is that assumption and only that: each captured model
+    # against `uniform` and the two parametric shapes closest to a real decode
+    # histogram, same grid, same seeds, same session. The parametric routings
+    # are the controls and are not padding -- a trace measured without them is a
+    # number with nothing to be different from.
+    #
+    # ONE MODEL PER TRACE, enforced by `trace_belongs_to` rather than by
+    # spelling out three single-model profiles, because the same rule then
+    # protects `--routings trace:...` typed at 3am on a rented box.
+    #
+    # `--models` and `--routings` are how this profile gets pointed at a capture
+    # it does not name: the ids here are what `capture_traces.py` writes by
+    # default, and a `--trace-id` or a `@bNlM` slice needs no edit to this file.
+    # Editing it on the pod would stamp `git_dirty` on every row of the run.
+    #
+    # Seeds pick the (batch, layer) slice, so three seeds replay three REAL
+    # layers rather than averaging them. Averaging skewed layers with different
+    # hot experts produces a histogram flatter than any layer that ever ran,
+    # which would answer the question backwards.
+    #
+    # L2-warm eager, for the reason `crossing-uniform` is: the flush is
+    # sustained load that trips the throttle flag on 48-75% of large-T rows and
+    # the analysis then deletes them.
+    "trace-replay": Profile(
+        name="trace-replay",
+        models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite"),
+        token_counts=COARSE_BACKBONE,
+        dtypes=("bf16",),
+        routings=(RoutingSpec("uniform"), RoutingSpec("zipf", 1.2),
+                  RoutingSpec("dirichlet", 0.3)) + CAPTURED_ROUTINGS,
+        seeds=(0, 1, 2),
+        l2_modes=(False,),
+        graph_modes=(False,),
+        include_pipeline_scope=False,
+        include_framework_pipeline=False,
+        notes=("captured decode routing against the parametric shapes standing "
+               "in for it. NEEDS traces/: run scripts/capture_traces.py first, "
+               "and --dry-run will name any that are missing"),
+    ),
 }
 
 # --------------------------------------------------------------------------
 # What a profile costs in wall clock
 # --------------------------------------------------------------------------
 
-#: Wall-clock seconds per TIMING ROW of an IMPLEMENTATION SPAN, by
-#: `(env, dtype family)`. Measured from `results/published/*/run_*.csv` by
-#: attributing each consecutive timestamp gap to the cell that opened it, so a
-#: rate belongs to the span that earned it rather than to the file average. It
-#: carries warmup, correctness checking, routing and CSV writing as well as the
-#: kernel, because all of that is on the clock a pod bills.
+@dataclass(frozen=True)
+class CellCost:
+    """What one cell of the matrix costs, split by what actually spends the time.
+
+    THE THREE PARTS DO NOT SCALE TOGETHER, and a flat seconds-per-row rate says
+    they do. `prologue` is paid ONCE per cell however many timing modes run
+    after it: weight allocation, the forced routing, the fp32 python-loop oracle
+    and the correctness compare, the tile observation, the load columns. `eager`
+    and `graph` are then paid once per timing row of that kind.
+
+    So halving the mode count does not halve a cell. A one-eager-mode profile
+    keeps 38-42% of a four-mode cell, not 25%: `(prologue + eager)` over
+    `(prologue + 2*eager + 2*graph)` is 0.382 for the base env in bf16, 0.394
+    for vLLM and 0.416 for SGLang. The old flat rate said 0.25 and under-priced
+    `crossing-uniform` and `deployment` by about 1.6x each.
+    """
+
+    prologue: float     # seconds per CELL, paid before any mode is timed
+    eager: float        # seconds per PLANNED eager timing row
+    graph: float        # seconds per PLANNED graph timing row
+
+
+#: Measured from `results/published/*/run_*.csv`, per `(env, dtype family)`.
+#:
+#: HOW, because a timestamp cannot do it alone. All four of a cell's rows are
+#: built in `driver.run_cell` before the prologue runs and share one timestamp,
+#: so a consecutive-timestamp gap prices the CELL and can never price a mode.
+#: The mode split comes from the columns instead: every timed row records
+#: `ms_p50`, `iters`, `trials` and `warmup`, and the timers spend
+#: `(warmup + 2) * ms` before the loop and `trials * iters * (ms + flush)`
+#: inside it, with `flush` a 256 MiB read at the arm's own measured bandwidth
+#: and a further `3 * ms` of side-stream warmup on the graph path. Summing that
+#: over an arm's rows accounts for 82-94% of its wall clock, and `prologue` is
+#: the per-cell remainder. It never goes negative on any arm, which is the check
+#: that the model is not over-claiming.
 #:
 #: PER SPAN AND NOT PER FILE, which is the correction that made these numbers
-#: usable. The base env's file average is 0.779, and a third of the rows behind
-#: it are the all-reference whole-layer cell at 1.093 while its two real spans
-#: run at 0.631. Averaging them over-estimates by 23% any profile that has the
-#: reference layer switched off -- which every profile now does.
+#: usable at all. The base env's file average is 0.779 s/row, and a third of the
+#: rows behind it are the all-reference whole-layer cell, which is 3.2x a real
+#: span per eager row. Averaging them over-estimates any profile with the
+#: reference layer switched off -- which every profile now is.
 #:
-#: fp8 is a separate column because it is not a small correction and it does not
-#: even have a consistent sign: it costs vLLM and SGLang about 30% MORE per row
-#: (quantisation and scale plumbing) and the base env about 10% more too, but a
-#: bf16 profile and an fp8 one differ by more than the noise in either.
-MEASURED_SECONDS_PER_ROW: dict[tuple[str, str], float] = {
-    ("base", "bf16"): 0.631,     # 19,820 rows, torch_grouped_mm up and down
-    ("base", "fp8"): 0.691,      # 19,140 rows, torch_scaled_grouped_mm
-    ("vllm", "bf16"): 0.464,     # 18,864 rows
-    ("vllm", "fp8"): 0.605,      #  5,284 rows
-    ("sglang", "bf16"): 0.467,   #  9,468 rows
-    ("sglang", "fp8"): 0.610,    #  4,700 rows
+#: fp8 is a separate column, and the decomposition says its extra cost is NOT
+#: where the flat rate implied. An fp8 eager row is CHEAPER than a bf16 one
+#: (0.555 against 0.608 for vLLM): halving the weight bytes makes the kernel
+#: faster and `calibrate_iters` targets a fixed 200 ms either way. The cost
+#: shows up in the prologue, which carries quantisation and scale plumbing, and
+#: in the graph column, because `should_time_graph` compares launch overhead
+#: against a roofline minimum computed from compulsory BYTES: halve the bytes
+#: and the launch share doubles, so the cost policy skips 16% of fp8 graph rows
+#: against 61% of vLLM's bf16 ones. Per CELL an fp8 vLLM cell still costs 1.30x
+#: a bf16 one, which is the "about 30% more" the flat rate recorded.
+#:
+#: The `graph` column is therefore per PLANNED graph row with the skip policy
+#: already inside it, not per row that was actually timed. Every arm timed a
+#: graph row at 0.657-0.674 s regardless of env or dtype; the spread in this
+#: column is the skip rate and nothing else.
+MEASURED_CELL_COST: dict[tuple[str, str], CellCost] = {
+    ("base", "bf16"): CellCost(0.322, 0.653, 0.463),    # 3,206 cells
+    ("base", "fp8"): CellCost(0.522, 0.615, 0.553),     # 2,351 cells
+    ("vllm", "bf16"): CellCost(0.129, 0.608, 0.262),    # 2,662 cells
+    ("vllm", "fp8"): CellCost(0.202, 0.555, 0.560),     # 1,258 cells
+    ("sglang", "bf16"): CellCost(0.144, 0.657, 0.233),  # 1,486 cells
+    ("sglang", "fp8"): CellCost(0.140, 0.564, 0.546),   # 1,175 cells
 }
 
-#: The all-reference whole-layer cell, `include_pipeline_scope`. 9,468 rows at
-#: 1.093 s each: 1.7x a real span, which is why it is off in every profile. The
-#: kernel it times is 12x slower than vLLM's and measures no kernel at all.
-REFERENCE_PIPELINE_SECONDS_PER_ROW = 1.093
+#: The all-reference whole-layer cell, `include_pipeline_scope`. 1,487 cells.
+#: 2.096 s per eager row against a real span's 0.653, and `should_time_graph`
+#: skipped its graph rows in 100% of them, so it is 3.2x a span where it is
+#: measured and free where it is not. It times a python loop over every expert
+#: and measures no kernel, which is why it is off in every profile.
+REFERENCE_PIPELINE_COST = CellCost(0.587, 2.096, 0.000)
 
 #: Framework spans that register per environment, COUNTED FROM THE PUBLISHED ARMS
 #: rather than read out of the registry. On a laptop neither vLLM nor SGLang
@@ -476,6 +659,20 @@ def _dtype_family(dtype: str) -> str:
     return "fp8" if dtype in FP8_WEIGHT_DTYPES else "bf16"
 
 
+def _mode_rows(profile: Profile) -> tuple[int, int]:
+    """`(eager rows, graph rows)` per cell.
+
+    The L2 axis multiplies BOTH, the graph axis selects between them. Counting
+    `len(l2_modes) * len(graph_modes)` as one number, which is what this
+    replaced, prices an eager-only profile at a graph profile's rate and the
+    other way round.
+    """
+    l2 = len(profile.l2_modes)
+    eager = sum(1 for g in profile.graph_modes if not g)
+    graph = sum(1 for g in profile.graph_modes if g)
+    return l2 * eager, l2 * graph
+
+
 def estimated_hours(profile: Profile) -> dict[str, float]:
     """Wall-clock hours this profile would cost, per environment plus `total`.
 
@@ -484,33 +681,46 @@ def estimated_hours(profile: Profile) -> dict[str, float]:
     Needs no GPU, no registry and no framework import, so it answers on the
     laptop the profile is being written on.
 
-    The whole-layer cells are priced at the span rate, not guessed: the vLLM arms
-    measured `__pipeline__:vllm_fused_experts` at 0.460 against the bare span's
-    0.464, a 1% difference, because the pipeline cell is the same fused span with
-    a router in front of it. The all-reference layer is the one that is genuinely
-    slower and it has its own constant.
+    Priced per CELL and then per timing row, because those are the two things a
+    sweep spends time on and they do not scale together. See `CellCost`: the
+    profiles that run one timing mode instead of four keep about 40% of a cell
+    rather than 25%, and the flat per-row rate this replaced was under-pricing
+    `crossing-uniform` and `deployment` by about 1.6x.
 
-    AN ESTIMATE, and it will be low in one known direction. The rates average
-    over grids that stopped at 8192, and a cell's cost rises with the batch once
-    the layer is compute-bound, so a profile reaching past that (`crossing-uniform`
-    goes to 16384) costs more per row at its top end than this says. It is a
+    The framework whole-layer cells are priced at the span rates, not guessed:
+    the vLLM arms measured a `__pipeline__:vllm_fused_experts` cell at 1.846 s
+    against the bare span's 1.869 s, a 1.2% difference, because it is the same
+    fused span with a router in front of it. The all-reference layer is the one
+    that is genuinely slower and it has its own constant.
+
+    AN ESTIMATE, and it is low in one known direction. `calibrate_iters` targets
+    a fixed 200 ms of timed work per row, so a row's cost is nearly flat in the
+    token count until `iters` hits its floor of 10, after which cost rises with
+    the batch. The rates average over grids that mostly stopped at 8192, so a
+    profile reaching past it (`crossing-uniform` goes to 16384) costs more at its
+    top end than this says. Checked against every published arm, it lands within
+    10% on nine of fifteen (env, arm) pairs and inside 30% on all of them, the
+    misses being the two arms whose token grid is furthest from the average. A
     figure to plan a rental against, not a budget with margin built in.
     """
     specs = len(profile.specs())
-    modes = len(profile.l2_modes) * len(profile.graph_modes)
+    eager_rows, graph_rows = _mode_rows(profile)
     families = [_dtype_family(d) for d in profile.dtypes] or ["bf16"]
+
+    def cell_seconds(cost: CellCost) -> float:
+        return cost.prologue + eager_rows * cost.eager + graph_rows * cost.graph
 
     out: dict[str, float] = {}
     for env, impls in MEASURED_IMPLS_PER_ENV.items():
         per_spec = impls
         if profile.include_framework_pipeline and env != BASE_ENV:
             per_spec += impls          # one whole-layer cell per framework span
-        rows_per_family = specs * per_spec * modes / len(families)
-        seconds = sum(rows_per_family * MEASURED_SECONDS_PER_ROW[(env, f)]
+        cells_per_family = specs * per_spec / len(families)
+        seconds = sum(cells_per_family * cell_seconds(MEASURED_CELL_COST[(env, f)])
                       for f in families)
         if profile.include_pipeline_scope and env == BASE_ENV:
             # Emitted once per spec regardless of env, and it is the slow one.
-            seconds += specs * modes * REFERENCE_PIPELINE_SECONDS_PER_ROW
+            seconds += specs * cell_seconds(REFERENCE_PIPELINE_COST)
         out[env] = seconds / 3600.0
     out["total"] = sum(out.values())
     return out

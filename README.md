@@ -97,7 +97,7 @@ runs kernels.
 Things this harness records rather than assumes, because most published MoE
 numbers omit them and are therefore not comparable to each other:
 
-- **L2 residency.** H200 has 50 MiB of L2. Whether expert weights are resident
+- **L2 residency.** H200 has 60 MiB of L2 (the harness records `l2_bytes = 62914560`; an earlier draft of this line said 50). Whether expert weights are resident
   changes small-batch results by more than most kernel optimisations do, so the
   flush state is a swept axis and a recorded column. The flush reads rather than
   writes, so it leaves no dirty lines to be written back inside the next timed

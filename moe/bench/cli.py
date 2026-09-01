@@ -6,6 +6,15 @@ a session would cost, without CUDA and without spending anything.
 
     python -m moe.bench.cli --profile standard --dry-run
     python -m moe.bench.cli --profile smoke --out-dir /workspace/results
+
+`--models`, `--tokens` and `--routings` override the profile's axes in place, so
+a rented box never has to edit `profiles.py` to sweep something the file does
+not name. That is not a convenience: an edited working tree stamps `git_dirty`
+on every row of the run.
+
+    python -m moe.bench.cli --profile trace-replay \\
+        --models deepseek-v2-lite \\
+        --routings uniform,trace:deepseek-v2-lite-chat-decode@b3l17
 """
 from __future__ import annotations
 
@@ -17,7 +26,7 @@ from pathlib import Path
 
 import moe
 
-from ..spec import MODEL_CONFIGS
+from ..spec import MODEL_CONFIGS, RoutingSpec
 from . import profiles as PR
 from . import timing as T
 from .driver import RunConfig, run_sweep
@@ -40,6 +49,12 @@ def parse_args(argv=None):
                    help="comma-separated model override, e.g. mixtral-8x7b,toy")
     p.add_argument("--tokens", default=None,
                    help="comma-separated token-count override")
+    p.add_argument("--routings", default=None,
+                   help="comma-separated routing override, in the label form "
+                        "the dry run prints and the CSV records: uniform, "
+                        "zipf:1.2, dirichlet:0.3, hot:0.5, "
+                        "trace:mixtral-8x7b-chat-decode, or a pinned slice "
+                        "trace:mixtral-8x7b-chat-decode@b3l17")
     p.add_argument("--max-minutes", type=float, default=None,
                    help="stop cleanly at this wall-clock budget; resume later")
     p.add_argument("--traces-dir", type=Path, default=None)
@@ -60,6 +75,41 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def parse_routing(text: str) -> RoutingSpec:
+    """Read one routing off the command line, in the form everything prints it.
+
+    `RoutingSpec.label` is the format: `uniform`, `zipf:1.2`, `trace:<id>`. So
+    what a dry run printed, or what a published CSV recorded, can be pasted back
+    in without translation, and there is one spelling of a routing in this
+    project rather than two.
+
+    WHY THIS EXISTS. `kind="trace"` is the axis the repo calls its
+    differentiator, and until `--routings` there was no way to point a sweep at
+    a capture except by editing `profiles.py` on the box -- which stamps
+    `git_dirty` on every row of the run and makes the arm unpublishable.
+
+    Errors exit rather than raise: this runs during argument parsing, where a
+    traceback is noise and a misspelt routing should cost nothing.
+    """
+    kind, _, rest = text.strip().partition(":")
+    kind, rest = kind.strip(), rest.strip()
+    if kind == "trace":
+        if not rest:
+            raise SystemExit("routing 'trace' needs an id, e.g. "
+                             "trace:mixtral-8x7b-chat-decode")
+        return RoutingSpec("trace", trace_id=rest)
+    param = 0.0
+    if rest:
+        try:
+            param = float(rest)
+        except ValueError:
+            raise SystemExit(f"routing {text!r}: {rest!r} is not a number") from None
+    try:
+        return RoutingSpec(kind, param)
+    except ValueError as e:
+        raise SystemExit(f"routing {text!r}: {e}") from None
+
+
 def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
     from dataclasses import replace
     changes = {}
@@ -71,9 +121,25 @@ def apply_overrides(profile: PR.Profile, args) -> PR.Profile:
         changes["models"] = names
     if args.tokens:
         changes["token_counts"] = tuple(int(t) for t in args.tokens.split(","))
+    if getattr(args, "routings", None):
+        routings = tuple(parse_routing(r) for r in args.routings.split(",")
+                         if r.strip())
+        if not routings:
+            raise SystemExit("--routings was given but names no routing")
+        changes["routings"] = routings
     if getattr(args, "no_pipeline_scope", False):
         changes["include_pipeline_scope"] = False
-    return replace(profile, **changes) if changes else profile
+    profile = replace(profile, **changes) if changes else profile
+    # A trace belongs to the model it was captured from, and `Profile.specs`
+    # drops the pairings that are not that. An override can therefore ask for a
+    # matrix whose every cell is dropped, and finding that out from a run that
+    # writes no rows is the expensive way.
+    if not profile.specs():
+        raise SystemExit(
+            f"the overridden matrix has no cells: models {list(profile.models)} "
+            f"against routings {[r.label for r in profile.routings]}. A trace "
+            "is only valid on the model it was captured from.")
+    return profile
 
 
 def measured_ceilings() -> dict:
@@ -153,7 +219,16 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
     print(f"dtypes          {', '.join(profile.dtypes)}")
     print(f"routings        {', '.join(r.label for r in profile.routings)}")
     print(f"seeds           {', '.join(str(s) for s in profile.seeds)}")
-    print(f"specs           {p.specs}")
+    # The axes above are a cartesian product and `Profile.specs` is not: a trace
+    # only sweeps the model it was captured from. Say so, or the two numbers
+    # disagree on the page with nothing to explain them.
+    product = (len(profile.models) * len(profile.token_counts)
+               * len(profile.dtypes) * len(profile.routings)
+               * len(profile.seeds))
+    dropped = product - p.specs
+    print(f"specs           {p.specs}" + (
+        f"   ({dropped} of {product} dropped: a trace is only valid on the "
+        "model it was captured from)" if dropped else ""))
     print(f"implementations {len(p.impls)}: "
           f"{', '.join(p.impls) if p.impls else 'NONE REGISTERED'}")
     print(f"timing modes    {p.modes} "
