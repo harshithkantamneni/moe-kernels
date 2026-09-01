@@ -664,6 +664,13 @@ two spans cross at the SAME batch.
     mixtral vLLM      313 then 800        qwen2 vLLM      730 then 1573
     deepseek-v3 vLLM 2925 then 6391       mixtral SGLang  313 then 778
 
+AND THE A100 CROSSES TWICE WHERE THE H200 CROSSES ONCE. A100 mixtral uniform gives
+229 AND 776 on the same octave grid where the H200 gives a single 313. So the
+cross-card mixtral ratio in C5 compares the A100's FIRST step against the H200's
+ONLY crossing, and taking the last on both reverses the sign entirely (776 / 313
+is 2.5, against 0.73 for the first). There is no matched quantity to compare, which
+is a cleaner reason the mixtral cross-card number is void than "different kernels".
+
 WHY THE CURVE CROSSES TWICE: M-TILE QUANTISATION. M-tiles per expert is
 `ceil(rows_per_expert / BLOCK_M)` and each extra tile is another pass over that
 expert's weight matrix. mixtral with `BLOCK_M = 128` held CONSTANT across the
@@ -671,11 +678,24 @@ whole band (checked against the shipped tuned JSON, the config does not change
 here):
 
     T=512   128 rows/expert   12 M-tiles   1.2224 ms
-    T=576   144              16           1.3323   slope 0.731   tiles JUMP
+    T=576   144              15           1.3323   slope 0.731   tiles JUMP
     T=640   160              16           1.3991   slope 0.464
     T=704   176              16           1.4292   slope 0.223
     T=768   192              16           1.4437   slope 0.116   tiles FLAT
-    T=1024  256              19           1.9088   slope 0.971   tiles JUMP
+    T=1024  256              21           1.9088   slope 0.971   tiles JUMP
+
+THOSE COUNTS ARE REPLICATE MEDIANS, corrected 2026-09-01. Uniform routing is
+SAMPLED per replicate, so the tile count varies within a cell: T=576 draws
+14/14/15/15/16/16 over its six rows and T=1024 draws 19/19/21/21/21/21. An earlier
+version quoted 12/16/16/16/16/19, which is ONE draw and does not line up with a
+median time. The STEP POSITIONS are unaffected, and they are what the mechanism
+rests on.
+
+AND 15 OF 16 CROSSINGS ARE TILE STEPS, NOT ALL 16. The exception is
+deepseek-v3 / SGLang's second crossing at T 5120 to 5632, where tiles are already
+saturated (511 to 512, every expert on two) and the slope merely grazes the
+threshold, 0.473 then 0.634. The same model on vLLM puts its second crossing 1450
+tokens later. State the exception rather than the round number.
 
 Time JUMPS at a tile step and FLATLINES between, so the slope spikes above 0.5 at
 every step. A first-passage detector reads a tile step, not a roofline transition.

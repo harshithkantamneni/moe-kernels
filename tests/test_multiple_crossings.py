@@ -27,6 +27,12 @@ from pathlib import Path
 
 import pytest
 
+# `from_slopes` builds a curve with exactly the slopes a test asks for, and the
+# staircase tests are about slopes. Imported rather than copied: a second copy
+# that drifted would let the two files disagree about what a slope of 0.9 means
+# while both kept passing.
+from test_crossing_uncertainty import from_slopes
+
 from moe.bench.crossing import (
     STORED_TILE_EFF,
     all_crossings_from_points,
@@ -411,16 +417,6 @@ def test_the_annotated_slopes_are_the_ones_local_slopes_reports():
 
 
 # --------------------------------------------------- the functions in isolation
-
-
-def from_slopes(t0: float, ms0: float, slopes: list[float]) -> list[tuple[float, float]]:
-    """A synthetic sweep with EXACTLY the requested `d(log ms)/d(log T)`. Each
-    step doubles T, so a slope of `s` multiplies the time by `2**s`."""
-    pts = [(t0, ms0)]
-    for s in slopes:
-        t, ms = pts[-1]
-        pts.append((t * 2, ms * 2 ** s))
-    return pts
 
 
 def test_a_staircase_returns_every_upcrossing_and_the_first_is_only_the_first():

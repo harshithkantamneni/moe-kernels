@@ -29,7 +29,18 @@ pytest
 ruff
 
 # For scripts/capture_traces.py only.
-transformers
+#
+# transformers is CAPPED, and the cap is the deepseek-v2-lite arm. That model
+# ships its own modelling code (trust_remote_code), written against transformers
+# 4.33, and its attention and decoder layers call
+# `past_key_value.get_usable_length(...)` at three points. That method was
+# removed from `DynamicCache` in 4.54.0. On a bare `pip install transformers`
+# the arm therefore dies with `AttributeError: 'DynamicCache' object has no
+# attribute 'get_usable_length'` on the FIRST forward pass -- after the 31 GB
+# download, on metered pod time. 4.53.3 is the last release that still defines
+# it. mixtral and qwen2 use in-library modelling and are fine on any version,
+# so the cap costs them nothing.
+transformers>=4.44,<4.54
 accelerate
 safetensors
 huggingface_hub

@@ -347,6 +347,14 @@ def all_crossings_from_points(points: list[tuple[float, float]],
         mixtral-8x7b  vllm     313 then  800     qwen2  vllm   730 then 1573
         deepseek-v3   vllm    2925 then 6391     mixtral sglang 313 then  778
 
+    Those are on the report's DEFAULT basis, which medians all four timing modes
+    into each point. The `crossing-uniform` profile times only L2-warm eager, so
+    the arm it produces is a different slice of the same cells; named here
+    because `profiles.py` quotes that slice and a reader comparing the two
+    should know why they differ. The staircase does not depend on the choice:
+    warm-eager alone the same four read 315/800, 732/1564, 2925/6391 and
+    316/780, every cell still crossing twice.
+
     THE MECHANISM IS M-TILE QUANTISATION, not the roofline. M-tiles per expert
     is `ceil(rows_per_expert / BLOCK_M)`, and each extra tile is another pass
     over that expert's weight matrix, so time steps up when a tile is added and
