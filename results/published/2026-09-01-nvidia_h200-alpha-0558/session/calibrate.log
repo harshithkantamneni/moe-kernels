@@ -1,0 +1,43 @@
+[calibrate] measuring achievable bandwidth and dense BF16 ...
+[calibrate] buffers 8 GiB, L2 flushed between iterations
+[calibrate] settling clocks under load (up to 30s) before measuring anything
+
+  device            NVIDIA H200
+  L2                60 MiB   (buffers are 137x larger)
+  power limit       700 W   (SXM)
+  memory clock      3201 MHz  -> pin rate 4916.7 GB/s
+                    (clk x 2 for DDR x 6144 bits / 8; a datasheet figure below this is already derated)
+
+  pattern       GB/s  of spec   of pin    p50 ms   note
+  read        4468.6   93.1%   90.9%     1.922   closest analogue to streaming expert weights; reduced along the contiguous axis so the tree does not bound it
+  copy        4300.5   89.6%   87.5%     3.995   
+  triad       4373.9   91.1%   89.0%     5.892   canonical STREAM metric; the default ceiling <-- ceiling
+  write       4681.6   97.5%   95.2%     1.835   1N proven (2N would exceed the pin rate by 94%); unflushed so the timed window cannot shed writeback
+                         ^ vs     ^ vs
+                        4800     4917  GB/s (published, derived)
+
+  achieved BW         4373.9 GB/s (pattern: triad)
+  achieved BF16        716.0 TFLOP/s (GEMM 8192^3)
+                        72.4% of the 989.5 datasheet figure
+  measured at       1935 MHz, where the silicon can do 1046.2 TFLOP/s
+                        68.4% of THAT <-- efficiency at the measured clock
+                    the datasheet assumes ~1830 MHz, a boost clock this part does not hold under dense tensor load
+
+  ridge point by choice of denominator (FLOP/byte):
+    read         160  (read)
+    copy         166  (copy)
+    triad        164  (triad) <-- used
+    write        153  (write)
+    datasheet     206
+
+  settle            reached at 1500 MHz   history [1500, 1470, 1515, 1500, 1470, 1500]
+
+  warm-up pass      discarded; largest per-pattern change 0.0%
+
+  clocks            1500 -> 1980 MHz, 56 -> 44 C
+
+  NOTE: write is 95.2% of the derived pin rate. That is a REAL store rate, not an accounting error: a read-for-ownership would make it 2N, which would exceed the pin rate by ~94% and is impossible. Write is not the ceiling because it is the least representative pattern for a read-dominated workload.
+
+[calibrate] wrote /workspace/repo/moe/bench/hardware/measured_nvidia_h200.yaml
+  commit it; plots and efficiency columns then use measured ceilings
+{"achieved_bw_gbps": 4373.8838993043155, "ceiling_pattern": "triad", "achieved_bf16_tflops": 715.999417539747, "ridge": 163.7}

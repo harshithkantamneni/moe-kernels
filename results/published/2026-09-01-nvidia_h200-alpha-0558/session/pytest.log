@@ -1,0 +1,27 @@
+................................................................................................................................................. [ 11%]
+.........................s....................................................................................................................... [ 22%]
+................................................................................................................................................. [ 33%]
+................................................................................................................................................. [ 45%]
+................................................................................................................................................. [ 56%]
+................................................................................................................................................. [ 67%]
+................................................................................................................................................. [ 78%]
+................................................................................................................................................. [ 90%]
+...............................................................................................................................                   [100%]
+=================================================================== warnings summary ====================================================================
+moe/baselines/__init__.py:13
+  /workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+    return load_package(__path__, __name__, "baseline", strict)
+
+moe/baselines/__init__.py:13
+  /workspace/repo/moe/baselines/__init__.py:13: UserWarning: baseline 'vllm_fused_moe' did not import: No module named 'vllm'
+    return load_package(__path__, __name__, "baseline", strict)
+
+tests/test_gpu.py::test_reference_pipeline_is_not_capturable_and_says_so
+tests/test_gpu.py::test_graph_policy_measures_a_short_kernel
+  /workspace/venvs/base/lib/python3.12/site-packages/torch/cuda/graphs.py:169: UserWarning: The CUDA Graph is empty. This usually means that the graph was attempted to be captured on wrong device or stream. (Triggered internally at /__w/pytorch/pytorch/aten/src/ATen/cuda/CUDAGraph.cpp:210.)
+    super().capture_end()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================================================ short test summary info ================================================================
+SKIPPED [1] tests/test_block_m_sweep.py:655: this asserts the laptop path
+1286 passed, 1 skipped, 4 warnings in 656.73s (0:10:56)

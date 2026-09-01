@@ -1,0 +1,79 @@
+step	name	status	observed	gate	consequence
+P1	clean working tree	PASS	0 dirty file(s)	== 0	
+P2a	GPU name	PASS	NVIDIA H200	contains 'NVIDIA H200'	
+P2b	device memory	PASS	143771 MiB	>= 80000 MiB	
+P2c	driver major	PASS	580.159.04	>= 580	
+P3a	torch is 2.13.0	PASS	2.13.0+cu130	starts with 2.13.0	
+P3b	triton is 3.7.1	PASS	3.7.1	starts with 3.7.1	
+P4	override_config binds and releases	PASS	bound released unshipped	== 'bound released unshipped'	
+P5	PTX dump isolation	PASS	1 .ptx	>= 1	
+P6a	volume free space	PASS	348985 GiB	>= 110 GiB	
+P6b	container disk free	PASS	48 GiB	>= 10 GiB	
+P7	provenance gate refuses 2 of 10	PASS	2 10	== '2 10'	
+P8	HF auth	PASS	Drogon4231	an authenticated user	
+P9	exfil paths are committable	PASS	0 of 6 ignored	== 0	
+P10	profiler availability	INFO	nsys=yes ncu=yes	informational	
+P11a	step scripts present and parse	PASS	0 missing, 0 unparseable	0 and 0	
+P11b	step scripts accept the flags used here	PASS	0 flag(s) not found in the scripts	== 0	
+P12	test suite	PASS	1286 passed, 1 skipped, 4 warnings in 656.73s (0:10:56)	exit 0	
+P13a	no active throttle	PASS	0x0000000000000000	== 0x0000000000000000	
+P13b	cold start	PASS	31 C	<= 60 C	
+P14	session dir outlives the pod	PASS	mfs#eur-is-4.runpod.net:9421 vs overlay	different mounts	
+Pnsys	nsys DRAM sampling	INFO	INFERRED: NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.	informational	
+P1	clean working tree	PASS	0 dirty file(s)	== 0	
+P2a	GPU name	PASS	NVIDIA H200	contains 'NVIDIA H200'	
+P2b	device memory	PASS	143771 MiB	>= 80000 MiB	
+P2c	driver major	PASS	580.159.04	>= 580	
+P3a	torch is 2.13.0	PASS	2.13.0+cu130	starts with 2.13.0	
+P3b	triton is 3.7.1	PASS	3.7.1	starts with 3.7.1	
+P4	override_config binds and releases	PASS	bound released unshipped	== 'bound released unshipped'	
+P5	PTX dump isolation	PASS	1 .ptx	>= 1	
+P6a	volume free space	PASS	347845 GiB	>= 110 GiB	
+P6b	container disk free	PASS	48 GiB	>= 10 GiB	
+P7	provenance gate refuses 2 of 10	PASS	2 10	== '2 10'	
+P8	weights reachable	PASS	ok	every repo step 7 pulls resolves	
+P9	exfil paths are committable	PASS	0 of 6 ignored	== 0	
+P10	profiler availability	INFO	nsys=yes ncu=yes	informational	
+P11a	step scripts present and parse	PASS	0 missing, 0 unparseable	0 and 0	
+P11b	step scripts accept the flags used here	PASS	0 flag(s) not found in the scripts	== 0	
+P12	test suite	SKIP	--skip-tests		
+P13a	no active throttle	FAIL	0x0000000000000001	== 0x0000000000000000	Timings will carry a thermal component the ridge band already blames for a 9.9% spread on one card. Wait for the card to settle, or accept a wider band and say so in the writeup.
+P13b	cold start	PASS	29 C	<= 60 C	
+P14	session dir outlives the pod	PASS	mfs#eur-is-4.runpod.net:9421 vs overlay	different mounts	
+Pnsys	nsys DRAM sampling	INFO	INFERRED: NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.	informational	
+S1a	calibrate_hardware exit	PASS	exit 0	== 0	
+S1b	calibration is same-session	PASS	checked_on 2026-09-01, today 2026-09-01	equal, and both readable	
+S1c	fp8 ceiling measured	PASS	fp8_e4m3 1443.4 TFLOP/s	> 0	
+S1d	bandwidth in the reproducible band	PASS	4373.9 GB/s	3900-4800	
+S1e	bf16 ridge in the measured band	PASS	163.7 FLOP/byte	150-185, band is 160.3-176.2	
+S1f	fp8 rows carry a peak	PASS	24 of 24 timed fp8 rows stamped	all of them, and at least one	
+S2a	sweep exit	PASS	exit 0	== 0	
+S2b	sweep's own gates	PASS	5 PASS, 0 FAIL lines	at least one PASS, no FAIL	
+SN	nsys traffic measurement	SKIP	traffic is INFERRED: NO. No invocation of this nsys sampled a DRAM metric on this device. The open path in docs/FINDINGS.md is now a closed one for this pod, and DRAM traffic stays modelled rather than counted. The control attempt above says whether nsys itself works here, which separates 'no sampler' from 'no nsys'.		
+SBa	ablation exit	FAIL	exit 1	== 0	exit 1 is a REFUTATION and the most valuable outcome this session can produce: read the P1 gate line, which names which candidate alpha the interval does contain. exit 4 means the interval was too wide to separate 0.10 from 0.558 and no candidate may be quoted from it. exit 3 means it never ran; the deepseek-v3 rung needs about 16 GiB free on the card. Either way the regression alpha from step 3 stands alone and the paper keeps its single-estimator caveat.
+SBb	ablation's own gates	FAIL	10 PASS, 2 FAIL lines	at least one PASS, no FAIL	A FAIL on ISA means the two variants did not compile to the same instruction stream, and nothing from this run may be quoted whatever P1 says. A FAIL on placebo, signal, form, control or resolution voids the design rather than the prediction. A FAIL on P1 alone is the refutation. /workspace/session/20260901T214218Z/logs/alias_ablation.log names which.
+S3a	sweep exit	FAIL	exit 1	== 0	The swizzle mechanism for alpha stays a two-point trend from the published pool, and 'alpha varies with the swizzle' must keep its UNTESTED label.
+S3b	sweep's own gates	FAIL	8 PASS, 1 FAIL lines	at least one PASS, no FAIL	A non-monotonic alpha here is a real result and should be reported, not retried.
+S4a	comparison exit	FAIL	exit 1	== 0	The cost of running on the fallback ladder stays unmeasured, and six of the study's eight cells are on it.
+S4b	comparison's own gates	FAIL	5 PASS, 3 FAIL lines	at least one PASS, no FAIL	Check /workspace/session/20260901T214218Z/logs/tuned_vs_fallback.log for which shape disagreed with the prediction before treating it as a bug.
+S5-deepseek-v3-16	wgmma deepseek-v3 T=16	PASS	0 kernel(s) with wgmma, config=default	== 0, config=default	
+S5cfg-deepseek-v3-16	config source deepseek-v3 T=16	PASS	default	== default	
+S5-deepseek-v3-256	wgmma deepseek-v3 T=256	PASS	2 kernel(s) with wgmma, config=default	> 0, config=default	
+S5cfg-deepseek-v3-256	config source deepseek-v3 T=256	PASS	default	== default	
+S5-mixtral-8x7b-256	wgmma mixtral-8x7b T=256	PASS	2 kernel(s) with wgmma, config=tuned	> 0, config=tuned	
+S5cfg-mixtral-8x7b-256	config source mixtral-8x7b T=256	PASS	tuned	== tuned	
+S5tar	PTX packaged for exfil	PASS	771951 bytes at /workspace/session/20260901T214218Z/exfil/ptx-nvidia-h200.tar.gz	> 1000 bytes	
+S6a	tile pinning is honoured	FAIL	observed tile_block_m = none	== 128, forced via MOE_FORCE_TILE	No pinning hook is wired into the sweep path, so the dense grid below runs on vLLM's own ladder. The crossing it produces is then a MIX of tile steps and the roofline transition, which is instrument defect 3, and it may not be quoted as a tile-pinned crossing. Run scripts/block_m_crossing_sweep.py (step 2) for the pinned answer instead.
+S6run	sweep run id	INFO	eeea4eaef73e	reused on resume	
+S6b	sweep exit	PASS	exit 0	== 0	
+S6c	correctness	PASS	0 failing rows	== 0	
+S6d	thermal stability	FAIL	48.6% of timed rows throttled	< 5%	Throttled rows are excluded from crossing detection, and the cold-L2 basis already loses 5 of 8 one-stage crossings that way. A high rate here narrows the grid the detector can actually use.
+S6e	coverage against the plan	PASS	3696 timed rows against a base-env plan of 1848	>= the base plan	
+S7a	weights arrived before they were needed	PASS	DOWNLOAD-COMPLETE /workspace/.cache/huggingface/hub/models--mistralai-	log contains DOWNLOAD-COMPLETE	
+S7-mixtral-8x7b	trace mixtral-8x7b	FAIL	0 .npz written, exit 1	>= 1 and exit 0	Skew claims for mixtral-8x7b stay parametric. traces/ is committed on purpose, so a missing capture is a visible gap rather than a silent one.
+S7-deepseek-v2-lite	trace deepseek-v2-lite	FAIL	0 .npz written, exit 1	>= 1 and exit 0	Skew claims for deepseek-v2-lite stay parametric. traces/ is committed on purpose, so a missing capture is a visible gap rather than a silent one.
+SRa	the two alphas agree	PASS	regression and ablation intervals overlap	overlapping intervals	
+S8a	artefacts exist	FAIL	24 present, 1 missing or empty	0 missing, at least 1 present	A step produced nothing. Check its log before tearing down; re-running one step is minutes and re-renting the pod is an hour.
+S8b	calibration unchanged since step 1	PASS	8c06fb38062e vs 8c06fb38062e	identical	
+S8c	nothing is silently gitignored	PASS	0 ignored	== 0	
+S8d	publish_results	PASS	exit 0	== 0	

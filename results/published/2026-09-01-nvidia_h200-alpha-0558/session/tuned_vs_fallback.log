@@ -1,0 +1,242 @@
+# What does vLLM's fallback config cost?
+
+run id f3df6fed9e30   config lookup device `NVIDIA H200`   dtype bf16   routing uniform   seed 0
+reps 3 x 15 timed calls per arm, round-robin, 8 warmup per arm per rep
+
+EVERYTHING IS SAVED TO  /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30
+  rows   /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30/timings.csv
+  report /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30/report.md
+Re-run the same command to resume; completed (cell, arm) pairs are skipped.
+
+THE SIGN, so it cannot be misread. Every ratio below is
+
+    penalty = time(FALLBACK ladder config) / time(TUNED file config)
+
+penalty > 1  the FALLBACK is SLOWER: running without a tuned file COSTS that much.
+penalty < 1  the FALLBACK is FASTER: vLLM's tuned file lost to its own default.
+
+The tuned side is the denominator throughout, and every penalty printed here is
+followed by the words SLOWER or FASTER.
+
+## Coverage: which of these shapes has a tuned file at all
+
+The shapes MODEL_CONFIGS defines, crossed with eight serving cards,
+bf16, at vLLM v0.27.1. Derived from the SHIPPED file listing and
+not from the four files this repo vendors, so a `ladder` here means
+vLLM ships nothing for that shape rather than that nobody copied it.
+
+| model              | H200   | H100_80GB_HB | B200   | A100-SXM4-80 | L40S   | L20    | GeForce_RTX_ | A10G   |
+|---|---|---|---|---|---|---|---|---|
+| mixtral-8x7b       | tuned  | ladder       | ladder | ladder       | ladder | ladder | ladder       | ladder |
+| qwen2-57b-a14b     | tuned  | ladder       | ladder | ladder       | ladder | ladder | ladder       | ladder |
+| deepseek-v3        | ladder | ladder       | ladder | ladder       | ladder | ladder | ladder       | ladder |
+| deepseek-v2-lite   | ladder | ladder       | tuned  | ladder       | ladder | ladder | ladder       | ladder |
+| deepseek-v3-tp4    | ladder | tuned        | ladder | ladder       | ladder | ladder | ladder       | ladder |
+| deepseek-v3-tp8    | ladder | ladder       | ladder | ladder       | ladder | ladder | ladder       | ladder |
+| mixtral-8x7b-tp8   | tuned  | tuned        | ladder | tuned        | ladder | ladder | ladder       | ladder |
+| qwen2-57b-a14b-tp8 | tuned  | tuned        | ladder | ladder       | ladder | ladder | ladder       | ladder |
+
+9 of 64 pairs have a tuned bf16 file (14.1%). The rest run the ladder, and this script is what the ladder costs.
+
+## The plan: two configs per cell, DERIVED, before anything runs
+
+| model | T | key | tuned (from file) | fallback (ladder) | differs in |
+|---|---|---|---|---|---|
+| mixtral-8x7b | 1 | 1 | `M16  N128 K128 G16 w4 s5` | `M16  N64  K128 G1  w4 s4` | nk, group, warpstages |
+| mixtral-8x7b | 4 | 4 | `M16  N64  K64  G1  w4 s5` | `M16  N64  K128 G1  w4 s4` | nk, warpstages |
+| mixtral-8x7b | 16 | 16 | `M16  N64  K256 G16 w4 s3` | `M16  N64  K128 G1  w4 s4` | nk, group, warpstages |
+| mixtral-8x7b | 32 | 32 | `M16  N128 K128 G16 w8 s3` | `M16  N64  K128 G1  w4 s4` | nk, group, warpstages |
+| mixtral-8x7b | 33 | 32 | `M16  N128 K128 G16 w8 s3` | `M32  N64  K128 G1  w4 s3` | bm, nk, group, warpstages |
+| mixtral-8x7b | 64 | 64 | `M32  N128 K128 G64 w4 s3` | `M32  N64  K128 G1  w4 s3` | nk, group |
+| mixtral-8x7b | 96 | 96 | `M32  N128 K128 G64 w4 s3` | `M32  N128 K64  G1  w4 s3` | nk, group |
+| mixtral-8x7b | 97 | 96 | `M32  N128 K128 G64 w4 s3` | `M64  N128 K64  G1  w4 s3` | bm, nk, group |
+| mixtral-8x7b | 128 | 128 | `M64  N128 K128 G1  w8 s4` | `M64  N128 K64  G1  w4 s3` | nk, warpstages |
+| mixtral-8x7b | 256 | 256 | `M128 N256 K64  G1  w8 s4` | `M64  N128 K64  G1  w8 s3` | bm, nk, warpstages |
+| mixtral-8x7b | 512 | 512 | `M128 N256 K64  G16 w8 s4` | `M64  N128 K64  G1  w8 s3` | bm, nk, group, warpstages |
+| mixtral-8x7b | 1024 | 1024 | `M128 N256 K64  G16 w8 s4` | `M128 N128 K64  G1  w8 s3` | nk, group, warpstages |
+| mixtral-8x7b | 2048 | 2048 | `M128 N256 K64  G32 w8 s4` | `M128 N128 K64  G16 w8 s3` | nk, group, warpstages |
+| mixtral-8x7b | 4096 | 4096 | `M128 N256 K64  G16 w8 s4` | `M128 N128 K64  G16 w8 s3` | nk, warpstages |
+| qwen2-57b-a14b | 1 | 1 | `M16  N64  K128 G32 w4 s2` | `M16  N64  K128 G1  w4 s4` | group, warpstages |
+| qwen2-57b-a14b | 4 | 4 | `M16  N64  K64  G16 w4 s5` | `M16  N64  K128 G1  w4 s4` | nk, group, warpstages |
+| qwen2-57b-a14b | 16 | 16 | `M16  N128 K128 G16 w4 s5` | `M16  N64  K128 G1  w4 s4` | nk, group, warpstages |
+| qwen2-57b-a14b | 32 | 32 | `M16  N64  K128 G1  w4 s5` | `M16  N64  K128 G1  w4 s4` | warpstages |
+| qwen2-57b-a14b | 33 | 32 | `M16  N64  K128 G1  w4 s5` | `M32  N64  K128 G1  w4 s3` | bm, warpstages |
+| qwen2-57b-a14b | 64 | 64 | `M16  N128 K128 G1  w8 s3` | `M32  N64  K128 G1  w4 s3` | bm, nk, warpstages |
+| qwen2-57b-a14b | 96 | 96 | `M32  N128 K128 G1  w4 s3` | `M32  N128 K64  G1  w4 s3` | nk |
+| qwen2-57b-a14b | 97 | 96 | `M32  N128 K128 G1  w4 s3` | `M64  N128 K64  G1  w4 s3` | bm, nk |
+| qwen2-57b-a14b | 128 | 128 | `M32  N128 K128 G1  w4 s3` | `M64  N128 K64  G1  w4 s3` | bm, nk |
+| qwen2-57b-a14b | 256 | 256 | `M64  N64  K64  G1  w4 s3` | `M64  N128 K64  G1  w8 s3` | nk, warpstages |
+| qwen2-57b-a14b | 512 | 512 | `M128 N256 K64  G1  w8 s4` | `M64  N128 K64  G1  w8 s3` | bm, nk, warpstages |
+| qwen2-57b-a14b | 1024 | 1024 | `M128 N256 K64  G16 w8 s4` | `M128 N128 K64  G1  w8 s3` | nk, group, warpstages |
+| qwen2-57b-a14b | 2048 | 2048 | `M128 N256 K64  G1  w8 s4` | `M128 N128 K64  G1  w8 s3` | nk, warpstages |
+| qwen2-57b-a14b | 4096 | 4096 | `M128 N256 K64  G16 w8 s4` | `M128 N128 K64  G1  w8 s3` | nk, group, warpstages |
+
+28 cells. BLOCK_SIZE_M AGREES in 19 of them, so in 19 cells any penalty is 0% tile height by construction.
+GROUP_SIZE_M differs in 15.
+
+## Predictions, registered before the run
+
+VALIDITY -- a FAIL here means no number on this page may be quoted.
+  G0  every arm computes the same layer   max rel err <= 0.02
+  G1  vLLM loads the config we DERIVE     zero observed/derived mismatches
+  G2  override_config really forces       zero arms running an unforced config
+  G3  placebo band is small               p90 |replica/native - 1| < 3%
+
+CLAIM -- a FAIL here is a result, not a broken run.
+  G4  tuning is not harmful          median penalty >= 1.00
+  G5  the ladder costs materially    median and interval low end >= 1.15
+  G6  tile height is NOT the story   BLOCK_SIZE_M share < 50%
+  G7  the swizzle IS the story       GROUP_SIZE_M share >= 50%
+
+G7 is the only one with an independent reason to believe it: the alpha refit
+found alpha falling with GROUP_SIZE_M (0.570 at 1, 0.488 at 16), which is what a
+swizzle-for-L2-reuse mechanism predicts, and the ladder pins GROUP_SIZE_M to 1
+until M//E > 128, i.e. across the whole decode range.
+
+override hook: vllm.model_executor.layers.fused_moe.override_config
+  [1/28] mixtral-8x7b T=1  tuned M16  N128 K128 G16 w4 s5  vs  fallback M16  N64  K128 G1  w4 s4
+INFO 09-01 22:24:36 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=8,N=14336,device_name=NVIDIA_H200.json for MoE layer.
+  [2/28] mixtral-8x7b T=4  tuned M16  N64  K64  G1  w4 s5  vs  fallback M16  N64  K128 G1  w4 s4
+  [3/28] mixtral-8x7b T=16  tuned M16  N64  K256 G16 w4 s3  vs  fallback M16  N64  K128 G1  w4 s4
+  [4/28] mixtral-8x7b T=32  tuned M16  N128 K128 G16 w8 s3  vs  fallback M16  N64  K128 G1  w4 s4
+  [5/28] mixtral-8x7b T=33  tuned M16  N128 K128 G16 w8 s3  vs  fallback M32  N64  K128 G1  w4 s3
+  [6/28] mixtral-8x7b T=64  tuned M32  N128 K128 G64 w4 s3  vs  fallback M32  N64  K128 G1  w4 s3
+  [7/28] mixtral-8x7b T=96  tuned M32  N128 K128 G64 w4 s3  vs  fallback M32  N128 K64  G1  w4 s3
+  [8/28] mixtral-8x7b T=97  tuned M32  N128 K128 G64 w4 s3  vs  fallback M64  N128 K64  G1  w4 s3
+  [9/28] mixtral-8x7b T=128  tuned M64  N128 K128 G1  w8 s4  vs  fallback M64  N128 K64  G1  w4 s3
+  [10/28] mixtral-8x7b T=256  tuned M128 N256 K64  G1  w8 s4  vs  fallback M64  N128 K64  G1  w8 s3
+  [11/28] mixtral-8x7b T=512  tuned M128 N256 K64  G16 w8 s4  vs  fallback M64  N128 K64  G1  w8 s3
+  [12/28] mixtral-8x7b T=1024  tuned M128 N256 K64  G16 w8 s4  vs  fallback M128 N128 K64  G1  w8 s3
+  [13/28] mixtral-8x7b T=2048  tuned M128 N256 K64  G32 w8 s4  vs  fallback M128 N128 K64  G16 w8 s3
+  [14/28] mixtral-8x7b T=4096  tuned M128 N256 K64  G16 w8 s4  vs  fallback M128 N128 K64  G16 w8 s3
+  [15/28] qwen2-57b-a14b T=1  tuned M16  N64  K128 G32 w4 s2  vs  fallback M16  N64  K128 G1  w4 s4
+INFO 09-01 22:25:14 [fused_moe.py:1148] Using configuration from /workspace/venvs/vllm/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/configs/E=64,N=2560,device_name=NVIDIA_H200.json for MoE layer.
+  [16/28] qwen2-57b-a14b T=4  tuned M16  N64  K64  G16 w4 s5  vs  fallback M16  N64  K128 G1  w4 s4
+  [17/28] qwen2-57b-a14b T=16  tuned M16  N128 K128 G16 w4 s5  vs  fallback M16  N64  K128 G1  w4 s4
+  [18/28] qwen2-57b-a14b T=32  tuned M16  N64  K128 G1  w4 s5  vs  fallback M16  N64  K128 G1  w4 s4
+  [19/28] qwen2-57b-a14b T=33  tuned M16  N64  K128 G1  w4 s5  vs  fallback M32  N64  K128 G1  w4 s3
+  [20/28] qwen2-57b-a14b T=64  tuned M16  N128 K128 G1  w8 s3  vs  fallback M32  N64  K128 G1  w4 s3
+  [21/28] qwen2-57b-a14b T=96  tuned M32  N128 K128 G1  w4 s3  vs  fallback M32  N128 K64  G1  w4 s3
+  [22/28] qwen2-57b-a14b T=97  tuned M32  N128 K128 G1  w4 s3  vs  fallback M64  N128 K64  G1  w4 s3
+  [23/28] qwen2-57b-a14b T=128  tuned M32  N128 K128 G1  w4 s3  vs  fallback M64  N128 K64  G1  w4 s3
+  [24/28] qwen2-57b-a14b T=256  tuned M64  N64  K64  G1  w4 s3  vs  fallback M64  N128 K64  G1  w8 s3
+  [25/28] qwen2-57b-a14b T=512  tuned M128 N256 K64  G1  w8 s4  vs  fallback M64  N128 K64  G1  w8 s3
+  [26/28] qwen2-57b-a14b T=1024  tuned M128 N256 K64  G16 w8 s4  vs  fallback M128 N128 K64  G1  w8 s3
+  [27/28] qwen2-57b-a14b T=2048  tuned M128 N256 K64  G1  w8 s4  vs  fallback M128 N128 K64  G1  w8 s3
+  [28/28] qwen2-57b-a14b T=4096  tuned M128 N256 K64  G16 w8 s4  vs  fallback M128 N128 K64  G1  w8 s3
+
+## Per cell: what the ladder cost
+
+| model | T | tuned ms | fallback ms | penalty | reads as | placebo |
+|---|---|---|---|---|---|---|
+| mixtral-8x7b | 1 | 0.3078 | 0.2875 | 0.934 | fallback is 7.1% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.945 |
+| mixtral-8x7b | 4 | 0.6172 | 0.6064 | 0.982 | fallback is 1.8% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.999 |
+| mixtral-8x7b | 16 | 0.7785 | 0.7942 | 1.020 | fallback is 2.0% SLOWER than tuned | 0.994 |
+| mixtral-8x7b | 32 | 0.8022 | 0.7968 | 0.993 | fallback is 0.7% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 1.004 |
+| mixtral-8x7b | 33 | 0.8099 | 0.7776 | 0.960 | fallback is 4.2% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.998 |
+| mixtral-8x7b | 64 | 0.7863 | 0.7843 | 0.998 | fallback is 0.2% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.998 |
+| mixtral-8x7b | 96 | 0.7929 | 0.8461 | 1.067 | fallback is 6.7% SLOWER than tuned | 1.000 |
+| mixtral-8x7b | 97 | 0.7950 | 0.8238 | 1.036 | fallback is 3.6% SLOWER than tuned | 0.997 |
+| mixtral-8x7b | 128 | 0.8055 | 0.8252 | 1.024 | fallback is 2.4% SLOWER than tuned | 0.998 |
+| mixtral-8x7b | 256 | 0.8678 | 1.0373 | 1.195 | fallback is 19.5% SLOWER than tuned | 1.000 |
+| mixtral-8x7b | 512 | 1.1834 | 1.7150 | 1.449 | fallback is 44.9% SLOWER than tuned | 1.020 |
+| mixtral-8x7b | 1024 | 1.8447 | 2.0267 | 1.099 | fallback is 9.9% SLOWER than tuned | 0.985 |
+| mixtral-8x7b | 2048 | 3.1452 | 3.5117 | 1.117 | fallback is 11.7% SLOWER than tuned | 1.036 |
+| mixtral-8x7b | 4096 | 5.8995 | 6.7707 | 1.148 | fallback is 14.8% SLOWER than tuned | 1.001 |
+| qwen2-57b-a14b | 1 | 0.2384 | 0.2294 | 0.962 | fallback is 3.9% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.939 |
+| qwen2-57b-a14b | 4 | 0.5065 | 0.4786 | 0.945 | fallback is 5.8% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 1.000 |
+| qwen2-57b-a14b | 16 | 0.7859 | 0.7787 | 0.991 | fallback is 0.9% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 1.004 |
+| qwen2-57b-a14b | 32 | 0.8920 | 0.8859 | 0.993 | fallback is 0.7% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 0.998 |
+| qwen2-57b-a14b | 33 | 0.8940 | 0.9084 | 1.016 | fallback is 1.6% SLOWER than tuned | 0.998 |
+| qwen2-57b-a14b | 64 | 0.9504 | 0.9408 | 0.990 | fallback is 1.0% FASTER than tuned (vLLM's tuned file LOST to its own fallback) | 1.000 |
+| qwen2-57b-a14b | 96 | 0.9494 | 0.9966 | 1.050 | fallback is 5.0% SLOWER than tuned | 0.999 |
+| qwen2-57b-a14b | 97 | 0.9536 | 0.9859 | 1.034 | fallback is 3.4% SLOWER than tuned | 0.996 |
+| qwen2-57b-a14b | 128 | 0.9599 | 0.9948 | 1.036 | fallback is 3.6% SLOWER than tuned | 1.000 |
+| qwen2-57b-a14b | 256 | 1.0146 | 1.0236 | 1.009 | fallback is 0.9% SLOWER than tuned | 1.001 |
+| qwen2-57b-a14b | 512 | 1.0987 | 1.1608 | 1.057 | fallback is 5.7% SLOWER than tuned | 0.996 |
+| qwen2-57b-a14b | 1024 | 1.4333 | 1.5269 | 1.065 | fallback is 6.5% SLOWER than tuned | 0.990 |
+| qwen2-57b-a14b | 2048 | 2.3226 | 2.5088 | 1.080 | fallback is 8.0% SLOWER than tuned | 1.003 |
+| qwen2-57b-a14b | 4096 | 4.0706 | 4.5682 | 1.122 | fallback is 12.2% SLOWER than tuned | 1.016 |
+
+  mixtral-8x7b: median penalty 1.030 -- fallback is 3.0% SLOWER than tuned
+  qwen2-57b-a14b: median penalty 1.025 -- fallback is 2.5% SLOWER than tuned
+
+## Which knob is the cost? One group moved at a time
+
+| model | T | full gap | BLOCK_SIZE_M | BLOCK_N/K | GROUP_SIZE_M | warps/stages | residual |
+|---|---|---|---|---|---|---|---|
+| mixtral-8x7b | 1 | 0.990 | 1.000 | 0.975 | 0.983 | 0.981 | -- |
+| mixtral-8x7b | 4 | 0.992 | 1.000 | 0.998 | 1.000 | 1.019 | -- |
+| mixtral-8x7b | 16 | 1.030 | 1.000 (0%) | 1.009 (32%) | 0.993 (-24%) | 1.012 (42%) | +50% |
+| mixtral-8x7b | 32 | 0.994 | 1.000 | 0.997 | 0.968 | 0.960 | -- |
+| mixtral-8x7b | 33 | 0.966 | 0.965 | 0.994 | 0.966 | 0.981 | -- |
+| mixtral-8x7b | 64 | 1.007 | 1.000 (0%) | 1.010 (149%) | 0.998 (-23%) | 1.000 (0%) | -26% |
+| mixtral-8x7b | 96 | 1.071 | 1.000 (0%) | 1.085 (120%) | 0.995 (-7%) | 1.000 (0%) | -13% |
+| mixtral-8x7b | 97 | 1.042 | 1.063 (150%) | 1.082 (195%) | 0.993 (-16%) | 1.000 (0%) | -229% |
+| mixtral-8x7b | 128 | 1.032 | 1.000 (0%) | 1.025 (77%) | 1.000 (0%) | 1.050 (155%) | -131% |
+| mixtral-8x7b | 256 | 1.199 | 1.268 (135%) | 1.104 (52%) | 1.000 (0%) | 1.045 (23%) | -110% |
+| mixtral-8x7b | 512 | 1.425 | 1.125 (29%) | 1.062 (15%) | 1.084 (20%) | 1.035 (8%) | +28% |
+| mixtral-8x7b | 1024 | 1.098 | 1.000 (0%) | 1.114 (117%) | 1.083 (85%) | 1.031 (32%) | -135% |
+| mixtral-8x7b | 2048 | 1.081 | 1.000 (0%) | 1.133 (164%) | 1.002 (2%) | 0.990 (-13%) | -54% |
+| mixtral-8x7b | 4096 | 1.106 | 1.000 (0%) | 1.109 (103%) | 1.000 (0%) | 0.968 (-30%) | +27% |
+| qwen2-57b-a14b | 1 | 1.025 | 1.000 (0%) | 1.000 (0%) | 0.968 (-125%) | 1.013 (51%) | +174% |
+| qwen2-57b-a14b | 4 | 0.955 | 1.000 | 0.963 | 0.997 | 1.007 | -- |
+| qwen2-57b-a14b | 16 | 0.996 | 1.000 | 0.990 | 0.997 | 0.994 | -- |
+| qwen2-57b-a14b | 32 | 1.000 | 1.000 (0%) | 1.000 (0%) | 1.000 (0%) | 0.999 (-108%) | +208% |
+| qwen2-57b-a14b | 33 | 1.022 | 1.017 (79%) | 1.000 (0%) | 1.000 (0%) | 1.002 (7%) | +14% |
+| qwen2-57b-a14b | 64 | 0.993 | 0.991 | 0.995 | 1.000 | 0.995 | -- |
+| qwen2-57b-a14b | 96 | 1.053 | 1.000 (0%) | 1.053 (100%) | 1.000 (0%) | 1.000 (0%) | -0% |
+| qwen2-57b-a14b | 97 | 1.041 | 1.101 (243%) | 1.054 (131%) | 1.000 (0%) | 1.000 (0%) | -274% |
+| qwen2-57b-a14b | 128 | 1.040 | 1.100 (252%) | 1.054 (138%) | 1.000 (0%) | 1.000 (0%) | -290% |
+| qwen2-57b-a14b | 256 | 1.013 | 1.000 (0%) | 1.007 (52%) | 1.000 (0%) | 1.025 (199%) | -152% |
+| qwen2-57b-a14b | 512 | 1.061 | 1.112 (185%) | 1.131 (217%) | 1.000 (0%) | 1.049 (80%) | -382% |
+| qwen2-57b-a14b | 1024 | 1.071 | 1.000 (0%) | 1.181 (254%) | 0.984 (-23%) | 1.030 (42%) | -173% |
+| qwen2-57b-a14b | 2048 | 1.096 | 1.000 (0%) | 1.212 (220%) | 1.000 (0%) | 0.998 (-2%) | -118% |
+| qwen2-57b-a14b | 4096 | 1.130 | 1.000 (0%) | 1.160 (123%) | 1.018 (14%) | 1.018 (14%) | -51% |
+
+  BLOCK_SIZE_M: median share of the excess 0.0%
+  BLOCK_SIZE_N/BLOCK_SIZE_K: median share of the excess 117.3%
+  GROUP_SIZE_M: median share of the excess 0.0%
+  num_warps/num_stages: median share of the excess 7.2%
+
+## Headline
+
+Median over 28 cells with a genuine config difference: penalty 1.029, 90% bootstrap interval over cells [1.003, 1.053].
+
+In words: fallback is 2.9% SLOWER than tuned. A deployment on a (model, shard, card) with no tuned vLLM config runs the fallback ladder and pays 2.9% more time per MoE layer than the same layer on the same card with a tuned file.
+
+Verdict band: FOOTNOTE (FOOTNOTE <1.05, MODEST <1.15, MATERIAL >=1.15).
+
+## Gates
+
+[PASS] G0 same-layer  every arm computes the same MoE layer as the native one
+         gate: max relative error vs native <= 0.02
+         saw:  max rel err 0.00e+00
+[PASS] G1 derivation  vLLM v0.27.1 loads the config tile_resolve DERIVES
+         gate: zero cells where the observed native config differs from the derived one
+         saw:  0 mismatches over 28 observed cells
+[PASS] G2 override  override_config actually forces the config it is given
+         gate: zero arms where the recorder saw a config other than the forced one
+         saw:  0 of 127 forced arms ran a config they were not given
+[FAIL] G3 placebo  re-timing the SAME config moves the answer by almost nothing
+         gate: p90 of |replica/native - 1| < 3%
+         saw:  p90 placebo deviation 3.62% over 28 cells
+[PASS] G4 sign  the tuned config is not SLOWER than its own fallback
+         gate: median penalty >= 1.00
+         saw:  median penalty 1.029 -- fallback is 2.9% SLOWER than tuned
+[FAIL] G5 size  the fallback costs at least 15%
+         gate: median penalty and the low end of its 90% bootstrap interval are both >= 1.15
+         saw:  median 1.029, 90% interval [1.003, 1.053] -> verdict FOOTNOTE
+[PASS] G6 tile height  BLOCK_SIZE_M alone explains less than half the gap
+         gate: median share of the excess attributable to BLOCK_SIZE_M < 50%
+         saw:  BLOCK_SIZE_M share 0.0%
+[FAIL] G7 swizzle  GROUP_SIZE_M alone explains the majority of the gap
+         gate: median share attributable to GROUP_SIZE_M >= 50%
+         saw:  GROUP_SIZE_M share 0.0%
+
+5 PASS, 3 FAIL, 0 UNKNOWN
+
+EVERYTHING IS SAVED TO /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30
+  rows /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30/timings.csv
+  report /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30/report.md
+  summary /workspace/session/20260901T214218Z/tuned_vs_fallback/f3df6fed9e30/summary.json
