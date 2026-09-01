@@ -813,25 +813,65 @@ PYEOF
     "${refusals:-none}" "== '2 10'" soft \
     "The guard that would catch a borrowed calibration has changed behaviour. Publishing from this session is still safe, but re-read moe/bench/published.py before quoting any absolute efficiency number."
 
-  head2 "P8  Hugging Face auth, before 93 GB has been paid for"
-  # Mixtral is gated. Discovering that after the pod is up and the download has
-  # started is the expensive ordering; this is the cheap one.
+  head2 "P8  the weights step 7 pulls are actually reachable"
+  # THIS USED TO CHECK FOR A TOKEN, WHICH IS NOT THE REQUIREMENT. It ran
+  # HfApi().whoami() and failed without credentials, advising "step 7 will fail
+  # on the gated mixtral repo". Mistral UNGATED Mixtral-8x7B-Instruct-v0.1: it
+  # is apache-2.0, model_info reports gated=False, and config.json downloads
+  # anonymously. So the gate demanded a credential nothing needed and justified
+  # it with a fact that had stopped being true, which is worse than not checking
+  # -- a reader trusts the stated reason. It also never checked the thing that
+  # DOES fail: a token present but a licence unaccepted passes a whoami and
+  # fails at 2:40, after every other step has been paid for.
+  #
+  # So it asks the question step 7 asks: are THESE repos reachable, by whatever
+  # credentials this box has? The repo ids come from moe/spec.py rather than
+  # being written here twice, and a token is reported as an advisory because it
+  # buys download RATE on 93.4 GB, not access.
   if [[ "$NO_DOWNLOAD" == "1" ]]; then
-    skipped P8 "HF auth" "--no-download, step 7 will not pull weights"
+    skipped P8 "weights reachable" "--no-download, step 7 will not pull weights"
   else
-    local who
-    who="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
+    local reach
+    reach="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
+import sys
 try:
     from huggingface_hub import HfApi
-    print(HfApi().whoami().get("name", "?"))
-except Exception as e:
-    print(f"no:{type(e).__name__}")
+    from moe.spec import MODEL_CONFIGS
+except Exception as exc:
+    print(f"unknown|import failed: {type(exc).__name__}"); raise SystemExit(0)
+
+api = HfApi()
+try:
+    who = api.whoami().get("name", "?")
+except Exception:
+    who = ""
+
+bad = []
+for key in ("mixtral-8x7b", "deepseek-v2-lite"):
+    cfg = MODEL_CONFIGS.get(key)
+    repo = getattr(cfg, "hf_repo", None) if cfg else None
+    if not repo:
+        bad.append(f"{key}: no hf_repo in spec")
+        continue
+    try:
+        info = api.model_info(repo)
+        if info.gated:
+            bad.append(f"{repo}: gated={info.gated!r}")
+    except Exception as exc:
+        bad.append(f"{repo}: {type(exc).__name__}")
+print(("ok" if not bad else "blocked") + "|"
+      + (f"as {who}" if who else "anonymous")
+      + ("" if not bad else "; " + "; ".join(bad)))
 PYEOF
 )"
-    note "huggingface identity: ${who:-unknown}"
-    [[ "${who:-no}" != no* && -n "${who:-}" ]]; verdict P8 "HF auth" $? \
-      "${who:-none}" "an authenticated user" soft \
-      "Step 7 will fail on the gated mixtral repo. Run huggingface-cli login and accept the licence, or run with --no-download and capture deepseek-v2-lite, which is not gated."
+    local rstate="${reach%%|*}" rdetail="${reach#*|}"
+    note "reachability: ${rstate:-unknown} (${rdetail:-no detail})"
+    if [[ "$rstate" == "ok" && "$rdetail" == anonymous* ]]; then
+      note "no token: access is fine, but HF rate-limits anonymous transfers and step 0 pulls 93.4 GB"
+    fi
+    [[ "$rstate" == "ok" ]]; verdict P8 "weights reachable" $? \
+      "${rstate:-unknown}" "every repo step 7 pulls resolves" soft \
+      "Step 7 cannot fetch what it needs. If a repo reports gated, accept its licence while signed in and log in on this box; if it reports an HTTP error, the hub or the network is the problem, not the credentials. --no-download skips step 7 entirely."
   fi
 
   head2 "P9  .gitignore anchoring, tested by probing the exact exfil paths"

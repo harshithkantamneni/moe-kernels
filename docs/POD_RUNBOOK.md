@@ -52,8 +52,13 @@ hardware at all.
 Two things to do by hand before the pod exists, because both are slow to
 discover late:
 
-1. **Accept the Mixtral licence** and `huggingface-cli login`. Mixtral is gated,
-   and the failure arrives after the download has started.
+1. **Set `HF_TOKEN`, for download RATE rather than access.** Mixtral is no
+   longer gated -- apache-2.0, `gated=False`, anonymous `config.json` download,
+   verified 2026-09-01 -- so nothing here needs a licence accepted. But HF
+   rate-limits anonymous transfers and step 0 pulls 93.4 GB against a 2:40
+   deadline. `huggingface-cli` lives in the venv, not on PATH:
+   `/workspace/venvs/base/bin/python -c "from huggingface_hub import login;
+   from getpass import getpass; login(token=getpass())"`.
 2. **Check volume size.** The sweeps download nothing at all -- they generate
    random weights -- but step 7 pulls 93.4 GB. 100 GB of Network Volume covers
    everything except trace capture; capturing Mixtral needs 250 GB.
@@ -80,7 +85,7 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P5 | an isolated `TRITON_CACHE_DIR` really produces PTX | with the shared `$WORKSPACE/triton-cache` inherited, every fused_moe specialisation is already built, nothing recompiles, no `.ptx` is written, and the dump script exits saying the kernel never compiled. This is very likely why the A100 was never successfully dumped. **FATAL.** |
 | P6 | 110 GB on the volume, 10 GB on the container | the 93 GB download, and the several GB of temp space wheel extraction needs. |
 | P7 | `entitled_ridge` still refuses 2 of the 10 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. |
-| P8 | Hugging Face auth | Mixtral is gated. |
+| P8 | the weights step 7 pulls are reachable | Asks whether the repos in `moe/spec.py` for `mixtral-8x7b` and `deepseek-v2-lite` resolve, using whatever credentials the box has. It used to check for a TOKEN and justify it with "Mixtral is gated" -- Mistral ungated that repo (apache-2.0, `gated=False`, `config.json` downloads anonymously), so the gate demanded a credential nothing needed and gave a reason that had stopped being true. A token still helps: HF rate-limits anonymous transfers and step 0 pulls 93.4 GB, so its absence is reported as an advisory rather than a failure. |
 | P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. Zero `.png` files are tracked under `results/published/` across all ten arms. **FATAL.** |
 | P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
 | P11a | the step scripts exist and parse | several are written concurrently by other people. |

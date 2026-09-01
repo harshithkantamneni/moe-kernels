@@ -176,8 +176,13 @@ git add traces/*.npz && git commit
 
 Traces are kilobytes. Model weights are never written to the repo.
 
-Mixtral is gated on Hugging Face. Accept the license and `huggingface-cli login`
-before the session, or the download fails after you have already started paying.
+Mixtral is NOT gated any more. `mistralai/Mixtral-8x7B-Instruct-v0.1` is
+apache-2.0, `model_info` reports `gated=False`, and `config.json` downloads with
+no credentials at all -- verified on an H200 pod on 2026-09-01. This document
+told you to accept a licence that no longer exists, which cost a session's worth
+of confusion; check `gated` rather than trusting either this line or the model
+card. A token is still worth setting, but for RATE and not for access: HF
+rate-limits anonymous transfers and step 0 pulls 93.4 GB.
 
 ### What fits on one H200 (141 GB, bf16)
 
