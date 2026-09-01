@@ -27,13 +27,27 @@ otherwise be discovered on the meter.
 
 ```bash
 bash scripts/pod_session.sh --dry-run          # every step, printed not run
-.venv/bin/python -m pytest tests/ -q           # 1052 passed, 34 skipped
+.venv/bin/python -m pytest tests/ -q           # must be green; the count moves
 bash scripts/run_all.sh --dry-run --profile crossing-uniform
+.venv/bin/python scripts/alias_ablation.py --synthetic refit   # step 2b, no GPU
+.venv/bin/python scripts/nsys_dram_probe.py --explain          # P-nsys, no GPU
 ```
 
 The dry run degrades cleanly with no GPU and no vLLM: GPU checks report SKIP with
 the reason, everything else runs for real. What it will NOT catch is anything
 about the actual card, which is what the pre-flight is for.
+
+**The test count is deliberately not written down here.** It was stale by a
+hundred tests twice, because scripts land on this branch faster than the number
+in a doc gets corrected, and a stale number teaches people to ignore the line.
+P12 gates on `exit 0`, not on a count, and that is the thing to reproduce.
+
+The last two lines are worth running before the pod because both exercise a whole
+gate ladder off-GPU. `--synthetic refit` runs step 2b against a planted alpha and
+must exit 0; `--synthetic retracted` plants 0.10 and must exit 1 with P1 FAIL,
+which is what proves the gate can still refuse. `--explain` prints the sampling
+arithmetic that decides what nsys can and cannot measure here, and it needs no
+hardware at all.
 
 Two things to do by hand before the pod exists, because both are slow to
 discover late:
@@ -48,8 +62,10 @@ discover late:
 
 ## The pre-flight, and what each check kills
 
-Runs automatically, takes about three minutes, spends almost nothing. Every check
-below exists because something in this list actually went wrong on this project.
+Runs automatically, takes about five minutes, spends almost nothing. Every check
+below exists because something in this list actually went wrong on this project,
+with one exception: P-nsys is not there to stop a failure, it is there because
+what it finds changes what every later step is allowed to claim.
 
 Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 
@@ -66,16 +82,70 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P7 | `entitled_ridge` still refuses 2 of the 10 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. |
 | P8 | Hugging Face auth | Mixtral is gated. |
 | P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. Zero `.png` files are tracked under `results/published/` across all ten arms. **FATAL.** |
-| P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` uses CUDA tracing and often works. |
-| P11a | the six step scripts exist and parse | three of them are written concurrently by other people. |
+| P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
+| P11a | the step scripts exist and parse | several are written concurrently by other people. |
 | P11b | those scripts accept the flags this session passes | a renamed flag should cost a line here, not an argparse error forty minutes in. |
 | P12 | the test suite | a failure here costs seconds; the same failure found after an hour of benchmarking costs an hour, and every row in between is suspect. **FATAL.** |
 | P13 | no active throttle, card under 60 C | thermal state is the largest source of run-to-run disagreement on rented hardware, and the harness records the symptom rather than controlling it. |
 | P14 | the session directory is on a different mount from `/` | a Network Volume at `/workspace` survives termination; the container filesystem does not, and `/workspace` on a pod without a volume attached looks identical. **FATAL.** |
+| P-nsys | can DRAM traffic be COUNTED here rather than modelled | not a failure gate. It decides whether steps 1 to 4 quote MEASURED or INFERRED bytes. **Never fatal, and absence is not even a soft FAIL.** Runs LAST in pre-flight because it is the only check that costs minutes. |
 
-Pre-flight runs to the END even after a fatal, so one three-minute pass shows you
-every problem rather than one per re-rent. It then stops before spending
-anything, and reports the FIRST fatal, which is usually the cause of the rest.
+Pre-flight runs to the END even after a fatal, so one pass shows you every
+problem rather than one per re-rent. It then stops before spending anything, and
+reports the FIRST fatal, which is usually the cause of the rest. P-nsys is the
+exception: once a fatal has tripped it is skipped, because that session is not
+going to run and there is nothing for its answer to multiply.
+
+### P-nsys, and why it moved to the front
+
+**Every byte figure in this study is arithmetic.** Nothing here has ever counted a
+DRAM transaction. `ncu` is walled off on a rented pod by `ERR_NVGPUCTRPERM`, so
+compulsory-traffic bytes are computed from the shapes and divided into a measured
+bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
+rather than instrumenting, and whether it works on a given pod is an open
+question this project has never answered.
+
+**It is a force multiplier, not a result**, and that is the whole reason it is in
+pre-flight. If the sampler works, then steps 2, 3 and 4 and the dtype headline
+stop being inferences from a byte model and become measurements checked against
+counted bytes. Knowing that at 0:03 lets those steps say so. Knowing it at 3:00
+is worth nothing.
+
+**What it actually runs.** `scripts/nsys_dram_probe.py --calibrate`, capped at
+twelve seconds per attempt. It asks the installed `nsys` which flags it offers
+rather than guessing a spelling, walks a six-rung ladder that varies one thing per
+rung, and scores each rung by whether `GPU_METRICS` came back non-empty with a
+DRAM metric in it -- not by the exit code, because nsys exits 0 while writing a
+report with no metrics in it. The last rung is a CONTROL with no metrics
+requested, which separates "no sampler" from "no nsys". Then it profiles a
+workload whose DRAM traffic is KNOWN without any model and checks the sampler
+against it.
+
+**Three outcomes, and only one of them is a FAIL.**
+
+| outcome | what the session does |
+|---|---|
+| the sampler works and passes the known-traffic case | traffic is **MEASURED**. Step 2 gets a companion `--measure` run, and every later step says MEASURED. |
+| no invocation sampled a DRAM metric | traffic is **INFERRED**. This is the EXPECTED outcome on a rented pod, it is an INFO row and not a FAIL, and the session runs exactly as it did before. |
+| the sampler works and gets the known answer WRONG | a soft **FAIL** (`PnsysCal`). This is the one outcome worth a verdict, because an instrument that answers and answers wrongly would have corrupted every step after it silently. Traffic stays INFERRED. |
+
+**What it does NOT buy, and this matters.** Even a working sampler cannot measure
+a single MoE kernel launch. The rate ceiling nsys offers is 200 kHz, so one 54 us
+launch buys ten samples and the quantisation is charged per WINDOW rather than per
+sample: 10 ms of kernel time is usable as one contiguous window and useless as ten
+separate ones. Profiling a thousand separate launches buys samples and zero
+accuracy. So wrapping a 45-minute sweep in nsys would be pointless, and the
+session does not do it. What IS measurable is a long contiguous run of
+back-to-back launches merged into one window, which is why the traffic
+measurement is a companion run of the cell rather than a trace over the sweep.
+
+At 10% traffic error the sampler pins alpha to about +/-0.156 on a two-tile cell.
+That **discriminates 0.558 from the retracted 0.10 and cannot pin either**;
++/-0.05 needs 3.2%. More M-tiles per expert sharpen it, which is why the cell
+profiled is a deep one.
+
+**Skip it** with `--no-nsys`. The session then runs as it did before P-nsys
+existed and everything says INFERRED.
 
 ---
 
@@ -84,19 +154,36 @@ anything, and reports the FIRST fatal, which is usually the cause of the rest.
 | offset | step | script | what it costs |
 |---|---|---|---|
 | 0:00 | 0. mixtral weights, backgrounded | `huggingface_hub.snapshot_download` | nothing on the critical path |
-| 0:02 | 1. fp8 same-session calibration | `scripts/calibrate_hardware.py` | about 3 min |
-| 0:05 | 2. BLOCK_M sweep, multi-tile | `scripts/block_m_crossing_sweep.py` | about 45 min |
-| 0:50 | 3. GROUP_SIZE_M sweep | `scripts/group_m_alpha_sweep.py` | about 20 min |
-| 1:10 | 4. tuned vs forced fallback | `scripts/tuned_vs_fallback.py` | about 30 min |
-| 1:40 | 5. config and ISA provenance, PTX | `scripts/check_mma_path.sh` x 3 cells | about 30 min |
-| 2:10 | 6. dense uniform grid | `scripts/run_all.sh --profile crossing-uniform` | about 90 min |
-| 3:40 | 7. trace capture | `scripts/capture_traces.py` | about 40 min |
-| 4:20 | 8. exfil | `scripts/publish_results.sh` plus checks | about 10 min |
+| 0:00 | pre-flight, P-nsys included | `scripts/nsys_dram_probe.py --calibrate` | about 5 min |
+| 0:05 | 1. fp8 same-session calibration | `scripts/calibrate_hardware.py` | about 3 min |
+| 0:08 | 2. BLOCK_M sweep, multi-tile | `scripts/block_m_crossing_sweep.py` | 4-6 min |
+| 0:14 | 2. traffic measurement of the cell | `scripts/nsys_dram_probe.py --measure` | 2 min, only if P-nsys said yes |
+| 0:16 | **2b. alias ablation, the independent alpha** | `scripts/alias_ablation.py --run` | 6-10 min |
+| 0:26 | 3. GROUP_SIZE_M sweep | `scripts/group_m_alpha_sweep.py` | 12-15 min |
+| 0:41 | 4. tuned vs forced fallback | `scripts/tuned_vs_fallback.py` | capped at 35 min |
+| 1:16 | 5. config and ISA provenance, PTX | `scripts/check_mma_path.sh` x 3 cells | 15-30 min |
+| 1:46 | 6. dense uniform grid | `scripts/run_all.sh --profile crossing-uniform` | about 54 min |
+| 2:40 | 7. trace capture | `scripts/capture_traces.py` | 25-40 min |
+| 3:20 | 8. exfil, and the two alphas reconciled | `scripts/publish_results.sh` plus checks | about 10 min |
 
-Resume anywhere: `--from 5`, or `--only 6`. A step that already has a PASS and no
-FAIL in `$SESSION/LEDGER.tsv` is skipped; `--force` re-runs it. The sweeps resume
-through the harness's own `--run-id` manifest, which flushes per cell, so aborting
-costs at most one cell.
+**Does it still fit? Yes, with more room than the old plan had.** Worst case on
+the pessimistic arm of every range reaches exfil at 3:20 and finishes at 3:30,
+against 4:20 and 4:30 before; best case is 2:51. Two things bought that back: the
+BLOCK_M sweep and the GROUP_SIZE_M sweep are both quicker than the original
+estimates, and the two additions are small. The 93 GB download needs about 90
+minutes and step 7 does not start until 2:40, so it is still nowhere near the
+critical path -- which was the reason step 0 exists.
+
+**Step 2b runs immediately after step 2 on purpose.** Both estimate alpha. One
+session and one thermal state means a disagreement between them cannot be
+explained away by the card having been a different card.
+
+Resume anywhere: `--from 5`, or `--only 6`. `--only` takes any step id including
+`2b`; `--from` takes a number, and `--from 2` includes 2b because 2b sits at
+position 2 in the running order. A step that already has a PASS and no FAIL in
+`$SESSION/LEDGER.tsv` is skipped; `--force` re-runs it. The sweeps resume through
+the harness's own `--run-id` manifest, which flushes per cell, so aborting costs
+at most one cell.
 
 ---
 
@@ -114,7 +201,7 @@ partial download and `snapshot_download` resumes. Capture `deepseek-v2-lite`
 
 ---
 
-## Step 1 (0:02) -- the fp8 same-session calibration
+## Step 1 (0:05) -- the fp8 same-session calibration
 
 **One line, and it gates two results.**
 
@@ -163,7 +250,7 @@ ceiling and nothing downstream could tell.
 
 ---
 
-## Step 2 (0:05) -- the BLOCK_M sweep, and the session's central result
+## Step 2 (0:08) -- the BLOCK_M sweep, and the session's central result
 
 **The science.** Arithmetic intensity of an MoE expert GEMM is
 
@@ -228,9 +315,99 @@ where the crossing sits rather than around raw time.
 **If the step dies.** Steps 3 and 4 still stand: they measure how alpha VARIES,
 which is a separate claim from its level.
 
+**Read it with step 2b, not alone.** This step tests a consequence of alpha
+against a byte model. Step 2b measures alpha without one. A disagreement between
+them is not noise, and this step on its own cannot tell a wrong alpha from a wrong
+byte model.
+
 ---
 
-## Step 3 (0:50) -- GROUP_SIZE_M, is alpha a scalar
+## Step 2b (0:16) -- the alias ablation, and the second alpha
+
+**Why a second estimate at all.** `alpha = 0.558` carries the whole
+tile-corrected roofline, and it comes from ONE regression against a byte model
+with no tile term in it: `alpha_refit` fits it out of `implied_traffic_ratio`,
+which is `time x bandwidth / COMPULSORY BYTES`. C4 in `docs/FINDINGS.md` is a
+CONFIRMED finding that the compulsory-byte ruler was itself wrong by 1.85% until
+it was fixed. A number a paper's headline rests on should not rest on one
+estimator over one derived column.
+
+**The method, which touches none of that.** Run the same grouped-GEMM access
+pattern twice at `n = 1, 2, 4, 8` M-tiles per expert.
+
+- **NORMAL** reads each expert weight block once per M-tile, so its HBM weight
+  traffic is `W (1 + alpha (n-1))` in units of one full pass.
+- **ALIASED** points every weight load at ONE resident tile. The loads still
+  execute, the instruction stream is identical, but they HIT L2 instead of
+  missing to HBM.
+
+Everything else -- activation reads, output writes, arithmetic, launch, grid --
+is identical and cancels:
+
+```
+D(n) = T_normal(n) - T_aliased(n) = W (1 + alpha (n-1)),   D(1) = W
+alpha = (D(n)/D(1) - 1) / (n - 1)
+```
+
+`W` is never predicted from bytes and a bandwidth. It is MEASURED, in the same
+units, in the same session, by the same clock. Rows per expert is an exact
+multiple of `BLOCK_M` at every rung, so the padding term is exactly zero and the
+tile count is the only thing that moves.
+
+**Why the answer is an interval and not a point.** The aliased variant issues the
+same loads; what it does not do is MISS. So both variants push `n W` bytes through
+L2, and that common cost cancels only if L2 and HBM service ADD. A streaming
+kernel runs closer to `max(L2, HBM)`, where the naive difference estimator fits to
+`(alpha - r)/(1 - r)` and, at an `r` near 0.5 on this card, a true 0.558 would
+come back as **0.018** -- which is to say the naive estimator is biased toward
+almost exactly the value this repo retracted. So a second estimator, exact under
+`max` and biased the other way under addition, is run beside it and the answer is
+the BRACKET between them. The report prints the measured `r`, which is what sets
+the bracket width.
+
+**PREDICTION.** The interval contains 0.558 and excludes 0.10 and TEMPO's 0.33.
+
+**The gates**, all of which appear in the log as `[PASS]` or `[FAIL]` lines that
+`pod_session.sh` counts.
+
+| gate | meaning of a FAIL |
+|---|---|
+| ISA | the two variants did not compile to the same instruction stream, so the difference is not measuring what it claims. **Nothing from the run may be quoted whatever P1 says.** The gate counts the UNION of `ld.global` and `cp.async`, because Triton pipelines the loads at `num_stages > 1` and counting `ld.global` alone would read zero. |
+| correctness | a variant did not reproduce its closed form, so the aliasing scalars did not do what was intended. |
+| placebo | two identical launches differ by a large fraction of D. The design is measuring noise. |
+| signal | the weight read is not most of what the kernel does, so the difference is measuring something the label does not cover. |
+| form | `D(n)` is not affine in `(n-1)`, so slope-over-intercept is not alpha. |
+| control | an L2-resident geometry, whose per-expert block fits in L2 and therefore has no HBM re-read to save, showed an extra-tile cost anyway. Whatever it is, it is not weight traffic. |
+| resolution | the interval is too wide to separate the candidates. The run says **NOT TESTABLE** rather than picking one. |
+| P1 | the interval does not contain the refit. **This is the refutation and it is a result.** The gate line names which candidate the interval DOES contain. |
+
+**Exit codes are meanings, not error levels.** `0` every gate passed. `1` a gate
+failed, which is a refutation. `3` it could not run here; the deepseek-v3 rung
+needs about 16 GiB free on the card. `4` the design did not identify alpha and the
+honest answer is NOT TESTABLE.
+
+**What this is NOT.** It is not vLLM's `fused_moe_kernel`. It has vLLM's B-pointer
+arithmetic, vLLM's `GROUP_SIZE_M` swizzle, vLLM's `[E, N, K]` layout and vLLM's
+tile constants, with the reduction replaced by `acc += tl.sum(a) + tl.sum(b)` on
+`docs/STUDY.md`'s own instruction. That replacement is what keeps the estimator
+unbiased: with a real `tl.dot` the aliased variant goes compute-bound while the
+normal one stays memory-bound, `D(n)` loses a copy of the per-tile compute cost
+and alpha is biased DOWN. `--compute dot` runs it that way anyway, prints the
+bound, and refuses to answer P1 with it.
+
+**One residual confound, bounded rather than removed.** Aliasing to a single tile
+pins every load to a handful of L2 slices, so the aliased ladder is served more
+slowly than aggregate L2 bandwidth suggests. That inflates it, and the effect is
+contained by the bracket rather than eliminated. Spreading the alias would remove
+the closed form the correctness gate checks against, which is a worse trade.
+
+**Rehearse it off-GPU** with `--synthetic refit` (must exit 0) and
+`--synthetic retracted` (must exit 1 with P1 FAIL). `--replay <dir>` re-reports a
+finished run without a GPU.
+
+---
+
+## Step 3 (0:26) -- GROUP_SIZE_M, is alpha a scalar
 
 **What it tests.** The refit found alpha falling with GROUP_SIZE_M: 0.570 at 1,
 0.488 at 16. That is exactly what a swizzle-for-L2-reuse mechanism predicts, which
@@ -262,9 +439,15 @@ real result: report it, do not retry it.
 Note either way that alpha is not a scalar. It already drifts with BLOCK_M, 0.466
 at 64 and 0.625 at 128, so any single number carries a range.
 
+**This step is also the session's REGRESSION estimate of alpha.** Its
+`GROUP_SIZE_M = 1` row is what step 2b's ablation is reconciled against in the
+summary, and unlike the published refit it was measured on this card in this
+session. If step 3 does not run, the reconciliation falls back to the published
+0.558 / 0.529-0.588 and says in the file that the number is not from this card.
+
 ---
 
-## Step 4 (1:10) -- tuned config against a forced fallback
+## Step 4 (0:41) -- tuned config against a forced fallback
 
 **What it tests.** Only 2 of the 8 (model x card) cells in this study have a tuned
 vLLM config at all, both on the H200: `E=8,N=14336` (mixtral) and `E=64,N=2560`
@@ -290,7 +473,7 @@ tuned files buy nothing in this regime.
 
 ---
 
-## Step 5 (1:40) -- config and ISA provenance, and the file that must leave the pod
+## Step 5 (1:16) -- config and ISA provenance, and the file that must leave the pod
 
 **Why this step is really about exfil.** C1 and C3 are the only claims in
 `docs/FINDINGS.md` that rest on transient pod output. The PTX dumps, the CUTLASS
@@ -346,7 +529,7 @@ filenames are committable.
 
 ---
 
-## Step 6 (2:10) -- the dense uniform grid
+## Step 6 (1:46) -- the dense uniform grid
 
 **The profile.** `crossing-uniform`: uniform routing only, 7 seeds, a `2^(1/4)`
 grid from 1 to 16384 straddling the ridge band, L2-WARM eager.
@@ -400,7 +583,7 @@ guards that one and the filter has to be written per analysis.
 
 ---
 
-## Step 7 (3:40) -- trace capture
+## Step 7 (2:40) -- trace capture
 
 **What it fixes.** `traces/` holds a single `.gitkeep`. Every routing distribution
 in this study is parametric, so every claim about realistic skew rests on zipf, hot
@@ -427,7 +610,7 @@ rather than a silent one, because `traces/` is tracked.
 
 ---
 
-## Step 8 (4:20) -- exfil, and nothing is torn down before it passes
+## Step 8 (3:20) -- exfil, and nothing is torn down before it passes
 
 **This repo has lost work twice at exactly this point.** Every published figure
 was dropped by an unanchored `plots/` rule that `git add` applied silently, and
@@ -443,11 +626,42 @@ recompiled. Both losses were invisible at the terminal.
 4. `traces/*.npz` from step 7
 5. every step log, so a number can be traced to the run that made it
 6. `LEDGER.tsv`, the machine-readable record of every gate above
+7. **`$SESSION/alias_ablation/`**, step 2b's report and per-cell measurements.
+   This is the only estimate of alpha in the session that does not go through the
+   byte model, so it is the only thing that can corroborate or refute the number
+   everything else is quoted against.
+8. **`TRAFFIC_PROVENANCE.txt`** and `$SESSION/nsys/probe.json`, which say whether
+   any byte figure here was counted or modelled.
+9. **`ALPHA_RECONCILIATION.txt`**, the two estimates side by side with their
+   intervals and the verdict on whether they agree.
+
+Items 7, 8 and 9 were added on 2026-09-01. The manifest had already omitted the
+outputs of steps 2, 3 and 4 once -- the entire scientific payload -- and a pod
+torn down after a clean run would have taken the answer with it. Items 8 and 9 are
+listed UNCONDITIONALLY, unlike everything above them, because they are written by
+the session rather than by a step and their whole point is to exist even when a
+step did not run: "traffic was INFERRED because nsys is not installed" and "only
+one alpha exists" are both results that have to survive teardown.
+
+**The two alphas are reconciled here, before the manifest is built.** Step 8
+starts by reading step 3's regression alpha and step 2b's ablation interval out of
+their logs, writing both to `ALPHA_RECONCILIATION.txt`, and saying plainly whether
+they agree. The summary then prints that file ABOVE the gate counts, so it is the
+last thing on the screen. A session that measured the study's central parameter
+twice and buried the disagreement four hundred lines up a log would be a session
+that answered the question and told nobody.
+
+**Read the intervals with their asymmetry.** The regression band is a cluster
+bootstrap over sampling noise. The ablation interval is a BRACKET between two
+estimators biased in opposite directions by whether L2 and HBM service add or
+compose as a max. They are not the same kind of object, so overlap is weak
+evidence of agreement and disjoint is strong evidence of disagreement.
 
 **The gates.**
 
 | gate | meaning of a FAIL |
 |---|---|
+| SRa the two alphas agree | the intervals are DISJOINT. **Do not publish either number.** Two routes that share no byte model, no bandwidth and no estimator disagree about the parameter the tile-corrected roofline rests on, so at least one of them is measuring something other than the extra-tile cost. Check first whether the ablation's ISA gate passed and whether the regression ran in the multi-tile regime at all. If only one estimate exists the gate SKIPs and says so. |
 | S8a every expected artefact exists and is non-empty | a step reported success and produced nothing. Check its log BEFORE tearing down; re-running one step is minutes and re-renting is an hour. An artefact is expected only when its producing step passed, so a skipped step never shows here. |
 | S8b the calibration is byte-identical to step 1's snapshot | **STOP.** The ruler moved under the results and `publish_results.sh` would copy a calibration these rows were never measured against. Restore `$SESSION/calibration/` first. |
 | S8c nothing is silently gitignored | **STOP.** `git add` drops an ignored file without a word. Rename the artefact or fix the rule. |
@@ -477,19 +691,42 @@ awk -F'\t' '$3=="FAIL"' "$SESSION/LEDGER.tsv"
 ```
 
 **The contract a step script honours.** It prints at least one line carrying the
-word PASS and no line carrying FAIL, either as the first non-blank token or
-immediately after a colon:
+word PASS and no line carrying FAIL, in one of exactly TWO shapes, matched
+exactly rather than loosely:
 
 ```
-PASS  no crossing found on a grid reaching 16384
-BLOCK_M=32: PASS  no crossing found on a grid reaching 16384
+  [PASS] regime: every cell is memory bound          <- group_m, tuned_vs_fallback, alias_ablation
+GATE 7  PASS  the crossing moved with BLOCK_M        <- block_m_crossing_sweep
 ```
 
-So prose in a step script must not start a line with PASS or FAIL, or put either
-straight after a colon. `scripts/block_m_crossing_sweep.py` also offers
-`--fail-on-gate`, which turns its scientific verdict into an exit code; this
-session deliberately does not use it, because a scientific FAIL is a legitimate
-outcome and should not be reported as a crashed run.
+**This was wrong until 2026-09-01 and the correction is worth knowing about.** The
+first version of the matcher looked for PASS as the first non-blank token or
+straight after a colon, and it was validated against synthetic log lines rather
+than real ones. Against the actual output of the three step scripts it read **0
+PASS and 0 FAIL from all three**, so those gates FAILED on a perfect run and a
+genuine refutation was equally invisible. The entire scientific payload of the
+session had no verdict channel. The rule is deliberately not a bare whitespace
+boundary, because `block_m` prints the prose line "a FAIL here is the interesting
+answer" and other scripts print "2 PASS, 1 FAIL" summaries; both would
+false-positive under a looser rule, and a false PASS is the one direction this
+must never fail in.
+
+So prose in a step script must not begin a line with `[PASS]` or `[FAIL]`, or with
+`GATE <n> PASS`. Verified against the real output of all four scripts the session
+counts, including `scripts/alias_ablation.py`, which prints 13 `[PASS]` lines on
+`--synthetic refit` and 12 PASS plus 1 `[FAIL]` on `--synthetic retracted`.
+
+`scripts/nsys_dram_probe.py` deliberately does NOT use this convention and is not
+read with it: it is gated on its exit code and on the contents of `probe.json`,
+because "nsys exited 0" and "nsys sampled something" are different facts and only
+the report distinguishes them.
+
+`scripts/block_m_crossing_sweep.py` offers `--fail-on-gate`, which turns its
+scientific verdict into an exit code, and **step 2 passes it**. Without it the
+sweep exits 0 with gates failed, so the exit-code gate would pass on a refutation
+and the session's central result would have no way to report one. The consequence
+line on that gate says in as many words that a FAIL there is a result and not a
+crashed run.
 
 ---
 
@@ -505,6 +742,12 @@ outcome and should not be reported as a crashed run.
 | override_config appears to do nothing | the hook moved between vLLM versions | P4 catches this. `try_get_optimal_moe_config` reads it via `get_config()`, so it exists under some name |
 | a step crashed on `--out` / `--out-dir` | a step script renamed a flag | P11b catches this. Fix the invocation in `scripts/pod_session.sh` |
 | the whole script is a bash syntax error | an apostrophe inside a heredoc that sits inside `$( )` | bash 3.2 tracks quotes through it, and reports the error hundreds of lines away. No apostrophes in those blocks. |
+| P-nsys says INFERRED | almost always: this pod has no DRAM sampler, which is the expected case | nothing. The session is unaffected and every traffic figure says INFERRED. Read the CONTROL rung in `$SESSION/logs/nsys_probe.log`: it separates "no sampler" from "no nsys". |
+| `PnsysCal` FAILS | the sampler answered and got a KNOWN answer wrong | do not quote anything measured through it. The session continues with traffic INFERRED. This is the failure the calibration exists to catch and it is worth more than the measurement would have been. |
+| step 2b exits 3 | not enough free memory, or no triton | the deepseek-v3 rung needs about 16 GiB free. Run it after the card is idle, or with `--models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite`. |
+| step 2b says NOT TESTABLE (exit 4) | the bracket is too wide to separate 0.10 from 0.558 | read the printed `r`, the aliased ladder's per-tile cost. It sets the bracket width, and a wide bracket means L2 service is a large share of the cost. Do NOT pick a candidate from a wide interval. |
+| the two alphas DISAGREE | one route is measuring something other than the extra-tile cost | check the ablation ISA gate first, then whether step 3 ran in the multi-tile regime. Do not publish either number until it is resolved. This is a result, not a bug. |
+| `--from 2b` is rejected | `--from` takes a number | `--from 2` includes 2b; `--only 2b` runs it alone. |
 
 ---
 
@@ -512,9 +755,17 @@ outcome and should not be reported as a crashed run.
 
 Worth keeping in view, because a good result here is easy to over-read.
 
-- **DRAM traffic is still modelled, not counted.** Every byte figure remains
-  compulsory-traffic arithmetic. `nsys` runs, its `--gpu-metrics-device` route is
-  untested, and that is the open path rather than a closed door.
+- **DRAM traffic is modelled unless P-nsys says otherwise, and even then only in
+  aggregate.** Pre-flight now tests the `--gpu-metrics-device` route rather than
+  leaving it untested, and the session labels every traffic figure MEASURED or
+  INFERRED accordingly. But sampling is not a per-launch counter substitute and
+  must not be described as one: a single MoE kernel launch is not measurable at
+  any rate nsys offers, and what a working sampler buys is aggregate traffic over
+  a long contiguous run of back-to-back launches merged into one window. That is
+  enough to validate or refute the compulsory byte model at roughly the 1% level
+  and enough to choose between 0.558 and 0.10. It is not enough to attribute
+  bytes to a launch, and it is device-wide, so a neighbour process on the pod is
+  bounded by the idle baseline rather than excluded.
 - **One GPU holding every expert.** DeepSeek runs decode on DP144+EP144 precisely
   to scale the aggregate batch past this ridge, and at that scale all-to-all
   communication dominates rather than the GEMM. Half the corrections in this

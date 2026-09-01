@@ -6,6 +6,7 @@
 #   bash scripts/pod_session.sh --label alpha-0558 # the real session
 #   bash scripts/pod_session.sh --from 5           # resume after a crash
 #   bash scripts/pod_session.sh --only 6 --force   # redo one step
+#   bash scripts/pod_session.sh --only 2b          # just the alias ablation
 #
 # WHY THIS EXISTS RATHER THAN A LIST OF COMMANDS IN A DOC. Three separate
 # failures on this project were not wrong hypotheses but a session that produced
@@ -42,19 +43,60 @@
 # spread was 1.10x. So the sweep either separates them by about 1.56x or the
 # refit is wrong, and there is no reading of the data where both hold.
 #
+# AND THAT IS ONE REGRESSION AGAINST A BYTE MODEL WITH NO TILE TERM IN IT.
+# alpha_refit fits alpha from implied_traffic_ratio = time x bandwidth /
+# COMPULSORY BYTES, and C4 is a confirmed finding that the compulsory-byte ruler
+# was itself wrong by 1.85% until it was fixed. A number a paper's headline rests
+# on should not rest on one estimator over one derived column, so this session
+# measures alpha a SECOND time by a route that touches neither: step 2b aliases
+# the weight pointer so every re-read hits L2, and reads alpha out of the
+# difference of two timings in the same session on the same clock. The two
+# estimates are printed TOGETHER at the end, with their intervals, and the
+# session says plainly whether they agree. Two independent measurements of the
+# study's central parameter disagreeing is the most important thing this session
+# could produce and it is the last thing on the screen, not a line in a log.
+#
+# WHY nsys IS PROBED IN PRE-FLIGHT AND NOT LATER. Every byte figure in this study
+# is modelled, never counted, because ncu is walled off on a rented pod by
+# ERR_NVGPUCTRPERM. nsys samples DRAM through a different mechanism and MIGHT
+# work here. If it does, steps 2, 3 and 4 and the dtype headline stop being
+# inferences from a byte model and become measurements, so it is a force
+# multiplier on everything after it and worth two minutes BEFORE anything is
+# spent. It is never fatal: on a pod where the sampler is blocked the session
+# runs exactly as it did before and every downstream traffic figure is labelled
+# INFERRED instead of MEASURED, in the output and in an exfiled file, not just in
+# a log line.
+#
 # TIMELINE. Offsets are from the moment the pod is up, and the mixtral download
 # is started at 0:00 in the background precisely so 93 GB is never on the
-# critical path.
+# critical path. Budget re-derived 2026-09-01 when 2b and the nsys probe landed.
 #
 #   0:00  mixtral weights start downloading, backgrounded          step 0
-#   0:02  fp8 SAME-SESSION calibration                             step 1
-#   0:05  BLOCK_M sweep, multi-tile                                step 2
-#   0:50  GROUP_SIZE_M sweep                                       step 3
-#   1:10  tuned vs forced-fallback                                 step 4
-#   1:40  config/ISA provenance and PTX, both cards                step 5
-#   2:10  dense uniform grid, tile pinned                          step 6
-#   3:40  trace capture                                            step 7
-#   4:20  exfil, and NOTHING is torn down before it passes         step 8
+#   0:00  PRE-FLIGHT, now including the nsys DRAM probe    5 min
+#   0:05  fp8 SAME-SESSION calibration                     3 min   step 1
+#   0:08  BLOCK_M sweep, multi-tile                        4-6     step 2
+#   0:14  nsys traffic measurement of the profiled cell    2 min   step 2 (if nsys)
+#   0:16  ALIAS ABLATION, the independent alpha            6-10    step 2b
+#   0:26  GROUP_SIZE_M sweep                               12-15   step 3
+#   0:41  tuned vs forced-fallback                         <= 35   step 4
+#   1:16  config/ISA provenance and PTX, both cards        15-30   step 5
+#   1:46  dense uniform grid, tile pinned                  54 min  step 6
+#   2:40  trace capture                                    25-40   step 7
+#   3:20  exfil, and NOTHING is torn down before it passes 10 min  step 8
+#   3:30  done, worst case; 2:51 best case
+#
+# THE BUDGET STILL FITS, with more slack than before: the old plan quoted 4:20 to
+# reach exfil and this one reaches it at 3:20 even on the pessimistic arm of every
+# range. The 93 GB download needs about 90 minutes and step 7 does not start until
+# 2:40, so it is still nowhere near the critical path. Step 2b is dominated by
+# allocation and Triton compilation rather than kernel time, and its deepseek-v3
+# rung needs about 16 GiB free on the card, which is why it runs before the
+# long-lived sweeps rather than beside them.
+#
+# STEP 2b RUNS IMMEDIATELY AFTER STEP 2 ON PURPOSE. Both estimate alpha. Putting
+# them in one session on one thermal state means a disagreement between them
+# cannot be blamed on the card being a different card, which is the first thing a
+# reviewer would reach for.
 #
 # EVERY STEP IS RE-RUNNABLE. A step that has already passed is skipped on a
 # second invocation unless --force, the ledger at $SESSION/LEDGER.tsv is the
@@ -79,16 +121,23 @@ ONLY_STEP=""
 FORCE=0
 ALLOW_DIRTY=0
 NO_DOWNLOAD=0
+NO_NSYS=0
 LABEL=""
 EXPECT_GPU="${MOE_EXPECT_GPU:-NVIDIA H200}"
 SESSION_DIR=""
 SKIP_TESTS=0
 
+#: The header comment IS the help text, so it is extracted rather than restated.
+#: Bounded by the first non-comment line rather than a hardcoded line number: the
+#: previous version stopped at line 70 and silently truncated the moment the
+#: header grew, which is how --help came to omit the timeline it exists to show.
 usage() {
-  sed -n '2,70p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '/^[^#]/d' | sed 's/^# \{0,1\}//'
   echo
   echo "flags: --dry-run --preflight-only --from N --only N --force --allow-dirty"
-  echo "       --no-download --skip-tests --label NAME --expect-gpu NAME --session-dir DIR"
+  echo "       --no-download --no-nsys --skip-tests --label NAME --expect-gpu NAME"
+  echo "       --session-dir DIR"
+  echo "steps: 0 1 2 2b 3 4 5 6 7 8   (--only takes any one of these; --from a number)"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -100,6 +149,7 @@ while [[ $# -gt 0 ]]; do
     --force)          FORCE=1; shift ;;
     --allow-dirty)    ALLOW_DIRTY=1; shift ;;
     --no-download)    NO_DOWNLOAD=1; shift ;;
+    --no-nsys)        NO_NSYS=1; shift ;;
     --skip-tests)     SKIP_TESTS=1; shift ;;
     --label)          LABEL="${2:?--label needs a name}"; shift 2 ;;
     --expect-gpu)     EXPECT_GPU="${2:?--expect-gpu needs a name}"; shift 2 ;;
@@ -108,6 +158,27 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; usage >&2; exit 3 ;;
   esac
 done
+
+# THE STEP LIST IS NO LONGER ALL DIGITS, so it is validated here rather than
+# discovered by arithmetic. `wanted` compares with `-ge`, which EVALUATES its
+# operands: a --from of `2b` or of anything else non-numeric is a bash arithmetic
+# error at the first step, hundreds of lines from the typo that caused it, and
+# under `set -uo pipefail` without -e it does not even stop. An unknown step is a
+# usage error, which is exit 3, and it costs nothing to say so here.
+STEP_IDS="0 1 2 2b 3 4 5 6 7 8"
+if [[ -n "$ONLY_STEP" ]]; then
+  case " $STEP_IDS " in
+    *" $ONLY_STEP "*) ;;
+    *) echo "--only: no step '$ONLY_STEP'. Steps are: $STEP_IDS" >&2; exit 3 ;;
+  esac
+fi
+# --from is a NUMBER because it means "everything from here on", and 2b is not a
+# position in that order; --from 2 includes it, which is what resuming after a
+# crash in step 2 should mean.
+if [[ ! "$FROM_STEP" =~ ^[0-9]+$ ]]; then
+  echo "--from takes a number (2b is included by --from 2). Steps: $STEP_IDS" >&2
+  exit 3
+fi
 
 # --------------------------------------------------------------------------
 # paths, and the rule that everything lands somewhere that outlives the pod
@@ -253,11 +324,25 @@ already_passed() {
   [[ "${p:-0}" -ge 1 && "${f:-0}" == "0" ]]
 }
 
-#: Should this numbered step run at all, given --from / --only?
+#: Where a step sits in the running order, which is not always its name. 2b is
+#: the alias ablation and it runs immediately after step 2, in the same session
+#: and the same thermal state, because both measure alpha and a difference
+#: between them must not be attributable to the card having cooled. Its ORDER is
+#: therefore 2: --from 2 resumes into it, --only 2b runs it alone.
+step_order() {
+  case "$1" in
+    2b) echo 2 ;;
+    *)  echo "$1" ;;
+  esac
+}
+
+#: Should this step run at all, given --from / --only? --only matches the step ID
+#: exactly, so `--only 2` does NOT drag 2b along with it; --from matches the
+#: ORDER, so `--from 2` does.
 wanted() {
   local n="$1"
   if [[ -n "$ONLY_STEP" ]]; then [[ "$n" == "$ONLY_STEP" ]]; return $?; fi
-  [[ "$n" -ge "$FROM_STEP" ]]
+  [[ "$(step_order "$n")" -ge "$FROM_STEP" ]]
 }
 
 #: A step that a fatal preflight failure has taken out.
@@ -291,15 +376,221 @@ absent_reason() {
   esac
 }
 
+# --------------------------------------------------------------------------
+# traffic provenance: is a byte figure COUNTED or MODELLED
+# --------------------------------------------------------------------------
+#
+# EVERY BYTE FIGURE IN THIS STUDY IS COMPULSORY-TRAFFIC ARITHMETIC. Nothing has
+# ever counted a DRAM transaction, because ncu is walled off on a rented pod by
+# ERR_NVGPUCTRPERM, and docs/FINDINGS.md says so under "what this does not
+# settle". Pre-flight P-nsys asks whether nsys can sample DRAM here instead. If it
+# can, the traffic figures behind steps 1 through 4 stop being inferences.
+#
+# THE DISTINCTION HAS TO REACH THE READER, not a log. A number that was modelled
+# and a number that was counted are different kinds of evidence and they look
+# identical in a table, which is exactly the shape of failure this whole script
+# exists to prevent. So the word is printed at the head of every step that
+# produces a traffic figure, written to an exfiled file that the manifest checks,
+# and repeated in the summary.
+NSYS_BIN=""
+NSYS_SAMPLES_DRAM=0
+NSYS_ROUTE=""
+NSYS_WHY="not probed"
+TRAFFIC_PROVENANCE="INFERRED"
+PROVENANCE_FILE=""
+
+#: One sentence, the same one everywhere, so a step can never imply more than the
+#: probe established.
+provenance_line() {
+  if [[ "$NSYS_SAMPLES_DRAM" == "1" ]]; then
+    echo "TRAFFIC: MEASURED. nsys sampled DRAM here via $NSYS_ROUTE, and the cell measured under step 2 scores the compulsory byte model against counted bytes. Device-wide and edge-quantised: quote it with its resolution line."
+  else
+    echo "TRAFFIC: INFERRED. Every byte figure below is compulsory-traffic arithmetic, never counted. Reason: $NSYS_WHY"
+  fi
+}
+
+#: Printed by each step that produces a traffic figure.
+provenance_banner() {
+  printf '  %s%s%s\n' "$BOLD" "$(provenance_line)" "$OFF"
+}
+
+#: The file the manifest checks, written the moment the probe finishes so it
+#: exists even if every later step is skipped.
+write_provenance() {
+  PROVENANCE_FILE="$SESSION/exfil/TRAFFIC_PROVENANCE.txt"
+  {
+    echo "# is a byte figure in this session counted or modelled"
+    echo "# written by scripts/pod_session.sh pre-flight P-nsys on $(date -u +%FT%TZ)"
+    echo "# card: ${GPU_NAME:-none}"
+    echo
+    echo "$TRAFFIC_PROVENANCE"
+    echo
+    provenance_line
+    echo
+    echo "route      : ${NSYS_ROUTE:-none}"
+    echo "reason     : $NSYS_WHY"
+    echo "probe      : $SESSION/nsys"
+    echo
+    echo "Steps 1, 2, 2b, 3 and 4 all carry this label. Step 2b is the ONE"
+    echo "measurement in this session that is independent of the byte model"
+    echo "whatever this file says, because it never divides by bytes at all."
+  } > "$PROVENANCE_FILE"
+}
+
+# --------------------------------------------------------------------------
+#: A hard wall-clock cap, so no pre-flight check can hang the session.
+#:
+#: The nsys probe walks a six-rung ladder and each rung can sit at its own
+#: --timeout, so its worst case is a multiple of a number this script passes it.
+#: That is bounded but not SHORT, and pre-flight has a two-minute contract. On a
+#: box without coreutils timeout (a mac laptop) the command runs uncapped, which
+#: is correct there: nothing is metered and nothing is at risk.
+with_deadline() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout -k 5 "$secs" "$@"
+  else
+    "$@"
+  fi
+}
+
+# --------------------------------------------------------------------------
+#: P-nsys. CAN DRAM TRAFFIC BE COUNTED ON THIS POD RATHER THAN MODELLED?
+#:
+#: WHY IT IS IN PRE-FLIGHT AND NOT A LATE STEP. It is a FORCE MULTIPLIER, not a
+#: result. If nsys samples DRAM here then steps 2, 3 and 4 and the dtype headline
+#: all become measurements instead of inferences from a byte model, and knowing
+#: that BEFORE the sweeps run is what lets the sweeps say so. Knowing it at 3:00
+#: would be worth nothing. Two minutes, before anything is spent.
+#:
+#: IT IS NEVER FATAL AND NEVER EVEN A SOFT FAIL FOR BEING ABSENT. nsys having no
+#: DRAM sampler on a rented pod is the EXPECTED case: ncu is already blocked by
+#: ERR_NVGPUCTRPERM and this route has never been tested. A gate that cries FAIL
+#: on the expected case is a gate nobody reads, and this one has to be read. So
+#: absence is an INFO row and the consequence is carried as a label rather than a
+#: verdict: every downstream traffic figure says INFERRED.
+#:
+#: THERE IS EXACTLY ONE FAILURE HERE WORTH A VERDICT, and it is the opposite one.
+#: The probe runs a workload whose DRAM traffic is KNOWN without any model and
+#: checks the sampler against it. A sampler that answers, and answers WRONG on a
+#: case with a known answer, is an instrument that would have silently corrupted
+#: every step after it. That is a soft FAIL with a named consequence, and it is
+#: the reason --calibrate is passed here rather than left for later.
+preflight_nsys() {
+  head2 "P-nsys  can DRAM traffic be COUNTED here, or does it stay modelled"
+  local plog="$SESSION/logs/nsys_probe.log" pdir="$SESSION/nsys"
+  mkdir -p "$pdir"
+
+  if [[ "$NO_NSYS" == "1" ]]; then
+    NSYS_WHY="--no-nsys was passed, so the sampler was never asked"
+    ledger Pnsys "nsys DRAM sampling" INFO "$NSYS_WHY" "informational" ""
+    note "$NSYS_WHY"
+    return 0
+  fi
+  if [[ ! -f scripts/nsys_dram_probe.py ]]; then
+    NSYS_WHY="scripts/nsys_dram_probe.py is not on this branch"
+    ledger Pnsys "nsys DRAM sampling" INFO "$NSYS_WHY" "informational" ""
+    note "$NSYS_WHY"
+    return 0
+  fi
+  if [[ "$HAVE_GPU" == "0" ]]; then
+    NSYS_WHY="$(absent_reason gpu)"
+    ledger Pnsys "nsys DRAM sampling" INFO "$NSYS_WHY" "informational" ""
+    note "$NSYS_WHY"
+    return 0
+  fi
+  if [[ -z "$NSYS_BIN" ]]; then
+    NSYS_WHY="nsys is not installed on this pod (P10 says so above)"
+    ledger Pnsys "nsys DRAM sampling" INFO "$NSYS_WHY" "informational" ""
+    note "$NSYS_WHY"
+    return 0
+  fi
+
+  # --timeout is PER ATTEMPT and the ladder has six of them, so 12 s caps the
+  # ladder near 72 s; --calibrate adds one run at twice that. with_deadline is
+  # the outer belt, because nsys export has its own timeout this script does not
+  # set.
+  say "  \$ $PY_BASE scripts/nsys_dram_probe.py --calibrate --timeout 12 --out $pdir"
+  with_deadline 150 "$PY_BASE" scripts/nsys_dram_probe.py --calibrate \
+    --timeout 12 --seconds 1.5 --out "$pdir" > "$plog" 2>&1
+  local rc=$?
+
+  # THE EXIT CODE IS NOT THE ANSWER, the report is: the probe exits 3 both when
+  # no invocation sampled anything and when one did and then failed calibration,
+  # and those are opposite findings. probe.json distinguishes them by name.
+  local parsed
+  parsed="$("$PY_BASE" - "$pdir/probe.json" <<'PYEOF' 2>/dev/null
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if not p.is_file():
+    print("none|no probe.json was written|")
+    raise SystemExit(0)
+try:
+    doc = json.loads(p.read_text())
+except Exception as exc:
+    print(f"none|probe.json is unreadable: {type(exc).__name__}|")
+    raise SystemExit(0)
+winner = ""
+for att in doc.get("attempts") or []:
+    if att.get("metrics_rows") and att.get("dram_metrics"):
+        winner = att.get("label") or "an unnamed invocation"
+cal = (doc.get("calibration") or {}).get("calibration_verdict") or ""
+if winner:
+    state = "lying" if cal.startswith("FAIL") else "ok"
+else:
+    state = "none"
+why = (doc.get("verdict") or "the probe wrote no verdict").replace("\n", " ")
+# FREE TEXT LAST. bash `read` with three names puts every surplus field into the
+# THIRD one, so a pipe character anywhere in the verdict prose would silently
+# shift the route into it if the order were the other way round.
+print("|".join([state, winner, why[:400]]))
+PYEOF
+)"
+  local state why route
+  IFS='|' read -r state route why <<< "$parsed"
+
+  case "${state:-none}" in
+    ok)
+      NSYS_SAMPLES_DRAM=1
+      NSYS_ROUTE="$route"
+      NSYS_WHY="nsys samples DRAM here"
+      TRAFFIC_PROVENANCE="MEASURED"
+      ledger Pnsys "nsys DRAM sampling" INFO "MEASURED via $route" "informational" ""
+      note "MEASURED. $route"
+      note "steps 2, 3 and 4 and the dtype headline are now measurements rather than inferences"
+      ;;
+    lying)
+      # The sampler answered and the known-traffic case says its answer is wrong.
+      # This is the one outcome here that is worth a verdict, because it is the
+      # one that would otherwise have corrupted everything downstream silently.
+      NSYS_WHY="nsys sampled DRAM and then FAILED a workload with a known answer, so its numbers are not usable"
+      false; verdict PnsysCal "nsys sampler tells the truth" $? \
+        "sampler present, calibration FAILED" "a known-traffic case within tolerance" soft \
+        "The sampler works and disagrees with a case whose answer needs no model. Nothing measured through it may be quoted; the session continues with traffic INFERRED exactly as before. See $plog and $pdir/probe.json."
+      ;;
+    *)
+      NSYS_WHY="${why:-no invocation of this nsys sampled a DRAM metric}"
+      ledger Pnsys "nsys DRAM sampling" INFO "INFERRED: $NSYS_WHY" "informational" ""
+      note "INFERRED. $NSYS_WHY"
+      note "this is the EXPECTED outcome on a rented pod and costs the session nothing; the control rung in $plog says whether nsys itself works here at all"
+      ;;
+  esac
+  [[ "$rc" == "0" || "$rc" == "3" ]] || note "probe exited $rc, which is neither 0 nor its no-sampler 3; see $plog"
+  note "probe log $plog"
+}
+
 # ==========================================================================
 # PRE-FLIGHT
 # ==========================================================================
 #
 # Every check below costs under two minutes and each one kills a whole CLASS of
 # failure that this project has actually suffered. They run before anything is
-# spent. Ordered cheapest-first so a fatal one stops the session in seconds.
+# spent. Ordered cheapest-first so a fatal one stops the session in seconds, and
+# P-nsys goes LAST because it is the only one that costs minutes rather than
+# seconds and there is no sense sampling DRAM on a pod whose tests are red.
 preflight() {
-  head1 "PRE-FLIGHT  (about 3 minutes, kills a class of failure per check)"
+  head1 "PRE-FLIGHT  (about 5 minutes, kills a class of failure per check)"
   say "  session dir : $SESSION"
   say "  repo        : $REPO_ROOT"
   say "  base python : $PY_BASE"
@@ -566,12 +857,16 @@ PYEOF
   command -v ncu  >/dev/null 2>&1 && have_ncu=yes
   note "nsys=$have_nsys ncu=$have_ncu (ncu is expected to be present but to fail with ERR_NVGPUCTRPERM)"
   ledger P10 "profiler availability" INFO "nsys=$have_nsys ncu=$have_ncu" "informational" ""
+  [[ "$have_nsys" == "yes" ]] && NSYS_BIN="$(command -v nsys)"
+  note "P-nsys below asks the harder question: whether nsys can SAMPLE DRAM here"
 
   head2 "P11  the step scripts exist and parse"
   # Three other agents are writing these concurrently. A missing or unparseable
   # step should cost a line here, not forty minutes and a stack trace at 1:10.
   local missing=0 broken=0 s
   for s in scripts/block_m_crossing_sweep.py scripts/group_m_alpha_sweep.py \
+           scripts/alias_ablation.py scripts/nsys_dram_probe.py \
+           scripts/alpha_refit.py \
            scripts/tuned_vs_fallback.py scripts/check_mma_path.sh \
            scripts/capture_traces.py scripts/calibrate_hardware.py \
            scripts/publish_results.sh; do
@@ -596,6 +891,13 @@ PYEOF
   for pair in "scripts/block_m_crossing_sweep.py:--out" \
               "scripts/group_m_alpha_sweep.py:--out" \
               "scripts/group_m_alpha_sweep.py:--run" \
+              "scripts/alias_ablation.py:--out" \
+              "scripts/alias_ablation.py:--run" \
+              "scripts/alias_ablation.py:--replay" \
+              "scripts/nsys_dram_probe.py:--out" \
+              "scripts/nsys_dram_probe.py:--calibrate" \
+              "scripts/nsys_dram_probe.py:--measure" \
+              "scripts/nsys_dram_probe.py:--timeout" \
               "scripts/tuned_vs_fallback.py:--out-dir" \
               "scripts/check_mma_path.sh:--model" \
               "scripts/check_mma_path.sh:--tokens" \
@@ -663,6 +965,22 @@ PYEOF
       "${m_sess:-unknown} vs ${m_root:-unknown}" "different mounts" fatal \
       "$SESSION is on the container filesystem and dies with the pod. Attach the Network Volume at /workspace, or pass --session-dir pointing into it. Step 8 can still push to git, but a session that crashes before step 8 would leave nothing at all."
   fi
+
+  # LAST IN PRE-FLIGHT, AND STILL BEFORE ANYTHING IS SPENT. It is the only check
+  # here that costs minutes rather than seconds, so it goes after the cheap fatal
+  # ones: there is no sense sampling DRAM for two minutes on a pod whose test
+  # suite is red or whose GPU is the wrong part. It is skipped entirely once a
+  # fatal has tripped, because that session is not going to run.
+  if halted; then
+    NSYS_WHY="a fatal pre-flight gate tripped first ($STOPPED), so the probe was not run"
+    head2 "P-nsys  skipped"
+    note "$NSYS_WHY"
+    ledger Pnsys "nsys DRAM sampling" SKIP "$NSYS_WHY" "" ""
+  else
+    preflight_nsys
+  fi
+  write_provenance
+  note "provenance recorded at $PROVENANCE_FILE; every step that quotes a byte figure reads it"
 }
 
 # ==========================================================================
@@ -752,7 +1070,7 @@ PYEOF
 
 # --------------------------------------------------------------------------
 step1_calibrate() {
-  head1 "STEP 1  (0:02)  fp8 SAME-SESSION calibration -- one line, two results"
+  head1 "STEP 1  (0:05)  fp8 SAME-SESSION calibration -- one line, two results"
   cat <<'TXT'
   WHAT IT GATES. Two published results currently rest on a calibration that did
   not belong to the session that measured them:
@@ -773,6 +1091,10 @@ step1_calibrate() {
     bf16 ridge         160.3-176.2 FLOP/byte
     fp8_e4m3 peak      about 1409 TFLOP/s, 1.83x the bf16 figure
 TXT
+  # The dtype headline is a RATIO OF EFFICIENCIES, and an efficiency is a time
+  # divided by a modelled byte count. Whether those bytes were counted or
+  # computed is part of the claim, so it is printed with it.
+  provenance_banner
   if already_passed S1; then skipped S1 "calibration" "already passed"; return 0; fi
   if [[ "$HAVE_GPU" == "0" ]]; then
     skipped S1 "calibration" "$(absent_reason gpu)"; return 0
@@ -889,7 +1211,7 @@ PYEOF
 
 # --------------------------------------------------------------------------
 step2_block_m() {
-  head1 "STEP 2  (0:05)  BLOCK_M sweep, multi-tile -- the session's central result"
+  head1 "STEP 2  (0:08)  BLOCK_M sweep, multi-tile -- the session's central result"
   cat <<'TXT'
   WHAT IT TESTS. Whether arithmetic intensity is BOUNDED by the tile height, as
   AI -> 2 BM / (alpha b) says it is, or whether the uncorrected 2R/b holds and
@@ -913,7 +1235,12 @@ step2_block_m() {
   killed it. A FAIL where 32 or 64 DOES cross means alpha < 0.0998 after all and
   the refit is wrong; a FAIL where 128 and 256 separate by ~1.10x instead of
   1.56x means the uncorrected 2R/b is right and this whole section retracts.
+
+  STEP 2b RUNS STRAIGHT AFTER THIS ONE and measures the same alpha by ablation,
+  touching no byte model at all. Read the two together in the summary; this step
+  on its own cannot tell a wrong alpha from a wrong byte model.
 TXT
+  provenance_banner
   if already_passed S2; then skipped S2 "BLOCK_M sweep" "already passed"; return 0; fi
   [[ -f scripts/block_m_crossing_sweep.py ]] || { skipped S2 "BLOCK_M sweep" "scripts/block_m_crossing_sweep.py not present"; return 0; }
   if [[ "$HAVE_VLLM" == "0" ]]; then skipped S2 "BLOCK_M sweep" "$(absent_reason vllm)"; return 0; fi
@@ -933,8 +1260,136 @@ TXT
 }
 
 # --------------------------------------------------------------------------
+#: The one traffic figure this session can actually COUNT, if P-nsys said yes.
+#:
+#: WHY ONE MEASUREMENT AND NOT A TRACE OVER THE SWEEP. nsys samples the DRAM
+#: counters at a fixed rate, so a single launch of the cell this study cares
+#: about is not measurable at ANY rate nsys offers: the probe prints the
+#: arithmetic and one 54 us launch buys half a sample at the nsys default and ten
+#: at the 200 kHz ceiling, and the quantisation is charged per WINDOW rather than
+#: per sample. What IS measurable is a long contiguous run of back-to-back
+#: launches merged into one window. A 45-minute sweep is the opposite of that: it
+#: is thousands of separate launches with compilation and allocation between them,
+#: so wrapping the sweep in nsys would buy samples and no accuracy at all. So the
+#: cell is profiled ON ITS OWN, in a loop, next to the sweep that ran it.
+#:
+#: WHAT IT SETTLES. deepseek-v3 up-stage at T=4096, where the two candidate
+#: traffic models are 45% apart: 256 active experts x 58.72 MB = 15.03 GB if
+#: traffic is active x W, against 370 M-tiles x 58.72 MB = 21.73 GB if every
+#: M-tile re-reads. That gap IS the tile term, so this is a direct read on the
+#: same physics as alpha, by counting rather than by fitting.
+step2_nsys_cell() {
+  if [[ "$NSYS_SAMPLES_DRAM" != "1" ]]; then
+    skipped SN "nsys traffic measurement" "traffic is INFERRED: $NSYS_WHY"
+    return 0
+  fi
+  if already_passed SN; then skipped SN "nsys traffic measurement" "already passed"; return 0; fi
+  head2 "step 2, under nsys: the compulsory byte model against counted bytes"
+  local mlog="$SESSION/logs/nsys_cell.log" mdir="$SESSION/nsys/cell"
+  mkdir -p "$mdir"
+  run_logged "$mlog" with_deadline 300 "$PY_BASE" scripts/nsys_dram_probe.py \
+    --measure --timeout 30 --seconds 3.0 --out "$mdir"
+  local rc=$?
+  if [[ "$DRY_RUN" == "1" ]]; then return 0; fi
+  local ratio
+  ratio="$("$PY_BASE" - "$mdir/probe.json" <<'PYEOF' 2>/dev/null
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+if not p.is_file():
+    print("no probe.json")
+    raise SystemExit(0)
+cell = (json.loads(p.read_text()).get("cell") or {})
+line = (cell.get("comparison") or cell.get("error") or "the probe measured no cell")
+print(line.replace("\n", " ")[:200])
+PYEOF
+)"
+  note "$ratio"
+  if [[ "$rc" != "0" ]]; then
+    # THE LABEL FOLLOWS THE MEASUREMENT, NOT THE CAPABILITY. A sampler that works
+    # and produced no cell figure leaves every downstream traffic number exactly
+    # as modelled as it was before, so the word downstream must go back to
+    # INFERRED. Claiming MEASURED because the instrument exists is the same shape
+    # of error as quoting an arm against a calibration from another session.
+    NSYS_SAMPLES_DRAM=0
+    NSYS_WHY="nsys samples DRAM here but the cell measurement failed (exit $rc), so nothing was actually counted"
+    TRAFFIC_PROVENANCE="INFERRED"
+    write_provenance
+  fi
+  [[ "$rc" == "0" ]]; verdict SN "nsys traffic measurement" $? \
+    "exit $rc: ${ratio:-nothing parsed}" "== 0 and a measured-over-modelled ratio" soft \
+    "The sampler worked in pre-flight and did not produce a cell measurement here. Traffic figures go back to INFERRED for this session and every later step says so; nothing else is affected. Log at $mlog."
+}
+
+# --------------------------------------------------------------------------
+step2b_alias_ablation() {
+  head1 "STEP 2b (0:16)  ALIAS ABLATION -- alpha again, without the byte model"
+  cat <<'TXT'
+  WHY THIS EXISTS AND WHY IT RUNS HERE. alpha = 0.558 is the number the whole
+  tile-corrected roofline rests on, and it comes from ONE regression against a
+  byte model that has no tile term in it: alpha_refit fits it out of
+  implied_traffic_ratio = time x bandwidth / COMPULSORY BYTES. C4 is a confirmed
+  finding that the compulsory-byte ruler was itself wrong by 1.85% until it was
+  fixed. One estimator over one derived column is not enough support for a
+  headline, so this measures the same physical quantity by a route that touches
+  no compulsory bytes, no calibrated bandwidth, no ridge and no fitted intercept.
+
+  THE METHOD. Run the same grouped-GEMM access pattern twice at n M-tiles per
+  expert, n = 1, 2, 4, 8. NORMAL reads each expert weight block once per M-tile.
+  ALIASED points every weight load at ONE resident tile, so the loads still
+  execute and still occupy the same instructions but they HIT L2 instead of
+  missing to HBM. Everything else is identical and cancels:
+
+    D(n) = T_normal(n) - T_aliased(n) = W (1 + alpha (n - 1)),   D(1) = W
+
+  so alpha = (D(n)/D(1) - 1)/(n - 1) with W measured in the same units by the
+  same clock, never predicted. Rows per expert is an exact multiple of BLOCK_M at
+  every rung, so the padding term is EXACTLY zero and the tile count is the only
+  thing that moves.
+
+  IT REPORTS A BRACKET, NOT A POINT, and that is deliberate. The aliased variant
+  issues the same loads, so both variants push n W bytes through L2 and that
+  common cost cancels only if L2 and HBM service ADD. A streaming kernel runs
+  closer to max(L2, HBM), where the naive difference estimator is biased toward
+  exactly the retracted 0.10. So a second estimator, biased the other way, is run
+  beside it and the answer is the interval between them.
+
+  PREDICTION: the interval contains 0.558 and excludes 0.10 and TEMPO's 0.33.
+
+  EXIT CODES ARE MEANINGS. 0 every gate passed. 1 a gate FAILED, which is a
+  refutation and a result, not a crash. 3 it cannot run here. 4 the design did
+  not identify alpha and the honest answer is NOT TESTABLE rather than a number.
+
+  THE THERMAL POINT. This runs immediately after step 2 so both alpha estimates
+  share one session and one thermal state. A disagreement between them then
+  cannot be explained away by the card.
+TXT
+  provenance_banner
+  note "this step is independent of the line above: it never divides by a byte count at all"
+  if already_passed SB; then skipped SB "alias ablation" "already passed"; return 0; fi
+  [[ -f scripts/alias_ablation.py ]] || { skipped SB "alias ablation" "scripts/alias_ablation.py not present"; return 0; }
+  if [[ "$HAVE_GPU" == "0" ]]; then skipped SB "alias ablation" "$(absent_reason gpu)"; return 0; fi
+
+  # PY_VLLM, not PY_BASE: the kernel reproduces vLLM 0.27.1 B-pointer arithmetic
+  # and tile constants, and its ISA gate reads PTX from the compiler step 5
+  # characterises, which is the vLLM venv one. PY_VLLM falls back to PY_BASE when
+  # that venv is absent, so a base-only pod still runs it.
+  local slog="$SESSION/logs/alias_ablation.log"
+  run_logged "$slog" "$PY_VLLM" scripts/alias_ablation.py --run --out "$SESSION/alias_ablation"
+  local rc=$?
+  [[ "$rc" == "0" ]]; verdict SBa "ablation exit" $? "exit $rc" "== 0" soft \
+    "exit 1 is a REFUTATION and the most valuable outcome this session can produce: read the P1 gate line, which names which candidate alpha the interval does contain. exit 4 means the interval was too wide to separate 0.10 from 0.558 and no candidate may be quoted from it. exit 3 means it never ran; the deepseek-v3 rung needs about 16 GiB free on the card. Either way the regression alpha from step 3 stands alone and the paper keeps its single-estimator caveat."
+  local counts p f
+  counts="$(gate_from_log "$slog")"; p="${counts%% *}"; f="${counts##* }"
+  [[ "${f:-1}" == "0" && "${p:-0}" -ge 1 ]]; verdict SBb "ablation's own gates" $? \
+    "${p:-0} PASS, ${f:-0} FAIL lines" "at least one PASS, no FAIL" soft \
+    "A FAIL on ISA means the two variants did not compile to the same instruction stream, and nothing from this run may be quoted whatever P1 says. A FAIL on placebo, signal, form, control or resolution voids the design rather than the prediction. A FAIL on P1 alone is the refutation. $slog names which."
+  note "the reconciliation against step 3's regression alpha is printed at the very end of this session"
+}
+
+# --------------------------------------------------------------------------
 step3_group_m() {
-  head1 "STEP 3  (0:50)  GROUP_SIZE_M sweep -- is alpha a scalar or a swizzle knob"
+  head1 "STEP 3  (0:26)  GROUP_SIZE_M sweep -- is alpha a scalar or a swizzle knob"
   cat <<'TXT'
   WHAT IT TESTS. The refit found alpha FALLING with GROUP_SIZE_M: 0.570 at 1,
   0.488 at 16. That is exactly what a swizzle-for-L2-reuse mechanism predicts,
@@ -957,7 +1412,12 @@ step3_group_m() {
   This is also the step that tests whether alpha may be reported as a scalar at
   all. It already drifts with BLOCK_M (0.466 at 64, 0.625 at 128), so a single
   number carries a range whatever this step finds.
+
+  THIS IS THE SESSION'S REGRESSION ESTIMATE OF ALPHA. Its GROUP_SIZE_M = 1 row is
+  what step 2b's ablation is reconciled against at the end, and unlike the
+  published refit it is measured on this card in this session.
 TXT
+  provenance_banner
   if already_passed S3; then skipped S3 "GROUP_SIZE_M sweep" "already passed"; return 0; fi
   [[ -f scripts/group_m_alpha_sweep.py ]] || { skipped S3 "GROUP_SIZE_M sweep" "scripts/group_m_alpha_sweep.py not present"; return 0; }
   if [[ "$HAVE_VLLM" == "0" ]]; then skipped S3 "GROUP_SIZE_M sweep" "$(absent_reason vllm)"; return 0; fi
@@ -975,7 +1435,7 @@ TXT
 
 # --------------------------------------------------------------------------
 step4_tuned_vs_fallback() {
-  head1 "STEP 4  (1:10)  tuned config against a forced fallback"
+  head1 "STEP 4  (0:41)  tuned config against a forced fallback"
   cat <<'TXT'
   WHAT IT TESTS. Only 2 of the 8 (model x card) cells in this study have a tuned
   vLLM config at all, both on the H200: E=8,N=14336 (mixtral) and E=64,N=2560
@@ -994,6 +1454,7 @@ step4_tuned_vs_fallback() {
   published and had to retract: vLLM and SGLang both ship tuned BLOCK_SIZE_M, so
   the honest question is what the tuning buys, not whether it exists.
 TXT
+  provenance_banner
   if already_passed S4; then skipped S4 "tuned vs fallback" "already passed"; return 0; fi
   [[ -f scripts/tuned_vs_fallback.py ]] || { skipped S4 "tuned vs fallback" "scripts/tuned_vs_fallback.py not present"; return 0; }
   if [[ "$HAVE_VLLM" == "0" ]]; then skipped S4 "tuned vs fallback" "$(absent_reason vllm)"; return 0; fi
@@ -1015,7 +1476,7 @@ TXT
 
 # --------------------------------------------------------------------------
 step5_isa() {
-  head1 "STEP 5  (1:40)  config and ISA provenance, both cards"
+  head1 "STEP 5  (1:16)  config and ISA provenance, both cards"
   cat <<'TXT'
   WHAT IT TESTS, AND WHY IT MUST LEAVE THE POD AS A FILE. C1 and C3 are the only
   claims in docs/FINDINGS.md that rest on transient pod output: the PTX dumps,
@@ -1114,7 +1575,7 @@ TXT
 
 # --------------------------------------------------------------------------
 step6_dense_grid() {
-  head1 "STEP 6  (2:10)  dense uniform grid, tile pinned"
+  head1 "STEP 6  (1:46)  dense uniform grid, tile pinned"
   cat <<'TXT'
   WHAT IT TESTS. The crossing itself, on the profile built for it. crossing-uniform
   is uniform-only (2R/b is a uniform-routing statement and pooling the seven
@@ -1239,7 +1700,7 @@ PYEOF
 
 # --------------------------------------------------------------------------
 step7_traces() {
-  head1 "STEP 7  (3:40)  trace capture -- the axis this repo calls its differentiator"
+  head1 "STEP 7  (2:40)  trace capture -- the axis this repo calls its differentiator"
   cat <<'TXT'
   WHAT IT FIXES. traces/ holds a single .gitkeep. Every routing distribution in
   this study is parametric, so every claim about realistic skew rests on zipf,
@@ -1284,8 +1745,222 @@ TXT
 }
 
 # --------------------------------------------------------------------------
+#: THE TWO ALPHAS, SIDE BY SIDE, WITH THEIR INTERVALS.
+#:
+#: This session measures the study's central parameter TWICE by routes that share
+#: almost nothing. Step 3 fits it by regression on implied_traffic_ratio, which is
+#: time x bandwidth / compulsory bytes: it depends on the byte model, on the
+#: calibrated bandwidth, and on the estimator. Step 2b measures it by ablation
+#: from a difference of two timings: it depends on none of those.
+#:
+#: TWO INDEPENDENT MEASUREMENTS OF THAT NUMBER DISAGREEING IS THE MOST IMPORTANT
+#: THING THIS SESSION COULD PRODUCE, so it is written to its own exfiled file, it
+#: is a ledger row, and it is the LAST thing on the screen rather than a line
+#: four hundred lines up a log. A session that buried it would be a session that
+#: answered the question and did not tell anyone.
+#:
+#: THEY ARE NOT THE SAME KIND OF INTERVAL and the file says so: the regression
+#: band is a cluster bootstrap over sampling noise, the ablation interval is a
+#: BRACKET between two estimators biased in opposite directions by how L2 and HBM
+#: service compose. Overlap is therefore weak evidence of agreement and disjoint
+#: is strong evidence of disagreement, which is the asymmetry to read it with.
+alpha_reconciliation() {
+  head1 "ALPHA, MEASURED TWICE"
+  local out="$SESSION/exfil/ALPHA_RECONCILIATION.txt"
+  local block
+  block="$("$PY_BASE" - "$SESSION/logs/group_m.log" "$SESSION/logs/alias_ablation.log" \
+                      "$SESSION/alias_ablation/report.md" <<'PYEOF' 2>&1
+import re
+import sys
+from pathlib import Path
+
+# NO APOSTROPHES ANYWHERE IN THIS BLOCK. bash 3.2 tracks quotes through a heredoc
+# inside a command substitution and one stray quote is a syntax error reported
+# hundreds of lines away.
+group_log, alias_log, alias_report = (Path(a) for a in sys.argv[1:4])
+
+#: The refit as published, used only when this session did not produce its own
+#: regression. Labelled as such wherever it is printed, because a number from
+#: another session is exactly what the calibration guards exist to catch.
+PUBLISHED = (0.558, 0.529, 0.588)
+
+
+def text(path):
+    try:
+        return path.read_text()
+    except OSError:
+        return ""
+
+
+def regression_alpha(blob):
+    """alpha at GROUP_SIZE_M = 1 out of the sweep table, with its 90% band.
+
+    Read by COLUMN NAME rather than by position: the table has grown a column
+    twice already, and the second table in that report is keyed on GROUP_SIZE_M
+    as well, so a positional read would silently return a timing ratio.
+    """
+    lines = blob.splitlines()
+    for i, line in enumerate(lines):
+        cells = [c.strip() for c in line.split("|")]
+        if "GROUP_SIZE_M" not in cells or "alpha" not in cells:
+            continue
+        try:
+            a_col = cells.index("alpha")
+            b_col = next(j for j, c in enumerate(cells) if c.startswith("90%"))
+        except (ValueError, StopIteration):
+            continue
+        for row in lines[i + 1:]:
+            if not row.strip().startswith("|"):
+                break
+            got = [c.strip() for c in row.split("|")]
+            if len(got) <= max(a_col, b_col) or got[1] != "1":
+                continue
+            band = re.findall(r"[0-9]*\.?[0-9]+", got[b_col])
+            try:
+                alpha = float(got[a_col])
+            except ValueError:
+                return None
+            if len(band) != 2:
+                return None
+            return alpha, float(band[0]), float(band[1])
+    return None
+
+
+def ablation_alpha(blob):
+    """The pooled bracket and the 90% interval around it."""
+    m = re.search(r"POOLED[^\n]*?alpha is in ([0-9.]+) to ([0-9.]+), "
+                  r"90% interval ([0-9.]+) to ([0-9.]+)", blob)
+    if not m:
+        return None
+    lo, hi, ilo, ihi = (float(g) for g in m.groups())
+    return lo, hi, ilo, ihi
+
+
+def verdict_line(blob, marker):
+    for line in blob.splitlines():
+        if line.startswith(marker):
+            return line.strip()
+    return ""
+
+
+gblob = text(group_log)
+ablob = text(alias_log) or text(alias_report)
+reg = regression_alpha(gblob)
+abl = ablation_alpha(ablob)
+
+out = []
+out.append("# the two estimates of alpha, the cost of an extra M-tile")
+out.append("#")
+out.append("# REGRESSION  fits alpha out of implied_traffic_ratio, which is")
+out.append("#             time x bandwidth / COMPULSORY BYTES. It depends on the")
+out.append("#             byte model, on the calibrated bandwidth and on the")
+out.append("#             estimator. C4 is a confirmed finding that the")
+out.append("#             compulsory-byte ruler was wrong by 1.85% until it was")
+out.append("#             fixed, which is why one route is not enough.")
+out.append("# ABLATION    reads alpha out of the difference between two timings")
+out.append("#             of the same access pattern, one of which hits L2 where")
+out.append("#             the other misses. No bytes, no bandwidth, no ridge.")
+out.append("")
+
+if reg is None:
+    ra, rlo, rhi = PUBLISHED
+    rsrc = ("the PUBLISHED refit over 10,813 rows -- step 3 produced no readable "
+            "table in this session, so this number is NOT from this card")
+else:
+    ra, rlo, rhi = reg
+    rsrc = "step 3, GROUP_SIZE_M = 1, measured in THIS session on THIS card"
+
+out.append(f"REGRESSION  alpha = {ra:.3f}   90% band {rlo:.3f} .. {rhi:.3f}")
+out.append(f"            source: {rsrc}")
+out.append("")
+
+state = "INCOMPLETE"
+if abl is None:
+    out.append("ABLATION    NOT AVAILABLE. Step 2b produced no pooled interval.")
+    out.append("            The paper keeps its single-estimator caveat: alpha")
+    out.append("            rests on one regression against a byte model with no")
+    out.append("            tile term in it, and that is the thing step 2b exists")
+    out.append("            to fix. Re-run with --only 2b before publishing.")
+    out.append("")
+    out.append("VERDICT     one estimate only. Nothing is reconciled.")
+else:
+    lo, hi, ilo, ihi = abl
+    out.append(f"ABLATION    alpha in {lo:.3f} .. {hi:.3f}   "
+               f"90% interval {ilo:.3f} .. {ihi:.3f}")
+    out.append("            source: step 2b, same session, same thermal state")
+    out.append("            a BRACKET, not a band: the two estimators inside it")
+    out.append("            are biased in opposite directions by whether L2 and")
+    out.append("            HBM service add or compose as a max.")
+    out.append("")
+    overlap = min(rhi, ihi) - max(rlo, ilo)
+    if overlap >= 0:
+        state = "AGREE"
+        out.append(f"VERDICT     THEY AGREE. The intervals overlap over "
+                   f"{overlap:.3f}.")
+        out.append("            Read the asymmetry honestly: these are different")
+        out.append("            kinds of interval, so overlap is weak evidence of")
+        out.append("            agreement while disjoint would have been strong")
+        out.append("            evidence against. What it buys is that alpha no")
+        out.append("            longer rests on the byte model alone.")
+    else:
+        state = "DISAGREE"
+        gap = -overlap
+        out.append(f"VERDICT     THEY DISAGREE. The intervals are DISJOINT by "
+                   f"{gap:.3f}.")
+        out.append("            This is the most important thing in the session.")
+        out.append("            The two routes share almost nothing, so at least")
+        out.append("            one of them is measuring something other than the")
+        out.append("            extra-tile cost. The tile-corrected roofline may")
+        out.append("            NOT be published on either number until that is")
+        out.append("            resolved. Check first: did the ablation ISA gate")
+        out.append("            pass, and was the regression run in the")
+        out.append("            multi-tile regime at all.")
+    out.append("")
+    for candidate, name in ((0.100, "this repo, retracted"),
+                            (0.330, "TEMPO arXiv:2608.13057"),
+                            (0.558, "the 2026-09-01 refit")):
+        in_reg = "IN " if rlo <= candidate <= rhi else "out"
+        in_abl = "IN " if ilo <= candidate <= ihi else "out"
+        out.append(f"  alpha = {candidate:.3f} ({name}): "
+                   f"regression says {in_reg}, ablation says {in_abl}")
+
+for marker, blob in (("VERDICT:", ablob),):
+    line = verdict_line(blob, marker)
+    if line:
+        out.append("")
+        out.append("ablation verdict as the script itself stated it:")
+        out.append("  " + line)
+
+out.append("")
+out.append(f"RECON {state}")
+print("\n".join(out))
+PYEOF
+)"
+  # RECON is the machine-readable marker the case below reads; it is stripped
+  # from anything a human sees so the file does not end in a token that looks
+  # like a result and is not one.
+  printf '%s\n' "$block" | grep -v '^RECON ' | sed 's/^/  /'
+  mkdir -p "$SESSION/exfil"
+  printf '%s\n' "$block" > "$out"
+  local state
+  state="$(printf '%s\n' "$block" | awk '/^RECON /{print $2}' | tail -1)"
+  case "${state:-INCOMPLETE}" in
+    AGREE)
+      verdict SRa "the two alphas agree" 0 "regression and ablation intervals overlap" \
+        "overlapping intervals" soft "" ;;
+    DISAGREE)
+      false; verdict SRa "the two alphas agree" $? \
+        "regression and ablation intervals are DISJOINT" "overlapping intervals" soft \
+        "STOP AND READ $out BEFORE PUBLISHING ANY alpha. Two routes that share no byte model, no bandwidth and no estimator disagree about the study's central parameter. Neither number may carry the tile-corrected roofline until this is resolved." ;;
+    *)
+      skipped SRa "the two alphas agree" "only one estimate exists; nothing to reconcile" ;;
+  esac
+  note "written to $out, and repeated in the summary below"
+}
+
+# --------------------------------------------------------------------------
 step8_exfil() {
-  head1 "STEP 8  (4:20)  EXFIL -- nothing is torn down before this passes"
+  head1 "STEP 8  (3:20)  EXFIL -- nothing is torn down before this passes"
   cat <<'TXT'
   THIS REPO HAS LOST WORK TWICE AT EXACTLY THIS POINT. Every published figure
   was dropped by an unanchored `plots/` rule that git add applied silently, and
@@ -1303,7 +1978,14 @@ step8_exfil() {
     4. traces/*.npz from step 7
     5. every step log, so a number can be traced to the run that made it
     6. LEDGER.tsv, which is the machine-readable record of every gate above
+    7. the alias ablation report and its per-cell measurements, which are the
+       ONLY estimate of alpha in this session that does not go through the byte
+       model, and therefore the only thing that can corroborate or refute it
+    8. TRAFFIC_PROVENANCE.txt and the nsys probe report, which say whether any
+       byte figure here was counted or modelled
+    9. ALPHA_RECONCILIATION.txt, the two estimates side by side
 TXT
+  alpha_reconciliation
   local missing=0 present=0 item
   head2 "the manifest"
   # AN ARTEFACT IS EXPECTED ONLY IF ITS PRODUCING STEP CLAIMED SUCCESS. Listing
@@ -1344,8 +2026,27 @@ TXT
     if ledger_passed S6; then
       ls -1 "$SESSION"/crossing_uniform/* 2>/dev/null
     fi
+    # ADDED WITH STEP 2b AND P-nsys. The manifest omitted the entire scientific
+    # payload once already today, and both of these are payload: the ablation is
+    # the only alpha in this session that is independent of the byte model, and
+    # the provenance file is the difference between a counted byte and a modelled
+    # one. Both are cheap and both are irreplaceable after teardown.
+    if ledger_passed SB; then
+      ls -1 "$SESSION"/alias_ablation/* 2>/dev/null
+    fi
+    if ledger_passed SN; then
+      ls -1 "$SESSION"/nsys/cell/probe.json 2>/dev/null
+    fi
+    # UNCONDITIONAL, unlike everything above it. These two are written by the
+    # session itself rather than by a step, so there is no step whose PASS could
+    # gate them, and their whole point is to be present even when a step did not
+    # run: "traffic was INFERRED because nsys is not installed" and "only one
+    # alpha exists" are results that must survive the pod.
+    [[ -s "$SESSION/exfil/TRAFFIC_PROVENANCE.txt" ]] && echo "$SESSION/exfil/TRAFFIC_PROVENANCE.txt"
+    [[ -s "$SESSION/exfil/ALPHA_RECONCILIATION.txt" ]] && echo "$SESSION/exfil/ALPHA_RECONCILIATION.txt"
+    ls -1 "$SESSION"/nsys/probe.json 2>/dev/null
   } | grep -v '^$' | sort -u > "$want"
-  note "$(wc -l < "$want" | tr -d ' ') artefact(s) expected, from the steps that reported success"
+  note "$(wc -l < "$want" | tr -d ' ') artefact(s) expected: the steps that reported success, plus the provenance and reconciliation files the session writes whatever ran"
   while IFS= read -r item; do
     if [[ -s "$item" ]]; then
       present=$((present + 1))
@@ -1435,6 +2136,14 @@ TXT
       cp -f "$SESSION"/exfil/ptx-*.tar.gz "$arm/session/" 2>/dev/null
       cp -f "$SESSION"/logs/*.log "$arm/session/" 2>/dev/null
       cp -f "$SESSION"/calibration/measured.sha256 "$arm/session/" 2>/dev/null
+      # The two files that say how much the rows beside them can be trusted, and
+      # the ablation that is the only check on the number they are read against.
+      cp -f "$SESSION"/exfil/TRAFFIC_PROVENANCE.txt "$arm/session/" 2>/dev/null
+      cp -f "$SESSION"/exfil/ALPHA_RECONCILIATION.txt "$arm/session/" 2>/dev/null
+      cp -f "$SESSION"/alias_ablation/report.md "$arm/session/alias_ablation.md" 2>/dev/null
+      cp -f "$SESSION"/alias_ablation/cells.jsonl "$arm/session/alias_cells.jsonl" 2>/dev/null
+      cp -f "$SESSION"/nsys/probe.json "$arm/session/nsys_probe.json" 2>/dev/null
+      cp -f "$SESSION"/nsys/cell/probe.json "$arm/session/nsys_cell.json" 2>/dev/null
       git add "$arm/session" traces >/dev/null 2>&1
       git commit -q -m "session artefacts for $(basename "$arm")" >/dev/null 2>&1
       local tracked
@@ -1482,7 +2191,7 @@ main() {
   preflight
   if halted; then
     head1 "STOPPED IN PRE-FLIGHT: $STOPPED"
-    say "Nothing was spent. Fix the gate above and re-run; --preflight-only re-checks in about 3 minutes."
+    say "Nothing was spent. Fix the gate above and re-run; --preflight-only re-checks in about 5 minutes."
     summarise; return 2
   fi
   if [[ "$PREFLIGHT_ONLY" == "1" ]]; then summarise; return $?; fi
@@ -1490,7 +2199,12 @@ main() {
   SPENT=1
   wanted 0 && step0_download
   wanted 1 && { step1_calibrate; halted && { summarise; return 2; }; }
-  wanted 2 && step2_block_m
+  # step2_nsys_cell is called BESIDE step2_block_m rather than from inside it,
+  # so a resume that skips an already-passed sweep still gets its traffic
+  # measurement. It carries its own idempotence on the SN ledger rows.
+  wanted 2 && { step2_block_m; step2_nsys_cell; }
+  # 2b, not 3: both estimate alpha and they must share one thermal state.
+  wanted 2b && step2b_alias_ablation
   wanted 3 && step3_group_m
   wanted 4 && step4_tuned_vs_fallback
   wanted 5 && step5_isa
@@ -1501,7 +2215,19 @@ main() {
 }
 
 summarise() {
+  # THE ANSWER GOES ABOVE THE SCOREBOARD. A session that measured the study's
+  # central parameter twice and printed the disagreement four hundred lines up a
+  # log would be a session that answered the question and told nobody, so the
+  # reconciliation and the traffic provenance are the first things here and the
+  # gate counts follow them.
+  if [[ -s "$SESSION/exfil/ALPHA_RECONCILIATION.txt" ]]; then
+    head1 "ALPHA, THE TWO ESTIMATES"
+    sed 's/^/  /' "$SESSION/exfil/ALPHA_RECONCILIATION.txt" | grep -v '^  RECON '
+  fi
+
   head1 "SUMMARY"
+  say "  $(provenance_line)"
+  say ""
   printf '  %-6s %s\n' "PASS" "$N_PASS"
   printf '  %-6s %s  (session continued; each names what it invalidates)\n' "FAIL" "$N_FAIL_SOFT"
   printf '  %-6s %s  (session stopped)\n' "FATAL" "$N_FAIL_FATAL"
@@ -1511,6 +2237,8 @@ summarise() {
   say "  session   $SESSION"
   say "  logs      $SESSION/logs"
   say "  exfil     $SESSION/exfil"
+  say "  alpha     $SESSION/exfil/ALPHA_RECONCILIATION.txt"
+  say "  traffic   $SESSION/exfil/TRAFFIC_PROVENANCE.txt"
   say ""
   if [[ "$N_FAIL_FATAL" -gt 0 && "$SPENT" == "1" ]]; then
     say "  DO NOT TEAR DOWN. A fatal gate failed at: $STOPPED, and steps had already run."
