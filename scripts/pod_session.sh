@@ -730,9 +730,17 @@ PYEOF
   if [[ "$HAVE_GPU" == "1" ]]; then
     local probe="$SESSION/ptx/_preflight"
     rm -rf "$probe"; mkdir -p "$probe"
-    local nptx
-    nptx="$(TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$probe" TRITON_CACHE_DIR="$probe/_cache" \
-      "$PY_BASE" - "$probe" <<'PYEOF' 2>/dev/null
+    local nptx perr
+    perr="$probe/_probe.stderr"
+    # THE PROBE MUST BE A REAL FILE. Triton's @jit calls inspect.getsourcelines
+    # on the decorated function, which raises "could not get source code" when
+    # the script arrived on stdin -- so a heredoc piped to `python -` can NEVER
+    # compile a kernel, and this gate reported "dumped 0 .ptx" on every machine
+    # it had ever run on. With stderr suppressed, that ValueError was
+    # indistinguishable from a dump environment that genuinely produced nothing,
+    # which is the exact shape of failure this script exists to catch. stderr is
+    # now kept and a raise is reported as -2 rather than collapsing into 0.
+    cat > "$probe/_probe.py" <<'PYEOF'
 import sys
 from pathlib import Path
 out = Path(sys.argv[1])
@@ -741,22 +749,32 @@ try:
 except Exception:
     print(-1); raise SystemExit(0)
 
+
 @triton.jit
 def _k(p, n, BLOCK: tl.constexpr):
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     tl.store(p + i, tl.load(p + i, mask=i < n) * 2.0, mask=i < n)
 
-x = torch.ones(1024, device="cuda")
-_k[(1,)](x, 1024, BLOCK=1024)
-torch.cuda.synchronize()
+
+try:
+    x = torch.ones(1024, device="cuda")
+    _k[(1,)](x, 1024, BLOCK=1024)
+    torch.cuda.synchronize()
+except Exception as exc:
+    print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+    print(-2); raise SystemExit(0)
 cache = out / "_cache"
 print(sum(1 for q in out.rglob("*.ptx") if cache not in q.parents))
 PYEOF
-)"
+    nptx="$(TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$probe" TRITON_CACHE_DIR="$probe/_cache" \
+      "$PY_BASE" "$probe/_probe.py" "$probe" 2>"$perr")"
+    if [[ "${nptx:-0}" == "-2" ]]; then
+      note "the probe kernel RAISED: $(head -1 "$perr")"
+    fi
     note "dumped ${nptx:-0} .ptx file(s) outside the per-run cache into $probe"
     [[ "${nptx:-0}" -ge 1 ]]; verdict P5 "PTX dump isolation" $? \
       "${nptx:-0} .ptx" ">= 1" fatal \
-      "Step 5 cannot answer the ISA question without a dump. If this is 0 the dump env is not reaching the compiler; if it is -1 triton did not import. Note that TRITON_CACHE_DIR is exported to the SHARED cache for the sweeps, and every dump must override it with a per-run directory."
+      "Step 5 cannot answer the ISA question without a dump. If this is 0 the dump env is not reaching the compiler; -1 means triton did not import; -2 means the probe kernel itself raised and the reason is on the line above. Note that TRITON_CACHE_DIR is exported to the SHARED cache for the sweeps, and every dump must override it with a per-run directory."
     rm -rf "$probe"
   fi
 

@@ -1607,7 +1607,8 @@ def report_prediction(say) -> None:
     say("  candidate values the measured band actually supports.")
 
 
-def report_design(say, design: Design, gates: list[Gate], l2_bytes: int) -> None:
+def report_design(say, design: Design, gates: list[Gate], l2_bytes: int,
+                  synthetic: bool = False) -> None:
     say()
     say("## the design")
     say()
@@ -1631,7 +1632,9 @@ def report_design(say, design: Design, gates: list[Gate], l2_bytes: int) -> None
                 f"{rung.rows_per_expert:12d} {rung.activation_fraction:10.4f}")
     if l2_bytes:
         say()
-        say(f"  L2 on the attached card: {l2_bytes / 2**20:.1f} MiB. P2 says "
+        where = ("the PLANTED threshold, not the attached card" if synthetic
+                 else "the attached card")
+        say(f"  L2 on {where}: {l2_bytes / 2**20:.1f} MiB. P2 says "
             "alpha is near 1 above it and near 0 below.")
     say()
     for gate in gates:
@@ -2238,9 +2241,19 @@ def main(argv: list[str] | None = None) -> int:
     say()
     report_prediction(say)
 
-    l2 = l2_bytes_here() or (SYNTHETIC_L2_BYTES if args.synthetic else 0)
+    # A SYNTHETIC REPLAY MUST NOT READ THE HARDWARE. `--synthetic l2-step`
+    # plants its law at SYNTHETIC_L2_BYTES, so classifying the recovered models
+    # against whatever card happens to be attached makes the planted answer
+    # depend on the box: this read `l2_bytes_here() or SYNTHETIC_L2_BYTES`, which
+    # took the real L2 whenever a GPU was present and only fell back to the
+    # planted value on a laptop. It passed for weeks purely because the laptop
+    # fallback and the planted threshold are both 50 MiB, and failed the moment
+    # it met an H200, where L2 is 60 MiB and deepseek-v2's 56 MiB/expert crosses
+    # from above the line to below it. The whole point of a planted law is that
+    # recovering it is machine-independent.
+    l2 = SYNTHETIC_L2_BYTES if args.synthetic else l2_bytes_here()
     pre = preflight(design, l2)
-    report_design(say, design, pre, l2)
+    report_design(say, design, pre, l2, synthetic=bool(args.synthetic))
     if any(g.ok is False for g in pre):
         say()
         say("VERDICT: the design is refused before spending anything. Fix the "

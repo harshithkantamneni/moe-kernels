@@ -705,6 +705,19 @@ def test_the_kernel_is_built_lazily_and_a_missing_triton_names_the_venv():
 
 def test_a_run_without_a_gpu_says_so_and_exits_three(tmp_path, monkeypatch,
                                                      capsys):
+    # The no-GPU condition is FORCED rather than inherited from the host. This
+    # asserted only that `--run` exits 3, which is true on a laptop because
+    # triton is absent and false on the pod because it is not: the base venv
+    # there carries triton 3.7.1, so the kernel builds, the run proceeds, and
+    # the exit code is a gate verdict instead. A test whose premise is "this
+    # machine has no GPU" silently stops testing anything on the only machine
+    # the code actually runs on.
+    def _no_triton(*a, **kw):
+        raise AB.CannotRunHere(
+            "triton is not importable in this interpreter. Run inside the vllm "
+            "venv on the pod: /workspace/venvs/vllm/bin/python "
+            "scripts/alias_ablation.py --run")
+    monkeypatch.setattr(AB, "build_kernel", _no_triton)
     code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
     assert code == 3
     assert "CANNOT RUN HERE" in out
@@ -776,3 +789,33 @@ def test_an_unknown_model_is_refused_by_name(capsys):
     with pytest.raises(SystemExit):
         AB.parse_args(["--models", "gpt-9"])
     assert "unknown model" in capsys.readouterr().err
+
+
+def test_a_synthetic_replay_ignores_the_attached_card(tmp_path, monkeypatch,
+                                                      capsys):
+    """The planted law must be recovered identically on every machine.
+
+    This is the regression for a defect that survived because the laptop's
+    no-GPU fallback and the planted threshold are the same 50 MiB. On an H200
+    (60 MiB L2) the classification moved under the report and one model crossed
+    sides, so the "recovered the planted law" assertion failed on the only
+    hardware the experiment is for. `l2_bytes_here` is made to answer like a
+    real card here; the synthetic output must not move.
+    """
+    monkeypatch.setattr(AB, "l2_bytes_here", lambda: 60 * 2 ** 20)
+    _, on_card = run_report(["--synthetic", "l2-step"], tmp_path, monkeypatch,
+                            capsys)
+    monkeypatch.setattr(AB, "l2_bytes_here", lambda: 0)
+    _, on_laptop = run_report(["--synthetic", "l2-step"], tmp_path, monkeypatch,
+                              capsys)
+
+    def sides(out):
+        block = out.split("## P2")[1]
+        return [ln for ln in block.splitlines() if "L2   alpha" in ln]
+
+    assert sides(on_card) == sides(on_laptop), (
+        "the synthetic classification moved with the attached card")
+    assert "L2 on the PLANTED threshold, not the attached card: 50.0 MiB" \
+        in on_card
+    assert len([x for x in sides(on_card) if "above L2" in x]) == 2
+    assert len([x for x in sides(on_card) if "below L2" in x]) == 2
