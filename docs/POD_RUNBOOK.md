@@ -105,6 +105,47 @@ bandwidth. `nsys` reaches the DRAM counters by a different mechanism, sampling
 rather than instrumenting, and whether it works on a given pod is an open
 question this project has never answered.
 
+**NOTHING IN THIS SECTION HAS TOUCHED A GPU, INCLUDING THE NUMBERS THAT LOOK LIKE
+MEASUREMENTS.** The probe has never been run against a card. On a laptop it exits
+3 with `REFUSED: no nsys on PATH`, which is what it should do and is not a
+result. Three different kinds of statement live in this section and they are not
+equally solid:
+
+| statement | where it comes from | verified? |
+|---|---|---|
+| default 10 kHz, ceiling 200 kHz | NVIDIA's nsys documentation, hard-coded at `nsys_metrics.py:287` | **NO.** Never confirmed against any card, let alone an H200 SXM. |
+| a 54 us launch buys 10.8 samples at that ceiling | arithmetic, `54e-6 * 200e3` | arithmetic is sound; it INHERITS the row above. |
+| quantisation is charged per window, not per sample | arithmetic over the sampling model | same inheritance. |
+| alpha to +/-0.156 at 10% traffic error | `alpha_uncertainty()`, propagated through the ladder | same, and it also assumes the sampler is unbiased, which is exactly what the calibration rung is for. |
+| the sampler works on a rented pod at all | -- | **UNTESTED.** This is the probe's actual job. |
+
+The direction of the risk is one-sided and worth stating: if the pod's real
+ceiling is BELOW 200 kHz -- and the doc figure is a ceiling, so it can only be
+lower -- then every conclusion above gets WORSE, not better. Fewer samples per
+window, a larger edge term, a wider alpha band. A ceiling of 50 kHz would put a
+54 us launch at 2.7 samples and widen the two-tile alpha band past the point
+where it separates 0.558 from 0.10 at all. The probe MEASURES the rate actually
+delivered rather than trusting the flag -- median inter-sample delta out of
+`GPU_METRICS`, written to `$SESSION/nsys/probe.json` as `observed_sample_hz`
+alongside a boolean `sample_rate_honoured` -- and that number, not the constant
+in the source, is what any later claim must cite.
+
+That check was added because the resolution arithmetic was self-referential
+without it: `resolve()` divides the window by the period of the rate it
+REQUESTED, so a build that clamped 200 kHz to 50 kHz would have left every
+traffic total correct and every stated confidence wrong by a factor of four,
+with nothing in the output looking odd. A clamp now sets `sample_rate_honoured`
+false and forces `resolution_ok` false regardless of how the window scored;
+`null` means the rate could not be measured at all, which voids the verdict
+rather than widening it. The pre-check verdict is kept beside it as
+`resolution_ok_before_rate_check` so the two causes stay distinguishable.
+
+The one claim here that does NOT depend on the rate: **a single launch is
+unmeasurable by orders of magnitude, not by a factor.** Reaching the minimum
+samples per window for one 54 us kernel needs something above 370 kHz, so no
+plausible correction to the doc figure rescues per-launch profiling. The merged
+window design stands regardless of what the pod reports.
+
 **It is a force multiplier, not a result**, and that is the whole reason it is in
 pre-flight. If the sampler works, then steps 2, 3 and 4 and the dtype headline
 stop being inferences from a byte model and become measurements checked against
@@ -755,6 +796,13 @@ crashed run.
 
 Worth keeping in view, because a good result here is easy to over-read.
 
+- **The nsys route is UNVERIFIED, and its supporting arithmetic is
+  doc-sourced.** No part of the probe has run against a GPU, and the 200 kHz
+  ceiling every sampling figure rests on is NVIDIA's documented number rather
+  than one this project has observed. Cite `observed_sample_hz` from the probe's
+  own output rather than the constant, and check `sample_rate_honoured` before
+  quoting any resolution verdict. See the provenance table in the P-nsys
+  section.
 - **DRAM traffic is modelled unless P-nsys says otherwise, and even then only in
   aggregate.** Pre-flight now tests the `--gpu-metrics-device` route rather than
   leaving it untested, and the session labels every traffic figure MEASURED or

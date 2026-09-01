@@ -707,6 +707,22 @@ def measure_from_report(sqlite_path: Path, sample_hz: float, peak_gbps: float | 
     """
     conn = nm.open_report(sqlite_path)
     try:
+        # The rate the tool DELIVERED, before anything is computed from the rate
+        # it was ASKED for. `--gpu-metrics-frequency` is a request and a build
+        # may clamp it without saying so; every sample count and edge term below
+        # divides by the requested period, so an unnoticed clamp would leave the
+        # traffic total right and its stated confidence wrong by the clamp
+        # factor. Refusals here are recorded, not raised: a rate that could not
+        # be measured must not stop a traffic figure being reported, it must
+        # stop that figure being called resolved.
+        rate_note, rate_ok = "", None
+        try:
+            cat = nm.metric_catalogue(conn)
+            found = nm.find_dram_metrics(cat)
+            rate = nm.observed_sample_hz(conn, found.read, sample_hz)
+            rate_note, rate_ok = str(rate), rate.honoured
+        except nm.NsysProbeRefused as exc:
+            rate_note, rate_ok = f"delivered rate NOT verified: {exc}", None
         all_windows = nm.merge_windows(nm.kernel_windows(conn, None),
                                        nm.sample_period_ns(sample_hz))
         chosen = nm.longest_window(all_windows)
@@ -729,7 +745,14 @@ def measure_from_report(sqlite_path: Path, sample_hz: float, peak_gbps: float | 
             "traffic": traffic.text(),
             "comparison": comparison.text(),
             "ratio": comparison.ratio,
-            "resolution_ok": traffic.resolution.ok,
+            "observed_sample_hz": rate_note,
+            "sample_rate_honoured": rate_ok,
+            # A resolution verdict is only as good as the rate it was computed
+            # from, so an unverified or clamped rate voids it rather than
+            # narrowing it. False and None are different states and both are
+            # kept: False means the tool clamped, None means we could not tell.
+            "resolution_ok": bool(traffic.resolution.ok) and rate_ok is True,
+            "resolution_ok_before_rate_check": traffic.resolution.ok,
             "edge_error": traffic.resolution.edge_error,
             "alpha_band_two_tiles": traffic.resolution.alpha_band(2),
             "route": traffic.route,
@@ -887,10 +910,16 @@ def main() -> int:
             print(f"  known     {known * info['iters'] / 1e9:.3f} GB over "
                   f"{info['iters']} launches ({info['achieved_gbps']:.0f} GB/s "
                   "by the clock)")
+            print("  RATE: " + got["observed_sample_hz"])
             print("  " + got["traffic"].replace("\n", "\n  "))
             print("  " + got["comparison"].replace("\n", "\n  "))
             if got["mismatch"]:
                 print("  " + got["mismatch"])
+            if got["sample_rate_honoured"] is not True:
+                print("  RESOLUTION VOID: the delivered rate was not confirmed "
+                      "to match the requested one, so the edge term and the "
+                      "alpha band below were computed from the wrong period. "
+                      "The traffic TOTAL still stands; its confidence does not.")
             print("  " + got["calibration_verdict"])
             if got["calibration_verdict"].startswith("FAIL"):
                 rep.verdict = ("nsys sampled DRAM, and the sampler FAILED a case "
@@ -919,6 +948,10 @@ def main() -> int:
             got = measure_from_report(sqlite_path, args.sample_hz, args.peak_gbps,
                                       modelled["total"], info["iters"])
             rep.cell = {**info, **got}
+            print("  RATE: " + got["observed_sample_hz"])
+            if got["sample_rate_honoured"] is not True:
+                print("  RESOLUTION VOID: alpha band below was computed from "
+                      "the REQUESTED rate, which was not confirmed delivered.")
             print("  " + got["traffic"].replace("\n", "\n  "))
             print("  " + got["comparison"].replace("\n", "\n  "))
             if got["mismatch"]:

@@ -53,7 +53,9 @@ from moe.bench.nsys_metrics import (
     Metric,
     MetricNotFound,
     MetricUnit,
+    NsysProbeRefused,
     NsysUnavailable,
+    RateUnverifiable,
     ReportSchemaUnsupported,
     UnitUnknown,
     Window,
@@ -69,6 +71,7 @@ from moe.bench.nsys_metrics import (
     longest_window,
     merge_windows,
     metric_catalogue,
+    observed_sample_hz,
     open_report,
     parse_gpu_metrics_support,
     parse_metric_sets,
@@ -625,3 +628,81 @@ def test_a_read_only_metric_set_makes_the_ratio_a_lower_bound(tmp_path):
     assert got.write_bytes is None
     assert "not split by this metric set" in got.text()
     assert "LOWER bound" in compare_to_model(got, 10_000.0, launches=100).verdict
+
+
+# --------------------------------------------------------------------------
+# The delivered sampling rate. `resolve()` computes its sample count from the
+# rate that was REQUESTED, so a build that silently clamps the frequency flag
+# would leave every resolution verdict overconfident by the clamp factor while
+# the traffic total stayed correct. These pin the detector for that.
+# --------------------------------------------------------------------------
+
+
+def _rate_db(tmp_path, period_ns, n=200, metric=BYTE_METRIC):
+    return write_report(
+        tmp_path / "rate.sqlite",
+        kernels=[(0, period_ns * n, "moe")],
+        metrics=[metric],
+        samples=[(i * period_ns, metric[0], 1000) for i in range(n)])
+
+
+def _metric_of(db):
+    conn = open_report(db)
+    return conn, next(m for m in metric_catalogue(conn) if m.metric_id == BYTE_METRIC[0])
+
+
+def test_observed_rate_confirms_an_honoured_request(tmp_path):
+    # 100 kHz requested, 10 us period delivered: the flag was honoured.
+    conn, metric = _metric_of(_rate_db(tmp_path, period_ns=10_000))
+    got = observed_sample_hz(conn, metric, requested_hz=100_000.0)
+    assert got.honoured
+    assert got.observed_hz == pytest.approx(100_000.0)
+    assert abs(got.rel_error) < 1e-9
+    assert "stands" in got.detail
+
+
+def test_observed_rate_catches_a_silent_clamp(tmp_path):
+    # Asked for 200 kHz, got 50 kHz: a 4x clamp, exactly the failure that would
+    # otherwise inflate every sample count fourfold and shrink every edge term.
+    conn, metric = _metric_of(_rate_db(tmp_path, period_ns=20_000))
+    got = observed_sample_hz(conn, metric, requested_hz=200_000.0)
+    assert not got.honoured
+    assert got.observed_hz == pytest.approx(50_000.0)
+    assert got.rel_error == pytest.approx(-0.75)
+    assert "1/4.0" in got.detail
+    assert "overstated" in got.detail
+
+
+def test_observed_rate_uses_the_median_so_a_dropped_sample_does_not_move_it(
+        tmp_path):
+    # One gap of three periods where a sample went missing. A mean would report
+    # a rate about 2% low and read as honoured-but-drifting; the median is exact.
+    period = 10_000
+    stamps = [i * period for i in range(200)]
+    del stamps[100:102]
+    db = write_report(
+        tmp_path / "gap.sqlite",
+        kernels=[(0, stamps[-1], "moe")],
+        metrics=[BYTE_METRIC],
+        samples=[(t, BYTE_METRIC[0], 1000) for t in stamps])
+    conn = open_report(db)
+    metric = next(m for m in metric_catalogue(conn) if m.metric_id == BYTE_METRIC[0])
+    got = observed_sample_hz(conn, metric, requested_hz=100_000.0)
+    assert got.observed_hz == pytest.approx(100_000.0)
+    assert got.honoured
+
+
+def test_observed_rate_refuses_rather_than_guessing_from_too_few_samples(
+        tmp_path):
+    conn, metric = _metric_of(_rate_db(tmp_path, period_ns=10_000, n=4))
+    with pytest.raises(RateUnverifiable) as exc:
+        observed_sample_hz(conn, metric, requested_hz=100_000.0)
+    assert "NOT verified" in str(exc.value)
+    assert "3 usable sample interval" in str(exc.value)
+
+
+def test_rate_unverifiable_is_a_refusal_not_a_coarseness_report():
+    # WindowTooShort says "too coarse to report"; this says "we cannot tell how
+    # coarse". Conflating them would let an unmeasured rate pass as a wide one.
+    assert issubclass(RateUnverifiable, NsysProbeRefused)
+    assert not issubclass(RateUnverifiable, WindowTooShort)

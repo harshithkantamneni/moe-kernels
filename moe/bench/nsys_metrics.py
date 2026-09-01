@@ -123,6 +123,16 @@ class WindowTooShort(NsysProbeRefused):
     """The kernel window holds too few samples for the number to mean anything."""
 
 
+class RateUnverifiable(NsysProbeRefused):
+    """The delivered sampling rate could not be measured from the report.
+
+    Distinct from WindowTooShort: that one says the measurement is too coarse to
+    report, this one says we cannot tell HOW coarse it is, because the rate the
+    tool actually used was never confirmed. Not knowing the rate voids every
+    resolution verdict rather than widening one.
+    """
+
+
 # --------------------------------------------------------------------------
 # What the installed nsys offers. Read out of the binary's OWN help text rather
 # than inferred from its version, because a distro package can carry either
@@ -778,6 +788,107 @@ def kernel_windows(conn: sqlite3.Connection, pattern: str | None = None
             f"no kernel name matched {pattern!r}; {unmatched} launches were "
             "examined. Run with no pattern to list what the report holds.")
     return tuple(out)
+
+
+@dataclass(frozen=True)
+class ObservedRate:
+    """The sampling rate nsys ACTUALLY delivered, measured from the report.
+
+    `resolve()` computes its sample count from the rate that was REQUESTED, so
+    every resolution verdict is only as good as the assumption that the tool
+    honoured the flag. It need not have. `--gpu-metrics-frequency` is a request,
+    a build may clamp it to a supported rate, and nsys does not have to say so.
+    A clamp is the one instrument failure this module cannot survive silently:
+    the period would be wrong by the clamp factor, every window would look like
+    it held more samples than it did, and the edge term -- which is what decides
+    whether a number is reported at all -- would be understated by the same
+    factor. The traffic total would still be right, because it is a sum over
+    whatever samples exist; what would be wrong is the CONFIDENCE attached to it.
+
+    So it is measured rather than assumed: consecutive sample timestamps in
+    GPU_METRICS, median of the deltas. The median rather than the mean because a
+    dropped sample doubles one delta and would drag a mean down while leaving the
+    median untouched.
+    """
+
+    requested_hz: float
+    observed_hz: float
+    n_deltas: int
+    median_delta_ns: float
+    #: Fraction by which the observed rate differs from the requested one.
+    rel_error: float
+    honoured: bool
+    detail: str
+
+    def __str__(self) -> str:
+        verb = "honoured" if self.honoured else "NOT honoured"
+        return (f"requested {self.requested_hz / 1e3:.1f} kHz, observed "
+                f"{self.observed_hz / 1e3:.1f} kHz over {self.n_deltas} deltas "
+                f"({self.rel_error * 100:+.1f}%): {verb}. {self.detail}")
+
+
+#: How far the delivered rate may sit from the requested one before the
+#: resolution arithmetic is treated as void. Ten percent is well inside any
+#: real clamp -- a clamp lands on a supported rate, so it is a factor and not a
+#: few percent -- and well outside sampler jitter.
+RATE_HONOURED_REL = 0.10
+
+#: Fewer deltas than this and the median is not a rate, it is a coincidence.
+MIN_RATE_DELTAS = 8
+
+
+def observed_sample_hz(conn: sqlite3.Connection, metric: Metric,
+                       requested_hz: float,
+                       min_deltas: int = MIN_RATE_DELTAS,
+                       tol: float = RATE_HONOURED_REL) -> ObservedRate:
+    """Measure the delivered sampling rate from one metric's timestamps.
+
+    Raises rather than returning a default, in keeping with the rest of this
+    module: a rate this function could not measure must not read as a rate that
+    matched.
+    """
+    require_table(conn, GPU_METRIC_TABLE, "nsys stores the sampled values")
+    if requested_hz <= 0:
+        raise ValueError(f"requested_hz must be positive, got {requested_hz}")
+    cols = column_names(conn, GPU_METRIC_TABLE)
+    if "timestamp" not in cols:
+        raise ReportSchemaUnsupported(
+            f"`{GPU_METRIC_TABLE}` has columns {cols} and no `timestamp`, so "
+            "the delivered sampling rate cannot be measured.")
+    where = "metricId = ?"
+    params: list = [metric.metric_id]
+    if "typeId" in cols:
+        where += " AND typeId = ?"
+        params.append(metric.type_id)
+    stamps = [int(r[0]) for r in conn.execute(
+        f"SELECT timestamp FROM {GPU_METRIC_TABLE} WHERE {where} "
+        "ORDER BY timestamp", params)]
+    deltas = [b - a for a, b in zip(stamps, stamps[1:], strict=False) if b > a]
+    if len(deltas) < min_deltas:
+        raise RateUnverifiable(
+            f"{len(deltas)} usable sample interval(s) for metric "
+            f"{metric.name!r}, under the {min_deltas} needed to call a median a "
+            f"rate. The capture is too short, or this metric was sampled once. "
+            f"Rate NOT verified, so no resolution verdict from this report can "
+            f"be trusted.")
+    deltas.sort()
+    mid = len(deltas) // 2
+    median = (float(deltas[mid]) if len(deltas) % 2
+              else (deltas[mid - 1] + deltas[mid]) / 2.0)
+    observed = 1e9 / median
+    rel = (observed - requested_hz) / requested_hz
+    honoured = abs(rel) <= tol
+    if honoured:
+        detail = "the resolution arithmetic stands."
+    else:
+        ratio = requested_hz / observed if observed else float("inf")
+        detail = (f"the tool delivered about 1/{ratio:.1f} of the rate asked "
+                  f"for, so every sample count computed from "
+                  f"{requested_hz / 1e3:.0f} kHz is overstated by that factor "
+                  f"and every edge term is understated by it. Recompute with "
+                  f"the observed rate before quoting anything.")
+    return ObservedRate(requested_hz, observed, len(deltas), median, rel,
+                        honoured, detail)
 
 
 def sum_samples(conn: sqlite3.Connection, metric: Metric, windows,
