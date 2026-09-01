@@ -55,3 +55,10 @@ traces/raw/
 # repo root for a week. Jupyter names them this by default, so the default name
 # is the one to catch.
 Untitled*.ipynb
+
+# --- pod session ------------------------------------------------------------
+# scripts/pod_session.sh creates this before its own preflight runs, and an
+# untracked entry here makes the tree dirty, which run_all.sh then stamps onto
+# every row it writes as git_dirty. 76.7% of the canonical pool is already
+# unusable that way.
+/session/

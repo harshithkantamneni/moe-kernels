@@ -224,10 +224,13 @@ skipped() {
 #: Did any ledger row whose id starts with this prefix pass? Used by the exfil
 #: manifest, which must expect an artefact only from a step that claimed to make
 #: one. A prefix rather than an exact id because step 5 writes one row per cell.
+#: The continuation must be a NON-DIGIT or absent, so `S2` still matches `S2a` and
+#: `S2b` as intended while `P1` no longer swallows `P11a`. Found by shellcheck
+#: SC1087 pointing at the unbraced expansion, not by the collision itself.
 ledger_passed() {
   local tab
   tab="$(printf '\t')"
-  grep -qE "^$1[^$tab]*$tab[^$tab]*${tab}PASS$tab" "$LEDGER" 2>/dev/null
+  grep -qE "^$1([^0-9$tab][^$tab]*)?$tab[^$tab]*${tab}PASS$tab" "$LEDGER" 2>/dev/null
 }
 
 #: Did this session measure anything at all? Guards the publish, so a rehearsal
@@ -245,8 +248,8 @@ already_passed() {
   [[ "$FORCE" == "1" ]] && return 1
   local tab p f
   tab="$(printf '\t')"
-  p="$(grep -cE "^$1[^$tab]*$tab[^$tab]*${tab}PASS$tab" "$LEDGER" 2>/dev/null)"
-  f="$(grep -cE "^$1[^$tab]*$tab[^$tab]*${tab}FAIL$tab" "$LEDGER" 2>/dev/null)"
+  p="$(grep -cE "^$1([^0-9$tab][^$tab]*)?$tab[^$tab]*${tab}PASS$tab" "$LEDGER" 2>/dev/null)"
+  f="$(grep -cE "^$1([^0-9$tab][^$tab]*)?$tab[^$tab]*${tab}FAIL$tab" "$LEDGER" 2>/dev/null)"
   [[ "${p:-0}" -ge 1 && "${f:-0}" == "0" ]]
 }
 
@@ -691,20 +694,29 @@ run_logged() {
 #: rather than read by a human. A script that prints NEITHER is a failure of a
 #: different kind, and is reported as such rather than silently passing.
 #:
-#: TWO ACCEPTED SHAPES, because both are natural to write and disagreeing about
-#: the format is not worth a lost result:
-#:      PASS  no crossing on a grid reaching 16384
-#:      BLOCK_M=32: PASS  no crossing on a grid reaching 16384
-#: that is, the verdict is the first non-blank token on the line, or the first
-#: token after a colon. Prose must therefore not put PASS or FAIL in either
-#: position, since "FAIL: means the refit is wrong" would be counted. The bias is
-#: deliberate and safe in one direction only: a false FAIL stops a reader, a
-#: false PASS would not.
+#: CORRECTED 2026-09-01. The first version of this matched NONE of the three
+#: scripts it exists to read, and was validated against synthetic logs rather than
+#: real ones. Measured against the actual output:
+#:      group_m         "  [PASS] regime: every cell is memory bound"
+#:      block_m         "GATE 0  PASS      override_config changed ..."
+#:      tuned_vs_fallb  "[PASS] G0  every arm same layer"
+#: the old '(^|:)[[:space:]]*PASS' read 0 PASS and 0 FAIL from all three, so S2b,
+#: S3b and S4b FAILED on a perfect run and a genuine refutation was equally
+#: invisible. The entire scientific payload of this session had no verdict channel.
+#:
+#: TWO ACCEPTED SHAPES, matched exactly rather than loosely:
+#:      [PASS] anything          the bracketed tag, at the start of the line
+#:      GATE 7  PASS  anything   block_m's form
+#: Deliberately NOT a bare whitespace boundary: block_m prints the prose line
+#: "a FAIL here is the interesting answer", and render_gates prints a
+#: "2 PASS, 1 FAIL" summary. Both would false-positive under a looser rule, and a
+#: false PASS is the one direction this must never fail in.
 gate_from_log() {
   local logfile="$1" rx p f
-  rx='(^|:)[[:space:]]*'
-  p="$(grep -cE "${rx}PASS([[:space:]]|:|$)" "$logfile" 2>/dev/null || true)"
-  f="$(grep -cE "${rx}FAIL([[:space:]]|:|$)" "$logfile" 2>/dev/null || true)"
+  rx='^[[:space:]]*\[(%s)\]|^GATE [0-9]+[[:space:]]+(%s)([[:space:]]|$)'
+  # shellcheck disable=SC2059
+  p="$(grep -cE "$(printf "$rx" PASS PASS)" "$logfile" 2>/dev/null || true)"
+  f="$(grep -cE "$(printf "$rx" FAIL FAIL)" "$logfile" 2>/dev/null || true)"
   echo "${p:-0} ${f:-0}"
 }
 
@@ -906,7 +918,10 @@ TXT
   [[ -f scripts/block_m_crossing_sweep.py ]] || { skipped S2 "BLOCK_M sweep" "scripts/block_m_crossing_sweep.py not present"; return 0; }
   if [[ "$HAVE_VLLM" == "0" ]]; then skipped S2 "BLOCK_M sweep" "$(absent_reason vllm)"; return 0; fi
   local slog="$SESSION/logs/block_m.log"
-  run_logged "$slog" "$PY_VLLM" scripts/block_m_crossing_sweep.py --out "$SESSION/block_m"
+  # --fail-on-gate is REQUIRED: without it block_m exits 0 with three gates
+  # failed, so S2a passes on a refutation and the session's central result has
+  # no way to report one. group_m and tuned_vs_fallback already exit 1.
+  run_logged "$slog" "$PY_VLLM" scripts/block_m_crossing_sweep.py --fail-on-gate --out "$SESSION/block_m"
   local rc=$?
   [[ "$rc" == "0" ]]; verdict S2a "sweep exit" $? "exit $rc" "== 0" soft \
     "The alpha refit stays unvalidated on hardware and docs/FINDINGS.md keeps its NOT YET VALIDATED banner. Steps 3 and 4 still stand: they measure how alpha VARIES, which is a separate claim from its level."
@@ -926,7 +941,14 @@ step3_group_m() {
   which turns alpha from a fudge factor into something with a named cause. But
   GROUP_SIZE_M 32 and 64 have ZERO discriminating rows in the published pool, so
   the direction is UNTESTED beyond 16 and cannot be tested from existing data at
-  any effort. Only override_config varying it at fixed batch settles it.
+  any effort. Only override_config varying it settles it, and NOT at fixed batch:
+  # group_m_alpha_sweep.py deliberately refuses that instruction, because one batch
+  # cannot identify alpha under this estimator -- the token count IS the intercept,
+  # so a single x-level is absorbed exactly and only curvature is left. On the
+  # design's own x values at 0.5% noise the top rung alone gives a 90% band of
+  # 0.373-0.756 against the seven-rung ladder's 0.552-0.580, 14x narrower against an
+  # effect size of 0.082. The ladder is identical across every GROUP_SIZE_M, so the
+  # cross-setting comparison is still at fixed design.
 
   PREDICTION: alpha continues to fall monotonically at 32 and 64, and the fall
   flattens as the swizzle stops buying reuse. A rise at any point refutes the
@@ -976,7 +998,11 @@ TXT
   [[ -f scripts/tuned_vs_fallback.py ]] || { skipped S4 "tuned vs fallback" "scripts/tuned_vs_fallback.py not present"; return 0; }
   if [[ "$HAVE_VLLM" == "0" ]]; then skipped S4 "tuned vs fallback" "$(absent_reason vllm)"; return 0; fi
   local slog="$SESSION/logs/tuned_vs_fallback.log"
-  run_logged "$slog" "$PY_VLLM" scripts/tuned_vs_fallback.py --out-dir "$SESSION/tuned_vs_fallback"
+  # --max-minutes caps the only step that can exceed its slot: 76 distinct
+  # (model, config) specialisations means ~152 Triton compiles at 8-25 s each,
+  # which is 21-64 min of pure compile. The script writes a PARTIAL RUN report
+  # on the cap and resumes on re-entry.
+  run_logged "$slog" "$PY_VLLM" scripts/tuned_vs_fallback.py --max-minutes 35 --out-dir "$SESSION/tuned_vs_fallback"
   local rc=$?
   [[ "$rc" == "0" ]]; verdict S4a "comparison exit" $? "exit $rc" "== 0" soft \
     "The cost of running on the fallback ladder stays unmeasured, and six of the study's eight cells are on it."
@@ -1299,6 +1325,24 @@ TXT
     fi
     if ledger_passed 'S7-'; then
       ls -1 traces/*.npz 2>/dev/null
+    fi
+    # ADDED 2026-09-01. The first version of this manifest listed the calibration,
+    # the PTX tarball and the traces, and omitted the outputs of steps 2, 3 and 4
+    # -- which is the entire scientific payload of the session. A pod torn down
+    # after a clean run would have taken the answer with it. This project has
+    # already lost every published figure to an unanchored gitignore and its A100
+    # PTX to a shared Triton cache; those were the same mistake.
+    if ledger_passed S2; then
+      ls -1 "$SESSION"/block_m/* 2>/dev/null
+    fi
+    if ledger_passed S3; then
+      ls -1 "$SESSION"/group_m/* 2>/dev/null
+    fi
+    if ledger_passed S4; then
+      ls -1 "$SESSION"/tuned_vs_fallback/* 2>/dev/null
+    fi
+    if ledger_passed S6; then
+      ls -1 "$SESSION"/crossing_uniform/* 2>/dev/null
     fi
   } | grep -v '^$' | sort -u > "$want"
   note "$(wc -l < "$want" | tr -d ' ') artefact(s) expected, from the steps that reported success"

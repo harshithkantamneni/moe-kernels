@@ -237,9 +237,21 @@ which is a separate claim from its level.
 turns alpha from a fudge factor into something with a named cause. But
 **GROUP_SIZE_M 32 and 64 have ZERO discriminating rows in the published pool**, so
 the direction is untested beyond 16 and cannot be tested from existing data at any
-effort. Only `override_config` varying it at fixed batch settles it.
+effort. Only override_config varying it settles it, and NOT at fixed batch:
+group_m_alpha_sweep.py deliberately refuses that instruction, because one batch
+cannot identify alpha under this estimator -- the token count IS the intercept,
+so a single x-level is absorbed exactly and only curvature is left. On the
+design's own x values at 0.5% noise the top rung alone gives a 90% band of
+0.373-0.756 against the seven-rung ladder's 0.552-0.580, 14x narrower against an
+effect size of 0.082. The ladder is identical across every GROUP_SIZE_M, so the
+cross-setting comparison is still at fixed design.
 
-**Prediction.** alpha keeps falling monotonically at 32 and 64, and the fall
+**Prediction.** alpha keeps falling monotonically at 32. **g=64 is NOT answerable on the
+mixtral arm this step runs**: num_pid_m tops out at 59-61, so g=64 saturates at
+every rung and the setting cannot be distinguished from g=32. Answering it needs a
+second arm, `--model qwen2-57b-a14b --tokens 32,64,128,256,512,768,1024`, which
+`pod_session.sh` does NOT invoke. Run it by hand if step 3 holds at 32 and the
+trend matters, and the fall
 flattens as the swizzle stops buying reuse.
 
 **PASS** means alpha may be reported with a mechanism instead of as an
