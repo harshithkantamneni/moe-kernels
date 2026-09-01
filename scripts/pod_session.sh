@@ -1106,21 +1106,56 @@ step0_download() {
   fi
   if already_passed S0; then skipped S0 "mixtral download" "already started this session"; return 0; fi
   local dlog="$SESSION/logs/download.log"
+  # A DRY RUN MUST STILL EXERCISE THE BACKGROUNDING. This used to print the
+  # command and return, so the only untested line in the script was the one that
+  # launches a 93 GB transfer -- and it was broken from the day it was written.
+  # `$!` was read in a shell that had started no background job, `set -u` aborted
+  # the session, and a laptop dry run could never have seen it. So the dry run
+  # now runs the SAME shape against a harmless command: same subshell, same
+  # backgrounding, same `$!` read, same pid file. It costs milliseconds and it
+  # covers the structure, which is the part that was wrong.
   if [[ "$DRY_RUN" == "1" ]]; then
     say "  \$ (background) huggingface-cli download mistralai/Mixtral-8x7B-Instruct-v0.1"
-    skipped S0 "mixtral download" "dry run"; return 0
+    ( : ) >> "$dlog" 2>&1 &
+    # set +u around the read, because `${!:-}` does NOT rescue an unset `$!`:
+    # bash treats the `!` as indirect expansion and still aborts under set -u,
+    # so the obvious-looking default is dead code. Verified both ways.
+    set +u; local dry_pid="${!:-}"; set -u
+    if [[ -z "$dry_pid" ]]; then
+      verdict S0 "mixtral download" 1 "no pid from a backgrounded subshell" \
+        "\$! is set after backgrounding" fatal \
+        "The real step 0 reads \$! the same way and would abort the session under set -u. This is the structure test, not the download."
+      return 0
+    fi
+    wait "$dry_pid" 2>/dev/null || true
+    skipped S0 "mixtral download" "dry run; backgrounding structure exercised, pid $dry_pid"
+    return 0
   fi
   # HF_HUB_OFFLINE is exported =1 by run_all.sh so a sweep can never reach a hub;
   # this is the one deliberate download and it must not inherit that.
-  ( HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 nohup "$PY_BASE" - <<'PYEOF' >> "$dlog" 2>&1 &
+  # THE `&` GOES OUTSIDE THE SUBSHELL. It used to sit inside, which backgrounded
+  # the job in a child shell whose PID the parent never sees: the parent had
+  # started no background job at all, so `$!` was UNSET, and `set -u` aborted the
+  # whole session with "line 1083: $!: unbound variable" -- after nohup had
+  # already launched the 93 GB download, so the run died while the transfer it
+  # had just started kept going invisibly. Backgrounding the subshell itself
+  # makes `$!` the subshell's PID, which is what download.pid is for.
+  ( HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 nohup "$PY_BASE" - <<'PYEOF'
 from huggingface_hub import snapshot_download
 p = snapshot_download("mistralai/Mixtral-8x7B-Instruct-v0.1",
                       allow_patterns=["*.json", "*.safetensors", "*.model"],
                       max_workers=8)
 print(f"DOWNLOAD-COMPLETE {p}")
 PYEOF
-  )
-  local pid=$!
+  ) >> "$dlog" 2>&1 &
+  set +u; local pid="${!:-}"; set -u
+  if [[ -z "$pid" ]]; then
+    # Belt and braces: never let a missing PID abort a session over a step that
+    # is explicitly OFF the critical path.
+    verdict S0 "mixtral download started" 1 "no pid" "a backgrounded pid" soft \
+      "The download may still be running. Check with: pgrep -fa snapshot_download"
+    return 0
+  fi
   echo "$pid" > "$SESSION/download.pid"
   verdict S0 "mixtral download started" 0 "pid $pid, log $dlog" "backgrounded" soft ""
   note "progress: tail -f $dlog   ;   du -sh $HF_HOME"
