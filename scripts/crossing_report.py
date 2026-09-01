@@ -23,6 +23,14 @@ token grid sampled first. The M-tile count sits beside every token count so the
 steps are visible in the table itself; `--block-m` names the tile it is counted
 at, since the published arms predate the column that records the tile actually
 run.
+
+`--max-affine` adds the OTHER estimator beside this one: TEMPO's global
+`t = max(a + b G, c + beta N)`, which has one inflection by construction and
+therefore cannot have the multiple-crossing failure the slope threshold has. Off
+by default, and the default output is byte for byte what it was without it. Read
+`moe/bench/maxaffine.py` before quoting the number it prints: on the five-stage
+cells it fits to a mean relative error of 24% and lands three times below the
+ridge, so it removes the ambiguity without resolving it.
 """
 from __future__ import annotations
 
@@ -47,6 +55,15 @@ from moe.bench.crossing import (  # noqa: E402
     timed_rows,
     upcrossings,
 )
+from moe.bench.maxaffine import (  # noqa: E402
+    PADDED_ROWS,
+    RELATIVE,
+    TOKENS,
+    WEIGHTINGS,
+    Comparison,
+    MaxAffineFit,
+    fit_rows,
+)
 from moe.bench.published import (  # noqa: E402
     filter_superseded,
     superseded_impls,
@@ -55,6 +72,7 @@ from moe.bench.published import (  # noqa: E402
 from moe.bench.ridge import (  # noqa: E402
     crossing_batch,
     ridge_for_dtype,
+    rows_per_expert,
     saturation_batch,
 )
 from moe.bench.schema import TileConfigUnrecorded  # noqa: E402
@@ -121,6 +139,145 @@ def print_staircase(found: list, predicted: float,
     print("    of these is the ridge is not decided by this grid.")
 
 
+#: The only columns `moe.bench.maxaffine` reads. Projected rather than keeping
+#: the whole row for the same reason the routing census is: a published row is
+#: 94 columns and there are up to 70k of them, and this script already refuses
+#: to hold them. Nothing is retained at all unless `--max-affine` is passed.
+AFFINE_COLUMNS = ("num_tokens", "ms_p50", "load_active_experts",
+                  "load_total_rows", "load_max_rows",
+                  "load_tile_eff_bm64", "load_tile_eff_bm128")
+
+
+def print_max_affine(fit: MaxAffineFit | None, comparison: Comparison,
+                     model: str, predicted: float) -> dict | None:
+    """The second estimator's answer for this cell, with its residuals attached.
+
+    Prints the fit quality on the SAME lines as the inflection, never below a
+    fold and never optional. A max-affine inflection is only worth more than the
+    slope detector's several if the model describes the curve, and on the
+    five-stage cells here it misses by a mean of 24% and a p95 of up to 263%. A
+    reader who copies one line out of this report has to copy the residual with
+    it, which is the lesson of every retraction in docs/FINDINGS.md.
+
+    Returns the row the head-to-head table is built from, or None when there was
+    no fit, so the summary is assembled from the same numbers that were printed
+    rather than recomputed beside them.
+    """
+    if fit is None:
+        print("  MAX-AFFINE: not fitted. Fewer than four token counts, or a "
+              "padded regressor")
+        print("    this row set cannot determine at the named BLOCK_M.")
+        return None
+    mem, comp = fit.memory, fit.compute
+    n = len(fit.observations)
+    b = ("unidentifiable, G never moved here" if mem.degenerate
+         else f"{mem.slope:.6f} ms per active expert")
+    beta = ("unidentifiable, N never moved here" if comp.degenerate
+            else f"{comp.slope:.8f} ms per unit N")
+    print("  MAX-AFFINE (TEMPO-style global fit): t = max(a + b G, c + beta N)")
+    print(f"    G = active experts (observed column); {fit.compute_side.label}")
+    print(f"    residuals weighted {fit.weighting}, split searched over all "
+          f"{n - 3} contiguous partitions")
+    print(f"    memory  branch:  a = {mem.intercept:9.4f} ms   b    = {b}"
+          f"   [{fit.n_memory} of {n} points]")
+    print(f"    compute branch:  c = {comp.intercept:9.4f} ms   beta = {beta}"
+          f"   [{fit.n_compute} of {n} points]")
+    inflection = fit.inflection
+    rpe = None
+    if inflection is None:
+        print(f"    inflection:      none on this grid "
+              f"({len(fit.inflections)} upward crossings)")
+    else:
+        rpe = rows_per_expert(model, inflection)
+        print(f"    inflection:      {inflection:8.0f} tokens   "
+              f"{inflection / predicted:.2f}x predicted   "
+              f"{rpe:.1f} rows per expert")
+    print(f"    fit quality:     mean |rel err| {fit.mean_rel_err:.1%}   "
+          f"p95 {fit.p95_rel_err:.1%}   max {fit.max_rel_err:.1%}")
+    if not fit.single_crossing:
+        print(f"    NOT SINGLE-CROSSING: the fitted max also crosses back "
+              f"{fit.reversals} time(s) at")
+        print("      small T, where G rises steeply and N has barely moved. "
+              "One inflection is a")
+        print("      property of two planes, not of the path a sweep walks "
+              "through them.")
+    found = comparison.slope_crossings
+    if found:
+        listed = ", ".join(f"{t:.0f}" for t in found)
+        print(f"    against the slope detector: {len(found)} crossing(s) "
+              f"({listed})")
+        first, last = comparison.ratio_to(comparison.first), \
+            comparison.ratio_to(comparison.last)
+        if first is not None:
+            print(f"      max-affine is {first:.2f}x the first and "
+                  f"{last:.2f}x the last")
+    return {"first": comparison.first, "last": comparison.last,
+            "n_crossings": len(found), "inflection": inflection, "rpe": rpe,
+            "ratio_first": comparison.ratio_to(comparison.first),
+            "ratio_last": comparison.ratio_to(comparison.last),
+            "mean": fit.mean_rel_err, "p95": fit.p95_rel_err,
+            "single": fit.single_crossing}
+
+
+def print_head_to_head(summary: list[tuple[str, dict]]) -> None:
+    """Both estimators for every cell in one table, then what they disagree by.
+
+    The per-cell blocks above are 40 lines apart, and a reader comparing two
+    estimators across sixteen cells cannot hold them. This is the same numbers
+    in one place -- assembled from the dicts those blocks returned, so the table
+    and the blocks cannot drift.
+
+    Reports the disagreement as a distribution rather than a mean, because the
+    interesting part is its width: the two estimators agree within 20% on the
+    smooth one-stage curves and differ by up to 5x on the stepped five-stage
+    ones, and a single average over both would hide exactly that.
+    """
+    print("=== ESTIMATOR HEAD TO HEAD: slope threshold against max-affine ===")
+    print("  The slope detector's crossings (all of them, first and last shown) "
+          "against the")
+    print("  max-affine inflection, on the SAME medians. R is rows per expert "
+          "at the")
+    print("  inflection, T k / E. `1x` is whether the fitted max crosses this "
+          "grid once.")
+    print(f"  {'cell':44} {'first':>7} {'last':>7} {'n':>2} "
+          f"{'affine':>7} {'x1st':>6} {'xlast':>6} {'R':>7} "
+          f"{'mean%':>6} {'p95%':>7}  1x")
+    for label, row in summary:
+        def num(value, fmt):
+            return "--" if value is None else format(value, fmt)
+        print(f"  {label:44} {num(row['first'], '7.0f'):>7} "
+              f"{num(row['last'], '7.0f'):>7} {row['n_crossings']:>2} "
+              f"{num(row['inflection'], '7.0f'):>7} "
+              f"{num(row['ratio_first'], '6.2f'):>6} "
+              f"{num(row['ratio_last'], '6.2f'):>6} "
+              f"{num(row['rpe'], '7.1f'):>7} "
+              f"{row['mean'] * 100:6.1f} {row['p95'] * 100:7.1f}  "
+              f"{'yes' if row['single'] else 'no'}")
+    rows = [r for _, r in summary]
+    ambiguous = [r for r in rows if r["n_crossings"] > 1]
+    resolved = [r for r in ambiguous if r["inflection"] is not None]
+    print(f"\n  {len(ambiguous)} of {len(rows)} cells give the slope detector "
+          f"more than one crossing.")
+    print(f"  Max-affine returns exactly one inflection on {len(resolved)} of "
+          f"those, and is")
+    print(f"  single-crossing along the grid on "
+          f"{sum(1 for r in rows if r['single'])} of {len(rows)} cells overall.")
+    for name, key in (("first", "ratio_first"), ("last ", "ratio_last")):
+        vals = sorted(r[key] for r in rows if r[key] is not None)
+        if vals:
+            print(f"  max-affine over the {name} crossing: median "
+                  f"{statistics.median(vals):.2f}, range {vals[0]:.2f} to "
+                  f"{vals[-1]:.2f} over {len(vals)} cells")
+    means = sorted(r["mean"] for r in rows)
+    p95s = sorted(r["p95"] for r in rows)
+    print(f"  fit quality across cells: mean |rel err| median "
+          f"{statistics.median(means):.1%} (range {means[0]:.1%} to "
+          f"{means[-1]:.1%}),")
+    print(f"  p95 median {statistics.median(p95s):.1%} (range {p95s[0]:.1%} to "
+          f"{p95s[-1]:.1%}). A fit that misses by that much is not locating a "
+          "ridge.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("csvs", nargs="+", type=Path)
@@ -142,6 +299,27 @@ def main() -> int:
                          "assumption rather than a measurement; 64 and 128 read "
                          "a stored efficiency, any other value is "
                          "reconstructed and refuses once an expert spans tiles")
+    ap.add_argument("--max-affine", action="store_true",
+                    help="also fit TEMPO's global t = max(a + b G, c + beta N) "
+                         "per cell and print both estimators side by side. Off "
+                         "by default and the default output is unchanged; this "
+                         "estimator has one inflection by construction, which "
+                         "is the reason to try it and the reason to check its "
+                         "residuals before quoting it")
+    ap.add_argument("--max-affine-n", choices=[TOKENS, PADDED_ROWS],
+                    default=TOKENS,
+                    help="the compute-side regressor. `tokens` is TEMPO's own "
+                         "and is a recorded column; `padded_rows` rounds up to "
+                         "whole M-tiles at --block-m, fits better, and is "
+                         "DERIVED -- below saturation it equals BLOCK_M x "
+                         "active experts exactly, so the two branches go "
+                         "collinear and the inflection stops meaning anything")
+    ap.add_argument("--max-affine-weighting", choices=list(WEIGHTINGS),
+                    default=RELATIVE,
+                    help="`relative` weights each residual by 1/ms^2 so the "
+                         "objective is relative error; `absolute` is textbook "
+                         "least squares, which on a curve spanning 0.13 to "
+                         "27.9 ms is a fit to the largest token count alone")
     ap.add_argument("--uncertainty", action="store_true",
                     help="add a 90%% band to each measured crossing, Monte "
                          "Carlo'd from the replicate spread of each token "
@@ -177,6 +355,10 @@ def main() -> int:
     # M-tiles per row, reduced to a number at ingest for the same reason: the
     # count is one float and the row it came from is 200 columns.
     tiles: dict[tuple[str, str, str], dict[int, list[float]]] = {}
+    # Projected rows for the max-affine fit, and only when it was asked for:
+    # with the flag off nothing here is populated and the report allocates
+    # exactly what it did before.
+    affine: dict[tuple[str, str, str], dict[int, list[dict]]] = {}
     modes: collections.Counter = collections.Counter()
     kept = skipped = untimed = tileless = 0
     for path in csvs:
@@ -218,6 +400,9 @@ def main() -> int:
                 cells.setdefault(key, {}).setdefault(t, []).append(ms)
                 routing_rows.setdefault(key, []).append(
                     {ROUTING_COLUMN: r.get(ROUTING_COLUMN, "")})
+                if args.max_affine:
+                    affine.setdefault(key, {}).setdefault(t, []).append(
+                        {c: r.get(c, "") for c in AFFINE_COLUMNS})
                 try:
                     tiles.setdefault(key, {}).setdefault(t, []).append(
                         m_tiles_for_row(r, args.block_m))
@@ -280,6 +465,7 @@ def main() -> int:
         print("nothing to report")
         return 1
 
+    summary: list[tuple[str, dict]] = []
     for key_, by_t in sorted(cells.items()):
         model, dtype, impl = key_
         # The replicate lists survive to here rather than being medianed away at
@@ -352,7 +538,20 @@ def main() -> int:
                           f"   {lo / predicted:.2f}-{hi / predicted:.2f}x "
                           f"predicted")
             print_staircase(found, predicted, tiles.get(key_, {}))
+        # Outside the else: a cell whose grid does not bracket a slope crossing
+        # is exactly the cell where a second estimator is worth having, and
+        # printing it only where the first one succeeded would hide that.
+        if args.max_affine:
+            print()
+            fit = fit_rows(affine.get(key_, {}), args.max_affine_n,
+                           args.block_m, args.max_affine_weighting)
+            comparison = Comparison(tuple(u.tokens for u in found), fit)
+            row = print_max_affine(fit, comparison, model, predicted)
+            if row is not None:
+                summary.append((f"{model} / {dtype} / {impl}", row))
         print()
+    if args.max_affine and summary:
+        print_head_to_head(summary)
     return 0
 
 

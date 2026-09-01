@@ -180,6 +180,9 @@ effective M never doubles to 128 that way either.
 Constancy is established over T = 1 to 4096 and assumed above it. The 8192 point
 this study later added was never re-run through `kernel_name.py`.
 
+RETRACTED 2026-09-01, alpha is 0.558 not 0.10. See the refit below; the 0.10 is
+an artefact of the estimator, not a measurement. The original text follows.
+
 Refitting the re-read cost against the observed tile over the 151 unthrottled
 memory-bound rows gives **alpha = 0.10** (mean ratio 1.65x, CV 12.8%), against
 1.67x / 13.1% at alpha = 0 and 1.60x / 17.5% at alpha = 1. An extra M-tile on the
@@ -964,10 +967,30 @@ own `compulsory_gbps`:
 | fp8 | eager | 275 | 1.158 | **1.959** | 7.982 |
 | fp8 | graph | 284 | 1.157 | **1.361** | 2.062 |
 
-In bf16 the incumbent sits essentially ON the compulsory byte floor and there is
-nothing to recover. In fp8, at the SAME cells with the SAME kernels, the ratio
-rises to 1.36 graphed and 1.96 eager, because halving the weight bytes halves the
-floor WITHOUT halving the fixed dispatch and tile-quantisation costs.
+CORRECTED 2026-09-01, twice, and the surviving claim is narrower.
+
+FIRST: bf16 IS NOT ON THE FLOOR. 1.144 eager / 1.162 graph is numerically the same
+"roughly 15% headroom" the supporting-results section already reports for these
+kernels. The defensible statement is that fp8 has MORE headroom than bf16, not
+that bf16 has none.
+
+SECOND: QUOTE THE GRAPHED ROW, NOT THE EAGER ONE. Decomposed over the 170 cells
+measured in all four of (bf16, fp8) x (eager, graph), the fp8 eager figure is 78%
+per-call HOST DISPATCH, and the stated mechanism cannot produce it:
+
+    eager minus graph, in TIME, where a fixed cost is fixed
+      bf16   median graph 203.7 us   eager - graph    4.9 us
+      fp8    median graph 139.0 us   eager - graph  131.3 us
+
+A cost that is merely fixed in time, divided by a floor that fp8 halves, can
+contribute at most 2x more to an fp8 ratio than a bf16 one. The measured ratio is
+27x. So the fp8 code path does genuinely more host work per call, CUDA graph
+capture replays it away, and production serving uses graphs.
+
+WHAT SURVIVES is the GRAPHED RESIDUAL, +0.337, positive in 96% of matched cells
+and in every model: in graph mode fp8 takes 0.68x the time for exactly 0.500x the
+bytes, and that excess IS a fixed cost surviving a halved floor. Headline figures
+are therefore bf16 1.162 against fp8 1.361 pooled, 1.475 matched.
 
 So the bandwidth headroom that routing-aware dispatch work reports is DTYPE-GATED:
 it appears once you quantise, and in bf16 it is not there. That positions with
@@ -999,10 +1022,19 @@ found in TEMPO, RaMP, Yun or Sieve:
 
  - the CEILING `2 BM / (alpha b)` stated as a bound on arithmetic intensity, and
    its consequence that a tile height can put the compute roof permanently out of
-   reach. TEMPO models TIME as a max-affine with two branches, which has one
-   crossing by construction and cannot express a bounded AI.
+   reach. TEMPO models TIME as a max-affine with two branches, which cannot
+   express a bounded AI.
+   AND MEASURED 2026-09-01: max-affine was implemented and run against these rows.
+   It gives one stable answer on all 8 ambiguous cells, its advertised property,
+   but it does NOT describe the stepped curves: p95 relative error 61-263% on the
+   variable-tile Triton spans against 14-47% on the fixed-tile CUTLASS ones, and
+   its single answer lands 3-9x BELOW the ridge band. "One crossing by
+   construction" is also false along a measured grid: 14 of 16 cells show a
+   reversal, because two planes cross once but the path a sweep walks through them
+   need not. So the detector is not the problem; an estimator that structurally
+   cannot see a staircase does not fit these curves.
  - the crossing as a FIXED POINT on a staircase, and therefore the possibility of
-   several crossings or none. A max-affine fit cannot produce that.
+   several crossings or none.
  - the step-position law in GLOBAL batch, `T = n BM E/k`, validated across an 8x
    spread in `E/k`. TEMPO and RaMP both stay in tokens-per-expert.
 
@@ -1010,15 +1042,34 @@ AND THE TWO MEASUREMENTS OF `alpha` DISAGREE BY 3.3x. This repo refit 0.10 with 
 CV of 12.8%; TEMPO fits `b2/b` about 0.33. That is not a detail, because `alpha`
 sets which tile heights can ever reach the roof at all:
 
-    BLOCK_M    cap at alpha=0.10   cap at alpha=0.33   ridge band 160.3-176.2
-         16          160  NEVER            48  NEVER
-         32          320  yes              97  NEVER
-         64          640  yes             194  yes
-        128         1280  yes             388  yes
+REFIT 2026-09-01 AND THE ANSWER IS 0.558, not 0.10 and not 0.33. Group-intercept
+fit over 10,813 admitted rows, 3,124 of them able to move alpha at all, 90%
+cluster-bootstrap band 0.529 to 0.588, placebo -0.002. Stable across models
+(0.46-0.72), cards (0.53 / 0.57), timing modes (0.48-0.59) and routing
+(0.44-0.63). The original 0.10 reproduces exactly on its own 151 rows, and
+changing ONLY the estimator on those same rows gives 0.484: the 0.10 came from
+minimising the CV of a POOLED ratio, an objective that falls 0.7% across its whole
+range and lets alpha absorb a between-cell level trend running the wrong way.
 
-At 0.10 only BLOCK_M=16 is capped out; at 0.33 so is 32, and 64 is marginal.
-Resolving `alpha` is therefore the measurement this section turns on, and two
-independent groups disagreeing threefold on it is itself worth reporting.
+    BLOCK_M    cap @0.10   cap @0.33   cap @0.558   ridge band 160.3-176.2
+         16          160          48           29   NEVER at any alpha
+         32          320          97           57   NEVER at 0.33 and 0.558
+         64          640         194          115   NEVER at 0.558
+        128         1280         388          229   crosses
+        256         2560         776          459   crosses
+
+AT THE REFITTED ALPHA, BLOCK_M OF 16, 32 AND 64 ALL CAP BELOW THE RIDGE. vLLM's
+tuned configs run BLOCK_M = 16 through the entire decode range. So on this
+hardware a decode-configured MoE kernel is structurally incapable of reaching its
+compute roof, at any batch size.
+
+AND ALPHA IS NOT A SCALAR, which the fit also shows: it drifts with BLOCK_M
+(0.466 at 64, 0.625 at 128) and falls with GROUP_SIZE_M (0.570 at 1, 0.488 at 16).
+The GROUP_SIZE_M direction is exactly what a swizzle-for-L2-reuse mechanism
+predicts, which is mechanistic support rather than a nuisance. But GROUP_SIZE_M 32
+and 64 have ZERO discriminating rows in the published pool, so "alpha varies with
+the swizzle" is UNTESTED rather than established, and needs override_config
+varying it at fixed batch.
 
 ### The formula
 
