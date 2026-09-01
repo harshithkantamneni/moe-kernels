@@ -949,6 +949,115 @@ to take deliberately rather than as a side effect.
 
 ---
 
+## The tile-corrected roofline, and why arithmetic intensity is bounded
+
+Proposed 2026-09-01. NOT YET VALIDATED; the experiment that tests it is named at
+the end. This is a closed form for the staircase, and it makes predictions the
+uncorrected model does not.
+
+### The formula
+
+For one expert holding `r` rows, with `N_w` weight elements at `b` bytes each and
+tile height `BM`:
+
+    useful FLOPs  = 2 N_w r
+    M-tiles       = ceil(r / BM)
+    weight bytes  = N_w b (1 + alpha (M-tiles - 1))
+
+the first tile reads the weights in full and each additional M-tile costs `alpha`
+of a fresh read, since it re-reads the same B operand across its N-tiles and L2
+absorbs part of it. So
+
+    AI(r) = (2r/b) / Q(r),      Q(r) = 1 + alpha (ceil(r/BM) - 1)
+
+`2R/b` is the `alpha = 0` or single-tile LIMIT of this, not the general case. `Q`
+is a tile-quantisation penalty: exactly 1 while `r <= BM`, then stepping up by
+`alpha` at every multiple of `BM`, flat in between. That is the staircase, in
+closed form.
+
+Scope: this handles the M direction only. The grid is two-dimensional,
+`cdiv(EM, BLOCK_M) x cdiv(N, BLOCK_N)`, and the N direction re-reads the
+ACTIVATIONS rather than the weights. In the weight-dominated regime that term is
+second order, which is the same assumption `2R/b` already makes.
+
+### Consequence 1: arithmetic intensity is BOUNDED
+
+As `r` grows, `ceil(r/BM)` tends to `r/BM`, so
+
+    AI  ->  2 BM / (alpha b)        INDEPENDENT OF r
+
+AI does not grow without limit with batch. It saturates at a value set by the TILE
+HEIGHT. And if that ceiling sits below the hardware ridge, the kernel can never
+become compute bound at any batch size at all.
+
+    ridge 160.3, bf16, alpha = 0.10
+      BLOCK_M =  16  ->  AI cap  160   NEVER CROSSES (needs alpha < 0.0998)
+      BLOCK_M =  32  ->          320   crosses
+      BLOCK_M =  64  ->          640   crosses
+      BLOCK_M = 128  ->         1280   crosses
+
+vLLM's tuned configs run `BLOCK_M = 16` through the whole decode range, where the
+cap is 160 against a ridge of 160.3 to 176.2. Whether a decode-configured MoE
+kernel can EVER reach compute bound therefore turns on whether `alpha` is above or
+below 0.0998, and this repo's own refit put `alpha` at about 0.10. That is a knife
+edge, and it is measurable.
+
+### Consequence 2: the crossing is a fixed point on a staircase
+
+    AI(R) = ridge   =>   R = ridge b Q(R) / 2,   with Q a STEP function of R
+
+A step function on both sides can have several solutions, or none inside a step.
+So the multiple crossings recorded above are not a detector artefact; they are a
+property of the equation. Solving it:
+
+    | BLOCK_M | uncorrected 2R/b | tile-corrected | shift |
+    |--------:|-----------------:|---------------:|------:|
+    |      32 |            160.3 |          304.6 | 1.90x |
+    |      64 |            160.3 |          208.4 | 1.30x |
+    |     128 |            160.3 |          176.3 | 1.10x |
+    |     256 |            160.3 |          160.3 | 1.00x |
+
+### A DEGENERACY THAT MUST BE STATED
+
+    tile-corrected, ridge 160.3, BM=128, alpha=0.10   ->  176.3
+    UNcorrected, at the high end of the ridge band    ->  176.2
+    measured mean rows/expert at the last crossing    ->  175.8
+
+The first two are numerically identical for entirely different reasons, so the
+measured 175.8 does NOT confirm this formula. An earlier draft of this section
+claimed it did. It cannot: the two hypotheses predict the same number at
+`BLOCK_M = 128`.
+
+### The experiment that validates or kills it
+
+Sweep `BLOCK_M` and measure the crossing at each. The uncorrected prediction does
+NOT move with `BLOCK_M`; the tile-corrected one moves by the shift column, a 1.90x
+spread between 32 and 256 which is not subtle. Three readouts from one sweep:
+
+1. WHERE the steps land. Both the traffic and the occupancy mechanism predict
+   `R = n BM`, so this confirms the steps are about tiles without saying which
+   tile effect causes them.
+2. WHICH WAY time moves in the MULTI-TILE regime. Bigger `BLOCK_M` means fewer
+   re-reads (faster) but fewer blocks (slower). C3 measured slower at small T,
+   but there every expert is one tile at any `BLOCK_M`, so there were no re-reads
+   to save and only occupancy could move. That regime is not this one.
+   Run it where wave count exceeds about 10 on BOTH sides of a step, so occupancy
+   is saturated and any remaining movement is traffic.
+3. WHETHER THE CROSSING SHIFTS BY Q, which is the direct test of the formula, and
+   whether `alpha` fitted this way matches the 0.10 from the re-read refit.
+4. AND THE CAP: force `BLOCK_M = 16` and sweep T as far as the grid allows. The
+   formula says no crossing exists. If one appears, `alpha < 0.0998` and the cap
+   is real but higher than assumed. If none appears, a decode-tuned MoE kernel is
+   structurally incapable of reaching its compute roof.
+
+WAYS THE FORMULA MAY NEED MODIFYING, to look for in the fit: `alpha` may itself
+depend on `BLOCK_M` (a taller tile holds more of B resident, so L2 reuse changes),
+on expert width (a wider expert evicts more), or on `BLOCK_N`. A single scalar
+`alpha` is the simplest thing that could work and should be tested as such before
+anything more elaborate.
+
+---
+
 ## Three results the study measured and never reported
 
 Added 2026-09-01. `cuda_graph` and `l2_flush` are FULLY SWEPT axes with measured
