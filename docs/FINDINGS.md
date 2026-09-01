@@ -949,11 +949,76 @@ to take deliberately rather than as a side effect.
 
 ---
 
+## The headroom is dtype-gated
+
+Added 2026-09-01, and it is currently the strongest positive result in this study.
+
+Production fused MoE kernels, uniform routing, T <= 64, which is the memory-bound
+regime a kernel would target. Traffic ratio is achievable bandwidth over the row's
+own `compulsory_gbps`:
+
+| dtype | mode | n | p10 | median | p90 |
+|---|---|---:|---:|---:|---:|
+| bf16 | eager | 279 | 1.030 | **1.144** | 2.833 |
+| bf16 | graph | 182 | 1.090 | **1.162** | 1.438 |
+| fp8 | eager | 275 | 1.158 | **1.959** | 7.982 |
+| fp8 | graph | 284 | 1.157 | **1.361** | 2.062 |
+
+In bf16 the incumbent sits essentially ON the compulsory byte floor and there is
+nothing to recover. In fp8, at the SAME cells with the SAME kernels, the ratio
+rises to 1.36 graphed and 1.96 eager, because halving the weight bytes halves the
+floor WITHOUT halving the fixed dispatch and tile-quantisation costs.
+
+So the bandwidth headroom that routing-aware dispatch work reports is DTYPE-GATED:
+it appears once you quantise, and in bf16 it is not there. That positions with
+RaMP (arXiv:2604.26039) rather than against it, and it is not a claim any of the
+2026 MoE papers surveyed makes.
+
+CAVEAT THAT MUST TRAVEL WITH THIS NUMBER. The fp8 arm carries
+`achieved_peak_tflops = 0.0` because its calibration measured no fp8 ceiling, so
+its `implied_traffic_ratio` column is EMPTY and the figures above were
+reconstructed as `achieved_bw_gbps / compulsory_gbps`. That is arithmetically the
+same quantity, but it means the headline number is not a published column, and it
+comes from an arm `entitled_ridge` already refuses. A same-session fp8 calibration
+is one line on a pod and it is a precondition for publishing this.
+
+---
+
 ## The tile-corrected roofline, and why arithmetic intensity is bounded
 
 Proposed 2026-09-01. NOT YET VALIDATED; the experiment that tests it is named at
 the end. This is a closed form for the staircase, and it makes predictions the
 uncorrected model does not.
+
+### What of this is ours, checked against the literature 2026-09-01
+
+arXiv:2608.13057 (TEMPO, 13 Aug 2026) independently measures the same staircase in
+tokens-per-expert at BLOCK_M=128, and fits the same extra-tile L2 discount, which
+is this section's `alpha`. So THE BYTE ACCOUNTING BELOW IS NOT NEW. What is not
+found in TEMPO, RaMP, Yun or Sieve:
+
+ - the CEILING `2 BM / (alpha b)` stated as a bound on arithmetic intensity, and
+   its consequence that a tile height can put the compute roof permanently out of
+   reach. TEMPO models TIME as a max-affine with two branches, which has one
+   crossing by construction and cannot express a bounded AI.
+ - the crossing as a FIXED POINT on a staircase, and therefore the possibility of
+   several crossings or none. A max-affine fit cannot produce that.
+ - the step-position law in GLOBAL batch, `T = n BM E/k`, validated across an 8x
+   spread in `E/k`. TEMPO and RaMP both stay in tokens-per-expert.
+
+AND THE TWO MEASUREMENTS OF `alpha` DISAGREE BY 3.3x. This repo refit 0.10 with a
+CV of 12.8%; TEMPO fits `b2/b` about 0.33. That is not a detail, because `alpha`
+sets which tile heights can ever reach the roof at all:
+
+    BLOCK_M    cap at alpha=0.10   cap at alpha=0.33   ridge band 160.3-176.2
+         16          160  NEVER            48  NEVER
+         32          320  yes              97  NEVER
+         64          640  yes             194  yes
+        128         1280  yes             388  yes
+
+At 0.10 only BLOCK_M=16 is capped out; at 0.33 so is 32, and 64 is marginal.
+Resolving `alpha` is therefore the measurement this section turns on, and two
+independent groups disagreeing threefold on it is itself worth reporting.
 
 ### The formula
 
