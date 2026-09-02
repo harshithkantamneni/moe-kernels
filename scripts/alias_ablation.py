@@ -226,6 +226,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -551,6 +553,61 @@ class Gate:
     @property
     def label(self) -> str:
         return {True: "PASS", False: "FAIL", None: "NOT TESTABLE"}[self.ok]
+
+    @property
+    def token(self) -> str:
+        """The gate's name as ONE whitespace-free token, for `RESULT:`.
+
+        THE WHOLE NAME IS SLUGGED, not just its first word, and the reason is in
+        this script's own gate list: `regime: every cell is memory bound` and
+        `regime: the multi-tile rung has re-reads to save` are two different
+        gates whose first word is the same. A driver keying on `regime` would
+        see one of them and silently lose the other, which is the shape of
+        failure `exit_codes` exists to stop rather than to reproduce.
+        """
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", self.name).strip("-")
+        return slug[:56] or "gate"
+
+    @property
+    def kind(self) -> str:
+        """CLAIM for the pre-registered predictions, VALIDITY for the rest.
+
+        `P1: the ablation agrees with the refit` is the only statement about the
+        WORLD this script makes, and a FAIL on it is a RESULT: the ablation
+        would have refuted the refit, which is the most valuable outcome the
+        experiment has. Everything else -- correctness, placebo, signal, form,
+        control, resolution, the ISA census and the preflights -- says whether
+        the apparatus was sound, and a FAIL there means nothing on the page may
+        be quoted at all.
+
+        The rule is `P<digit>`, the same one `group_m_alpha_sweep` uses, so the
+        two scripts cannot classify a gate differently. The trailing colon is
+        stripped because this file writes `P1:` and that one writes `P1 `.
+        """
+        first = self.name.split()[0].rstrip(":")
+        return (exit_codes.CLAIM
+                if first[:1] == "P" and first[1:].isdigit()
+                else exit_codes.VALIDITY)
+
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.ok]
+
+    def result_line(self) -> str:
+        """The ONE line the session driver may grep for this gate.
+
+        Rendered by `moe.bench.exit_codes.result_line`, so the prefix, the field
+        order and the refusals are identical in every script. The `[PASS] name`
+        block beside it is prose: a line that merely contains "PASS" is not a
+        result, which is what the driver's old free-text grep was reading
+        pre-registered expectations out of.
+        """
+        return exit_codes.result_line(self.kind, self.token, self.verdict,
+                                      self.detail.replace("\n", " ")[:160])
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.token, self.verdict)
 
 
 def preflight(design: Design, l2_bytes: int) -> list[Gate]:
@@ -1638,6 +1695,7 @@ def report_design(say, design: Design, gates: list[Gate], l2_bytes: int,
             "alpha is near 1 above it and near 0 below.")
     say()
     for gate in gates:
+        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
 
@@ -2083,6 +2141,7 @@ def verdict(say, gates: list[Gate]) -> int:
     say("## gates")
     say()
     for gate in gates:
+        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
     say()
@@ -2108,6 +2167,62 @@ def verdict(say, gates: list[Gate]) -> int:
 # --------------------------------------------------------------------------
 # wiring
 # --------------------------------------------------------------------------
+
+#: The card label a run that touches no GPU carries. `--synthetic` generates its
+#: rows from a stated law and `--replay` re-reports a finished directory, so
+#: neither has a card, and `provenance.run_id` refuses an id without one. A name
+#: no `nvidia-smi` can produce, so it can never be read as a real card.
+NO_CARD = "no-card-nothing-measured"
+
+
+def resolve_card(args) -> str:
+    """The card this run is about, or `NO_CARD` when there is not one.
+
+    `--card`, else the live device, else `NO_CARD`. `CannotRunHere` already
+    refuses the measuring path without a GPU, so `NO_CARD` reaches the id only
+    on the two paths that measure nothing.
+    """
+    if getattr(args, "card", None):
+        return str(args.card)
+    with contextlib.suppress(Exception):
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    return NO_CARD
+
+
+def default_run_id(args, card: str, design: Design) -> str:
+    """The output directory's name: card first, then every knob that moves a row.
+
+    THE THREE OMISSIONS (A5/P5), all live before 2026-09-02:
+
+      * THE CARD. It is not swept by this script, it is swept by the operator
+        moving to another pod, and `results_root()` prefers `$MOE_RESULTS_DIR`
+        then `/workspace/results`, a network volume the runbook uses BECAUSE it
+        outlives the pod. The resume key is `rung.key`, which is
+        model|tiles|block_m and carries no device, so a second card would find
+        every rung present, spend no GPU time, and report the first card's
+        timings. This experiment's whole subject is L2 behaviour and the two
+        cards' L2 differ by 20 MiB, so that is not a small error.
+      * `--seed`. It seeds the bootstrap AND, through `measure_rung`, the tensor
+        contents; two seeds are two datasets and they shared a directory.
+      * `--no-l2-flush`. This is an ABLATION OF CACHE BEHAVIOUR. A warm-L2 run
+        and a flushed run are different experiments by construction, and the
+        design fingerprint did not distinguish them.
+
+    `design.fingerprint` still carries the models, the tile ladder, BLOCK_M, the
+    fixed tile, the compute mode, the replicate count and the control geometry,
+    so a change to any of those still lands elsewhere; it is passed through
+    rather than re-listed here so the two cannot drift apart. `--bootstrap`
+    stays OUT: it re-analyses a set of measurements rather than change one.
+    """
+    return PV.run_id(card=card, **{
+        "1mode": design.compute, "2bm": design.block_m,
+        "3design": design.fingerprint, "4seed": args.seed,
+        "5flush": bool(args.l2_flush)})
+
 
 def results_root() -> Path:
     """Where output goes so that it survives the pod being terminated.
@@ -2205,6 +2320,11 @@ def parse_args(argv: list[str] | None = None):
                              "an ablation of cache behaviour must control the "
                              "cache state it starts from")
     parser.add_argument("--bootstrap", type=int, default=2000)
+    parser.add_argument("--card", default=None,
+                        help="the card this run measures, as nvidia-smi names "
+                             "it. Defaults to the live device; --synthetic and "
+                             "--replay touch no GPU and are labelled "
+                             f"{NO_CARD!r}")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
     args.models = tuple(v for v in str(args.models).split(",") if v)
@@ -2221,13 +2341,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     design = build_design(args)
     suffix = f"-synthetic-{args.synthetic}" if args.synthetic else ""
+    card = resolve_card(args)
     out_dir = args.replay or args.out or (
         results_root() / "alias_ablation"
-        / f"{design.compute}-bm{design.block_m}-{design.fingerprint}{suffix}")
+        / f"{default_run_id(args, card, design)}{suffix}")
+
+    # PROVENANCE, built once and written into every artefact this run leaves.
+    # None of the ten gaps-session scripts wrote a commit, a card or an
+    # instrument, so not one of the 26 published reports can be attributed to a
+    # code version (A5).
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS)
 
     say = Report()
     say(f"# alpha by ablation, without the byte model   ({git_head() or 'no git'})")
     say()
+    say(f"card: {card}")
     say(f"output directory: {out_dir}")
     say("Everything below is written there as report.md, beside plan.json and "
         "cells.jsonl.")
@@ -2258,7 +2386,7 @@ def main(argv: list[str] | None = None) -> int:
         say()
         say("VERDICT: the design is refused before spending anything. Fix the "
             "failed preflight gate above.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 1
 
     records: list[dict] = []
@@ -2278,12 +2406,14 @@ def main(argv: list[str] | None = None) -> int:
             (out_dir / "cells.jsonl").unlink(missing_ok=True)
         existing = read_records(out_dir / "cells.jsonl")
         done = {r["id"] for r in existing}
-        (out_dir / "plan.json").write_text(json.dumps(
+        (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
             {"fingerprint": design.fingerprint, "argv": sys.argv[1:],
              "git": git_head(), "models": list(design.models),
              "tiles": list(design.tiles), "block_m": design.block_m,
              "tile": design.tile, "compute": design.compute,
-             "replicates": design.replicates}, indent=2))
+             "card": card, "run_id": out_dir.name, "seed": args.seed,
+             "l2_flush": bool(args.l2_flush),
+             "replicates": design.replicates}), indent=2))
         say()
         say(f"## measuring: {len(design.rungs) - len(done)} rungs to do, "
             f"{len(done)} already on disk")
@@ -2296,7 +2426,7 @@ def main(argv: list[str] | None = None) -> int:
                 "valid and cost nothing;")
             say("re-run with --run on the pod, or --synthetic to exercise the "
                 "gates.")
-            _save(out_dir, say)
+            _save(out_dir, say, prov)
             return 3
         except KeyboardInterrupt:
             say()
@@ -2308,14 +2438,14 @@ def main(argv: list[str] | None = None) -> int:
         say("Nothing was measured. Add --run on the pod, --synthetic to "
             "exercise the gates,")
         say("or --replay <dir> to re-report a finished run.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 0
 
-    return _analyse(say, design, records, args, out_dir, l2)
+    return _analyse(say, design, records, args, out_dir, l2, prov)
 
 
 def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
-             l2: int) -> int:
+             l2: int, prov=None) -> int:
     known = {r.key for r in design.rungs}
     stray = [r for r in records if r.get("id") not in known]
     synthetic = bool(args.synthetic) or any(
@@ -2336,7 +2466,7 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     if not timed:
         say()
         say("VERDICT: NOT TESTABLE. Nothing was timed.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 4
 
     throttled = [r["id"] for r in timed if r.get("throttled")]
@@ -2377,14 +2507,21 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
         prediction_gate(pooled, pooled_bracket, design.compute),
     ]
     code = verdict(say, gates)
-    _save(out_dir, say)
+    _save(out_dir, say, prov)
     return code
 
 
-def _save(out_dir: Path, say: Report) -> None:
+def _save(out_dir: Path, say: Report, prov=None) -> None:
     with contextlib.suppress(OSError):
         out_dir.mkdir(parents=True, exist_ok=True)
         say.save(out_dir / "report.md")
+        if prov is not None:
+            # Beside the markdown, not inside it: the report is prose a human
+            # reads and the block is fields a script reads, and a run whose
+            # report.md was hand-edited must still carry an unedited record of
+            # the commit, the card and the instrument.
+            (out_dir / "provenance.json").write_text(
+                json.dumps(prov.stamp({"run_id": out_dir.name}), indent=2))
         print()
         print(f"[alias] report written to {out_dir / 'report.md'}")
         print(f"[alias] measurements at  {out_dir / 'cells.jsonl'}")

@@ -125,6 +125,7 @@ import json
 import math
 import os
 import random
+import re
 import statistics
 import subprocess
 import sys
@@ -138,6 +139,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from moe.bench import bytes_model as BM  # noqa: E402
+from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.routing.imbalance import expert_load, padded_rows, tile_efficiency  # noqa: E402
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec  # noqa: E402
 from moe.stages import contract_for, exposed_writes  # noqa: E402
@@ -228,9 +231,18 @@ MIN_DISCRIMINATING = 20
 #: can show the curvature is consistent rather than merely fitted.
 MIN_INTERCEPT_GROUPS = 3
 
-#: A 90% band wider than this cannot resolve the effect this experiment is for:
-#: the published GROUP_SIZE_M split differs by 0.082 between g=1 and g=16.
-MAX_BAND_WIDTH = 0.15
+#: A setting's 90% band must be no wider than this MULTIPLE of the effect the
+#: experiment is for, and the effect is `PUBLISHED_GROUP_M_EFFECT` below.
+#:
+#: IT WAS AN ABSOLUTE 0.15 UNTIL 2026-09-02, against an effect of 0.082: a band
+#: 1.8x the effect, so a setting could be called "identified" while its interval
+#: contained both zero and twice the number being claimed (S37, Hoefler & Belli
+#: rule 7). Expressed as a multiple now, so the two cannot drift apart when
+#: either is revised, and set to 1.0: a band that does not fit inside the effect
+#: has not resolved it. On the shipped design the fitted bands run around 0.03
+#: to 0.05, so this tightens a threshold nothing was using rather than
+#: retiring settings that were passing.
+BAND_WIDTH_OVER_EFFECT = 1.0
 
 #: P4. The single-tile rung's paired time effect must be at most this fraction
 #: of the multi-tile rung's, or the GROUP_SIZE_M effect is not specific to the
@@ -261,14 +273,44 @@ FLOOR_SLACK_BANDS = 2.0
 #: in padded arithmetic, which GROUP_SIZE_M cannot move.
 MEMORY_BOUND_MARGIN = 0.90
 
-#: Timing noise assumed by the power simulation, as a fraction of log time.
-#: `moe/bench/crossing.py` records that repeated measurements of one cell
-#: reproduce to about 0.2%; 0.5% is the pessimistic end of that.
-POWER_NOISE = 0.005
+#: Timing noise the power simulation plants, as a fraction of log time.
+#: MEASURED, NOT ASSUMED, as of 2026-09-02: it is the MEDIAN of
+#: `timing_spread_median` over the 26 published `*.report.json` files under
+#: `results/published`, which is every arm in this repository that records one.
+#: The corpus runs 0.0039 to 0.0182 with a median of 0.0077.
+#:
+#: IT WAS 0.005, sourced to `moe/bench/crossing.py`'s note that one cell
+#: reproduces to about 0.2% and described as "the pessimistic end of that"
+#: (S37). It sat BELOW the entire measured range, so the power line overstated
+#: what the design can see. The median is the honest single number; the maximum
+#: is `POWER_NOISE_MAX` and `report_power` prints the band at BOTH, because the
+#: design's answer differs between them and one number would hide which.
+POWER_NOISE = 0.0077
+
+#: The worst per-cell spread in the same corpus. The mixtral H200 arms -- this
+#: sweep's own model on its own card -- are the top of that range (0.0140 to
+#: 0.0182), so this is not a tail case for this design; it is the case.
+POWER_NOISE_MAX = 0.0182
 
 #: The effect the design has to be able to see, from the published split
 #: (0.570 at GROUP_SIZE_M=1 against 0.488 at 16).
+#:
+#: IT IS A POOLED, UNPAIRED NUMBER and is labelled one (idx 36): it is the
+#: `alpha_refit` marginal split over an unbalanced pool, not a paired
+#: comparison at matched levels. It sizes the band gate and the power line,
+#: neither of which is a claim about the world; nothing is scored against it.
 PUBLISHED_GROUP_M_EFFECT = 0.082
+
+
+def max_band_width() -> float:
+    """The absolute band a setting must fit inside to count as identified.
+
+    A function rather than a constant so the two numbers it is built from stay
+    visibly connected: a revision to either has to move this, and a threshold
+    that silently stops tracking the effect it is about is how a band 1.8x the
+    effect came to read as "resolved".
+    """
+    return BAND_WIDTH_OVER_EFFECT * PUBLISHED_GROUP_M_EFFECT
 
 
 # --------------------------------------------------------------------------
@@ -538,6 +580,56 @@ class Gate:
     def label(self) -> str:
         return {True: "PASS", False: "FAIL", None: "NOT TESTABLE"}[self.ok]
 
+    @property
+    def token(self) -> str:
+        """The gate's name as ONE whitespace-free token, for `RESULT:`.
+
+        THE WHOLE NAME IS SLUGGED, not just its first word, and the reason is in
+        this script's own gate list: `regime: every cell is memory bound` and
+        `regime: the multi-tile rung has re-reads to save` are two different
+        gates whose first word is the same. A driver keying on `regime` would
+        see one of them and silently lose the other, which is the shape of
+        failure `exit_codes` exists to stop rather than to reproduce.
+        """
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", self.name).strip("-")
+        return slug[:56] or "gate"
+
+    @property
+    def kind(self) -> str:
+        """VALIDITY for the preflight gates, CLAIM for the result gates.
+
+        The preflight gates are about whether the DESIGN can answer the
+        question and are scored before a kernel runs; the result gates are the
+        pre-registered predictions. `exit_codes` needs the distinction because a
+        failed prediction is a RESULT and a design that cannot answer is not.
+        The preflight names are lower-case words and the result names all start
+        with P and a digit, which is the discriminator.
+        """
+        first = self.name.split()[0].rstrip(":")
+        return (exit_codes.CLAIM
+                if first[:1] == "P" and first[1:].isdigit()
+                else exit_codes.VALIDITY)
+
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.ok]
+
+    def result_line(self) -> str:
+        """The ONE line the session driver may grep for this gate.
+
+        Rendered by `moe.bench.exit_codes.result_line`, so the prefix, the
+        field order and the refusals are identical in every script. The
+        `[PASS] name` block beside it is prose: a line that merely contains
+        "PASS" is not a result, which is what the driver's old free-text grep
+        was reading pre-registered expectations out of.
+        """
+        return exit_codes.result_line(self.kind, self.token, self.verdict,
+                                      self.detail.replace("\n", " ")[:160])
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.token, self.verdict)
+
 
 def preflight(plan: Plan, ridge_low: float) -> list[Gate]:
     """Refuse a design that cannot answer the question, before it is paid for.
@@ -758,7 +850,7 @@ class SettingFit:
                 and self.n_disc >= MIN_DISCRIMINATING
                 and self.n_groups >= MIN_INTERCEPT_GROUPS
                 and self.interval is not None
-                and (self.interval[1] - self.interval[0]) <= MAX_BAND_WIDTH)
+                and (self.interval[1] - self.interval[0]) <= max_band_width())
 
     @property
     def width(self) -> float:
@@ -908,7 +1000,7 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
         recording_tile_config,
         vllm_override_active,
     )
-    from moe.bench.timing import ClockState, clock_drift, time_eager
+    from moe.bench.timing import ClockState, clock_drift, time_kernel
     if not torch.cuda.is_available():
         raise CannotRunHere("no CUDA device; --run needs the pod")
     override_config, where = find_override_config()
@@ -994,9 +1086,18 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                             max_diff = float((out.float() - reference.float())
                                              .abs().max().item())
                         del out
-                        timing = time_eager(call, warmup=args.warmup,
-                                            trials=args.trials,
-                                            l2_flush=args.l2_flush)
+                        # ONE INSTRUMENT (A7). This was `time_eager`, which
+                        # is queue-deep and flushes but takes a warmup as a
+                        # CALL COUNT and reads no clock under load: cells timed
+                        # here at `--warmup 10` were compared with a roof warmed
+                        # for hundreds of milliseconds, and the only clock
+                        # evidence was the two idle-instant samples `clock_drift`
+                        # takes, which the audit showed detect whether the START
+                        # sample caught the idle boost rather than throttling.
+                        measured = time_kernel(
+                            call, warmup_ms=args.warmup,
+                            target_ms=args.cell_budget_ms,
+                            trials=args.trials, l2_flush=args.l2_flush)
                 except Exception as exc:  # noqa: BLE001 - one cell must not end the run
                     record = _record(cell, group_m, pass_index, plan, math.nan,
                                      error=f"{type(exc).__name__}: {exc}")
@@ -1008,9 +1109,23 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                 drift, throttled = clock_drift(before, after)
                 seen = capture.calls[0].config if capture.calls else None
                 record = _record(
-                    cell, group_m, pass_index, plan, timing.ms_p50,
-                    ms_std=timing.ms_std, jitter=timing.jitter_p90_over_p50,
-                    samples=timing.samples, l2_flush=timing.l2_flush,
+                    cell, group_m, pass_index, plan, measured.ms_p50,
+                    ms_std=measured.ms_std,
+                    jitter=(measured.ms_p90 / measured.ms_p50
+                            if measured.ms_p50 else None),
+                    samples=measured.samples, l2_flush=measured.l2_flush,
+                    # The state the cell ran in, from `KernelTiming`. The two
+                    # clock flags are tri-state and BOTH have to be read: the
+                    # `clock_drift_pct`/`throttled` pair beside them is the old
+                    # idle-instant measurement, kept so a resumed jsonl still
+                    # parses and so the two can be compared on the next pod.
+                    instrument=measured.instrument,
+                    warmup_ms=measured.warmup_ms, iters=measured.iters,
+                    trials=measured.trials,
+                    sm_clock_load_mhz=measured.sm_clock_load_mhz,
+                    clock_level_ok=measured.clock_level_ok,
+                    clock_drift_ok=measured.clock_drift_ok,
+                    host_bound=measured.host_bound,
                     clock_drift_pct=drift, throttled=throttled,
                     override_active=bool(observed_override),
                     observed_config=seen,
@@ -1186,24 +1301,26 @@ class Report:
         path.write_text("\n".join(self.lines) + "\n")
 
 
-def estimated_seconds(plan: Plan, warmup: int, trials: int,
+def estimated_seconds(plan: Plan, warmup: float, trials: int,
                       target_ms: float = 200.0) -> float:
     """Rough wall clock for the whole sweep, from the byte model. NOT a promise.
 
     Printed because this runs on a metered box and "how long is this" should not
-    require starting it. `time_eager` calibrates its iteration count so that one
-    trial is about `target_ms` of kernel, so the timed part is nearly constant
-    per cell and the warmup is what scales with the cell's own time.
+    require starting it. `time_kernel` sizes its iteration count so one trial is
+    about `target_ms` of kernel, so the timed part is nearly constant per cell.
+
+    THE WARMUP TERM IS NOW CONSTANT, and it is the units change that made it so:
+    `warmup` is milliseconds of delivered load rather than a call count, so it
+    costs the same wall clock at every cell instead of scaling with the cell's
+    own time. The old term (`warmup * ms`) priced a call count and is what a
+    reader comparing this estimate against an old ARMS.tsv will find changed.
     """
-    per_cell = 0.0
-    for cell in plan.cells:
-        ms = cell.compulsory_bytes * (1.0 + 0.558 * cell.x) / NOMINAL_BANDWIDTH_BYTES_S * 1e3
-        per_cell += len(plan.group_m) * (trials * target_ms + warmup * ms) / 1e3
-    return per_cell * plan.passes
+    per_setting = (trials * target_ms + warmup) / 1e3
+    return len(plan.cells) * len(plan.group_m) * per_setting * plan.passes
 
 
 def report_plan(say, plan: Plan, gates: list[Gate], ridge: tuple[float, float],
-                warmup: int = 10, trials: int = 3) -> None:
+                warmup: float = 300.0, trials: int = 3) -> None:
     say("## the design")
     say()
     say(f"model {plan.model}  dtype {plan.dtype}  BLOCK_SIZE_M {plan.block_m} FORCED")
@@ -1280,6 +1397,7 @@ def report_plan(say, plan: Plan, gates: list[Gate], ridge: tuple[float, float],
     say("### preflight")
     say()
     for gate in gates:
+        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
 
@@ -1288,8 +1406,29 @@ def report_power(say, AR, plan: Plan, draws: int, seed: int) -> None:
     say()
     say("## can this design see the effect at all")
     say()
-    say("Planted alpha, this design's own x values, the same estimator, "
-        f"{POWER_NOISE:.1%} timing noise.")
+    say("Planted alpha, this design's own x values, the same estimator, and a "
+        "timing noise")
+    say(f"MEASURED rather than assumed: {POWER_NOISE:.2%} is the median "
+        f"`timing_spread_median` over the 26")
+    say(f"published reports and {POWER_NOISE_MAX:.2%} is the worst of them. "
+        "This line used to assume")
+    say("0.5%, which sits below the whole measured range.")
+    say()
+    say("MDE. Both ends are priced, because the answer differs between them "
+        "and one number")
+    say("would hide which:")
+    for label, noise in (("median", POWER_NOISE), ("worst", POWER_NOISE_MAX)):
+        got = power_band(AR, plan, 0.558, noise, draws, seed)
+        if got is None:
+            say(f"  at the {label:<6} spread {noise:.2%}: no band; the design "
+                "does not identify alpha at all")
+            continue
+        width = got[1] - got[0]
+        say(f"  at the {label:<6} spread {noise:.2%}: band width {width:.3f}"
+            + (f" <= the {PUBLISHED_GROUP_M_EFFECT:.3f} effect, RESOLVED"
+               if width <= PUBLISHED_GROUP_M_EFFECT
+               else f" > the {PUBLISHED_GROUP_M_EFFECT:.3f} effect, "
+                    "CANNOT RESOLVE IT"))
     say()
     full = power_band(AR, plan, 0.558, POWER_NOISE, draws, seed)
     say(f"  whole ladder ({len(plan.tokens)} token counts): "
@@ -1312,8 +1451,9 @@ def report_power(say, AR, plan: Plan, draws: int, seed: int) -> None:
     if full:
         width = full[1] - full[0]
         ok = width <= PUBLISHED_GROUP_M_EFFECT
-        say(f"  [{'PASS' if ok else 'FAIL'}] the band ({width:.3f}) is at most the "
-            f"published GROUP_SIZE_M effect")
+        say(f"  [{'PASS' if ok else 'FAIL'}] at the MEDIAN measured spread, the "
+            f"band ({width:.3f}) is at most the")
+        say("          published GROUP_SIZE_M effect")
         say(f"          ({PUBLISHED_GROUP_M_EFFECT:.3f}, 0.570 at g=1 against 0.488 "
             f"at g=16). A wider band can still")
         say("          resolve a LARGER effect, which is what a forced sweep expects "
@@ -1338,7 +1478,10 @@ def report_fits(say, fits: list[SettingFit]) -> None:
     say("A setting is IDENTIFIED when it has at least "
         f"{MIN_DISCRIMINATING} discriminating rows,")
     say(f"{MIN_INTERCEPT_GROUPS} intercepts and a band no wider than "
-        f"{MAX_BAND_WIDTH}. Residual RMS is model")
+        f"{max_band_width():.3f} -- {BAND_WIDTH_OVER_EFFECT:g}x the "
+        f"{PUBLISHED_GROUP_M_EFFECT:.3f} effect it")
+    say("has to resolve, where it used to be an absolute 0.15, i.e. 1.8x that "
+        "effect. Residual RMS is model")
     say("adequacy in log units, not sampling error: if it is far above the "
         "timing")
     say("repeatability the bands are optimistic and only the ORDER of the "
@@ -1498,6 +1641,7 @@ def verdict(say, gates: list[Gate]) -> int:
     say("## gates")
     say()
     for gate in gates:
+        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
     say()
@@ -1548,6 +1692,64 @@ def git_head() -> str:
     return ""
 
 
+#: The card label a run that touches no GPU carries. `--synthetic` generates its
+#: rows from a stated law and `--replay` re-reports a finished directory, so
+#: neither has a card, and `provenance.run_id` refuses an id without one. A name
+#: no `nvidia-smi` can produce, so it can never be read as a real card.
+NO_CARD = "no-card-nothing-measured"
+
+
+def resolve_card(args) -> str:
+    """The card this run is about, or `NO_CARD` when there is not one.
+
+    `--card`, else the live device, else `NO_CARD`. The measuring path
+    (`--run`) needs a real one and `CannotRunHere` already refuses without a
+    GPU, so `NO_CARD` reaches the id only on the two paths that measure nothing.
+    """
+    if getattr(args, "card", None):
+        return str(args.card)
+    with contextlib.suppress(Exception):
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    return NO_CARD
+
+
+def default_run_id(args, card: str, plan: Plan) -> str:
+    """The output directory's name: card first, then every knob that moves a row.
+
+    THE FOUR OMISSIONS (A5/P5), all of them live before 2026-09-02:
+
+      * THE CARD. It is not swept by this script, it is swept by the operator
+        moving to another pod, and `results_root()` prefers `$MOE_RESULTS_DIR`
+        then `/workspace/results`, a network volume the runbook uses BECAUSE it
+        outlives the pod. Two cards therefore derived one directory, and the
+        resume key is `r["id"]`, which carries no device: the second card would
+        read the first's `cells.jsonl`, find every measurement present, spend no
+        GPU time, and report the first card's timings under its own heading.
+        The sibling sweep has the proof in the repo -- one report filename under
+        both `2026-09-01-nvidia_h200-cross-card-s3` and
+        `2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`.
+      * `--warmup`, `--trials` and `--no-l2-flush`. Each sets the measured
+        milliseconds of every row. The flush one is the sharpest here: this
+        experiment is ABOUT a cache claim, so a warm-L2 run and a flushed run
+        are different experiments, and they shared a directory.
+
+    `plan.fingerprint` still carries the design (model, dtype, block_m, tokens,
+    group_m ladder, routings, seeds, passes, fixed tile), so a change to any of
+    those still lands elsewhere; it is passed through rather than re-listed, so
+    the two cannot drift. `--bootstrap` and `--seed` stay OUT: they re-analyse a
+    set of measurements rather than change one, and two analyses of one sweep
+    belong in one directory.
+    """
+    return PV.run_id(card=card, **{
+        "1model": plan.model, "2bm": plan.block_m,
+        "3plan": plan.fingerprint, "4wm": args.warmup,
+        "5tr": args.trials, "6flush": bool(args.l2_flush)})
+
+
 def bandwidth_for(gpu_name: str) -> tuple[float, str]:
     """The card's measured read ceiling, or the nominal one, and which it was.
 
@@ -1588,11 +1790,26 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--fresh", action="store_true",
                         help="ignore any cells already on disk and start over")
-    parser.add_argument("--warmup", type=int, default=10)
+    parser.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                        dest="warmup", metavar="MS",
+                        help="MILLISECONDS of delivered GPU load to warm up "
+                             "for, not a call count. UNITS CHANGED 2026-09-02: "
+                             "this sweep's cells span 16 to 448 tokens, so a "
+                             "fixed count of 10 calls delivered two orders of "
+                             "magnitude of different warmup across the grid "
+                             "whose LEVELS the fit compares")
+    parser.add_argument("--cell-budget-ms", type=float, default=200.0,
+                        help="target duration of ONE trial; time_kernel derives "
+                             "the iteration count from it")
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--no-l2-flush", dest="l2_flush", action="store_false",
                         help="time with L2 warm; the default flushes, because a "
                              "swizzle is a cache claim")
+    parser.add_argument("--card", default=None,
+                        help="the card this run measures, as nvidia-smi names "
+                             "it. Defaults to the live device; --synthetic and "
+                             "--replay touch no GPU and are labelled "
+                             f"{NO_CARD!r}")
     parser.add_argument("--max-minutes", type=float, default=0.0)
     parser.add_argument("--bootstrap", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
@@ -1617,12 +1834,24 @@ def main(argv: list[str] | None = None) -> int:
     # resumes from, and a suffix in the path is a stronger guarantee of that
     # than a field inside the records.
     suffix = f"-synthetic-{args.synthetic}" if args.synthetic else ""
+    card = resolve_card(args)
     out_dir = args.replay or args.out or (
         results_root() / "group_m_alpha"
-        / f"{plan.model}-bm{plan.block_m}-{plan.fingerprint}{suffix}")
+        / f"{default_run_id(args, card, plan)}{suffix}")
+    # PROVENANCE, built once and written into every artefact this run leaves.
+    # None of the ten gaps-session scripts wrote a commit, a card or an
+    # instrument, so not one of the 26 published reports can be attributed to a
+    # code version (A5). `instrument` is the string `time_kernel` stamps on
+    # every row it produces, so a reader can tell at a glance which apparatus
+    # made a number.
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS,
+                               warmup_ms=args.warmup,
+                               target_ms=args.cell_budget_ms)
+
     say = Report()
     say(f"# GROUP_SIZE_M sweep: is alpha a scalar?   ({git_head() or 'no git'})")
     say()
+    say(f"card: {card}   instrument: {timing.TIMING_BASIS}")
     say(f"output directory: {out_dir}")
     say("Everything below is written there as report.md, beside plan.json and "
         "cells.jsonl.")
@@ -1641,7 +1870,7 @@ def main(argv: list[str] | None = None) -> int:
         say()
         say("VERDICT: the design is refused before spending anything. Fix the "
             "failed preflight gate above.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 1
 
     records: list[dict] = []
@@ -1665,12 +1894,16 @@ def main(argv: list[str] | None = None) -> int:
         say()
         say(f"## measuring: {plan.n_measurements - len(done)} timings to do, "
             f"{len(done)} already on disk")
-        (out_dir / "plan.json").write_text(json.dumps(
+        (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
             {"fingerprint": plan.fingerprint, "argv": sys.argv[1:],
-             "git": git_head(), "model": plan.model, "block_m": plan.block_m,
+             "git": git_head(), "card": card, "run_id": out_dir.name,
+             "model": plan.model, "block_m": plan.block_m,
              "tokens": list(plan.tokens), "group_m": list(plan.group_m),
              "routings": list(plan.routings), "seeds": plan.seeds,
-             "passes": plan.passes, "fixed_tile": plan.fixed_tile}, indent=2))
+             "passes": plan.passes, "fixed_tile": plan.fixed_tile,
+             "warmup_ms": args.warmup, "cell_budget_ms": args.cell_budget_ms,
+             "trials": args.trials, "l2_flush": bool(args.l2_flush)}),
+            indent=2))
         try:
             fresh, meta = measure(plan, args, out_dir, done)
         except CannotRunHere as exc:
@@ -1679,7 +1912,7 @@ def main(argv: list[str] | None = None) -> int:
             say("The plan and the preflight above are still valid and cost "
                 "nothing; re-run with")
             say("--run on the pod, or --synthetic to exercise the gates.")
-            _save(out_dir, say)
+            _save(out_dir, say, prov)
             return 3
         except KeyboardInterrupt:
             say()
@@ -1692,14 +1925,14 @@ def main(argv: list[str] | None = None) -> int:
         say("Nothing was measured. Add --run on the pod, --synthetic to "
             "exercise the gates,")
         say("or --replay <dir> to re-report a finished run.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 0
 
-    return _analyse(say, AR, plan, records, meta, args, out_dir)
+    return _analyse(say, AR, plan, records, meta, args, out_dir, prov)
 
 
 def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
-             out_dir: Path) -> int:
+             out_dir: Path, prov=None) -> int:
     known = {c.key for c in plan.cells}
     timed = [r for r in records if r.get("ms_p50")]
     # A REPLAY OF SYNTHETIC ROWS MUST NOT READ AS A MEASUREMENT. `--replay` does
@@ -1728,7 +1961,7 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
     if not timed:
         say()
         say("VERDICT: NOT TESTABLE. Nothing was timed.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 4
     throttled = [r for r in timed if r.get("throttled")]
     if throttled:
@@ -1776,14 +2009,21 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
     gates = result_gates(fits, multi, control, knee, (min(tpe), max(tpe)))
     gates.insert(0, swizzle_integrity_gate(timed))
     code = verdict(say, gates)
-    _save(out_dir, say)
+    _save(out_dir, say, prov)
     return code
 
 
-def _save(out_dir: Path, say: Report) -> None:
+def _save(out_dir: Path, say: Report, prov=None) -> None:
     with contextlib.suppress(OSError):
         out_dir.mkdir(parents=True, exist_ok=True)
         say.save(out_dir / "report.md")
+        if prov is not None:
+            # Beside the markdown, not inside it: the report is prose a human
+            # reads and the block is fields a script reads, and a run whose
+            # report.md was hand-edited must still carry an unedited record of
+            # the commit, the card and the instrument.
+            (out_dir / "provenance.json").write_text(
+                json.dumps(prov.stamp({"run_id": out_dir.name}), indent=2))
         print()
         print(f"[group_m] report written to {out_dir / 'report.md'}")
         print(f"[group_m] measurements at  {out_dir / 'cells.jsonl'}")

@@ -47,19 +47,43 @@ Routing is uniform and T is small on purpose: max rows per expert stays far belo
 16, so every expert is one tile at every setting and weight traffic is identical
 across the sweep. Without that the hot expert spills and traffic stops being
 flat, which is the objection raised in GPU MODE against the original design.
+
+THE APPARATUS, and what it replaced on 2026-09-02. Every cell is timed by
+`moe.bench.timing.time_kernel` under `moe.bench.timing.TIMING_BASIS`: queue-deep,
+one synchronise per trial, L2 flushed by default, the SM clock sampled WHILE the
+trials run. This file used to carry a verbatim copy of
+`block_m_crossing_sweep.time_call` -- events created inside the loop, a
+synchronise after every iteration, no flush, no clock -- which is one of the six
+copies the audit found (A7) and which exposes ~0.18 ms of host enqueue per
+fused_experts call on the H200 pod. That prefix is roughly constant across the
+tile settings compared here, so it did not reverse this experiment's answer; it
+did make "flat" mean flat-including-a-host-prefix, which is not the claim.
+
+The prediction above is now a scored GATE rather than a paragraph: C1 asks
+whether any tile beats the first by more than the noise band, and V1 asks
+whether the run measured enough distinct settings to have been able to say. Both
+print one `RESULT:` line, the exit code comes from `moe.bench.exit_codes` over
+the same gates, and `--dry-run` prints the design's MDE against the measured
+timing spread before any GPU is rented.
 """
 from __future__ import annotations
 
 import argparse
+import csv
+import json
+import math
 import os
 import statistics
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch  # noqa: E402
 
+from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.reference.torch_ref import make_inputs  # noqa: E402
 from moe.routing.distributions import sample_topk_ids  # noqa: E402
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec  # noqa: E402
@@ -167,39 +191,370 @@ def _make_call(fused_experts, x, weights, w, ids, kw):
     return call
 
 
-def time_call(fn, warmup: int, iters: int) -> tuple[float, float]:
-    """Median and stdev milliseconds. No L2 flush: the comparison is between
-    tile settings on identical data, and adding a flush adds its own variance."""
-    for _ in range(warmup):
-        fn()
-    torch.cuda.synchronize()
-    out = []
-    for _ in range(iters):
-        s, e = (torch.cuda.Event(enable_timing=True) for _ in range(2))
-        s.record()
-        fn()
-        e.record()
-        torch.cuda.synchronize()
-        out.append(s.elapsed_time(e))
-    return statistics.median(out), statistics.pstdev(out)
+#: The timing spread this design is sized against, as a fraction of one cell's
+#: time. MEASURED, not assumed: the median and the maximum of
+#: `timing_spread_median` over the 26 published `*.report.json` files under
+#: `results/published`, which is every arm in this repository that records one
+#: (min 0.0039, median 0.0077, max 0.0182 on 2026-09-02).
+MEASURED_SPREAD_MEDIAN = 0.0077
+MEASURED_SPREAD_MAX = 0.0182
+
+#: Two-sided 5% at 80% power, the convention `replicate_noise_floor` uses for
+#: every MDE it prints.
+MDE_LEVEL = 0.05
+MDE_POWER = 0.80
+
+#: C1's band. A tile counts as FASTER than the reference only when it beats it
+#: by more than this fraction. Set to the MDE this design has at the worst
+#: measured spread rather than to a round number, so the gate cannot claim to
+#: have resolved something smaller than the box can show; `render_mde` prints
+#: the arithmetic and `--dry-run` prints it before anything is rented.
+def improvement_band(trials: int) -> float:
+    """The smallest speedup this design can call a speedup.
+
+    One p50 per setting, compared as a ratio against the first setting, so the
+    quantity that has to clear the noise is a difference of two log times and a
+    ratio inherits both spreads: hence the sqrt(2). Sigma is imported from the
+    published corpus rather than estimated inside the run, which makes this a
+    known-variance z test -- the only form evaluable at one measurement per
+    setting, and the stricter of the two available.
+    """
+    return mde_of_ratio(MEASURED_SPREAD_MAX, max(1, trials))
 
 
-def main() -> int:
+def mde_of_ratio(spread: float, reps: int) -> float:
+    """Smallest ratio-versus-the-first-tile this design can resolve."""
+    if reps < 1:
+        raise ValueError(f"an MDE needs at least one repeat, got {reps}")
+    if spread <= 0:
+        raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    normal = statistics.NormalDist()
+    z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
+    return z * spread * math.sqrt(2.0 / reps)
+
+
+#: The columns `timing.KernelTiming` contributes to every measured row.
+TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
+                      "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
+                      "l2_flush", "host_bound")
+
+CSV_COLUMNS = ("model", "num_tokens", "block_size_m", "active_experts",
+               "max_rows_on_one_expert", "ms_p50", "ms_p90", "ms_min",
+               "ms_stdev", "ratio_vs_first", "isa_note", "error",
+               *TIMING_CSV_COLUMNS,
+               *PV.Provenance().as_columns())
+
+
+def _flag(value: bool | None) -> str:
+    """A tri-state flag as a CSV cell: "1", "0", or empty for NOT DETERMINED."""
+    return "" if value is None else str(int(value))
+
+
+def timing_columns(t) -> dict:
+    """The `KernelTiming` fields that have to reach `cells.csv`.
+
+    Columns rather than a note, because the question a reader asks of a flat
+    curve is "was every point at the same clock", and a note cannot be filtered.
+    None stays None: an empty cell means NOT DETERMINED, never False.
+    """
+    return {"instrument": t.instrument, "warmup_ms": f"{t.warmup_ms:.1f}",
+            "iters": t.iters, "trials": t.trials,
+            "sm_clock_load_mhz": ("" if t.sm_clock_load_mhz is None
+                                  else f"{t.sm_clock_load_mhz:.0f}"),
+            "clock_level_ok": _flag(t.clock_level_ok),
+            "clock_drift_ok": _flag(t.clock_drift_ok),
+            "l2_flush": _flag(t.l2_flush),
+            "host_bound": _flag(t.host_bound)}
+
+
+@dataclass(frozen=True)
+class Gate:
+    """One pre-registered prediction and the number that settled it.
+
+    UNKNOWN is never printed as a pass: a gate that could not be evaluated has
+    not passed, and on a VALIDITY gate that means the page is not quotable. The
+    exit code comes from `exit_codes.classify` over these, so the log and the
+    code cannot disagree.
+    """
+
+    name: str
+    kind: str
+    prediction: str
+    rule: str
+    verdict: str
+    observed: str
+
+    def result_line(self) -> str:
+        return exit_codes.result_line(self.kind, self.name.split()[0],
+                                      self.verdict, self.observed[:160])
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.name.split()[0], self.verdict)
+
+    def render(self, with_result: bool = True) -> str:
+        out = [self.result_line()] if with_result else []
+        out += [f"[{self.verdict:7s}] {self.kind:8s} {self.name}  "
+                f"{self.prediction}",
+                f"                    gate: {self.rule}",
+                f"                    saw:  {self.observed}"]
+        return "\n".join(out)
+
+
+def build_gates(rows: list[dict], band: float) -> list[Gate]:
+    """V1 then C1, over the rows that actually produced a time.
+
+    V1 IS THE NON-VACUITY GATE and it is not decoration. A sweep in which every
+    setting but one failed to compile would print a perfectly flat curve, and a
+    flat curve is what this experiment reads as confirmation. Two settings are
+    the arithmetic minimum for a comparison, so fewer is UNKNOWN rather than a
+    pass, and a run in that state cannot reach DONE.
+    """
+    timed = [r for r in rows if r.get("ms_p50")]
+    gates = [Gate(
+        "V1 comparable", exit_codes.VALIDITY,
+        "at least two tile settings produced a time to compare",
+        "timed settings >= 2",
+        exit_codes.PASS if len(timed) >= 2 else exit_codes.FAIL,
+        f"{len(timed)} of {len(rows)} planned settings produced a time"
+        + (f"; failures: {[r['block_size_m'] for r in rows if r.get('error')]}"
+           if any(r.get('error') for r in rows) else ""))]
+
+    if len(timed) < 2:
+        gates.append(Gate(
+            "C1 flat", exit_codes.CLAIM,
+            "no tile setting beats the smallest by more than the noise band",
+            f"min(ratio vs first) > 1 - {band:.3f}", exit_codes.UNKNOWN,
+            "fewer than two settings were timed, so nothing was compared"))
+        return gates
+
+    best = min(timed, key=lambda r: r["ratio_vs_first"])
+    improved = best["ratio_vs_first"] < 1.0 - band
+    gates.append(Gate(
+        "C1 flat", exit_codes.CLAIM,
+        "no tile setting beats the smallest by more than the noise band",
+        f"min(ratio vs first) > 1 - {band:.3f}, the MDE at the worst measured "
+        f"timing spread",
+        exit_codes.FAIL if improved else exit_codes.PASS,
+        f"best is BLOCK_SIZE_M={best['block_size_m']} at "
+        f"{best['ratio_vs_first']:.3f}x the first setting"
+        + (" -- an improvement the thesis does not allow"
+           if improved else " -- inside the band")))
+    return gates
+
+
+def render_mde(trials: int, spreads=None) -> str:
+    """What this design can see, printed BEFORE the box is rented.
+
+    B14: no arm in this study stated a minimum detectable effect, so C1 could
+    "confirm" a flat curve without anyone knowing how big a step it could have
+    seen. `spreads` overrides the measured pair, which is how the
+    CANNOT-RESOLVE branch is planted in the tests.
+    """
+    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
+                          ("worst", MEASURED_SPREAD_MAX))
+    lines = ["## What this design can see (MDE)", "",
+             "Effect under test: a speedup at BLOCK_SIZE_M >= 64, which would "
+             "refute the thesis.",
+             "Noise assumption: per-cell timing spread, MEASURED over the 26 "
+             f"published reports; median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+             f"{MEASURED_SPREAD_MAX:.2%}.",
+             f"Design: one time_kernel p50 per setting over {trials} "
+             "queue-deep trials, compared as a ratio against the first.", ""]
+    for label, spread in spreads:
+        mde = mde_of_ratio(spread, trials)
+        lines.append(f"  at the {label:<7} spread {spread:.2%}:  MDE "
+                     f"{mde:.3f}"
+                     + ("   a 1% step would be INVISIBLE" if mde > 0.01
+                        else "   resolves a 1% step"))
+    lines += ["",
+              "C1's band is the WORST-spread number above. A flat curve at a "
+              "band of 0.05 says",
+              "less than a flat curve at a band of 0.01, and the band is "
+              "printed beside the verdict."]
+    return "\n".join(lines)
+
+
+def results_root() -> Path:
+    """`$MOE_RESULTS_DIR`, else the network volume, else the repo.
+
+    The same order `scripts/run_all.sh` resolves it in. A pod's container disk
+    dies with the pod and the network volume does not, so a results path that
+    defaults to the checkout is a results path that defaults to being lost.
+    """
+    env = os.environ.get("MOE_RESULTS_DIR")
+    if env:
+        return Path(env)
+    workspace = Path(os.environ.get("WORKSPACE", "/workspace"))
+    if workspace.is_dir():
+        return workspace / "results"
+    return Path(__file__).resolve().parents[1] / "results"
+
+
+class NoCardToLabel(ValueError):
+    """No card could be named, and none will be invented.
+
+    The run id, the output directory and every row carry a card. There is no
+    default: a laptop run labelled `NVIDIA H200` looks exactly like a pod run
+    in `ls` and in the CSV, and this script's whole answer is a per-card claim
+    about which MMA instruction the tile reaches.
+    """
+
+
+def resolve_card(args) -> str:
+    """`--card`, else the live device, else refuse.
+
+    Refusing is cheap here: this script cannot measure anything without a GPU
+    anyway, and `--dry-run` is the mode that runs off one. What the refusal
+    prevents is the third state -- a machine that has a GPU whose name could
+    not be read -- producing rows attributed to nothing.
+    """
+    if args.card:
+        return str(args.card)
+    if torch.cuda.is_available():
+        name = torch.cuda.get_device_name(torch.cuda.current_device())
+        if name:
+            return str(name)
+    raise NoCardToLabel(
+        "no --card and no readable CUDA device name. Pass --card as nvidia-smi "
+        "spells it; the run id, the output directory and every row are named "
+        "after it, and a wrong label is worse than no run.")
+
+
+def default_run_id(args, card: str) -> str:
+    """Derived from EVERY swept and device-dependent knob, card first.
+
+    A run id that omits a knob is how two settings come to share a directory
+    and the second silently reports the first's numbers: the sibling sweep lost
+    a whole arm to one that omitted GROUP_SIZE_M. The card is in it because it
+    is swept by the operator moving to another pod while `$MOE_RESULTS_DIR` is
+    a network volume that outlives the pod on purpose. The four timing knobs
+    are in it because each sets the measured milliseconds of every row.
+
+    `--dump-ptx` is NOT in the key: it adds a column to the report and does not
+    change a time, so two runs that differ only there belong together.
+
+    THE KEYS ARE NUMBERED because `run_id` renders them sorted into a name
+    capped at 96 characters and truncates the tail. `FIXED` is five knobs whose
+    rendered value is longer than everything else put together, and it has no
+    flag behind it, so it sorts LAST: it stays in the hash, where a change to
+    the constants sends the run to a new directory, and it is the first thing
+    the visible name gives up.
+    """
+    return PV.run_id(card=card, **{
+        "1model": args.model,
+        "2tok": tuple(int(v) for v in args.tokens.split(",")),
+        "3tile": tuple(int(v) for v in args.tiles.split(",")),
+        "4seed": args.seed, "5it": args.iters, "6wm": args.warmup,
+        "7bd": args.cell_budget_ms, "8tr": args.trials,
+        "9flush": not args.no_l2_flush, "zfixed": FIXED})
+
+
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default="deepseek-v3", choices=sorted(MODEL_CONFIGS))
     ap.add_argument("--tokens", default="16,64,256")
     ap.add_argument("--tiles", default="16,32,64,128")
-    ap.add_argument("--iters", type=int, default=50)
-    ap.add_argument("--warmup", type=int, default=20)
+    ap.add_argument("--iters", type=int, default=50,
+                    help="RETIRED as a timing knob on 2026-09-02 and kept in "
+                         "the run id. moe.bench.timing.time_kernel sizes the "
+                         "iteration count from --cell-budget-ms and the "
+                         "warmup's own queue-deep per-call time, which is the "
+                         "only sizing that holds a trial to a duration")
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. UNITS CHANGED 2026-09-02: the tile "
+                         "settings compared here differ in occupancy, so they "
+                         "reach the clock governor's operating point at "
+                         "different call counts, and a fixed count warms them "
+                         "unequally")
+    ap.add_argument("--cell-budget-ms", type=float, default=200.0,
+                    help="target duration of ONE trial")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per setting")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="time with L2 warm. The default FLUSHES, the opposite "
+                         "of what this script did before 2026-09-02. The old "
+                         "comment argued a flush 'adds its own variance', which "
+                         "is true and is not the point: the roof and every "
+                         "other arm in this study are measured flushed, and an "
+                         "unflushed curve cannot be read against them")
+    ap.add_argument("--card", default=None,
+                    help="the card this run is for, as nvidia-smi names it. "
+                         "Defaults to the live device; there is no static "
+                         "default")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out-dir", type=Path, default=None,
+                    help=f"defaults to {results_root()}/tile_sweep")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan, the MDE and the cost, measure nothing")
     ap.add_argument("--dump-ptx", type=Path, default=None,
                     help="dump and count the emitted ISA per tile setting, so "
                          "the wgmma claim is verified rather than labelled")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    tiles = [int(v) for v in args.tiles.split(",")]
+    tokens = [int(v) for v in args.tokens.split(",")]
+
+    try:
+        card = resolve_card(args)
+    except NoCardToLabel as exc:
+        print("\n".join(["REFUSED. Nothing was planned and nothing was measured.",
+                         f"  NoCardToLabel: {exc}"]))
+        return exit_codes.REFUSED
+
+    run_id = default_run_id(args, card)
+    out_dir = (args.out_dir or (results_root() / "tile_sweep")) / run_id
+    csv_path = out_dir / "cells.csv"
+    report_path = out_dir / "report.json"
+    band = improvement_band(args.trials)
+
+    cfg = MODEL_CONFIGS[args.model]
+    print("# Does forcing a bigger tile buy anything?")
+    print(f"run id  {run_id}")
+    print(f"card    {card}   instrument {timing.TIMING_BASIS}")
+    print(f"model   {args.model}  E={cfg.num_experts} k={cfg.top_k}  "
+          f"fixed {FIXED}")
+    print(f"timing  {args.trials} queue-deep trials sized to "
+          f"{args.cell_budget_ms:.0f} ms, after {args.warmup:.0f} ms of warmup, "
+          f"L2 " + ("flushed" if not args.no_l2_flush else "WARM"))
+    print(f"writes  {out_dir}")
+    print()
+    print(render_mde(args.trials))
+    print()
+
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS,
+                               warmup_ms=args.warmup,
+                               target_ms=args.cell_budget_ms)
+
+    if args.dry_run:
+        print("=" * 72)
+        print("NOT A RESULT. Nothing was measured.")
+        print("  reason: --dry-run was given")
+        print(f"  {len(tokens)} token counts x {len(tiles)} tile settings = "
+              f"{len(tokens) * len(tiles)} cells, each "
+              f"{args.trials} x {args.cell_budget_ms:.0f} ms of trials plus "
+              f"{args.warmup:.0f} ms of warmup;")
+        print(f"  {len(tiles)} distinct Triton specialisations to compile.")
+        print("  NO `RESULT:` LINE IS PRINTED HERE. Nothing was measured, so "
+              "this exits REFUSED, and")
+        print("  a REFUSED log carrying result lines would let the driver "
+              "recompute DONE from them.")
+        print("=" * 72)
+        return exit_codes.REFUSED
 
     if not torch.cuda.is_available():
-        raise SystemExit("needs the GPU box")
+        print("\n".join(["=" * 72,
+                         "REFUSED. Nothing was measured.",
+                         "  reason: no CUDA device. --dry-run prints the plan, "
+                         "the MDE and the cost.",
+                         "=" * 72]))
+        return exit_codes.REFUSED
 
     # Before find_override(), which imports vLLM: Triton reads these at compile
     # time and the first compile happens on the first fused_experts call.
@@ -212,20 +567,17 @@ def main() -> int:
 
     from moe.baselines._framework_config import vllm_call_kwargs
 
-    cfg = MODEL_CONFIGS[args.model]
-    tiles = [int(v) for v in args.tiles.split(",")]
     # Across ALL token counts, not per block. Triton specialises the kernel on
-    # the tile constants, and T only sizes the grid at runtime, so each setting
+    # the tile constants and T only sizes the grid at runtime, so each setting
     # compiles exactly once and every later token block is a legitimate cache
     # hit. Resetting per block made the first row of each later block re-count
     # every file the earlier blocks had produced.
     seen_ptx: set[Path] = set()
     isa_by_tile: dict[int, str] = {}
-    print(f"override hook: {where}.override_config")
-    print(f"model {args.model}  E={cfg.num_experts} k={cfg.top_k}  "
-          f"fixed {FIXED}\n")
+    rows: list[dict] = []
+    print(f"override hook: {where}.override_config\n")
 
-    for tok in (int(v) for v in args.tokens.split(",")):
+    for tok in tokens:
         spec = BenchSpec(cfg, num_tokens=tok, dtype="bf16",
                          routing=RoutingSpec("uniform", 0.0), seed=args.seed)
         x, weights = make_inputs(spec, device="cuda")
@@ -249,13 +601,25 @@ def main() -> int:
         for bm in tiles:
             conf = dict(FIXED, BLOCK_SIZE_M=bm)
             call = _make_call(fused_experts, x, weights, w, ids, kw)
+            row = {"model": args.model, "num_tokens": tok, "block_size_m": bm,
+                   "active_experts": active, "max_rows_on_one_expert": mx,
+                   **prov.as_columns()}
             with override_config(conf):
                 try:
-                    ms, sd = time_call(call, args.warmup, args.iters)
+                    t = timing.time_kernel(
+                        call, warmup_ms=args.warmup,
+                        target_ms=args.cell_budget_ms, trials=args.trials,
+                        l2_flush=not args.no_l2_flush)
                 except Exception as exc:  # noqa: BLE001
-                    print(f"  {bm:13d} {'FAILED':>10}   {type(exc).__name__}: {exc}")
+                    row["error"] = f"{type(exc).__name__}: {exc}"[:300]
+                    rows.append(row)
+                    print(f"  {bm:13d} {'FAILED':>10}   {row['error']}")
                     continue
-            base = base if base is not None else ms
+            base = base if base is not None else t.ms_p50
+            row.update({"ms_p50": t.ms_p50, "ms_p90": t.ms_p90,
+                        "ms_min": t.ms_min, "ms_stdev": t.ms_std,
+                        "ratio_vs_first": t.ms_p50 / base, "error": "",
+                        **timing_columns(t)})
             if args.dump_ptx:
                 # Each BLOCK_SIZE_M is a distinct Triton specialisation and so a
                 # distinct cache entry, which is why files appearing after this
@@ -281,20 +645,56 @@ def main() -> int:
                 # only {2} below compute capability 9.0. Use --dump-ptx to make
                 # this column evidence.
                 note = "mma.sync (M<64)" if bm < 64 else "wgmma reachable (M>=64)"
-            print(f"  {bm:13d} {ms:10.4f} {sd:8.4f} {ms / base:8.3f}x   {note}")
+            row["isa_note"] = note
+            rows.append(row)
+            print(f"  {bm:13d} {t.ms_p50:10.4f} {t.ms_std:8.4f} "
+                  f"{row['ratio_vs_first']:8.3f}x   {note}")
+            if t.clock_level_ok is False or t.host_bound:
+                print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
         print()
 
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(CSV_COLUMNS),
+                                extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+    gates = build_gates(rows, band)
+    print("## Gates\n")
+    for gate in gates:
+        print(gate.render())
+    print()
     print("READING IT. Flat across all four confirms the thesis: neither the")
     print("padded arithmetic nor the tensor-core instruction is on the critical")
-    print("path, because the weight read is. An improvement at 64 refutes it.")
+    print("path, because the weight read is. An improvement at 64 refutes it,")
+    print(f"and 'improvement' means more than {band:.1%}, which is what this")
+    print("design can see at the worst spread the published arms recorded.")
     if args.dump_ptx:
         print(f"ISA counted per setting from {args.dump_ptx}. If wgmma stays 0 at")
         print("M>=64 then Triton is not reaching the warpgroup instruction even when")
         print("the tile allows it, which is a finding in its own right.")
     else:
         print("Re-run with --dump-ptx to verify the instruction actually changed;")
-        print("without it this asserts nothing about what was emitted, only cost.")
-    return 0
+        print("without it the note column asserts nothing about what was emitted.")
+
+    report_path.write_text(json.dumps(prov.stamp({
+        "run_id": run_id, "card": card, "model": args.model,
+        "tokens": tokens, "tiles": tiles, "fixed": FIXED,
+        "improvement_band": band,
+        "measured_spread_median": MEASURED_SPREAD_MEDIAN,
+        "measured_spread_max": MEASURED_SPREAD_MAX,
+        "cells": rows,
+        "gates": [{"name": g.name, "kind": g.kind, "verdict": g.verdict,
+                   "rule": g.rule, "observed": g.observed} for g in gates],
+    }), indent=2, default=str))
+    print(f"\ncells    {csv_path}")
+    print(f"report   {report_path}")
+
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
 
 
 if __name__ == "__main__":
