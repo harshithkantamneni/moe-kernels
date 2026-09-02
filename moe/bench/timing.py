@@ -14,15 +14,85 @@ makes explicit columns:
 Both timing modes use per-iteration CUDA events so the two are measured
 identically and remain comparable. Event overhead (a few microseconds) is
 therefore included in both, and is not subtracted.
+
+ONE INSTRUMENT, AND WHY IT HAS A NAME
+-------------------------------------
+Until 2026-09-02 this repository had two timing instruments and compared their
+outputs. The roof (`calibrate.measure_bf16_gemm` via `time_eager` below) was
+measured queue-deep: events pre-primed, L2 flushed per iteration, one
+synchronise per trial. Every ladder script carried a private `time_call` that
+created its events inside the loop, recorded the start event on a stream that
+had just been synchronised (an idle GPU, so the host's own enqueue cost sat
+inside the interval), synchronised after every iteration, never flushed, and
+read no clock. The audit that found it (AUDIT_REPORT A7) bounded the exposed
+host prefix at ~0.18 ms per fused_experts call on the H200 pod and ~0.30 ms on
+the A100 pod, a bias of 8-16% in alpha at the smallest ladder cells, different
+per card, and of the order of the cross-card effect the study registered.
+
+`time_kernel` is the one instrument now, and `TIMING_BASIS` is its name. Every
+consumer writes `TIMING_BASIS` into its rows so a reader can tell at a glance
+which apparatus produced a number, and a row without it is a row from before
+the fix. Change the string when the instrument changes in a way that moves
+numbers; never otherwise.
+
+CLOCKS ARE READ UNDER LOAD, AND FLAGGED ON LEVEL AS WELL AS DRIFT
+-----------------------------------------------------------------
+The old `clock_drift` flag compared two idle-instant samples (both taken after
+a synchronise) and fired only on a >5% DROP. On the published alpha-0558 arm it
+flagged 91% of vLLM rows above T=4096 while flagged and unflagged replicates
+in the same cell timed at ratio 0.998 with identical end clocks: it detected
+whether the START sample had caught the idle boost, not throttling. And a
+card sitting at 1500 MHz for the whole cell, with a roof measured at 1980,
+passed it with drift 0.0. `time_kernel` polls the clock from a background
+thread WHILE the trials run, reports the median as `sm_clock_load_mhz`, and
+sets two flags: LEVEL (`clock_level_ok`: the loaded clock is within
+`LEVEL_FRACTION` of the reference the roof was measured at) and DRIFT
+(`clock_drift_ok`: first and last under-load samples agree within
+`DRIFT_FRACTION`, in either direction). A rise is a defect too: it means the
+warmup did not reach the operating point, so the trials were not at one clock.
 """
 from __future__ import annotations
 
 import statistics
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import torch
+
+#: The name of the instrument `time_kernel` implements. Written into every row
+#: it produces. Bump the version suffix when a change would move a published
+#: number; the reader compares this string, not a commit hash.
+TIMING_BASIS = "queue-deep/l2-flush/clock-under-load/v2"
+
+#: LEVEL flag: the SM clock sampled under load must be at least this fraction
+#: of the reference clock (the one the roof was measured at) for the cell to
+#: be comparable with the roof. 0.95 because the H200's compute plateau moves
+#: 1455-1515 MHz across sessions of one card (calibrate.py), a 4% band, and a
+#: flag inside the band would fire on the card's own session-to-session noise.
+LEVEL_FRACTION = 0.95
+
+#: DRIFT flag: first and last under-load samples may differ by at most this
+#: fraction of the first, in EITHER direction. The same 5% `clock_drift` used,
+#: so one number means one thing here.
+DRIFT_FRACTION = 0.05
+
+#: Target duration of one warmup batch between synchronises. Short enough that
+#: warmup overshoots `warmup_ms` by at most this much, long enough that the
+#: queue stays deep: settling with a synchronise every few kernels converges to
+#: a partial-load plateau below what the real measurement induces (measured
+#: 1575 vs 1980 MHz, calibrate.settle_clocks).
+WARMUP_BATCH_MS = 25.0
+
+#: Largest warmup batch, in calls. A bound on host memory for the enqueue, not
+#: a tuning knob: a 1 us kernel reaches it at 10 ms per batch.
+WARMUP_BATCH_MAX_CALLS = 10_000
+
+#: How often the background sampler polls the clock during the trials. NVML
+#: costs tens of microseconds per read; at 50 ms a 600 ms cell yields ~12
+#: samples and the poll thread is asleep 99.9% of the time.
+CLOCK_POLL_SECONDS = 0.05
 
 #: Fallback when the device cannot be queried. Prefer flush_mb_for_device().
 DEFAULT_FLUSH_MB = 256
@@ -49,6 +119,17 @@ def flush_mb_for_device(multiple: float = 4.0, minimum_mb: int = 128) -> int:
 def require_cuda() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("no CUDA device; timing must run on the GPU box")
+
+
+class TimingRefused(RuntimeError):
+    """`time_kernel` cannot produce a measurement here and will not fake one.
+
+    Raised when CUDA is absent and the caller has not injected the fakes that
+    stand in for it (events, clock sampler, and the flusher when flushing),
+    or when an argument makes the measurement meaningless (a zero warmup). A
+    named exception so a script can tell "no GPU" apart from "the kernel
+    crashed", which both used to arrive as RuntimeError.
+    """
 
 
 # --------------------------------------------------------------------------
@@ -162,7 +243,16 @@ class ClockState:
 
 
 def clock_drift(start: ClockState, end: ClockState) -> tuple[float, bool]:
-    """Percent drop in SM clock across a cell, and whether it looks throttled."""
+    """Percent drop in SM clock across a cell, and whether it looks throttled.
+
+    THE LEGACY FLAG, kept because the driver's rows carry it. It fires only on
+    a drop, and when its two samples are taken after synchronises (as
+    `driver.py` does) it measures whether the start sample caught the idle
+    boost, not whether the cell throttled: a card at 1500 MHz for the whole
+    cell against a 1980 MHz roof passes with drift 0.0. `time_kernel` replaces
+    it with `clock_flags`, which tests LEVEL against a reference and DRIFT in
+    both directions on samples taken under load.
+    """
     if start.sm_clock_mhz <= 0:
         return 0.0, False
     drift = (start.sm_clock_mhz - end.sm_clock_mhz) / start.sm_clock_mhz * 100.0
@@ -241,6 +331,14 @@ class _EventPairs:
     lands INSIDE the measured interval. A fixed offset on both arms is not
     harmless: it biases the eager/graph RATIO toward 1, which is precisely the
     number this project would publish.
+
+    THE INJECTION SEAM. `time_kernel` takes an `events` factory with this
+    class's shape: `events(n)` returns an object with `starts[i].record()`,
+    `ends[i].record()`, `synchronize()` and `elapsed(n) -> list[float]`
+    (milliseconds per pair). Priming happens in the constructor, so "the pairs
+    were primed before the timed region" is the same statement as "the factory
+    was called before the first start record". A fake that scripts `elapsed`
+    exercises every branch of the instrument off-GPU (tests/test_timing.py).
     """
 
     def __init__(self, n: int):
@@ -248,6 +346,9 @@ class _EventPairs:
         self.ends = [torch.cuda.Event(enable_timing=True) for _ in range(n)]
         for e in (*self.starts, *self.ends):
             e.record()          # forces creation of the underlying cudaEvent
+        torch.cuda.synchronize()
+
+    def synchronize(self) -> None:
         torch.cuda.synchronize()
 
     def elapsed(self, n: int) -> list[float]:
@@ -294,20 +395,58 @@ class TimingResult:
     flush_mode: str = "read"
 
 
-def _summarise(samples: list[float], **meta) -> TimingResult:
+def _stats(samples: list[float]) -> tuple[float, float, float, float]:
+    """p50, p90, min, std of a sample list. One definition, three timers."""
     s = sorted(samples)
     n = len(s)
     p50 = statistics.median(s)
     p90 = s[min(n - 1, int(round(0.9 * (n - 1))))]
+    return p50, p90, s[0], (statistics.stdev(s) if n > 1 else 0.0)
+
+
+def _summarise(samples: list[float], **meta) -> TimingResult:
+    p50, p90, lo, std = _stats(samples)
     return TimingResult(
         ms_p50=p50,
         ms_p90=p90,
-        ms_min=s[0],
-        ms_std=statistics.stdev(s) if n > 1 else 0.0,
+        ms_min=lo,
+        ms_std=std,
         jitter_p90_over_p50=(p90 / p50) if p50 > 0 else float("inf"),
-        samples=n,
+        samples=len(samples),
         **meta,
     )
+
+
+def _timed_trials(fn: Callable[[], None], iters: int, trials: int, events,
+                  flush: Callable[[], None] | None) -> list[float]:
+    """The queue-deep loop every timer in this module runs.
+
+    Per trial: `iters` calls enqueued back to back, each bracketed by its own
+    pre-primed event pair, the flush (when there is one) enqueued BEFORE the
+    start record so it sits outside the interval, and ONE synchronise at the
+    end. The host runs ahead of the GPU for the whole trial, so a start event
+    is timestamped when the previous work finishes, not when the host got
+    round to enqueueing the kernel. That is the difference between this loop
+    and the per-iteration-synchronise `time_call` the ladders used to carry,
+    and it is worth 0.18-0.30 ms per call on a fused_experts cell.
+
+    Why per-iteration pairs rather than one pair around the trial: with the
+    flush inside a single pair its ~50 us of L2-sized reads would be inside
+    the measurement, and subtracting it back out would be a model, not a
+    measurement. One pair per call keeps the flush out by construction and
+    leaves `iters * trials` samples for the percentiles instead of `trials`.
+    """
+    samples: list[float] = []
+    for _ in range(trials):
+        for i in range(iters):
+            if flush is not None:
+                flush()
+            events.starts[i].record()
+            fn()
+            events.ends[i].record()
+        events.synchronize()
+        samples.extend(events.elapsed(iters))
+    return samples
 
 
 def time_eager(
@@ -320,7 +459,15 @@ def time_eager(
     flush_mode: str = "read",
     target_ms: float = 200.0,
 ) -> TimingResult:
-    """Per-iteration CUDA-event timing of an eagerly launched callable."""
+    """Per-iteration CUDA-event timing of an eagerly launched callable.
+
+    Runs the same `_timed_trials` loop as `time_kernel`, so the two agree on
+    the measured interval; what differs is around it. This warms up for a
+    COUNT of calls (`warmup`) and calibrates from one isolated call, and reads
+    no clock; the driver depends on those semantics and on `TimingResult`, so
+    they are unchanged. New consumers use `time_kernel`, which warms up for a
+    duration of sustained load and samples the clock during the trials.
+    """
     require_cuda()
     flusher = L2Flusher(flush_mb if l2_flush else 0, mode=flush_mode)
 
@@ -330,17 +477,7 @@ def time_eager(
 
     if iters is None:
         iters = calibrate_iters(fn, target_ms)
-    events = _EventPairs(iters)
-
-    samples: list[float] = []
-    for _ in range(trials):
-        for i in range(iters):
-            flusher.flush()
-            events.starts[i].record()
-            fn()
-            events.ends[i].record()
-        torch.cuda.synchronize()
-        samples.extend(events.elapsed(iters))
+    samples = _timed_trials(fn, iters, trials, _EventPairs(iters), flusher.flush)
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=False,
@@ -403,18 +540,270 @@ def time_graph(
 
     if iters is None:
         iters = calibrate_iters(graph.replay, target_ms)
-    events = _EventPairs(iters)
-
-    samples: list[float] = []
-    for _ in range(trials):
-        for i in range(iters):
-            flusher.flush()
-            events.starts[i].record()
-            graph.replay()
-            events.ends[i].record()
-        torch.cuda.synchronize()
-        samples.extend(events.elapsed(iters))
+    samples = _timed_trials(graph.replay, iters, trials, _EventPairs(iters),
+                            flusher.flush)
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=True,
                       flush_mb=flusher.megabytes, flush_mode=flush_mode)
+
+
+# --------------------------------------------------------------------------
+# the one instrument
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class WarmupReport:
+    """What the sustained-load warmup actually did, for the row and the tests.
+
+    `per_call_ms` is the LAST batch's mean per call, measured queue-deep with
+    the governor already responding to the load. It is what `time_kernel`
+    calibrates `iters` from: an isolated single call (what `calibrate_iters`
+    measures) includes launch latency on an idle GPU and reads a 5 us kernel
+    as 15, so an iteration count sized from it lands at a third of the target.
+    """
+
+    delivered_ms: float
+    calls: int
+    batches: int
+    per_call_ms: float
+
+
+def warm_until(fn: Callable[[], None], warmup_ms: float, events,
+               batch_ms: float = WARMUP_BATCH_MS) -> WarmupReport:
+    """Run `fn` under sustained load until `warmup_ms` of GPU time has passed.
+
+    A COUNT of warmup calls is the wrong unit, and the ladders that compared
+    cells warmed at 5 against cells warmed at 20 were comparing clock states:
+    a 1 ms kernel needs hundreds of calls before the governor reacts, a 30 ms
+    GEMM needs one. So the warmup is a duration of delivered GPU time, measured
+    with the same events the trials use. The first batch is one call, which
+    sizes the rest to about `batch_ms` each so the queue stays deep between
+    synchronises; the loop stops after the batch that carries the total past
+    `warmup_ms`, so the overshoot is bounded by one batch.
+    """
+    if warmup_ms <= 0:
+        raise TimingRefused(
+            f"warmup_ms={warmup_ms}: the instrument warms up for a duration of "
+            "sustained load and calibrates its iteration count from that load; "
+            "a zero warmup measures a cold governor and calibrates from nothing")
+    pair = events(1)
+    delivered = 0.0
+    calls = 0
+    batches = 0
+    batch = 1
+    per_call = 0.0
+    while delivered < warmup_ms:
+        pair.starts[0].record()
+        for _ in range(batch):
+            fn()
+        pair.ends[0].record()
+        pair.synchronize()
+        ms = max(pair.elapsed(1)[0], 1e-4)
+        delivered += ms
+        calls += batch
+        batches += 1
+        per_call = ms / batch
+        batch = max(1, min(WARMUP_BATCH_MAX_CALLS, int(batch_ms / per_call)))
+    return WarmupReport(delivered_ms=delivered, calls=calls, batches=batches,
+                        per_call_ms=per_call)
+
+
+def iters_for(per_call_ms: float, target_ms: float, lo: int = 10,
+              hi: int = 2000) -> int:
+    """Iterations per trial so that one trial lasts about `target_ms`."""
+    return max(lo, min(hi, int(target_ms / max(per_call_ms, 1e-4))))
+
+
+class BackgroundClockSampler:
+    """Polls the SM clock from a thread while the calling thread keeps the GPU busy.
+
+    The context-manager shape is the injection seam: `time_kernel` enters it
+    before the first trial and exits it after the last synchronise, and reads
+    `.samples` afterwards. A fake with the same shape returns a scripted trace.
+
+    The first sample is taken `poll_seconds` AFTER entering, not at entry.
+    Entry happens right after the events were primed, which ends in a
+    synchronise, and a sample at that instant is the idle-boost reading the
+    old flag was fooled by. Waiting first puts every sample inside the trials.
+    """
+
+    def __init__(self, sample: Callable[[], ClockState] = ClockState.sample,
+                 poll_seconds: float = CLOCK_POLL_SECONDS):
+        self._sample = sample
+        self._poll = poll_seconds
+        self._stop = threading.Event()
+        self._got: list[ClockState] = []
+        self._thread: threading.Thread | None = None
+        self.samples: tuple[ClockState, ...] = ()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._poll):
+            self._got.append(self._sample())
+
+    def __enter__(self) -> BackgroundClockSampler:
+        self._stop.clear()
+        self._got = []
+        self._thread = threading.Thread(target=self._run, name="clock-sampler",
+                                        daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+        self.samples = tuple(self._got)
+
+
+def clock_flags(load_mhz: float | None, start_mhz: float | None,
+                end_mhz: float | None, reference_mhz: float | None,
+                ) -> tuple[bool | None, bool | None]:
+    """LEVEL and DRIFT verdicts on under-load clock samples. Pure.
+
+    LEVEL: the loaded clock is at least `LEVEL_FRACTION` of `reference_mhz`,
+    the clock the roof was measured at. None when there is no reference or no
+    load sample: the flag is a comparison and half a comparison is not a
+    verdict.
+
+    DRIFT: first and last under-load samples agree within `DRIFT_FRACTION` of
+    the first, in either direction. A drop is throttling during the trials; a
+    rise is a warmup that did not reach the operating point. Both mean the
+    samples were not taken at one clock and the median is a blend.
+    """
+    level: bool | None
+    drift: bool | None
+    if load_mhz is None or reference_mhz is None or reference_mhz <= 0:
+        level = None
+    else:
+        level = load_mhz >= LEVEL_FRACTION * reference_mhz
+    if start_mhz is None or end_mhz is None or start_mhz <= 0:
+        drift = None
+    else:
+        drift = abs(start_mhz - end_mhz) / start_mhz <= DRIFT_FRACTION
+    return level, drift
+
+
+@dataclass(frozen=True)
+class KernelTiming:
+    """One cell's measurement under `TIMING_BASIS`, with the state it ran in.
+
+    The clock fields are Optional and None means "not determined", never
+    "zero": NVML absent, a container that forbids it, or a trial too short for
+    the poller to land a sample. `clock_note` says which. `clock_level_ok` and
+    `clock_drift_ok` are the two verdicts `clock_flags` documents; a consumer
+    that filters rows must test BOTH, since the old single drop-only flag is
+    the defect this record exists to replace.
+    """
+
+    ms_p50: float
+    ms_p90: float
+    ms_min: float
+    ms_std: float
+    iters: int
+    trials: int
+    warmup_ms: float
+    l2_flush: bool
+    sm_clock_load_mhz: float | None
+    sm_clock_start_mhz: float | None
+    sm_clock_end_mhz: float | None
+    clock_level_ok: bool | None
+    clock_drift_ok: bool | None
+    samples: int
+    warmup_calls: int
+    flush_mb: int
+    clock_samples: int
+    clock_note: str = ""
+    instrument: str = TIMING_BASIS
+
+
+def time_kernel(
+    fn: Callable[[], None],
+    *,
+    warmup_ms: float,
+    target_ms: float = 200.0,
+    trials: int = 3,
+    l2_flush: bool = True,
+    reference_clock_mhz: float | None = None,
+    clock_sampler=None,
+    events=None,
+    flusher=None,
+) -> KernelTiming:
+    """Time `fn` the one way this repository times anything it publishes.
+
+    In order: warm up under sustained load until `warmup_ms` of GPU time has
+    been delivered (`warm_until`); size `iters` so a trial lasts `target_ms`
+    from the warmup's own queue-deep per-call time; prime one event pair per
+    iteration; start the clock poller; run `trials` trials of `_timed_trials`
+    (flush before each call when `l2_flush`, one synchronise per trial); stop
+    the poller; summarise the `iters * trials` samples the way `time_eager`
+    does and the clock samples the way `clock_flags` does.
+
+    `reference_clock_mhz` is the clock the roof was measured at
+    (`calibrate.LoadedClock.median_mhz`); without it the LEVEL flag is None,
+    because a level is relative to something and this function will not
+    invent the something.
+
+    OFF-GPU. Refuses with `TimingRefused` unless every CUDA-touching part is
+    injected: `events` (a factory with `_EventPairs`'s shape), `clock_sampler`
+    (a context manager with `BackgroundClockSampler`'s shape) and, when
+    `l2_flush`, `flusher` (an object with `flush()` and `megabytes`). With all
+    of them present the full logic runs against the fakes; that is how the
+    tests plant every PASS and FAIL branch of both clock flags.
+    """
+    if trials < 1:
+        raise TimingRefused(f"trials={trials}: a measurement needs at least one trial")
+    on_gpu = torch.cuda.is_available()
+    missing = [name for name, given in (("events", events),
+                                        ("clock_sampler", clock_sampler),
+                                        ("flusher", flusher if l2_flush else True))
+               if given is None]
+    if missing and not on_gpu:
+        raise TimingRefused(
+            "no CUDA device, and no fake injected for " + ", ".join(missing)
+            + "; time_kernel measures a GPU or runs against injected fakes, it "
+            "does not invent numbers")
+    if events is None:
+        events = _EventPairs
+    if clock_sampler is None:
+        clock_sampler = BackgroundClockSampler()
+    if l2_flush and flusher is None:
+        flusher = L2Flusher(flush_mb_for_device())
+    flush = flusher.flush if l2_flush else None
+    flush_mb = int(flusher.megabytes) if l2_flush else 0
+
+    warm = warm_until(fn, warmup_ms, events)
+    iters = iters_for(warm.per_call_ms, target_ms)
+    pairs = events(iters)
+    with clock_sampler as poller:
+        samples = _timed_trials(fn, iters, trials, pairs, flush)
+    clocks = [c.sm_clock_mhz for c in poller.samples]
+    usable = [c for c in clocks if c > 0]
+
+    if usable:
+        load: float | None = float(statistics.median(usable))
+        start: float | None = float(usable[0])
+        end: float | None = float(usable[-1])
+        note = ""
+        if len(usable) < 2:
+            note = ("one usable clock sample during the trials; drift is not "
+                    "determinable from one point")
+            end = None
+        if reference_clock_mhz is None:
+            note = (note + "; " if note else "") + \
+                "no reference clock given, level not determinable"
+    else:
+        load = start = end = None
+        note = (f"no usable SM clock sample during the trials ({len(clocks)} "
+                "polled, all zero or none landed); clocks not determinable")
+    level_ok, drift_ok = clock_flags(load, start, end, reference_clock_mhz)
+
+    p50, p90, lo, std = _stats(samples)
+    return KernelTiming(
+        ms_p50=p50, ms_p90=p90, ms_min=lo, ms_std=std,
+        iters=iters, trials=trials, warmup_ms=warm.delivered_ms,
+        l2_flush=l2_flush, sm_clock_load_mhz=load, sm_clock_start_mhz=start,
+        sm_clock_end_mhz=end, clock_level_ok=level_ok, clock_drift_ok=drift_ok,
+        samples=len(samples), warmup_calls=warm.calls, flush_mb=flush_mb,
+        clock_samples=len(usable), clock_note=note,
+    )
