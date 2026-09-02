@@ -1,28 +1,28 @@
 """The one timing instrument, exercised off-GPU against fakes.
 
 `time_kernel` is the apparatus every published number is supposed to come
-from, and its two failure modes are silent: an event structure that lets host
-time into the interval, and a clock flag that passes a card running at 1500 MHz
-against a roof measured at 1980. Neither leaves a mark on the number. So every
-branch here is planted with a fake GPU whose per-call durations and clock trace
-are scripted, and the assertions are on what the instrument DID (order of
-records, count of synchronises, calls made during warmup), not only on what it
-returned.
+from, and its failure modes are silent: an event structure that lets host
+time into the interval, a callable whose host side outruns its GPU side so
+the queue drains whatever the events do, and a clock flag that passes a card
+running at 1500 MHz against a roof measured at 1980. None of them leaves a
+mark on the number. So every branch here is planted with a fake GPU whose
+per-call durations, host cost, backlog and clock trace are scripted, and the
+assertions are on what the instrument DID (order of records, count of
+synchronises, calls made during warmup, wall clocks it compared), not only on
+what it returned.
 
-The one GPU test at the bottom is the audit's acceptance case: a ~50 us kernel
-measured by `time_kernel` agrees with `time_eager` within 2%, because both run
-the same `_timed_trials` loop.
+The one GPU test at the bottom is the audit's acceptance case: a ~55 us kernel
+(8192x8192 bf16, 128 MiB in and out) measured by `time_kernel` agrees with
+`time_eager` within 2%, because both run the same `_timed_trials` loop.
 """
 import itertools
 import statistics
+import time
 
 import pytest
 import torch
 
 from moe.bench import timing as T
-
-NO_CUDA = not torch.cuda.is_available()
-
 
 # --- fakes -------------------------------------------------------------------
 
@@ -48,6 +48,9 @@ class _FakePairs:
     def synchronize(self) -> None:
         self.syncs += 1
         self.gpu.log.append(("sync", self.n))
+        if self.n > 1 and self.gpu.sync_sleep_s > 0:
+            # The GPU's backlog at the end of a trial: the host waits here.
+            time.sleep(self.gpu.sync_sleep_s)
 
     def elapsed(self, n: int) -> list[float]:
         return list(self.ms[:n])
@@ -60,11 +63,19 @@ class FakeGPU:
     from `warm_call_ms` while a one-pair (warmup) interval is open, or from
     `timed_call_ms` while a multi-pair (trial) interval is open, and adds it
     to the open interval. `events` is the factory, `flush` the flusher.
+
+    Two real-time knobs plant the host-bound branches: `host_call_s` makes
+    each `fn` call cost the host that much wall (a slow Python launcher), and
+    `sync_sleep_s` makes each trial's synchronise wait that long (the GPU
+    still working through a deep queue after the host finished).
     """
 
-    def __init__(self, warm_call_ms=1.0, timed_call_ms=1.0):
+    def __init__(self, warm_call_ms=1.0, timed_call_ms=1.0,
+                 host_call_s: float = 0.0, sync_sleep_s: float = 0.0):
         self._warm = self._iter(warm_call_ms)
         self._timed = self._iter(timed_call_ms)
+        self.host_call_s = host_call_s
+        self.sync_sleep_s = sync_sleep_s
         self.log: list = []
         self.calls = 0
         self.flushes = 0
@@ -93,6 +104,8 @@ class FakeGPU:
     def fn(self) -> None:
         self.calls += 1
         self.log.append(("fn",))
+        if self.host_call_s > 0:
+            time.sleep(self.host_call_s)
         pairs, i = self._open if self._open else (None, None)
         if pairs is None:
             return
@@ -112,9 +125,13 @@ class FakeGPU:
 class ScriptedClocks:
     """Stands in for `BackgroundClockSampler`: a scripted trace, in MHz."""
 
-    def __init__(self, gpu: FakeGPU, trace):
+    def __init__(self, gpu: FakeGPU, trace, note: str = "",
+                 poll_cost_ms: float | None = None):
         self.gpu, self.trace = gpu, list(trace)
         self.samples: tuple = ()
+        self.source = "scripted"
+        self.note = note
+        self.poll_cost_ms = poll_cost_ms
 
     def __enter__(self):
         self.gpu.log.append(("clock_on",))
@@ -170,6 +187,20 @@ def test_warmup_batches_keep_the_queue_deep():
     # 1 + 2 * 2500, give or take the float rounding of 25.0 / 0.01
     assert abs(report.calls - (1 + 2 * T.WARMUP_BATCH_MS / 0.01)) <= 2
     assert report.per_call_ms == pytest.approx(0.01)
+
+
+def test_warmup_batch_is_capped_for_a_microsecond_kernel():
+    # A 1 us kernel would need 25,000 calls per batch to reach WARMUP_BATCH_MS;
+    # the cap holds the batch at 10,000 (10 ms delivered), and the loop takes
+    # more batches instead of a larger one.
+    gpu = FakeGPU(warm_call_ms=0.001)
+    report = T.warm_until(gpu.fn, 25.0, gpu.events)
+    cap = T.WARMUP_BATCH_MAX_CALLS
+    # batches: 1 call (0.001 ms), then cap, cap, cap -> 30.001 ms >= 25
+    assert report.batches == 4
+    assert report.calls == 1 + 3 * cap
+    assert report.delivered_ms == pytest.approx(0.001 * (1 + 3 * cap))
+    assert report.delivered_ms >= 25.0
 
 
 def test_zero_warmup_is_refused_not_defaulted():
@@ -235,6 +266,66 @@ def test_clock_is_sampled_during_the_trials_not_around_them():
     assert max(warm_syncs) < on
 
 
+# --- (3b) the host-bound verdict: both branches, on real wall clocks -----------
+
+def test_host_bound_when_the_host_enqueue_outruns_the_gpu():
+    # A 2 ms host cost per call against a "0.5 ms" kernel: the queue drains
+    # on every call, the synchronise returns at once, and the backlog at the
+    # end of the enqueue loop is nothing. This is the B0 shape (fused_experts
+    # at T=1: 0.18 ms of Python per 0.04 ms of GPU).
+    gpu = FakeGPU(warm_call_ms=10.0, timed_call_ms=0.5, host_call_s=0.002,
+                  sync_sleep_s=0.0)
+    res = run(gpu, warmup_ms=10.0, target_ms=5.0, trials=1)
+    assert res.iters == 10
+    assert res.host_bound is True
+    assert res.host_enqueue_ms is not None and res.host_enqueue_ms >= 10 * 2.0
+    assert "host-bound" in res.host_note and "upper bound" in res.host_note
+    # The intervals themselves are the contaminated witness: they read the
+    # scripted 0.5 ms and would never have flagged it.
+    assert res.ms_p50 == 0.5
+
+
+def test_not_host_bound_when_the_gpu_still_has_a_backlog_after_the_enqueue():
+    # Enqueue costs the host nothing measurable; the synchronise then waits
+    # 50 ms for the GPU to drain a queue that stayed deep. Backlog (50 ms) is
+    # far above two iterations of the trial's per-iteration wall (~10 ms).
+    gpu = FakeGPU(warm_call_ms=10.0, timed_call_ms=0.5, host_call_s=0.0,
+                  sync_sleep_s=0.05)
+    res = run(gpu, warmup_ms=10.0, target_ms=5.0, trials=1)
+    assert res.iters == 10
+    assert res.host_bound is False
+    assert res.host_enqueue_ms is not None and res.host_enqueue_ms < 10.0
+    assert res.host_note == ""
+
+
+def test_host_bound_is_any_trial_not_the_median_trial():
+    walls = [T.TrialWall(enqueue_s=0.001, wall_s=0.050),     # deep
+             T.TrialWall(enqueue_s=0.001, wall_s=0.050),     # deep
+             T.TrialWall(enqueue_s=0.020, wall_s=0.0205)]    # drained
+    bound, ms, note = T.host_bound_verdict(walls, iters=10)
+    assert bound is True
+    assert "1 of 3 trials" in note
+    assert ms == pytest.approx(1.0)                           # median enqueue, ms
+
+
+def test_host_bound_verdict_boundary_is_two_iterations_of_backlog():
+    # wall 10 ms over 10 iters -> 1 ms per iteration; backlog of exactly 2 ms
+    # is NOT host-bound, 1.99 ms is.
+    deep = T.host_bound_verdict([T.TrialWall(enqueue_s=0.008, wall_s=0.010)], 10)
+    drained = T.host_bound_verdict([T.TrialWall(enqueue_s=0.00801, wall_s=0.010)], 10)
+    assert deep[0] is False
+    assert drained[0] is True
+    assert T.HOST_BOUND_BACKLOG_ITERS == 2
+
+
+def test_host_bound_verdict_refuses_rather_than_guessing():
+    assert T.host_bound_verdict([], 10) == (None, None, "no trials; host-bound not determinable")
+    bound, ms, note = T.host_bound_verdict([T.TrialWall(0.0, 0.0)], 10)
+    assert bound is None and ms is None and "no wall time" in note
+    bound, ms, note = T.host_bound_verdict([T.TrialWall(0.001, 0.010)], 0)
+    assert bound is None
+
+
 # --- (4) LEVEL: the case the old flag missed -----------------------------------
 
 def test_level_fails_when_the_clock_sits_low_at_both_ends_with_zero_drift():
@@ -250,16 +341,16 @@ def test_level_fails_when_the_clock_sits_low_at_both_ends_with_zero_drift():
 
 
 def test_level_passes_at_the_reference_and_just_inside_the_fraction():
-    ok = run(FakeGPU(), trace=[1980, 1980], reference_clock_mhz=1980.0)
+    ok = run(FakeGPU(), trace=[1980] * 3, reference_clock_mhz=1980.0)
     assert ok.clock_level_ok is True
-    edge = run(FakeGPU(), trace=[1881, 1881], reference_clock_mhz=1980.0)
+    edge = run(FakeGPU(), trace=[1881] * 3, reference_clock_mhz=1980.0)
     assert edge.clock_level_ok is True          # 0.95 * 1980 = 1881
-    below = run(FakeGPU(), trace=[1880, 1880], reference_clock_mhz=1980.0)
+    below = run(FakeGPU(), trace=[1880] * 3, reference_clock_mhz=1980.0)
     assert below.clock_level_ok is False
 
 
 def test_level_is_none_without_a_reference_and_says_so():
-    res = run(FakeGPU(), trace=[1500, 1500])
+    res = run(FakeGPU(), trace=[1500] * 3)
     assert res.clock_level_ok is None
     assert res.clock_drift_ok is True
     assert "no reference clock" in res.clock_note
@@ -310,18 +401,29 @@ def test_no_usable_clock_sample_gives_none_with_a_reason_not_zero():
 
 
 def test_zero_samples_are_dropped_before_the_median():
-    res = run(FakeGPU(), trace=[0, 1980, 0, 1980, 0], reference_clock_mhz=1980.0)
+    res = run(FakeGPU(), trace=[0, 1980, 0, 1980, 0, 1980], reference_clock_mhz=1980.0)
     assert res.sm_clock_load_mhz == 1980.0
-    assert res.clock_samples == 2
+    assert res.clock_samples == 3
     assert res.clock_level_ok is True
 
 
-def test_one_sample_gives_a_level_but_no_drift():
-    res = run(FakeGPU(), trace=[1980], reference_clock_mhz=1980.0)
-    assert res.clock_level_ok is True
-    assert res.clock_drift_ok is None
-    assert res.sm_clock_end_mhz is None
-    assert "one usable clock sample" in res.clock_note
+def test_the_median_floor_is_the_same_three_samples_the_reference_clock_needs():
+    # One sample: neither verdict. Two: drift (a first and a last) but no
+    # median, so no level. Three: both. calibrate.clock_under_load refuses
+    # the reference below three for the same reason, so LEVEL compares two
+    # numbers of one kind.
+    assert T.CLOCK_SAMPLE_FLOOR == 3
+    one = run(FakeGPU(), trace=[1980], reference_clock_mhz=1980.0)
+    assert one.sm_clock_load_mhz is None and one.clock_level_ok is None
+    assert one.clock_drift_ok is None and one.sm_clock_end_mhz is None
+    assert "below the floor of 3" in one.clock_note and "drift needs two" in one.clock_note
+    two = run(FakeGPU(), trace=[1980, 1700], reference_clock_mhz=1980.0)
+    assert two.sm_clock_load_mhz is None and two.clock_level_ok is None
+    assert two.clock_drift_ok is False
+    assert "below the floor of 3" in two.clock_note
+    three = run(FakeGPU(), trace=[1980, 1980, 1980], reference_clock_mhz=1980.0)
+    assert three.clock_level_ok is True and three.clock_drift_ok is True
+    assert "floor" not in three.clock_note
 
 
 # --- (6) statistics match a hand computation ----------------------------------
@@ -353,16 +455,20 @@ def test_kernel_timing_and_time_eager_share_one_percentile_definition():
     assert (legacy.ms_p50, legacy.ms_p90, legacy.ms_min, legacy.ms_std) == (p50, p90, lo, std)
 
 
-# --- (7) refusal off-GPU ----------------------------------------------------------
+# --- (7) refusal off-GPU, planted everywhere by taking CUDA away ------------------
 
-@pytest.mark.skipif(not NO_CUDA, reason="refusal is the off-GPU branch")
-def test_refuses_off_gpu_without_fakes():
+@pytest.fixture
+def no_cuda(monkeypatch):
+    """Make the refuse branch run on the GPU box too, not only where CUDA is absent."""
+    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: False)
+
+
+def test_refuses_off_gpu_without_fakes(no_cuda):
     with pytest.raises(T.TimingRefused, match="events, clock_sampler, flusher"):
         T.time_kernel(lambda: None, warmup_ms=10.0)
 
 
-@pytest.mark.skipif(not NO_CUDA, reason="refusal is the off-GPU branch")
-def test_refuses_off_gpu_when_only_some_fakes_are_injected():
+def test_refuses_off_gpu_when_only_some_fakes_are_injected(no_cuda):
     gpu = FakeGPU()
     with pytest.raises(T.TimingRefused, match="clock_sampler, flusher"):
         T.time_kernel(gpu.fn, warmup_ms=10.0, events=gpu.events)
@@ -380,21 +486,84 @@ def test_refuses_zero_trials():
         run(FakeGPU(), trials=0)
 
 
-# --- (8) every record names its instrument ---------------------------------------
+# --- (8) every record names its instrument and its clock source --------------------
 
 def test_every_record_carries_the_instrument_name():
-    for trace in ([1980, 1980], [1500, 1500], [0, 0]):
+    for trace in ([1980] * 3, [1500] * 3, [0, 0]):
         res = run(FakeGPU(), trace=trace, reference_clock_mhz=1980.0)
         assert res.instrument == T.TIMING_BASIS
+        assert res.clock_source == "scripted"
     assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v2"
     assert T.KernelTiming.__dataclass_params__.frozen
+
+
+def test_sampler_note_and_poll_cost_reach_the_record():
+    gpu = FakeGPU()
+    sampler = ScriptedClocks(gpu, [1980] * 3, note="reader said so",
+                             poll_cost_ms=0.03)
+    res = T.time_kernel(gpu.fn, warmup_ms=10.0, target_ms=10.0, trials=1,
+                        events=gpu.events, flusher=gpu, clock_sampler=sampler,
+                        reference_clock_mhz=1980.0)
+    assert res.clock_note.startswith("reader said so")
+    assert res.clock_poll_ms == 0.03
+
+
+# --- the clock reader: NVML only, bound to the caller's device -------------------
+
+def test_nvml_clock_reader_refuses_without_cuda(no_cuda):
+    with pytest.raises(T.ClockSourceUnavailable, match="no CUDA device"):
+        T.nvml_clock_reader()
+
+
+def test_nvml_clock_reader_names_a_missing_pynvml_and_never_forks(monkeypatch):
+    # The base pod venv has torch but no nvidia-ml-py: clock_rate raises
+    # ModuleNotFoundError. The reader must surface that, with the remedy,
+    # and must not reach for nvidia-smi.
+    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(T.torch.cuda, "current_device", lambda: 0)
+
+    def no_pynvml(device=None):
+        raise ModuleNotFoundError("No module named 'pynvml'")
+    monkeypatch.setattr(T.torch.cuda, "clock_rate", no_pynvml)
+    forks = []
+    monkeypatch.setattr(T, "_nvidia_smi", lambda q: forks.append(q) or [])
+    with pytest.raises(T.ClockSourceUnavailable, match="pynvml.*nvidia-ml-py"):
+        T.nvml_clock_reader(0)
+    assert forks == []
+    # and the sampler, resolving its source at entry, records the reason
+    # instead of raising, starts no thread, and collects nothing
+    with T.BackgroundClockSampler(device_index=0, poll_seconds=0.001) as s:
+        time.sleep(0.01)
+    assert s.source == "none" and s.samples == ()
+    assert "nvidia-ml-py" in s.note and s.poll_cost_ms is None
+    assert forks == []
+
+
+def test_nvml_clock_reader_reads_the_device_it_was_given(monkeypatch):
+    # torch's current device is per host thread; the poll thread would start
+    # on device 0. The reader carries the index it was constructed with.
+    seen = []
+    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(T.torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(T.torch.cuda, "clock_rate", lambda d: seen.append(("clk", d)) or 1755)
+    monkeypatch.setattr(T.torch.cuda, "temperature", lambda d: seen.append(("tmp", d)) or 61)
+    read = T.nvml_clock_reader(3)
+    assert read() == T.ClockState(1755, 61)
+    assert all(d == 3 for _, d in seen)
+    with T.BackgroundClockSampler(device_index=3, poll_seconds=0.002) as s:
+        time.sleep(0.03)
+    assert s.source == "nvml"
+    assert len(s.samples) >= 1 and s.samples[0] == T.ClockState(1755, 61)
+    assert s.note == "" and s.poll_cost_ms is not None and s.poll_cost_ms < 1.0
+    # a bare reader with no index takes the CALLING thread's device
+    seen.clear()
+    T.nvml_clock_reader()()
+    assert seen and all(d == 0 for _, d in seen)
 
 
 # --- the background sampler, with a fake clock and a real thread -----------------
 
 def test_background_sampler_waits_before_its_first_sample_and_collects_under_load():
-    import time
-
     trace = iter([1980, 1900, 1850, 1800, 1800, 1800, 1800, 1800])
     sampler = T.BackgroundClockSampler(
         sample=lambda: T.ClockState(next(trace, 1800), 50), poll_seconds=0.005)
@@ -402,21 +571,82 @@ def test_background_sampler_waits_before_its_first_sample_and_collects_under_loa
         assert s is sampler
         assert s.samples == ()
         time.sleep(0.05)
-    assert 3 <= len(sampler.samples) <= 12
+    # The count over a 50 ms window is scheduler-dependent; the first sample
+    # and the short-region property below are not.
+    assert 1 <= len(sampler.samples) <= 12
     assert sampler.samples[0].sm_clock_mhz == 1980
+    assert sampler.source == "injected"
     # and a region too short for one poll yields NO sample rather than an idle one
     quick = T.BackgroundClockSampler(sample=lambda: T.ClockState(1980, 50),
                                      poll_seconds=1.0)
     with quick:
         pass
-    assert quick.samples == ()
+    assert quick.samples == () and quick.note == ""
+
+
+def test_background_sampler_reports_a_reader_that_raises_instead_of_dying_quietly():
+    # Used to reach threading.excepthook; the record then said "one usable
+    # sample, drift not determinable", which misstates the cause.
+    def flaky_reader():
+        reads = iter([T.ClockState(1980, 50)])
+
+        def flaky():
+            try:
+                return next(reads)
+            except StopIteration:
+                raise OSError("NVML lost the device") from None
+        return flaky
+
+    sampler = T.BackgroundClockSampler(sample=flaky_reader(), poll_seconds=0.002)
+    with sampler:
+        time.sleep(0.05)
+    assert sampler.samples == (T.ClockState(1980, 50),)
+    assert "raised after 1 samples" in sampler.note
+    assert "OSError: NVML lost the device" in sampler.note
+    assert "polling stopped" in sampler.note
+    # and time_kernel puts it in front of the floor note. The fake trial must
+    # outlast two polls for the reader to be asked twice, hence the backlog.
+    gpu = FakeGPU(sync_sleep_s=0.05)
+    res = T.time_kernel(gpu.fn, warmup_ms=10.0, target_ms=10.0, trials=1,
+                        events=gpu.events, flusher=gpu,
+                        clock_sampler=T.BackgroundClockSampler(
+                            sample=flaky_reader(), poll_seconds=0.002),
+                        reference_clock_mhz=1980.0)
+    assert res.clock_note.startswith("clock sampler raised after 1 samples")
+    assert "below the floor of 3" in res.clock_note
+    assert res.clock_samples == 1 and res.clock_source == "injected"
+
+
+def test_background_sampler_notes_a_reader_slower_than_its_budget():
+    # A 20 ms read against a 5 ms poll: the poller is awake far more than the
+    # 10% budget allows, competing with the enqueue thread. The cost is what
+    # the reader took, so the assertion is deterministic.
+    def slow():
+        time.sleep(0.02)
+        return T.ClockState(1980, 50)
+    sampler = T.BackgroundClockSampler(sample=slow, poll_seconds=0.005)
+    with sampler:
+        time.sleep(0.06)
+    assert sampler.poll_cost_ms is not None and sampler.poll_cost_ms >= 20.0
+    assert "clock poll cost" in sampler.note and "competed with the enqueue thread" in sampler.note
+    assert f"over {T.CLOCK_POLL_BUDGET_FRACTION:.0%}" in sampler.note
+    # a fast reader gets no such note
+    fast = T.BackgroundClockSampler(sample=lambda: T.ClockState(1980, 50),
+                                    poll_seconds=0.005)
+    with fast:
+        time.sleep(0.03)
+    assert fast.poll_cost_ms is not None and fast.poll_cost_ms < 0.5
+    assert fast.note == ""
 
 
 # --- the audit's acceptance case, on the box only ---------------------------------
 
 @pytest.mark.gpu
 def test_time_kernel_matches_time_eager_on_a_short_kernel_within_two_percent():
-    a = torch.randn((2048, 2048), device="cuda", dtype=torch.bfloat16)
+    # 8192x8192 bf16: 128 MiB read, 128 MiB written, ~55 us on an H200. Large
+    # enough that launch latency is not the number, and above the regime
+    # where L2Flusher's docstring records the flush itself moving a kernel.
+    a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
     out = torch.empty_like(a)
 
     def k():
@@ -426,5 +656,9 @@ def test_time_kernel_matches_time_eager_on_a_short_kernel_within_two_percent():
                          flush_mb=T.flush_mb_for_device())
     ours = T.time_kernel(k, warmup_ms=500.0, trials=3, l2_flush=True)
     assert ours.instrument == T.TIMING_BASIS
-    assert ours.sm_clock_load_mhz is not None and ours.clock_samples >= 3
+    assert ours.host_bound is False, ours.host_note
+    if ours.clock_source == "nvml":
+        assert ours.sm_clock_load_mhz is not None and ours.clock_samples >= 3
+    else:
+        assert ours.clock_source == "none" and "nvidia-ml-py" in ours.clock_note
     assert abs(ours.ms_p50 - eager.ms_p50) / eager.ms_p50 <= 0.02

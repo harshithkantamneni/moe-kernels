@@ -29,11 +29,28 @@ host prefix at ~0.18 ms per fused_experts call on the H200 pod and ~0.30 ms on
 the A100 pod, a bias of 8-16% in alpha at the smallest ladder cells, different
 per card, and of the order of the cross-card effect the study registered.
 
-`time_kernel` is the one instrument now, and `TIMING_BASIS` is its name. Every
-consumer writes `TIMING_BASIS` into its rows so a reader can tell at a glance
-which apparatus produced a number, and a row without it is a row from before
-the fix. Change the string when the instrument changes in a way that moves
-numbers; never otherwise.
+`time_kernel` is the instrument that replaces both, and `TIMING_BASIS` is its
+name. The ladder scripts still carry their private `time_call` as this is
+written; moving them onto `time_kernel` is the next phase, and until it lands
+a row is comparable with the roof only if it carries `TIMING_BASIS`. A
+consumer that adopts the instrument writes the string into every row it
+produces, so a reader can tell at a glance which apparatus made a number, and
+a row without it is a row from before the fix. Change the string when the
+instrument changes in a way that moves numbers; never otherwise.
+
+THE HOST-BOUND CASE IS DETECTED, NOT ASSUMED AWAY
+-------------------------------------------------
+A queue-deep loop only measures the GPU while the queue is deep. When the
+host takes longer to enqueue one call than the GPU takes to run it (the B0
+evidence: vLLM's fused_experts at T=1 reads 0.18 ms per call through a
+Python launcher and 0.04 ms as a graph replay) the queue drains, every start
+event is timestamped on an idle GPU, and the interval carries the host's
+enqueue time again, exactly as `time_call` did. No event structure can fix
+that; it is a property of the callable. What the instrument can do is notice:
+each trial's enqueue loop is wall-clocked against the whole trial, and a trial
+whose GPU had less than `HOST_BOUND_BACKLOG_ITERS` iterations of work left
+when the host finished enqueueing is marked `host_bound`. A host-bound number
+is an upper bound on the kernel time, and the row says so.
 
 CLOCKS ARE READ UNDER LOAD, AND FLAGGED ON LEVEL AS WELL AS DRIFT
 -----------------------------------------------------------------
@@ -56,6 +73,7 @@ from __future__ import annotations
 import statistics
 import subprocess
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -89,10 +107,35 @@ WARMUP_BATCH_MS = 25.0
 #: a tuning knob: a 1 us kernel reaches it at 10 ms per batch.
 WARMUP_BATCH_MAX_CALLS = 10_000
 
-#: How often the background sampler polls the clock during the trials. NVML
-#: costs tens of microseconds per read; at 50 ms a 600 ms cell yields ~12
-#: samples and the poll thread is asleep 99.9% of the time.
+#: How often the background sampler polls the clock during the trials. The
+#: sampler reads through torch's NVML bindings only (`nvml_clock_reader`),
+#: tens of microseconds per read, so at 50 ms a 600 ms cell yields ~12 samples
+#: and the poll thread is asleep 99.9% of the time. It never forks nvidia-smi
+#: inside the timed region: that costs tens of milliseconds and an NVML init
+#: per read, on the same host the enqueue thread needs to keep the queue deep.
+#: Where NVML is unavailable the record says so and carries no clock.
 CLOCK_POLL_SECONDS = 0.05
+
+#: The sampler's per-read cost may take at most this fraction of the poll
+#: interval before the record notes that the poller was competing with the
+#: enqueue thread for the host. 10% of 50 ms is 5 ms, two orders above an
+#: NVML read; only a slow or blocking reader reaches it.
+CLOCK_POLL_BUDGET_FRACTION = 0.10
+
+#: Fewest usable under-load samples a clock median is taken from. The same
+#: floor `calibrate.clock_under_load` applies to the reference clock, so the
+#: cell's `sm_clock_load_mhz` and the roof's `median_mhz` are one kind of
+#: number: two cannot disagree with each other, and one is not a median.
+#: DRIFT needs only a first and a last, so it is reported from two.
+CLOCK_SAMPLE_FLOOR = 3
+
+#: A trial is host-bound when the GPU had fewer than this many iterations of
+#: work queued at the instant the host finished enqueueing it. A drained queue
+#: leaves at most the last kernel in flight (one iteration); a queue that was
+#: deep for the whole trial leaves the accumulated backlog, which is many. Two
+#: is the smallest count that separates the two by construction rather than
+#: by a chosen fraction.
+HOST_BOUND_BACKLOG_ITERS = 2
 
 #: Fallback when the device cannot be queried. Prefer flush_mb_for_device().
 DEFAULT_FLUSH_MB = 256
@@ -417,18 +460,43 @@ def _summarise(samples: list[float], **meta) -> TimingResult:
     )
 
 
+@dataclass(frozen=True)
+class TrialWall:
+    """Host wall clocks of one trial, the raw material of the host-bound verdict.
+
+    `enqueue_s` is the perf_counter span of the enqueue loop alone; `wall_s`
+    runs from the same start to the return of the synchronise. Their difference
+    is the GPU's backlog at the instant the host finished: how long the GPU
+    kept working on already-enqueued iterations after the host had nothing
+    left to give it. That backlog, not the event intervals, is what tells a
+    deep queue from a drained one, because a drained queue lets host time INTO
+    the intervals and they cannot then witness against themselves.
+    """
+
+    enqueue_s: float
+    wall_s: float
+
+
 def _timed_trials(fn: Callable[[], None], iters: int, trials: int, events,
-                  flush: Callable[[], None] | None) -> list[float]:
+                  flush: Callable[[], None] | None,
+                  ) -> tuple[list[float], list[TrialWall]]:
     """The queue-deep loop every timer in this module runs.
 
     Per trial: `iters` calls enqueued back to back, each bracketed by its own
     pre-primed event pair, the flush (when there is one) enqueued BEFORE the
     start record so it sits outside the interval, and ONE synchronise at the
-    end. The host runs ahead of the GPU for the whole trial, so a start event
-    is timestamped when the previous work finishes, not when the host got
-    round to enqueueing the kernel. That is the difference between this loop
-    and the per-iteration-synchronise `time_call` the ladders used to carry,
-    and it is worth 0.18-0.30 ms per call on a fused_experts cell.
+    end. As long as each call costs the host less to enqueue than it costs the
+    GPU to run, the queue deepens and a start event is timestamped when the
+    previous work finishes, not when the host got round to enqueueing the
+    kernel. That is the difference between this loop and the
+    per-iteration-synchronise `time_call` the ladders used to carry, worth
+    0.18-0.30 ms per call on a fused_experts cell.
+
+    The condition is not always met. A callable whose host side is slower
+    than its GPU side (a Python launcher over many small kernels at T=1)
+    drains the queue no matter how the events are arranged, and the interval
+    then holds host time again. This loop cannot prevent that; it records the
+    wall clocks that let `host_bound_verdict` detect it, per trial.
 
     Why per-iteration pairs rather than one pair around the trial: with the
     flush inside a single pair its ~50 us of L2-sized reads would be inside
@@ -437,16 +505,67 @@ def _timed_trials(fn: Callable[[], None], iters: int, trials: int, events,
     leaves `iters * trials` samples for the percentiles instead of `trials`.
     """
     samples: list[float] = []
+    walls: list[TrialWall] = []
     for _ in range(trials):
+        t0 = time.perf_counter()
         for i in range(iters):
             if flush is not None:
                 flush()
             events.starts[i].record()
             fn()
             events.ends[i].record()
+        t1 = time.perf_counter()
         events.synchronize()
+        t2 = time.perf_counter()
         samples.extend(events.elapsed(iters))
-    return samples
+        walls.append(TrialWall(enqueue_s=t1 - t0, wall_s=t2 - t0))
+    return samples, walls
+
+
+def host_bound_verdict(walls: list[TrialWall], iters: int,
+                       ) -> tuple[bool | None, float | None, str]:
+    """Was any trial host-bound? Pure. Returns (verdict, enqueue_ms, note).
+
+    A trial's GPU backlog at the end of its enqueue loop is `wall_s -
+    enqueue_s`. If the host was slower than the GPU the backlog is at most the
+    last iteration still in flight; if the host was faster it is everything
+    the GPU has not yet reached, which grows through the trial. The verdict
+    compares the backlog with `HOST_BOUND_BACKLOG_ITERS` iterations of the
+    trial's own mean per-iteration wall (`wall_s / iters`, which bounds the
+    GPU's per-iteration time from above, flush included). Any host-bound
+    trial marks the record: its samples are pooled with the others.
+
+    Why not compare the host wall with the event intervals, which is the
+    obvious gate: when the queue drains the start event fires on an idle GPU
+    and the interval absorbs the host's enqueue time, so the intervals sum to
+    MORE than the host wall in exactly the case to be caught. The intervals
+    are the contaminated witness.
+
+    `enqueue_ms` is the median per-trial host wall of the enqueue loop, in
+    milliseconds, reported so a reader can divide by `iters` and see the
+    host's per-call cost beside the GPU's. None with a reason when no wall
+    time elapsed (only a fake can manage that) or there were no trials.
+    """
+    if not walls or iters < 1:
+        return None, None, "no trials; host-bound not determinable"
+    if any(w.wall_s <= 0 for w in walls):
+        return None, None, ("a trial spanned no wall time; host-bound not "
+                            "determinable")
+    bound = []
+    for w in walls:
+        backlog = w.wall_s - w.enqueue_s
+        bound.append(backlog < HOST_BOUND_BACKLOG_ITERS * (w.wall_s / iters))
+    enqueue_ms = float(statistics.median(w.enqueue_s for w in walls)) * 1e3
+    if any(bound):
+        n = sum(bound)
+        return True, enqueue_ms, (
+            f"host-bound: in {n} of {len(walls)} trials the GPU had fewer than "
+            f"{HOST_BOUND_BACKLOG_ITERS} iterations of work queued when the host "
+            f"finished enqueueing (host enqueue {enqueue_ms / iters:.4f} ms per "
+            "call); the intervals include host enqueue time and the number is "
+            "an upper bound on the kernel time; time the callable as a graph "
+            "replay or through a fused launcher to measure the GPU alone")
+    return False, enqueue_ms, ""
 
 
 def time_eager(
@@ -477,7 +596,7 @@ def time_eager(
 
     if iters is None:
         iters = calibrate_iters(fn, target_ms)
-    samples = _timed_trials(fn, iters, trials, _EventPairs(iters), flusher.flush)
+    samples, _ = _timed_trials(fn, iters, trials, _EventPairs(iters), flusher.flush)
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=False,
@@ -540,8 +659,8 @@ def time_graph(
 
     if iters is None:
         iters = calibrate_iters(graph.replay, target_ms)
-    samples = _timed_trials(graph.replay, iters, trials, _EventPairs(iters),
-                            flusher.flush)
+    samples, _ = _timed_trials(graph.replay, iters, trials, _EventPairs(iters),
+                               flusher.flush)
 
     return _summarise(samples, warmup=warmup, iters=iters, trials=trials,
                       l2_flush=l2_flush, cuda_graph=True,
@@ -580,7 +699,13 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
     with the same events the trials use. The first batch is one call, which
     sizes the rest to about `batch_ms` each so the queue stays deep between
     synchronises; the loop stops after the batch that carries the total past
-    `warmup_ms`, so the overshoot is bounded by one batch.
+    `warmup_ms`, so the overshoot is bounded by one batch. Batches are capped
+    at `WARMUP_BATCH_MAX_CALLS` calls, so for a kernel under 2.5 us a batch
+    delivers less than `batch_ms` and the loop takes more of them.
+
+    The warmup runs UNFLUSHED and so does `per_call_ms`: it is the kernel's
+    own queue-deep time, warm in L2, and it is what `iters_for` sizes the
+    trials from. The trials then add a flush per iteration on top.
     """
     if warmup_ms <= 0:
         raise TimingRefused(
@@ -611,8 +736,69 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
 
 def iters_for(per_call_ms: float, target_ms: float, lo: int = 10,
               hi: int = 2000) -> int:
-    """Iterations per trial so that one trial lasts about `target_ms`."""
+    """Iterations per trial so that one trial holds `target_ms` of KERNEL time.
+
+    `target_ms` budgets the measured intervals, not the trial's wall: with
+    `l2_flush` each iteration also enqueues a flush (about 50 us of reads over
+    a 240 MB buffer on an H200, outside the interval by construction) and a
+    cold-L2 start for the kernel. For a 10 us kernel the 2000-iteration cap
+    makes the trial about 120 ms of wall for 20 ms of measured time; for a
+    1 ms kernel the flush is 5% on top. Same property as `calibrate_iters`,
+    stated here because the old docstring implied the trial itself lasted
+    `target_ms`.
+    """
     return max(lo, min(hi, int(target_ms / max(per_call_ms, 1e-4))))
+
+
+class ClockSourceUnavailable(RuntimeError):
+    """The fast clock path cannot be used on this host; the message says why.
+
+    Raised by `nvml_clock_reader` when torch's NVML bindings are absent
+    (`nvidia-ml-py` not installed: the base pod venv ships without it) or
+    refuse (a vGPU or a restricted container). `BackgroundClockSampler`
+    catches it at entry and records the reason instead of sampling, so a
+    `KernelTiming` on such a host carries `clock_source == "none"` and the
+    reason in `clock_note`, never a zero and never a forked nvidia-smi inside
+    the timed region.
+    """
+
+
+def nvml_clock_reader(device_index: int | None = None) -> Callable[[], ClockState]:
+    """A reader for one device's SM clock through torch's NVML bindings only.
+
+    Probed ONCE, here, before the timed region: a reader that fails on every
+    poll would spend the whole region raising. The device is fixed at
+    construction from the CALLING thread, because torch's current device is
+    per host thread and a poll thread starts on device 0; a sweep that
+    selected card k with `torch.cuda.set_device(k)` would otherwise read card
+    0's clock. Nothing in the repo calls `set_device` today (selection is via
+    CUDA_VISIBLE_DEVICES), so this is latent, and cheap to close.
+
+    Deliberately no nvidia-smi fallback. `ClockState.sample` has one because
+    its callers read twice per cell; a poller reads every 50 ms for the whole
+    timed region, and a fork plus NVML init per read (tens of milliseconds,
+    on the host the enqueue thread needs) is not a clock sample, it is a
+    perturbation of the thing being measured.
+    """
+    if not torch.cuda.is_available():
+        raise ClockSourceUnavailable("no CUDA device; there is no clock to read")
+    index = torch.cuda.current_device() if device_index is None else int(device_index)
+
+    def read() -> ClockState:
+        return ClockState(int(torch.cuda.clock_rate(index)),
+                          int(torch.cuda.temperature(index)))
+
+    try:
+        read()
+    except Exception as e:  # noqa: BLE001
+        # Broad for the same reason ClockState.sample is: torch surfaces a
+        # missing pynvml as ModuleNotFoundError and NVML refusals as its own
+        # NVMLError family, and the reader has to name them all as one thing.
+        raise ClockSourceUnavailable(
+            f"torch.cuda.clock_rate(device={index}) failed: {type(e).__name__}: "
+            f"{e}; install nvidia-ml-py in the pod venv to sample clocks under "
+            "load, or accept rows without a clock") from e
+    return read
 
 
 class BackgroundClockSampler:
@@ -620,30 +806,87 @@ class BackgroundClockSampler:
 
     The context-manager shape is the injection seam: `time_kernel` enters it
     before the first trial and exits it after the last synchronise, and reads
-    `.samples` afterwards. A fake with the same shape returns a scripted trace.
+    `.samples`, `.source`, `.note` and `.poll_cost_ms` afterwards. A fake with
+    the same shape returns a scripted trace.
+
+    THE SOURCE IS RESOLVED AT ENTRY AND NAMED. With no `sample` injected the
+    sampler asks `nvml_clock_reader` for the device it was given (the
+    calling thread's current device, passed by `time_kernel`); if that
+    refuses, no thread starts, `source` is "none" and `note` carries the
+    reason. It never falls back to nvidia-smi. An injected `sample` is
+    "injected".
 
     The first sample is taken `poll_seconds` AFTER entering, not at entry.
     Entry happens right after the events were primed, which ends in a
     synchronise, and a sample at that instant is the idle-boost reading the
     old flag was fooled by. Waiting first puts every sample inside the trials.
+
+    A reader that raises mid-region stops the poller and is REPORTED, not
+    lost: the exception used to reach threading.excepthook and the record
+    then said "one usable sample, drift not determinable", which misstates
+    the cause. Now `note` names the exception and the count reached.
+
+    Each read is wall-clocked; `poll_cost_ms` is the median. A reader whose
+    cost exceeds `CLOCK_POLL_BUDGET_FRACTION` of the poll interval gets a
+    note too, because a poll thread that is awake most of the time competes
+    with the enqueue thread for the host, and that is the thread keeping the
+    queue deep.
     """
 
-    def __init__(self, sample: Callable[[], ClockState] = ClockState.sample,
-                 poll_seconds: float = CLOCK_POLL_SECONDS):
+    def __init__(self, sample: Callable[[], ClockState] | None = None,
+                 poll_seconds: float = CLOCK_POLL_SECONDS,
+                 device_index: int | None = None):
         self._sample = sample
+        self._device = device_index
         self._poll = poll_seconds
         self._stop = threading.Event()
         self._got: list[ClockState] = []
+        self._costs: list[float] = []
         self._thread: threading.Thread | None = None
+        self._reader: Callable[[], ClockState] | None = None
         self.samples: tuple[ClockState, ...] = ()
+        self.source: str = "unresolved"
+        self.note: str = ""
+        self.poll_cost_ms: float | None = None
+
+    @property
+    def poll_seconds(self) -> float:
+        return self._poll
 
     def _run(self) -> None:
+        assert self._reader is not None
         while not self._stop.wait(self._poll):
-            self._got.append(self._sample())
+            t0 = time.perf_counter()
+            try:
+                state = self._reader()
+            except Exception as e:  # noqa: BLE001
+                # Anything the reader raises is the finding; a narrow clause
+                # would send the rest to threading.excepthook and lose it.
+                self.note = (f"clock sampler raised after {len(self._got)} "
+                             f"samples: {type(e).__name__}: {e}; polling stopped")
+                return
+            self._costs.append(time.perf_counter() - t0)
+            self._got.append(state)
 
     def __enter__(self) -> BackgroundClockSampler:
         self._stop.clear()
         self._got = []
+        self._costs = []
+        self._thread = None
+        self.note = ""
+        self.samples = ()
+        self.poll_cost_ms = None
+        if self._sample is None:
+            try:
+                self._reader = nvml_clock_reader(self._device)
+            except ClockSourceUnavailable as e:
+                self.source = "none"
+                self.note = str(e)
+                return self
+            self.source = "nvml"
+        else:
+            self._reader = self._sample
+            self.source = "injected"
         self._thread = threading.Thread(target=self._run, name="clock-sampler",
                                         daemon=True)
         self._thread.start()
@@ -654,6 +897,15 @@ class BackgroundClockSampler:
         if self._thread is not None:
             self._thread.join()
         self.samples = tuple(self._got)
+        if self._costs:
+            self.poll_cost_ms = float(statistics.median(self._costs)) * 1e3
+            budget_ms = CLOCK_POLL_BUDGET_FRACTION * self._poll * 1e3
+            if self.poll_cost_ms > budget_ms:
+                slow = (f"clock poll cost {self.poll_cost_ms:.2f} ms per read, "
+                        f"over {CLOCK_POLL_BUDGET_FRACTION:.0%} of the "
+                        f"{self._poll * 1e3:.0f} ms poll interval; the sampler "
+                        "competed with the enqueue thread for the host")
+                self.note = (self.note + "; " if self.note else "") + slow
 
 
 def clock_flags(load_mhz: float | None, start_mhz: float | None,
@@ -690,10 +942,22 @@ class KernelTiming:
 
     The clock fields are Optional and None means "not determined", never
     "zero": NVML absent, a container that forbids it, or a trial too short for
-    the poller to land a sample. `clock_note` says which. `clock_level_ok` and
-    `clock_drift_ok` are the two verdicts `clock_flags` documents; a consumer
-    that filters rows must test BOTH, since the old single drop-only flag is
-    the defect this record exists to replace.
+    the poller to land a sample. `clock_note` says which, and `clock_source`
+    says which reader polled ("nvml", "injected", or "none"). The floors:
+    `sm_clock_load_mhz` is a median of at least `CLOCK_SAMPLE_FLOOR` usable
+    samples, the same floor the reference clock in `calibrate.clock_under_load`
+    is held to, so LEVEL compares two numbers of one kind; `sm_clock_start_mhz`
+    and `sm_clock_end_mhz` need two. `clock_level_ok` and `clock_drift_ok` are
+    the two verdicts `clock_flags` documents; a consumer that filters rows
+    must test BOTH, since the old single drop-only flag is the defect this
+    record exists to replace.
+
+    `host_bound` is the third verdict, from `host_bound_verdict`: True when
+    any trial's queue had drained by the time the host finished enqueueing,
+    in which case the intervals include host time and `ms_*` bound the kernel
+    from above. `host_enqueue_ms` is the median per-trial host wall of the
+    enqueue loop; divided by `iters` it is the host's per-call cost, the
+    number to hold beside `ms_p50` when the flag is up. `host_note` says why.
     """
 
     ms_p50: float
@@ -713,7 +977,12 @@ class KernelTiming:
     warmup_calls: int
     flush_mb: int
     clock_samples: int
+    clock_source: str
+    clock_poll_ms: float | None
+    host_bound: bool | None
+    host_enqueue_ms: float | None
     clock_note: str = ""
+    host_note: str = ""
     instrument: str = TIMING_BASIS
 
 
@@ -744,12 +1013,18 @@ def time_kernel(
     because a level is relative to something and this function will not
     invent the something.
 
+    The default sampler is bound to the calling thread's current device and
+    reads NVML only; on a host without `nvidia-ml-py` the record says so in
+    `clock_note` and carries `clock_source == "none"`. The host-bound verdict
+    is taken from the trials' wall clocks; see `host_bound_verdict`.
+
     OFF-GPU. Refuses with `TimingRefused` unless every CUDA-touching part is
     injected: `events` (a factory with `_EventPairs`'s shape), `clock_sampler`
-    (a context manager with `BackgroundClockSampler`'s shape) and, when
-    `l2_flush`, `flusher` (an object with `flush()` and `megabytes`). With all
-    of them present the full logic runs against the fakes; that is how the
-    tests plant every PASS and FAIL branch of both clock flags.
+    (a context manager with `BackgroundClockSampler`'s shape: `.samples`,
+    `.source`, `.note`, `.poll_cost_ms` after exit) and, when `l2_flush`,
+    `flusher` (an object with `flush()` and `megabytes`). With all of them
+    present the full logic runs against the fakes; that is how the tests
+    plant every PASS and FAIL branch of all three verdicts.
     """
     if trials < 1:
         raise TimingRefused(f"trials={trials}: a measurement needs at least one trial")
@@ -766,7 +1041,11 @@ def time_kernel(
     if events is None:
         events = _EventPairs
     if clock_sampler is None:
-        clock_sampler = BackgroundClockSampler()
+        # The device is read HERE, on the calling thread, and handed to the
+        # poller: torch's current device is per thread and the poll thread
+        # would otherwise start on device 0.
+        clock_sampler = BackgroundClockSampler(
+            device_index=torch.cuda.current_device())
     if l2_flush and flusher is None:
         flusher = L2Flusher(flush_mb_for_device())
     flush = flusher.flush if l2_flush else None
@@ -776,27 +1055,34 @@ def time_kernel(
     iters = iters_for(warm.per_call_ms, target_ms)
     pairs = events(iters)
     with clock_sampler as poller:
-        samples = _timed_trials(fn, iters, trials, pairs, flush)
+        samples, walls = _timed_trials(fn, iters, trials, pairs, flush)
     clocks = [c.sm_clock_mhz for c in poller.samples]
     usable = [c for c in clocks if c > 0]
 
-    if usable:
-        load: float | None = float(statistics.median(usable))
-        start: float | None = float(usable[0])
-        end: float | None = float(usable[-1])
-        note = ""
-        if len(usable) < 2:
-            note = ("one usable clock sample during the trials; drift is not "
-                    "determinable from one point")
-            end = None
+    notes: list[str] = []
+    if poller.note:
+        notes.append(poller.note)
+    load: float | None = None
+    start: float | None = None
+    end: float | None = None
+    if len(usable) >= CLOCK_SAMPLE_FLOOR:
+        load = float(statistics.median(usable))
         if reference_clock_mhz is None:
-            note = (note + "; " if note else "") + \
-                "no reference clock given, level not determinable"
-    else:
-        load = start = end = None
-        note = (f"no usable SM clock sample during the trials ({len(clocks)} "
-                "polled, all zero or none landed); clocks not determinable")
+            notes.append("no reference clock given, level not determinable")
+    if len(usable) >= 2:
+        start, end = float(usable[0]), float(usable[-1])
+    if not usable:
+        notes.append(f"no usable SM clock sample during the trials ({len(clocks)} "
+                     "polled, all zero or none landed); clocks not determinable")
+    elif len(usable) < CLOCK_SAMPLE_FLOOR:
+        what = ("drift needs two" if len(usable) < 2
+                else "drift is reported from the first and last")
+        notes.append(f"{len(usable)} usable clock sample(s) during the trials "
+                     f"({len(clocks)} polled) is below the floor of "
+                     f"{CLOCK_SAMPLE_FLOOR} a median is taken from; level not "
+                     f"determinable, {what}")
     level_ok, drift_ok = clock_flags(load, start, end, reference_clock_mhz)
+    host_bound, host_ms, host_note = host_bound_verdict(walls, iters)
 
     p50, p90, lo, std = _stats(samples)
     return KernelTiming(
@@ -805,5 +1091,8 @@ def time_kernel(
         l2_flush=l2_flush, sm_clock_load_mhz=load, sm_clock_start_mhz=start,
         sm_clock_end_mhz=end, clock_level_ok=level_ok, clock_drift_ok=drift_ok,
         samples=len(samples), warmup_calls=warm.calls, flush_mb=flush_mb,
-        clock_samples=len(usable), clock_note=note,
+        clock_samples=len(usable), clock_source=poller.source,
+        clock_poll_ms=poller.poll_cost_ms, host_bound=host_bound,
+        host_enqueue_ms=host_ms, clock_note="; ".join(notes),
+        host_note=host_note,
     )
