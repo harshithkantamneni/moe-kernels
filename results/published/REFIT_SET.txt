@@ -1,0 +1,39 @@
+# THE PINNED INPUT SET FOR scripts/alpha_refit.py
+#
+# WHY THIS FILE EXISTS. `docs/FINDINGS.md` quotes alpha = 0.558 over 10,813
+# admitted rows, 3,124 of them discriminating, with a 90% cluster-bootstrap band
+# of 0.529-0.588. Those four numbers reproduce ONLY over the ten arms listed
+# below. The command the docstring gives,
+#
+#     python scripts/alpha_refit.py results/published/*/run_*.csv
+#
+# reads fourteen arms and answers 0.560 / 11,181 / 3,181 / 0.529-0.593, because
+# three surface arms and one calibration arm landed on 2026-09-01 and 2026-09-02
+# after the number was written. No document named the set, so a reviewer
+# rerunning the documented command got different numbers from the ones in the
+# paper and had nothing to tell them why (audit S34/B3, fix B8).
+#
+# The fix is not to freeze the answer. It is to make the INPUT quotable: run
+# with `--pinned-set` to reproduce what FINDINGS says, run with a glob to see
+# what the whole corpus says, and let the two disagree in public.
+#
+# FORMAT. One arm DIRECTORY NAME per line, relative to `results/published/`.
+# Blank lines and `#` comments are ignored. Every listed arm must exist and must
+# hold at least one `run_*.csv`, or the run REFUSES: a pinned set that silently
+# loses an arm is the failure this file was written to close, wearing a
+# different hat.
+#
+# TO ADD AN ARM: append it, rerun `--pinned-set`, and update the numbers in
+# `docs/FINDINGS.md` in the same commit. Editing one without the other puts the
+# repository back where it started.
+
+2026-08-22-first-smoke
+2026-08-22-standard-sweep
+2026-08-26-nvidia_h200-full-three-way
+2026-08-26-nvidia_h200-full-three-way-recalibrated
+2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card
+2026-08-28-nvidia_h200-h200-fp8-refixed
+2026-08-28-nvidia_h200-h200-fp8-three-kernel
+2026-08-28-nvidia_h200-h200-v2lite
+2026-08-28-nvidia_h200-h200-whole-layer
+2026-08-28-nvidia_h200-ridge-resolution

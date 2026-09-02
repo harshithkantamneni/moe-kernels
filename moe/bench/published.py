@@ -314,10 +314,13 @@ def calibration_provenance(arm: Path | str) -> CalibrationProvenance:
             "no measured.yaml beside the rows, so the efficiency columns cannot "
             "be interpreted")
 
-    # Deferred, and it has to stay deferred: calibrate.py imports torch at module
-    # scope. `crossing_report.py` reaches this module for `filter_superseded`
-    # alone and must keep importing on a box with no torch, so the cost lands on
-    # the arms that actually have a calibration to read instead of on import.
+    # Deferred, and it stays deferred even though `calibrate.py` no longer pulls
+    # torch in at import (2026-09-02, audit B11): reading a YAML stamp is not
+    # something every reader of `filter_superseded` should pay for, and the
+    # deferral is what kept THIS path working while the module-scope import was
+    # still there. `crossing_report.py` reaches this module for
+    # `filter_superseded` alone; the cost belongs on the arms that actually have
+    # a calibration to read.
     from .calibrate import read_stamp
     stamp = read_stamp(cal)
     evidence["calibration"] = cal.name
@@ -546,6 +549,127 @@ def _fmt(value: float | None) -> str:
 #: How the committed report is regenerated. Named in the report itself, so the
 #: next reader can rerun it instead of trusting a file with no provenance -- in
 #: a document about provenance that would be a poor joke.
+# --- two things every report over this corpus has to say out loud --------------
+
+#: The column `bench.py` stamps with "the tree had uncommitted changes when this
+#: row was written".
+DIRTY_COLUMN = "git_dirty"
+
+_TRUE = frozenset({"true", "1", "yes"})
+
+
+def row_is_dirty(row) -> bool:
+    """Was this row measured from a tree with uncommitted changes?
+
+    False for a row with no such column, which is not the same as clean and is
+    reported separately by `dirty_share`: an arm predating the column cannot
+    answer, and counting its silence as clean would be the same
+    absence-as-evidence error the rest of this module exists to refuse.
+    """
+    return str(row.get(DIRTY_COLUMN, "")).strip().lower() in _TRUE
+
+
+def dirty_share(rows) -> tuple[int, int, int]:
+    """`(dirty, unrecorded, total)` over the rows an analysis actually admitted.
+
+    WHY EVERY REPORT PRINTS THIS. 44,872 of the 100,144 published rows were
+    measured from a dirty tree, because `calibrate_hardware.py` writes a TRACKED
+    yaml and the session then swept with that edit in the working copy. The
+    column has been on every row since the first arm and NO analysis path read
+    it: not `published.py`, not `crossing.py`, not `crossing_report.py`, not
+    `alpha_refit.py`. A number quoted off rows that cannot be tied to a commit
+    is a number a stranger cannot reproduce, and the corpus does not say so
+    unless the tool that reads it does.
+
+    It is a SHARE and not a filter. Dropping the dirty rows would discard most
+    of the study; the honest move is to state the exposure beside the answer and
+    let the reader price it.
+    """
+    dirty = unrecorded = total = 0
+    for row in rows:
+        total += 1
+        raw = str(row.get(DIRTY_COLUMN, "")).strip()
+        if not raw:
+            unrecorded += 1
+        elif raw.lower() in _TRUE:
+            dirty += 1
+    return dirty, unrecorded, total
+
+
+def dirty_share_line(rows, label: str = "admitted rows") -> str:
+    """One line, always printed, even when the share is zero.
+
+    Zero dirty is a finding and has to be visible as one; a line that appears
+    only when something is wrong cannot be distinguished from a line nobody
+    remembered to print.
+    """
+    dirty, unrecorded, total = dirty_share(rows)
+    if not total:
+        return f"  dirty share of {label}: no rows"
+    part = f"  dirty share of {label}: {dirty}/{total} ({dirty / total:.1%})"
+    if unrecorded:
+        part += (f", and {unrecorded} row(s) carry no {DIRTY_COLUMN} column at "
+                 "all, which is not the same as clean")
+    return part
+
+
+#: Two-sided 90% and 80% power: `z(0.95) + z(0.80)`. The 90% matches the
+#: cluster-bootstrap band every report in this repo already prints, so the MDE
+#: and the band are quoted at the same confidence rather than at two.
+Z_SUM_90_80 = 1.6449 + 0.8416
+
+
+def two_sample_mde(sd: float) -> float:
+    """Smallest difference between two independent splits this pool can resolve.
+
+    `(z_{0.95} + z_{0.80}) * sqrt(2) * sd`, the textbook two-sample minimum
+    detectable effect at 90% two-sided confidence and 80% power, with both
+    splits assumed as precise as the whole pool.
+
+    WHY IT IS PRINTED AND WHY IT IS OPTIMISTIC. Audit B14: no arm in this study
+    states an MDE, so a split-to-split difference has never been compared with
+    the smallest difference the design could have found. The assumption that a
+    split is as precise as the pool is generous in the only direction that
+    matters here -- a split has fewer clusters, so its own sd is LARGER and the
+    real MDE is WIDER -- which makes this a floor. A difference under this
+    number is not a small effect; it is an unmeasured one.
+    """
+    return Z_SUM_90_80 * math.sqrt(2.0) * abs(sd)
+
+
+def sd_from_band(lo: float, hi: float, z: float = 1.6449) -> float:
+    """The sd a symmetric 90% band implies: `(hi - lo) / (2 z)`."""
+    return abs(hi - lo) / (2.0 * z)
+
+
+def paired_mde(sd_of_differences: float, n_pairs: int) -> float:
+    """Smallest paired difference `n_pairs` matched cells can resolve.
+
+    `(z_{0.95} + z_{0.80}) * sd / sqrt(n)`. Paired rather than two-sample
+    because the comparisons this repo's surface makes are within a cell -- the
+    same model, tile and arm at two levels of one lever -- and pairing is the
+    whole reason those comparisons are worth more than the pooled medians they
+    replaced. Raises on `n_pairs < 2`: one pair has no sd and no MDE.
+    """
+    if n_pairs < 2:
+        raise ValueError("a paired MDE needs at least two pairs")
+    return Z_SUM_90_80 * abs(sd_of_differences) / math.sqrt(n_pairs)
+
+
+def mde_line(lo: float, hi: float, unit: str, assumption: str) -> str:
+    """The MDE line itself, with the noise assumption it came from named in it.
+
+    The assumption travels in the line because an MDE quoted without one is a
+    number with no denominator: the same design has a different MDE under a
+    within-process replicate spread than under a between-session one, and this
+    study has both.
+    """
+    sd = sd_from_band(lo, hi)
+    return (f"  MDE {two_sample_mde(sd):.3f} {unit} (two independent splits, "
+            f"90% two-sided, 80% power, sd {sd:.3f} from {assumption}). A "
+            "split-to-split gap below it is unmeasured, not small.")
+
+
 REPORT_COMMAND = (".venv/bin/python -m moe.bench.published results/published/*/ "
                   "> results/published/CALIBRATION_PROVENANCE.md")
 

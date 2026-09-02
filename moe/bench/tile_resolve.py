@@ -453,23 +453,41 @@ def resolve_tile_for_row(row: Mapping) -> DerivedTile:
                         gpu, int(float(row.get("num_tokens") or 0)))
 
 
+def comparable(row: Mapping) -> bool:
+    """Can this row's OBSERVED tile be set against the derivation at all?
+
+    The predicate `disagreement_with_observed` applies before it decides
+    anything, factored out because a caller has to be able to tell the two
+    reasons for a `None` apart. `None` from a row that carries no observed tile
+    means "nothing was checked"; `None` from a row that carries one means
+    "checked and they agree", and those are opposite pieces of evidence.
+
+    THE BUG THIS EXISTS TO CLOSE (audit B11/P). `_main` counted only the
+    disagreements, so an empty disagreement list printed "No row observed a tile
+    to check the derivation against ... it is NOT a pass" -- after comparing 924
+    v4 rows and finding every one of them in agreement. The strongest result the
+    module has ever produced was reported as its weakest.
+    """
+    if not SC.has_tile_config(row):
+        return False
+    try:
+        resolve_tile_for_row(row)
+    except TileNotDerivable:
+        return False
+    return True
+
+
 def disagreement_with_observed(row: Mapping) -> str | None:
     """For a v4 row: does the derivation match what the run actually recorded?
 
     None when they agree, when the row is v3 (nothing observed to compare
     against), or when the row is not a vLLM span. A string naming both values
-    when they differ.
-
-    This is the check that converts the whole module from an argument into a
-    testable claim, and it can only be run on a pod. Until a v4 arm exists every
-    call returns None, which is the honest answer and not a pass.
+    when they differ. `comparable` distinguishes the first `None` from the
+    other two, and `_main` counts both.
     """
-    if not SC.has_tile_config(row):
+    if not comparable(row):
         return None
-    try:
-        derived = resolve_tile_for_row(row)
-    except TileNotDerivable:
-        return None
+    derived = resolve_tile_for_row(row)
     observed = int(SC.tile_field(row, "tile_block_m"))
     if observed == derived.block_m_derived:
         return None
@@ -532,18 +550,41 @@ def _main(argv: list[str]) -> int:
     print()
     print("| model | gpu | dtype | source | BLOCK_M -> rows |")
     print("|---|---|---|---|---|")
-    for key in sorted(census(rows)):
-        counts = census(rows)[key]
+    # ONE census over the rows, not one per key. The loop used to rebuild the
+    # whole table inside its own iteration, which is 100k rows re-walked once
+    # per output line.
+    table = census(rows)
+    for key in sorted(table):
+        counts = table[key]
         spread = ", ".join(f"{bm}: {n}" for bm, n in sorted(counts.items()))
         print(f"| {key[0]} | {key[1]} | {key[2]} | {key[3]} | {spread} |")
+
+    # THE TWO COUNTS ARE BOTH REPORTED, and neither can be inferred from the
+    # other. `checked` is how many rows carried an observed tile the derivation
+    # could be set against; `disagreements` is how many of those it got wrong.
+    # Printing only the second made a clean 924-row validation and an empty
+    # corpus produce the same sentence.
+    checked = sum(1 for r in rows if comparable(r))
     disagreements = [d for d in (disagreement_with_observed(r) for r in rows) if d]
     print()
     if disagreements:
-        print(f"## {len(disagreements)} rows OBSERVED a tile this module derives "
-              f"differently")
+        print(f"## {len(disagreements)} of {checked} rows OBSERVED a tile this "
+              "module derives differently")
         for line in disagreements[:20]:
             print(f"- {line}")
         return 1
+    if checked:
+        print(f"## {checked} rows observed a tile; the derivation matches every "
+              "one of them")
+        print()
+        print("That is a validation and it is bounded by what those rows cover: "
+              "the")
+        print("derivation is confirmed on the (model, dtype, gpu, token count) "
+              "combinations")
+        print("present above and nowhere else. A shape no v4 row visited is "
+              "still derived,")
+        print("still unobserved, and still has to be labelled that way.")
+        return 0
     print("No row observed a tile to check the derivation against. Every input is")
     print("schema v3, which is exactly why this module had to be written, and it")
     print("is NOT a pass: nothing here has been validated against a run.")

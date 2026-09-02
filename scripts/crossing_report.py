@@ -15,6 +15,16 @@ count already carries. Off by default so existing output is unchanged, but every
 crossing this study has quoted was quoted bare, and on a flat curve the
 interpolation multiplies a 6% timing wobble into a 35% move in the answer.
 
+SINCE 2026-09-02 IT BANDS EVERY QUOTED RATIO, not only the headline crossing:
+each staircase step against the prediction, last over first, and the max-affine
+comparison. `docs/FINDINGS.md`'s "1.149 +/- 0.069" is the sd of eight ratios
+with none of their own intervals propagated, and `docs/STUDY.md` reads a 1-12%
+span-vs-whole-layer agreement as a confirmation while each crossing in it
+carries a 15-35% band. Both live inside the noise of what they are built from
+(audit S39, fix B9). The header also states an MDE from the corpus's own
+replicate spread, and the run prints the dirty share of the rows it admitted,
+which no analysis path in this repository had ever read (A6).
+
 EVERY crossing is printed, not the first. 8 of the 16 canonical uniform cells
 cross 0.5 going up more than once, because the curve is a staircase in M-tiles
 per expert rather than one flat-to-linear transition, and a cell that crosses
@@ -38,6 +48,7 @@ import argparse
 import collections
 import csv
 import itertools
+import random
 import statistics
 import sys
 from pathlib import Path
@@ -45,16 +56,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from moe.bench.crossing import (  # noqa: E402
+    BAND_QUANTILES,
     DEFAULT_DRAWS,
+    MIN_RELATIVE_SPREAD,
     ROUTING_COLUMN,
     STORED_TILE_EFF,
     crossing_interval,
     local_slopes,
     m_tiles_for_row,
+    relative_spread,
     routing_domain,
     timed_rows,
     upcrossings,
 )
+
+# ONE PERCENTILE ESTIMATOR FOR EVERY BAND THIS REPORT PRINTS. `crossing_interval`
+# bands the first crossing and `CellBands` below bands all of them, and the two
+# appear within four lines of each other in the output. Two different quantile
+# conventions -- this module's linear interpolation against
+# `statistics.quantiles`' exclusive method -- put those numbers a percent or two
+# apart on the same cell, for no reason a reader could ever work out. So the
+# module's own estimator is imported, private name and all, rather than
+# reimplemented next to it.
+from moe.bench.crossing import _percentile as _band_percentile  # noqa: E402
 from moe.bench.maxaffine import (  # noqa: E402
     PADDED_ROWS,
     RELATIVE,
@@ -65,9 +89,11 @@ from moe.bench.maxaffine import (  # noqa: E402
     fit_rows,
 )
 from moe.bench.published import (  # noqa: E402
+    dirty_share_line,
     filter_superseded,
     superseded_impls,
     superseded_reason,
+    two_sample_mde,
 )
 from moe.bench.ridge import (  # noqa: E402
     crossing_batch,
@@ -77,6 +103,103 @@ from moe.bench.ridge import (  # noqa: E402
 )
 from moe.bench.schema import TileConfigUnrecorded  # noqa: E402
 from moe.routing.imbalance import TileEfficiencyUndetermined  # noqa: E402
+
+
+class CellBands:
+    """Every crossing in one cell, each with its own 90% band, from ONE shake.
+
+    WHY EVERY RATIO NEEDS ONE. `docs/FINDINGS.md` quotes "1.149 +/- 0.069" for
+    the whole-layer over span comparison; that 0.069 is the sd of eight ratios
+    with no propagation of each crossing's own interval, which is 15-35% per
+    crossing because the interpolation's leverage is `1/(s1 - s0)` and the curve
+    is flat. `docs/STUDY.md` then reads a 1-12% agreement as a confirmation. Both
+    numbers live inside the noise of the crossings they are built from, and
+    neither had an interval that said so (audit S39, fix B9).
+
+    ONE SHAKE, NOT ONE PER CROSSING. The crossings of a cell are functions of the
+    same measured points, so `last / first` is a ratio of two dependent
+    quantities: banding them separately and dividing the ends would give a band
+    for a pair of independent crossings, which these are not. Every draw here
+    perturbs the whole curve once and reads every crossing off the result, so a
+    ratio's band is the distribution of the ratio.
+
+    MATCHED BY STEP, NOT BY INDEX. A draw can lose or gain a crossing, so the
+    k-th crossing of a draw is not necessarily the k-th of the medians. Each
+    measured crossing is matched to the draw's crossing on the SAME grid
+    interval, `Upcrossing.step_lo`/`step_hi`, and draws that produced none there
+    are dropped. That makes every band CONDITIONAL on the crossing surviving,
+    and `kept` says how often it did: a crossing recovered by a tenth of the
+    draws is not a well-located crossing however tight the band around the
+    survivors looks.
+    """
+
+    def __init__(self, replicates, min_tokens: float,
+                 draws: int = DEFAULT_DRAWS, seed: int = 0):
+        points, sigmas = [], []
+        for t, reps in replicates:
+            vals = [float(v) for v in reps if float(v) > 0.0]
+            if not vals:
+                continue
+            points.append((float(t), statistics.median(vals)))
+            sigmas.append(max(relative_spread(vals), MIN_RELATIVE_SPREAD))
+        #: The medians and the per-point sigmas the shake was built from, kept
+        #: so a reader chasing a band can see its inputs without re-deriving
+        #: them from the CSVs.
+        self.points = points
+        self.sigmas = sigmas
+        self.measured = upcrossings(points, min_tokens=min_tokens)
+        rng = random.Random(seed)
+        self.draws: list[list] = []
+        for _ in range(draws):
+            shaken = [(t, ms * rng.lognormvariate(0.0, sigma))
+                      for (t, ms), sigma in zip(points, sigmas, strict=True)]
+            self.draws.append(upcrossings(shaken, min_tokens=min_tokens))
+        self.n_draws = len(self.draws)
+
+    def band(self, index: int) -> tuple[float, float, int] | None:
+        """`(lo, hi, draws that kept this crossing)`, or None if none did."""
+        if index >= len(self.measured):
+            return None
+        step = (self.measured[index].step_lo, self.measured[index].step_hi)
+        samples = sorted(u.tokens for draw in self.draws for u in draw
+                         if (u.step_lo, u.step_hi) == step)
+        if not samples:
+            return None
+        return (_band_percentile(samples, BAND_QUANTILES[0]),
+                _band_percentile(samples, BAND_QUANTILES[1]), len(samples))
+
+    def ratio_band(self, index: int, denominator: float
+                   ) -> tuple[float, float, int] | None:
+        """The band on `crossing / denominator`, for a FIXED denominator.
+
+        The prediction `2R/b` is arithmetic over the model shape and the ridge,
+        so it carries none of this cell's timing noise and divides straight
+        through. A ratio against another MEASURED crossing is `last_over_first`,
+        which does not.
+        """
+        band = self.band(index)
+        if band is None or denominator <= 0:
+            return None
+        lo, hi, kept = band
+        return lo / denominator, hi / denominator, kept
+
+    def last_over_first(self) -> tuple[float, float, int] | None:
+        """The band on `last crossing / first crossing`, jointly propagated.
+
+        None when the medians give fewer than two crossings, or when no draw
+        gave two. Only draws with at least two crossings contribute, so this is
+        conditional on the staircase surviving, which is the same conditioning
+        every band here carries and is stated for the same reason.
+        """
+        if len(self.measured) < 2:
+            return None
+        samples = sorted(draw[-1].tokens / draw[0].tokens
+                         for draw in self.draws
+                         if len(draw) >= 2 and draw[0].tokens > 0)
+        if not samples:
+            return None
+        return (_band_percentile(samples, BAND_QUANTILES[0]),
+                _band_percentile(samples, BAND_QUANTILES[1]), len(samples))
 
 
 def tile_cell(counted: list[float] | None, previous: float | None) -> str:
@@ -103,7 +226,8 @@ def tile_cell(counted: list[float] | None, previous: float | None) -> str:
 
 
 def print_staircase(found: list, predicted: float,
-                    cell_tiles: dict[int, list[float]]) -> None:
+                    cell_tiles: dict[int, list[float]],
+                    bands: CellBands | None = None) -> None:
     """Every crossing, and what a cell with more than one of them is.
 
     Silent for a cell that crosses once, so the output of a single-crossing run
@@ -128,8 +252,31 @@ def print_staircase(found: list, predicted: float,
               f"{u.tokens / predicted:.2f}x predicted   "
               f"on the step T {u.step_lo:.0f} -> {u.step_hi:.0f}, "
               f"M-tiles {lo} -> {hi}")
-    print(f"    last over first: {found[-1].tokens / found[0].tokens:.2f}x. "
-          "M-tiles per expert is a step")
+        # EVERY RATIO ON THIS PAGE CARRIES ITS OWN BAND, not just the first
+        # crossing's. These per-step lines are what the staircase argument is
+        # read off, and until now they were the only bare numbers left in a
+        # report that bands its headline.
+        if bands is not None:
+            rb = bands.ratio_band(i - 1, predicted)
+            if rb is None:
+                print("             90% band: no draw kept a crossing on this "
+                      "step; the step does not survive its own noise")
+            else:
+                blo, bhi, kept = rb
+                print(f"             90% band: {blo:.2f}-{bhi:.2f}x predicted "
+                      f"({kept} of {bands.n_draws} draws kept this step)")
+    ratio = found[-1].tokens / found[0].tokens
+    print(f"    last over first: {ratio:.2f}x. M-tiles per expert is a step")
+    # ON ITS OWN LINE, above the prose it belongs to, so the banded run is the
+    # plain run plus lines: see the banner note in `main`. Jointly propagated,
+    # because the two crossings are functions of the same measured points and a
+    # ratio of two separately banded numbers would be a band for a pair that
+    # does not exist.
+    lof = bands.last_over_first() if bands is not None else None
+    if lof is not None:
+        blo, bhi, kept = lof
+        print(f"      90% band on last over first: {blo:.2f}-{bhi:.2f}x "
+              f"({kept} of {bands.n_draws} draws kept two crossings)")
     print("    function of T, and each extra tile is another pass over that "
           "expert's weights,")
     print("    so the slope spikes above 0.5 at every step and sags below it "
@@ -149,7 +296,8 @@ AFFINE_COLUMNS = ("num_tokens", "ms_p50", "load_active_experts",
 
 
 def print_max_affine(fit: MaxAffineFit | None, comparison: Comparison,
-                     model: str, predicted: float) -> dict | None:
+                     model: str, predicted: float,
+                     bands: CellBands | None = None) -> dict | None:
     """The second estimator's answer for this cell, with its residuals attached.
 
     Prints the fit quality on the SAME lines as the inflection, never below a
@@ -211,6 +359,29 @@ def print_max_affine(fit: MaxAffineFit | None, comparison: Comparison,
         if first is not None:
             print(f"      max-affine is {first:.2f}x the first and "
                   f"{last:.2f}x the last")
+            # The slope crossings in that ratio are measured and carry the
+            # cell's timing noise; the max-affine inflection is a fit to the
+            # same points and carries its own, which is NOT propagated here.
+            # Inverting the measured crossing's band gives the half of the
+            # uncertainty this report can compute, and the line says it is a
+            # half rather than pretending to be the whole.
+            infl = fit.inflection
+            if bands is not None and infl is not None:
+                # One crossing means first IS last, and printing the same band
+                # twice under two headings reads as two pieces of evidence.
+                wanted = [("first", 0)] if len(found) < 2 else \
+                    [("first", 0), ("last", len(found) - 1)]
+                for label, index in wanted:
+                    band = bands.band(index)
+                    if band is None:
+                        continue
+                    blo, bhi, kept = band
+                    if blo <= 0 or bhi <= 0:
+                        continue
+                    print(f"      against the {label} crossing's own 90% band: "
+                          f"{infl / bhi:.2f}-{infl / blo:.2f}x "
+                          f"({kept} of {bands.n_draws} draws); the "
+                          "inflection's own noise is not in this")
     return {"first": comparison.first, "last": comparison.last,
             "n_crossings": len(found), "inflection": inflection, "rpe": rpe,
             "ratio_first": comparison.ratio_to(comparison.first),
@@ -360,6 +531,12 @@ def main() -> int:
     # exactly what it did before.
     affine: dict[tuple[str, str, str], dict[int, list[dict]]] = {}
     modes: collections.Counter = collections.Counter()
+    # THE DIRTY COLUMN, COUNTED AS ROWS ARE ADMITTED, not re-read afterwards.
+    # `git_dirty` is the only thing a row carries about whether the code that
+    # produced it can be recovered, and no analysis path in this repository had
+    # ever looked at it (audit A6). One tiny dict per kept row rather than the
+    # row itself: a published row is 94 columns and there are up to 70k of them.
+    admitted_dirty: list[dict] = []
     kept = skipped = untimed = tileless = 0
     for path in csvs:
         with path.open(newline="") as fh:
@@ -403,6 +580,7 @@ def main() -> int:
                 if args.max_affine:
                     affine.setdefault(key, {}).setdefault(t, []).append(
                         {c: r.get(c, "") for c in AFFINE_COLUMNS})
+                admitted_dirty.append({"git_dirty": r.get("git_dirty", "")})
                 try:
                     tiles.setdefault(key, {}).setdefault(t, []).append(
                         m_tiles_for_row(r, args.block_m))
@@ -418,6 +596,7 @@ def main() -> int:
     print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
           f"{untimed} never timed (skipped graph mode: ms_p50 is 0.0, "
           f"which is not a measurement)")
+    print(dirty_share_line(admitted_dirty, "admitted rows"))
     if len(modes) > 1:
         print("  timing modes mixed into each median (l2_flush, cuda_graph): "
               + ", ".join(f"{k}x{v}" for k, v in sorted(modes.items())))
@@ -449,6 +628,18 @@ def main() -> int:
               f"between")
         print("  two slopes with leverage 1/(s1-s0), so it is widest exactly "
               "where the curve is flattest")
+        # EVERY LINE OF THIS BANNER OPENS WITH "bands are ", and that is a
+        # contract rather than a stylistic tic. `--uncertainty` is required to
+        # ADD lines and rewrite none, and `tests/test_crossing_uncertainty.py`
+        # enforces it by stripping the banded run of every line matching
+        # "90% band", "bands are " or "two slopes with leverage" and comparing
+        # what is left with the plain run. The same file also asserts that
+        # EXACTLY ONE line carries "90% band" on a single-crossing cell, which
+        # is the headline band, so a banner line may not use that phrase.
+        print("  bands are on EVERY quoted ratio below, not just the headline "
+              "crossing:")
+        print("  bands are printed per staircase step, on last over first, and "
+              "on max-affine")
     # Louder than the timing-mode note above, and deliberately not a change of
     # default: pooled rows do not make the crossing noisier, they make it a
     # crossing of nothing. Silently switching to `--routing uniform` here would
@@ -464,6 +655,37 @@ def main() -> int:
     if not cells:
         print("nothing to report")
         return 1
+
+    # THE MDE, FROM A STATED NOISE ASSUMPTION, BEFORE THE FIRST CELL. Audit
+    # B14: no arm in this study states one, so no ratio it prints has ever been
+    # set against the smallest ratio the design could resolve. The assumption is
+    # the corpus's own replicate spread, not a guess: `relative_spread` over
+    # each token count's replicates, medianed across every cell about to be
+    # reported. The crossing then AMPLIFIES that by its own leverage, which is
+    # why this is a floor and the per-cell bands below are the real widths.
+    spreads = []
+    for by_t in cells.values():
+        for reps in by_t.values():
+            vals = [float(v) for v in reps if float(v) > 0.0]
+            if vals:
+                spreads.append(max(relative_spread(vals), MIN_RELATIVE_SPREAD))
+    if spreads:
+        sd_rel = statistics.median(spreads)
+        print(f"  noise assumption: median relative replicate spread "
+              f"{sd_rel:.2%} over {len(spreads)} token counts "
+              f"(floor {MIN_RELATIVE_SPREAD:.1%})")
+        print(f"  MDE {two_sample_mde(sd_rel):.1%} relative, on a TIME (two "
+              "independent cells, 90% two-sided,")
+        print("  80% power). A crossing is an interpolation between two "
+              "slopes, so it multiplies")
+        print("  this by 1/(s1-s0) -- 4.3x on the measured A100 qwen2 cell -- "
+              "and the MDE on a")
+        print("  crossing RATIO is the per-cell band below, never this line.")
+    else:
+        print("  MDE: NOT STATED -- no cell carries replicates, so this report "
+              "has no noise")
+        print("  model and no ratio in it is comparable with anything.")
+    print()
 
     summary: list[tuple[str, dict]] = []
     for key_, by_t in sorted(cells.items()):
@@ -495,6 +717,10 @@ def main() -> int:
         # Below E/k a batch misses experts, so weight traffic grows with the
         # batch and the slope crosses for a reason unrelated to the ridge.
         sat = saturation_batch(model)
+        # ONE shake per cell, built once and shared by every band printed for
+        # it, so the crossing band, the per-step ratios and last-over-first all
+        # come off the same draws and cannot disagree with each other.
+        bands = CellBands(replicates, sat) if args.uncertainty else None
         # Every upcrossing, not the first. The first is what the line below
         # still prints, because published figures were read off it, but a cell
         # that crosses twice gets said so in as many words underneath.
@@ -537,7 +763,7 @@ def main() -> int:
                           f"{hi:.0f} tokens"
                           f"   {lo / predicted:.2f}-{hi / predicted:.2f}x "
                           f"predicted")
-            print_staircase(found, predicted, tiles.get(key_, {}))
+            print_staircase(found, predicted, tiles.get(key_, {}), bands)
         # Outside the else: a cell whose grid does not bracket a slope crossing
         # is exactly the cell where a second estimator is worth having, and
         # printing it only where the first one succeeded would hide that.
@@ -546,7 +772,7 @@ def main() -> int:
             fit = fit_rows(affine.get(key_, {}), args.max_affine_n,
                            args.block_m, args.max_affine_weighting)
             comparison = Comparison(tuple(u.tokens for u in found), fit)
-            row = print_max_affine(fit, comparison, model, predicted)
+            row = print_max_affine(fit, comparison, model, predicted, bands)
             if row is not None:
                 summary.append((f"{model} / {dtype} / {impl}", row))
         print()
