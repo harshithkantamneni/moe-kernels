@@ -884,6 +884,19 @@ def adopting_repo(tmp_path, rel):
     return tmp_path
 
 
+def unadopting_repo(tmp_path, rel):
+    """A repo whose `rel` does NOT import the module, for the caveat's loud
+    branch. Written rather than picked from the tree on purpose: which real
+    script is unadopted changes every time a slice lands (the anchor's adoption
+    broke two tests that had named it), and a test of the MECHANISM must not
+    depend on that. `adopts_exit_codes` reads the file, so a file is what this
+    gives it."""
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("def main():\n    raise SystemExit(2)\n")
+    return tmp_path
+
+
 def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path):
     """THE DEFECT, PLANTED. `dram_counter_route.py` ends `return 0 if verdict ==
     "OPEN" else 3`, so BLOCKED -- the answer that arm exists to obtain, and the
@@ -909,12 +922,17 @@ def test_an_unadopted_refusal_says_two_may_mean_the_opposite(tmp_path):
     measurement; this session reads 2 as REFUSED and prints "REFUSED BEFORE
     MEASURING". Until that script adopts the module the summary must not leave
     that sentence standing alone."""
+    repo = unadopting_repo(tmp_path, "scripts/memory_branch_anchor.py")
     log = tmp_path / "anchor.log"
     log.write_text("REFUSED: no calibration for this device.\n")
-    got = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(ROOT))
+    got = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(repo))
     assert "REFUSED BEFORE MEASURING" in got.stdout
-    assert "DOCUMENTS 2 as a" in got.stdout
+    assert "used to document 2" in got.stdout
     assert "eight-minute measurement" in got.stdout
+    # THE SAME ARM AGAINST THE REAL TREE IS SILENT, because the anchor adopted
+    # the table in this same rebuild. That is the caveat working, not missing.
+    real = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(ROOT))
+    assert "used to document 2" not in real.stdout
 
 
 def test_the_caveat_is_silent_once_the_file_speaks_the_table(tmp_path):
@@ -952,11 +970,19 @@ def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(
         "counter_plan\tINVALID\t3\t61\t0\t/x.log\t\n"
         "anchor_measure\tREFUSED\t2\t480\t0\t/y.log\t\n"
         "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
-    got = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    repo = unadopting_repo(tmp_path, "scripts/memory_branch_anchor.py")
+    (repo / "scripts" / "dram_counter_route.py").write_text(
+        "def main():\n    raise SystemExit(3)\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(repo))
     assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
     assert "counter_plan        INVALID" in got.stdout
     assert "anchor_measure      REFUSED" in got.stdout
     assert "ruler" not in got.stdout, "a DONE row has no state to disclose"
+    # Against the real tree only the counter route is still unadopted, so the
+    # anchor row drops out of the disclosure by itself.
+    real = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    assert "counter_plan        INVALID" in real.stdout
+    assert "anchor_measure" not in real.stdout
 
     clean = tmp_path / "CLEAN.tsv"
     clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"

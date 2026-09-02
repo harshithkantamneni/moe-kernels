@@ -373,9 +373,19 @@ PUBLISHED_BF16_CROSSING: dict[str, float] = {
 #: the A100". The paired data say otherwise, and `scripts/alpha_surface.py`
 #: refuses to call an unpaired median a comparison for this reason:
 #:
-#:   * The A100 arm (`2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`) runs
-#:     the OTHER WAY over the same three levels: 0.736 at G=8, 0.745 at G=16,
-#:     0.782 at G=64, RISING where this dict falls. It is not a reproduction.
+#:   * The A100 arm (`2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`) CANNOT
+#:     SAY. Exactly ONE (model, BN, BM) cell there holds all four levels, so the
+#:     paired medians are 0.651 / 0.706 / 0.739 / 0.679 at G = 1 / 8 / 16 / 64
+#:     off a single cell: they rise to G=16 and fall at G=64, and with n=1
+#:     `alpha_surface.py` prints no paired MDE because there is nothing to
+#:     compare the change against. It is not a reproduction of this dict and it
+#:     is not a contradiction of it either; it is silence, which is the weaker
+#:     and the correct reading.
+#:     THE NUMBERS THIS BULLET USED TO QUOTE, 0.736 / 0.745 / 0.782 "RISING",
+#:     WERE THE POOLED ARTEFACT THIS VERY COMMENT WARNS ABOUT: unpaired medians
+#:     over 2, 4 and 2 different fits, ordered by a string sort that put G=8
+#:     last (`1, 16, 64, 8`). Reading a direction off them was the same error
+#:     one bullet down, made while withdrawing it.
 #:   * Inside one shape at one tile, where a comparison is legitimate, neither
 #:     card is monotone. H200 qwen2 at BN=64/BM=32 goes 0.721 -> 0.766 -> 0.699
 #:     -> 0.668 across G = 1, 8, 16, 64: it RISES at the first step. H200 mixtral

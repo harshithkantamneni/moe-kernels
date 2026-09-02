@@ -1331,7 +1331,10 @@ def test_the_alpha_curve_is_labelled_pooled_and_says_the_a100_disagrees():
     source = (ROOT / "scripts" / "dtype_tile_confound.py").read_text()
     head = source.split("ALPHA_BY_GROUP_M_POOLED")[0]
     assert "POOLED, UNPAIRED MEDIANS" in head
-    assert "0.736" in head and "0.745" in head and "0.782" in head
+    # The paired A100 medians, off the one cell that holds every level. The
+    # pooled 0.736/0.745/0.782 survive only as the named artefact.
+    assert "0.651" in head and "0.706" in head and "0.739" in head
+    assert "POOLED ARTEFACT" in head
     # And the numbers are still exactly the H200 s4 medians they came from.
     assert DTC.ALPHA_BY_GROUP_M_POOLED == {1: 0.84, 8: 0.73, 16: 0.68, 64: 0.67}
 
@@ -1339,8 +1342,17 @@ def test_the_alpha_curve_is_labelled_pooled_and_says_the_a100_disagrees():
 def test_the_a100_surface_really_does_run_the_other_way():
     """Not a number typed into a comment: read out of the committed arm.
 
-    If the A100 arm is ever re-run and the medians change, this fails and the
-    docstring that quotes them has to be rewritten, which is the point.
+    THE ASSERTION THIS TEST USED TO MAKE WAS THE POOLED ARTEFACT. It read
+    `medians[8] < medians[16] < medians[64]` off a SURFACE.txt written by the
+    unpaired version of `alpha_surface.py`, which ordered the levels by a
+    string sort (1, 16, 64, 8) and took each median over a different set of
+    fits (n = 4, 4, 2, 2). Comparing medians over different cells is the exact
+    error the dict's comment exists to withdraw, so the test was committing it
+    to prove it.
+
+    Against the paired file there is ONE (model, bn, bm) cell holding all four
+    levels, so what the arm supports is: a non-monotone shape off a single
+    cell, and no direction at all.
     """
     text = (ROOT / "results" / "published"
             / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
@@ -1352,7 +1364,15 @@ def test_the_a100_surface_really_does_run_the_other_way():
         if len(parts) >= 5 and parts[0].isdigit() and "median" in line:
             medians[int(parts[0])] = float(parts[-1] if "corrected" not in line
                                            else parts[-3])
-    assert medians[8] < medians[16] < medians[64], medians
+    assert medians == {1: 0.651, 8: 0.706, 16: 0.739, 64: 0.679}, medians
+    # Rises to G=16, falls at G=64: not monotone, so it cannot reproduce a
+    # monotone dict, and not a clean reversal of one either.
+    assert medians[8] < medians[16]
+    assert medians[64] < medians[16]
+    # And it rests on one cell, which is why the file refuses to price the
+    # change. A single cell is the reason this is silence rather than evidence.
+    assert "only 1 matched cell" in block
+    assert "no\n  paired change here is comparable" in block
     assert DTC.ALPHA_BY_GROUP_M_POOLED[8] > DTC.ALPHA_BY_GROUP_M_POOLED[16]
 
 

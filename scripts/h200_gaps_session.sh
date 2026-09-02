@@ -54,9 +54,12 @@
 #     kernel at one BLOCK_N is evidence about that BLOCK_N.
 #   * THE ONE TABLE WAS ADOPTED HERE AND NOWHERE ELSE, SILENTLY. Adopting
 #     moe/bench/exit_codes fixed this file's reading and fixed none of the
-#     twenty scripts it reads: today only block_m_crossing_sweep.py imports the
-#     module, memory_branch_anchor.py still DOCUMENTS 2 and 3 the other way
-#     round, and dram_counter_route.py returns 3 for every verdict that is not
+#     twenty scripts it reads. That has since been closed for the measuring
+#     arms: every script this driver runs to time a cell imports the module,
+#     which is why `adopts_exit_codes` is a live check per row rather than a
+#     list maintained here. What remains unadopted is the analysis and probe
+#     tail, and one of them is an arm: dram_counter_route.py returns 3 for
+#     every verdict that is not
 #     OPEN -- so a BLOCKED counter route, which is that arm's registered ANSWER
 #     on a rented pod, lands in the ledger as INVALID and is described to the
 #     operator as measured-and-unquotable. The dry-run said this, for free,
@@ -329,9 +332,11 @@ contract_caveat() {
       printf '  %b.\n' "$why"
       printf '  It therefore reads REFUSED for one reason and one only: the command\n'
       printf '  exited 2. A file that has not adopted the table may spend 2 on\n'
-      printf '  something else -- scripts/memory_branch_anchor.py DOCUMENTS 2 as a\n'
-      printf '  VALIDITY gate that failed AFTER an eight-minute measurement, the\n'
-      printf '  opposite reading, and such a run is unquotable rather than free.\n'
+      printf '  something else. scripts/memory_branch_anchor.py used to document 2\n'
+      printf '  as a VALIDITY gate that failed AFTER an eight-minute measurement,\n'
+      printf '  the opposite reading, under which such a run is unquotable rather\n'
+      printf '  than free; it has since adopted the table, so it no longer reaches\n'
+      printf '  this caveat, and that is the shape of the risk for whatever has not.\n'
       printf '  Read the log before believing that nothing was measured, and\n'
       printf '  before re-running it.\n' ;;
     INVALID)
