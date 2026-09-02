@@ -1024,8 +1024,13 @@ def test_noise_floor_refuses_a_schema_it_does_not_know(tmp_path):
 
 
 def test_every_gate_prints_exactly_one_parsable_result_line():
-    """The driver greps `RESULT: ` and nothing else. A gate name with a space
-    in it would be dropped by the parser rather than fail loudly."""
+    """`RESULT: ` is the ONE line per gate a reader may grep. A gate name with
+    a space in it would be dropped by the parser rather than fail loudly.
+
+    This is the contract this file offers, not a description of what the
+    session driver currently reads: `arm_gate_regex` still selects free text
+    for this arm. See the test below for the half that is still open.
+    """
     if not HAVE_ARMS:
         pytest.skip("the committed arms are not checked out")
     floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
@@ -1041,3 +1046,75 @@ def test_every_gate_prints_exactly_one_parsable_result_line():
     assert len({g.token for g in gates}) == len(gates), "tokens must be unique"
     assert NF.exit_codes.classify_text(text) == \
         NF.exit_codes.classify(g.scored() for g in gates)
+
+
+#: The session driver's summary selector for this arm, copied from
+#: `arm_gate_regex` in `scripts/h200_gaps_session.sh` as it stands on
+#: apparatus-standard. Copied rather than imported because that file belongs to
+#: another slice: this is a record of what the reader does today, not a claim
+#: on it.
+DRIVER_FREE_TEXT_GREP = re.compile(r"^[ \t]*V[0-9][ \t]|floor|sigma")
+RESULT_GREP = re.compile(r"^RESULT: ")
+
+
+def _hits(pattern, text):
+    return [ln for ln in text.splitlines() if pattern.search(ln)]
+
+
+@needs_arms
+def test_the_result_grep_separates_a_refusal_from_a_scored_page_and_prose_cannot(capsys):
+    """A4, both halves: the one this file closed and the one it cannot.
+
+    THE DEFECT was that a REFUSED log reached the session summary looking like
+    output, because the summary selects this arm's lines by free text. The half
+    this file owns is closed: a refusal scores nothing and prints no
+    `RESULT: ` line at all, so the same grep that lifts every gate off a
+    measured page lifts NOTHING off a refusal.
+
+    The other half is not closed and cannot be closed here. The page has to say
+    "floor" and "sigma" to be about a noise floor, so the driver's current
+    pattern matches a refusal as readily as a result and cannot tell them
+    apart. That is pinned as a measurement rather than described, so that the
+    docstrings' claim about the remaining work is checked and not just asserted;
+    it goes green either way once the driver greps `^RESULT: `, since nothing
+    here reads that file.
+    """
+    assert NF.main(["--control-only"]) == NF.exit_codes.REFUSED
+    refused = capsys.readouterr().out
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS}
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    arms = list(NF.DEFAULT_ARMS)
+    gates = NF.validity_gates([], 6, arms, "fresh", floors)
+    gates += NF.claim_gates(floors, [], control, cards, arms)
+    scored = NF.render_gates(gates)
+
+    assert _hits(RESULT_GREP, refused) == [], \
+        "a refusal scores nothing, so it may print no result line"
+    assert len(_hits(RESULT_GREP, scored)) == len(gates), \
+        "and a scored page prints exactly one per gate, or the grep is useless"
+    assert _hits(DRIVER_FREE_TEXT_GREP, refused), \
+        ("if this is ever empty the driver's regex has stopped matching a "
+         "refusal and the note in the module docstring is out of date")
+    assert _hits(DRIVER_FREE_TEXT_GREP, scored), \
+        "prose matches both pages, which is exactly why it cannot be the reader"
+
+
+@needs_arms
+def test_a_refused_plan_leaks_its_registered_expectations_to_a_prose_reader(capsys):
+    """The concrete shape of the open half, named so it is not forgotten.
+
+    `--dry-run` prints the seven registered validity expectations as
+    `V1..V7` rows. Every one of them starts with the driver's own
+    `^[[:space:]]*V[0-9][[:space:]]` alternative, so a REFUSED plan puts seven
+    pre-registered expectations into the session summary under a heading that
+    reads like results. Rewording them cannot help: the rows have to be named
+    after the gates they register. Only the reader can fix this, and it is the
+    driver slice's line to change.
+    """
+    assert NF.main(["--dry-run", "--replicates", "6"]) == NF.exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert _hits(RESULT_GREP, out) == [], "a plan is not a result"
+    leaked = [ln.strip().split()[0] for ln in _hits(DRIVER_FREE_TEXT_GREP, out)
+              if re.match(r"^[ \t]*V[0-9][ \t]", ln)]
+    assert leaked == [f"V{i}" for i in range(1, 8)], leaked

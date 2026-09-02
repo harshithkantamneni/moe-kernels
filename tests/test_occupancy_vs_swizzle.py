@@ -1008,8 +1008,13 @@ def test_planted_cells_are_stamped_synthetic_and_never_with_the_real_name():
 
 
 def test_every_gate_prints_exactly_one_parsable_result_line():
-    """The driver greps `RESULT: ` and nothing else. A gate whose name carried
-    a space would be dropped by the parser rather than fail loudly."""
+    """`RESULT: ` is the ONE line per gate a reader may grep. A gate whose name
+    carried a space would be dropped by the parser rather than fail loudly.
+
+    It is the contract this file offers. The session driver's regex for this
+    arm still matches verdict-shaped prose instead, which is why the exit code
+    a pod records is checked separately below.
+    """
     args, cfg, b, plan, reg, _ = _plan_and_reg()
     samples = OVS.planted_samples(
         cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
@@ -1158,3 +1163,29 @@ def test_replay_refuses_a_directory_with_no_recorded_rulers(tmp_path):
     rc = OVS.main(["--replay", str(out), "--capability", "9.0",
                    "--sm-count", "132", "--l2-bytes", "50000000"])
     assert rc == OVS.exit_codes.REFUSED
+
+
+def test_a_claim_fail_arm_exits_zero_unless_argv_asks_for_the_code(capsys):
+    """What a pod's ledger records when a claim gate does not pass, measured.
+
+    The file says in two places that a P6-UNKNOWN run CLASSIFIES as CLAIM_FAIL,
+    and the qualifier is the whole point: `exit_for` prints the CLAIM_FAIL line
+    and then returns DONE without `--fail-on-gate`, for callers that predate
+    the exit-code table, and `scripts/h200_gaps_session.sh` launches this arm
+    without the flag. A reader of the docstrings alone would expect a non-zero
+    exit on a pod and would be wrong; the verdict travels on the RESULT lines,
+    which is why `classify_text` over the log has to disagree with the code.
+
+    `--audit` is the cheapest genuine CLAIM_FAIL available off GPU: A1 fails
+    against the published corpus and A2 is UNKNOWN by construction. Both
+    branches of the flag are exercised, because a downgrade that also fired
+    with `--fail-on-gate` would make the flag decorative.
+    """
+    assert OVS.main(["--audit"]) == OVS.exit_codes.DONE
+    out = capsys.readouterr().out
+    assert f"{OVS.exit_codes.CLAIM_FAIL} CLAIM_FAIL" in out, \
+        "the downgrade must still print the code it would have exited with"
+    assert "--fail-on-gate" in out, "and how to get that code instead"
+    assert OVS.exit_codes.classify_text(out) == OVS.exit_codes.CLAIM_FAIL, \
+        "the log says CLAIM_FAIL where the exit code says DONE"
+    assert OVS.main(["--audit", "--fail-on-gate"]) == OVS.exit_codes.CLAIM_FAIL

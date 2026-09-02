@@ -80,8 +80,16 @@ setting with no reference has no alpha. So on the H200 this experiment can
 report that alpha moves with the ladder and CANNOT say which of the two things
 the ladder moves is responsible; on the A100 it can. An UNKNOWN P6 counts
 against the run through `moe.bench.exit_codes.classify`, which is the honest
-accounting: the concurrency reading is not established, and the arm exits
-CLAIM_FAIL rather than DONE.
+accounting: the concurrency reading is not established, so the run CLASSIFIES
+as CLAIM_FAIL.
+
+WHETHER IT EXITS 1 IS A DIFFERENT QUESTION, and the answer is no unless argv
+says so. `exit_for` prints the CLAIM_FAIL line and the code it would have used
+and then returns DONE without `--fail-on-gate`, for callers that predate the
+exit-code table, and the session driver launches this arm without the flag. So
+on a pod a P6-UNKNOWN run exits 0 and the ledger records DONE. What carries the
+verdict is the `RESULT: CLAIM P6 ... UNKNOWN` line above it, which is why every
+gate prints one and why `classify_text` over the log is the second opinion.
 
 WHAT alpha IS HERE, stated because the name has caused trouble in this study. A
 ladder fit at BLOCK_M returns
@@ -2209,8 +2217,10 @@ def gate_depth_control(depth: Contrast, occ: Contrast, threshold: float,
     nothing for depth to be smaller than, and comparing two noise measurements
     passes about half the time. `exit_codes.classify` scores UNKNOWN against
     the gate in both cases, so a run that could not separate the two mechanisms
-    exits CLAIM_FAIL rather than DONE, which is what "the claim was not
-    established" means.
+    CLASSIFIES as CLAIM_FAIL rather than DONE, which is what "the claim was not
+    established" means. It exits 1 only under `--fail-on-gate`: `exit_for`
+    reports a CLAIM_FAIL as DONE without it, so this gate's `RESULT:` line and
+    not the process code is what tells a caller the reading was confounded.
     """
     ladder = ["residency ladder (blocks/SM -> num_stages that reach it): "
               + ", ".join(f"{k}: {v}" for k, v in levels.items()),

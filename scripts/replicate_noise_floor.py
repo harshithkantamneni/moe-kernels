@@ -171,11 +171,23 @@ to exit 3 for "nothing was measured" while the session driver read 3 as RETRY an
 2 as REFUSED, so every honest refusal was queued for a re-run; and because the
 driver's summary grepped free text for `floor|sigma`, a REFUSED log matched
 eighteen times and printed the IMPORTED proxy and a PRE-REGISTERED expectation as
-though they were this run's measured output. Both halves are fixed here: refusals
-return `exit_codes.REFUSED`, a measured run returns `exit_codes.classify` over
-its own gates, and the only greppable result on the page is one
-`exit_codes.result_line` per SCORED gate. A refusal prints none at all, which is
-what `classify_text` reads as "nothing was scored".
+though they were this run's measured output. THE WRITING HALF IS FIXED HERE:
+refusals return `exit_codes.REFUSED`, a measured run returns
+`exit_codes.classify` over its own gates, and the only result-shaped line on the
+page is one `exit_codes.result_line` per SCORED gate. A refusal prints none at
+all, which is what `classify_text` reads as "nothing was scored".
+
+THE READING HALF IS NOT FIXED, AND IS NOT THIS FILE'S TO FIX. `arm_gate_regex`
+in `scripts/h200_gaps_session.sh` still selects this arm's summary with
+`^[[:space:]]*V[0-9][[:space:]]|floor|sigma`, and no wording available to this
+file escapes it: a page about a noise floor has to say "floor" and "sigma".
+Measured against that regex on 2026-09-02, a REFUSED `--control-only` still
+matches 8 lines and a REFUSED `--dry-run` 23, the second including all seven
+registered `V1..V7` expectation rows, which is the defect itself. So the shape
+changes below are necessary and not sufficient: the defect closes when the
+driver greps `^RESULT: ` for this arm, which is the driver's slice to change.
+Until it does, a noise_floor block in a session summary is UNVERIFIED unless a
+`RESULT:` line stands inside it.
 """
 from __future__ import annotations
 
@@ -1391,9 +1403,11 @@ class Gate:
         """The ONE line a driver may grep for this gate.
 
         Nothing else this file prints starts with `RESULT: `. The summary that
-        used to grep `floor|sigma` matched a REFUSED log eighteen times and
-        printed the imported proxy and a pre-registered expectation as measured
-        output; that is what this line replaces.
+        greps `floor|sigma` matched a REFUSED log eighteen times and printed the
+        imported proxy and a pre-registered expectation as measured output; this
+        line is what that grep should have been reading. It is not what the
+        session driver reads yet, so this line OFFERS the fix rather than being
+        it: `arm_gate_regex` still selects free text for this arm.
         """
         detail = (f"[{self.kind}] {self.prediction} | expected {self.expected} "
                   f"| gate {self.rule} | saw {self.observed}")
@@ -1954,7 +1968,11 @@ def render_power_table(sd: float, label: str, cells: int = 4) -> str:
             # NOT WRITTEN AS `floor: <number>`. That was the shape of this
             # line until 2026-09-02, and the session driver's free-text summary
             # grep (`floor|sigma`) lifted it out of a REFUSED log and printed
-            # the imported proxy as though this run had measured it.
+            # the imported proxy as though this run had measured it. Reshaping
+            # it stops it LOOKING like a result to a reader and to
+            # `parse_result_lines`; it does not stop that grep, which still
+            # matches this table through the word "sigma". Only a `^RESULT: `
+            # grep in the driver does that.
             "THE DESIGN THE STUDY ACTUALLY RAN is one run per condition with "
             "sigma imported from this",
             f"table, which detects {mde_external_sigma(sd, 1):.4f} in alpha. "
@@ -2126,6 +2144,15 @@ def render_predictions(n: int, arms: list[Arm]) -> str:
     them out of a REFUSED log as measured output. Expectations are written as
     `expect PASS` here; the only result-shaped line this file emits is
     `moe.bench.exit_codes.result_line`, and a refusal emits none.
+
+    THAT IS NOT ENOUGH BY ITSELF, and the limit is worth naming where the rows
+    are built. The driver's regex for this arm is still
+    `^[[:space:]]*V[0-9][[:space:]]|floor|sigma`, which catches these rows for
+    their leading `V1..V7` and for the word `floor` whatever verdict word they
+    carry, so a refusal's registered expectations still reach the session
+    summary. What the wording buys is that nothing here can be MISTAKEN for a
+    measurement by a reader or parsed as one; keeping it out of the summary
+    altogether is the driver's regex to change.
     """
     per_model = []
     for model, group in swizzle_pairs(arms).items():
