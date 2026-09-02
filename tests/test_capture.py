@@ -495,3 +495,55 @@ def test_position_ids_skip_the_padding_they_are_given():
     assert pos.tolist() == [[0, 0, 0, 1], [0, 1, 2, 3]]
     # The first real token of a left-padded row must be position 0, not 2.
     assert pos[0, 2].item() == 0
+
+
+# --------------------------------------------------------------------------
+# The torchvision block. Step 7 lost both of its captures on 2026-09-01 to a
+# torch/torchvision ABI mismatch that transformers reported as a MODEL problem.
+# --------------------------------------------------------------------------
+
+def _capture_traces_module():
+    spec = importlib.util.spec_from_file_location(
+        "capture_traces",
+        Path(__file__).resolve().parents[1] / "scripts" / "capture_traces.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_disabling_torchvision_makes_it_unimportable_and_undetectable(
+        monkeypatch, capsys):
+    """Both halves matter and they fail differently.
+
+    `import torchvision` must raise ImportError, which is what transformers
+    already handles. And `find_spec` must return None rather than raising,
+    because transformers' _is_package_available calls it FIRST and a raise there
+    would replace one crash with another. On CPython 3.12 a None entry in
+    sys.modules gives exactly that pair; this pins it, because the whole fix
+    rests on that behaviour and it is not something the stdlib documents
+    prominently.
+    """
+    import sys as _sys
+    monkeypatch.delitem(_sys.modules, "torchvision", raising=False)
+    mod = _capture_traces_module()
+    mod._disable_torchvision()
+
+    assert _sys.modules["torchvision"] is None
+    with pytest.raises(ImportError):
+        importlib.import_module("torchvision")
+    assert importlib.util.find_spec("torchvision") is None, (
+        "find_spec must report absence cleanly; if it raises, transformers' "
+        "availability check crashes instead of degrading")
+    assert "torchvision disabled" in capsys.readouterr().out
+
+
+def test_a_working_torchvision_is_left_alone(monkeypatch):
+    """The block is for a MISMATCHED torchvision, not a hostile act. If one is
+    already imported and working, taking it away would break a caller that has
+    every right to it."""
+    import sys as _sys
+    sentinel = object()
+    monkeypatch.setitem(_sys.modules, "torchvision", sentinel)
+    mod = _capture_traces_module()
+    mod._disable_torchvision()
+    assert _sys.modules["torchvision"] is sentinel

@@ -422,6 +422,38 @@ def assert_batches_differ(counts) -> None:
             "least batches*batch_size distinct prompts. Nothing was written.")
 
 
+def _disable_torchvision() -> None:
+    """Make `import torchvision` fail cleanly, BEFORE transformers reaches it.
+
+    THE FAILURE THIS FIXES, and it cost a whole step-7 slot on 2026-09-01:
+
+        RuntimeError: operator torchvision::nms does not exist
+        ModuleNotFoundError: Could not import module 'MixtralForCausalLM'
+
+    transformers imports torchvision unconditionally from `image_utils`, and the
+    torchvision on the path is the IMAGE's, installed against a different torch
+    than the venv's pinned 2.13.0. Registering its fake kernels against the wrong
+    torch raises at import time, and transformers reports the result as "could
+    not import MixtralForCausalLM. Are this object's requirements defined
+    correctly?" -- which reads as a model problem and is a torch/torchvision ABI
+    problem. Both models this study captures died that way.
+
+    Setting the entry to None makes `import torchvision` raise ImportError, which
+    is the failure transformers ALREADY handles: its is_torchvision_available()
+    path degrades to no image support, and nothing here processes images. That is
+    strictly better than uninstalling the image's torchvision, which is shared
+    with everything else on the box, and better than pinning a matching build,
+    which would pull a second torch.
+    """
+    import sys as _sys
+    if "torchvision" in _sys.modules and _sys.modules["torchvision"] is not None:
+        return                       # already imported and working; leave it
+    _sys.modules["torchvision"] = None
+    print("[capture] torchvision disabled: transformers imports it "
+          "unconditionally and the one on this path was built against a "
+          "different torch. Nothing here processes images.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -481,6 +513,7 @@ def main() -> int:
     print(f"[capture] {len(prompts)} distinct prompts -> {n_distinct} distinct "
           f"batches of {args.batch_size}")
 
+    _disable_torchvision()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"[capture] loading {cfg.hf_repo} (first run downloads to HF_HOME)")
