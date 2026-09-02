@@ -1275,3 +1275,188 @@ def test_help_renders(capsys):
     assert exc.value.code == 0
     out = capsys.readouterr().out
     assert "--plant-noise" in out and "--trials" in out
+
+
+# --------------------------------------------------------------------------
+# THE BAND'S PROVENANCE WHERE IT IS ACTUALLY SCORED (review of finding 32).
+# The plan output was corrected and the GATE was not, so `--dry-run` printed
+# the two committed reports while report.txt, report.json and the RESULT line's
+# context went on naming four A100 slopes that are in no file. Everything below
+# scores a planted run rather than grepping a plan, because a plan scores no
+# gates and that is exactly how the surviving copy went untested.
+# --------------------------------------------------------------------------
+
+def _break_the_corpus(monkeypatch):
+    """Make the committed BN pair unreadable, through the REAL refusal path.
+
+    `published_two_point_alpha_a` binds `PUBLISHED_BN_PAIR` as a default at
+    definition time, so patching the constant would silently do nothing and the
+    test would pass by not testing. This re-points the function at two paths
+    that do not exist, so what the callers see is the refusal the real function
+    raises with the real message.
+    """
+    real = BND.published_two_point_alpha_a
+    monkeypatch.setattr(
+        BND, "published_two_point_alpha_a",
+        lambda *a, **k: real((ROOT / "nope-a.json", ROOT / "nope-b.json")))
+
+
+def test_the_scored_c1_gate_carries_the_committed_provenance():
+    """The gate, not the plan: what report.txt and report.json actually say."""
+    _, gates, payload = _planted_run(16, noise=0.004)
+    c1 = gates["C1"]
+    printed = "\n".join(c1.render())
+    assert "d66ad3.report.json" in printed and "16cc16.report.json" in printed
+    assert "alpha_a band [0.10, 0.38]" in printed
+    for phantom in ("0.106", "0.102", "0.129", "0.119", "ai_model.py's 0.143"):
+        assert phantom not in printed, f"{phantom} is back in the gate"
+    # And the same text is what leaves the pod in the JSON.
+    blob = json.dumps(payload, default=str)
+    for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        assert phantom not in blob, f"{phantom} reached report.json"
+
+
+def test_c1_prints_the_band_lines_it_is_handed():
+    """`analyse_run` threads `check_alpha_a_band`'s lines down to the gate.
+
+    The band is re-derived once, before any GPU time, and the gate prints THAT
+    derivation rather than a second one: two copies of a provenance is how the
+    corrected one and the stale one ended up in the same report.
+    """
+    _, band_lines = BND.check_alpha_a_band()
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False, band_lines=band_lines)
+    assert gate.lines[:len(band_lines)] == band_lines
+
+
+def test_the_gate_refuses_in_words_when_the_band_cannot_be_re_read(monkeypatch):
+    """The FAIL branch: a corpus that no longer reads back.
+
+    Scoring happens after the pod time is spent, so the gate says so on the page
+    instead of raising the report away -- and it must never fall back to a
+    remembered sentence, which is the whole finding.
+    """
+    _break_the_corpus(monkeypatch)
+    lines = BND.band_provenance_lines()
+    assert len(lines) == 1 and lines[0].startswith("BAND PROVENANCE UNREADABLE")
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False)
+    assert any("BAND PROVENANCE UNREADABLE" in ln for ln in gate.lines)
+    assert not any("0.106" in ln for ln in gate.lines)
+
+
+def test_c1_says_why_it_read_unknown_when_the_estimator_is_not_sharp():
+    """UNKNOWN with a fitted number beside it is otherwise unreadable."""
+    fit = BND.Decomposition("EXA", None, 0.9, 0.2, 0.0, 4, 3, (0.001,),
+                            ("BN=64 BM=128",), (0.5,), "planted")
+    boot = BND.Bootstrap(10, {}, {}, 0.4, 0.01, None, {}, "planted")
+    gate = BND.gate_alpha_a(fit, boot, sharp=False)
+    assert gate.passed is None and "C6" in gate.observed
+    assert BND.gate_alpha_a(fit, boot, sharp=True).passed is True
+
+
+# --------------------------------------------------------------------------
+# C6, THE SHARPNESS GATE: THE RULE IT STATES AND THE KIND IT IS.
+# --------------------------------------------------------------------------
+
+def test_the_sharpness_rule_states_the_derivation_the_ceiling_actually_has():
+    """"Half the width of the band" is arithmetically false and was printed.
+
+    Half of the [0.10, 0.38] band is 0.14, five times the 0.025 ceiling, and the
+    constant's own re-justification says the bar is the sharpest two-point sd in
+    the corpus instead. The rule string is what every report quotes, so it is
+    read from the corpus rather than written down.
+    """
+    boot = BND.Bootstrap(10, {}, {}, 0.01, 0.01, None, {}, "planted")
+    gate = BND.gate_sharpness(boot)
+    sharpest, source = BND.sharpest_two_point_sd()
+    assert sharpest == pytest.approx(
+        min(p.sd for p in BND.published_two_point_alpha_a()))
+    assert f"{sharpest:.3f}" in gate.rule and "d66ad3" in "".join(gate.lines)
+    assert "half the width" not in gate.rule.lower()
+    assert source in "".join(gate.lines)
+
+
+def test_the_sharpness_rule_says_so_when_the_corpus_cannot_be_read(monkeypatch):
+    """The FAIL branch of the bar's provenance: no bar quoted from memory."""
+    _break_the_corpus(monkeypatch)
+    sharpest, why = BND.sharpest_two_point_sd()
+    assert sharpest is None and why
+    gate = BND.gate_sharpness(
+        BND.Bootstrap(10, {}, {}, 0.30, 0.01, None, {}, "planted"))
+    assert "cannot be read here" in gate.rule
+    assert gate.passed is False          # it still scores; only the bar's
+    assert "0.043" not in gate.rule      # provenance is missing
+
+
+def test_a_pinning_that_cannot_resolve_alpha_a_is_a_result_not_a_broken_run():
+    """C6 is a CLAIM gate, and a G=1 arm therefore ends CLAIM_FAIL, not INVALID.
+
+    The shortfall is PREDICTED at GROUP_SIZE_M=1 and printed in the plan before
+    the pod is rented. As a VALIDITY gate it made `classify` return 3 INVALID --
+    nothing on the page quotable -- for a run whose alpha_b, C3 and C5 are
+    exactly what that pinning is for, and the session driver re-measured the arm
+    on every pass because 3 is not one of its finished codes.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    c6 = gates["C6"]
+    assert c6.kind == "CLAIM" and c6.passed is False
+    assert c6.result_line().startswith("RESULT: CLAIM C6 FAIL")
+    assert "C1 ALONE" in c6.invalidates
+    assert all(g.passed is True for g in gates.values() if g.kind == "VALIDITY")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    args = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), args) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL
+
+
+def test_a_real_validity_failure_at_the_same_pinning_is_still_invalid():
+    """The FAIL branch: the softening reaches CLAIM_FAIL and nothing else.
+
+    Planted onto the same G=1 gate list, one broken VALIDITY gate still takes
+    the arm to 3 with the flag off, which is what stops this change from being
+    a way of exiting 0 whatever happened.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    broken = list(gates.values()) + [
+        BND.Gate("VALIDITY", "V0 planted", "", "", False, "planted failure")]
+    assert exit_codes.classify(g.scored() for g in broken) == exit_codes.INVALID
+    assert BND._exit_over(broken, args_for(capability="9.0")) \
+        == exit_codes.INVALID
+
+
+def test_the_plan_says_which_exit_code_a_g1_arm_is_expected_to_return(capsys):
+    """Predicted before the pod, in the same line that predicts the shortfall."""
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "1",
+              "--power-draws", "20", "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "CANNOT RESOLVE alpha_a" in out
+    assert "1 CLAIM_FAIL" in out and "NOT 3 INVALID" in out
+
+
+# --------------------------------------------------------------------------
+# WHAT AN UNDECIDABLE CLAIM ACTUALLY MAKES THE PROCESS RETURN.
+# The C2 guard's docstrings said an arm whose C2 has no power "exits
+# CLAIM_FAIL"; `_exit_over` reports CLAIM_FAIL as DONE unless --fail-on-gate,
+# and the session driver passes neither. The verdict travels on the RESULT
+# line, not in the exit code, and that is what this pins.
+# --------------------------------------------------------------------------
+
+def test_a_powerless_c2_travels_on_the_result_line_not_the_exit_code():
+    _, gates, _ = _planted_run(1, noise=0.008)
+    assert gates["C2"].passed is None
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 UNKNOWN")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    default = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), default) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL

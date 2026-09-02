@@ -228,6 +228,20 @@ the session driver reads verdicts rather than grepping prose -- the failure that
 once let a REFUSED log's pre-registered `C1 ... [PASS]` be summarised as a
 measurement.
 
+AND WHAT A GROUP_SIZE_M=1 ARM EXITS WITH, because that arm is scheduled
+unconditionally and two of its gates are PREDICTED not to pass there. C4 is
+predicted to FAIL and C6, the estimator's sharpness, is predicted to FAIL with
+it: both are CLAIM gates, so `classify` returns 1 CLAIM_FAIL and `_exit_over`
+reports that as 0 without `--fail-on-gate`, which is what the driver's ledger
+reads as finished. It is NOT 3 INVALID. C6 was a VALIDITY gate until 2026-09-02
+and INVALID is what a G=1 arm returned, so the driver logged every one of them
+RETRY and re-measured 11 GPU minutes on every pass, while the report under it
+read UNKNOWN on alpha_a and PASS on everything a G=1 run is there for. INVALID
+means nothing on the page may be quoted, and a predicted shortfall in one
+estimator's power is not that; see `gate_sharpness`. The failing gates are still
+on the page, still one RESULT line each, and `--fail-on-gate` still returns the
+1 for a caller that wants a claim shortfall to be an error.
+
 OFF GPU. `--dry-run` prints the plan, the resource bill, the per-cell
 predictions, the computed design power and its MDE, and the cost. `--self-test`
 plants four worlds -- the exact model, the model with a term missing, a world
@@ -470,7 +484,7 @@ STRUCTURE_CORRELATION = 0.90
 #:
 #: IT IS NO LONGER HALF THE BAND WIDTH, and the number did not move. It was
 #: written as "half the width of [0.10, 0.15]", so widening the band to the one
-#: the corpus supports would have carried the ceiling to 0.14 and made V6 pass
+#: the corpus supports would have carried the ceiling to 0.14 and made C6 pass
 #: on an estimator six times looser than the one it was written to require. A
 #: gate that loosens because its hypothesis got vaguer is not a gate. The bar is
 #: instead the thing this experiment claims to improve on: the SHARPEST
@@ -478,6 +492,12 @@ STRUCTURE_CORRELATION = 0.90
 #: that cannot beat the two-point reading it replaces has not replaced it. 0.025
 #: is comfortably inside that, and `--self-test` is what shows whether a given
 #: pinning reaches it.
+#:
+#: `gate_sharpness` READS that 0.043 back out of the corpus rather than printing
+#: this paragraph's copy of it, because the gate line and the constant's
+#: justification drifted apart once already: the rule string went on saying
+#: "half the width of the [0.10, 0.38] band" for a band whose half-width is
+#: 0.14, five times this ceiling, beside the very widening that refuted it.
 ALPHA_A_SD_CEILING = 0.025
 
 #: A compute reference must imply at least this fraction of the ATTACHED card's
@@ -2124,42 +2144,132 @@ def gate_identifiable(cells, primary: int) -> Gate:
                  f"against a tolerance of {TOLERANCE:.2f}."])
 
 
+def band_provenance_lines() -> list[str]:
+    """`check_alpha_a_band`'s lines, or ONE line naming why they cannot be read.
+
+    Every place that prints the band's provenance reads it from the two
+    committed reports through here. It exists because a gate must not RECITE a
+    provenance: until 2026-09-02 C1's own lines named four A100 slopes that are
+    in no committed file, the plan output was corrected and this path was not,
+    and nothing in the code could tell the two apart.
+
+    It refuses in words rather than raising. Scoring happens after the pod time
+    is already spent and an exception there would take the whole report with it;
+    a report saying its band cannot be re-derived is worth more than no report.
+    `_main` still calls `check_alpha_a_band` BEFORE measuring, where the same
+    failure is free and the run refuses outright.
+    """
+    try:
+        return list(check_alpha_a_band()[1])
+    except CorpusMissing as exc:
+        return [f"BAND PROVENANCE UNREADABLE, do not quote C1: {exc}"]
+
+
+def sharpest_two_point_sd() -> tuple[float | None, str]:
+    """The tightest two-point sd in the committed corpus, and where it is from.
+
+    This is what `ALPHA_A_SD_CEILING` is set against: the reading a three-point
+    fit exists to replace. Read rather than quoted, for the reason the constant
+    gives. The ceiling used to be justified as "half the band width", and half a
+    band that later widened is not a bar, it is whatever the hypothesis happened
+    to become.
+    """
+    try:
+        points = published_two_point_alpha_a()
+    except CorpusMissing as exc:
+        return None, str(exc)
+    best = min(points, key=lambda p: p.sd)
+    return best.sd, f"BM={best.block_m} of {best.source}"
+
+
 def gate_sharpness(boot: Bootstrap) -> Gate:
-    """Is the estimator sharp enough for C1 to mean anything."""
+    """C6: is the estimator sharp enough for C1 to mean anything.
+
+    A CLAIM GATE AND NOT A VALIDITY ONE, changed 2026-09-02, and the reason is
+    the shared table's own vocabulary. VALIDITY means the instrument broke and
+    NOTHING on the page may be quoted (`exit_codes`, INVALID); this gate says
+    one thing only, that alpha_a's interval is too wide for C1 to be tested,
+    which is exactly what its `invalidates` field has always said. alpha_b, the
+    invariance and the TEMPO comparison do not pass through alpha_a's spread and
+    stay quotable, and C1 already reads UNKNOWN on its own when `sharp` is
+    False, so the claim is not established either way.
+
+    WHAT IT COST AS A VALIDITY GATE. The spread is PREDICTED to miss this bar at
+    GROUP_SIZE_M=1: the design's power scales with `1 - alpha_b` and the corpus
+    puts alpha_b near 0.93 there. So every G=1 arm exited 3 INVALID, the session
+    driver reads anything but its listed finished code as RETRY, and the arm was
+    re-measured on every pass at 11 GPU minutes a time while its own report said
+    a G=1 run measures alpha_b and the invariance. A pinning whose power was
+    predicted, printed in the plan and then met is not a broken instrument. It
+    is a pre-registered expectation the world declined, which is what CLAIM_FAIL
+    is for and what C4 at the same pinning already was.
+    """
     sd = boot.alpha_a_sd
-    return Gate(VALIDITY, "V6 estimator sharpness",
-                "alpha_a's interval is narrower than the band it is tested "
-                "against",
-                f"bootstrap sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f}, half the "
-                f"width of the [{ALPHA_A_BAND[0]:.2f}, {ALPHA_A_BAND[1]:.2f}] "
-                "band",
+    sharpest, sharpest_source = sharpest_two_point_sd()
+    rule = f"bootstrap sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f}"
+    if sharpest is None:
+        rule += (", the sharpest two-point sd in the committed corpus, which "
+                 f"cannot be read here: {sharpest_source}")
+    else:
+        rule += (f", inside the {sharpest:.3f} sd of the sharpest two-point "
+                 "slope this three-point fit replaces. NOT half the band "
+                 f"width: the band is {ALPHA_A_BAND[1] - ALPHA_A_BAND[0]:.2f} "
+                 "wide and half of it would be a looser bar than the reading "
+                 "being replaced")
+    return Gate(CLAIM, "C6 estimator sharpness",
+                "alpha_a's interval is tighter than the two-point reading it "
+                "replaces",
+                rule,
                 None if sd is None else sd <= ALPHA_A_SD_CEILING,
                 "no bootstrap spread" if sd is None else f"sd = {sd:.4f}",
-                "C1: an estimator whose interval is wider than the hypothesis "
-                "it tests has not tested it, and a PASS would be an artefact "
-                "of the band's width",
-                [boot.note])
+                "C1 ALONE, which reads UNKNOWN: an estimator whose interval is "
+                "wider than the hypothesis it tests has not tested it, and a "
+                "PASS would be an artefact of the band's width. alpha_b, C3 and "
+                "C5 do not pass through this spread and stay quotable",
+                [boot.note]
+                + ([] if sharpest is None
+                   else [f"the bar is read from {sharpest_source}"]))
 
 
-def gate_alpha_a(fit: Decomposition, boot: Bootstrap, sharp: bool) -> Gate:
+def gate_alpha_a(fit: Decomposition, boot: Bootstrap, sharp: bool,
+                 band_lines: list[str] | None = None) -> Gate:
+    """C1, scored against a band whose provenance is READ and never recited.
+
+    `band_lines` is `check_alpha_a_band`'s second return value, threaded from
+    the caller that already re-derived the band before spending a pod minute.
+    When nobody passes it this gate reads the corpus itself through
+    `band_provenance_lines` rather than printing a remembered sentence.
+
+    THIS GATE IS WHAT THE PROVENANCE FINDING WAS ABOUT. The retired text named
+    four A100 two-point slopes, 0.106, 0.102, 0.129, 0.119, that exist in no
+    committed file, and it survived the fix that corrected the plan output
+    because the plan and the gate printed the band from two different places.
+    The gate is the copy that matters: it is what report.txt shows, what
+    report.json carries under "gates", and what surrounds the RESULT line.
+    """
     lo, hi = ALPHA_A_BAND
     val = fit.alpha_a
     sd = boot.alpha_a_sd
     inside = None if (val is None or not sharp) else lo <= val <= hi
+    observed = ("not fitted" if val is None else
+                f"alpha_a = {val:.4f}"
+                + (f" +/- {sd:.4f}" if sd else " (no interval)"))
+    if val is not None and not sharp:
+        observed += " -- UNKNOWN, not scored: C6 says the interval is too wide"
+    lines = (list(band_lines) if band_lines is not None
+             else band_provenance_lines())
     return Gate(CLAIM, "C1 alpha_a", f"alpha_a lands in [{lo:.2f}, {hi:.2f}]",
                 f"{lo:.2f} <= alpha_a <= {hi:.2f} from the {fit.form} fit",
-                inside,
-                "not fitted" if val is None else
-                f"alpha_a = {val:.4f}"
-                + (f" +/- {sd:.4f}" if sd else " (no interval)"),
-                lines=["The band is the published two-point slopes (A100: "
-                       "0.106, 0.102, 0.129, 0.119), ai_model.py's 0.143 from "
-                       "the study's own ALPHA_BY_BLOCK_M pair, and the H200 "
-                       "G=1 mixtral pair's 0.146 -- all read through (LIN). A "
-                       "FAIL well ABOVE the band with a clean residual would "
-                       "say the two-point slopes were biased by the missing "
-                       "denominator; a FAIL at zero says BN does not move "
-                       "alpha at all and the activation re-read is not there."])
+                inside, observed,
+                lines=lines + [
+                    "A FAIL ABOVE the band with a clean residual would say both "
+                    "committed two-point slopes were biased low by the "
+                    "denominator the two-point form drops; a FAIL at or near "
+                    "zero says BN does not move alpha at all and there is no "
+                    "activation re-read to decompose. A PASS is weak: the two "
+                    "slopes above disagree by a factor of two and the band "
+                    "covers both, which is the width a three-point fit is here "
+                    "to narrow."])
 
 
 def gate_residual(fit: Decomposition, chi2: float | None, why: str,
@@ -2183,8 +2293,19 @@ def gate_residual(fit: Decomposition, chi2: float | None, why: str,
     which ARE the question and must not ask it of themselves.
 
     A guard is not a softening. UNKNOWN counts against a CLAIM gate exactly as
-    FAIL does (`moe.bench.exit_codes`), so an arm whose C2 has no power exits
-    CLAIM_FAIL and cannot be reported as model completeness.
+    FAIL does (`moe.bench.exit_codes`), so an arm whose C2 has no power
+    CLASSIFIES as 1 CLAIM_FAIL and its C2 can never be quoted as model
+    completeness: the RESULT line says `CLAIM C2 UNKNOWN` and the reason is
+    beside it.
+
+    WHAT THE PROCESS ACTUALLY RETURNS IS 0 UNLESS `--fail-on-gate`. `_exit_over`
+    reports CLAIM_FAIL as DONE by default, deliberately and out loud, because a
+    claim that did not pass is a result and not a retry, and the session driver
+    runs both bn arms without that flag. So the exit code is NOT what stops a
+    powerless C2 being read as completeness; the printed verdict is, which is
+    why the verdict is a machine-readable RESULT line rather than prose. A
+    caller that needs the shortfall to be an error passes `--fail-on-gate` and
+    gets the 1.
     """
     passed = None if chi2 is None else chi2 <= RESIDUAL_CHI2_CEILING
     observed = (f"chi2 = {chi2:.2f} over {fit.dof} dof; residual RMS "
@@ -2984,6 +3105,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 sm_count: int, block_ns, subjects, draws: int | None = None,
                 probe_c2_power: bool = False,
                 plant_noise: float | None = None,
+                band_lines: list[str] | None = None,
                 ) -> tuple[list[str], list[Gate], dict]:
     """Everything read off the timings, as text, gates and a payload.
 
@@ -2997,6 +3119,10 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     `plant_noise` overrides the spread the probe plants at; None means use the
     one this run measured (`measured_spread`), which is the point of running the
     probe inside the run rather than from the command line.
+
+    `band_lines` is the alpha_a band's provenance, already re-derived by `_main`
+    before any GPU time, handed down so C1 prints the band it was actually
+    scored against. None means C1 reads the corpus itself; it never recites.
     """
     kw = dict(block_ns=block_ns, subjects=subjects, ridge=ridge,
               bandwidth_gbps=bandwidth_gbps, b=b, base_pinned=base_pinned,
@@ -3153,7 +3279,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         gate_ladders(spreads, inversion_rows, boot.survival),
         gate_identifiable(cells, PRIMARY_BLOCK_M),
         gate_sharpness(boot),
-        gate_alpha_a(fit, boot, sharp),
+        gate_alpha_a(fit, boot, sharp, band_lines),
         gate_residual(fit, chi2, why, struct, power),
         gate_invariance(per_bm, boot),
         gate_physicality(fit, boot),
@@ -3378,6 +3504,11 @@ class DesignPower:
                        "goes. --group-m 16 is the setting that resolves it; "
                        "--reps buys the rest, and this line is what says how "
                        "much it bought.")
+            out.append("C6 will FAIL with it and both are CLAIM gates, so the "
+                       "arm is expected to end 1 CLAIM_FAIL, printed as exit 0 "
+                       "without --fail-on-gate. It is NOT 3 INVALID and must "
+                       "not be re-measured: alpha_b, C3 and C5 are what a run "
+                       "at this pinning is for and they stay quotable.")
         return out
 
 
@@ -3414,8 +3545,11 @@ class C2Power:
     So the real run plants that world itself, at its OWN measured across-repeat
     spread and its OWN swizzle, before it scores anything, and C2 reads UNKNOWN
     with `reason()` whenever the missing-term world would have passed. UNKNOWN
-    counts against the gate by `moe.bench.exit_codes`'s rule, so the arm exits
-    CLAIM_FAIL rather than DONE: a gate that could not decide has not passed.
+    counts against the gate by `moe.bench.exit_codes`'s rule, so the gates
+    CLASSIFY as CLAIM_FAIL rather than DONE: a gate that could not decide has
+    not passed. The process still exits 0 unless `--fail-on-gate` is given
+    (`_exit_over`, which says so in the log), so what carries this verdict off
+    the page is the `RESULT: CLAIM C2 UNKNOWN` line and not the exit code.
     """
 
     ran: bool
@@ -3679,8 +3813,8 @@ def self_test(args, cfg, b: int, ridge: float, bandwidth_gbps: float,
         prior_sd_source = str(exc)
     gates.append(Gate(
         VALIDITY, "S4 the design resolves alpha_a",
-        "at the PINNED settings, alpha_a's spread is smaller than the band C1 "
-        "tests it against",
+        "at the PINNED settings, alpha_a's spread beats the two-point reading "
+        "this fit replaces, which is C6's bar and not the band's width",
         f"sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f} in the TRUTH world",
         ceiling_ok,
         "no spread" if truth_sd is None else f"sd = {truth_sd:.4f} at "
@@ -3885,9 +4019,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="plant four worlds and check the gates tell them "
                          "apart, off GPU")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes. Off by "
-                         "default: C4 is predicted to FAIL at GROUP_SIZE_M=1 "
-                         "and a falsified prediction is a result, not an error")
+                    help="exit 1 CLAIM_FAIL unless every gate passes. Off by "
+                         "default: C4 and C6 are both predicted to FAIL at "
+                         "GROUP_SIZE_M=1, and a falsified prediction is a "
+                         "result, not an error. It never softens 3 INVALID")
     return ap
 
 
@@ -4281,7 +4416,8 @@ def _main(argv=None) -> int:                                    # noqa: C901
         ceiling_tflops=ceiling, ceiling_source=ceiling_source,
         capability=capability, base_pinned=base_pinned, compiles=compiles,
         executed=executed, sm_count=sm_count, block_ns=block_ns,
-        subjects=subjects, probe_c2_power=True, plant_noise=args.plant_noise)
+        subjects=subjects, probe_c2_power=True, plant_noise=args.plant_noise,
+        band_lines=band_lines)
     payload["gpu"] = torch.cuda.get_device_name(0)
     payload["run_id"] = run_id
     payload["ridge_source"] = rr.source
