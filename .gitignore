@@ -15,8 +15,11 @@ venv/
 *.pt
 *.pth
 *.gguf
-hf_cache/
-models/
+# ANCHORED. Unanchored, these match at any depth, and git does not descend into
+# an excluded directory, so results/published/<arm>/models/ could not be
+# re-included by any rule below. Same defect as the `plots/` line under it.
+/hf_cache/
+/models/
 
 # --- benchmark output ----------------------------------------------------
 # Raw runs are large and machine-specific. Only curated, committed-on-purpose
@@ -62,3 +65,32 @@ Untitled*.ipynb
 # every row it writes as git_dirty. 76.7% of the canonical pool is already
 # unusable that way.
 /session/
+
+# --- raw evidence under results/published/ ---------------------------------
+# THE RULE THAT DROPPED THE EVIDENCE, twice. `/plots/` above is anchored
+# because an unanchored `plots/` matched at ANY depth and swallowed every
+# figure a publish copied into results/published/<arm>/plots/. The extension
+# rules below it (*.ptx, *.cubin, *.nsys-rep, *.ncu-rep, *.qdrep) still match
+# at any depth, so results/published/<arm>/ptx/kernel.ptx was ignored on
+# exactly the same terms: `git add` said nothing, the C3 PTX evidence survives
+# only as tarballs, and pod_session P9 had to remind the operator to tar the
+# dumps because git would not take them.
+#
+# results/published/ is the one place in this repo where those files ARE the
+# artefact, so they are re-included here. ORDER MATTERS: a negation only wins
+# when it comes after the pattern it undoes, which is why this block is last.
+# A PARENT MATTERS MORE: git does not descend into an excluded DIRECTORY, so no
+# `!` under it can ever fire. That is why `models/` and `hf_cache/` above are
+# anchored to the repo root rather than left to match at any depth; an arm
+# directory called models/ would otherwise be unrecoverable from here.
+!results/published/**/*.ptx
+!results/published/**/*.cubin
+!results/published/**/*.ncu-rep
+!results/published/**/*.nsys-rep
+!results/published/**/*.qdrep
+#
+# DELIBERATELY NOT re-included: *.safetensors, *.bin, *.pt, *.pth, *.gguf.
+# Those are weight formats, a single mixtral shard is gigabytes, and "never
+# commit model weights" is worth more than the one raw dump per year that
+# happens to use a weight extension. Exfil that one as a .tar.gz, which this
+# block leaves committable.

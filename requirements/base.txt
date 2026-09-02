@@ -28,6 +28,19 @@ pyyaml
 pytest
 ruff
 
+# THE CLOCK SAMPLER'S ONLY SOURCE. moe/bench/timing.py reads the SM clock under
+# load through torch.cuda.clock_rate, which is torch's NVML binding, and it
+# refuses to fork nvidia-smi inside a timed region (tens of milliseconds on the
+# host thread that is enqueueing work is not a clock sample, it is a
+# perturbation of the thing being measured). torch needs nvidia-ml-py for that
+# call and does not depend on it. Without this line the pod's base venv has no
+# NVML, every KernelTiming records clock_source "none", the LEVEL flag is None
+# on every row, and the fix for "the ladders record no clock while the same
+# session shows 62-97% throttling" is defeated silently. vLLM and SGLang each
+# pull nvidia-ml-py transitively today; it is named in all three files so a
+# release that drops the transitive dependency cannot take the clock with it.
+nvidia-ml-py
+
 # For scripts/capture_traces.py only.
 #
 # transformers is CAPPED, and the cap is the deepseek-v2-lite arm. That model

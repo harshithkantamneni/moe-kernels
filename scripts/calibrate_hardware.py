@@ -6,17 +6,58 @@ flag a container tenant cannot set; on a rented pod `ncu` fails with
 ERR_NVGPUCTRPERM. So DRAM traffic cannot be read directly, and the roofline
 would otherwise rest entirely on a datasheet peak.
 
-This measures the ceilings with ordinary kernels and a clock instead, and writes
-them beside the cited spec file. Efficiency can then be quoted against what the
-machine actually delivers, which is both fairer to your kernel and more
-defensible in public.
+This measures the ceilings with ordinary kernels and a clock instead. Efficiency
+can then be quoted against what the machine actually delivers, which is both
+fairer to your kernel and more defensible in public.
 
-    python scripts/calibrate_hardware.py   # -> hardware/measured_<device>.yaml
+    python scripts/calibrate_hardware.py --dry-run   # the plan and its MDE, free
+    python scripts/calibrate_hardware.py             # -> results/.../measured_<device>.yaml
+    python scripts/calibrate_hardware.py --publish   # ALSO into the tracked tree
+
+WHY THE DEFAULT NO LONGER WRITES INTO THE TREE
+----------------------------------------------
+It used to write `moe/bench/hardware/measured_<device>.yaml` directly, and that
+file is TRACKED. So the first metered step of every session modified the
+checkout, `pod_session.sh` P1 (clean working tree) went from PASS to FAIL, and
+`driver.py` stamped `git_dirty=True` on every row measured afterwards: all
+3,696 rows of the 2026-09-01 alpha-0558 arm, 44,872 of the 100,144 published
+rows in total. Rows that name a commit they were not measured at are rows
+nobody can reproduce, and the cause was a side effect of the calibration rather
+than anything the operator chose.
+
+The measurement now lands on an untracked session path under the results root
+(`results/` is gitignored), which costs nothing and dirties nothing. Copying it
+into the tree is a separate decision spelled `--publish`, because the copy is
+what makes the ruler visible to `roofline.load_measured()` and therefore to the
+sweep, and a session that needs it should say so out loud. `--publish` prints
+exactly which file it dirtied and what that does to the rows measured next.
+
+WHAT INSTRUMENT THIS IS
+-----------------------
+The ceilings are timed by `moe.bench.calibrate`, not by
+`moe.bench.timing.time_kernel`, and this script does not pretend otherwise: the
+`instrument` field it records names the function that actually ran. Migrating
+`calibrate` onto the shared queue-deep loop is that module's own phase; until it
+lands, an arm timed with `time_kernel` and a roof timed here are two
+instruments, and the only defensible thing to do is write down which is which.
+
+EXIT CODES are `moe.bench.exit_codes`. `--dry-run` exits REFUSED, because a plan
+measured nothing and scored no gate, and `classify([])` raises rather than
+calling an empty gate list DONE for exactly that reason. (Note the divergence:
+`scripts/block_m_crossing_sweep.py --dry-run` exits 0 today. One of the two
+should move; this one is the reading the table supports.) A calibration whose
+clock could not be established is INVALID rather than DONE, because `sustained_peak_tflops` and
+`gemm_efficiency_pct` are normalised by that clock and the module refuses to
+quote them; the yaml is still written, so the numbers that do not depend on the
+clock survive for a reader who wants them.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -26,14 +67,89 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch  # noqa: E402
 import yaml  # noqa: E402
 
+from moe.bench import calibrate as calibrate_mod  # noqa: E402
+from moe.bench import exit_codes as EX  # noqa: E402
 from moe.bench.calibrate import DEFAULT_CEILING, calibrate  # noqa: E402
+from moe.bench.provenance import provenance_block, run_id  # noqa: E402
 from moe.bench.roofline import (  # noqa: E402
+    HARDWARE_DIR,
     ambiguous_for_device,
+    current_gpu_name,
     for_device,
     load_hardware,
+    measured_slug,
     power_limit_w,
 )
 from moe.bench.schema import git_provenance  # noqa: E402
+
+#: Two-sided 5%, 80% power. The multiplier a minimum-detectable-effect is
+#: `z(1-a/2) + z(power)` = 1.96 + 0.84; written out so the line an arm prints
+#: can be checked rather than believed.
+MDE_Z = 2.80
+
+
+def instrument_name() -> str:
+    """What actually timed these ceilings, named rather than assumed.
+
+    Reads a `TIMING_BASIS` from `moe.bench.calibrate` when that module grows
+    one (its migration onto `timing.time_kernel` is a separate phase), and
+    otherwise says plainly which loop ran. A calibration that claimed
+    `timing.TIMING_BASIS` while running `time_eager` would put the roof and the
+    ladders under one label when they are two instruments, which is the
+    confusion the audit measured at 12-16% in alpha.
+    """
+    basis = getattr(calibrate_mod, "TIMING_BASIS", None)
+    if basis:
+        return str(basis)
+    return ("moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed "
+            "events, L2 flush between iterations); NOT timing.TIMING_BASIS")
+
+
+def mde_line(sigma_pct: float | None, trials: int, why: str) -> str:
+    """One line: the smallest effect this run could resolve, and from what.
+
+    `sigma_pct` is a stated noise level in percent of the measured value, `why`
+    says where it came from. Returns a REFUSAL line when no noise level is
+    available, because an MDE derived from a number nobody measured is a prior
+    dressed as a bound, which is exactly what B14 found across the arms.
+    """
+    if sigma_pct is None or sigma_pct <= 0 or trials < 1:
+        return (f"MDE: REFUSED. No noise level to derive one from ({why}). "
+                "State one before quoting a difference as real.")
+    mde = MDE_Z * sigma_pct / math.sqrt(trials)
+    return (f"MDE: {mde:.2f}% of the measured value, at alpha 0.05 and 80% "
+            f"power, from sigma {sigma_pct:.2f}% over {trials} trial(s) "
+            f"({why}). A difference smaller than this is not resolvable here.")
+
+
+def published_sigma_pct(published: Path) -> tuple[float | None, int, str]:
+    """`(median relative within-cell sd in %, rows used, provenance sentence)`.
+
+    Derived from the published rows themselves rather than asserted, so the MDE
+    moves when the apparatus does. It is a LOWER BOUND on the real noise: the
+    column is within-cell `ms_std / ms_p50`, and the between-run spread nobody
+    has measured yet is larger. Said in the sentence, so the number is never
+    quoted as the whole story.
+    """
+    rel: list[float] = []
+    for path in sorted(published.glob("*/run_*.csv")):
+        try:
+            with path.open(newline="") as fh:
+                for row in csv.DictReader(fh):
+                    try:
+                        p50 = float(row.get("ms_p50") or 0)
+                        sd = float(row.get("ms_std") or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if p50 > 0 and sd > 0:
+                        rel.append(sd / p50)
+        except OSError:
+            continue
+    if not rel:
+        return None, 0, f"no timed rows with an ms_std under {published}"
+    return (100.0 * statistics.median(rel), len(rel),
+            f"median within-cell ms_std/ms_p50 over {len(rel)} published rows; "
+            "a LOWER bound, since between-run spread is not in that column")
 
 
 def _device_facts() -> dict:
@@ -103,13 +219,161 @@ def _memory_bus_bits(gpu_name: str) -> int | None:
     return None
 
 
-def main() -> int:
+def swept(args) -> dict:
+    """The knobs that change the numbers, in the order `run_id` will sort them.
+
+    Everything here is a knob the operator can vary between two runs on the
+    same card; `--out`, `--publish` and `--compare-to` are deliberately absent
+    because they re-file or re-describe a measurement rather than change it.
+    """
+    return {"buffer_gb": float(args.buffer_gb), "gemm_n": int(args.gemm_n),
+            "ceiling": str(args.ceiling), "settle": bool(args.settle),
+            "settle_s": float(args.settle_seconds)}
+
+
+def session_out(args, card: str) -> Path:
+    """Where a calibration lands by default: untracked, card-named, id-named.
+
+    Under the results root, which `.gitignore` excludes, so a calibration never
+    dirties the checkout. The run id carries every swept knob, so two ceilings
+    measured with different buffers or a different settle cannot land on each
+    other; the card is at the front of it for the reason `provenance.run_id`
+    documents.
+    """
+    root = Path(args.results_root)
+    return (root / "calibration" / run_id(card=card, **swept(args))
+            / f"{measured_slug(card)}.yaml")
+
+
+def write_cells(path: Path, cal, prov) -> Path:
+    """One row per bandwidth pattern, beside the yaml, with its provenance.
+
+    `find results/published -name cells.csv` returned zero across every arm, so
+    no published number could be traced to the samples under it. A ceiling has
+    the same duty as a cell: the row says what was timed, by what, and how
+    little of the timing state is known. The KernelTiming columns this
+    instrument does not report (`warmup_ms`, `iters`, `trials`, the clock
+    verdicts) are written EMPTY rather than filled with a plausible default,
+    and `instrument` says which loop ran, so a reader can see the gap instead
+    of inheriting a guess.
+    """
+    columns = ["pattern", "bytes_moved", "ms_p50", "ms_min", "gbps",
+               "gbps_peak_min", "sm_clock_start_mhz", "sm_clock_end_mhz",
+               "instrument", "warmup_ms", "iters", "trials", "l2_flush",
+               "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok", "note"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=columns + list(prov.as_columns()))
+        writer.writeheader()
+        for pat in cal.bandwidth_patterns:
+            row = dict.fromkeys(columns, "")
+            row.update(pattern=pat.pattern, bytes_moved=pat.bytes_moved,
+                       ms_p50=pat.ms_p50, ms_min=pat.ms_min, gbps=pat.gbps,
+                       gbps_peak_min=pat.gbps_peak_min,
+                       sm_clock_start_mhz=pat.sm_clock_start_mhz,
+                       sm_clock_end_mhz=pat.sm_clock_end_mhz,
+                       instrument=prov.instrument, l2_flush=True, note=pat.note)
+            row.update(prov.as_columns())
+            writer.writerow(row)
+    return path
+
+
+def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
+    """`(kind, name, verdict, detail)` for every gate this calibration scores.
+
+    Each one can PASS and can FAIL, and `tests/test_calibrate_hardware.py`
+    plants both branches of all five against a synthetic `Calibration`.
+
+    UNKNOWN is used where the run could not decide rather than where it decided
+    "fine": no settle means no clock plateau to check against, and a card
+    outside the memory-bus table has no pin rate, so the claim that nothing
+    exceeded it was not tested. Both count against their gate, which is what
+    makes an untested claim visible in the exit code.
+    """
+    gates: list[tuple[str, str, str, str]] = []
+
+    established = cal.clock_established
+    gates.append((EX.VALIDITY, "clock_established",
+                  EX.PASS if established is True else
+                  EX.FAIL if established is False else EX.UNKNOWN,
+                  "the samples agree with each other and with the settle plateau"
+                  if established is True else
+                  "the samples disagree with each other or with the settle "
+                  "plateau; nothing normalised by the clock may be quoted"
+                  if established is False else
+                  "no settle to check the samples against (--no-settle)"))
+
+    ceiling = cal.pattern(cal.ceiling_pattern)
+    disowned = bool(ceiling and calibrate_mod.DISOWNED in (ceiling.note or ""))
+    gates.append((EX.VALIDITY, "ceiling_pattern_measured",
+                  EX.PASS if (ceiling and not disowned) else EX.FAIL,
+                  f"{cal.ceiling_pattern} = {ceiling.gbps:.1f} GB/s" if
+                  (ceiling and not disowned) else
+                  f"{cal.ceiling_pattern} was disowned by the measurement: "
+                  f"{(ceiling.note if ceiling else 'pattern absent')}"))
+
+    write = cal.pattern("write")
+    if pin_rate_gbps is None:
+        gates.append((EX.CLAIM, "no_pattern_exceeds_the_pin_rate", EX.UNKNOWN,
+                      "no memory-bus width for this device, so the one hard "
+                      "physical bound in the file could not be derived"))
+    else:
+        worst = max(cal.bandwidth_patterns, key=lambda p: p.gbps)
+        over = worst.gbps > pin_rate_gbps
+        gates.append((EX.CLAIM, "no_pattern_exceeds_the_pin_rate",
+                      EX.FAIL if over else EX.PASS,
+                      f"fastest pattern {worst.pattern} {worst.gbps:.1f} GB/s "
+                      f"against a derived pin rate of {pin_rate_gbps:.1f} GB/s"
+                      + ("; a figure above the pin rate means the byte "
+                         "accounting is wrong, not that the hardware exceeded "
+                         "its specification" if over else "")))
+        if write is not None:
+            gates.append((EX.CLAIM, "write_rate_is_a_store_rate",
+                          EX.PASS if write.gbps <= pin_rate_gbps else EX.FAIL,
+                          f"write {write.gbps:.1f} GB/s is "
+                          f"{100 * write.gbps / pin_rate_gbps:.1f}% of the pin "
+                          "rate; a read-for-ownership would make it 2N and "
+                          "impossible"))
+
+    gates.append((EX.CLAIM, "clock_steady_across_patterns",
+                  EX.FAIL if cal.clock_ramped else EX.PASS,
+                  "SM clock differed by >5% ACROSS the patterns, so they were "
+                  "measured in different states and are not comparable"
+                  if cal.clock_ramped else
+                  "every pattern was measured in the same clock state"))
+
+    throttled = bool((cal.clocks or {}).get("throttled"))
+    gates.append((EX.CLAIM, "not_throttled",
+                  EX.FAIL if throttled else EX.PASS,
+                  f"clocks {(cal.clocks or {}).get('sm_start_mhz')} -> "
+                  f"{(cal.clocks or {}).get('sm_end_mhz')} MHz"
+                  + (", THROTTLED: ceilings measured on a throttling GPU are "
+                     "low" if throttled else "")))
+    return gates
+
+
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=None,
-                    help="default: moe/bench/hardware/measured_<device>.yaml, "
-                         "so calibrating a second GPU does not overwrite the "
-                         "first")
+                    help="write the yaml exactly here. Default: an untracked "
+                         "path under --results-root named by the card and the "
+                         "run id, so a calibration never dirties the checkout")
+    ap.add_argument("--results-root", type=Path,
+                    default=Path(__file__).resolve().parents[1] / "results",
+                    help="root of the untracked results tree (gitignored)")
+    ap.add_argument("--publish", action="store_true",
+                    help="ALSO copy the yaml into moe/bench/hardware/, which is "
+                         "where roofline.load_measured() looks and therefore "
+                         "what the sweep reads. This modifies a TRACKED file: "
+                         "every row measured before you commit it carries "
+                         "git_dirty=True")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan, the paths and the MDE, measure "
+                         "nothing, write nothing")
+    ap.add_argument("--card", default=None,
+                    help="name the card for --dry-run planning on a machine "
+                         "that has none; ignored when a GPU is present")
     ap.add_argument("--buffer-gb", type=float, default=8.0,
                     help="STREAM buffer size; must dwarf L2 and run long enough "
                          "that launch and clock ramp do not matter")
@@ -132,10 +396,45 @@ def main() -> int:
     ap.add_argument("--compare-to", default=None,
                     help="datasheet profile to compare against; auto-detected "
                          "when the device name is unambiguous")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+
+    card = current_gpu_name() or (args.card or "")
+    sigma_pct, _n, why = published_sigma_pct(
+        Path(__file__).resolve().parents[1] / "results" / "published")
+
+    if args.dry_run:
+        # THE PLAN, AND NOTHING ELSE. A dry run writes no file, tracked or
+        # otherwise, so a laptop rehearsal of a session cannot leave the tree
+        # dirty for the rows that follow it.
+        print("[calibrate] dry run: nothing is measured and nothing is written")
+        print(f"  patterns          bandwidth ladder, ceiling = {args.ceiling}")
+        print(f"  buffers           {args.buffer_gb:g} GiB, L2 flushed between "
+              "iterations")
+        print(f"  gemm              {args.gemm_n}^3 dense, bf16 and fp8 where "
+              "the silicon has it")
+        settle = (f"up to {args.settle_seconds:.0f}s under load" if args.settle
+                  else "SKIPPED (--no-settle)")
+        print(f"  settle            {settle}")
+        print(f"  instrument        {instrument_name()}")
+        if card:
+            print(f"  card              {card}")
+            print(f"  would write       {session_out(args, card)}")
+        else:
+            print("  card              NOT VISIBLE from here, so the run id "
+                  "cannot be formed (provenance.NoCard); pass --card to plan "
+                  "for a named part")
+        publish = (f"yes, into {HARDWARE_DIR} (dirties a TRACKED file)"
+                   if args.publish else
+                   "no; --publish copies it into the tree")
+        print(f"  publish           {publish}")
+        # B14: an arm that states no MDE lets any difference be read as real.
+        print(f"  {mde_line(sigma_pct, 3, why)}")
+        return EX.REFUSED
 
     if not torch.cuda.is_available():
-        raise SystemExit("calibration needs a GPU")
+        print("REFUSED: calibration needs a GPU; there is no ceiling to measure "
+              "here. --dry-run prints the plan without one.", file=sys.stderr)
+        return EX.REFUSED
 
     print("[calibrate] measuring achievable bandwidth and dense BF16 ...")
     print(f"[calibrate] buffers {args.buffer_gb:g} GiB, L2 flushed between iterations")
@@ -307,6 +606,19 @@ def main() -> int:
                   "read-dominated workload.")
 
     sha, dirty = git_provenance()
+    # ONE PROVENANCE BLOCK, the shared one, so this yaml answers the same
+    # questions a cells.csv and a report.json answer: which commit, which card,
+    # which driver, which ruler, and WHICH INSTRUMENT. The 26 published reports
+    # carried none of it and the H200 s4 filenames could not be tied to any
+    # commit at all.
+    prov = provenance_block(
+        instrument=instrument_name(),
+        bandwidth=cal.achieved_bandwidth_gbps,
+        bandwidth_source=f"measured here, '{cal.ceiling_pattern}' pattern",
+        ridge=round(cal.ridge_point(), 1),
+        ridge_source="derived from this run's own ceilings",
+        target_ms=None,
+    )
     payload = {
         "name": f"{cal.gpu_name} (measured)",
         "verified": True,
@@ -338,18 +650,36 @@ def main() -> int:
         "observed": {**observed, "power_limit_w": tdp},
         "spec_comparison": {"profile": profile, "bandwidth_gbps": spec_bw,
                             "bf16_tflops": spec_tf},
+        "provenance": prov.as_dict(),
     }
-    # One calibration file per device. A single shared measured.yaml meant
-    # calibrating a second GPU overwrote the first, and a later re-plot of an
-    # earlier sweep then scored it against the wrong roof.
-    out = args.out
-    if out is None:
-        from moe.bench.roofline import HARDWARE_DIR, measured_slug
-        out = HARDWARE_DIR / f"{measured_slug(cal.gpu_name)}.yaml"
+    # One calibration file per device, on an UNTRACKED path. A single shared
+    # measured.yaml meant calibrating a second GPU overwrote the first, and a
+    # later re-plot of an earlier sweep then scored it against the wrong roof;
+    # writing into the tracked tree meant every row measured afterwards carried
+    # git_dirty=True. The run id keeps two settings of the same card apart.
+    out = args.out if args.out is not None else session_out(args, cal.gpu_name)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(yaml.safe_dump(payload, sort_keys=False))
+    cells = write_cells(out.parent / "cells.csv", cal, prov)
     print(f"\n[calibrate] wrote {out}")
-    print("  commit it; plots and efficiency columns then use measured ceilings")
+    print(f"[calibrate] wrote {cells}")
+    print(f"  {mde_line(sigma_pct, 3, why)}")
+
+    published_to = None
+    if args.publish:
+        published_to = HARDWARE_DIR / f"{measured_slug(cal.gpu_name)}.yaml"
+        published_to.parent.mkdir(parents=True, exist_ok=True)
+        published_to.write_text(out.read_text())
+        print(f"[calibrate] PUBLISHED to {published_to}")
+        print("  That file is TRACKED. roofline.load_measured() reads it, so the "
+              "sweep now has ceilings; until you commit it, every row measured "
+              "carries git_dirty=True and cannot be reproduced from the commit "
+              "it names.")
+    else:
+        print("  Not in the tree: roofline.load_measured() will not see it and "
+              "the sweep's efficiency columns stay empty. Re-run with --publish "
+              "when you want the sweep to use it, and commit the result.")
+
     band = cal.ridge_band()
     print(json.dumps({"achieved_bw_gbps": cal.achieved_bandwidth_gbps,
                       "ceiling_pattern": cal.ceiling_pattern,
@@ -360,9 +690,30 @@ def main() -> int:
                       "ridge_band": [round(band[0], 1), round(band[1], 1)]
                       if band else None,
                       "gemm_clock_mhz": cal.gemm_clock_mhz,
-                      "clock_established": cal.clock_established}))
-    return 0
+                      "clock_established": cal.clock_established,
+                      "out": str(out),
+                      "published_to": str(published_to) if published_to else None,
+                      "instrument": prov.instrument}))
+
+    # THE ONLY LINES THE DRIVER MAY GREP. Everything above is prose, including
+    # the words PASS and REFUSED where they appear in it.
+    print()
+    gates = score(cal, pin)
+    for kind, name, verdict, detail in gates:
+        print(EX.result_line(kind, name, verdict, detail))
+    return EX.classify([(k, v) for k, _n, v, _d in gates])
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except Exception:                                   # noqa: BLE001
+        # ERROR is the table's word for an exception nobody planned; the
+        # traceback is the reason and it goes to stderr, not into an exit code
+        # that would read as a result.
+        import traceback
+
+        traceback.print_exc()
+        raise SystemExit(EX.ERROR) from None
