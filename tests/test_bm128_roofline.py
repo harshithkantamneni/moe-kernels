@@ -973,6 +973,42 @@ def test_the_production_swizzle_refuses_at_pins_that_do_not_fit_and_says_which_d
     assert "--num-warps 16" in out and "--num-stages" in out
 
 
+def test_the_hint_refuses_to_name_a_stage_count_with_no_capability(rf, capsys):
+    """The remedy the pod would reject, and why it must not be printed plainly.
+
+    Off a device `SWEEP.resolve_capability` returns None, `tile_resources`
+    leaves `smem_limit_bytes` unset, and NO shared-memory refusal can fire; the
+    hint's search then returns the first pair whose REGISTERS fit. Before this
+    was fixed the same laptop invocation printed "DOES FIT, at --num-warps 16
+    --num-stages 4" for exactly the pins the docstring computes as 256 KiB
+    against sm_90's 227 KiB. The register ceiling is 255 everywhere, so the
+    warps are still nameable; the stages are not.
+    """
+    code = rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
+                    "--control", "256"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "THE ACCUMULATOR FITS AT --num-warps 16" in out
+    assert "STAGE COUNT CANNOT BE NAMED FROM HERE" in out
+    assert "--capability 9.0" in out
+    assert "DOES FIT, at --num-warps" not in out, \
+        "an unqualified pin was named with no shared-memory limit to check it"
+    assert "--num-stages 4." not in out, \
+        "the stage count the pod refuses was named as the remedy"
+
+
+def test_the_hint_names_the_whole_pin_once_the_capability_is_known(rf, capsys):
+    """The PASS branch of the same gate: with sm_90 given, both halves are
+    checkable and the stage count that fits (3, not 4) is named outright."""
+    code = rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
+                    "--control", "256", "--capability", "9.0"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "THE REQUESTED CONFIGURATION DOES FIT, at --num-warps 16 " \
+           "--num-stages 3." in out
+    assert "CANNOT BE NAMED FROM HERE" not in out
+
+
 def test_the_plan_predicts_the_outcome_the_published_arms_already_imply(rf, cfg,
                                                                        roof):
     """R2 / A8. The scheduled arm at BLOCK_SIZE_N=64, GROUP_SIZE_M=1 is not an
@@ -988,6 +1024,47 @@ def test_the_plan_predicts_the_outcome_the_published_arms_already_imply(rf, cfg,
     assert arm.gap < rf.CONTROL_SEPARATION
     assert arm.outcome() == rf.NOT_TILE
     assert "report.json" in why
+
+
+def test_the_prediction_says_how_many_arms_matched_and_over_what_span(rf, cfg,
+                                                                     roof):
+    """TWO arms match the headline configuration and only one is quoted.
+
+    alpha-surface-s4 reads 0.468 / 0.526, a gap of 0.058, and cross-card-s3
+    reads 0.482 / 0.502, a gap of 0.019. The line an operator uses to decide the
+    arm is not worth renting used to call the winner "the published arm", which
+    is a uniqueness claim, and the selection rule maximises the subject peak,
+    which is the SMALLEST gap when the controls sit close. Both predict NOT_TILE
+    today, so the bias costs nothing yet; the count and the span are printed so
+    a later corpus that disagrees cannot disagree silently.
+    """
+    arm, why = rf.published_prediction(cfg, roof, block_n=64, group_m=1,
+                                       control_block_m=256)
+    assert "2 matching" in why, why
+    assert "+0.019" in why and "+0.058" in why, why
+    assert "HIGHEST subject peak" in why and "SMALLEST gap" in why, why
+    assert "the published arm at" not in why, \
+        "one of two matching arms was described as the only one"
+    lines = " ".join(rf.prior_arm_lines(cfg, roof, block_n=64, group_m=1,
+                                        control_block_m=256))
+    assert "2 matching" in lines, "the plan must carry the disclosure too"
+
+
+def test_a_single_matching_arm_is_named_as_the_only_one(rf, cfg, roof, tmp_path):
+    """The other branch of the same sentence. A corpus with ONE match must not
+    be described with a count and a span it does not have."""
+    only = tmp_path / "2026-09-02-nvidia_h200-one-arm"
+    only.mkdir()
+    (only / "x.report.json").write_text(json.dumps({
+        "model": cfg.name, "fixed": {"BLOCK_SIZE_N": 64, "GROUP_SIZE_M": 1},
+        "ladder": {"128": {"points": [[8, 8.66]]},
+                   "256": {"points": [[4, 8.0]]}}}))
+    arm, why = rf.published_prediction(cfg, roof, block_n=64, group_m=1,
+                                       control_block_m=256,
+                                       published_dir=tmp_path)
+    assert arm is not None, why
+    assert "the ONE published arm at" in why, why
+    assert "matching model=" not in why and "HIGHEST" not in why, why
 
 
 def test_the_plan_says_it_cannot_predict_when_the_corpus_has_no_control_ladder(
@@ -1202,6 +1279,51 @@ def test_a_working_self_test_exits_done(rf, capsys):
     assert "0 FAIL, 0 UNKNOWN" in capsys.readouterr().out
 
 
+def test_an_unplanned_crash_exits_error_and_never_claim_fail(rf, monkeypatch,
+                                                             capsys):
+    """R4. The apparatus breaking must not be filed as one of the outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records it as a RESULT and never retries it. A torch OOM would then
+    be published as "the claim did not hold". ERROR is outside FINISHED_CODES
+    so that the two can be told apart, and the traceback is printed rather than
+    swallowed because a bare code names nothing to fix.
+    """
+    from moe.bench import exit_codes
+
+    def explode(argv=None):
+        raise RuntimeError("the allocator gave up halfway through the ladder")
+
+    monkeypatch.setattr(rf, "_main", explode)
+    code = rf.main(["--dry-run"])
+    err = capsys.readouterr().err
+    assert code == exit_codes.ERROR
+    assert code != exit_codes.CLAIM_FAIL
+    assert code not in exit_codes.FINISHED_CODES, \
+        "an apparatus failure must stay retryable"
+    assert "the allocator gave up halfway" in err, "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+def test_a_string_refusal_still_exits_refused_and_not_error(rf, monkeypatch,
+                                                            capsys):
+    """The other branch of the same handler. A `raise SystemExit("sentence")`
+    is a PRECONDITION not met, which is free and distinct from a crash, so it
+    must not be caught by the new `except Exception` and relabelled."""
+    from moe.bench import exit_codes
+
+    def refuse(argv=None):
+        raise SystemExit("no calibration for the attached device")
+
+    monkeypatch.setattr(rf, "_main", refuse)
+    code = rf.main(["--dry-run"])
+    err = capsys.readouterr().err
+    assert code == exit_codes.REFUSED
+    assert err.startswith("REFUSED: no calibration")
+    assert "Traceback" not in err
+
+
 def test_the_report_payload_takes_a_provenance_stamp_without_colliding(rf, cfg,
                                                                        roof):
     """R4. `stamp` raises rather than layering one block over another, so the
@@ -1268,6 +1390,60 @@ def test_the_mde_is_the_studys_own_two_sample_t_and_not_a_normal(rf):
                                     power=rf.MDE_POWER)
     lines = " ".join(rf.mde_lines(reps=3, noise_rel=0.014, noise_source="test"))
     assert f"{expected:.4f}" in lines
+
+
+def _plant_power(rf, monkeypatch, tmp_path, body: str):
+    """A `scripts/replicate_noise_floor.py` that is broken in a stated way.
+
+    `_load_power` loads that file BY PATH off `rf.ROOT`, so moving ROOT is how
+    its two refusals are reached without touching the real file, which another
+    slice owns. The module name is cleared either side because `_load_power`
+    registers it with `setdefault` and a planted module left behind would be
+    the next test's import.
+    """
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "replicate_noise_floor.py").write_text(body)
+    monkeypatch.setattr(rf, "ROOT", tmp_path)
+    monkeypatch.delitem(sys.modules, "replicate_noise_floor", raising=False)
+
+
+def test_the_mde_refuses_when_the_file_that_owns_the_power_will_not_import(
+        rf, monkeypatch, tmp_path):
+    """The FAIL branch of the adoption. `_load_power` refuses rather than
+    substituting a normal quantile, which at 4 degrees of freedom is 35% too
+    generous and would advertise a resolution this run does not have. The
+    refusal is what stops another slice's edit from silently downgrading it."""
+    _plant_power(rf, monkeypatch, tmp_path,
+                 "raise ValueError('half a rewrite')\n")
+    with pytest.raises(SystemExit) as caught:
+        rf._load_power()
+    assert str(caught.value).startswith("REFUSED: ")
+    assert "did not import" in str(caught.value)
+    assert "ValueError: half a rewrite" in str(caught.value)
+    assert "35% too generous" in str(caught.value)
+
+
+def test_the_mde_refuses_when_the_power_symbols_have_been_renamed(
+        rf, monkeypatch, tmp_path):
+    """The second FAIL branch, and the one the handover leans on: the file
+    imports cleanly but no longer exports what is called on it. Without this the
+    rename would surface as an AttributeError inside a plan, not as a refusal
+    naming the two symbols to re-point."""
+    _plant_power(rf, monkeypatch, tmp_path,
+                 "def mde_paired(sd, n):\n    return sd\n")
+    with pytest.raises(SystemExit) as caught:
+        rf._load_power()
+    assert str(caught.value).startswith("REFUSED: ")
+    assert "no longer exports" in str(caught.value)
+    assert "mde_two_sample" in str(caught.value)
+    assert "replicates_for" in str(caught.value)
+
+
+def test_the_real_power_file_satisfies_both_of_those_refusals(rf):
+    """The PASS branch, asserted against the file the study actually ships, so
+    the two tests above cannot pass by planting worlds nothing resembles."""
+    power = rf._load_power()
+    assert callable(power.mde_two_sample) and callable(power.replicates_for)
 
 
 def test_the_run_id_comes_from_the_shared_builder_and_needs_a_card(rf):

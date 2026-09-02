@@ -257,6 +257,7 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -893,6 +894,20 @@ def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
     because every number here is a fraction of a per-card roof, and dividing an
     A100 ladder by an H200 roof is the exact defect that put a stale ridge into
     seven published reports.
+
+    SEVERAL ARMS USUALLY MATCH, AND THE ONE PICKED IS THE LEAST FLATTERING TO
+    THE STUDY. The scheduled headline configuration matches TWO committed H200
+    arms today, alpha-surface-s4 (0.468 / 0.526, gap 0.058) and cross-card-s3
+    (0.482 / 0.502, gap 0.019). The selection rule is `max` on
+    `(gap is not None, subject_peak)`: an arm with BOTH ladders always beats one
+    with a hole, and among those the HIGHEST subject peak wins. That second half
+    is a deliberate bias and not a tie-break. When the controls sit close, the
+    highest subject peak is the SMALLEST gap, so the arm named is the one LEAST
+    likely to predict a tile effect, and a plan that says "not worth renting"
+    says it on the evidence most hostile to that conclusion. Both of today's
+    arms predict NOT_TILE, so nothing turns on the choice yet; a later corpus
+    need not agree, which is why the count and the SPAN of the gaps go into
+    `why` rather than only the winner.
     """
     directory = published_dir or PUBLISHED_DIR
     slug = roof_card_slug(roof)
@@ -915,7 +930,7 @@ def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
             continue
         ladder = doc.get("ladder") or {}
         hits.append(PriorArm(
-            path=str(path.relative_to(ROOT)), fixed=fixed,
+            path=_corpus_path(path), fixed=fixed,
             subject_peak=_frac(_ladder_peak(ladder, cfg, SUBJECT_BLOCK_M,
                                             str(SUBJECT_BLOCK_M)), roof),
             control_peak=_frac(_ladder_peak(ladder, cfg, control_block_m,
@@ -926,13 +941,53 @@ def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
                       "read on this card), so this configuration's outcome "
                       "cannot be predicted from the corpus and the run is a "
                       "real experiment")
+    # Documented in this function's docstring: complete arms beat holed ones,
+    # and among the complete ones the highest subject peak wins BECAUSE it is
+    # the smallest gap, i.e. the reading least favourable to a tile effect.
     arm = max(hits, key=lambda a: (a.gap is not None, a.subject_peak or 0.0))
+    among = _selection_phrase(hits, want)
     if arm.control_peak is None:
-        return arm, (f"the matching arm {arm.path} has no BLOCK_M="
-                     f"{control_block_m} ladder, so the CONTROL half of the "
-                     "prediction does not exist and the outcome cannot be "
-                     "predicted; only the subject's peak is known")
-    return arm, f"predicted from {arm.path}, the published arm at {want}"
+        return arm, (f"{arm.path}, {among}, has no BLOCK_M={control_block_m} "
+                     "ladder, so the CONTROL half of the prediction does not "
+                     "exist and the outcome cannot be predicted; only the "
+                     "subject's peak is known")
+    return arm, f"predicted from {arm.path}, {among}"
+
+
+def _corpus_path(path: Path) -> str:
+    """A published report as the repository spells it, or as it actually is.
+
+    `relative_to(ROOT)` RAISES on a path outside the tree, and `published_dir=`
+    is a parameter exactly so a test or an operator can point the prediction at
+    a corpus kept elsewhere. Losing a whole plan to a ValueError raised while
+    formatting the path it was about to quote is a cosmetic call taking down a
+    real one, so the absolute path is the fallback rather than the crash.
+    """
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _selection_phrase(hits: list[PriorArm], want: str) -> str:
+    """How many arms matched, over what span of gaps, and why THIS one.
+
+    Exists because "the published arm at <want>" read as a uniqueness claim in
+    the one plan line an operator uses to decide an arm is not worth renting,
+    while two arms matched and their gaps differed by 3x. Silence about the
+    other arm is the failure this prevents: the span is printed so a reader can
+    see the disagreement, and the rule is named so they can see it is the
+    conservative end of it.
+    """
+    if len(hits) == 1:
+        return f"the ONE published arm at {want}"
+    gaps = [a.gap for a in hits if a.gap is not None]
+    span = (f"gaps {min(gaps):+.3f} to {max(gaps):+.3f}" if gaps
+            else "no arm among them carries both ladders")
+    return (f"the arm with the HIGHEST subject peak of {len(hits)} matching "
+            f"{want} ({span}); the highest subject peak is the SMALLEST gap "
+            "when the controls sit close, so this is the arm least likely to "
+            "predict a tile effect")
 
 
 def prior_arm_lines(cfg, roof: Roof, *, block_n: int, group_m: int,
@@ -2285,6 +2340,18 @@ def control_resource_hint(args, b: int, capability) -> str:
     C3 rests on the subject and the control differing in the tile and in nothing
     else, so a hint that lowered the stages for the control alone would buy a
     measurement that cannot be compared.
+
+    WITHOUT A CAPABILITY, ONLY HALF THE BILL EXISTS, AND ONLY HALF IS NAMED.
+    `SWEEP.resolve_capability` returns None off a device, `tile_resources` then
+    leaves `smem_limit_bytes` unset and NO shared-memory refusal can fire, so
+    the same search returns the first pair whose REGISTERS fit and would call it
+    a fit. That is how this function came to print "DOES FIT, at --num-warps 16
+    --num-stages 4" on a laptop for the very configuration the paragraph above
+    computes as 256 KiB against sm_90's 227 KiB: the remedy the pod rejects,
+    stated unqualified, found in review on 2026-09-02. The register ceiling is
+    255 on every architecture this can run on, so the WARP count is decidable
+    off a device and is still named; the stage count is not, and is refused with
+    the flag that makes it decidable rather than guessed at.
     """
     tiles = (SUBJECT_BLOCK_M, args.control)
     for warps in (8, 16, 32):
@@ -2297,14 +2364,30 @@ def control_resource_hint(args, b: int, capability) -> str:
             if not refusals:
                 if (warps, stages) == (args.num_warps, args.num_stages):
                     continue
+                if capability is None:
+                    return (
+                        f"THE ACCUMULATOR FITS AT --num-warps {warps}, AND THE "
+                        "STAGE COUNT CANNOT BE NAMED FROM HERE. No device is "
+                        "attached and no --capability was given, so the "
+                        "shared-memory limit is unknown and the stage half of "
+                        "the bill was never checked: any --num-stages this "
+                        "search returned would be the register answer wearing "
+                        "the shared memory's name, and at --block-n "
+                        f"{args.block_n} four stages is 256 KiB against "
+                        "sm_90's 227 KiB. Re-run this plan with --capability "
+                        "9.0 for the H200 or 8.0 for the A100 and the stage "
+                        "count is computed against that card's real limit.")
                 return (
                     f"THE REQUESTED CONFIGURATION DOES FIT, at --num-warps "
                     f"{warps} --num-stages {stages}. Both tiles move together "
                     "under those pins, which is what C3 needs; re-run with them "
                     "and the run id changes with them.")
+    where = ("on any capability, the accumulator alone refusing it"
+             if capability is None
+             else f"on sm_{capability[0]}{capability[1]}")
     return ("NO --num-warps/--num-stages combination this file will try fits "
-            f"BLOCK_M={args.control} at BLOCK_SIZE_N={args.block_n} on this "
-            "capability. The accumulator, not the shared memory, is usually the "
+            f"BLOCK_M={args.control} at BLOCK_SIZE_N={args.block_n} {where}. "
+            "The accumulator, not the shared memory, is usually the "
             "wall, and it does not move with stages. Choose a smaller "
             "--control or a smaller --block-n; there is no pin that rescues "
             "this one.")
@@ -3299,6 +3382,16 @@ def main(argv=None) -> int:
     Caught here rather than at twenty raise sites so the contract holds for a
     caller of main() as well as for the CLI, and so a new refusal added later
     cannot reintroduce the bug by forgetting the code.
+
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the driver records it, and it is never retried. A torch OOM
+    or a truncated report would then be filed as one of this experiment's
+    registered outcomes. ERROR (4) is outside FINISHED_CODES precisely so the
+    driver can tell "the apparatus broke" from "the claim did not hold". The
+    traceback is printed first and not swallowed, because a code without one
+    tells an operator nothing about what to fix.
     """
     try:
         return _main(argv)
@@ -3308,6 +3401,14 @@ def main(argv=None) -> int:
             print(msg, file=sys.stderr)
             return exit_codes.REFUSED
         raise
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: bm128_roofline crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":
