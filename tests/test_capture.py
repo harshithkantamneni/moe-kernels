@@ -511,7 +511,7 @@ def _capture_traces_module():
     return mod
 
 
-def test_disabling_torchvision_makes_it_unimportable_and_undetectable(
+def test_disabling_torch_extensions_makes_them_unimportable_and_undetectable(
         monkeypatch, capsys):
     """Both halves matter and they fail differently.
 
@@ -524,17 +524,22 @@ def test_disabling_torchvision_makes_it_unimportable_and_undetectable(
     prominently.
     """
     import sys as _sys
-    monkeypatch.delitem(_sys.modules, "torchvision", raising=False)
     mod = _capture_traces_module()
-    mod._disable_torchvision()
+    for name in mod._TORCH_EXTENSIONS:
+        monkeypatch.delitem(_sys.modules, name, raising=False)
+    mod._disable_torch_extensions()
 
-    assert _sys.modules["torchvision"] is None
-    with pytest.raises(ImportError):
-        importlib.import_module("torchvision")
-    assert importlib.util.find_spec("torchvision") is None, (
-        "find_spec must report absence cleanly; if it raises, transformers' "
-        "availability check crashes instead of degrading")
-    assert "torchvision disabled" in capsys.readouterr().out
+    # torchaudio matters as much as torchvision: blocking only the first fixed
+    # one import and revealed the next, and the run failed a second time.
+    assert {"torchvision", "torchaudio"} <= set(mod._TORCH_EXTENSIONS)
+    for name in mod._TORCH_EXTENSIONS:
+        assert _sys.modules[name] is None
+        with pytest.raises(ImportError):
+            importlib.import_module(name)
+        assert importlib.util.find_spec(name) is None, (
+            f"find_spec({name}) must report absence cleanly; if it raises, "
+            "transformers' availability check crashes instead of degrading")
+    assert "disabled" in capsys.readouterr().out
 
 
 def test_a_working_torchvision_is_left_alone(monkeypatch):
@@ -545,5 +550,5 @@ def test_a_working_torchvision_is_left_alone(monkeypatch):
     sentinel = object()
     monkeypatch.setitem(_sys.modules, "torchvision", sentinel)
     mod = _capture_traces_module()
-    mod._disable_torchvision()
+    mod._disable_torch_extensions()
     assert _sys.modules["torchvision"] is sentinel

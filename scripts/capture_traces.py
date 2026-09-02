@@ -422,36 +422,50 @@ def assert_batches_differ(counts) -> None:
             "least batches*batch_size distinct prompts. Nothing was written.")
 
 
-def _disable_torchvision() -> None:
-    """Make `import torchvision` fail cleanly, BEFORE transformers reaches it.
+#: torch companion packages that ship in the RunPod image's dist-packages and
+#: are compiled against the IMAGE's torch, not the venv's pinned 2.13.0. Each
+#: one loads a .so that resolves symbols out of libtorch, so a mismatch is not a
+#: version warning, it is an undefined symbol at import.
+_TORCH_EXTENSIONS = ("torchvision", "torchaudio", "torchtext", "torchdata")
 
-    THE FAILURE THIS FIXES, and it cost a whole step-7 slot on 2026-09-01:
+
+def _disable_torch_extensions() -> None:
+    """Make torch's companion packages unimportable BEFORE transformers reaches them.
+
+    THE FAILURES THIS FIXES, in the order they appeared on 2026-09-01:
 
         RuntimeError: operator torchvision::nms does not exist
-        ModuleNotFoundError: Could not import module 'MixtralForCausalLM'
+        OSError: libtorchaudio.so: undefined symbol:
+                 _ZN5torch8autograd10deleteNodeEPNS0_4NodeE
 
-    transformers imports torchvision unconditionally from `image_utils`, and the
-    torchvision on the path is the IMAGE's, installed against a different torch
-    than the venv's pinned 2.13.0. Registering its fake kernels against the wrong
-    torch raises at import time, and transformers reports the result as "could
-    not import MixtralForCausalLM. Are this object's requirements defined
-    correctly?" -- which reads as a model problem and is a torch/torchvision ABI
-    problem. Both models this study captures died that way.
+    Both are the same thing wearing different masks. transformers imports these
+    unconditionally from image_utils and audio_utils; the copies on the path are
+    the IMAGE's, in /usr/local/lib/.../dist-packages, compiled against the torch
+    the image shipped rather than the venv's pinned 2.13.0. Each loads a shared
+    object that resolves symbols out of libtorch, so the mismatch is an undefined
+    symbol at import time, not a version warning.
 
-    Setting the entry to None makes `import torchvision` raise ImportError, which
-    is the failure transformers ALREADY handles: its is_torchvision_available()
-    path degrades to no image support, and nothing here processes images. That is
-    strictly better than uninstalling the image's torchvision, which is shared
-    with everything else on the box, and better than pinning a matching build,
-    which would pull a second torch.
+    Blocking only torchvision fixed the first and revealed the second, which is
+    why this is a LIST. transformers reports either one as "Could not import
+    module 'MixtralForCausalLM'. Are this object's requirements defined
+    correctly?" -- a message that points at the model and means the ABI.
+
+    Setting the entry to None makes `import X` raise ImportError, which is the
+    failure transformers already handles: its is_X_available() checks call
+    importlib.util.find_spec first, and find_spec returns None cleanly for a None
+    entry on CPython 3.12. Nothing here processes images or audio.
     """
     import sys as _sys
-    if "torchvision" in _sys.modules and _sys.modules["torchvision"] is not None:
-        return                       # already imported and working; leave it
-    _sys.modules["torchvision"] = None
-    print("[capture] torchvision disabled: transformers imports it "
-          "unconditionally and the one on this path was built against a "
-          "different torch. Nothing here processes images.")
+    blocked = []
+    for name in _TORCH_EXTENSIONS:
+        if _sys.modules.get(name) is not None and name in _sys.modules:
+            continue                 # already imported and working; leave it
+        _sys.modules[name] = None
+        blocked.append(name)
+    if blocked:
+        print(f"[capture] disabled {', '.join(blocked)}: transformers imports "
+              "them unconditionally and the copies on this path were built "
+              "against a different torch. Nothing here processes images or audio.")
 
 
 def main() -> int:
@@ -513,7 +527,7 @@ def main() -> int:
     print(f"[capture] {len(prompts)} distinct prompts -> {n_distinct} distinct "
           f"batches of {args.batch_size}")
 
-    _disable_torchvision()
+    _disable_torch_extensions()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"[capture] loading {cfg.hf_repo} (first run downloads to HF_HOME)")
