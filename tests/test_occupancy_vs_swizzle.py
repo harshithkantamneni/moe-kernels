@@ -34,6 +34,7 @@ The script is loaded by path, because `scripts/` is not a package.
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
 import sys
 from pathlib import Path
@@ -336,16 +337,51 @@ def _plan_and_reg(reps: int = 2, ridge: float = 162.8, bw: float = 4374.5):
     return args, cfg, b, plan, reg, limits
 
 
-def test_three_planted_worlds_give_three_verdicts():
+def test_planted_worlds_discriminate_verdicts_and_both_controls():
     """THE CLAIM OF THIS FILE. A pipeline that answers the same in every world
     cannot settle the experiment, and the whole real code path runs here:
     planting, the per-setting compute reference, the ladder fit, the contrasts,
-    the gates and the verdict."""
-    _, cfg, b, plan, reg, _ = _plan_and_reg()
-    lines, gates = OVS.self_test(cfg, plan, reg, b, ridge=162.8,
+    the gates and the verdict.
+
+    Six worlds since 2026-09-02, not three. The three original ones test the
+    VERDICT; the three added test the two CONTROLS, whose FAIL branches the
+    original set never reached -- the audit found P3's by running the self-test
+    and P6 did not exist. Every S gate must PASS: an S gate is the assertion
+    that the gate under it returned the verdict its world was built to force.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    lines, gates = OVS.self_test(args, cfg, plan, reg, b, ridge=162.8,
                                  bandwidth_gbps=4374.5, noise=0.004, seed=3)
-    assert [g.passed for g in gates] == [True, True, True], "\n".join(lines)
-    assert len({g.observed for g in gates}) == 3
+    assert [g.passed for g in gates] == [True] * 7, "\n".join(lines)
+    names = [g.name for g in gates]
+    assert "S P3_warp_control fail" in names, "P3's FAIL branch is unexercised"
+    assert "S P6_depth_control fail" in names, "P6's FAIL branch is unexercised"
+    assert "S P6_depth_control pass" in names, "P6 can only ever fail"
+
+
+def test_self_test_can_fail_when_a_world_is_planted_wrong():
+    """The self-test's own FAIL branch. `self_test` returning all-PASS is only
+    evidence if it can return something else, so a world is planted with the
+    OPPOSITE expectation and the S gate for it has to notice."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    real = OVS.self_test_worlds
+
+    def lying(*a, **kw):
+        worlds = real(*a, **kw)
+        # The concurrency world, told to expect P3 to FAIL. It does not.
+        first = worlds[0]
+        return [OVS.World(first.name, first.alpha_of, first.verdict,
+                          {"P3_warp_control": False}, first.plan, first.reg)]
+
+    OVS.self_test_worlds = lying
+    try:
+        _, gates = OVS.self_test(args, cfg, plan, reg, b, ridge=162.8,
+                                 bandwidth_gbps=4374.5, noise=0.004, seed=3)
+    finally:
+        OVS.self_test_worlds = real
+    assert any(g.passed is False for g in gates)
+    assert OVS.exit_codes.classify(g.scored() for g in gates) == \
+        OVS.exit_codes.INVALID
 
 
 def test_concurrency_world_recovers_the_predicted_direction_and_size():
@@ -529,7 +565,7 @@ def test_run_id_carries_every_swept_knob_and_the_card():
                         ("--control-warps", "2"), ("--control-stages", "3"),
                         ("--reps", "7"), ("--r-max", "512"),
                         ("--block-n", "128"), ("--block-k", "32"),
-                        ("--iters", "50"), ("--warmup", "9"),
+                        ("--warmup-ms", "9"), ("--trials", "5"),
                         ("--cell-budget-ms", "111"), ("--seed", "5"),
                         ("--model", "qwen2-57b-a14b"), ("--dtype", "fp16")):
         other = OVS.build_parser().parse_args([flag, value])
@@ -715,16 +751,25 @@ def test_compiled_smem_gate_fails_on_register_spills():
 
 
 def test_dry_run_and_run_contradict_each_other():
-    assert OVS.main(["--dry-run", "--run"]) == 2
+    assert OVS.main(["--dry-run", "--run"]) == OVS.exit_codes.REFUSED
 
 
-def test_dry_run_works_off_gpu_and_measures_nothing(capsys):
-    """The pod session reads this on a laptop before spending anything."""
-    assert OVS.main(["--dry-run"]) == 0
+def test_dry_run_works_off_gpu_and_refuses_rather_than_reporting_done(capsys):
+    """The pod session reads this on a laptop before spending anything.
+
+    A PLAN IS NOT A RESULT. It exits REFUSED and prints no RESULT line, so the
+    driver's `classify_text` over the log finds nothing scored -- which is what
+    a refusal looks like from the other side. Before 2026-09-02 it exited 0,
+    indistinguishable from a run that measured and passed every gate.
+    """
+    assert OVS.main(["--dry-run"]) == OVS.exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "Predictions, registered before anything is measured" in out
     assert "HYPOTHESIS" in out
     assert "blk/SM" in out
+    assert "RESULT:" not in out
+    with pytest.raises(OVS.exit_codes.NoGatesScored):
+        OVS.exit_codes.classify_text(out)
 
 
 def test_failed_and_unchecked_validity_gates_print_differently():
@@ -742,4 +787,405 @@ def test_failed_and_unchecked_validity_gates_print_differently():
         l2_source="read off a device", measured=True)
     text = "\n".join(lines)
     assert "NOT CHECKED: V9 compiled shared memory" in text
-    assert "READ THIS FIRST" not in text
+    # V10 FAILS on planted cells, which is correct and is not what this test is
+    # about, so the two sentences are compared on the gates each names.
+    assert "READ THIS FIRST: the VALIDITY gates V10 one instrument FAILED" in text
+    assert "V9 compiled shared memory FAILED" not in text
+
+
+# --------------------------------------------------------------------------
+# THE PIPELINE-DEPTH CONFOUND (audit A16). `num_stages` moves residency AND
+# prefetch depth, and `occupancy_contrast` averaged the settings that share a
+# residency level -- which is exactly where the pure depth effect lives. These
+# tests pin the contrast that recovers it, the gate that scores it, and the
+# fact that the confound is UNREMOVABLE on both real cards.
+# --------------------------------------------------------------------------
+
+def _rung(stages: int, blocks: int, alpha: float, *, warps: int = 8,
+          group: int = 1):
+    """One occupancy-arm SettingResult at a given residency, built by hand.
+
+    `_result` above is the general helper; this one exists because the depth
+    tests care about exactly three fields -- num_stages, resident_blocks and
+    alpha -- and spelling the other twelve out at each call site would bury
+    which cells a contrast is supposed to pair.
+    """
+    return _result(f"s{stages}w{warps}g{group}", stages, warps, group, blocks,
+                   alpha, (OVS.ARM_OCCUPANCY,), sigma=0.001)
+
+
+def test_depth_contrast_pairs_two_num_stages_at_one_residency():
+    """The pure pipeline-depth effect: same blocks/SM, same warps, same G."""
+    results = [_rung(4, 2, 0.80), _rung(5, 2, 0.50),
+               _rung(2, 6, 0.95)]
+    dpt = OVS.depth_contrast(results)
+    assert dpt.lo_label.startswith("s4") and dpt.hi_label.startswith("s5")
+    assert dpt.swing == pytest.approx(-0.30)
+
+
+def test_depth_contrast_is_not_formable_when_every_stage_has_its_own_residency():
+    """NOT FORMED is a real answer and must not be a zero.
+
+    A zero swing would read as "depth does not move alpha", which is the
+    opposite of "depth was never varied at fixed residency".
+    """
+    results = [_rung(2, 6, 0.95), _rung(3, 4, 0.90),
+               _rung(4, 3, 0.85), _rung(5, 2, 0.80)]
+    assert OVS.depth_contrast(results).swing is None
+    assert OVS.depth_levels(results) == {2: [5], 3: [4], 4: [3], 6: [2]}
+
+
+def test_occupancy_contrast_averages_exactly_what_the_depth_contrast_recovers():
+    """The averaging is the defect and the depth contrast is the repair.
+
+    Two stages at one residency level enter `occupancy_contrast` as their MEAN,
+    so a 0.30 depth effect leaves a trace of 0.15 in the residency swing and no
+    trace at all of its own size. `depth_contrast` reads the same two cells and
+    returns the 0.30.
+    """
+    results = [_rung(4, 2, 0.80), _rung(5, 2, 0.50),
+               _rung(2, 6, 0.95)]
+    occ = OVS.occupancy_contrast(results)
+    assert occ.lo_alpha == pytest.approx(0.65), "the two depths were averaged"
+    assert occ.swing == pytest.approx(0.30)
+    assert OVS.depth_contrast(results).swing == pytest.approx(-0.30)
+
+
+def test_p6_passes_fails_and_refuses_on_the_three_worlds_it_has():
+    """Every branch of P6, including the two that are not verdicts.
+
+    PASS: depth moves less than residency. FAIL: it moves at least as much, so
+    P1 cannot be read as a footprint effect. UNKNOWN twice: no pair to form,
+    and a P1 that never cleared its own threshold so there is nothing for depth
+    to be smaller than. UNKNOWN counts AGAINST the gate in both cases.
+    """
+    levels = {2: [4, 5], 6: [2]}
+    occ = OVS.Contrast("occupancy", "2 blocks/SM", "6 blocks/SM", 0.60, 0.90,
+                       0.001, 2)
+    small = OVS.Contrast(OVS.ARM_DEPTH, "s4", "s5", 0.60, 0.62, 0.001, 1)
+    large = OVS.Contrast(OVS.ARM_DEPTH, "s4", "s5", 0.60, 0.95, 0.001, 1)
+    none = OVS.Contrast(OVS.ARM_DEPTH, "", "", None, None, None, 0)
+    flat = OVS.Contrast("occupancy", "2 blocks/SM", "6 blocks/SM", 0.60, 0.601,
+                        0.001, 2)
+
+    assert OVS.gate_depth_control(small, occ, 0.046, levels).passed is True
+    assert OVS.gate_depth_control(large, occ, 0.046, levels).passed is False
+    unformed = OVS.gate_depth_control(none, occ, 0.046, levels)
+    assert unformed.passed is None
+    assert "UNREMOVED" in unformed.observed
+    assert OVS.gate_depth_control(small, flat, 0.046, levels).passed is None
+    # UNKNOWN is not a pass anywhere the exit code is computed.
+    assert OVS.exit_codes.classify([unformed.scored()]) == \
+        OVS.exit_codes.CLAIM_FAIL
+
+
+def test_neither_real_card_can_form_the_depth_control():
+    """The finding P6 reports on a pod, pinned so a ladder change is noticed.
+
+    After the BLOCK_M=256 reference prunes the top of the ladder, the H200 runs
+    2/3/4/5 stages at 6/4/3/2 blocks and the A100 runs 2/3/4 at 4/3/2. No two
+    rungs collide on either card, so the pure depth effect cannot be measured
+    by this design at all -- which is why the self-test plants its P6 worlds on
+    a card that does not exist and says so.
+    """
+    from moe.spec import MODEL_CONFIGS, dtype_bytes
+    b = dtype_bytes("bf16")
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    for capability, sm, l2, want in ((H200, 132, 50_000_000, {6: [2], 4: [3],
+                                                              3: [4], 2: [5]}),
+                                     (A100, 108, 40_000_000, {4: [2], 3: [3],
+                                                              2: [4]})):
+        args = OVS.build_parser().parse_args(
+            ["--capability", f"{capability[0]}.{capability[1]}",
+             "--sm-count", str(sm), "--l2-bytes", str(l2)])
+        limits = OVS.card_limits(capability, sm, l2, "test")
+        plan = OVS.build_plan(args, cfg, b, limits, alpha=0.9, ridge=162.8,
+                              bandwidth_gbps=4374.5)
+        results = [
+            _rung(s.num_stages,
+                  OVS.residency(s.pinned(64, 64), 64, b, limits).resident_blocks,
+                  0.9)
+            for s in plan.settings if OVS.ARM_OCCUPANCY in s.arms]
+        assert OVS.depth_levels(results) == want, capability
+        assert OVS.depth_contrast(results).swing is None, capability
+
+
+def test_every_verdict_branch_names_the_pipeline_depth_confound():
+    """A16: the confound was stated once, in the predictions text, about the
+    wrong knob. A verdict quoted without it reads as a footprint result."""
+    for verdict, note in OVS.VERDICT_NOTE.items():
+        assert "P6" in note, verdict
+        assert "prefetch depth" in note or "pipeline depth" in note or \
+            "latency-hiding" in note or "depth" in note, verdict
+
+
+# --------------------------------------------------------------------------
+# THE INSTRUMENT, THE EXIT CODES, THE RUN ID, THE MDE.
+# --------------------------------------------------------------------------
+
+def test_the_retired_timing_loop_is_neither_required_nor_called():
+    """`time_call` raises `RetiredInstrument` now, so requiring it in
+    `_load_sweep` would have passed on a laptop and failed on the pod."""
+    source = (ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text()
+    assert "SWEEP.time_call" not in source
+    assert "SWEEP.scaled_iters" not in source
+    assert '"time_call"' not in source
+
+
+def test_every_timing_column_round_trips_through_the_csv(tmp_path):
+    """A clock that was NOT DETERMINED must not come back as False.
+
+    `csv` writes None as "" and `bool("False")` is True, so both directions are
+    spelled out in `_opt_bool`; a flag read back as a passing False is exactly
+    the reading the column exists to prevent.
+    """
+    path = tmp_path / "cells.csv"
+    rows = [
+        OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01, 200,
+                   instrument="queue-deep/v9", warmup_ms=300.0, trials=3,
+                   sm_clock_load_mhz=1755.0, clock_level_ok=True,
+                   clock_drift_ok=False, l2_flush=True),
+        OVS.Sample("s4w8g1", 4, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01, 200,
+                   instrument="queue-deep/v9", warmup_ms=300.0, trials=3),
+    ]
+    for row in rows:
+        OVS.append_sample(path, row)
+    _, back = OVS.read_samples(path)
+    assert back[0].clock_level_ok is True
+    assert back[0].clock_drift_ok is False
+    assert back[0].sm_clock_load_mhz == 1755.0
+    assert back[0].l2_flush is True
+    assert back[1].clock_level_ok is None, "not determined is not False"
+    assert back[1].sm_clock_load_mhz is None
+
+
+def test_a_cells_csv_from_before_the_instrument_had_a_name_still_replays(tmp_path):
+    """The committed cells have none of these columns. Reading one back must
+    say 'not recorded', not fail to parse and not invent a passing flag."""
+    path = tmp_path / "cells.csv"
+    path.write_text(
+        "setting,num_stages,num_warps,group_m,block_m,tiles,rows_per_expert,"
+        "tokens,rep,ms_p50,ms_min,ms_stdev,iters,status,detail\n"
+        "s3w8g1,3,8,1,64,4,256,1024,1,1.0,0.9,0.01,50,ok,\n")
+    _, back = OVS.read_samples(path)
+    assert back[0].instrument == ""
+    assert back[0].clock_level_ok is None
+    assert back[0].l2_flush is False
+
+
+def test_v10_passes_fails_and_refuses_on_the_instrument_stamp():
+    """Every branch. An unstamped row and a differently-stamped row both FAIL,
+    and they are DIFFERENT states: one is a row from before the instrument had
+    a name, the other is a row from another instrument."""
+    basis = OVS.timing_basis()
+    good = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                       200, instrument=basis)]
+    old = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                      200, instrument="")]
+    other = [OVS.Sample("s3w8g1", 3, 8, 1, 64, 4, 256, 1024, 1, 1.0, 0.9, 0.01,
+                        200, instrument="per-iteration-sync/no-flush")]
+    assert OVS.gate_one_instrument(good).passed is True
+    assert OVS.gate_one_instrument(old).passed is False
+    assert OVS.gate_one_instrument(other).passed is False
+    assert OVS.gate_one_instrument([]).passed is None
+    # A planted world is not a badly timed one and must not be scored as if it
+    # were: UNKNOWN, with the reason.
+    planted = OVS.gate_one_instrument(good, measured=False)
+    assert planted.passed is None
+    assert "GENERATED" in planted.observed
+    # A VALIDITY failure is INVALID, never a downgradeable claim failure.
+    assert OVS.exit_codes.classify([OVS.gate_one_instrument(old).scored()]) == \
+        OVS.exit_codes.INVALID
+
+
+def test_planted_cells_are_stamped_synthetic_and_never_with_the_real_name():
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.0, seed=1)
+    assert {s.instrument for s in samples} == {OVS.SYNTHETIC_INSTRUMENT}
+    assert OVS.SYNTHETIC_INSTRUMENT != OVS.timing_basis()
+
+
+def test_every_gate_prints_exactly_one_parsable_result_line():
+    """`RESULT: ` is the ONE line per gate a reader may grep. A gate whose name
+    carried a space would be dropped by the parser rather than fail loudly.
+
+    It is the contract this file offers. The session driver's regex for this
+    arm still matches verdict-shaped prose instead, which is why the exit code
+    a pod records is checked separately below.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.003, seed=7)
+    _, gates, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    text = "\n".join(line for g in gates for line in g.render())
+    parsed = OVS.exit_codes.parse_result_lines(text)
+    assert len(parsed) == len(gates)
+    assert [p.name for p in parsed] == [g.token for g in gates]
+    assert [p.verdict for p in parsed] == [g.verdict for g in gates]
+    # And the log's implied code agrees with the one the process would return.
+    assert OVS.exit_codes.classify_text(text) == \
+        OVS.exit_codes.classify(g.scored() for g in gates)
+    assert all(" " not in g.token for g in gates)
+
+
+def test_gate_tokens_are_unique_so_two_gates_cannot_share_a_result_line():
+    """Two gates named V9 shipped in this file for one afternoon. The driver
+    would have kept whichever one it read last."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.003, seed=7)
+    _, gates, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False)
+    tokens = [g.token for g in gates]
+    assert len(tokens) == len(set(tokens)), tokens
+
+
+def test_exit_for_never_downgrades_a_validity_failure():
+    """CLAIM_FAIL is a result and may be reported as DONE for old callers.
+    INVALID is not: nothing on the page may be quoted, whatever the flag."""
+    claim = [OVS.Gate(OVS.CLAIM, "P1 occupancy", "p", "r", False, "o")]
+    validity = [OVS.Gate(OVS.VALIDITY, "V1 card provenance", "p", "r", False, "o")]
+    assert OVS.exit_for(claim, False) == OVS.exit_codes.DONE
+    assert OVS.exit_for(claim, True) == OVS.exit_codes.CLAIM_FAIL
+    assert OVS.exit_for(validity, False) == OVS.exit_codes.INVALID
+    assert OVS.exit_for(validity, True) == OVS.exit_codes.INVALID
+
+
+def test_run_id_carries_the_instruments_knobs_and_refuses_without_a_card():
+    """`--warmup-ms`, `--trials` and `--l2-flush` each set the measured
+    milliseconds of every cell, so a re-run that changed one and landed in the
+    same directory would print the old numbers under the new label."""
+    base = OVS.build_parser().parse_args([])
+    ident = OVS.default_run_id(base, "nvidia_h200")
+    for argv in (["--warmup-ms", "150"], ["--trials", "5"], ["--no-l2-flush"]):
+        other = OVS.build_parser().parse_args(argv)
+        assert OVS.default_run_id(other, "nvidia_h200") != ident, argv
+    assert ident.startswith("nvidia_h200-")
+    with pytest.raises(OVS.PV.NoCard):
+        OVS.default_run_id(base, "")
+
+
+def test_the_plan_prints_an_mde_from_a_stated_assumption():
+    """B14: no arm in this study stated one. A registered threshold with no
+    MDE beside it cannot be read."""
+    args, cfg, b, plan, reg, _ = _plan_and_reg(reps=5)
+    text = "\n".join(OVS.mde_lines(args, reg))
+    assert "MDE" in text
+    assert f"{OVS.mde(OVS.ASSUMED_ALPHA_SD, 5):.4f}" in text
+    assert "assumed sigma" in text
+    assert "upper bound on same-session rerun noise only" in text
+    assert f"{reg.occupancy_threshold:.3f}" in text
+
+
+def test_the_mde_falls_with_repeats_and_refuses_a_nonsense_sigma():
+    values = [OVS.mde(OVS.ASSUMED_ALPHA_SD, n) for n in range(1, 10)]
+    assert values == sorted(values, reverse=True)
+    with pytest.raises(ValueError):
+        OVS.mde(0.0, 5)
+    with pytest.raises(ValueError):
+        OVS.mde(0.02, 0)
+
+
+def test_the_cost_model_prices_the_instrument_and_not_the_retired_loop():
+    """One cell costs a warmup DURATION plus `trials` trials of the budget, so
+    the total is nearly independent of the per-call time. The retired formula
+    multiplied a per-call time by a call count and, once `--warmup` became
+    milliseconds, added a duration to an iteration count."""
+    from moe.spec import MODEL_CONFIGS, dtype_bytes
+    cfg, b = MODEL_CONFIGS["mixtral-8x7b"], dtype_bytes("bf16")
+    plans = {}
+    for budget in ("200", "400"):
+        args = OVS.build_parser().parse_args(
+            ["--capability", "9.0", "--sm-count", "132",
+             "--l2-bytes", "50000000", "--cell-budget-ms", budget])
+        plans[budget] = OVS.build_plan(args, cfg, b, _limits(), alpha=0.9,
+                                       ridge=162.8, bandwidth_gbps=4374.5)
+    cells = plans["400"].cells
+    lo, hi = plans["200"], plans["400"]
+    # warmup + trials * budget per cell, to within the iteration-count clamp.
+    assert hi.estimated_seconds == pytest.approx(
+        cells * (hi.warmup_ms + hi.trials * hi.cell_budget_ms) / 1e3, rel=0.05)
+    assert lo.estimated_seconds < hi.estimated_seconds
+
+
+def test_replay_re_reports_planted_cells_through_the_exit_code_table(tmp_path):
+    """The whole off-GPU path a pod operator uses to re-score a finished run:
+    cells.csv in, contrasts and gates out, one exit code from the shared table.
+
+    The planted rows carry no instrument, so V10 FAILS and the run is INVALID.
+    That is the correct answer for a cells.csv written before 2026-09-02 and it
+    is what a replay of the committed arms will say.
+    """
+    args, cfg, b, plan, reg, limits = _plan_and_reg(reps=2)
+    out = tmp_path / "run"
+    out.mkdir()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.002, seed=13)
+    for sample in samples:
+        OVS.append_sample(out / "cells.csv", sample)
+    (out / "CARD").write_text("nvidia_h200\n")
+    (out / "inputs.json").write_text(json.dumps(
+        {"ridge": 162.8, "bandwidth_gbps": 4374.5,
+         "roofline_source": "planted", "l2_source": "planted",
+         "device": "NVIDIA H200",
+         "limits": {"capability": list(H200), "smem_per_sm": limits.smem_per_sm,
+                    "max_threads_per_sm": limits.max_threads_per_sm,
+                    "max_blocks_per_sm": limits.max_blocks_per_sm,
+                    "sm_count": limits.sm_count, "l2_bytes": limits.l2_bytes,
+                    "source": "planted"}}))
+    rc = OVS.main(["--replay", str(out), "--capability", "9.0",
+                   "--sm-count", "132", "--l2-bytes", "50000000",
+                   "--reps", "2", "--card", "nvidia_h200"])
+    assert rc == OVS.exit_codes.INVALID
+
+
+def test_replay_refuses_a_directory_with_no_recorded_rulers(tmp_path):
+    """Re-scoring stored timings against THIS machine's ridge is the
+    hybrid-of-two-machines failure this study has already published once."""
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "cells.csv").write_text(
+        "setting,num_stages,num_warps,group_m,block_m,tiles,rows_per_expert,"
+        "tokens,rep,ms_p50,ms_min,ms_stdev,iters,status,detail\n"
+        "s3w8g1,3,8,1,64,4,256,1024,1,1.0,0.9,0.01,50,ok,\n")
+    rc = OVS.main(["--replay", str(out), "--capability", "9.0",
+                   "--sm-count", "132", "--l2-bytes", "50000000"])
+    assert rc == OVS.exit_codes.REFUSED
+
+
+def test_a_claim_fail_arm_exits_zero_unless_argv_asks_for_the_code(capsys):
+    """What a pod's ledger records when a claim gate does not pass, measured.
+
+    The file says in two places that a P6-UNKNOWN run CLASSIFIES as CLAIM_FAIL,
+    and the qualifier is the whole point: `exit_for` prints the CLAIM_FAIL line
+    and then returns DONE without `--fail-on-gate`, for callers that predate
+    the exit-code table, and `scripts/h200_gaps_session.sh` launches this arm
+    without the flag. A reader of the docstrings alone would expect a non-zero
+    exit on a pod and would be wrong; the verdict travels on the RESULT lines,
+    which is why `classify_text` over the log has to disagree with the code.
+
+    `--audit` is the cheapest genuine CLAIM_FAIL available off GPU: A1 fails
+    against the published corpus and A2 is UNKNOWN by construction. Both
+    branches of the flag are exercised, because a downgrade that also fired
+    with `--fail-on-gate` would make the flag decorative.
+    """
+    assert OVS.main(["--audit"]) == OVS.exit_codes.DONE
+    out = capsys.readouterr().out
+    assert f"{OVS.exit_codes.CLAIM_FAIL} CLAIM_FAIL" in out, \
+        "the downgrade must still print the code it would have exited with"
+    assert "--fail-on-gate" in out, "and how to get that code instead"
+    assert OVS.exit_codes.classify_text(out) == OVS.exit_codes.CLAIM_FAIL, \
+        "the log says CLAIM_FAIL where the exit code says DONE"
+    assert OVS.main(["--audit", "--fail-on-gate"]) == OVS.exit_codes.CLAIM_FAIL
