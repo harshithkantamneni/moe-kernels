@@ -36,6 +36,7 @@ its case statement, which would agree with it until it did not.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -768,3 +769,221 @@ def test_it_never_commits_terminates_or_pushes(tmp_path):
             assert forbidden not in line, line
     got = run(["--dry-run"], session=tmp_path / "s")
     assert "NOTHING HERE IS COMMITTED AND NOTHING IS PUSHED" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 10. the card probe, the capability parse, and the gate they feed
+# --------------------------------------------------------------------------
+#: The shipped read, lifted verbatim rather than retyped, so a change to the
+#: delimiter or the field order fails here instead of on a pod.
+READ_FIELDS = "IFS='|' read -r CARD CAPABILITY CARD_REASON"
+#: The two shipped lines that turn a compute capability into a major number.
+PARSE = re.search(r'^SM_MAJOR=""\n\[\[ "\$CAPABILITY" =~ [^\n]*\n', TEXT, re.M).group(0)
+
+
+def read_probe(line):
+    """Run the driver's own field split over one planted probe line."""
+    body = (f'set -uo pipefail\n{READ_FIELDS} '
+            f'< <(printf "%s\\n" {shlex.quote(line)})\n'
+            'printf "%s\\n%s\\n%s\\n" "$CARD" "$CAPABILITY" "$CARD_REASON"\n')
+    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    return done.stdout.split("\n")[:3]
+
+
+def test_the_probe_is_pipe_delimited_because_a_prose_reason_ate_the_capability():
+    """THE 2026-09-02 LIVE BUG, PLANTED. The probe used to split on a character
+    the reasons themselves contain, so `compute capability unreadable:
+    RuntimeError, no CUDA` put the words `no CUDA` in CAPABILITY. `pre_hopper`
+    was then written as an arithmetic comparison, bash looked for a variable
+    named CUDA, and `set -u` ended the session at the second arm. A pipe cannot
+    appear in a reason these branches write, and the reason is the LAST field,
+    so anything unexpected in it stays in it."""
+    assert READ_FIELDS in CODE
+    # The python side of the probe emits the same three pipe-joined fields on
+    # every exit, including the two that give up.
+    assert 'print(f"{card_slug(prov.gpu_name)}|{capability}|")' in TEXT
+    assert TEXT.count('print(f"nocard||') == 2
+    card, cap, reason = read_probe(
+        "nocard||compute capability unreadable: RuntimeError, no CUDA, none")
+    assert card == "nocard"
+    assert cap == "", "the reason must not reach the capability field"
+    assert reason == "compute capability unreadable: RuntimeError, no CUDA, none"
+    # And the PASS side: a real card fills the first two and leaves the third empty.
+    assert read_probe("nvidia_h200|9.0|") == ["nvidia_h200", "9.0", ""]
+
+
+@pytest.mark.parametrize("capability,major", [
+    ("9.0", "9"), ("8.0", "8"), ("10.0", "10"),
+    ("", ""), ("no CUDA", ""), ("nine.zero", ""), ("9", ""),
+])
+def test_the_capability_major_is_taken_only_from_a_number(capability, major):
+    """A capability that did not parse leaves SM_MAJOR EMPTY rather than
+    guessing. `9` with no dot is deliberately empty: the field this driver reads
+    is always `major.minor`, and a bare integer is a string from somewhere
+    else."""
+    body = (f"set -uo pipefail\nCAPABILITY={shlex.quote(capability)}\n"
+            f'{PARSE}printf "%s\\n" "$SM_MAJOR"\n')
+    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == major
+
+
+@pytest.mark.parametrize("sm_major,skips", [
+    ("7", True), ("8", True), ("9", False), ("10", False), ("", False),
+])
+def test_pre_hopper_skips_a_pre_hopper_card_and_never_skips_on_a_string_it_could_not_read(
+        sm_major, skips):
+    """ALL THREE BRANCHES OF THE GATE THAT DECIDES FOUR ARMS. sm_80 skips them,
+    because BLOCK_N=256 at four stages asks 192 KiB of shared memory against
+    that card's 164. sm_90 runs them. An EMPTY SM_MAJOR runs them too: the gate
+    exists to spare a card that provably cannot hold the shape, and a
+    capability nobody could parse is not that proof. Skipping on an unreadable
+    string would drop the session's only confirming arm and say nothing."""
+    got = lift('if pre_hopper; then echo SKIP; else echo RUN; fi',
+               REPO=str(ROOT), SM_MAJOR=sm_major)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == ("SKIP" if skips else "RUN")
+
+
+def test_an_unreadable_capability_travels_the_whole_chain_without_ending_the_run():
+    """The probe, the parse and the gate together, on the exact string that
+    ended a session. Under `set -u`, and the run must still be RUN and rc 0."""
+    script = (f'{READ_FIELDS} < <(printf "%s\\n" '
+              f'{shlex.quote("nocard||compute capability unreadable: no CUDA")})\n'
+              f'{PARSE}'
+              'if pre_hopper; then echo SKIP; else echo RUN; fi\n')
+    got = lift(script, REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == "RUN"
+
+
+def test_the_pre_hopper_gate_decides_exactly_the_four_arms_that_need_the_shape():
+    """The gate is not free: every arm behind it is an arm the session does not
+    run. These four are the ones whose configuration a pre-Hopper card cannot
+    hold; anything else appearing here is an arm silently dropped."""
+    guarded = re.findall(r"if pre_hopper; then\n\s*skip_arm ([\w.-]+)", CODE)
+    assert sorted(guarded) == sorted(["pin_probe-n256-g16", "roofline-n256-g16",
+                                      "roofline-n256-g32", "mma_switch"])
+    for name in guarded:
+        assert 'compute capability $CAPABILITY' in CODE.split(f"skip_arm {name} ", 1)[1][:400] \
+            or 'capability $CAPABILITY' in CODE.split(f"skip_arm {name} ", 1)[1][:400], name
+
+
+# --------------------------------------------------------------------------
+# 11. the state word is disclosed when the file that produced it uses another table
+# --------------------------------------------------------------------------
+
+def adopting_repo(tmp_path, rel):
+    """A repo whose `rel` imports the module, for the caveat's silent branch."""
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("from moe.bench.exit_codes import classify\n")
+    return tmp_path
+
+
+def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path):
+    """THE DEFECT, PLANTED. `dram_counter_route.py` ends `return 0 if verdict ==
+    "OPEN" else 3`, so BLOCKED -- the answer that arm exists to obtain, and the
+    expected one on a rented pod -- exits 3, which the adopted table reads as
+    INVALID. The base driver carried `counter_plan) echo 0,3` for exactly this;
+    R1 deleted the per-arm lists and that script is not on audit A4's fix list,
+    so the row is wrong at merge and the only honest thing this file can do is
+    say so beside it."""
+    log = tmp_path / "counter_plan.log"
+    log.write_text(RESULT_LOG)
+    got = lift(f'summarize_arm counter_plan {log} INVALID', REPO=str(ROOT))
+    assert "dram_counter_route.py returns 3 for" in got.stdout
+    assert "not OPEN" in got.stdout
+    assert "not a broken instrument" in got.stdout
+    # and it still says what INVALID does to the ledger, because that is what
+    # the operator has to undo.
+    assert "delete this row from" in got.stdout
+
+
+def test_an_unadopted_refusal_says_two_may_mean_the_opposite(tmp_path):
+    """The other direction of the same collision. `memory_branch_anchor.py`
+    documents 2 as a VALIDITY gate that failed AFTER an eight-minute
+    measurement; this session reads 2 as REFUSED and prints "REFUSED BEFORE
+    MEASURING". Until that script adopts the module the summary must not leave
+    that sentence standing alone."""
+    log = tmp_path / "anchor.log"
+    log.write_text("REFUSED: no calibration for this device.\n")
+    got = lift(f'summarize_arm anchor_measure {log} REFUSED', REPO=str(ROOT))
+    assert "REFUSED BEFORE MEASURING" in got.stdout
+    assert "DOCUMENTS 2 as a" in got.stdout
+    assert "eight-minute measurement" in got.stdout
+
+
+def test_the_caveat_is_silent_once_the_file_speaks_the_table(tmp_path):
+    """THE PASS BRANCH, and the reason this is asked of the file rather than
+    kept in a list here: a sibling slice landing the fix must turn the caveat
+    off without anyone editing this driver."""
+    repo = adopting_repo(tmp_path, "scripts/dram_counter_route.py")
+    got = lift('contract_caveat counter_plan INVALID; echo "rc=$?"', REPO=str(repo))
+    assert got.stdout.strip() == "rc=1"
+    assert "CAVEAT" not in got.stdout
+
+
+def test_a_file_the_driver_cannot_find_is_unknown_and_not_adopted(tmp_path):
+    """REFUSE RATHER THAN DEFAULT. An arm whose script is missing gets the
+    caveat, worded as UNKNOWN, because "could not check" is not "checked and
+    fine"."""
+    got = lift('contract_caveat counter_plan INVALID', REPO=str(tmp_path))
+    assert "could not find" in got.stdout
+    assert "UNKNOWN" in got.stdout
+    rcs = lift('adopts_exit_codes scripts/nothing_here.py; echo "rc=$?"',
+               REPO=str(tmp_path))
+    assert rcs.stdout.strip() == "rc=2"
+
+
+def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(tmp_path):
+    """AUDIT A4, the half that was left in the cheap branch. The `--dry-run`
+    banner said a refusal exiting 3 is "a refusal wearing an INVALID's number";
+    the measuring path, where the mislabel costs an arm, said nothing. Both
+    branches of the new section are planted: rows from unadopted files, and a
+    ledger with none."""
+    assert '(( DRY )) || contract_disclosure "$LEDGER"' in CODE
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(
+        "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+        "counter_plan\tINVALID\t3\t61\t0\t/x.log\t\n"
+        "anchor_measure\tREFUSED\t2\t480\t0\t/y.log\t\n"
+        "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
+    assert "counter_plan        INVALID" in got.stdout
+    assert "anchor_measure      REFUSED" in got.stdout
+    assert "ruler" not in got.stdout, "a DONE row has no state to disclose"
+
+    clean = tmp_path / "CLEAN.tsv"
+    clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                     "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
+    ok = lift(f'contract_disclosure {clean}', REPO=str(ROOT))
+    assert "THE EXIT-CODE CONTRACT" in ok.stdout
+    assert "WRONG WORD" not in ok.stdout
+    assert "No REFUSED or INVALID row" in ok.stdout
+
+
+def test_the_disclosure_restores_no_per_arm_state_map():
+    """R1 DELETED THE PER-ARM DONE-CODE LISTS AND THIS PUTS NONE BACK. The new
+    functions print words; they call `ledger_state` nowhere and assign `state`
+    nowhere, so the ledger word still comes from the one table and from nothing
+    else."""
+    for fn in ("arm_script", "adopts_exit_codes", "contract_caveat",
+               "contract_disclosure"):
+        body = CODE.split(f"\n{fn}() ", 1)[1].split("\nesac; }", 1)[0] \
+            if f"\n{fn}() {{ case" in CODE else \
+            CODE.split(f"\n{fn}() {{", 1)[1].split("\n}", 1)[0]
+        assert "ledger_state" not in body, fn
+        assert not re.search(r'^\s*state=', body, re.M), fn
+    assert "arm_done_codes" not in TEXT
+
+
+def test_the_counter_arm_says_to_read_its_verdict_and_not_its_ledger_state():
+    listing = run(["--list"]).stdout
+    block = listing.split("  counter_plan ", 1)[1].split("\n\n", 1)[0]
+    assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" in block
+    assert "BLOCKED is the ANSWER" in block

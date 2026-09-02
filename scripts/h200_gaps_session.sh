@@ -14,7 +14,7 @@
 # and the closing summary -- and each of those three has already been wrong in a
 # way that cost a rented pod.
 #
-# WHAT CHANGED ON 2026-09-02, second rewrite, after the standards audit. Six
+# WHAT CHANGED ON 2026-09-02, second rewrite, after the standards audit. Seven
 # defects, each of which made a broken run look like a clean one:
 #
 #   * THE EXIT-CODE CONTRACT WAS INVERTED AND PER-ARM. This file read 2 as
@@ -52,6 +52,21 @@
 #   * THE PIN WAS PROBED AT A CONFIGURATION NO ARM RUNS. The probe pinned
 #     BLOCK_N=128 while every arm pins 64 (or, now, 256). A pin that reaches the
 #     kernel at one BLOCK_N is evidence about that BLOCK_N.
+#   * THE ONE TABLE WAS ADOPTED HERE AND NOWHERE ELSE, SILENTLY. Adopting
+#     moe/bench/exit_codes fixed this file's reading and fixed none of the
+#     twenty scripts it reads: today only block_m_crossing_sweep.py imports the
+#     module, memory_branch_anchor.py still DOCUMENTS 2 and 3 the other way
+#     round, and dram_counter_route.py returns 3 for every verdict that is not
+#     OPEN -- so a BLOCKED counter route, which is that arm's registered ANSWER
+#     on a rented pod, lands in the ledger as INVALID and is described to the
+#     operator as measured-and-unquotable. The dry-run said this, for free,
+#     where it costs nothing; the pod run said nothing, where it costs an arm.
+#     The states are NOT patched per arm -- that is the list R1 deleted. Instead
+#     `adopts_exit_codes` ASKS each arm's file whether it imports the module,
+#     and `contract_caveat` / `contract_disclosure` print, next to every REFUSED
+#     or INVALID row that came from a file which does not, what the state may
+#     actually mean and in which direction. When a sibling slice lands the fix,
+#     the caveat stops printing on its own; nothing here has to be remembered.
 #
 # THE THREE FINDINGS THAT SET THE ORDER, restated because two of them were
 # retracted since this file last said them:
@@ -261,6 +276,115 @@ ledger_state() { case "$1" in
   *) echo RETRY ;;
 esac; }
 
+# WHICH FILE EACH ARM ACTUALLY RUNS, repo-relative, so this driver can ASK that
+# file whether it speaks the table above instead of assuming it does. It decides
+# NO arm's state: R1 deleted the per-arm done-code lists and this restores none.
+# `ledger_state` is still the only thing that turns an exit code into a word.
+arm_script() { case "$1" in
+  calibrate)                     echo scripts/calibrate_hardware.py ;;
+  pin_probe-*)                   echo moe/bench/cli.py ;;
+  roofline-*)                    echo scripts/bm128_roofline.py ;;
+  bm128_depth)                   echo scripts/bm128_depth.py ;;
+  noise_floor)                   echo scripts/replicate_noise_floor.py ;;
+  bn_g16|bn_g1)                  echo scripts/bn_decomposition.py ;;
+  anchor_measure|anchor_rescore) echo scripts/memory_branch_anchor.py ;;
+  occupancy)                     echo scripts/occupancy_vs_swizzle.py ;;
+  mma_switch)                    echo scripts/check_mma_path.sh ;;
+  ruler)                         echo scripts/ruler_rebaseline.py ;;
+  cap_test)                      echo scripts/tile_cap_test.py ;;
+  dtype)                         echo scripts/dtype_tile_confound.py ;;
+  span|span_dense)               echo scripts/span_extent_separation.py ;;
+  counter_plan)                  echo scripts/dram_counter_route.py ;;
+  *)                             echo "" ;;
+esac; }
+
+# Does the file an arm runs speak moe/bench/exit_codes' table. ASKED of the file
+# on every run rather than carried in a list here, because a list of who has
+# adopted goes stale the day someone adopts, which is the failure mode R1
+# removed. rc 0 adopted, rc 1 not, rc 2 UNKNOWN -- a file this cannot find, which
+# is not the same answer as adopted and is treated here as not.
+adopts_exit_codes() {
+  local rel="$1"
+  [[ -n "$rel" && -f "${REPO:-}/$rel" ]] || return 2
+  grep -q 'moe\.bench\.exit_codes\|moe\.bench import exit_codes' -- "${REPO:-}/$rel"
+}
+
+# WHAT A REFUSED OR INVALID ROW MAY ACTUALLY MEAN when the file that produced it
+# has not adopted the table this session reads it by. Prints nothing -- rc 1 --
+# for a file that has adopted, and nothing for any other state, so it is silent
+# on every row whose word is trustworthy. It changes no state and no exit code;
+# the whole content is disclosure, which is what the measuring path did not have.
+contract_caveat() {
+  local name="$1" state="$2" rel why rc=0
+  rel="$(arm_script "$name")"
+  adopts_exit_codes "$rel" || rc=$?
+  case "$rc" in
+    0) return 1 ;;
+    2) why="which this driver could not find, so whether it speaks that\n  module is UNKNOWN -- and UNKNOWN is not the same answer as adopted" ;;
+    *) why="which does not import moe/bench/exit_codes" ;;
+  esac
+  case "$state" in
+    REFUSED)
+      printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
+      printf '  %b.\n' "$why"
+      printf '  It therefore reads REFUSED for one reason and one only: the command\n'
+      printf '  exited 2. A file that has not adopted the table may spend 2 on\n'
+      printf '  something else -- scripts/memory_branch_anchor.py DOCUMENTS 2 as a\n'
+      printf '  VALIDITY gate that failed AFTER an eight-minute measurement, the\n'
+      printf '  opposite reading, and such a run is unquotable rather than free.\n'
+      printf '  Read the log before believing that nothing was measured, and\n'
+      printf '  before re-running it.\n' ;;
+    INVALID)
+      printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
+      printf '  %b.\n' "$why"
+      printf '  It therefore reads INVALID for one reason and one only: the command\n'
+      printf '  exited 3. A file that has not adopted the table may spend 3 on a\n'
+      printf '  REFUSAL, which measured nothing and costs nothing to re-run, or on\n'
+      printf '  a registered ANSWER: scripts/dram_counter_route.py returns 3 for\n'
+      printf '  every verdict that is not OPEN, and BLOCKED on a rented pod is what\n'
+      printf '  that arm exists to find out, not a broken instrument. INVALID rows\n'
+      printf '  are latched and skipped on every later run; delete this row from\n'
+      printf '  the ledger to run the arm again.\n' ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
+# THE MEASURING PATH'S COUNTERPART TO THE DRY-RUN BANNER, which said only under
+# --dry-run, where it costs nothing, that a refusal exiting 3 is a refusal
+# wearing an INVALID's number. On the pod the same collision costs an arm and
+# nothing said it. Reads the ledger rather than the arm list so it can be tested
+# with a planted ledger, and so an arm added later is covered without being
+# named twice. Both branches print: the all-clear is a sentence, not silence,
+# because an empty section reads as nothing to report.
+contract_disclosure() {
+  local ledger="$1" n state rest rel any=0
+  while IFS=$'\t' read -r n state rest; do
+    case "$state" in REFUSED|INVALID) ;; *) continue ;; esac
+    rel="$(arm_script "$n")"
+    [[ -n "$rel" ]] && adopts_exit_codes "$rel" && continue
+    if (( any == 0 )); then
+      say "THE ROWS WHOSE STATE MAY BE THE WRONG WORD"
+      printf '  This session reads every exit code through moe/bench/exit_codes.\n'
+      printf '  The files below have not adopted that module, so their codes were\n'
+      printf '  chosen against some other table and the state in the ledger is a\n'
+      printf '  translation nobody agreed to. Nothing here is patched per arm; the\n'
+      printf '  fix belongs in those files, through exit_codes.classify.\n\n'
+      any=1
+    fi
+    printf '  %-19s %s   from %s\n' "$n" "$state" "${rel:-a command outside scripts/}"
+    contract_caveat "$n" "$state"
+    printf '\n'
+  done < "$ledger"
+  if (( any == 0 )); then
+    say "THE EXIT-CODE CONTRACT"
+    printf '  No REFUSED or INVALID row in this session came from a file that has\n'
+    printf '  not adopted moe/bench/exit_codes, so every state word above is the\n'
+    printf '  one that table defines.\n'
+  fi
+  return 0
+}
+
 # A PLAN IS NOT A MEASUREMENT, so a plan does not get measuring words. Three
 # outcomes, and only one of them is silent-failure-shaped: a --dry-run that
 # tracebacks exits 1, which lands in BROKEN and stops the session, which is the
@@ -315,6 +439,7 @@ summarize_arm() {
   if [[ "$state" == "REFUSED" || "$state" == "PLAN_REFUSED" ]]; then
     printf '  REFUSED BEFORE MEASURING. Nothing below is a gate:\n'
     grep -m2 'REFUSED' -- "$log" | sed 's/^/    /'
+    [[ "$state" == "REFUSED" ]] && contract_caveat "$name" REFUSED
     return 1
   fi
   if [[ "$state" == "INVALID" ]]; then
@@ -322,6 +447,7 @@ summarize_arm() {
     printf '  quoted, its cells must not be scored, and it is NOT auto-retried:\n'
     printf '  the instrument broke while in use. Re-run it only after the log\n'
     printf '  says in words that the cause was transient.\n'
+    contract_caveat "$name" INVALID
   fi
   hits="$(result_lines "$log")"
   if [[ -z "$hits" ]]; then
@@ -367,8 +493,10 @@ arm() {
     RETRY)   RETRY_ARMS=$((RETRY_ARMS + 1))
              note "   exit $rc is not in the table. Read the log before re-running." ;;
     REFUSED|PLAN_REFUSED)
-             note "   $(grep -m1 'REFUSED' -- "$log" || tail -1 "$log")" ;;
-    INVALID) note "   Do NOT re-run and do NOT quote it: a VALIDITY gate failed after measuring." ;;
+             note "   $(grep -m1 'REFUSED' -- "$log" || tail -1 "$log")"
+             [[ "$state" == "REFUSED" ]] && contract_caveat "$name" REFUSED ;;
+    INVALID) note "   Do NOT re-run and do NOT quote it: a VALIDITY gate failed after measuring."
+             contract_caveat "$name" INVALID ;;
   esac
   if [[ "$before" != "-" && "$after" != "-" && "$after" -gt "$before" ]]; then
     note "   WARNING: this arm dirtied the work tree ($before -> $after files)."
@@ -509,7 +637,7 @@ arm_closes() { case "$1" in
   dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype." ;;
   span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry." ;;
   span)       echo "The same on the sparse grid, for the extent comparison. CLAIM_FAIL here is the registered outcome of the kernel world and is recorded as finished." ;;
-  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way." ;;
+  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py returns 0 only for OPEN and 3 for everything else, and 3 is INVALID in the table this session adopted, so the BLOCKED answer this arm exists to obtain is filed as a validity failure. BLOCKED is the ANSWER, not a broken instrument; the fix belongs in that script, which audit A4 does not schedule." ;;
 esac; }
 
 arm_offgpu_gates() { case "$1" in
@@ -987,6 +1115,7 @@ done
 
 say "ARMS"
 cat "$LEDGER"
+(( DRY )) || contract_disclosure "$LEDGER"
 printf '\ntotal %s min of wall clock\n' "$(( ($(date -u +%s) - started) / 60 ))"
 printf 'work tree %s dirty file(s) at start, %s now\n' "$DIRTY_AT_START" "$(dirty_count)"
 
