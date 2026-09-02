@@ -348,7 +348,7 @@ def test_a_calibration_missing_its_provenance_fields_is_read_not_rejected(tmp_pa
 # --- the ten arms actually published -----------------------------------------
 
 @published_only
-def test_the_eleven_published_arms_have_these_verdicts():
+def test_the_fourteen_published_arms_have_these_verdicts():
     """The state this check exists for, and the place a new one gets declared on
     purpose rather than discovered by md5-ing directories three days later.
 
@@ -373,6 +373,17 @@ def test_the_eleven_published_arms_have_these_verdicts():
         # span. That is what the gate was written to reward and no earlier arm
         # had managed it.
         "2026-09-01-nvidia_h200-alpha-0558": SAME_SESSION,
+        # THREE REPORT-ONLY DIRECTORIES, a kind of published artefact this gate
+        # was never designed for. Recovered from the pod volumes on 2026-09-02,
+        # they carry report.json files and no merged.csv, so there are no rows
+        # whose stamped ceilings could be compared against a shipped
+        # calibration. UNKNOWN is the honest verdict and blocking is the right
+        # consequence: nothing here should be quoted as a calibrated arm.
+        # Do NOT "fix" this by relaxing the gate -- fix it, if it matters, by
+        # teaching publish_results.sh to mark a reports directory as such.
+        "2026-09-01-nvidia_h200-alpha-surface-s4": UNKNOWN,
+        "2026-09-01-nvidia_h200-cross-card-s3": UNKNOWN,
+        "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3": UNKNOWN,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}
@@ -380,11 +391,30 @@ def test_the_eleven_published_arms_have_these_verdicts():
 
 
 @published_only
-def test_exactly_one_published_arm_cannot_prove_its_calibration_is_its_own():
-    """Ten of eleven pass. The one that does not is the one C5 needed."""
-    blocked = [p.name for p in sorted(PUBLISHED.iterdir()) if p.is_dir()
-               and calibration_provenance(p).blocking_reason]
-    assert blocked == ["2026-08-28-nvidia_h200-h200-whole-layer"]
+def test_only_whole_layer_is_blocked_among_arms_that_carry_rows():
+    """The distinction the gate does not draw and this test now does.
+
+    whole-layer is blocked for a SCIENTIFIC reason: its rows were stamped
+    against a calibration that is not the one shipped beside them, which is what
+    cost C5 its target. The three 2026-09 report-only directories are blocked
+    for a STRUCTURAL one: they hold report.json files and no merged.csv, so
+    there are no rows to check and UNKNOWN is the only honest answer.
+
+    Collapsing the two would let a real provenance failure hide among a growing
+    pile of report directories, which is precisely the shape of the defect this
+    whole module exists to catch.
+    """
+    arms, reports = [], []
+    for p in sorted(PUBLISHED.iterdir()):
+        if not p.is_dir() or not calibration_provenance(p).blocking_reason:
+            continue
+        (arms if list(p.glob("merged.csv")) else reports).append(p.name)
+    assert arms == ["2026-08-28-nvidia_h200-h200-whole-layer"]
+    assert reports == [
+        "2026-09-01-nvidia_h200-alpha-surface-s4",
+        "2026-09-01-nvidia_h200-cross-card-s3",
+        "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+    ]
 
 
 @published_only

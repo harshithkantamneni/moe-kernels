@@ -28,16 +28,31 @@ and did not catch the one real defect, which happened inside a single day.
 | `2026-08-28-nvidia_h200-h200-whole-layer` | ceilings_disagree | disagree | n/a | n/a | **refused** |
 | `2026-08-28-nvidia_h200-ridge-resolution` | different_session | agree | differs | within the sweep | 162.8 |
 | `2026-09-01-nvidia_h200-alpha-0558` | same_session | agree | matches | within the sweep | 163.7 |
+| `2026-09-01-nvidia_h200-alpha-surface-s4` | unknown | n/a | n/a | n/a | **refused** |
+| `2026-09-01-nvidia_h200-cross-card-s3` | unknown | n/a | n/a | n/a | **refused** |
+| `2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3` | unknown | n/a | n/a | n/a | **refused** |
 
-**10 of 11 arms pass**: their calibration is either their own or declared derived. 1 does not.
+**10 of 14 arms pass**: their calibration is either their own or declared derived. 4 does not.
 
 - `2026-08-28-nvidia_h200-h200-whole-layer`: the calibration shipped with this arm is not the one its rows were quoted against: rows carry achieved_bw_gbps 4377.212185, measured.yaml reports 4374.489664; rows carry achieved_peak_tflops 701.612906 for dtype 'bf16', measured.yaml reports 770.916292
+
+- `2026-09-01-nvidia_h200-alpha-surface-s4`: no measured.yaml beside the rows, so the efficiency columns cannot be interpreted
+
+- `2026-09-01-nvidia_h200-cross-card-s3`: no measured.yaml beside the rows, so the efficiency columns cannot be interpreted
+
+- `2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`: no measured.yaml beside the rows, so the efficiency columns cannot be interpreted
 
 ## Arms with no ridge to quote
 
 - 2026-08-28-nvidia_h200-h200-fp8-three-kernel: refused, no ceiling for dtype 'fp8_e4m3' on the rows or in measured.yaml, which is why every row carries achieved_peak_tflops 0.0
 
 - 2026-08-28-nvidia_h200-h200-whole-layer: refused, the calibration shipped with this arm is not the one its rows were quoted against: rows carry achieved_bw_gbps 4377.212185, measured.yaml reports 4374.489664; rows carry achieved_peak_tflops 701.612906 for dtype 'bf16', measured.yaml reports 770.916292. Its rows give 160.3 FLOP/byte and its measured.yaml gives 176.2; neither was measured in this arm's session
+
+- 2026-09-01-nvidia_h200-alpha-surface-s4: rows carry 0 dtypes [], so there is no single ridge; pass one
+
+- 2026-09-01-nvidia_h200-cross-card-s3: rows carry 0 dtypes [], so there is no single ridge; pass one
+
+- 2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3: rows carry 0 dtypes [], so there is no single ridge; pass one
 
 A `ceilings_disagree` refusal above is what costs claim C5 a
 target: a cross-card `2R/b` prediction scales with the ridge,
