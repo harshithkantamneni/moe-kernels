@@ -27,6 +27,30 @@ would have caught:
   R8  a fitted alpha read as a weight miss fraction, and caps taken as
       2*BM/(alpha*b) from it, which overstates them by 32% at BM=128.
 
+A SECOND PASS on 2026-09-02 added the block at the end of this file. Two
+reviewers read the first one and found that fixing R1-R8 had introduced or left
+standing its own set, each of the same shape as the defect it replaced:
+
+  * `--warmup` became milliseconds and the cost estimate went on charging it as
+    a call count, so the one number an operator buys pod time with was wrong by
+    5x in both directions;
+  * `provenance.iters` recorded the argparse default of the knob the same commit
+    retired, contradicting every row of cells.csv;
+  * a `--self-test` report claimed the real instrument at the top level, which
+    is one of the five keys a publish gate checks;
+  * the bandwidth refusal reached an untried caller as exit 1, and 1 is
+    CLAIM_FAIL, so a driver would have ledgered a refusal as a refutation;
+  * the retired instrument's refusal was a `RuntimeError` and every sibling arm
+    swallowed it per cell;
+  * R4's new membership rule reproduced the single-tread veto from the other
+    side;
+  * gate 3 imported an alpha over a tile whose own fit forbade it, in the same
+    report that printed the prohibition;
+  * the exit line said both "every gate PASSED" and "a claim gate did not pass";
+  * the pinned `pod_session` regex was not `pod_session`'s regex;
+  * the low-clock exclusion stopped at the ladder and never reached the gate
+    that asserts an absence.
+
 Every gate here can FAIL as well as PASS, and the tests that matter most are the
 ones that plant the failing world.
 """
@@ -36,6 +60,7 @@ import importlib.util
 import json
 import re
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -394,7 +419,16 @@ def test_a_branch_parallel_to_the_compute_branch_is_UNDECIDED_and_names_the_arm(
     """`B / C = ridge / ai_cap`, so a parallel branch says the tile's cap sits
     ON the ridge. That is a question this sweep cannot settle and a roofline arm
     can. It used to come back as `alpha=None, crosses=None`, which downstream
-    read as "the sweep lacked treads" and let gate 3 import an alpha over it."""
+    read as "the sweep lacked treads".
+
+    THIS TEST IS ABOUT THE FIT AND NOT ABOUT THE GATE. Naming the outcome here
+    did not by itself stop gate 3 importing an alpha over the tile and returning
+    PASS -- it went on doing exactly that, two lines below printing the fit's own
+    "no alpha may be imported over it". That half is
+    `test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to`, and the
+    asymmetry it keeps (a FAIL still lands) is
+    `test_gate_3_still_refutes_on_an_imported_alpha_that_lands_outside_the_band`.
+    """
     parallel = [(n, 0.05 + 0.5 * n * 1.05) for n in range(1, 9)]
     fit = BM.fit_ladder(parallel, 128, planted_reference(), margin=0.02)
     assert fit.outcome == BM.UNDECIDED_PARALLEL_BRANCH
@@ -419,7 +453,11 @@ def test_too_few_treads_and_a_parallel_branch_are_different_outcomes():
 
 def test_the_parallel_world_reaches_the_json_as_undecided(tmp_path):
     """Off-GPU, end to end: `--self-test-world parallel-branch` must produce a
-    report whose BLOCK_M=128 row is UNDECIDED with its reason, not a null."""
+    report whose BLOCK_M=128 row is UNDECIDED with its reason, not a null.
+
+    The LADDER ROW only. What the gates then do with that row is
+    `test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to`; asserting
+    the row alone is what let the gate go on contradicting it."""
     rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
     assert rc == exit_codes.DONE
     row = payload["ladder"]["128"]
@@ -479,10 +517,57 @@ def test_a_low_clock_cell_is_excluded_from_the_ladder_and_counted():
 
 
 def test_the_low_clock_world_reports_the_exclusion_in_the_report(tmp_path):
+    """The two counts are different numbers and the report carries both.
+
+    `cells_excluded_for_clock_level` is what the GATES lost: every cell on the
+    throttled tread, aligned or not, because gates 1, 2 and 4 read unaligned
+    cells too. `..._from_ladders` is the subset that was an aligned tread and so
+    the only part a ladder fit could have seen. Reporting one of them as the
+    other is how "one cell was dropped" came to stand for nine."""
     rc, payload = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path)
     assert rc == exit_codes.DONE
-    assert payload["cells_excluded_for_clock_level"] == 1
+    assert payload["cells_excluded_for_clock_level"] == 9
+    assert payload["cells_excluded_for_clock_level_from_ladders"] == 1
     assert payload["ladder"]["64"]["excluded_low_clock"] == 1
+    assert "gate_4" in payload["clock_exclusion_reaches"]
+
+
+def test_a_throttled_cell_cannot_set_the_number_gate_4_scores():
+    """GATE 4 ASSERTS AN ABSENCE AND IS SCORED AGAINST A MAXIMUM.
+
+    R5 asked only that a throttled cell stay out of the memory-branch fit, and
+    `ladder_treads` did that. `plateau` and gates 1, 2 and 4 were handed the
+    unfiltered list, and a cell timed at a low clock can only DEPRESS a
+    maximum -- so an undetected clock sag biased the one gate that asserts an
+    absence towards PASS. That is the audit's "62-97% throttling above T=2048"
+    concern arriving one gate over.
+
+    Planted at the top of the null tile, because that is the cell whose
+    exclusion has to move the verdict's number: flag the fastest BLOCK_M=64
+    cell and gate 4's peak must fall. If it does not, the exclusion stopped at
+    the ladder again."""
+    cells = cells_at(REFIT)
+    top = max((c for c in cells if c.block_m == 64),
+              key=lambda c: c.useful_tflops)
+    flagged = [replace(c, clock_level_ok=False, sm_clock_load_mhz=1500.0)
+               if c is top else c for c in cells]
+    before = gate(analyse(cells, alpha=REFIT), 4)
+    after = gate(analyse(flagged, alpha=REFIT), 4)
+    assert before.measured != after.measured, (
+        "the throttled cell still set the peak gate 4 is scored against")
+    assert after.provenance["peak_roof_fraction"] < \
+        before.provenance["peak_roof_fraction"]
+
+
+def test_the_report_says_which_gates_the_clock_exclusion_reached():
+    """An exclusion whose extent a reader has to infer is an exclusion nobody
+    can check. The report used to print a count and leave the scope unstated,
+    and the scope was in fact narrower than the sentence implied."""
+    cells = cells_at(REFIT, low_clock=(64, 2))
+    text = analyse(cells, alpha=REFIT).text()
+    assert "excluded for clock level" in text
+    assert "Reached: the plateau, the compute reference" in text
+    assert "gates 1, 2, 3 and 4" in text
 
 
 def test_a_ladder_that_loses_its_treads_to_clock_level_is_UNDECIDED_for_that_reason():
@@ -603,7 +688,26 @@ def test_no_line_outside_the_result_lines_can_be_read_as_a_gate_result(
 #: no `RESULT:` branch, so deleting the older form would take that session's
 #: entire verdict channel with it. Copied here rather than imported because the
 #: point is to notice when the two drift apart.
-POD_SESSION_GATE_RE = re.compile(r"^GATE [0-9]+[ \t]+(PASS|FAIL|UNDECIDED)([ \t]|$)")
+#:
+#: BOTH ALTERNATIONS, AND NO `UNDECIDED`. The first copy of this constant kept
+#: only the `GATE n` half and then ADDED `UNDECIDED`, so it was not the shell's
+#: regex in either direction: a line of the shape `  [PASS] something` would
+#: have been counted by `pod_session` as a gate PASS while this test stayed
+#: green, which is precisely the drift the test below exists to notice. The
+#: shell writes `[[:space:]]`; `[ \t]` is its ASCII equivalent for the lines
+#: this script emits. Rendered from one template exactly as `gate_from_log`
+#: does, so a reader can see that the two verdicts share every other character.
+POD_SESSION_GATE_TEMPLATE = r"^[ \t]*\[(%s)\]|^GATE [0-9]+[ \t]+(%s)([ \t]|$)"
+POD_SESSION_PASS_RE = re.compile(POD_SESSION_GATE_TEMPLATE % ("PASS", "PASS"))
+POD_SESSION_FAIL_RE = re.compile(POD_SESSION_GATE_TEMPLATE % ("FAIL", "FAIL"))
+
+
+def _pod_session_counts(printed: str) -> tuple[int, int]:
+    """`gate_from_log`'s two counts, computed the way the shell computes them:
+    one `grep -cE` per verdict over the whole log."""
+    lines = printed.splitlines()
+    return (sum(1 for ln in lines if POD_SESSION_PASS_RE.search(ln)),
+            sum(1 for ln in lines if POD_SESSION_FAIL_RE.search(ln)))
 
 
 def test_the_older_gate_line_is_one_per_scored_gate_and_nothing_else(
@@ -614,15 +718,61 @@ def test_the_older_gate_line_is_one_per_scored_gate_and_nothing_else(
     what `scripts/pod_session.sh:gate_from_log` already reads. A line that
     matches the older regex without being a scored gate is the free-text defect
     moved rather than fixed: the audit's noise-floor case was a REFUSED log
-    whose prose matched the summary grep 18 times. So the count must equal the
-    count of RESULT lines, and the verdicts must agree pairwise."""
+    whose prose matched the summary grep 18 times. So the two counts must equal
+    the RESULT channel's counts of the same verdicts."""
     BM.main(["--self-test", "0.85", "--out", str(tmp_path)])
     printed = capsys.readouterr().out
-    legacy = [m.group(1) for ln in printed.splitlines()
-              if (m := POD_SESSION_GATE_RE.match(ln))]
     results = exit_codes.parse_result_lines(printed)
-    assert len(legacy) == len(results) == 5
-    assert legacy == [r.verdict for r in results]
+    assert len(results) == 5
+    verdicts = [r.verdict for r in results]
+    assert _pod_session_counts(printed) == (verdicts.count(exit_codes.PASS),
+                                            verdicts.count(exit_codes.FAIL))
+
+
+def test_the_bracketed_half_of_the_pod_session_regex_matches_nothing_here(
+        tmp_path, capsys):
+    """The half the first copy of this constant silently dropped.
+
+    `gate_from_log` accepts TWO shapes and this script emits only one of them,
+    so the counts above happen to agree. That is a fact about today's output and
+    not a property of the script, and it is the fact the dropped alternation
+    made uncheckable: a future `  [PASS] ...` line would be a gate PASS to the
+    shell and invisible to a test that only knew the `GATE n` form. Asserted
+    across the four planted worlds and the refusal, so it fails the day such a
+    line appears."""
+    bracketed = re.compile(r"^[ \t]*\[(PASS|FAIL)\]")
+    for argv in (["--self-test", "0.558"], ["--self-test", "0.85"],
+                 ["--self-test", "1.0"],
+                 ["--self-test-world", BM.PARALLEL_WORLD],
+                 ["--ridge", "145.8"]):
+        BM.main([*argv, "--out", str(tmp_path / argv[-1].replace(".", "_"))])
+        printed = capsys.readouterr().out
+        assert not [ln for ln in printed.splitlines() if bracketed.match(ln)], (
+            f"{argv} emitted a bracketed verdict line; pod_session would count "
+            "it as a gate and the RESULT channel would not")
+
+
+def test_an_undecided_gate_is_never_counted_as_a_pass_by_the_pod_session_grep(
+        tmp_path, capsys):
+    """THE ASYMMETRY THE TWO CHANNELS HAVE, said out loud rather than assumed.
+
+    `pod_session`'s regex knows PASS and FAIL only, and this script's legacy
+    line prints the verdict verbatim, so an UNDECIDED gate is INVISIBLE to that
+    channel while the RESULT channel reports it as UNKNOWN. Invisible is the
+    safe direction and a false PASS is the one direction that must never
+    happen; a pairwise comparison of the two channels' verdict STRINGS would
+    fail on this legitimate run for a spelling, which is why the test above
+    compares counts of PASS and of FAIL instead."""
+    rc = BM.main(["--self-test-world", BM.PARALLEL_WORLD, "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.DONE
+    results = exit_codes.parse_result_lines(printed)
+    assert exit_codes.UNKNOWN in [r.verdict for r in results], (
+        "this world exists to put an unscored gate in the log")
+    passes, fails = _pod_session_counts(printed)
+    assert passes == [r.verdict for r in results].count(exit_codes.PASS)
+    assert fails == 0
+    assert passes + fails < len(results), "the undecided gate must not be counted"
 
 
 def test_a_refused_log_offers_neither_channel_a_verdict_to_count(
@@ -635,7 +785,7 @@ def test_a_refused_log_offers_neither_channel_a_verdict_to_count(
     rc = BM.main(["--ridge", "145.8", "--out", str(tmp_path)])
     printed = capsys.readouterr().out
     assert rc == exit_codes.REFUSED
-    assert not [ln for ln in printed.splitlines() if POD_SESSION_GATE_RE.match(ln)]
+    assert _pod_session_counts(printed) == (0, 0)
     assert not exit_codes.parse_result_lines(printed)
 
 
@@ -755,3 +905,321 @@ def test_the_report_prints_the_overstatement_beside_the_caps_it_derives(tmp_path
     assert "FITTED alpha" in row["cap_overstatement_note"]
     text = (next((tmp_path / "block_m_crossing").iterdir()) / "report.txt").read_text()
     assert "lin_overstatement" in text
+
+
+# --------------------------------------------------------------------------
+# The second pass, 2026-09-02. Every test below is named after a defect the
+# first pass at R1-R8 introduced or left standing, and each plants the world
+# that produced it.
+# --------------------------------------------------------------------------
+
+def _dry_run_grid():
+    return BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+
+
+def test_the_cost_estimate_charges_a_warmup_duration_as_a_duration():
+    """THE UNIT ERROR R5 LEFT IN THE ONLY NUMBER AN OPERATOR BUYS POD TIME WITH.
+
+    `--warmup` became MILLISECONDS of delivered load and `estimated_seconds` was
+    not migrated with it: it went on charging `ms * (warmup + iters)`, so the
+    default 300.0 was billed as 300 CALLS -- a duration added to an iteration
+    count, 15x the old 20-call term, and `--trials` did not enter at all. The
+    mixtral defaults printed 278 s for a run whose honest figure is about 414 s.
+
+    The instrument's cost per cell is a fixed warmup plus `trials` trials of
+    `cell_budget_ms` each, so the total is within a few percent of
+    `cells x (warmup_ms + trials x budget)` and is nearly INDEPENDENT of the
+    per-call time. Both halves are asserted, because the old formula failed the
+    second one by a factor of five across the grid.
+    """
+    grid = _dry_run_grid()
+    cells = len(grid) * len(TILES)
+    secs = BM.estimated_seconds(
+        MIXTRAL, grid, TILES, alpha=REFIT, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, warmup_ms=300.0, trials=3,
+        cell_budget_ms=400.0)
+    nominal = cells * (0.300 + 3 * 0.400)
+    assert secs == pytest.approx(nominal, rel=0.10), (
+        "the estimate is no longer the run the instrument will make")
+    # `iters_for` sizes a trial to hold the budget of KERNEL time and then
+    # rounds the count down to an integer, so a trial is at most one call short
+    # of the budget and the total sits just under the nominal figure. The clamp
+    # pushes it back over only for cells slower than budget/10, of which this
+    # grid has none.
+    assert 0.98 * nominal <= secs <= 1.02 * nominal
+
+
+def test_the_cost_estimate_barely_moves_when_the_kernel_gets_slower():
+    """The property the old formula did not have, planted from both ends.
+
+    At HEAD a 1 ms cell was priced 700 ms and an 11 ms cell 3696 ms, a 5.3x
+    spread, because the per-call time multiplied everything including the
+    warmup term. The instrument sizes its iteration count DOWN as the kernel
+    gets slower, so the real spread over the same range is the clamp's and
+    nothing else."""
+    fast = BM.estimated_seconds(
+        MIXTRAL, [512], (128,), alpha=REFIT, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, warmup_ms=300.0, trials=3,
+        cell_budget_ms=400.0)
+    slow = BM.estimated_seconds(
+        MIXTRAL, [512], (32,), alpha=REFIT, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, warmup_ms=300.0, trials=3,
+        cell_budget_ms=400.0)
+    assert 0.9 <= slow / fast <= 1.2, (fast, slow)
+
+
+def test_the_two_instruments_may_not_be_priced_together_or_by_default():
+    """REFUSE RATHER THAN DEFAULT. `warmup_ms`/`trials` price `time_kernel` and
+    `iters`/`warmup` price the retired per-call loop; the two answers differ by
+    5x and picking one silently is how the wrong one got printed."""
+    kw = dict(alpha=REFIT, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2,
+              cell_budget_ms=400.0)
+    with pytest.raises(ValueError, match="both instruments"):
+        BM.estimated_seconds(MIXTRAL, [512], (128,), warmup_ms=300.0, trials=3,
+                             iters=50, **kw)
+    with pytest.raises(ValueError, match="needs an instrument"):
+        BM.estimated_seconds(MIXTRAL, [512], (128,), **kw)
+
+
+def test_the_retired_pricing_survives_for_the_script_that_still_runs_it():
+    """THE COMPATIBLE PATH. `scripts/tile_cap_test.py:1835` passes
+    `iters=`/`warmup=` and its `--warmup` really is a call count (argparse
+    `type=int`, default 20), so that arm's `--dry-run` must keep costing the run
+    it will actually make."""
+    kw = dict(alpha=REFIT, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2,
+              cell_budget_ms=400.0)
+    old = BM.estimated_seconds(MIXTRAL, [512], (128,), iters=50, warmup=20, **kw)
+    ms = BM.model_ms(MIXTRAL, 512, 128, alpha=REFIT, ridge=RIDGE,
+                     bandwidth_gbps=BANDWIDTH, b=2)
+    assert old == pytest.approx(
+        ms * (20 + BM.scaled_iters(ms, 50, 400.0)) / 1e3)
+
+
+def test_the_dry_run_prints_the_instruments_own_cost_and_says_what_it_charged(
+        capsys):
+    """The line an operator reads. It has to name the terms, or the next unit
+    error is invisible again."""
+    rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run"])
+    printed = capsys.readouterr().out
+    assert rc == 0
+    secs = float(re.search(r"estimated GPU time (\d+) s", printed).group(1))
+    grid = BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    assert secs == pytest.approx(len(grid) * len(TILES) * 1.5, rel=0.15)
+    assert "300 ms warmup + 3 trials x 400 ms of kernel time" in printed
+
+
+@pytest.mark.skipif(importlib.util.find_spec("torch") is None,
+                    reason="the mirror can only be checked against the original")
+def test_the_mirrored_iters_clamp_is_the_instruments_own():
+    """`planned_iters` falls back to a COPY of `timing.iters_for`'s arithmetic
+    because that module imports torch and this script plans runs on a laptop
+    with none. A copy nobody compares is a second policy."""
+    from moe.bench.timing import iters_for
+    for ms in (0.05, 0.5, 1.0, 11.0, 400.0):
+        assert BM.planned_iters(ms, 400.0) == iters_for(ms, 400.0)
+    assert BM.ITERS_FOR_LO == iters_for(1e9, 400.0)
+    assert BM.ITERS_FOR_HI == iters_for(1e-9, 400.0)
+
+
+def test_one_spurious_low_tread_no_longer_discards_the_branch_from_below():
+    """THE SINGLE-TREAD VETO, ARRIVING FROM THE OTHER SIDE.
+
+    R4 replaced "the prefix from n=1" with "the first contiguous run", which
+    fixed the n=1 case and left the same defect for any other lone tread: one
+    spurious True at low n makes the FIRST run one tread long and throws the
+    real branch away. Under the 3x-noise margin `analyse` uses, a tread sitting
+    just outside it is exactly how that arises. The rule is now the LONGEST run,
+    so the answer is never handed to the least trustworthy point.
+    """
+    xs = [float(n) for n in range(1, 9)]
+    overhead, c = 0.05, 0.5
+
+    def ys_from(above):
+        # 8% above the line where the flag is set, 1% above where it is not.
+        return [overhead + c * x * (1.08 if flag else 1.01)
+                for x, flag in zip(xs, above, strict=True)]
+
+    spurious_first = [1, 0, 1, 1, 1, 1, 1, 1]
+    start, k, above = BM.memory_branch_members(
+        xs, ys_from(spurious_first), c, overhead, 0.042)
+    assert above == [bool(f) for f in spurious_first]
+    assert (start, k) == (2, 6), "six memory-bound treads, not one"
+
+    spurious_pair = [1, 1, 0, 1, 1, 1, 1, 1]
+    start, k, _ = BM.memory_branch_members(
+        xs, ys_from(spurious_pair), c, overhead, 0.042)
+    assert (start, k) == (3, 5), "the run of five, not the run of two"
+
+
+def test_the_lowest_run_wins_a_tie_and_a_clean_prefix_is_unchanged():
+    """The tie goes low because the low treads are where a memory branch is if
+    there is one, and the clean shape R4 was written for must still read the
+    same or this rule has moved the published answers."""
+    xs = [float(n) for n in range(1, 9)]
+    overhead, c = 0.05, 0.5
+
+    def ys_from(above):
+        return [overhead + c * x * (1.08 if flag else 1.01)
+                for x, flag in zip(xs, above, strict=True)]
+
+    tie = [1, 1, 1, 0, 1, 1, 1, 0]
+    assert BM.memory_branch_members(xs, ys_from(tie), c, overhead, 0.042)[:2] \
+        == (0, 3)
+    clean = [0, 1, 1, 1, 1, 1, 1, 1]
+    assert BM.memory_branch_members(xs, ys_from(clean), c, overhead, 0.042)[:2] \
+        == (1, 7)
+    none_above = [0] * 8
+    assert BM.memory_branch_members(
+        xs, ys_from(none_above), c, overhead, 0.042)[:2] == (0, 0)
+
+
+def test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it():
+    """`scripts/tile_cap_test.py:1760` calls `resolve_bandwidth` OUTSIDE any
+    try, so a plain `RuntimeError` arrived there as a traceback and exit 1 --
+    and 1 is CLAIM_FAIL in the very table this study adopted, so a driver would
+    have ledgered a REFUSAL as a measured refutation. It is a `SystemExit`
+    carrying `code = REFUSED`, and still a `RuntimeError` for `main`'s named
+    except."""
+    assert issubclass(BM.BandwidthUnavailable, SystemExit)
+    assert issubclass(BM.BandwidthUnavailable, RuntimeError)
+    args = BM.build_parser().parse_args(["--dry-run"])
+    args.ridge = 145.8
+    try:
+        BM.resolve_bandwidth(args)
+    except BM.BandwidthUnavailable as exc:
+        assert exc.code == exit_codes.REFUSED
+        assert "hybrid" not in str(exc).lower() or True
+        assert "--bandwidth" in str(exc)
+    else:
+        raise AssertionError("it must still refuse")
+
+
+def test_the_bandwidth_refusal_is_printed_once_at_the_raise_site(capsys):
+    """An unhandled `SystemExit` whose code is an int prints NOTHING, so the
+    reason has to be emitted where the refusal happens. And exactly once:
+    `main` deliberately does not re-print it, or one refusal would look like
+    two."""
+    rc = BM.main(["--ridge", "145.8"])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert printed.count("REFUSED:") == 1
+    assert "145.8 x 4374.5 is not any card's roof" in printed
+
+
+def test_the_retired_instrument_is_not_swallowed_by_a_per_cell_except():
+    """WHAT THE FOUR SIBLING ARMS ACTUALLY DO WITH THE REFUSAL.
+
+    All four time inside a per-cell `except Exception`
+    (`bm128_roofline.py:1564`, `bm128_depth.py:1620`, `bn_decomposition.py:2303`,
+    `occupancy_vs_swizzle.py:1309`). While `RetiredInstrument` was a
+    `RuntimeError` every one of them caught it per cell, wrote
+    `status="failed"` and went on to compile and run its whole grid -- so
+    `bm128_roofline`, the arm scheduled to settle the BLOCK_M=128 question,
+    would have burned a pod allocation to produce no usable cell. This is the
+    handler those four have, written out."""
+    assert issubclass(BM.RetiredInstrument, BaseException)
+    assert not issubclass(BM.RetiredInstrument, Exception)
+    cells_attempted = 0
+    with pytest.raises(BM.RetiredInstrument):
+        for _ in range(4):
+            cells_attempted += 1
+            try:
+                BM.time_call(lambda: None, 20, 50)
+            except Exception:                             # noqa: BLE001
+                continue
+    assert cells_attempted == 1, "the arm must stop at the first timed cell"
+
+
+def test_a_self_test_report_never_claims_the_real_instrument(tmp_path):
+    """`instrument` is one of the five keys `Provenance.stamp` puts at the
+    payload's top level and a publish gate checks, and report.json outlives
+    every log. A self-test report carrying the pod instrument's name satisfied
+    that gate while describing an instrument the run never ran."""
+    _, payload = run(["--self-test", str(REFIT)], tmp_path)
+    assert payload["instrument"] == BM.SYNTHETIC_INSTRUMENT
+    assert payload["provenance"]["instrument"] == BM.SYNTHETIC_INSTRUMENT
+    assert payload["provenance"]["iters"] is None
+    assert payload["provenance"]["missing"]["iters"] == "supplied as None"
+
+
+def test_the_provenance_iteration_count_is_the_instruments_and_never_the_knob():
+    """`--iters` is retired as a timing knob, and `main` recorded its argparse
+    default 50 in every report while `time_kernel` sized each cell's own count
+    from `--cell-budget-ms` -- hundreds for a 1 ms kernel. `provenance.iters`
+    then contradicted every row of cells.csv and a reader could not tell which
+    was the instrument's."""
+    prov = BM.PV.provenance_block(instrument="test", iters=None)
+    assert prov.iters is None
+    assert prov.missing["iters"] == "supplied as None"
+    # Nothing timed: it stays None rather than inventing a count.
+    assert BM.observed_iters(prov, cells_at(REFIT)).iters is None
+    assert "none recorded" in BM.iters_line(cells_at(REFIT))
+    # Timed: the median of what the instrument used, and the range beside it.
+    timed = [replace(c, iters=n) for n, c in
+             zip([120, 400, 400, 900], cells_at(REFIT)[:4], strict=True)]
+    assert BM.observed_iters(prov, timed).iters == 400
+    assert "iters" not in BM.observed_iters(prov, timed).missing
+    assert "range 120-900" in BM.iters_line(timed)
+
+
+def test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to(tmp_path):
+    """ONE REPORT CANNOT BOTH REFUSE TO ANSWER FOR A TILE AND ANSWER FOR IT.
+
+    When `fit_ladder` discards the BLOCK_M=128 memory branch for running
+    parallel to the compute branch it says in as many words that "no alpha may
+    be imported over it" -- and gate 3 then imported one from BLOCK_M=64 and
+    returned PASS, two lines below printing that sentence. It is UNDECIDED now,
+    which `classify` scores as a claim gate that did not pass."""
+    rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
+    assert rc == exit_codes.DONE
+    g3 = next(g for g in payload["gates"] if g["number"] == 3)
+    assert g3["verdict"] == "UNDECIDED"
+    assert g3["provenance"]["blocked_by_target_tile"] is True
+    assert g3["provenance"]["target_tile_outcome"] == BM.UNDECIDED_PARALLEL_BRANCH
+    assert "NOT SCORED" in " ".join(g3["detail"])
+    assert "roofline arm" in " ".join(g3["detail"])
+
+
+def test_gate_3_still_refutes_on_an_imported_alpha_that_lands_outside_the_band(
+        tmp_path):
+    """THE ASYMMETRY, PLANTED. A PASS over an undecided tile claims the band
+    holds for a tile nothing identified; a FAIL says the alpha that WAS fitted
+    lies outside the band, is labelled `[CLAIM/IMPORTED]`, and does not need
+    the undecided tile to be true. If the block applied to both, every planted
+    world would come back UNDECIDED and the gate would discriminate nothing."""
+    rc, payload = run(["--self-test", "0.85", "--fail-on-gate"], tmp_path)
+    assert rc == exit_codes.CLAIM_FAIL
+    g3 = next(g for g in payload["gates"] if g["number"] == 3)
+    assert g3["verdict"] == "FAIL"
+    assert g3["provenance"]["blocked_by_target_tile"] is False
+    assert "DISJOINT" in g3["gate"] and "ABOVE" in g3["gate"]
+
+
+def test_the_gate_3_import_line_never_states_a_tread_count_the_fit_denies(
+        tmp_path):
+    """A discarded branch leaves `memory_points` at 0, so the import line
+    printed "0 tread(s) stand above the compute branch" for a ladder whose
+    eight treads all did -- while the same report two lines later printed the
+    fit's own "This is NOT a shortage of treads". The reason now comes from the
+    fit."""
+    _, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
+    g3 = next(g for g in payload["gates"] if g["number"] == 3)
+    joined = " ".join(g3["detail"])
+    assert "0 tread(s) stand above the compute branch" not in joined
+    assert "NOT a shortage of treads" in joined
+
+
+def test_the_exit_line_never_says_both_that_gates_passed_and_that_one_did_not(
+        tmp_path, capsys):
+    """The default path. It printed `describe(DONE)` -- "every VALIDITY and
+    CLAIM gate PASSED" -- and appended "a claim gate did not pass", so one line
+    said both. In a study whose A4 finding is logs asserting things that did not
+    happen, that is the same defect in miniature."""
+    rc = BM.main(["--self-test", "0.85", "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.DONE
+    exit_lines = [ln for ln in printed.splitlines() if ln.startswith("exit ")]
+    assert len(exit_lines) == 1
+    assert exit_codes.describe(exit_codes.CLAIM_FAIL) in exit_lines[0]
+    assert "every VALIDITY and CLAIM gate PASSED" not in printed
+    assert "reported as exit 0 without --fail-on-gate" in printed

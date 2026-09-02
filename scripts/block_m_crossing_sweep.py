@@ -146,7 +146,7 @@ import re
 import statistics
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -181,6 +181,47 @@ def timing_basis() -> str | None:
         # worth taking the whole report down for.
         return None
     return TIMING_BASIS
+
+
+def observed_iters(prov, cells):
+    """The run's provenance block with the iteration count the cells were
+    actually timed at, or unchanged when nothing was timed.
+
+    THE FIELD USED TO CARRY A NUMBER NO CELL USED. `main` passed
+    `iters=args.iters`, the argparse default 50, on the same day `--iters` was
+    retired as a timing knob; on a pod `time_kernel` sizes the count per cell
+    from `--cell-budget-ms` and it is hundreds for a 1 ms kernel, so
+    `provenance.iters` contradicted every row of `cells.csv`. The median over
+    the cells that were timed is a number a reader can check against those
+    rows, and the report prints the range beside it so a median standing for a
+    spread of 20 to 900 cannot pass for a constant.
+
+    NOTHING TIMED MEANS NOTHING RECORDED. A `--self-test` plants `iters=0` on
+    every cell, so there is no median to take and the block keeps its None and
+    its "supplied as None" reason. Inventing one there would be the same defect
+    with a different number in it.
+    """
+    counts = sorted(c.iters for c in cells
+                    if c.status == "ok" and c.iters and c.iters > 0)
+    if not counts:
+        return prov
+    missing = {k: v for k, v in prov.missing.items() if k != "iters"}
+    return replace(prov, iters=int(statistics.median(counts)), missing=missing)
+
+
+def iters_line(cells) -> str:
+    """One line naming the instrument's iteration counts, or saying there were
+    none. Printed in the report so `provenance.iters` is never read as a knob
+    somebody set."""
+    counts = sorted(c.iters for c in cells
+                    if c.status == "ok" and c.iters and c.iters > 0)
+    if not counts:
+        return ("iterations per trial: none recorded (nothing was timed; a "
+                "self-test's cells carry iters=0)")
+    return (f"iterations per trial: median {int(statistics.median(counts))} "
+            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. "
+            "Sized per cell by the instrument from --cell-budget-ms, not by "
+            "--iters, which is retired as a timing knob.")
 
 # --------------------------------------------------------------------------
 # The numbers this script is arguing about. All of them stated up front so a
@@ -631,21 +672,95 @@ def build_grid(cfg, block_sizes, r_max: int, row_step: int, step_probes: int
     return sorted(grid)
 
 
+#: `moe.bench.timing.iters_for`'s clamp, mirrored here and ONLY here. That
+#: module imports torch at module scope and this file is documented to plan a
+#: run on a laptop that has none, so `--dry-run` cannot call the real function
+#: and cannot be allowed to guess a different rule either: the estimate an
+#: operator buys pod time with has to be the sizing the pod will use.
+#: `planned_iters` prefers the real function whenever it imports, and
+#: `test_the_mirrored_iters_clamp_is_the_instruments_own` asserts these two
+#: numbers against it on any machine where it does.
+ITERS_FOR_LO, ITERS_FOR_HI = 10, 2000
+
+
+def planned_iters(per_call_ms: float, target_ms: float) -> int:
+    """`timing.iters_for` when torch imports, its arithmetic when it does not.
+
+    The fallback is a MIRROR and is documented as one, not a second policy: the
+    instrument sizes a trial to hold `target_ms` of kernel time, clamped to
+    `[ITERS_FOR_LO, ITERS_FOR_HI]`, and a planner that used any other rule would
+    be pricing a run nobody is going to make.
+    """
+    try:
+        from moe.bench.timing import iters_for
+    except Exception:                                     # noqa: BLE001
+        # Broad for the reason `timing_basis` is: an installed-and-broken torch
+        # raises OSError on a missing libcudart, and a cost estimate is never
+        # worth taking the plan down for.
+        return max(ITERS_FOR_LO,
+                   min(ITERS_FOR_HI, int(target_ms / max(per_call_ms, 1e-4))))
+    return iters_for(per_call_ms, target_ms)
+
+
 def estimated_seconds(cfg, grid, block_sizes, *, alpha: float, ridge: float,
-                      bandwidth_gbps: float, b: int, iters: int, warmup: int,
-                      cell_budget_ms: float) -> float:
+                      bandwidth_gbps: float, b: int, cell_budget_ms: float,
+                      warmup_ms: float | None = None, trials: int | None = None,
+                      iters: int | None = None,
+                      warmup: int | None = None) -> float:
     """Cost of the whole sweep at the model's own prediction, for --dry-run.
 
-    Uses the SAME auto-scaling rule the runner uses, so the estimate is of the
-    run that will actually happen rather than of a fixed iteration count that
-    the budget would have cut.
+    THE UNIT BUG THIS FIXES, because it is the only number an operator buys pod
+    time with. `--warmup` became MILLISECONDS of delivered load on 2026-09-02
+    and this function was not migrated with it: it went on charging
+    `ms * (warmup + scaled_iters(...))`, so the default 300.0 was billed as 300
+    CALLS. That is a duration added to an iteration count, it was 15x the old
+    20-call term, and `--trials` -- which multiplies the real cost by three --
+    did not enter at all. The mixtral default grid printed 278 s for a run whose
+    honest figure is about 414 s, and a 1 ms cell and an 11 ms cell were priced
+    700 ms and 3696 ms when the instrument charges nearly the same for both.
+
+    THE RULE, WHICH IS THE RUNNER'S. `time_kernel` warms for a FIXED DURATION
+    and then runs `trials` trials, each sized by `iters_for` to hold
+    `cell_budget_ms` of kernel time. So one cell costs
+    `warmup_ms + trials * ms * planned_iters(ms, cell_budget_ms)`, which is
+    about `warmup_ms + trials * cell_budget_ms` and is nearly INDEPENDENT of the
+    per-call time -- exactly the property the old formula did not have. The
+    clamp is why it is not exactly independent: a cell slower than
+    `cell_budget_ms / ITERS_FOR_LO` still pays for ten iterations.
+
+    TWO INSTRUMENTS, NAMED BY THEIR KEYWORDS, because this file does not own
+    every caller. `warmup_ms=` and `trials=` price the instrument above.
+    `iters=` and `warmup=` price the RETIRED one, where `warmup` is a CALL COUNT
+    and `iters` a fixed sample size -- which is what `scripts/tile_cap_test.py`
+    still passes and still means, so its `--dry-run` keeps costing the run it
+    will actually make. Mixing the two pairs is a refusal rather than a
+    precedence rule: the two answers differ by 5x and picking one silently is
+    how the wrong one got printed for a fortnight.
     """
+    new = warmup_ms is not None or trials is not None
+    old = iters is not None or warmup is not None
+    if new and old:
+        raise ValueError(
+            "estimated_seconds got both instruments: warmup_ms/trials size a "
+            "time_kernel run and iters/warmup size the retired per-call loop. "
+            "They price different runs and there is no conversion between a "
+            "duration of warmup and a count of warmup calls; pass one pair.")
+    if not new and not old:
+        raise ValueError(
+            "estimated_seconds needs an instrument to price: warmup_ms= and "
+            "trials= for time_kernel, or iters= and warmup= for the retired "
+            "per-call loop. There is no default because the two differ by 5x.")
     total = 0.0
     for bm in block_sizes:
         for r in grid:
             ms = model_ms(cfg, r, bm, alpha=alpha, ridge=ridge,
                           bandwidth_gbps=bandwidth_gbps, b=b)
-            total += ms * (warmup + scaled_iters(ms, iters, cell_budget_ms))
+            if new:
+                total += (warmup_ms or 0.0) + (trials or 1) * ms * planned_iters(
+                    ms, cell_budget_ms)
+            else:
+                total += ms * ((warmup or 0)
+                               + scaled_iters(ms, iters or 1, cell_budget_ms))
     return total / 1e3
 
 
@@ -1676,26 +1791,43 @@ def memory_branch_members(xs, ys, c_ref: float, overhead: float,
     that one tread veto the other seven is a rule that hands the answer to the
     least trustworthy point on the ladder.
 
-    So the branch is now the CONTIGUOUS run of memory-bound treads starting at
-    the LOWEST such n. Contiguity is kept because memory-boundness really is a
-    prefix property of the underlying curve -- `Q` grows by alpha per tile and
+    So the branch is the LONGEST CONTIGUOUS RUN of memory-bound treads, ties
+    going to the lowest n. Contiguity is kept because memory-boundness really is
+    a prefix property of the underlying curve -- `Q` grows by alpha per tile and
     the compute branch by 1, so once compute is on top it stays there -- and a
     scattered subset would be noise picking its own points. What is dropped is
     only the requirement that n=1 be in the run. Treads BELOW the run's start
     are neither on the branch nor evidence against it, and the caller is told
     where the run began.
+
+    WHY THE LONGEST RUN AND NOT THE FIRST ONE, which is the rule this replaced
+    on 2026-09-02 and the second half of the same defect. `above` is a noisy
+    reading of a prefix property, and when it is NOT a clean prefix the first
+    run is whatever the lowest treads happened to do. Planted directly:
+    `[1,0,1,1,1,1,1,1]` returned `start=0, k=1` and threw six memory-bound
+    treads away on the strength of one, which is the single-tread veto arriving
+    from the other side; `[1,1,0,1,1,1,1,1]` returned `k=2` off the short run
+    and ignored the run of five. Under the 3x-noise margin `analyse` uses, one
+    tread sitting just outside it at low n is exactly how those shapes arise.
+    The longest run is the reading that does not hand the answer to the least
+    trustworthy point, in either direction; the tie goes low because the low
+    treads are where a memory branch is if there is one.
     """
     above = [y > overhead + c_ref * x * (1.0 + margin)
              for x, y in zip(xs, ys, strict=True)]
-    if not any(above):
-        return 0, 0, above
-    start = above.index(True)
-    count = 0
-    for flag in above[start:]:
-        if not flag:
-            break
-        count += 1
-    return start, count, above
+    best_start, best_count = 0, 0
+    run_start = None
+    for i, flag in enumerate([*above, False]):
+        if flag and run_start is None:
+            run_start = i
+        elif not flag and run_start is not None:
+            # STRICTLY greater, so the earliest run wins a tie: `>=` would walk
+            # the answer up to the last equal-length run, which is the treads
+            # furthest from where a memory branch lives.
+            if i - run_start > best_count:
+                best_start, best_count = run_start, i - run_start
+            run_start = None
+    return best_start, best_count, above
 
 
 def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
@@ -2453,6 +2585,10 @@ def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
         "alpha_source_block_m": alpha_source_bm,
         "imported_from_another_block_m": (
             None if alpha_source_bm is None else alpha_source_bm != lo),
+        "target_tile_outcome": (None if fits.get(lo) is None
+                                else fits[lo].outcome),
+        "target_tile_outcome_reason": (None if fits.get(lo) is None
+                                       else fits[lo].outcome_reason),
         "restated_crossing_ratio": (
             None if alpha_hat is None else 1.0 + alpha_hat),
         "restated_crossing_ratio_note": (
@@ -2478,12 +2614,42 @@ def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
                     basis=DERIVED, provenance=provenance)
 
     where = interval.direction(band)
-    verdict = PASS if not where else FAIL
     own = fits.get(lo)
     imported = alpha_source_bm is not None and alpha_source_bm != lo
+    # THE TILE'S OWN FIT CAN VETO THIS GATE, and until 2026-09-02 it could not.
+    # When `fit_ladder` finds the BLOCK_M=128 memory branch running parallel to
+    # the compute branch it returns UNDECIDED and says in as many words that
+    # "no alpha may be imported over it" -- and this gate then imported one from
+    # BLOCK_M=64 and returned PASS, two lines above printing that same sentence.
+    # One report cannot both refuse to answer for a tile and answer for it. The
+    # verdict is now UNDECIDED, which `exit_codes.classify` scores as a claim
+    # gate that did not pass, and the roofline arm the fit names is the way to
+    # settle it.
+    #
+    # IT BLOCKS THE PASS AND NOT THE FAIL, and the asymmetry is the argument.
+    # A PASS here would say the pre-registered alpha holds AT BLOCK_M=128, on
+    # the strength of a number fitted at another tiling, for a tile whose own
+    # ladder just refused to answer: that is the direction the fit's reason
+    # forbids. A FAIL says the alpha that WAS fitted lies outside the band, is
+    # reported `[CLAIM/IMPORTED]` so a reader knows which tiling it belongs to,
+    # and does not need the undecided tile to be true. Refusing to affirm and
+    # allowing to refute is also what keeps `--self-test 0.85` a FAIL: a gate
+    # that answered UNDECIDED to every planted world would discriminate
+    # nothing.
+    blocked = (imported and not where and own is not None
+               and own.outcome == UNDECIDED_PARALLEL_BRANCH)
+    verdict = FAIL if where else (UNDECIDED if blocked else PASS)
     # WHICH ALPHA WAS SCORED, in the verdict's own provenance line, because the
     # gate is about BLOCK_M=128 and the number is usually not from BLOCK_M=128.
-    if own is not None and own.memory_points >= MIN_MEMORY_TREADS and not imported:
+    if blocked:
+        provenance_line = (
+            f"NOT SCORED. BLOCK_M={lo}'s own ladder came back "
+            f"{own.outcome}, and the alpha above is BLOCK_M={alpha_source_bm}'s, "
+            f"shown for reference only. {own.outcome_reason} An imported alpha "
+            "cannot decide a tile whose own fit says this sweep cannot, so the "
+            "verdict is UNDECIDED rather than the PASS the overlap would "
+            "otherwise read.")
+    elif own is not None and own.memory_points >= MIN_MEMORY_TREADS and not imported:
         crossing = preds_lo[lo].crossing_rows
         fragility = (
             f"Tread 2 there sits within a few percent of the compute branch -- "
@@ -2500,11 +2666,18 @@ def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
             f"memory-bound treads. {fragility} Compare it with the ladders "
             "below.")
     else:
+        # THE REASON COMES FROM THE FIT, not from a tread count this gate
+        # recomputes. A discarded branch leaves `memory_points` at 0, so the
+        # old wording printed "0 tread(s) stand above the compute branch" for a
+        # ladder whose eight treads all did -- a false count in the one line a
+        # reader checks the import against.
+        why = (f"there is no BLOCK_M={lo} ladder in this sweep" if own is None
+               else own.outcome_reason or
+               f"{own.memory_points} tread(s) stand above the compute branch, "
+               f"and a verdict needs {MIN_MEMORY_TREADS}")
         provenance_line = (
             f"SCORED ON AN alpha IMPORTED from BLOCK_M={alpha_source_bm}: it is "
-            f"not identifiable at BLOCK_M={lo} on this sweep "
-            f"({own.memory_points if own else 0} tread(s) stand above the "
-            f"compute branch, and a verdict needs {MIN_MEMORY_TREADS}). "
+            f"not identifiable at BLOCK_M={lo} on this sweep ({why}). "
             "ALPHA_BY_BLOCK_M records a drift of about +/-25% across block "
             "sizes, and that drift is `phi` growing with BM/BN rather than a "
             "different miss fraction, so an imported alpha is an alpha of "
@@ -2549,6 +2722,17 @@ def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
                  f"[{band[0]}, {band[1]}]"
                  + (f" -- DISJOINT, {where} the band" if where
                     else " -- overlaps"))
+    if blocked:
+        # The overlap is still stated, and it is still not the verdict. A
+        # threshold line reading "overlaps" beside an UNDECIDED verdict would
+        # be the same one-line contradiction this gate was just corrected for.
+        threshold += (f"; NOT SCORED, BLOCK_M={lo} is "
+                      f"{UNDECIDED_PARALLEL_BRANCH}")
+    provenance["blocked_by_target_tile"] = blocked
+    # `measured` stays the bare fitted alpha. Which tile it belongs to is in
+    # `basis` (IMPORTED), in the threshold and in the provenance line;
+    # `tests/test_gate_units_and_ridge.py` pins this field's exact shape and
+    # that file is not this one's to edit.
     return Gate(3, claim, verdict, f"alpha {alpha_hat:.3f}", threshold, lines,
                 basis=IMPORTED if imported else DERIVED, provenance=provenance)
 
@@ -2906,7 +3090,21 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         ridge_band = (ridge, ridge)
     ridge_band = (min(ridge_band), max(ridge_band))
     lines: list[str] = []
-    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    timed = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    # THE LOW-CLOCK EXCLUSION REACHES EVERY GATE, not just the ladder fit.
+    # R5 asked only that a throttled cell stay out of the memory-branch fit, and
+    # `ladder_treads` does that. But `plateau` and gates 1, 2 and 4 were handed
+    # the unfiltered list, and gate 4's claim is an ABSENCE -- "BLOCK_M=64 never
+    # reaches the compute roof" -- scored against `plateau`. A throttled cell can
+    # only depress a maximum, so an undetected clock sag biases the one gate
+    # that asserts an absence towards PASS, which is the audit's own "62-97%
+    # throttling above T=2048" concern arriving one gate over. `ok` below is
+    # therefore the SCORED set: everything timed, less the cells whose loaded
+    # clock came in low. `timed` is kept only to count what was dropped, and the
+    # ladder fits still read `timed` so they can report their own exclusions per
+    # block size. None is not an exclusion anywhere; see `ladder_treads`.
+    ok = [c for c in timed if not c.clock_excluded]
+    excluded_from_gates = len(timed) - len(ok)
     aligned = [c for c in ok if c.aligned]
     plateau = max((c.useful_tflops for c in aligned), default=0.0)
     noise = statistics.median([c.rel_spread for c in ok]) if ok else 0.0
@@ -2924,7 +3122,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # "above" it, which is how a BLOCK_M=128 ladder planted at alpha=0.10
     # reported 0.80.
     margin = max(MEMORY_BRANCH_MARGIN, 3.0 * noise)
-    treads = {bm: ladder_treads(ok, bm) for bm in block_sizes}
+    # `timed`, not `ok`: `ladder_treads` does its own exclusion and RETURNS THE
+    # COUNT, which is what lets each block size say how many treads it lost.
+    # Handing it the already-filtered list would report every ladder as having
+    # lost nothing.
+    treads = {bm: ladder_treads(timed, bm) for bm in block_sizes}
     fits = {bm: fit_ladder(pts, bm, ref, margin, excluded_low_clock=dropped)
             for bm, (pts, dropped) in treads.items()}
     fits = {bm: f for bm, f in fits.items() if f.points}
@@ -2948,6 +3150,10 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # calibration was missing or unreadable.
     lines.append(f"  bandwidth source: {bandwidth_gbps:.1f} GB/s, "
                  f"{bandwidth_source or 'NOT STATED by the caller'}")
+    # Beside the two rulers, because it is the third thing a reader has to know
+    # to judge a number here and `provenance.iters` is a single median standing
+    # for it. See `observed_iters`.
+    lines.append("  " + iters_line(cells))
     if ridge_band[0] == ridge_band[1]:
         lines.append("  the band is DEGENERATE: one calibration, so which tread "
                      "a crossing lands in is not bracketed by this run")
@@ -3040,12 +3246,19 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     lines.append("  alpha here is B/(A+B), which is (alpha_b+phi)/(1+phi+delta) "
                  "and NOT a weight miss fraction: see moe/bench/ai_model.py "
                  "and LadderFit.alpha")
-    if excluded_total:
+    if excluded_total or excluded_from_gates:
         lines.append(
-            f"  {excluded_total} cell(s) excluded for clock level: their SM "
-            "clock under load came in below the clock the roof was measured "
+            f"  {excluded_from_gates} cell(s) excluded for clock level: their "
+            "SM clock under load came in below the clock the roof was measured "
             "at, so they sit above a compute branch they were never comparable "
-            "with. Excluded from every fit below and counted per ladder.")
+            "with.")
+        # WHICH GATES THE EXCLUSION REACHED, named, because an exclusion whose
+        # extent a reader has to infer is an exclusion nobody can check.
+        lines.append(
+            f"    Reached: the plateau, the compute reference, the noise "
+            f"estimate that sets the margin, and gates 1, 2, 3 and 4. "
+            f"{excluded_total} of them were aligned treads and are counted per "
+            "ladder below.")
     if ref.refused:
         # Said BEFORE the table, because the table is all n/a and a reader who
         # meets the blanks first will reach for the tread count -- which is what
@@ -3164,7 +3377,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         "bandwidth_gbps": bandwidth_gbps,
         "bandwidth_source": (bandwidth_source
                              or "NOT STATED by the caller"),
-        "cells_excluded_for_clock_level": excluded_total,
+        "cells_excluded_for_clock_level": excluded_from_gates,
+        "cells_excluded_for_clock_level_from_ladders": excluded_total,
+        "clock_exclusion_reaches": [
+            "plateau", "compute_reference", "noise_margin",
+            "gate_1", "gate_2", "gate_3", "gate_4", "ladder_fits"],
         "ridge_band_degenerate": ridge_band[0] == ridge_band[1],
         "model_roof_tflops": model_roof, "dtype_bytes": b,
         "model": model_name, "dtype": dtype, "fixed": pinned or FIXED,
@@ -3328,8 +3545,21 @@ def count_new(root: Path, seen: set[Path]) -> int:
     return len(fresh)
 
 
-class RetiredInstrument(RuntimeError):
+class RetiredInstrument(BaseException):
     """`time_call` was called. It no longer times anything, by design.
+
+    NOT AN `Exception`, AND THAT IS THE WHOLE MECHANISM. All four sibling arms
+    time inside a per-cell `except Exception` (`scripts/bm128_roofline.py:1564`,
+    `bm128_depth.py:1620`, `bn_decomposition.py:2303`,
+    `occupancy_vs_swizzle.py:1309`), which turns any per-cell failure into a
+    `status="failed"` row and moves on. As a `RuntimeError` this refusal was
+    swallowed by every one of them: the arm compiled and ran its whole grid,
+    recorded a failed row per cell and only then reached its gates, so
+    `bm128_roofline` -- the arm scheduled to settle the BLOCK_M=128 question --
+    would have burned a pod allocation to produce no usable cell. Deriving from
+    `BaseException` puts it outside every one of those handlers, so the first
+    cell any of them tries to time stops the arm with the fix in the message,
+    which is what the retirement was for.
 
     See `time_call` for what to call instead and why this is a refusal rather
     than a redirect.
@@ -3366,9 +3596,22 @@ def time_call(fn, warmup: int, iters: int):
     symbol would abort those four at import with "no longer exports time_call",
     which says nothing about what actually changed. They keep importing, and the
     first cell any of them tries to time raises this, with the fix in the
-    message. Migrating them onto `time_kernel` is their own phase; until then
-    their numbers were never comparable with the roof, which is the finding, not
-    a regression introduced here.
+    message.
+
+    WHAT "RAISES THIS" ACTUALLY DOES TO THEM, corrected 2026-09-02. All four
+    time inside a per-cell `except Exception`, so while `RetiredInstrument` was
+    a `RuntimeError` this refusal was caught per cell: the arm went on to
+    compile and run every setting in its grid, wrote `status="failed"` and
+    `ms_p50=0.0` for each and printed one FAILED line per cell before its gates
+    saw an empty sweep. Nothing fabricated a number -- all four filter on
+    `status == "ok" and ms_p50 > 0` and their non-vacuity gates refuse to PASS
+    on zero cells -- but the arm burned its whole allocation to learn one fact
+    it could have learned at cell 1. `RetiredInstrument` is now a
+    `BaseException`, outside those handlers, and the arm stops at the first
+    timed cell as this docstring always claimed. Migrating them onto
+    `time_kernel` is their own phase; until then their numbers were never
+    comparable with the roof, which is the finding, not a regression introduced
+    here.
     """
     raise RetiredInstrument(
         "time_call has been retired: it timed with per-iteration synchronises "
@@ -4223,8 +4466,25 @@ def resolve_ridge(args, *, synthetic: bool) -> ResolvedRidge:
         "say so in the report.")
 
 
-class BandwidthUnavailable(RuntimeError):
+class BandwidthUnavailable(SystemExit, RuntimeError):
     """No bandwidth this run is entitled to use, and no constant may stand in.
+
+    IT IS A `SystemExit` AS WELL AS A `RuntimeError`, AND THAT IS THE DELIVERY,
+    not a curiosity. `scripts/tile_cap_test.py:1760` calls `resolve_bandwidth`
+    OUTSIDE any try and cannot be edited from here, so a plain `RuntimeError`
+    arrived there as an uncaught traceback and exit 1 -- and 1 is `CLAIM_FAIL`
+    in the very table this study adopted, so a driver would have ledgered a
+    REFUSAL as a measured refutation. That is the audit's own defect, made by
+    the fix for it. As a `SystemExit` carrying `code = REFUSED` the same
+    uncaught refusal leaves the process at 2 with no traceback, which is what it
+    means, and `except (RidgeUnavailable, BandwidthUnavailable)` in `main` still
+    catches it by name because it is still a `RuntimeError` too. It is
+    deliberately NOT caught by a blanket `except Exception`: a refusal that a
+    caller can swallow by accident is the state this class exists to end.
+
+    THE MESSAGE IS PRINTED AT THE RAISE SITE, once, by `_refuse_bandwidth`,
+    because an unhandled `SystemExit` whose code is an int prints nothing at
+    all. `main` therefore returns REFUSED without re-printing.
 
     THE HYBRID ROOF, WHICH `resolve_ridge` ALREADY REFUSED AND THIS DID NOT.
     Every predicted millisecond, every `ridge x bandwidth` roof and therefore
@@ -4242,6 +4502,28 @@ class BandwidthUnavailable(RuntimeError):
     not a machine's. So this refuses on exactly the terms `RidgeUnavailable`
     does, and `--ridge` now requires `--bandwidth` beside it.
     """
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        # `SystemExit.__init__` has just set `code = message`, which the
+        # interpreter would print and then exit 1 with. The code is the whole
+        # point of the class being a SystemExit, so it is overwritten here;
+        # `str(exc)` still returns the message, and `_refuse_bandwidth` has
+        # already printed it.
+        self.code = exit_codes.REFUSED
+
+
+def _refuse_bandwidth(message: str) -> BandwidthUnavailable:
+    """Print the refusal once, then hand back the exception to raise.
+
+    A refusal nobody can read is not a refusal. This function exists because the
+    exception is a `SystemExit`: a caller with no try around
+    `resolve_bandwidth` gets exit 2 and, without this, a silent one. Printing
+    here rather than in `__init__` keeps the side effect at the one place that
+    refuses, and keeps `raise` a `raise`.
+    """
+    print(f"REFUSED: {message}")
+    return BandwidthUnavailable(message)
 
 
 @dataclass(frozen=True)
@@ -4310,6 +4592,14 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
     The one in-repo caller outside this file monkeypatches this function in a
     test (`tests/test_tile_cap.py`), which passes its own callable and is
     unaffected by the shape.
+
+    HOW THE REFUSAL IS DELIVERED, since one caller cannot catch it.
+    `BandwidthUnavailable` is a `SystemExit` carrying `code = REFUSED`, and
+    `_refuse_bandwidth` prints the reason before it is raised. So
+    `scripts/tile_cap_test.py --ridge 145.8 --dry-run`, which calls this outside
+    any try, now ends with the refusal on stdout and exit 2 instead of a
+    traceback and exit 1. It is still a `RuntimeError`, so `main`'s named
+    `except` is unchanged.
     """
     if synthetic is None:
         # INFERRED, not defaulted to False. `scripts/tile_cap_test.py` calls
@@ -4331,7 +4621,7 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
         # Broad, and it REFUSES rather than substituting. A yaml this process
         # cannot parse is not a licence to use another machine's ceiling; it is
         # a reason to stop and say which file failed.
-        raise BandwidthUnavailable(
+        raise _refuse_bandwidth(
             f"this device's calibration could not be read "
             f"({type(exc).__name__}: {exc}), so this run has no bandwidth it is "
             "entitled to quote.\n"
@@ -4349,7 +4639,7 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
         return ResolvedBandwidth(PUBLISHED_H200_TRIAD_GBPS, "hypothesis",
                                  HYPOTHESIS_BANDWIDTH_SOURCE, gpu_name)
     if ridge_arg:
-        raise BandwidthUnavailable(
+        raise _refuse_bandwidth(
             f"--ridge {ridge_arg} Op/B was given and there is no bandwidth to "
             f"pair it with on this device ({gpu_name or 'no CUDA device'}).\n"
             "    The ridge is then YOUR assertion, for some card, and the only "
@@ -4372,11 +4662,15 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
     #
     # WHY THIS ONE IS RETURNED AND NOT RAISED, said plainly.
     # `scripts/tile_cap_test.py:1760` calls this function OUTSIDE a try and
-    # then refuses on its own ridge two lines later; raising here would replace
-    # that script's named refusal and exit code 2 with an uncaught exception,
-    # in a file this one does not own. A zero it never reads costs nothing.
+    # then refuses on its own ridge two lines later. Its refusal is the better
+    # message here -- it names the ridge as well -- so this state stays a
+    # return and lets that one speak. A zero it never reads costs nothing.
     # Every state where a hybrid roof COULD form -- an asserted ridge with no
-    # bandwidth, an unreadable calibration -- still raises above.
+    # bandwidth, an unreadable calibration -- raises above, and since
+    # 2026-09-02 those raises land in that same untried caller as exit 2
+    # REFUSED with the reason printed, not as a traceback and exit 1. Exit 1 is
+    # CLAIM_FAIL, and a driver reading one would have written a refusal into
+    # the ledger as a measured refutation.
     return ResolvedBandwidth(
         0.0, "unresolved",
         f"NO BANDWIDTH: this device ({gpu_name or 'no CUDA device'}) has no "
@@ -4412,7 +4706,13 @@ def main(argv=None) -> int:
     try:
         rr = resolve_ridge(args, synthetic=synthetic)
         rb = resolve_bandwidth(args, synthetic=synthetic)
-    except (RidgeUnavailable, BandwidthUnavailable) as exc:
+    except BandwidthUnavailable:
+        # NOT re-printed. `_refuse_bandwidth` printed it at the raise site,
+        # because that exception is a SystemExit and reaches sibling scripts
+        # that have no try to print it for them. Printing it twice here would
+        # make one refusal look like two.
+        return exit_codes.REFUSED
+    except RidgeUnavailable as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
     if rb.source == "unresolved":
@@ -4498,12 +4798,24 @@ def main(argv=None) -> int:
         # resumed by run id. The refused settings simply contribute no rows.
 
     if args.dry_run:
+        # PRICED AS `time_kernel` WILL CHARGE, not as the retired loop did:
+        # a fixed warmup DURATION plus `--trials` trials of `--cell-budget-ms`
+        # each. `--iters` is deliberately not passed; it is retired as a timing
+        # knob and passing it here is what made this line read a duration as a
+        # call count.
         secs = estimated_seconds(cfg, grid, block_sizes, alpha=args.alpha,
                                  ridge=rr.ridge, bandwidth_gbps=bandwidth,
-                                 b=b, iters=args.iters, warmup=args.warmup,
+                                 b=b, warmup_ms=args.warmup,
+                                 trials=args.trials,
                                  cell_budget_ms=args.cell_budget_ms)
+        cells_planned = len(grid) * len(block_sizes)
         print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
               "excluding compiles and allocation")
+        print(f"  {cells_planned} cells x ({args.warmup:.0f} ms warmup + "
+              f"{args.trials} trials x {args.cell_budget_ms:.0f} ms of kernel "
+              "time), which is what the instrument charges; a cell slower than "
+              f"{args.cell_budget_ms / ITERS_FOR_LO:.0f} ms costs more because "
+              f"the iteration count floors at {ITERS_FOR_LO}")
         preds = predictions(block_sizes, args.alpha, rr.ridge, b)
         for bm in block_sizes:
             p = preds[bm]
@@ -4535,10 +4847,28 @@ def main(argv=None) -> int:
     # a source without pattern-matching a sentence.
     ridge_src = f"{rr.source_kind}: {rr.source}"
     bw_src = f"{rb.source}: {rb.detail}"
+    # `instrument` IS THE SELF-TEST'S TOO, and it is the synthetic name.
+    # `instrument` is one of the five keys `Provenance.stamp` puts at the
+    # payload's top level and a publish gate checks, and report.json outlives
+    # every log. A --self-test report carrying the real instrument's name
+    # satisfied that gate while describing an instrument the run never touched;
+    # `SYNTHETIC_INSTRUMENT` is the same string the planted cells carry, so the
+    # report and its rows now agree about having measured nothing.
+    #
+    # `iters` IS None HERE, NOT `args.iters`. `--iters` is retired as a timing
+    # knob: on a pod each cell's count comes from `time_kernel`, sized from
+    # --cell-budget-ms, and is hundreds for a 1 ms kernel. Recording the dead
+    # argparse default would have put `provenance.iters: 50` in every report
+    # while every row of cells.csv said something else, and a reader could not
+    # tell which was the instrument's. None reaches the block as the honest
+    # "supplied as None"; the report's copy below carries the count the
+    # instrument actually used.
     prov = PV.provenance_block(
-        instrument=timing_basis(), ridge=rr.ridge, ridge_source=ridge_src,
+        instrument=(SYNTHETIC_INSTRUMENT if args.self_test is not None
+                    else timing_basis()),
+        ridge=rr.ridge, ridge_source=ridge_src,
         bandwidth=bandwidth, bandwidth_source=bw_src,
-        warmup_ms=args.warmup, iters=args.iters,
+        warmup_ms=args.warmup, iters=None,
         target_ms=args.cell_budget_ms)
 
     if args.self_test is not None:
@@ -4567,6 +4897,11 @@ def main(argv=None) -> int:
             prov=prov)
         print(f"\nswept in {time.time() - started:.0f} s")
 
+    # THE REPORT'S BLOCK CARRIES THE INSTRUMENT'S OWN ITERATION COUNT; the one
+    # the CSV rows were stamped with does not, because each row already has its
+    # own `iters` column and a run-wide median would contradict most of them.
+    report_prov = observed_iters(prov, cells)
+
     sm_source = ("given on the command line" if args.sm_count
                  else "reported by the driver" if args.self_test is None
                  else f"assumed H200 default {DEFAULT_SM_COUNT}")
@@ -4576,7 +4911,7 @@ def main(argv=None) -> int:
                      executed=executed, sm_count=sm_count, sm_source=sm_source,
                      pinned=pinned, ridge_band=rr.band, ridge_source=ridge_src,
                      ridge_band_source=rr.band_source, capability=capability,
-                     card=card, bandwidth_source=bw_src, prov=prov)
+                     card=card, bandwidth_source=bw_src, prov=report_prov)
     print(report.text())
 
     (out_dir / "report.txt").write_text(report.text())
@@ -4593,10 +4928,19 @@ def main(argv=None) -> int:
     # different things in two files is the defect that module is named against.
     rc = exit_codes.classify(g.scored() for g in report.gates)
     if rc == exit_codes.CLAIM_FAIL and not args.fail_on_gate:
-        print(f"exit     {exit_codes.describe(exit_codes.DONE)} "
-              f"(a claim gate did not pass, which is a RESULT; pass "
-              f"--fail-on-gate to exit "
-              f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL on it)")
+        # DESCRIBED AS WHAT HAPPENED, not as the code returned. This line used
+        # to print `describe(DONE)`, whose text is a claim ABOUT THE GATES --
+        # "every VALIDITY and CLAIM gate PASSED" -- and then appended "a claim
+        # gate did not pass" to it, so one line said both. In a study whose A4
+        # finding is logs asserting things that did not happen, that is the same
+        # defect in miniature. The DIVERGENCE between the classification and the
+        # returned code is deliberate and stays; only the sentence is now the
+        # classification's.
+        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
+        print(f"         reported as exit {exit_codes.DONE} without "
+              f"--fail-on-gate: a claim that did not pass is a RESULT, not a "
+              f"broken run. Pass --fail-on-gate to return "
+              f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL instead.")
         return exit_codes.DONE
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
