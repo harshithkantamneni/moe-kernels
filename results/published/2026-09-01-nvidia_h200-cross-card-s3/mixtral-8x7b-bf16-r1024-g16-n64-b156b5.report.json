@@ -1,0 +1,410 @@
+{
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 160.3,
+  "ridge_band": [
+    160.3,
+    176.2
+  ],
+  "dtype_bytes": 2,
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 3
+  },
+  "plateau_tflops": 375.6124436596309,
+  "timing_spread_median": 0.01602077527845281,
+  "overhead_ms": 0.31038403511047363,
+  "compute_reference": {
+    "block_m": 256,
+    "overhead_ms": 0.31038403511047363,
+    "slope_per_tile": 1.9718565185864767,
+    "mean_rel_err": 0.03375301725948935,
+    "note": "BLOCK_M=256 ladder, 4 treads, proportional to 3.4%: compute branch 1.9719 ms per tile, fixed cost 0.3104 ms"
+  },
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "alpha_measured": 0.7347597700658343,
+  "alpha_source": "measured at BLOCK_M=64 over 16 memory-bound treads, activation traffic subtracted",
+  "predictions": {
+    "32": {
+      "ai_cap": 57.34767025089605,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null
+    },
+    "64": {
+      "ai_cap": 114.6953405017921,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null
+    },
+    "128": {
+      "ai_cap": 229.3906810035842,
+      "crossing_rows_ridge_lo": 249.74740000000003,
+      "crossing_rows_ridge_hi": 372.8392,
+      "first_compute_tread": 2
+    },
+    "256": {
+      "ai_cap": 458.7813620071684,
+      "crossing_rows_ridge_lo": 160.3,
+      "crossing_rows_ridge_hi": 176.2,
+      "first_compute_tread": 1
+    }
+  },
+  "ladder": {
+    "32": {
+      "points": [
+        [
+          1,
+          0.8422240018844604
+        ],
+        [
+          2,
+          1.3115839958190918
+        ],
+        [
+          3,
+          1.926800012588501
+        ],
+        [
+          4,
+          2.5410560369491577
+        ],
+        [
+          5,
+          3.037999987602234
+        ],
+        [
+          6,
+          3.5359039306640625
+        ],
+        [
+          7,
+          4.187215805053711
+        ],
+        [
+          8,
+          4.6329920291900635
+        ],
+        [
+          9,
+          5.197423934936523
+        ],
+        [
+          10,
+          5.759696006774902
+        ],
+        [
+          11,
+          6.305392026901245
+        ],
+        [
+          12,
+          6.885823965072632
+        ],
+        [
+          13,
+          7.38430380821228
+        ],
+        [
+          14,
+          8.019279956817627
+        ],
+        [
+          15,
+          8.57919979095459
+        ],
+        [
+          16,
+          8.980495929718018
+        ],
+        [
+          17,
+          9.577759742736816
+        ],
+        [
+          18,
+          10.223664283752441
+        ],
+        [
+          19,
+          10.71225643157959
+        ],
+        [
+          20,
+          11.21564769744873
+        ],
+        [
+          21,
+          11.774208068847656
+        ],
+        [
+          22,
+          12.37929630279541
+        ],
+        [
+          23,
+          13.043264389038086
+        ],
+        [
+          24,
+          13.3787202835083
+        ],
+        [
+          25,
+          14.005343914031982
+        ],
+        [
+          26,
+          14.573311805725098
+        ],
+        [
+          27,
+          15.132384300231934
+        ],
+        [
+          28,
+          15.677632331848145
+        ],
+        [
+          29,
+          16.25436782836914
+        ],
+        [
+          30,
+          16.81500816345215
+        ],
+        [
+          31,
+          17.3777437210083
+        ],
+        [
+          32,
+          17.612703323364258
+        ],
+        [
+          33,
+          18.44264030456543
+        ]
+      ],
+      "memory_points": 33,
+      "alpha": 0.6637453630841595,
+      "alpha_corrected": 0.6565043278551586,
+      "alpha_upper": 1.06211494123656,
+      "slope_memory": 0.5492704402715127,
+      "slope_compute": null,
+      "slope_compute_ref": 0.2464820648233096,
+      "crosses": false,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "mean_rel_err": 0.007187162598996212
+    },
+    "64": {
+      "points": [
+        [
+          1,
+          0.8583040237426758
+        ],
+        [
+          2,
+          1.3801760077476501
+        ],
+        [
+          3,
+          1.9907200336456299
+        ],
+        [
+          4,
+          2.5049439668655396
+        ],
+        [
+          5,
+          3.1444480419158936
+        ],
+        [
+          6,
+          3.8132479190826416
+        ],
+        [
+          7,
+          4.396560192108154
+        ],
+        [
+          8,
+          4.811071872711182
+        ],
+        [
+          9,
+          5.663535833358765
+        ],
+        [
+          10,
+          6.161504030227661
+        ],
+        [
+          11,
+          6.8964478969573975
+        ],
+        [
+          12,
+          7.4117279052734375
+        ],
+        [
+          13,
+          8.037264347076416
+        ],
+        [
+          14,
+          8.652064323425293
+        ],
+        [
+          15,
+          9.285088062286377
+        ],
+        [
+          16,
+          9.469056129455566
+        ]
+      ],
+      "memory_points": 16,
+      "alpha": 0.7497941620343517,
+      "alpha_corrected": 0.7347597700658343,
+      "alpha_upper": 1.2279158884700139,
+      "slope_memory": 0.597683916635373,
+      "slope_compute": null,
+      "slope_compute_ref": 0.4929641296466192,
+      "crosses": false,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "mean_rel_err": 0.016984242799840066
+    },
+    "128": {
+      "points": [
+        [
+          1,
+          1.182528018951416
+        ],
+        [
+          2,
+          2.1334879398345947
+        ],
+        [
+          3,
+          3.1043519973754883
+        ],
+        [
+          4,
+          3.9727039337158203
+        ],
+        [
+          5,
+          4.991728067398071
+        ],
+        [
+          6,
+          5.803263902664185
+        ],
+        [
+          7,
+          6.946976184844971
+        ],
+        [
+          8,
+          7.684031963348389
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 0.9282297211534837,
+      "slope_compute_ref": 0.9859282592932384,
+      "crosses": null,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "mean_rel_err": 0.01585266985021788
+    },
+    "256": {
+      "points": [
+        [
+          1,
+          2.152351975440979
+        ],
+        [
+          2,
+          4.089344024658203
+        ],
+        [
+          3,
+          5.9105119705200195
+        ],
+        [
+          4,
+          7.773279905319214
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 1.868395173549652,
+      "slope_compute_ref": 1.9718565185864767,
+      "crosses": null,
+      "basis": "the reference ladder itself: compute bound at every tread",
+      "mean_rel_err": 0.006205158950949448
+    }
+  },
+  "bracketing": {
+    "reached_rows": 1024.0,
+    "reached_tiles": 16,
+    "horizon_rows": 416.78000000000003,
+    "positive_control": 256,
+    "saturation": 0.9528281750266809,
+    "last_gain": 0.04594310116048672
+  },
+  "gates": [
+    {
+      "number": 0,
+      "claim": "override_config changed the kernel at every setting",
+      "verdict": "PASS",
+      "measured": "fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=128:16, BM=256:16",
+      "gate": ">= 1 per setting"
+    },
+    {
+      "number": 1,
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "verdict": "PASS",
+      "measured": "median step minus tread +15.19%",
+      "gate": ">= +6.37% (half the model's step) and > 3x noise (4.81%)"
+    },
+    {
+      "number": 2,
+      "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
+      "verdict": "PASS",
+      "measured": "ms(BM=32) / ms(BM=256) = 2.266x at 1024 rows per expert",
+      "gate": ">= 1.50x"
+    },
+    {
+      "number": 3,
+      "claim": "the BLOCK_M=128 crossing sits Q above the BLOCK_M=256 one",
+      "verdict": "PASS",
+      "measured": "1.735x",
+      "gate": "> 1.33x (rules out alpha=0.1)"
+    },
+    {
+      "number": 4,
+      "claim": "BLOCK_M=64 never reaches the compute roof",
+      "verdict": "PASS",
+      "measured": "peak roof fraction 0.811",
+      "gate": "<= 0.85"
+    }
+  ]
+}

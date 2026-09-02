@@ -1,0 +1,79 @@
+ALPHA SURFACE -- every fit found under /workspace/session/20260901T214218Z/alpha_surface
+
+alpha is the fraction of a weight re-read that MISSES L2. 1.0 means an
+extra M-tile costs a full re-read; 0.0 means L2 absorbs it entirely.
+A blank alpha means the fit was not identifiable at that BLOCK_M --
+fewer than 3 memory-bound treads -- not that it is zero.
+
+  model                 G   BN   BM  treads   alpha  corrected   upper  fit err
+  ------------------ ---- ---- ---- ------- ------- ---------- ------- --------
+  deepseek-v2-lite      1   64   32       7   0.618      0.596   0.945    0.42%
+  deepseek-v2-lite      1   64   64       0      --         --      --       --
+  deepseek-v2-lite      1   64  128       0      --         --      --       --
+  deepseek-v2-lite      1   64  256       0      --         --      --       --
+  deepseek-v2-lite     16   64   32       0      --         --      --       --
+  deepseek-v2-lite     16   64   64       0      --         --      --       --
+  deepseek-v2-lite     16   64  128       2      --         --      --       --
+  deepseek-v2-lite     16   64  256       0      --         --      --       --
+  mixtral-8x7b          1  256   32      33   0.909      0.900   1.228    1.56%
+  mixtral-8x7b          1  256   64      16   0.839      0.823   1.078    0.85%
+  mixtral-8x7b          1  256  128       0      --         --      --       --
+  mixtral-8x7b          1   64   32      33   1.016      1.007   1.327    1.33%
+  mixtral-8x7b          1   64   64      16   0.947      0.933   1.193    1.45%
+  mixtral-8x7b          1   64  128       0      --         --      --       --
+  mixtral-8x7b          1   64  256       0      --         --      --       --
+  mixtral-8x7b         16   64   32      33   0.629      0.622   0.880    1.02%
+  mixtral-8x7b         16   64   64      16   0.659      0.646   0.919    1.63%
+  mixtral-8x7b         16   64  128       0      --         --      --       --
+  mixtral-8x7b         16   64  256       0      --         --      --       --
+  mixtral-8x7b         64   64   32      33   0.646      0.639   0.715    0.83%
+  mixtral-8x7b         64   64   64      16   0.745      0.731   0.826    1.57%
+  mixtral-8x7b         64   64  128       1      --         --      --       --
+  mixtral-8x7b         64   64  256       0      --         --      --       --
+  mixtral-8x7b          8   64   32      33   0.718      0.710   1.057    0.94%
+  mixtral-8x7b          8   64   64      16   0.699      0.685   0.993    2.17%
+  mixtral-8x7b          8   64  128       0      --         --      --       --
+  mixtral-8x7b          8   64  256       0      --         --      --       --
+  qwen2-57b-a14b        1  256   32       0      --         --      --       --
+  qwen2-57b-a14b        1  256   64       0      --         --      --       --
+  qwen2-57b-a14b        1  256  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64   32      33   0.721      0.706   0.935    0.57%
+  qwen2-57b-a14b        1   64   64      16   0.713      0.687   0.906    0.48%
+  qwen2-57b-a14b        1   64  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64  256       0      --         --      --       --
+  qwen2-57b-a14b       16   64   32      33   0.699      0.685   1.022    0.89%
+  qwen2-57b-a14b       16   64   64      16   0.691      0.664   0.976    1.10%
+  qwen2-57b-a14b       16   64  128       0      --         --      --       --
+  qwen2-57b-a14b       16   64  256       0      --         --      --       --
+  qwen2-57b-a14b       64   64   32      33   0.668      0.654   1.205    0.62%
+  qwen2-57b-a14b       64   64   64       0      --         --      --       --
+  qwen2-57b-a14b       64   64  128       0      --         --      --       --
+  qwen2-57b-a14b       64   64  256       0      --         --      --       --
+  qwen2-57b-a14b        8   64   32      33   0.766      0.751   1.001    1.07%
+  qwen2-57b-a14b        8   64   64      16   0.741      0.714   0.940    1.30%
+  qwen2-57b-a14b        8   64  128       1      --         --      --       --
+  qwen2-57b-a14b        8   64  256       0      --         --      --       --
+
+18 identifiable fit(s) of 46 block sizes swept.
+
+alpha against GROUP_SIZE_M, the swizzle width:
+  1                    n=7   median alpha 0.839   corrected 0.823
+  16                   n=4   median alpha 0.675   corrected 0.655
+  64                   n=3   median alpha 0.668   corrected 0.654
+  8                    n=4   median alpha 0.729   corrected 0.712
+
+alpha against model, i.e. per-expert footprint:
+  deepseek-v2-lite     n=1   median alpha 0.618   corrected 0.596
+  mixtral-8x7b         n=10  median alpha 0.731   corrected 0.720
+  qwen2-57b-a14b       n=7   median alpha 0.713   corrected 0.687
+
+alpha against BLOCK_SIZE_N, the activation-confound control:
+  256                  n=2   median alpha 0.874   corrected 0.862
+  64                   n=16  median alpha 0.706   corrected 0.686
+
+READ IT AGAINST THE THREE CANDIDATES:
+  alpha = 0.100 (this repo, retracted): 0 of 18 fits within 0.05
+  alpha = 0.330 (TEMPO arXiv:2608.13057): 0 of 18 fits within 0.05
+  alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 18 fits within 0.05
+
+A pooled scalar cannot describe this surface if the levers move it.

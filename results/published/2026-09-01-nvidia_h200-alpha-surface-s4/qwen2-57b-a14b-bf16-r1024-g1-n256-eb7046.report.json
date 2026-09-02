@@ -1,0 +1,380 @@
+{
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 160.3,
+  "ridge_band": [
+    160.3,
+    176.2
+  ],
+  "dtype_bytes": 2,
+  "model": "qwen2-57b-a14b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 256,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "plateau_tflops": 499.1728348104061,
+  "timing_spread_median": 0.01017985181222231,
+  "overhead_ms": 0.0,
+  "compute_reference": {
+    "block_m": null,
+    "overhead_ms": 0.0,
+    "slope_per_tile": null,
+    "mean_rel_err": 0.053191410897987845,
+    "note": "BLOCK_M=128 ladder is not proportional to its tile count (5.3% mean error against a line through the origin), so it is not compute bound throughout and cannot provide a compute branch. Membership falls back to a split search and NO alpha may decide a verdict"
+  },
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "alpha_measured": null,
+  "alpha_source": "",
+  "predictions": {
+    "32": {
+      "ai_cap": 57.34767025089605,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null
+    },
+    "64": {
+      "ai_cap": 114.6953405017921,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null
+    },
+    "128": {
+      "ai_cap": 229.3906810035842,
+      "crossing_rows_ridge_lo": 249.74740000000003,
+      "crossing_rows_ridge_hi": 372.8392,
+      "first_compute_tread": 2
+    },
+    "256": {
+      "ai_cap": 458.7813620071684,
+      "crossing_rows_ridge_lo": 160.3,
+      "crossing_rows_ridge_hi": 176.2,
+      "first_compute_tread": 1
+    }
+  },
+  "ladder": {
+    "32": {
+      "points": [
+        [
+          1,
+          1.0416640043258667
+        ],
+        [
+          2,
+          1.312831997871399
+        ],
+        [
+          3,
+          1.7580159902572632
+        ],
+        [
+          4,
+          2.239135980606079
+        ],
+        [
+          5,
+          2.7092320919036865
+        ],
+        [
+          6,
+          3.177248001098633
+        ],
+        [
+          7,
+          3.6741440296173096
+        ],
+        [
+          8,
+          4.154688119888306
+        ],
+        [
+          9,
+          4.5927839279174805
+        ],
+        [
+          10,
+          5.100448131561279
+        ],
+        [
+          11,
+          5.526976108551025
+        ],
+        [
+          12,
+          6.018159866333008
+        ],
+        [
+          13,
+          6.573824167251587
+        ],
+        [
+          14,
+          6.996271848678589
+        ],
+        [
+          15,
+          7.422207832336426
+        ],
+        [
+          16,
+          7.946655988693237
+        ],
+        [
+          17,
+          8.432000160217285
+        ],
+        [
+          18,
+          8.850720405578613
+        ],
+        [
+          19,
+          9.404576301574707
+        ],
+        [
+          20,
+          9.820367813110352
+        ],
+        [
+          21,
+          10.27670431137085
+        ],
+        [
+          22,
+          10.766816139221191
+        ],
+        [
+          23,
+          11.256671905517578
+        ],
+        [
+          24,
+          11.72383975982666
+        ],
+        [
+          25,
+          12.200495719909668
+        ],
+        [
+          26,
+          12.68404769897461
+        ],
+        [
+          27,
+          13.164352416992188
+        ],
+        [
+          28,
+          13.651008129119873
+        ],
+        [
+          29,
+          14.111071586608887
+        ],
+        [
+          30,
+          14.534687995910645
+        ],
+        [
+          31,
+          15.029888153076172
+        ],
+        [
+          32,
+          15.550992012023926
+        ],
+        [
+          33,
+          15.958831787109375
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 0.48360096324573865,
+      "slope_compute_ref": null,
+      "crosses": null,
+      "basis": "split search: no usable compute reference; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "mean_rel_err": 0.05843504470123409
+    },
+    "64": {
+      "points": [
+        [
+          1,
+          1.0511360168457031
+        ],
+        [
+          2,
+          1.5034720301628113
+        ],
+        [
+          3,
+          2.0990240573883057
+        ],
+        [
+          4,
+          2.665808081626892
+        ],
+        [
+          5,
+          3.2446401119232178
+        ],
+        [
+          6,
+          3.8160959482192993
+        ],
+        [
+          7,
+          4.39521598815918
+        ],
+        [
+          8,
+          4.971487998962402
+        ],
+        [
+          9,
+          5.582272052764893
+        ],
+        [
+          10,
+          6.137376070022583
+        ],
+        [
+          11,
+          6.680544137954712
+        ],
+        [
+          12,
+          7.354464054107666
+        ],
+        [
+          13,
+          7.893247842788696
+        ],
+        [
+          14,
+          8.450223922729492
+        ],
+        [
+          15,
+          9.02297592163086
+        ],
+        [
+          16,
+          9.639935970306396
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 0.6020449362772666,
+      "slope_compute_ref": null,
+      "crosses": null,
+      "basis": "split search: no usable compute reference; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "mean_rel_err": 0.07174594303279812
+    },
+    "128": {
+      "points": [
+        [
+          1,
+          1.1808000206947327
+        ],
+        [
+          2,
+          2.013216018676758
+        ],
+        [
+          3,
+          2.901439905166626
+        ],
+        [
+          4,
+          3.7276960611343384
+        ],
+        [
+          5,
+          4.63153600692749
+        ],
+        [
+          6,
+          5.463855981826782
+        ],
+        [
+          7,
+          6.324064016342163
+        ],
+        [
+          8,
+          7.245023965835571
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "slope_memory": null,
+      "slope_compute": 0.9056279957294464,
+      "slope_compute_ref": null,
+      "crosses": null,
+      "basis": "split search: no usable compute reference; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "mean_rel_err": 0.05692956529964876
+    }
+  },
+  "bracketing": {
+    "reached_rows": 1024.0,
+    "reached_tiles": 16,
+    "horizon_rows": 416.78000000000003,
+    "positive_control": 128,
+    "saturation": 0.9528281750266809,
+    "last_gain": -0.001600458821960693
+  },
+  "gates": [
+    {
+      "number": 0,
+      "claim": "override_config changed the kernel at every setting",
+      "verdict": "FAIL",
+      "measured": "fresh Triton artefacts per setting: BM=32:17, BM=64:16, BM=128:16, BM=256:0",
+      "gate": ">= 1 per setting"
+    },
+    {
+      "number": 1,
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "verdict": "PASS",
+      "measured": "median step minus tread +10.76%",
+      "gate": ">= +6.25% (half the model's step) and > 3x noise (3.05%)"
+    },
+    {
+      "number": 2,
+      "claim": "time falls with BLOCK_M at equal rows per expert",
+      "verdict": "UNDECIDED",
+      "measured": "no rows-per-expert common to every block size",
+      "gate": "a multiple of 256"
+    },
+    {
+      "number": 3,
+      "claim": "the BLOCK_M=128 crossing sits Q above the BLOCK_M=256 one",
+      "verdict": "UNDECIDED",
+      "measured": "alpha not identifiable at any block size",
+      "gate": "> 1.33x"
+    },
+    {
+      "number": 4,
+      "claim": "BLOCK_M=64 never reaches the compute roof",
+      "verdict": "PASS",
+      "measured": "peak roof fraction 0.751",
+      "gate": "<= 0.85"
+    }
+  ]
+}

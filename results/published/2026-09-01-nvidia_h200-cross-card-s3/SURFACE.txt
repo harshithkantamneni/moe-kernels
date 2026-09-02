@@ -1,0 +1,56 @@
+ALPHA SURFACE -- every fit found under /workspace/session/20260901T214218Z/cross_card/nvidia_h200-s3
+
+alpha is the fraction of a weight re-read that MISSES L2. 1.0 means an
+extra M-tile costs a full re-read; 0.0 means L2 absorbs it entirely.
+A blank alpha means the fit was not identifiable at that BLOCK_M --
+fewer than 3 memory-bound treads -- not that it is zero.
+
+  model                 G   BN   BM  treads   alpha  corrected   upper  fit err
+  ------------------ ---- ---- ---- ------- ------- ---------- ------- --------
+  mixtral-8x7b          1   64   32      33   1.006      0.998   1.184    1.43%
+  mixtral-8x7b          1   64   64      16   0.930      0.916   1.070    0.77%
+  mixtral-8x7b          1   64  128       1      --         --      --       --
+  mixtral-8x7b          1   64  256       0      --         --      --       --
+  mixtral-8x7b         16   64   32      33   0.664      0.657   1.062    0.72%
+  mixtral-8x7b         16   64   64      16   0.750      0.735   1.228    1.70%
+  mixtral-8x7b         16   64  128       0      --         --      --       --
+  mixtral-8x7b         16   64  256       0      --         --      --       --
+  qwen2-57b-a14b        1  256   32       0      --         --      --       --
+  qwen2-57b-a14b        1  256   64       0      --         --      --       --
+  qwen2-57b-a14b        1  256  128       0      --         --      --       --
+  qwen2-57b-a14b        1  256  256       0      --         --      --       --
+  qwen2-57b-a14b        1   64   32      33   0.724      0.709   1.001    0.47%
+  qwen2-57b-a14b        1   64   64      16   0.719      0.692   0.967    0.45%
+  qwen2-57b-a14b        1   64  128       0      --         --      --       --
+  qwen2-57b-a14b        1   64  256       0      --         --      --       --
+  qwen2-57b-a14b       16   64   32      33   0.718      0.703   1.281    0.84%
+  qwen2-57b-a14b       16   64   64      16   0.701      0.675   1.166    1.05%
+  qwen2-57b-a14b       16   64  128       0      --         --      --       --
+  qwen2-57b-a14b       16   64  256       0      --         --      --       --
+  qwen2-57b-a14b       64   64   32      33   0.675      0.661   1.399    0.48%
+  qwen2-57b-a14b       64   64   64       0      --         --      --       --
+  qwen2-57b-a14b       64   64  128       0      --         --      --       --
+  qwen2-57b-a14b       64   64  256       0      --         --      --       --
+  qwen2-57b-a14b        8   64   32      33   0.726      0.712   1.334    0.96%
+  qwen2-57b-a14b        8   64   64      16   0.750      0.723   1.323    1.18%
+  qwen2-57b-a14b        8   64  128       0      --         --      --       --
+  qwen2-57b-a14b        8   64  256       0      --         --      --       --
+
+11 identifiable fit(s) of 28 block sizes swept.
+
+alpha against GROUP_SIZE_M, the swizzle width:
+  1                    n=4   median alpha 0.827   corrected 0.813
+  16                   n=4   median alpha 0.709   corrected 0.689
+  64                   n=1   median alpha 0.675   corrected 0.661
+  8                    n=2   median alpha 0.738   corrected 0.717
+
+alpha against model, i.e. per-expert footprint:
+  mixtral-8x7b         n=4   median alpha 0.840   corrected 0.825
+  qwen2-57b-a14b       n=7   median alpha 0.719   corrected 0.703
+
+READ IT AGAINST THE THREE CANDIDATES:
+  alpha = 0.100 (this repo, retracted): 0 of 11 fits within 0.05
+  alpha = 0.330 (TEMPO arXiv:2608.13057): 0 of 11 fits within 0.05
+  alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 11 fits within 0.05
+
+A pooled scalar cannot describe this surface if the levers move it.
