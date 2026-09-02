@@ -66,6 +66,7 @@ def _load(name: str, filename: str):
 BND = _load("bn_decomposition", "bn_decomposition.py")
 SWEEP = BND.SWEEP
 
+from moe.bench import exit_codes  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
@@ -562,7 +563,14 @@ def test_physicality_fails_when_alpha_b_leaves_the_unit_interval():
     ("model", "qwen2-57b-a14b"), ("dtype", "fp16"), ("block_n_list", "32,64"),
     ("tiles", "64,128"), ("r_max", 512), ("max_treads", 6), ("reps", 7),
     ("group_m", 16), ("block_k", 32), ("num_stages", 3), ("num_warps", 4),
-    ("iters", 25), ("warmup", 10), ("cell_budget_ms", 200.0), ("seed", 1),
+    ("iters", 25), ("warmup", 10.0), ("cell_budget_ms", 200.0), ("seed", 1),
+    # New to the key on 2026-09-02, and all three set the measured
+    # milliseconds: the warmup is now a DURATION, `--trials` is the number of
+    # queue-deep trials the percentiles are taken over, and `--no-l2-flush`
+    # decides whether every timed iteration starts with a cold L2. The roof was
+    # measured flushed, so a flushed and an unflushed sweep must never share a
+    # directory.
+    ("trials", 5), ("plant_noise", 0.02),
 ])
 def test_every_swept_knob_changes_the_run_id(knob, value):
     """The bug that overwrote a whole arm, once per omitted field.
@@ -628,16 +636,24 @@ def test_the_design_power_gate_fails_at_the_swizzle_that_cannot_resolve(capsys):
     """S4 is the reason this script has a recommended --group-m at all.
 
     At GROUP_SIZE_M=1 the corpus puts alpha near 0.93, the response moves with
-    alpha_a as (1 - alpha_b), and the lever is worth 15% of its size at 16. The
-    run still measures alpha_b and the residual; it cannot answer P1.
+    alpha_a as (1 - alpha_b), and the lever is a fraction of its size at 16. The
+    run still measures alpha_b; it cannot answer P1.
+
+    THE CODE IS 3 AND NOT 1. A VALIDITY gate that did not pass means nothing on
+    the page may be quoted, which is INVALID in `moe.bench.exit_codes`'s table;
+    1 is CLAIM_FAIL, a measured run whose pre-registered claim was refuted, and
+    that is a RESULT rather than a broken instrument. This file used to return 1
+    for both, which is the two-integers-two-meanings defect the shared table is
+    named against.
     """
     code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "1",
                      "--reps", "9", "--draws", "40", "--plant-noise", "0.004",
                      "--fail-on-gate"])
     out = capsys.readouterr().out
-    assert code == 1
+    assert code == exit_codes.INVALID
     assert "S4 the design resolves alpha_a" in out
     assert "[FAIL] VALIDITY S4" in out
+    assert "RESULT: VALIDITY S4 FAIL" in out
 
 
 def test_dry_run_needs_no_gpu_and_prints_the_predictions(capsys):
@@ -711,3 +727,736 @@ def test_the_payload_is_json_and_keeps_the_import_provenance():
     assert {a["basis"] for a in payload["arms"]} <= {"OWN", "IMPORTED"}
     assert any(g.kind == "VALIDITY" for g in gates)
     assert payload["fits"]["pooled_exact"]["alpha_a"] is not None
+
+
+# --------------------------------------------------------------------------
+# THE POWER GUARD ON C2 (audit A9). A gate whose two outcomes cannot both occur
+# is not a gate, and at GROUP_SIZE_M=1 this one's cannot: the planted
+# missing-term world passes it with the same verdict the true world gets.
+# Every test here plants BOTH branches -- the world where the guard fires and
+# the world where it does not -- because a guard that only ever fires is as
+# uninformative as the gate it was written to protect.
+# --------------------------------------------------------------------------
+
+def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
+                 extra=None, probe=True, plant_noise=None):
+    """One planted world scored the way a real run is scored, probe and all."""
+    args = args_for(capability="9.0", group_m=group_m, reps=reps, draws=draws,
+                    power_draws=draws)
+    alpha_b = BND.planted_alpha_b(group_m)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=alpha_b, alpha_a=alpha_a)
+    bw = BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=alpha_b, alpha_a=alpha_a, ridge=rho,
+        bandwidth_gbps=bw, b=2, block_ns=(32, 64, 128),
+        subjects=(32, 64, 128), extra=extra, noise=noise, seed=0)
+    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                num_warps=args.num_warps, GROUP_SIZE_M=group_m,
+                BLOCK_SIZE_K=args.block_k)
+    base.pop("BLOCK_SIZE_N", None)
+    compiles = {(bn, bm): 1 for bn in (32, 64, 128)
+                for bm in (32, 64, 128, 256)}
+    lines, gates, payload = BND.analyse_run(
+        samples, MIXTRAL, args, ridge=rho, bandwidth_gbps=bw, b=2,
+        ceiling_tflops=712.259, ceiling_source="planted", capability=(9, 0),
+        base_pinned=base, compiles=compiles, executed=dict(compiles),
+        sm_count=132, block_ns=(32, 64, 128), subjects=(32, 64, 128),
+        probe_c2_power=probe, plant_noise=plant_noise)
+    return lines, {g.token: g for g in gates}, payload
+
+
+def test_c2_reads_unknown_where_the_missing_term_world_would_pass():
+    """A9, the blocking finding, in the world it was found in.
+
+    At GROUP_SIZE_M=1 the planted MISSING world comes back at chi2 1.78 against
+    the 4.0 ceiling -- a PASS, the same verdict TRUTH gets -- so a C2 PASS at
+    that swizzle could not have been a FAIL. The gate must say UNKNOWN and say
+    why, and UNKNOWN counts against it.
+    """
+    lines, gates, payload = _planted_run(1, noise=0.008)
+    c2 = gates["C2"]
+    assert c2.passed is None
+    assert "the planted missing-term world passes at this swizzle / noise" \
+        in c2.observed
+    assert c2.result_line().startswith("RESULT: CLAIM C2 UNKNOWN")
+    assert payload["c2_power"]["discriminates"] is False
+    # UNKNOWN is not a soft PASS: the arm cannot exit DONE on it.
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        != exit_codes.DONE
+
+
+def test_c2_keeps_its_own_verdict_where_the_probe_discriminates():
+    """The other branch, and the reason this is a guard and not a muzzle.
+
+    At GROUP_SIZE_M=16 with a quiet pod the missing-term world FAILS C2, so the
+    gate has power and its own verdict stands. A guard that fired everywhere
+    would have made C2 unquotable at every pinning, which is not a fix.
+    """
+    _, gates, payload = _planted_run(16, noise=0.004)
+    assert payload["c2_power"]["discriminates"] is True
+    assert gates["C2"].passed is True
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 PASS")
+
+
+def test_the_guarded_gate_can_still_fail_on_a_real_missing_term():
+    """PASS, FAIL and UNKNOWN are all reachable, which is the whole claim.
+
+    Where the probe discriminates AND the data carry the missing term, C2 must
+    FAIL: the guard decides whether the verdict is readable, never what it is.
+    """
+    _, gates, payload = _planted_run(16, noise=0.004, extra=BND.missing_term)
+    assert payload["c2_power"]["discriminates"] is True
+    assert gates["C2"].passed is False
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 FAIL")
+
+
+def test_the_probe_plants_at_the_runs_own_measured_spread():
+    """"At the measured spread" is the half that makes the guard about THIS pod.
+
+    The audit's second finding was that the driver self-tested at 0.8% while the
+    published H200 spread reaches 1.82% and S4 fails above about 1%. A probe
+    that plants at a constant is a probe about some other pod.
+    """
+    _, _, payload = _planted_run(1, noise=0.017)
+    measured = payload["measured_spread"]
+    assert measured == pytest.approx(0.017, rel=0.35)
+    assert payload["c2_power"]["noise"] == pytest.approx(measured)
+    assert "this run's own repeats" in payload["c2_power"]["noise_source"]
+
+
+def test_an_explicit_plant_noise_overrides_the_measured_one_and_says_so():
+    """The operator may ask a what-if, and the report must name whose number it is."""
+    _, _, payload = _planted_run(1, noise=0.008, plant_noise=0.02)
+    assert payload["c2_power"]["noise"] == pytest.approx(0.02)
+    assert payload["c2_power"]["noise_source"] == "given on the command line"
+
+
+def test_a_probe_that_could_not_run_is_unknown_and_never_pass():
+    """The FAIL branch of the probe itself: a crash establishes nothing.
+
+    `C2Power.ran=False` is what a probe that raised leaves behind, and a gate
+    guarded by a probe that did not run has not been shown to have power. It
+    must not fall through to the unguarded verdict.
+    """
+    dead = BND.C2Power(False, 1, 9, 0.008, "this run's own repeats", 40,
+                       note="RuntimeError: planted grid collapsed")
+    assert dead.discriminates is None
+    struct = BND.Structure({}, "quadratic in BM/BN", None, False)
+    fit = BND.Decomposition("EXA", None, 0.94, 0.14, None, 7, 2,
+                            (0.01,) * 7, ("BN=32 BM=32",) * 7, (0.5,) * 7,
+                            "planted")
+    gate = BND.gate_residual(fit, 0.5, "", struct, dead)
+    assert gate.passed is None
+    assert "could not run" in gate.observed
+    unguarded = BND.gate_residual(fit, 0.5, "", struct, None)
+    assert unguarded.passed is True          # the branch the guard overrides
+
+
+def test_the_self_test_names_the_power_gate_and_exits_nonzero_at_g1(capsys):
+    """The audit's own acceptance command, verbatim.
+
+    `--self-test --capability 9.0 --group-m 1 --reps 17 --plant-noise 0.018
+    --fail-on-gate` must exit non-zero, and S5 must be the gate that says why:
+    the arm the driver schedules at this swizzle cannot establish C2.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "1",
+                     "--reps", "17", "--plant-noise", "0.018", "--draws", "40",
+                     "--power-draws", "40", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert code != 0
+    assert code == exit_codes.INVALID
+    assert "RESULT: VALIDITY S5 FAIL" in out
+
+
+def test_the_power_gate_passes_where_the_design_has_power(capsys):
+    """S5's other branch, so the gate is a gate."""
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--draws", "40", "--power-draws", "40",
+                     "--plant-noise", "0.004", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    assert code == exit_codes.DONE
+    assert "RESULT: VALIDITY S5 PASS" in out
+
+
+# --------------------------------------------------------------------------
+# THE DESIGN-POWER LINE IS COMPUTED (audit A9's third clause, and B14).
+# --------------------------------------------------------------------------
+
+def test_no_spread_is_quoted_as_a_literal_in_what_the_run_prints(capsys):
+    """The string that was wrong: "sd 0.11-0.13 ... at any rep count tried".
+
+    The computed value at those settings was 0.176. A number about the
+    estimator's precision that is typed rather than measured is the shape this
+    whole slice exists to remove. Asserted on what the run PRINTS rather than on
+    the source, because the source still names the retired string in the
+    sentence that disowns it, and a reader who deletes that history is the next
+    person to reintroduce it.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "1",
+              "--reps", "17", "--power-draws", "40", "--plant-noise", "0.018"])
+    out = capsys.readouterr().out
+    assert "0.11-0.13" not in out
+    assert "at any rep count tried" not in out
+    assert "sd(alpha_a) = 0." in out           # computed, and printed
+
+
+def test_the_plan_prints_a_computed_spread_and_an_mde(capsys):
+    """--dry-run must say what this pinning can resolve, from a bootstrap.
+
+    B14: no arm stated an MDE, and a gate threshold that is a prior rather than
+    a noise-derived limit cannot be argued with. The line names its noise
+    assumption in the same sentence, because an MDE without one is a limit
+    presented as a fact.
+    """
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--power-draws", "40",
+                     "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "planted TRUTH world at GROUP_SIZE_M=16" in out
+    assert "MDE (alpha_a" in out
+    assert "Assumption: lognormal spread 0.80%" in out
+    assert "cross-arm floor" in out
+
+
+def test_the_design_power_verdict_moves_with_the_swizzle():
+    """The claim the plan makes: G=1 cannot resolve alpha_a and G=16 can.
+
+    Both branches, on planted worlds, so "the lever is the swizzle" is measured
+    here rather than asserted.
+    """
+    common = dict(b=2, ceiling_tflops=712.259, capability=(9, 0),
+                  block_ns=(32, 64, 128), subjects=(32, 64, 128), sm_count=132,
+                  noise=0.004, noise_source="planted", draws=40)
+    hard = BND.design_power(MIXTRAL, args_for(capability="9.0", group_m=1,
+                                              reps=9, draws=40), **common)
+    easy = BND.design_power(MIXTRAL, args_for(capability="9.0", group_m=16,
+                                              reps=9, draws=40), **common)
+    assert hard.resolves is False
+    assert easy.resolves is True
+    assert hard.alpha_a_sd > easy.alpha_a_sd
+
+
+def test_plant_noise_resolves_to_a_measurement_before_a_constant():
+    """`--plant-noise` used to default to 0.008, the middle of the published range.
+
+    S4 passes at 0.008 and fails at 0.015-0.020, so that default decided whether
+    the experiment looked worth paying for while describing a pod quieter than
+    half the corpus. All three branches, in order.
+    """
+    assert BND.resolve_plant_noise(0.02, 0.009, "measured") == (
+        0.02, "given on the command line")
+    assert BND.resolve_plant_noise(None, 0.009, "measured") == (0.009, "measured")
+    value, source = BND.resolve_plant_noise(None, None, "no repeats")
+    assert value == BND.PLANT_NOISE_FALLBACK
+    assert "worst published" in source
+    # And the fallback is the WORST published spread, not the middle one: the
+    # middle is the number the audit found S4 being scored at.
+    assert BND.PLANT_NOISE_FALLBACK > 0.008
+
+
+def test_an_mde_needs_a_spread_and_says_so_when_there_is_none():
+    """A limit computed from no spread is not zero, it is unknown.
+
+    Zero is the value that would make every effect look resolvable, which is why
+    `mde_one_sample` raises and `mde_line` prints UNKNOWN instead.
+    """
+    with pytest.raises(ValueError):
+        BND.mde_one_sample(0.0)
+    said = BND.mde_line(None, what="alpha_a", assumption="none")
+    assert "UNKNOWN" in said and "0.0000" not in said
+    # The convention is the study's own, not a fresh z value typed in here.
+    assert BND.mde_one_sample(0.01) == pytest.approx(
+        (BND.POWER.normal_ppf(0.975) + BND.POWER.normal_ppf(0.80)) * 0.01)
+
+
+# --------------------------------------------------------------------------
+# THE alpha_a BAND'S PROVENANCE (audit finding 32). The band cited four A100
+# two-point slopes that exist in no file under results/published.
+# --------------------------------------------------------------------------
+
+def test_the_phantom_a100_slopes_are_no_longer_the_bands_basis(capsys):
+    """0.106, 0.102, 0.129, 0.119 -- four numbers no committed file contains.
+
+    They were P1's whole stated basis. The plan must now cite the two committed
+    reports instead, and none of the four may appear in what it prints. The
+    source still names them once, in the paragraph that says they are in no
+    file, which is the history worth keeping.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--power-draws", "20",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        assert phantom not in out, f"{phantom} is back in the band's basis"
+    assert "d66ad3.report.json" in out and "16cc16.report.json" in out
+
+
+def test_the_band_is_what_the_committed_bn_pair_actually_says():
+    """The pre-registered literal, re-derived from the two files it came from.
+
+    The repo contains exactly one pair of arms differing in BLOCK_SIZE_N and
+    nothing else, and it gives two slopes that disagree: 0.29 at BM=32 and 0.15
+    at BM=64, with two-point sds of 0.086 and 0.043. The band covers both,
+    widened by their own sds.
+    """
+    points = BND.published_two_point_alpha_a()
+    by_bm = {p.block_m: p for p in points}
+    assert set(by_bm) == {32, 64}
+    assert by_bm[32].slope == pytest.approx(0.286, abs=0.01)
+    assert by_bm[64].slope == pytest.approx(0.146, abs=0.01)
+    assert by_bm[32].sd == pytest.approx(0.086, abs=0.005)
+    assert by_bm[64].sd == pytest.approx(0.043, abs=0.005)
+    assert BND.alpha_a_band_from_published(points) == BND.ALPHA_A_BAND
+    # The retired band excluded the larger of its own two inputs, which is how
+    # a measured 0.28 would have printed as "FAIL high".
+    assert not (0.10 <= by_bm[32].slope <= 0.15)
+
+
+def test_the_band_check_refuses_when_the_literal_no_longer_reads_back():
+    """The FAIL branch: a literal that outlives its source is the whole finding."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.check_alpha_a_band((0.10, 0.15))
+    points, lines = BND.check_alpha_a_band()
+    assert points and any("wide against input sds" in line for line in lines)
+
+
+def test_a_pair_that_differs_in_more_than_block_n_is_refused():
+    """Two arms differing in the swizzle too would give a swizzle slope."""
+    pair = (PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+            / "mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json",
+            PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+            / "mixtral-8x7b-bf16-r1024-g16-n64-69f35a.report.json")
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_two_point_alpha_a(pair)
+
+
+def test_a_missing_corpus_file_refuses_rather_than_defaulting(tmp_path):
+    """A band whose provenance cannot be read is a band that cannot be checked."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_two_point_alpha_a((tmp_path / "a.json", tmp_path / "b.json"))
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_prior_sd(tmp_path / "NOISE_FLOOR.json")
+
+
+def test_the_band_provenance_and_its_width_reach_the_plan(capsys):
+    """P1 must carry where its band came from and how wide it is against its inputs."""
+    assert BND.main(["--dry-run", "--capability", "9.0", "--power-draws",
+                     "20", "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "mixtral-8x7b-bf16-r1024-g1-n256" in out
+    assert "wide against input sds" in out
+
+
+def test_the_sharpness_ceiling_beats_the_two_point_slope_it_replaces():
+    """0.025 is no longer "half the band width", and the number did not move.
+
+    Widening the band would have carried a half-the-width ceiling to 0.14 and
+    made V6 pass on an estimator six times looser. The bar is instead the
+    sharpest two-point sd in the corpus, which is what a three-point fit has to
+    beat to have replaced anything.
+    """
+    sharpest = min(p.sd for p in BND.published_two_point_alpha_a())
+    assert BND.ALPHA_A_SD_CEILING < sharpest
+    assert BND.ALPHA_A_SD_CEILING < (BND.ALPHA_A_BAND[1]
+                                     - BND.ALPHA_A_BAND[0]) / 2
+
+
+# --------------------------------------------------------------------------
+# THE INSTRUMENT AND ITS COLUMNS (audit A7), AND PROVENANCE (A5).
+# --------------------------------------------------------------------------
+
+def test_nothing_here_calls_the_retired_instrument():
+    """`time_call` timed with per-iteration synchronises and no L2 flush.
+
+    The roof every alpha here is scored against was measured queue-deep, so the
+    two were never comparable: 0.18-0.30 ms of host enqueue inside the measured
+    interval, a per-card bias of 8-16% in the fitted alpha at the smallest
+    cells. The symbol still exists over in the sweep and refuses when called,
+    which is why probing for it would have kept passing while meaning nothing.
+    """
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    assert "SWEEP.time_call" not in source.replace(
+        "The private `SWEEP.time_call` this used", "")
+    assert "timing.time_kernel(" in source
+
+
+def test_a_timed_row_keeps_every_instrument_column_through_the_csv(tmp_path):
+    """cells.csv is what outlives the pod, so the instrument travels on the row.
+
+    A row that carries `instrument` can be excluded by a later reader; a row
+    that does not cannot, and the rows this file wrote before 2026-09-02 came
+    from an instrument that is not comparable with the roof.
+    """
+    prov = BND.PV.provenance_block(instrument="queue-deep/test", iters=None)
+    row = BND.Sample(64, 128, 3, 384, 1536, 1, 1.25, 1.2, 0.01, 512,
+                     instrument="queue-deep/test", warmup_ms=300.0, trials=3,
+                     l2_flush=True, sm_clock_load_mhz=1755.0,
+                     clock_level_ok=True, clock_drift_ok=False,
+                     host_bound=False)
+    path = tmp_path / "cells.csv"
+    BND.append_sample(path, row, prov)
+    header = path.read_text().splitlines()[0].split(",")
+    for column in ("instrument", "warmup_ms", "iters", "trials",
+                   "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
+                   "l2_flush"):
+        assert column in header
+    assert "prov_git_sha" in header and "prov_gpu_name" in header
+    _, back = BND.read_samples(path)
+    assert back[0].instrument == "queue-deep/test"
+    assert back[0].warmup_ms == 300.0 and back[0].trials == 3
+    assert back[0].clock_level_ok is True and back[0].clock_drift_ok is False
+    assert back[0].l2_flush is True
+
+
+def test_a_row_from_before_the_instrument_reads_back_as_absent(tmp_path):
+    """Not as a default. Those rows were timed by the retired loop.
+
+    "Flushed" and "level ok" are claims, and a resumed directory whose older
+    half makes them by omission is worse than one that says nothing.
+    """
+    path = tmp_path / "old.csv"
+    path.write_text("block_n,block_m,tiles,rows_per_expert,tokens,rep,ms_p50,"
+                    "ms_min,ms_stdev,iters,status,detail\n"
+                    "64,128,3,384,1536,1,1.25,1.2,0.01,50,ok,\n")
+    _, back = BND.read_samples(path)
+    assert back[0].instrument == ""
+    assert back[0].clock_level_ok is None and back[0].clock_drift_ok is None
+    assert back[0].l2_flush is False
+
+
+def test_a_planted_row_never_claims_the_real_instrument():
+    """"Not measured" is a value in the column, never an absence.
+
+    `instrument` is one of the five keys a publish gate reads at the top of a
+    report, and a planted row carrying TIMING_BASIS would satisfy that gate
+    while describing an instrument no process ran.
+    """
+    args = args_for(capability="9.0", group_m=16, reps=2)
+    rho = BND.achieved_rho(MIXTRAL, 2, alpha_b=0.61, alpha_a=0.14)
+    samples = BND.planted_samples(
+        MIXTRAL, args, alpha_b=0.61, alpha_a=0.14, ridge=rho,
+        bandwidth_gbps=BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho, b=2,
+        block_ns=(64,), subjects=(64,), noise=0.002, seed=0)
+    assert {s.instrument for s in samples} == {SWEEP.SYNTHETIC_INSTRUMENT}
+    assert SWEEP.SYNTHETIC_INSTRUMENT != BND.SWEEP.timing_basis()
+
+
+def test_the_run_id_is_the_shared_one_and_refuses_a_missing_card():
+    """Three scripts each re-implemented this rule and each left a knob out."""
+    args = args_for(capability="9.0")
+    assert BND.default_run_id(args, "NVIDIA H200").startswith("nvidia_h200-")
+    with pytest.raises(BND.PV.NoCard):
+        BND.default_run_id(args, "")
+
+
+def test_the_resolved_plant_noise_never_enters_the_run_id():
+    """It is derived from the cells the id names, so it would change mid-sweep.
+
+    An id that depends on its own directory's contents is the resume collision
+    this study has already paid for, arriving from the other direction.
+    """
+    args = args_for(capability="9.0")
+    assert args.plant_noise is None
+    # Two runs that will RESOLVE different noises -- one on a quiet pod, one on
+    # a noisy one -- must still share a directory, or a resume would re-measure
+    # every cell it already had.
+    assert BND.default_run_id(args, "h200") == BND.default_run_id(
+        args_for(capability="9.0"), "h200")
+    # And the operator's own choice is a different experiment's directory.
+    assert BND.default_run_id(args, "h200") != BND.default_run_id(
+        args_for(capability="9.0", plant_noise=0.018), "h200")
+
+
+def test_the_plan_prices_what_the_instrument_charges():
+    """The old estimate multiplied a per-call time by a call count.
+
+    `time_kernel` warms for a DURATION and runs `--trials` trials each sized to
+    `--cell-budget-ms` of kernel time, so a timing costs the same wall clock
+    whatever the kernel's own duration is, and the old one under-priced every
+    fast cell.
+    """
+    args = args_for(capability="9.0", reps=3, trials=2, warmup=100.0,
+                    cell_budget_ms=200.0)
+    plan = BND.build_plan(args, MIXTRAL, 2, (9, 0), 160.3, 4374.5)
+    per_timing_ms = 100.0 + 2 * 200.0
+    assert plan.seconds == pytest.approx(
+        plan.timings * per_timing_ms / 1e3)
+
+
+# --------------------------------------------------------------------------
+# THE EXIT CODES AND THE ONE GREPPABLE LINE (audit A4/A5's contract).
+# --------------------------------------------------------------------------
+
+def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does(capsys):
+    """The driver's summary once grepped free text and matched prose 18 times.
+
+    So: one RESULT line per scored gate, none from anything that is not one, and
+    the code the process returns recomputable from the log it printed.
+    """
+    code = BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "9", "--draws", "40", "--power-draws", "40",
+                     "--plant-noise", "0.004", "--fail-on-gate"])
+    out = capsys.readouterr().out
+    parsed = exit_codes.parse_result_lines(out)
+    assert [r.name for r in parsed] == ["S1", "S2", "S3", "S4", "S5"]
+    assert out.count("RESULT: ") == len(parsed)
+    assert exit_codes.classify_text(out) == code
+
+
+def test_a_refusal_before_measuring_exits_refused_and_not_one(capsys):
+    """`raise SystemExit("sentence")` exits 1, which is CLAIM_FAIL's code.
+
+    A run that refused before measuring anything then looked to the driver like
+    a measured run whose claim was refuted.
+    """
+    assert BND.main(["--tiles", "32,256", "--capability", "9.0"]) \
+        == exit_codes.REFUSED
+    assert "REFUSED" in capsys.readouterr().out
+
+
+def test_a_claim_that_did_not_pass_is_a_result_without_fail_on_gate():
+    """CLAIM_FAIL is softened to DONE without the flag; INVALID never is.
+
+    C4 is PREDICTED to fail at GROUP_SIZE_M=1, and re-running until it passes is
+    the failure mode the exit table is named against.
+    """
+    args = args_for(capability="9.0")
+    claim_failed = [BND.Gate("VALIDITY", "V0 x", "", "", True, ""),
+                    BND.Gate("CLAIM", "C4 x", "", "", False, "")]
+    invalid = [BND.Gate("VALIDITY", "V0 x", "", "", False, ""),
+               BND.Gate("CLAIM", "C4 x", "", "", True, "")]
+    assert BND._exit_over(claim_failed, args) == exit_codes.DONE
+    assert BND._exit_over(invalid, args) == exit_codes.INVALID
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(claim_failed, strict) == exit_codes.CLAIM_FAIL
+
+
+# --------------------------------------------------------------------------
+# WHAT KIND OF NOISE THE INTERVALS ARE (B14, R5).
+# --------------------------------------------------------------------------
+
+def test_the_report_states_the_bootstrap_scope_and_carries_the_floor():
+    """Two different kinds of noise, and only one of them is in the bootstrap.
+
+    These resamples are of within-process warm repeats: one process, one
+    allocation, one clock state. Every cross-arm difference this study publishes
+    is a between-process comparison, so an interval from here is a LOWER bound
+    on the uncertainty of one, and NOISE_FLOOR.json's prior_sd is the only
+    measured upper bound the repo has.
+    """
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "WITHIN-PROCESS WARM REPEATS" in text
+    assert "cross-arm floor" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
+        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert "within-process" in payload["bootstrap"]["scope"]
+    assert payload["bootstrap"]["mde_alpha_a"] == pytest.approx(
+        BND.mde_one_sample(payload["bootstrap"]["alpha_a_sd"]))
+
+
+def test_the_published_floor_is_read_from_the_file_not_quoted():
+    """A literal here would silently stop describing a regenerated file."""
+    value, source = BND.published_prior_sd()
+    assert value == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert "s3-vs-s4" in source
+
+
+def test_help_renders(capsys):
+    """argparse expands `%` in help text, so a formatted percentage must escape it.
+
+    Caught live: `--plant-noise`'s help gained an f-string percentage while this
+    slice was being written and `--help` died with "unsupported format
+    character ')'". Nothing else in the suite runs the parser's renderer, and a
+    script whose --help raises is a script nobody can find the flag in.
+    """
+    with pytest.raises(SystemExit) as exc:
+        BND.build_parser().parse_args(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "--plant-noise" in out and "--trials" in out
+
+
+# --------------------------------------------------------------------------
+# THE BAND'S PROVENANCE WHERE IT IS ACTUALLY SCORED (review of finding 32).
+# The plan output was corrected and the GATE was not, so `--dry-run` printed
+# the two committed reports while report.txt, report.json and the RESULT line's
+# context went on naming four A100 slopes that are in no file. Everything below
+# scores a planted run rather than grepping a plan, because a plan scores no
+# gates and that is exactly how the surviving copy went untested.
+# --------------------------------------------------------------------------
+
+def _break_the_corpus(monkeypatch):
+    """Make the committed BN pair unreadable, through the REAL refusal path.
+
+    `published_two_point_alpha_a` binds `PUBLISHED_BN_PAIR` as a default at
+    definition time, so patching the constant would silently do nothing and the
+    test would pass by not testing. This re-points the function at two paths
+    that do not exist, so what the callers see is the refusal the real function
+    raises with the real message.
+    """
+    real = BND.published_two_point_alpha_a
+    monkeypatch.setattr(
+        BND, "published_two_point_alpha_a",
+        lambda *a, **k: real((ROOT / "nope-a.json", ROOT / "nope-b.json")))
+
+
+def test_the_scored_c1_gate_carries_the_committed_provenance():
+    """The gate, not the plan: what report.txt and report.json actually say."""
+    _, gates, payload = _planted_run(16, noise=0.004)
+    c1 = gates["C1"]
+    printed = "\n".join(c1.render())
+    assert "d66ad3.report.json" in printed and "16cc16.report.json" in printed
+    assert "alpha_a band [0.10, 0.38]" in printed
+    for phantom in ("0.106", "0.102", "0.129", "0.119", "ai_model.py's 0.143"):
+        assert phantom not in printed, f"{phantom} is back in the gate"
+    # And the same text is what leaves the pod in the JSON.
+    blob = json.dumps(payload, default=str)
+    for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        assert phantom not in blob, f"{phantom} reached report.json"
+
+
+def test_c1_prints_the_band_lines_it_is_handed():
+    """`analyse_run` threads `check_alpha_a_band`'s lines down to the gate.
+
+    The band is re-derived once, before any GPU time, and the gate prints THAT
+    derivation rather than a second one: two copies of a provenance is how the
+    corrected one and the stale one ended up in the same report.
+    """
+    _, band_lines = BND.check_alpha_a_band()
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False, band_lines=band_lines)
+    assert gate.lines[:len(band_lines)] == band_lines
+
+
+def test_the_gate_refuses_in_words_when_the_band_cannot_be_re_read(monkeypatch):
+    """The FAIL branch: a corpus that no longer reads back.
+
+    Scoring happens after the pod time is spent, so the gate says so on the page
+    instead of raising the report away -- and it must never fall back to a
+    remembered sentence, which is the whole finding.
+    """
+    _break_the_corpus(monkeypatch)
+    lines = BND.band_provenance_lines()
+    assert len(lines) == 1 and lines[0].startswith("BAND PROVENANCE UNREADABLE")
+    empty = BND.Decomposition("EXA", None, None, None, None, 0, 2, (), (), (),
+                              "nothing")
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    gate = BND.gate_alpha_a(empty, boot, sharp=False)
+    assert any("BAND PROVENANCE UNREADABLE" in ln for ln in gate.lines)
+    assert not any("0.106" in ln for ln in gate.lines)
+
+
+def test_c1_says_why_it_read_unknown_when_the_estimator_is_not_sharp():
+    """UNKNOWN with a fitted number beside it is otherwise unreadable."""
+    fit = BND.Decomposition("EXA", None, 0.9, 0.2, 0.0, 4, 3, (0.001,),
+                            ("BN=64 BM=128",), (0.5,), "planted")
+    boot = BND.Bootstrap(10, {}, {}, 0.4, 0.01, None, {}, "planted")
+    gate = BND.gate_alpha_a(fit, boot, sharp=False)
+    assert gate.passed is None and "C6" in gate.observed
+    assert BND.gate_alpha_a(fit, boot, sharp=True).passed is True
+
+
+# --------------------------------------------------------------------------
+# C6, THE SHARPNESS GATE: THE RULE IT STATES AND THE KIND IT IS.
+# --------------------------------------------------------------------------
+
+def test_the_sharpness_rule_states_the_derivation_the_ceiling_actually_has():
+    """"Half the width of the band" is arithmetically false and was printed.
+
+    Half of the [0.10, 0.38] band is 0.14, five times the 0.025 ceiling, and the
+    constant's own re-justification says the bar is the sharpest two-point sd in
+    the corpus instead. The rule string is what every report quotes, so it is
+    read from the corpus rather than written down.
+    """
+    boot = BND.Bootstrap(10, {}, {}, 0.01, 0.01, None, {}, "planted")
+    gate = BND.gate_sharpness(boot)
+    sharpest, source = BND.sharpest_two_point_sd()
+    assert sharpest == pytest.approx(
+        min(p.sd for p in BND.published_two_point_alpha_a()))
+    assert f"{sharpest:.3f}" in gate.rule and "d66ad3" in "".join(gate.lines)
+    assert "half the width" not in gate.rule.lower()
+    assert source in "".join(gate.lines)
+
+
+def test_the_sharpness_rule_says_so_when_the_corpus_cannot_be_read(monkeypatch):
+    """The FAIL branch of the bar's provenance: no bar quoted from memory."""
+    _break_the_corpus(monkeypatch)
+    sharpest, why = BND.sharpest_two_point_sd()
+    assert sharpest is None and why
+    gate = BND.gate_sharpness(
+        BND.Bootstrap(10, {}, {}, 0.30, 0.01, None, {}, "planted"))
+    assert "cannot be read here" in gate.rule
+    assert gate.passed is False          # it still scores; only the bar's
+    assert "0.043" not in gate.rule      # provenance is missing
+
+
+def test_a_pinning_that_cannot_resolve_alpha_a_is_a_result_not_a_broken_run():
+    """C6 is a CLAIM gate, and a G=1 arm therefore ends CLAIM_FAIL, not INVALID.
+
+    The shortfall is PREDICTED at GROUP_SIZE_M=1 and printed in the plan before
+    the pod is rented. As a VALIDITY gate it made `classify` return 3 INVALID --
+    nothing on the page quotable -- for a run whose alpha_b, C3 and C5 are
+    exactly what that pinning is for, and the session driver re-measured the arm
+    on every pass because 3 is not one of its finished codes.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    c6 = gates["C6"]
+    assert c6.kind == "CLAIM" and c6.passed is False
+    assert c6.result_line().startswith("RESULT: CLAIM C6 FAIL")
+    assert "C1 ALONE" in c6.invalidates
+    assert all(g.passed is True for g in gates.values() if g.kind == "VALIDITY")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    args = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), args) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL
+
+
+def test_a_real_validity_failure_at_the_same_pinning_is_still_invalid():
+    """The FAIL branch: the softening reaches CLAIM_FAIL and nothing else.
+
+    Planted onto the same G=1 gate list, one broken VALIDITY gate still takes
+    the arm to 3 with the flag off, which is what stops this change from being
+    a way of exiting 0 whatever happened.
+    """
+    _, gates, _ = _planted_run(1, noise=0.008)
+    broken = list(gates.values()) + [
+        BND.Gate("VALIDITY", "V0 planted", "", "", False, "planted failure")]
+    assert exit_codes.classify(g.scored() for g in broken) == exit_codes.INVALID
+    assert BND._exit_over(broken, args_for(capability="9.0")) \
+        == exit_codes.INVALID
+
+
+def test_the_plan_says_which_exit_code_a_g1_arm_is_expected_to_return(capsys):
+    """Predicted before the pod, in the same line that predicts the shortfall."""
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "1",
+              "--power-draws", "20", "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "CANNOT RESOLVE alpha_a" in out
+    assert "1 CLAIM_FAIL" in out and "NOT 3 INVALID" in out
+
+
+# --------------------------------------------------------------------------
+# WHAT AN UNDECIDABLE CLAIM ACTUALLY MAKES THE PROCESS RETURN.
+# The C2 guard's docstrings said an arm whose C2 has no power "exits
+# CLAIM_FAIL"; `_exit_over` reports CLAIM_FAIL as DONE unless --fail-on-gate,
+# and the session driver passes neither. The verdict travels on the RESULT
+# line, not in the exit code, and that is what this pins.
+# --------------------------------------------------------------------------
+
+def test_a_powerless_c2_travels_on_the_result_line_not_the_exit_code():
+    _, gates, _ = _planted_run(1, noise=0.008)
+    assert gates["C2"].passed is None
+    assert gates["C2"].result_line().startswith("RESULT: CLAIM C2 UNKNOWN")
+    assert exit_codes.classify(g.scored() for g in gates.values()) \
+        == exit_codes.CLAIM_FAIL
+    default = args_for(capability="9.0")
+    assert BND._exit_over(list(gates.values()), default) == exit_codes.DONE
+    strict = args_for(capability="9.0")
+    strict.fail_on_gate = True
+    assert BND._exit_over(list(gates.values()), strict) == exit_codes.CLAIM_FAIL

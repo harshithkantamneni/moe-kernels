@@ -12,13 +12,33 @@ miss fraction. It is the blend
 
 and BM appears in TWO of those terms while BN appears in exactly one. So
 sweeping BM moves alpha_a and alpha_b together and can never separate them --
-which is why the study's current alpha_a is a TWO-POINT slope between BN=64 and
-BN=256, stable on the A100 (0.106, 0.102, 0.129, 0.119) and not on the H200,
-where one of the two-point values comes out NEGATIVE and a miss fraction cannot
-be. Sweeping BN at FIXED BM moves exactly one term. Three or more BN values give
-a fit where there were slopes, and -- this is the half that matters more -- they
-leave a RESIDUAL, which is the only thing in this study that can say whether the
-three terms are ALL of it.
+which is why the study's current alpha_a is a TWO-POINT slope between one BN and
+another. Sweeping BN at FIXED BM moves exactly one term. Three or more BN values
+give a fit where there were slopes, and -- this is the half that matters more --
+they leave a RESIDUAL, which is the only thing in this study that can say
+whether the three terms are ALL of it.
+
+HOW MANY TWO-POINT SLOPES THIS REPO ACTUALLY HAS: ONE PAIR, AT TWO BLOCK_M.
+Until 2026-09-02 this file said the band [0.10, 0.15] came from "published
+two-point A100 slopes 0.106, 0.102, 0.129, 0.119". Those four numbers are in no
+file under `results/published`: the A100 BN=256 arm has no identifiable ladder
+at all (its compute reference is the 43.6x one this file exists to refuse, and
+ANCHOR_RESCORE withdrew it), and the qwen2 H200 BN=256 arm fits nothing either.
+The whole repo contains exactly one pair of arms that differ in BLOCK_SIZE_N and
+in nothing else -- H200 s4 mixtral at GROUP_SIZE_M=1, BN=64 against BN=256 --
+and `published_two_point_alpha_a()` reads it out of those two committed files
+rather than quoting it. It gives TWO values, from the two BLOCK_M that fit in
+both arms, and they disagree:
+
+    BM=32   alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds = 0.375  ->  0.286
+    BM=64   alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds = 0.750  ->  0.146
+
+each with a two-point sd of `PUBLISHED_ALPHA_SD/ds` = 0.086 and 0.043, so the
+gap between them is 1.5 sigma and neither is two sigma from zero. `ALPHA_A_BAND`
+is built from those two numbers and their sds, is 3-6x wider than the sd of its
+own inputs, and C1 says so on its own gate line: at this width a PASS is weak
+evidence and only a FAIL is informative. Fixing that width is what a THREE-point
+BN fit is for, which is this experiment.
 
 THE IDENTITY THAT MAKES BN THE LEVER, derived rather than asserted, because it
 is what the whole experiment rests on. One expert holding `r` rows runs
@@ -147,13 +167,40 @@ AND THE SWIZZLE DECIDES WHETHER ANY OF IT IS RESOLVABLE. The response moves with
 alpha_a as `g1 (1 - alpha_b)/(1 + phi)^2`, so the design's whole power is
 proportional to `1 - alpha_b`. At GROUP_SIZE_M=1 -- the production fallback, and
 this file's default because it is what the study pins elsewhere -- the corpus
-puts alpha near 0.93 and the lever is worth 15% of its size at GROUP_SIZE_M=16;
-planted at that swizzle, alpha_a's own spread is 0.11 to 0.13 against the 0.025
-C1 needs, at every rep count tried. So a G=1 run measures alpha_b, the residual
-and the invariance, and reads UNKNOWN on alpha_a; `--group-m 16` is the setting
-that resolves it, and `--reps` buys the rest as 1/sqrt(reps). S4 computes this
-before any GPU time and the plan prints it, because it is a property of the
-pinning and not of the pod.
+puts alpha near 0.93 and the lever is worth a small fraction of its size at
+GROUP_SIZE_M=16. THE SPREAD THAT FOLLOWS IS COMPUTED AND NEVER QUOTED: this file
+used to print "sd 0.11-0.13 ... at any rep count" as a literal string while the
+number the code produced at those settings was 0.176, so `design_power()` now
+plants the TRUTH world at the run's own noise and the plan prints the sd it got,
+beside the effect that sd can resolve (`mde_one_sample`). A G=1 run measures
+alpha_b and the invariance and reads UNKNOWN on alpha_a; `--group-m 16` is the
+setting that resolves it, and `--reps` buys the rest.
+
+AND AT G=1 IT DECIDES C2 AS WELL, WHICH IS WHY THAT GATE NOW HAS A POWER GUARD.
+The residual gate is the reason this experiment exists, and a gate is only a
+gate if both its outcomes can occur. They cannot at every pinning: planted at
+GROUP_SIZE_M=1 the MISSING world -- the same world `--self-test` uses to prove
+C2 discriminates -- comes back with chi2 1.78 against the 4.0 ceiling and PASSES,
+the identical verdict the TRUTH world gets, so a C2 PASS there would be reported
+as "the three terms are all of it" from a test that cannot say otherwise. The
+real run therefore plants that world ITSELF, at its own measured across-repeat
+spread and its own swizzle, BEFORE it scores C2 (`c2_power_probe`), and C2 reads
+UNKNOWN with the reason whenever the missing-term world would have passed. The
+audit that found this also found S4 passing only for planted noise at or below
+about 1%, against published H200 spreads of 0.76-1.82%, which is why
+`--plant-noise` now RESOLVES to a measured spread instead of defaulting to the
+middle of that range.
+
+THE INSTRUMENT IS THE SHARED ONE. Every cell is timed by
+`moe.bench.timing.time_kernel` under `TIMING_BASIS`: queue-deep, L2 flushed per
+iteration, SM clock sampled under load, warmup in MILLISECONDS of delivered load.
+The private `time_call` this file used until 2026-09-02 synchronised per
+iteration with events created inside the loop and no flush, which is not the
+instrument the compute roof was measured with; it let 0.18-0.30 ms of host
+enqueue inside the measured interval, a per-card bias of 8-16% in the fitted
+alpha at the smallest ladder cells. Every timing on disk from before that change
+is therefore not comparable with the roof this file scores against, and the
+`instrument` column on every row says which one produced it.
 
 WHAT IT WRITES. Under `$MOE_RESULTS_DIR`, else `/workspace/results` (the RunPod
 network volume, which outlives the pod), else `<repo>/results`:
@@ -164,22 +211,48 @@ network volume, which outlives the pod), else `<repo>/results`:
     <results>/bn_decomposition/<run-id>/report.json   fits, gates, provenance
     <results>/bn_decomposition/<run-id>/triton-cache/ per-(BN,BM) compile evidence
 
-`cells.csv` is appended and flushed per timing and a re-run resumes it. The run
-id carries EVERY swept knob AND the card, because the results root is a network
-volume shared between pods and this repo has already had one card silently
-report another's timings twice.
+`cells.csv` is appended and flushed per timing and a re-run resumes it. Each row
+carries the `KernelTiming` columns the instrument produced (instrument,
+warmup_ms, iters, trials, sm_clock_load_mhz, clock_level_ok, clock_drift_ok,
+l2_flush) and the run's `provenance` columns, so a row can be attributed to a
+commit, a card and a ruler without the report beside it. The run id is built by
+`moe.bench.provenance.run_id` from EVERY swept knob AND the card, because the
+results root is a network volume shared between pods and this repo has already
+had one card silently report another's timings twice.
+
+HOW IT EXITS. Through `moe.bench.exit_codes.classify`, over the same gate
+objects that printed the report: 0 DONE, 1 CLAIM_FAIL, 2 REFUSED, 3 INVALID,
+4 ERROR. Every scored gate prints exactly one `RESULT: <KIND> <NAME> <VERDICT>
+<detail>` line at column zero and nothing else in the output has that shape, so
+the session driver reads verdicts rather than grepping prose -- the failure that
+once let a REFUSED log's pre-registered `C1 ... [PASS]` be summarised as a
+measurement.
+
+AND WHAT A GROUP_SIZE_M=1 ARM EXITS WITH, because that arm is scheduled
+unconditionally and two of its gates are PREDICTED not to pass there. C4 is
+predicted to FAIL and C6, the estimator's sharpness, is predicted to FAIL with
+it: both are CLAIM gates, so `classify` returns 1 CLAIM_FAIL and `_exit_over`
+reports that as 0 without `--fail-on-gate`, which is what the driver's ledger
+reads as finished. It is NOT 3 INVALID. C6 was a VALIDITY gate until 2026-09-02
+and INVALID is what a G=1 arm returned, so the driver logged every one of them
+RETRY and re-measured 11 GPU minutes on every pass, while the report under it
+read UNKNOWN on alpha_a and PASS on everything a G=1 run is there for. INVALID
+means nothing on the page may be quoted, and a predicted shortfall in one
+estimator's power is not that; see `gate_sharpness`. The failing gates are still
+on the page, still one RESULT line each, and `--fail-on-gate` still returns the
+1 for a caller that wants a claim shortfall to be an error.
 
 OFF GPU. `--dry-run` prints the plan, the resource bill, the per-cell
-predictions and the cost. `--self-test` plants four worlds -- the exact model,
-the model with a term missing, a world with no activation re-read at all, and a
-noise-only world -- and checks the gates come out DIFFERENT in each, which is
-the claim that they discriminate rather than the claim that they pass.
+predictions, the computed design power and its MDE, and the cost. `--self-test`
+plants four worlds -- the exact model, the model with a term missing, a world
+with no activation re-read at all, and a noise-only world -- and checks the gates
+come out DIFFERENT in each, which is the claim that they discriminate rather
+than the claim that they pass.
 """
 from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import importlib.util
 import json
 import math
@@ -196,6 +269,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 
 
@@ -223,11 +298,19 @@ def _load_sweep():
               "ComputeReference",
               "ladder_points", "make_cell", "tile_resources",
               "parse_capability", "tokens_for_rows", "rows_quantum",
-              "results_root", "scaled_iters", "useful_flops",
+              "results_root", "useful_flops",
               "weight_bytes_per_expert", "activation_bytes_per_row",
               "activation_slope_ms",
               "resolve_ridge", "RidgeUnavailable", "missing_gpu_stack",
-              "find_override", "count_new", "time_call", "balanced_ids")
+              "find_override", "count_new", "balanced_ids",
+              # THE INSTRUMENT'S NAMES, not the retired loop's. `time_call` was
+              # in this list until 2026-09-02 and its presence was the only
+              # thing standing between this file and a pod run timed with an
+              # instrument the roof was never measured with. It is deliberately
+              # NOT probed for any more: the symbol still exists over there and
+              # raises `RetiredInstrument` when called, so asking for it would
+              # keep passing while meaning nothing.
+              "timing_basis", "reference_clock_mhz", "SYNTHETIC_INSTRUMENT")
     missing = [n for n in needed if not hasattr(module, n)]
     if missing:
         raise SystemExit(
@@ -255,6 +338,35 @@ def _load_sweep():
 
 
 SWEEP = _load_sweep()
+
+
+def _load_power():
+    """Load the study's power arithmetic BY PATH, for the same reason as the fit.
+
+    `scripts/replicate_noise_floor.py` holds the two-sample, external-sigma and
+    paired MDE forms and the normal and Student quantiles they are built on. An
+    MDE quoted here from a fourth private copy of the same algebra is how "3.5x
+    underpowered" once turned into an argument about whether it meant 3.5 or 12,
+    so this file borrows the quantiles and names the ONE form it adds
+    (`mde_one_sample`) rather than re-deriving any of them.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "replicate_noise_floor", ROOT / "scripts" / "replicate_noise_floor.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    missing = [n for n in ("normal_ppf", "TEST_LEVEL", "TEST_POWER")
+               if not hasattr(module, n)]
+    if missing:
+        raise SystemExit(
+            "scripts/replicate_noise_floor.py no longer exports "
+            f"{', '.join(missing)}. Every MDE printed by this file is one of "
+            "that module's quantiles times a standard error; re-point the "
+            "import rather than inlining a z value.")
+    return module
+
+
+POWER = _load_power()
 
 TOLERANCE = SWEEP.PARALLEL_BRANCH_TOLERANCE
 MIN_MEMORY_TREADS = SWEEP.MIN_MEMORY_TREADS
@@ -296,11 +408,41 @@ DEFAULT_BLOCK_N = (32, 64, 128)
 #: model with, which is the state this whole experiment exists to leave.
 MIN_BN_POINTS = 3
 
-#: Predicted alpha_a. The published two-point A100 slopes are 0.106, 0.102,
-#: 0.129 and 0.119; `moe/bench/ai_model.py` derives 0.143 from the study's own
-#: ALPHA_BY_BLOCK_M pair; the H200 G=1 mixtral pair gives 0.146 read through
-#: (LIN). The band is those, rounded outward.
-ALPHA_A_BAND = (0.10, 0.15)
+#: The ONE pair of committed arms that differ in BLOCK_SIZE_N and in nothing
+#: else, and the only measurement of alpha_a anywhere in this repository. Both
+#: are H200 s4, mixtral, GROUP_SIZE_M=1, the same session, the same ridge.
+PUBLISHED_BN_PAIR = (
+    ROOT / "results" / "published" / "2026-09-01-nvidia_h200-alpha-surface-s4"
+    / "mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json",
+    ROOT / "results" / "published" / "2026-09-01-nvidia_h200-alpha-surface-s4"
+    / "mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json",
+)
+
+#: Where the cross-arm alpha floor lives. Read, never quoted: `PUBLISHED_ALPHA_SD`
+#: below is the literal and `published_prior_sd` is what checks it still is.
+NOISE_FLOOR_PATH = ROOT / "results" / "published" / "NOISE_FLOOR.json"
+
+#: Predicted alpha_a, PRE-REGISTERED AS A LITERAL AND CHECKED AGAINST THE FILES
+#: IT CAME FROM. `alpha_a_band_from_published` re-derives it from
+#: `PUBLISHED_BN_PAIR` on every run and `check_alpha_a_band` refuses when the two
+#: disagree, so the band cannot quietly stop describing the corpus.
+#:
+#: WHAT IT USED TO SAY AND WHY THAT MATTERED. Until 2026-09-02 this was
+#: (0.10, 0.15) "from the published two-point A100 slopes 0.106, 0.102, 0.129,
+#: 0.119". Those four numbers exist in no file under results/published. The two
+#: that do exist come from the one BN pair above and read 0.286 (BM=32) and
+#: 0.146 (BM=64) with two-point sds of 0.086 and 0.043, so the retired band
+#: excluded the larger of its own two inputs: a measured 0.28 would have printed
+#: "FAIL high" against a band the repo's own data already sat outside.
+#:
+#: WHAT IT SAYS NOW: both measured slopes, each widened by its own sd, rounded
+#: outward to a hundredth. That is 0.28 wide against input sds of 0.043-0.086,
+#: i.e. 3.2 to 6.5 times the spread of the numbers that built it, and C1's gate
+#: line says so: a PASS inside a band this wide is weak evidence and only a FAIL
+#: is informative. Narrowing it is what a THREE-point BN fit is for, and that is
+#: the experiment. Widening rather than keeping the old width is the honest
+#: direction: the old width was not a tighter prior, it was a wrong one.
+ALPHA_A_BAND = (0.10, 0.38)
 
 #: TEMPO (arXiv:2608.13057) publishes these for the weight-side re-read, in two
 #: configurations. They are the closest prior work and the only external number
@@ -338,8 +480,24 @@ STRUCTURE_CORRELATION = 0.90
 
 #: alpha_a's bootstrap spread has to be smaller than this or C1 cannot
 #: distinguish the predicted band from its alternatives and reads UNKNOWN
-#: instead of PASS. Half the band width: an estimator whose interval is wider
-#: than the hypothesis it tests has not tested it.
+#: instead of PASS.
+#:
+#: IT IS NO LONGER HALF THE BAND WIDTH, and the number did not move. It was
+#: written as "half the width of [0.10, 0.15]", so widening the band to the one
+#: the corpus supports would have carried the ceiling to 0.14 and made C6 pass
+#: on an estimator six times looser than the one it was written to require. A
+#: gate that loosens because its hypothesis got vaguer is not a gate. The bar is
+#: instead the thing this experiment claims to improve on: the SHARPEST
+#: two-point slope in the corpus has sd 0.043 (BM=64), and a three-point fit
+#: that cannot beat the two-point reading it replaces has not replaced it. 0.025
+#: is comfortably inside that, and `--self-test` is what shows whether a given
+#: pinning reaches it.
+#:
+#: `gate_sharpness` READS that 0.043 back out of the corpus rather than printing
+#: this paragraph's copy of it, because the gate line and the constant's
+#: justification drifted apart once already: the rule string went on saying
+#: "half the width of the [0.10, 0.38] band" for a band whose half-width is
+#: 0.14, five times this ceiling, beside the very widening that refuted it.
 ALPHA_A_SD_CEILING = 0.025
 
 #: A compute reference must imply at least this fraction of the ATTACHED card's
@@ -372,11 +530,48 @@ MONOTONE_SIGMA = 2.0
 BOOTSTRAP_DRAWS = 1000
 
 #: The published cross-arm floor on alpha, carried for context only and never
-#: used as a gate: results/published/NOISE_FLOOR.json records a paired s3-vs-s4
-#: sd of 0.0323 over 11 cells and a prior sd of 0.0228. This run's own bootstrap
-#: is what C2 is scored against, because a floor measured on other arms cannot
-#: know how noisy THIS pod was.
+#: used as a gate: `NOISE_FLOOR_PATH` records a paired s3-vs-s4 sd of 0.0323 over
+#: 11 cells and a `prior_sd` of 0.0228 (that sd over root two, an upper bound
+#: because it confounds num_stages). This run's own bootstrap is what C2 is
+#: scored against, because a floor measured on other arms cannot know how noisy
+#: THIS pod was.
+#:
+#: THE TWO ARE DIFFERENT KINDS OF NOISE AND THE REPORT NOW PRINTS BOTH. The
+#: bootstrap resamples WITHIN-PROCESS WARM REPEATS: one process, one allocation,
+#: one clock state, repeats interleaved round-robin. It cannot see anything that
+#: changes between processes -- a re-import, a re-allocation, a different pod
+#: hour -- and every published cross-arm difference in this study is exactly
+#: that kind of comparison. So an interval from here is a LOWER bound on the
+#: uncertainty of any number compared across arms, and this floor is the only
+#: measured upper bound the repo has. Quoting the first alone is how an effect
+#: smaller than the floor gets a sigma that makes it look resolved.
 PUBLISHED_ALPHA_SD = 0.0228
+
+#: `--plant-noise` when nothing measured is available to resolve it from: the
+#: WORST across-repeat spread the corpus has shown (H200 ladders, 1.82%), not
+#: the middle of the range. S4's design-power verdict is a claim about whether
+#: the pod run can answer P1, and a claim like that scored at the median of the
+#: observed spreads is scored at a pod half the sessions were noisier than. The
+#: audit measured what that choice bought: at 0.8% S4 passes at G=16 and at
+#: 1.5-2.0% it fails, so the old default made the design look resolvable at a
+#: spread the H200 has repeatedly exceeded.
+PLANT_NOISE_FALLBACK = 0.0182
+PLANT_NOISE_FALLBACK_SOURCE = (
+    "the worst published across-repeat spread (H200 s4 ladders 0.76-1.82%, "
+    "A100 0.48-0.61%); nothing measured was available to resolve it from")
+
+#: The token `--plant-noise` contributes to the run id when it was not given.
+#: The RESOLVED value must never enter the id: on a real run it is derived from
+#: the cells the id names, so an id containing it would depend on its own
+#: directory's contents and change halfway through the sweep.
+PLANT_NOISE_AUTO = "auto"
+
+#: Bootstrap draws behind the C2 power probe and the plan's design-power line,
+#: as distinct from the draws behind the report's own intervals. Fewer, because
+#: what is read off them is one sd rather than a published interval: the
+#: relative error of a bootstrap sd is about 1/sqrt(2 draws), which is 5% here,
+#: and the probe runs twice on the pod path where each draw rebuilds every arm.
+POWER_PROBE_DRAWS = 200
 
 #: The card slug a run id carries when no device is attached: every --dry-run
 #: and every --self-test on a laptop. Visible rather than blank, so a laptop
@@ -421,6 +616,240 @@ PLANTED_ALPHA_B = {1: 0.94, 8: 0.65, 16: 0.61, 64: 0.71}
 def planted_alpha_b(group_m: int) -> float:
     """The corpus's alpha_b at this swizzle, or the G=1 value as the hard case."""
     return PLANTED_ALPHA_B.get(group_m, PLANTED_ALPHA_B[1])
+
+
+# --------------------------------------------------------------------------
+# What the corpus actually says, read out of the committed files rather than
+# quoted from them. Every number in this section had a version that was typed
+# into a comment and did not survive a check against its own source.
+# --------------------------------------------------------------------------
+
+class CorpusMissing(RuntimeError):
+    """A committed file this file's pre-registration rests on is not readable.
+
+    Raised, not defaulted around. A band whose provenance cannot be read is a
+    band whose provenance cannot be checked, and this file already shipped one
+    of those: four A100 slopes that no file ever contained.
+    """
+
+
+@dataclass(frozen=True)
+class TwoPoint:
+    """One two-point alpha_a slope, and everything needed to doubt it."""
+
+    block_m: int
+    block_n_lo: int
+    block_n_hi: int
+    alpha_lo: float
+    alpha_hi: float
+    #: `BM (1/BN_lo - 1/BN_hi)`, the change in `s = BM/BN` the pair spans. The
+    #: whole two-point weakness lives here: it is 0.375 at BM=32 and 0.75 at
+    #: BM=64, so the SAME alpha difference reads twice as large a slope at the
+    #: smaller tile, and the sd divides by it too.
+    delta_s: float
+    slope: float
+    sd: float
+    source: str
+
+    def line(self) -> str:
+        return (f"BM={self.block_m:3d}  alpha {self.alpha_lo:.4f} "
+                f"(BN={self.block_n_lo}) - {self.alpha_hi:.4f} "
+                f"(BN={self.block_n_hi}) over ds {self.delta_s:.3f}  ->  "
+                f"alpha_a {self.slope:.3f} +/- {self.sd:.3f}")
+
+
+def published_prior_sd(path: Path | None = None) -> tuple[float, str]:
+    """`(prior_sd, source)` from NOISE_FLOOR.json. Raises rather than assuming.
+
+    The cross-arm floor, which is the only measured statement in this repo about
+    noise this run's own bootstrap cannot see (see `PUBLISHED_ALPHA_SD`). It is
+    read rather than quoted because the file is regenerated by
+    `scripts/replicate_noise_floor.py` and a literal here would silently stop
+    describing it.
+    """
+    path = path or NOISE_FLOOR_PATH
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise CorpusMissing(
+            f"{path} is not readable ({type(exc).__name__}), and it is the only "
+            "measured cross-arm alpha floor in this repository. Every interval "
+            "this run reports comes from within-process repeats and needs that "
+            "floor printed beside it to be read honestly.") from exc
+    sd = doc.get("prior_sd")
+    if not isinstance(sd, (int, float)) or not sd > 0:
+        raise CorpusMissing(f"{path} carries no positive prior_sd; got {sd!r}")
+    return float(sd), str(doc.get("prior_sd_source", "no source recorded in the file"))
+
+
+def published_two_point_alpha_a(pair=PUBLISHED_BN_PAIR, sigma: float | None = None
+                                ) -> list[TwoPoint]:
+    """Every two-point alpha_a the corpus supports, read out of the two reports.
+
+    THE SLOPE. (LIN) says `alpha = alpha_b + alpha_a s + BM/K` with `s = BM/BN`,
+    and BM is held fixed across the pair, so everything but the middle term
+    cancels and `alpha_a = (alpha(BN_lo) - alpha(BN_hi)) / (BM (1/BN_lo -
+    1/BN_hi))`. Two points, two unknowns, nothing left over: that is exactly the
+    state this experiment exists to leave, and reading it here is how the band
+    it leaves gets a provenance.
+
+    THE COLUMN IS `alpha_corrected`, the published alpha with the reference's
+    fixed cost removed, because that is the quantity the decomposition fits.
+    The raw `alpha` column gives 0.284 and 0.145 against this one's 0.286 and
+    0.146, so the choice moves nothing; it is stated because an unstated one is
+    how two readings of one number become an argument.
+
+    `sigma` is the sd of ONE arm's alpha; the difference of two carries
+    `sigma sqrt(2)`, and the slope that sd over `delta_s`. Default is the
+    published cross-arm floor, which is an upper bound and therefore the
+    conservative choice for a band this is going to be widened by.
+    """
+    if sigma is None:
+        sigma, _ = published_prior_sd()
+    docs = []
+    for path in pair:
+        try:
+            docs.append((path, json.loads(Path(path).read_text())))
+        except (OSError, ValueError) as exc:
+            raise CorpusMissing(
+                f"{path} is not readable ({type(exc).__name__}). It is one of "
+                "the two arms the pre-registered alpha_a band is derived from, "
+                "and a band derived from a file nobody can open is the defect "
+                "this function was written to remove.") from exc
+    (lo_path, lo_doc), (hi_path, hi_doc) = docs
+    bn_lo = int(lo_doc["fixed"]["BLOCK_SIZE_N"])
+    bn_hi = int(hi_doc["fixed"]["BLOCK_SIZE_N"])
+    if bn_lo == bn_hi:
+        raise CorpusMissing(
+            f"{lo_path.name} and {hi_path.name} both pin BLOCK_SIZE_N={bn_lo}, "
+            "so they are not a BN pair and no slope exists between them")
+    for key in ("GROUP_SIZE_M", "num_stages", "BLOCK_SIZE_K"):
+        if lo_doc["fixed"].get(key) != hi_doc["fixed"].get(key):
+            raise CorpusMissing(
+                f"{lo_path.name} and {hi_path.name} differ in {key} as well as "
+                "in BLOCK_SIZE_N, so the difference between them is not a "
+                "BLOCK_SIZE_N effect")
+    out: list[TwoPoint] = []
+    for bm_key, lo_fit in sorted(lo_doc.get("ladder", {}).items(),
+                                 key=lambda kv: int(kv[0])):
+        hi_fit = hi_doc.get("ladder", {}).get(bm_key)
+        if hi_fit is None:
+            continue
+        a_lo, a_hi = lo_fit.get("alpha_corrected"), hi_fit.get("alpha_corrected")
+        if a_lo is None or a_hi is None:
+            continue
+        bm = int(bm_key)
+        ds = bm * (1.0 / bn_lo - 1.0 / bn_hi)
+        if ds == 0:
+            continue
+        out.append(TwoPoint(bm, bn_lo, bn_hi, float(a_lo), float(a_hi), ds,
+                            (float(a_lo) - float(a_hi)) / ds,
+                            sigma * math.sqrt(2.0) / abs(ds),
+                            f"{lo_path.name} vs {hi_path.name}"))
+    if not out:
+        raise CorpusMissing(
+            f"{lo_path.name} and {hi_path.name} share no BLOCK_M with an "
+            "identifiable ladder in BOTH arms, so the repo contains no "
+            "two-point alpha_a at all and the band has no provenance")
+    return out
+
+
+def alpha_a_band_from_published(points: list[TwoPoint] | None = None
+                                ) -> tuple[float, float]:
+    """The band the corpus supports: every measured slope, widened by its own sd.
+
+    Rounded OUTWARD to a hundredth, so the band can only ever be looser than its
+    inputs and a rounding can never exclude a measurement that is inside.
+    """
+    points = points if points is not None else published_two_point_alpha_a()
+    lo = min(p.slope - p.sd for p in points)
+    hi = max(p.slope + p.sd for p in points)
+    return (math.floor(lo * 100.0) / 100.0, math.ceil(hi * 100.0) / 100.0)
+
+
+def check_alpha_a_band(band=ALPHA_A_BAND) -> tuple[list[TwoPoint], list[str]]:
+    """Re-derive the band and REFUSE when the literal no longer matches.
+
+    Called before any GPU time on every path that scores C1. The pre-registered
+    band stays a literal -- a hypothesis nobody can see is not pre-registered --
+    and this is what stops the literal outliving the files it came from, which
+    is the exact failure it is replacing.
+    """
+    points = published_two_point_alpha_a()
+    derived = alpha_a_band_from_published(points)
+    if tuple(round(v, 4) for v in derived) != tuple(round(v, 4) for v in band):
+        raise CorpusMissing(
+            f"the pre-registered alpha_a band {band} is not what the committed "
+            f"BN pair now says ({derived}). Either the corpus was re-published "
+            "or the literal was edited without its source; do not score C1 "
+            "against a band whose provenance no longer reads back.")
+    widest = max(p.sd for p in points)
+    narrowest = min(p.sd for p in points)
+    width = band[1] - band[0]
+    lines = [
+        f"alpha_a band [{band[0]:.2f}, {band[1]:.2f}], derived from the ONLY "
+        "pair of committed arms that differ in BLOCK_SIZE_N and nothing else:"]
+    lines += ["  " + p.line() for p in points]
+    lines += [
+        f"  source: {points[0].source}",
+        f"  the band is {width:.2f} wide against input sds of "
+        f"{narrowest:.3f}-{widest:.3f}, i.e. {width / widest:.1f}-"
+        f"{width / narrowest:.1f}x the spread of the numbers that built it. A "
+        "PASS inside it is weak evidence; a FAIL outside it is not. Narrowing "
+        "it is what a three-point BN fit is for, which is this run.",
+    ]
+    return points, lines
+
+
+# --------------------------------------------------------------------------
+# Power, in the one form this file adds to the study's shared arithmetic.
+# --------------------------------------------------------------------------
+
+def mde_one_sample(sd: float, *, level: float | None = None,
+                   power: float | None = None) -> float:
+    """Smallest alpha_a offset a single estimate with this sd can resolve.
+
+    `(z_{1-level/2} + z_{power}) sd`, the one-sample known-sigma form, which is
+    the design this file runs: ONE fit, one bootstrap sd, compared against a
+    pre-registered band rather than against a second arm.
+    `scripts/replicate_noise_floor.py` holds the two-sample, external-sigma and
+    paired forms and this is the fourth; naming it rather than reaching for
+    `mde_external_sigma` matters because that one carries a `sqrt(2)` for the
+    second arm this design does not have and would overstate the limit by 41%.
+
+    Raises on a non-positive sd: an MDE from no spread is not zero, it is
+    unknown, and zero is the value that would make every effect look resolvable.
+    """
+    if sd is None or not sd > 0:
+        raise ValueError(f"an MDE needs a positive sd, got {sd!r}")
+    level = POWER.TEST_LEVEL if level is None else level
+    power = POWER.TEST_POWER if power is None else power
+    return (POWER.normal_ppf(1.0 - level / 2.0) + POWER.normal_ppf(power)) * sd
+
+
+def mde_line(sd: float | None, *, what: str, assumption: str,
+             floor: float | None = None, floor_source: str = "") -> str:
+    """The one MDE sentence every plan and every report prints.
+
+    THE NOISE ASSUMPTION IS IN THE SENTENCE, not in a constant three screens
+    away, because an MDE is a statement about an assumed spread and quoting it
+    without one is how a limit becomes a fact. When `sd` is None the line says
+    the MDE is UNKNOWN and why; it never prints a number.
+    """
+    head = f"MDE ({what}, two-sided {POWER.TEST_LEVEL:.0%} at " \
+           f"{POWER.TEST_POWER:.0%} power): "
+    if sd is None or not sd > 0:
+        body = f"UNKNOWN, no spread to derive one from. Assumption: {assumption}"
+    else:
+        body = (f"{mde_one_sample(sd):.4f} in alpha_a, from sd {sd:.4f}. "
+                f"Assumption: {assumption}")
+    if floor:
+        body += (f". Beside it, the cross-arm floor {floor:.4f} ({floor_source}): "
+                 "this run's own bootstrap resamples WITHIN-PROCESS warm "
+                 "repeats and cannot see anything that changes between "
+                 "processes, so it is a lower bound and the floor is the "
+                 "repo's only measured upper one")
+    return head + body
 
 
 # --------------------------------------------------------------------------
@@ -906,7 +1335,24 @@ def structure_of(fit: Decomposition, cells, cfg, chi2: float | None
 
 @dataclass
 class Sample:
-    """One timing of one tread of one (BLOCK_N, BLOCK_M) setting. The CSV row."""
+    """One timing of one tread of one (BLOCK_N, BLOCK_M) setting. The CSV row.
+
+    THE INSTRUMENT'S OWN COLUMNS ARE PART OF THE ROW, not of the report beside
+    it. `instrument`, `warmup_ms`, `iters`, `trials`, `sm_clock_load_mhz`,
+    `clock_level_ok`, `clock_drift_ok` and `l2_flush` come straight off the
+    `moe.bench.timing.KernelTiming` that produced `ms_p50`. Until 2026-09-02
+    none of them existed here and the report recorded a warmup and an iteration
+    count from argv, which is how ladders warmed at 5 calls were compared with
+    ladders warmed at 20 and nothing in any file said so. A row that carries
+    `instrument` can be excluded by a later reader; a row that does not cannot.
+    A row from a planted world carries the sweep's `SYNTHETIC_INSTRUMENT`, so
+    "not measured" is a value in the column rather than an absence.
+
+    The clock flags are Optional and None means "not determined" -- no NVML, a
+    trial too short for the poller, no calibration to compare a level against --
+    never "fine". Both must be read: the drop-only flag they replace was the one
+    the audit found detecting whether the first sample caught the idle boost.
+    """
 
     block_n: int
     block_m: int
@@ -920,6 +1366,14 @@ class Sample:
     iters: int
     status: str = "ok"
     detail: str = ""
+    instrument: str = ""
+    warmup_ms: float = 0.0
+    trials: int = 0
+    l2_flush: bool = False
+    sm_clock_load_mhz: float | None = None
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
+    host_bound: bool | None = None
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
@@ -1455,9 +1909,40 @@ class Gate:
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def token(self) -> str:
+        """The one-token name this gate answers to on its RESULT line.
+
+        The first word of `name` -- V0, C2, S4 -- because
+        `moe.bench.exit_codes.result_line` requires a name with no whitespace
+        and the driver greps for these words. Taking it from `name` rather than
+        from a second table means the printed heading and the machine-readable
+        line can never disagree about which gate they are.
+        """
+        return self.name.split()[0]
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, token, verdict)` in `moe.bench.exit_codes`'s vocabulary."""
+        return (self.kind, self.token,
+                {True: exit_codes.PASS, False: exit_codes.FAIL,
+                 None: exit_codes.UNKNOWN}[self.passed])
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        `RESULT: <KIND> <NAME> <VERDICT> <detail>` at column zero, rendered and
+        read back by `moe.bench.exit_codes`. Nothing else this file prints has
+        that shape. The predecessor of this line was free text, and the session
+        driver's summary grep for `floor|sigma` matched a REFUSED log 18 times
+        and printed a pre-registered `C1 ... [PASS]` as measured output.
+        """
+        detail = f"{self.prediction} | saw {self.observed} | gate {self.rule}"
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
     def render(self) -> list[str]:
         tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
-        out = [f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
+        out = [self.result_line(),
+               f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
                f"         gate: {self.rule}",
                f"         saw:  {self.observed}"]
         if self.passed is not True and self.invalidates:
@@ -1467,13 +1952,28 @@ class Gate:
 
 
 def render_gates(gates: list[Gate]) -> list[str]:
+    """Every gate, each with exactly one RESULT line, then the tally.
+
+    The tally is prose and deliberately does not look like a result: a summary
+    line that could be parsed as a verdict is how a count of gates becomes a
+    gate.
+    """
     out: list[str] = []
     for g in gates:
         out += g.render()
     npass = sum(1 for g in gates if g.passed is True)
     nfail = sum(1 for g in gates if g.passed is False)
     nunk = sum(1 for g in gates if g.passed is None)
-    return out + ["", f"{npass} PASS, {nfail} FAIL, {nunk} UNKNOWN"]
+    if not gates:
+        # `classify([])` raises rather than returning DONE, for the reason the
+        # exit-code module gives: a check that examined nothing reports zero
+        # failures. Said in words here so a report with no gates does not end in
+        # a traceback.
+        return out + ["", "NO GATES WERE SCORED. Nothing on this page is a "
+                          "verdict."]
+    implied = exit_codes.classify(g.scored() for g in gates)
+    return out + ["", f"{npass} PASS, {nfail} FAIL, {nunk} UNKNOWN",
+                  f"the gates imply {exit_codes.describe(implied)}"]
 
 
 def gate_non_vacuity(counts: dict[str, int]) -> Gate:
@@ -1644,63 +2144,190 @@ def gate_identifiable(cells, primary: int) -> Gate:
                  f"against a tolerance of {TOLERANCE:.2f}."])
 
 
+def band_provenance_lines() -> list[str]:
+    """`check_alpha_a_band`'s lines, or ONE line naming why they cannot be read.
+
+    Every place that prints the band's provenance reads it from the two
+    committed reports through here. It exists because a gate must not RECITE a
+    provenance: until 2026-09-02 C1's own lines named four A100 slopes that are
+    in no committed file, the plan output was corrected and this path was not,
+    and nothing in the code could tell the two apart.
+
+    It refuses in words rather than raising. Scoring happens after the pod time
+    is already spent and an exception there would take the whole report with it;
+    a report saying its band cannot be re-derived is worth more than no report.
+    `_main` still calls `check_alpha_a_band` BEFORE measuring, where the same
+    failure is free and the run refuses outright.
+    """
+    try:
+        return list(check_alpha_a_band()[1])
+    except CorpusMissing as exc:
+        return [f"BAND PROVENANCE UNREADABLE, do not quote C1: {exc}"]
+
+
+def sharpest_two_point_sd() -> tuple[float | None, str]:
+    """The tightest two-point sd in the committed corpus, and where it is from.
+
+    This is what `ALPHA_A_SD_CEILING` is set against: the reading a three-point
+    fit exists to replace. Read rather than quoted, for the reason the constant
+    gives. The ceiling used to be justified as "half the band width", and half a
+    band that later widened is not a bar, it is whatever the hypothesis happened
+    to become.
+    """
+    try:
+        points = published_two_point_alpha_a()
+    except CorpusMissing as exc:
+        return None, str(exc)
+    best = min(points, key=lambda p: p.sd)
+    return best.sd, f"BM={best.block_m} of {best.source}"
+
+
 def gate_sharpness(boot: Bootstrap) -> Gate:
-    """Is the estimator sharp enough for C1 to mean anything."""
+    """C6: is the estimator sharp enough for C1 to mean anything.
+
+    A CLAIM GATE AND NOT A VALIDITY ONE, changed 2026-09-02, and the reason is
+    the shared table's own vocabulary. VALIDITY means the instrument broke and
+    NOTHING on the page may be quoted (`exit_codes`, INVALID); this gate says
+    one thing only, that alpha_a's interval is too wide for C1 to be tested,
+    which is exactly what its `invalidates` field has always said. alpha_b, the
+    invariance and the TEMPO comparison do not pass through alpha_a's spread and
+    stay quotable, and C1 already reads UNKNOWN on its own when `sharp` is
+    False, so the claim is not established either way.
+
+    WHAT IT COST AS A VALIDITY GATE. The spread is PREDICTED to miss this bar at
+    GROUP_SIZE_M=1: the design's power scales with `1 - alpha_b` and the corpus
+    puts alpha_b near 0.93 there. So every G=1 arm exited 3 INVALID, the session
+    driver reads anything but its listed finished code as RETRY, and the arm was
+    re-measured on every pass at 11 GPU minutes a time while its own report said
+    a G=1 run measures alpha_b and the invariance. A pinning whose power was
+    predicted, printed in the plan and then met is not a broken instrument. It
+    is a pre-registered expectation the world declined, which is what CLAIM_FAIL
+    is for and what C4 at the same pinning already was.
+    """
     sd = boot.alpha_a_sd
-    return Gate(VALIDITY, "V6 estimator sharpness",
-                "alpha_a's interval is narrower than the band it is tested "
-                "against",
-                f"bootstrap sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f}, half the "
-                f"width of the [{ALPHA_A_BAND[0]:.2f}, {ALPHA_A_BAND[1]:.2f}] "
-                "band",
+    sharpest, sharpest_source = sharpest_two_point_sd()
+    rule = f"bootstrap sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f}"
+    if sharpest is None:
+        rule += (", the sharpest two-point sd in the committed corpus, which "
+                 f"cannot be read here: {sharpest_source}")
+    else:
+        rule += (f", inside the {sharpest:.3f} sd of the sharpest two-point "
+                 "slope this three-point fit replaces. NOT half the band "
+                 f"width: the band is {ALPHA_A_BAND[1] - ALPHA_A_BAND[0]:.2f} "
+                 "wide and half of it would be a looser bar than the reading "
+                 "being replaced")
+    return Gate(CLAIM, "C6 estimator sharpness",
+                "alpha_a's interval is tighter than the two-point reading it "
+                "replaces",
+                rule,
                 None if sd is None else sd <= ALPHA_A_SD_CEILING,
                 "no bootstrap spread" if sd is None else f"sd = {sd:.4f}",
-                "C1: an estimator whose interval is wider than the hypothesis "
-                "it tests has not tested it, and a PASS would be an artefact "
-                "of the band's width",
-                [boot.note])
+                "C1 ALONE, which reads UNKNOWN: an estimator whose interval is "
+                "wider than the hypothesis it tests has not tested it, and a "
+                "PASS would be an artefact of the band's width. alpha_b, C3 and "
+                "C5 do not pass through this spread and stay quotable",
+                [boot.note]
+                + ([] if sharpest is None
+                   else [f"the bar is read from {sharpest_source}"]))
 
 
-def gate_alpha_a(fit: Decomposition, boot: Bootstrap, sharp: bool) -> Gate:
+def gate_alpha_a(fit: Decomposition, boot: Bootstrap, sharp: bool,
+                 band_lines: list[str] | None = None) -> Gate:
+    """C1, scored against a band whose provenance is READ and never recited.
+
+    `band_lines` is `check_alpha_a_band`'s second return value, threaded from
+    the caller that already re-derived the band before spending a pod minute.
+    When nobody passes it this gate reads the corpus itself through
+    `band_provenance_lines` rather than printing a remembered sentence.
+
+    THIS GATE IS WHAT THE PROVENANCE FINDING WAS ABOUT. The retired text named
+    four A100 two-point slopes, 0.106, 0.102, 0.129, 0.119, that exist in no
+    committed file, and it survived the fix that corrected the plan output
+    because the plan and the gate printed the band from two different places.
+    The gate is the copy that matters: it is what report.txt shows, what
+    report.json carries under "gates", and what surrounds the RESULT line.
+    """
     lo, hi = ALPHA_A_BAND
     val = fit.alpha_a
     sd = boot.alpha_a_sd
     inside = None if (val is None or not sharp) else lo <= val <= hi
+    observed = ("not fitted" if val is None else
+                f"alpha_a = {val:.4f}"
+                + (f" +/- {sd:.4f}" if sd else " (no interval)"))
+    if val is not None and not sharp:
+        observed += " -- UNKNOWN, not scored: C6 says the interval is too wide"
+    lines = (list(band_lines) if band_lines is not None
+             else band_provenance_lines())
     return Gate(CLAIM, "C1 alpha_a", f"alpha_a lands in [{lo:.2f}, {hi:.2f}]",
                 f"{lo:.2f} <= alpha_a <= {hi:.2f} from the {fit.form} fit",
-                inside,
-                "not fitted" if val is None else
-                f"alpha_a = {val:.4f}"
-                + (f" +/- {sd:.4f}" if sd else " (no interval)"),
-                lines=["The band is the published two-point slopes (A100: "
-                       "0.106, 0.102, 0.129, 0.119), ai_model.py's 0.143 from "
-                       "the study's own ALPHA_BY_BLOCK_M pair, and the H200 "
-                       "G=1 mixtral pair's 0.146 -- all read through (LIN). A "
-                       "FAIL well ABOVE the band with a clean residual would "
-                       "say the two-point slopes were biased by the missing "
-                       "denominator; a FAIL at zero says BN does not move "
-                       "alpha at all and the activation re-read is not there."])
+                inside, observed,
+                lines=lines + [
+                    "A FAIL ABOVE the band with a clean residual would say both "
+                    "committed two-point slopes were biased low by the "
+                    "denominator the two-point form drops; a FAIL at or near "
+                    "zero says BN does not move alpha at all and there is no "
+                    "activation re-read to decompose. A PASS is weak: the two "
+                    "slopes above disagree by a factor of two and the band "
+                    "covers both, which is the width a three-point fit is here "
+                    "to narrow."])
 
 
 def gate_residual(fit: Decomposition, chi2: float | None, why: str,
-                  struct: Structure) -> Gate:
+                  struct: Structure, power: C2Power | None = None) -> Gate:
     """C2, and the one that matters more than the parameters.
 
     A fit always returns numbers. This asks whether the numbers describe the
     data: if the three terms are all of it, the residual is the measurement
     noise and chi2 is about 1. Structure in the residual means a term is
     missing, and `struct` names which candidate column it lines up with.
+
+    THE POWER GUARD, added 2026-09-02, and the reason it is here rather than in
+    the caller. This gate can PASS at a pinning where it cannot FAIL: planted at
+    GROUP_SIZE_M=1 the missing-term world comes back at chi2 1.78 against the
+    4.0 ceiling, which is the same PASS the TRUTH world gets, and the session
+    driver schedules that arm unconditionally. `power` is the verdict of a
+    planted MISSING world at THIS run's own swizzle and its own measured spread
+    (`c2_power_probe`), and when it did not discriminate this gate reads UNKNOWN
+    and says which. `power=None` means nobody asked -- the two calls that pass
+    None are the probe's own scoring and `--self-test`'s four worlds, both of
+    which ARE the question and must not ask it of themselves.
+
+    A guard is not a softening. UNKNOWN counts against a CLAIM gate exactly as
+    FAIL does (`moe.bench.exit_codes`), so an arm whose C2 has no power
+    CLASSIFIES as 1 CLAIM_FAIL and its C2 can never be quoted as model
+    completeness: the RESULT line says `CLAIM C2 UNKNOWN` and the reason is
+    beside it.
+
+    WHAT THE PROCESS ACTUALLY RETURNS IS 0 UNLESS `--fail-on-gate`. `_exit_over`
+    reports CLAIM_FAIL as DONE by default, deliberately and out loud, because a
+    claim that did not pass is a result and not a retry, and the session driver
+    runs both bn arms without that flag. So the exit code is NOT what stops a
+    powerless C2 being read as completeness; the printed verdict is, which is
+    why the verdict is a machine-readable RESULT line rather than prose. A
+    caller that needs the shortfall to be an error passes `--fail-on-gate` and
+    gets the 1.
     """
     passed = None if chi2 is None else chi2 <= RESIDUAL_CHI2_CEILING
+    observed = (f"chi2 = {chi2:.2f} over {fit.dof} dof; residual RMS "
+                f"{fit.rms:.4f}" if chi2 is not None and fit.rms is not None
+                else f"not computable: {why}")
+    power_lines: list[str] = []
+    if power is not None:
+        power_lines = power.lines()
+        if power.discriminates is not True:
+            passed = None
+            observed = ("NO POWER: " + power.reason()
+                        + ("" if chi2 is None
+                           else f". This run's own chi2 was {chi2:.2f}, which "
+                                "is not quotable as a verdict"))
     return Gate(CLAIM, "C2 model completeness",
                 "the three terms are ALL of it: the residual is noise",
                 f"chi2 = sum (r/sigma)^2 / dof <= {RESIDUAL_CHI2_CEILING:.1f}, "
-                "sigma from this run's own bootstrap",
+                "sigma from this run's own bootstrap, AND the same gate must "
+                "FAIL on a planted missing-term world at this pinning",
                 passed,
-                (f"chi2 = {chi2:.2f} over {fit.dof} dof; residual RMS "
-                 f"{fit.rms:.4f}" if chi2 is not None and fit.rms is not None
-                 else f"not computable: {why}"),
-                lines=[f"structure: {struct.line()}",
+                observed,
+                lines=power_lines + [f"structure: {struct.line()}",
                        "A FAIL is a RESULT and the more interesting one: it "
                        "says alpha_fitted is not the blend the study writes "
                        "down, and the correlation above names the term to add. "
@@ -1871,7 +2498,15 @@ def cell_table(cfg, b: int, ridge: float, block_ns, subjects, treads: dict
 
 
 def predictions_text(cfg, b: int, ridge: float, ridge_source: str, block_ns,
-                     subjects, treads: dict, group_m: int) -> str:
+                     subjects, treads: dict, group_m: int,
+                     band_lines: list[str]) -> str:
+    """P1..P7, with P1's band carrying the provenance it is derived from.
+
+    `band_lines` comes from `check_alpha_a_band`, which re-reads the two
+    committed arms the band is built on and refuses when the literal no longer
+    matches them. It is passed in rather than recomputed here so that the
+    refusal happens once, before any GPU time, instead of inside a print.
+    """
     lo, hi = ALPHA_A_BAND
     keff = effective_k(cfg)
     return "\n".join([
@@ -1893,10 +2528,8 @@ def predictions_text(cfg, b: int, ridge: float, ridge_source: str, block_ns,
         f"{ridge:.2f} Op/B ({ridge_source}).", "",
         "P1  alpha_a, as a SLOPE over three or more BN and not a two-point "
         f"difference, lands in [{lo:.2f}, {hi:.2f}].",
-        "    BASIS  published two-point A100 slopes 0.106, 0.102, 0.129, 0.119; "
-        "ai_model.py's 0.143 from",
-        "           ALPHA_BY_BLOCK_M; the H200 G=1 mixtral pair's 0.146. All of "
-        "those are (LIN) readings.",
+        *("    BASIS  " + line if i == 0 else "           " + line
+          for i, line in enumerate(band_lines)),
         "    A FAIL at zero says BN does not move alpha and there is no "
         "activation re-read to model.",
         "    A FAIL high, with a clean residual, says the two-point slopes were "
@@ -2001,10 +2634,16 @@ class Plan:
     refusals: dict[tuple[int, int], str]
     reps: int
     group_m: int
-    iters: int
-    warmup: int
+    warmup_ms: float
+    trials: int
+    l2_flush: bool
     cell_budget_ms: float
     seconds: float
+    #: The design-power reading, computed rather than quoted. See `design_power`.
+    power: DesignPower | None = None
+    #: The cross-arm floor printed beside every interval this run reports.
+    prior_sd: float | None = None
+    prior_sd_source: str = ""
 
     @property
     def timings(self) -> int:
@@ -2023,23 +2662,20 @@ class Plan:
             "its own can still borrow one, and whether it can is not knowable "
             "until the others exist",
             f"repeats      {self.reps} round-robin passes per setting",
-            f"design power at GROUP_SIZE_M={self.group_m}: the corpus puts "
-            f"alpha_b near {planted_alpha_b(self.group_m):.2f} there, and the "
-            "response moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so "
-            f"the lever is {(1 - planted_alpha_b(self.group_m)) / (1 - planted_alpha_b(16)):.0%} "
-            "of its size at GROUP_SIZE_M=16."
-            + ("  AT THIS SWIZZLE THE DESIGN CANNOT RESOLVE alpha_a AT ANY REP "
-               "COUNT TRIED (sd 0.11-0.13 against a 0.025 bar): the run still "
-               "measures alpha_b, C2 and C3, but C1 will read UNKNOWN. "
-               "--group-m 16 is the setting that resolves it."
-               if planted_alpha_b(self.group_m) > 0.85 else ""),
-            f"timing       {self.warmup} warmup + up to {self.iters} iters, cut "
-            f"to keep one timing inside {self.cell_budget_ms:.0f} ms",
+        ]
+        out += self.power_lines()
+        out += [
+            f"timing       {self.warmup_ms:.0f} ms of warmup under load, then "
+            f"{self.trials} trial(s) of {self.cell_budget_ms:.0f} ms of kernel "
+            f"time each, L2 flush {'ON' if self.l2_flush else 'OFF'}; the "
+            "instrument sizes its own iteration count from the warmup's "
+            "queue-deep per-call time",
             f"timings      {self.timings} "
             f"({sum(len(v) for v in self.rows.values())} treads x {self.reps} "
             "reps)",
-            f"estimate     {self.seconds:.0f} s of GPU at the model's own "
-            "timings, excluding compiles and allocation",
+            f"estimate     {self.seconds:.0f} s of GPU at what the instrument "
+            "charges (warmup + trials x budget per timing), excluding compiles "
+            "and allocation",
         ]
         for (bn, bm), rows in sorted(self.rows.items()):
             out.append(f"  BN={bn:4d} BM={bm:4d}  treads {len(rows):2d}  "
@@ -2050,9 +2686,44 @@ class Plan:
             out.append(f"  REFUSED BN={bn} BM={bm}: {why}")
         return out
 
+    def power_lines(self) -> list[str]:
+        """The design-power paragraph, EVERY NUMBER IN IT COMPUTED.
+
+        This paragraph used to end with the literal string "sd 0.11-0.13 against
+        a 0.025 bar ... at any rep count tried", beside a claim that the run
+        "still measures alpha_b, C2 and C3". Both were wrong in the same way:
+        the sd the code produced at those settings was 0.176, and C2 at that
+        swizzle cannot fail. So the sd is now whatever `design_power` measured
+        on a planted world at THIS pinning, the MDE beside it says what that sd
+        can resolve, and the C2 sentence is a verdict from the same probe rather
+        than a promise.
+        """
+        lever = ((1 - planted_alpha_b(self.group_m))
+                 / (1 - planted_alpha_b(16)))
+        out = [
+            f"design power at GROUP_SIZE_M={self.group_m}: the corpus puts "
+            f"alpha_b near {planted_alpha_b(self.group_m):.2f} there, and the "
+            "response moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so "
+            f"the lever is {lever:.0%} of its size at GROUP_SIZE_M=16."]
+        if self.power is None:
+            out.append(
+                "             design power NOT COMPUTED for this plan, so "
+                "neither the spread nor the MDE below is available. Nothing "
+                "here says the design works; it says nobody asked.")
+            return out
+        out += ["             " + line for line in self.power.lines()]
+        out.append("             " + mde_line(
+            self.power.alpha_a_sd, what="alpha_a, planted TRUTH world",
+            assumption=(f"lognormal spread {self.power.noise:.2%} on every "
+                        f"timing, from {self.power.noise_source}; "
+                        f"{self.power.draws} bootstrap draws"),
+            floor=self.prior_sd, floor_source=self.prior_sd_source))
+        return out
+
 
 def build_plan(args, cfg, b: int, capability, ridge: float,
-               bandwidth_gbps: float) -> Plan:
+               bandwidth_gbps: float, *, power: DesignPower | None = None,
+               prior_sd: float | None = None, prior_sd_source: str = "") -> Plan:
     """The grid, the resource refusals, and the cost -- all off GPU.
 
     A SETTING THAT CANNOT HOLD ITS ACCUMULATOR IS DROPPED HERE, where it is
@@ -2063,6 +2734,13 @@ def build_plan(args, cfg, b: int, capability, ridge: float,
     AND AN ARM WHOSE REFERENCE IS DROPPED IS DROPPED WHOLE. The subjects of an
     arm with no reference cannot be classified, so measuring them would buy
     nothing but GPU time and a row of blanks that reads like data.
+
+    THE COST IS PRICED AS `time_kernel` CHARGES, which is not what the retired
+    loop charged. That instrument warms for a DURATION and then runs `--trials`
+    trials each sized to `--cell-budget-ms` of kernel time, so a timing costs
+    `warmup_ms + trials x cell_budget_ms` whatever the kernel's own duration is.
+    The old estimate multiplied a per-call time by a call count and read a
+    warmup duration as a count of calls, which under-priced every fast cell.
     """
     base = dict(SWEEP.FIXED, num_stages=args.num_stages,
                 num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
@@ -2098,33 +2776,50 @@ def build_plan(args, cfg, b: int, capability, ridge: float,
             rows[(bn, bm)] = r
         for bm, why in arm_refusals.items():
             refusals[(bn, bm)] = why
-    total = 0.0
-    ab, aa = WORLD_LADDER
-    for (bn, bm), rs in rows.items():
-        for r in rs:
-            ms = planted_ms(cfg, bm, bn, r // bm, alpha_b=ab, alpha_a=aa,
-                            ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b,
-                            overhead_ms=args.overhead_ms)
-            iters = SWEEP.scaled_iters(ms, args.iters, args.cell_budget_ms)
-            total += args.reps * ms * (args.warmup + iters)
+    per_timing_ms = args.warmup + args.trials * args.cell_budget_ms
+    total = args.reps * sum(len(rs) for rs in rows.values()) * per_timing_ms
     return Plan(args.model, args.dtype, base, tuple(kept_ns), subjects, rows,
-                refusals, args.reps, args.group_m, args.iters, args.warmup,
-                args.cell_budget_ms, total / 1e3)
+                refusals, args.reps, args.group_m, args.warmup, args.trials,
+                not args.no_l2_flush, args.cell_budget_ms, total / 1e3,
+                power=power, prior_sd=prior_sd, prior_sd_source=prior_sd_source)
 
 
 # --------------------------------------------------------------------------
 # Persistence, identity, and the two ways this repo has already lost an arm.
 # --------------------------------------------------------------------------
 
-def append_sample(path: Path, sample: Sample) -> None:
-    """One row, flushed. An abort costs the timing in flight and nothing else."""
+def append_sample(path: Path, sample: Sample, prov=None) -> None:
+    """One row, flushed. An abort costs the timing in flight and nothing else.
+
+    The run's provenance columns ride on every row. A cells.csv is the artefact
+    that outlives the pod, and the audit's finding was that not one of the ten
+    session scripts wrote a git sha or a card into one: a file of milliseconds
+    with no commit behind it is an anecdote. The block is built ONCE per run and
+    passed in, so a mid-run `git commit` cannot give two rows two shas.
+    """
     new = not path.exists()
+    row = asdict(sample)
+    if prov is not None:
+        row.update(prov.as_columns())
     with path.open("a", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=SAMPLE_FIELDS)
+        writer = csv.DictWriter(fh, fieldnames=list(row))
         if new:
             writer.writeheader()
-        writer.writerow(asdict(sample))
+        writer.writerow(row)
         fh.flush()
+
+
+def _opt_float(text: str | None) -> float | None:
+    try:
+        return float(text) if text not in (None, "", "None") else None
+    except ValueError:
+        return None
+
+
+def _opt_bool(text: str | None) -> bool | None:
+    if text in (None, "", "None"):
+        return None
+    return str(text).strip().lower() in ("1", "true", "yes")
 
 
 def read_samples(path: Path) -> tuple[set[tuple[int, int, int, int]], list[Sample]]:
@@ -2134,6 +2829,12 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int, int]], list[Sampl
     that lost its device or a setting that ran out of shared memory, both of
     which a re-run can leave behind, and a real failure fails again in
     milliseconds.
+
+    THE INSTRUMENT COLUMNS ARE READ BACK AS ABSENT, NEVER AS DEFAULTS, when the
+    file predates them: `instrument` becomes the empty string and every clock
+    flag None. A resumed directory whose older half says nothing about how it
+    was timed must be visibly missing that, because those rows were produced by
+    the retired per-iteration loop and are not comparable with the roof.
     """
     if not path.exists():
         return set(), []
@@ -2147,7 +2848,15 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int, int]], list[Sampl
                 tokens=int(row["tokens"]), rep=int(row["rep"]),
                 ms_p50=float(row["ms_p50"]), ms_min=float(row["ms_min"]),
                 ms_stdev=float(row["ms_stdev"]), iters=int(row["iters"]),
-                status=row.get("status", "ok"), detail=row.get("detail", "")))
+                status=row.get("status", "ok"), detail=row.get("detail", ""),
+                instrument=row.get("instrument", ""),
+                warmup_ms=_opt_float(row.get("warmup_ms")) or 0.0,
+                trials=int(row.get("trials") or 0),
+                l2_flush=bool(_opt_bool(row.get("l2_flush"))),
+                sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                clock_level_ok=_opt_bool(row.get("clock_level_ok")),
+                clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
+                host_bound=_opt_bool(row.get("host_bound"))))
     return ({(s.block_n, s.block_m, s.tiles, s.rep)
              for s in out if s.status == "ok"}, out)
 
@@ -2202,30 +2911,58 @@ def default_run_id(args, card: str) -> str:
     and an H200 one, both contain a report named
     `mixtral-8x7b-bf16-r1024-g1-n64-4867a2`, for sm_count 108 and 132.
 
+    BUILT BY `moe.bench.provenance.run_id` AS OF 2026-09-02, not by a private
+    hash here. Three scripts had each re-implemented a subset of the same rule
+    and each had left a different knob out. That function refuses a missing card
+    (`NoCard`) and a None or empty knob (`UnresolvedKnob`), hashes the knobs in
+    sorted order so the id does not depend on the order they were named in, and
+    puts the card slug at the FRONT where `ls` shows it.
+
     BLOCK_SIZE_N IS THE SWEEP HERE, so the LIST is in the key rather than a
     value: two runs over different BN grids are different experiments even when
     the grids overlap, because `--block-n-list 32,64,128` and `64,128` fit
     different numbers of points and V5 reads a different verdict.
 
-    `--ridge`, `--bandwidth-gbps` and `--draws` stay OUT: they re-analyse a set
-    of timings rather than change one, and two analyses of one sweep belong in
-    one directory.
+    THREE KNOBS ARE NEW TO THE KEY AND ALL THREE SET THE MEASURED
+    MILLISECONDS: `warmup` (now a DURATION of sustained load, not a call count),
+    `trials`, and `flush`, which decides whether every timed iteration starts
+    with a cold L2. A flushed and an unflushed sweep must never share a
+    directory; the roof was measured flushed.
+
+    `plant_noise` IS IN THE KEY AS THE OPERATOR'S CHOICE, NEVER AS THE RESOLVED
+    VALUE. When it is not given it contributes the token "auto", because the
+    resolved number is derived from the cells this id names: an id containing it
+    would depend on its own directory's contents and would change halfway
+    through the sweep, which is the resume collision this function exists to
+    prevent, arriving from the other direction.
+
+    `--ridge`, `--bandwidth-gbps`, `--draws` and `--power-draws` stay OUT: they
+    re-analyse a set of timings rather than change one, and two analyses of one
+    sweep belong in one directory.
     """
-    key = json.dumps({"card": card, "model": args.model, "dtype": args.dtype,
-                      "block_ns": args.block_n_list, "tiles": args.tiles,
-                      "reference": REFERENCE_BLOCK_M, "r_max": args.r_max,
-                      "max_treads": args.max_treads, "reps": args.reps,
-                      "group_m": args.group_m, "block_k": args.block_k,
-                      "num_stages": args.num_stages,
-                      "num_warps": args.num_warps, "iters": args.iters,
-                      "warmup": args.warmup, "budget": args.cell_budget_ms,
-                      "seed": args.seed}, sort_keys=True)
-    ns = args.block_n_list.replace(",", "_")
-    ms = args.tiles.replace(",", "_")
-    return (f"{card}-{args.model}-{args.dtype}-n{ns}-bm{ms}-r{args.r_max}"
-            f"-t{args.max_treads}-g{args.group_m}-k{args.block_k}"
-            f"-s{args.num_stages}-w{args.num_warps}-x{args.reps}-"
-            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+    return PV.run_id(
+        card=card,
+        model=args.model,
+        dtype=args.dtype,
+        n=tuple(int(v) for v in args.block_n_list.split(",")),
+        bm=tuple(int(v) for v in args.tiles.split(",")),
+        ref=REFERENCE_BLOCK_M,
+        r=args.r_max,
+        treads=args.max_treads,
+        reps=args.reps,
+        g=args.group_m,
+        k=args.block_k,
+        stages=args.num_stages,
+        warps=args.num_warps,
+        iters=args.iters,
+        warmup=args.warmup,
+        trials=args.trials,
+        flush=not args.no_l2_flush,
+        budget=args.cell_budget_ms,
+        seed=args.seed,
+        plantnoise=(PLANT_NOISE_AUTO if args.plant_noise is None
+                    else args.plant_noise),
+    )
 
 
 def arm_cache(root: Path, block_n: int, block_m: int) -> Path:
@@ -2246,7 +2983,8 @@ def arm_cache(root: Path, block_n: int, block_m: int) -> Path:
 
 def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
                     csv_path: Path, cache_root: Path, pinned: dict, done,
-                    samples: list[Sample]) -> tuple[int, int]:
+                    samples: list[Sample], *, prov=None,
+                    reference_clock_mhz: float | None = None) -> tuple[int, int]:
     """Time one (BN, BM) setting, `--reps` round-robin passes over its treads.
 
     ROUND ROBIN INSIDE THE SETTING. Measuring tread 1 fifty times and then
@@ -2254,10 +2992,31 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
     thermal history, and the resulting monotone drift IS a slope -- the very
     quantity being fitted. One pass over all treads per repeat spreads that
     drift across the ladder instead of aligning it with the x axis.
+
+    THE INSTRUMENT IS `moe.bench.timing.time_kernel` AND NOTHING ELSE. It warms
+    for `--warmup` MILLISECONDS of delivered GPU load, sizes its own iteration
+    count so a trial lasts `--cell-budget-ms` of kernel time, primes one event
+    pair per iteration outside the loop, flushes L2 before every timed call and
+    samples the SM clock under load. The private `SWEEP.time_call` this used
+    until 2026-09-02 did none of that, and the roof every alpha here is scored
+    against was measured queue-deep, so the two were never comparable: the audit
+    put the bias at 8-16% in the fitted alpha at the smallest cells, DIFFERENT
+    PER CARD, which is the size of the cross-card effect this study registered.
+
+    `reference_clock_mhz` is the clock the roof was measured at, resolved once
+    for the whole arm. Without it every cell's LEVEL verdict is None, meaning
+    "not determined": a level is relative to something and neither this function
+    nor the instrument will invent the something.
+
+    A REFUSAL FROM THE INSTRUMENT IS NOT A FAILED CELL. `TimingRefused` says the
+    measurement could not be made at all (no CUDA and no injected fakes), and
+    catching it per cell would write a grid of `status="failed"` rows and burn
+    the whole arm to learn it once. It is re-raised, and the arm stops.
     """
     import torch
 
     from moe.baselines._framework_config import vllm_call_kwargs
+    from moe.bench import timing
     from moe.reference.torch_ref import make_inputs
     from moe.spec import BenchSpec, RoutingSpec
 
@@ -2300,12 +3059,23 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
                     call()
                     torch.cuda.synchronize()
                     compiles += SWEEP.count_new(cache_root, seen)
-                    ms0, _, _ = SWEEP.time_call(call, 1, 3)
-                    iters = SWEEP.scaled_iters(ms0, args.iters,
-                                               args.cell_budget_ms)
-                    ms, mn, sd = SWEEP.time_call(call, args.warmup, iters)
-                sample = Sample(block_n, block_m, r // block_m, r, tokens, rep,
-                                ms, mn, sd, iters)
+                    t = timing.time_kernel(
+                        call, warmup_ms=args.warmup,
+                        target_ms=args.cell_budget_ms, trials=args.trials,
+                        l2_flush=not args.no_l2_flush,
+                        reference_clock_mhz=reference_clock_mhz)
+                sample = Sample(
+                    block_n, block_m, r // block_m, r, tokens, rep,
+                    t.ms_p50, t.ms_min, t.ms_std, t.iters,
+                    instrument=t.instrument, warmup_ms=t.warmup_ms,
+                    trials=t.trials, l2_flush=t.l2_flush,
+                    sm_clock_load_mhz=t.sm_clock_load_mhz,
+                    clock_level_ok=t.clock_level_ok,
+                    clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound)
+                if t.clock_level_ok is False or t.host_bound:
+                    print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+            except timing.TimingRefused:
+                raise
             except Exception as exc:                    # noqa: BLE001
                 sample = Sample(block_n, block_m, r // block_m, r, tokens, rep,
                                 0.0, 0.0, 0.0, 0, "failed",
@@ -2318,7 +3088,7 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
                           "for one setting alone would unpin the thing this "
                           "sweep holds fixed.")
             samples.append(sample)
-            append_sample(csv_path, sample)
+            append_sample(csv_path, sample, prov)
             print(f"  BN={block_n:4d} BM={block_m:4d} n={r // block_m:2d} "
                   f"rep={rep:2d} r={r:5d} T={tokens:6d}  "
                   f"{sample.ms_p50:9.4f} ms ({sample.iters} iters)")
@@ -2332,13 +3102,33 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
 def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 b: int, ceiling_tflops: float, ceiling_source: str, capability,
                 base_pinned: dict, compiles: dict, executed: dict,
-                sm_count: int, block_ns, subjects
+                sm_count: int, block_ns, subjects, draws: int | None = None,
+                probe_c2_power: bool = False,
+                plant_noise: float | None = None,
+                band_lines: list[str] | None = None,
                 ) -> tuple[list[str], list[Gate], dict]:
-    """Everything read off the timings, as text, gates and a payload."""
+    """Everything read off the timings, as text, gates and a payload.
+
+    `probe_c2_power` decides whether C2 is scored with a power guard. It is True
+    exactly once per real run and False everywhere else, and the everywhere-else
+    is not a convenience: the guard's own probe scores planted worlds through
+    this same function, so a probe that probed would not terminate, and
+    `--self-test`'s four worlds ARE the discrimination question and cannot be
+    asked to answer it about themselves.
+
+    `plant_noise` overrides the spread the probe plants at; None means use the
+    one this run measured (`measured_spread`), which is the point of running the
+    probe inside the run rather than from the command line.
+
+    `band_lines` is the alpha_a band's provenance, already re-derived by `_main`
+    before any GPU time, handed down so C1 prints the band it was actually
+    scored against. None means C1 reads the corpus itself; it never recites.
+    """
     kw = dict(block_ns=block_ns, subjects=subjects, ridge=ridge,
               bandwidth_gbps=bandwidth_gbps, b=b, base_pinned=base_pinned,
               capability=capability, ceiling_tflops=ceiling_tflops,
               sm_count=sm_count)
+    draws = args.draws if draws is None else draws
     cells, verdicts, spreads = arm_alphas(samples, cfg, **kw)
     keys = [(c.block_n, c.block_m) for c in cells if c.usable]
 
@@ -2352,7 +3142,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                         f"BN={bn} BM={bm} tread {tread}: time falls {drop:.3%}"
                         + (f" at spread {sp:.3%}" if sp else " (spread unknown)"))
 
-    boot = run_bootstrap(samples, cfg, keys, draws=args.draws, seed=args.seed,
+    boot = run_bootstrap(samples, cfg, keys, draws=draws, seed=args.seed,
                          form="EXA", **kw)
     fit = decompose(cells, cfg, "EXA")
     fit_lin = decompose(cells, cfg, "LIN")
@@ -2434,6 +3224,53 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
               "timings read": sum(1 for s in samples if s.status == "ok"),
               "treads fitted": sum(c.treads for c in cells)}
     sharp = boot.alpha_a_sd is not None and boot.alpha_a_sd <= ALPHA_A_SD_CEILING
+
+    # THE POWER PROBE RUNS HERE, AFTER THE SPREAD IS KNOWN AND BEFORE C2 IS
+    # SCORED. It plants the missing-term world at THIS run's own across-repeat
+    # spread and this run's own swizzle and asks whether C2 could have failed.
+    # Inside the probe's own scoring `probe_c2_power` is False, which is the
+    # recursion guard; see `analyse_run`'s docstring.
+    spread, spread_source = measured_spread(spreads)
+    power: C2Power | None = None
+    if probe_c2_power:
+        noise, noise_source = resolve_plant_noise(plant_noise, spread,
+                                                  spread_source)
+        power = c2_power_probe(
+            cfg, args, b=b, ceiling_tflops=ceiling_tflops,
+            capability=capability, block_ns=block_ns, subjects=subjects,
+            sm_count=sm_count, noise=noise, noise_source=noise_source,
+            draws=getattr(args, "power_draws", POWER_PROBE_DRAWS))
+
+    prior_sd, prior_sd_source = None, ""
+    try:
+        prior_sd, prior_sd_source = published_prior_sd()
+    except CorpusMissing as exc:
+        prior_sd_source = str(exc)
+    lines += ["", "## Noise, and which kind of it", "",
+              "  " + boot.note,
+              "  SCOPE: these resamples are of WITHIN-PROCESS WARM REPEATS -- "
+              "one process, one allocation, one clock state, repeats "
+              "interleaved round robin. Nothing that changes between processes "
+              "is in them, and every cross-arm comparison this study publishes "
+              "is exactly that kind of comparison, so every interval below is "
+              "a LOWER bound on the uncertainty of a number compared across "
+              "arms.",
+              "  " + (f"cross-arm floor {prior_sd:.4f} ({prior_sd_source}), "
+                      "carried beside the intervals and never used as a gate"
+                      if prior_sd else
+                      f"cross-arm floor UNAVAILABLE: {prior_sd_source}"),
+              "  " + mde_line(boot.alpha_a_sd, what="alpha_a, this run",
+                              assumption=(
+                                  "this run's own bootstrap over "
+                                  f"{boot.draws} draws; measured across-repeat "
+                                  "spread "
+                                  + ("unknown" if spread is None
+                                     else f"{spread:.2%}")
+                                  + f" ({spread_source})"),
+                              floor=prior_sd, floor_source=prior_sd_source)]
+    if power is not None:
+        lines += ["  " + line for line in power.lines()]
+
     gates = [
         gate_non_vacuity(counts),
         gate_override(compiles, executed),
@@ -2442,8 +3279,8 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         gate_ladders(spreads, inversion_rows, boot.survival),
         gate_identifiable(cells, PRIMARY_BLOCK_M),
         gate_sharpness(boot),
-        gate_alpha_a(fit, boot, sharp),
-        gate_residual(fit, chi2, why, struct),
+        gate_alpha_a(fit, boot, sharp, band_lines),
+        gate_residual(fit, chi2, why, struct, power),
         gate_invariance(per_bm, boot),
         gate_physicality(fit, boot),
         gate_tempo(fit, boot, args.group_m),
@@ -2484,11 +3321,326 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         "bootstrap": {"draws": boot.draws, "alpha_a_sd": boot.alpha_a_sd,
                       "alpha_b_sd": boot.alpha_b_sd, "delta_sd": boot.delta_sd,
                       "alpha_b_by_bm_sd": boot.alpha_b_by_bm_sd,
-                      "note": boot.note},
+                      "note": boot.note,
+                      # THE SCOPE TRAVELS WITH THE NUMBER. A reader working from
+                      # report.json alone must not have to know that these
+                      # resamples cannot see between-process noise.
+                      "scope": "within-process warm repeats, resampled with "
+                               "replacement; blind to anything that changes "
+                               "between processes",
+                      "mde_alpha_a": (mde_one_sample(boot.alpha_a_sd)
+                                      if boot.alpha_a_sd else None),
+                      "mde_convention": f"one-sample, two-sided "
+                                        f"{POWER.TEST_LEVEL}, power "
+                                        f"{POWER.TEST_POWER}",
+                      "cross_arm_prior_sd": prior_sd,
+                      "cross_arm_prior_sd_source": prior_sd_source},
+        "measured_spread": spread, "measured_spread_source": spread_source,
+        "c2_power": (None if power is None else
+                     {**asdict(power), "discriminates": power.discriminates,
+                      "reason": power.reason()}),
+        "alpha_a_band": list(ALPHA_A_BAND),
         "spreads": spreads, "inversions": inversion_rows,
         "gates": [asdict(g) for g in gates],
+        "result_lines": [g.result_line() for g in gates],
     }
     return lines, gates, payload
+
+
+# --------------------------------------------------------------------------
+# The two questions asked of a PLANTED world before a real one is scored.
+#
+# Both are the same machinery `--self-test` uses, called from inside the run
+# rather than from the command line, because the audit's finding was that the
+# off-GPU self-test was run at GROUP_SIZE_M=16 and the pod arm was scheduled at
+# 1, where the same gates cannot discriminate. A check that is only performed at
+# a setting other than the one being paid for is not a check on that setting.
+# --------------------------------------------------------------------------
+
+#: The missing term `--self-test`'s MISSING world plants and the C2 power probe
+#: re-plants: alpha_b rising with `(BM/BN)^2`, a shape the three terms cannot
+#: absorb. Sized several times the published cross-arm alpha spread and small
+#: enough not to move a cell into another regime, so a C2 FAIL is the residual
+#: gate seeing a term and not the grid collapsing. It is module level so that
+#: the world the probe asks about and the world the self-test advertises are the
+#: SAME world; two copies would let the pod be guarded against one shape while
+#: the report claimed the other.
+MISSING_TERM_SIZE = 0.004
+
+
+def missing_term(block_m: int, block_n: int) -> float:
+    """The MISSING world's extra alpha_b, in units of alpha."""
+    return MISSING_TERM_SIZE * (block_m / block_n) ** 2
+
+
+def bn_drift_term(block_m: int, block_n: int) -> float:      # noqa: ARG001
+    """BN-DRIFT: alpha_b itself moving with 1/BN, which the model forbids.
+
+    The specific alternative this experiment was built to see, and the one the
+    published G=1 BN pair already hints at (its two BN values imply alpha_b 0.92
+    and 0.81).
+    """
+    return 6.0 / block_n
+
+
+def measured_spread(spreads: dict) -> tuple[float | None, str]:
+    """This run's own across-repeat spread, as one number, and where it is from.
+
+    The median over the arms of each arm's median across-repeat relative
+    standard deviation. A median rather than the worst, because one arm made
+    noisy by a single failed tread would otherwise set the noise every planted
+    world is generated at; the worst is printed beside it in V4.
+    """
+    seen = [s for s in spreads.values() if s is not None and s > 0]
+    if not seen:
+        return None, ("no arm produced an across-repeat spread; a spread needs "
+                      "at least two repeats of one tread")
+    return (statistics.median(seen),
+            f"this run's own repeats, median over {len(seen)} arm(s)")
+
+
+def resolve_plant_noise(explicit: float | None, measured: float | None,
+                        measured_source: str) -> tuple[float, str]:
+    """The spread every planted world is generated at, and its provenance.
+
+    IN ORDER: what the operator asked for, then what THIS POD MEASURED, then the
+    worst spread the corpus has published. The middle one is the change the
+    audit asked for. `--plant-noise` used to default to 0.008, the middle of the
+    published range, and every design-power verdict this file printed was a
+    verdict about a pod quieter than half the sessions in the corpus: at 0.008
+    S4 passes at G=16 and at 0.015-0.020 it fails. A default that decides
+    whether an experiment is worth paying for has to come from the machine that
+    will run it.
+    """
+    if explicit is not None:
+        return float(explicit), "given on the command line"
+    if measured is not None:
+        return float(measured), measured_source
+    return PLANT_NOISE_FALLBACK, PLANT_NOISE_FALLBACK_SOURCE
+
+
+def planted_world_gates(cfg, args, *, alpha_b: float, alpha_a: float, extra,
+                        noise: float, b: int, ceiling_tflops: float,
+                        capability, block_ns, subjects, sm_count: int,
+                        draws: int, seed: int | None = None
+                        ) -> tuple[dict, dict]:
+    """Generate one named world and score it exactly as a real run is scored.
+
+    Returns `({gate key: Gate}, payload)`. The gate key is the first token of
+    the gate's name, so a caller asks for "C2" rather than matching a sentence.
+
+    THE PLANTED BANDWIDTH IS DERIVED FROM THE PLANTED RATE, NOT ASSUMED.
+    `planted_ms` charges compute at `rho x bandwidth`, so planting the anchor's
+    rho beside the card's PEAK bandwidth plants a kernel running at 114% of its
+    card -- which V2 then refuses, and the probe would be testing the level gate
+    against a world the level gate is right to reject. The compute rate is
+    planted at `PLANT_COMPUTE_FRACTION` of the ceiling, inside the 38-64% the
+    published references reach, and the bandwidth follows from it.
+
+    `probe_c2_power` is OFF for this call and that is the recursion guard:
+    scoring a planted world must not itself plant a world to ask whether its own
+    C2 had power, or the probe would never terminate.
+    """
+    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
+                BLOCK_SIZE_K=args.block_k)
+    base.pop("BLOCK_SIZE_N", None)
+    rho = achieved_rho(cfg, b, alpha_b=alpha_b, alpha_a=alpha_a)
+    bw = PLANT_COMPUTE_FRACTION * ceiling_tflops * 1e3 / rho
+    samples = planted_samples(cfg, args, alpha_b=alpha_b, alpha_a=alpha_a,
+                              ridge=rho, bandwidth_gbps=bw, b=b,
+                              block_ns=block_ns, subjects=subjects, extra=extra,
+                              noise=noise,
+                              seed=args.seed if seed is None else seed)
+    compiles = {(bn, bm): 1 for bn in block_ns
+                for bm in (*subjects, REFERENCE_BLOCK_M)}
+    _, gates, payload = analyse_run(
+        samples, cfg, args, ridge=rho, bandwidth_gbps=bw, b=b,
+        ceiling_tflops=ceiling_tflops, ceiling_source="planted",
+        capability=capability, base_pinned=base, compiles=compiles,
+        executed=dict(compiles), sm_count=sm_count, block_ns=block_ns,
+        subjects=subjects, draws=draws, probe_c2_power=False)
+    return {g.name.split()[0]: g for g in gates}, payload
+
+
+@dataclass(frozen=True)
+class DesignPower:
+    """What a planted TRUTH world says this pinning can resolve. Computed.
+
+    Replaces the sentence "alpha_a's own spread is 0.11 to 0.13 ... at every rep
+    count tried", which was a string in a docstring and in a plan line while the
+    number the code produced at those settings was 0.176. Every field here comes
+    from a bootstrap that just ran.
+    """
+
+    group_m: int
+    reps: int
+    noise: float
+    noise_source: str
+    draws: int
+    alpha_a_sd: float | None
+    alpha_b_sd: float | None
+    note: str = ""
+
+    @property
+    def resolves(self) -> bool | None:
+        """True, False, or None for "no spread came back to judge"."""
+        if self.alpha_a_sd is None:
+            return None
+        return self.alpha_a_sd <= ALPHA_A_SD_CEILING
+
+    def lines(self) -> list[str]:
+        if self.alpha_a_sd is None:
+            return [f"design power UNKNOWN: no bootstrap spread came back from "
+                    f"the planted TRUTH world ({self.note or 'no note'})"]
+        verdict = ("RESOLVES alpha_a" if self.resolves else
+                   "CANNOT RESOLVE alpha_a")
+        out = [f"planted TRUTH world at GROUP_SIZE_M={self.group_m}, "
+               f"{self.reps} reps, spread {self.noise:.2%} "
+               f"({self.noise_source}): sd(alpha_a) = {self.alpha_a_sd:.4f} "
+               f"against the {ALPHA_A_SD_CEILING:.3f} C1 needs -> {verdict}"]
+        if self.resolves is False:
+            out.append("AT THIS PINNING C1 WILL READ UNKNOWN however the run "
+                       "goes. --group-m 16 is the setting that resolves it; "
+                       "--reps buys the rest, and this line is what says how "
+                       "much it bought.")
+            out.append("C6 will FAIL with it and both are CLAIM gates, so the "
+                       "arm is expected to end 1 CLAIM_FAIL, printed as exit 0 "
+                       "without --fail-on-gate. It is NOT 3 INVALID and must "
+                       "not be re-measured: alpha_b, C3 and C5 are what a run "
+                       "at this pinning is for and they stay quotable.")
+        return out
+
+
+def design_power(cfg, args, *, b: int, ceiling_tflops: float, capability,
+                 block_ns, subjects, sm_count: int, noise: float,
+                 noise_source: str, draws: int) -> DesignPower:
+    """Plant the TRUTH world at this pinning and report what it could resolve.
+
+    Off GPU, before the pod, and printed by `--dry-run`: the whole point is that
+    it is a property of the PINNING and of the pod's noise, not of the run, so
+    it can be known before the run is paid for.
+    """
+    gates, payload = planted_world_gates(
+        cfg, args, alpha_b=planted_alpha_b(args.group_m), alpha_a=0.14,
+        extra=None, noise=noise, b=b, ceiling_tflops=ceiling_tflops,
+        capability=capability, block_ns=block_ns, subjects=subjects,
+        sm_count=sm_count, draws=draws)
+    boot = payload["bootstrap"]
+    return DesignPower(args.group_m, args.reps, noise, noise_source, draws,
+                       boot["alpha_a_sd"], boot["alpha_b_sd"], boot["note"])
+
+
+@dataclass(frozen=True)
+class C2Power:
+    """Whether C2 could have FAILED at this run's own swizzle and spread.
+
+    THE GATE THIS RECORD GUARDS IS THE ONE THE EXPERIMENT EXISTS FOR. C2 says
+    "the three terms are ALL of it", and at GROUP_SIZE_M=1 the audit found the
+    planted MISSING-term world coming back with chi2 1.78 against the 4.0
+    ceiling -- a PASS, the same verdict the TRUTH world gets. A C2 PASS there
+    would have been published as model completeness by a test that cannot say
+    otherwise, and the driver schedules that arm unconditionally.
+
+    So the real run plants that world itself, at its OWN measured across-repeat
+    spread and its OWN swizzle, before it scores anything, and C2 reads UNKNOWN
+    with `reason()` whenever the missing-term world would have passed. UNKNOWN
+    counts against the gate by `moe.bench.exit_codes`'s rule, so the gates
+    CLASSIFY as CLAIM_FAIL rather than DONE: a gate that could not decide has
+    not passed. The process still exits 0 unless `--fail-on-gate` is given
+    (`_exit_over`, which says so in the log), so what carries this verdict off
+    the page is the `RESULT: CLAIM C2 UNKNOWN` line and not the exit code.
+    """
+
+    ran: bool
+    group_m: int
+    reps: int
+    noise: float
+    noise_source: str
+    draws: int
+    truth_pass: bool | None = None
+    missing_pass: bool | None = None
+    truth_chi2: float | None = None
+    missing_chi2: float | None = None
+    note: str = ""
+
+    @property
+    def discriminates(self) -> bool | None:
+        """True only when the probe ran AND answered differently in the two worlds.
+
+        None means the probe could not run, which is not the same as "it has
+        power" and must not be scored as if it were.
+        """
+        if not self.ran or self.truth_pass is None or self.missing_pass is None:
+            return None
+        return self.truth_pass is True and self.missing_pass is False
+
+    def reason(self) -> str:
+        """One line, safe for a RESULT detail: no newlines, names the numbers."""
+        where = (f"GROUP_SIZE_M={self.group_m}, {self.reps} reps, spread "
+                 f"{self.noise:.2%} from {self.noise_source}, "
+                 f"{self.draws} draws")
+        if not self.ran:
+            return f"the C2 power probe could not run ({self.note}); {where}"
+        if self.missing_pass is not False:
+            return (
+                "the planted missing-term world passes at this swizzle / noise "
+                f"({where}: MISSING chi2 "
+                + ("n/a" if self.missing_chi2 is None
+                   else f"{self.missing_chi2:.2f}")
+                + f" against a ceiling of {RESIDUAL_CHI2_CEILING:.1f}, the same "
+                  "verdict TRUTH gets), so a PASS here could not have been a FAIL")
+        if self.truth_pass is not True:
+            return (f"the planted TRUTH world FAILS C2 at this pinning ({where}: "
+                    "chi2 "
+                    + ("n/a" if self.truth_chi2 is None
+                       else f"{self.truth_chi2:.2f}")
+                    + "), so C2 fails on a world the model describes and a real "
+                      "FAIL would say nothing")
+        return (f"the probe discriminates at this pinning ({where}: TRUTH "
+                "PASSES, MISSING FAILS), so C2's verdict below is a verdict")
+
+    def lines(self) -> list[str]:
+        return [f"C2 power probe: {self.reason()}"]
+
+
+def c2_power_probe(cfg, args, *, b: int, ceiling_tflops: float, capability,
+                   block_ns, subjects, sm_count: int, noise: float,
+                   noise_source: str, draws: int) -> C2Power:
+    """Plant TRUTH and MISSING at this pinning and ask whether C2 can tell them apart.
+
+    Two worlds and no more: a gate discriminates if the world it is looking for
+    fails it and the world it is not passes. The other two self-test worlds
+    (NO-A, BN-DRIFT) test different claims and would double the probe's cost for
+    a question C2's power does not depend on.
+
+    THE SEEDS ARE DIFFERENT ON PURPOSE. Both worlds run at `--seed`, which is the
+    same noise realisation, so the only difference between them is the planted
+    term. That is what makes "MISSING passes too" a statement about the gate
+    rather than about a lucky draw.
+    """
+    common = dict(b=b, ceiling_tflops=ceiling_tflops, capability=capability,
+                  block_ns=block_ns, subjects=subjects, sm_count=sm_count,
+                  draws=draws)
+    ab = planted_alpha_b(args.group_m)
+    try:
+        truth_gates, truth_payload = planted_world_gates(
+            cfg, args, alpha_b=ab, alpha_a=0.14, extra=None, noise=noise,
+            **common)
+        missing_gates, missing_payload = planted_world_gates(
+            cfg, args, alpha_b=ab, alpha_a=0.14, extra=missing_term,
+            noise=noise, **common)
+    except Exception as exc:                                # noqa: BLE001
+        # NOT swallowed into a PASS. A probe that crashed has established
+        # nothing, `discriminates` is None, and C2 reads UNKNOWN with this
+        # sentence as its reason.
+        return C2Power(False, args.group_m, args.reps, noise, noise_source,
+                       draws, note=f"{type(exc).__name__}: {exc}")
+    return C2Power(True, args.group_m, args.reps, noise, noise_source, draws,
+                   truth_pass=truth_gates["C2"].passed,
+                   missing_pass=missing_gates["C2"].passed,
+                   truth_chi2=truth_payload["chi2"],
+                   missing_chi2=missing_payload["chi2"])
 
 
 # --------------------------------------------------------------------------
@@ -2504,6 +3656,12 @@ def planted_samples(cfg, args, *, alpha_b: float, alpha_a: float,
     `extra(block_m, block_n) -> float` adds a term the model does NOT contain,
     in units of alpha. That is what makes the residual gate testable: a gate
     that cannot be made to FAIL by a missing term is not testing for one.
+
+    EVERY ROW CARRIES `SYNTHETIC_INSTRUMENT`, the sweep's own name for "this was
+    not measured". `instrument` is a column on the CSV and one of the five keys
+    a publish gate reads at the top of a report, so a planted row that carried
+    `TIMING_BASIS` would satisfy that gate while describing an instrument no
+    process ever ran. "Not measured" is a VALUE here, never an absence.
     """
     rng = random.Random(seed)
     out: list[Sample] = []
@@ -2518,18 +3676,23 @@ def planted_samples(cfg, args, *, alpha_b: float, alpha_a: float,
                                     bandwidth_gbps=bandwidth_gbps, b=b,
                                     overhead_ms=args.overhead_ms)
                     ms *= math.exp(rng.gauss(0.0, noise))
-                    out.append(Sample(bn, bm, n, r, SWEEP.tokens_for_rows(cfg, r),
-                                      rep, ms, ms, ms * noise, args.iters))
+                    out.append(Sample(
+                        bn, bm, n, r, SWEEP.tokens_for_rows(cfg, r), rep,
+                        ms, ms, ms * noise, 0,
+                        instrument=SWEEP.SYNTHETIC_INSTRUMENT,
+                        warmup_ms=0.0, trials=0, l2_flush=False))
     return out
 
 
 def self_test(args, cfg, b: int, ridge: float, bandwidth_gbps: float,
-              ceiling_tflops: float, capability, block_ns, subjects
+              ceiling_tflops: float, capability, block_ns, subjects, *,
+              noise: float, noise_source: str
               ) -> tuple[list[str], list[Gate]]:
     """Four worlds. The claim is that the gates DISCRIMINATE, not that they pass.
 
-      TRUTH     the exact model at (alpha_b, alpha_a) = (0.31, 0.14).
-                C1 and C2 must PASS and alpha_a must come back near 0.14.
+      TRUTH     the exact model at the corpus's alpha_b for this swizzle and
+                alpha_a = 0.14. C1 and C2 must PASS and alpha_a must come back
+                near what it was planted at.
       MISSING   the same, plus a term the model does not contain: alpha_b
                 rising with (BM/BN)^2. C2 must FAIL and the structure test must
                 name the quadratic column.
@@ -2539,61 +3702,43 @@ def self_test(args, cfg, b: int, ridge: float, bandwidth_gbps: float,
                 tell them apart.
       BN-DRIFT  alpha_b moving linearly with 1/BN, which is the specific
                 alternative this experiment was built to see. C2 must FAIL.
+
+    `noise` is RESOLVED BY THE CALLER and its provenance printed, because the
+    verdicts here are only as good as it is: at 0.8% S4 passes at G=16 and at
+    1.5-2.0% -- inside the published H200 range -- it fails. It used to be an
+    argparse default of 0.008, the middle of that range, which made every
+    design-power verdict a verdict about a pod quieter than half the corpus.
+
+    THE FOUR WORLDS ARE SCORED WITH `probe_c2_power` OFF, through
+    `planted_world_gates`. C2's power guard asks exactly the question S2 asks,
+    so leaving it on would let a guarded UNKNOWN in the MISSING world satisfy
+    "C2 FAILS in MISSING" -- a gate proving itself with its own guard.
     """
-    base = dict(SWEEP.FIXED, num_stages=args.num_stages,
-                num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
-                BLOCK_SIZE_K=args.block_k)
-    base.pop("BLOCK_SIZE_N", None)
-    # PLANTED AT THE WORLD THE CORPUS MEASURES, not at a round number: alpha_b
-    # 0.92 is what this study's own G=1 ladders imply, and the worlds are
-    # planted at the ACHIEVED rho that reproduces the measured anchor. The
-    # perturbations are sized to be several times the published cross-arm alpha
-    # spread and small enough not to move a cell into another regime, so a FAIL
-    # is the residual gate seeing a missing term and not the grid collapsing.
     ab0 = planted_alpha_b(args.group_m)
     worlds = {
         "TRUTH": (ab0, 0.14, None),
-        "MISSING": (ab0, 0.14, lambda bm, bn: 0.004 * (bm / bn) ** 2),
+        "MISSING": (ab0, 0.14, missing_term),
         "NO-A": (ab0, 0.0, None),
-        "BN-DRIFT": (ab0, 0.14, lambda bm, bn: 6.0 / bn),
+        "BN-DRIFT": (ab0, 0.14, bn_drift_term),
     }
-    rho0 = achieved_rho(cfg, b, alpha_b=planted_alpha_b(args.group_m),
-                        alpha_a=0.14)
+    rho0 = achieved_rho(cfg, b, alpha_b=ab0, alpha_a=0.14)
     lines = ["", "## Self test: four planted worlds", "",
              "  planted at the achieved rho that reproduces the measured "
              f"anchor: {rho0:.1f} Op/B against a calibrated {ridge:.1f}; "
-             f"alpha_b planted at {planted_alpha_b(args.group_m):.3f}, the "
-             f"corpus value at GROUP_SIZE_M={args.group_m}", "",
+             f"alpha_b planted at {ab0:.3f}, the corpus value at "
+             f"GROUP_SIZE_M={args.group_m}",
+             f"  every timing carries a lognormal spread of {noise:.2%}, from "
+             f"{noise_source}", "",
              "  world      alpha_a  sd(a_a)    alpha_b   chi2 cells   C2     "
              "structure"]
     gates: list[Gate] = []
     verdicts: dict[str, tuple] = {}
     for name, (ab, aa, extra) in worlds.items():
-        rho = achieved_rho(cfg, b, alpha_b=ab, alpha_a=aa)
-        # THE PLANTED BANDWIDTH IS DERIVED FROM THE PLANTED RATE, NOT ASSUMED.
-        # `planted_ms` charges compute at `rho x bandwidth`, so planting the
-        # anchor's rho beside the card's PEAK bandwidth plants a kernel running
-        # at 114% of its card -- which this file's own V2 then refuses, and the
-        # self test would be testing the level gate against a world the level
-        # gate is right to reject. The compute rate is planted at
-        # PLANT_COMPUTE_FRACTION of the ceiling, inside the 38-64% the published
-        # references reach, and the bandwidth follows from it.
-        bw = PLANT_COMPUTE_FRACTION * ceiling_tflops * 1e3 / rho
-        samples = planted_samples(cfg, args, alpha_b=ab, alpha_a=aa,
-                                  ridge=rho, bandwidth_gbps=bw,
-                                  b=b, block_ns=block_ns, subjects=subjects,
-                                  extra=extra, noise=args.plant_noise,
-                                  seed=args.seed)
-        compiles = {(bn, bm): 1 for bn in block_ns
-                    for bm in (*subjects, REFERENCE_BLOCK_M)}
-        _, g, pay = analyse_run(
-            samples, cfg, args, ridge=rho, bandwidth_gbps=bw,
-            b=b, ceiling_tflops=ceiling_tflops,
-            ceiling_source="planted", capability=capability,
-            base_pinned=base, compiles=compiles, executed=dict(compiles),
-            sm_count=args.sm_count or 132, block_ns=block_ns,
-            subjects=subjects)
-        by = {gate.name.split()[0]: gate for gate in g}
+        by, pay = planted_world_gates(
+            cfg, args, alpha_b=ab, alpha_a=aa, extra=extra, noise=noise, b=b,
+            ceiling_tflops=ceiling_tflops, capability=capability,
+            block_ns=block_ns, subjects=subjects,
+            sm_count=args.sm_count or 132, draws=args.draws)
         fitted = pay["fits"]["pooled_exact"]
         chi2 = pay["chi2"]
         sd = pay["bootstrap"]["alpha_a_sd"]
@@ -2661,24 +3806,58 @@ def self_test(args, cfg, b: int, ridge: float, bandwidth_gbps: float,
         "activation re-read is still a world the three terms DESCRIBE, and a "
         "residual gate that failed there would be failing on a parameter value"))
     ceiling_ok = truth_sd is not None and truth_sd <= ALPHA_A_SD_CEILING
+    prior_sd, prior_sd_source = None, ""
+    try:
+        prior_sd, prior_sd_source = published_prior_sd()
+    except CorpusMissing as exc:
+        prior_sd_source = str(exc)
     gates.append(Gate(
         VALIDITY, "S4 the design resolves alpha_a",
-        "at the PINNED settings, alpha_a's spread is smaller than the band C1 "
-        "tests it against",
+        "at the PINNED settings, alpha_a's spread beats the two-point reading "
+        "this fit replaces, which is C6's bar and not the band's width",
         f"sd(alpha_a) <= {ALPHA_A_SD_CEILING:.3f} in the TRUTH world",
         ceiling_ok,
         "no spread" if truth_sd is None else f"sd = {truth_sd:.4f} at "
-        f"GROUP_SIZE_M={args.group_m}, {args.reps} reps",
+        f"GROUP_SIZE_M={args.group_m}, {args.reps} reps, planted spread "
+        f"{noise:.2%} ({noise_source})",
         "C1 on the real run: the same settings will produce the same spread, "
         "so a FAIL here says the POD RUN CANNOT ANSWER P1 and should be "
         "re-pinned before it is paid for",
-        ["THE LEVER IS THE SWIZZLE, and the arithmetic says why. The response "
+        [mde_line(truth_sd, what="alpha_a, planted TRUTH world",
+                  assumption=(f"lognormal spread {noise:.2%} on every timing, "
+                              f"from {noise_source}; {args.draws} draws"),
+                  floor=prior_sd, floor_source=prior_sd_source),
+         "THE LEVER IS THE SWIZZLE, and the arithmetic says why. The response "
          "moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so the whole "
          "design's power is proportional to (1 - alpha_b): at "
-         "GROUP_SIZE_M=1 this study measures alpha near 0.93 and the lever is "
-         "worth 0.07 of its full size, while at 8 or 16 it measures 0.65-0.75 "
-         "and the lever is 4x stronger. --reps buys the rest, as 1/sqrt(reps).",
+         f"GROUP_SIZE_M={args.group_m} the corpus puts alpha_b at "
+         f"{ab0:.2f}, so the lever is "
+         f"{(1 - ab0) / (1 - planted_alpha_b(16)):.0%} of its size at "
+         "GROUP_SIZE_M=16. --reps buys some of the rest, and this gate is what "
+         "says how much: no number here is quoted from a previous run.",
          "If this gate FAILS, re-run --dry-run --group-m 16 before the pod."]))
+    gates.append(Gate(
+        VALIDITY, "S5 C2 can still fail here",
+        "the residual gate has POWER at this pinning: the missing-term world "
+        "does not pass it",
+        "C2 = FAIL in the MISSING world at this GROUP_SIZE_M and this spread",
+        verdicts["MISSING"][4] is False,
+        f"MISSING C2 = {verdicts['MISSING'][4]} at chi2 "
+        + ("n/a" if verdicts["MISSING"][2] is None
+           else f"{verdicts['MISSING'][2]:.2f}")
+        + f" against a ceiling of {RESIDUAL_CHI2_CEILING:.1f}; TRUTH C2 = "
+        + f"{verdicts['TRUTH'][4]} at chi2 "
+        + ("n/a" if verdicts["TRUTH"][2] is None
+           else f"{verdicts['TRUTH'][2]:.2f}"),
+        "C2 on the real run: this is the same probe the run performs on itself "
+        "before scoring C2, so a FAIL here says the real run's C2 will read "
+        "UNKNOWN and the arm cannot establish model completeness",
+        ["S2 asks whether C2 answers DIFFERENTLY across the four worlds and can "
+         "be satisfied by a C2 that fails everywhere. This asks the one thing "
+         "the pod arm's headline depends on: that a PASS could have been a "
+         "FAIL. It is stated separately because the audit found the driver "
+         "self-testing at GROUP_SIZE_M=16, where both hold, and scheduling the "
+         "arm at 1, where this one does not."]))
     return lines, gates
 
 
@@ -2752,9 +3931,36 @@ def build_parser() -> argparse.ArgumentParser:
                          "raising it would let BLOCK_N=256 run -- and would "
                          "unpin the achieved compute rate the references are "
                          "compared across")
-    ap.add_argument("--iters", type=int, default=50)
-    ap.add_argument("--warmup", type=int, default=20)
-    ap.add_argument("--cell-budget-ms", type=float, default=400.0)
+    ap.add_argument("--iters", type=int, default=50,
+                    help="RETIRED as a timing knob on 2026-09-02 and kept only "
+                         "in the run id. moe.bench.timing.time_kernel sizes the "
+                         "iteration count per cell from --cell-budget-ms and "
+                         "the warmup's own queue-deep per-call time. It stays "
+                         "in the id because cells measured under the retired "
+                         "loop exist on disk and a directory must not be "
+                         "resumed into across that change")
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. UNITS CHANGED 2026-09-02: a 1 ms "
+                         "kernel needs hundreds of calls before the governor "
+                         "reacts and a 30 ms one needs a few, so ladders warmed "
+                         "at a fixed COUNT were compared at different clock "
+                         "states. The instrument warms for a duration measured "
+                         "with the same events the trials use")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per timing; the percentiles are "
+                         "over iters x trials samples")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do NOT evict L2 between timed iterations. Off by "
+                         "default because the compute roof every alpha here is "
+                         "scored against was measured flushed, and a warm-L2 "
+                         "cell is not comparable with it. Recorded per row and "
+                         "in the run id, so a flushed and an unflushed sweep "
+                         "can never share a directory")
+    ap.add_argument("--cell-budget-ms", type=float, default=400.0,
+                    help="target measured KERNEL time per trial; the "
+                         "instrument sizes its own iteration count from it")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--draws", type=int, default=BOOTSTRAP_DRAWS,
                     help="bootstrap resamples behind every interval and behind "
@@ -2773,13 +3979,25 @@ def build_parser() -> argparse.ArgumentParser:
                     help="LO,HI in Op/B, only meaningful with --ridge")
     ap.add_argument("--bandwidth-gbps", type=float, default=0.0,
                     help="0 reads this machine's calibration")
-    ap.add_argument("--plant-noise", type=float, default=0.008,
-                    help="lognormal sigma on every planted timing, used ONLY "
-                         "by --self-test. 0.8%% is the middle of the published "
-                         "across-repeat spreads (0.48%% on the A100 arms, up to "
-                         "1.82%% on the H200 ones). S4's design-power verdict "
-                         "is only as good as this number, so set it to what "
-                         "the pod actually shows before trusting it")
+    ap.add_argument("--plant-noise", type=float, default=None,
+                    help="lognormal sigma on every planted timing, used by "
+                         "--self-test, by --dry-run's design-power line and by "
+                         "the C2 power probe the real run performs on itself. "
+                         "DEFAULT IS RESOLVED, NOT FIXED: this run's own "
+                         "measured across-repeat spread when it has one, else "
+                         "the WORST published spread "
+                         f"({PLANT_NOISE_FALLBACK * 100:.2f}%%). "
+                         "It used to default to 0.008, the middle of the "
+                         "published range, and S4 passes at 0.008 and fails at "
+                         "0.015-0.020, so that default decided whether the "
+                         "experiment looked worth paying for by describing a "
+                         "pod quieter than half the corpus")
+    ap.add_argument("--power-draws", type=int, default=POWER_PROBE_DRAWS,
+                    help="bootstrap draws behind the design-power line and the "
+                         "C2 power probe, as distinct from --draws behind the "
+                         "report's own intervals. Fewer, because one sd is "
+                         "read off them and a bootstrap sd's own relative "
+                         "error is about 1/sqrt(2 draws)")
     ap.add_argument("--overhead-ms", type=float, default=0.15,
                     help="the fused layer's fixed cost, used ONLY to plant "
                          "self-test worlds and to price the run. The measured "
@@ -2801,9 +4019,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="plant four worlds and check the gates tell them "
                          "apart, off GPU")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes. Off by "
-                         "default: C4 is predicted to FAIL at GROUP_SIZE_M=1 "
-                         "and a falsified prediction is a result, not an error")
+                    help="exit 1 CLAIM_FAIL unless every gate passes. Off by "
+                         "default: C4 and C6 are both predicted to FAIL at "
+                         "GROUP_SIZE_M=1, and a falsified prediction is a "
+                         "result, not an error. It never softens 3 INVALID")
     return ap
 
 
@@ -2812,6 +4031,34 @@ def _hypothesis_ceiling(dtype: str) -> tuple[float, str]:
     return (712.259 if dtype == "bf16" else 712.259,
             "HYPOTHESIS: the 2026-09-01 H200 bf16 calibration in this repo, "
             "which belongs to no attached device")
+
+
+def _exit_over(gates: list[Gate], args) -> int:
+    """The exit code the gates imply, through `moe.bench.exit_codes.classify`.
+
+    VALIDITY before CLAIM, UNKNOWN counting against both, and an empty list
+    refused rather than reported as DONE -- all of that is the shared table's,
+    not this file's. Two integers meaning two different things in two files is
+    the defect that module is named against, and this file used to return 1 for
+    "some gate did not pass" and 2 for "refused", which collided with the
+    driver's own reading of 2.
+
+    `--fail-on-gate` softens ONE case and says so out loud: without it a
+    CLAIM_FAIL is reported as DONE, because a claim gate that failed is a
+    RESULT and not a broken run, and C4 is PREDICTED to fail at
+    GROUP_SIZE_M=1. It never softens INVALID: a VALIDITY gate that did not pass
+    means nothing on the page may be quoted, whatever the operator asked for.
+    """
+    rc = exit_codes.classify(g.scored() for g in gates)
+    if rc == exit_codes.CLAIM_FAIL and not args.fail_on_gate:
+        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
+        print(f"         reported as exit {exit_codes.DONE} without "
+              "--fail-on-gate: a claim that did not pass is a RESULT. Pass "
+              f"--fail-on-gate to return {exit_codes.CLAIM_FAIL} CLAIM_FAIL "
+              "instead.")
+        return exit_codes.DONE
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
 
 
 def _main(argv=None) -> int:                                    # noqa: C901
@@ -2824,7 +4071,19 @@ def _main(argv=None) -> int:                                    # noqa: C901
         print(f"REFUSED: BLOCK_M={REFERENCE_BLOCK_M} is the compute reference "
               "and cannot also be a subject. A ladder used as its own compute "
               "branch has no memory branch by assumption and yields no alpha.")
-        return 2
+        return exit_codes.REFUSED
+
+    # THE PRE-REGISTERED BAND IS CHECKED AGAINST THE FILES IT CAME FROM BEFORE
+    # ANYTHING ELSE HAPPENS. The band this replaced cited four A100 slopes that
+    # exist in no file, and nothing in the code could have noticed. A run whose
+    # C1 would be scored against a band that no longer reads back refuses here,
+    # at no cost, rather than on the pod.
+    try:
+        _, band_lines = check_alpha_a_band()
+        prior_sd, prior_sd_source = published_prior_sd()
+    except CorpusMissing as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
 
     capability = SWEEP.parse_capability(args.capability)
     if capability is None and not synthetic:
@@ -2842,7 +4101,7 @@ def _main(argv=None) -> int:                                    # noqa: C901
         rr = SWEEP.resolve_ridge(args, synthetic=synthetic)
     except SWEEP.RidgeUnavailable as exc:
         print(f"REFUSED: {exc}")
-        return 2
+        return exit_codes.REFUSED
     bandwidth, bw_source = args.bandwidth_gbps, "given on the command line"
     ceiling, ceiling_source = 0.0, ""
     try:
@@ -2867,10 +4126,6 @@ def _main(argv=None) -> int:                                    # noqa: C901
                 "HYPOTHESIS: the published H200 triad ceiling, no calibration "
                 "on this box")
 
-    plan = build_plan(args, cfg, b, capability, rr.ridge, bandwidth)
-    block_ns = plan.block_ns
-    treads = {bm: len(rs) for (bn, bm), rs in plan.rows.items()}
-
     detected = detect_card_slug()
     card = args.card or detected or NO_CARD_SLUG
     if args.card and detected and args.card != detected:
@@ -2878,18 +4133,65 @@ def _main(argv=None) -> int:                                    # noqa: C901
               f"{detected!r}. --card may name a card that is ABSENT, so a "
               "laptop can print the pod's real path; it may never contradict "
               "one that is present. Nothing measured.")
-        return 2
+        return exit_codes.REFUSED
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or SWEEP.results_root()) / "bn_decomposition" / run_id
     csv_path = out_dir / "cells.csv"
     card_path = out_dir / "CARD"
     cache_root = out_dir / "triton-cache"
 
+    # THE SPREAD EVERY PLANTED WORLD IS GENERATED AT, resolved once, before the
+    # plan is priced and before any gate is scored, and printed with its
+    # provenance wherever it is used.
+    #
+    # THE ORDER IS THE FIX. `--plant-noise` used to be an argparse default of
+    # 0.008 -- the middle of the published range -- and S4 passes at 0.008 and
+    # fails at 0.015-0.020, so that one number decided whether the experiment
+    # looked worth paying for, while describing a pod quieter than half the
+    # corpus. It now comes from THIS run's own cells when there are any on disk
+    # (a resume, or a replay of a pod directory pointed at with --out), and
+    # otherwise from the WORST published spread, which is the conservative end.
+    _, prior_samples = read_samples(csv_path)
+    _, _, prior_spreads = arm_alphas(
+        prior_samples, cfg, block_ns=tuple(int(v) for v in
+                                           args.block_n_list.split(",")),
+        subjects=subjects, ridge=rr.ridge, bandwidth_gbps=bandwidth, b=b,
+        base_pinned=dict(SWEEP.FIXED, num_stages=args.num_stages,
+                         num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
+                         BLOCK_SIZE_K=args.block_k),
+        capability=capability, ceiling_tflops=ceiling,
+        sm_count=args.sm_count or 132) if prior_samples else ([], [], {})
+    on_disk, on_disk_source = measured_spread(prior_spreads)
+    noise, noise_source = resolve_plant_noise(args.plant_noise, on_disk,
+                                              on_disk_source)
+
+    # BUILT TWICE, AND CHEAPLY: the design-power probe needs to know which BN
+    # arms survive the resource bill before it can plant a world on them, and
+    # the plan the report prints carries that probe's answer. Both passes are
+    # pure arithmetic on the pinned constants and neither touches a device.
+    grid_only = build_plan(args, cfg, b, capability, rr.ridge, bandwidth)
+    block_ns = grid_only.block_ns
+    treads = {bm: len(rs) for (bn, bm), rs in grid_only.rows.items()}
+
+    # THE DESIGN-POWER LINE IS COMPUTED HERE, on a planted TRUTH world at this
+    # pinning and this noise, and it is what replaces the literal string
+    # "sd 0.11-0.13 ... at any rep count tried" that this file printed while the
+    # code produced 0.176 at the same settings.
+    power = (design_power(cfg, args, b=b, ceiling_tflops=ceiling,
+                          capability=capability, block_ns=block_ns,
+                          subjects=subjects, sm_count=args.sm_count or 132,
+                          noise=noise, noise_source=noise_source,
+                          draws=args.power_draws)
+             if block_ns else None)
+    plan = build_plan(args, cfg, b, capability, rr.ridge, bandwidth,
+                      power=power, prior_sd=prior_sd,
+                      prior_sd_source=prior_sd_source)
+
     lines = [
         "experiment  bn_decomposition: separate alpha_a from alpha_b, and test "
         "whether the model is complete", "",
         predictions_text(cfg, b, rr.ridge, rr.source, block_ns, subjects,
-                         treads, args.group_m), "",
+                         treads, args.group_m, band_lines), "",
         "## The plan", ""]
     lines += plan.lines(cfg)
     lines += [
@@ -2897,6 +4199,10 @@ def _main(argv=None) -> int:                                    # noqa: C901
         f"ridge band   {rr.band[0]:.2f}-{rr.band[1]:.2f}, {rr.band_source}",
         f"bandwidth    {bandwidth:.1f} GB/s, {bw_source}",
         f"ceiling      {ceiling:.1f} TFLOP/s {args.dtype}, {ceiling_source}",
+        "instrument   " + (SWEEP.timing_basis() or
+                           "NOT NAMEABLE on this box (no importable torch), "
+                           "which is also the case in which nothing here "
+                           "measures anything"),
         f"card         {card}" + ("" if detected else
                                   "  (NO DEVICE: this id is the 'nocard' one "
                                   "and is not what a pod derives; --card "
@@ -2906,6 +4212,7 @@ def _main(argv=None) -> int:                                    # noqa: C901
         + (f"sm_{capability[0]}{capability[1]}" if capability
            else "an UNKNOWN device (--capability MAJOR.MINOR gives the "
                 "shared-memory verdict; the register check runs regardless)")]
+
     base_pinned = plan.base_pinned
     for bn in tuple(int(v) for v in args.block_n_list.split(",")):
         for bm in (*subjects, REFERENCE_BLOCK_M):
@@ -2940,19 +4247,19 @@ def _main(argv=None) -> int:                                    # noqa: C901
 
     if args.dry_run:
         print("\n".join(lines))
-        return 0 if not underpowered else 2
+        return exit_codes.DONE if not underpowered else exit_codes.REFUSED
 
     if args.self_test:
         more, gates = self_test(args, cfg, b, rr.ridge, bandwidth, ceiling,
-                                capability, block_ns, subjects)
+                                capability, block_ns, subjects, noise=noise,
+                                noise_source=noise_source)
         print("\n".join(lines + more + ["", "## Gates", ""]
                         + render_gates(gates)))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        return _exit_over(gates, args)
 
     if underpowered:
         print("\n".join(lines))
-        return 2
+        return exit_codes.REFUSED
 
     missing = SWEEP.missing_gpu_stack()
     if missing:
@@ -2962,25 +4269,25 @@ def _main(argv=None) -> int:                                    # noqa: C901
               "  --self-test  four planted worlds, checking the gates "
               "discriminate\n"
               "  --dry-run    the plan, the resource bill and the cost")
-        return 2
+        return exit_codes.REFUSED
 
     visibility = git_visibility(out_dir)
     if args.require_git_visible and visibility.startswith("IGNORED"):
         print("\n".join(lines))
         print(f"\nREFUSING: {visibility}")
-        return 2
+        return exit_codes.REFUSED
     if not block_ns:
         print("\n".join(lines))
         print("\nREFUSED: every BN arm was dropped by the resource bill. "
               "Nothing to measure.")
-        return 2
+        return exit_codes.REFUSED
     if hw is None:
         print("\n".join(lines))
         print("\nREFUSED: no calibration for the attached device. V2 scores "
               "every compute reference against THIS card's measured peak, and "
               "there is nothing here to accept or refuse one with. Run "
               "scripts/calibrate_hardware.py first.")
-        return 2
+        return exit_codes.REFUSED
 
     import torch
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -3000,13 +4307,36 @@ def _main(argv=None) -> int:                                    # noqa: C901
                   f"{written_by or '<unrecorded>'!r} and this run is {card!r}. "
                   "Resuming would report one card's treads against the other's "
                   "ridge. Move or delete that directory deliberately.")
-            return 2
+            return exit_codes.REFUSED
     card_path.write_text(card + "\n")
 
     sm_count = args.sm_count or torch.cuda.get_device_properties(0).multi_processor_count
     done, samples = read_samples(csv_path)
     compiles: dict[tuple[int, int], int] = {}
     executed: dict[tuple[int, int], int] = {}
+
+    # THE ROW-LEVEL PROVENANCE, BUILT ONCE. A mid-run commit must not give two
+    # rows two shas, and `iters` is None here on purpose: each row carries the
+    # count the instrument sized for that cell, and a run-wide number in the
+    # block would contradict most of them. The report's own copy is stamped
+    # after the sweep with the median the cells actually used.
+    row_prov = PV.provenance_block(
+        instrument=SWEEP.timing_basis(), ridge=rr.ridge, ridge_source=rr.source,
+        bandwidth=bandwidth, bandwidth_source=bw_source,
+        warmup_ms=args.warmup, target_ms=args.cell_budget_ms, iters=None)
+
+    # THE CLOCK THE ROOF WAS MEASURED AT, resolved once before any cell so the
+    # whole arm is scored against one number and a mid-sweep yaml rewrite cannot
+    # move it. Without it every cell's LEVEL verdict is None, which means "not
+    # determined" and excludes nothing; a guessed reference would exclude real
+    # treads.
+    reference_clock, clock_source = SWEEP.reference_clock_mhz()
+    print("reference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT RESOLVED ({clock_source}); every cell's clock LEVEL "
+                  "verdict will be None and no cell can be excluded for it"))
+    instrument_kw = dict(prov=row_prov,
+                         reference_clock_mhz=reference_clock)
     started = time.time()
     # EVERY REFERENCE FIRST, ACROSS ALL ARMS, AND THEN THE SUBJECTS. Two
     # reasons, and the second is why it is not merely tidy:
@@ -3028,7 +4358,8 @@ def _main(argv=None) -> int:                                    # noqa: C901
         print(f"\n-- BN={bn}: reference ladder, BLOCK_M={REFERENCE_BLOCK_M} --")
         c, e = measure_setting(args, cfg, bn, REFERENCE_BLOCK_M,
                                plan.rows[(bn, REFERENCE_BLOCK_M)], csv_path,
-                               cache_root, pinned, done, samples)
+                               cache_root, pinned, done, samples,
+                               **instrument_kw)
         compiles[(bn, REFERENCE_BLOCK_M)], executed[(bn, REFERENCE_BLOCK_M)] = c, e
         pts, _ = collapse(samples, bn, REFERENCE_BLOCK_M)
         early_cells = [SWEEP.make_cell(cfg, n * REFERENCE_BLOCK_M,
@@ -3072,19 +4403,37 @@ def _main(argv=None) -> int:                                    # noqa: C901
                 continue
             print(f"\n-- BN={bn}: subject ladder, BLOCK_M={bm} --")
             c, e = measure_setting(args, cfg, bn, bm, plan.rows[(bn, bm)],
-                                   csv_path, cache_root, pinned, done, samples)
+                                   csv_path, cache_root, pinned, done,
+                                   samples, **instrument_kw)
             compiles[(bn, bm)], executed[(bn, bm)] = c, e
     print(f"\nmeasured in {time.time() - started:.0f} s")
 
+    # `probe_c2_power=True` EXACTLY HERE AND NOWHERE ELSE. The measured run is
+    # the only thing that has a measured spread to plant at, and C2 is the gate
+    # the arm's headline rests on. See `gate_residual`.
     more, gates, payload = analyse_run(
         samples, cfg, args, ridge=rr.ridge, bandwidth_gbps=bandwidth, b=b,
         ceiling_tflops=ceiling, ceiling_source=ceiling_source,
         capability=capability, base_pinned=base_pinned, compiles=compiles,
         executed=executed, sm_count=sm_count, block_ns=block_ns,
-        subjects=subjects)
+        subjects=subjects, probe_c2_power=True, plant_noise=args.plant_noise,
+        band_lines=band_lines)
     payload["gpu"] = torch.cuda.get_device_name(0)
     payload["run_id"] = run_id
     payload["ridge_source"] = rr.source
+    payload["alpha_a_band_provenance"] = band_lines
+    # THE ITERATION COUNT IN THE BLOCK IS THE INSTRUMENT'S, NOT THE KNOB'S:
+    # `--iters` is retired and `time_kernel` sizes each cell from the budget,
+    # so recording the argparse default would contradict every row of the CSV.
+    iters_seen = [s.iters for s in samples
+                  if s.status == "ok" and s.iters > 0]
+    payload = PV.provenance_block(
+        instrument=SWEEP.timing_basis(),
+        ridge=rr.ridge, ridge_source=rr.source,
+        bandwidth=bandwidth, bandwidth_source=bw_source,
+        warmup_ms=args.warmup, target_ms=args.cell_budget_ms,
+        iters=int(statistics.median(iters_seen)) if iters_seen else None,
+    ).stamp(payload)
     text = "\n".join(lines + more + ["", "## Gates", ""] + render_gates(gates))
     print("\n".join(more + ["", "## Gates", ""] + render_gates(gates)))
     (out_dir / "report.txt").write_text(text)
@@ -3093,8 +4442,7 @@ def _main(argv=None) -> int:                                    # noqa: C901
     for label, path in (("cells", csv_path), ("report", out_dir / "report.txt"),
                         ("json", out_dir / "report.json")):
         print(f"{label:8s} {path}\n         {git_visibility(path)}")
-    return 1 if (args.fail_on_gate
-                 and any(g.passed is not True for g in gates)) else 0
+    return _exit_over(gates, args)
 
 
 def main(argv=None) -> int:
@@ -3118,7 +4466,7 @@ def main(argv=None) -> int:
         if isinstance(exc.code, str):
             msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
             print(msg, file=sys.stderr)
-            return 2
+            return exit_codes.REFUSED
         raise
 
 
