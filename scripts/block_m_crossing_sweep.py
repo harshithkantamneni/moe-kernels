@@ -299,6 +299,24 @@ def rows_step(cfg) -> int:
     return cfg.num_experts // math.gcd(cfg.num_experts, cfg.top_k)
 
 
+def rows_quantum(cfg) -> int:
+    """Rows-per-expert must be a multiple of this or the token count is not one.
+
+    `T = R E / k`, so R must be a multiple of `k / gcd(E, k)`. It is 1 for
+    mixtral (E=8, k=2) and for qwen2 (E=64, k=8), which is why nothing noticed
+    -- and 3 for deepseek-v2-lite (E=64, k=6), whose default grid starts at
+    r=28 and stepped by 32, hitting a legal row only by accident.
+
+    build_grid did not consult it, so the model with the SMALLEST per-expert
+    footprint -- the low-phi anchor of the whole alpha-versus-L2 curve -- died
+    three seconds into an unattended run with `28 rows per expert is not an
+    integer token count`, twice, while every other arm passed. A geometry
+    constraint that excludes one model from a study is worse than a crash,
+    because the surface still plots.
+    """
+    return cfg.top_k // math.gcd(cfg.num_experts, cfg.top_k)
+
+
 def tokens_for_rows(cfg, rows: int) -> int:
     tokens = rows * cfg.num_experts / cfg.top_k
     if abs(tokens - round(tokens)) > 1e-9:
@@ -403,6 +421,14 @@ def build_grid(cfg, block_sizes, r_max: int, row_step: int, step_probes: int
     and a grid that only samples tread tops cannot see a step at all: it has one
     point per tread and every interval it can form spans a boundary.
     """
+    # Every point is snapped DOWN to a legal row count, then the illegal ones
+    # are dropped rather than nudged: a probe at `edge - gap` that got rounded
+    # onto `edge` would stop bracketing the boundary it exists to bracket, and
+    # gate 1 would be reading a step that no point straddles.
+    q = rows_quantum(cfg)
+    row_step = max(row_step, q)
+    if row_step % q:
+        row_step += q - (row_step % q)
     grid = set(range(row_step, r_max + 1, row_step))
     for bm in block_sizes:
         gap = max(2, bm // 8)
@@ -416,7 +442,7 @@ def build_grid(cfg, block_sizes, r_max: int, row_step: int, step_probes: int
             # above it, and an unbracketed boundary is invisible to gate 1
             # however dense the rest of the grid is.
             for r in (edge - gap, edge, edge + gap):
-                if 1 <= r <= r_max + gap:
+                if 1 <= r <= r_max + gap and r % q == 0:
                     grid.add(r)
     return sorted(grid)
 

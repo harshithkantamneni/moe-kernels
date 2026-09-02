@@ -752,3 +752,40 @@ def test_the_report_states_the_prediction_before_the_measurement():
     assert "1.558x at the low ridge" in text
     assert "2.116x at the high one" in text
     assert "retracted alpha=0.1 says 1.100x" in text
+
+
+def test_the_grid_is_legal_for_every_model_in_the_study():
+    """deepseek-v2-lite died 3 seconds into an unattended run, twice, on
+
+        ValueError: 28 rows per expert is not an integer token count for E=64 k=6
+
+    T = R E / k, so R must be a multiple of k / gcd(E, k). That is 1 for mixtral
+    (E=8, k=2) and for qwen2 (E=64, k=8), which is why nothing caught it, and 3
+    for v2lite -- whose default grid started at 28 and stepped by 32, landing on
+    a legal row only by accident. build_grid never consulted the quantum.
+
+    The cost was not the crash. It was that the model with the SMALLEST
+    per-expert footprint, the low-phi anchor of the alpha-versus-L2 curve, was
+    silently absent from the surface while every other arm passed and the plot
+    still drew.
+    """
+    for name, cfg in sorted(MODEL_CONFIGS.items()):
+        q = BM.rows_quantum(cfg)
+        grid = BM.build_grid(cfg, (32, 64, 128, 256), 1024, 32, 6)
+        assert grid, f"{name}: empty grid"
+        illegal = [r for r in grid if r % q]
+        assert not illegal, f"{name}: {len(illegal)} rows are not multiples of {q}"
+        for r in grid:
+            BM.tokens_for_rows(cfg, r)      # raises if the token count is not one
+
+
+def test_the_quantum_is_one_for_the_models_that_never_exposed_this():
+    """Pinned so the fix cannot silently change the grid for the two models the
+    published alpha values were measured on. A different grid there would mean
+    the new numbers are not comparable with the old ones."""
+    assert BM.rows_quantum(MODEL_CONFIGS["mixtral-8x7b"]) == 1
+    assert BM.rows_quantum(MODEL_CONFIGS["qwen2-57b-a14b"]) == 1
+    assert BM.rows_quantum(MODEL_CONFIGS["deepseek-v2-lite"]) == 3
+    for name in ("mixtral-8x7b", "qwen2-57b-a14b"):
+        grid = BM.build_grid(MODEL_CONFIGS[name], (32, 64, 128, 256), 1024, 32, 6)
+        assert len(grid) == 69, f"{name}: grid changed size, results are not comparable"
