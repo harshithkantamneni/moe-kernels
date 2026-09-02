@@ -43,14 +43,39 @@ sources nest inside one another:
      the CUDA context, the allocator arenas and the clocks;
   3. re-running the sweep as a FRESH PROCESS with a FRESH Triton cache.
 
-Only (3) is exchangeable with the comparison being scored. The cross-card arms
-ran in separate processes on separate pods with separate caches; so did s3 and
-s4. A floor measured at (1) or (2) would be narrower than the noise actually
-present in every difference the study reports, and scoring those differences
-against it is the exact mechanism by which a null becomes a finding. So a
-replicate here is a separate `block_m_crossing_sweep.py` PROCESS with its own
-output directory, which gives it its own Triton cache for free -- the sweep
-already points TRITON_CACHE_DIR at <out_dir>/triton-cache before it imports vLLM.
+Only (3) is exchangeable with the comparison being scored. A floor measured at
+(1) or (2) would be narrower than the noise actually present in every difference
+the study reports, and scoring those differences against it is the exact
+mechanism by which a null becomes a finding. So a replicate here is a separate
+`block_m_crossing_sweep.py` PROCESS with its own output directory, which gives it
+its own Triton cache for free -- the sweep already points TRITON_CACHE_DIR at
+<out_dir>/triton-cache before it imports vLLM.
+
+WHAT THE PROXY ACTUALLY BOUNDS, corrected 2026-09-02. This docstring said until
+today that s3 and s4 "ran in separate processes on separate pods with separate
+caches". Separate processes and separate caches are true. SEPARATE PODS IS
+FALSE: both arms' ARMS.tsv log to /workspace/session/20260901T214218Z, the same
+pod and the same hour, because scripts/cross_card_surface.sh deliberately reuses
+the newest session directory. The proxy therefore bounds SAME-SESSION rerun
+noise plus num_stages, and nothing about it is established for a comparison
+across pods, days or cards -- which is most of what this study subtracts. Part
+(a) below inherits the same limit by design (one card, one session), so running
+it does not make the cross-pod comparisons scoreable either; saying that plainly
+is better than a floor whose scope nobody wrote down.
+
+THE PROXY IS ALSO HETEROSCEDASTIC and must not be quoted per cell. Its 11 paired
+deltas split by model into mixtral n=4, sd 0.0486, largest |delta| 0.0888, and
+qwen2 n=7, sd 0.0186 -- a 2.61x ratio, inside this file's own
+HOMOGENEITY_RATIO of 3.0 but not by much. "Inside 2x the pooled 0.0323" is the
+wrong yardstick at mixtral G>=8, where the spread is half again as wide as the
+pool. The scope block in NOISE_FLOOR.json carries both numbers.
+
+THE SCOPE OF ANY FLOOR THIS SCRIPT PUBLISHES is written into the JSON and
+printed in the plan, because a floor whose scope is only in a docstring gets
+quoted without it. It is: one card, one session, the models named in `--arms`,
+one BLOCK_SIZE_N, one num_stages, one seed, fresh Triton cache, and the
+instrument named by `moe.bench.timing.TIMING_BASIS`. Anything outside that list
+is unscored by it.
 
 FRESH CACHE IS THE DEFAULT, and `--warm-cache` measures the other thing on
 purpose. Warm is the narrower floor: it holds codegen fixed and reports only
@@ -92,7 +117,30 @@ within a factor of three is not a floor -- and because its 0.0410 detection limi
 is 9.4x below the swizzle swing (0.3855) and 10.0x below the G=1 footprint spread
 (0.411), the two effects the study most wants to claim. It deliberately does NOT
 resolve the cross-card 0.0117: that would need 61 replicates per card at one
-cell, and saying so is the point rather than a limitation.
+cell, and saying so is the point rather than a limitation. It also does not
+resolve the QWEN2 swizzle effect (0.0226 at its largest H200 cell), and that is
+registered below as an EXPECTED FAIL rather than discovered afterwards.
+
+THE ARMS ARE TWO MODELS, NOT ONE, and that is the whole of the second fix. Until
+2026-09-02 DEFAULT_ARMS was mixtral at G=1 and G=16 and nothing else, i.e. the
+one model where the swizzle effect is 0.3855 and a 12-sigma certainty. On qwen2
+the same lever moves 0.006 to 0.023 on the H200 and reverses sign between tiles
+on the A100 (+0.0813 at BLOCK_M=32, -0.0914 at 64) -- below this design's
+detection limit, unregistered, and never replicated. A floor measured only where
+the effect is largest would have been published as though it licensed the
+surface, so `--arms` now covers both models by default and REFUSES a
+single-model floor unless `--single-model-floor` says so in argv.
+
+INTERLEAVED, NOT BLOCKED. Until 2026-09-02 the runner ran all six G=1 replicates
+and then all six G=16, so C3's swizzle delta was a between-BLOCK difference
+carrying whatever drifted across thirteen minutes, while the between-replicate
+sd it was scored against was a within-block number. The two swizzles of one
+model now run back to back inside one replicate, and the ORDER of the pair
+alternates across replicates (`--order counterbalanced`, the default), so a
+linear drift inside a pair cancels out of the mean delta instead of being added
+to every one of them. `--order paired` keeps G=1 first in every replicate; it is
+the weaker design and is kept only because it is the simplest thing to check by
+eye. The plan prints the exact sequence on an `order:` line per model.
 
 THE SAME ARITHMETIC ON THE DESIGN THE STUDY ACTUALLY RAN. Paired over k cells
 with one replicate per condition and sd_d = 0.0480, the detectable effect at k=11
@@ -118,12 +166,20 @@ git would ignore. And it refuses to treat a set of replicates whose alphas are
 bit-identical as a measurement, because that is what a run-id collision looks
 like from the outside and this repo has already shipped one.
 
-EXIT CODES. 0 every gate passed, 1 a gate FAILED, 3 nothing was measured.
+EXIT CODES come from `moe.bench.exit_codes` and from nowhere else. This file used
+to exit 3 for "nothing was measured" while the session driver read 3 as RETRY and
+2 as REFUSED, so every honest refusal was queued for a re-run; and because the
+driver's summary grepped free text for `floor|sigma`, a REFUSED log matched
+eighteen times and printed the IMPORTED proxy and a PRE-REGISTERED expectation as
+though they were this run's measured output. Both halves are fixed here: refusals
+return `exit_codes.REFUSED`, a measured run returns `exit_codes.classify` over
+its own gates, and the only greppable result on the page is one
+`exit_codes.result_line` per SCORED gate. A refusal prints none at all, which is
+what `classify_text` reads as "nothing was scored".
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -138,7 +194,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
+
 SWEEP = ROOT / "scripts" / "block_m_crossing_sweep.py"
+
+
+def timing_basis() -> str | None:
+    """`moe.bench.timing.TIMING_BASIS`, or None when it cannot be named here.
+
+    NOT a top-level import, for the same reason `block_m_crossing_sweep` does
+    not take one: `moe.bench.timing` imports torch, and `--control-only` and
+    `--dry-run` are documented to run on a laptop with no torch at all. None is
+    not a default; it says the instrument could not be NAMED on this machine,
+    which is exactly the case where nothing was measured either. Broad except
+    because a torch that is INSTALLED and broken raises OSError on a missing
+    libcudart rather than ImportError, and naming the instrument is never worth
+    taking the report down for.
+    """
+    try:
+        from moe.bench.timing import TIMING_BASIS
+    except Exception:                                     # noqa: BLE001
+        return None
+    return TIMING_BASIS
 PUBLISHED = ROOT / "results" / "published"
 
 #: Where the importable number lives. `results/*` is ignored with only
@@ -147,9 +225,16 @@ PUBLISHED = ROOT / "results" / "published"
 #: rather than trusting this comment.
 NOISE_FLOOR_JSON = PUBLISHED / "NOISE_FLOOR.json"
 
-SCHEMA = "moe-kernels/noise-floor/1"
+SCHEMA = "moe-kernels/noise-floor/2"
 
-EXIT_OK, EXIT_GATE_FAILED, EXIT_NOT_MEASURED = 0, 1, 3
+#: Every schema `noise_floor()` still knows how to read, oldest first. Version 2
+#: (2026-09-02) added `scope`, `prior_sd_by_model`, a provenance block and an
+#: instrument, and CORRECTED `prior_sd_source`, which used to say only "upper
+#: bound" without saying what it bounded. The additions are additive and v1
+#: files still parse, which is why v1 stays in this tuple; the correction is
+#: why the version moved at all. A file whose schema is not here is REFUSED
+#: rather than parsed on the assumption that the fields mean what they used to.
+SCHEMA_READABLE = ("moe-kernels/noise-floor/1", SCHEMA)
 
 #: The two committed arms that are the SAME CARD at different pipeline depths.
 #: This pairing is the whole of part (b) and it existed on disk, unread, from the
@@ -192,12 +277,30 @@ class Effect:
     name: str
     size: float
     source: str
+    #: The model the effect was measured on, or "" when it is not a per-model
+    #: quantity. `--arms` is checked against these: an effect registered on a
+    #: model no arm measures is a target the run cannot shoot at.
+    model: str = ""
 
 
 EFFECTS: tuple[Effect, ...] = (
     Effect("swizzle swing", 0.3855,
            "s4 arm, mixtral BLOCK_M=32: alpha-corrected 1.0073 at GROUP_SIZE_M=1 "
-           "vs 0.6218 at 16"),
+           "vs 0.6218 at 16", "mixtral-8x7b"),
+    # REGISTERED 2026-09-02, and registered because it is SMALL. The surface is
+    # published as a general mechanism on the strength of the mixtral number
+    # above; on qwen2 the identical lever moves a tenth of that on the H200 and
+    # reverses sign between two tiles on the A100, which is what an effect that
+    # is not there looks like through a design with an MDE of 0.041. Writing it
+    # down before the run is what stops the replicate arm confirming the
+    # mechanism on the one model where it is 12 sigma and saying nothing about
+    # the other.
+    Effect("swizzle swing", 0.0226,
+           "H200 s4 and s3, qwen2 G=1 -> G=16 in alpha-corrected: -0.0217 and "
+           "-0.0226 (s4, BLOCK_M 32 and 64), -0.0061 and -0.0175 (s3). The "
+           "A100 s3 arm gives +0.0813 at BLOCK_M=32 and -0.0914 at 64, i.e. "
+           "OPPOSITE SIGNS at matched cells of one arm",
+           "qwen2-57b-a14b"),
     Effect("footprint spread at G=1", 0.4110,
            "s4 arm, all seven GROUP_SIZE_M=1 fits: 1.0073 (mixtral BN=64 BM=32) "
            "down to 0.5963 (deepseek-v2-lite BM=32)"),
@@ -206,12 +309,40 @@ EFFECTS: tuple[Effect, ...] = (
            "alpha-corrected"),
 )
 
+
+def effects_for(model: str) -> tuple[Effect, ...]:
+    """Every registered effect that belongs to `model`, plus the model-free ones."""
+    return tuple(e for e in EFFECTS if e.model in ("", model))
+
+
+#: The effect the paired-design power arithmetic is quoted against, looked up by
+#: name rather than by position. It used to be `EFFECTS[-1]`, which was correct
+#: only while nothing was ever appended to the tuple.
+CROSS_CARD_EFFECT = next(e for e in EFFECTS if e.name == "cross-card L2")
+
 #: The best prior estimate of per-arm replicate sd, and its provenance. The
 #: s3-vs-s4 paired sd is 0.0323 over 11 cells; dividing by sqrt(2) turns a
 #: difference-of-two sd into a per-arm sd. It CONFOUNDS num_stages with rerun
 #: noise, so it can only be an upper bound, which is what makes it safe to size N
 #: against.
 PRIOR_SD = 0.0323 / math.sqrt(2.0)
+
+#: What the proxy is an upper bound ON, spelled out because the old label said
+#: only "upper bound" and was read as though it covered every comparison in the
+#: repo. Both arms logged to /workspace/session/20260901T214218Z.
+PRIOR_SD_SOURCE = (
+    "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages "
+    "with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and "
+    "on nothing else: both arms ran in the same pod hour "
+    "(/workspace/session/20260901T214218Z), so it is NOT established for "
+    "cross-pod, cross-day or cross-card comparisons. It is also "
+    "heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a "
+    "2.61x ratio, so it must not be quoted per cell at mixtral G>=8")
+
+#: The proxy's spread split by model, from `stages_control()`'s own 11 deltas.
+#: Recomputed at run time into the published JSON; these are the values at the
+#: commit that registered them, kept so a drift is visible rather than silent.
+PRIOR_SD_BY_MODEL = {"mixtral-8x7b": 0.0486, "qwen2-57b-a14b": 0.0186}
 
 DEFAULT_REPLICATES = 6
 
@@ -570,6 +701,14 @@ def noise_floor(path: Path | None = None, field_name: str = PRIMARY_FIELD,
             f"GPU and then --publish. There is no default noise floor and there "
             f"will not be one.")
     doc = json.loads(target.read_text())
+    schema = doc.get("schema")
+    if schema not in SCHEMA_READABLE:
+        raise NoiseFloorUnmeasured(
+            f"{target} carries schema {schema!r}, which this module does not "
+            f"know how to read (it reads {list(SCHEMA_READABLE)}). Parsing it "
+            f"anyway would mean assuming its fields still mean what they meant "
+            f"here, and the one field that has already changed meaning is the "
+            f"scope of the prior.")
     block = doc.get("replicate_floor")
     if not block:
         raise NoiseFloorUnmeasured(
@@ -793,10 +932,32 @@ def cross_card(field_name: str = PRIMARY_FIELD) -> PairedDifference:
 class Arm:
     """One sweep configuration, replicated N times.
 
-    The defaults are the two ends of the swizzle swing on the model whose arm is
-    cheapest, so the same replicates that measure the floor also score the
-    largest effect the study claims -- with replicates, which no comparison in
-    this repo has ever had.
+    The defaults are the two ends of the swizzle swing, on BOTH models the s3/s4
+    surface was fitted on, so the same replicates that measure the floor score
+    the largest effect the study claims AND the one it never registered.
+
+    THE TIMING FIELDS ARE THE INSTRUMENT'S, NOT A CALL COUNT. `--warmup` on the
+    sweep became MILLISECONDS of delivered load on 2026-09-02 and `--iters` was
+    retired as a timing knob (`moe.bench.timing.time_kernel` sizes the count per
+    cell from `--cell-budget-ms`). This arm carried `warmup=20` from before that
+    change, which the new parser reads as 20 MILLISECONDS -- a fifteenth of the
+    sweep's own 300 ms default, so every replicate would have been timed at an
+    unsettled clock and the floor would have measured the governor. `warmup_ms`,
+    `trials` and `l2_flush` are the instrument's three knobs and they are passed
+    through by name.
+
+    BLOCK_M=128 IS NOT SWEPT HERE AND ITS ABSENCE PAYS FOR THE SECOND MODEL.
+    The floor is a spread of FITTED alphas, so a tile with no fit contributes
+    nothing to it, and 128 has no fit anywhere in the committed s3/s4 arms at
+    these settings: `ladder["128"]["alpha_corrected"]` is null in every mixtral
+    and qwen2 report at BLOCK_SIZE_N=64, because at this geometry its cap sits
+    on the ridge and `fit_ladder` discards a memory branch within 15% of the
+    compute branch. 256 stays because it is not a subject either: it is the
+    COMPUTE REFERENCE, `compute_reference` qualifies the LARGEST ladder and
+    refuses rather than falling through to the runner-up, so dropping it would
+    leave 64 as the largest and cost the run every alpha it has. Three tiles
+    instead of four is 256 s of modelled GPU per arm against 413, which is what
+    makes a two-model floor cost about what the one-model floor cost.
     """
 
     name: str
@@ -805,32 +966,121 @@ class Arm:
     group_m: int = 1
     block_n: int = 64
     num_stages: int = 4
-    tiles: str = "32,64,128,256"
+    tiles: str = "32,64,256"
     r_max: int = 1024
     row_step: int = 32
     step_probes: int = 6
-    iters: int = 50
-    warmup: int = 20
+    warmup_ms: float = 300.0
+    trials: int = 3
+    l2_flush: bool = True
     cell_budget_ms: float = 400.0
     seed: int = 0
 
+    @property
+    def swizzle_label(self) -> str:
+        """`g1`, `g16`: the token this arm shows up as on the `order:` line."""
+        return f"g{self.group_m}"
+
     def sweep_argv(self, run_id: str, out_dir: Path) -> list[str]:
-        return [
+        argv = [
             "--model", self.model, "--dtype", self.dtype, "--tiles", self.tiles,
             "--r-max", str(self.r_max), "--row-step", str(self.row_step),
             "--step-probes", str(self.step_probes),
             "--num-stages", str(self.num_stages), "--group-m", str(self.group_m),
-            "--block-n", str(self.block_n), "--iters", str(self.iters),
-            "--warmup", str(self.warmup),
+            "--block-n", str(self.block_n), "--warmup", str(self.warmup_ms),
+            "--trials", str(self.trials),
             "--cell-budget-ms", str(self.cell_budget_ms), "--seed", str(self.seed),
             "--run-id", run_id, "--out", str(out_dir),
         ]
+        if not self.l2_flush:
+            argv.append("--no-l2-flush")
+        return argv
 
+
+MIXTRAL, QWEN2 = "mixtral-8x7b", "qwen2-57b-a14b"
 
 DEFAULT_ARMS: tuple[Arm, ...] = (
-    Arm("mixtral_g1", group_m=1),
-    Arm("mixtral_g16", group_m=16),
+    Arm("mixtral_g1", model=MIXTRAL, group_m=1),
+    Arm("mixtral_g16", model=MIXTRAL, group_m=16),
+    Arm("qwen2_g1", model=QWEN2, group_m=1),
+    Arm("qwen2_g16", model=QWEN2, group_m=16),
 )
+
+#: Every arm, in the order `--arms` names them by default. Both models, both
+#: ends of the swizzle: see the module docstring for why one model is not a
+#: floor.
+DEFAULT_ARM_NAMES = ",".join(a.name for a in DEFAULT_ARMS)
+
+ORDER_COUNTERBALANCED = "counterbalanced"
+ORDER_PAIRED = "paired"
+ORDER_MODES = (ORDER_COUNTERBALANCED, ORDER_PAIRED)
+
+
+def swizzle_pairs(arms: list[Arm]) -> dict[str, list[Arm]]:
+    """`{model: [arms, sorted by GROUP_SIZE_M]}`, which is what gets interleaved.
+
+    Grouped by MODEL because the contrast the interleave protects is within a
+    model: a mixtral G=16 run beside a qwen2 G=1 run is not a pair of anything.
+    """
+    by: dict[str, list[Arm]] = {}
+    for arm in arms:
+        by.setdefault(arm.model, []).append(arm)
+    return {m: sorted(v, key=lambda a: a.group_m) for m, v in sorted(by.items())}
+
+
+def run_order(arms: list[Arm], n: int, mode: str = ORDER_COUNTERBALANCED
+              ) -> list[tuple[Arm, int]]:
+    """The launch sequence: `[(arm, replicate index), ...]`, interleaved.
+
+    THE DEFECT THIS REPLACES ran `for arm in arms: for index in 1..n`, i.e. all
+    six G=1 replicates and then all six G=16. The between-replicate sd it
+    published was then a within-block number while the swizzle delta it scored
+    against that sd was a between-block difference, carrying every drift that
+    happened across the thirteen minutes between the blocks. The repo's own
+    record of how big that can be is the H200 dense peak moving 7.1% between
+    sessions.
+
+    COUNTERBALANCED is the default and reverses the pair's order on alternate
+    replicates (g1,g16 / g16,g1 / g1,g16 / ...). A linear drift inside a pair
+    then contributes +d to half the deltas and -d to the other half and cancels
+    out of the mean, at the cost of a slightly WIDER per-arm replicate sd --
+    which is the conservative direction for a floor. PAIRED keeps g1 first in
+    every replicate: every contrast is still within minutes, but a within-pair
+    drift biases every delta the same way and survives averaging.
+
+    Models are cycled outermost so the two models' pairs interleave too, which
+    keeps neither model's replicates bunched at one end of the session.
+    """
+    if mode not in ORDER_MODES:
+        raise ValueError(f"unknown order {mode!r}; known modes are {ORDER_MODES}")
+    pairs = swizzle_pairs(arms)
+    out: list[tuple[Arm, int]] = []
+    for index in range(1, n + 1):
+        for _model, group in pairs.items():
+            ordered = group
+            if mode == ORDER_COUNTERBALANCED and index % 2 == 0:
+                ordered = list(reversed(group))
+            out += [(arm, index) for arm in ordered]
+    return out
+
+
+def order_lines(arms: list[Arm], n: int, mode: str) -> list[str]:
+    """One `order:` line per model, naming the exact launch sequence.
+
+    Greppable on purpose and it is the acceptance check for the interleave:
+
+        --dry-run | grep -E 'order: [^ ]+ (g1,g16,g16,g1,){2}g1,g16,g16,g1'
+        --order paired --dry-run | grep -E 'order: [^ ]+ (g1,g16,){5}'
+
+    The pattern is printed rather than described because a description of an
+    order is not an order, and the blocked design this replaces was described
+    as interleaved in its own predictions text.
+    """
+    seq: dict[str, list[str]] = {}
+    for arm, _index in run_order(arms, n, mode):
+        seq.setdefault(arm.model, []).append(arm.swizzle_label)
+    return [f"order: {model} {','.join(labels)}   [{mode}]"
+            for model, labels in seq.items()]
 
 
 def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str) -> str:
@@ -849,20 +1099,39 @@ def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str) -> s
     them and report replicate 1's timings six times with a between-replicate sd
     of exactly 0.0000. The V3 gate below exists to catch that even if this
     function is wrong.
+
+    THE ID IS BUILT BY `moe.bench.provenance.run_id` AS OF 2026-09-02 and not by
+    a private hash here, so the card is a REQUIRED keyword that raises `NoCard`
+    when absent and every knob is refused when it is None. Three scripts had
+    each re-implemented a subset of this and each had left a different knob out.
     """
-    payload = json.dumps({
-        "arm": arm.name, "model": arm.model, "dtype": arm.dtype,
-        "group_m": arm.group_m, "block_n": arm.block_n,
-        "num_stages": arm.num_stages, "tiles": arm.tiles, "r_max": arm.r_max,
-        "row_step": arm.row_step, "step_probes": arm.step_probes,
-        "iters": arm.iters, "warmup": arm.warmup,
-        "cell_budget_ms": arm.cell_budget_ms, "seed": arm.seed,
-        "gpu": gpu_name, "cache": cache_mode, "replicate": replicate,
-    }, sort_keys=True)
-    slug = re.sub(r"[^a-z0-9]+", "", gpu_name.lower())[:12] or "unknowngpu"
-    return (f"nf-{arm.name}-{arm.model}-{arm.dtype}-g{arm.group_m}"
-            f"-n{arm.block_n}-s{arm.num_stages}-r{arm.r_max}-{cache_mode}"
-            f"-{slug}-rep{replicate}-{hashlib.sha1(payload.encode()).hexdigest()[:8]}")
+    return PV.run_id(
+        card=gpu_name,
+        # `run_id` renders the knobs in NAME ORDER and truncates the visible
+        # part at 96 characters, so the six knobs a human needs in `ls` are
+        # named to sort ahead of the rest and the rest travel under one
+        # `settings` key. Every one of them still enters the hash, which is
+        # what actually keeps two replicates apart; the ordering only decides
+        # what survives the truncation.
+        cache=cache_mode,
+        g=arm.group_m,
+        model=arm.model,
+        n=arm.block_n,
+        rep=replicate,
+        s=arm.num_stages,
+        settings={
+            "dtype": arm.dtype,
+            "tiles": arm.tiles,
+            "r_max": arm.r_max,
+            "row_step": arm.row_step,
+            "step_probes": arm.step_probes,
+            "warmup_ms": arm.warmup_ms,
+            "trials": arm.trials,
+            "l2_flush": arm.l2_flush,
+            "cell_budget_ms": arm.cell_budget_ms,
+            "seed": arm.seed,
+        },
+    )
 
 
 @dataclass
@@ -879,6 +1148,15 @@ class Replicate:
     error: str = ""
     cells: list[LadderCell] = field(default_factory=list)
     compiles: dict[int, int] = field(default_factory=dict)
+    #: `moe.bench.timing.TIMING_BASIS` as the sweep stamped it into this
+    #: replicate's report. "" means the report carried no instrument at all,
+    #: which is a report from before 2026-09-02 and is NOT the same state as a
+    #: report timed by a different named instrument. V6 tells the two apart.
+    instrument: str = ""
+    #: The per-cell timing state the sweep recorded, summarised: how many of
+    #: this replicate's cells were timed at a clock the roof would accept, and
+    #: how many said nothing about their clock at all.
+    timing_state: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -902,13 +1180,34 @@ def parse_compiles(doc: dict) -> dict[int, int]:
 
 
 def load_replicate(rep: Replicate) -> Replicate:
-    """Read one replicate's report.json into ladder cells."""
+    """Read one replicate's report.json into ladder cells.
+
+    THE INSTRUMENT IS READ OFF THE REPORT, not assumed from this process. A
+    floor pooled over replicates timed by two different loops is a measurement
+    of the difference between the loops, and this repo has just retired one
+    instrument in favour of another: the committed arms part (b) reads were
+    timed by the retired `time_call` and carry no instrument field at all,
+    while anything a pod produces from now on carries
+    `moe.bench.timing.TIMING_BASIS`. V6 scores the agreement; this only records
+    what each replicate said.
+    """
     if not rep.report.exists():
         rep.error = f"no report.json at {rep.report}"
         return rep
     doc = json.loads(rep.report.read_text())
     fixed = doc["fixed"]
     rep.compiles = parse_compiles(doc)
+    rep.instrument = doc.get("instrument") or ""
+    prov = doc.get("provenance") or {}
+    rep.timing_state = {
+        "instrument": rep.instrument,
+        "warmup_ms": prov.get("warmup_ms"),
+        "iters": prov.get("iters"),
+        "target_ms": prov.get("target_ms"),
+        "cells_excluded_for_clock_level": doc.get(
+            "cells_excluded_for_clock_level"),
+        "timing_spread_median": doc.get("timing_spread_median"),
+    }
     for block_m, fit in doc["ladder"].items():
         rep.cells.append(LadderCell(
             model=doc["model"], dtype=doc["dtype"],
@@ -1050,9 +1349,18 @@ class Gate:
     `expected` is filled in BEFORE the run and printed beside the outcome, so a
     FAIL that was predicted reads as a result and a PASS that was not predicted
     reads as a surprise worth chasing. `passed=None` prints UNKNOWN and never
-    counts as a pass.
+    counts as a pass, and `moe.bench.exit_codes.classify` scores UNKNOWN against
+    the gate for the same reason: a check that examined nothing also reports
+    zero failures.
+
+    `kind` is VALIDITY or CLAIM in `exit_codes`'s own vocabulary, because the
+    two have opposite consequences -- a VALIDITY non-PASS means nothing on the
+    page may be quoted (INVALID), a CLAIM non-PASS is the world disagreeing with
+    a pre-registered expectation (CLAIM_FAIL, which is a result and never a
+    retry).
     """
 
+    kind: str
     name: str
     prediction: str
     rule: str
@@ -1061,13 +1369,44 @@ class Gate:
     observed: str
     invalidates: str = ""
 
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.passed]
+
+    @property
+    def token(self) -> str:
+        """The one-token name this gate answers to on its `RESULT:` line.
+
+        `result_line` refuses a name with whitespace, and these names are
+        sentences ("C1 floor size"), so the spaces become underscores here
+        rather than the gate silently disappearing from the driver's summary.
+        """
+        return re.sub(r"\s+", "_", self.name.strip())
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.token, self.verdict)
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        Nothing else this file prints starts with `RESULT: `. The summary that
+        used to grep `floor|sigma` matched a REFUSED log eighteen times and
+        printed the imported proxy and a pre-registered expectation as measured
+        output; that is what this line replaces.
+        """
+        detail = (f"[{self.kind}] {self.prediction} | expected {self.expected} "
+                  f"| gate {self.rule} | saw {self.observed}")
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
     def render(self) -> str:
-        tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
         surprise = ""
         if self.passed is not None:
             got = "PASS" if self.passed else "FAIL"
             surprise = "" if got == self.expected else f"  <-- expected {self.expected}"
-        out = [f"[{tag}] {self.name}  {self.prediction}{surprise}",
+        out = [self.result_line(),
+               f"[{self.verdict}] {self.kind:8s} {self.name}  "
+               f"{self.prediction}{surprise}",
                f"         gate: {self.rule}",
                f"         saw:  {self.observed}"]
         if self.passed is False and self.invalidates:
@@ -1085,13 +1424,14 @@ def render_gates(gates: list[Gate]) -> str:
 
 
 def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm],
-                   cache_mode: str, floors: dict[str, PooledFloor]) -> list[Gate]:
+                   cache_mode: str, floors: dict[str, PooledFloor],
+                   *, single_model_ok: bool = False) -> list[Gate]:
     """V-gates. A FAIL means no number from part (a) may be quoted."""
     gates: list[Gate] = []
     done = [r for r in replicates if r.ok]
 
     gates.append(Gate(
-        "V1 distinct runs",
+        exit_codes.VALIDITY, "V1 distinct runs",
         "every replicate wrote its own directory under its own run id",
         f"{len(replicates)} distinct run ids and {len(replicates)} distinct out dirs",
         "PASS",
@@ -1106,7 +1446,7 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
 
     want = expected_n * len(arms)
     gates.append(Gate(
-        "V2 non-vacuity",
+        exit_codes.VALIDITY, "V2 non-vacuity",
         "the replicates that were planned actually ran and produced fits",
         f"{want} replicates complete and at least 2 cells with all "
         f"{expected_n} values present",
@@ -1124,7 +1464,7 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
 
     degenerate = [s for s in floors[PRIMARY_FIELD].spreads if s.degenerate]
     gates.append(Gate(
-        "V3 not a collision",
+        exit_codes.VALIDITY, "V3 not a collision",
         "no cell returned bit-identical alpha in every replicate",
         "zero cells with exactly one distinct value across replicates",
         "PASS",
@@ -1139,7 +1479,7 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
     if cache_mode == "fresh":
         counts = [min(r.compiles.values()) for r in done if r.compiles]
         gates.append(Gate(
-            "V4 fresh cache",
+            exit_codes.VALIDITY, "V4 fresh cache",
             "every replicate compiled its own Triton artefacts at every setting",
             "minimum fresh-artefact count over replicates and settings >= 1",
             "PASS",
@@ -1149,13 +1489,13 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
             "the unit: a warm cache makes this a narrower floor than the "
             "comparisons it is meant to score"))
     else:
-        # Replicates are launched arm-major, so "everything after the first" is
-        # NOT a tail slice of the list: it is every replicate whose index is
-        # above 1, one per arm being excluded rather than the first len(arms)
-        # entries, which would have been reps 1 and 2 of the FIRST arm only.
+        # Replicates are launched INTERLEAVED, so "everything after the first"
+        # is not a tail slice of the list and never was a per-arm one either:
+        # it is every replicate whose INDEX is above 1, which is one exclusion
+        # per arm however the arms are ordered within a replicate.
         later = [min(r.compiles.values()) for r in done if r.index > 1 and r.compiles]
         gates.append(Gate(
-            "V4 warm cache",
+            exit_codes.VALIDITY, "V4 warm cache",
             "replicates after the first reused the shared Triton cache",
             "minimum fresh-artefact count over replicates 2..N == 0",
             "PASS",
@@ -1171,7 +1511,7 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
         if len(sds) >= 2:
             ratios[name] = max(sds) / min(sds)
     gates.append(Gate(
-        "V5 homogeneity",
+        exit_codes.VALIDITY, "V5 homogeneity",
         "the cells share a spread, so pooling them into one floor is legitimate",
         f"max cell sd / min cell sd <= {HOMOGENEITY_RATIO:g} in {PRIMARY_FIELD}",
         "PASS",
@@ -1181,7 +1521,62 @@ def validity_gates(replicates: list[Replicate], expected_n: int, arms: list[Arm]
         else f"{ratios[PRIMARY_FIELD]:.2f}x spread across cells",
         "nothing -- a FAIL falls back to the WIDEST cell, which is the "
         "conservative floor, and the published number says so"))
+
+    # V6. ONE INSTRUMENT, OR NO FLOOR. Two replicates timed by two loops
+    # measure the difference between the loops, and this repo retired one
+    # instrument for another on 2026-09-02: the committed arms part (b) reads
+    # carry NO instrument field, everything a pod produces from now on carries
+    # `moe.bench.timing.TIMING_BASIS`. An empty string is a DIFFERENT state
+    # from a named-but-other instrument and both fail here, because a floor
+    # pooled across either is not a floor.
+    stamps = {r.instrument for r in done}
+    expected_basis = timing_basis()
+    named = expected_basis or "the instrument could not be named on this host"
+    gates.append(Gate(
+        exit_codes.VALIDITY, "V6 one instrument",
+        "every replicate was timed by the instrument this repo publishes with",
+        f"every report stamps instrument == {named!r}",
+        "PASS",
+        None if not stamps or expected_basis is None
+        else stamps == {expected_basis},
+        "nothing was launched" if not stamps
+        else ("the instrument could not be named on this host, so agreement "
+              "cannot be checked" if expected_basis is None
+              else "instruments seen: "
+                   + ", ".join(sorted(repr(s) for s in stamps))),
+        "the floor and every contrast built on it: a spread pooled over two "
+        "timing loops measures the loops, and an unstamped report is a report "
+        "from before the instrument had a name rather than one that agrees"))
+
+    # V7. THE FLOOR'S SCOPE IS PART OF THE FLOOR. A floor measured on the one
+    # model where the swizzle effect is 0.3855 does not license a surface
+    # published across four models, and until 2026-09-02 that was the whole
+    # design. A single-model floor is still available and still refused
+    # silently: it has to be asked for in argv, and the scope block says so.
+    models = sorted({a.model for a in arms})
+    gates.append(Gate(
+        exit_codes.VALIDITY, "V7 scope",
+        "the floor covers more than the one model where the effect is largest",
+        ">= 2 models among the arms, or --single-model-floor in argv",
+        "PASS",
+        len(models) >= 2 or single_model_ok,
+        f"models measured: {', '.join(models) or 'none'}"
+        + ("; --single-model-floor was given" if single_model_ok else ""),
+        "the generality of everything scored against this floor: the qwen2 "
+        "swizzle effect is 0.0226 where mixtral's is 0.3855, and a floor that "
+        "never saw qwen2 cannot say which of the two the surface is about"))
     return gates
+
+
+def swizzle_gate_name(model: str) -> str:
+    """`C3 swizzle mixtral-8x7b`: one C3 per model, named so it stays distinct.
+
+    The old C3 took `arms[0]` against `arms[-1]`, which was the two ends of the
+    swizzle while the arms were one model and became mixtral-G=1 against
+    qwen2-G=16 the moment a second model was added -- a contrast across two
+    levers at once, scored as though it were one.
+    """
+    return f"C3 swizzle {model}"
 
 
 def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
@@ -1194,7 +1589,7 @@ def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
     sd = primary.pooled_sd if primary else None
 
     gates.append(Gate(
-        "C1 floor size",
+        exit_codes.CLAIM, "C1 floor size",
         f"the measured floor is no wider than the s3/s4 proxy implied "
         f"({PRIOR_SD:.4f})",
         f"pooled between-replicate sd of {PRIMARY_FIELD} <= {PRIOR_SD:.4f}",
@@ -1208,7 +1603,7 @@ def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
 
     delta_card = cards[PRIMARY_FIELD]
     gates.append(Gate(
-        "C2 cross-card is under the floor",
+        exit_codes.CLAIM, "C2 cross-card under floor",
         "the published cross-card difference is smaller than one run per card "
         "could resolve",
         "|paired mean| < the known-sigma MDE at the measured floor, n=1 per card",
@@ -1222,28 +1617,48 @@ def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
         "nothing -- a PASS here is the finding: the cross-card result is not a "
         "null, it is an unresolvable measurement"))
 
-    resolvable = []
-    for block_m in sorted({s.block_m for s in spreads}):
-        got = two_sample_delta(spreads, arms[0].name, arms[-1].name, block_m)
-        if got:
-            delta, pooled_sd, n = got
-            resolvable.append((block_m, delta, mde_two_sample(pooled_sd, n)))
-    swizzle_ok = None
-    if len(arms) >= 2 and arms[0].group_m != arms[-1].group_m and resolvable:
-        swizzle_ok = all(abs(d) >= m for _, d, m in resolvable)
-    gates.append(Gate(
-        "C3 swizzle survives replicates",
-        f"the GROUP_SIZE_M {arms[0].group_m} -> {arms[-1].group_m} swing is "
-        f"bigger than the floor at every BLOCK_M",
-        "|delta| >= the two-sample MDE at every measured BLOCK_M",
-        "PASS",
-        swizzle_ok,
-        "the two arms do not differ in GROUP_SIZE_M, or nothing was measured"
-        if swizzle_ok is None else
-        "; ".join(f"BM={bm} {delta:+.4f} vs MDE {m:.4f}"
-                  for bm, delta, m in resolvable),
-        "the study's largest claim: if the swizzle swing is inside the floor "
-        "then the alpha surface is noise"))
+    # ONE C3 PER MODEL, each scored against ITS OWN registered effect size and
+    # its OWN replicates. mixtral's is expected to clear the floor by a factor
+    # of nine; qwen2's is 0.0226 against an MDE near 0.041 and is registered as
+    # an EXPECTED FAIL, which is the whole reason the qwen2 arm exists. A
+    # single pooled C3 would have reported the mixtral answer for both.
+    for model, group in swizzle_pairs(arms).items():
+        registered = next((e for e in EFFECTS
+                           if e.model == model and e.name == "swizzle swing"),
+                          None)
+        expected = "PASS" if registered is None or registered.size >= 0.10 \
+            else "FAIL"
+        if len(group) < 2 or group[0].group_m == group[-1].group_m:
+            gates.append(Gate(
+                exit_codes.CLAIM, swizzle_gate_name(model),
+                "the GROUP_SIZE_M swing on this model is bigger than the floor",
+                "|delta| >= the two-sample MDE at every measured BLOCK_M",
+                expected, None,
+                f"{model} was measured at one GROUP_SIZE_M only, so there is "
+                "no swizzle contrast to score",
+                "this model's row of the alpha surface"))
+            continue
+        lo, hi = group[0], group[-1]
+        resolvable = []
+        for block_m in sorted({s.block_m for s in spreads}):
+            got = two_sample_delta(spreads, lo.name, hi.name, block_m)
+            if got:
+                delta, pooled_sd, n = got
+                resolvable.append((block_m, delta, mde_two_sample(pooled_sd, n)))
+        gates.append(Gate(
+            exit_codes.CLAIM, swizzle_gate_name(model),
+            f"the GROUP_SIZE_M {lo.group_m} -> {hi.group_m} swing on {model} "
+            f"is bigger than the floor at every BLOCK_M"
+            + ("" if registered is None
+               else f" (registered at {registered.size:.4f})"),
+            "|delta| >= the two-sample MDE at every measured BLOCK_M",
+            expected,
+            all(abs(d) >= m for _, d, m in resolvable) if resolvable else None,
+            "nothing was measured for this model" if not resolvable else
+            "; ".join(f"BM={bm} {delta:+.4f} vs MDE {m:.4f}"
+                      for bm, delta, m in resolvable),
+            "this model's row of the alpha surface: a swizzle swing inside the "
+            "floor is a surface feature that is noise"))
 
     ctrl = control[PRIMARY_FIELD]
     card = cards[PRIMARY_FIELD]
@@ -1251,7 +1666,7 @@ def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
     if ctrl.mean is not None and card.mean is not None and ctrl.mde is not None:
         separable = abs(card.mean) - abs(ctrl.mean) >= ctrl.mde
     gates.append(Gate(
-        "C4 card beats the stages control",
+        exit_codes.CLAIM, "C4 card beats stages control",
         "changing the card moves alpha more than changing num_stages on one card",
         "|cross-card mean| - |stages-control mean| >= the control's own paired MDE",
         "FAIL",
@@ -1274,7 +1689,7 @@ def claim_gates(floors: dict[str, PooledFloor], spreads: list[CellSpread],
     ctrl_signs = {n: math.copysign(1.0, d.mean)
                   for n, d in control.items() if d.mean is not None}
     gates.append(Gate(
-        "C5 sign consistency",
+        exit_codes.CLAIM, "C5 sign consistency",
         "the cross-card difference points the same way in every alpha estimator",
         "sign(alpha) == sign(alpha_corrected) == sign(alpha_upper)",
         "FAIL",
@@ -1339,12 +1754,81 @@ def paired_payload(diff: PairedDifference) -> dict:
             "varied": list(diff.varied), "same_machine": diff.same_machine}
 
 
+def by_model_spread(diff: PairedDifference) -> dict:
+    """The proxy's paired deltas split by MODEL, so its heteroscedasticity ships.
+
+    "Inside 2x the pooled 0.0323" was the yardstick every effect in the study
+    was read against, and the pool is not one population: mixtral's four deltas
+    have sd 0.0486 and qwen2's seven have 0.0186. A per-cell comparison at
+    mixtral G>=8 against the pooled number is against a spread half again too
+    narrow. Computed here from the same pairs rather than restated, so the
+    published block cannot drift from the arms it came from.
+    """
+    per: dict[str, list[float]] = {}
+    for key, a, b in diff.pairs:
+        per.setdefault(str(key[0]), []).append(b - a)
+    out = {}
+    for model, deltas in sorted(per.items()):
+        out[model] = {
+            "n": len(deltas),
+            "mean": statistics.fmean(deltas),
+            "sd": statistics.stdev(deltas) if len(deltas) >= 2 else None,
+            "max_abs": max(abs(d) for d in deltas),
+        }
+    sds = [v["sd"] for v in out.values() if v["sd"]]
+    return {"per_model": out,
+            "ratio": (max(sds) / min(sds)) if len(sds) >= 2 else None,
+            "homogeneity_ratio": HOMOGENEITY_RATIO}
+
+
+def scope_block(arms: list[Arm], *, n_replicates: int, cache_mode: str,
+                gpu_name: str, order: str, single_model_ok: bool) -> dict:
+    """What a floor from this run does and does not cover, in the file itself.
+
+    A floor whose scope lives only in a docstring gets quoted without it, and
+    that is what happened: the proxy was labelled "upper bound only" with no
+    statement of what it bounded, and was then cited for cross-card, cross-pod
+    and other-model comparisons it says nothing about.
+    """
+    models = sorted({a.model for a in arms})
+    return {
+        "session": "ONE card, ONE session. Nothing here bounds cross-pod, "
+                   "cross-day or cross-card noise; replicates that span "
+                   "sessions would be a different measurement and this is not "
+                   "it",
+        "gpu_name": gpu_name,
+        "models": models,
+        "single_model_floor_allowed": single_model_ok,
+        "arms": [{"name": a.name, "model": a.model, "group_m": a.group_m,
+                  "block_n": a.block_n, "num_stages": a.num_stages,
+                  "dtype": a.dtype, "seed": a.seed,
+                  "warmup_ms": a.warmup_ms, "trials": a.trials,
+                  "l2_flush": a.l2_flush} for a in arms],
+        "block_n": sorted({a.block_n for a in arms}),
+        "num_stages": sorted({a.num_stages for a in arms}),
+        "dtype": sorted({a.dtype for a in arms}),
+        "seed_held_fixed": sorted({a.seed for a in arms}),
+        "n_replicates": n_replicates,
+        "cache_mode": cache_mode,
+        "order": order,
+        "instrument": timing_basis(),
+        "excludes": [
+            "data-generation variance: the seed is held fixed across "
+            "replicates, so this floor may not score a comparison that "
+            "re-rolled its inputs",
+            "any BLOCK_SIZE_N, num_stages, dtype or model not listed above",
+            "anything timed by an instrument other than the one named above",
+        ],
+    }
+
+
 def build_document(control: dict[str, PairedDifference],
                    cards: dict[str, PairedDifference],
                    floors: dict[str, PooledFloor] | None,
                    *, n_replicates: int = 0, cache_mode: str = "",
                    gpu_name: str = "", provenance: str = "",
-                   synthetic: bool = False) -> dict:
+                   synthetic: bool = False, scope: dict | None = None,
+                   prov: PV.Provenance | None = None) -> dict:
     """The published JSON. `replicate_floor` is null until a card produces one."""
     doc = {
         "schema": SCHEMA,
@@ -1352,15 +1836,25 @@ def build_document(control: dict[str, PairedDifference],
         "git": git_state(),
         "sign": "every delta is alpha(second arm) - alpha(first arm)",
         "primary_field": PRIMARY_FIELD,
-        "effects_registered": [{"name": e.name, "size": e.size, "source": e.source}
+        "effects_registered": [{"name": e.name, "size": e.size,
+                                "source": e.source, "model": e.model}
                                for e in EFFECTS],
         "prior_sd": PRIOR_SD,
-        "prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2); "
-                           "CONFOUNDS num_stages, so an upper bound only",
+        "prior_sd_source": PRIOR_SD_SOURCE,
+        "prior_sd_by_model": by_model_spread(control[PRIMARY_FIELD]),
+        "scope": scope,
         "stages_control": {name: paired_payload(d) for name, d in control.items()},
+        "stages_control_instrument":
+            "the two committed arms were timed by the RETIRED per-iteration "
+            "loop (block_m_crossing_sweep.time_call), not by "
+            "moe.bench.timing.time_kernel: they carry no instrument field at "
+            "all. Part (b) is arithmetic over those numbers and inherits their "
+            "instrument",
         "cross_card": {name: paired_payload(d) for name, d in cards.items()},
         "replicate_floor": None,
     }
+    if prov is not None:
+        doc = prov.stamp(doc)
     if floors:
         per_field = {}
         for name, floor in floors.items():
@@ -1377,7 +1871,16 @@ def build_document(control: dict[str, PairedDifference],
         if per_field:
             doc["replicate_floor"] = {
                 "n_replicates": n_replicates, "cache_mode": cache_mode,
-                "gpu_name": gpu_name, "provenance": provenance,
+                "gpu_name": gpu_name,
+                # `provenance` HERE is the one-line prose `Floor.provenance`
+                # has read since this file was written; the machine-readable
+                # block from `moe.bench.provenance` is at the TOP level, where
+                # the audit's publish gate looks for it. Two different things
+                # under one word, kept because renaming this one would silently
+                # give every existing reader a KeyError.
+                "provenance": provenance,
+                "instrument": timing_basis(),
+                "scope": scope,
                 "synthetic": synthetic, "per_field": per_field,
             }
     return doc
@@ -1448,10 +1951,14 @@ def render_power_table(sd: float, label: str, cells: int = 4) -> str:
             f"The last column is how well N pins the FLOOR itself, pooled over "
             f"{cells} cells.",
             "",
+            # NOT WRITTEN AS `floor: <number>`. That was the shape of this
+            # line until 2026-09-02, and the session driver's free-text summary
+            # grep (`floor|sigma`) lifted it out of a REFUSED log and printed
+            # the imported proxy as though this run had measured it.
             "THE DESIGN THE STUDY ACTUALLY RAN is one run per condition with "
             "sigma imported from this",
-            f"floor: {mde_external_sigma(sd, 1):.4f}. Everything below is what "
-            f"REPLICATING would buy.",
+            f"table, which detects {mde_external_sigma(sd, 1):.4f} in alpha. "
+            f"Everything below is what REPLICATING would buy.",
             "",
             "     N   sigma from the two arms   sigma from this floor   "
             "floor known to within"]
@@ -1464,7 +1971,8 @@ def render_power_table(sd: float, label: str, cells: int = 4) -> str:
     rows.append("  effect the study wants to claim        size    replicates needed")
     for effect in EFFECTS:
         need = replicates_for(effect.size, sd)
-        rows.append(f"    {effect.name:<34s}{effect.size:.4f}   "
+        label = effect.name + (f" [{effect.model}]" if effect.model else "")
+        rows.append(f"    {label:<34.34s}{effect.size:.4f}   "
                     + ("out of reach under 500" if need is None else f"N = {need}"))
     rows.append("")
     rows.append(f"  N = {DEFAULT_REPLICATES} is NOT set by power -- power alone is "
@@ -1510,7 +2018,7 @@ def render_control(control: dict[str, PairedDifference],
                    "agree' but 'this design cannot tell the cards apart, and it "
                    "cannot tell a card apart from a pipeline stage either'.")
     if card.sd is not None and card.sd > 0 and card.mde is not None:
-        need = cells_for(EFFECTS[-1].size, card.sd)
+        need = cells_for(CROSS_CARD_EFFECT.size, card.sd)
         out.append(f"POWER:   at sd_d = {card.sd:.4f} the {card.n}-cell paired "
                    f"design detects {card.mde:.4f}. Detecting the observed "
                    f"{abs(card.mean):.4f} needs "
@@ -1522,12 +2030,64 @@ def render_control(control: dict[str, PairedDifference],
     return "\n".join(out)
 
 
+def render_mde_line(n: int, arms: list[Arm]) -> list[str]:
+    """The one line B14 says every arm's plan must print, and its assumption.
+
+    An MDE with no stated sigma is a number with no units. The sigma here is
+    `PRIOR_SD`, the s3-vs-s4 proxy over sqrt(2), and its scope is on the line
+    beside it because it is an upper bound on SAME-SESSION rerun noise and on
+    nothing else. Two limits are printed because the run has two designs in it:
+    the replicate design (n per condition) and the design every published
+    difference in this repo actually is (one run per condition, sigma imported).
+    """
+    per_model = ", ".join(
+        f"{m} {sd:.4f}" for m, sd in sorted(PRIOR_SD_BY_MODEL.items()))
+    out = [
+        f"MDE: at the assumed sigma {PRIOR_SD:.4f} this plan resolves "
+        f"{mde_two_sample(PRIOR_SD, n):.4f} in alpha with N={n} replicates per "
+        f"condition, and {mde_external_sigma(PRIOR_SD, 1):.4f} at the one-run "
+        f"design the study published.",
+        f"     the sigma is ASSUMED, not measured here: {PRIOR_SD_SOURCE}",
+        f"     it is heteroscedastic by model ({per_model}), so a per-cell "
+        f"comparison at mixtral G>=8 is against a wider spread than the pool.",
+    ]
+    for arm in sorted({a.model for a in arms}):
+        for effect in EFFECTS:
+            if effect.model != arm:
+                continue
+            limit = mde_two_sample(PRIOR_SD, n)
+            verdict = ("ABOVE the limit, so this design can see it"
+                       if effect.size >= limit else
+                       "BELOW the limit: this design CANNOT see it, and the "
+                       "gate for it is registered as an expected FAIL")
+            out.append(f"     {effect.name} on {arm} is {effect.size:.4f}, "
+                       f"{verdict}.")
+    return out
+
+
 def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
-                gpu_name: str, costs: dict[str, float | None]) -> str:
+                gpu_name: str, costs: dict[str, float | None],
+                order: str = ORDER_COUNTERBALANCED) -> str:
     out = ["## The plan", "",
            f"{len(arms)} arm(s) x {n} replicates = {len(arms) * n} sweep processes, "
            f"cache mode {cache_mode}, config device {gpu_name}",
            f"EVERYTHING IS SAVED TO  {base}", ""]
+    out += render_mde_line(n, arms)
+    out.append("")
+    out.append("INTERLEAVED. The two swizzles of one model run back to back "
+               "inside a replicate, so their contrast is paired within minutes "
+               "rather than across blocks:")
+    out += ["  " + line for line in order_lines(arms, n, order)]
+    out.append("")
+    out.append("SCOPE of any floor this produces: one card, one session, "
+               f"models {', '.join(sorted({a.model for a in arms}))}; "
+               f"BLOCK_SIZE_N {sorted({a.block_n for a in arms})}, num_stages "
+               f"{sorted({a.num_stages for a in arms})}, dtype "
+               f"{sorted({a.dtype for a in arms})}, seed held FIXED at "
+               f"{sorted({a.seed for a in arms})}, instrument "
+               f"{timing_basis()!r}. It bounds nothing outside that list, and "
+               "cross-pod noise least of all.")
+    out.append("")
     total_model = 0.0
     unknown = False
     for arm in arms:
@@ -1557,7 +2117,27 @@ def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
     return "\n".join(out)
 
 
-def render_predictions(n: int) -> str:
+def render_predictions(n: int, arms: list[Arm]) -> str:
+    """The registered expectations.
+
+    NOTHING HERE IS A RESULT AND NOTHING HERE IS SHAPED LIKE ONE. The expected
+    verdicts used to print as `[PASS]` and `[FAIL]`, which is exactly the shape
+    a scored gate prints, and the session driver's free-text summary grep read
+    them out of a REFUSED log as measured output. Expectations are written as
+    `expect PASS` here; the only result-shaped line this file emits is
+    `moe.bench.exit_codes.result_line`, and a refusal emits none.
+    """
+    per_model = []
+    for model, group in swizzle_pairs(arms).items():
+        registered = next((e for e in EFFECTS
+                           if e.model == model and e.name == "swizzle swing"),
+                          None)
+        size = "unregistered" if registered is None else f"{registered.size:.4f}"
+        want = "PASS" if registered is not None and registered.size >= 0.10 \
+            else "FAIL"
+        ends = "->".join(f"G={a.group_m}" for a in group)
+        per_model.append(f"  {swizzle_gate_name(model):<34s} expect {want}  "
+                         f"{ends}, registered at {size}")
     return f"""\
 ## Predictions, registered before anything ran
 
@@ -1567,21 +2147,30 @@ VALIDITY -- a FAIL means no number from part (a) may be quoted.
   V3  no cell returned identical alpha every time        zero degenerate cells
   V4  the Triton cache behaved as the mode claims        fresh: >= 1 artefact each
   V5  the cells share a spread                           max sd / min sd <= {HOMOGENEITY_RATIO:g}
+  V6  one instrument across every replicate              instrument == {timing_basis()!r}
+  V7  the floor covers more than one model               >= 2 models, or --single-model-floor
 
-CLAIM -- a FAIL is a result, not a broken run. Expected verdict in brackets.
-  C1  the floor is no wider than the proxy implied  [PASS]  sd <= {PRIOR_SD:.4f}
-  C2  the cross-card difference is under the floor  [PASS]  |{EFFECTS[-1].size:.4f}| < MDE
-  C3  the swizzle swing survives replicates         [PASS]  |delta| >= MDE at every BM
-  C4  the card beats the num_stages control         [FAIL]  |card| - |stages| >= MDE
-  C5  the cross-card sign is estimator-independent  [FAIL]  one sign across three fields
+CLAIM -- a FAIL is a result, not a broken run.
+  C1 floor size                       expect PASS  sd <= {PRIOR_SD:.4f}
+  C2 cross-card under floor           expect PASS  |{CROSS_CARD_EFFECT.size:.4f}| < MDE
+{chr(10).join(per_model)}
+  C4 card beats stages control        expect FAIL  |card| - |stages| >= MDE
+  C5 sign consistency                 expect FAIL  one sign across three fields
 
 C4 and C5 are registered as EXPECTED FAILURES from the committed reports alone, and
 both are computed here without a GPU. C4 fails because the same 11 cells move
 +0.0101 when num_stages goes 4 -> 3 on one card and +0.0117 when the card changes.
 C5 fails because the cross-card difference is +0.0117 in alpha-corrected and
 -0.3325 in alpha-upper -- two anchorings of the same fit, opposite signs -- while
-the num_stages control keeps one sign across all three. Registering them as
-failures now means neither can be reported later as a discovery."""
+the num_stages control keeps one sign across all three.
+
+THE QWEN2 C3 IS THE THIRD REGISTERED FAILURE and it is the reason that arm is in
+the plan. Its swizzle effect is 0.0226 at its largest committed H200 cell against
+an N={n} detection limit of {mde_two_sample(PRIOR_SD, n):.4f}, and on the A100 it
+changes SIGN between BLOCK_M 32 and 64. Expecting it to fail means the replicate
+arm cannot come back having confirmed a swizzle mechanism on the one model where
+it is twelve sigma and silently said nothing about the model where it is absent.
+Registering all three now means none can be reported later as a discovery."""
 
 
 # --------------------------------------------------------------------------
@@ -1697,8 +2286,26 @@ def build_parser() -> argparse.ArgumentParser:
                     help=f"identical repeats per arm; {DEFAULT_REPLICATES} is "
                          f"argued in the module docstring and anything below 3 "
                          f"cannot bound its own sd")
-    ap.add_argument("--arms", default="mixtral_g1,mixtral_g16",
-                    help="comma list from " + ",".join(a.name for a in DEFAULT_ARMS))
+    ap.add_argument("--arms", default=DEFAULT_ARM_NAMES,
+                    help="comma list from " + ",".join(a.name for a in DEFAULT_ARMS)
+                         + ". Both models by default: a floor measured only on "
+                           "mixtral is a floor measured where the swizzle "
+                           "effect is 0.3855, and the surface it licenses "
+                           "spans models where it is 0.02")
+    ap.add_argument("--single-model-floor", action="store_true",
+                    help="allow --arms to name one model only. V7 REFUSES a "
+                         "single-model floor without this, because the "
+                         "consequence -- a mechanism confirmed on the one "
+                         "model where it is twelve sigma -- is invisible in "
+                         "the output otherwise")
+    ap.add_argument("--order", choices=ORDER_MODES, default=ORDER_COUNTERBALANCED,
+                    help="how the replicates interleave. counterbalanced (the "
+                         "default) alternates the order of each model's "
+                         "G=1/G=16 pair across replicates, so a linear drift "
+                         "inside a pair cancels out of the mean delta; paired "
+                         "keeps G=1 first every time. Both pair the contrast "
+                         "within minutes, which the retired blocked design did "
+                         "not")
     ap.add_argument("--warm-cache", action="store_true",
                     help="share ONE Triton cache across replicates. Measures the "
                          "narrower, execution-only floor; never the published one "
@@ -1770,12 +2377,15 @@ def main(argv: list[str] | None = None) -> int:
         print("=" * 72)
         print("PART (b) ONLY. The replicate floor was not measured and no number "
               "on this page is one.")
+        print("  Nothing above is a scored gate: this page prints no RESULT "
+              "line, so `exit_codes.classify_text` reads it as nothing scored, "
+              "which is what REFUSED means.")
         print("=" * 72)
         if args.publish:
             print(write_published(build_document(control, cards, None)))
         print()
         print(IMPORT_BANNER)
-        return EXIT_NOT_MEASURED
+        return exit_codes.REFUSED
 
     device, missing = detect_gpu()
     gpu_name = args.gpu_name or device or "NVIDIA H200"
@@ -1783,9 +2393,9 @@ def main(argv: list[str] | None = None) -> int:
     costs = {arm.name: sweep_cost(arm, args.python) for arm in arms}
 
     print()
-    print(render_plan(arms, n, cache_mode, base, gpu_name, costs))
+    print(render_plan(arms, n, cache_mode, base, gpu_name, costs, args.order))
     print()
-    print(render_predictions(n))
+    print(render_predictions(n, arms))
 
     rehearsing = args.rehearse is not None
     blocked = args.dry_run or (bool(missing) and not rehearsing)
@@ -1798,12 +2408,13 @@ def main(argv: list[str] | None = None) -> int:
         print("  Part (b) above IS a result: it is arithmetic over committed")
         print("  reports and needed no GPU. Part (a) needs one.")
         print(f"  On the pod:  {Path(sys.argv[0]).name} --replicates {n} --publish")
+        print("  No RESULT line was printed, because nothing was scored.")
         print("=" * 72)
         if args.publish:
             print(write_published(build_document(control, cards, None)))
         print()
         print(IMPORT_BANNER)
-        return EXIT_NOT_MEASURED
+        return exit_codes.REFUSED
 
     extra: list[str] = list(args.sweep_arg)
     shared_cache = (base / "shared-triton-cache") if args.warm_cache else None
@@ -1815,37 +2426,50 @@ def main(argv: list[str] | None = None) -> int:
               "its cells are GENERATED from the model and nothing is measured. "
               "The seed varies per replicate purely to make the plumbing move; a "
               "real replicate holds the seed FIXED. Stamped synthetic everywhere.")
-        print("  C1 and C3 are MEANINGLESS here and their verdicts must be "
+        print("  C1 and every C3 are MEANINGLESS here and their verdicts must be "
               "ignored: the floor is whatever --rehearse-noise was set to, and "
               "the sweep's synthetic cells do not depend on GROUP_SIZE_M, so the "
-              "two arms are the same data and C3 reads a swizzle delta of exactly "
-              "0.0000. That C3 catches it is the point of running this.")
+              "two arms of a model are the same data and C3 reads a swizzle "
+              "delta of exactly 0.0000. That C3 catches it is the point of "
+              "running this.")
+        print("  V6 WILL FAIL and must: the sweep stamps its self-test cells "
+              "with the synthetic instrument, not with the one this repo "
+              "publishes under, so a rehearsal exits INVALID by construction "
+              "and no rehearsal can ever leave a quotable floor behind. That "
+              "is the gate working, not the plumbing breaking.")
 
     base.mkdir(parents=True, exist_ok=True)
     replicates: list[Replicate] = []
     started = time.time()
-    for arm in arms:
-        for index in range(1, n + 1):
-            per_rep = list(extra)
-            if rehearsing:
-                # The sweep's synthetic cells are a deterministic function of the
-                # seed, so a rehearsal that held it fixed would produce N
-                # identical reports, sd 0.0000, and would exercise nothing except
-                # the V3 gate. A real replicate does the opposite: seed FIXED.
-                per_rep += ["--seed", str(1000 + index)]
-            print(f"  [{arm.name} rep {index}/{n}] launching", flush=True)
-            rep = run_replicate(arm, index, base, gpu_name=gpu_name,
-                                cache_mode=cache_mode, python=args.python,
-                                extra=per_rep, shared_cache=shared_cache,
-                                timeout_s=args.replicate_timeout)
-            replicates.append(rep)
-            status = "ok" if rep.ok else f"FAILED: {rep.error}"
-            print(f"      {rep.seconds:.0f} s  {status}", flush=True)
+    # INTERLEAVED, and the order is the one the plan printed. `run_order`
+    # alternates each model's G=1/G=16 pair across replicates, so the swizzle
+    # contrast is paired within minutes and a linear drift inside a pair
+    # cancels out of the mean rather than being added to every delta. The
+    # retired loop ran all N of one arm and then all N of the other.
+    schedule = run_order(arms, n, args.order)
+    for position, (arm, index) in enumerate(schedule, start=1):
+        per_rep = list(extra)
+        if rehearsing:
+            # The sweep's synthetic cells are a deterministic function of the
+            # seed, so a rehearsal that held it fixed would produce N identical
+            # reports, sd 0.0000, and would exercise nothing except the V3
+            # gate. A real replicate does the opposite: seed FIXED.
+            per_rep += ["--seed", str(1000 + index)]
+        print(f"  [{position}/{len(schedule)}] {arm.name} rep {index}/{n} "
+              f"launching", flush=True)
+        rep = run_replicate(arm, index, base, gpu_name=gpu_name,
+                            cache_mode=cache_mode, python=args.python,
+                            extra=per_rep, shared_cache=shared_cache,
+                            timeout_s=args.replicate_timeout)
+        replicates.append(rep)
+        status = "ok" if rep.ok else f"FAILED: {rep.error}"
+        print(f"      {rep.seconds:.0f} s  {status}", flush=True)
 
     floors = {f: pool(spreads_for(replicates, f), f) for f in ALPHA_FIELDS}
     primary_spreads = spreads_for(replicates, PRIMARY_FIELD)
 
-    gates = validity_gates(replicates, n, arms, cache_mode, floors)
+    gates = validity_gates(replicates, n, arms, cache_mode, floors,
+                           single_model_ok=args.single_model_floor)
     gates += claim_gates(floors, primary_spreads, control, cards, arms)
 
     print()
@@ -1863,8 +2487,21 @@ def main(argv: list[str] | None = None) -> int:
         if floor.pooled_sd is None:
             print(f"  {name:16s} NO FLOOR: {floor.reason}")
         else:
-            print(f"  {name:16s} floor sd {floor.pooled_sd:.4f} on {floor.df} df, "
-                  f"upper 95% {floor.upper95:.4f} -- {floor.reason}")
+            print(f"  {name:16s} between-replicate sd {floor.pooled_sd:.4f} on "
+                  f"{floor.df} df, upper 95% {floor.upper95:.4f} -- "
+                  f"{floor.reason}")
+
+    print()
+    print("## The instrument every replicate was timed by")
+    print()
+    for rep in replicates:
+        state = rep.timing_state or {}
+        print(f"  {rep.arm:<14s} rep {rep.index}  "
+              f"{state.get('instrument') or '<none stamped>'}  "
+              f"warmup {state.get('warmup_ms')} ms  "
+              f"target {state.get('target_ms')} ms  "
+              f"clock-excluded cells "
+              f"{state.get('cells_excluded_for_clock_level')}")
 
     primary = floors[PRIMARY_FIELD]
     if primary.pooled_sd:
@@ -1883,12 +2520,21 @@ def main(argv: list[str] | None = None) -> int:
     print(render_gates(gates))
 
     provenance = (f"{len(arms)} arm(s) x {n} replicates on {gpu_name}, cache "
-                  f"{cache_mode}, {time.time() - started:.0f} s wall, under {base}")
+                  f"{cache_mode}, order {args.order}, "
+                  f"{time.time() - started:.0f} s wall, under {base}")
+    scope = scope_block(arms, n_replicates=n, cache_mode=cache_mode,
+                        gpu_name=gpu_name, order=args.order,
+                        single_model_ok=args.single_model_floor)
+    prov = PV.provenance_block(
+        instrument=timing_basis(),
+        warmup_ms=statistics.fmean([a.warmup_ms for a in arms]),
+        iters=None,
+        target_ms=statistics.fmean([a.cell_budget_ms for a in arms]))
     publishable = cache_mode == args.floor_from
     doc = build_document(
         control, cards, floors if publishable else None,
         n_replicates=n, cache_mode=cache_mode, gpu_name=gpu_name,
-        provenance=provenance, synthetic=rehearsing)
+        provenance=provenance, synthetic=rehearsing, scope=scope, prov=prov)
     (base / "noise_floor.json").write_text(json.dumps(doc, indent=2) + "\n")
     print()
     print(f"EVERYTHING IS SAVED TO {base}")
@@ -1911,8 +2557,16 @@ def main(argv: list[str] | None = None) -> int:
     print()
     print(IMPORT_BANNER)
 
-    failed = [g for g in gates if g.passed is False]
-    return EXIT_GATE_FAILED if failed else EXIT_OK
+    # ONE EXIT CODE, FROM THE SHARED TABLE, OVER THE SAME GATES THAT PRINTED
+    # THEIR RESULT LINES. `classify` scores UNKNOWN against the gate: a VALIDITY
+    # gate that could not decide leaves the page as unquotable as a FAIL, and a
+    # CLAIM gate that could not decide has not established its claim. The
+    # driver can recompute this from the log with `classify_text` and a
+    # disagreement between the two is itself a defect.
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print()
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
 
 
 if __name__ == "__main__":                                # pragma: no cover

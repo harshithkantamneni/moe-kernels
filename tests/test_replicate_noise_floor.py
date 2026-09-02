@@ -41,6 +41,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -199,8 +200,9 @@ def test_run_id_separates_every_swept_parameter():
     ref = NF.run_id_for(base, 1, gpu_name="NVIDIA H200", cache_mode="fresh")
     import dataclasses
     for knob, value in [("group_m", 16), ("block_n", 256), ("num_stages", 3),
-                        ("r_max", 512), ("row_step", 64), ("iters", 25),
-                        ("warmup", 5), ("seed", 7), ("tiles", "32,64"),
+                        ("r_max", 512), ("row_step", 64), ("trials", 5),
+                        ("warmup_ms", 150.0), ("l2_flush", False),
+                        ("seed", 7), ("tiles", "32,64"),
                         ("dtype", "fp16"), ("step_probes", 3),
                         ("cell_budget_ms", 200.0)]:
         moved = dataclasses.replace(base, **{knob: value})
@@ -238,7 +240,7 @@ def test_the_sweeps_own_run_id_now_carries_the_card_and_ours_still_adds_the_repl
     # ...and our id for the same arm carries the card and the replicate.
     ours = NF.run_id_for(NF.DEFAULT_ARMS[0], 1, gpu_name="NVIDIA H200",
                          cache_mode="fresh")
-    assert "rep1" in ours and "nvidiah200" in ours
+    assert "rep1" in ours and ours.startswith("nvidia_h200-")
 
 
 def test_identical_values_are_flagged_degenerate_not_reported_as_a_floor():
@@ -503,17 +505,21 @@ def test_every_delta_names_both_arms_and_the_direction():
 
 
 def test_a_failed_gate_says_what_it_invalidates():
-    gate = NF.Gate("G", "claim", "rule", "PASS", False, "saw", "the headline")
+    gate = NF.Gate(NF.exit_codes.CLAIM, "G", "claim", "rule", "PASS", False,
+                   "saw", "the headline")
     text = gate.render()
     assert "[FAIL]" in text and "invalidates: the headline" in text
     assert "expected PASS" in text, "an unexpected FAIL must be marked as one"
 
 
 def test_an_unevaluated_gate_is_unknown_and_never_a_pass():
-    text = NF.Gate("G", "claim", "rule", "PASS", None, "nothing ran").render()
-    assert "[UNKNOWN]" in text and "PASS" not in text.split("\n")[0]
-    assert "0 PASS, 0 FAIL, 1 UNKNOWN" in NF.render_gates(
-        [NF.Gate("G", "c", "r", "PASS", None, "x")])
+    gate = NF.Gate(NF.exit_codes.CLAIM, "G", "claim", "rule", "PASS", None,
+                   "nothing ran")
+    text = gate.render()
+    assert "[UNKNOWN]" in text
+    assert "0 PASS, 0 FAIL, 1 UNKNOWN" in NF.render_gates([gate])
+    # And the shared table scores UNKNOWN against the gate, never as a pass.
+    assert NF.exit_codes.classify([gate.scored()]) == NF.exit_codes.CLAIM_FAIL
 
 
 def test_parse_compiles_reads_the_sweeps_own_gate_0_line():
@@ -534,8 +540,14 @@ def test_validity_gates_report_unknown_when_nothing_was_launched():
     """A check that examined nothing must not report zero failures."""
     floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
     gates = NF.validity_gates([], 6, list(NF.DEFAULT_ARMS), "fresh", floors)
-    assert all(g.passed is not True for g in gates)
-    assert "0 PASS" in NF.render_gates(gates)
+    # V7 (scope) is answerable from argv alone and PASSES on the default arms,
+    # which is the point of it: it asks whether the DESIGN covers more than one
+    # model, not whether anything ran. Every gate that reads a measurement is
+    # UNKNOWN.
+    measuring = [g for g in gates if g.name != "V7 scope"]
+    assert all(g.passed is not True for g in measuring), [g.name for g in gates]
+    assert NF.exit_codes.classify(g.scored() for g in gates) == \
+        NF.exit_codes.INVALID
 
 
 @needs_arms
@@ -604,7 +616,13 @@ def test_the_default_arms_straddle_the_swizzle_swing():
     """The floor is measured at BOTH ends of the largest effect the study claims,
     so the same replicates that produce the floor also score that effect."""
     assert {a.group_m for a in NF.DEFAULT_ARMS} == {1, 16}
-    assert {a.model for a in NF.DEFAULT_ARMS} == {"mixtral-8x7b"}
+    # BOTH models since 2026-09-02. Measuring only mixtral measured the one
+    # model where the swizzle effect is 0.3855 and said nothing about the one
+    # where it is 0.0226 and changes sign between tiles on the A100.
+    assert {a.model for a in NF.DEFAULT_ARMS} == {"mixtral-8x7b",
+                                                 "qwen2-57b-a14b"}
+    for model, group in NF.swizzle_pairs(list(NF.DEFAULT_ARMS)).items():
+        assert [a.group_m for a in group] == [1, 16], model
 
 
 def test_resolve_arms_refuses_an_unknown_name():
@@ -616,26 +634,39 @@ def test_resolve_arms_refuses_an_unknown_name():
 
 @needs_arms
 def test_control_only_runs_off_gpu_and_reports_nothing_measured(capsys):
-    assert NF.main(["--control-only"]) == NF.EXIT_NOT_MEASURED
+    assert NF.main(["--control-only"]) == NF.exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "PART (b) ONLY" in out and "no number on this page is one" in out
     assert "+0.0101" in out and "+0.0117" in out
+    # A REFUSAL SCORES NOTHING and therefore prints no RESULT line. The old
+    # summary grepped free text for `floor|sigma`, matched this page eighteen
+    # times, and printed the imported proxy and a pre-registered expectation as
+    # measured output.
+    assert "RESULT:" not in out
+    with pytest.raises(NF.exit_codes.NoGatesScored):
+        NF.exit_codes.classify_text(out)
 
 
 @needs_arms
 def test_dry_run_prints_the_plan_the_cost_and_the_registered_predictions(capsys):
-    assert NF.main(["--dry-run", "--replicates", "6"]) == NF.EXIT_NOT_MEASURED
+    assert NF.main(["--dry-run", "--replicates", "6"]) == NF.exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "NOT A RESULT" in out
     assert "TOTAL" in out and "min of GPU" in out
-    assert out.count("rep6-") == 2, "every replicate's run id must be in the plan"
+    assert out.count("-rep6-") == len(NF.DEFAULT_ARMS), \
+        "every replicate's run id must be in the plan"
     # The predictions have to carry NUMBERS and their expected verdicts before
-    # anything is measured, or "registered in advance" means nothing.
-    for expected in ("C4  the card beats the num_stages control         [FAIL]",
-                     "C5  the cross-card sign is estimator-independent  [FAIL]",
-                     "C1  the floor is no wider than the proxy implied  [PASS]",
+    # anything is measured, or "registered in advance" means nothing. They must
+    # NOT be shaped like scored results: `[PASS]` is what a gate prints, and a
+    # summary grepping prose read these expectations out of a refused log.
+    for expected in ("C4 card beats stages control        expect FAIL",
+                     "C5 sign consistency                 expect FAIL",
+                     "C1 floor size                       expect PASS",
+                     "C3 swizzle mixtral-8x7b            expect PASS",
+                     "C3 swizzle qwen2-57b-a14b          expect FAIL",
                      "sd <= 0.0228", "|0.0117| < MDE"):
         assert expected in out, f"missing from the registered predictions: {expected}"
+    assert "RESULT:" not in out
     # ...and the cost, which is what a metered pod is budgeted against.
     assert "wall-over-model factor" in out
 
@@ -660,7 +691,11 @@ def test_the_published_floor_file_refuses_until_a_card_has_run():
     rather than receive a default.
     """
     doc = json.loads(NF.NOISE_FLOOR_JSON.read_text())
-    assert doc["schema"] == NF.SCHEMA
+    # The committed file predates the 2026-09-02 schema bump and still parses:
+    # v2 ADDED scope, prior_sd_by_model, an instrument and a provenance block,
+    # and corrected the prior's scope string. A schema outside this tuple is
+    # refused rather than parsed on the old field meanings.
+    assert doc["schema"] in NF.SCHEMA_READABLE
     assert doc["stages_control"]["alpha_corrected"]["n_cells"] == 11
     assert doc["stages_control"]["alpha_corrected"]["same_machine"] is True
     assert doc["cross_card"]["alpha_corrected"]["same_machine"] is False
@@ -693,3 +728,316 @@ def test_the_power_table_df_column_follows_the_cell_count_it_is_given():
     # At N=6: two cells give 10 df and a 1.75x bound, four give 20 df and 1.44x.
     assert "1.75x  (10 df)" in two and "1.75x  (10 df)" not in four
     assert "1.44x  (20 df)" in four and "1.44x  (20 df)" not in two
+
+
+# --------------------------------------------------------------------------
+# 6. THE DESIGN'S OWN DEFECTS (audit A15). A floor measured in two BLOCKS is a
+# floor whose sd is a within-block number scoring a between-block difference; a
+# floor measured on one model is a floor measured where the effect is largest;
+# and a proxy labelled "upper bound" without saying what it bounds gets cited
+# for comparisons it says nothing about.
+# --------------------------------------------------------------------------
+
+def test_the_replicates_interleave_instead_of_running_in_two_blocks():
+    """THE DEFECT THIS REPLACES ran all six G=1 replicates and then all six
+    G=16, so the swizzle delta was a between-block difference carrying whatever
+    drifted across thirteen minutes while the sd it was scored against was a
+    within-block number."""
+    arms = list(NF.DEFAULT_ARMS)
+    order = NF.run_order(arms, 6, NF.ORDER_COUNTERBALANCED)
+    assert len(order) == len(arms) * 6
+    assert len(set(order)) == len(order), "every (arm, replicate) exactly once"
+    # Each model's two swizzles are ADJACENT in the launch sequence, which is
+    # what "paired within minutes" means operationally.
+    positions = {}
+    for index, (arm, rep) in enumerate(order):
+        positions[(arm.model, rep)] = positions.get((arm.model, rep), []) + [index]
+    for key, where in positions.items():
+        assert max(where) - min(where) == 1, key
+
+
+def test_counterbalanced_alternates_the_pair_order_and_paired_does_not():
+    """Counterbalancing cancels a linear drift inside a pair out of the MEAN
+    delta; the paired order leaves it in every one of them."""
+    arms = [a for a in NF.DEFAULT_ARMS if a.model == "mixtral-8x7b"]
+    counter = [a.swizzle_label for a, _ in
+               NF.run_order(arms, 6, NF.ORDER_COUNTERBALANCED)]
+    paired = [a.swizzle_label for a, _ in
+              NF.run_order(arms, 6, NF.ORDER_PAIRED)]
+    assert counter[:4] == ["g1", "g16", "g16", "g1"]
+    assert paired[:4] == ["g1", "g16", "g1", "g16"]
+    assert counter.count("g1") == counter.count("g16") == 6
+
+
+def test_the_plan_prints_the_order_it_will_actually_launch_in():
+    """A description of an order is not an order: the blocked design this
+    replaces described itself as interleaved in its own predictions text."""
+    arms = list(NF.DEFAULT_ARMS)
+    lines = NF.order_lines(arms, 6, NF.ORDER_COUNTERBALANCED)
+    assert len(lines) == 2, "one line per model"
+    assert any("g1,g16,g16,g1,g1,g16,g16,g1,g1,g16,g16,g1" in line
+               for line in lines)
+    paired = NF.order_lines(arms, 6, NF.ORDER_PAIRED)
+    assert all(re.search(r"order: \S+ (g1,g16,){5}g1,g16", line)
+               for line in paired)
+    # And the sequence a line prints is the sequence run_order returns.
+    for mode in NF.ORDER_MODES:
+        seq = [a.swizzle_label for a, _ in NF.run_order(arms, 6, mode)
+               if a.model == "mixtral-8x7b"]
+        assert ",".join(seq) in "\n".join(NF.order_lines(arms, 6, mode))
+
+
+def test_run_order_refuses_an_order_it_does_not_know():
+    with pytest.raises(ValueError, match="unknown order"):
+        NF.run_order(list(NF.DEFAULT_ARMS), 6, "blocked")
+
+
+def test_the_qwen2_swizzle_effect_is_registered_with_its_source():
+    """A15/S35: the surface is published as a general mechanism on the strength
+    of the mixtral number. The qwen2 one was never written down, and it is a
+    tenth the size and sign-inconsistent across tiles on the A100."""
+    swings = {e.model: e for e in NF.EFFECTS if e.name == "swizzle swing"}
+    assert set(swings) == {"mixtral-8x7b", "qwen2-57b-a14b"}
+    assert swings["qwen2-57b-a14b"].size == pytest.approx(0.0226, abs=1e-4)
+    assert "OPPOSITE SIGNS" in swings["qwen2-57b-a14b"].source
+    # It is BELOW what N=6 replicates can resolve, which is why its gate is
+    # registered as an expected FAIL rather than discovered afterwards.
+    assert swings["qwen2-57b-a14b"].size < NF.mde_two_sample(NF.PRIOR_SD, 6)
+    assert swings["mixtral-8x7b"].size > NF.mde_two_sample(NF.PRIOR_SD, 6)
+
+
+@needs_arms
+def test_the_registered_qwen2_effect_matches_the_committed_reports():
+    """The registered size is a claim about files on disk, so it is checked
+    against them rather than trusted."""
+    biggest = 0.0
+    for arm in (ROOT / "results" / "published" /
+                "2026-09-01-nvidia_h200-alpha-surface-s4",
+                ROOT / "results" / "published" /
+                "2026-09-01-nvidia_h200-cross-card-s3"):
+        cells = {c.key: c for c in NF.read_arm(arm)
+                 if c.model == "qwen2-57b-a14b" and c.block_n == 64}
+        for key, cell in cells.items():
+            if key[2] != 1:                     # GROUP_SIZE_M == 1 only
+                continue
+            other = (key[0], key[1], 16, *key[3:])
+            mate = cells.get(other)
+            if mate is None:
+                continue
+            a = cell.values["alpha_corrected"]
+            c = mate.values["alpha_corrected"]
+            if a is not None and c is not None:
+                biggest = max(biggest, abs(c - a))
+    registered = next(e for e in NF.EFFECTS
+                      if e.model == "qwen2-57b-a14b")
+    assert registered.size == pytest.approx(biggest, abs=5e-4)
+
+
+def test_one_c3_per_model_scored_against_its_own_registered_effect():
+    """The old C3 took arms[0] against arms[-1], which became mixtral-G=1
+    against qwen2-G=16 the moment a second model was added: a contrast across
+    two levers at once, scored as though it were one."""
+    arms = list(NF.DEFAULT_ARMS)
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS} \
+        if HAVE_ARMS else None
+    if control is None:
+        pytest.skip("the committed arms are not checked out")
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    gates = NF.claim_gates(floors, [], control, cards, arms)
+    names = [g.name for g in gates]
+    assert "C3 swizzle mixtral-8x7b" in names
+    assert "C3 swizzle qwen2-57b-a14b" in names
+    by_name = {g.name: g for g in gates}
+    assert by_name["C3 swizzle mixtral-8x7b"].expected == "PASS"
+    assert by_name["C3 swizzle qwen2-57b-a14b"].expected == "FAIL"
+
+
+def test_c3_refuses_a_model_measured_at_one_swizzle():
+    """UNKNOWN, not PASS: a model with one GROUP_SIZE_M has no contrast, and a
+    gate that examined nothing must not report zero failures."""
+    if not HAVE_ARMS:
+        pytest.skip("the committed arms are not checked out")
+    arms = [a for a in NF.DEFAULT_ARMS if a.group_m == 1]
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS}
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    gates = {g.name: g for g in NF.claim_gates(floors, [], control, cards, arms)}
+    gate = gates["C3 swizzle mixtral-8x7b"]
+    assert gate.passed is None
+    assert "one GROUP_SIZE_M only" in gate.observed
+
+
+def test_v7_refuses_a_single_model_floor_unless_argv_asks_for_one():
+    """A15/S35 again, as a gate. The consequence of a mixtral-only floor -- a
+    mechanism confirmed where it is twelve sigma -- is invisible otherwise."""
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    one = [a for a in NF.DEFAULT_ARMS if a.model == "mixtral-8x7b"]
+    both = list(NF.DEFAULT_ARMS)
+    def scope(arms, ok):
+        gates = NF.validity_gates([], 6, arms, "fresh", floors,
+                                  single_model_ok=ok)
+        return next(g for g in gates if g.name == "V7 scope")
+    assert scope(one, False).passed is False
+    assert scope(one, True).passed is True
+    assert scope(both, False).passed is True
+    # A VALIDITY failure is INVALID: nothing on the page may be quoted.
+    assert NF.exit_codes.classify([scope(one, False).scored()]) == \
+        NF.exit_codes.INVALID
+
+
+def test_v6_fails_on_a_mixed_or_unstamped_instrument():
+    """A floor pooled over replicates timed by two loops measures the loops.
+    An unstamped report and a differently-stamped one are different states and
+    both fail."""
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    basis = NF.timing_basis()
+
+    def rep(index, instrument):
+        r = NF.Replicate("mixtral_g1", index, f"id{index}", Path(f"/tmp/{index}"),
+                         Path(f"/tmp/{index}/report.json"), returncode=0,
+                         instrument=instrument)
+        r.cells = [NF.LadderCell("mixtral-8x7b", "bf16", 1, 64, 64, 8, 4, 64,
+                                 {"alpha_corrected": 0.9}, 8, 132, "x")]
+        return r
+
+    def verdict(reps):
+        gates = NF.validity_gates(reps, 1, [NF.DEFAULT_ARMS[0]], "fresh", floors)
+        return next(g for g in gates if g.name == "V6 one instrument").passed
+
+    assert verdict([rep(1, basis), rep(2, basis)]) is True
+    assert verdict([rep(1, basis), rep(2, "retired/time_call")]) is False
+    assert verdict([rep(1, ""), rep(2, "")]) is False, "unstamped is not agreement"
+    assert verdict([]) is None
+
+
+def test_the_arms_pass_the_instruments_knobs_and_not_a_retired_call_count():
+    """`--warmup` on the sweep became MILLISECONDS on 2026-09-02. The arm
+    carried `warmup=20` from before that, which the new parser reads as 20 ms
+    -- a fifteenth of the sweep's own default, so every replicate would have
+    been timed at an unsettled clock and the floor would have measured the
+    governor."""
+    spec = importlib.util.spec_from_file_location(
+        "block_m_crossing_sweep", ROOT / "scripts" / "block_m_crossing_sweep.py")
+    sweep = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = sweep
+    spec.loader.exec_module(sweep)
+    arm = NF.DEFAULT_ARMS[0]
+    args = sweep.build_parser().parse_args(arm.sweep_argv("id", Path("/tmp/x")))
+    assert args.warmup == arm.warmup_ms == 300.0
+    assert args.trials == arm.trials == 3
+    assert not args.no_l2_flush
+    assert "--iters" not in arm.sweep_argv("id", Path("/tmp/x"))
+    # And BLOCK_M=128 is not swept: it has no fit in any committed arm at these
+    # settings, so it contributes nothing to a spread of fitted alphas, while
+    # 256 stays because it is the compute reference.
+    assert arm.tiles == "32,64,256"
+
+
+def test_the_plan_states_its_scope_and_its_mde_from_a_stated_assumption():
+    """B14 and A15: an MDE nobody stated, and a floor whose scope lived only in
+    a docstring and was then cited for cross-pod comparisons."""
+    arms = list(NF.DEFAULT_ARMS)
+    text = "\n".join(NF.render_mde_line(6, arms))
+    assert f"{NF.mde_two_sample(NF.PRIOR_SD, 6):.4f}" in text
+    assert "sigma is ASSUMED" in text
+    assert "same-session" in text.lower()
+    assert "heteroscedastic" in text
+    assert "BELOW the limit" in text, "the qwen2 effect must be called out"
+    scope = NF.scope_block(arms, n_replicates=6, cache_mode="fresh",
+                           gpu_name="NVIDIA H200",
+                           order=NF.ORDER_COUNTERBALANCED,
+                           single_model_ok=False)
+    assert scope["models"] == ["mixtral-8x7b", "qwen2-57b-a14b"]
+    assert scope["instrument"] == NF.timing_basis()
+    assert "cross-pod" in scope["session"]
+    assert any("re-rolled" in line for line in scope["excludes"])
+
+
+def test_the_docstring_no_longer_claims_the_proxy_arms_ran_on_separate_pods():
+    """A15/S30: both ARMS.tsv log to /workspace/session/20260901T214218Z, the
+    same pod and the same hour, so the proxy bounds same-session rerun noise
+    and nothing else. The old sentence is what made it quotable across pods."""
+    source = (ROOT / "scripts" / "replicate_noise_floor.py").read_text()
+    # The phrase survives EXACTLY ONCE, inside the paragraph that quotes it in
+    # order to mark it false. Deleting the old sentence without recording what
+    # it said would leave nothing for a reader of the published proxy to
+    # discover it by.
+    assert source.count("separate pods") == 1
+    assert "SEPARATE PODS IS\nFALSE" in source
+    assert "20260901T214218Z" in source
+    assert "same-session" in NF.PRIOR_SD_SOURCE.lower() or \
+        "SAME-SESSION" in NF.PRIOR_SD_SOURCE
+
+
+@needs_arms
+def test_the_proxy_is_heteroscedastic_and_the_published_block_says_so():
+    """S30: mixtral's four deltas have sd 0.0486 and qwen2's seven 0.0186, so
+    'inside 2x the pooled 0.0323' is the wrong per-cell yardstick at mixtral."""
+    block = NF.by_model_spread(NF.stages_control())
+    assert block["per_model"]["mixtral-8x7b"]["sd"] == pytest.approx(0.0486,
+                                                                    abs=5e-4)
+    assert block["per_model"]["qwen2-57b-a14b"]["sd"] == pytest.approx(0.0186,
+                                                                      abs=5e-4)
+    assert block["ratio"] == pytest.approx(2.61, abs=0.02)
+    assert block["ratio"] < NF.HOMOGENEITY_RATIO
+    # And the registered constants match what the arms actually say.
+    for model, entry in block["per_model"].items():
+        assert NF.PRIOR_SD_BY_MODEL[model] == pytest.approx(entry["sd"],
+                                                            abs=5e-4)
+
+
+@needs_arms
+def test_the_published_document_carries_a_provenance_block_and_the_scope():
+    arms = list(NF.DEFAULT_ARMS)
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS}
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    scope = NF.scope_block(arms, n_replicates=6, cache_mode="fresh",
+                           gpu_name="NVIDIA H200",
+                           order=NF.ORDER_COUNTERBALANCED,
+                           single_model_ok=False)
+    prov = NF.PV.provenance_block(instrument=NF.timing_basis())
+    doc = NF.build_document(control, cards, None, scope=scope, prov=prov)
+    assert doc["schema"] == NF.SCHEMA
+    for key in NF.PV.TOP_LEVEL_KEYS:
+        assert key in doc, key
+    assert doc["provenance"]["instrument"] == NF.timing_basis()
+    assert doc["scope"]["order"] == NF.ORDER_COUNTERBALANCED
+    assert "same-session" in doc["prior_sd_source"].lower()
+    assert doc["prior_sd_by_model"]["ratio"] == pytest.approx(2.61, abs=0.02)
+    assert "RETIRED" in doc["stages_control_instrument"]
+
+
+def test_noise_floor_refuses_a_schema_it_does_not_know(tmp_path):
+    """Parsing an unknown schema means assuming its fields mean what they used
+    to, and the one field that has already changed meaning is the prior's
+    scope."""
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text(json.dumps({"schema": "moe-kernels/noise-floor/99",
+                                "replicate_floor": {"per_field": {}}}))
+    with pytest.raises(NF.NoiseFloorUnmeasured, match="schema"):
+        NF.noise_floor(path)
+    for known in NF.SCHEMA_READABLE:
+        path.write_text(json.dumps({"schema": known, "replicate_floor": None}))
+        with pytest.raises(NF.NoiseFloorUnmeasured, match="replicate_floor"):
+            NF.noise_floor(path)
+
+
+def test_every_gate_prints_exactly_one_parsable_result_line():
+    """The driver greps `RESULT: ` and nothing else. A gate name with a space
+    in it would be dropped by the parser rather than fail loudly."""
+    if not HAVE_ARMS:
+        pytest.skip("the committed arms are not checked out")
+    floors = {f: NF.pool([], f) for f in NF.ALPHA_FIELDS}
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS}
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    arms = list(NF.DEFAULT_ARMS)
+    gates = NF.validity_gates([], 6, arms, "fresh", floors)
+    gates += NF.claim_gates(floors, [], control, cards, arms)
+    text = NF.render_gates(gates)
+    parsed = NF.exit_codes.parse_result_lines(text)
+    assert len(parsed) == len(gates)
+    assert [p.name for p in parsed] == [g.token for g in gates]
+    assert len({g.token for g in gates}) == len(gates), "tokens must be unique"
+    assert NF.exit_codes.classify_text(text) == \
+        NF.exit_codes.classify(g.scored() for g in gates)

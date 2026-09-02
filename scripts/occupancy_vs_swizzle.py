@@ -55,6 +55,34 @@ So the design is one lever that changes residency, one that changes warp-level
 parallelism at fixed residency, and one that changes program order at fixed
 both. Three arms, one fit, one verdict.
 
+THE CONFOUND THIS DESIGN CANNOT REMOVE, and it is named in every branch below
+rather than buried here. `num_stages` sets residency AND the software-pipeline
+prefetch depth of the K loop. Fewer stages means fewer resident blocks and ALSO
+a shallower prefetch, so a change in alpha across the ladder is consistent with
+two mechanisms -- a larger concurrent footprint overflowing L2, or worse latency
+hiding leaving more of the stream exposed -- and `num_warps` separates neither:
+it holds blocks fixed while changing WARPS, which is a third thing. Until
+2026-09-02 `occupancy_contrast` made this invisible by AVERAGING the settings
+that share a residency level, which is precisely where the pure pipeline-depth
+effect lives: two `num_stages` at ONE resident-block count differ in depth and
+in nothing else, and averaging them is the one operation that destroys the
+measurement.
+
+THE DEPTH CONTROL, and why it is a card property. `depth_contrast` reports that
+pure effect beside the residency one, and gate P6 scores it. It is formable only
+where two swept `num_stages` compute the SAME resident-block count: on an A100
+(164 KiB of shared memory per SM) 4 and 5 stages both give 2 blocks, so the pair
+exists; on an H200 (227 KiB) the ladder is 6, 4, 3, 2 blocks at 2, 3, 4, 5
+stages and no two collide, so P6 is UNKNOWN there and says so in words. The
+ladder cannot simply be extended to find a collision: at 6 stages the BLOCK_M=256
+REFERENCE needs 240 KiB per CTA, past both cards' per-block ceiling, and a
+setting with no reference has no alpha. So on the H200 this experiment can
+report that alpha moves with the ladder and CANNOT say which of the two things
+the ladder moves is responsible; on the A100 it can. An UNKNOWN P6 counts
+against the run through `moe.bench.exit_codes.classify`, which is the honest
+accounting: the concurrency reading is not established, and the arm exits
+CLAIM_FAIL rather than DONE.
+
 WHAT alpha IS HERE, stated because the name has caused trouble in this study. A
 ladder fit at BLOCK_M returns
 
@@ -95,24 +123,33 @@ computed resident-block count is the same at every setting has swept nothing,
 and would report a flat alpha as evidence for program order.
 
 WHAT IS IMPORTED AND NEVER REIMPLEMENTED. The ladder fit, the compute
-reference, its level checks, the tile-resource refusals, the timing loop, the
-override hook and the balanced routing all come from
-`scripts/block_m_crossing_sweep.py` by path. This script has to be scored by the
-fit the study publishes; a private copy would drift and every number here would
-become unattributable. What is NEW here is the residency arithmetic, which that
-file does not have: it assumes one resident CTA per SM when it counts waves, and
-says so.
+reference, its level checks, the tile-resource refusals, the override hook and
+the balanced routing all come from `scripts/block_m_crossing_sweep.py` by path.
+This script has to be scored by the fit the study publishes; a private copy
+would drift and every number here would become unattributable. THE TIMING LOOP
+NO LONGER COMES FROM THERE: every cell is timed by `moe.bench.timing.time_kernel`
+under `TIMING_BASIS`, queue-deep with an L2 flush and the SM clock sampled while
+the trials run, and the per-cell clock state is a COLUMN of cells.csv rather
+than a property of the session. That is the same instrument the roof was
+measured with; the retired `time_call` synchronised every iteration, created its
+events inside the loop, flushed nothing and read no clock, and cells timed by it
+are not comparable with a roof that was not. The exit code comes from
+`moe.bench.exit_codes.classify` over the same gates that printed their
+`RESULT:` lines, and the run id and the report's provenance block come from
+`moe.bench.provenance`. What is NEW here is the residency arithmetic, which the
+sweep does not have: it assumes one resident CTA per SM when it counts waves,
+and says so.
 """
 from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import importlib.util
 import json
 import math
 import os
 import random
+import re
 import statistics
 import subprocess
 import sys
@@ -123,7 +160,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+
+
+def timing_basis() -> str | None:
+    """`moe.bench.timing.TIMING_BASIS`, or None when it cannot be named here.
+
+    Not a top-level import: `moe.bench.timing` imports torch, and `--audit`,
+    `--self-test` and `--dry-run` are documented to run on a laptop. None says
+    the instrument could not be NAMED on this machine, which is the same set of
+    cases where nothing was measured. Broad except because an installed-and-
+    broken torch raises OSError on a missing libcudart rather than ImportError.
+    """
+    try:
+        from moe.bench.timing import TIMING_BASIS
+    except Exception:                                     # noqa: BLE001
+        return None
+    return TIMING_BASIS
 
 
 def _load_sweep():
@@ -140,13 +195,21 @@ def _load_sweep():
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault(spec.name, module)
     spec.loader.exec_module(module)
+    # `time_call` and `scaled_iters` LEFT THIS LIST ON 2026-09-02 with the
+    # instrument they belonged to. `time_call` is now a stub that raises
+    # `RetiredInstrument`, so requiring it here would have kept passing while
+    # every call to it failed on the pod; `planned_iters` replaces
+    # `scaled_iters` in the cost model because the cost model now prices a
+    # warmup DURATION and `--trials` trials, which is what `time_kernel`
+    # charges.
     needed = ("FIXED", "MIN_MEMORY_TREADS", "PARALLEL_BRANCH_TOLERANCE",
               "SMEM_PER_BLOCK_BYTES", "MAX_REGISTERS_PER_THREAD",
               "activation_slope_ms", "arm_triton_cache", "balanced_ids",
               "compute_reference", "count_new", "find_override", "fit_ladder",
               "ladder_points", "make_cell", "missing_gpu_stack", "model_ms",
-              "results_root", "rows_quantum", "scaled_iters", "tile_resources",
-              "time_call", "tokens_for_rows", "weight_bytes_per_expert")
+              "planned_iters", "reference_clock_mhz", "results_root",
+              "rows_quantum", "tile_resources",
+              "tokens_for_rows", "weight_bytes_per_expert")
     missing = [n for n in needed if not hasattr(module, n)]
     if missing:
         raise SystemExit(
@@ -652,9 +715,40 @@ class Gate:
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.passed]
+
+    @property
+    def token(self) -> str:
+        """The one-token name this gate answers to on its `RESULT:` line.
+
+        The names here are phrases ("P1 occupancy", "V6 replication") and
+        `exit_codes.result_line` refuses a name containing whitespace, because
+        a name with a space in it cannot be read back and the gate would vanish
+        from the driver's summary rather than fail loudly.
+        """
+        return re.sub(r"\s+", "_", self.name.strip())
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, name, verdict)` in `moe.bench.exit_codes`'s vocabulary."""
+        return (self.kind, self.token, self.verdict)
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        Nothing else this file prints begins with `RESULT: `. The `[PASS]` line
+        below it is for a human; it is prose, and the summary that used to grep
+        prose for `PASS` is the reason this contract exists.
+        """
+        detail = (f"[{self.kind}] {self.prediction} | gate {self.rule} "
+                  f"| saw {self.observed}")
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
     def render(self) -> list[str]:
-        tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
-        out = [f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
+        out = [self.result_line(),
+               f"[{self.verdict}] {self.kind:8s} {self.name}  {self.prediction}",
                f"         gate: {self.rule}",
                f"         saw:  {self.observed}"]
         if self.passed is not True and self.invalidates:
@@ -663,10 +757,9 @@ class Gate:
         return out
 
     def as_dict(self) -> dict:
-        return {"kind": self.kind, "name": self.name,
+        return {"kind": self.kind, "name": self.name, "token": self.token,
                 "prediction": self.prediction, "rule": self.rule,
-                "verdict": {True: "PASS", False: "FAIL",
-                            None: "UNKNOWN"}[self.passed],
+                "verdict": self.verdict,
                 "observed": self.observed, "invalidates": self.invalidates}
 
 
@@ -877,6 +970,17 @@ def predictions_text(reg: Registered, settings: list[Setting]) -> str:
         "    reading is confounded by something num_warps changes -- latency",
         "    hiding, register pressure, scheduling -- and P1 cannot be read as",
         "    a footprint effect.",
+        "P6  THE OTHER CONTROL, and the one this design usually cannot run.",
+        "    num_stages sets residency AND software-pipeline prefetch depth, so",
+        "    P1's axis carries two mechanisms. They come apart ONLY where two",
+        "    num_stages compute the SAME resident-block count, and after the",
+        "    BLOCK_M=256 reference prunes the ladder neither real card has such",
+        "    a pair: the H200 runs 2/3/4/5 stages at 6/4/3/2 blocks and the A100",
+        "    runs 2/3/4 at 4/3/2. So P6 is expected to report UNKNOWN on a pod,",
+        "    which counts AGAINST the run and is the honest accounting: the",
+        "    concurrency reading is not established, and CONCURRENCY may not be",
+        "    quoted without that clause. The self-test plants P6's PASS and FAIL",
+        "    branches on a card that does not exist and says so.",
         "P4  THE NULL IS A RESULT. If P1 and P2 both FAIL the verdict is",
         f"    {VERDICT_NEITHER}, printed as such and not forced into a branch.",
         "    It would retire both models at once and point at DRAM scheduling,",
@@ -923,8 +1027,14 @@ class Plan:
     block_n: int
     block_k: int
     reps: int
-    iters: int
-    warmup: int
+    #: THE INSTRUMENT'S KNOBS, not a call count and a sample size. `warmup_ms`
+    #: is MILLISECONDS of delivered GPU load; `time_kernel` then sizes the
+    #: iteration count itself from `cell_budget_ms`. The retired pair
+    #: (`iters`, `warmup`) priced a warmup of 5 CALLS, which for a 1 ms kernel
+    #: is 5 ms and reaches no operating point at all.
+    warmup_ms: float
+    trials: int
+    l2_flush: bool
     cell_budget_ms: float
     estimated_seconds: float
     cells: int
@@ -948,8 +1058,11 @@ class Plan:
             + ", ".join(s.key for s in self.settings),
             f"repeats      {self.reps} passes, settings shuffled inside each "
             "token count on the same tensors, so every contrast is paired",
-            f"timing       {self.warmup} warmup + up to {self.iters} iters, cut "
-            f"to keep a cell inside {self.cell_budget_ms:.0f} ms",
+            f"timing       moe.bench.timing.time_kernel "
+            f"[{timing_basis() or 'instrument not nameable on this host'}]: "
+            f"{self.warmup_ms:.0f} ms of delivered warmup, {self.trials} "
+            f"queue-deep trials of {self.cell_budget_ms:.0f} ms each, L2 flush "
+            f"{'on' if self.l2_flush else 'OFF'}, SM clock sampled under load",
             f"cells        {self.cells} timings",
             f"estimate     {self.estimated_seconds:.0f} s of GPU at the model's "
             "own timings, excluding compiles and allocation",
@@ -999,6 +1112,13 @@ def build_plan(args, cfg, b: int, limits: CardLimits, *, alpha: float,
             "every setting in the grid is refused on this card's shared-memory "
             "or register limits, so there is nothing to measure. The refusals:\n  "
             + "\n  ".join(f"{k}: {v}" for k, v in sorted(refused.items())))
+    # PRICED AS `time_kernel` WILL CHARGE. One cell costs a fixed warmup
+    # DURATION plus `trials` trials, each sized by `planned_iters` to hold
+    # `cell_budget_ms` of kernel time -- so the cost is nearly independent of
+    # the per-call time, which the retired `ms * (warmup + iters)` formula was
+    # not. That formula also added a duration to a call count once `--warmup`
+    # changed units, and priced a 1 ms cell and an 11 ms cell an order of
+    # magnitude apart when the instrument charges nearly the same for both.
     total = 0.0
     cells = 0
     for _ in kept:
@@ -1007,11 +1127,12 @@ def build_plan(args, cfg, b: int, limits: CardLimits, *, alpha: float,
             for r in rows:
                 ms = SWEEP.model_ms(cfg, r, bm, alpha=alpha, ridge=ridge,
                                     bandwidth_gbps=bandwidth_gbps, b=b)
-                it = SWEEP.scaled_iters(ms, args.iters, args.cell_budget_ms)
-                total += args.reps * ms * (args.warmup + it)
+                it = SWEEP.planned_iters(ms, args.cell_budget_ms)
+                total += args.reps * (args.warmup_ms + args.trials * ms * it)
                 cells += args.reps
     return Plan(args.model, args.dtype, kept, subject_rows, reference_rows,
-                args.block_n, args.block_k, args.reps, args.iters, args.warmup,
+                args.block_n, args.block_k, args.reps, args.warmup_ms,
+                args.trials, not args.no_l2_flush,
                 args.cell_budget_ms, total / 1e3, cells, refused)
 
 
@@ -1021,7 +1142,22 @@ def build_plan(args, cfg, b: int, limits: CardLimits, *, alpha: float,
 
 @dataclass
 class Sample:
-    """One timing of one tread of one setting in one repeat. The CSV row."""
+    """One timing of one tread of one setting in one repeat. The CSV row.
+
+    THE STATE THE CELL WAS TIMED IN IS A COLUMN, not a property of the session,
+    for the reason `block_m_crossing_sweep.Cell` gives: without them a reader
+    cannot tell a cell timed at 1980 MHz from one timed at 1500, and every
+    published cell of this study was timed by a different instrument from the
+    roof it was compared against. `instrument`, `warmup_ms`, `trials`,
+    `sm_clock_load_mhz`, `clock_level_ok`, `clock_drift_ok` and `l2_flush` are
+    what `moe.bench.timing.time_kernel` reports about the measurement it just
+    made.
+
+    THE THREE CLOCK FIELDS ARE OPTIONAL AND None MEANS "NOT DETERMINED", never
+    "fine". A container without NVML, a trial too short for the poller to land
+    a sample, and a laptop replay all produce None, and a filter that read None
+    as True would re-admit exactly the rows the column exists to flag.
+    """
 
     setting: str
     num_stages: int
@@ -1038,9 +1174,33 @@ class Sample:
     iters: int
     status: str = "ok"
     detail: str = ""
+    instrument: str = ""
+    warmup_ms: float = 0.0
+    trials: int = 0
+    sm_clock_load_mhz: float | None = None
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
+    l2_flush: bool = False
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
+
+
+def _opt_float(text: str | None) -> float | None:
+    """CSV round-trip for an Optional[float]. "" is None, never 0.0."""
+    return float(text) if text not in (None, "") else None
+
+
+def _opt_bool(text: str | None) -> bool | None:
+    """CSV round-trip for an Optional[bool]. "" is None, never False.
+
+    `csv` writes None as the empty string and `bool("False")` is True, so both
+    directions have to be spelled out: a clock flag read back as False when it
+    was never determined is the reading this column exists to prevent.
+    """
+    if text in (None, ""):
+        return None
+    return text.strip().lower() in ("true", "1")
 
 
 def append_sample(path: Path, sample: Sample) -> None:
@@ -1074,7 +1234,18 @@ def read_samples(path: Path) -> tuple[set[tuple[str, int, int, int]],
                 tokens=int(row["tokens"]), rep=int(row["rep"]),
                 ms_p50=float(row["ms_p50"]), ms_min=float(row["ms_min"]),
                 ms_stdev=float(row["ms_stdev"]), iters=int(row["iters"]),
-                status=row.get("status", "ok"), detail=row.get("detail", "")))
+                status=row.get("status", "ok"), detail=row.get("detail", ""),
+                # `.get` with a default on every timing-state column: a
+                # cells.csv written before 2026-09-02 has none of them, and a
+                # replay of one must say "not recorded" rather than fail to
+                # parse or, worse, read a missing clock flag as a passing one.
+                instrument=row.get("instrument", ""),
+                warmup_ms=float(row.get("warmup_ms") or 0.0),
+                trials=int(row.get("trials") or 0),
+                sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                clock_level_ok=_opt_bool(row.get("clock_level_ok")),
+                clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
+                l2_flush=_opt_bool(row.get("l2_flush")) or False))
     done = {(s.setting, s.block_m, s.tiles, s.rep)
             for s in out if s.status == "ok"}
     return done, out
@@ -1241,12 +1412,23 @@ def gate_compiled_smem(probe: dict[str, dict], note: str,
 
 
 def measure(args, cfg, plan: Plan, csv_path: Path, cache_root: Path,
-            done, samples: list[Sample], probe: KernelProbe
+            done, samples: list[Sample], probe: KernelProbe,
+            reference_clock_mhz: float | None = None
             ) -> tuple[dict[str, int], dict[str, int]]:
-    """The metered part. Appends every timing as it lands, so aborting keeps it."""
+    """The metered part. Appends every timing as it lands, so aborting keeps it.
+
+    ONE INSTRUMENT, and it is the roof's. `moe.bench.timing.time_kernel` warms
+    for a duration, sizes the iteration count itself, runs `--trials`
+    queue-deep trials with an L2 flush before each call, and samples the SM
+    clock from a background thread WHILE the trials run. `reference_clock_mhz`
+    is the clock the roof was measured at; without it the LEVEL flag is None,
+    because a level is relative to something and the instrument will not invent
+    the something.
+    """
     import torch
 
     from moe.baselines._framework_config import vllm_call_kwargs
+    from moe.bench import timing
     from moe.reference.torch_ref import make_inputs
     from moe.spec import BenchSpec, RoutingSpec
 
@@ -1306,13 +1488,22 @@ def measure(args, cfg, plan: Plan, csv_path: Path, cache_root: Path,
                         torch.cuda.synchronize()
                         compiles[st.key] += SWEEP.count_new(cache_root, seen)
                         probe.record(st.key)
-                        ms0, _, _ = SWEEP.time_call(call, 1, 3)
-                        iters = SWEEP.scaled_iters(ms0, args.iters,
-                                                   args.cell_budget_ms)
-                        ms, mn, sd = SWEEP.time_call(call, args.warmup, iters)
-                    sample = Sample(st.key, st.num_stages, st.num_warps,
-                                    st.group_m, bm, n, rows, tokens, rep, ms,
-                                    mn, sd, iters)
+                        t = timing.time_kernel(
+                            call, warmup_ms=plan.warmup_ms,
+                            target_ms=plan.cell_budget_ms, trials=plan.trials,
+                            l2_flush=plan.l2_flush,
+                            reference_clock_mhz=reference_clock_mhz)
+                    sample = Sample(
+                        st.key, st.num_stages, st.num_warps, st.group_m, bm, n,
+                        rows, tokens, rep, t.ms_p50, t.ms_min, t.ms_std,
+                        t.iters, instrument=t.instrument,
+                        warmup_ms=t.warmup_ms, trials=t.trials,
+                        sm_clock_load_mhz=t.sm_clock_load_mhz,
+                        clock_level_ok=t.clock_level_ok,
+                        clock_drift_ok=t.clock_drift_ok, l2_flush=t.l2_flush)
+                    if t.clock_level_ok is False or t.host_bound:
+                        print(f"  ^ {t.clock_note or ''} "
+                              f"{t.host_note or ''}".rstrip())
                 except Exception as exc:                # noqa: BLE001
                     sample = Sample(st.key, st.num_stages, st.num_warps,
                                     st.group_m, bm, n, rows, tokens, rep, 0.0,
@@ -1324,7 +1515,10 @@ def measure(args, cfg, plan: Plan, csv_path: Path, cache_root: Path,
                 append_sample(csv_path, sample)
                 print(f"  rep {rep} T={tokens:6d} {st.key:12s} BM={bm:3d} "
                       f"n={n:2d}  {sample.ms_p50:9.4f} ms "
-                      f"({sample.iters} iters)")
+                      f"({sample.iters} iters, clock "
+                      + (f"{sample.sm_clock_load_mhz:.0f} MHz"
+                         if sample.sm_clock_load_mhz else "not determined")
+                      + ")")
             del x, weights, ids, w, kw
             torch.cuda.empty_cache()
     return compiles, executed
@@ -1477,6 +1671,13 @@ def occupancy_contrast(results: list[SettingResult]) -> Contrast:
     because two `num_stages` can compute to the same resident-block count -- on
     an A100 four and five stages both give two -- and treating them as two rungs
     would put a pure num_stages effect on an axis that did not move.
+
+    THE AVERAGING IS ALSO WHAT HIDES THAT EFFECT, so it does not stand alone.
+    Within one residency level the settings differ in PIPELINE DEPTH and in
+    nothing else, and the mean over them is exactly the statistic that discards
+    the difference. `depth_contrast` reports it beside this one and P6 scores
+    it; reading this contrast without that one is reading a residency axis that
+    a second mechanism also moves.
     """
     usable = [r for r in results
               if ARM_OCCUPANCY in r.setting.arms and r.usable]
@@ -1527,6 +1728,63 @@ def warp_contrast(results: list[SettingResult]) -> Contrast:
     return Contrast("warp-control", f"s{key[0]} w{lo_w}", f"s{key[0]} w{hi_w}",
                     v[lo_w], v[hi_w], statistics.fmean(sig) if sig else None,
                     len(pairs))
+
+
+ARM_DEPTH = "depth-control"
+
+
+def depth_contrast(results: list[SettingResult]) -> Contrast:
+    """The PURE `num_stages` effect: two depths at ONE resident-block count.
+
+    THE CONTRAST THE AVERAGING IN `occupancy_contrast` DESTROYS. `num_stages`
+    moves two things at once, residency and software-pipeline prefetch depth,
+    and the only place they come apart is a pair of stage settings that compute
+    the SAME resident blocks per SM: there the footprint is identical, the
+    warps are identical, the tiling is identical, and depth is the only thing
+    left. Matched on `resident_blocks`, `num_warps` and `GROUP_SIZE_M` so
+    nothing else can enter, and the widest such pair is reported because the
+    question is whether depth can move alpha at all.
+
+    NOT FORMABLE IS A REAL AND COMMON ANSWER, and it is a property of the CARD.
+    On an H200 the default ladder gives 6, 4, 3, 2 blocks at 2, 3, 4, 5 stages
+    and no two collide, so this returns an unformed contrast and P6 reports
+    UNKNOWN with the reason. On an A100 stages 4 and 5 both give 2 blocks and
+    the pair exists. Extending the ladder does not help: at 6 stages the
+    BLOCK_M=256 reference needs 240 KiB per CTA, past both cards' per-block
+    ceiling.
+    """
+    usable = [r for r in results
+              if ARM_OCCUPANCY in r.setting.arms and r.usable]
+    by: dict[tuple[int, int, int], dict[int, float]] = {}
+    for r in usable:
+        key = (r.residency.resident_blocks, r.setting.num_warps,
+               r.setting.group_m)
+        by.setdefault(key, {})[r.setting.num_stages] = r.alpha_corrected
+    pairs = [(k, v) for k, v in by.items() if len(v) >= 2]
+    if not pairs:
+        return Contrast(ARM_DEPTH, "", "", None, None, None, 0)
+    key, v = max(pairs, key=lambda kv: max(kv[1].values()) - min(kv[1].values()))
+    lo_s, hi_s = min(v), max(v)
+    sig = [r.alpha_sigma for r in usable if r.alpha_sigma is not None]
+    return Contrast(ARM_DEPTH, f"s{lo_s} @{key[0]} blk", f"s{hi_s} @{key[0]} blk",
+                    v[lo_s], v[hi_s],
+                    statistics.fmean(sig) if sig else None, len(pairs))
+
+
+def depth_levels(results: list[SettingResult]) -> dict[int, list[int]]:
+    """`{resident blocks: [num_stages that compute it]}` over the occupancy arm.
+
+    Printed whether or not the contrast forms, because "no two stages share a
+    residency on this card" is the sentence a reader needs to understand an
+    UNKNOWN P6, and a table of the ladder is how that sentence is checked.
+    """
+    out: dict[int, list[int]] = {}
+    for r in results:
+        if ARM_OCCUPANCY not in r.setting.arms:
+            continue
+        out.setdefault(r.residency.resident_blocks, []).append(
+            r.setting.num_stages)
+    return {k: sorted(set(v)) for k, v in sorted(out.items())}
 
 
 def monotone_in_residency(results: list[SettingResult]) -> tuple[int, int]:
@@ -1688,6 +1946,98 @@ def gate_non_vacuity(results: list[SettingResult],
         "failures, which is the shape this study has already published once")
 
 
+def timing_summary(samples) -> dict:
+    """The timing state of the rows a report was fitted from, in one block.
+
+    Every field is a COUNT or a median over the timed rows, never a verdict:
+    `clock_level_below` is a positive exclusion, `clock_level_unknown` is the
+    rows that determined nothing, and the two are separate because a run that
+    could not read its clocks and a run whose clocks were fine are not the same
+    state.
+    """
+    timed = [s for s in samples if s.status == "ok"]
+    clocks = [s.sm_clock_load_mhz for s in timed if s.sm_clock_load_mhz]
+    return {
+        "instruments": sorted({s.instrument for s in timed}),
+        "expected_instrument": timing_basis(),
+        "rows_timed": len(timed),
+        "warmup_ms": sorted({s.warmup_ms for s in timed}),
+        "trials": sorted({s.trials for s in timed}),
+        "l2_flush": sorted({s.l2_flush for s in timed}),
+        "iters_median": statistics.median([s.iters for s in timed]) if timed
+                        else None,
+        "sm_clock_load_mhz_median": statistics.median(clocks) if clocks else None,
+        "clock_level_below": sum(1 for s in timed if s.clock_level_ok is False),
+        "clock_level_unknown": sum(1 for s in timed if s.clock_level_ok is None),
+        "clock_drift_flagged": sum(1 for s in timed if s.clock_drift_ok is False),
+    }
+
+
+#: What `planted_samples` stamps instead of an instrument name. A generated
+#: cell is not a cell timed badly, it is a cell that was never timed, and the
+#: two must not share a label: V9 fails on a real run that carries this and
+#: reports UNKNOWN on a planted one.
+SYNTHETIC_INSTRUMENT = "synthetic/model-generated/not-measured"
+
+
+def gate_one_instrument(samples, measured: bool = True) -> Gate:
+    """V10. Every timing came from the instrument the roof was measured with.
+
+    THE DEFECT THIS CLOSES is the study's, not this file's: until 2026-09-02
+    every ladder in the repo was timed by a per-iteration loop that
+    synchronised inside the loop, created its events there, flushed nothing and
+    read no clock, while the roof those ladders were compared against was timed
+    queue-deep with pre-primed events. A cell and a roof measured by two
+    instruments are not comparable, and nothing in any report said which one
+    had been used. Now every row carries `instrument`, and this gate refuses a
+    report whose rows disagree with each other or with the name this repo
+    publishes under.
+
+    THE CLOCK COLUMNS ARE REPORTED HERE AND NOT GATED ON. `clock_level_ok is
+    False` is a positive exclusion and is counted; None is "not determined" --
+    no NVML, a container that forbids it, a trial too short for the poller --
+    and is counted separately, because a run that determined nothing about its
+    clocks and a run whose clocks were fine must not print the same number.
+    """
+    timed = [s for s in samples if s.status == "ok"]
+    stamps = {s.instrument for s in timed}
+    below = sum(1 for s in timed if s.clock_level_ok is False)
+    unknown_clock = sum(1 for s in timed if s.clock_level_ok is None)
+    drifted = sum(1 for s in timed if s.clock_drift_ok is False)
+    basis = timing_basis()
+    lines = [f"{len(timed)} timed rows; {below} below the roof's clock "
+             f"(LEVEL false), {drifted} drifting within a cell, "
+             f"{unknown_clock} with no clock determined at all",
+             "clock_level_ok is None means NOT DETERMINED and never 'fine'; a "
+             "filter that read it as True would re-admit the rows this column "
+             "exists to flag"]
+    if not measured:
+        return Gate(
+            VALIDITY, "V10 one instrument",
+            "every cell was timed by the instrument the roof was measured with",
+            f"every row stamps instrument == {basis!r}",
+            None,
+            "these cells were GENERATED from the model, not timed, so there is "
+            "no instrument to agree about: "
+            + ", ".join(sorted(repr(s) for s in stamps) or ["none"]),
+            "nothing here -- a planted world tests the analysis, not the "
+            "instrument", lines)
+    return Gate(
+        VALIDITY, "V10 one instrument",
+        "every cell was timed by the instrument the roof was measured with",
+        f"every row stamps instrument == {basis!r}",
+        None if not stamps or basis is None else stamps == {basis},
+        "nothing was timed" if not stamps
+        else ("the instrument could not be named on this host, so agreement "
+              "cannot be checked" if basis is None
+              else "instruments seen: "
+                   + ", ".join(sorted(repr(s) for s in stamps))),
+        "every alpha in this report and every comparison of one with the "
+        "study's roof: two timing loops measure two different things and a "
+        "row with no instrument is a row from before the instrument had a name",
+        lines)
+
+
 def _floor(contrast: Contrast, registered_threshold: float) -> float:
     """The occupancy threshold actually applied: registered, floored at noise.
 
@@ -1843,6 +2193,73 @@ def gate_warp_control(warp: Contrast, occ: Contrast, threshold: float) -> Gate:
              "pressure and P1 cannot be read as a footprint effect."])
 
 
+def gate_depth_control(depth: Contrast, occ: Contrast, threshold: float,
+                       levels: dict[int, list[int]]) -> Gate:
+    """P6, the control on the lever P1 reads, and the one A16 says was missing.
+
+    `num_stages` sets residency AND pipeline depth. Where two stage settings
+    compute the SAME residency, the difference between them is depth alone, and
+    if that difference is as big as the whole residency swing then P1 is not a
+    footprint result whatever its verdict says.
+
+    UNKNOWN IS THE HONEST ANSWER TWICE OVER, and both are spelled out rather
+    than folded into a PASS. When no two stages share a residency -- the H200
+    default ladder -- the contrast cannot be formed at all and the confound is
+    simply unremoved. When P1 itself did not clear its threshold there is
+    nothing for depth to be smaller than, and comparing two noise measurements
+    passes about half the time. `exit_codes.classify` scores UNKNOWN against
+    the gate in both cases, so a run that could not separate the two mechanisms
+    exits CLAIM_FAIL rather than DONE, which is what "the claim was not
+    established" means.
+    """
+    ladder = ["residency ladder (blocks/SM -> num_stages that reach it): "
+              + ", ".join(f"{k}: {v}" for k, v in levels.items()),
+              "num_stages moves residency AND software-pipeline prefetch depth. "
+              "This gate is the only place they come apart, and it needs two "
+              "stage settings at ONE resident-block count.",
+              "Not formable on an H200 with the default ladder (6/4/3/2 blocks "
+              "at 2/3/4/5 stages); formable on an A100, where 4 and 5 stages "
+              "both give 2. Extending the ladder cannot help: at 6 stages the "
+              "BLOCK_M=256 reference exceeds both cards' per-CTA shared memory."]
+    if depth.swing is None:
+        return Gate(
+            CLAIM, "P6 depth control",
+            "alpha tracks resident BLOCKS, not pipeline DEPTH",
+            "the pure num_stages contrast at fixed residency is smaller than "
+            "the occupancy contrast",
+            None,
+            "no two num_stages settings computed the same resident-block "
+            "count, so the pure pipeline-depth effect was not measured and the "
+            "confound in P1 is UNREMOVED on this card",
+            "P1's reading as a footprint effect: alpha moving with the ladder "
+            "is equally consistent with latency hiding, and this run cannot "
+            "say which", ladder)
+    if occ.swing is None or abs(occ.swing) < threshold:
+        return Gate(
+            CLAIM, "P6 depth control",
+            "alpha tracks resident BLOCKS, not pipeline DEPTH",
+            "|depth swing| < |occupancy swing|, and only where the occupancy "
+            f"swing cleared its own threshold of {threshold:.3f}",
+            None,
+            f"depth swing {depth.swing:+.3f} between {depth.lo_label} and "
+            f"{depth.hi_label}, but the occupancy swing "
+            + ("was not formed" if occ.swing is None
+               else f"{occ.swing:+.3f} did not clear {threshold:.3f}")
+            + ", so there is nothing for it to be smaller than",
+            "nothing on its own -- this gate is a CONTROL on P1 and is only "
+            "readable when P1 moved", ladder)
+    return Gate(
+        CLAIM, "P6 depth control",
+        "alpha tracks resident BLOCKS, not pipeline DEPTH",
+        "|depth swing| < |occupancy swing|",
+        abs(depth.swing) < abs(occ.swing),
+        f"depth {depth.lo_label} -> {depth.hi_label}: {depth.swing:+.3f}; "
+        f"occupancy: {occ.swing:+.3f}",
+        "P1 as a footprint result: a pipeline-depth effect at or above the "
+        "residency effect means the ladder's two mechanisms are not separable "
+        "here and CONCURRENCY may not be reported as the verdict", ladder)
+
+
 def verdict_of(occupancy: Gate, order: Gate) -> str:
     """Which model the data picked, INCLUDING the null and the unreadable case."""
     if occupancy.passed is None and order.passed is None:
@@ -1856,32 +2273,53 @@ def verdict_of(occupancy: Gate, order: Gate) -> str:
     return VERDICT_NEITHER
 
 
+#: NAMED IN EVERY BRANCH, not in a footnote. The lever that moves residency is
+#: `num_stages`, which also sets the software-pipeline prefetch depth, so every
+#: sentence about residency below is a sentence about two mechanisms until P6
+#: says otherwise. A16 found this stated only in the predictions text and only
+#: about num_warps, so a P1 PASS printed a CONCURRENCY verdict whose caveat
+#: appeared nowhere near it.
+DEPTH_CAVEAT = (
+    "READ P6 BEFORE QUOTING THIS. num_stages moves resident blocks AND "
+    "software-pipeline prefetch depth together, so the residency axis carries "
+    "a latency-hiding mechanism as well as a footprint one. P6 separates them "
+    "only where two num_stages compute the same residency, which is an A100 "
+    "property and not an H200 one; where P6 is UNKNOWN the separation was not "
+    "made and this verdict must be quoted with that clause attached.")
+
 VERDICT_NOTE = {
     VERDICT_CONCURRENCY:
         "alpha is set by how many blocks are resident, not by the order they "
         "run in. Reuse-distance analysis -- the standard predictor, and what "
         "TileSight uses -- assumes sequential execution and does not transfer "
         "to a machine whose concurrent working set overflows L2 before program "
-        "order gets a vote. That is a correction to a published method.",
+        "order gets a vote. That is a correction to a published method. "
+        + DEPTH_CAVEAT,
     VERDICT_ORDER:
         "alpha is set by program order after all, and the 40x gap between "
         "1/GROUP_SIZE_M and the measured re-read fraction is something else -- "
         "most likely the expert boundary, which caps reuse at tiles per expert "
-        "and is already in the capped form of the prediction.",
+        "and is already in the capped form of the prediction. The residency "
+        "arm is not load-bearing for this verdict, but its own reading is "
+        "still confounded: " + DEPTH_CAVEAT,
     VERDICT_BOTH:
         "both knobs move alpha. The two mechanisms are not exclusive and the "
         "effect sizes above are the finding; neither model may be reported as "
-        "THE explanation.",
+        "THE explanation. And the residency half is really two halves: "
+        + DEPTH_CAVEAT,
     VERDICT_NEITHER:
         "a null, and it is a result. Neither concurrency nor program order "
         "moves the re-read fraction by more than this design can resolve, "
         "which retires both models at once and points at DRAM scheduling, the "
         "replacement policy or sector granularity instead. The design's "
         "resolution is V6's spread and P1's applied threshold; quote both "
-        "whenever this verdict is quoted.",
+        "whenever this verdict is quoted. A null here retires the FOOTPRINT "
+        "and the ORDER models; it does not retire pipeline depth, which this "
+        "design never varied on its own. " + DEPTH_CAVEAT,
     VERDICT_UNREADABLE:
         "neither contrast could be formed, so no model was tested. Read the "
-        "VALIDITY gates: this is a broken run, not a null.",
+        "VALIDITY gates: this is a broken run, not a null. Nothing is said "
+        "about residency, order or depth. " + DEPTH_CAVEAT,
 }
 
 
@@ -1900,6 +2338,8 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
     occ = occupancy_contrast(results)
     swz = swizzle_contrast(results)
     wrp = warp_contrast(results)
+    dpt = depth_contrast(results)
+    levels = depth_levels(results)
     rising = monotone_in_residency(results)
 
     lines = ["", "## What each setting measured", "",
@@ -1927,8 +2367,8 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
                          + (f" | {r.reference_note}" if r.reference_refused
                             else ""))
 
-    lines += ["", "## The three contrasts", ""]
-    for c in (occ, swz, wrp):
+    lines += ["", "## The four contrasts", ""]
+    for c in (occ, swz, wrp, dpt):
         if c.swing is None:
             lines.append(f"  {c.name:14s} NOT FORMED ({c.levels} usable level"
                          f"{'' if c.levels == 1 else 's'})")
@@ -1937,6 +2377,19 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
                 f"  {c.name:14s} {c.lo_label:14s} {c.lo_alpha:.3f}  ->  "
                 f"{c.hi_label:14s} {c.hi_alpha:.3f}   swing {c.swing:+.3f}   "
                 f"ratio {c.ratio:.3f}")
+    # THE PURE num_stages EFFECT IS PRINTED BESIDE THE RESIDENCY ONE, always,
+    # and the ladder is printed with it so an unformed depth contrast reads as
+    # "no two stages share a residency on this card" rather than as a blank.
+    lines += ["",
+              "  residency ladder, blocks/SM -> the num_stages that reach it: "
+              + (", ".join(f"{k}: {v}" for k, v in levels.items()) or "none"),
+              "  the depth-control contrast is the ONLY place pipeline depth "
+              "comes apart from residency, and it needs one of those rows to "
+              "hold two num_stages.",
+              "  " + ("it does not on this card, so P1's residency reading "
+                      "carries an unremoved latency-hiding confound."
+                      if dpt.swing is None else
+                      "it does, so P6 can score depth against residency.")]
 
     gates = [
         gate_provenance(reg.limits, l2_source, measured),
@@ -1948,11 +2401,14 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
         gate_override(compiles, executed),
         gate_non_vacuity(results, [occ, swz, wrp]),
         gate_compiled_smem(probe or {}, probe_note, results),
+        gate_one_instrument(samples, measured),
     ]
     g_occ = gate_occupancy(occ, reg, rising)
     g_ord = gate_order(swz, reg, swizzle_collapse(results))
+    threshold = _floor(occ, reg.occupancy_threshold)
     gates += [g_occ, g_ord,
-              gate_warp_control(wrp, occ, _floor(occ, reg.occupancy_threshold))]
+              gate_warp_control(wrp, occ, threshold),
+              gate_depth_control(dpt, occ, threshold, levels)]
 
     verdict = verdict_of(g_occ, g_ord)
     # FAIL and UNKNOWN are not the same standing and must not print the same
@@ -1999,7 +2455,14 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
                                "lo_alpha": c.lo_alpha, "hi_alpha": c.hi_alpha,
                                "swing": c.swing, "ratio": c.ratio,
                                "sigma": c.sigma, "levels": c.levels}
-                      for c in (occ, swz, wrp)},
+                      for c in (occ, swz, wrp, dpt)},
+        "residency_levels": {str(k): v for k, v in levels.items()},
+        "depth_control_formable": dpt.swing is not None,
+        # THE TIMING STATE OF THE ROWS THIS REPORT WAS FITTED FROM, summarised
+        # beside the numbers rather than left only in cells.csv, so a reader of
+        # report.json alone can tell a run timed at the roof's clock from one
+        # timed 25% under it.
+        "timing": timing_summary(samples),
         "rising_steps": rising,
         "compiled_smem": probe or {},
         "compiled_smem_note": probe_note,
@@ -2307,60 +2770,214 @@ def planted_samples(cfg, plan: Plan, alpha_of, *, ridge: float,
                     out.append(Sample(
                         st.key, st.num_stages, st.num_warps, st.group_m, bm,
                         r // bm, r, SWEEP.tokens_for_rows(cfg, r), rep, ms, ms,
-                        ms * noise, 0))
+                        ms * noise, 0,
+                        # STAMPED SYNTHETIC, never left blank and never given
+                        # the real instrument's name. A generated cell is not a
+                        # badly timed cell, and a planted world that carried
+                        # `TIMING_BASIS` would let V9 pass on data no
+                        # instrument ever touched.
+                        instrument=SYNTHETIC_INSTRUMENT))
     return out
 
 
-def self_test(cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
-              bandwidth_gbps: float, noise: float, seed: int
-              ) -> tuple[list[str], list[Gate]]:
-    """Three planted worlds and the verdicts they MUST produce.
+#: A card that does not exist, used ONLY by the self-test's depth worlds.
+#: `SMEM_PER_SM` is chosen so that four and five stages both compute two
+#: resident blocks (180000 // 67584 == 180000 // 83968 == 2), which is the one
+#: configuration `depth_contrast` can read and which NEITHER real card in this
+#: study provides: on an H200 the surviving ladder is 6/4/3/2 blocks at 2/3/4/5
+#: stages and on an A100 it is 4/3/2 at 2/3/4, because the BLOCK_M=256
+#: reference's shared memory prunes the top of the ladder before any two rungs
+#: can collide. The fiction is confined to the self-test and labelled in its
+#: `source` string; a measured run reads the attached device and refuses
+#: without one.
+SELF_TEST_DEPTH_SMEM_PER_SM = 180_000
 
-    The point is not that the code runs. It is that the verdict
-    DISCRIMINATES: a pipeline that answers CONCURRENCY in a world built from
-    GROUP_SIZE_M alone cannot settle anything, and neither can one that answers
-    NEITHER in both.
+
+def depth_control_limits() -> CardLimits:
+    """The fictional card the P6 worlds are planted on, labelled as fiction."""
+    return CardLimits(
+        HYPOTHESIS_CAPABILITY, SELF_TEST_DEPTH_SMEM_PER_SM,
+        MAX_THREADS_PER_SM[HYPOTHESIS_CAPABILITY],
+        MAX_BLOCKS_PER_SM[HYPOTHESIS_CAPABILITY], HYPOTHESIS_SM_COUNT,
+        HYPOTHESIS_L2_BYTES,
+        "SELF-TEST FICTION: a card with 176 KiB of shared memory per SM, which "
+        "is the only way to make two num_stages share a residency level and so "
+        "the only way to exercise P6's PASS and FAIL branches at all")
+
+
+@dataclass(frozen=True)
+class World:
+    """One planted world, and everything it claims the pipeline will do with it.
+
+    `verdict` is the overall verdict the world must produce, or None when the
+    world exists to exercise ONE gate rather than the verdict machinery.
+    `gates` maps a gate's one-token name to the verdict it must return, so a
+    control's FAIL branch can be planted and asserted directly instead of being
+    inferred from a verdict that does not depend on it.
+    """
+
+    name: str
+    alpha_of: object
+    verdict: str | None = None
+    gates: dict[str, bool | None] = field(default_factory=dict)
+    plan: Plan | None = None
+    reg: Registered | None = None
+
+
+def self_test_worlds(args, cfg, plan: Plan, reg: Registered, b: int, *,
+                     ridge: float, bandwidth_gbps: float) -> list[World]:
+    """The planted worlds, including the FAIL branch of both controls.
+
+    THE THREE ORIGINAL WORLDS test the verdict: a pipeline that answers
+    CONCURRENCY in a world built from GROUP_SIZE_M alone settles nothing, and
+    neither does one that answers NEITHER in both.
+
+    THE THREE ADDED ON 2026-09-02 test the CONTROLS, which the original set
+    never did. P3 returned UNKNOWN in two of the three worlds and PASS in the
+    third, so its FAIL branch -- the branch that says the residency reading is
+    confounded -- had never been executed; the audit found it by running the
+    self-test rather than by reading it. P6 did not exist. A control whose FAIL
+    branch is unreachable is not a control, it is a decoration.
+
+    THE TWO DEPTH WORLDS RUN ON A FICTIONAL CARD and say so. `depth_contrast`
+    needs two num_stages at one resident-block count and neither real card in
+    this study has that after the BLOCK_M=256 reference prunes the ladder --
+    which is itself the finding P6 reports on a pod. Planting the gate's two
+    branches therefore needs a card where the pair exists, and the alternative
+    is a control that can only ever return UNKNOWN and has never been shown to
+    do anything else.
     """
     base = 0.95
+    warp_shift = -0.30
+    depth_shift = -0.30
+
+    def concurrency(st):
+        return reg.concurrency_alpha[st.key]
+
+    def warps_move(st):
+        """Alpha depends on num_warps at FIXED residency: P3 must FAIL.
+
+        The warp-control settings are in ARM_WARPS and NOT in ARM_OCCUPANCY, so
+        shifting them moves the warp contrast and leaves the occupancy contrast
+        untouched -- which is what makes the planted FAIL attributable to the
+        control rather than to a broken ladder. The shift is NEGATIVE so every
+        planted alpha stays inside the window this design can read; a positive
+        one would push settings past 1.0, where the traffic model does not go.
+        """
+        shift = warp_shift if st.num_warps != BASE_WARPS else 0.0
+        return reg.concurrency_alpha[st.key] + shift
+
     worlds = [
-        ("concurrency: alpha = 1 - L2/footprint(residency)",
-         lambda st: reg.concurrency_alpha[st.key], VERDICT_CONCURRENCY),
-        ("program order: alpha = alpha(1) / min(G, tiles per expert)",
-         lambda st: alpha_order(base, st.group_m, reg.order_cap),
-         VERDICT_ORDER),
-        ("null: alpha is the same everywhere",
-         lambda _st: base, VERDICT_NEITHER),
+        World("concurrency: alpha = 1 - L2/footprint(residency)",
+              concurrency, VERDICT_CONCURRENCY,
+              {"P3_warp_control": True}),
+        World("program order: alpha = alpha(1) / min(G, tiles per expert)",
+              lambda st: alpha_order(base, st.group_m, reg.order_cap),
+              VERDICT_ORDER),
+        World("null: alpha is the same everywhere", lambda _st: base,
+              VERDICT_NEITHER),
+        World("warps move alpha at fixed residency (P3 must FAIL)",
+              warps_move, None, {"P3_warp_control": False}),
     ]
+
+    # The two P6 worlds, on the fictional card, with their own plan and their
+    # own registered predictions: residency is the swept axis and a plan built
+    # against one card's shared memory cannot be scored against another's.
+    try:
+        limits = depth_control_limits()
+        d_plan = build_plan(args, cfg, b, limits, alpha=args.alpha, ridge=ridge,
+                            bandwidth_gbps=bandwidth_gbps)
+        d_reg = register(cfg, d_plan.settings, limits, block_n=args.block_n,
+                         block_k=args.block_k, b=b,
+                         subject_rows=d_plan.subject_rows, ridge=ridge,
+                         l2_source=limits.source)
+    except SystemExit:
+        # build_plan refuses when every setting's tiles are unrunnable. The
+        # depth worlds are then simply absent and the two verdict worlds still
+        # run; a self-test that silently substituted the real plan would report
+        # P6 UNKNOWN and call it an exercised branch.
+        return worlds
+
+    def depth_moves(st):
+        """Alpha depends on num_stages at FIXED residency: P6 must FAIL."""
+        shift = depth_shift if st.num_stages == max(args.stages) else 0.0
+        return d_reg.concurrency_alpha[st.key] + shift
+
+    worlds += [
+        World("residency only, on the fictional card (P6 must PASS)",
+              lambda st: d_reg.concurrency_alpha[st.key], None,
+              {"P6_depth_control": True}, d_plan, d_reg),
+        World("pipeline depth moves alpha at fixed residency (P6 must FAIL)",
+              depth_moves, None, {"P6_depth_control": False}, d_plan, d_reg),
+    ]
+    return worlds
+
+
+def self_test(args, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
+              bandwidth_gbps: float, noise: float, seed: int
+              ) -> tuple[list[str], list[Gate]]:
+    """Every planted world, the real gates, and what each world must produce.
+
+    The point is not that the code runs. It is that the verdict and both
+    controls DISCRIMINATE: a gate that returns the same answer in the world it
+    is meant to catch and in the world it is meant to pass has never been shown
+    to be a gate at all.
+    """
+    worlds = self_test_worlds(args, cfg, plan, reg, b, ridge=ridge,
+                              bandwidth_gbps=bandwidth_gbps)
     lines = ["", "## Self test: planted worlds, real gates, real verdict", "",
-             f"{'world':52s} {'occupancy':>12s} {'swizzle':>12s}  verdict"]
+             f"{'world':58s} {'occupancy':>12s} {'swizzle':>12s} {'depth':>12s}"
+             "  verdict"]
     gates: list[Gate] = []
-    for name, alpha_of, expected in worlds:
-        samples = planted_samples(cfg, plan, alpha_of, ridge=ridge,
+    for world in worlds:
+        w_plan = world.plan or plan
+        w_reg = world.reg or reg
+        samples = planted_samples(cfg, w_plan, world.alpha_of, ridge=ridge,
                                   bandwidth_gbps=bandwidth_gbps, b=b,
                                   noise=noise, seed=seed)
-        compiles = {s.key: 1 for s in plan.settings}
-        executed = {s.key: plan.reps for s in plan.settings}
+        compiles = {s.key: 1 for s in w_plan.settings}
+        executed = {s.key: w_plan.reps for s in w_plan.settings}
         _, world_gates, payload = analyse(
-            samples, cfg, plan, reg, b, ridge=ridge,
+            samples, cfg, w_plan, w_reg, b, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, compiles=compiles,
-            executed=executed, l2_source=reg.l2_source, measured=False)
+            executed=executed, l2_source=w_reg.l2_source, measured=False)
         got = payload["verdict"]
         occ = payload["contrasts"]["occupancy"]["swing"]
         swz = payload["contrasts"]["swizzle"]["ratio"]
+        dpt = payload["contrasts"][ARM_DEPTH]["swing"]
         lines.append(
-            f"{name:52s} "
+            f"{world.name:58.58s} "
             + (f"{occ:+12.3f}" if occ is not None else f"{'collapsed':>12s}")
             + (f"{swz:12.3f}" if swz is not None else f"{'collapsed':>12s}")
+            + (f"{dpt:+12.3f}" if dpt is not None else f"{'not formed':>12s}")
             + f"  {got}")
-        gates.append(Gate(
-            VALIDITY, f"S {expected.split()[0].lower()}",
-            f"a world built from {name.split(':')[0]} is called {expected}",
-            f"verdict == {expected!r}", got == expected,
-            f"verdict {got!r}",
-            "the verdict machinery itself: a pipeline that answers the same in "
-            "every planted world cannot settle this experiment",
-            [f"  {g.name}: {'PASS' if g.passed else 'FAIL' if g.passed is False else 'UNKNOWN'}"
-             for g in world_gates if g.kind == CLAIM]))
+        detail = [f"  {g.name}: {g.verdict}"
+                  for g in world_gates if g.kind == CLAIM]
+        if world.verdict is not None:
+            gates.append(Gate(
+                VALIDITY, f"S {world.verdict.split()[0].lower()}",
+                f"a world built from {world.name.split(':')[0]} is called "
+                f"{world.verdict}",
+                f"verdict == {world.verdict!r}", got == world.verdict,
+                f"verdict {got!r}",
+                "the verdict machinery itself: a pipeline that answers the "
+                "same in every planted world cannot settle this experiment",
+                detail))
+        for token, want in world.gates.items():
+            found = next((g for g in world_gates if g.token == token), None)
+            verdict = None if found is None else found.passed
+            gates.append(Gate(
+                VALIDITY, f"S {token} {'pass' if want else 'fail'}",
+                f"in the world '{world.name}', {token} returns "
+                f"{'PASS' if want else 'FAIL'}",
+                f"{token}.passed is {want!r}",
+                None if found is None else verdict == want,
+                f"{token} was not scored in this world" if found is None
+                else f"{token} returned "
+                     + {True: "PASS", False: "FAIL", None: "UNKNOWN"}[verdict],
+                "the control itself: a gate whose FAIL branch never executes "
+                "is not a control, and this study has shipped one",
+                detail))
     return lines, gates
 
 
@@ -2418,31 +3035,56 @@ def default_run_id(args, card: str) -> str:
     heading. A run id that omitted the CARD had an A100 session resume into an
     H200 directory on the shared `/workspace` volume and report the H200's
     timings against the A100's ridge.
+
+    THE ID IS BUILT BY `moe.bench.provenance.run_id` AS OF 2026-09-02, not by a
+    private hash here. That function takes the card as a REQUIRED keyword and
+    raises `NoCard` without it, refuses a None or empty value rather than
+    hashing one, sorts the knobs so the id does not depend on the order they
+    were named in, and puts the card slug at the FRONT where `ls` shows it.
+    Three scripts had each re-implemented a subset of that and each had left a
+    different knob out.
+
+    THE INSTRUMENT'S KNOBS ARE IN THE KEY and `--iters` is gone from it. Each
+    of `warmup_ms`, `trials` and `l2_flush` sets the measured milliseconds of
+    every cell, so a re-run that changed one of them and landed in the same
+    directory would print the old numbers under the new label; `--iters` no
+    longer exists, because the instrument sizes the count itself.
     """
-    key = json.dumps({
-        "card": card, "model": args.model, "dtype": args.dtype,
-        "r_max": args.r_max, "block_n": args.block_n, "block_k": args.block_k,
-        "stages": sorted(args.stages), "control_warps": sorted(args.control_warps),
-        "control_stages": sorted(args.control_stages),
-        "groups": sorted(args.groups), "reps": args.reps, "iters": args.iters,
-        "warmup": args.warmup, "budget": args.cell_budget_ms, "seed": args.seed,
-        "subject": SUBJECT_BLOCK_M, "reference": REFERENCE_BLOCK_M,
-        # --capability PRUNES the grid: it sets smem_per_sm, which sets how many
-        # blocks fit, which is the residency ladder. Asserting 8.0 on an sm_90
-        # box drops the s=5 rung, and `stages` above is the REQUEST, not the
-        # survivors -- so two runs differing only here derived one id and the
-        # 8-setting run would resume into the 9-setting directory.
-        # --sm-count and --l2-bytes are deliberately NOT here: they enter only
-        # the analysis, and a knob that re-analyses the same timings must not
-        # fork the directory, or a re-report becomes an empty resume.
-        "capability": getattr(args, "capability", None)},
-        sort_keys=True)
-    stages = "_".join(str(s) for s in sorted(args.stages))
-    warps = "_".join(str(w) for w in sorted({BASE_WARPS, *args.control_warps}))
-    groups = "_".join(str(g) for g in sorted(args.groups))
-    return (f"{card}-{args.model}-{args.dtype}-r{args.r_max}"
-            f"-n{args.block_n}-k{args.block_k}-s{stages}-w{warps}-g{groups}"
-            f"-x{args.reps}-{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+    return PV.run_id(
+        card=card,
+        # Named to sort ahead of `settings` so the six knobs a human reads in
+        # `ls` survive `run_id`'s 96-character truncation of the visible part.
+        # Everything still enters the hash, which is what keeps two runs apart.
+        dtype=args.dtype,
+        g="_".join(str(v) for v in sorted(args.groups)),
+        model=args.model,
+        n=args.block_n,
+        s="_".join(str(v) for v in sorted(args.stages)),
+        w="_".join(str(v) for v in sorted({BASE_WARPS, *args.control_warps})),
+        x=args.reps,
+        settings={
+            "r_max": args.r_max,
+            "block_k": args.block_k,
+            "control_stages": sorted(args.control_stages),
+            "warmup_ms": args.warmup_ms,
+            "trials": args.trials,
+            "l2_flush": not args.no_l2_flush,
+            "cell_budget_ms": args.cell_budget_ms,
+            "seed": args.seed,
+            "subject": SUBJECT_BLOCK_M,
+            "reference": REFERENCE_BLOCK_M,
+            # --capability PRUNES the grid: it sets smem_per_sm, which sets how
+            # many blocks fit, which is the residency ladder. Asserting 8.0 on
+            # an sm_90 box drops the s=5 rung, and `s` above is the REQUEST,
+            # not the survivors -- so two runs differing only here derived one
+            # id and the 8-setting run would resume into the 9-setting
+            # directory. --sm-count and --l2-bytes are deliberately NOT here:
+            # they enter only the analysis, and a knob that re-analyses the
+            # same timings must not fork the directory, or a re-report becomes
+            # an empty resume.
+            "capability": getattr(args, "capability", "") or "from-device",
+        },
+    )
 
 
 # --------------------------------------------------------------------------
@@ -2490,8 +3132,27 @@ def build_parser() -> argparse.ArgumentParser:
                          "inside each token count on the same tensors, so "
                          "every contrast is paired and the spread of these is "
                          "the noise floor the claim gates are scored against")
-    ap.add_argument("--iters", type=int, default=100)
-    ap.add_argument("--warmup", type=int, default=5)
+    ap.add_argument("--warmup-ms", "--warmup", type=float, default=300.0,
+                    dest="warmup_ms", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. UNITS CHANGED 2026-09-02 with the "
+                         "instrument: the old default of 5 CALLS is about 5 ms "
+                         "for this kernel and reaches no operating point at "
+                         "all, so settings measured early in a pass were timed "
+                         "at a different clock from settings measured late -- "
+                         "and every contrast here is between settings")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per cell; the percentiles are over "
+                         "iters x trials samples. The iteration count itself "
+                         "is not a knob: moe.bench.timing.time_kernel sizes it "
+                         "from --cell-budget-ms and the warmup's own "
+                         "queue-deep per-call time")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do NOT flush the L2 before each timed call. The "
+                         "default flushes, which is what the roof was measured "
+                         "with; this experiment is about what survives in L2, "
+                         "so a run that did not flush would be measuring the "
+                         "previous call's residue as well as the kernel's")
     ap.add_argument("--cell-budget-ms", type=float, default=400.0)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--alpha", type=float, default=0.9,
@@ -2626,6 +3287,106 @@ def resolve_roofline(args, *, synthetic: bool) -> tuple[float, float, str]:
         "    off GPU, --dry-run and --self-test may assume the H200 and say so.")
 
 
+#: The noise every MDE on the plan page is derived from, and where it comes
+#: from. It is the ASSUMED per-setting spread of a fitted alpha before the run:
+#: the s3-vs-s4 paired sd of alpha over 11 matched cells is 0.0323, and
+#: dividing by sqrt(2) turns a difference-of-two sd into a per-arm sd. It
+#: CONFOUNDS num_stages with rerun noise and both arms ran in one pod hour, so
+#: it is an upper bound on same-session rerun noise and on nothing else --
+#: which is the right direction for sizing a threshold, since a wider assumed
+#: sigma can only make a claim harder. `scripts/replicate_noise_floor.py`
+#: measures the real thing; until it has run on a card, this is the honest
+#: number to plan against and it is labelled as an assumption wherever it
+#: prints.
+ASSUMED_ALPHA_SD = 0.0323 / math.sqrt(2.0)
+ASSUMED_ALPHA_SD_SOURCE = (
+    "s3-vs-s4 paired sd 0.0323 of alpha over 11 matched cells / sqrt(2); "
+    "CONFOUNDS num_stages with rerun noise and both arms ran in one pod hour, "
+    "so it is an upper bound on same-session rerun noise only")
+
+#: Two-sided 5% at 80% power, the convention the MDE line uses, and the normal
+#: quantile sum that goes with it: z(0.975) + z(0.80) = 1.960 + 0.842.
+MDE_LEVEL, MDE_POWER, MDE_Z = 0.05, 0.80, 1.9600 + 0.8416
+
+
+def mde(sd: float, reps: int) -> float:
+    """The smallest alpha difference this design can resolve between settings.
+
+    A two-sided 5% test at 80% power comparing two settings, each fitted from
+    `reps` repeats, with sigma taken from OUTSIDE the two settings (the
+    assumption above) rather than estimated from them. The known-variance form
+    is used deliberately: the t form at these tiny degrees of freedom is 35%
+    LOOSER, and a looser limit is the one that would flatter a claim of "the
+    effect cleared the noise".
+    """
+    if reps < 1:
+        raise ValueError(f"an MDE needs at least one repeat, got {reps}")
+    if sd <= 0:
+        raise ValueError(f"an MDE needs a positive sd, got {sd}")
+    return MDE_Z * sd * math.sqrt(2.0 / reps)
+
+
+def mde_lines(args, reg: Registered) -> list[str]:
+    """The MDE line the plan must print, and the assumption it comes from.
+
+    B14: no arm in this study stated one. A threshold without an MDE beside it
+    cannot be read -- P1's registered threshold is half a MODEL's predicted
+    swing, which says nothing about whether the design could see it -- so the
+    two are printed together and their ratio is stated in words.
+    """
+    limit = mde(ASSUMED_ALPHA_SD, args.reps)
+    out = [
+        "",
+        f"MDE          {limit:.4f} in alpha between two settings at "
+        f"{args.reps} repeats each, two-sided {MDE_LEVEL:.0%} at "
+        f"{MDE_POWER:.0%} power",
+        f"             assumed sigma {ASSUMED_ALPHA_SD:.4f}: "
+        f"{ASSUMED_ALPHA_SD_SOURCE}",
+        f"             P1's registered threshold is {reg.occupancy_threshold:.3f} "
+        f"(half the model's predicted swing of {reg.occupancy_swing:+.3f}), "
+        + ("which is ABOVE the MDE, so the design can see the effect it gates "
+           "on." if reg.occupancy_threshold >= limit else
+           "which is BELOW the MDE: the gate would be scored inside the noise, "
+           "and `_floor` therefore raises the applied threshold to 3 sigma of "
+           "the MEASURED per-repeat spread at scoring time."),
+        "             the sigma is ASSUMED and not measured here. "
+        "scripts/replicate_noise_floor.py measures the real between-replicate "
+        "spread; until it has run on a card every threshold on this page rests "
+        "on an upper bound from another session.",
+    ]
+    return out
+
+
+def exit_for(gates: list[Gate], fail_on_gate: bool) -> int:
+    """The one exit code, from the shared table, over the gates just printed.
+
+    `classify` scores UNKNOWN against the gate: a VALIDITY gate that could not
+    decide leaves the page as unquotable as a FAIL, and a CLAIM gate that could
+    not decide has not established its claim. A driver can recompute this from
+    the log with `classify_text` over the `RESULT:` lines, and a disagreement
+    between the two is itself a defect worth finding.
+
+    `--fail-on-gate` NO LONGER DECIDES WHAT HAPPENED, only what is reported. A
+    CLAIM_FAIL is a result and the table says so; without the flag it is
+    reported as DONE for callers that predate the table, with the code it would
+    have been printed beside it. A VALIDITY failure is never downgraded: those
+    are INVALID whatever any flag says.
+    """
+    rc = exit_codes.classify(g.scored() for g in gates)
+    if rc == exit_codes.CLAIM_FAIL and not fail_on_gate:
+        failed = [g.token for g in gates
+                  if g.kind == CLAIM and g.passed is not True]
+        print(f"\nexit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
+        print(f"         claim gates that did not pass: {', '.join(failed)}")
+        print(f"         reported as exit {exit_codes.DONE} without "
+              f"--fail-on-gate, because a caller that predates the exit-code "
+              f"table reads any non-zero as broken. Pass --fail-on-gate to "
+              f"exit {exit_codes.CLAIM_FAIL} CLAIM_FAIL instead.")
+        return exit_codes.DONE
+    print(f"\nexit     {exit_codes.describe(rc)}")
+    return rc
+
+
 def _main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     cfg = MODEL_CONFIGS[args.model]
@@ -2636,7 +3397,7 @@ def _main(argv=None) -> int:
         print(f"{header}\n\nREFUSED: --dry-run and --run contradict each "
               "other. --dry-run prints the plan against an assumed H200 and "
               "measures nothing; --run measures. Nothing measured.")
-        return 2
+        return exit_codes.REFUSED
     synthetic = args.dry_run or not args.run
 
     if args.audit:
@@ -2645,8 +3406,7 @@ def _main(argv=None) -> int:
                                              args.block_k, b, args.r_max)
         print("\n".join([header] + lines + ["", "## Gates", ""]
                         + render_gates(gates)))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        return exit_for(gates, args.fail_on_gate)
 
     try:
         limits, l2_source, device = resolve_device(args, synthetic=synthetic)
@@ -2657,7 +3417,7 @@ def _main(argv=None) -> int:
         print(f"{header}\n\nREFUSED: {exc}\n"
               "    Nothing was measured. Off GPU, --audit, --self-test and "
               "--dry-run all still work.")
-        return 2
+        return exit_codes.REFUSED
     ridge, bandwidth, roof_source = resolve_roofline(args, synthetic=synthetic)
     plan = build_plan(args, cfg, b, limits, alpha=args.alpha, ridge=ridge,
                       bandwidth_gbps=bandwidth)
@@ -2672,7 +3432,7 @@ def _main(argv=None) -> int:
               f"{detected!r}. --card may name a card that is ABSENT, so a "
               "laptop can print the pod's real path; it may never contradict "
               "one that is present. Nothing measured.")
-        return 2
+        return exit_codes.REFUSED
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.replay or (args.out or SWEEP.results_root())
                / "occupancy_vs_swizzle" / run_id)
@@ -2693,6 +3453,23 @@ def _main(argv=None) -> int:
         f"             {git_visibility(out_dir)}",
         "             cells.csv (one row per timing, flushed), CARD, "
         "inputs.json, report.txt, report.json, triton-cache/"]
+    lines += mde_lines(args, reg)
+
+    # ONE PROVENANCE BLOCK PER RUN, built before anything is measured so every
+    # line of the report belongs to one tree, one card and one instrument. The
+    # rulers go in with their SOURCE strings, because a ridge without a source
+    # is a number that could have come from another machine -- which is how
+    # seven published A100 reports came to be scored against an H200 ridge.
+    # The instrument this file TIMES with, unconditionally. Whether the rows in
+    # front of it actually carry that stamp is V10's question, not this block's:
+    # a replay of a cells.csv from before the instrument had a name must say
+    # what this run would have used and let the gate fail on the mismatch.
+    prov = PV.provenance_block(
+        instrument=timing_basis(),
+        ridge=ridge, ridge_source=roof_source,
+        bandwidth=bandwidth, bandwidth_source=roof_source,
+        warmup_ms=args.warmup_ms, iters=None,
+        target_ms=args.cell_budget_ms)
 
     gates: list[Gate] = []
     payload: dict = {"predictions": predictions_text(reg, plan.settings),
@@ -2702,10 +3479,16 @@ def _main(argv=None) -> int:
                               "reference_rows": plan.reference_rows,
                               "refused": plan.refused,
                               "cells": plan.cells,
-                              "estimated_seconds": plan.estimated_seconds}}
+                              "warmup_ms": plan.warmup_ms,
+                              "trials": plan.trials,
+                              "l2_flush": plan.l2_flush,
+                              "cell_budget_ms": plan.cell_budget_ms,
+                              "estimated_seconds": plan.estimated_seconds},
+                     "run_id": run_id, "card": card}
+    payload = prov.stamp(payload)
 
     if args.self_test:
-        more, g = self_test(cfg, plan, reg, b, ridge=ridge,
+        more, g = self_test(args, cfg, plan, reg, b, ridge=ridge,
                             bandwidth_gbps=bandwidth, noise=args.noise,
                             seed=args.seed)
         lines += more
@@ -2716,7 +3499,7 @@ def _main(argv=None) -> int:
             print("\n".join(lines))
             print(f"\nREFUSED: {csv_path} does not exist, so there is nothing "
                   "to replay.")
-            return 2
+            return exit_codes.REFUSED
         stored = json.loads(inputs_path.read_text()) if inputs_path.exists() \
             else {}
         if not stored:
@@ -2726,7 +3509,7 @@ def _main(argv=None) -> int:
                   "unknown. Re-scoring it against THIS machine's numbers is "
                   "exactly the hybrid-of-two-machines failure this study has "
                   "already published once.")
-            return 2
+            return exit_codes.REFUSED
         ridge, bandwidth = stored["ridge"], stored["bandwidth_gbps"]
         limits = CardLimits(tuple(stored["limits"]["capability"]),
                             stored["limits"]["smem_per_sm"],
@@ -2755,8 +3538,7 @@ def _main(argv=None) -> int:
         gates += g
         payload["run"] = pay
         print("\n".join(lines + ["", "## Gates", ""] + render_gates(gates)))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        return exit_for(gates, args.fail_on_gate)
 
     if not args.run:
         lines += ["", "## Nothing was measured", "",
@@ -2767,14 +3549,21 @@ def _main(argv=None) -> int:
                   "  --audit to score both models against results/published."]
         print("\n".join(lines + (["", "## Gates", ""] + render_gates(gates))
                         if gates else lines))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        # A PLAN IS NOT A RESULT and prints no RESULT line, so
+        # `classify_text` over this log raises `NoGatesScored`, which is what
+        # a REFUSED log looks like from the driver's side. `--self-test` DOES
+        # score gates -- on planted worlds rather than on a card -- so it
+        # exits through the table like any other scored run.
+        if not gates:
+            print(f"\nexit     {exit_codes.describe(exit_codes.REFUSED)}")
+            return exit_codes.REFUSED
+        return exit_for(gates, args.fail_on_gate)
 
     visibility = git_visibility(out_dir)
     if args.require_git_visible and visibility.startswith("IGNORED"):
         print("\n".join(lines))
         print(f"\nREFUSING: {visibility}")
-        return 2
+        return exit_codes.REFUSED
 
     missing = SWEEP.missing_gpu_stack()
     if missing:
@@ -2785,7 +3574,7 @@ def _main(argv=None) -> int:
               "  --self-test  three planted worlds, checking the verdict "
               "discriminates\n"
               "  --dry-run    the plan, the residency ladder and the cost")
-        return 2
+        return exit_codes.REFUSED
 
     import torch
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2816,8 +3605,17 @@ def _main(argv=None) -> int:
     done, samples = read_samples(csv_path)
     started = time.time()
     probe = KernelProbe()
+    # THE CLOCK THE ROOF WAS MEASURED AT, from the sweep's own resolver rather
+    # than a second copy of the same three-field fallback. Without it
+    # `clock_level_ok` is None on every cell, which means NOT DETERMINED and
+    # never "fine"; a guessed reference would exclude real treads.
+    reference_clock, clock_source = SWEEP.reference_clock_mhz()
+    print("reference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT KNOWN ({clock_source}); every cell's LEVEL flag will "
+                  "be None, which means not determined and never 'fine'"))
     compiles, executed = measure(args, cfg, plan, csv_path, cache_root, done,
-                                 samples, probe)
+                                 samples, probe, reference_clock)
     print(f"\nmeasured in {time.time() - started:.0f} s")
 
     more, g, pay = analyse(samples, cfg, plan, reg, b, ridge=ridge,
@@ -2843,8 +3641,7 @@ def _main(argv=None) -> int:
                         ("report", out_dir / "report.txt"),
                         ("json", out_dir / "report.json")):
         print(f"{label:8s} {path}\n         {git_visibility(path)}")
-    return 1 if (args.fail_on_gate
-                 and any(g.passed is not True for g in gates)) else 0
+    return exit_for(gates, args.fail_on_gate)
 
 
 def main(argv=None) -> int:
