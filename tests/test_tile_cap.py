@@ -398,24 +398,31 @@ def test_a_control_that_never_reached_a_roof_voids_the_page():
 
 
 def test_a_sweep_where_nothing_reached_the_roof_voids_c1_and_keeps_c2():
-    """The state the sibling found in all 26 published reports.
+    """Below even the FUSED-layer roof, nothing in the sweep reached anything.
 
-    Their plateaus ran 46.5-75.6% of the card's own `ridge x bandwidth`, so
-    nothing in any of those sweeps reached a compute roof. Simulated by slowing
-    every cell by the same factor, which leaves the ladder SHAPES untouched --
-    V2 still passes, the control is still proportional and still flat -- and
-    moves only the LEVEL.
+    THE FACTOR IS 4x AND NOT 2x, and that is the 2026-09-02 V3 repair. `ridge x
+    bandwidth` is the DENSE cuBLAS peak; a fused layer counting only its two
+    GEMMs' FLOPs cannot approach it, and the 26 published reports run 46.5-75.6%
+    of it. At 2x this control lands near 0.50 of the dense peak, which is where
+    every published arm sits, so a V3 that failed there failed on every card
+    that exists. It is scored against the fused-layer roof now, and the level
+    that fails it has to be under THAT. `tests/test_tile_cap_test.py` carries
+    the PASS side and the above-the-dense-peak refusal.
 
-    C1 compares a throughput with the roof, so it is void. C2 fits the cap
-    tile's own re-read fraction and never needs a roof, so it stands. That
-    split is the whole reason C2 is in the report, and a V3 whose consequence
-    said "the page is void" would throw the surviving claim away with the dead
-    one.
+    Simulated by slowing every cell by the same factor, which leaves the ladder
+    SHAPES untouched -- V2 still passes, the control is still proportional and
+    still flat -- and moves only the LEVEL.
+
+    C1 compares a throughput with the roof, so it is void. C2's NUMBER is
+    arithmetically independent of the roof: it fits the cap tile's own re-read
+    fraction, so re-running the control alone recovers it. That split is the
+    whole reason C2 is in the report. It is not a licence to quote C2 off an
+    INVALID page, and the consequence text says both halves.
     """
     _, cells = cells_at(REFIT)
     slowed = [SWEEP.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
-                              c.ms_p50 * 2.0, sm_count=132, block_n=64,
-                              ms_min=c.ms_min * 2.0, ms_stdev=c.ms_stdev * 2.0)
+                              c.ms_p50 * 4.0, sm_count=132, block_n=64,
+                              ms_min=c.ms_min * 4.0, ms_stdev=c.ms_stdev * 4.0)
               for c in cells]
     report = CAP.analyse(
         slowed, MIXTRAL, cap_tile=16, control_tile=256, alpha=REFIT, ridge=RIDGE,
@@ -427,7 +434,8 @@ def test_a_sweep_where_nothing_reached_the_roof_voids_c1_and_keeps_c2():
     assert v["V2"] == "PASS", "the shapes did not change, only the level"
     assert v["V3"] == "FAIL"
     v3 = next(g for g in report.gates if g.tag == "V3")
-    assert "C2 SURVIVES" in v3.consequence
+    assert "THE WHOLE PAGE IS UNQUOTABLE" in v3.consequence
+    assert "arithmetically independent of the roof" in v3.consequence
     assert report.payload["plateau_tflops"] / report.payload["model_roof_tflops"] < 0.6
     assert v["C2"] == "PASS"
 
@@ -561,7 +569,12 @@ def test_the_self_test_is_hermetic_and_does_not_read_this_machine(tmp_path, monk
         return 1.0, "a calibration that must not be read"
     monkeypatch.setattr(SWEEP, "resolve_bandwidth", absurd)
     out = tmp_path / "a"
-    rc = CAP.main(["--self-test", "0.558", "--out", str(out)])
+    # `--plant-noise 0` because THIS test is about hermeticity, not about noise:
+    # the default now plants the published per-cell spread, whose maximum over a
+    # ladder moves the plateau by a few per cent and would make the two exact
+    # numbers below a statement about the seed.
+    rc = CAP.main(["--self-test", "0.558", "--plant-noise", "0",
+                   "--out", str(out)])
     assert rc == 0
     payload = json.loads(
         next(out.rglob("report.json")).read_text())
@@ -581,12 +594,16 @@ def test_the_run_writes_where_it_said_and_the_dry_run_writes_nothing(tmp_path, c
 
 
 def test_exit_codes_separate_a_void_run_from_a_falsified_claim(tmp_path):
-    # 0: the page is readable whatever the claims said. 1: a validity gate did
-    # not pass. Confusing the two is how a broken run gets published as a
-    # negative result.
+    # `moe.bench.exit_codes` owns the table now. DONE (0): the page is readable
+    # whatever the claims said, because a falsified pre-registered claim is a
+    # result and not a retry. INVALID (3), not 1: a validity gate did not pass
+    # AFTER measuring, so nothing may be quoted. REFUSED (2): nothing was
+    # measured. Confusing the first two is how a broken run gets published as a
+    # negative result; confusing the last two is how a free refusal gets queued
+    # for a second pod.
     assert CAP.main(["--self-test", "0.10", "--out", str(tmp_path / "b")]) == 0
     assert CAP.main(["--self-test", "0.10", "--r-max", "512",
-                     "--out", str(tmp_path / "c")]) == 1
+                     "--out", str(tmp_path / "c")]) == 3
     assert CAP.main(["--cap-tile", "8", "--dry-run",
                      "--out", str(tmp_path / "d")]) == 2
 

@@ -2,9 +2,76 @@
 """Can BLOCK_SIZE_M=128 ever show FIVE clean memory-bound treads? Arithmetic first.
 
     python scripts/bm128_depth.py --audit        # the answer, off GPU, from published data
-    python scripts/bm128_depth.py --self-test    # plant three worlds, check the gates flip
-    python scripts/bm128_depth.py --dry-run      # the pod plan, the grid and the cost
+    python scripts/bm128_depth.py --self-test    # four worlds, through the pod's own analysis
+    python scripts/bm128_depth.py --dry-run      # the pod plan, the cost, and what it can detect
     python scripts/bm128_depth.py                # the pod run
+
+THE APPARATUS, AND WHAT IT USED TO BE. Seven repairs landed on 2026-09-02, one
+per heading below. Each is named where it lives, but a reader arriving here
+should know them first.
+
+  THE INSTRUMENT is `moe.bench.timing.time_kernel` and nothing else. Every
+  tread used to go through a private loop that created its CUDA events inside
+  the timed region, synchronised after every call, never flushed L2 and never
+  read a clock -- while the compute reference every tread is classified against
+  was measured queue-deep. That let 0.18-0.30 ms of host enqueue time per call
+  inside the interval, a per-card bias in the fitted alpha of 8-16% at the
+  smallest treads, the same size as the cross-card effect this study
+  registered. `Sample` now carries the instrument's own columns and
+  `analyse_run` carries them into the fit, so a tread timed below the clock the
+  roof was measured at is EXCLUDED and counted rather than fitted.
+
+  THE EXCLUSION REACHES EVERY GATE, not only the fit. It stopped at
+  `fit_ladder` for one commit: V2's inversions, V3's slope sequence, V5's
+  replication and the membership band were all still taken over the UNEXCLUDED
+  medians, so a tread the fit had decided sits on another compute branch could
+  still FAIL a VALIDITY gate -- INVALID, nothing quotable -- for the very reason
+  the exclusion exists to discount. `analyse_run` now scores `fit_points` and a
+  spread taken over them, and prints the whole ladder with the dropped treads
+  marked.
+
+  A MISSING POWER CALCULATION IS NOT A REFUTED CLAIM. `mde_lines` refused by
+  `raise SystemExit(<str>)`, which exits 1 = CLAIM_FAIL without passing through
+  `exit_codes.classify`. `--dry-run --plant-noise 0` returned 1 having measured
+  nothing, and a pod run at `--reps 1` spent both ladders and then died between
+  the last timing and the first `write_text`, leaving no report at all. It now
+  raises the named `MdeNotStateable`, the plan degrades to one "not stateable"
+  line as the sibling `tile_cap_test` does, and after the sweep the report is
+  written and the exit code still comes from the gates.
+
+  THE SELF TEST runs `analyse_run`, which is the function the pod run calls.
+  It used to build `(tread, ms)` pairs by hand, count membership from the
+  planted compute slope and call one helper; `compute_reference`, `fit_ladder`
+  and every gate below were never touched, so a regression in the path that
+  produced the 43.6x reference passed it. Each world now registers a verdict per
+  gate AND THE EXIT CODE `classify` must return, which is the only thing the
+  session driver can see; `--plant-noise` plants the published spread rather
+  than silence, and a zero or over-ceiling spread is REFUSED with the reason.
+  Two registrations are deliberately withheld and say so where they are made:
+  V5 and C2 in the low-clock world, whose two surviving treads make the spread a
+  median of two draws against a ceiling 10% away, so the seed would decide them.
+  Everything else, `V1` included, is registered in every world that has it.
+
+  UNDECIDED IS A THIRD ANSWER. `fit_ladder` has six named outcomes and two of
+  them mean the sweep LOOKED AND COULD NOT SAY. Read as a blank,
+  `undecided_parallel_branch` publishes "no depth" from a fit that named none,
+  and `undecided_low_clock` publishes the card as the tile. Both now reach the
+  report as UNKNOWN with the outcome printed beside them.
+
+  `C3 the law predicts the depth` IS NOW `V6 fit self-consistency`. It compared
+  `n*` computed from `(alpha, B/C)` against the tread count those same numbers
+  were fitted on, which agrees by construction for any ladder that is two lines.
+  As a CLAIM it read as a confirmed prediction; it is a check on the fit. ITS
+  SCOPE IS THE ALPHA IN THE REPORT AND NOTHING ELSE: a report that publishes no
+  alpha -- `undecided_parallel_branch`, which is what both cards return here --
+  gets a vacuous PASS, because a VALIDITY gate that voids the page over a number
+  the page does not contain makes this arm RETRY by construction on every card
+  that exists. An alpha the gate cannot evaluate is still withheld.
+
+  EXIT CODES AND THE ONE GREPPABLE LINE come from `moe.bench.exit_codes`, the
+  run id from `moe.bench.provenance.run_id`, and `report.json` carries a
+  provenance block naming the git sha, the device, the instrument and both
+  halves of the roof with their sources.
 
 WHY THIS EXISTS. BLOCK_SIZE_M=128 is the one tile height where the study's
 arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
@@ -148,7 +215,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import importlib.util
 import json
 import math
@@ -165,8 +231,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.roofline import HARDWARE_DIR, load_hardware  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+
+#: `moe.bench.timing` is imported LAZILY, in `measure_setting` only, and this
+#: comment is the reason. That module imports torch at module scope; this one is
+#: documented to run `--audit`, `--self-test` and `--dry-run` on a laptop with
+#: no torch at all, and an import here would turn three documented paths into an
+#: ImportError before argparse ran. `exit_codes` and `provenance` import nothing
+#: heavier than the standard library.
 
 
 def _load_sweep():
@@ -188,7 +263,13 @@ def _load_sweep():
               "MIN_MEMORY_TREADS", "FIXED", "ComputeReference", "fit_ladder",
               "ladder_points", "compute_reference", "make_cell", "model_ms",
               "tokens_for_rows", "rows_quantum", "results_root", "scaled_iters",
-              "activation_slope_ms", "useful_flops", "_line")
+              "activation_slope_ms", "useful_flops", "_line",
+              # Added 2026-09-02 with the instrument. `time_call` is retired
+              # over there and raises; the clock the roof was measured at is
+              # what `time_kernel` needs before it can say anything about
+              # LEVEL, and this file must resolve it the same way the sweep
+              # does or its rows are not comparable with the sweep's.
+              "reference_clock_mhz", "timing_basis", "ladder_treads")
     missing = [n for n in needed if not hasattr(module, n)]
     if missing:
         raise SystemExit(
@@ -291,6 +372,17 @@ SLOPE_DROP_FLOOR = 0.05
 #: 0.48-0.61%; 2% is a ceiling on the noise a replicated run is allowed to have
 #: before its verdict is withdrawn rather than reported.
 MAX_REPLICATE_SPREAD = 0.02
+
+#: The per-tread spread this study actually produces, and the default
+#: `--plant-noise`. The published H200 ladders run 0.76-1.82% on one pass and
+#: the A100 ones 0.48-0.61%; 1.82% is the TOP of the H200 range, which is the
+#: end a gate has to survive and the end the self-test therefore plants at.
+#:
+#: A ZERO DEFAULT IS THE DEFECT THIS REPLACES. The planted worlds were
+#: noiseless, so every threshold propagated from a measured spread -- the
+#: membership margin, the convexity floor, the margin's own sigma -- was
+#: exercised only at 0.00%, the one value no pod produces.
+PUBLISHED_LADDER_SPREAD = 0.0182
 
 #: Calibration files, by the substring that identifies the card in a published
 #: arm's directory name. Read rather than hardcoded: the A100's ridge is
@@ -748,9 +840,56 @@ class Gate:
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def tag(self) -> str:
+        """The one-token name on the RESULT line: `V1`, `C3`, `S escape-up`.
+
+        `name` is "V1 reference level" and `moe.bench.exit_codes.result_line`
+        requires one run of non-whitespace, so the leading token is the name and
+        the rest is prose. A gate whose name has no leading token would silently
+        collide with another's on a driver's grep, so the whole name is
+        squashed rather than truncated in that case.
+        """
+        parts = self.name.split()
+        if not parts:
+            return "gate"
+        # `V1 reference level` -> `V1`. A leading token that is a letter-digit
+        # code is the name; anything else (`S escape-up`) is hyphen-joined
+        # whole, because three gates called `S` would collide on a driver's
+        # grep and a collision is a gate that silently disappears.
+        if re.fullmatch(r"[A-Za-z]+\d+", parts[0]):
+            return parts[0]
+        return "-".join(parts)
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, tag, verdict)` in `moe.bench.exit_codes`'s vocabulary.
+
+        `passed=None` is UNKNOWN, never PASS, and UNKNOWN counts AGAINST the
+        gate on both kinds: on a VALIDITY gate it means the instrument's
+        soundness could not be shown, which is exactly as unquotable as a FAIL.
+        """
+        verdict = {True: exit_codes.PASS, False: exit_codes.FAIL,
+                   None: exit_codes.UNKNOWN}[self.passed]
+        return (exit_codes.VALIDITY if self.kind == VALIDITY
+                else exit_codes.CLAIM, self.tag, verdict)
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        The `[PASS] VALIDITY ...` line below it is for a human and for
+        `scripts/h200_gaps_session.sh`, whose `gate_from_log` has matched that
+        shape since 2026-09-01; both are kept because they have different
+        readers, and only this one is the machine contract. Nothing else this
+        file prints starts with `RESULT: `.
+        """
+        detail = (f"[{self.kind}] {self.prediction} | saw {self.observed} "
+                  f"| gate {self.rule}")
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
     def render(self) -> list[str]:
         tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
-        out = [f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
+        out = [self.result_line(),
+               f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
                f"         gate: {self.rule}",
                f"         saw:  {self.observed}"]
         if self.passed is not True and self.invalidates:
@@ -841,7 +980,49 @@ def gate_convex(drops: list[SlopeDrop], slopes: list[float],
                 invalidates, [d.line() for d in drops])
 
 
-def gate_depth(memory_treads: int, ladder_treads: int) -> Gate:
+def gate_depth(memory_treads: int, ladder_treads: int,
+               outcome: str = "", undecided: bool = False) -> Gate:
+    """Did BLOCK_M=128 show `TARGET_TREADS` clean memory-bound treads.
+
+    UNDECIDED IS A THIRD ANSWER AND IT IS NOT "NO". `fit_ladder` gained six
+    named outcomes on 2026-09-02 precisely because the four that are not
+    `identified` used to arrive here as the same blank, and two of them are
+    states where the sweep LOOKED AND COULD NOT SAY rather than states where
+    the tile is compute bound early:
+
+      `undecided_parallel_branch` -- the memory branch runs within
+      `PARALLEL_BRANCH_TOLERANCE` of the compute branch, which by the identity
+      `B/C = ridge/ai_cap` means this tile's cap sits ON the ridge. That is the
+      exact regime the whole BLOCK_M=128 question is about, and scoring it FAIL
+      would publish "no depth" from a fit that declined to name one.
+      `undecided_low_clock` -- enough treads were dropped for clock level that
+      what remains is under the floor. The card is what that ladder measured.
+
+    Both return UNKNOWN, which counts against the gate without asserting the
+    opposite, and both NAME the outcome so the reader knows which next
+    experiment settles it. Anything else keeps the plain comparison.
+    """
+    lines = ["A FAIL is the registered expectation and is a result: see the "
+             "escape thresholds above."]
+    if outcome:
+        lines.append(f"ladder outcome: {outcome}")
+    if undecided:
+        return Gate(CLAIM, "C1 depth",
+                    f"at least {TARGET_TREADS} clean memory-bound treads at "
+                    f"BLOCK_M={SUBJECT_BLOCK_M}",
+                    f">= {TARGET_TREADS} treads standing above the compute "
+                    "branch", None,
+                    f"UNDECIDED ({outcome}): the fit LOOKED and declined to "
+                    f"name a memory branch, so the {memory_treads} treads it "
+                    f"reports of {ladder_treads} are not a depth",
+                    lines=lines + [
+                        "This is NOT the same as a shallow ladder, and reading "
+                        "it as one is how a fit that refused to answer becomes "
+                        "a published 'no'. `undecided_parallel_branch` says the "
+                        "cap sits ON the ridge, which the roofline arm can "
+                        "settle and this one cannot; `undecided_low_clock` says "
+                        "the card throttled and the run should be repeated on a "
+                        "quiet one."])
     return Gate(CLAIM, "C1 depth",
                 f"at least {TARGET_TREADS} clean memory-bound treads at "
                 f"BLOCK_M={SUBJECT_BLOCK_M}",
@@ -849,8 +1030,7 @@ def gate_depth(memory_treads: int, ladder_treads: int) -> Gate:
                 memory_treads >= TARGET_TREADS,
                 f"{memory_treads} of {ladder_treads} treads above the compute "
                 f"branch (a verdict also needs {MIN_MEMORY_TREADS})",
-                lines=["A FAIL is the registered expectation and is a result: "
-                       "see the escape thresholds above."])
+                lines=lines)
 
 
 def gate_margin(margin: Margin) -> Gate:
@@ -872,21 +1052,43 @@ def gate_margin(margin: Margin) -> Gate:
                        "it."])
 
 
-def gate_non_vacuity(counts: dict[str, int]) -> Gate:
+def gate_non_vacuity(counts: dict[str, int],
+                     optional: dict[str, int] | None = None) -> Gate:
     """A check that examined nothing also reports zero failures.
 
     Every gate above can pass by having no data. This one asserts the data
     existed, and it names the count so a reader can see WHICH work happened
     rather than trusting that some did.
+
+    `counts` ARE THE REPORT'S OWN INPUTS and a zero in any of them is vacuity:
+    no timings, no treads, no repeats, no setting that executed. `optional` are
+    counts that belong to a gate that may legitimately DECLINE -- the bootstrap
+    resample count is C2's, and C2 returns UNKNOWN when the ladder has no memory
+    branch to resample. Scoring that zero here made "a gate declined" print as
+    "this report examined nothing", which is the same conflation of a refusal
+    with a null that `fit_ladder`'s UNDECIDED outcomes exist to prevent one
+    level down. A zero in `optional` is REPORTED, named, and not scored; the
+    declining gate already carries its own UNKNOWN into the exit code.
     """
+    optional = optional or {}
     empty = sorted(k for k, v in counts.items() if v <= 0)
+    declined = sorted(k for k, v in optional.items() if v <= 0)
+    lines = []
+    if empty:
+        lines.append(f"nothing was counted for: {', '.join(empty)}")
+    if declined:
+        lines.append(
+            f"not counted, and NOT scored here: {', '.join(declined)}. That "
+            "count belongs to a gate that declined to answer, and its own "
+            "UNKNOWN is what carries the refusal into the exit code.")
     return Gate(VALIDITY, "V0 non-vacuity", "this report examined real work",
-                "every counted quantity is above zero",
+                "every one of the report's own input counts is above zero",
                 not empty,
-                ", ".join(f"{k}={v}" for k, v in sorted(counts.items())),
+                ", ".join(f"{k}={v}" for k, v in
+                          sorted({**counts, **optional}.items())),
                 "every gate in this report: a check with no input reports no "
                 "failures",
-                [f"nothing was counted for: {', '.join(empty)}"] if empty else [])
+                lines)
 
 
 # --------------------------------------------------------------------------
@@ -1391,7 +1593,26 @@ def audit_report(rows: list[AuditRow], skipped: list[str], b: int = 2
 
 @dataclass
 class Sample:
-    """One timing of one tread in one repeat. The CSV row."""
+    """One timing of one tread in one repeat. The CSV row.
+
+    THE STATE THE TIMING WAS TAKEN IN IS A COLUMN, not a property of the
+    session. Until 2026-09-02 this row carried an iteration count and nothing
+    else, and the loop that filled it created its CUDA events inside the timed
+    region, synchronised after every call, never flushed L2 and never read a
+    clock -- while the compute reference every tread here is classified against
+    was measured queue-deep by `moe.bench.timing`. The audit bounded the host
+    prefix that let inside the interval at 0.18 ms per `fused_experts` call on
+    the H200 and 0.30 ms on the A100, which is a per-card bias in the fitted
+    alpha of 8-16% at the smallest treads: the same size as the cross-card
+    effect this study registered. Every row now comes from
+    `timing.time_kernel` under `TIMING_BASIS`, and the fields below are what
+    that instrument reported about the measurement it had just made.
+
+    THE THREE CLOCK FIELDS ARE OPTIONAL AND None MEANS "NOT DETERMINED", never
+    "fine". A container without NVML, a trial too short for the poller to land a
+    sample, and a replay all produce None, and a reader that treats None as True
+    re-admits exactly the rows the column exists to flag.
+    """
 
     block_m: int
     tiles: int
@@ -1404,6 +1625,27 @@ class Sample:
     iters: int
     status: str = "ok"
     detail: str = ""
+    #: `moe.bench.timing.TIMING_BASIS` of the loop that produced `ms_p50`.
+    #: Empty means a row from before the instrument had a name, or a planted one.
+    instrument: str = ""
+    #: MILLISECONDS of delivered GPU load the warmup ran for, not a call count.
+    warmup_ms: float = 0.0
+    trials: int = 0
+    sm_clock_load_mhz: float | None = None
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
+    l2_flush: bool = False
+
+    @property
+    def clock_excluded(self) -> bool:
+        """Was this timing taken below the clock the roof was measured at.
+
+        False for None on purpose, and this is the one place that reading is
+        correct: an EXCLUSION has to be positively established. A row with no
+        clock is a row whose comparability is unknown, and the report says how
+        many of those there are rather than dropping them.
+        """
+        return self.clock_level_ok is False
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
@@ -1447,7 +1689,10 @@ class Plan:
     subject_rows: list[int]
     reps: int
     iters: int
-    warmup: int
+    #: MILLISECONDS of delivered GPU load, not a call count. See `build_parser`.
+    warmup: float
+    trials: int
+    l2_flush: bool
     cell_budget_ms: float
     estimated_seconds: float
     cells: int
@@ -1463,8 +1708,14 @@ class Plan:
             f"subject      BLOCK_M={SUBJECT_BLOCK_M} at rows {self.subject_rows}",
             f"repeats      {self.reps} round-robin passes per setting, so an "
             "inversion can be told from noise",
-            f"timing       {self.warmup} warmup + up to {self.iters} iters, cut "
-            f"to keep a cell inside {self.cell_budget_ms:.0f} ms",
+            f"timing       moe.bench.timing.time_kernel: {self.warmup:.0f} ms "
+            f"of delivered warmup load, then {self.trials} queue-deep trials "
+            f"of {self.cell_budget_ms:.0f} ms each, L2 "
+            + ("flushed" if self.l2_flush else "NOT flushed (--no-l2-flush)")
+            + " between iterations, SM clock sampled under load",
+            f"             --iters {self.iters} is RETIRED as a timing knob and "
+            "is kept only in the run id; the instrument sizes each cell's "
+            "iteration count from --cell-budget-ms and records it per row",
             f"cells        {self.cells} timings "
             f"({len(self.reference_rows) + len(self.subject_rows)} treads x "
             f"{self.reps} reps)",
@@ -1473,23 +1724,34 @@ class Plan:
         ]
 
 
-def build_plan(args, cfg, b: int, alpha: float, ridge: float,
-               bandwidth_gbps: float) -> Plan:
+def build_plan(args, cfg) -> Plan:
+    """The pod plan and its cost, priced the way `time_kernel` charges.
+
+    Takes no alpha, ridge or bandwidth: under the instrument the bill is a
+    warmup duration plus `--trials` budgets per cell and does not depend on how
+    fast the kernel is. They used to be parameters and the estimate used to be
+    `ms x (warmup + iters)`, which is a call-count formula and became wrong the
+    moment `--warmup` became a duration.
+    """
     pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
                   num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
                   BLOCK_SIZE_N=args.block_n, BLOCK_SIZE_K=args.block_k)
     ref_rows = ladder_rows(cfg, REFERENCE_BLOCK_M, args.r_max)
     sub_rows = ladder_rows(cfg, SUBJECT_BLOCK_M, args.r_max)
-    total = 0.0
-    for bm, rows in ((REFERENCE_BLOCK_M, ref_rows), (SUBJECT_BLOCK_M, sub_rows)):
-        for r in rows:
-            ms = SWEEP.model_ms(cfg, r, bm, alpha=alpha, ridge=ridge,
-                                bandwidth_gbps=bandwidth_gbps, b=b)
-            iters = SWEEP.scaled_iters(ms, args.iters, args.cell_budget_ms)
-            total += args.reps * ms * (args.warmup + iters)
+    # PRICED AS THE INSTRUMENT CHARGES, not as the retired loop did. A cell
+    # costs a fixed warmup DURATION plus `--trials` trials of `--cell-budget-ms`
+    # of kernel time each, and it costs that whatever the kernel's own time is,
+    # because `time_kernel` sizes the iteration count to fill the budget. The
+    # old form multiplied the modelled milliseconds by a call count, which read
+    # a duration as a count once the units changed and priced an 8-tread ladder
+    # at seconds when it costs minutes. `alpha`, `ridge` and `bandwidth_gbps`
+    # no longer enter the estimate at all and the docstring says so rather than
+    # leaving three unused arguments looking load-bearing.
+    per_cell_ms = args.warmup + args.trials * args.cell_budget_ms
+    cells = args.reps * (len(ref_rows) + len(sub_rows))
     return Plan(args.model, args.dtype, pinned, ref_rows, sub_rows, args.reps,
-                args.iters, args.warmup, args.cell_budget_ms, total / 1e3,
-                args.reps * (len(ref_rows) + len(sub_rows)))
+                args.iters, args.warmup, args.trials, not args.no_l2_flush,
+                args.cell_budget_ms, cells * per_cell_ms / 1e3, cells)
 
 
 def collapse(samples: list[Sample], block_m: int
@@ -1506,9 +1768,66 @@ def collapse(samples: list[Sample], block_m: int
         if s.block_m == block_m and s.status == "ok" and s.ms_p50 > 0:
             by.setdefault(s.tiles, []).append(s.ms_p50)
     points = [(n, statistics.median(v)) for n, v in sorted(by.items())]
+    return points, by, _spread_of(by)
+
+
+def _spread_of(reps: dict[int, list[float]]) -> float | None:
+    """Median across-repeat relative spread over the treads handed in.
+
+    SPLIT OUT OF `collapse` SO THE SPREAD CAN BE TAKEN OVER THE SCORED TREADS.
+    `collapse` sees every tread the CSV holds; `analyse_run` scores only the
+    treads `ladder_treads` admitted, and the spread it weighs an inversion or a
+    slope drop against has to come from the same set. A spread taken over treads
+    that were excluded for clock level is a noise band measured partly on
+    another compute branch, and it is the denominator of every sigma on the
+    page.
+
+    None, never 0.0, when no tread has two repeats: "we do not know how noisy
+    this was" and "this was 0% noisy" are different states and only one of them
+    lets an inversion be dismissed.
+    """
     spreads = [statistics.pstdev(v) / statistics.median(v)
-               for v in by.values() if len(v) > 1 and statistics.median(v) > 0]
-    return points, by, statistics.median(spreads) if spreads else None
+               for v in reps.values() if len(v) > 1 and statistics.median(v) > 0]
+    return statistics.median(spreads) if spreads else None
+
+
+def tread_clock(samples: list[Sample], block_m: int
+                ) -> dict[int, tuple[bool | None, bool | None, float | None]]:
+    """Per tread: `(clock_level_ok, clock_drift_ok, median loaded SM clock)`.
+
+    THE INSTRUMENT'S COLUMNS HAVE TO REACH THE FIT OR THEY ARE DECORATION.
+    `collapse` takes a median across repeats and throws everything else away, so
+    without this the clock a tread was timed at never reaches `make_cell` and
+    `ladder_treads` -- which excludes a tread whose loaded clock came in below
+    the clock the roof was measured at -- has nothing to exclude on. A run on a
+    throttling card would then fit its ladder on treads taken at two different
+    compute branches and report the result as one.
+
+    MAJORITY, NOT ANY, and the reason is the same as the sweep's membership
+    rule. A single throttled repeat out of seven is what the median across
+    repeats exists to absorb; a tread is excluded when MOST of its repeats were
+    taken below the reference clock, which is when its median is the throttled
+    number. `None` (not determined) is not evidence either way and is returned
+    as None: a reader that treats it as True re-admits exactly the rows the
+    column exists to flag.
+    """
+    out: dict[int, tuple[bool | None, bool | None, float | None]] = {}
+    by: dict[int, list[Sample]] = {}
+    for s in samples:
+        if s.block_m == block_m and s.status == "ok" and s.ms_p50 > 0:
+            by.setdefault(s.tiles, []).append(s)
+    for tiles, group in sorted(by.items()):
+        def _majority(flags):
+            known = [f for f in flags if f is not None]
+            if not known:
+                return None
+            return sum(1 for f in known if f) * 2 > len(known)
+        clocks = [s.sm_clock_load_mhz for s in group
+                  if s.sm_clock_load_mhz is not None]
+        out[tiles] = (_majority([s.clock_level_ok for s in group]),
+                      _majority([s.clock_drift_ok for s in group]),
+                      statistics.median(clocks) if clocks else None)
+    return out
 
 
 def drift(samples: list[Sample], block_m: int) -> float | None:
@@ -1541,19 +1860,53 @@ def append_sample(path: Path, sample: Sample) -> None:
         fh.flush()
 
 
+def _opt_float(raw) -> float | None:
+    """`None` for an empty cell, a float otherwise. None is NOT zero.
+
+    A clock column read back as 0.0 would say the card ran at 0 MHz, which no
+    filter can distinguish from a genuine reading; None says the sampler landed
+    nothing, which is what an empty cell means.
+    """
+    text = (raw or "").strip()
+    if not text or text.lower() in ("none", "null"):
+        return None
+    return float(text)
+
+
+def _opt_bool(raw) -> bool | None:
+    """Three states, because the clock verdicts have three. See `Sample`."""
+    text = (raw or "").strip().lower()
+    if not text or text in ("none", "null"):
+        return None
+    return text in ("1", "true", "yes")
+
+
 def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
     if not path.exists():
         return set(), []
     out: list[Sample] = []
     with path.open(newline="") as fh:
         for row in csv.DictReader(fh):
+            # `.get` with a default on the instrument columns, and NOT on the
+            # measurement ones: a row written before 2026-09-02 has no
+            # instrument name, and the honest reading of that is "" (the
+            # instrument was not recorded), not a crash and not an invented
+            # name. A missing `ms_p50` is a corrupt file and still raises.
             out.append(Sample(
                 block_m=int(row["block_m"]), tiles=int(row["tiles"]),
                 rows_per_expert=int(row["rows_per_expert"]),
                 tokens=int(row["tokens"]), rep=int(row["rep"]),
                 ms_p50=float(row["ms_p50"]), ms_min=float(row["ms_min"]),
                 ms_stdev=float(row["ms_stdev"]), iters=int(row["iters"]),
-                status=row.get("status", "ok"), detail=row.get("detail", "")))
+                status=row.get("status", "ok"), detail=row.get("detail", ""),
+                instrument=row.get("instrument", ""),
+                warmup_ms=float(row.get("warmup_ms") or 0.0),
+                trials=int(row.get("trials") or 0),
+                sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                clock_level_ok=_opt_bool(row.get("clock_level_ok")),
+                clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
+                l2_flush=(row.get("l2_flush", "") or "").strip()
+                         .lower() in ("1", "true", "yes")))
     # Only successful timings count as done, for the same reason the sweep does
     # it: a failed cell is usually a pod that lost its device, and a real
     # failure fails again in milliseconds.
@@ -1561,8 +1914,8 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
 
 
 def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
-                    cache_root: Path, pinned: dict, done, samples: list[Sample]
-                    ) -> tuple[int, int]:
+                    cache_root: Path, pinned: dict, done, samples: list[Sample],
+                    reference_clock: float | None = None) -> tuple[int, int]:
     """Time one block size, `--reps` round-robin passes over its treads.
 
     ROUND ROBIN INSIDE THE SETTING, not tread-by-tread to completion. Measuring
@@ -1571,10 +1924,21 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
     drift IS a slope -- the very quantity being fitted. One pass over all treads
     per repeat spreads that drift across the whole ladder instead of aligning it
     with the x axis.
+
+    ONE INSTRUMENT, AND IT IS THE ROOF'S. Every timing goes through
+    `moe.bench.timing.time_kernel`: queue-deep, one event pair per iteration
+    primed before the loop, L2 evicted between iterations unless
+    `--no-l2-flush`, the SM clock sampled UNDER LOAD against the clock the
+    calibration's dense GEMM ran at, and the iteration count sized from
+    `--cell-budget-ms` rather than asserted. `reference_clock` is resolved ONCE
+    per run, before any tread, so the whole ladder is scored against one number
+    and a mid-run yaml rewrite cannot move it; without it every row's
+    `clock_level_ok` is None, which means "not determined" and excludes nothing.
     """
     import torch
 
     from moe.baselines._framework_config import vllm_call_kwargs
+    from moe.bench import timing
     from moe.reference.torch_ref import make_inputs
     from moe.spec import BenchSpec, RoutingSpec
 
@@ -1617,12 +1981,26 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                     call()
                     torch.cuda.synchronize()
                     compiles += SWEEP.count_new(cache_root, seen)
-                    ms0, _, _ = SWEEP.time_call(call, 1, 3)
-                    iters = SWEEP.scaled_iters(ms0, args.iters,
-                                               args.cell_budget_ms)
-                    ms, mn, sd = SWEEP.time_call(call, args.warmup, iters)
-                sample = Sample(block_m, r // block_m, r, tokens, rep, ms, mn,
-                                sd, iters)
+                    # NO PILOT CALL AND NO `scaled_iters`. `time_kernel` sizes
+                    # its own iteration count from the warmup's queue-deep
+                    # per-call time, which is the same measurement the pilot was
+                    # for and is taken with the instrument that will do the
+                    # timing rather than with a different one.
+                    t = timing.time_kernel(
+                        call, warmup_ms=args.warmup,
+                        target_ms=args.cell_budget_ms, trials=args.trials,
+                        l2_flush=not args.no_l2_flush,
+                        reference_clock_mhz=reference_clock)
+                sample = Sample(block_m, r // block_m, r, tokens, rep, t.ms_p50,
+                                t.ms_min, t.ms_std, t.iters,
+                                instrument=t.instrument, warmup_ms=t.warmup_ms,
+                                trials=t.trials,
+                                sm_clock_load_mhz=t.sm_clock_load_mhz,
+                                clock_level_ok=t.clock_level_ok,
+                                clock_drift_ok=t.clock_drift_ok,
+                                l2_flush=t.l2_flush)
+                if t.clock_level_ok is False or t.host_bound:
+                    print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
             except Exception as exc:                    # noqa: BLE001
                 sample = Sample(block_m, r // block_m, r, tokens, rep, 0.0, 0.0,
                                 0.0, 0, "failed", f"{type(exc).__name__}: {exc}")
@@ -1649,12 +2027,23 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     # The compute reference comes from the study's own qualification, run over
     # Cell objects built from these medians, so this run is judged by the same
     # code the published surface was.
+    # THE CLOCK COLUMNS TRAVEL WITH THE MEDIAN. `ladder_treads` excludes a
+    # tread whose loaded clock came in below the clock the roof was measured at,
+    # and it can only do that if the verdict reaches the Cell. Before 2026-09-02
+    # nothing here carried one, so a ladder fitted across a throttling episode
+    # was indistinguishable from one that was not.
     cells = []
+    clocks = {bm: tread_clock(samples, bm)
+              for bm in (REFERENCE_BLOCK_M, SUBJECT_BLOCK_M)}
     for bm, points in ((REFERENCE_BLOCK_M, ref_points),
                        (SUBJECT_BLOCK_M, sub_points)):
         for n, ms in points:
+            level, drift_ok, mhz = clocks[bm].get(n, (None, None, None))
             cells.append(SWEEP.make_cell(cfg, n * bm, bm, ms,
-                                         sm_count=1, block_n=1))
+                                         sm_count=1, block_n=1,
+                                         sm_clock_load_mhz=mhz,
+                                         clock_level_ok=level,
+                                         clock_drift_ok=drift_ok))
     ref = SWEEP.compute_reference(
         cells, (SUBJECT_BLOCK_M, REFERENCE_BLOCK_M), cfg=cfg, ridge=ridge,
         bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned)
@@ -1663,57 +2052,111 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
              if ref.block_m and ref.slope_per_tile else None)
 
     moved = drift(samples, SUBJECT_BLOCK_M)
-    margin_band = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (sub_spread or 0.0))
-    fit = SWEEP.fit_ladder(sub_points, SUBJECT_BLOCK_M, ref, margin=margin_band)
+    # THE FIT READS THE SIBLING'S LADDER, NOT THE RAW MEDIANS, and that is what
+    # makes the clock columns matter. `ladder_treads` drops a tread whose loaded
+    # clock came in below the clock the roof was measured at -- membership is
+    # decided against `C = 2 BM N / peak` and a tread taken at 1000 MHz against
+    # a roof measured at 1980 sits well above that line for a reason that is not
+    # weight re-reads -- and returns how many it dropped. Passing `sub_points`
+    # here instead, which is what this file used to do, fitted those treads in
+    # and reported the card as the tile.
+    fit_points, excluded = SWEEP.ladder_treads(
+        [c for c in cells if c.block_m == SUBJECT_BLOCK_M], SUBJECT_BLOCK_M)
+    # THE EXCLUSION REACHES EVERY GATE THAT READS THE SUBJECT LADDER, not just
+    # the fit. Until 2026-09-02 it stopped at `fit_ladder`: V2's inversions, V3's
+    # slope sequence, V5's replication and the membership band were all computed
+    # over `sub_points`, the UNEXCLUDED medians. So a tread the fit had decided
+    # sits on a different compute branch could still trip a VALIDITY gate --
+    # INVALID, nothing quotable -- for exactly the reason the exclusion exists to
+    # discount, and a throttled ladder came out INVALID-by-bend instead of
+    # UNDECIDED-by-clock. Those point at different next steps: one says the
+    # instrument is broken, the other says re-time on a quiet card. `ladder_treads`
+    # is the one place a tread is admitted, and `kept_*` below is what every gate
+    # scores. The full ladder is still PRINTED, marked, because a reader must be
+    # able to see what was dropped.
+    kept = {n for n, _ in fit_points}
+    kept_reps = {n: v for n, v in sub_reps.items() if n in kept}
+    kept_spread = _spread_of(kept_reps)
+    margin_band = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (kept_spread or 0.0))
+    fit = SWEEP.fit_ladder(fit_points, SUBJECT_BLOCK_M, ref, margin=margin_band,
+                           excluded_low_clock=excluded)
     c_ref = ref.slope_for(SUBJECT_BLOCK_M)
-    k = fit.memory_points if fit.memory_points >= 2 else len(sub_points)
-    margin = margin_of(sub_points, k, c_ref=c_ref, overhead=ref.overhead_ms,
-                       spread=sub_spread, replicates=sub_reps, draws=draws,
+    k = fit.memory_points if fit.memory_points >= 2 else len(fit_points)
+    margin = margin_of(fit_points, k, c_ref=c_ref, overhead=ref.overhead_ms,
+                       spread=kept_spread, replicates=kept_reps, draws=draws,
                        seed=seed)
-    inv = inversions(sub_points, sub_spread)
-    drops = slope_drops(sub_points, sub_spread)
+    inv = inversions(fit_points, kept_spread)
+    drops = slope_drops(fit_points, kept_spread)
 
     out += ["", "## The measured ladder", "",
             f"reference    {ref.note}",
             f"             {level.line() if level else 'no level: no reference'}",
-            f"subject      {len(sub_points)} treads, across-repeat spread "
-            + (f"{sub_spread:.3%}" if sub_spread else "UNKNOWN (one repeat)"),
+            f"subject      {len(sub_points)} treads ({len(fit_points)} scored "
+            f"after {excluded} excluded for clock level), across-repeat spread "
+            + (f"{kept_spread:.3%}" if kept_spread else "UNKNOWN (one repeat)")
+            + " over the scored treads"
+            + (f" (all {len(sub_points)}: "
+               + (f"{sub_spread:.3%}" if sub_spread else "UNKNOWN") + ")"
+               if excluded else ""),
             f"             membership margin {margin_band:.3%} "
             f"(floor {SWEEP.MEMORY_BRANCH_MARGIN:.0%}, 3x the measured spread)",
             "             drift first->last repeat "
             + (f"{moved:+.3%}" if moved is not None else "unknown"),
             f"             {fit.basis}",
+            # THE OUTCOME IS PRINTED AS A WORD, not inferred from a blank alpha.
+            # `fit_ladder` has six named outcomes and two of them are UNDECIDED
+            # -- the sweep looked and could not say -- which reads identically
+            # to "no treads" if only the alpha is shown.
+            f"             ladder outcome: {fit.outcome}"
+            + ("  (UNDECIDED: the fit declined to name a branch, which is not "
+               "the same as finding none)" if fit.undecided else ""),
             f"             memory treads {fit.memory_points}, alpha "
             + (f"{fit.alpha:.4f}" if fit.alpha is not None
-               else "NOT IDENTIFIABLE"),
-            f"             {margin.line()}", "",
+               else ("DECLINED, see the outcome above" if fit.undecided
+                     else "NOT IDENTIFIABLE")),
+            f"             {margin.line()}",
+            (f"             {excluded} tread(s) EXCLUDED: timed below the clock "
+             "the roof was measured at, so they sit on a different compute "
+             "branch. A ladder that lost treads to a hot box must not look "
+             "like a ladder that never had them."
+             if excluded else
+             "             no tread was excluded for clock level"), "",
             f"{'n':>3s} {'rows':>6s} {'ms':>10s} {'slope':>9s} {'reps':>5s} "
-            f"{'spread':>8s}"]
-    slopes = slope_sequence(sub_points)
+            f"{'spread':>8s}  scored"]
+    # EVERY TREAD IS PRINTED, the excluded ones included and marked. The gates
+    # score `fit_points`; a table that showed only those would hide the rows a
+    # reader needs to see to judge the exclusion, and the count in the header
+    # would have nothing to point at.
+    display_slopes = slope_sequence(sub_points)
     for i, (n, ms) in enumerate(sub_points):
         reps = sub_reps.get(n, [])
         sp = (statistics.pstdev(reps) / ms) if len(reps) > 1 and ms > 0 else None
         out.append(f"{n:3d} {n * SUBJECT_BLOCK_M:6d} {ms:10.4f} "
-                   + (f"{slopes[i - 1]:9.4f}" if i else "        -")
+                   + (f"{display_slopes[i - 1]:9.4f}" if i else "        -")
                    + f" {len(reps):5d} "
-                   + (f"{sp:8.3%}" if sp is not None else "       -"))
+                   + (f"{sp:8.3%}" if sp is not None else "       -")
+                   + ("  yes" if n in kept else "  NO: clock below the roof's"))
 
     gates = [
         gate_non_vacuity({
             "timings": len(samples),
             "subject treads": len(sub_points),
+            # SCORED, not merely measured. Every subject gate reads
+            # `fit_points`, so a ladder whose treads were all excluded for clock
+            # level examined nothing, whatever the measured count says.
+            "scored treads": len(fit_points),
             "reference treads": len(ref_points),
             "repeats per tread": min((len(v) for v in sub_reps.values()),
                                      default=0),
-            "bootstrap resamples": margin.draws,
             "settings that executed": sum(1 for v in executed.values() if v > 0),
-        }),
+        }, optional={"bootstrap resamples": margin.draws}),
         _gate_override(compiles, executed),
         gate_reference_level(level),
-        gate_monotone(inv, max(0, len(sub_points) - 1), sub_spread),
-        gate_convex(drops, slopes, sub_spread),
-        _gate_replication(sub_reps, sub_spread),
-        gate_depth(fit.memory_points, len(sub_points)),
+        gate_monotone(inv, max(0, len(fit_points) - 1), kept_spread),
+        gate_convex(drops, slope_sequence(fit_points), kept_spread),
+        _gate_replication(kept_reps, kept_spread),
+        gate_depth(fit.memory_points, len(fit_points),
+                   outcome=fit.outcome, undecided=fit.undecided),
         gate_margin(margin),
         _gate_law(fit, margin, c_ref, ref.overhead_ms, margin_band),
     ]
@@ -1723,8 +2166,16 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                       "overhead_ms": ref.overhead_ms, "note": ref.note,
                       "level_fraction": level.fraction if level else None},
         "subject_points": sub_points,
+        "scored_points": fit_points,
         "subject_spread": sub_spread,
+        "scored_spread": kept_spread,
         "memory_points": fit.memory_points,
+        # THE OUTCOME AND THE UNDECIDED FLAG ARE COLUMNS. A consumer reading
+        # only `alpha: null` cannot tell a fit that found nothing from a fit
+        # that declined to answer, and those point at different experiments.
+        "ladder_outcome": fit.outcome,
+        "ladder_undecided": fit.undecided,
+        "excluded_low_clock": fit.excluded_low_clock,
         "alpha": fit.alpha, "alpha_upper": fit.alpha_upper,
         "slope_memory": fit.slope_memory, "slope_compute_ref": c_ref,
         "ratio": margin.ratio if not math.isnan(margin.ratio) else None,
@@ -1798,32 +2249,118 @@ def _gate_replication(reps: dict[int, list[float]], spread: float | None) -> Gat
 
 def _gate_law(fit, margin: Margin, c_ref: float | None, overhead: float,
               band: float) -> Gate:
-    """Does the depth law predict the tread count the fit actually found.
+    """Are the fitted `(alpha, B/C)` and the observed tread count consistent.
 
-    The law is arithmetic, so a mismatch is never the law being 'wrong about
-    this card': it means the ladder is not two lines. That is the same finding
-    V3 reports from the other direction, and having both makes it checkable
-    rather than asserted.
+    RELABELLED FROM A CLAIM ON 2026-09-02, and the relabelling is the point.
+    This gate computes `n*` from `(alpha, B/C)` FITTED ON THE SAME LADDER whose
+    tread count it then compares `n*` against. For any ladder that really is two
+    lines the two agree by construction, so it can only fail when the two-line
+    model does not describe the data -- which is a statement about the FIT, not
+    about the world. Carried as `C3 the law predicts the depth` it read as a
+    pre-registered prediction confirmed by the run, and a reader counting the
+    CLAIM gates counted it as evidence for the law. It is a self-consistency
+    check on the fit, it belongs with the VALIDITY gates that decide whether the
+    alpha above may be quoted, and it is scored as one.
+
+    WHAT WOULD MAKE IT A CLAIM AGAIN. `n*` computed from an alpha and a B/C
+    registered BEFORE this ladder was measured -- the corpus median, say -- and
+    compared with this ladder's count. That is a real prediction and a different
+    gate; this file does not make it, and says so rather than implying it.
+
+    A mismatch says the ladder is not two lines, which is the same thing V3
+    reports from the other direction, and having both makes it checkable rather
+    than asserted.
+
+    WHAT IT DOES WHEN THERE IS NO ALPHA, and why that is a PASS. A VALIDITY gate
+    that is not PASS exits INVALID, "nothing on this page may be quoted", and
+    the driver reads it as a spent arm to be re-run. This gate's subject is the
+    alpha in the report. When the fit named none -- `undecided_parallel_branch`,
+    which is what BOTH cards produce at BLOCK_M=128 and is this arm's own
+    registered expectation -- there is no alpha in the report, so there is
+    nothing to certify AND NOTHING TO WITHHOLD, and voiding the page over it
+    makes the twelve-minute arm RETRY by construction on every card that exists.
+    That is exactly the defect this phase removes elsewhere; recreating it here
+    would be the same defect in another file. The depth verdict is C1's, and C1
+    already returns UNKNOWN for those outcomes, which is CLAIM_FAIL: a result,
+    not a retry.
+
+    So the rule is scoped rather than blanket, and the scope is "is there a
+    number here that this gate is responsible for":
+
+      no alpha at all              PASS, and the observed line says it is
+                                   vacuous and names the outcome.
+      an alpha this gate cannot    UNKNOWN. `undecided_low_clock` leaves a fit
+      evaluate                     over the two treads that survived the
+                                   exclusion, and a run with no compute
+                                   reference leaves no `B/C` to put into the
+                                   law. In both cases an alpha IS in the payload
+                                   and this gate did not certify it, so it
+                                   withholds and the page is INVALID.
+      an alpha and a `B/C`         the comparison below, PASS or FAIL.
     """
-    if fit.alpha is None or margin.ratio is None or math.isnan(margin.ratio) \
-            or not c_ref:
-        return Gate(CLAIM, "C3 the law predicts the depth",
+    if fit.alpha is None:
+        # VACUOUS, AND SAID OUT LOUD. `gate_non_vacuity` is the reason this is
+        # safe to call a PASS: the counts that say this report examined real
+        # work are scored there, not here, so a PASS here cannot be a check that
+        # examined nothing pretending to be a check that found nothing.
+        why = (f"the ladder fit is {fit.outcome}, so it declined to name an "
+               "alpha rather than failing to find treads"
+               if getattr(fit, "undecided", False) else
+               "no memory branch was identified, so there is no alpha to put "
+               "into the law")
+        return Gate(VALIDITY, "V6 fit self-consistency",
                     "the observed tread count matches n* from the fitted "
                     "(alpha, B/C)",
-                    "within 1 tread", None,
-                    "no memory branch was identified, so there is no alpha to "
-                    "put into the law")
+                    "within 1 tread, or vacuous when the report carries no alpha",
+                    True, f"VACUOUS: {why}",
+                    "nothing: there is no alpha in this report for this gate to "
+                    "certify, so it withholds nothing. C1 carries the depth "
+                    "verdict and returns UNKNOWN for the same outcome",
+                    lines=["This gate is a check on the FIT and not a "
+                           "prediction about the world; see its docstring.",
+                           "A PASS here is NOT a statement that the ladder is "
+                           "two lines. It is a statement that the report "
+                           "publishes no alpha, so no alpha can be mis-quoted "
+                           "out of it."])
+    if fit.undecided or margin.ratio is None or math.isnan(margin.ratio) \
+            or not c_ref:
+        # AN ALPHA THE GATE CANNOT EVALUATE IS WITHHELD, NOT WAIVED. A ladder
+        # that lost most of its treads to clock level still yields an alpha from
+        # the two that survived, `payload["alpha"]` carries it, and certifying
+        # it would publish exactly the number the exclusion exists to withhold.
+        why = (f"the ladder fit is {fit.outcome} and yet reports alpha "
+               f"{fit.alpha:.4f}, fitted on the treads that survived; the "
+               "instrument declined to name a branch, so that alpha is not "
+               "certified here"
+               if getattr(fit, "undecided", False) else
+               f"alpha {fit.alpha:.4f} was fitted, but there is no usable "
+               "compute slope B/C to put into the law, so n* cannot be computed")
+        return Gate(VALIDITY, "V6 fit self-consistency",
+                    "the observed tread count matches n* from the fitted "
+                    "(alpha, B/C)",
+                    "within 1 tread, or vacuous when the report carries no alpha",
+                    None, why,
+                    "the alpha and the tread count above, which are only "
+                    "quotable if the ladder is the two lines the fit assumed",
+                    lines=["This gate is a check on the FIT and not a "
+                           "prediction about the world; see its docstring."])
     n_star = prefix_depth(margin.ratio, fit.alpha, overhead / c_ref, band)
     predicted = len(fit.points) if n_star is None else max(0, math.floor(n_star))
-    return Gate(CLAIM, "C3 the law predicts the depth",
+    return Gate(VALIDITY, "V6 fit self-consistency",
                 "the observed tread count matches n* from the fitted (alpha, B/C)",
-                "within 1 tread", abs(predicted - fit.memory_points) <= 1,
+                "within 1 tread, or vacuous when the report carries no alpha",
+                abs(predicted - fit.memory_points) <= 1,
                 f"law predicts {predicted} "
                 + ("(every tread: B/C is above the membership margin)"
                    if n_star is None else f"(n* = {n_star:.2f})")
                 + f", fit found {fit.memory_points}",
+                "the alpha and the tread count above, which are only quotable "
+                "if the ladder is the two lines the fit assumed",
                 lines=["A mismatch says the ladder is not two lines, which is "
-                       "the same thing V3 reports from the other direction."])
+                       "the same thing V3 reports from the other direction.",
+                       "NOT A PREDICTION: n* is computed from an alpha and a "
+                       "B/C fitted on this same ladder, so agreement is "
+                       "self-consistency and not confirmation."])
 
 
 # --------------------------------------------------------------------------
@@ -1897,24 +2434,35 @@ def default_run_id(args, card: str) -> str:
     ridge, which is a hybrid of two machines and is exactly the defect that put
     a stale H200 band into seven published A100 reports.
     """
-    key = json.dumps({"card": card, "model": args.model, "dtype": args.dtype,
-                      "r_max": args.r_max, "reps": args.reps,
-                      "iters": args.iters, "warmup": args.warmup,
-                      "budget": args.cell_budget_ms, "seed": args.seed,
-                      "group_m": args.group_m, "block_n": args.block_n,
-                      "block_k": args.block_k, "num_stages": args.num_stages,
-                      "num_warps": args.num_warps,
-                      "subject": SUBJECT_BLOCK_M,
-                      "reference": REFERENCE_BLOCK_M}, sort_keys=True)
-    return (f"{card}-{args.model}-{args.dtype}-r{args.r_max}-g{args.group_m}"
-            f"-n{args.block_n}-k{args.block_k}-s{args.num_stages}"
-            f"-w{args.num_warps}-x{args.reps}-"
-            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+    swept = {
+        "model": args.model, "dtype": args.dtype, "r": args.r_max,
+        "reps": args.reps, "iters": args.iters, "warmup": args.warmup,
+        "trials": args.trials, "l2flush": not args.no_l2_flush,
+        "budget": args.cell_budget_ms, "seed": args.seed, "g": args.group_m,
+        "n": args.block_n, "k": args.block_k, "stages": args.num_stages,
+        "warps": args.num_warps, "subject": SUBJECT_BLOCK_M,
+        "reference": REFERENCE_BLOCK_M,
+    }
+    return PV.run_id(card=card, **swept)
 
 
 # --------------------------------------------------------------------------
-# Self test: plant three worlds, check the gates tell them apart.
+# Self test: plant four worlds, check the gates tell them apart.
 # --------------------------------------------------------------------------
+
+#: What the planted BLOCK_M=256 reference achieves, as a fraction of the planted
+#: card's calibrated ceiling. Under 1 SO THAT V1 HAS A PASS BRANCH: the gate's
+#: window is `[REFERENCE_LEVEL_FLOOR, 100%]` and a reference generated at the
+#: world's own `rho` implies exactly 100%, which is the wall, so the seed decided
+#: the verdict. 0.97 also happens to be true of every real grouped GEMM.
+REFERENCE_KERNEL_EFFICIENCY = 0.97
+
+#: The clock the planted roof was measured at, and the clock a throttled tread
+#: was timed at. The ratio is applied to the COMPUTE branch of those treads, not
+#: to their traffic, because that is what a lower SM clock does.
+SELF_TEST_REFERENCE_CLOCK_MHZ = 1980.0
+SELF_TEST_LOW_CLOCK_MHZ = 1000.0
+
 
 def planted_ladder(treads: int, *, alpha: float, rho: float, block_m: int,
                    b: int, load_ms: float, overhead_ms: float,
@@ -1923,6 +2471,10 @@ def planted_ladder(treads: int, *, alpha: float, rho: float, block_m: int,
 
     `t(n) = D + max(L (1 + alpha(n-1)), C n)` with `C = L alpha / ratio`, which
     is the two-line model with `B / C` set to exactly what `branch_ratio` says.
+
+    KEPT FOR THE ARITHMETIC, NOT FOR THE SELF TEST. `margin_of` and
+    `prefix_depth` are checked against it directly, where a hand-built ladder is
+    the right fixture. The self test no longer uses it: see `planted_samples`.
     """
     rng = random.Random(seed)
     ratio = branch_ratio(block_m, b, alpha, rho)
@@ -1934,60 +2486,367 @@ def planted_ladder(treads: int, *, alpha: float, rho: float, block_m: int,
     return out
 
 
-def self_test(b: int = 2, treads: int = 8) -> tuple[list[str], list[Gate]]:
-    """Three worlds and the verdicts they must produce.
+def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
+                    b: int = 2, reps: int = 5, noise: float = 0.0,
+                    seed: int = 0, r_max: int = 1024,
+                    low_clock_treads: tuple[int, ...] = ()) -> list[Sample]:
+    """A whole replicated run, as the CSV rows a pod would have written.
 
-    The point is not that the code runs; it is that the gates DISCRIMINATE. A
-    depth gate that passes in every world would have passed on the published
-    A100 ladder too.
+    GENERATED THROUGH `SWEEP.model_ms`, NOT BY HAND, and that is not a
+    convenience. `compute_reference` level-checks its candidate against the
+    roof, against one full weight read and against the smaller ladders, so a
+    hand-rolled ladder with a plausible-looking slope is REFUSED for being
+    physically inconsistent with the card it claims to be from. Both settings
+    come from one model at one `(alpha, rho, bandwidth)`, which keeps the
+    planted world self-consistent: its implied ceiling is `rho x bandwidth`.
+
+    `instrument` is left EMPTY on every planted row, deliberately. These rows
+    were not measured, and stamping them with `TIMING_BASIS` would make a
+    planted world indistinguishable from a pod's in the one column that says
+    which instrument produced a number.
+
+    THE REFERENCE LADDER IS PLANTED A FEW PER CENT UNDER THE CEILING, and that
+    is what makes V1 registrable at all. `reference_level` accepts a compute
+    reference whose implied rate lands in `[REFERENCE_LEVEL_FLOOR, 100%]` of the
+    card's calibrated ceiling. `model_ms` computes its compute branch as
+    `flops / (ridge x bandwidth)`, so a reference generated at the world's own
+    `rho` implies EXACTLY `rho x bandwidth`, which is the gate's upper wall: at
+    any planted spread the seed decides which side of 100% it lands on, and at
+    the default spread seeds 0, 3 and 5 gave V1 FAIL while 1, 2 and 4 gave PASS.
+    Registering that is registering a coin flip, and leaving it unregistered
+    left the one gate the 43.6x reference exists to catch with no PASS branch
+    planted anywhere. `REFERENCE_KERNEL_EFFICIENCY` is the fix and it is also
+    the physics: a Triton grouped GEMM does not achieve the calibrated cuBLAS
+    ceiling, and a fixture in which it does is a fixture no pod can produce.
+
+    `low_clock_treads` marks the named SUBJECT treads as having been timed below
+    the clock the roof was measured at, which is how the throttled world is
+    planted. Every other row carries `clock_level_ok=True`, because a world
+    where the verdict is None everywhere excludes nothing and would not
+    exercise the exclusion at all.
+
+    A THROTTLED TREAD IS SLOWER, NOT MERELY LABELLED. Until 2026-09-02 this
+    function stamped the clock columns on the low rows and computed their `ms`
+    identically to every other row, so the fixture planted the LABEL and not the
+    physics: no gate could tell a throttled ladder from a clean one, and the
+    claim in `ladder_treads`' docstring -- that a ladder which lost treads to a
+    hot box must not look like a ladder that never had them -- was demonstrated
+    by nothing. A card at `SELF_TEST_LOW_CLOCK_MHZ` runs its COMPUTE branch
+    slower in exactly that proportion and its traffic at the same DRAM
+    bandwidth, which is a lower `ridge` and nothing else, so those rows are
+    generated at `rho x low / reference` and the shape of the ladder bends where
+    the throttling starts. That bend is what V2 and V3 would score if the
+    exclusion did not reach them.
     """
-    load_ms, overhead_ms = 4.0, 0.5
-    worlds = [
-        # alpha x rho = 166.2, over the 147.2 the escape needs.
-        ("escape-up   alpha 0.95 rho 175", 0.95, 175.0, True),
-        # Where BOTH cards actually sit at BLOCK_M=128: alpha x rho = 127.6
-        # against the 128 that makes the two branches one line.
-        ("straddle    alpha 0.88 rho 145", 0.88, 145.0, False),
-        # alpha x rho = 96, under the 108.8 cap, and rho = 320 is 2.2x the
-        # A100's calibrated 145.8 and 2.0x the H200's 162.8. This world is
-        # reachable by the gates and by NO CARD IN THIS STUDY, which is the
-        # whole finding: the gates can see a depth that the hardware cannot
-        # produce.
-        ("escape-down alpha 0.30 rho 320", 0.30, 320.0, True),
-    ]
-    out = ["", "## Self test: planted worlds, real gates", "",
-           f"{'world':34s} {'B/C':>7s} {'regime':>12s} {'law n*':>8s} "
-           f"{'mem':>4s} {'margin':>10s}  verdict"]
+    rng = random.Random(seed)
+    out: list[Sample] = []
+    throttled = SELF_TEST_LOW_CLOCK_MHZ / SELF_TEST_REFERENCE_CLOCK_MHZ
+    for rep in range(1, reps + 1):
+        for block_m in (REFERENCE_BLOCK_M, SUBJECT_BLOCK_M):
+            for rows in ladder_rows(cfg, block_m, r_max):
+                tiles = rows // block_m
+                low = (block_m == SUBJECT_BLOCK_M
+                       and tiles in low_clock_treads)
+                # ONE KNOB CARRIES BOTH EFFECTS because both are the same
+                # physics: `ridge` is `peak / bandwidth`, so scaling it scales
+                # the compute branch and leaves the traffic branch alone. The
+                # reference kernel runs under the calibrated peak; a throttled
+                # tread runs under its own card's peak.
+                scale = REFERENCE_KERNEL_EFFICIENCY if block_m == REFERENCE_BLOCK_M else 1.0
+                if low:
+                    scale *= throttled
+                ms = SWEEP.model_ms(cfg, rows, block_m, alpha=alpha,
+                                    ridge=rho * scale,
+                                    bandwidth_gbps=bandwidth_gbps, b=b,
+                                    overhead_ms=0.05)
+                if noise:
+                    ms *= math.exp(rng.gauss(0.0, noise))
+                out.append(Sample(block_m, tiles, rows,
+                                  SWEEP.tokens_for_rows(cfg, rows), rep, ms, ms,
+                                  0.0, 0, clock_level_ok=not low,
+                                  clock_drift_ok=True,
+                                  sm_clock_load_mhz=(
+                                      SELF_TEST_LOW_CLOCK_MHZ if low
+                                      else SELF_TEST_REFERENCE_CLOCK_MHZ)))
+    return out
+
+
+@dataclass(frozen=True)
+class PlantedWorld:
+    """A planted `(alpha, rho)`, what it demonstrates, and what must come back.
+
+    `expect` maps a gate TAG (`C1`, `V1`, ...) to `True` / `False` / `None`, the
+    three values `Gate.passed` takes. A tag absent from `expect` is deliberately
+    unregistered and is not asserted; a tag NAMED in `expect` that the report
+    does not contain is itself a mismatch, because a registration that silently
+    matches nothing is the check-that-examined-nothing shape one level up.
+
+    `exit_code` IS REGISTERED TOO, AND IT IS THE POINT OF THIS FIXTURE. Per-gate
+    verdicts are not what a session driver sees; it sees one integer, and
+    `scripts/h200_gaps_session.sh` turns anything outside this arm's done list
+    into RETRY with "nothing on the page may be quoted". A fixture that scored
+    only the gates let all four worlds pass while every one of them would have
+    exited INVALID on a pod -- which is what happened when `C3` was relabelled
+    to a VALIDITY gate, and it is what this field catches. It is
+    `moe.bench.exit_codes.classify` over the SAME gates, so the world registers
+    the number the driver reads and not a paraphrase of it.
+    """
+
+    name: str
+    alpha: float
+    rho: float
+    why: str
+    expect: dict[str, bool | None]
+    #: The `moe.bench.exit_codes` value `classify` must return for this world.
+    exit_code: int = exit_codes.DONE
+    #: Subject treads planted as having been timed below the roof's clock.
+    low_clock_treads: tuple[int, ...] = ()
+
+    def check(self, gates: list[Gate]) -> list[str]:
+        """The registrations that did not come back. Empty is a pass."""
+        got = {g.tag: g.passed for g in gates}
+        word = {True: "PASS", False: "FAIL", None: "UNKNOWN"}
+        bad = []
+        for tag, want in sorted(self.expect.items()):
+            if tag not in got:
+                bad.append(f"{tag}: registered {word[want]}, but the report "
+                           f"has no gate {tag}")
+            elif got[tag] is not want:
+                bad.append(f"{tag}: registered {word[want]}, got {word[got[tag]]}")
+        rc = exit_codes.classify(g.scored() for g in gates)
+        if rc != self.exit_code:
+            bad.append(f"exit code: registered {exit_codes.describe(self.exit_code)}, "
+                       f"got {exit_codes.describe(rc)}")
+        return bad
+
+
+class SelfTestRefused(RuntimeError):
+    """The planted design cannot exercise what the registrations are about.
+
+    A REFUSAL, NOT A FAILURE, and the difference is the exit code: `main`
+    returns `exit_codes.REFUSED`, which the driver reads as "nothing was
+    measured, this cost nothing, read the first line and fix it". Raised as a
+    `RuntimeError` rather than a `SystemExit` so that a caller inside the test
+    suite can name it, and so it cannot exit 1 -- CLAIM_FAIL -- which would tell
+    a driver the worlds were run and a claim was refuted.
+    """
+
+
+#: The bandwidth every planted world is generated at. The A100's calibrated
+#: figure, so `rho x bandwidth` is a ceiling a real card could have and the
+#: level check has something physical to accept or refuse.
+SELF_TEST_BANDWIDTH = 1799.4
+
+
+#: The worlds, the verdicts the REAL gates must return in each, and the exit
+#: code the driver would read.
+SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
+    PlantedWorld(
+        "escape-up", 0.95, 175.0,
+        "alpha x rho = 166.2, over the 147.2 the escape needs. rho = 175 Op/B "
+        "is a card NEITHER OF THIS STUDY'S HAS -- the A100 calibrates at 145.8 "
+        "and the H200 at 162.8 -- which is the finding stated as a fixture: to "
+        "plant a world where the depth claim is reachable, hardware has to be "
+        "invented. The one world that exits DONE, so DONE is planted too",
+        # V1 IS REGISTERED IN EVERY WORLD THAT HAS A REFERENCE, and it can be
+        # because `planted_samples` now generates the reference ladder at
+        # `REFERENCE_KERNEL_EFFICIENCY` of the planted ceiling. Generated at the
+        # ceiling itself, which is `reference_level`'s own upper wall, the seed
+        # decided the verdict -- 0, 3 and 5 gave FAIL and 1, 2 and 4 gave PASS
+        # -- so this gate, the one the 43.6x reference exists to catch, had its
+        # PASS branch planted in no world at all.
+        {"V0": True, "V1": True, "V2": True, "V3": True, "V4": True,
+         "V5": True, "C1": True, "C2": True, "V6": True},
+        exit_code=exit_codes.DONE),
+    PlantedWorld(
+        "straddle", 0.88, 145.813,
+        "where BOTH cards actually sit at BLOCK_M=128: alpha x rho = 128.3 "
+        "against the 128 that makes the two branches one line. The depth must "
+        "NOT be found, the tolerance margin must not be confident either, and "
+        "THE ARM MUST STILL EXIT ON A RESULT rather than on a void page",
+        # C1 IS UNKNOWN HERE AND THAT IS THE REGISTRATION. B/C comes out inside
+        # PARALLEL_BRANCH_TOLERANCE, so `fit_ladder` returns
+        # `undecided_parallel_branch` -- it LOOKED and declined -- and the
+        # identity `B/C = ridge/ai_cap` says the cap sits ON the ridge, which is
+        # the roofline arm's question and not this one's. Registering FAIL here
+        # would publish "no depth" from a fit that named none, which is the
+        # defect this world pins.
+        #
+        # V6 PASSES HERE, VACUOUSLY, AND THE EXIT CODE IS WHY IT MATTERS. This
+        # is the outcome every published H200 BLOCK_M=128 arm returns. A V6 that
+        # scored UNKNOWN over a fit that published no alpha made the world
+        # INVALID (3), which the session driver reads as RETRY, so the twelve
+        # metered minutes were RETRY by construction on both cards. There is no
+        # alpha in this report, so there is nothing for a VALIDITY gate to
+        # withhold; C1's UNKNOWN carries the verdict and CLAIM_FAIL is a result.
+        {"V0": True, "V1": True, "V2": True, "V3": True, "V4": True,
+         "V5": True, "C1": None, "C2": False, "V6": True},
+        exit_code=exit_codes.CLAIM_FAIL),
+    PlantedWorld(
+        "escape-down", 0.30, 320.0,
+        "alpha x rho = 96, under the 108.8 cap, and rho = 320 is 2.2x the "
+        "A100's calibrated 145.8. Reachable by the gates and by NO CARD IN "
+        "THIS STUDY, which is the whole finding: the gates can see a depth the "
+        "hardware cannot produce",
+        # V1 UNKNOWN, deterministically: at rho = 320 the reference ladder is
+        # memory bound at every tread, so no compute reference qualifies at all.
+        # That is a property of the world, not of the seed.
+        #
+        # AND THAT IS WHY THIS WORLD IS REGISTERED INVALID. A run with no
+        # compute reference has no instrument -- membership falls back to a
+        # split search, which invents an alpha rather than declining to -- so
+        # the C1 PASS below is a statement about the gate's arithmetic and is
+        # NOT a quotable result. Registering DONE here would be registering that
+        # a page with no ruler on it may be read.
+        #
+        # C2 IS NOT REGISTERED: with no compute reference the bootstrap has no
+        # `B/C` to resample and the verdict alternates between UNKNOWN and FAIL
+        # with the seed. A registration on a coin flip is worse than none, and
+        # C2's three branches are planted in the other worlds.
+        {"V0": True, "V1": None, "V2": True, "V3": True, "V4": True,
+         "V5": True, "C1": True, "V6": None},
+        exit_code=exit_codes.INVALID),
+    PlantedWorld(
+        "low-clock", 0.95, 175.0,
+        "the escape-up world again, with six of its eight subject treads TIMED "
+        f"AT {SELF_TEST_LOW_CLOCK_MHZ:.0f} MHz against a roof measured at "
+        f"{SELF_TEST_REFERENCE_CLOCK_MHZ:.0f}. Those treads are not merely "
+        "labelled slow, they ARE slow: their compute branch is generated at the "
+        "throttled clock and their traffic is not, so the ladder BENDS where "
+        "the throttling starts. `ladder_treads` excludes them and what remains "
+        "is under the floor an alpha may decide on. THE VERDICT MUST BE "
+        "UNDECIDED AND NOT 'no depth': the card is what that ladder measured, "
+        "and a run on a quiet card is the next step. This world is why the "
+        "clock columns travel from the CSV into the fit AND INTO EVERY GATE",
+        # V3 IS UNKNOWN HERE, AND THAT IS THE FIX IT PINS. Scored over all eight
+        # treads this ladder is not convex -- the throttle onset makes the slope
+        # rise 1.9 -> 3.0 and fall back to 2.2, a drop that clears both the floor
+        # and the sigma bar at every seed tried -- so V3 FAILED, which is
+        # INVALID, for exactly the reason the exclusion exists to discount.
+        # Scored over the two treads that survive it there is no second
+        # difference and the honest answer is UNKNOWN. Both are non-PASS and
+        # both make the arm INVALID, but they say opposite things about what to
+        # do next, and only one of them is true.
+        #
+        # V5 AND C2 ARE NOT REGISTERED HERE. Two surviving treads make the
+        # across-repeat spread a median of two draws at a planted 1.82% against
+        # a 2% ceiling, so V5 straddles its own bar with the seed (5 of 40
+        # seeds FAIL); C2 follows the same two treads. Both are registered in
+        # the worlds where they are deterministic, and a registration on a coin
+        # flip is what the V1 comment above exists to warn against.
+        {"V0": True, "V1": True, "V2": True, "V3": None, "V4": True,
+         "C1": None, "V6": None},
+        exit_code=exit_codes.INVALID,
+        low_clock_treads=(3, 4, 5, 6, 7, 8)),
+)
+
+
+def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
+              ) -> tuple[list[str], list[Gate]]:
+    """Four worlds, routed through the code the pod runs, with registered verdicts.
+
+    WHAT THIS USED TO DO AND WHY IT PROVED NOTHING ABOUT THE POD PATH. It built
+    a bare list of `(tread, ms)` pairs from `planted_ladder`, computed the
+    membership count BY HAND from the planted compute slope, and called
+    `margin_of` on it. `SWEEP.compute_reference`, `SWEEP.fit_ladder`,
+    `gate_reference_level`, `gate_monotone`, `gate_convex`,
+    `_gate_replication`, `gate_depth` and `_gate_law` -- every function the
+    twelve metered minutes actually run, and the path that produced the 43.6x
+    reference the level check exists to catch -- were never called. A
+    regression in any of them passed this self test.
+
+    WHAT IT DOES NOW. Generates a full replicated run per world through
+    `planted_samples` and hands it to `analyse_run`, which is the one function
+    `main` calls after the sweep. The gates that come back are the pod's gates,
+    scored on data whose answer is known, and `PlantedWorld.expect` registers
+    that answer per world so a wrong verdict is a failure rather than a line to
+    eyeball. The `S <world>` gates below carry the comparison; the world's own
+    gates are printed under it so a mismatch names itself.
+
+    AND IT SCORES THE EXIT CODE EACH WORLD WOULD RETURN ON A POD. Per-gate
+    verdicts are not what the session driver sees; it sees one integer. For one
+    commit every world here reported four S gates PASS while all four would have
+    exited INVALID on a pod, because relabelling `C3` to a VALIDITY gate turned
+    the arm's own expected outcome into a void page and nothing in this fixture
+    looked at the number. `PlantedWorld.exit_code` is that number, computed by
+    `moe.bench.exit_codes.classify` over the same gate objects, and a world that
+    returns a different one is a mismatch like any other.
+    """
+    if noise <= 0:
+        raise SelfTestRefused(
+            "--plant-noise 0 with --self-test: a noiseless world cannot "
+            "exercise a single one of this file's noise-floored thresholds. "
+            "The membership margin is max(2%, 3 x the measured spread), the "
+            "convexity floor is propagated from it, and C2's margin needs an "
+            "across-repeat spread before it has a sigma at all -- at 0.00% "
+            "every one of them is evaluated at the one value no pod produces, "
+            "and C2 comes back UNKNOWN in every world for want of a noise "
+            f"model. Use the default {PUBLISHED_LADDER_SPREAD}, the top of the "
+            "published H200 range, or a spread you have measured.")
+    if noise > MAX_REPLICATE_SPREAD:
+        raise SelfTestRefused(
+            f"--plant-noise {noise} with --self-test: above "
+            f"{MAX_REPLICATE_SPREAD:.0%} gate V5 WITHDRAWS its verdict by "
+            "design -- an across-repeat spread that large makes every margin on "
+            "the page unreadable -- so every world would report V5 FAIL and the "
+            "registrations below, which are for a run whose noise is inside what "
+            "a replicated run is allowed to have, would all mismatch. That is V5 "
+            "working, not the worlds failing, and this refuses rather than "
+            "printing four mismatches that mean the opposite of what they say. "
+            "Plant at or below the ceiling, or fix the card.")
+    out = ["", "## Self test: planted worlds, through the pod's own analysis", "",
+           f"planted at a per-tread spread of {noise:.2%}; every world is "
+           f"generated from SWEEP.model_ms at {SELF_TEST_BANDWIDTH:.0f} GB/s "
+           "and routed through analyse_run, which is the function main() calls "
+           "after the sweep"]
+    cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
     gates: list[Gate] = []
-    for name, alpha, rho, expect in worlds:
-        pts = planted_ladder(treads, alpha=alpha, rho=rho,
-                             block_m=SUBJECT_BLOCK_M, b=b, load_ms=load_ms,
-                             overhead_ms=overhead_ms)
-        # The PLANTED compute slope is used, not one recovered from the ladder:
-        # this test is about whether the gates discriminate, and recovering C
-        # from the same points would make the comparison circular.
-        ratio = branch_ratio(SUBJECT_BLOCK_M, b, alpha, rho)
-        c_true = load_ms * alpha / ratio
-        law = depth_verdict(SUBJECT_BLOCK_M, b, alpha, rho,
-                            overhead_over_c=overhead_ms / c_true)
-        k = sum(1 for n, ms in pts if ms > overhead_ms + c_true * n * 1.02)
-        margin = margin_of(pts, k if k >= 2 else len(pts), c_ref=c_true,
-                           overhead=overhead_ms, spread=0.005, draws=400, seed=1)
-        got = k >= TARGET_TREADS and margin.confident
-        out.append(f"{name:34s} {law.ratio:7.3f} {law.regime:>12s} "
-                   + (f"{'inf':>8s}" if law.reachable_treads is None
-                      else f"{law.reachable_treads:8.2f}")
-                   + f" {k:4d} {margin.margin:+10.6f}  "
-                   + (f"{TARGET_TREADS}+ clean treads" if got else "no"))
+    for world in SELF_TEST_WORLDS:
+        samples = planted_samples(cfg, alpha=world.alpha, rho=world.rho,
+                                  bandwidth_gbps=SELF_TEST_BANDWIDTH, b=b,
+                                  noise=noise, seed=seed,
+                                  low_clock_treads=world.low_clock_treads)
+        ceiling = world.rho * SELF_TEST_BANDWIDTH * 1e9 / 1e12
+        _, world_gates, payload = analyse_run(
+            samples, cfg, b, ceiling_tflops=ceiling,
+            ceiling_source=f"planted world {world.name}",
+            compiles={SUBJECT_BLOCK_M: 1, REFERENCE_BLOCK_M: 1},
+            executed={SUBJECT_BLOCK_M: len(samples), REFERENCE_BLOCK_M: len(samples)},
+            ridge=world.rho, bandwidth_gbps=SELF_TEST_BANDWIDTH, seed=seed,
+            draws=draws)
+        law = depth_verdict(SUBJECT_BLOCK_M, b, world.alpha, world.rho)
+        bad = world.check(world_gates)
+        rc = exit_codes.classify(g.scored() for g in world_gates)
+        out += ["",
+                f"### {world.name}  alpha {world.alpha} rho {world.rho}",
+                f"    {world.why}",
+                f"    law says: {law.line()}",
+                "    real gates: "
+                + ", ".join(f"{g.tag}="
+                            + {True: 'PASS', False: 'FAIL', None: 'UNKNOWN'}[g.passed]
+                            for g in world_gates),
+                f"    memory treads {payload['memory_points']}, ladder outcome "
+                f"{payload['ladder_outcome']}",
+                # THE INTEGER THE DRIVER WOULD READ, printed beside the verdicts
+                # it came from. The gates are for a human; this is the contract.
+                f"    on a pod this world exits {exit_codes.describe(rc)} "
+                f"(registered {exit_codes.describe(world.exit_code)})"]
+        out += [f"    MISMATCH {line}" for line in bad]
         gates.append(Gate(
-            VALIDITY, f"S {name.split()[0]}",
-            f"the planted world is called {'feasible' if expect else 'infeasible'}",
-            f"{TARGET_TREADS} treads and a {MARGIN_SIGMA:.0f} sd margin "
-            f"{'reached' if expect else 'not reached'}",
-            got == expect, f"{k} treads, margin {margin.margin:+.6f}, "
-            + ("confident" if margin.confident else "not confident"),
-            "the gates themselves: a gate that answers the same in every world "
-            "cannot settle this experiment"))
+            VALIDITY, f"S {world.name}",
+            f"the {world.name} world returns its registered verdicts AND its "
+            "registered exit code through analyse_run",
+            f"{len(world.expect)} registered gate(s) match and "
+            f"classify() returns {exit_codes.CODE_NAMES[world.exit_code]}",
+            not bad,
+            (f"every registered verdict matched; classify() returned "
+             f"{exit_codes.CODE_NAMES[rc]}") if not bad else "; ".join(bad),
+            "the gates themselves: a self test that exercises a different code "
+            "path from the pod cannot certify the pod's, and one that scores "
+            "gates but never the exit code cannot see an arm that is RETRY by "
+            "construction",
+            lines=[f"registered: {world.expect}",
+                   f"registered exit: {exit_codes.describe(world.exit_code)}"]))
     return out, gates
 
 
@@ -2010,7 +2869,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="calibration yaml directory; the ceiling every "
                          "reference level is scored against")
     ap.add_argument("--self-test", action="store_true",
-                    help="plant three worlds from the law and check the gates "
+                    help="plant four worlds from the law and check the gates "
                          "tell them apart, off GPU")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, then stop")
@@ -2043,9 +2902,36 @@ def build_parser() -> argparse.ArgumentParser:
                          "and the wrong direction for escape down as well")
     ap.add_argument("--num-stages", type=int, default=SWEEP.FIXED["num_stages"])
     ap.add_argument("--num-warps", type=int, default=SWEEP.FIXED["num_warps"])
-    ap.add_argument("--iters", type=int, default=50)
-    ap.add_argument("--warmup", type=int, default=20)
-    ap.add_argument("--cell-budget-ms", type=float, default=400.0)
+    ap.add_argument("--iters", type=int, default=50,
+                    help="RETIRED as a timing knob and kept in the run id. "
+                         "moe.bench.timing.time_kernel sizes each cell's "
+                         "iteration count from --cell-budget-ms and the "
+                         "warmup's own queue-deep per-call time; the count a "
+                         "cell really used is a column in cells.csv")
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. UNITS CHANGED with the instrument: "
+                         "a count of 20 and a duration of 20 ms are both "
+                         "accepted by argparse and only one of them is a warmup")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per timing; the percentiles are "
+                         "over iters x trials samples")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do NOT evict L2 between timed iterations. Off by "
+                         "default because the compute reference and the card's "
+                         "ceiling were both measured flushed and a warm-L2 "
+                         "tread is not comparable with either. Recorded per row")
+    ap.add_argument("--cell-budget-ms", type=float, default=400.0,
+                    help="target measured KERNEL time per trial; the "
+                         "instrument sizes its iteration count from it")
+    ap.add_argument("--plant-noise", type=float, default=PUBLISHED_LADDER_SPREAD,
+                    metavar="SIGMA",
+                    help="lognormal sigma planted on every --self-test tread, "
+                         "and the noise assumption every MDE in the plan is "
+                         f"derived from. Defaults to {PUBLISHED_LADDER_SPREAD}, "
+                         "the top of the published H200 across-repeat spread; "
+                         "0 plants a world no pod produces")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--draws", type=int, default=BOOTSTRAP_DRAWS,
                     help="bootstrap resamples behind every reported margin")
@@ -2105,7 +2991,147 @@ def _cost_inputs(args):
     return ridge, ridge_src, bandwidth, bw_src
 
 
+def _exit_code(gates: list[Gate], fail_on_gate: bool) -> int:
+    """The shared table's verdict over the scored gates.
+
+    `moe.bench.exit_codes.classify` decides it, over the SAME gate objects that
+    printed the RESULT lines, so `classify_text` on the log recomputes the code
+    the process returned and a disagreement is itself a defect. Without
+    `--fail-on-gate` a CLAIM_FAIL is REPORTED as DONE, because the registered
+    expectation of this arm is that its CLAIM gates FAIL -- no published ladder
+    reaches five clean memory treads -- and a falsified pre-registered claim is
+    the most valuable outcome an experiment has, not a retry. A VALIDITY failure
+    is INVALID either way: nothing on the page may be quoted after one.
+    """
+    rc = exit_codes.classify(g.scored() for g in gates)
+    if rc == exit_codes.CLAIM_FAIL and not fail_on_gate:
+        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
+        print(f"         reported as exit {exit_codes.DONE} without "
+              "--fail-on-gate: this arm's registered expectation is that C1 "
+              "FAILS, and a falsified prediction is a result. Pass "
+              f"--fail-on-gate to return {exit_codes.CLAIM_FAIL} instead.")
+        return exit_codes.DONE
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
+
+
+class MdeNotStateable(RuntimeError):
+    """`mde_lines` was asked for a power calculation its inputs cannot carry.
+
+    A NAMED REFUSAL AND NOT A `SystemExit`, and the difference is an exit code
+    that used to be a lie. This raised `SystemExit(<str>)` until 2026-09-02,
+    which exits the process with 1 -- CLAIM_FAIL, "a pre-registered claim was
+    refuted" -- from a run that had refuted nothing. `--dry-run --plant-noise 0`
+    returned 1 after measuring nothing, and worse, `main` builds
+    `payload["mde"]` AFTER both ladders are timed and BEFORE `report.json` is
+    written, so a pod run at `--reps 1` spent the twelve metered minutes, exited
+    1, and wrote no report at all. Neither number reached
+    `moe.bench.exit_codes.classify`; both were chosen by the interpreter.
+
+    Raised as a `RuntimeError` so a caller can name it. Both call sites do, and
+    they answer it differently ON PURPOSE: in the plan the MDE is one section of
+    a document and the sibling's degradation is right (`tile_cap_test` prints
+    "MINIMUM DETECTABLE EFFECT: not stateable" and carries on), while after the
+    sweep the report must still be written and the exit code must still come
+    from the gates that were scored. Under no arrangement may the absence of a
+    power calculation decide the arm's verdict.
+    """
+
+
+def mde_lines(*, spread: float, reps: int, treads: int) -> list[str]:
+    """The minimum detectable effect of this arm's gates, before it is paid for.
+
+    HOEFLER & BELLI RULE 12. Not one arm in this study stated an MDE, and this
+    one carries two thresholds that are multiples of a measured spread -- V2's
+    `MONOTONE_SIGMA` inversion test and C2's `MARGIN_SIGMA` tolerance margin --
+    so what they can see is entirely a function of the spread and the repeat
+    count, and neither was ever written down.
+
+    ONE ASSUMPTION, `--plant-noise`, and everything derived from it.
+
+      V2 scores an inversion, a difference of two per-tread MEDIANS over `reps`
+      repeats each, so its standard error is `spread * sqrt(2 / reps)` and it
+      fires at `MONOTONE_SIGMA` of that. One-sided, because `t(n)` cannot fall
+      under either branch.
+      C2 scores `|B/C - 1| - TOLERANCE` at `MARGIN_SIGMA` bootstrap sd. The sd
+      is a property of the fitted ladder and is not knowable before the run;
+      what IS knowable is the sd the ladder's own points contribute, which is
+      the slope's relative sd, and it is stated so the run can be sized.
+      C1 is a COUNT and has no MDE: five treads either stand above the compute
+      branch or they do not. Said out loud rather than left as a gap, because a
+      missing line reads as an oversight.
+    """
+    if spread <= 0:
+        raise MdeNotStateable(
+            f"--plant-noise {spread}: an MDE is a multiple of a standard "
+            "deviation, and at a spread of zero every effect is detectable, "
+            "which is a statement about the planted world and not about any "
+            "pod. State the spread you believe the card has.")
+    if reps < 2 or treads < 2:
+        raise MdeNotStateable(
+            f"--reps {reps} over {treads} treads: an across-repeat spread needs "
+            "two repeats and a slope needs two treads, so no MDE is stateable.")
+    se_median = spread * math.sqrt(2.0 / reps)
+    inversion = MONOTONE_SIGMA * se_median
+    slope_rel = spread * math.sqrt(12.0 / (treads * (treads ** 2 - 1.0)))
+    return [
+        "",
+        "## Minimum detectable effect, from ONE stated assumption",
+        "",
+        f"  assumed per-tread relative spread {spread:.2%} (--plant-noise; the "
+        "published H200 ladders run 0.76-1.82% on one pass and the A100 ones "
+        f"0.48-0.61%, so the default {PUBLISHED_LADDER_SPREAD:.2%} is the top "
+        "of the H200 range, which is the end a gate has to survive)",
+        f"  V2 inversions   a per-tread median over {reps} repeats carries "
+        f"{se_median:.3%}; at {MONOTONE_SIGMA:.0f} sigma this run can see an "
+        f"inversion of {inversion:.2%} or more. The published A100 ladder's "
+        "1.24% inversion is "
+        + ("INSIDE that and would be called noise here"
+           if 0.0124 < inversion else
+           "OUTSIDE that and would be called a mechanism here"),
+        f"  C2 margin       the slope's relative sd over {treads} treads is "
+        f"{slope_rel:.3%} (equally spaced OLS), so B/C carries at least that "
+        f"and the {MARGIN_SIGMA:.0f}-sigma bar needs the margin to clear "
+        f"{MARGIN_SIGMA * slope_rel:.3%} of B/C on top of the "
+        f"{TOLERANCE:.0%} tolerance. The published A100 fit clears the "
+        "tolerance by 0.007%, which is inside this before the bootstrap is run",
+        f"  C1 depth        a COUNT, not an effect: {TARGET_TREADS} treads "
+        "either stand above the compute branch or they do not, so it has no "
+        "MDE. What noise buys it is membership churn at the boundary, which is "
+        f"why the membership margin is max({SWEEP.MEMORY_BRANCH_MARGIN:.0%}, "
+        "3 x the measured spread) rather than a constant",
+    ]
+
+
+def mde_block(*, spread: float, reps: int, treads: int) -> tuple[list[str], str]:
+    """The MDE section, or the one line that says why this run has none.
+
+    ONE FUNCTION SO BOTH CALL SITES DEGRADE THE SAME WAY, and so the pod path's
+    degradation can be exercised off GPU. `main` needs the MDE twice -- in the
+    plan, where it is a section of a document, and after the sweep, where it is
+    a key in `report.json` -- and for one commit only the first of those had any
+    handling at all: the second called `mde_lines` bare, between the last timing
+    and the first `write_text`, so a `--reps 1` pod run paid for both ladders,
+    raised `SystemExit`, wrote no report and returned 1 = CLAIM_FAIL from a run
+    that had refuted nothing.
+
+    Returns `(lines, reason)`. `reason` is empty when the MDE was stateable and
+    is the refusal's own words otherwise, so the caller can put it in the report
+    as a named field rather than leaving a reader to parse the prose.
+    """
+    try:
+        return mde_lines(spread=spread, reps=reps, treads=treads), ""
+    except MdeNotStateable as exc:
+        return ["", f"MINIMUM DETECTABLE EFFECT: not stateable. {exc}"], str(exc)
+
+
 def main(argv=None) -> int:
+    """The one entry point, and the one place an exit code is chosen.
+
+    Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
+    before anything is measured, and otherwise `_exit_code` over the scored
+    gates.
+    """
     args = build_parser().parse_args(argv)
     cfg = MODEL_CONFIGS[args.model]
     b = dtype_bytes(args.dtype)
@@ -2117,7 +3143,13 @@ def main(argv=None) -> int:
 
     if args.audit or args.self_test:
         if args.self_test:
-            more, g = self_test(b)
+            try:
+                more, g = self_test(b, noise=args.plant_noise, seed=args.seed,
+                                    draws=args.draws)
+            except SelfTestRefused as exc:
+                print("\n".join(lines))
+                print(f"\nREFUSED: {exc}")
+                return exit_codes.REFUSED
             lines += more
             gates += g
         if args.audit:
@@ -2131,11 +3163,10 @@ def main(argv=None) -> int:
             payload["audit"] = pay
         lines += ["", "## Gates", ""] + render_gates(gates)
         print("\n".join(lines))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        return _exit_code(gates, args.fail_on_gate)
 
     ridge, ridge_src, bandwidth, bw_src = _cost_inputs(args)
-    plan = build_plan(args, cfg, b, args.alpha, ridge, bandwidth)
+    plan = build_plan(args, cfg)
     # THE CARD, RESOLVED BEFORE THE RUN ID. See default_run_id: the results root
     # is a network volume shared between pods and every verdict here is scored
     # against a per-card ridge, so two cards must not derive one directory.
@@ -2146,7 +3177,7 @@ def main(argv=None) -> int:
               f"{detected!r}. --card may name a card that is ABSENT, so a "
               "laptop can print the pod's real path; it may never contradict "
               "one that is present. Nothing measured.")
-        return 2
+        return exit_codes.REFUSED
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or SWEEP.results_root()) / "bm128_depth" / run_id
     csv_path = out_dir / "cells.csv"
@@ -2190,14 +3221,23 @@ def main(argv=None) -> int:
                   "seconds the run takes.",
                   "  Nothing in --r-max, --model or --block-n appears in either "
                   "threshold. Run --audit for the measured corpus."]
+        # THE MDE IS PART OF THE PLAN, not of the post mortem: the only cheap
+        # moment to find that a gate cannot resolve the effect it is registered
+        # against is before the pod is rented. A plan whose MDE is not stateable
+        # is still a plan, and it says so in the one line where the number would
+        # have been -- the sibling `tile_cap_test` degrades identically. What it
+        # may NOT do is choose the exit code: a `--dry-run` measured nothing, so
+        # a missing power calculation cannot make it CLAIM_FAIL.
+        lines += mde_block(spread=args.plant_noise, reps=args.reps,
+                           treads=len(plan.subject_rows))[0]
         print("\n".join(lines))
-        return 0
+        return exit_codes.DONE
 
     visibility = git_visibility(out_dir)
     if args.require_git_visible and visibility.startswith("IGNORED"):
         print("\n".join(lines))
         print(f"\nREFUSING: {visibility}")
-        return 2
+        return exit_codes.REFUSED
 
     missing = SWEEP.missing_gpu_stack()
     if missing:
@@ -2210,10 +3250,11 @@ def main(argv=None) -> int:
         print(f"\n{first}.\n"
               "Off GPU, this script's whole argument is still available:\n"
               "  --audit      the gates over every published BLOCK_M=128 ladder\n"
-              "  --self-test  three planted worlds, checking the gates "
-              "discriminate\n"
+              "  --self-test  four planted worlds through the pod's own "
+              "analysis, each with a registered verdict per gate and a "
+              "registered exit code\n"
               "  --dry-run    the pod plan, the grid and the cost")
-        return 2
+        return exit_codes.REFUSED
 
     import torch
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2248,6 +3289,29 @@ def main(argv=None) -> int:
     print(f"\nqualification ridge {ridge:.3f} Op/B and bandwidth "
           f"{bandwidth:.1f} GB/s, both from {hw.name}")
 
+    # THE CLOCK THE ROOF WAS MEASURED AT, resolved ONCE, before any tread. It is
+    # the reference `timing.clock_flags` compares against, and without it every
+    # row's LEVEL verdict is None, which means "not determined" and excludes
+    # nothing. Resolved here rather than per tread so the whole ladder is scored
+    # against one number and a mid-run yaml rewrite cannot move it.
+    reference_clock, clock_source = SWEEP.reference_clock_mhz(hw.name)
+    print("reference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT RESOLVED ({clock_source}); every row's clock LEVEL "
+                  "verdict will be None and no tread can be excluded for it"))
+
+    # ONE PROVENANCE BLOCK PER RUN, built after the rulers resolve so it carries
+    # their sources and before any measurement so every artefact of one run
+    # carries one block. `iters` is None because --iters is retired as a timing
+    # knob: on a pod each row's count comes from `time_kernel`, sized from
+    # --cell-budget-ms, and recording the dead argparse default would put a
+    # number in the report that no row used.
+    prov = PV.provenance_block(
+        instrument=SWEEP.timing_basis(),
+        ridge=ridge, ridge_source=f"calibration: {hw.name}",
+        bandwidth=bandwidth, bandwidth_source=f"calibration: {hw.name}",
+        warmup_ms=args.warmup, iters=None, target_ms=args.cell_budget_ms)
+
     # THE RESUME GUARD, belt as well as braces. The card is already in the run
     # id, so another card lands in another directory and cannot normally reach
     # this cells.csv at all. This catches the ways it could anyway: an explicit
@@ -2278,7 +3342,8 @@ def main(argv=None) -> int:
     # the expensive half of the run on cells that cannot be read.
     print(f"\n-- reference ladder, BLOCK_M={REFERENCE_BLOCK_M} --")
     c, e = measure_setting(args, cfg, REFERENCE_BLOCK_M, plan.reference_rows,
-                           csv_path, cache_root, plan.pinned, done, samples)
+                           csv_path, cache_root, plan.pinned, done, samples,
+                           reference_clock)
     compiles[REFERENCE_BLOCK_M], executed[REFERENCE_BLOCK_M] = c, e
 
     ref_points, _, _ = collapse(samples, REFERENCE_BLOCK_M)
@@ -2299,13 +3364,20 @@ def main(argv=None) -> int:
                   "This is the A100 BLOCK_N=256 failure, caught before the "
                   "expensive half of the run.")
             print(f"cells   {csv_path}")
-            return 1
+            # INVALID, not CLAIM_FAIL and not REFUSED. The reference WAS
+            # measured and it is unsound, so the arm cost pod minutes and
+            # nothing on the page may be quoted; re-running it without changing
+            # the world repeats the failure. REFUSED would have the driver treat
+            # a spent half-run as free.
+            print(f"exit     {exit_codes.describe(exit_codes.INVALID)}")
+            return exit_codes.INVALID
     else:
         print(f"\nreference did not qualify: {early.note}")
 
     print(f"\n-- subject ladder, BLOCK_M={SUBJECT_BLOCK_M} --")
     c, e = measure_setting(args, cfg, SUBJECT_BLOCK_M, plan.subject_rows,
-                           csv_path, cache_root, plan.pinned, done, samples)
+                           csv_path, cache_root, plan.pinned, done, samples,
+                           reference_clock)
     compiles[SUBJECT_BLOCK_M], executed[SUBJECT_BLOCK_M] = c, e
     print(f"\nmeasured in {time.time() - started:.0f} s")
 
@@ -2316,6 +3388,20 @@ def main(argv=None) -> int:
     gates += g
     payload["run"] = pay
     payload["gpu"] = torch.cuda.get_device_name(0)
+    # AFTER TWELVE METERED MINUTES THE REPORT GETS WRITTEN. This line used to
+    # raise `SystemExit` out of `main` between the last timing and the first
+    # `write_text`, so a pod run at `--reps 1` paid for both ladders, wrote no
+    # report.json, and exited 1. The MDE is a section of a document; it is not a
+    # gate, and it does not get a vote on the arm's verdict.
+    payload["mde"], not_stateable = mde_block(
+        spread=args.plant_noise, reps=args.reps,
+        treads=len(plan.subject_rows))
+    payload["mde_not_stateable"] = not_stateable or None
+    # The block goes in LAST and through `stamp`, which raises if the payload
+    # already carries a different value for any of the five keys it puts at the
+    # top level. That is how the block and the report are made to agree rather
+    # than merely coexist.
+    payload = prov.stamp(payload)
     text = "\n".join(lines + more + ["", "## Gates", ""] + render_gates(gates))
     print("\n".join(more + ["", "## Gates", ""] + render_gates(gates)))
     (out_dir / "report.txt").write_text(text)
@@ -2329,8 +3415,7 @@ def main(argv=None) -> int:
         # repo has already lost every published figure to a pattern that
         # matched at a depth nobody checked.
         print(f"{label:8s} {path}\n         {git_visibility(path)}")
-    return 1 if (args.fail_on_gate
-                 and any(g.passed is not True for g in gates)) else 0
+    return _exit_code(gates, args.fail_on_gate)
 
 
 if __name__ == "__main__":
