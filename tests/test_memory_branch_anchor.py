@@ -31,7 +31,9 @@ minutes and report a tidy null:
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -1107,3 +1109,191 @@ def test_c5_scores_against_the_prior_it_names():
     gate = mba.gate_c5_correction_size([])
     assert str(mba.C5_SHIFT_PRIOR) in gate.threshold
     assert "PRIOR" in gate.threshold
+
+
+# --------------------------------------------------------------------------
+# THE FOUR FUNCTIONS THAT BUILD THE EVIDENCE. Everything above tests the
+# CONSUMERS of a pin record against a planted one; a review found that nothing
+# tested the code that builds a real one. All four run off-GPU: the device work
+# is in the `run_measure` loop around them, not in them.
+# --------------------------------------------------------------------------
+
+def test_reference_clock_from_takes_the_sweeps_three_fields_in_its_order():
+    """THE SAME ORDER AS THE LADDERS, or an anchor is admitted (or excluded) on
+    a LEVEL rule the data it re-anchors never applied. The three fields have
+    disagreed on one H200 by 450 MHz, so which one answered is part of the
+    answer and is asserted here alongside the number."""
+    detail = {"gemm_clock": {"median_mhz": 1470}, "gemm_clock_mhz": 1935,
+              "settle": {"final_mhz": 1515}}
+    mhz, why = mba.reference_clock_from(detail, "nvidia_h200")
+    assert (mhz, "median of the samples" in why) == (1470.0, True)
+
+    detail.pop("gemm_clock")
+    mhz, why = mba.reference_clock_from(detail, "nvidia_h200")
+    assert (mhz, "gemm_clock_mhz" in why) == (1935.0, True)
+
+    detail.pop("gemm_clock_mhz")
+    mhz, why = mba.reference_clock_from(detail, "nvidia_h200")
+    assert (mhz, "settle" in why) == (1515.0, True)
+
+
+def test_reference_clock_from_says_no_cell_can_be_excluded_when_it_finds_none():
+    """The branch that silently disables every LEVEL verdict in the run. None is
+    not a failure and it is not a pass either: it has to SAY that nothing can be
+    excluded on it, because the alternative -- a missing clock reading as a
+    clean one -- is how a throttled cell reaches a published fit."""
+    mhz, why = mba.reference_clock_from({}, "nvidia_a100_sxm4_80gb")
+    assert mhz is None
+    assert "nvidia_a100_sxm4_80gb" in why
+    assert "not determinable" in why
+
+
+def test_count_new_counts_each_artefact_once_and_only_once(tmp_path):
+    """The compile assay is a DIFFERENCE, so double-counting one file would let
+    a setting that compiled nothing inherit the previous setting's evidence."""
+    seen: set = set()
+    assert mba.count_new(tmp_path, seen) == 0
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "kernel.cubin").write_text("x")
+    assert mba.count_new(tmp_path, seen) == 1
+    assert mba.count_new(tmp_path, seen) == 0
+    (tmp_path / "a" / "kernel.json").write_text("y")
+    assert mba.count_new(tmp_path, seen) == 1
+
+
+def test_arm_triton_cache_points_triton_at_this_settings_own_directory(tmp_path,
+                                                                       monkeypatch):
+    """The variable is read by Triton at COMPILE time, so it has to be set
+    before the setting's first call, and the per-setting directory is what makes
+    "did this setting compile anything" countable rather than assumed. The key
+    is the PAIR: this arm sweeps the swizzle, and a directory keyed on the tile
+    alone would pool four swizzles into one count."""
+    monkeypatch.setenv("TRITON_CACHE_DIR", "a-stale-value")
+    first = mba.arm_triton_cache(tmp_path, 32, 8)
+    assert first.is_dir() and not list(first.iterdir())
+    assert os.environ["TRITON_CACHE_DIR"] == str(first)
+    assert mba.arm_triton_cache(tmp_path, 32, 64) != first
+    assert mba.arm_triton_cache(tmp_path, 64, 8) != first
+
+
+def test_a_resumed_session_does_not_inherit_the_previous_sessions_warm_cache(tmp_path):
+    """THE DEFECT THIS FUNCTION EXISTS AGAINST. A cache root under the resume
+    directory hands session 2 session 1's compiled artefacts; the per-setting
+    baseline absorbs them, every re-measured cell records `fresh_artefacts = 0`,
+    and M6 fails "compiled nothing new" on a sound run for ever. Session 2 has
+    to start empty, and session 1's evidence has to survive, because deleting
+    what it finds under a human's --out-dir is not this script's business."""
+    one = mba.session_cache_root(tmp_path)
+    mba.arm_triton_cache(one, 32, 8).joinpath("kernel.cubin").write_text("x")
+
+    two = mba.session_cache_root(tmp_path)
+    assert two != one
+    assert list(one.rglob("*.cubin"))            # session 1 was not swept away
+    assert not list(two.rglob("*"))              # session 2 starts cold
+
+    seen: set = set()
+    mba.arm_triton_cache(two, 32, 8)
+    assert mba.count_new(two, seen) == 0
+    (two / "bm32-g8" / "kernel.cubin").write_text("x")
+    assert mba.count_new(two, seen) == 1
+
+
+# --------------------------------------------------------------------------
+# `observed_pin`: the one derivation the pin assay calls derived rather than
+# asserted. Its input is a real `TileCapture`, so it is built here as
+# `recording_tile_config` would fill it.
+# --------------------------------------------------------------------------
+
+def _capture(**call):
+    """A `TileCapture` holding one recorded lookup, or none at all."""
+    fc = pytest.importorskip("moe.baselines._framework_config")
+    cap = fc.TileCapture()
+    if call:
+        cap.calls.append(fc.TileCall(**call))
+    return cap
+
+
+REQUESTED = {"BLOCK_SIZE_M": 32, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64,
+             "GROUP_SIZE_M": 8, "num_warps": 8, "num_stages": 3}
+
+
+def test_observed_pin_reads_the_override_off_the_lookup_it_skipped():
+    """THE DERIVATION. `try_get_optimal_moe_config` consults `get_config()`
+    first and returns the override WITHOUT reaching `get_moe_configs`, so a call
+    that skipped the tuned-file lookup took the override. Deriving it from what
+    the lookup did is the whole point: `tile_meta_from_capture(
+    override_active=True)` labels any capture vllm_override because its caller
+    said so, and a gate that asks "did the override take" cannot be answered by
+    the fact that one was entered."""
+    conf, source = mba.observed_pin(
+        _capture(m=1024, config=dict(REQUESTED), lookup_observed=False))
+    assert source == mba.PIN_SOURCE_OVERRIDE
+    assert conf == REQUESTED
+
+
+@pytest.mark.parametrize("tuned_keys, source", [
+    (None, "vllm_default"),
+    ([16, 64, 128], "vllm_tuned"),
+])
+def test_observed_pin_names_vllms_own_two_config_paths_apart(tuned_keys, source):
+    """A call that RAN the lookup went to vLLM's tuned file or to its hardcoded
+    fallback ladder, and either way the override did not take. They are kept
+    apart because "there is a tuned file for this shape and it won" and "there
+    is none and the ladder won" send an operator to different files."""
+    ran = dict(REQUESTED, BLOCK_SIZE_M=64, GROUP_SIZE_M=1)
+    conf, got = mba.observed_pin(
+        _capture(m=1024, config=ran, tuned_keys=tuned_keys, lookup_observed=True))
+    assert got == source
+    assert conf["BLOCK_SIZE_M"] == 64
+    assert mba.pin_disagreement(
+        {"block_m": 32, "group_m": 8,
+         "pin": {"requested": REQUESTED, "observed": conf, "source": got}})
+
+
+def test_observed_pin_records_nothing_rather_than_a_likelier_answer():
+    """No recorded call is not "the override took". It is a cell with no
+    evidence, and `pin_disagreement` fails it for exactly that."""
+    assert mba.observed_pin(_capture()) == ({}, "unrecorded")
+
+
+def test_observed_pin_keeps_only_the_six_constants_the_gate_compares():
+    """The capture carries whatever vLLM's config dict held. Writing the extras
+    into the row would put keys in `observed` that `requested` never had and
+    that no leg of M6 reads."""
+    conf, _ = mba.observed_pin(_capture(
+        m=1024, config=dict(REQUESTED, SPLIT_K=2, matrix_instr_nonkdim=16),
+        lookup_observed=False))
+    assert set(conf) == set(mba.PIN_KEYS)
+
+
+def test_a_memoised_vllm_lands_in_the_override_branch_and_the_tile_still_catches_it():
+    """THE SOURCE LEG'S RESIDUAL, held at the width the docstring now claims.
+    `recording_tile_config` names the degradation itself: a vLLM that memoises
+    `try_get_optimal_moe_config` never re-enters `get_moe_configs`, so the row
+    comes back with real tile ints and no observation behind them, which is
+    indistinguishable HERE from an override that took. It is not
+    indistinguishable at the gate: the config in hand is vLLM's own choice, so
+    the six constants disagree with the six requested and M6 fails on the tile
+    comparison instead of on the label."""
+    memoised = dict(REQUESTED, BLOCK_SIZE_M=64, GROUP_SIZE_M=1)
+    conf, source = mba.observed_pin(
+        _capture(m=1024, config=memoised, lookup_observed=False))
+    assert source == mba.PIN_SOURCE_OVERRIDE      # the label cannot see it
+
+    cells = mba.plant_cells(MIXTRAL, pin="ok")
+    for row in cells:
+        row["pin"]["observed"] = dict(conf, GROUP_SIZE_M=row["group_m"])
+    _, _, gates = _score(cells)
+    assert gates["M6"].verdict == mba.FAIL
+    assert "BLOCK_SIZE_M: asked 32, ran 64" in " ".join(gates["M6"].lines)
+
+
+def test_the_gate_render_has_no_way_to_suppress_its_result_line():
+    """The suppression flag that used to be here named `--self-test` as its
+    caller and `self_test` never called `render` at all: it prints its own
+    lines. A flag would have made "no RESULT line out of a plant" something a
+    caller has to remember; not having one is the same guarantee with nothing
+    to forget."""
+    gate = mba.gate_v1_non_vacuity([], [])
+    assert list(inspect.signature(mba.Gate.render).parameters) == ["self"]
+    assert gate.render()[0] == gate.result_line()

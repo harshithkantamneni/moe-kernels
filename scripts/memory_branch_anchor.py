@@ -222,6 +222,7 @@ import re
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from dataclasses import asdict, dataclass, field, fields
@@ -958,15 +959,20 @@ class Gate:
         detail = f"{self.claim} | measured {self.measured} | gate {self.threshold}"
         return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
 
-    def render(self, result_line: bool = True) -> list[str]:
-        """The gate as a block of lines, RESULT line first unless suppressed.
+    def render(self) -> list[str]:
+        """The gate as a block of lines, RESULT line first. Always.
 
-        `--self-test` suppresses it. A planted world's verdict is not a result
-        about this machine, and a driver that grepped one out of a self-test log
-        would be reading a plant as a measurement -- the same defect, in the
-        other direction, as a refused arm's log matching a gate regex.
+        NO SUPPRESSION SWITCH, and the one that used to sit here was worse than
+        useless: it documented `--self-test` as the caller that passed False,
+        and `self_test` has never called this method at all. It prints its own
+        `[PASS] <world>` lines, which is what actually keeps a planted verdict
+        out of the machine format -- a driver that grepped a plant out of a
+        self-test log would be reading it as a measurement, the same defect in
+        the other direction as a refused arm's log matching a gate regex. A flag
+        would have made that guarantee something a caller has to remember to
+        ask for; having no flag is the same guarantee with nothing to forget.
         """
-        out = [self.result_line()] if result_line else []
+        out = [self.result_line()]
         out += [f"GATE {self.number:3s} {self.kind:8s} {self.verdict:7s} {self.claim}",
                 f"                        measured {self.measured}   gate {self.threshold}"]
         out += [f"                        {line}" for line in self.lines]
@@ -2147,6 +2153,11 @@ def gate_m6_pin(cells) -> Gate:
     inherits it rather than going UNKNOWN for want of an experiment it cannot
     repeat. That is the difference from `block_m_crossing_sweep.gate_0_override`,
     which keeps its counts in memory and must go UNDECIDED on a full resume.
+    The cells a resumed session RE-measures are the other half of that, and they
+    need the opposite treatment: an inherited count is evidence, an inherited
+    Triton cache is not, because a warm one makes a legitimate compile
+    invisible and reads out here as "compiled nothing new". `session_cache_root`
+    is why the count of a re-measured cell still means something.
     """
     ok = [c for c in cells if c.get("status") == "ok"]
     if not ok:
@@ -2636,6 +2647,32 @@ def arm_triton_cache(root: Path, block_m: int, group_m: int) -> Path:
     return directory
 
 
+def session_cache_root(out_dir: Path) -> Path:
+    """An EMPTY Triton cache directory belonging to this session alone.
+
+    The artefact count is only evidence if the cache it counts into started
+    empty. A single `out_dir/triton-cache` is not that: `out_dir` is the resume
+    directory, so a second session finds the first session's compiled artefacts
+    already on disk, the per-setting baseline absorbs them, every re-measured
+    cell loads from the warm cache and records `fresh_artefacts = 0`, and gate
+    M6 fails "compiled nothing new" on a run that is otherwise sound. That is
+    the shape of the M0-forever-fail-on-resume defect the persisted stream check
+    was written to remove -- the stream check was carried across sessions, the
+    artefact count was not, and the count cannot be carried because it is a
+    statement about a directory rather than about a cell. So the directory
+    moves instead, and each session compiles once per setting into its own.
+
+    `mkdtemp` rather than a timestamp: two calls in one second in one process
+    would collide on a stamp, and the whole point of the directory is that
+    nothing has written into it. Earlier sessions' directories are LEFT ALONE.
+    They are that session's evidence, and a script handed `--out-dir` by a
+    human has no business deleting what it finds there.
+    """
+    root = out_dir / "triton-cache"
+    root.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="session-", dir=root))
+
+
 def count_new(root: Path, seen: set[Path]) -> int:
     """How many files have appeared under `root` since the last call."""
     fresh = [p for p in root.rglob("*") if p.is_file() and p not in seen]
@@ -2660,10 +2697,34 @@ def observed_pin(capture) -> tuple[dict, str]:
     override, and a call that ran the lookup went to vLLM's own tuned file or
     its hardcoded fallback ladder, which is the override failing.
 
-    KNOWN LIMIT, named because it is the reason this is not the only leg of the
-    assay: a vLLM that exposed no `get_moe_configs` for the recorder to wrap
-    would make every call look like it skipped the lookup. The fresh-artefact
-    count does not depend on the recorder's reach, and gate M6 requires both.
+    KNOWN LIMIT, and it is WIDER THAN "the recorder found nothing to wrap".
+    `lookup_observed` is False in three worlds, not two, and this function can
+    only see that it is False:
+
+      * the override took, and the lookup was skipped because it was;
+      * vLLM exposed no `get_moe_configs` binding, so nothing watched the
+        lookup that did run;
+      * vLLM memoised `try_get_optimal_moe_config` itself, so the observation
+        call hit that cache and never re-entered the lookup. That is the
+        degradation `recording_tile_config` names in its own docstring, and it
+        returns real tile ints with no observation behind them.
+
+    The last two are labelled `vllm_override` here. That is deliberate and it is
+    the opposite of what `tile_meta_from_capture` does with the same input,
+    where an unobserved lookup writes "unrecorded": that function labels rows
+    for a tile-source CSV in which nobody asserted a tile, so the conservative
+    answer is to name no source. Here the caller HAS entered an override and the
+    only question is whether it took; writing "unrecorded" would make the source
+    leg unable to return PASS in the healthy world, which is not conservatism,
+    it is deleting the leg.
+
+    WHAT BOUNDS THE RESIDUAL is that the label alone passes nothing. Gate M6
+    needs `pin_disagreement` to find the six PIN_KEYS read back EQUAL to the six
+    requested, and it needs the setting to have compiled a fresh Triton
+    artefact; neither depends on the recorder's reach. In both degraded worlds
+    the config in hand is vLLM's own choice, so the six constants agree with the
+    six requested only where vLLM would have chosen the pinned tile anyway --
+    a cell that measures the requested kernel either way.
     """
     if not capture.calls:
         return {}, "unrecorded"
@@ -2873,12 +2934,13 @@ def run_measure(args) -> int:
 
     # BEFORE vLLM is imported. Triton may snapshot this variable at import in
     # some versions, and a warm cache compiles and dumps nothing -- the bug that
-    # cost this project its A100 PTX dump. Pointing it at this run's own
-    # directory first makes the count fresh relative to previous runs whatever
-    # the per-setting redirect below manages, and the count is taken over the
-    # whole root so the assay works either way.
-    cache_root = out_dir / "triton-cache"
-    cache_root.mkdir(parents=True, exist_ok=True)
+    # cost this project its A100 PTX dump. Pointing it at this SESSION's own
+    # empty directory first makes the count fresh whatever the per-setting
+    # redirect below manages, and the count is taken over the whole root so the
+    # assay works either way. Per session, not per out_dir: see
+    # `session_cache_root`, or a resumed run reports zero fresh artefacts for
+    # every setting it re-measures and fails M6 for ever.
+    cache_root = session_cache_root(out_dir)
     os.environ["TRITON_CACHE_DIR"] = str(cache_root)
 
     from vllm.model_executor.layers.fused_moe import fused_experts
@@ -2894,7 +2956,7 @@ def run_measure(args) -> int:
     from moe.bench import timing
 
     print(f"instrument: {timing.TIMING_BASIS}")
-    print(f"triton cache: {cache_root} (fresh for this run)")
+    print(f"triton cache: {cache_root} (this session's own, empty)")
 
     cells_path = out_dir / "cells.json"
     # RESUME. The run id is derived from every swept knob precisely so that
