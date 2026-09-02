@@ -1,0 +1,118 @@
+{
+  "schema": "moe-kernels/noise-floor/1",
+  "written_utc": "2026-09-02T05:55:53Z",
+  "git": {
+    "commit": "8342cc877704e841d0c66f19a1dbb43532a8a55c",
+    "dirty": true
+  },
+  "sign": "every delta is alpha(second arm) - alpha(first arm)",
+  "primary_field": "alpha_corrected",
+  "effects_registered": [
+    {
+      "name": "swizzle swing",
+      "size": 0.3855,
+      "source": "s4 arm, mixtral BLOCK_M=32: alpha-corrected 1.0073 at GROUP_SIZE_M=1 vs 0.6218 at 16"
+    },
+    {
+      "name": "footprint spread at G=1",
+      "size": 0.411,
+      "source": "s4 arm, all seven GROUP_SIZE_M=1 fits: 1.0073 (mixtral BN=64 BM=32) down to 0.5963 (deepseek-v2-lite BM=32)"
+    },
+    {
+      "name": "cross-card L2",
+      "size": 0.0117,
+      "source": "A100 s3 minus H200 s3, 11 matched cells, paired mean of alpha-corrected"
+    }
+  ],
+  "prior_sd": 0.022839549032325487,
+  "prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2); CONFOUNDS num_stages, so an upper bound only",
+  "stages_control": {
+    "alpha": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.01033761857135438,
+      "sd": 0.03284055972827598,
+      "mde": 0.03076684419395452,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    },
+    "alpha_corrected": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.010100328558003418,
+      "sd": 0.03233250623999132,
+      "mde": 0.03029087171828473,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    },
+    "alpha_upper": {
+      "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
+      "second": "2026-09-01-nvidia_h200-cross-card-s3",
+      "sign": "delta = alpha(2026-09-01-nvidia_h200-cross-card-s3) - alpha(2026-09-01-nvidia_h200-alpha-surface-s4)",
+      "n_cells": 11,
+      "mean": 0.15534490321084357,
+      "sd": 0.17441012961050248,
+      "mde": 0.16339701052517483,
+      "resolved": false,
+      "varied": [
+        "num_stages"
+      ],
+      "same_machine": true
+    }
+  },
+  "cross_card": {
+    "alpha": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": 0.015161634063298441,
+      "sd": 0.0480002216434044,
+      "mde": 0.044969250000521675,
+      "resolved": false,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    },
+    "alpha_corrected": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": 0.011743121983295907,
+      "sd": 0.04798382867102405,
+      "mde": 0.04495389216157876,
+      "resolved": false,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    },
+    "alpha_upper": {
+      "first": "2026-09-01-nvidia_h200-cross-card-s3",
+      "second": "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3",
+      "sign": "delta = alpha(2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3) - alpha(2026-09-01-nvidia_h200-cross-card-s3)",
+      "n_cells": 11,
+      "mean": -0.33254328735743627,
+      "sd": 0.17471477653939071,
+      "mde": 0.1636824205386711,
+      "resolved": true,
+      "varied": [
+        "gpu"
+      ],
+      "same_machine": false
+    }
+  },
+  "replicate_floor": null
+}

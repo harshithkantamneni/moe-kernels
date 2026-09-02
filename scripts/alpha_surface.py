@@ -22,6 +22,14 @@ from pathlib import Path
 #: blank cell means "not identifiable here" rather than a number nobody checked.
 MIN_TREADS = 3
 
+#: WHY THERE ARE TWO BLANK MARKERS NOW. The BN=256 arm's compute reference was
+#: 44x too steep, so no tread in it could stand above the compute branch and all
+#: 8 of its cells came out unidentifiable -- and this table printed them as `--`
+#: under a caption blaming the tread count. The corruption read as a boring null
+#: across two cards. A refused reference is a WITHDRAWN arm, not a quiet one, so
+#: it gets its own marker and its own count.
+REFUSED = "REF!"
+
 
 def reports(root: Path):
     for p in sorted(root.rglob("report.json")):
@@ -36,6 +44,13 @@ def main() -> int:
     rows = []
     for path, r in reports(root):
         fixed = r.get("fixed", {})
+        cref = r.get("compute_reference") or {}
+        # A report written before the level checks existed carries no
+        # `refusals` key. Absent is treated as "not refused" but is NOT the
+        # same as checked-and-clean, and the legend says which reports were
+        # readable at all, so a stale corpus cannot pass itself off as a clean
+        # one.
+        refused = bool(cref.get("refusals"))
         for bm, lad in sorted(r.get("ladder", {}).items(), key=lambda kv: int(kv[0])):
             rows.append({
                 "model": r.get("model", "?"),
@@ -47,6 +62,9 @@ def main() -> int:
                 "corr": lad.get("alpha_corrected"),
                 "hi": lad.get("alpha_upper"),
                 "err": lad.get("mean_rel_err"),
+                "refused": refused,
+                "refused_bm": cref.get("refused_block_m"),
+                "checked": "refusals" in cref,
                 "path": path,
             })
     if not rows:
@@ -59,24 +77,50 @@ def main() -> int:
     print("extra M-tile costs a full re-read; 0.0 means L2 absorbs it entirely.")
     print("A blank alpha means the fit was not identifiable at that BLOCK_M --")
     print(f"fewer than {MIN_TREADS} memory-bound treads -- not that it is zero.")
+    print(f"{REFUSED} is a DIFFERENT state and not a null: that arm's compute")
+    print("reference was refused on its level, so nothing in it could be")
+    print("classified at all. Those rows are WITHDRAWN, not uninformative.")
     print()
     print(f"  {'model':<18} {'G':>4} {'BN':>4} {'BM':>4} {'treads':>7} "
           f"{'alpha':>7} {'corrected':>10} {'upper':>7} {'fit err':>8}")
     print(f"  {'-'*18} {'-'*4} {'-'*4} {'-'*4} {'-'*7} {'-'*7} {'-'*10} "
           f"{'-'*7} {'-'*8}")
     for x in rows:
-        ident = (x["treads"] or 0) >= MIN_TREADS and x["alpha"] is not None
-        a = f"{x['alpha']:.3f}" if ident else "--"
-        c = f"{x['corr']:.3f}" if ident and x["corr"] is not None else "--"
-        h = f"{x['hi']:.3f}" if ident and x["hi"] is not None else "--"
-        e = f"{x['err']*100:.2f}%" if ident and x["err"] is not None else "--"
+        # A refused reference outranks every other reason a cell is blank: it
+        # is not that this BLOCK_M was uninformative, it is that nothing in the
+        # arm was classified against a real compute branch.
+        blank = REFUSED if x["refused"] else "--"
+        ident = (not x["refused"] and (x["treads"] or 0) >= MIN_TREADS
+                 and x["alpha"] is not None)
+        a = f"{x['alpha']:.3f}" if ident else blank
+        c = f"{x['corr']:.3f}" if ident and x["corr"] is not None else blank
+        h = f"{x['hi']:.3f}" if ident and x["hi"] is not None else blank
+        e = f"{x['err']*100:.2f}%" if ident and x["err"] is not None else blank
         print(f"  {x['model']:<18} {str(x['g']):>4} {str(x['bn']):>4} "
               f"{x['bm']:>4} {x['treads']:>7} {a:>7} {c:>10} {h:>7} {e:>8}")
 
-    ident = [x for x in rows if (x["treads"] or 0) >= MIN_TREADS
-             and x["alpha"] is not None]
+    ident = [x for x in rows if not x["refused"]
+             and (x["treads"] or 0) >= MIN_TREADS and x["alpha"] is not None]
+    withdrawn = [x for x in rows if x["refused"]]
+    unchecked = [x for x in rows if not x["checked"]]
     print()
     print(f"{len(ident)} identifiable fit(s) of {len(rows)} block sizes swept.")
+    if withdrawn:
+        arms = sorted({(x["model"], x["bn"], x["g"], x["refused_bm"])
+                       for x in withdrawn})
+        print(f"{len(withdrawn)} cell(s) WITHDRAWN: their compute reference was "
+              "refused on its level, so they are not nulls and must not be "
+              "read as one.")
+        for model, bn, g, bm in arms:
+            print(f"  {model} G={g} BN={bn}: reference refused at BLOCK_M={bm}")
+    if unchecked:
+        # Non-vacuity for the marker: a corpus of reports written before the
+        # level checks existed would show zero withdrawals for the same reason
+        # an empty scan does.
+        print(f"{len(unchecked)} cell(s) come from reports with NO level check "
+              "recorded, so their reference was never tested for level. Absence "
+              "of a withdrawal above is not evidence of a sound reference in "
+              "those; re-run the analysis over their cells.csv to find out.")
     if not ident:
         return 0
 

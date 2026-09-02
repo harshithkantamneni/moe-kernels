@@ -519,10 +519,24 @@ STATUS_NOT_CAPTURABLE = "not_capturable"
 STATUS_INVALID_PIPELINE = "invalid_pipeline"
 STATUS_ERROR = "error"
 STATUS_CRASH = "crash"
+#: MOE_FORCE_TILE was set and this cell's implementation has no way to honour
+#: it, so it was recorded rather than measured. See moe/bench/force_tile.py.
+STATUS_FORCE_TILE_UNHONOURABLE = "force_tile_unhonourable"
+#: The cell ran pinned but the tile it was OBSERVED running is not the tile that
+#: was forced, so no row was written: a row that says it was pinned when it was
+#: not is worse than no pinning at all.
+STATUS_FORCE_TILE_NOT_OBSERVED = "force_tile_not_observed"
 
 #: Outcomes that are deterministic, so re-running would reproduce them exactly.
 #: Anything else (a CUDA OOM, a crash) is transient and MUST stay retryable, or
 #: a single bad moment permanently blanks that cell from every future run.
+#:
+#: NEITHER force-tile status is terminal, and that is deliberate rather than an
+#: omission. Both describe the cell UNDER A PIN, not the cell: the same cell is
+#: measurable in a run without MOE_FORCE_TILE set, and marking it done here
+#: would blank it from every future unpinned resume of the same run id. The pin
+#: is in the manifest KEY (see driver._cell_key), so a pinned skip and an
+#: unpinned measurement of the same cell are different records either way.
 TERMINAL_STATUSES = frozenset({STATUS_OK, STATUS_CORRECTNESS_FAILED,
                                STATUS_NOT_CAPTURABLE, STATUS_INVALID_PIPELINE})
 

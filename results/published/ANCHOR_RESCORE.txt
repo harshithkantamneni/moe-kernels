@@ -1,0 +1,210 @@
+==============================================================================
+MEMORY BRANCH ANCHOR -- alpha's denominator, measured instead of extrapolated
+==============================================================================
+published root : /Users/harshithkantamneni/Desktop/moe-kernels/results/published
+mode           : --rescore (no GPU, no measurement, seconds)
+
+THE MODEL, so every column below can be checked by hand:
+    bytes(n) = W (1 + alpha (n-1)) + Act1 n      t(n) = D + bytes(n)/BW, D >= 0
+    B = (W alpha + Act1) / BW      =>      alpha = (B BW - Act1) / W
+    BW >= (W + Act1) / t(1)   because at n=1 every weight byte is read once
+    BW <= the card's measured streaming ceiling
+
+REGISTERED PREDICTIONS
+  P1  the anchor t(1) at a fixed BLOCK_M varies by <= 4.0% across GROUP_SIZE_M in {1, 8, 16}, and by <= 8.0% including 64
+      BASIS       12 committed (arm, model, BLOCK_M) groups give 0.36% to 3.10% across G <= 16 and up to 6.74% including G=64
+      A FAIL      L_hi = t(1) as a condition-free upper bound. The bracket's top end would then have to be taken over swizzle conditions, widening it
+  P2  the anchor rate (W + Act1) / t(1) at BLOCK_M=32 lands between 64% and 78% of the card's pin rate
+      BASIS       21 committed BLOCK_M=32 fits give 1370-1477 GB/s on the A100 (67.2-72.4% of 2039) and 3344-3522 on the H200 (68.0-71.6% of 4916.7)
+      A FAIL      the carry-across. A new anchor at a different rate is not the same physical event as the one the committed arms measured, and the re-scoring of those arms could not be quoted from this run
+  P3  dropping the anchor tread from the branch fit moves the slope B by <= 1.5%
+      BASIS       40 committed fits move by -0.03% to +0.79% when n=1 is dropped
+      A FAIL      the independence of the two ends. B and t(1) would then share the anchor and B / t(1) would be partly a restatement of it, not a bound
+  P4  the anchor rate never exceeds the card's measured ceiling: BW_1 / BW_ceiling <= 1.0 on every cell
+      BASIS       the tightest committed case is 78.6% (1477 GB/s against the A100's 1879.1 write pattern)
+      A FAIL      the bracket outright on that card. An anchor above the ceiling means the ceiling is not one and the interval inverts
+
+  PROVENANCE  P1-P4 are OUT OF SAMPLE for --measure: they are stated from the committed reports and predict a run that has not happened. They are NOT out of sample for --rescore, which re-reads the same reports; there the honest object is the gate thresholds, which are constants at the top of this file and are printed below BEFORE the table they score. Said plainly so nobody reads a reproduction as a prediction.
+
+REGISTERED GATE THRESHOLDS, constants in this file, printed before the table
+  V1 non-vacuity            >= 20 scored fits
+  V2 slope reproduction     <= 1e-06 relative
+  V3 anchor present         every scored fit has a measured n=1 tread
+  V4 poisoned reference     the level check fires on >= 2 arm(s)
+  V5 bracket order          anchor rate <= measured ceiling on every fit
+  V6 ASSUMPTION A           an anchor below its branch is within 2 timing spreads
+  C1 physicality            0 published alphas above the pin rate
+  C2 containment            0 published alphas outside their bracket
+  C3 tile cap               cap/ridge < 1.000 for every BLOCK_M <= 64 fit
+  C4 pooled alpha           0 brackets contain 0.558
+  C5 correction size        median |published - bracket midpoint| <= 0.05
+
+CARD CALIBRATIONS USED (the bracket's upper end, and the ridge for C3)
+  NVIDIA A100-SXM4-80GB (measured): ceiling 1879.1 GB/s (write), pin 2039.0, ridge 145.81 FLOP/byte, measured 2026-09-02 @ 63de5b9f  [copy 1758, read 1744, triad 1799, write 1879]
+  NVIDIA H200 (measured): ceiling 4682.4 GB/s (write), pin 4916.7, ridge 162.81 FLOP/byte, measured 2026-09-02 @ 63de5b9f  [copy 4301, read 4470, triad 4375, write 4682]
+
+  RIDGE PROVENANCE, because C3 is scored against it. Every one of these
+  reports carries ridge=160.3 and ridge_band=[160.3, 176.2], because the
+  sweep's --ridge defaults to RIDGE_BAND[0] and the cross-card driver
+  never passes it. 160.3 is a stale H200 band and belongs to NEITHER
+  card. C3 uses each card's OWN contemporaneous calibration instead:
+    nvidia_a100_sxm4_80gb    ridge 145.81 FLOP/byte  (dense 262.37 TFLOP/s over its own triad bandwidth, measured 2026-09-02)
+    nvidia_h200              ridge 162.81 FLOP/byte  (dense 712.26 TFLOP/s over its own triad bandwidth, measured 2026-09-02)
+  The default itself belongs to another workflow's lane and is reported,
+  not edited, here.
+
+REFUSED, 4 fit(s) -- listed, never defaulted to a number
+  2026-09-01-nvidia_h200-alpha-s deepseek-v2-li G= 1 BN= 64 BM= 32
+      no n=1 tread in this ladder (lowest is n=3); the anchor is a MEASURED single-tile time and there is nothing to substitute for it
+  2026-09-01-nvidia_h200-alpha-s deepseek-v2-li G=16 BN= 64 BM=128
+      no n=1 tread in this ladder (lowest is n=3); the anchor is a MEASURED single-tile time and there is nothing to substitute for it
+  2026-09-01-nvidia_h200-cross-c qwen2-57b-a14b G= 1 BN=256 BM= -1
+      compute reference at BLOCK_M=256 implies 87.7 TFLOP/s, 12.3% of this card's measured 712; it classified every tread in this report and cannot be trusted to have found a memory branch. 0 identifiable ladder(s) in this report are excluded, and its 'not identifiable' verdicts are not evidence about the tile
+  2026-09-02-nvidia_a100_sxm4_80 qwen2-57b-a14b G= 1 BN=256 BM= -1
+      compute reference at BLOCK_M=256 implies 3.6 TFLOP/s, 1.4% of this card's measured 262; it classified every tread in this report and cannot be trusted to have found a memory branch. 0 identifiable ladder(s) in this report are excluded, and its 'not identifiable' verdicts are not evidence about the tile
+
+
+PER-FIT BRACKET. alpha_pub is the report's own alpha-corrected column. The bracket is
+[(B*BW_1 - Act1)/W, (B*BW_ceil - Act1)/W] with B refitted WITHOUT the anchor tread.
+elev is how far the measured n=1 tread stands above the fitted branch, as a fraction of itself.
+
+  card   model        G   BN  st   BM  a_pub     lo     hi  hi@pin    elev  BW_pub   BW_1  in? cap/ridge
+  ------------------------------------------------------------------------------------------------------------
+  a100_s mixtral-8x   1   64   3   32  1.009  0.872  1.000   1.000  +14.3%    1723   1477  OUT     0.252  clip
+  a100_s mixtral-8x   1   64   3   64  0.936  0.897  1.000   1.000   +5.6%    1508   1421   in     0.489  clip
+  a100_s mixtral-8x  16   64   3   32  0.637  0.449  0.580   0.630  +30.1%    2101   1461  OUT     0.489  !bus ~0.558
+  a100_s mixtral-8x  16   64   3   64  0.764  0.641  0.864   0.940  +17.7%    1715   1404   in     0.685
+  a100_s qwen2-57b-   1   64   3   32  0.636  0.581  0.751   0.817   +9.8%    1636   1462   in     0.378
+  a100_s qwen2-57b-   1   64   3   64  0.812  0.737  1.000   1.000  +11.7%    1586   1391   in     0.596  clip
+  a100_s qwen2-57b-   8   64   3   32  0.685  0.464  0.603   0.656  +33.2%    2199   1458  OUT     0.473  !bus ~0.558
+  a100_s qwen2-57b-   8   64   3   64  0.735  0.629  0.870   0.947  +16.9%    1674   1377   in     0.698
+  a100_s qwen2-57b-  16   64   3   32  0.717  0.453  0.594   0.646  +37.7%    2335   1445  OUT     0.484  !bus ~0.558
+  a100_s qwen2-57b-  16   64   3   64  0.720  0.613  0.860   0.937  +17.2%    1662   1360   in     0.716
+  a100_s qwen2-57b-  64   64   3   32  0.659  0.422  0.585   0.636  +36.8%    2184   1370  OUT     0.520  !bus ~0.558
+  a100_s qwen2-57b-  64   64   3  128  0.851  0.864  1.000   1.000   +1.7%     937    913  OUT     1.016  clip
+  h200   mixtral-8x   1  256   4   32  0.900  0.699  0.978   1.000  +23.0%    4363   3358   in     0.281
+  h200   mixtral-8x   1   64   4   32  1.007  0.861  1.000   1.000  +15.2%    3990   3384  OUT     0.228  clip
+  h200   mixtral-8x   1  256   4   64  0.823  0.761  1.000   1.000   +9.1%    3760   3407   in     0.516  clip
+  h200   mixtral-8x   1   64   4   64  0.933  0.842  1.000   1.000  +11.2%    3540   3140   in     0.467  clip
+  h200   mixtral-8x   8   64   4   32  0.710  0.661  0.927   0.974   +7.6%    3637   3350   in     0.297
+  h200   mixtral-8x   8   64   4   64  0.685  0.638  0.975   1.000   +8.1%    3394   3095   in     0.616
+  h200   mixtral-8x  16   64   4   32  0.622  0.645  0.905   0.951   -3.1%    3266   3351  OUT     0.305
+  h200   mixtral-8x  16   64   4   64  0.646  0.615  0.953   1.000   +6.0%    3276   3052   in     0.639
+  h200   mixtral-8x  64   64   4   32  0.639  0.650  0.910   0.956   -1.2%    3337   3360  OUT     0.302
+  h200   mixtral-8x  64   64   4   64  0.731  0.676  1.000   1.000   +8.7%    3420   3102   in     0.581  clip
+  h200   qwen2-57b-   1   64   4   32  0.706  0.680  0.923   0.970   +4.9%    3677   3474   in     0.289
+  h200   qwen2-57b-   1   64   4   64  0.687  0.702  0.969   1.000   +0.2%    3490   3437  OUT     0.560
+  h200   qwen2-57b-   8   64   4   32  0.751  0.672  0.917   0.964  +11.7%    3927   3451   in     0.293
+  h200   qwen2-57b-   8   64   4   64  0.714  0.694  0.971   1.000   +5.2%    3621   3393   in     0.566
+  h200   qwen2-57b-  16   64   4   32  0.685  0.653  0.895   0.941   +5.7%    3676   3441   in     0.301
+  h200   qwen2-57b-  16   64   4   64  0.664  0.669  0.942   0.991   +1.6%    3479   3372  OUT     0.588
+  h200   qwen2-57b-  64   64   4   32  0.654  0.622  0.878   0.923   +5.9%    3585   3344   in     0.316
+  h200   mixtral-8x   1   64   3   32  0.998  0.862  1.000   1.000  +14.3%    3954   3390   in     0.228  clip
+  h200   mixtral-8x   1   64   3   64  0.916  0.904  1.000   1.000   +2.8%    3481   3381   in     0.435  clip
+  h200   mixtral-8x  16   64   3   32  0.657  0.649  0.903   0.949   +1.7%    3454   3378   in     0.303
+  h200   mixtral-8x  16   64   3   64  0.735  0.693  0.977   1.000   +7.1%    3624   3345   in     0.567
+  h200   qwen2-57b-   1   64   3   32  0.709  0.687  0.919   0.966   +4.4%    3707   3522   in     0.286
+  h200   qwen2-57b-   1   64   3   64  0.692  0.704  0.968   1.000   +0.6%    3517   3451  OUT     0.558
+  h200   qwen2-57b-   8   64   3   32  0.712  0.675  0.904   0.951   +6.4%    3780   3516   in     0.291
+  h200   qwen2-57b-   8   64   3   64  0.723  0.688  0.970   1.000   +7.2%    3668   3366   in     0.571
+  h200   qwen2-57b-  16   64   3   32  0.703  0.660  0.892   0.938   +7.3%    3786   3487   in     0.298
+  h200   qwen2-57b-  16   64   3   64  0.675  0.666  0.946   0.995   +3.5%    3518   3347   in     0.590
+  h200   qwen2-57b-  64   64   3   32  0.661  0.638  0.874   0.918   +4.7%    3641   3443   in     0.308
+
+SUMMARY
+  nvidia_a100_sxm4_80gb  (12 fits)
+    anchor above the fitted branch   12 of 12, +1.7% to +37.7% of the measured tread
+    bracket width                    0.103 to 0.263 in alpha (median 0.152)
+    shift from the published point   median 0.065, max 0.193
+    published anchor above the bus   4 of 12
+    what sets the width              the anchor reaches 1378 GB/s and the ceiling is 1879, a 36% window in BW and so in alpha
+  nvidia_h200  (28 fits)
+    anchor above the fitted branch   26 of 28, -3.1% to +23.0% of the measured tread
+    bracket width                    0.096 to 0.338 in alpha (median 0.258)
+    shift from the published point   median 0.096, max 0.153
+    published anchor above the bus   0 of 28
+    what sets the width              the anchor reaches 3362 GB/s and the ceiling is 4682, a 39% window in BW and so in alpha
+
+  READ THE WIDTH AS THE ANSWER, not as a failure of the method. It is the
+  gap between what the kernel achieved at n=1 and what the card can do,
+  and only a DRAM counter closes it. ncu returns ERR_NVGPUCTRPERM on a
+  rented pod and the image's nsys cannot convert its own capture, so no
+  counter-free method identifies the branch's bandwidth and this file does
+  not pretend one does.
+
+  B IS IDENTIFIED AND L IS NOT, which is the whole finding in one line:
+    dropping the anchor tread moves the slope by at most 0.79%,
+    while the level it is divided by is unidentified over the width above.
+
+==============================================================================
+GATES
+==============================================================================
+GATE V1  VALIDITY PASS    the run actually scored something
+                        measured 40 fits over 2 card(s), 4 refusal(s)   gate >= 20 fits on >= 1 card
+GATE V2  VALIDITY PASS    OLS on the published prefix returns the published slope
+                        measured worst relative difference 0.00e+00 at 2026-09-01-nvidia_h200-alpha-surface-s4/mixtral-8x7b G=1 BM=32   gate <= 1e-06
+GATE V3  VALIDITY PASS    every scored fit carries a MEASURED n=1 tread
+                        measured 40 scored with an anchor, 2 refused for want of one   gate no scored fit may have anchor_ms <= 0
+GATE V4  VALIDITY PASS    the poisoned-compute-reference check fires on the known case
+                        measured fired on 2 arm/model pair(s): 2026-09-01-nvidia_h200-cross-card-s3/qwen2-57b-a14b, 2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3/qwen2-57b-a14b   gate >= 2 (the BN=256 arms, whose reference is 43.6x too slow on the A100 and 4.1x on the H200)
+GATE V5  VALIDITY PASS    the anchor rate never exceeds the card's measured ceiling
+                        measured tightest 78.6% at 2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3/mixtral-8x7b G=1 BM=32 (1477 against 1879 GB/s)   gate <= 100%
+GATE V6  VALIDITY PASS    ASSUMPTION A: no branch runs slower than its own anchor
+                        measured 2 of 40 anchors sit below the fitted branch; deepest -1.73 spreads (-3.14% against a 1.82% spread) at 2026-09-01-nvidia_h200-alp/mixtral-8x7b G=16 BM=32   gate within 2 of the arm's own timing spread
+GATE C1  CLAIM    FAIL    every published alpha implies a bandwidth the card has
+                        measured 4 of 40 fits imply more than the pin rate; worst 2335 GB/s against 2039 (114.5%) at 2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3/qwen2-57b-a14b G=16 BM=32   gate 0 fits above the pin rate
+                          2026-09-02-nvidia_a100_sxm mixtral-8x7b   G=16 BM= 32  alpha 0.647 implies   2101 GB/s = 103.1% of pin
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=16 BM= 32  alpha 0.739 implies   2335 GB/s = 114.5% of pin
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=64 BM= 32  alpha 0.679 implies   2184 GB/s = 107.1% of pin
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G= 8 BM= 32  alpha 0.706 implies   2199 GB/s = 107.9% of pin
+                        INVALIDATES: the listed alphas as point estimates. They are not uncertain, they are impossible: no fitted level may move the weight set faster than the bus.
+GATE C2  CLAIM    FAIL    every published alpha lies inside its own anchor bracket
+                        measured 12 of 40 published alpha-corrected values fall outside   gate 0 outside
+                          2026-09-01-nvidia_h200-alp mixtral-8x7b   G= 1 BM= 32  published 1.007 vs bracket [0.861, 1.000]  ABOVE ROOF: alpha > 1 is not a fraction of a weight read
+                          2026-09-01-nvidia_h200-alp mixtral-8x7b   G=16 BM= 32  published 0.622 vs bracket [0.645, 0.905]  BELOW alpha_lo by 0.023 in alpha; the anchor sits -1.73 spreads BELOW its own branch, within noise of lying ON it, so ASSUMPTION A is strained and alpha_lo is inflated -- the interval being tight rather than the published point being wrong
+                          2026-09-01-nvidia_h200-alp mixtral-8x7b   G=64 BM= 32  published 0.639 vs bracket [0.650, 0.910]  BELOW alpha_lo by 0.011 in alpha; the anchor sits -0.70 spreads BELOW its own branch, within noise of lying ON it, so ASSUMPTION A is strained and alpha_lo is inflated -- the interval being tight rather than the published point being wrong
+                          2026-09-01-nvidia_h200-alp qwen2-57b-a14b G= 1 BM= 64  published 0.687 vs bracket [0.702, 0.969]  BELOW alpha_lo by 0.015 in alpha; the anchor sits +0.21 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
+                          2026-09-01-nvidia_h200-alp qwen2-57b-a14b G=16 BM= 64  published 0.664 vs bracket [0.669, 0.942]  BELOW alpha_lo by 0.004 in alpha; the anchor sits +1.85 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
+                          2026-09-01-nvidia_h200-cro qwen2-57b-a14b G= 1 BM= 64  published 0.692 vs bracket [0.704, 0.968]  BELOW alpha_lo by 0.012 in alpha; the anchor sits +0.80 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
+                          2026-09-02-nvidia_a100_sxm mixtral-8x7b   G= 1 BM= 32  published 1.009 vs bracket [0.872, 1.000]  ABOVE ROOF: alpha > 1 is not a fraction of a weight read
+                          2026-09-02-nvidia_a100_sxm mixtral-8x7b   G=16 BM= 32  published 0.637 vs bracket [0.449, 0.580]  ABOVE: the fitted level is too small for the card's bandwidth
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=16 BM= 32  published 0.717 vs bracket [0.453, 0.594]  ABOVE: the fitted level is too small for the card's bandwidth
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=64 BM= 32  published 0.659 vs bracket [0.422, 0.585]  ABOVE: the fitted level is too small for the card's bandwidth
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=64 BM=128  published 0.851 vs bracket [0.864, 1.000]  BELOW alpha_lo by 0.013 in alpha; the anchor sits +3.51 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G= 8 BM= 32  published 0.685 vs bracket [0.464, 0.603]  ABOVE: the fitted level is too small for the card's bandwidth
+                        INVALIDATES: the listed point estimates. The bracket's two ends are a measured time and a measured ceiling; a value outside it is not supported by either.
+GATE C3  CLAIM    PASS    at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge
+                        measured worst 0.716 of the ridge at 2026-09-02-nvidia_a100_sxm/qwen2-57b-a14b G=16 BM=64   gate < 1.000 for every BLOCK_M <= 64 fit
+                          BM= 32  cap/ridge in [0.228, 0.520] over 21 fits
+                          BM= 64  cap/ridge in [0.435, 0.716] over 18 fits
+GATE C4  CLAIM    FAIL    no anchor bracket admits the pooled alpha 0.558
+                        measured 4 of 40 brackets contain 0.558   gate 0 brackets
+                          2026-09-02-nvidia_a100_sxm mixtral-8x7b   G=16 BM= 32  bracket [0.449, 0.580] contains 0.558
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=16 BM= 32  bracket [0.453, 0.594] contains 0.558
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=64 BM= 32  bracket [0.422, 0.585] contains 0.558
+                          2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G= 8 BM= 32  bracket [0.464, 0.603] contains 0.558
+                        INVALIDATES: SURFACE.txt's line "alpha = 0.558 ...: 0 of 12 fits within 0.05". That count is a statement about POINT estimates whose anchor is unidentified; the listed fits are consistent with the pooled value once the anchor is bracketed, so the sentence must be withdrawn or requalified.
+GATE C5  CLAIM    FAIL    re-anchoring moves the published alpha by less than 0.05
+                        measured median shift 0.094 (max 0.193); median bracket width 0.242 (max 0.338)   gate median shift <= 0.05
+                        INVALIDATES: any published alpha quoted to three decimals. The anchor moves the number by more than the precision it is quoted at, so it may only be quoted as an interval.
+
+==============================================================================
+WITHDRAWALS -- published cells and sentences this run says cannot stand
+==============================================================================
+
+W1. 4 published alpha values are IMPOSSIBLE, not uncertain.
+    Their fitted level moves the weight set faster than the memory bus:
+      2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3  mixtral-8x7b G=16 BM=32: alpha 0.647 needs 2101 GB/s on a 2039 GB/s bus
+      2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3  qwen2-57b-a14b G=16 BM=32: alpha 0.739 needs 2335 GB/s on a 2039 GB/s bus
+      2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3  qwen2-57b-a14b G=64 BM=32: alpha 0.679 needs 2184 GB/s on a 2039 GB/s bus
+      2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3  qwen2-57b-a14b G=8 BM=32: alpha 0.706 needs 2199 GB/s on a 2039 GB/s bus
+
+W2. 12 of 40 published alpha-corrected values fall outside their own anchor bracket and may not be quoted as point estimates.
+
+W3. SURFACE.txt's "alpha = 0.558 ...: 0 of 12 fits within 0.05" must be withdrawn or requalified. 4 bracket(s) contain 0.558; the 0-of-12 count is a property of an unidentified anchor, not of the data.
+
+W4. No alpha in this study may be quoted as a number. Every reported alpha carries an anchor interval wider than the precision it is printed at, and this file's `anchor.json` carries the interval per fit.
+
+NOT WITHDRAWN. The BLOCK_M <= 64 arithmetic-intensity cap survives. It is scored at the bracket's most generous alpha, which is the best case for a small tile reaching its roof, and it still caps below the ridge on every fit.
+
+WROTE

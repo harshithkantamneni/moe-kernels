@@ -353,26 +353,102 @@ def bindings_of(attr: str, module_names: Iterable[str] = VLLM_CONFIG_MODULES
     return found
 
 
+def vllm_forced_config(module_names: Iterable[str] = VLLM_CONFIG_MODULES
+                       ) -> dict | None:
+    """The config an override_config context is forcing right now, or None.
+
+    try_get_optimal_moe_config consults get_config() first and a truthy value
+    bypasses both the tuned file and the default ladder, so a row measured under
+    one says nothing about what vLLM would have chosen.
+
+    Returns the DICT rather than a bool because "an override is active" is not
+    the only question asked of it: `forcing_tile_config` has to know whether the
+    active override is the one it just installed, and a bool cannot tell a
+    forced 128 from someone else's forced 64. First truthy answer wins; every
+    binding reads the same module-level global, so they cannot disagree.
+    """
+    for module in bindings_of("get_config", module_names):
+        try:
+            config = module.get_config()
+        except Exception:  # noqa: BLE001
+            # Deliberately broad: a probe that cannot answer must not take a
+            # metered cell down with it. An unanswered probe reads as "no
+            # override", which is the state every unpinned sweep runs in.
+            continue
+        if config:
+            return dict(config)
+    return None
+
+
 def vllm_override_active(module_names: Iterable[str] = VLLM_CONFIG_MODULES
                          ) -> bool:
     """Is an override_config context in force right now?
 
-    try_get_optimal_moe_config consults get_config() first and a truthy value
-    bypasses both the tuned file and the default ladder, so a row measured under
-    one says nothing about what vLLM would have chosen. Asked directly rather
-    than inferred from the config's shape, because a forced tile can be
-    identical to the one that would have been picked anyway.
+    Asked directly rather than inferred from the config's shape, because a
+    forced tile can be identical to the one that would have been picked anyway.
     """
-    for module in bindings_of("get_config", module_names):
-        try:
-            if module.get_config():
-                return True
-        except Exception:  # noqa: BLE001
-            # Deliberately broad: a probe that cannot answer must not take a
-            # metered cell down with it. An unanswered probe reads as "no
-            # override", which is the state every sweep in this study runs in.
-            continue
-    return False
+    return vllm_forced_config(module_names) is not None
+
+
+class ForceTileNotHonoured(RuntimeError):
+    """A tile was forced onto a path that did not take it.
+
+    Raised rather than measuring the cell anyway. The whole value of pinning is
+    that a row can be read as "the kernel ran THIS tile"; a cell that was asked
+    to pin and did not, measured anyway, produces a row that claims exactly that
+    and is wrong -- which is worse than the unpinned sweep it replaced, because
+    the unpinned sweep at least records vLLM's own choice honestly.
+
+    Lives here, beside the probes it is raised by, so `moe.bench.force_tile`
+    (which owns the policy) depends on this module and not the other way round.
+    """
+
+
+@contextmanager
+def forcing_tile_config(config: dict,
+                        module_names: Iterable[str] = VLLM_CONFIG_MODULES):
+    """Run everything inside this context under EXACTLY `config`.
+
+    vLLM's own hook, probed rather than imported from a fixed path, exactly as
+    `scripts/tile_sweep.find_override` and `block_m_crossing_sweep.find_override`
+    probe it: the import path has moved between versions and a wrong guess
+    forces nothing while looking installed.
+
+    THEN VERIFIED, which is the part those scripts do differently and the reason
+    this one exists. `block_m_crossing_sweep` proves the override took by
+    counting Triton artefacts per setting (its gate 0); a sweep cannot, because
+    it runs one setting. So the check here is direct: after entering, ask
+    get_config() what vLLM would now hand its kernel and refuse if it is not
+    what we asked for. Entering a context and assuming it took is how
+    MOE_FORCE_TILE came to be set for a whole session with nothing reading it.
+
+    Compared key by key rather than as whole dicts: a future vLLM that copies
+    the override and adds a key of its own would still be honouring every value
+    that was forced, and refusing that would be a false alarm. A value that came
+    back changed or missing is not.
+
+    Yields the dotted name of the hook that took, so a caller can print WHICH
+    binding was used rather than asserting one.
+    """
+    holders = bindings_of("override_config", module_names)
+    if not holders:
+        raise ForceTileNotHonoured(
+            f"vLLM exposes no override_config in any of {list(module_names)}, "
+            f"so no tile can be forced in this process. Check the installed "
+            f"version: try_get_optimal_moe_config reads it through get_config(), "
+            f"so the hook exists under some name.")
+    module = holders[0]
+    wanted = dict(config)
+    with module.override_config(wanted):
+        seen = vllm_forced_config(module_names)
+        mismatch = (seen is None or
+                    any(seen.get(k) != v for k, v in wanted.items()))
+        if mismatch:
+            raise ForceTileNotHonoured(
+                f"{module.__name__}.override_config was entered with {wanted} "
+                f"but get_config() reports {seen!r}. The kernel would run a "
+                f"tile nobody asked for while every row claimed the forced one.")
+        yield f"{module.__name__}.override_config"
 
 
 @contextmanager

@@ -15,6 +15,21 @@ on every row of the run.
     python -m moe.bench.cli --profile trace-replay \\
         --models deepseek-v2-lite \\
         --routings uniform,trace:deepseek-v2-lite-chat-decode@b3l17
+
+MOE_FORCE_TILE pins the Triton tile for the whole run instead of letting vLLM's
+ladder step it with the token count. It is an environment variable rather than a
+flag because `scripts/pod_session.sh` and `docs/POD_RUNBOOK.md` already document
+it as one, and because it must reach every venv `moe.runner.subproc` spawns:
+
+    MOE_FORCE_TILE='{"BLOCK_SIZE_M":128,"BLOCK_SIZE_N":128,"BLOCK_SIZE_K":64,
+                     "GROUP_SIZE_M":1,"num_warps":8,"num_stages":4}' \\
+        python -m moe.bench.cli --profile crossing-uniform --env vllm \\
+               --groups baselines --impl vllm_fused_experts
+
+Exit codes, so a shell can tell a falsified prediction from a broken instrument:
+0 ran, 1 the plan is invalid, 2 nothing to benchmark, 3 a tile was forced and no
+cell in the run stands under it, 4 a cell ran pinned and its row did not show
+the pin. See moe/bench/force_tile.py.
 """
 from __future__ import annotations
 
@@ -27,6 +42,8 @@ from pathlib import Path
 import moe
 
 from ..spec import MODEL_CONFIGS, RoutingSpec
+from ..stages import registry
+from . import force_tile as FT
 from . import profiles as PR
 from . import timing as T
 from .driver import RunConfig, run_sweep
@@ -207,7 +224,41 @@ def time_limited(cells, max_minutes: float | None):
               "stopping cleanly. Re-run with the same --run-id to resume.")
 
 
-def dry_run(profile: PR.Profile, args, traces) -> int:
+def force_tile_plan(forced: FT.ForcedTile | None, impls) -> tuple[list[str], bool]:
+    """What the pin would do to this plan, printed BEFORE anything is spent.
+
+    Returns the lines and whether the plan is honourable at all. A plan where
+    nothing can be pinned is not a warning: it is the exact state the
+    2026-09-01 session ran in for 54 minutes, and the dry run is the review step
+    that was supposed to catch it.
+
+    Off the GPU box no framework span registers, so a laptop dry run always
+    reports "nothing can pin this". That is honest rather than a nuisance: it is
+    also what the run would do on a pod where the vLLM import failed.
+    """
+    if forced is None:
+        return [], True
+    can, cannot = FT.split_by_pinnability(impls)
+    lines = [f"\nforced tile     {forced.describe()}",
+             f"  resume key    {forced.fingerprint()} (in every manifest key, "
+             f"so a pinned run cannot resume an unpinned one)"]
+    if can:
+        lines.append(f"  CAN PIN       {', '.join(can)}")
+    if cannot:
+        lines.append(f"  CANNOT PIN    {', '.join(cannot)}")
+        lines.append("                those cells are RECORDED AND SKIPPED, "
+                     "never measured unpinned")
+    if not can:
+        lines.append(
+            f"\nREFUSED: {FT.ENV_VAR} is set and no implementation in this plan "
+            f"can honour it, so the run would measure nothing pinned. Either "
+            f"unset it, or point the sweep at the vLLM span: --env vllm "
+            f"--groups baselines --impl vllm_fused_experts, inside the vllm "
+            f"venv. Off the GPU box no framework span registers at all.")
+    return lines, bool(can)
+
+
+def dry_run(profile: PR.Profile, args, traces, forced=None) -> int:
     """Print what a sweep would do. All computation lives in profiles.plan()."""
     p = PR.plan(profile, env=args.env, impl_filter=tuple(args.impl),
                 include_reference=args.include_reference, traces=traces)
@@ -263,12 +314,30 @@ def dry_run(profile: PR.Profile, args, traces) -> int:
         print("\nNothing to benchmark: no non-reference implementations are "
               "registered. Write a kernel in moe/kernels/ (see TEMPLATE.md).")
 
+    # `registry()[name]` rather than a second call to candidate_impls, so this
+    # cannot describe a different implementation set from the one just planned.
+    lines, honourable = force_tile_plan(forced, [registry()[n] for n in p.impls])
+    for line in lines:
+        print(line)
+
     print("\nNo GPU was used. Nothing was spent.")
-    return 0 if p.ok else 1
+    return 0 if (p.ok and honourable) else 1
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+
+    # BEFORE bootstrap, which imports vLLM and costs ~20 s on the pod: a
+    # mistyped tile config should cost nothing at all. SystemExit rather than a
+    # traceback for the reason parse_routing gives -- this is argument handling,
+    # and the message is the useful part.
+    try:
+        forced = FT.from_env()
+    except FT.ForceTileMalformed as e:
+        # str(e), not a wrapped message: every refusal in force_tile already
+        # names the variable and says what to do instead.
+        raise SystemExit(str(e)) from None
+
     moe.bootstrap(*[g.strip() for g in args.groups.split(",") if g.strip()])
 
     if args.list_impls:
@@ -282,13 +351,13 @@ def main(argv=None) -> int:
     routing, routing_info, traces = build_routing_source(args)
 
     if args.dry_run:
-        return dry_run(profile, args, traces)
+        return dry_run(profile, args, traces, forced)
 
     cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
                   warmup=profile.warmup, trials=profile.trials,
                   iters=profile.iters, l2_modes=profile.l2_modes,
                   graph_modes=profile.graph_modes, routing_info=routing_info,
-                  **measured_ceilings())
+                  force_tile=forced, **measured_ceilings())
     if args.run_id:
         cfg_kw["run_id"] = args.run_id
     cfg = RunConfig(**cfg_kw)
@@ -305,11 +374,68 @@ def main(argv=None) -> int:
     print(f"[cli] env={args.env} {info['env_version']} "
           f"gpu={info.get('gpu_name', 'none')}")
 
+    if forced is not None:
+        # BEFORE the sweep, and a refusal here costs nothing: the alternative is
+        # discovering after 22 GB of weights and an fp32 oracle that the plan
+        # contained no span able to honour the pin, which is the shape of the
+        # 2026-09-01 session.
+        lines, honourable = force_tile_plan(forced, planned_impls(args))
+        for line in lines:
+            print(line)
+        if not honourable:
+            return 3
+        print("[cli] gates registered before the run, with their thresholds:")
+        for gid, claim, _, threshold, _ in cfg.force_tile_ledger.gates():
+            print(f"[cli]   {gid}  {claim}: {threshold}")
+
     started = time.time()
     path = run_sweep(cells, cfg, routing, info=info)
     print(f"[cli] run_id={cfg.run_id} elapsed={time.time() - started:.1f}s")
+    # The JSON line first: moe.runner.subproc parses it out of stdout and a
+    # non-zero exit below must not cost the caller the paths it needs to resume.
     print(json.dumps({"csv": str(path), "manifest": str(cfg.manifest_path),
                       "run_id": cfg.run_id}))
+    return force_tile_verdict(forced, cfg.force_tile_ledger)
+
+
+def planned_impls(args) -> list:
+    """The spans this invocation would benchmark, filtered exactly as
+    `profiles.cells` filters them, so the pinning report cannot describe an
+    implementation set the sweep does not use."""
+    impls = PR.candidate_impls(env=args.env,
+                               include_reference=args.include_reference)
+    keep = tuple(args.impl)
+    return [s for s in impls if not keep or s.name in keep]
+
+
+def force_tile_verdict(forced, ledger) -> int:
+    """The run's exit code, once the pin has been accounted for.
+
+    NON-VACUITY, and it is the whole reason the ledger counts anything. A sweep
+    that was asked to pin and pinned nothing writes rows nobody can quote as
+    pinned, and every check downstream of it examines zero pinned rows and
+    reports zero failures -- which is exactly how MOE_FORCE_TILE stayed set for
+    a whole session with nothing reading it. So that state exits non-zero and
+    says which of the two shapes it is.
+    """
+    if forced is None:
+        return 0
+    for gid, claim, measured, threshold, ok in ledger.gates():
+        print(f"[force-tile] GATE {gid}  {claim}: {measured} against "
+              f"{threshold}  {'PASS' if ok else 'FAIL'}")
+    if ledger.unobserved:
+        print(f"REFUSED (4): {len(ledger.unobserved)} implementation(s) ran "
+              f"under {FT.ENV_VAR} and produced no row showing that tile. No "
+              f"number from this run may be quoted as tile-pinned. See the NOT "
+              f"HONOURED lines above.")
+        return 4
+    if ledger.vacuous():
+        print(f"REFUSED (3): {FT.ENV_VAR} was set and not one cell of this run "
+              f"stands under it ({ledger.skipped_cells} cells were skipped as "
+              f"unpinnable). Point the sweep at the vLLM span -- --env vllm "
+              f"--groups baselines --impl vllm_fused_experts, inside the vllm "
+              f"venv -- or unset the variable to sweep vLLM's own ladder.")
+        return 3
     return 0
 
 

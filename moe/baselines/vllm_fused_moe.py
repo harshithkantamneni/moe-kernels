@@ -31,6 +31,7 @@ from ..stages import StageSpan, register
 from ..state import MoEState
 from ._framework_config import (
     TileCapture,
+    forcing_tile_config,
     recording_tile_config,
     tile_meta_from_capture,
     vllm_call_kwargs,
@@ -146,6 +147,28 @@ class VllmFusedExperts(StageSpan):
         # Asked after the recorder is restored, and asked rather than inferred:
         # a forced tile can be identical to the one vLLM would have chosen.
         return tile_meta_from_capture(capture, vllm_override_active())
+
+    def force_tile_config(self, config: dict):
+        """Run this span under a tile chosen from outside it. THE PINNING HOOK.
+
+        `moe.bench.force_tile` looks this method up by name and the driver keeps
+        it open across the whole cell -- correctness check, tile observation and
+        every timed trial -- so the tile the fp32 oracle validated is the tile
+        that was timed.
+
+        THIS SPAN IS THE ONLY ONE THAT HAS IT, and that is a statement about the
+        kernels rather than about effort: torch's grouped GEMM is CUTLASS, whose
+        tile is fixed at 64 by the wgmma instruction shape (claim C1), and
+        SGLang selects through a tuning tree this harness has never probed. A
+        span without this method is refused a pin rather than quietly running
+        unpinned; see rule 2 in moe/bench/force_tile.py.
+
+        Nothing here writes a tile column. `observe_tile_config` above still
+        reads the config back out of vLLM during a real call, and the driver
+        compares what it read against what was forced -- so a pinned row is
+        evidence the kernel ran that tile, not evidence that a variable was set.
+        """
+        return forcing_tile_config(config)
 
     def __call__(self, st: MoEState) -> None:
         x, topk_ids, topk_weights = st.require("x", "topk_ids", "topk_weights")

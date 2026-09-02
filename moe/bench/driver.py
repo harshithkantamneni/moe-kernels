@@ -21,6 +21,7 @@ import traceback
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 import torch
@@ -32,6 +33,7 @@ from ..spec import BenchSpec
 from ..stages import BASE_ENV
 from ..state import MoEState
 from . import bytes_model as BM
+from . import force_tile as FT
 from . import schema as SC
 from . import timing as T
 from .roofline import Hardware
@@ -120,6 +122,18 @@ class RunConfig:
     hardware: Hardware | None = None
     validate_shapes: bool = True
     device: str = "cuda"
+    #: The tile every cell of this run must be pinned to, from MOE_FORCE_TILE.
+    #: None is the ordinary sweep: vLLM picks its own tile per token count and
+    #: the rows record which one. Set, it becomes part of a cell's identity
+    #: (see _cell_key) and a cell whose implementation cannot honour it is
+    #: recorded rather than measured. moe/bench/force_tile.py has the why.
+    force_tile: FT.ForcedTile | None = None
+    #: Counters the CLI refuses on. Lives on the config because run_sweep hands
+    #: cfg to every cell and nothing else is threaded through all of them; a
+    #: sweep that pinned NOTHING must not exit 0, which is the state the
+    #: 2026-09-01 session shipped in without noticing.
+    force_tile_ledger: FT.ForceTileLedger = field(
+        default_factory=FT.ForceTileLedger)
 
     # Injectable backends. Overridden in tests so the driver's control flow can
     # be verified without CUDA.
@@ -426,12 +440,66 @@ def _emit(writer: SC.CsvWriter, manifest: SC.Manifest, row: SC.Row, key: str,
     return 1
 
 
+def _cell_key(row: SC.Row, pin: FT.CellPin) -> str:
+    """`schema.cell_key` plus the forced tile, when one is active.
+
+    THE PROJECT'S FAILURE MODE 2 and not a hypothetical one: a run id that omits
+    a swept parameter lets a second setting resume the first's manifest, skip
+    every completed cell, and print the first's numbers under the second's
+    label. A forced tile is such a parameter the moment it exists, and the
+    suffix is empty without one, so every existing manifest still resumes
+    byte-for-byte.
+    """
+    return SC.cell_key(row) + pin.key_suffix
+
+
+def _mode_rows(make_row: Callable[[], SC.Row], cfg: RunConfig,
+               pin: FT.CellPin) -> list[tuple[bool, bool, SC.Row, str]]:
+    """One (graph, l2, row, key) per timing mode this cell would measure."""
+    keyed = []
+    for use_graph in cfg.graph_modes:
+        for l2 in cfg.l2_modes:
+            row = make_row()
+            row.l2_flush, row.cuda_graph = l2, use_graph
+            keyed.append((use_graph, l2, row, _cell_key(row, pin)))
+    return keyed
+
+
+def _record_unpinnable(keyed, impl: str, cfg: RunConfig, manifest: SC.Manifest,
+                       pin: FT.CellPin) -> int:
+    """A cell nothing can pin: recorded, printed, counted, and NOT measured.
+
+    No CSV row, on purpose. Nothing ran, so every column of such a row would be
+    a dataclass default -- and a row with `tile_block_m = 0` written during a
+    pinned sweep is indistinguishable from the unpinned rows this whole
+    mechanism exists to keep out of the file. The manifest carries the fact
+    instead, under a status that is deliberately NOT terminal so the same cell
+    is measured normally by any later run without the pin.
+
+    Printed once per implementation rather than once per cell: a dense grid
+    skips thousands of cells on the same two spans, and a line each would bury
+    the summary under its own repetition.
+    """
+    for _, _, _, key in keyed:
+        manifest.record(key, SC.STATUS_FORCE_TILE_UNHONOURABLE, pin.reason)
+    if cfg.force_tile_ledger.record_skip(impl, pin.reason):
+        print(f"[force-tile] NOT MEASURED: {impl} -- {pin.reason}")
+    return 0
+
+
 @torch.no_grad()
 def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
              cfg: RunConfig, routing: RoutingSource,
              writer: SC.CsvWriter, manifest: SC.Manifest,
              info: dict, sha: str, dirty: bool) -> int:
-    """Benchmark one (cell, tiling, target) across the configured timing modes."""
+    """Benchmark one (cell, tiling, target) across the configured timing modes.
+
+    With `cfg.force_tile` set, the whole cell -- correctness check, tile
+    observation and every timed trial -- runs inside the target span's own
+    pinning context, so the tile the fp32 oracle validated is the tile that was
+    timed. A cell no span can pin is recorded rather than measured; see
+    `moe/bench/force_tile.py` for why that is not merely tidiness.
+    """
     pipe = build(pipeline_names, spec=spec)
     span = _resolve_target(pipe, impl)
     if pipe.env not in (cfg.env_name, BASE_ENV):
@@ -439,18 +507,42 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
             f"pipeline needs environment {pipe.env!r} but this process is "
             f"{cfg.env_name!r}; rows would claim a framework that did not run")
 
+    pin = FT.pin_for(cfg.force_tile, pipe.spans, span)
+    make_row = partial(_base_row, spec, pipe, impl, span, cfg, info, sha, dirty)
     # Build every mode key up front. If they are all already done, skip the
     # cell entirely: re-running the fp32 python-loop oracle to produce zero
     # rows is the single most expensive way to resume a sweep.
-    modes = [(g, l2) for g in cfg.graph_modes for l2 in cfg.l2_modes]
-    keyed = []
-    for use_graph, l2 in modes:
-        row = _base_row(spec, pipe, impl, span, cfg, info, sha, dirty)
-        row.l2_flush, row.cuda_graph = l2, use_graph
-        keyed.append((use_graph, l2, row, SC.cell_key(row)))
+    keyed = _mode_rows(make_row, cfg, pin)
     if all(key in manifest for _, _, _, key in keyed):
+        if pin.status == FT.PINNED:
+            # Its rows are in the file already, and under THIS pin's key rather
+            # than some other run's, so they count toward the run standing on
+            # something -- but separately, because a session that measured
+            # nothing and a session with nothing left to measure are different
+            # states and only one of them is a failure.
+            cfg.force_tile_ledger.record_resumed()
         return 0
+    if pin.status == FT.UNHONOURABLE:
+        return _record_unpinnable(keyed, impl, cfg, manifest, pin)
+    # Entered per cell rather than once around the sweep so a raising cell
+    # cannot leave an override installed over every cell after it, which is the
+    # same reason `recording_tile_config` restores in a finally.
+    with pin.applied():
+        return _run_modes(spec, pipe, span, impl, keyed, make_row, cfg, routing,
+                          writer, manifest, pin)
 
+
+@torch.no_grad()
+def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
+               make_row: Callable[[], SC.Row], cfg: RunConfig,
+               routing: RoutingSource, writer: SC.CsvWriter,
+               manifest: SC.Manifest, pin: FT.CellPin) -> int:
+    """The measured half of `run_cell`, inside whatever pin is in force.
+
+    Split out only so the pin can wrap it without re-indenting the body; the
+    control flow is unchanged from before pinning existed, and `pin` is inert
+    (`CellPin()` with status "off") on every unpinned sweep.
+    """
     written = 0
     x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
                              reuse_weights=cfg.reuse_weights)
@@ -470,6 +562,21 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
     # real call re-runs the span, and a span covering `router` or `permute`
     # would rewrite the very state _expert_counts reads.
     tile_meta = observe_tile_config(pipe, span, st)
+
+    # RULE 3 of moe/bench/force_tile.py, and the reason the S6a gate means
+    # anything: the pin is honoured only if the row can SHOW it. `tile_meta` is
+    # what the observer read back out of the framework during a real call, so
+    # this compares the tile that ran against the tile that was asked for, and
+    # refuses the cell when they differ or when nothing was observed at all.
+    # The cell is not measured, because a row carrying "vllm_override" that ran
+    # something else is worse than the unpinned sweep this replaced.
+    disagreement = pin.disagrees_with(tile_meta)
+    if disagreement:
+        for _, _, _, key in keyed:
+            manifest.record(key, SC.STATUS_FORCE_TILE_NOT_OBSERVED, disagreement)
+        if cfg.force_tile_ledger.record_unobserved(impl, disagreement):
+            print(f"[force-tile] NOT HONOURED: {disagreement}")
+        return 0
 
     # Cost is scoped to what the timer wraps, and materialisation is taken from
     # THIS tiling rather than from the span in isolation.
@@ -494,11 +601,11 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
         # One row, not four: none of the timing modes ran. capture_status says
         # so explicitly, since the l2_flush/cuda_graph columns would otherwise
         # read as a measured mode that happened to produce no numbers.
-        row = prepare(_base_row(spec, pipe, impl, span, cfg, info, sha, dirty))
+        row = prepare(make_row())
         row.capture_status = "not_timed"
         row.notes = (f"correctness failed (rel={correctness.rel_err:.3e} > "
                      f"{correctness.tol_rel_max:.3e}); not timed")
-        written += _emit(writer, manifest, row, SC.cell_key(row),
+        written += _emit(writer, manifest, row, _cell_key(row, pin),
                          SC.STATUS_CORRECTNESS_FAILED,
                          f"rel={correctness.rel_err:.3e}")
         # Re-running would reproduce this verdict exactly, so every mode key
@@ -617,6 +724,11 @@ def run_cell(spec: BenchSpec, pipeline_names: Sequence[str], impl: str,
 
         written += _emit(writer, manifest, row, key)
 
+    if written and pin.status == FT.PINNED:
+        # Counted where the rows were written, not where the pin was planned:
+        # the question the CLI refuses on is whether anything is IN THE FILE
+        # under this tile, and a plan is not a file.
+        cfg.force_tile_ledger.record_pinned()
     return written
 
 
@@ -665,4 +777,6 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
         finally:
             manifest.close()
     print(f"[driver] wrote {total} rows -> {cfg.csv_path}")
+    for line in cfg.force_tile_ledger.summary(cfg.force_tile):
+        print(line)
     return cfg.csv_path

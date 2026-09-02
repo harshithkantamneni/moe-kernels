@@ -299,11 +299,23 @@ def test_both_timing_modes_produce_comparable_rows(tmp_path):
 
 # --- hardware calibration: the stand-in for unavailable counters -------------
 
+#: The patterns every card must produce. `read_stream` is NOT here: it needs
+#: Triton, and a machine without it records a refusal instead, which is a
+#: legitimate result and not a failed measurement.
+ALWAYS_MEASURED = {"read_reduce", "copy", "triad", "write"}
+
+
 @pytest.mark.slow
 def test_bandwidth_measurement_is_plausible():
     from moe.bench.calibrate import measure_bandwidth
-    results = measure_bandwidth(target_bytes=1 << 30, warmup=3, iters=10, trials=2)
-    assert {r.pattern for r in results} == {"read", "copy", "triad", "write"}
+    refusals = []
+    results = measure_bandwidth(target_bytes=1 << 30, warmup=3, iters=10,
+                                trials=2, refusals=refusals)
+    names = {r.pattern for r in results}
+    assert ALWAYS_MEASURED <= names
+    # The optional one is present OR refused in writing. Neither absent-and-
+    # silent nor present-as-a-zero is allowed.
+    assert ("read_stream" in names) ^ any("read_stream" in r for r in refusals)
     for r in results:
         assert r.gbps > 50, f"{r.pattern} measured {r.gbps:.1f} GB/s, implausible"
         assert 0 < r.ms_p50 and r.ms_min <= r.ms_p50
@@ -326,22 +338,30 @@ def device_reference():
     return hw
 
 @pytest.mark.slow
-def test_read_bandwidth_is_measured_and_not_optimised_away():
-    """A pure read is the closest analogue to streaming expert weights. If the
-    reduction were elided the reported figure would be absurd."""
+@pytest.mark.parametrize("pattern", sorted(("read_reduce", "read_stream")))
+def test_read_bandwidth_is_measured_and_not_optimised_away(pattern):
+    """Every read pattern moves the bytes it claims to.
+
+    Both formulations exist to consume a stream while writing almost nothing,
+    which is exactly the shape a compiler can delete. `read_stream` is the more
+    exposed of the two: its whole design is that nothing but one float per
+    program leaves the kernel.
+    """
     from moe.bench.calibrate import measure_bandwidth
-    read = next(r for r in measure_bandwidth(target_bytes=1 << 30, warmup=3,
-                                             iters=10, trials=2)
-                if r.pattern == "read")
+    results = measure_bandwidth(target_bytes=1 << 30, warmup=3, iters=10,
+                                trials=2)
+    read = next((r for r in results if r.pattern == pattern), None)
+    if read is None:
+        pytest.skip(f"{pattern} was refused on this machine")
     peak = device_reference().bandwidth_bytes_s / 1e9
     # A pure read legitimately exceeds the triad ceiling: 1N against 2R+1W.
     # With the read measured on a 2-D view it reaches ~4472 where triad is
     # 4377, so a 1.02 bound fails on correct hardware. What this guards against
-    # is the reduction being elided entirely, which gives a figure several times
+    # is the loads being elided entirely, which gives a figure several times
     # too high, so the bound is generous on purpose.
     assert read.gbps < peak * 2.0, (
-        f"read measured {read.gbps:.0f} GB/s against a {peak:.0f} ceiling; the "
-        "reduction was probably optimised away")
+        f"{pattern} measured {read.gbps:.0f} GB/s against a {peak:.0f} ceiling; "
+        "the loads were probably optimised away")
     assert read.gbps > peak * 0.4
 
 
@@ -355,12 +375,17 @@ def test_calibration_names_its_ceiling_and_records_every_pattern():
                     settle=False)
     assert cal.ceiling_pattern == "triad"
     assert cal.achieved_bandwidth_gbps == cal.pattern("triad").gbps
-    assert {p.pattern for p in cal.bandwidth_patterns} == {"read", "copy",
-                                                           "triad", "write"}
+    names = {p.pattern for p in cal.bandwidth_patterns}
+    assert ALWAYS_MEASURED <= names <= (ALWAYS_MEASURED | {"read_stream"})
     # the ridge moves with the denominator, so every one is recorded
     ridges = cal.as_dict()["ridge_by_pattern"]
-    assert set(ridges) == {"read", "copy", "triad", "write"}
+    assert set(ridges) == names
     assert all(v > 0 for v in ridges.values())
+    # And the band, because a single ridge is the shape of the whole problem:
+    # triad and the matched read ruler disagree by 2.2% on this card, which is
+    # a whole tile tread at the crossings this study quotes.
+    band = cal.ridge_band()
+    assert band is None or band[0] < band[1]
 
 
 @pytest.mark.slow
@@ -383,6 +408,45 @@ def test_settling_reaches_a_stable_clock():
     if info["settled"]:
         recent = info["clock_history_mhz"][-3:]
         assert (max(recent) - min(recent)) / max(recent) * 100 <= 2.0, recent
+
+
+@pytest.mark.slow
+def test_the_gemm_clock_is_sampled_while_the_gemm_is_running():
+    """The failure this replaces: one sample taken AFTER `time_eager` had
+    synchronised, i.e. with the GPU idle and boosting back up. Across the eleven
+    committed H200 calibrations that field ran 1485-1935 MHz on one card while
+    the achieved rate moved 12%, and `gemm_efficiency_pct` published 87.4% and
+    68.4% for the same kernel.
+
+    Asserted here rather than only in the report because the wrong number was
+    plausible: 1935 MHz is a real clock this part can reach, just not while it
+    is saturating its tensor cores.
+    """
+    from moe.bench.calibrate import measure_bf16_gemm
+    gemm = measure_bf16_gemm(n=2048, warmup=3, iters=10, trials=2)
+    assert gemm.clock is not None, "no clock established for the GEMM"
+    assert len(gemm.clock.samples) >= 3, "two samples cannot disagree"
+    assert all(s > 0 for s in gemm.clock.samples), "a zero is not a clock"
+    assert gemm.sm_clock_mhz == gemm.clock.median_mhz
+    assert gemm.clock.after_idle_mhz > 0, (
+        "the post-hoc sample is kept on purpose: the gap between it and the "
+        "median is the size of the artefact")
+
+
+@pytest.mark.slow
+def test_a_clock_cannot_be_established_without_nvml(monkeypatch):
+    """A typed refusal, not a zero. `ClockState.sample()` returns 0 MHz when the
+    container forbids NVML, and a zero reaching `sustained_peak_tflops` makes
+    the silicon's peak zero and the efficiency infinite, in a yaml where nothing
+    looks wrong."""
+    import moe.bench.timing as T
+    from moe.bench.calibrate import ClockUnavailable, clock_under_load
+
+    monkeypatch.setattr(T.ClockState, "sample",
+                        classmethod(lambda cls: T.ClockState(0, 0)))
+    with pytest.raises(ClockUnavailable, match="usable SM clock samples"):
+        clock_under_load(lambda: None, "probe", samples=3,
+                         seconds_per_sample=0.01)
 
 
 @pytest.mark.slow

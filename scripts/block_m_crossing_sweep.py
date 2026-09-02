@@ -115,6 +115,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import statistics
 import sys
 import time
@@ -143,12 +144,54 @@ RETRACTED_ALPHA = 0.10
 #: slices, and they are what gate 4's worst case is run against.
 ALPHA_BY_BLOCK_M = {64: 0.466, 128: 0.625}
 
-#: The measured H200 ridge, both ends. Three calibrations of the same card
-#: disagree by 9.9% on the compute term, so every absolute statement carries
-#: both -- and here the two ends do not merely widen a band, they change which
-#: TREAD the BLOCK_M=128 crossing lands in (2 at 160.3, 3 at 176.2) and so
-#: change gate 3's prediction from 1.558 to 2.116.
+#: THE 2026-08-26 H200 RIDGE BAND. Three calibrations of that card disagreed by
+#: 9.9% on the compute term, and the two ends do not merely widen a band: they
+#: change which TREAD the BLOCK_M=128 crossing lands in (2 at 160.3, 3 at 176.2).
+#:
+#: IT IS NOT A DEFAULT AND MUST NEVER BECOME ONE AGAIN. `--ridge` used to default
+#: to `RIDGE_BAND[0]` and `scripts/cross_card_surface.sh` never passed `--ridge`,
+#: so all 7 published A100 reports carry ridge=160.3 and ridge_band=[160.3,176.2]
+#: -- a band belonging to NEITHER card. The A100's own contemporaneous
+#: calibration is 262.371/1.79936 = 145.8 and the H200's is 712.259/4.37476 =
+#: 162.8, so every printed `ridge x bandwidth` on the A100 was a hybrid of two
+#: machines. `resolve_ridge` now reads the ATTACHED device's calibration and
+#: REFUSES when there is none; this constant survives only as the hypothesis a
+#: laptop planning run (--dry-run / --self-test) is allowed to assume, where
+#: nothing was measured and so nothing can be mislabelled, and as the value
+#: `scripts/tile_cap_test.py` imports.
 RIDGE_BAND = (160.3, 176.2)
+
+#: What a report says when its ridge is this constant rather than a measurement.
+#: Carried into `report.json` so the provenance cannot be lost between the
+#: printout and the file, which is how 160.3 reached seven A100 reports unnoticed.
+HYPOTHESIS_RIDGE_SOURCE = (
+    "HYPOTHESIS: the 2026-08-26 H200 band, which belongs to no attached device")
+
+#: The card slug a run id carries when no device is attached: every --dry-run
+#: and every --self-test on a laptop. Visible rather than blank, so a laptop
+#: directory cannot be mistaken for the one a pod would write to.
+NO_CARD_SLUG = "nocard"
+
+
+def detect_card_slug() -> str:
+    """Slug for the ATTACHED device, or `NO_CARD_SLUG`.
+
+    Read at run-id time, because the card belongs IN the id. See
+    `default_run_id` for the collision it prevents.
+    """
+    try:
+        import torch
+    except ImportError:
+        return NO_CARD_SLUG
+    try:
+        if not torch.cuda.is_available():
+            return NO_CARD_SLUG
+        name = torch.cuda.get_device_name(0)
+    except Exception:                                   # noqa: BLE001
+        # A driver present but unusable is not a card identity, and naming it
+        # `nocard` keeps the run out of a real card's directory.
+        return NO_CARD_SLUG
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or NO_CARD_SLUG
 
 #: Held fixed so BLOCK_SIZE_M is the only thing that can move. Same values as
 #: `scripts/tile_sweep.py` pins, so the two experiments compose. num_warps=8
@@ -164,20 +207,55 @@ DEFAULT_BLOCK_SIZES = (32, 64, 128, 256)
 #: source so a wave count is never mistaken for something the driver reported.
 DEFAULT_SM_COUNT = 132
 
-#: Gate 3 discriminates rather than confirms: the midpoint between the retracted
-#: prediction (1.10) and the refit one (1.558). A measured ratio above this is
-#: incompatible with alpha=0.10 at any ridge in the band.
-GATE3_DISCRIMINATOR = 1.33
+#: WHAT GATE 3 ACTUALLY TESTS. The midpoint between the retracted alpha (0.10)
+#: and the refit one (0.558), rounded to the value the published gate used.
+#:
+#: The gate used to be phrased as a CROSSING RATIO and scored `1 + alpha_hat`
+#: against 1.33. That "measured" field was an algebraic restatement of a fitted
+#: alpha imported from a DIFFERENT BLOCK_M -- checked against all 22 published
+#: reports that carry one, where measured == 1 + alpha_measured in 22 of 22 and
+#: differs in 0 -- so the ratio was never an observation. Worse, the identity
+#: `R_cross(128)/R_cross(256) = 1 + alpha` holds only if the 128 crossing lands
+#: in tread 2, which at the A100's own alphas it does not in 3 of 6 arms; and
+#: across all of `results/published` the ladder field `crosses` is False 41
+#: times, null 61 times and True ZERO times. No crossing has ever been observed
+#: by this study, so no gate may be phrased as though one was. The gate now
+#: reports the fitted alpha itself, against this threshold.
+GATE3_ALPHA_DISCRIMINATOR = 0.33
+
+#: The same threshold in the ratio units the published gate printed. Kept so the
+#: old verdict can be recomputed from a new report, and so `1 + alpha` never has
+#: to be reconstructed by a reader guessing at what was compared.
+GATE3_DISCRIMINATOR = 1.0 + GATE3_ALPHA_DISCRIMINATOR
 
 #: Gate 2 asks a direction, and a direction needs a magnitude or noise answers
 #: it. 1.5x at the largest common rows-per-expert is 5x the worst per-cell
 #: timing spread this harness has produced.
 GATE2_RATIO = 1.5
 
-#: Gate 4 passes when BLOCK_M=64 never gets near the roof. The model says it
-#: tops out at cap/ridge = 0.716; 0.85 leaves room for the fused layer's
-#: non-GEMM work without leaving room for an actual crossing.
+#: LEGACY, AND A UNIT ERROR. Gate 4 used to score `top > 0.85` where `top` is a
+#: fraction of the ARM'S OWN measured plateau, while the 0.85's stated rationale
+#: (cap/ridge = 0.716, "leaves room for the fused layer's non-GEMM work") is a
+#: fraction of PEAK COMPUTE. Those are not the same denominator: across the 14
+#: s3 reports the plateau is 50.5-71.8% of ridge x bandwidth and swings
+#: 145.7-198.4 TFLOP/s inside ONE A100 session, so in the gate's own units the
+#: model ceiling for the arm that "failed" it is 1.42 and 0.891 was never
+#: evidence against anything. The two FAILs it ever produced are both qwen2 at
+#: GROUP_SIZE_M=64, where the BLOCK_M=256 reference -- the plateau, the
+#: DENOMINATOR -- drops to 41.36 rows/ms against 45.1-45.7 elsewhere while
+#: BLOCK_M=64 is unchanged. That is a denominator artefact, not a crossing.
+#:
+#: `gate_4_no_crossing` now works in fractions of `ridge x bandwidth` on BOTH
+#: sides and derives its threshold per run from the two worlds it separates.
+#: This constant is retained only because `scripts/tile_cap_test.py` imports it.
 GATE4_ROOF_FRACTION = 0.85
+
+#: The two worlds gate 4 separates must actually be apart before a verdict means
+#: anything. At alpha=0.558 the BLOCK_M=64 ceiling is cap/ridge = 0.70 (H200) or
+#: 0.79 (A100) and the retracted alpha=0.10 puts it at 1.00, a gap of 0.21-0.30.
+#: Below this the gate is not discriminating between them and says so instead of
+#: scoring.
+GATE4_MIN_SEPARATION = 0.10
 
 #: A tread whose top throughput is this close to the plateau is compute bound.
 COMPUTE_BOUND_FRACTION = 0.95
@@ -754,6 +832,204 @@ MEMORY_BRANCH_MARGIN = 0.02
 PARALLEL_BRANCH_TOLERANCE = 0.15
 
 
+#: How far ABOVE `ridge x bandwidth` a qualified compute reference is allowed to
+#: sit, as a fraction of the roof.
+#:
+#: A compute branch cannot run faster than the compute roof, so the physical
+#: bound is 1.0 and everything past it is slack for the ruler. The slack is
+#: taken from the study's own ridge band: three calibrations of the same H200
+#: disagreed by 9.9% on the compute term, so a reference within 10% of the roof
+#: is inside the calibration's disagreement with itself. Beyond that the arm is
+#: claiming to beat its card, which means the roof belongs to a different
+#: machine or the FLOP count is wrong -- and both make every roof fraction, every
+#: membership decision and every alpha in the report meaningless.
+REFERENCE_ROOF_CEILING = 1.10
+
+#: How much SLOWER than the fastest smaller block size, at a matched
+#: exactly-full row count, a compute reference may be.
+#:
+#: At `r = n BM` there is no padding at any block size on the grid, so at a
+#: matched `r` every block size does IDENTICAL useful arithmetic, and the larger
+#: tile additionally does strictly FEWER weight re-reads (`Q(n)` falls as `n`
+#: falls). Under the model the larger tile can therefore only be faster. Slower
+#: at all is the model failing; the tolerance covers the timing spread and the
+#: coarser wave quantum a big tile leaves at the end of a launch. 1.25 is set
+#: above the worst value any sound published reference reaches -- 1.094, over 24
+#: references on two cards -- and 4.6x below the smallest corrupt one, 5.723.
+REFERENCE_LEVEL_TOLERANCE = 1.25
+
+
+#: Maximum shared memory ONE thread block may opt into, in bytes, by compute
+#: capability. Not the per-SM total: a CTA cannot exceed these however much the
+#: SM holds. sm_80 has 164 KiB per SM and lets a block take 163; sm_90 has 228
+#: and lets a block take 227. UNKNOWN CAPABILITIES ARE NOT DEFAULTED. A missing
+#: entry makes the shared-memory verdict "unknown", never "fits", because a
+#: guessed limit that is too generous is exactly the failure this table exists
+#: to catch.
+SMEM_PER_BLOCK_BYTES: dict[tuple[int, int], int] = {
+    (7, 0): 98304,      # V100
+    (7, 5): 65536,      # T4
+    (8, 0): 166912,     # A100
+    (8, 6): 101376,     # A10 / A40 / RTX 30
+    (8, 9): 101376,     # L4 / L40S / RTX 40
+    (9, 0): 232448,     # H100 / H200
+    (10, 0): 232448,    # B200
+}
+
+#: A CUDA thread may address 255 registers, on every architecture this study can
+#: run on. It is not a tuning parameter and there is no opt-in past it.
+MAX_REGISTERS_PER_THREAD = 255
+
+
+@dataclass(frozen=True)
+class TileResources:
+    """What one CTA of a given tile setting must be given, against what exists.
+
+    THE CHECK THAT WOULD HAVE STOPPED THE BN=256 ARM BEFORE IT WAS TIMED. Two
+    hard limits, computed from the pinned constants alone, so both are knowable
+    off-GPU before a single cell runs:
+
+      * SHARED MEMORY. Triton multi-buffers the K loop, so one CTA holds
+        `num_stages` copies of the `BM x BK` A tile and the `BK x BN` B tile:
+        `num_stages (BM BK + BK BN) b` bytes. At BM=BN=256, BK=64, bf16 and 3
+        stages that is 192 KiB, which fits an H200's 227 KiB per-block ceiling
+        and does NOT fit an A100's 163 KiB. At 4 stages it is 256 KiB and fits
+        neither -- and in the two published num_stages=4 BN=256 arms the
+        BLOCK_M=256 ladder is simply ABSENT, which is that cliff.
+
+      * REGISTERS. `tl.dot` accumulates in fp32, so one CTA holds a `BM x BN`
+        fp32 accumulator in registers: `BM BN / (32 num_warps)` registers per
+        thread. At BM=BN=256 with num_warps=8 that is 256 per thread against a
+        hardware maximum of 255, so the accumulator ALONE cannot be held and the
+        kernel spills to local memory. This one is card-independent, which is
+        why the setting is slow on BOTH cards; the A100 is 43.6x slow and the
+        H200 only 3.92x because only the A100 also blows the shared-memory
+        limit.
+
+    WHY THIS IS A REFUSAL AND NOT A WARNING. A spilled kernel still returns a
+    time, that time still fits a straight line through the origin, and that line
+    still qualified as this study's compute reference at 0.2% error. Every tread
+    in the arm was then classified against a compute branch 44x too steep. The
+    setting has to be refused where it is chosen, not diagnosed afterwards.
+    """
+
+    block_m: int
+    block_n: int
+    block_k: int
+    num_stages: int
+    num_warps: int
+    dtype_bytes: int
+    smem_bytes: int
+    acc_registers_per_thread: float
+    smem_limit_bytes: int | None
+    capability: tuple[int, int] | None
+
+    @property
+    def registers_fit(self) -> bool:
+        return self.acc_registers_per_thread <= MAX_REGISTERS_PER_THREAD
+
+    @property
+    def smem_fits(self) -> bool | None:
+        """None means the device is unknown, which is not the same as True."""
+        if self.smem_limit_bytes is None:
+            return None
+        return self.smem_bytes <= self.smem_limit_bytes
+
+    @property
+    def refusal(self) -> str:
+        """Empty when the setting may be timed; otherwise why it may not be."""
+        why = []
+        if not self.registers_fit:
+            why.append(
+                f"the {self.block_m}x{self.block_n} fp32 accumulator needs "
+                f"{self.acc_registers_per_thread:.0f} registers per thread at "
+                f"num_warps={self.num_warps}, against a hardware maximum of "
+                f"{MAX_REGISTERS_PER_THREAD}. The accumulator alone does not "
+                "fit, so the kernel spills to local memory and its time is not "
+                "the time of the tiling this sweep is about")
+        if self.smem_fits is False:
+            why.append(
+                f"one CTA needs {self.smem_bytes / 1024:.0f} KiB of shared "
+                f"memory ({self.num_stages} stages x ({self.block_m}x"
+                f"{self.block_k} + {self.block_k}x{self.block_n}) x "
+                f"{self.dtype_bytes} B) against sm_{self.capability[0]}"
+                f"{self.capability[1]}'s {self.smem_limit_bytes / 1024:.0f} KiB "
+                "per-block ceiling")
+        return "; ".join(why)
+
+    def render(self) -> str:
+        smem = f"{self.smem_bytes / 1024:6.0f} KiB"
+        limit = ("      ?" if self.smem_limit_bytes is None
+                 else f"{self.smem_limit_bytes / 1024:6.0f} KiB")
+        return (f"  BLOCK_M={self.block_m:4d}  smem {smem} of {limit}  "
+                f"acc {self.acc_registers_per_thread:5.0f} reg/thread of "
+                f"{MAX_REGISTERS_PER_THREAD}  "
+                + ("REFUSED" if self.refusal else "ok"))
+
+
+def tile_resources(pinned: dict, block_m: int, dtype_bytes: int,
+                   capability: tuple[int, int] | None) -> TileResources:
+    """One CTA's shared-memory and accumulator-register bill for a setting.
+
+    Pure arithmetic on the pinned constants, so `--dry-run` on a laptop prints
+    the same numbers the pod would refuse on.
+    """
+    bn = pinned["BLOCK_SIZE_N"]
+    bk = pinned["BLOCK_SIZE_K"]
+    stages = pinned["num_stages"]
+    warps = pinned["num_warps"]
+    smem = stages * (block_m * bk + bk * bn) * dtype_bytes
+    # fp32 accumulator, one register per element, spread over the CTA's threads.
+    acc = block_m * bn / (32.0 * warps)
+    return TileResources(
+        block_m=block_m, block_n=bn, block_k=bk, num_stages=stages,
+        num_warps=warps, dtype_bytes=dtype_bytes, smem_bytes=smem,
+        acc_registers_per_thread=acc,
+        smem_limit_bytes=SMEM_PER_BLOCK_BYTES.get(capability)
+        if capability else None,
+        capability=capability)
+
+
+def parse_capability(text: str) -> tuple[int, int] | None:
+    """`"9.0"` -> `(9, 0)`. Empty gives None, which means UNKNOWN, not "fine"."""
+    if not text:
+        return None
+    major, _, minor = text.partition(".")
+    return int(major), int(minor or 0)
+
+
+def resolve_capability(args, *, synthetic: bool) -> tuple[int, int] | None:
+    """The attached device's capability, or the one named on the command line.
+
+    A synthetic run has no device, so the shared-memory limit is genuinely
+    unknown there and is REPORTED as unknown. The register ceiling is 255 on
+    every architecture this can run on, so the check that catches the BN=256
+    accumulator still fires on a laptop.
+    """
+    named = parse_capability(args.capability)
+    if named is not None or synthetic:
+        return named
+    try:
+        import torch
+        return tuple(torch.cuda.get_device_capability(0))
+    except Exception:                                   # noqa: BLE001
+        return None
+
+
+def tile_resource_plan(pinned: dict, block_sizes, dtype_bytes: int,
+                       capability: tuple[int, int] | None
+                       ) -> tuple[dict[int, TileResources], dict[int, str]]:
+    """Every block size's bill, and the refusals among them.
+
+    Returned rather than printed so `main` can print it in the plan, drop the
+    refused settings from the sweep, and carry the refusals into the report --
+    three places that must agree, from one computation.
+    """
+    plan = {bm: tile_resources(pinned, bm, dtype_bytes, capability)
+            for bm in block_sizes}
+    return plan, {bm: r.refusal for bm, r in plan.items() if r.refusal}
+
+
 @dataclass(frozen=True)
 class ComputeReference:
     """The compute branch, and the fused layer's fixed cost, from one ladder.
@@ -780,6 +1056,17 @@ class ComputeReference:
     say" is the point; a reference taken from a ladder that was secretly memory
     bound would put `C` at the memory slope and quietly make every block size
     look identifiable.
+
+    SHAPE IS NOT LEVEL, AND THE ORIGINAL QUALIFICATION ONLY TESTED SHAPE. A line
+    44x too steep is still perfectly proportional. In the BN=256 arm the
+    BLOCK_M=256 reference took 249.765 ms for one tile on the A100 against 5.724
+    ms for the identical setting in its BN=64 twin, and qualified at 0.2% mean
+    error, because through-origin residual is scale free. Every tread in the arm
+    was then classified against that branch, no tread could stand above it, all
+    8 cells came out "not identifiable", and the arm printed as a boring null.
+    `refusals` carries the LEVEL checks that now have to pass as well, and
+    `refused_block_m` names the ladder they rejected, so a reader can tell a
+    refused reference from a sweep that never had a candidate.
     """
 
     block_m: int | None
@@ -787,6 +1074,29 @@ class ComputeReference:
     slope_per_tile: float | None
     mean_rel_err: float
     note: str
+    #: The ladder the level checks REJECTED, when they rejected one. None both
+    #: when a reference qualified and when no candidate existed at all, which is
+    #: why `refusals` and not this field is what says a refusal happened.
+    refused_block_m: int | None = None
+    #: One line per failed level check, empty when the reference is usable.
+    refusals: tuple[str, ...] = ()
+    #: `C` at the roof over `C` measured: the fraction of `ridge x bandwidth`
+    #: the reference ladder actually reached. 1.0 is the roof, and 0.013 is what
+    #: the corrupt A100 BN=256 reference reached.
+    roof_fraction: float | None = None
+    #: `C` scaled to the smallest swept block size, over one full weight read.
+    #: At or above 1 the reference makes memory-boundness impossible everywhere.
+    vacuity_ratio: float | None = None
+    #: Worst `t_reference(r) / min t_smaller(r)` over matched exactly-full row
+    #: counts, and how many such comparisons there were. A zero count means the
+    #: cross-ladder level check EXAMINED NOTHING and must not read as a pass.
+    level_ratio: float | None = None
+    level_comparisons: int = 0
+
+    @property
+    def refused(self) -> bool:
+        """A candidate existed and the level checks threw it out."""
+        return bool(self.refusals)
 
     def slope_for(self, block_m: int) -> float | None:
         """`C` at another block size, by `C ~ BLOCK_M`."""
@@ -794,8 +1104,176 @@ class ComputeReference:
             return None
         return self.slope_per_tile * block_m / self.block_m
 
+    def render(self) -> list[str]:
+        """The qualification, as numbers against thresholds.
 
-def compute_reference(cells, block_sizes, max_err: float = 0.05
+        Printed whether it passed or failed. The defect this exists to catch was
+        invisible precisely because a refused reference and an uninformative
+        sweep printed the same blanks downstream.
+        """
+        out = [f"  compute reference: {self.note}"]
+        if self.roof_fraction is not None:
+            out.append(
+                f"    LEVEL roof fraction   {self.roof_fraction:8.3f}   "
+                f"gate <= {REFERENCE_ROOF_CEILING:.2f} of ridge x bandwidth "
+                f"(a compute branch cannot beat the roof)")
+        if self.vacuity_ratio is not None:
+            out.append(
+                f"    LEVEL non-vacuity     {self.vacuity_ratio:8.3f}   "
+                "gate <  1.00 of one full weight read, scaled to the smallest "
+                "block size (at or above, NO tread anywhere can be memory "
+                "bound and every alpha is unidentifiable by construction)")
+        if self.level_comparisons:
+            out.append(
+                f"    LEVEL vs smaller BM   {self.level_ratio:8.3f}   "
+                f"gate <= {REFERENCE_LEVEL_TOLERANCE:.2f} at matched "
+                f"exactly-full rows, over {self.level_comparisons} comparison(s)")
+        else:
+            out.append(
+                "    LEVEL vs smaller BM   NOT CHECKED   no smaller ladder "
+                "shares an exactly-full row count with the reference, so this "
+                "check examined nothing and is not a pass")
+        for why in self.refusals:
+            out.append(f"    REFUSED: {why}")
+        return out
+
+
+def _level_checks(cells, block_sizes, bm: int, c: float, *, cfg, ridge: float,
+                  bandwidth_gbps: float, b: int, pinned: dict | None,
+                  capability) -> tuple[list[str], dict]:
+    """Is the candidate's per-tile slope the RIGHT SIZE, not just the right shape.
+
+    Three independent readings of the same number, returned with the numbers so
+    the report can print them whether they passed or not.
+
+      1. ROOF CEILING. `C` at the roof is `6 E BM F H / (ridge x bandwidth)`.
+         The measured slope cannot be smaller than that: nothing runs faster
+         than the compute roof. Above `REFERENCE_ROOF_CEILING` the ruler belongs
+         to another machine or the FLOP count is wrong.
+
+      2. NON-VACUITY, and this is the one that catches the BN=256 arm. Scale `C`
+         to the SMALLEST swept block size and compare it with ONE FULL WEIGHT
+         READ `L = E 3 F H b / bandwidth`. A tread is memory bound when it
+         stands above the compute branch, and the highest a memory branch can
+         ever sit is `alpha = 1`, one full re-read per tile. So if the scaled
+         compute branch is already at or above `L`, NO tread at ANY block size
+         can be classified memory bound -- the report's blanks are then a
+         property of the reference, not a measurement. Equivalently in roof
+         units the floor is `2 BM_min / (b ridge)`, the smallest block size's
+         own AI cap at alpha=1 over the ridge. The A100 BN=256 reference sits at
+         15.9x this bound and the H200 one at 1.6x; every sound published
+         reference sits between 0.31 and 0.52.
+
+      3. AGAINST THE SWEEP'S OWN SMALLER LADDERS. At `r = n BM` nothing is
+         padded at any block size, so a matched `r` is identical useful
+         arithmetic with strictly fewer weight re-reads for the bigger tile: the
+         reference can only be faster. `REFERENCE_LEVEL_TOLERANCE` is the slack.
+         This check needs no roof and no calibration at all, which is what makes
+         it worth having beside the other two -- and when the reference is the
+         smallest ladder swept there is nothing to compare against, which is
+         reported as NOT CHECKED rather than silently as a pass.
+
+    A tile setting that cannot physically run is checked here too, because a
+    spilled kernel produces a time that is proportional to its tile count and
+    therefore sails through the shape test -- which is exactly how 249.765 ms
+    became this study's compute branch.
+    """
+    why: list[str] = []
+    nums: dict = {"roof_fraction": None, "vacuity_ratio": None,
+                  "level_ratio": None, "level_comparisons": 0}
+
+    if pinned is not None:
+        res = tile_resources(pinned, bm, b, capability)
+        if res.refusal:
+            why.append(
+                f"BLOCK_M={bm} cannot run as pinned: {res.refusal}. Its timing "
+                "is not a measurement of this tiling and must not become the "
+                "compute branch every other ladder is classified against")
+
+    roof_flops = ridge * bandwidth_gbps * 1e9
+    if roof_flops > 0:
+        c_roof = 1e3 * useful_flops(cfg, cfg.num_experts * bm) / roof_flops
+        nums["roof_fraction"] = c_roof / c
+        if nums["roof_fraction"] > REFERENCE_ROOF_CEILING:
+            why.append(
+                f"BLOCK_M={bm} runs at {nums['roof_fraction']:.3f} of "
+                f"ridge x bandwidth, past the {REFERENCE_ROOF_CEILING:.2f} "
+                "ceiling. A compute branch cannot beat the compute roof, so "
+                "either the roof was calibrated on a different machine or the "
+                "FLOP count is wrong; either way nothing downstream is scored "
+                "against a real ceiling")
+
+    if bandwidth_gbps > 0 and block_sizes:
+        bm_min = min(block_sizes)
+        full_read_ms = (1e3 * cfg.num_experts * weight_bytes_per_expert(cfg, b)
+                        / (bandwidth_gbps * 1e9))
+        nums["vacuity_ratio"] = (c * bm_min / bm) / full_read_ms
+        if nums["vacuity_ratio"] >= 1.0:
+            why.append(
+                f"BLOCK_M={bm}'s compute branch scaled to BLOCK_M={bm_min} is "
+                f"{nums['vacuity_ratio']:.3f} of one full weight read. A memory "
+                "branch cannot exceed one full re-read per tile (alpha <= 1), "
+                "so no tread at any block size in this sweep could stand above "
+                "this line: every 'not identifiable' below would be a property "
+                "of the reference and not a measurement")
+
+    ratios = []
+    smaller = [s for s in block_sizes if s < bm]
+    if smaller:
+        ref_pts = dict(ladder_points(cells, bm))
+        others = {s: dict(ladder_points(cells, s)) for s in smaller}
+        for n, t_ref in ref_pts.items():
+            rows = n * bm
+            peers = [pts[rows // s] for s, pts in others.items()
+                     if rows % s == 0 and (rows // s) in pts]
+            if peers and t_ref > 0:
+                ratios.append(t_ref / min(peers))
+    if ratios:
+        nums["level_ratio"] = max(ratios)
+        nums["level_comparisons"] = len(ratios)
+        if nums["level_ratio"] > REFERENCE_LEVEL_TOLERANCE:
+            why.append(
+                f"BLOCK_M={bm} is {nums['level_ratio']:.3f}x slower than the "
+                f"best smaller block size at a matched exactly-full row count, "
+                f"past the {REFERENCE_LEVEL_TOLERANCE:.2f} tolerance, over "
+                f"{len(ratios)} comparison(s). At a matched full stack the "
+                "bigger tile does the same arithmetic and strictly fewer weight "
+                "re-reads, so under the model it cannot be slower at all")
+    return why, nums
+
+
+#: The machine-readable half of "why is this cell blank". Kept as fixed tokens
+#: rather than prose so a downstream table can branch on them; the prose is in
+#: `LadderFit.basis` and in `ComputeReference.render`.
+NOT_IDENTIFIABLE_REFERENCE_REFUSED = "reference_refused"
+NOT_IDENTIFIABLE_NO_REFERENCE = "no_compute_reference"
+NOT_IDENTIFIABLE_TOO_FEW_TREADS = "too_few_memory_treads"
+NOT_IDENTIFIABLE_IS_REFERENCE = "is_the_reference_ladder"
+
+
+def _why_not_identifiable(fit, ref) -> str:
+    """Empty when the fit IS identifiable, else the reason it is not.
+
+    THE CONFLATION THIS EXISTS TO BREAK. All 8 cells of the BN=256 arm printed
+    as blanks under a caption reading "fewer than 3 memory-bound treads". The
+    treads were there; the compute reference was 44x too steep, so nothing could
+    stand above it. Those two states have to be told apart at the row level,
+    because the arm's whole defect was invisible while they were not.
+    """
+    if fit.memory_points >= MIN_MEMORY_TREADS and fit.alpha is not None:
+        return ""
+    if ref is not None and ref.refused:
+        return NOT_IDENTIFIABLE_REFERENCE_REFUSED
+    if ref is not None and ref.block_m == fit.block_m:
+        return NOT_IDENTIFIABLE_IS_REFERENCE
+    if ref is None or ref.block_m is None:
+        return NOT_IDENTIFIABLE_NO_REFERENCE
+    return NOT_IDENTIFIABLE_TOO_FEW_TREADS
+
+
+def compute_reference(cells, block_sizes, max_err: float = 0.05, *,
+                      cfg, ridge: float, bandwidth_gbps: float, b: int,
+                      pinned: dict | None = None, capability=None
                       ) -> ComputeReference:
     """Qualify the largest ladder as a compute branch, or decline.
 
@@ -817,6 +1295,19 @@ def compute_reference(cells, block_sizes, max_err: float = 0.05
     clear a marginally higher line to be called memory bound. That is the
     direction to be wrong in, since every failure this file defends against is a
     tread wrongly called memory bound.
+
+    PROPORTIONALITY IS NECESSARY AND NOWHERE NEAR SUFFICIENT, and believing
+    otherwise cost this study 8 published cells. It is a test of SHAPE and a
+    line 44x too steep has the right shape. `_level_checks` is the test of
+    LEVEL, it runs after the shape test on the same candidate, and a candidate
+    that fails it is REFUSED rather than warned about, because the reference is
+    what every other ladder in the report is classified against: a bad one does
+    not add noise, it decides the answer.
+
+    A REFUSAL DOES NOT FALL THROUGH TO THE NEXT BLOCK SIZE. The next-largest
+    ladder is measured under the same pinned constants on the same card, so the
+    thing that broke the level is very likely still there; taking the runner-up
+    would replace a loud refusal with a quiet, differently-wrong reference.
     """
     for bm in sorted(block_sizes, reverse=True):
         pts = ladder_points(cells, bm)
@@ -835,6 +1326,20 @@ def compute_reference(cells, block_sizes, max_err: float = 0.05
                 "it is not compute bound throughout and cannot provide a "
                 "compute branch. Membership falls back to a split search and NO "
                 "alpha may decide a verdict")
+        why, nums = _level_checks(
+            cells, block_sizes, bm, c, cfg=cfg, ridge=ridge,
+            bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned,
+            capability=capability)
+        if why:
+            return ComputeReference(
+                None, 0.0, None, err,
+                f"BLOCK_M={bm} ladder is proportional to {err:.1%} but its "
+                "LEVEL is wrong, so it is REFUSED as a compute branch. "
+                "Membership falls back to a split search, NO alpha may decide a "
+                "verdict, and every 'not identifiable' in this report is "
+                "CAUSED BY THIS REFUSAL rather than by a sweep that lacked "
+                "treads",
+                refused_block_m=bm, refusals=tuple(why), **nums)
         # Reported, and used only for `alpha_upper` and to shift the compute
         # branch. Clamped at zero because a negative fixed cost is a fitting
         # artefact and subtracting one would inflate every alpha.
@@ -843,7 +1348,8 @@ def compute_reference(cells, block_sizes, max_err: float = 0.05
             bm, max(0.0, intercept), c, err,
             f"BLOCK_M={bm} ladder, {len(pts)} treads, proportional to "
             f"{err:.1%}: compute branch {c:.4f} ms per tile, fixed cost "
-            f"{max(0.0, intercept):.4f} ms")
+            f"{max(0.0, intercept):.4f} ms",
+            **nums)
     return ComputeReference(
         None, 0.0, None, math.inf,
         "no ladder had the 3 treads needed to qualify a compute branch. "
@@ -904,8 +1410,17 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
         basis = (f"membership from the compute branch scaled off "
                  f"BLOCK_M={ref.block_m}")
     else:
-        k, basis = (_best_split(xs, ys, overhead),
-                    "split search: no usable compute reference")
+        # THE TWO WAYS TO HAVE NO REFERENCE ARE NOT THE SAME STATE and printing
+        # them the same way is what hid the BN=256 corruption: 8 cells read as
+        # "not identifiable" under a caption blaming tread count, when the
+        # actual cause was a compute branch 44x too steep. Say which happened.
+        k = _best_split(xs, ys, overhead)
+        basis = ("split search: the compute reference was REFUSED at "
+                 f"BLOCK_M={ref.refused_block_m} on its level, so this ladder "
+                 "is unidentifiable BECAUSE OF THE REFERENCE and not for want "
+                 "of treads"
+                 if ref is not None and ref.refused
+                 else "split search: no usable compute reference")
 
     a = b = None
     if k >= 2:
@@ -984,6 +1499,22 @@ def activation_slope_ms(cfg, block_m: int, bandwidth_gbps: float) -> float:
 
 PASS, FAIL, UNDECIDED = "PASS", "FAIL", "UNDECIDED"
 
+#: A gate about the INSTRUMENT: whether the run is readable at all. Gate 0 is
+#: the only one, and a non-PASS there voids every claim gate below it.
+VALIDITY = "VALIDITY"
+#: A gate about the WORLD: it can be FAILed by hardware without the run being
+#: broken, and a FAIL is a result rather than an error.
+CLAIM = "CLAIM"
+
+#: Where the number in `measured` came from. The distinction exists because
+#: gate 3 printed a "measured" crossing ratio for 22 published reports that was
+#: an algebraic restatement of a fitted alpha imported from a different
+#: BLOCK_M, and the serialized JSON kept only {number, claim, verdict, measured,
+#: gate} -- so nothing in the published file said the ratio was never observed.
+OBSERVED = "OBSERVED"       # read off a timing in this run
+DERIVED = "DERIVED"         # computed from a fit over this run's own timings
+IMPORTED = "IMPORTED"       # computed from a fit over a DIFFERENT setting
+
 
 @dataclass
 class Gate:
@@ -993,9 +1524,18 @@ class Gate:
     measured: str
     threshold: str
     lines: list[str] = field(default_factory=list)
+    #: VALIDITY or CLAIM. Defaults to CLAIM because four of the five are.
+    kind: str = CLAIM
+    #: OBSERVED / DERIVED / IMPORTED, for the number in `measured`.
+    basis: str = OBSERVED
+    #: Machine-readable provenance, serialized beside the verdict. Anything a
+    #: reader would need to tell an observation from a restatement goes here,
+    #: because the printed detail lines do not survive into report.json.
+    provenance: dict = field(default_factory=dict)
 
     def render(self) -> list[str]:
-        out = [f"GATE {self.number}  {self.verdict:9s} {self.claim}",
+        out = [f"GATE {self.number}  {self.verdict:9s} [{self.kind}/"
+               f"{self.basis}] {self.claim}",
                f"          measured {self.measured}   gate {self.threshold}"]
         out += [f"          {line}" for line in self.lines]
         return out
@@ -1032,7 +1572,7 @@ def gate_0_override(compiles: dict[int, int], executed: dict[int, int],
              "Either override_config did not take effect, or TRITON_CACHE_DIR "
              "was warm.",
              "Every gate below is then a comparison of one kernel with itself. "
-             "Do not read them."])
+             "Do not read them."], kind=VALIDITY)
     if resumed:
         return Gate(
             0, "override_config changed the kernel at every setting", UNDECIDED,
@@ -1041,10 +1581,11 @@ def gate_0_override(compiles: dict[int, int], executed: dict[int, int],
              "already in cells.csv.",
              "The compile assay belongs to the session that measured them and "
              "cannot be inherited. Delete cells.csv and re-run to assay it "
-             "again, or read the gates knowing this one was not repeated."])
+             "again, or read the gates knowing this one was not repeated."],
+            kind=VALIDITY)
     return Gate(0, "override_config changed the kernel at every setting", PASS,
                 f"fresh Triton artefacts per setting: {counts}",
-                ">= 1 per setting", [])
+                ">= 1 per setting", [], kind=VALIDITY)
 
 
 def gate_1_steps(cells, cfg, preds, *, alpha: float, ridge: float,
@@ -1174,48 +1715,109 @@ def gate_2_direction(cells, cfg, *, alpha: float, retracted: float, ridge: float
         + detail)
 
 
-def gate_3_crossing_shift(fits, preds_lo, preds_hi, cfg, *, lo: int, hi: int,
-                          alpha_source: str, alpha_hat: float | None) -> Gate:
-    """Does the crossing shift by `Q` between BLOCK_M=128 and 256.
+def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
+                               hi: int, alpha_source: str,
+                               alpha_hat: float | None,
+                               alpha_source_bm: int | None,
+                               ridge_band: tuple[float, float]) -> Gate:
+    """Is the fitted re-read fraction above 0.33, the midpoint of the two worlds.
 
-    `R_cross = ridge b Q(n*) / 2` and the ridge is a property of the card, so
-    the ratio between two block sizes is a ratio of `Q` and nothing else. At
-    BLOCK_M=256 the crossing lands in tread 1 where `Q = 1`, which makes that
-    crossing ALPHA-INDEPENDENT and the natural anchor; the 128 crossing lands in
-    tread 2 at 160.3 (`Q = 1 + alpha`) and in tread 3 at 176.2 (`Q = 1 + 2
-    alpha`), which is why the prediction is quoted at both ends of the ridge
-    band and not as one number.
+    WHAT THIS GATE USED TO CLAIM, AND WHY THAT WAS WITHDRAWN. It was phrased as
+    "the BLOCK_M=128 crossing sits Q above the BLOCK_M=256 one" and its
+    `measured` field was `1.0 + alpha_hat`. That is not a measurement of a
+    crossing ratio; it is the model's identity `R_cross(lo)/R_cross(hi) = 1 +
+    alpha` evaluated at a fitted alpha, and the alpha is usually IMPORTED from a
+    different BLOCK_M because tread 2 at 128 is compute bound under both worlds
+    and so carries no information about re-read. Three things make the old
+    phrasing indefensible rather than merely loose:
 
-    WHAT THIS GATE IMPORTS, and it must be read with it. The measured ratio is
-    `1 + alpha`, and alpha is not identifiable at BLOCK_M=128 on this sweep:
-    tread 2 there is compute bound under BOTH alphas, so its time carries no
-    information about the re-read fraction. The alpha used is therefore measured
-    at a block size where the memory branch has two or more treads, and the
-    source is named in the verdict. `ALPHA_BY_BLOCK_M` says that import costs
-    about 25% either way, which is smaller than the gap this gate is asked to
-    discriminate.
+      * it is ALGEBRA, not evidence. Recomputed over every published report that
+        carries both fields, `measured == 1 + alpha_measured` in 22 of 22 and
+        differs in 0. The gate restated its own input.
+      * the identity needs the 128 crossing to land in tread 2. At the A100's
+        own alphas the model predicts NO CROSSING AT ALL for 3 of 6 arms, so
+        for those the ratio does not exist and 1 + alpha stands for nothing.
+      * NO CROSSING HAS EVER BEEN OBSERVED. Across all of `results/published`
+        the ladder field `crosses` is False 41 times, null 61 times and True
+        zero times. A gate must not be phrased as though one was seen.
+
+    So the claim is now what the arithmetic supports: the fitted alpha exceeds
+    0.33. That is still the discrimination the sweep was built for -- 0.33 is
+    the midpoint between the refit 0.558 and the retracted 0.10, so a PASS is
+    incompatible with the retracted world and a FAIL is incompatible with the
+    refit one -- and it no longer borrows the authority of an observation.
+
+    The crossing ratio the old gate printed is still computed and still
+    reported, under `provenance["restated_crossing_ratio"]`, so an old verdict
+    can be recomputed from a new report. It is labelled as a restatement.
     """
     pred_lo = crossing_ratio(preds_lo, lo, hi)
     pred_hi = crossing_ratio(preds_hi, lo, hi)
-    retracted = crossing_ratio(
-        predictions((lo, hi), RETRACTED_ALPHA, RIDGE_BAND[0]), lo, hi)
+    retracted_ratio = crossing_ratio(
+        predictions((lo, hi), RETRACTED_ALPHA, ridge_band[0]), lo, hi)
     band = []
-    for name, value in (("ridge 160.3", pred_lo), ("ridge 176.2", pred_hi)):
-        band.append(f"{name}: {value:.3f}x" if value else f"{name}: no crossing")
+    for ridge_end, value in zip(ridge_band, (pred_lo, pred_hi), strict=True):
+        band.append(f"ridge {ridge_end:.1f}: {value:.3f}x" if value
+                    else f"ridge {ridge_end:.1f}: no crossing")
+    # An ABSENCE stated from the data rather than from the model, because the
+    # gate's old wording implied a crossing had been watched. `LadderFit.crosses`
+    # is `C > B` read off two FITTED slopes: whether this ladder's own numbers
+    # say a crossing exists at all. It is the weakest form of the claim -- it
+    # does not require the crossing to have been reached -- and even so it has
+    # never once been true: across all of results/published it is False 41
+    # times, null 61 times and True zero times.
+    crossed = sorted(bm for bm, f in fits.items() if f.crosses)
+    undecided_cross = sorted(bm for bm, f in fits.items() if f.crosses is None)
+    observed = (
+        f"ladders whose own fitted slopes imply a crossing exists (C > B): "
+        f"{crossed}; slopes missing at {undecided_cross}" if crossed else
+        "NO ladder's fitted slopes imply a crossing exists (C > B is met "
+        f"nowhere; slopes missing at {undecided_cross}), so nothing here is a "
+        "crossing measurement and no crossing has been observed")
+    claim = f"the fitted re-read fraction alpha exceeds {GATE3_ALPHA_DISCRIMINATOR:.2f}"
+    threshold = (f"> {GATE3_ALPHA_DISCRIMINATOR:.2f} "
+                 f"(midpoint of the refit {ALPHA} and the retracted "
+                 f"{RETRACTED_ALPHA})")
+    provenance = {
+        "tests": "alpha_hat > threshold",
+        "not_an_observed_crossing": True,
+        "observed_crossing_ratio": None,
+        "ladders_whose_slopes_imply_a_crossing": crossed,
+        "ladders_with_a_missing_slope": undecided_cross,
+        "alpha_hat": alpha_hat,
+        "alpha_source": alpha_source,
+        "alpha_source_block_m": alpha_source_bm,
+        "imported_from_another_block_m": (
+            None if alpha_source_bm is None else alpha_source_bm != lo),
+        "restated_crossing_ratio": (
+            None if alpha_hat is None else 1.0 + alpha_hat),
+        "restated_crossing_ratio_note": (
+            "1 + alpha_hat, the model's identity evaluated at the fitted alpha. "
+            "It is what the retired ratio gate printed as 'measured'. It is not "
+            "a measurement and it is only the crossing ratio at all when the "
+            f"BLOCK_M={lo} crossing lands in tread 2."),
+        "model_ratio_ridge_lo": pred_lo,
+        "model_ratio_ridge_hi": pred_hi,
+        "model_ratio_retracted": retracted_ratio,
+        "ridge_band": list(ridge_band),
+    }
     if alpha_hat is None:
-        return Gate(3, f"the BLOCK_M={lo} crossing sits Q above the BLOCK_M={hi} one",
-                    UNDECIDED, "alpha not identifiable at any block size",
-                    f"> {GATE3_DISCRIMINATOR:.2f}x",
+        return Gate(3, claim, UNDECIDED,
+                    "alpha not identifiable at any block size", threshold,
                     ["No ladder had two memory-bound treads, so no block size "
                      "measured the re-read fraction.",
                      "Lower --r-max is not the fix; a block size whose cap is "
                      "below the ridge is. 32 and 64 are those.",
-                     "model predicts " + "   ".join(band)])
-    measured = 1.0 + alpha_hat
-    verdict = PASS if measured > GATE3_DISCRIMINATOR else FAIL
+                     observed,
+                     "model's crossing ratio, for reference only: "
+                     + "   ".join(band)],
+                    basis=DERIVED, provenance=provenance)
+
+    verdict = PASS if alpha_hat > GATE3_ALPHA_DISCRIMINATOR else FAIL
     own = fits.get(lo)
-    if own is not None and own.memory_points >= MIN_MEMORY_TREADS:
-        provenance = (
+    imported = alpha_source_bm is not None and alpha_source_bm != lo
+    if own is not None and own.memory_points >= MIN_MEMORY_TREADS and not imported:
+        provenance_line = (
             f"alpha came from BLOCK_M={lo} itself, over {own.memory_points} "
             f"treads. Tread 2 there sits within a few percent of the compute "
             f"branch -- 256 padded rows against a {preds_lo[lo].crossing_rows:.0f} "
@@ -1223,20 +1825,25 @@ def gate_3_crossing_shift(fits, preds_lo, preds_hi, cfg, *, lo: int, hi: int,
             "this alpha is the most fragile number in the report. Compare it "
             "with the ladders below, which have many more treads.")
     else:
-        provenance = (
-            f"alpha is NOT identifiable at BLOCK_M={lo} on this sweep "
+        provenance_line = (
+            f"alpha is IMPORTED from BLOCK_M={alpha_source_bm}: it is not "
+            f"identifiable at BLOCK_M={lo} on this sweep "
             f"({own.memory_points if own else 0} tread(s) stand above the "
-            f"compute branch, and a verdict needs {MIN_MEMORY_TREADS}), so the "
-            "ratio is imported from a block size where enough do, which is "
-            "where the re-read fraction is measurable at all. "
+            f"compute branch, and a verdict needs {MIN_MEMORY_TREADS}). "
             "ALPHA_BY_BLOCK_M puts the cost of that import at about +/-25%, "
             "which is smaller than the gap being discriminated.")
-    lines = [f"measured ratio is 1 + alpha = 1 + {alpha_hat:.3f}, with alpha "
-             f"{alpha_source}",
-             "model predicts " + "   ".join(band),
-             f"the retracted alpha={RETRACTED_ALPHA} predicts "
-             f"{retracted:.3f}x; the gate is the midpoint of the two worlds",
-             provenance]
+    lines = [
+        f"measured is the FITTED alpha ({alpha_hat:.3f}), {alpha_source}. It "
+        "is not a crossing ratio and no crossing was measured to produce it.",
+        observed,
+        f"the same alpha restates the model's crossing ratio as "
+        f"1 + {alpha_hat:.3f} = {1.0 + alpha_hat:.3f}x, which is what the "
+        "retired ratio gate printed as its 'measured' value. That number is "
+        "algebra over this line, not a second observation.",
+        "model's crossing ratio: " + "   ".join(band),
+        f"the retracted alpha={RETRACTED_ALPHA} would put that ratio at "
+        + (f"{retracted_ratio:.3f}x" if retracted_ratio else "no crossing"),
+        provenance_line]
     for bm, fit in sorted(fits.items()):
         if fit.alpha is not None:
             lines.append(f"  BLOCK_M={bm:3d}  alpha {fit.alpha:.3f} from "
@@ -1245,10 +1852,8 @@ def gate_3_crossing_shift(fits, preds_lo, preds_hi, cfg, *, lo: int, hi: int,
         else:
             lines.append(f"  BLOCK_M={bm:3d}  alpha not identifiable "
                          f"({fit.memory_points} memory-bound tread(s))")
-    return Gate(3, f"the BLOCK_M={lo} crossing sits Q above the BLOCK_M={hi} one",
-                verdict, f"{measured:.3f}x",
-                f"> {GATE3_DISCRIMINATOR:.2f}x (rules out alpha={RETRACTED_ALPHA})",
-                lines)
+    return Gate(3, claim, verdict, f"alpha {alpha_hat:.3f}", threshold, lines,
+                basis=IMPORTED if imported else DERIVED, provenance=provenance)
 
 
 @dataclass(frozen=True)
@@ -1265,6 +1870,16 @@ class Bracketing:
         places this block size's crossing, times a safety factor;
       * SATURATION, the fraction of the modelled AI ceiling the last tread
         reached, since a curve still climbing has not finished rising.
+
+    THE CONTROL IS SCORED AGAINST `ridge x bandwidth`, NOT AGAINST THE RUN'S OWN
+    PLATEAU, and that is the change that makes it a control at all. Against the
+    plateau -- the arm's own maximum -- something always reaches 1.00 by
+    construction, because the plateau IS the maximum, so the control could never
+    fail and the check examined nothing. Against the absolute roof it is a real
+    question, and in all 26 published reports the answer is no: the plateau is
+    46.5-75.6% of that card's own `ridge x bandwidth`, so nothing in any of
+    those sweeps reached a compute roof and none of them was ever entitled to
+    read an absence at BLOCK_M=64 as evidence about BLOCK_M=64.
     """
 
     reached_rows: float
@@ -1273,6 +1888,12 @@ class Bracketing:
     positive_control: int | None
     saturation: float
     last_gain: float
+    #: The best roof fraction any OTHER block size reached, in units of
+    #: `ridge x bandwidth`. Recorded even when it fails the control threshold,
+    #: because "the best anything managed was 0.53" is the diagnosis.
+    best_other_roof_fraction: float = 0.0
+    #: `ridge x bandwidth` in TFLOP/s, the denominator every fraction here uses.
+    roof_tflops: float = 0.0
 
     @property
     def sufficient(self) -> bool:
@@ -1281,10 +1902,15 @@ class Bracketing:
                 and self.saturation >= 0.90)
 
     def lines(self) -> list[str]:
-        control = (f"BLOCK_M={self.positive_control} crossed inside this same "
-                   "grid" if self.positive_control is not None
-                   else "NOTHING crossed in this grid, so the sweep never "
-                        "demonstrated it can detect a crossing at all")
+        control = (f"BLOCK_M={self.positive_control} reached "
+                   f"{self.best_other_roof_fraction:.2f} of ridge x bandwidth "
+                   "inside this same grid"
+                   if self.positive_control is not None
+                   else "NOTHING reached the compute roof in this grid (best "
+                        f"other block size {self.best_other_roof_fraction:.2f} "
+                        f"of ridge x bandwidth = {self.roof_tflops:.0f} "
+                        "TFLOP/s), so the sweep never demonstrated it can "
+                        "detect a crossing at all")
         return [
             f"swept to {self.reached_rows:.0f} rows per expert "
             f"({self.reached_tiles} M-tiles)",
@@ -1297,7 +1923,13 @@ class Bracketing:
 
 
 def bracketing(cells, block_m: int, alpha: float, ridge: float, b: int,
-               fits, plateau: float, safety: float = 2.0) -> Bracketing:
+               fits, roof_tflops: float, safety: float = 2.0) -> Bracketing:
+    """`roof_tflops` is `ridge x bandwidth`, NOT the run's own plateau.
+
+    Passing the plateau here is what made the positive control vacuous: the
+    plateau is the maximum over the same cells the control is read from, so
+    some block size always scores 1.00 against it.
+    """
     pts = ladder_points(cells, block_m)
     reached_tiles = pts[-1][0] if pts else 0
     reached = float(reached_tiles * block_m)
@@ -1309,65 +1941,150 @@ def bracketing(cells, block_m: int, alpha: float, ridge: float, b: int,
     # a fit that lost its memory branch to noise would silently remove the
     # control and turn a real absence into UNDECIDED.
     control = None
+    best_other = 0.0
     for bm in sorted({c.block_m for c in cells}):
         if bm == block_m:
             continue
-        tp_other = _throughput_ladder(cells, bm, plateau)
-        if tp_other and max(v for _, v in tp_other) >= COMPUTE_BOUND_FRACTION:
+        tp_other = _throughput_ladder(cells, bm, roof_tflops)
+        if not tp_other:
+            continue
+        best = max(v for _, v in tp_other)
+        best_other = max(best_other, best)
+        if best >= COMPUTE_BOUND_FRACTION:
             control = bm
     cap = ai_cap(block_m, alpha, b)
     ai = (2.0 * reached / b) / q_of_tiles(max(reached_tiles, 1), alpha) if reached else 0.0
     gain = 0.0
-    tp = _throughput_ladder(cells, block_m, plateau)
+    tp = _throughput_ladder(cells, block_m, roof_tflops)
     if len(tp) >= 2 and tp[-2][1] > 0:
         gain = tp[-1][1] / tp[-2][1] - 1.0
     return Bracketing(reached, reached_tiles, horizon, control,
-                      ai / cap if cap else 0.0, gain)
+                      ai / cap if cap else 0.0, gain,
+                      best_other_roof_fraction=best_other,
+                      roof_tflops=roof_tflops)
 
 
-def _throughput_ladder(cells, block_m: int, plateau: float):
-    """`(tiles, useful throughput as a fraction of the plateau)` per tread."""
+def _throughput_ladder(cells, block_m: int, denominator: float):
+    """`(tiles, useful throughput as a fraction of `denominator`)` per tread.
+
+    The caller chooses the denominator and OWNS what the fraction then means.
+    Gate 4 and `bracketing` pass `ridge x bandwidth`, so their fractions are
+    fractions of peak compute and are comparable across arms and cards. A
+    caller that passes the run's own plateau gets an ARM-RELATIVE number whose
+    denominator moved 145.7-198.4 TFLOP/s inside one A100 session, which is not
+    a quantity any threshold can be stated against.
+    """
     out = []
     for c in sorted((c for c in cells
                      if c.block_m == block_m and c.aligned and c.status == "ok"),
                     key=lambda c: c.tiles_per_expert):
-        if plateau > 0:
-            out.append((c.tiles_per_expert, c.useful_tflops / plateau))
+        if denominator > 0:
+            out.append((c.tiles_per_expert, c.useful_tflops / denominator))
     return out
 
 
+def gate_4_roof_fraction(*, block_m: int, alpha: float, ridge: float, b: int
+                         ) -> tuple[float, float, float]:
+    """`(model ceiling, retracted ceiling, threshold)`, all as fractions of peak.
+
+    Both worlds cap the block size's attainable throughput at `ai_cap / ridge`
+    of `ridge x bandwidth`, CLAMPED AT 1.0 -- a kernel cannot exceed the roof no
+    matter how large its arithmetic intensity, and the retracted alpha puts the
+    BLOCK_M=64 ceiling at 640/163 = 3.9 if the clamp is left out, which would
+    make the midpoint 2.3 and the gate unfailable.
+
+    The threshold is the midpoint of the two, so it is a DISCRIMINATOR in the
+    same sense as gate 3's 0.33: above it the refit's ceiling is violated,
+    below it the retracted world's is not reached.
+    """
+    model = min(ai_cap(block_m, alpha, b) / ridge, 1.0)
+    retracted = min(ai_cap(block_m, RETRACTED_ALPHA, b) / ridge, 1.0)
+    return model, retracted, 0.5 * (model + retracted)
+
+
 def gate_4_no_crossing(cells, fits, *, block_m: int, plateau: float,
-                       alpha: float, ridge: float, b: int, brack: Bracketing
-                       ) -> Gate:
-    """Does BLOCK_M=64 fail to cross at all.
+                       alpha: float, ridge: float, b: int, brack: Bracketing,
+                       roof_tflops: float) -> Gate:
+    """Does BLOCK_M=64 fail to reach the compute roof.
 
-    Two statements of the same thing, one direct and one mechanical, because an
-    absence needs both.
+    BOTH SIDES ARE NOW FRACTIONS OF `ridge x bandwidth`, and that is the fix.
+    The retired form scored `top > 0.85` where `top` was a fraction of the ARM'S
+    OWN measured plateau, while the 0.85's stated rationale (`cap/ridge` = 0.716
+    plus room for the fused layer's non-GEMM work) is a fraction of PEAK
+    COMPUTE. Those denominators differ by the plateau's own shortfall, which
+    across the 14 s3 reports runs 50.5-71.8% of `ridge x bandwidth`; in the
+    gate's own units the model ceiling for the arm that "failed" it is 1.42, so
+    0.891 was never evidence against anything. Both FAILs it ever produced are
+    qwen2 at GROUP_SIZE_M=64, where the BLOCK_M=256 reference that SETS the
+    plateau falls to 41.36 rows/ms against 45.1-45.7 elsewhere while BLOCK_M=64
+    does not move: a denominator artefact, and the same config scored 0.871 FAIL
+    on one run and 0.841 PASS on another.
 
-    DIRECT: the highest fraction of the run's own compute plateau that this
-    block size ever reached. The model caps it at `ai_cap / ridge` = 0.716 and
-    the retracted alpha caps it at 1.0, so the observable separates the worlds
-    without any fitting.
+    WHAT WAS NARROWED AS WELL AS RESCALED. A PASS is only allowed when the sweep
+    demonstrated it could have produced a FAIL -- some OTHER block size actually
+    reached `COMPUTE_BOUND_FRACTION` of `ridge x bandwidth` in this same grid.
+    Without that the gate is a check that examined nothing: an absence measured
+    by an instrument never shown to detect a presence. In every published report
+    to date the plateau itself is 46.5-75.6% of that card's own roof, so no such
+    control existed and the honest verdict there is UNDECIDED, not PASS.
 
-    MECHANICAL: the fitted per-tile memory slope `B` against the per-tile
-    compute slope `C`. `C` is never observed at this block size (that is the
-    prediction), so it is scaled from a block size where it IS observed, using
-    `C ~ BLOCK_M`, which is checked in the consistency block rather than
-    assumed.
+    The arm-relative number the old gate scored is still printed, labelled, as a
+    diagnostic. It is not the verdict.
     """
     fit = fits.get(block_m)
-    tp = _throughput_ladder(cells, block_m, plateau)
-    if not tp or fit is None:
-        return Gate(4, f"BLOCK_M={block_m} never reaches the compute roof",
-                    UNDECIDED, "no aligned cells at this block size", "n/a",
-                    ["The sweep produced no exactly-full tile stack here."])
+    tp = _throughput_ladder(cells, block_m, roof_tflops)
+    model_ceiling, retracted_ceiling, threshold = gate_4_roof_fraction(
+        block_m=block_m, alpha=alpha, ridge=ridge, b=b)
+    separates = retracted_ceiling - model_ceiling >= GATE4_MIN_SEPARATION
+    claim = (f"BLOCK_M={block_m} never reaches the compute roof "
+             "(ridge x bandwidth)")
+    gate_text = (f"< {COMPUTE_BOUND_FRACTION:.2f} of ridge x bandwidth"
+                 + (f", and <= {threshold:.3f} (the midpoint of this run's "
+                    f"ceiling {model_ceiling:.3f} and the rival world's "
+                    f"{retracted_ceiling:.3f})" if separates else
+                    f"; the ceiling test is SKIPPED because this run's ceiling "
+                    f"{model_ceiling:.3f} and the rival's "
+                    f"{retracted_ceiling:.3f} do not separate"))
+    provenance = {
+        "units": "fraction of ridge x bandwidth (peak compute)",
+        "roof_tflops": roof_tflops,
+        "plateau_tflops": plateau,
+        "plateau_over_roof": (plateau / roof_tflops) if roof_tflops else None,
+        "model_ceiling": model_ceiling,
+        "retracted_ceiling": retracted_ceiling,
+        "threshold": threshold,
+        "positive_control_block_m": brack.positive_control,
+        "best_other_roof_fraction": brack.best_other_roof_fraction,
+        "retired_denominator": "the arm's own plateau; see GATE4_ROOF_FRACTION",
+    }
+    if not tp or fit is None or roof_tflops <= 0:
+        why = ("no aligned cells at this block size" if not tp or fit is None
+               else "no roof to measure against: ridge x bandwidth is zero")
+        return Gate(4, claim, UNDECIDED, why, gate_text,
+                    ["The sweep produced no exactly-full tile stack here."
+                     if not tp or fit is None else
+                     "ridge x bandwidth resolved to zero, so every fraction "
+                     "below would divide by nothing. REFUSED."],
+                    provenance=provenance)
     top = max(v for _, v in tp)
-    cap = ai_cap(block_m, alpha, b)
-    lines = [f"predicted ceiling is cap/ridge = {cap:.1f}/{ridge:.1f} = "
-             f"{cap / ridge:.3f} of the roof; the retracted "
-             f"alpha={RETRACTED_ALPHA} predicts 1.000",
-             "throughput per tread as a fraction of the plateau: "
-             + ", ".join(f"n={n}:{v:.2f}" for n, v in tp)]
+    provenance["peak_roof_fraction"] = top
+    arm_top = (max(v for _, v in _throughput_ladder(cells, block_m, plateau))
+               if plateau > 0 else None)
+    provenance["peak_arm_relative_fraction"] = arm_top
+    lines = [
+        f"measured in fractions of ridge x bandwidth ({roof_tflops:.0f} "
+        f"TFLOP/s); the refit caps this block size at cap/ridge = "
+        f"{ai_cap(block_m, alpha, b):.1f}/{ridge:.1f} = {model_ceiling:.3f} "
+        f"and the retracted alpha={RETRACTED_ALPHA} at {retracted_ceiling:.3f}",
+        "throughput per tread as a fraction of that roof: "
+        + ", ".join(f"n={n}:{v:.2f}" for n, v in tp),
+        f"this arm's own plateau is {plateau:.1f} TFLOP/s = "
+        + (f"{plateau / roof_tflops:.1%}" if roof_tflops else "n/a")
+        + " of that roof. Against the plateau this block size peaks at "
+        + (f"{arm_top:.3f}" if arm_top is not None else "n/a")
+        + ", which is the number the retired gate scored against 0.85. It is "
+          "ARM-RELATIVE and it is not the verdict.",
+    ]
     if fit.slope_memory is not None and fit.compute_slope:
         c = fit.compute_slope
         src = ("measured on this block size's own compute-bound treads"
@@ -1378,27 +2095,57 @@ def gate_4_no_crossing(cells, fits, *, block_m: int, plateau: float,
             f"crossing to exist at all, and it is "
             f"{'MET' if c > fit.slope_memory else 'NOT met'}.")
     lines += brack.lines()
-    # Bracketing only governs an ABSENCE. A block size that reached the roof
-    # crossed, and a sweep that watched it happen is bracketed by demonstration
-    # whatever the horizon says, so the undecided path is reserved for the case
-    # it was built for: nothing was seen, and the sweep cannot say whether that
-    # is because there was nothing to see.
-    if top > GATE4_ROOF_FRACTION:
-        return Gate(4, f"BLOCK_M={block_m} never reaches the compute roof",
-                    FAIL, f"peak roof fraction {top:.3f}",
-                    f"<= {GATE4_ROOF_FRACTION:.2f}",
+
+    provenance["worlds_separate"] = separates
+    provenance["reached_roof"] = top >= COMPUTE_BOUND_FRACTION
+    provenance["exceeded_ceiling_midpoint"] = separates and top > threshold
+    if not separates:
+        # Reported, not scored around. Two ceilings that coincide say the run's
+        # own alpha and the rival's put this block size in the same place, so
+        # the ceiling comparison cannot discriminate. The DIRECT question --
+        # did it reach the roof -- still can, and it is asked below.
+        lines.insert(1, f"THE CEILING TEST IS SKIPPED AT BLOCK_M={block_m}: "
+                        f"this run's ceiling {model_ceiling:.3f} and the "
+                        f"retracted world's {retracted_ceiling:.3f} differ by "
+                        f"{retracted_ceiling - model_ceiling:.3f}, under the "
+                        f"{GATE4_MIN_SEPARATION:.2f} needed to tell them "
+                        "apart. Only the direct roof question is scored.")
+
+    # FAIL first, on the DIRECT question, judged by the same criterion the
+    # positive control is judged by so that "reached the roof" means one thing
+    # in this file. A block size that reached the roof crossed, and bracketing
+    # governs an ABSENCE only: a sweep that watched the roof being reached is
+    # bracketed by demonstration whatever the horizon says.
+    if top >= COMPUTE_BOUND_FRACTION:
+        return Gate(4, claim, FAIL, f"peak {top:.3f} of ridge x bandwidth",
+                    gate_text,
                     [f"BLOCK_M={block_m} DID reach the roof, so it crosses and "
-                     "the AI ceiling is not where this study put it."] + lines)
+                     "the AI ceiling is not where this study put it."] + lines,
+                    provenance=provenance)
+    # The weaker falsification, and the one that needs the two worlds to be
+    # apart: the block size did not reach the ROOF but did pass the ceiling its
+    # own alpha puts on it, by more than half the distance to the rival world.
+    if separates and top > threshold:
+        return Gate(4, claim, FAIL, f"peak {top:.3f} of ridge x bandwidth",
+                    gate_text,
+                    [f"BLOCK_M={block_m} stayed below the roof but passed "
+                     f"{threshold:.3f}, the midpoint between its modelled "
+                     f"ceiling {model_ceiling:.3f} and the rival world's "
+                     f"{retracted_ceiling:.3f}. The ceiling is not where this "
+                     "run's alpha puts it."] + lines,
+                    provenance=provenance)
     if not brack.sufficient:
-        return Gate(4, f"BLOCK_M={block_m} never reaches the compute roof",
-                    UNDECIDED, f"peak roof fraction {top:.3f}",
-                    f"<= {GATE4_ROOF_FRACTION:.2f}",
+        # NON-VACUITY. Without a control this gate is an absence reported by an
+        # instrument never shown to detect a presence, and every published
+        # report to date is in exactly this state.
+        return Gate(4, claim, UNDECIDED, f"peak {top:.3f} of ridge x bandwidth",
+                    gate_text,
                     ["THE SWEEP IS NOT BRACKETED, so an absence here is not "
                      "evidence of absence and this gate refuses to score it."]
-                    + lines)
-    return Gate(4, f"BLOCK_M={block_m} never reaches the compute roof",
-                PASS, f"peak roof fraction {top:.3f}",
-                f"<= {GATE4_ROOF_FRACTION:.2f}", lines)
+                    + lines,
+                    provenance=provenance)
+    return Gate(4, claim, PASS, f"peak {top:.3f} of ridge x bandwidth",
+                gate_text, lines, provenance=provenance)
 
 
 # --------------------------------------------------------------------------
@@ -1418,20 +2165,39 @@ class Report:
 def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
             bandwidth_gbps: float, b: int, model_name: str, dtype: str,
             compiles: dict[int, int], executed: dict[int, int],
-            sm_count: int, sm_source: str, pinned: dict | None = None) -> Report:
+            sm_count: int, sm_source: str, pinned: dict | None = None,
+            ridge_band: tuple[float, float] | None = None,
+            ridge_source: str = "", ridge_band_source: str = "",
+            capability=None, card: str = NO_CARD_SLUG) -> Report:
     """Everything between the timings and the verdicts. No GPU, no I/O.
 
     Kept pure and passed only cells so that `--self-test` and the test suite
     exercise the SAME code the pod run prints, rather than a second
     implementation that agrees with it until it does not.
+
+    `ridge_band` IS NOT DEFAULTED TO `RIDGE_BAND`. That module constant is one
+    machine's 2026-08-26 calibration, and defaulting to it is exactly how all 7
+    published A100 reports came to carry a band belonging to neither card. When
+    the caller does not state a band, the band is this run's own single ridge
+    twice over, and the report says so -- a degenerate band is honest about
+    being one calibration, a borrowed band is not.
     """
+    if ridge_band is None:
+        ridge_band = (ridge, ridge)
+    ridge_band = (min(ridge_band), max(ridge_band))
     lines: list[str] = []
     ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
     aligned = [c for c in ok if c.aligned]
     plateau = max((c.useful_tflops for c in aligned), default=0.0)
     noise = statistics.median([c.rel_spread for c in ok]) if ok else 0.0
 
-    ref = compute_reference(ok, block_sizes)
+    # The roof and the pinned tile constants are passed in because the
+    # qualification is a LEVEL test as well as a shape test, and level cannot be
+    # judged without knowing what the card can do. There is no default: a
+    # reference qualified against an unknown ceiling is the defect, not the fix.
+    ref = compute_reference(ok, block_sizes, cfg=cfg, ridge=ridge,
+                            bandwidth_gbps=bandwidth_gbps, b=b,
+                            pinned=pinned or FIXED, capability=capability)
     # The margin scales with what the timing actually did. A fixed 2% was too
     # small at 2% spread: the reference slope carries the same spread, and a
     # compute branch estimated 2% low makes every compute-bound tread stand
@@ -1442,16 +2208,22 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
             for bm in block_sizes}
     fits = {bm: f for bm, f in fits.items() if f.points}
 
-    preds_lo = predictions(block_sizes, alpha, RIDGE_BAND[0], b)
-    preds_hi = predictions(block_sizes, alpha, RIDGE_BAND[1], b)
+    preds_lo = predictions(block_sizes, alpha, ridge_band[0], b)
+    preds_hi = predictions(block_sizes, alpha, ridge_band[1], b)
 
     lines.append("")
     lines.append("PREDICTIONS, stated before the run and not adjusted after it")
     lines.append(f"  alpha {alpha:.3f} (band {ALPHA_BAND[0]}-{ALPHA_BAND[1]}), "
-                 f"{dtype} at {b} bytes, ridge band "
-                 f"{RIDGE_BAND[0]}-{RIDGE_BAND[1]} Op/B")
-    lines.append("  BLOCK_M   AI cap   crossing @ridge 160.3      "
-                 "crossing @ridge 176.2")
+                 f"{dtype} at {b} bytes, ridge {ridge:.1f} Op/B, band "
+                 f"{ridge_band[0]:.1f}-{ridge_band[1]:.1f} Op/B")
+    lines.append(f"  ridge source: {ridge_source or 'NOT STATED by the caller'}")
+    lines.append(f"  ridge band source: "
+                 f"{ridge_band_source or 'NOT STATED by the caller'}")
+    if ridge_band[0] == ridge_band[1]:
+        lines.append("  the band is DEGENERATE: one calibration, so which tread "
+                     "a crossing lands in is not bracketed by this run")
+    lines.append(f"  BLOCK_M   AI cap   crossing @ridge {ridge_band[0]:<10.1f} "
+                 f" crossing @ridge {ridge_band[1]:.1f}")
     for bm in block_sizes:
         p, ph = preds_lo[bm], preds_hi[bm]
         def fmt(pred):
@@ -1465,7 +2237,23 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     if r_lo and r_hi:
         lines.append(f"  128-over-256 crossing ratio: {r_lo:.3f}x at the low "
                      f"ridge, {r_hi:.3f}x at the high one; the retracted "
-                     f"alpha={RETRACTED_ALPHA} says 1.100x")
+                     f"alpha={RETRACTED_ALPHA} says 1.100x. MODEL, not "
+                     "measurement: no crossing has been observed by this study.")
+    # REGISTERED HERE, above the measurement, because both thresholds are
+    # derived from this run's ridge and alpha rather than hardcoded, and a
+    # derived threshold printed only beside its own verdict is a threshold a
+    # reader cannot tell from a threshold chosen after the fact.
+    null_bm = 64 if 64 in block_sizes else min(block_sizes)
+    g4_model, g4_retracted, g4_threshold = gate_4_roof_fraction(
+        block_m=null_bm, alpha=alpha, ridge=ridge, b=b)
+    lines.append(f"  GATE 3 will test alpha > {GATE3_ALPHA_DISCRIMINATOR:.2f} "
+                 f"(midpoint of {alpha:.3f} and {RETRACTED_ALPHA})")
+    lines.append(
+        f"  GATE 4 will test BLOCK_M={null_bm} against the roof in fractions "
+        f"of ridge x bandwidth: this run's ceiling {g4_model:.3f}, the "
+        f"retracted world's {g4_retracted:.3f}, so the gate is "
+        f"{COMPUTE_BOUND_FRACTION:.2f} (reached the roof) and "
+        f"{g4_threshold:.3f} (passed its own ceiling)")
 
     lines.append("")
     lines.append(f"MEASURED  {model_name} {dtype}  {len(ok)} cells, "
@@ -1482,7 +2270,7 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                  "means nothing in the sweep reached a roof and every roof "
                  "fraction is relative to something that is not one.")
     lines.append(f"  per-cell timing spread, median {noise:.2%}")
-    lines.append(f"  compute reference: {ref.note}")
+    lines += ref.render()
     lines.append(f"  {sm_count} SMs ({sm_source}), one resident CTA per SM "
                  "assumed for every wave count")
     if ok:
@@ -1499,9 +2287,17 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     lines.append("  alpha is a LOWER bound (the fused layer's fixed cost sits "
                  "in the denominator); alpha-hi takes that cost out, and "
                  "alpha-corrected also removes activation traffic")
+    if ref.refused:
+        # Said BEFORE the table, because the table is all n/a and a reader who
+        # meets the blanks first will reach for the tread count -- which is what
+        # happened to the BN=256 arm across two cards and eight published cells.
+        lines.append("  EVERY BLANK BELOW IS CAUSED BY THE REFUSED REFERENCE "
+                     f"ABOVE (BLOCK_M={ref.refused_block_m}), not by a shortage "
+                     "of memory-bound treads. Withdraw this arm; do not table "
+                     "it beside arms whose reference qualified.")
     lines.append("  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  "
                  "alpha-hi  B ms/tile  C ms/tile  fit err")
-    alpha_hat, alpha_source = None, ""
+    alpha_hat, alpha_source, alpha_source_bm = None, "", None
     alpha_corrected: dict[int, float] = {}
     for bm in sorted(fits):
         f = fits[bm]
@@ -1528,7 +2324,8 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                     and bm != ref.block_m
                     and f.memory_points >= MIN_MEMORY_TREADS)
         if eligible:
-            alpha_hat, alpha_source = corr, (
+            alpha_hat, alpha_source_bm = corr, bm
+            alpha_source = (
                 f"measured at BLOCK_M={bm} over {f.memory_points} memory-bound "
                 "treads, activation traffic subtracted")
 
@@ -1543,13 +2340,18 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         gate_2_direction(ok, cfg, alpha=alpha, retracted=RETRACTED_ALPHA,
                          ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b,
                          block_sizes=block_sizes),
-        gate_3_crossing_shift(fits, preds_lo, preds_hi, cfg, lo=128, hi=256,
-                              alpha_source=alpha_source, alpha_hat=alpha_hat),
+        gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, lo=128,
+                                   hi=256, alpha_source=alpha_source,
+                                   alpha_hat=alpha_hat,
+                                   alpha_source_bm=alpha_source_bm,
+                                   ridge_band=ridge_band),
     ]
-    null_bm = 64 if 64 in block_sizes else min(block_sizes)
-    brack = bracketing(ok, null_bm, alpha, ridge, b, fits, plateau)
+    # `model_roof`, not `plateau`: see gate_4_no_crossing and Bracketing on why
+    # scoring an absence against the run's own maximum examines nothing.
+    brack = bracketing(ok, null_bm, alpha, ridge, b, fits, model_roof)
     gates.append(gate_4_no_crossing(ok, fits, block_m=null_bm, plateau=plateau,
-                                    alpha=alpha, ridge=ridge, b=b, brack=brack))
+                                    alpha=alpha, ridge=ridge, b=b, brack=brack,
+                                    roof_tflops=model_roof))
 
     lines.append("")
     lines.append("GATES")
@@ -1558,7 +2360,17 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         lines.append("")
 
     verdicts = {g.verdict for g in gates}
-    if gates[0].verdict != PASS:
+    if ref.refused:
+        # Ranked ABOVE gate 0, because a refused reference is not a failed
+        # prediction: it means the instrument, not the hypothesis, is what the
+        # arm measured. Nothing in it is a result either way.
+        lines.append(
+            "READING IT. THE COMPUTE REFERENCE WAS REFUSED ON ITS LEVEL, so "
+            "every ladder below was classified against a compute branch that "
+            "is the wrong size. No alpha here is a measurement, no blank here "
+            "is a null, and the gates are being scored against an instrument "
+            "rather than against the hardware. WITHDRAW THIS ARM.")
+    elif gates[0].verdict != PASS:
         lines.append("READING IT. Gate 0 failed, so the four settings may not "
                      "have been four kernels. Nothing below gate 0 is evidence.")
     elif verdicts == {PASS}:
@@ -1576,11 +2388,20 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     payload = {
         "alpha": alpha, "alpha_band": list(ALPHA_BAND),
         "retracted_alpha": RETRACTED_ALPHA, "ridge": ridge,
-        "ridge_band": list(RIDGE_BAND), "dtype_bytes": b,
+        "ridge_band": list(ridge_band),
+        "ridge_source": ridge_source or "NOT STATED by the caller",
+        "ridge_band_source": ridge_band_source or "NOT STATED by the caller",
+        "ridge_band_degenerate": ridge_band[0] == ridge_band[1],
+        "model_roof_tflops": model_roof, "dtype_bytes": b,
         "model": model_name, "dtype": dtype, "fixed": pinned or FIXED,
         "plateau_tflops": plateau, "timing_spread_median": noise,
         "overhead_ms": ref.overhead_ms, "compute_reference": asdict(ref),
         "sm_count": sm_count, "sm_source": sm_source,
+        # THE CARD, IN THE ONLY MACHINE-READABLE ARTEFACT. `Cell` carries no
+        # device column, so without this a cells.csv on a shared network volume
+        # is unattributable after the pod is gone -- and this study's central
+        # comparison is between two cards.
+        "card": card,
         "alpha_measured": alpha_hat, "alpha_source": alpha_source,
         "predictions": {
             str(bm): {"ai_cap": preds_lo[bm].ai_cap,
@@ -1598,11 +2419,29 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              "slope_compute_ref": f.slope_compute_ref,
                              "crosses": f.crosses,
                              "basis": f.basis,
+                             # A blank alpha has two causes and they are not
+                             # interchangeable. Written per ladder so a reader
+                             # of one row -- or a table generator like
+                             # `scripts/alpha_surface.py` -- cannot print a
+                             # refused reference as a sweep that lacked treads.
+                             "identifiable": (f.memory_points
+                                              >= MIN_MEMORY_TREADS
+                                              and f.alpha is not None),
+                             "unidentifiable_reason": _why_not_identifiable(
+                                 f, ref),
                              "mean_rel_err": f.mean_rel_err}
                    for bm, f in fits.items()},
         "bracketing": asdict(brack),
-        "gates": [{"number": g.number, "claim": g.claim, "verdict": g.verdict,
-                   "measured": g.measured, "gate": g.threshold} for g in gates],
+        # THE DETAIL LINES AND THE PROVENANCE ARE SERIALIZED. They used not to
+        # be, and that is how 22 published reports asserted a crossing ratio
+        # with nothing in the file to say it was a restatement of a fitted
+        # alpha imported from another BLOCK_M. A verdict a reader cannot trace
+        # is a verdict a reader cannot check.
+        "gates": [{"number": g.number, "claim": g.claim, "kind": g.kind,
+                   "basis": g.basis, "verdict": g.verdict,
+                   "measured": g.measured, "gate": g.threshold,
+                   "detail": list(g.lines), "provenance": g.provenance}
+                  for g in gates],
     }
     return Report(lines, gates, payload)
 
@@ -1884,7 +2723,7 @@ def results_root() -> Path:
     return Path(__file__).resolve().parents[1] / "results"
 
 
-def default_run_id(args) -> str:
+def default_run_id(args, card: str) -> str:
     """Derived from the arguments, so "the same experiment" resumes itself.
 
     A random id would make every re-run a new directory and turn the resume
@@ -1899,14 +2738,44 @@ def default_run_id(args) -> str:
     the report prints `pinned` from argv rather than from the cells it read. The
     knobs are in the visible name too, so two runs are distinguishable in `ls`
     and not only by a hash nobody can invert.
+
+    THE SAME OMISSION SURVIVED IN FOUR MORE FIELDS UNTIL 2026-09-02, and the
+    first of them had already been committed:
+
+      * THE CARD. It is not swept by this script, it is swept by the operator
+        moving to another pod, and `results_root()` prefers `$MOE_RESULTS_DIR`
+        then `/workspace/results`, the network volume the runbook uses BECAUSE
+        it outlives the pod. Two cards therefore derived one id, and the proof
+        is in the repo: `results/published/2026-09-01-nvidia_h200-cross-card-s3`
+        and `results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`
+        both contain `mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json`, for
+        `sm_count` 132 and 108. `read_cells` keys resume on `(block_m, tokens)`
+        and `Cell` carries no device column, so nothing downstream would notice:
+        the second card finds all cells present, skips them, spends no GPU time,
+        and prints the first card's timings scored against its own ridge --
+        145.7 against 162.8. `scripts/replicate_noise_floor.py:run_id_for`
+        documents this defect and works around it locally; fixing it here is
+        what stops the next caller inheriting it.
+      * `--iters`, `--warmup` and `--cell-budget-ms`. These are not analysis
+        knobs: they set the measured milliseconds of every cell. A `--iters 200`
+        re-run after `--iters 50` landed in the same directory and printed the
+        50-iteration numbers under the 200-iteration label, invisibly, because
+        the report renders `pinned` and the arguments from argv rather than from
+        the cells it read.
+
+    `--ridge`, `--ridge-band`, `--alpha` and `--bandwidth-gbps` stay OUT of the
+    key on purpose: they re-analyse a set of cells rather than change one, so
+    two analyses of one sweep belong in one directory.
     """
-    key = json.dumps({"model": args.model, "dtype": args.dtype,
+    key = json.dumps({"card": card, "model": args.model, "dtype": args.dtype,
                       "tiles": args.tiles, "r_max": args.r_max,
                       "row_step": args.row_step, "probes": args.step_probes,
                       "seed": args.seed, "group_m": args.group_m,
-                      "block_n": args.block_n, "num_stages": args.num_stages},
+                      "block_n": args.block_n, "num_stages": args.num_stages,
+                      "iters": args.iters, "warmup": args.warmup,
+                      "budget": args.cell_budget_ms},
                      sort_keys=True)
-    return f"{args.model}-{args.dtype}-r{args.r_max}-" \
+    return f"{card}-{args.model}-{args.dtype}-r{args.r_max}-" \
            f"g{args.group_m}-n{args.block_n}-" \
            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}"
 
@@ -1976,7 +2845,24 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sm-count", type=int, default=0,
                     help="0 asks the driver; only needed off-GPU")
-    ap.add_argument("--ridge", type=float, default=RIDGE_BAND[0])
+    ap.add_argument("--capability", default="",
+                    help="compute capability as MAJOR.MINOR, e.g. 8.0 for the "
+                         "A100 or 9.0 for the H200. Empty asks the driver; "
+                         "give it off-GPU to get the shared-memory verdict in "
+                         "the tile-resource plan. The register check needs no "
+                         "device and runs either way")
+    ap.add_argument("--ridge", type=float, default=0.0,
+                    help="Op/B. 0 (the default) reads the ATTACHED DEVICE's "
+                         "own calibration and REFUSES if there is none. It used "
+                         "to default to 160.3, an H200 figure, and "
+                         "cross_card_surface.sh never passed it, so all 7 "
+                         "published A100 reports were scored against a ridge "
+                         "belonging to neither card")
+    ap.add_argument("--ridge-band", default="",
+                    help="LO,HI in Op/B, only meaningful with --ridge. Without "
+                         "it an operator-asserted ridge gets a DEGENERATE band "
+                         "and the report says so, rather than inheriting a "
+                         "width measured on some other machine")
     ap.add_argument("--alpha", type=float, default=ALPHA)
     ap.add_argument("--bandwidth-gbps", type=float, default=0.0,
                     help="0 reads this machine's calibration, else 4374.5")
@@ -2021,6 +2907,213 @@ def missing_gpu_stack() -> str:
     return ""
 
 
+class RidgeUnavailable(RuntimeError):
+    """No ridge this run is entitled to use, and no constant may stand in.
+
+    Raised rather than defaulted. `--ridge` used to default to `RIDGE_BAND[0]`
+    and `scripts/cross_card_surface.sh` never passed it, so seven A100 reports
+    were written against 160.3 Op/B -- a stale H200 figure -- and every
+    `ridge x bandwidth` they printed was a hybrid of two machines. Nothing
+    about that failure was visible in the output, which is precisely why the
+    replacement refuses instead of choosing.
+    """
+
+
+@dataclass(frozen=True)
+class ResolvedRidge:
+    """The ridge, its band, and where each came from. Provenance travels with it."""
+
+    ridge: float
+    band: tuple[float, float]
+    source: str
+    band_source: str
+    device: str
+
+
+#: The phrase `moe/bench/calibrate.py` writes onto a bandwidth pattern it has
+#: disowned. A ridge built from a disowned denominator is a ridge built from a
+#: number the calibration itself says is not a ceiling.
+DISOWNED_NOTE = "not a valid ceiling"
+
+
+def _measured_yaml(gpu_name: str) -> dict:
+    """THIS device's calibration yaml as a dict, or {}.
+
+    Read directly rather than through `roofline.Hardware`, which carries only
+    the headline peaks. The candidate order mirrors `load_measured` so this
+    cannot end up describing a different file from the one the ridge came from,
+    and the device name inside the file is checked again here: a detail block
+    from another machine would put another machine's pattern spread on this
+    run's band, which is the same class of error the whole change is about.
+    """
+    try:
+        import yaml
+
+        from moe.bench.roofline import HARDWARE_DIR, measured_slug
+    except ImportError:                                   # pragma: no cover
+        return {}
+    stems = ([measured_slug(gpu_name)] if gpu_name else []) + ["measured"]
+    for stem in stems:
+        path = HARDWARE_DIR / f"{stem}.yaml"
+        if not path.exists():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except Exception:                                 # noqa: BLE001
+            return {}
+        named = str((data.get("detail") or {}).get("gpu_name") or "")
+        if named and gpu_name:
+            norm = lambda t: "".join(c for c in t.lower() if c.isalnum())  # noqa: E731
+            if norm(named) not in norm(gpu_name) and norm(gpu_name) not in norm(named):
+                return {}
+        return data
+    return {}
+
+
+def _measured_detail(gpu_name: str) -> dict:
+    """Just the `detail` block, which is where the per-pattern ridges live."""
+    return _measured_yaml(gpu_name).get("detail") or {}
+
+
+def calibration_stamp_line(doc: dict) -> str:
+    """Which calibration SESSION the ridge came from, named in the report.
+
+    The device match this replaces a hardcoded constant with is necessary and
+    not sufficient: `measured_*.yaml` is keyed by DEVICE NAME, so a second pod
+    of the same part inherits the first pod's ceilings, and the H200's dense
+    bf16 moved 7.1% between 2026-08-28 and 2026-09-01 while its bandwidth
+    reproduced to 0.014%. The ridge is compute over bandwidth, so that drift
+    lands entirely on the ridge. Naming the session does not stop the reuse --
+    `scripts/cross_card_surface.sh` recalibrating first is what stops it -- but
+    it makes a report that inherited one say whose it was.
+    """
+    when = doc.get("checked_on")
+    commit = str(doc.get("measured_commit") or "")[:8]
+    dirty = " DIRTY TREE" if doc.get("measured_dirty") else ""
+    if not when and not commit:
+        return "calibration session unstamped"
+    return f"calibrated {when or 'undated'} at {commit or 'no commit'}{dirty}"
+
+
+def ridge_band_from_detail(detail: dict, ridge: float
+                           ) -> tuple[tuple[float, float], str]:
+    """A ridge band from THIS device's own bandwidth patterns, or a degenerate one.
+
+    The band is the same silicon measured against several DRAM rulers, which is
+    the honest width of a single calibration: the compute term is common to
+    every end, so the spread is carried as a RATIO against the ceiling pattern
+    and applied to `ridge`. Carrying the ratio rather than the stored
+    `ridge_by_pattern` values keeps this correct for a dtype whose peak is not
+    the bf16 peak those values were computed from.
+
+    Patterns the calibration disowned are excluded: `calibrate.py` marks a
+    pattern that came in below triad, which a read cannot legitimately do, and
+    a band built from one is a band built from a number the file has already
+    withdrawn.
+
+    Returns a DEGENERATE band when fewer than two rulers survive. Degenerate is
+    the honest answer for one calibration; borrowing another machine's band is
+    not, and that is what this function exists to stop.
+    """
+    by_pattern = detail.get("ridge_by_pattern") or {}
+    ceiling = detail.get("ceiling_pattern")
+    base = by_pattern.get(ceiling)
+    if not base or not ridge:
+        return (ridge, ridge), ("degenerate: the calibration records no "
+                                "per-pattern ridges, so this run has one "
+                                "denominator and the band is one number twice")
+    disowned = {p.get("pattern") for p in (detail.get("bandwidth_patterns") or [])
+                if DISOWNED_NOTE in str(p.get("note") or "")}
+    kept = {k: v for k, v in by_pattern.items() if k not in disowned and v}
+    if len(kept) < 2:
+        return (ridge, ridge), ("degenerate: fewer than two bandwidth patterns "
+                                "survived this calibration's own disowning")
+    scaled = sorted(ridge * v / base for v in kept.values())
+    names = ", ".join(sorted(kept))
+    return (scaled[0], scaled[-1]), (
+        f"this device's own bandwidth patterns ({names}), carried as a ratio "
+        f"against the {ceiling} ceiling; {sorted(disowned)} excluded as "
+        "disowned by the calibration" if disowned else
+        f"this device's own bandwidth patterns ({names}), carried as a ratio "
+        f"against the {ceiling} ceiling")
+
+
+def resolve_ridge(args, *, synthetic: bool) -> ResolvedRidge:
+    """The ridge THIS run is entitled to quote, or a refusal.
+
+    Order, and each step is a different kind of claim:
+
+      1. `--ridge` (with optional `--ridge-band`), which makes the number the
+         operator's assertion and puts it in the run's own command line.
+      2. THE ATTACHED DEVICE'S OWN CALIBRATION: `peak(dtype) / bandwidth`, from
+         the yaml `scripts/calibrate_hardware.py` wrote for this GPU. This is
+         the default, and it is the whole point of the change: the A100's
+         contemporaneous calibration puts its ridge at 145.8 and the H200's at
+         162.8, and the reports that quoted 160.3 on the A100 were quoting
+         neither.
+      3. For `--dry-run` and `--self-test` ONLY, where nothing was measured and
+         so nothing can be mislabelled, the module's H200 band as a stated
+         HYPOTHESIS. The source string says so and is written into the report.
+      4. Otherwise REFUSE. A measured run with no calibration for its own
+         device does not get a ridge from anywhere else.
+    """
+    band_arg = getattr(args, "ridge_band", "") or ""
+    if args.ridge:
+        band = (args.ridge, args.ridge)
+        band_source = ("degenerate: --ridge given as one number and no "
+                       "--ridge-band with it")
+        if band_arg:
+            ends = tuple(float(v) for v in band_arg.split(","))
+            if len(ends) != 2:
+                raise RidgeUnavailable(
+                    f"--ridge-band wants LO,HI; got {band_arg!r}")
+            band = (min(ends), max(ends))
+            band_source = "given on the command line"
+        return ResolvedRidge(args.ridge, band, "given on the command line",
+                             band_source, "")
+
+    from moe.bench import roofline
+    gpu_name = roofline.current_gpu_name()
+    try:
+        hw = roofline.load_measured(gpu_name or None)
+    except roofline.HardwareMismatch as exc:
+        raise RidgeUnavailable(str(exc)) from exc
+    if hw is not None:
+        try:
+            ridge = hw.ridge_point(args.dtype)
+        except ValueError as exc:
+            raise RidgeUnavailable(
+                f"{hw.name} has a measured bandwidth but no verified "
+                f"{args.dtype} peak, so it cannot state a ridge: {exc}") from exc
+        doc = _measured_yaml(gpu_name)
+        band, band_source = ridge_band_from_detail(doc.get("detail") or {}, ridge)
+        return ResolvedRidge(
+            ridge, band,
+            f"measured on this device: {hw.name}, "
+            f"{hw.peak(args.dtype) / 1e12:.1f} TFLOP/s {args.dtype} over "
+            f"{hw.bandwidth_bytes_s / 1e9:.1f} GB/s "
+            f"({hw.ceiling_pattern or 'unnamed'} pattern); "
+            f"{calibration_stamp_line(doc)}",
+            band_source, hw.name or gpu_name)
+
+    if synthetic:
+        return ResolvedRidge(RIDGE_BAND[0], RIDGE_BAND, HYPOTHESIS_RIDGE_SOURCE,
+                             HYPOTHESIS_RIDGE_SOURCE, gpu_name)
+
+    raise RidgeUnavailable(
+        f"no calibration for this device ({gpu_name or 'no CUDA device'}), so "
+        "this run has no ridge it is entitled to quote.\n"
+        "    Every roof fraction, every AI cap comparison and every crossing "
+        "prediction below would be scored against another machine's ceiling: "
+        f"the module constant is {RIDGE_BAND[0]} Op/B, which is a 2026-08-26 "
+        "H200 figure and belongs to no attached device.\n"
+        "    Run:  python scripts/calibrate_hardware.py\n"
+        "    or state the assertion yourself:  --ridge <Op/B> "
+        "[--ridge-band LO,HI]\n"
+        "    off GPU, --dry-run and --self-test may assume the H200 band and "
+        "say so in the report.")
+
+
 def resolve_bandwidth(args) -> tuple[float, str]:
     """This machine's measured bandwidth, or the published H200 figure.
 
@@ -2046,18 +3139,30 @@ def main(argv=None) -> int:
     block_sizes = tuple(int(v) for v in args.tiles.split(","))
     b = dtype_bytes(args.dtype)
     bandwidth, bw_source = resolve_bandwidth(args)
+    # RESOLVED BEFORE ANY GPU TIME IS SPENT, and before the plan is printed, so
+    # a run that has no ridge it may quote costs nothing and says why.
+    try:
+        rr = resolve_ridge(args, synthetic=bool(args.dry_run
+                                                or args.self_test is not None))
+    except RidgeUnavailable as exc:
+        print(f"REFUSED: {exc}")
+        return 2
     grid = build_grid(cfg, block_sizes, args.r_max, args.row_step,
                       args.step_probes)
     step = rows_step(cfg)
     pinned = dict(FIXED, num_stages=args.num_stages,
                   GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
 
-    run_id = args.run_id or default_run_id(args)
+    card = detect_card_slug()
+    run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or results_root()) / "block_m_crossing" / run_id
     csv_path = out_dir / "cells.csv"
     cache_root = out_dir / "triton-cache"
 
     print(f"experiment  block_m_crossing / {run_id}")
+    print(f"card        {card}"
+          + ("   (no CUDA device: a plan or a replay, not a measurement)"
+             if card == NO_CARD_SLUG else ""))
     print(f"model       {args.model} E={cfg.num_experts} k={cfg.top_k}  "
           f"{args.dtype} ({b} bytes)")
     print(f"pinned      {pinned}")
@@ -2067,18 +3172,58 @@ def main(argv=None) -> int:
           f"T in [{tokens_for_rows(cfg, grid[0])}, "
           f"{tokens_for_rows(cfg, grid[-1])}]")
     print(f"bandwidth   {bandwidth:.1f} GB/s, {bw_source}")
+    print(f"ridge       {rr.ridge:.2f} Op/B, {rr.source}")
+    print(f"ridge band  {rr.band[0]:.2f}-{rr.band[1]:.2f} Op/B, {rr.band_source}")
+    # The run id deliberately does NOT include the ridge: it names the
+    # MEASUREMENT, and the ridge changes only the analysis over it. Two runs of
+    # the same grid at two ridges must share cells.csv, or the resume path
+    # re-measures identical cells. What must not happen is a ridge reaching the
+    # report without being named, which is what the two lines above prevent.
     print(f"WRITES TO   {out_dir}")
     print("            cells.csv (appended per cell), report.txt, report.json, "
           "triton-cache/")
 
+    # THE PLAN'S RESOURCE BILL, PRINTED BEFORE ANY TIMING. A setting that cannot
+    # hold its accumulator in registers, or its pipeline in shared memory, still
+    # RUNS -- it spills, and returns a time proportional to its tile count that
+    # sails through the compute reference's shape test. That is how a 249.765 ms
+    # tile became this study's compute branch and cost 8 published cells. The
+    # setting is refused here, where it is chosen.
+    capability = resolve_capability(
+        args, synthetic=bool(args.dry_run or args.self_test is not None))
+    plan, tile_refusals = tile_resource_plan(pinned, block_sizes, b, capability)
+    print("\nTILE RESOURCE PLAN, one CTA, at "
+          + (f"sm_{capability[0]}{capability[1]}" if capability
+             else "an UNKNOWN device (--capability MAJOR.MINOR gives the "
+                  "shared-memory verdict; the register check runs regardless)"))
+    for bm in block_sizes:
+        print(plan[bm].render())
+    if tile_refusals:
+        for bm, why in tile_refusals.items():
+            print(f"  REFUSED BLOCK_M={bm}: {why}")
+        block_sizes = tuple(bm for bm in block_sizes if bm not in tile_refusals)
+        if not block_sizes:
+            print("REFUSED: every block size in --tiles is unrunnable as "
+                  "pinned. Nothing to measure.")
+            return 2
+        print(f"  sweeping {list(block_sizes)} only. The refused settings are "
+              "NOT missing data: they are settings this hardware cannot run, "
+              "and a timing taken from one would not be a measurement of the "
+              "tiling this sweep is about.")
+        # THE GRID IS NOT REBUILT, deliberately. `build_grid` derives its row
+        # counts and its step probes from the block sizes, so rebuilding it here
+        # would make the SAME run id mean two different grids on two cards --
+        # sm_80 refuses this tile where sm_90 does not -- and `cells.csv` is
+        # resumed by run id. The refused settings simply contribute no rows.
+
     if args.dry_run:
         secs = estimated_seconds(cfg, grid, block_sizes, alpha=args.alpha,
-                                 ridge=args.ridge, bandwidth_gbps=bandwidth,
+                                 ridge=rr.ridge, bandwidth_gbps=bandwidth,
                                  b=b, iters=args.iters, warmup=args.warmup,
                                  cell_budget_ms=args.cell_budget_ms)
         print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
               "excluding compiles and allocation")
-        preds = predictions(block_sizes, args.alpha, args.ridge, b)
+        preds = predictions(block_sizes, args.alpha, rr.ridge, b)
         for bm in block_sizes:
             p = preds[bm]
             where = ("NO CROSSING EVER" if p.crossing_rows is None else
@@ -2100,7 +3245,7 @@ def main(argv=None) -> int:
         alpha = args.self_test
         sm_count = args.sm_count or DEFAULT_SM_COUNT
         cells = synthetic_cells(cfg, grid, block_sizes, alpha=alpha,
-                                ridge=args.ridge, bandwidth_gbps=bandwidth, b=b,
+                                ridge=rr.ridge, bandwidth_gbps=bandwidth, b=b,
                                 sm_count=sm_count, noise=args.self_test_noise,
                                 seed=args.seed)
         compiles = {bm: 1 for bm in block_sizes}
@@ -2122,10 +3267,12 @@ def main(argv=None) -> int:
                  else "reported by the driver" if args.self_test is None
                  else f"assumed H200 default {DEFAULT_SM_COUNT}")
     report = analyse(cells, cfg, block_sizes=block_sizes, alpha=alpha,
-                     ridge=args.ridge, bandwidth_gbps=bandwidth, b=b,
+                     ridge=rr.ridge, bandwidth_gbps=bandwidth, b=b,
                      model_name=args.model, dtype=args.dtype, compiles=compiles,
                      executed=executed, sm_count=sm_count, sm_source=sm_source,
-                     pinned=pinned)
+                     pinned=pinned, ridge_band=rr.band, ridge_source=rr.source,
+                     ridge_band_source=rr.band_source, capability=capability,
+                     card=card)
     print(report.text())
 
     (out_dir / "report.txt").write_text(report.text())

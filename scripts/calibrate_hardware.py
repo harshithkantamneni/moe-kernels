@@ -115,10 +115,15 @@ def main() -> int:
                          "that launch and clock ramp do not matter")
     ap.add_argument("--gemm-n", type=int, default=8192)
     ap.add_argument("--ceiling", default=DEFAULT_CEILING,
-                    choices=("read", "copy", "triad", "write"),
+                    choices=("read_stream", "read_reduce", "copy", "triad",
+                             "write"),
                     help="which pattern defines achieved bandwidth. triad is the "
-                         "canonical STREAM metric; read is closest to streaming "
-                         "expert weights at small batch")
+                         "canonical STREAM metric and the default; read_stream "
+                         "is the ruler this study's ~98.5%%-read traffic "
+                         "actually matches, and read_reduce is the reduction's "
+                         "lower bound on it. Changing this re-baselines every "
+                         "efficiency column; price it with "
+                         "scripts/ruler_rebaseline.py first")
     ap.add_argument("--no-settle", dest="settle", action="store_false",
                     help="skip the clock settle. Only for a quick smoke check: "
                          "measuring from idle walks the clock ramp across the "
@@ -211,25 +216,60 @@ def main() -> int:
             print(f"                    the datasheet assumes ~{implied:.0f} MHz, "
                   "a boost clock this part does not hold under dense tensor load")
 
+    # WHERE THAT CLOCK CAME FROM. It used to be one nvidia-smi sample taken
+    # after the GEMM had already synchronised, and across the eleven committed
+    # H200 calibrations it moved 30% (1485-1935 MHz) while the achieved rate
+    # moved 12%. The line below is the whole reason this run can be believed:
+    # samples taken under load, their spread, and the idle sample beside them.
+    for label, rec in (("bf16 GEMM", cal.gemm_clock),
+                       ("fp8 GEMM", cal.fp8_gemm_clock)):
+        if not rec:
+            continue
+        print(f"  clock, {label:<10}{rec['median_mhz']:>5} MHz median of "
+              f"{rec['samples']}, spread {rec['spread_pct']:.1f}%")
+        print(f"  {'':<17}post-hoc idle sample {rec['after_idle_mhz']} MHz "
+              f"(what this field used to be)"
+              + (f", {rec['power_w']:.0f} W" if rec.get("power_w") else ""))
+    established = cal.clock_established
+    if established is False:
+        print("  CLOCK NOT ESTABLISHED: the samples disagree with each other or "
+              "with the settle plateau.")
+        print("                    Nothing normalised against a clock -- "
+              "sustained_peak_tflops, gemm_efficiency_pct -- may be quoted.")
+    elif established is None:
+        print("  clock state       not established (no settle to check against)")
+
     print("\n  ridge point by choice of denominator (FLOP/byte):")
     for pat in cal.bandwidth_patterns:
         mark = " <-- used" if pat.pattern == cal.ceiling_pattern else ""
-        print(f"    {pat.pattern:<8}{cal.ridge_point(pat.gbps):>8.0f}"
-              f"  ({pat.pattern}){mark}")
+        if pat.pattern == (cal.matched_pattern().pattern
+                           if cal.matched_pattern() else None):
+            mark += " <-- matched to this study's traffic"
+        print(f"    {pat.pattern:<12}{cal.ridge_point(pat.gbps):>8.0f}{mark}")
     if spec_bw and spec_tf:
-        print(f"    {'datasheet':<8}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
+        print(f"    {'datasheet':<12}{spec_tf * 1e12 / (spec_bw * 1e9):>8.0f}")
+    band = cal.ridge_band()
+    if band:
+        print(f"    band          {band[0]:.1f} to {band[1]:.1f}  "
+              f"({100 * (band[1] / band[0] - 1):.1f}% wide) -- quote this, not "
+              "one end, for any crossing inside it")
 
-    st = cal.settle
-    if st.get("skipped"):
-        print("\n  settle            SKIPPED: ceilings may be mid-ramp")
-    else:
-        hist = st.get("clock_history_mhz") or []
-        print(f"\n  settle            "
-              f"{'reached' if st.get('settled') else 'TIMED OUT'} at "
-              f"{st.get('final_mhz', 0)} MHz   history {hist}")
-        if not st.get("settled"):
+    for line in cal.refusals:
+        print(f"  REFUSED           {line}")
+
+    # BOTH settles, each labelled with what it governs. The memory settle has
+    # been measured since 2026-08-27 and was never printed, so this report read
+    # "settle reached at 1500 MHz" followed by "clocks 1500 -> 1980 MHz" -- the
+    # signature of an unsettled ramp -- and docs/STUDY.md still listed the work
+    # as not done five days after it was done, on the strength of this output.
+    print()
+    for line in cal.settle_lines():
+        print(f"  {line}")
+    for info in (cal.settle, (cal.settle or {}).get("bandwidth_settle") or {}):
+        if info and not info.get("skipped") and not info.get("settled"):
             print("                    clocks still moving when the budget ran "
                   "out; raise --settle-seconds")
+            break
 
     if cal.warmup_pass:
         print(f"\n  warm-up pass      discarded; largest per-pattern change "
@@ -310,10 +350,17 @@ def main() -> int:
     out.write_text(yaml.safe_dump(payload, sort_keys=False))
     print(f"\n[calibrate] wrote {out}")
     print("  commit it; plots and efficiency columns then use measured ceilings")
+    band = cal.ridge_band()
     print(json.dumps({"achieved_bw_gbps": cal.achieved_bandwidth_gbps,
                       "ceiling_pattern": cal.ceiling_pattern,
                       "achieved_bf16_tflops": cal.achieved_bf16_tflops,
-                      "ridge": round(cal.ridge_point(), 1)}))
+                      "ridge": round(cal.ridge_point(), 1),
+                      # The band, not just the point, so a consumer that greps
+                      # this line cannot quote one end without seeing the other.
+                      "ridge_band": [round(band[0], 1), round(band[1], 1)]
+                      if band else None,
+                      "gemm_clock_mhz": cal.gemm_clock_mhz,
+                      "clock_established": cal.clock_established}))
     return 0
 
 

@@ -53,19 +53,39 @@ from moe.spec import MODEL_CONFIGS  # noqa: E402
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
 TILES = (32, 64, 128, 256)
 RIDGE = 160.3
+#: STATED BY THE CALLER, ON PURPOSE. `analyse` no longer defaults the band to
+#: the module's `RIDGE_BAND`: defaulting is how seven published A100 reports
+#: came to carry an H200 band. A caller that wants the two-ended prediction has
+#: to say which two ends, and these are the 2026-08-26 H200 pair the published
+#: predictions were computed at.
+RIDGE_BAND = (160.3, 176.2)
 BANDWIDTH = 4374.5          # the published H200 triad ceiling
 REFIT = 0.558
 RETRACTED = 0.10
 
 
 def analyse(cells, cfg=MIXTRAL, *, alpha: float, tiles=TILES, compiles=None,
-            executed=None):
+            executed=None, ridge_band=RIDGE_BAND):
     return BM.analyse(
         cells, cfg, block_sizes=tiles, alpha=alpha, ridge=RIDGE,
         bandwidth_gbps=BANDWIDTH, b=2, model_name=cfg.name, dtype="bf16",
         compiles=compiles or {bm: 1 for bm in tiles},
         executed=executed or {bm: 1 for bm in tiles}, sm_count=132,
-        sm_source="test")
+        sm_source="test", ridge_band=ridge_band,
+        ridge_source="stated by the test", ridge_band_source="stated by the test")
+
+
+def reference(cells, tiles=TILES, cfg=MIXTRAL, *, pinned=None,
+              capability=(9, 0)):
+    """`compute_reference` with the roof it now REQUIRES.
+
+    The qualification is a level test as well as a shape test, so it cannot be
+    called without a ceiling to judge the level against. There is no default
+    ceiling on purpose: a reference qualified against an unknown roof is the
+    defect this argument exists to close."""
+    return BM.compute_reference(
+        cells, tiles, cfg=cfg, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2,
+        pinned=pinned or dict(BM.FIXED, BLOCK_SIZE_N=64), capability=capability)
 
 
 def report_at(alpha: float, *, noise: float = 0.0, r_max: int = 1024,
@@ -345,7 +365,7 @@ def test_a_free_split_search_invents_an_alpha_at_block_m_128_that_the_guard_refu
     assert free.alpha is not None
     assert free.alpha > 0.5, "the trap did not fire; this test has stopped testing it"
 
-    ref = BM.compute_reference(cells, TILES)
+    ref = reference(cells, TILES)
     guarded = BM.fit_ladder(points, 128, ref)
     assert guarded.memory_points <= 1
     assert guarded.alpha is None
@@ -483,11 +503,14 @@ def test_the_bracketing_horizon_is_twice_the_competing_hypothesis_crossing():
     grid = BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
     cells = BM.synthetic_cells(MIXTRAL, grid, TILES, alpha=REFIT, ridge=RIDGE,
                                bandwidth_gbps=BANDWIDTH, b=2, sm_count=132)
-    ref = BM.compute_reference(cells, TILES)
+    ref = reference(cells, TILES)
     fits = {bm: BM.fit_ladder(BM.ladder_points(cells, bm), bm, ref)
             for bm in TILES}
-    plateau = max(c.useful_tflops for c in cells if c.aligned)
-    brack = BM.bracketing(cells, 64, REFIT, RIDGE, 2, fits, plateau)
+    # `ridge x bandwidth`, not the arm's own plateau: the control asks whether
+    # anything reached the ABSOLUTE roof, and against the plateau something
+    # always does, because the plateau is the maximum over the same cells.
+    roof = RIDGE * BANDWIDTH * 1e9 / 1e12
+    brack = BM.bracketing(cells, 64, REFIT, RIDGE, 2, fits, roof)
     assert brack.horizon_rows == pytest.approx(2 * 208.4, abs=1.0)
     assert brack.reached_rows == 1024
     assert brack.positive_control in (128, 256)
@@ -505,8 +528,8 @@ def test_the_positive_control_is_measured_and_not_fitted():
         bandwidth_gbps=BANDWIDTH, b=2, sm_count=132)]
     fits = {bm: BM.fit_ladder(BM.ladder_points(cells, bm), bm, None)
             for bm in (32, 64)}
-    plateau = max(c.useful_tflops for c in cells if c.aligned)
-    brack = BM.bracketing(cells, 64, REFIT, RIDGE, 2, fits, plateau)
+    roof = RIDGE * BANDWIDTH * 1e9 / 1e12
+    brack = BM.bracketing(cells, 64, REFIT, RIDGE, 2, fits, roof)
     assert brack.positive_control is None
     assert not brack.sufficient
 
@@ -518,7 +541,7 @@ def test_the_compute_reference_refuses_a_ladder_that_is_not_proportional():
     make every other block size look identifiable."""
     bent = [BM.make_cell(MIXTRAL, n * 256, 256, 1.0 + 0.6 * (n - 1) ** 2,
                          sm_count=132, block_n=64) for n in (1, 2, 3, 4)]
-    ref = BM.compute_reference(bent, (256,))
+    ref = reference(bent, (256,))
     assert ref.block_m is None
     assert ref.slope_for(64) is None
     assert "NO alpha may decide a verdict" in ref.note
@@ -531,7 +554,7 @@ def test_a_memory_bound_ladder_cannot_pass_itself_off_as_a_compute_branch():
     the compute branch and every other ladder would come back identifiable."""
     memory = [BM.make_cell(MIXTRAL, n * 256, 256, 0.44 + 0.558 * n,
                            sm_count=132, block_n=64) for n in (1, 2, 3, 4)]
-    assert BM.compute_reference(memory, (256,)).block_m is None
+    assert reference(memory, (256,)).block_m is None
 
 
 def test_no_alpha_decides_a_verdict_when_no_compute_branch_qualified():
@@ -618,9 +641,9 @@ def test_the_run_id_is_derived_from_the_arguments_so_a_rerun_resumes_itself():
     a = parser.parse_args([])
     b = parser.parse_args([])
     c = parser.parse_args(["--r-max", "2048"])
-    assert BM.default_run_id(a) == BM.default_run_id(b)
-    assert BM.default_run_id(a) != BM.default_run_id(c)
-    assert "mixtral" in BM.default_run_id(a)
+    assert BM.default_run_id(a, "nvidia_h200") == BM.default_run_id(b, "nvidia_h200")
+    assert BM.default_run_id(a, "nvidia_h200") != BM.default_run_id(c, "nvidia_h200")
+    assert "mixtral" in BM.default_run_id(a, "nvidia_h200")
 
 
 def test_every_pinned_knob_changes_the_run_id():
@@ -642,12 +665,57 @@ def test_every_pinned_knob_changes_the_run_id():
     base = parser.parse_args([])
     for flag, value in (("--group-m", "16"),
                         ("--block-n", "256"),
-                        ("--num-stages", "3")):
+                        ("--num-stages", "3"),
+                        # THE THREE THAT SET THE MEASURED MILLISECONDS of every
+                        # cell, absent from the key until 2026-09-02. A re-run
+                        # at a different iteration count resumed the first
+                        # run's directory, skipped every completed cell, and
+                        # printed the first count's timings under the second's
+                        # label.
+                        ("--iters", "200"),
+                        ("--warmup", "200"),
+                        ("--cell-budget-ms", "9999")):
         other = parser.parse_args([flag, value])
-        assert BM.default_run_id(base) != BM.default_run_id(other), (
+        assert BM.default_run_id(base, "nvidia_h200") != BM.default_run_id(
+            other, "nvidia_h200"), (
             f"{flag} does not change the run id, so a sweep over it would "
             f"resume into the previous setting's directory and report its "
             f"numbers")
+
+
+def test_two_cards_no_longer_derive_one_run_id():
+    """THE COLLISION THAT IS ALREADY COMMITTED IN THIS REPO.
+
+    `results/published/2026-09-01-nvidia_h200-cross-card-s3/` and
+    `results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3/` both
+    contain `mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json`, for `sm_count`
+    132 and 108. `results_root()` prefers `$MOE_RESULTS_DIR` then
+    `/workspace/results`, a network volume the runbook uses BECAUSE it outlives
+    the pod, and `read_cells` keys resume on `(block_m, tokens)` with no device
+    column on `Cell`. So the second card found every cell present, skipped all
+    of them, spent no GPU time, and reported the first card's timings against
+    its own ridge -- 145.7 against 162.8.
+    """
+    args = BM.build_parser().parse_args([])
+    h200 = BM.default_run_id(args, "nvidia_h200")
+    a100 = BM.default_run_id(args, "nvidia_a100_sxm4_80gb")
+    assert h200 != a100
+    assert h200.startswith("nvidia_h200-")               # visible in `ls`
+    assert a100.startswith("nvidia_a100_sxm4_80gb-")
+
+
+def test_the_analysis_knobs_stay_out_of_the_run_id():
+    """The ridge and alpha re-analyse a set of cells; they do not change one.
+
+    Putting them in the key would re-measure the whole grid to produce numbers
+    the existing cells already support.
+    """
+    parser = BM.build_parser()
+    base = BM.default_run_id(parser.parse_args([]), "nvidia_h200")
+    for flag, value in (("--ridge", "145.7"), ("--alpha", "0.33"),
+                        ("--bandwidth-gbps", "1799.4")):
+        assert BM.default_run_id(parser.parse_args([flag, value]),
+                                 "nvidia_h200") == base, flag
 
 
 def test_the_run_id_names_the_swizzle_and_the_n_tile_in_plain_text():
@@ -656,7 +724,8 @@ def test_the_run_id_names_the_swizzle_and_the_n_tile_in_plain_text():
     a reader of the paper's data directory sees."""
     parser = BM.build_parser()
     rid = BM.default_run_id(parser.parse_args(["--group-m", "16",
-                                               "--block-n", "256"]))
+                                               "--block-n", "256"]),
+                            "nvidia_h200")
     assert "-g16-" in rid
     assert "-n256-" in rid
 
