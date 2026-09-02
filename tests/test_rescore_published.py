@@ -18,6 +18,17 @@ REVERSIBILITY as much as about the new numbers:
 
 No GPU. Every test that writes works on a COPY of the arm in tmp_path; the two
 that read the committed tree only read it.
+
+THE PRE-RESCORE DOCUMENT IS A COMMITTED FIXTURE, NOT A `git show`. The first
+version of these tests read the baseline with `git show HEAD:<report>`, which
+was true only while HEAD was the commit BEFORE the rescoring. The moment the
+rescoring was committed, `HEAD:` served the rescored file, `before` and `after`
+became the same document, and the confinement test compared it with itself:
+one assertion failed outright and its neighbour passed for no reason at all. A
+baseline read through a moving ref is not a baseline. So the withdrawn document
+is checked in beside these tests, and `test_the_fixture_is_the_real_pre_rescore
+_document` proves it is the genuine pre-image by rescoring it and getting the
+committed file back, which no fabricated fixture would do.
 """
 from __future__ import annotations
 
@@ -39,6 +50,13 @@ PUBLISHED = ROOT / "results" / "published"
 A100_ARM = PUBLISHED / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
 A100_MIXTRAL = A100_ARM / "mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json"
 H200_S4 = PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
+
+#: `A100_MIXTRAL` exactly as it stood before the rescoring, copied out of
+#: `apparatus-standard` at 456e1e4 (blob ce590c80) and committed here. Pinned as
+#: a file rather than fetched from a ref because every ref that named the
+#: pre-rescore tree at the time of writing -- `HEAD`, `HEAD~1`,
+#: `apparatus-standard` -- names the rescored tree once this work lands.
+BEFORE_FIXTURE = Path(__file__).with_name("test_rescore_published_before.json")
 
 
 def _load():
@@ -109,6 +127,41 @@ def test_the_a100_note_exists_and_names_both_numbers():
     assert "gate" in note.lower()
 
 
+def test_the_invocation_the_docstring_opens_with_actually_runs():
+    """The first documented command used to be `argparse` error 2.
+
+    A usage line that cannot be typed is the same defect class this slice
+    exists to close, so the flag is now real and the plan it prints is checked
+    to be the same plan the no-flag default prints.
+    """
+    usage = RS.__doc__.splitlines()[2].split("#")[0].split()
+    assert usage[:3] == ["python", "scripts/rescore_published_reports.py",
+                         "--dry-run"]
+    dry = _run(["--dry-run"])
+    assert dry.returncode == 0, dry.stderr
+    assert "0 to rewrite" in dry.stdout
+    assert dry.stdout == _run([]).stdout
+
+
+def test_asking_to_write_and_to_dry_run_at_once_refuses(arm_copy, tmp_path):
+    """The FAIL branch of the new flag: a contradiction is not resolved.
+
+    Checked on a COPY with real work to do, so a refusal that silently wrote
+    anyway would show up as a changed file rather than as an opinion.
+    """
+    for path in RS.report_paths(arm_copy):
+        doc = json.loads(path.read_text())
+        doc["ridge"] = 160.3
+        path.write_text(json.dumps(doc, indent=2))
+    snapshot = {p: p.read_bytes() for p in RS.report_paths(arm_copy)}
+
+    got = _run(["--write", "--dry-run", str(tmp_path)])
+    assert got.returncode == X.REFUSED
+    assert "REFUSED" in got.stdout
+    assert "RESULT:" not in got.stdout
+    assert {p: p.read_bytes() for p in RS.report_paths(arm_copy)} == snapshot
+
+
 def test_running_the_tool_on_the_committed_tree_now_changes_nothing():
     """Idempotence, on the real tree, as a plan that proposes no rewrite."""
     got = _run([])
@@ -121,31 +174,64 @@ def test_running_the_tool_on_the_committed_tree_now_changes_nothing():
 # confinement: only the four fields move
 # --------------------------------------------------------------------------
 
-def test_only_the_registered_fields_differ_from_the_pre_rescore_report(arm_copy):
-    """`untouched()` is the check the gate makes; here it is made from git."""
-    original = subprocess.run(
-        ["git", "show", f"HEAD:results/published/{A100_ARM.name}/"
-                        f"{A100_MIXTRAL.name}"],
-        capture_output=True, text=True, cwd=ROOT)
-    assert original.returncode == 0, original.stderr
-    before = json.loads(original.stdout)
+def test_the_fixture_is_the_real_pre_rescore_document():
+    """The fixture earns its place by being the pre-image, not by being asserted.
+
+    Rescoring it reproduces the committed report exactly, apart from the
+    timestamp, and the committed report's own `rescored_from` block quotes the
+    two numbers the fixture carries. A fixture built by editing the rescored
+    file backwards would fail the first check on the four recomputed
+    quantities; a stale one would fail it on everything else.
+    """
+    before = json.loads(BEFORE_FIXTURE.read_text())
+    assert before["ridge"] == 160.3
+    assert before["ridge_band"] == [160.3, 176.2]
+    assert "ridge_source" not in before and "rescored_from" not in before
+
+    committed = json.loads(A100_MIXTRAL.read_text())
+    assert committed["rescored_from"]["ridge"] == before["ridge"]
+    assert committed["rescored_from"]["ridge_band"] == before["ridge_band"]
+
+    rebuilt = RS.rescored_payload(before, A100_MIXTRAL, SWEEP, "2026-01-01T00:00:00Z")
+    assert RS.without_utc(rebuilt) == RS.without_utc(committed)
+
+
+def test_only_the_registered_fields_differ_from_the_pre_rescore_report():
+    """`untouched()` is the check the gate makes, made here against the fixture.
+
+    The four non-vacuity assertions are the point: each names one registered
+    field and shows it actually moved, so `untouched()` agreeing is a statement
+    about the rest of an 8 KB document rather than about two identical files.
+    """
+    before = json.loads(BEFORE_FIXTURE.read_text())
     after = json.loads(A100_MIXTRAL.read_text())
     assert RS.untouched(before) == RS.untouched(after)
-    # And the rescoring really did move something, or the check above is vacuous.
-    assert before["ridge"] != after["ridge"]
+
+    assert before["ridge"] == 160.3 and after["ridge"] == 145.8
+    assert before["ridge_band"] != after["ridge_band"]
+    assert before["bracketing"]["horizon_rows"] != after["bracketing"]["horizon_rows"]
+    moved = [bm for bm, pred in before["predictions"].items()
+             if pred["crossing_rows_ridge_lo"]
+             != after["predictions"][bm]["crossing_rows_ridge_lo"]]
+    assert moved, "no prediction moved, so confinement is being checked on a no-op"
 
 
 def test_the_gate_verdicts_ai_caps_and_ladders_are_untouched():
-    original = subprocess.run(
-        ["git", "show", f"HEAD:results/published/{A100_ARM.name}/"
-                        f"{A100_MIXTRAL.name}"],
-        capture_output=True, text=True, cwd=ROOT)
-    before = json.loads(original.stdout)
+    """Ridge independence, the claim NOTE.md rests on, against the real before.
+
+    It re-asserts that the ridge moved first. Without that line this test would
+    keep passing if a later rescoring quietly moved a gate AND the baseline it
+    is compared against, which is exactly how its `git show HEAD:` ancestor
+    passed while comparing the rescored file with itself.
+    """
+    before = json.loads(BEFORE_FIXTURE.read_text())
     after = json.loads(A100_MIXTRAL.read_text())
+    assert before["ridge"] != after["ridge"], "nothing was rescored; see the fixture"
     assert before["gates"] == after["gates"]
     assert before["ladder"] == after["ladder"]
     assert before["plateau_tflops"] == after["plateau_tflops"]
     assert before["compute_reference"] == after["compute_reference"]
+    assert before["predictions"].keys() == after["predictions"].keys()
     for bm, pred in before["predictions"].items():
         assert pred["ai_cap"] == after["predictions"][bm]["ai_cap"]
 

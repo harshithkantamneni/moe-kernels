@@ -16,8 +16,12 @@ measured in this same session and committed as
 
 so the published ceiling was 9.9% too high, and it belonged to no device
 attached to the machine that produced these rows. The band was worse than the
-point: `[160.3, 176.2]` is one card's triad ridge beside another card's read
-ridge, a band drawn across two machines.
+point. Both ends of `[160.3, 176.2]` are H200 figures, from two calibrations of
+that one card: 701.6 TFLOP/s over 4377.2 GB/s and 770.9 over 4374.5
+(`docs/INSTRUMENTATION.md`'s six-calibration table, where bandwidth reproduces
+to 0.06% and the compute term does not). Its width is therefore the H200's
+compute ceiling failing to reproduce, carried onto an A100 arm as if it were
+this card's uncertainty about its own ridge.
 
 `results/published/CALIBRATION_PROVENANCE.md` lists this arm as unknown,
 `results/published/ANCHOR_RESCORE.txt` and `docs/COUNTERS.md` disclose the
@@ -68,7 +72,7 @@ to no attached device.
 
 ## How to check this
 
-    python scripts/rescore_published_reports.py            # plan; writes nothing
+    python scripts/rescore_published_reports.py --dry-run  # plan; writes nothing
     python scripts/rescore_published_reports.py --write    # idempotent
 
 A second `--write` rewrites nothing and leaves the tree clean; the run scores

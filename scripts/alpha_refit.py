@@ -105,9 +105,22 @@ from moe.stages import CANONICAL_STAGES  # noqa: E402
 REPO_PUBLISHED_ALPHA = 0.10
 TEMPO_ALPHA = 0.33
 
-#: The measured H200 ridge band, `docs/FINDINGS.md`. A band and not a number
-#: because three calibrations of the same card disagree by 9.9% on the compute
-#: term, so every absolute AI statement carries both ends.
+#: THE WITHDRAWN BAND, and what it actually is. Both ends are H200 numbers from
+#: two calibrations of the SAME card: 160.3 is 701.6 TFLOP/s over 4377.2 GB/s
+#: (`fp8-three-kernel`, `v2lite`) and 176.2 is 770.9 over 4374.5
+#: (`fp8-refixed`, `whole-layer`), `docs/INSTRUMENTATION.md`'s six-calibration
+#: table. Bandwidth reproduces to 0.06% across all six and the compute term does
+#: not, so this band measures how badly the compute ceiling REPRODUCES, not how
+#: wide any device's ridge is. It was then quoted on A100 arms, whose own ridge
+#: is 145.8, where neither end belongs to the attached card at all. On
+#: 2026-09-02 it was withdrawn from all 26 published reports by
+#: `scripts/rescore_published_reports.py`.
+#:
+#: NOTHING IN THIS FILE SCORES AGAINST IT ANY MORE. `card_ridge_bands()` is
+#: where a ceiling comes from. The name survives only because
+#: `scripts/group_m_alpha_sweep.py` and two test modules import it, and deleting
+#: a constant out from under other people's files is not this slice's to do;
+#: those callers are the next thing to move onto per-card bands.
 RIDGE_BAND = (160.3, 176.2)
 
 #: torch's `grouped_mm` tile, OBSERVED under claim C1 by reading the CUTLASS
@@ -587,6 +600,65 @@ def max_alpha_that_still_crosses(block_m: int, ridge: float,
                                  dtype_bytes: int = 2) -> float:
     """The largest `alpha` at which `block_m` can still reach `ridge`."""
     return 2.0 * block_m / (ridge * dtype_bytes)
+
+
+def card_ridge_bands(dtype: str = "bf16") -> list[tuple[str, float, list[float]]]:
+    """`(card, ridge, band)` for every card with a committed calibration.
+
+    WHAT FAILURE THIS PREVENTS. The AI-cap table below decided "NEVER crosses"
+    against `RIDGE_BAND`, which is the gap between two H200 calibrations of the
+    same card and is not any device's ceiling. A cap verdict is a claim about a
+    specific card, so it is now scored card by card against each one's own
+    ridge, from each one's own `measured_*.yaml`, with the card named in the
+    column header. Two cards disagreeing about whether a tile crosses is a
+    result; hiding that behind one band belonging to neither was not.
+
+    WHAT THESE BANDS DO NOT CARRY. Each is the spread of ONE calibration's
+    surviving DRAM patterns, so it is a bandwidth band. The 9.9% disagreement
+    between the H200's own compute ceilings is a separate open number and no
+    band here contains it; `docs/INSTRUMENTATION.md` is where that lives.
+
+    RESOLVED THROUGH THE RESCORER RATHER THAN RE-DERIVED.
+    `scripts/rescore_published_reports.py` already resolves a card's ridge and
+    band for the 26 published reports, and it does so through the sweep's
+    `ridge_band_from_detail`, which drops the bandwidth patterns a calibration
+    disowned. Recomputing that here would be a second implementation free to
+    drift from the one the reports were rescored with.
+
+    Returns an EMPTY list when nothing resolves, and the caller refuses on it
+    rather than reaching for a constant.
+    """
+    import importlib.util
+
+    path = Path(__file__).resolve().with_name("rescore_published_reports.py")
+    if not path.exists():                     # pragma: no cover - repo invariant
+        return []
+    spec = importlib.util.spec_from_file_location("_alpha_refit_rescore", path)
+    rescore = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, rescore)
+    spec.loader.exec_module(rescore)
+    sweep = rescore.load_sweep()
+
+    out = []
+    for card, profile in sorted(rescore.measured_profiles().items()):
+        try:
+            ridge, band, *_ = rescore.calibration(profile, dtype, sweep)
+        except (ValueError, KeyError, FileNotFoundError):
+            continue
+        out.append((card, ridge, band))
+    return out
+
+
+def cap_verdict(cap: float, band: list[float]) -> str:
+    """What a tile's AI cap says about one card's band. The whole vocabulary.
+
+    Three answers and no fourth: below the low end the tile cannot reach that
+    card's ridge at any batch size, above the high end it always can, and
+    between them the calibration's own spread decides and this study cannot.
+    """
+    lo, hi = band[0], band[-1]
+    return ("NEVER crosses" if cap < lo
+            else "crosses" if cap > hi else "inside the band")
 
 
 def count_excluded_memory_bound(paths, alpha: float,
@@ -1198,26 +1270,61 @@ def _report_adversarial(triton: list[Observation], alpha: float, args) -> None:
     print("  coefficient it is an UPPER bound. That bound caps arithmetic intensity at")
     print("  2 BM / (alpha b), in rows per expert:")
     print()
-    print("  | BLOCK_M | AI cap | vs ridge band "
-          f"{RIDGE_BAND[0]}-{RIDGE_BAND[1]} |")
-    print("  |---:|---:|---|")
+    print_ai_cap_table(alpha)
+
+
+def print_ai_cap_table(alpha: float) -> None:
+    """The AI-cap table, and the C2 comparison, each against a NAMED card's band.
+
+    A SEPARATE FUNCTION SO ITS REFUSALS CAN BE PLANTED. Both failure branches
+    here -- no calibration at all, and no H200 calibration for a paragraph about
+    H200 rows -- have to be reachable in a test, and they are not while the only
+    way in is a full adversarial run over the corpus.
+    """
+    bands = card_ridge_bands()
+    if not bands:
+        print("  REFUSED: no committed calibration resolves, so there is no ceiling")
+        print("  this table is entitled to score against. It is NOT printed against")
+        print("  the withdrawn cross-machine band, which belongs to no device.")
+        return
+    print("  Scored against EACH CARD'S OWN band, off its own measured_*.yaml. The")
+    print("  cross-machine 160.3-176.2 this table used to quote was withdrawn from")
+    print("  all 26 published reports on 2026-09-02 and is not a ceiling of anything.")
+    print()
+    print("  | BLOCK_M | AI cap | "
+          + " | ".join(f"vs {card} {band[0]}-{band[-1]}"
+                       for card, _ridge, band in bands) + " |")
+    print("  |---:|---:|" + "---|" * len(bands))
     for block_m in (16, 32, 64, 128, 256):
         cap = ai_cap(block_m, alpha)
-        verdict = ("NEVER crosses" if cap < RIDGE_BAND[0]
-                   else "crosses" if cap > RIDGE_BAND[1] else "inside the band")
-        print(f"  | {block_m} | {cap:.0f} | {verdict} |")
+        print(f"  | {block_m} | {cap:.0f} | "
+              + " | ".join(cap_verdict(cap, band) for _c, _r, band in bands) + " |")
     print()
+
+    # FINDINGS C2's crossing was measured on the H200, so the ceiling it is
+    # weighed against has to be the H200's own low end and not whichever card
+    # sorts first. No H200 calibration, no paragraph: the alternative is
+    # comparing one card's rows with another card's ridge, which is the exact
+    # substitution this section now exists to have stopped doing.
+    h200 = [entry for entry in bands if "h200" in entry[0]]
+    if not h200:
+        print("  The C2 comparison below needs the H200's own band and no committed")
+        print("  H200 calibration resolved, so it is REFUSED rather than scored")
+        print("  against another card.")
+        return
+    card, _ridge, band = h200[0]
     measured = rows_per_expert("mixtral-8x7b", MIXTRAL_ONE_STAGE_CROSSING_TOKENS)
-    ceiling = max_alpha_that_still_crosses(CUTLASS_BLOCK_M, RIDGE_BAND[0])
+    ceiling = max_alpha_that_still_crosses(CUTLASS_BLOCK_M, band[0])
     print("  AND THAT IS REFUTED BY THIS STUDY'S OWN ROWS. torch grouped_mm runs at")
     print(f"  CUTLASS BLOCK_M={CUTLASS_BLOCK_M} and DOES cross: FINDINGS C2 puts mixtral's")
     print(f"  one-stage bf16 crossing at {MIXTRAL_ONE_STAGE_CROSSING_TOKENS} tokens, "
           f"which is {measured:.0f} rows per expert,")
     print(f"  well above the {ai_cap(CUTLASS_BLOCK_M, alpha):.0f} this alpha allows.")
+    print(f"  Those rows are {card} rows, and the band below is {card}'s.")
     print()
     print("  So one of three things is true, and this pool cannot say which:")
     print(f"   - the TRAFFIC coefficient is at most {ceiling:.3f}, the largest value at")
-    print(f"     which BLOCK_M={CUTLASS_BLOCK_M} still reaches a ridge of {RIDGE_BAND[0]}, and the")
+    print(f"     which BLOCK_M={CUTLASS_BLOCK_M} still reaches a ridge of {band[0]}, and the")
     print(f"     gap up to {alpha:.2f} is an extra tile's NON-traffic cost;")
     print("   - the bounded-AI consequence does not follow from a time-fitted alpha;")
     print("   - or the one-stage crossings are tile steps rather than the ridge, which")

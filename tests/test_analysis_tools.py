@@ -603,3 +603,124 @@ def test_cell_bands_have_nothing_to_band_on_a_curve_with_no_crossing():
     assert bands.band(0) is None
     assert bands.last_over_first() is None
     assert bands.ratio_band(0, 100.0) is None
+
+
+# --------------------------------------------------------------------------
+# 5. the withdrawn cross-machine band is scored against nowhere (B4, second pass)
+# --------------------------------------------------------------------------
+
+WITHDRAWN_BAND = (160.3, 176.2)
+
+
+def test_each_card_gets_its_own_band_off_its_own_calibration():
+    """The replacement for `RIDGE_BAND` in the cap table.
+
+    160.3 and 176.2 are two H200 calibrations of the same card disagreeing about
+    its compute ceiling by 9.9%, so the pair is a reproducibility spread and not
+    a device's band: `alpha_refit --adversarial` decided "NEVER crosses" against
+    it, on a corpus with A100 rows in it, while the same commit withdrew it from
+    all 26 published reports. Each end here has to come from one card's own
+    yaml, and the two cards have to DISAGREE, or the old single band was
+    harmless after all.
+    """
+    refit = _load("alpha_refit")
+    bands = dict((card, band) for card, _ridge, band in refit.card_ridge_bands())
+    assert bands["nvidia_h200"] == [152.1, 165.6]
+    assert bands["nvidia_a100_sxm4_80gb"] == [139.6, 149.3]
+    for band in bands.values():
+        assert tuple(band) != WITHDRAWN_BAND
+        assert band[0] < band[1], "a two-machine band was the only wide one"
+    assert bands["nvidia_h200"][0] > bands["nvidia_a100_sxm4_80gb"][1]
+
+
+def test_the_cap_verdict_has_all_three_branches_and_they_move_with_the_band():
+    """Every branch, including the one the withdrawn band used to get wrong.
+
+    A cap of 150 rows per expert crosses on the A100 and never crosses on the
+    H200, and against 160.3-176.2 it would have been called "NEVER crosses" for
+    both. The verdict is a claim about a device, and this is the arithmetic
+    that makes it one.
+    """
+    refit = _load("alpha_refit")
+    a100 = [139.6, 149.3]
+    h200 = [152.1, 165.6]
+    assert refit.cap_verdict(150.0, a100) == "crosses"
+    assert refit.cap_verdict(150.0, h200) == "NEVER crosses"
+    assert refit.cap_verdict(145.0, a100) == "inside the band"
+    assert refit.cap_verdict(160.0, h200) == "inside the band"
+    assert refit.cap_verdict(0.0, a100) == "NEVER crosses"
+
+
+def test_the_adversarial_cap_table_names_its_cards_and_not_the_withdrawn_band(
+        capsys):
+    """The output a reader actually sees, on the real corpus."""
+    refit = _load("alpha_refit")
+    csvs = sorted(str(p) for p in PUBLISHED.glob("*/run_*.csv"))
+    assert csvs, "the published corpus is the input this test is about"
+    assert refit.main([*csvs, "--bootstrap", "5", "--adversarial"]) == 0
+    out = capsys.readouterr().out
+    section = out.split("### 4.")[1]
+    assert "vs nvidia_h200 152.1-165.6" in section
+    assert "vs nvidia_a100_sxm4_80gb 139.6-149.3" in section
+    quoting = [ln for ln in section.splitlines() if "160.3-176.2" in ln]
+    assert not any(ln.strip().startswith("|") for ln in quoting), \
+        "the withdrawn band may be named as history, never scored against"
+    assert all("used to quote" in ln for ln in quoting)
+    assert "vs ridge band 160.3-176.2" not in out
+    assert "NEVER crosses" in section
+    assert "ridge of 152.1" in section, "C2's rows are H200 rows"
+
+
+def test_the_cap_table_refuses_rather_than_falling_back_to_the_constant(monkeypatch,
+                                                                       capsys):
+    """The FAIL branch: no calibration resolves, so no table is printed.
+
+    Planted rather than reasoned about. The whole defect being repaired is a
+    tool reaching for a module constant when the device's own number was not
+    available, so the no-calibration path must produce a refusal and must not
+    contain the withdrawn numbers anywhere.
+    """
+    refit = _load("alpha_refit")
+    monkeypatch.setattr(refit, "card_ridge_bands", lambda *a, **k: [])
+    refit.print_ai_cap_table(0.558)
+    out = capsys.readouterr().out
+    assert "REFUSED" in out
+    assert "160.3" not in out and "176.2" not in out
+    assert "| BLOCK_M |" not in out
+
+
+def test_the_c2_paragraph_refuses_when_the_h200_calibration_is_missing(monkeypatch,
+                                                                      capsys):
+    """The second FAIL branch: one card present, but not the one C2 was measured on.
+
+    Scoring H200 rows against the A100's band would be the same substitution in
+    the opposite direction, so the paragraph is dropped instead.
+    """
+    refit = _load("alpha_refit")
+    monkeypatch.setattr(refit, "card_ridge_bands",
+                        lambda *a, **k: [("nvidia_a100_sxm4_80gb", 145.8,
+                                          [139.6, 149.3])])
+    refit.print_ai_cap_table(0.558)
+    out = capsys.readouterr().out
+    assert "| BLOCK_M |" in out, "the table itself still has a card to score against"
+    assert "REFUSED rather than scored" in out
+    assert "FINDINGS C2 puts mixtral's" not in out
+
+
+def test_the_crossing_report_docstring_no_longer_teaches_the_withdrawn_ridge():
+    """A usage line is read as a recommendation, and 160.3 was one.
+
+    `--ridge` is required, so the example is the only ridge the file suggests;
+    it suggested the figure that reached an A100 arm from an H200 calibration.
+    """
+    report = _load("crossing_report")
+    # The usage block continues with a backslash, so the literal joins into one
+    # line and the runnable command has to be matched as a substring.
+    assert "--ridge 162.8 --impl vllm_fused_experts" in report.__doc__
+    assert "--ridge 160.3 --impl" not in report.__doc__
+    assert "used to read `--ridge 160.3`" in report.__doc__, \
+        "the withdrawn figure is named as history, so a reader can follow it"
+    staircase = report.print_staircase.__doc__
+    assert "152.1-165.6" in staircase
+    assert "CV 21.2%" in staircase, "the measured spreads are unchanged"
+    assert "against the measured ridge band" not in staircase

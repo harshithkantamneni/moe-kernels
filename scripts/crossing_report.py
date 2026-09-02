@@ -8,7 +8,13 @@ and prints it beside the `2R/b` prediction.
 The measured side never consults the byte model, so the prediction can be wrong.
 
     python scripts/crossing_report.py /workspace/results/run_h200fp8b_vllm.csv \
-        --ridge 160.3 --impl vllm_fused_experts
+        --ridge 162.8 --impl vllm_fused_experts
+
+162.8 is the H200's OWN triad ridge, off `moe/bench/hardware/
+measured_nvidia_h200.yaml`. This line used to read `--ridge 160.3`, which is a
+2026-08-26 H200 figure that ended up quoted for an A100 arm too; it was
+withdrawn from all 26 published reports on 2026-09-02. `--ridge` is required
+and has no default, so a run that cannot name its card's ridge does not start.
 
 `--uncertainty` adds a 90% band, propagated from the replicate spread each token
 count already carries. Off by default so existing output is unchanged, but every
@@ -235,11 +241,21 @@ def print_staircase(found: list, predicted: float,
     number off a curve that supplies several -- is how a tile step got quoted
     as a ridge crossing for the length of this study.
 
-    Names no winner. The last crossing has the better claim on the ridge (rows
-    per expert at the last: mean 175.8, CV 21.2% against the measured ridge band
-    160.3-176.2; at the first: 123.4 and CV 40.0%), and choosing on that here
+    Names no winner. The last crossing has the tighter distribution and to that
+    extent the better claim on the ridge (rows per expert at the last: mean
+    175.8, CV 21.2%; at the first: 123.4, CV 40.0%), and choosing on that here
     would bake a preference into a report whose job is to show that the sweep
     does not resolve it. A dense token grid resolves it.
+
+    Those two means were quoted against a band of 160.3-176.2 until 2026-09-02,
+    which flattered the last crossing by sitting it inside the band. Both ends
+    of that band are H200 numbers from two calibrations of the same card whose
+    compute ceilings disagree by 9.9%, so its width was the ceiling failing to
+    reproduce and not the ridge being uncertain, and it was withdrawn from every
+    published report. Against the H200's own band, 152.1-165.6 off its committed
+    calibration, the last crossing sits ABOVE and the first below: the band
+    contains neither, and the sweep pins the ridge even less well than the old
+    figure made it look.
     """
     if len(found) < 2:
         return

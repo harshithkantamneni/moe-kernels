@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Rescore the published block_m reports against each card's OWN ridge.
 
-    python scripts/rescore_published_reports.py --dry-run
-    python scripts/rescore_published_reports.py --write
+    python scripts/rescore_published_reports.py --dry-run   # the plan; writes nothing
+    python scripts/rescore_published_reports.py --write     # rewrite the reports
+
+`--dry-run` is the default and is spelled out anyway, because the two modes of
+a script that edits committed evidence should both be things a reader can type.
+Passing both is REFUSED rather than resolved in either direction: the two flags
+are a contradiction about whether the tree is allowed to change, and picking a
+winner for the caller is how an unintended rewrite happens.
 
 WHAT WAS WRONG. All 26 committed `*.report.json` files under
 `results/published/` carry `ridge = 160.3` and `ridge_band = [160.3, 176.2]`.
@@ -159,9 +165,14 @@ def calibration(profile: str, dtype: str, sweep):
 
     The ridge is `peak(dtype) / bandwidth` off the committed yaml, and the band
     is `ridge_band_from_detail`: the SAME device measured against its own
-    surviving DRAM rulers, carried as a ratio against its ceiling pattern. Not
-    the old `[160.3, 176.2]`, which is one card's triad ridge beside another
-    card's read ridge and is a band across two machines.
+    surviving DRAM rulers, carried as a ratio against its ceiling pattern.
+
+    Not the old `[160.3, 176.2]`. Both of those are H200 figures from two
+    calibrations of that one card, 701.6 TFLOP/s over 4377.2 GB/s and 770.9 over
+    4374.5, so the width is the compute ceiling failing to reproduce rather than
+    any card's ridge being uncertain by that much. Quoting it on an A100 arm put
+    a number there that belonged to neither the arm's card nor, as a band, to
+    any single measurement.
     """
     import yaml
 
@@ -464,6 +475,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--write", action="store_true",
                     help="write the rescored reports. Without it the run is a "
                          "plan and touches nothing")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan and touch nothing. The default; "
+                         "spelled out so the documented invocation exists, and "
+                         "refused alongside --write")
     ap.add_argument("--report", type=Path, default=None,
                     help="write this run's own JSON report, with a provenance "
                          "block, to PATH")
@@ -474,6 +489,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.self_test:
         return self_test()
+
+    if args.write and args.dry_run:
+        print("REFUSED: --write and --dry-run disagree about whether this run "
+              "may edit the published tree. Pass one.")
+        return exit_codes.REFUSED
 
     sweep = load_sweep()
     now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
