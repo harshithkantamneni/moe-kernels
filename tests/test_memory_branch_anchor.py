@@ -14,11 +14,25 @@ against are the ones that would let that bracket be wrong QUIETLY:
     of health;
   * a bracket so wide it contains everything, which is not an improvement on a
     point estimate nobody can defend.
+
+And, since the 2026-09-02 audit, the four that let the GPU arm spend eight
+minutes and report a tidy null:
+
+  * a tile pin that never reached the kernel, whose expected PASS is
+    indistinguishable from a clean run in every gate that existed before M6;
+  * two integers meaning two different things in two files, so a
+    measured-and-invalid run was logged REFUSED and a genuine refusal queued as
+    a retry;
+  * a stream check that ran only on a freshly timed cell, so a fully resumed run
+    failed M0 for ever and the arm could never reach DONE;
+  * a free re-scoring that rewrote a TRACKED file, with an absolute path in it,
+    on every run including the session driver's dry one.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -160,20 +174,20 @@ def test_load_calibration_refuses_an_unknown_card(tmp_path):
 
 def planted_ladder(alpha: float, bw_anchor: float, bw_branch: float,
                    fixed_ms: float, block_m: int = 32, treads: int = 33):
-    """`t(n)` from a stated alpha, with the anchor allowed its own bandwidth.
+    """`(points, W, Act1)` around the script's own `plant_ladder`.
 
-    The anchor running SLOWER than the branch is the pathology in the committed
-    data -- the measured n=1 tread stands above the fitted line in 12 of 12 A100
-    fits -- so the plant has to be able to express it, or the test would only
-    ever exercise the case where nothing is wrong.
+    THE GENERATOR IS THE SCRIPT'S, not a second one here. `--self-test` scores
+    ten planted worlds built with it, so a plant that drifted from the one the
+    tests use would leave the self-test asserting things about a world no test
+    ever sees. This wrapper exists only to keep the bandwidths in GB/s at the
+    call sites that predate the move, and to hand back the two byte counts the
+    arithmetic tests compare against.
     """
+    points = mba.plant_ladder(alpha, bw_anchor_gbps=bw_anchor / 1e9,
+                              bw_branch_gbps=bw_branch / 1e9, fixed_ms=fixed_ms,
+                              cfg=MIXTRAL, block_m=block_m, treads=treads)
     w, act1 = mba.anchor_bytes(MIXTRAL, "bf16", block_m)
-    out = []
-    for n in range(1, treads + 1):
-        bw = bw_anchor if n == 1 else bw_branch
-        bytes_n = w * (1.0 + alpha * (n - 1)) + act1 * n
-        out.append((n, fixed_ms + bytes_n / bw * 1e3))
-    return out, w, act1
+    return points, w, act1
 
 
 def test_bracket_covers_a_planted_alpha_and_does_not_cry_wolf():
@@ -395,8 +409,8 @@ def _plan(**over) -> mba.MeasurePlan:
     base = dict(card="nvidia_h200", model="qwen2-57b-a14b", dtype="bf16",
                 block_sizes=(32, 64),
                 group_sizes=(1, 8, 16, 64), slope_tiles=(2, 3, 4), block_n=64,
-                block_k=64, num_warps=8, num_stages=3, seed=0, iters=30,
-                warmup=5, stream_reps=20)
+                block_k=64, num_warps=8, num_stages=3, seed=0, warmup_ms=300.0,
+                cell_budget_ms=400.0, trials=3, l2_flush=True)
     base.update(over)
     return mba.MeasurePlan(**base)
 
@@ -406,7 +420,8 @@ def _plan(**over) -> mba.MeasurePlan:
     ("model", "mixtral-8x7b"), ("dtype", "fp8_w8a8"), ("block_sizes", (32,)),
     ("group_sizes", (1,)), ("slope_tiles", (2, 3)), ("block_n", 256),
     ("block_k", 128), ("num_warps", 4), ("num_stages", 4), ("seed", 1),
-    ("iters", 31), ("warmup", 6), ("stream_reps", 21),
+    ("warmup_ms", 301.0), ("cell_budget_ms", 401.0), ("trials", 4),
+    ("l2_flush", False),
 ])
 def test_run_id_changes_when_any_swept_knob_changes(field, value):
     """Two settings that share an id collide, and the second silently reports
@@ -435,9 +450,23 @@ def test_the_card_is_in_the_visible_name_not_only_the_hash():
 def test_run_id_names_the_knobs_it_hashes():
     """A hash nobody can invert makes two runs indistinguishable in `ls`."""
     rid = _plan().run_id()
-    for token in ("nvidia_h200", "qwen2-57b-a14b", "bf16", "bm32_64",
+    for token in ("nvidia_h200", "qwen2_57b_a14b", "bf16", "bm32_64",
                   "g1_8_16_64", "n64", "s3"):
-        assert token in rid
+        assert token in rid, rid
+
+
+def test_every_plan_field_is_in_the_run_id_key():
+    """THE FAILURE THIS GUARDS IS A KNOB ADDED TO THE PLAN AND NOT TO THE ID.
+
+    That is not hypothetical here: `--group-m` existed before it was in the id,
+    and a G=16 run derived the G=1 directory, resumed into it, skipped every
+    cell as already measured and published G=1's timings under a G=16 heading.
+    `MeasurePlan.run_id` raises KeyError on an unmapped field for that reason,
+    and this test is what makes the KeyError arrive in CI rather than on a pod.
+    """
+    from dataclasses import fields as dc_fields
+    named = {f.name for f in dc_fields(mba.MeasurePlan)} - {"card"}
+    assert named == set(mba.ID_KNOBS), named ^ set(mba.ID_KNOBS)
 
 
 def test_a_dry_run_with_no_device_says_its_path_is_not_the_pods(capsys):
@@ -446,38 +475,44 @@ def test_a_dry_run_with_no_device_says_its_path_is_not_the_pods(capsys):
     The placeholder card is visible in the id AND called out in words, because
     the operator's next move is to check `git check-ignore` on that exact path.
     """
-    assert mba.main(["--measure", "--dry-run"]) == 3
+    assert mba.main(["--measure", "--dry-run"]) == mba.exit_codes.REFUSED
     out = capsys.readouterr().out
-    assert f"{mba.UNKNOWN_CARD_SLUG}-qwen2-57b-a14b" in out
+    assert f"{mba.UNKNOWN_CARD_SLUG}-" in out
     assert "NO DEVICE ATTACHED" in out
 
 
 def test_card_flag_prints_the_pods_real_path_from_a_laptop(capsys):
-    assert mba.main(["--measure", "--dry-run", "--card", "nvidia_h200"]) == 3
+    rc = mba.main(["--measure", "--dry-run", "--card", "nvidia_h200"])
+    assert rc == mba.exit_codes.REFUSED
     out = capsys.readouterr().out
-    assert "nvidia_h200-qwen2-57b-a14b" in out
+    assert "nvidia_h200-" in out
     assert mba.UNKNOWN_CARD_SLUG not in out
 
 
-def test_slope_tiles_below_two_are_refused_at_the_cli():
-    """The anchor may not be inside the slope it is compared against."""
+def test_slope_tiles_below_two_are_refused_at_the_cli(capsys):
+    """The anchor may not be inside the slope it is compared against.
+
+    REFUSED (2), not `SystemExit` (1). A bad flag measures nothing, and 1 in the
+    shared table is CLAIM_FAIL: "measured, and a pre-registered claim was
+    refuted". A mistyped argument is not a finding about the world.
+    """
     dense = ",".join(str(n) for n in range(1, 17))
-    with pytest.raises(SystemExit) as exc:
-        mba.main(["--measure", "--dry-run", "--slope-tiles", dense])
-    assert "must all be >= 2" in str(exc.value)
+    rc = mba.main(["--measure", "--dry-run", "--slope-tiles", dense])
+    assert rc == mba.exit_codes.REFUSED
+    assert "must all be >= 2" in capsys.readouterr().out
 
 
-def test_a_short_branch_is_refused_because_p3_cannot_be_scored_on_it():
+def test_a_short_branch_is_refused_because_p3_cannot_be_scored_on_it(capsys):
     """P3's 1.5% threshold came from 16- and 33-tread ladders. On 8 treads the
     slope moves 3.2% for a reason that is about the grid, and a threshold that
     fails for the wrong reason teaches a reader to ignore it."""
-    with pytest.raises(SystemExit) as exc:
-        mba.main(["--measure", "--dry-run", "--slope-tiles", "2,3,4,6,8,12,16"])
-    assert "branch treads" in str(exc.value)
+    rc = mba.main(["--measure", "--dry-run", "--slope-tiles", "2,3,4,6,8,12,16"])
+    assert rc == mba.exit_codes.REFUSED
+    assert "branch treads" in capsys.readouterr().out
 
 
 def test_dry_run_measures_nothing_and_says_so():
-    assert mba.main(["--measure", "--dry-run"]) == 3
+    assert mba.main(["--measure", "--dry-run"]) == mba.exit_codes.REFUSED
 
 
 # --------------------------------------------------------------------------
@@ -485,25 +520,25 @@ def test_dry_run_measures_nothing_and_says_so():
 # --------------------------------------------------------------------------
 
 def _calibration() -> mba.Calibration:
-    return mba.Calibration(
-        slug="nvidia_a100_sxm4_80gb", name="A100 (test)", checked_on="2026-09-02",
-        measured_commit="deadbeef", patterns={"triad": 1799.4, "write": A100_CEILING},
-        ceiling_pattern="write", ceiling_gbps=A100_CEILING, pin_gbps=A100_PIN,
-        dense_tflops={"bf16": 262.3712016979615}, ridge=145.81)
+    """The script's own planted calibration, not a second copy of it.
+
+    `--self-test` scores ten worlds against `SELF_TEST_CALIBRATION`; a fixture
+    here with the same numbers typed again would drift the day one of them
+    changed, and the tests would then be checking a card the self-test does not
+    use.
+    """
+    return mba.SELF_TEST_CALIBRATION
 
 
 def _cells(alpha=0.558, bw_anchor=1450e9, bw_branch=1750e9, fixed_ms=0.05,
-           groups=(1, 16), block_m=32, treads=16):
-    pts, _, _ = planted_ladder(alpha, bw_anchor, bw_branch, fixed_ms,
-                               block_m=block_m, treads=treads)
-    rows = []
-    for g in groups:
-        for n, ms in pts:
-            rows.append({"block_m": block_m, "group_m": g, "tiles": n,
-                         "rows_per_expert": block_m * n, "tokens": 0,
-                         "ms_p50": ms, "ms_min": ms, "ms_stdev": 0.0,
-                         "status": "ok", "detail": ""})
-    return rows
+           groups=(1, 16), block_m=32, treads=16, pin="ok"):
+    """A measured grid, through the script's own planter. Bandwidths in bytes/s
+    at the call sites that predate the move to GB/s."""
+    return mba.plant_cells(
+        MIXTRAL, alpha=alpha,
+        anchor_bw_by_g={g: bw_anchor / 1e9 for g in groups},
+        bw_branch_gbps=bw_branch / 1e9, fixed_ms=fixed_ms, block_m=block_m,
+        treads=treads, pin=pin)
 
 
 def test_measured_cells_recover_the_planted_alpha_inside_the_bracket():
@@ -556,9 +591,8 @@ def test_stream_gate_fails_when_the_ceiling_is_below_the_data():
 def test_anchor_invariance_gate_fails_on_a_swizzle_dependent_anchor():
     """P1's whole point: if t(1) moves with GROUP_SIZE_M, it is not a
     condition-free bound and the bracket's top end has to widen."""
-    rows = _cells(groups=(1,))
-    slow = _cells(groups=(16,), bw_anchor=1000e9)     # a 45% slower anchor at G=16
-    fits, _ = mba.fits_from_cells(rows + slow, MIXTRAL, "bf16", 64, _calibration())
+    rows = mba.plant_cells(MIXTRAL, anchor_bw_by_g={1: 1450.0, 16: 1000.0})
+    fits, _ = mba.fits_from_cells(rows, MIXTRAL, "bf16", 64, _calibration())
     assert mba.gate_m1_anchor_invariance(fits).verdict == mba.FAIL
     ok, _ = mba.fits_from_cells(_cells(), MIXTRAL, "bf16", 64, _calibration())
     assert mba.gate_m1_anchor_invariance(ok).verdict == mba.PASS
@@ -569,18 +603,23 @@ def test_score_measured_runs_every_gate_and_refuses_an_empty_grid():
     rows = _cells()
     fits, refusals, gates, lines = mba.score_measured(
         rows, MIXTRAL, "bf16", 64, cal, {"gbps": 1500.0}, planned=len(rows))
-    assert {g.number for g in gates} == {"M0", "M1", "M2", "M3", "M4", "M5"}
+    assert {g.number for g in gates} == {"M0", "M1", "M2", "M3", "M4", "M5", "M6"}
     assert fits and lines
     _, _, empty_gates, _ = mba.score_measured([], MIXTRAL, "bf16", 64, cal, None, 0)
     assert all(g.verdict == mba.FAIL for g in empty_gates
-               if g.number in {"M0", "M3", "M4", "M5"})
+               if g.number in {"M0", "M3", "M4", "M5", "M6"})
 
 
 def test_score_measured_round_trips_through_a_written_file(tmp_path, capsys):
     """The pod writes, the laptop scores. A verdict path that only runs on a
     rented GPU is a verdict path nobody tests."""
     cal = _calibration()
-    plan = _plan(block_sizes=(32,), group_sizes=(1, 16),
+    # MIXTRAL, because the cells are planted from mixtral's byte counts. Scored
+    # under another model's config the anchor rate lands at 87% of pin and M2
+    # FAILs -- which the old assertion (`rc in (0, 1)`) accepted, so the test
+    # passed for a run in which the plan and the cells described different
+    # layers.
+    plan = _plan(model="mixtral-8x7b", block_sizes=(32,), group_sizes=(1, 16),
                  slope_tiles=tuple(range(2, 17)))
     rows = _cells()
     payload = {"plan": {**plan.__dict__, "block_sizes": list(plan.block_sizes),
@@ -591,14 +630,15 @@ def test_score_measured_round_trips_through_a_written_file(tmp_path, capsys):
     path = tmp_path / "measure.json"
     path.write_text(json.dumps(payload))
     rc = mba.main(["--score-measured", str(path)])
-    assert rc in (0, 1)
+    assert rc == mba.exit_codes.DONE
     out = capsys.readouterr().out
     assert "MEASURED BRACKETS" in out
     assert "GATE M1" in out
 
 
 def test_score_measured_refuses_a_missing_file(tmp_path):
-    assert mba.main(["--score-measured", str(tmp_path / "nope.json")]) == 3
+    rc = mba.main(["--score-measured", str(tmp_path / "nope.json")])
+    assert rc == mba.exit_codes.REFUSED
 
 
 # --------------------------------------------------------------------------
@@ -720,3 +760,350 @@ def test_git_ignored_says_UNKNOWN_for_a_path_outside_the_work_tree(tmp_path):
     # ... while the two answers git CAN give still come back as booleans.
     assert mba.git_ignored(mba.PUBLISHED / "ANCHOR_RESCORE.json") is False
     assert mba.git_ignored(mba.REPO / "results" / "scratch" / "x.json") is True
+
+
+# --------------------------------------------------------------------------
+# THE PIN ASSAY (audit A10). Until 2026-09-02 the GPU arm entered
+# `override_config` and assumed it took. The refuter fed this file's scorer 128
+# synthetic cells carrying the failed-override signature -- one anchor and one
+# slope, repeated at G=1, 8, 16 and 64 -- and every gate returned PASS with exit
+# 0. These tests hold that world at INVALID, and hold the reason it used to pass
+# (M0-M5 cannot tell it from a clean run) in front of the reader.
+# --------------------------------------------------------------------------
+
+def _score(cells, stream=None, planned=None):
+    stream = stream if stream is not None else {"gbps": 1500.0}
+    planned = len(cells) if planned is None else planned
+    fits, refusals, gates, _ = mba.score_measured(
+        cells, MIXTRAL, "bf16", 64, _calibration(), stream, planned)
+    return fits, refusals, {g.number: g for g in gates}
+
+
+def test_the_failed_pin_signature_now_voids_the_run():
+    """THE AUDIT'S EXECUTED WORLD, and the argument for M6 in one assertion.
+
+    The cells are numerically IDENTICAL to a clean run -- that is what a failed
+    override produces, one kernel measured at every setting -- so M0 through M5
+    all PASS on them, exactly as they did when the refuter ran this. Only the
+    tile vLLM handed the kernel separates the two, and only M6 reads it.
+    """
+    _, _, gates = _score(mba.plant_cells(MIXTRAL, pin="default_tile"))
+    assert gates["M6"].verdict == mba.FAIL
+    assert gates["M6"].kind == mba.VALIDITY
+    assert [n for n in ("M0", "M1", "M2", "M3", "M4", "M5")
+            if gates[n].verdict != mba.PASS] == []
+    rc = mba.exit_codes.classify(g.scored() for g in gates.values())
+    assert rc == mba.exit_codes.INVALID
+
+
+def test_a_cell_with_no_pin_record_is_scored_as_unpinned_not_as_pinned():
+    """A cell that cannot show its tile is not a smaller failure than one that
+    shows the wrong tile: both leave a row CLAIMING a tile it cannot evidence,
+    which is worse than an honest unpinned row."""
+    _, _, gates = _score(mba.plant_cells(MIXTRAL, pin="missing"))
+    assert gates["M6"].verdict == mba.FAIL
+    assert "no pin assay recorded" in " ".join(gates["M6"].lines)
+
+
+def test_the_right_tile_with_a_warm_cache_still_fails_the_pin_gate():
+    """The second leg. A cache serving a previous run compiles nothing, and an
+    override that changed no constant looks the same; both are fatal in the same
+    way, which is why one gate carries both counts."""
+    _, _, gates = _score(mba.plant_cells(MIXTRAL, pin="warm_cache"))
+    assert gates["M6"].verdict == mba.FAIL
+    assert "compiled nothing new" in " ".join(gates["M6"].lines)
+
+
+def test_the_pin_gate_passes_when_both_legs_do():
+    """The gate has to be able to PASS, or it is a refusal wearing a gate's
+    clothes and the arm can never reach DONE."""
+    _, _, gates = _score(mba.plant_cells(MIXTRAL, pin="ok"))
+    assert gates["M6"].verdict == mba.PASS
+
+
+def test_the_pin_gate_fails_when_nothing_was_measured():
+    """NON-VACUITY. An empty grid assayed nothing, and a check that examined
+    nothing reports zero failures."""
+    _, _, gates = _score([], planned=0)
+    assert gates["M6"].verdict == mba.FAIL
+
+
+@pytest.mark.parametrize("mutate, needle", [
+    (lambda row: row.pop("pin"), "no pin assay recorded"),
+    (lambda row: row["pin"].update(observed={}), "nothing was read back"),
+    (lambda row: row["pin"].update(source="vllm_tuned"), "came from 'vllm_tuned'"),
+    (lambda row: row["pin"]["observed"].update(num_stages=4), "num_stages"),
+    (lambda row: row["pin"]["requested"].update(BLOCK_SIZE_M=128), "labelled block_m"),
+])
+def test_pin_disagreement_names_every_way_a_cell_can_fail_to_show_its_tile(mutate, needle):
+    """Four failures with four different fixes, kept apart on purpose. A single
+    "pin bad" would send an operator looking for a cache when the kernel was
+    taking its own tile, and the pod is rented while they look."""
+    row = mba.plant_cells(MIXTRAL, pin="ok")[0]
+    assert mba.pin_disagreement(row) == ""
+    mutate(row)
+    assert needle in mba.pin_disagreement(row)
+
+
+def test_a_partly_honoured_override_is_not_a_pass():
+    """All six constants, not the two this arm sweeps. A vLLM that honoured
+    BLOCK_SIZE_M and GROUP_SIZE_M while substituting num_warps would still be
+    running a kernel nobody asked for, timed as if it were the one asked for."""
+    cells = mba.plant_cells(MIXTRAL, pin="ok")
+    for row in cells:
+        row["pin"]["observed"]["num_warps"] = 4
+    _, _, gates = _score(cells)
+    assert gates["M6"].verdict == mba.FAIL
+
+
+def test_the_pin_source_string_has_not_drifted_from_force_tiles():
+    """`PIN_SOURCE_OVERRIDE` duplicates `moe.bench.force_tile`'s constant,
+    because importing that module at script scope pulls torch in through
+    `moe.quant` and breaks the laptop `--rescore` path. A duplicate nobody
+    checks is a duplicate that drifts."""
+    force_tile = pytest.importorskip("moe.bench.force_tile")
+    assert mba.PIN_SOURCE_OVERRIDE == force_tile.TILE_SOURCE_OVERRIDE
+
+
+# --------------------------------------------------------------------------
+# THE EXIT-CODE CONTRACT (audit A4). This file documented 2 for "a VALIDITY gate
+# failed after the eight-minute measurement" and 3 for "nothing measured", the
+# exact inverse of the session driver's table.
+# --------------------------------------------------------------------------
+
+def test_the_measure_mode_refuses_with_two_when_there_is_no_device():
+    """The audit's own test, run as a PROCESS: the integer the driver sees is
+    the only thing it can read without parsing prose."""
+    proc = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "memory_branch_anchor.py"),
+         "--measure", "--card", "nonexistent"],
+        cwd=REPO, capture_output=True, text=True, timeout=300)
+    assert proc.returncode == mba.exit_codes.REFUSED, proc.stdout[-2000:]
+    assert "REFUSED" in proc.stdout
+
+
+def test_a_validity_failure_after_measuring_is_invalid_and_not_refused():
+    """The two are opposite states and the driver treats them oppositely: a
+    REFUSED arm cost nothing and has nothing to resume into, an INVALID arm cost
+    the whole allocation and has a directory of cells that must not be scored.
+    Folding them together is what printed "REFUSED BEFORE MEASURING. Nothing
+    below is a gate" over an eight-minute run whose gate had failed."""
+    _, _, gates = _score(mba.plant_cells(MIXTRAL), stream={"gbps": 1e9})
+    assert gates["M0"].verdict == mba.FAIL
+    rc = mba.exit_codes.classify(g.scored() for g in gates.values())
+    assert rc == mba.exit_codes.INVALID
+    assert mba.exit_codes.ledger_state(rc) == "INVALID"
+
+
+def test_a_full_resume_carries_the_stream_check_and_passes_m0(tmp_path):
+    """THE ARM COULD NEVER REACH DONE. The stream check runs only on a freshly
+    timed cell, so a run that resumed every cell measured none, handed M0 a
+    None, and was REFUSED again on every attempt. The check belongs to the
+    session that measured the cells and is stored with them."""
+    cells = mba.plant_cells(MIXTRAL)
+    path = tmp_path / "cells.json"
+    path.write_text(json.dumps({"card": "nvidia_a100_sxm4_80gb", "run_id": "x",
+                                "stream_check": {"gbps": 1500.0},
+                                "cells": cells}))
+    rows, done, stream = mba.restore_cells(path, "nvidia_a100_sxm4_80gb")
+    assert len(done) == len(cells) and stream is not None
+    _, _, gates = _score(rows, stream=stream, planned=len(rows))
+    assert gates["M0"].verdict == mba.PASS
+    assert mba.exit_codes.classify(g.scored() for g in gates.values()) == 0
+
+
+def test_a_resume_refuses_a_foreign_card_and_the_legacy_shape(tmp_path):
+    """Both refusals, because the card in the id only makes the collision hard
+    to reach, not impossible: an explicit --out-dir, a directory copied between
+    pods, or a file written before the card entered the id all reach it."""
+    path = tmp_path / "cells.json"
+    path.write_text(json.dumps({"card": "nvidia_h200", "cells": []}))
+    with pytest.raises(mba.ResumeRefused) as exc:
+        mba.restore_cells(path, "nvidia_a100_sxm4_80gb")
+    assert "nvidia_h200" in str(exc.value)
+    path.write_text(json.dumps([]))          # the legacy bare list
+    with pytest.raises(mba.ResumeRefused) as exc:
+        mba.restore_cells(path, "nvidia_a100_sxm4_80gb")
+    assert "pre-card-in-id" in str(exc.value)
+    assert mba.restore_cells(tmp_path / "absent.json", "any") == ([], set(), None)
+
+
+def test_every_scored_gate_prints_exactly_one_result_line(tmp_path, capsys, scored):
+    """The ONE machine contract. The driver's summary used to grep free text
+    (`floor|sigma`) and matched a REFUSED arm's log 18 times, printing an
+    imported constant under the heading "floor" and a pre-registered expectation
+    as `[PASS]`. Here: one RESULT line per gate, nothing else shaped like one,
+    and the code the log implies is the code the function returned."""
+    rc = mba.main(["--rescore", "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    lines = mba.exit_codes.parse_result_lines(out)
+    assert len(lines) == 11, [line.name for line in lines]
+    assert len({line.name for line in lines}) == 11
+    assert mba.exit_codes.classify_text(out) == rc
+
+
+def test_the_self_test_prints_no_result_line_at_all(capsys):
+    """A planted world's verdict is not a result about this machine, and a
+    driver that grepped one would be reading a plant as a measurement."""
+    assert mba.main(["--self-test"]) == mba.exit_codes.DONE
+    out = capsys.readouterr().out
+    assert mba.exit_codes.parse_result_lines(out) == []
+    assert "pin_failed" in out
+
+
+def test_the_self_test_fails_when_a_world_is_mis_registered(monkeypatch, capsys):
+    """The proof that the self-test can return non-zero. Without this the whole
+    mode is a function that has only ever been seen to print PASS."""
+    broken = (mba.SELF_TEST_WORLDS[1].__class__(
+        **{**mba.SELF_TEST_WORLDS[1].__dict__, "expect": mba.exit_codes.DONE}),)
+    monkeypatch.setattr(mba, "SELF_TEST_WORLDS", broken)
+    assert mba.self_test() == mba.exit_codes.INVALID
+    assert "registered DONE" in capsys.readouterr().out
+
+
+def test_every_gate_this_file_can_build_has_a_result_line_name():
+    """`Gate.name` raises KeyError on an unnamed gate rather than falling back,
+    because a fallback name is a gate that quietly leaves a driver's summary."""
+    assert set(mba.GATE_NAMES) >= {"V1", "V2", "V3", "V4", "V5", "V6",
+                                   "C1", "C2", "C3", "C4", "C5",
+                                   "M0", "M1", "M2", "M3", "M4", "M5", "M6"}
+    assert len(set(mba.GATE_NAMES.values())) == len(mba.GATE_NAMES)
+    gate = mba.gate_m6_pin(mba.plant_cells(MIXTRAL))
+    back = mba.exit_codes.parse_result_lines(gate.result_line() + "\n")
+    assert [b.name for b in back] == ["pin_took_effect"]
+    assert back[0].verdict == gate.verdict
+
+
+# --------------------------------------------------------------------------
+# THE INSTRUMENT (audit A7) and the run's provenance (A5).
+# --------------------------------------------------------------------------
+
+def test_the_retired_instrument_is_gone_rather_than_wrapped():
+    """`time_call` synchronised every iteration with events created inside the
+    loop and no L2 flush, which put 0.18-0.30 ms of host enqueue time inside the
+    measured interval. A wrapper would have kept the two-instrument problem and
+    hidden it; the roof and the ladders are queue-deep, so this arm is too."""
+    assert not hasattr(mba, "time_call")
+    assert mba.timing_basis() in (None, "queue-deep/l2-flush/clock-under-load/v2")
+
+
+def test_every_timing_column_the_apparatus_requires_reaches_the_row():
+    """A row that recorded a time and not the clock it was taken at cannot be
+    compared with the roof, and this study has nine session scripts that record
+    no clock at all."""
+    timing = pytest.importorskip("moe.bench.timing")
+    t = timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=200, trials=3,
+        warmup_ms=301.0, l2_flush=True, sm_clock_load_mhz=1480.0,
+        sm_clock_start_mhz=1480.0, sm_clock_end_mhz=1470.0, clock_level_ok=True,
+        clock_drift_ok=True, samples=600, warmup_calls=90, flush_mb=256,
+        clock_samples=9, clock_source="nvml", clock_poll_ms=0.2,
+        host_bound=False, host_enqueue_ms=0.4)
+    columns = mba.timing_columns(t)
+    assert {"instrument", "warmup_ms", "iters", "trials", "sm_clock_load_mhz",
+            "clock_level_ok", "clock_drift_ok", "l2_flush"} <= set(columns)
+    assert columns["instrument"] == timing.TIMING_BASIS
+    assert columns["warmup_ms"] == 301.0
+
+
+def test_the_plan_names_its_instrument_and_its_warmup_in_milliseconds(capsys):
+    """The ladders warm for 300 ms. This arm warmed for 5 CALLS, and the two
+    numbers were then compared tread for tread."""
+    mba.main(["--measure", "--dry-run", "--card", "nvidia_h200"])
+    out = capsys.readouterr().out
+    assert "300 ms warmup" in out
+    assert "iters is NOT a knob" in out
+
+
+def test_the_rescore_report_carries_a_provenance_block(tmp_path):
+    """A number nobody can attribute to a commit, a card and a ruler is not a
+    measurement. The 26 published report.json files carry none of the three."""
+    mba.main(["--rescore", "--out-dir", str(tmp_path)])
+    payload = json.loads((tmp_path / "ANCHOR_RESCORE.json").read_text())
+    assert set(mba.PV.TOP_LEVEL_KEYS) <= set(payload)
+    block = payload["provenance"]
+    assert block["provenance_version"] == mba.PV.PROVENANCE_VERSION
+    # NOTHING WAS TIMED, and the block says so in words rather than borrowing
+    # the current instrument's name for numbers it did not produce.
+    assert "times nothing" in payload["instrument"]
+    assert block["ridge_source"] and block["bandwidth_source"]
+
+
+# --------------------------------------------------------------------------
+# THE OUTPUT PATH (audit A6) and the stated MDE (B14).
+# --------------------------------------------------------------------------
+
+def test_a_default_rescore_leaves_the_work_tree_exactly_as_it_found_it(tmp_path):
+    """--rescore rewrote a TRACKED pair on every run, including the one the
+    session driver makes under --dry-run, with the author's home directory
+    embedded. The tree was dirty from arm one and 44,872 of 100,144 published
+    rows carry git_dirty=True."""
+    def porcelain():
+        proc = subprocess.run(["git", "status", "--porcelain"], cwd=REPO,
+                              capture_output=True, text=True, timeout=60)
+        if proc.returncode != 0:
+            pytest.skip("not a git work tree")
+        return proc.stdout
+    committed = REPO / "results" / "published" / "ANCHOR_RESCORE.txt"
+    before, bytes_before = porcelain(), (committed.read_bytes()
+                                         if committed.exists() else None)
+    mba.main(["--rescore"])
+    assert porcelain() == before
+    assert (committed.read_bytes() if committed.exists() else None) == bytes_before
+
+
+def test_only_publish_routes_the_rescore_into_the_tree(monkeypatch):
+    """The flag is the whole guard, so the routing is asserted rather than
+    exercised: running --publish here would rewrite the committed pair, which is
+    the thing under test."""
+    seen = {}
+
+    def capture(args):
+        seen["out"] = args.out_dir
+        return 0
+
+    monkeypatch.setattr(mba, "run_rescore", capture)
+    mba.main(["--rescore"])
+    assert seen["out"] != mba.PUBLISHED
+    assert mba.git_ignored(seen["out"] / "ANCHOR_RESCORE.txt") is not False
+    mba.main(["--rescore", "--publish"])
+    assert seen["out"] == mba.PUBLISHED
+
+
+def test_the_rescore_report_embeds_a_repo_relative_root(tmp_path):
+    """An absolute path is a fact about one laptop, and this one was being
+    written into a tracked file."""
+    mba.main(["--rescore", "--out-dir", str(tmp_path)])
+    text = (tmp_path / "ANCHOR_RESCORE.txt").read_text()
+    assert "published root : results/published" in text
+    assert str(REPO) not in text
+    assert str(REPO) not in (tmp_path / "ANCHOR_RESCORE.json").read_text()
+
+
+def test_the_plan_states_an_mde_and_labels_c5_a_prior(capsys):
+    """B14: no arm in this study stated an MDE, so every threshold read as a
+    number the author liked. C5's 0.05 had no justification at all."""
+    mba.main(["--measure", "--dry-run", "--card", "nvidia_h200"])
+    out = capsys.readouterr().out
+    assert "MINIMUM DETECTABLE EFFECT" in out
+    assert f"{mba.mde_ratio():.2%}" in out
+    assert "is a PRIOR" in out
+
+
+def test_the_mde_follows_the_noise_assumption_it_is_derived_from(capsys):
+    """A stated assumption a reader can disagree with: the published replicates
+    run 0.76% to 1.82%, and at the pessimistic end M1's 4% gate stops being
+    comfortably above the smallest effect it could resolve."""
+    assert mba.mde_ratio(0.0182) > mba.mde_ratio(0.0077)
+    assert mba.mde_ratio(0.0182) > mba.ANCHOR_INVARIANCE_SMALL_G
+    mba.main(["--measure", "--dry-run", "--card", "nvidia_h200",
+              "--noise", "0.0182"])
+    assert "sigma = 1.82%" in capsys.readouterr().out
+
+
+def test_c5_scores_against_the_prior_it_names():
+    """The constant and the threshold text have to be one thing, or the report
+    prints a number the gate does not use."""
+    gate = mba.gate_c5_correction_size([])
+    assert str(mba.C5_SHIFT_PRIOR) in gate.threshold
+    assert "PRIOR" in gate.threshold
