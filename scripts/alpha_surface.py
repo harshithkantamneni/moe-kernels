@@ -88,20 +88,50 @@ def main() -> int:
         n = len(v)
         return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
 
+    # PAIRED AT MATCHED LEVELS, never pooled. Averaging one lever over the others
+    # is only valid on a balanced grid and this one is ragged: the 2026-09-01
+    # H200 run had ten identifiable mixtral fits against seven for qwen2, spread
+    # differently over GROUP_SIZE_M, and the pooled medians came out 0.731 and
+    # 0.713 -- a footprint effect of 0.018, which is nothing. At matched
+    # (G=1, BN=64) the same data give 0.98 and 0.72. The pooling did not measure
+    # a small effect, it averaged a large one away, and it would have been read
+    # as evidence AGAINST the footprint mechanism.
+    others = {"g": ("model", "bn", "bm"), "model": ("g", "bn", "bm"),
+              "bn": ("model", "g", "bm")}
     for lever, label in (("g", "GROUP_SIZE_M, the swizzle width"),
                          ("model", "model, i.e. per-expert footprint"),
                          ("bn", "BLOCK_SIZE_N, the activation-confound control")):
         vals = sorted({x[lever] for x in ident}, key=str)
         if len(vals) < 2:
             continue
+        keys = others[lever]
+        cells: dict = {}
+        for x in ident:
+            cells.setdefault(tuple(x[k] for k in keys), {})[x[lever]] = x
+        # A cell only counts when it holds EVERY level of the lever, so the
+        # comparison is within one shape at one tile rather than across shapes.
+        full = [c for c in cells.values() if set(c) == set(vals)]
         print()
         print(f"alpha against {label}:")
+        if not full:
+            print(f"  no {'/'.join(keys)} cell holds every level of this lever, "
+                  "so it cannot be compared without pooling. Not reported.")
+            for v in vals:
+                sel = [x["alpha"] for x in ident if x[lever] == v]
+                print(f"    (unpaired: {v} n={len(sel)} median "
+                      f"{med(sel):.3f} -- NOT a comparison)")
+            continue
+        print(f"  {len(full)} cell(s) of ({', '.join(keys)}) hold every level")
         for v in vals:
-            sel = [x["alpha"] for x in ident if x[lever] == v]
-            cor = [x["corr"] for x in ident if x[lever] == v
-                   and x["corr"] is not None]
+            sel = [c[v]["alpha"] for c in full]
+            cor = [c[v]["corr"] for c in full if c[v]["corr"] is not None]
             print(f"  {str(v):<20} n={len(sel):<3} median alpha {med(sel):.3f}"
                   + (f"   corrected {med(cor):.3f}" if cor else ""))
+        lo, hi = vals[0], vals[-1]
+        deltas = [c[hi]["alpha"] - c[lo]["alpha"] for c in full]
+        print(f"  paired change {lo} -> {hi}: median {med(deltas):+.3f}"
+              f"   (every cell moves the same way: "
+              f"{'yes' if len({d > 0 for d in deltas}) == 1 else 'NO'})")
 
     print()
     print("READ IT AGAINST THE THREE CANDIDATES:")
