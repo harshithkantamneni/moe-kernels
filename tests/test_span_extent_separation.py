@@ -24,10 +24,16 @@ NINE GROUPS, and the second is the point.
     on another, and the plan says so before anything is measured. The run id was
     card-free and `restore` ignored `gpu_name`, so a second pod resuming through
     the shared network volume measured zero cells and published the first card's
-    timings;
+    timings. The SELF-TEST WORLD is in that key too, because a self test and a
+    measured run detect the same card and three worlds were writing one
+    report.md; and a run that restored every arm and timed none says so in one
+    line, because the session driver books two span arms that derive one id;
   - the SELF TEST THAT ASSERTS SOMETHING: every world reproduces the verdict row
     registered for it, an S gate FAILS when one does not, a gate added without
-    an expectation is caught, and the registered rows differ from each other. On
+    an expectation is caught, a gate REMOVED without editing the table is caught
+    and its S gate is UNKNOWN rather than a quiet pass, and the registered rows
+    differ from each other -- planted, by making two worlds register one row,
+    rather than recomputed from the gate's own PASS condition. On
     the grid the driver used to run first, the world where the claim is TRUE
     could not pass C2 and produced the same claim-gate row as the world with no
     mechanism at all, which is why `--densify` is now the default and a grid
@@ -38,11 +44,18 @@ NINE GROUPS, and the second is the point.
   - ONE INSTRUMENT: the private `time_calls` copy is gone, `time_arm` hands
     `timing.time_kernel` the knobs from argv, the KernelTiming columns round
     trip through the CSV with their three states intact, and V7 FAILS when two
-    instruments appear in one run -- including in every synthetic world, which
-    is what stops a laptop self test being quotable;
+    RULERS appear in one run -- two instrument strings, or one instrument with
+    the L2 flush on for some rows and off for others, which the basis string
+    cannot tell apart. These rows are unflushed by design and are published as
+    NOT roof-comparable. Every synthetic world fails V7, which is what stops a
+    laptop self test being quotable;
   - the STATISTICS a reader needs beside the numbers: the interval's scope and
-    its n, degenerate at the n=2 the gates permit, and an MDE derived from a
-    stated noise assumption rather than discovered after the fact.
+    its n, degenerate at the n=2 the gates permit, an MDE derived from a stated
+    noise assumption rather than discovered after the fact, and BOTH sides of
+    the instrument's iteration clamp -- read off `iters_for` itself, because two
+    docstrings here restated it as [10, 10000] against a real `hi` of 2000 and
+    therefore reported the third of the grid that underruns its budget as
+    nobody.
 
 The script is loaded by path rather than imported, because `scripts/` is not a
 package and never has been.
@@ -52,6 +65,8 @@ from __future__ import annotations
 import csv
 import dataclasses
 import importlib.util
+import inspect
+import json
 import math
 import sys
 from pathlib import Path
@@ -545,7 +560,8 @@ def test_a_budget_missing_one_launch_reports_no_reconstruction():
 BASE_ID_ARGS = dict(card="NVIDIA H200", models=["mixtral-8x7b"], tokens=[1, 2],
                     dtype="bf16", routing="uniform", seed=0, reps=3,
                     target_ms=200.0, warmup_ms=200.0, trials=3, l2_flush=False,
-                    arms=["fused", "gemm_up", "gemm_down"], densify=False)
+                    arms=["fused", "gemm_up", "gemm_down"], densify=False,
+                    self_test=None, self_test_noise=0.0)
 
 
 @pytest.mark.parametrize("field,value", [
@@ -555,6 +571,12 @@ BASE_ID_ARGS = dict(card="NVIDIA H200", models=["mixtral-8x7b"], tokens=[1, 2],
     ("warmup_ms", 50.0), ("trials", 5), ("l2_flush", True),
     ("arms", ["fused", "gemm_up", "gemm_down", "act"]),
     ("densify", True),
+    # The two the audit's own off-GPU check line moved through. A self test and
+    # a measured run detect the same card, so without these the runbook's
+    # `--self-test kernel` would have written its generated report.md and
+    # summary.json OVER a measured run's, in that run's directory.
+    ("self_test", "kernel"),
+    ("self_test_noise", 0.05),
 ])
 def test_every_swept_parameter_changes_the_run_id(field, value):
     """A run id that omits a swept parameter means two settings derive the same
@@ -600,6 +622,75 @@ def test_the_default_sets_are_named_in_the_id_and_any_other_set_is_spelled_out()
            for m in (SE.DEFAULT_MODELS, ("mixtral-8x7b",),
                      ("mixtral-8x7b", "qwen2-57b-a14b"))}
     assert len(ids) == 3
+
+
+def test_the_three_worlds_and_a_measured_run_get_four_directories():
+    """The failure this pins is the one the audit's own off-GPU check line would
+    have caused. A self test and a measured run detect the SAME card, so with
+    `--self-test` out of the key the runbook's `--self-test kernel` line writes a
+    GENERATED report.md and summary.json into a measured run's directory, over
+    the real ones, carrying the real run's provenance block."""
+    ids = {world: SE.plan_run_id(**dict(BASE_ID_ARGS, self_test=world))
+           for world in (None, *SE.WORLD_EXPECTATIONS)}
+    assert len(set(ids.values())) == len(ids)
+    # And the world survives into the VISIBLE part, not only the hash: a
+    # directory whose world can be recovered only by opening summary.json is
+    # what let three worlds overwrite one report.
+    assert "casemeasured" in ids[None]
+    for world in SE.WORLD_EXPECTATIONS:
+        assert f"case{world}" in ids[world]
+
+
+def test_two_self_tests_of_different_worlds_do_not_overwrite_one_report(tmp_path,
+                                                                        capsys):
+    """End to end, because the collision was end to end: three worlds wrote one
+    summary.json and the survivor was whichever ran last."""
+    for world in ("kernel", "neither"):
+        SE.main(["--self-test", world, "--fail-on-world", "--models",
+                 "mixtral-8x7b,qwen2-57b-a14b", "--out-dir", str(tmp_path)])
+    capsys.readouterr()
+    summaries = sorted(tmp_path.glob("*/summary.json"))
+    assert len(summaries) == 2
+    worlds = {json.loads(path.read_text())["synthetic_world"]
+              for path in summaries}
+    assert worlds == {"kernel", "neither"}
+
+
+def test_a_run_that_restored_every_arm_says_it_timed_nothing():
+    """THE DRIVER'S TWO SPAN ARMS DERIVE ONE RUN ID, because `--densify` is now
+    the default and one arm passes it. The second restores every row, times
+    nothing, and would land DONE in the ledger having spent no minutes. The
+    driver fix is deleting the bare arm and is not this file's; refusing to be
+    silent about it is."""
+    replay = SE.MeasurementTally(measured=0, restored=756,
+                                 path=Path("/w/timings.csv"))
+    assert replay.replay is True
+    assert replay.note.startswith("REPLAY: this run TIMED NOTHING")
+    assert "756" in replay.note and "/w/timings.csv" in replay.note
+    # And the FAIL branch of the same question: a run that measured anything at
+    # all is not a replay, however much it also restored.
+    partial = SE.MeasurementTally(measured=1, restored=755,
+                                  path=Path("/w/timings.csv"))
+    assert partial.replay is False
+    assert partial.note.startswith("MEASURED: 1 arm row(s)")
+    assert SE.MeasurementTally(0, 0, Path("/w/timings.csv")).replay is False
+
+
+def test_the_store_counts_what_it_restored_against_what_it_wrote(tmp_path):
+    """The tally is not a guess: `Store` counts the two events as they happen,
+    because from inside a resume and a duplicated driver arm are the same
+    thing."""
+    cell = SE.Cell("mixtral-8x7b", 256, "bf16")
+    first = SE.Store(tmp_path / "t.csv", "H200")
+    first.write(timed_arm(), cell, meta_for())
+    assert (first.written_arms, first.restored_arms) == (1, 0)
+    first.close()
+
+    second = SE.Store(tmp_path / "t.csv", "H200")
+    assert second.restore(("mixtral-8x7b", 256, "gemm_up")) is not None
+    assert second.restore(("mixtral-8x7b", 256, "act")) is None
+    second.close()
+    assert (second.written_arms, second.restored_arms) == (0, 1)
 
 
 def meta_for(gpu_name="H200"):
@@ -1028,6 +1119,50 @@ def test_the_registered_worlds_do_not_all_land_on_one_claim_gate_row():
     assert len(set(SE.world_triples().values())) == len(SE.WORLD_EXPECTATIONS)
 
 
+def test_S_discrimination_FAILS_when_two_worlds_register_one_row(monkeypatch):
+    """THE PLANTED FAIL BRANCH of the gate above, which the assertion above does
+    not exercise: it recomputes the gate's own PASS condition and would hold
+    just as well if the gate were deleted. Here `neither` is given `kernel`'s
+    row -- the exact state the sparse grid produced on hardware -- and the gate
+    has to say so."""
+    _, _, _, gates = run_world("kernel", models=list(SE.DEFAULT_MODELS),
+                               densify=True)
+    passing = SE.self_test_gates(SE.WORLDS["kernel"], gates)
+    assert gate(passing, "S-discrimination").passed is True
+
+    monkeypatch.setitem(SE.WORLD_EXPECTATIONS, "neither",
+                        dict(SE.WORLD_EXPECTATIONS["kernel"]))
+    failing = gate(SE.self_test_gates(SE.WORLDS["kernel"], gates),
+                   "S-discrimination")
+    assert failing.passed is False
+    assert "distinct rows across" in failing.observed
+    assert "would not be evidence about which world we are in" in failing.invalidates
+
+
+def test_a_registered_gate_that_was_never_scored_is_caught_and_is_UNKNOWN(
+        monkeypatch):
+    """The OTHER half of S-registered, and the UNKNOWN branch of an S-<KEY>.
+
+    `test_a_gate_added_without_an_expectation_is_caught` plants "scored but not
+    registered". This plants "registered but not scored", which is what a gate
+    silently disappearing from `build_gates` looks like, and it must not be a
+    quiet PASS: the row it stands for is then an expectation about nothing, and
+    the S gate that mirrors it cannot say the world was right or wrong."""
+    _, _, _, gates = run_world("kernel", models=list(SE.DEFAULT_MODELS),
+                               densify=True)
+    dropped = [g for g in gates if not g.name.startswith("C3")]
+    s_gates = SE.self_test_gates(SE.WORLDS["kernel"], dropped)
+
+    registered = gate(s_gates, "S-registered")
+    assert registered.passed is False
+    assert "registered but not scored: ['C3']" in registered.observed
+
+    orphan = gate(s_gates, "S-C3")
+    assert orphan.passed is None
+    assert orphan.tag == exit_codes.UNKNOWN
+    assert "C3 was not scored in this run" in orphan.observed
+
+
 def test_the_sparse_grid_cannot_tell_the_kernel_world_from_the_neither_world():
     """WHY --densify IS THE DEFAULT, measured rather than asserted. On the
     published powers-of-two grid every expert holds a power-of-two number of
@@ -1251,6 +1386,81 @@ def test_V7_fails_when_two_instruments_appear_in_one_run():
     assert "(none recorded)" in v7.observed
 
 
+def flushed_world(flush_by_arm):
+    """The kernel world with a real instrument stamped and a chosen flush state.
+
+    A synthetic world carries `synthetic:<world>` and no flush at all, which is
+    the state V7 refuses; to ask V7 about the FLUSH the rows have to be
+    otherwise clean, so the basis is stamped on and `l2_flush` is set per arm.
+    """
+    cells = build(models=list(SE.DEFAULT_MODELS), densify=True)
+    results = SE.synthetic_results(cells, SE.WORLDS["kernel"], ridge=RIDGE,
+                                   bandwidth_gbps=BANDWIDTH, noise=0.0, seed=0)
+    basis = SE.timing_basis()
+    for arms in results.values():
+        for name, arm in arms.items():
+            arms[name] = dataclasses.replace(arm, instrument=basis,
+                                             l2_flush=flush_by_arm(name))
+    return cells, results
+
+
+def test_V7_FAILS_when_flushed_and_unflushed_rows_share_one_instrument():
+    """`KernelTiming` stamps TIMING_BASIS on every row it produces WHATEVER the
+    flush was, so a CSV mixing flushed with unflushed rows carries one
+    instrument string and two rulers. V7 read the string until 2026-09-02 and
+    called that one ruler; a flushed arm pays a cold L2 per iteration and an
+    unflushed one does not, and every number on this page is one arm's
+    milliseconds over another's."""
+    _, results = flushed_world(lambda name: False)
+    clean = SE.analyse(build(models=list(SE.DEFAULT_MODELS), densify=True),
+                       results)
+    assert gate(SE.build_gates(clean), "V7").passed is True
+    assert set(clean.rulers) == {f"{SE.timing_basis()} l2_flush=off"}
+
+    cells, mixed_results = flushed_world(lambda name: name == "fused")
+    mixed = SE.analyse(cells, mixed_results)
+    v7 = gate(SE.build_gates(mixed), "V7")
+    assert v7.passed is False
+    assert "l2_flush=on" in v7.observed and "l2_flush=off" in v7.observed
+    # One instrument, two rulers: the column alone cannot see this.
+    assert len(mixed.instruments) == 1 and len(mixed.rulers) == 2
+
+
+def test_rows_this_script_times_are_published_as_NOT_roof_comparable():
+    """timing.py's contract is that a row is comparable with the ROOF only if it
+    carries TIMING_BASIS. This script times with the flush OFF on purpose (see
+    `time_arm`: V2 compares an isolated launch against the same launch inside a
+    five-launch sequence), so its rows carry the basis of an instrument
+    configured differently from the one the roof was measured with. The negative
+    travels with the numbers rather than living in a docstring."""
+    basis = SE.timing_basis()
+    assert SE.roof_comparable({f"{basis} l2_flush=off": 9}, basis) is False
+    assert SE.roof_comparable({f"{basis} l2_flush=on": 9}, basis) is True
+    assert SE.roof_comparable({"synthetic:kernel l2_flush=unrecorded": 9},
+                              basis) is False
+    # Two states that are not an answer: nothing timed, and a host that cannot
+    # name the instrument to compare against.
+    assert SE.roof_comparable({}, basis) is None
+    assert SE.roof_comparable({f"{basis} l2_flush=on": 9}, None) is None
+
+    _, results = flushed_world(lambda name: False)
+    cells = build(models=list(SE.DEFAULT_MODELS), densify=True)
+    v7 = gate(SE.build_gates(SE.analyse(cells, results)), "V7")
+    assert "NOT ROOF-COMPARABLE" in v7.observed
+
+
+def test_the_summary_publishes_the_ruler_and_the_roof_answer(tmp_path, capsys):
+    """A consumer applying "carries TIMING_BASIS, therefore roof-comparable" to
+    these rows must find the contradiction in the file."""
+    SE.main(["--self-test", "kernel", "--fail-on-world", "--models",
+             "mixtral-8x7b,qwen2-57b-a14b", "--out-dir", str(tmp_path)])
+    capsys.readouterr()
+    summary = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
+    assert summary["roof_comparable"] is False
+    assert "flush ON" in summary["roof_comparable_note"]
+    assert list(summary["rulers"]) == ["synthetic:kernel l2_flush=unrecorded"]
+
+
 def test_V7_is_UNKNOWN_and_never_PASS_when_nothing_was_timed():
     """A check that examined nothing reports zero failures too."""
     cells = build(models=["mixtral-8x7b"], tokens=[256])
@@ -1377,6 +1587,67 @@ def test_the_plan_names_the_instrument_and_where_it_would_clamp(capsys):
     assert "OVERRUN the budget" in text
 
 
+def test_the_clamp_is_read_off_the_shared_function_and_not_restated():
+    """TWO DOCSTRINGS HERE SAID [10, 10000] AGAINST A REAL hi OF 2000, and the
+    difference is a factor of five on the threshold a third of the grid sits
+    under. A copy of a bound drifts, so the plan asks `iters_for` for its own
+    defaults and this pins that it is the same function's."""
+    from moe.bench import timing
+
+    params = inspect.signature(timing.iters_for).parameters
+    assert SE.iters_clamp() == (params["lo"].default, params["hi"].default)
+    assert SE.iters_clamp() != (10, 10000)
+
+
+def test_the_plan_names_the_arms_that_will_UNDERRUN_the_budget(capsys):
+    """The overrun side was printed and the underrun side was not, so the plan
+    said "no trial should overrun the budget" and nothing at all about the 261
+    arms of 756 that deliver less measured time than the budget bought."""
+    SE.main(["--dry-run"])
+    text = capsys.readouterr().out
+    assert "iters clamp [10, 2000]" in text
+    assert "261 of 756 arm(s) are modelled faster than 200 ms / 2000" in text
+    assert "UNDERRUN the budget" in text
+    assert "no arm is modelled slower than 200 ms / 10" in text
+
+
+def test_both_clamp_lines_have_a_PASS_branch_and_a_FAIL_branch(capsys):
+    """A plan line that can only say one thing is not a check. `--target-ms 1`
+    puts every arm over the top clamp and none under the bottom one, which is
+    the mirror image of the default grid."""
+    plan = "\n".join(SE.render_instrument_plan(
+        build(models=["mixtral-8x7b"], tokens=[1, 8192]),
+        ["fused", "gemm_up", "gemm_down"], target_ms=1.0, warmup_ms=200.0,
+        trials=3, l2_flush=False, ridge=RIDGE, bandwidth_gbps=BANDWIDTH))
+    assert "OVERRUN the budget" in plan
+    assert "no arm is modelled faster than 1 ms / 2000" in plan
+
+    slow_none = "\n".join(SE.render_instrument_plan(
+        build(models=["mixtral-8x7b"], tokens=[1]),
+        ["align"], target_ms=200.0, warmup_ms=200.0, trials=3, l2_flush=False,
+        ridge=RIDGE, bandwidth_gbps=BANDWIDTH))
+    assert "no trial should overrun the budget" in slow_none
+    assert "UNDERRUN the budget" in slow_none
+
+
+def test_the_cost_estimate_over_charges_the_arms_that_underrun_and_says_so():
+    """`estimated_seconds` returns the design's BUDGET. Below the top clamp the
+    trial delivers less than the budget, so the number is an over-estimate
+    there, and the docstring that claimed the cost never depends on the cell's
+    own speed held for two thirds of the default grid."""
+    lo, hi = SE.iters_clamp()
+    cells = build(models=["mixtral-8x7b"], tokens=[1])
+    fastest = min(SE.modelled_arm_ms(c, a, ridge=RIDGE,
+                                     bandwidth_gbps=BANDWIDTH)
+                  for c in cells for a in ["align", "act", "sum"])
+    assert fastest * hi < 200.0
+    budget = SE.estimated_seconds(cells, ["align"], reps=1, target_ms=200.0,
+                                  warmup_ms=200.0, trials=3)
+    delivered = (200.0 + 3 * fastest * hi) / 1e3
+    assert budget == pytest.approx(0.8)
+    assert delivered < budget
+
+
 def test_the_cost_estimate_is_the_instruments_budget_and_not_the_cells_speed():
     """`time_kernel` sizes iters so every arm costs the same wall time. The old
     estimate multiplied a modelled millisecond by a call count and said a
@@ -1407,8 +1678,10 @@ def test_a_find_pieces_refusal_exits_REFUSED_and_not_INVALID(tmp_path, capsys,
     everything else as RETRY, so the arm was queued for another attempt that
     would refuse again."""
     monkeypatch.setattr(SE, "missing_gpu_stack", lambda: "")
-    monkeypatch.setattr(SE, "run_measurement",
-                        lambda *a, **k: (None, "PieceMissing: silu_and_mul"))
+    monkeypatch.setattr(
+        SE, "run_measurement",
+        lambda *a, **k: (None, "PieceMissing: silu_and_mul",
+                         SE.MeasurementTally(0, 0, tmp_path / "timings.csv")))
     code = SE.main(["--models", "mixtral-8x7b", "--out-dir", str(tmp_path)])
     capsys.readouterr()
     assert code == exit_codes.REFUSED

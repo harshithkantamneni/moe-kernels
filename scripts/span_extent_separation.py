@@ -187,6 +187,15 @@ session driver ran first, the `kernel` world -- the world where the claim is
 TRUE -- gave C2 FAIL, C5 FAIL and C3 UNKNOWN, and produced the SAME claim-gate
 row as the `neither` world, in which no mechanism exists. Nothing said so.
 
+AND A NOTE FOR WHOEVER MERGES THIS. `--densify` being the default makes the
+session driver's two span arms -- one bare, one `--densify` -- derive the SAME
+run id and the same output directory, so the second restores every row the first
+wrote, times nothing, and still lands DONE in the ledger. The data is right and
+the ledger is wrong, the fix is deleting the bare arm in the driver, and that
+file is not this one. What this file does instead is refuse to be quiet about
+it: see `MeasurementTally`, the `REPLAY:` line and `arms_measured_here` /
+`arms_restored` / `replay` in `summary.json`.
+
 WHICH IS WHY `--densify` IS NOW THE DEFAULT, and the plan REFUSES on a grid that
 cannot answer. On the published powers-of-two grid every expert holds a
 power-of-two number of rows, BLOCK_M is a power of two, and the padding factor
@@ -221,6 +230,7 @@ import contextlib
 import csv
 import dataclasses
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -263,6 +273,37 @@ def timing_basis() -> str | None:
     except Exception:                                     # noqa: BLE001
         return None
     return timing.TIMING_BASIS
+
+
+#: What `timing.iters_for` clamps to, for a machine that cannot import it to
+#: ask: a laptop with no torch, where nothing is measured anyway. One place, and
+#: it is a fallback rather than the source, for the reason `iters_clamp` gives.
+ITERS_CLAMP_FALLBACK = (10, 2000)
+
+
+def iters_clamp() -> tuple[int, int]:
+    """The `[lo, hi]` `timing.iters_for` really clamps `iters` to, READ OFF IT.
+
+    A COPY OF A BOUND DRIFTS, AND THIS ONE HAD. Until 2026-09-02 two docstrings
+    here said the instrument clamps to [10, 10000] while `iters_for` clamps at
+    `hi=2000`, and the gap is not cosmetic. At the default `--target-ms 200` the
+    lower threshold is `target_ms / hi`: 0.1 ms with the real bound, 0.02 ms
+    with the stated one. 261 of the 756 arms in the default plan are modelled
+    under 0.1 ms, so a third of the grid underruns its budget and the plan said
+    nothing about it, while `estimated_seconds` charged all of them the full
+    `warmup_ms + trials * target_ms` and was therefore an OVER-estimate there.
+
+    So the plan asks the shared function for its own defaults rather than
+    restating them, and a future edit to `iters_for` moves this file's threshold
+    with it instead of silently invalidating a sentence.
+    """
+    try:
+        from moe.bench import timing
+    except Exception:                                     # noqa: BLE001
+        return ITERS_CLAMP_FALLBACK
+    params = inspect.signature(timing.iters_for).parameters
+    return int(params["lo"].default), int(params["hi"].default)
+
 
 # --------------------------------------------------------------------------
 # The numbers this script argues about, every one with its provenance, so a
@@ -320,6 +361,33 @@ DEFAULT_TOKENS: tuple[int, ...] = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024,
 #: uses, spelled the same way, because two names for "no card" would sort into
 #: two directories.
 NO_CARD = "nocard"
+
+#: What the run id's `case` knob records when nothing was generated. A sentinel
+#: and not an empty string: `provenance.run_id` raises `UnresolvedKnob` on an
+#: empty value, and rightly, because "" reads as "not filled in" and this is a
+#: filled-in answer.
+MEASURED_NOT_GENERATED = "measured"
+
+
+def run_case(self_test: str | None, self_test_noise: float) -> str:
+    """WHERE THIS RUN'S ARM TIMES CAME FROM, as one value of the run id.
+
+    `measured-noise0`, or `kernel-noise0`, `extent-noise0.05` and so on. One
+    knob rather than two, and named `case` rather than `self_test`, for a reason
+    that is entirely about `ls`: `provenance.run_id` sorts the knobs by name and
+    truncates the VISIBLE part at 96 characters, so anything sorting after
+    `routing` is cut off this script's ids and survives only in the hash. A
+    directory whose world can only be recovered by opening `summary.json` is
+    what let three worlds overwrite one report in the first place.
+
+    THE NOISE IS ALWAYS IN IT, including on a measured run where it generates
+    nothing. That over-splits directories for a knob a pod run never passes, and
+    it is deliberate: an id that is conditional on which knobs "matter" has a
+    branch in it, and a knob quietly not mattering is the exact failure the key
+    exists to prevent.
+    """
+    return f"{self_test or MEASURED_NOT_GENERATED}-noise{self_test_noise:g}"
+
 
 # --------------------------------------------------------------------------
 # Arms.
@@ -808,19 +876,27 @@ def estimated_seconds(cells: list[Cell], arms: list[str], *, reps: int,
                       target_ms: float, warmup_ms: float, trials: int) -> float:
     """GPU seconds at the byte model's own timings, compiles excluded.
 
-    THE COST NO LONGER DEPENDS ON THE CELL'S OWN SPEED, and that is a property
-    of the instrument rather than of this arithmetic. `time_kernel` warms for
-    `warmup_ms` of delivered load and then sizes `iters` so a trial lasts
-    `target_ms`, so every arm of every cell costs the same wall time by design:
-    `warmup_ms + trials * target_ms` per repeat. The old estimate multiplied a
-    modelled millisecond by a call count and therefore said a T=8192 deepseek-v3
-    cell cost a thousand times a T=1 mixtral one, which the instrument makes
-    false.
+    THE COST STOPS DEPENDING ON THE CELL'S OWN SPEED BETWEEN THE TWO CLAMPS,
+    and that is a property of the instrument rather than of this arithmetic.
+    `time_kernel` warms for `warmup_ms` of delivered load and then sizes `iters`
+    so a trial lasts `target_ms`, so an arm whose modelled per-call time lands
+    inside `[target_ms / hi, target_ms / lo]` costs
+    `warmup_ms + trials * target_ms` per repeat whatever it is. The old estimate
+    multiplied a modelled millisecond by a call count and therefore said a
+    T=8192 deepseek-v3 cell cost a thousand times a T=1 mixtral one, which the
+    instrument makes false.
 
-    `iters_for` clamps at 10 and 10000 calls, so a cell slower than
-    `target_ms / 10` overruns and one faster than `target_ms / 10000` underruns.
-    Both are reported as the bound they are rather than modelled: this returns
-    the design's own budget, and `--max-minutes` is what actually stops the run.
+    OUTSIDE THE CLAMPS THIS IS A BOUND, NOT THE COST, and the plan says which
+    way. `iters_clamp` reads the real `[lo, hi]` off `iters_for` -- [10, 2000],
+    not the [10, 10000] this docstring claimed until 2026-09-02. An arm slower
+    than `target_ms / lo` cannot fit `lo` calls in the budget and OVERRUNS it,
+    so this UNDER-estimates it. An arm faster than `target_ms / hi` is capped at
+    `hi` calls and delivers less measured time than the budget, so this
+    OVER-estimates it -- and at the default target that is 261 of the 756 arms
+    in the default plan, a third of the grid, the fastest modelled at 0.006 ms.
+    Neither is modelled here: this returns the design's own budget, both
+    departures from it are counted by name in `render_instrument_plan`, and
+    `--max-minutes` is what actually stops the run.
     """
     per_arm_ms = warmup_ms + trials * target_ms
     return len(cells) * len(arms) * reps * per_arm_ms / 1e3
@@ -963,6 +1039,52 @@ class ArmResult:
 
 
 Results = dict[tuple[str, int], dict[str, ArmResult]]
+
+#: How `arm_ruler` spells a flush state that no row recorded: a synthetic world,
+#: or a CSV from before the column existed. Not folded into "off", because "we
+#: do not know" and "we know it was off" are different rows to a reader.
+FLUSH_UNRECORDED = "l2_flush=unrecorded"
+
+
+def arm_ruler(arm: ArmResult) -> str:
+    """The instrument string AND the flush state, which is what a ratio needs.
+
+    WHY THE FLUSH IS PART OF THE RULER AND NOT A FOOTNOTE. `KernelTiming` stamps
+    `timing.TIMING_BASIS` on every row it produces, unconditionally, whatever
+    `l2_flush` was; `timing.py`'s own contract (its module docstring) is that a
+    row is comparable with the ROOF only if it carries that string. This script
+    times with the flush OFF on purpose -- `time_arm` says why, and the reason
+    is V2 -- so its rows carry the basis of an instrument configured differently
+    from the one that measured the roof. Reading the basis alone, a downstream
+    consumer would divide these milliseconds by a roof they were never
+    commensurable with.
+
+    So V7 asks its question of THIS string rather than of the column, and
+    `roof_comparable` answers the roof question separately and in the negative.
+    Two rows with the same ruler are divisible by each other, which is the only
+    thing every ratio on this page needs; two rows with the same instrument and
+    different flush states are not, and until 2026-09-02 V7 called them one.
+    """
+    flush = {True: "l2_flush=on", False: "l2_flush=off"}.get(
+        arm.l2_flush, FLUSH_UNRECORDED)
+    return f"{arm.instrument or '(none recorded)'} {flush}"
+
+
+def roof_comparable(rulers: dict[str, int], basis: str | None) -> bool | None:
+    """May these rows be divided by the ROOF? None when this host cannot say.
+
+    True needs both halves: the instrument named by `timing.TIMING_BASIS`, and
+    the flush ON, because the roof was measured queue-deep WITH the flush. This
+    script's default answer is therefore False, deliberately and per its own
+    design, and it is stamped in `summary.json` so that the negative travels
+    with the numbers instead of living in a docstring here. Nothing on this page
+    is scored against the roof -- every ratio is measured over measured and the
+    predicted crossing cancels -- so False costs this script nothing and costs a
+    reader who assumed otherwise a great deal.
+    """
+    if basis is None or not rulers:
+        return None
+    return set(rulers) == {f"{basis} l2_flush=on"}
 
 
 def arm_ms(results: Results, cell_key: tuple[str, int], arm: str) -> float | None:
@@ -1466,10 +1588,17 @@ class Analysis:
     comparability: dict[str, float]
     estimator_spreads: dict[str, float]
     failures: list[str]
-    #: Instrument string -> how many timed arms carry it. V7 reads this. A run
-    #: whose rows came from two instruments is a run whose ratios compare two
-    #: rulers, and until 2026-09-02 every row here carried no instrument at all.
+    #: Instrument string -> how many timed arms carry it. A run whose rows came
+    #: from two instruments is a run whose ratios compare two rulers, and until
+    #: 2026-09-02 every row here carried no instrument at all.
     instruments: dict[str, int]
+    #: RULER string -> how many timed arms carry it, where a ruler is the
+    #: instrument TOGETHER WITH the L2 flush state. V7 reads this one, and the
+    #: two are separate fields because they answer different questions: the
+    #: instrument column says which code timed the row, the ruler says whether
+    #: two rows are divisible by each other. `arm_ruler` says why the flush has
+    #: to be in it.
+    rulers: dict[str, int]
     #: Timed arms whose recorded clock verdict was False. Counted rather than
     #: gated: every ratio here is between two arms of the SAME round-robin
     #: repeat, so a card that sat low all session moves neither, and what the
@@ -1611,6 +1740,7 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
     incomplete: list[str] = []
     configs_observed = arms_timed = artifacts = 0
     instruments: dict[str, int] = {}
+    rulers: dict[str, int] = {}
     clock_level_bad = clock_drift_bad = host_bound_arms = 0
     sample_counts: list[int] = []
     fused_config: dict[tuple[str, int], dict] = {}
@@ -1639,6 +1769,8 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
                 # instrument column existed, and folding it in with the rows
                 # that name one is how a retired ruler survives a resume.
                 instruments[arm.instrument] = instruments.get(arm.instrument, 0) + 1
+                ruler = arm_ruler(arm)
+                rulers[ruler] = rulers.get(ruler, 0) + 1
                 clock_level_bad += arm.clock_level_ok is False
                 clock_drift_bad += arm.clock_drift_ok is False
                 host_bound_arms += arm.host_bound is True
@@ -1700,6 +1832,7 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
         configs_observed=configs_observed, comparability=comparability,
         estimator_spreads=spreads, failures=failures, refusals=refusals,
         incomplete_configs=incomplete, instruments=instruments,
+        rulers=rulers,
         clock_level_bad=clock_level_bad, clock_drift_bad=clock_drift_bad,
         host_bound_arms=host_bound_arms)
 
@@ -1987,38 +2120,57 @@ def build_gates(analysis: Analysis) -> list[Gate]:
 
     # V7. ONE RULER FOR EVERY ARM. Every ratio on this page is one arm's
     # milliseconds over another's, so the one thing that must be true of the
-    # timings is that they were produced by the same instrument. It is a
-    # reachable FAIL in three real ways and each has happened somewhere in this
-    # repo: a resumed CSV holding rows written by the retired `time_call` loop
-    # beside rows written by `time_kernel`; a `--self-test` world, whose arms
-    # carry `synthetic:<world>` and were produced by no instrument at all; and a
-    # laptop replay where torch would not import so the basis could not even be
-    # named. The gate reads the string on the ROW, not a run-level header,
-    # because a resume is exactly the case a header gets wrong.
+    # timings is that they were produced by the same instrument IN THE SAME
+    # CONFIGURATION. It is a reachable FAIL in four real ways and each has
+    # happened or could happen here: a resumed CSV holding rows written by the
+    # retired `time_call` loop beside rows written by `time_kernel`; a
+    # `--self-test` world, whose arms carry `synthetic:<world>` and were
+    # produced by no instrument at all; a laptop replay where torch would not
+    # import so the basis could not even be named; and a CSV mixing flushed with
+    # unflushed rows, which `KernelTiming` stamps with the SAME basis string and
+    # which this gate called one ruler until 2026-09-02. `arm_ruler` is where
+    # the flush joined the key. The gate reads the strings on the ROWS, not a
+    # run-level header, because a resume is exactly the case a header gets
+    # wrong.
     basis = timing_basis()
     found = analysis.instruments
+    rulers = analysis.rulers
     v7_verdict: bool | None
     if not found:
         v7_verdict = None
+    elif len(rulers) > 1:
+        # A definite mix, and nameable or not it is one: two rulers in one CSV
+        # is a FAIL this host can see without knowing what either should be.
+        v7_verdict = False
     elif basis is None:
         # Nothing to compare against: torch is absent here, so this process
-        # cannot say what the rows on disk should have said.
+        # cannot say what the one ruler on disk should have said.
         v7_verdict = None
     else:
         v7_verdict = set(found) == {basis}
-    named = ", ".join(f"{name or '(none recorded)'}: {n} arm(s)"
-                      for name, n in sorted(found.items()))
+    named = ", ".join(f"{name}: {n} arm(s)" for name, n in sorted(rulers.items()))
+    roof_ok = roof_comparable(rulers, basis)
+    # The clause below is about ONE case: rows this instrument produced, with
+    # the flush off. A synthetic world is not roof-comparable either, and saying
+    # "carries the basis string" about `synthetic:kernel` would be false.
+    basis_unflushed = (basis is not None and set(found) == {basis}
+                       and roof_ok is False)
     gates.append(Gate(
         "V7 one instrument", VALIDITY,
-        "every timed arm was measured by the one instrument the study times with",
+        "every timed arm was measured by the one instrument the study times "
+        "with, in one configuration of it",
         f"every timed arm's `instrument` column is {basis or 'TIMING_BASIS'} "
-        f"and no other value appears",
+        f"and its `l2_flush` column agrees with every other row's",
         v7_verdict,
         ("no arm was timed, so no instrument was recorded" if not found
          else (f"observed {named}"
                + ("; torch is not importable here so this process cannot name "
                   "the instrument to compare against"
                   if basis is None else "")
+               + ("; NOT ROOF-COMPARABLE: these rows carry the basis string but "
+                  "were not flushed, and the roof was, so nothing here may be "
+                  "divided by it -- nothing here is (see `roof_comparable`)"
+                  if basis_unflushed else "")
                + (f"; clock LEVEL bad on {analysis.clock_level_bad}, DRIFT bad "
                   f"on {analysis.clock_drift_bad}, host-bound on "
                   f"{analysis.host_bound_arms} of {analysis.arms_timed} timed "
@@ -3146,7 +3298,8 @@ def detect_card() -> str:
 def plan_run_id(card: str, models: list[str], tokens: list[int], dtype: str,
                 routing: str, seed: int, reps: int, target_ms: float,
                 warmup_ms: float, trials: int, l2_flush: bool,
-                arms: list[str], densify: bool) -> str:
+                arms: list[str], densify: bool, self_test: str | None,
+                self_test_noise: float) -> str:
     """A run id that is a HASH OF THE PLAN, so a rerun resumes by default.
 
     EVERY swept or pinned parameter is in the key, THE CARD FIRST. The failure
@@ -3177,13 +3330,26 @@ def plan_run_id(card: str, models: list[str], tokens: list[int], dtype: str,
     count, and `l2_flush` decides whether every timed iteration starts with a
     cold L2. `--ridge` and `--bandwidth-gbps` stay OUT: they price the plan and
     touch no ratio, so two costings of one sweep belong in one directory.
+
+    AND `--self-test` AND `--self-test-noise`, WHICH WERE THE OTHER HALF OF THE
+    SAME DEFECT, together in the `case` knob `run_case` builds. They are not
+    swept on a pod, they are swept on a laptop, and until 2026-09-02 they were
+    not in the key: the `kernel`, `extent` and `neither` worlds all derived one
+    id, so three runs wrote one `report.md` and one `summary.json` and the
+    survivor was whichever ran last, labelled by its own `synthetic_world` field
+    and by nothing else. Worse on the box, where the card is detected
+    identically for a generated page and a measured one: the runbook's own
+    off-GPU check line would have overwritten a measured run's report and
+    summary IN PLACE, leaving a synthetic page beside a real `timings.csv` and
+    carrying the real run's provenance block.
     """
     return PV.run_id(
         card=card, models=named_or_listed(models, DEFAULT_MODELS, "published4"),
         tokens=named_or_listed(tokens, DEFAULT_TOKENS, "pow2grid"),
         arms=named_or_listed(arms, ARM_ORDER, "all"),
         dtype=dtype, routing=routing, seed=seed, reps=reps, target=target_ms,
-        warmup=warmup_ms, trials=trials, flush=l2_flush, densify=densify)
+        warmup=warmup_ms, trials=trials, flush=l2_flush, densify=densify,
+        case=run_case(self_test, self_test_noise))
 
 
 def named_or_listed(chosen, default, name: str):
@@ -3258,6 +3424,52 @@ def survey_resume(path: Path, gpu_name: str) -> ResumeSurvey:
     return ResumeSurvey(path, gpu_name, restorable, foreign, errored)
 
 
+@dataclass(frozen=True)
+class MeasurementTally:
+    """How many arms this process TIMED, against how many it restored from disk.
+
+    THE FINDING THIS EXISTS FOR, and it is a finding about the SESSION DRIVER
+    rather than about this script. The driver books two span arms, one bare and
+    one `--densify`, 45 minutes and 35. `--densify` has been the default since
+    2026-09-02 -- the sparse grid cannot answer C2 even in the world where C2 is
+    true -- so both arms derive the SAME run id and the same directory, and the
+    second restores every row the first wrote, measures nothing, and lands DONE
+    in the ledger having spent zero minutes. The data is right; the ledger is
+    not. The fix is one line in the driver, deleting the bare arm, and that file
+    is not this slice's to edit.
+
+    What IS this script's is refusing to be silent about it. A resumed run and a
+    duplicate arm are indistinguishable from inside -- both are "the rows are
+    already there", and a resume after a killed pod is a feature -- so this does
+    not change the exit code, which would break the resume. It counts, says so
+    in one unmissable line, and puts both numbers in `summary.json` where the
+    ledger's own bookkeeping can read them.
+    """
+
+    measured: int
+    restored: int
+    path: Path
+
+    @property
+    def replay(self) -> bool:
+        """Every arm came off disk and nothing was timed here."""
+        return self.measured == 0 and self.restored > 0
+
+    @property
+    def note(self) -> str:
+        """The one line, whichever case this is."""
+        if self.replay:
+            return (f"REPLAY: this run TIMED NOTHING. All {self.restored} "
+                    f"arm(s) were restored from {self.path}, written by an "
+                    f"earlier run with this run id on this card, and no GPU "
+                    f"minute was spent here. That is correct for a resume after "
+                    f"an interrupted run. If a session driver booked this as a "
+                    f"SECOND arm expecting fresh minutes, its two arms derive "
+                    f"one run id and only the first one spends anything")
+        return (f"MEASURED: {self.measured} arm row(s) written by this run, "
+                f"{self.restored} restored from {self.path}")
+
+
 class Store:
     """Append-only CSV of arm results, flushed per arm, re-read on resume.
 
@@ -3285,6 +3497,11 @@ class Store:
         self.path = path
         self.gpu_name = (gpu_name or "").strip()
         self.done: dict[tuple[str, str, int, str], dict] = {}
+        #: Arms this process restored from disk, and arms it wrote itself. The
+        #: pair is the whole content of `replay_note`: a run that restored every
+        #: arm and wrote none spent no GPU minutes, whatever its exit code says.
+        self.restored_arms = 0
+        self.written_arms = 0
         #: Card -> rows on disk under it, for every card that is not this one.
         self.foreign: dict[str, int] = {}
         if fresh and path.exists():
@@ -3328,6 +3545,7 @@ class Store:
         row = self.done.get((self.gpu_name, *key))
         if row is None or row.get("error"):
             return None
+        self.restored_arms += 1
 
         def num(name, cast=float):
             try:
@@ -3376,6 +3594,7 @@ class Store:
         row = result.row(cell, meta)
         self._writer.writerow(row)
         self._fh.flush()
+        self.written_arms += 1
         self.done[(self.gpu_name, *result.key)] = row
 
     def close(self) -> None:
@@ -3552,9 +3771,18 @@ def render_instrument_plan(cells: list[Cell], arms: list[str], *,
                            bandwidth_gbps: float) -> list[str]:
     """What the instrument will do to each arm, including where it clamps.
 
-    `timing.iters_for` clamps `iters` to [10, 10000], so a cell modelled slower
-    than `target_ms / 10` cannot fit a trial into the budget and will overrun.
-    Naming those cells here is cheaper than discovering them at minute 40 of a
+    BOTH SIDES OF THE CLAMP, because both are real and this plan used to print
+    one. `iters_clamp` reads `[lo, hi]` off `timing.iters_for` itself. An arm
+    modelled slower than `target_ms / lo` cannot fit `lo` calls into the budget
+    and OVERRUNS it; an arm faster than `target_ms / hi` is capped at `hi` calls
+    and UNDERRUNS it, delivering less measured kernel time than the budget
+    bought and a wider interval than the plan implies. At the default
+    `--target-ms 200` the underrun threshold is 0.1 ms and a third of the
+    default grid sits below it, which the old text -- written against a stated
+    clamp of 10000 that the shared function does not have -- put at 0.02 ms and
+    therefore reported as nobody.
+
+    Naming both here is cheaper than discovering either at minute 40 of a
     45-minute arm.
     """
     basis = timing_basis() or ("TIMING_BASIS -- torch is not importable here, so "
@@ -3567,23 +3795,44 @@ def render_instrument_plan(cells: list[Cell], arms: list[str], *,
            + ("" if l2_flush else " -- see `time_arm` for why this arm, alone "
               "in the study, does not flush: V2 compares an isolated launch "
               "against the same launch inside a five-launch sequence")]
-    slow = []
+    lo, hi = iters_clamp()
+    slow, fast, fastest = [], [], None
     for cell in cells:
         for arm in arms:
             ms = modelled_arm_ms(cell, arm, ridge=ridge,
                                  bandwidth_gbps=bandwidth_gbps)
-            if ms * 10 > target_ms:
-                slow.append(f"{cell.model} T={cell.num_tokens} {arm} "
-                            f"~{ms:.1f} ms")
+            where = f"{cell.model} T={cell.num_tokens} {arm}"
+            if ms * lo > target_ms:
+                slow.append(f"{where} ~{ms:.1f} ms")
+            elif ms * hi < target_ms:
+                fast.append(f"{where} ~{ms:.3f} ms")
+                fastest = ms if fastest is None else min(fastest, ms)
+    out.append(f"  iters clamp [{lo}, {hi}], read off `timing.iters_for` "
+               f"itself, so a trial holds {target_ms:g} ms of kernel time only "
+               f"for an arm between {target_ms / hi:.3f} and "
+               f"{target_ms / lo:.1f} ms per call")
     if slow:
         out.append(f"  {len(slow)} arm(s) are modelled slower than "
-                   f"{target_ms:g} ms / 10, the instrument's minimum of 10 "
+                   f"{target_ms:g} ms / {lo}, the instrument's minimum of {lo} "
                    f"calls per trial, so their trials will OVERRUN the budget: "
                    + "; ".join(slow[:4])
                    + (f"; and {len(slow) - 4} more" if len(slow) > 4 else ""))
     else:
-        out.append(f"  no arm is modelled slower than {target_ms:g} ms / 10, so "
-                   f"no trial should overrun the budget")
+        out.append(f"  no arm is modelled slower than {target_ms:g} ms / {lo}, "
+                   f"so no trial should overrun the budget")
+    if fast:
+        out.append(f"  {len(fast)} of {len(cells) * len(arms)} arm(s) are "
+                   f"modelled faster than {target_ms:g} ms / {hi}, the "
+                   f"instrument's maximum of {hi} calls per trial, so their "
+                   f"trials UNDERRUN the budget -- the fastest at "
+                   f"{fastest:.3f} ms delivers about "
+                   f"{fastest * hi:.1f} ms of kernel time per trial, not "
+                   f"{target_ms:g}, and the cost estimate above OVER-charges "
+                   f"them: " + "; ".join(fast[:4])
+                   + (f"; and {len(fast) - 4} more" if len(fast) > 4 else ""))
+    else:
+        out.append(f"  no arm is modelled faster than {target_ms:g} ms / {hi}, "
+                   f"so no trial should underrun the budget")
     return out
 
 
@@ -4003,7 +4252,7 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id or plan_run_id(
         card, models, tokens, args.dtype, args.routing, args.seed, args.reps,
         args.target_ms, args.warmup_ms, args.trials, args.l2_flush, arms,
-        args.densify)
+        args.densify, args.self_test, args.self_test_noise)
     out_dir = ((args.out_dir or (results_root() / "span_extent_separation"))
                / run_id)
     csv_path, report_path = out_dir / "timings.csv", out_dir / "report.md"
@@ -4085,6 +4334,10 @@ def main(argv: list[str] | None = None) -> int:
 
     stopped = ""
     self_gates: list[Gate] = []
+    # The self-test path times nothing and restores nothing; an empty tally is
+    # the true statement about it, and `synthetic_world` in the summary is what
+    # says the page is generated.
+    tally = MeasurementTally(0, 0, csv_path)
     if args.self_test is not None:
         world = WORLDS[args.self_test]
         solved = ""
@@ -4125,8 +4378,8 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             print(f"\nREFUSED: {missing}")
             return exit_codes.REFUSED
-        results, stopped = run_measurement(cells, arms, args, out_dir, csv_path,
-                                           run_id, gpu_name, prov)
+        results, stopped, tally = run_measurement(
+            cells, arms, args, out_dir, csv_path, run_id, gpu_name, prov)
         if results is None:
             # `find_pieces` could not locate a launch of vLLM's fused path, or
             # its signature drifted. Nothing was measured and nothing was spent,
@@ -4166,6 +4419,22 @@ def main(argv: list[str] | None = None) -> int:
             f"bound imported from scripts/replicate_noise_floor.py PRIOR_SD; "
             f"not measured from this run's own arms"),
         "instruments": analysis.instruments,
+        # THE RULER, AND THE ROOF ANSWER, BESIDE THE NUMBERS. `instruments` is
+        # the column; `rulers` is the column together with the flush state, and
+        # it is what V7 scores. `roof_comparable` is False here by design and is
+        # published as False so a consumer applying `timing.py`'s "carries
+        # TIMING_BASIS, therefore roof-comparable" rule to these rows finds the
+        # contradiction in the file rather than in a docstring.
+        "rulers": analysis.rulers,
+        "roof_comparable": roof_comparable(analysis.rulers, timing_basis()),
+        "roof_comparable_note": (
+            "the roof was measured with the L2 flush ON and these rows are "
+            "timed with it OFF (see `time_arm`: V2 compares an isolated launch "
+            "against the same launch inside a five-launch sequence, and "
+            "flushing charges the isolated arm a cold cache the fused path "
+            "never pays). Every ratio on this page is measured over measured "
+            "and the predicted crossing cancels, so no number here is scored "
+            "against the roof"),
         "clock_level_bad_arms": analysis.clock_level_bad,
         "clock_drift_bad_arms": analysis.clock_drift_bad,
         "host_bound_arms": analysis.host_bound_arms,
@@ -4188,6 +4457,13 @@ def main(argv: list[str] | None = None) -> int:
         },
         "cells_measured": analysis.cells_measured,
         "arms_timed": analysis.arms_timed,
+        # `arms_timed` counts the rows the ANALYSIS read, restored ones
+        # included. These two count what this PROCESS did, which is the pair a
+        # ledger needs to tell a run that spent 45 minutes from one that spent
+        # none. See `MeasurementTally`.
+        "arms_measured_here": tally.measured,
+        "arms_restored": tally.restored,
+        "replay": tally.replay,
         "refusals": analysis.refusals,
         "models_decomposed": [d.model for d in analysis.decomposed],
         "models_excluded": {d.model: d.excluded for d in analysis.per_model
@@ -4220,6 +4496,10 @@ def main(argv: list[str] | None = None) -> int:
         print(render_gates(self_gates))
     if stopped:
         print(f"\nPARTIAL RUN: {stopped}.")
+    if tally.replay:
+        # Twice on purpose, and the second time at the bottom, because the
+        # bottom of stdout is what a human reads and what a driver logs.
+        print("\n" + "=" * 72 + f"\n{tally.note}.\n" + "=" * 72)
     print(f"\nEVERYTHING IS SAVED TO {out_dir}")
     print(f"  rows    {csv_path}\n  report  {report_path}\n"
           f"  summary {out_dir / 'summary.json'}\n  {gitignore_note(out_dir)}")
@@ -4268,7 +4548,11 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_measurement(cells: list[Cell], arms: list[str], args, out_dir: Path,
                     csv_path: Path, run_id: str, gpu_name: str, prov):
-    """The metered part. Returns `(results, stopped)`, or `(None, reason)`.
+    """The metered part. Returns `(results, stopped, tally)`.
+
+    `results` is None when `find_pieces` refused, and then nothing was measured
+    and the tally is empty. `MeasurementTally` says why the third element is
+    there at all.
 
     TRITON_CACHE_DIR is pointed at this run's own directory BEFORE vLLM is
     imported. A warm cache compiles and dumps nothing, which makes V4's compile
@@ -4283,7 +4567,7 @@ def run_measurement(cells: list[Cell], arms: list[str], args, out_dir: Path,
         pieces = find_pieces()
     except SeparationRefusal as exc:
         print(f"\nNOT A RESULT: {exc}")
-        return None, str(exc)
+        return None, str(exc), MeasurementTally(0, 0, csv_path)
 
     # `gpu_name` is forced to the card the Store keys on rather than re-probed.
     # The row's `gpu_name` column IS the resume key, so a row whose column and
@@ -4343,7 +4627,9 @@ def run_measurement(cells: list[Cell], arms: list[str], args, out_dir: Path,
                    "disk and the same command resumes")
     finally:
         store.close()
-    return results, stopped
+    tally = MeasurementTally(store.written_arms, store.restored_arms, csv_path)
+    print("\n" + tally.note)
+    return results, stopped, tally
 
 
 if __name__ == "__main__":                                # pragma: no cover
