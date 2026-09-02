@@ -468,6 +468,42 @@ def _disable_torch_extensions() -> None:
               "against a different torch. Nothing here processes images or audio.")
 
 
+def _shim_moved_transformers_helpers() -> None:
+    """Restore names that trust_remote_code modules import from private paths.
+
+        ImportError: cannot import name 'is_torch_fx_available' from
+                     'transformers.utils.import_utils'
+
+    DeepSeek-V2-Lite ships its own modeling_deepseek.py, pinned to a revision
+    from 2024, and it imports helpers out of `transformers.utils.import_utils` --
+    a private path that has since been reorganised. The name still exists on
+    `transformers.utils`; only the submodule it used to live in changed. The
+    model is frozen on the Hub and cannot be updated, so the choice is to shim or
+    to pin transformers back for every other model too.
+
+    Only names that ALREADY EXIST elsewhere in transformers are re-exported. A
+    missing helper is left missing rather than stubbed with a plausible default:
+    inventing `is_torch_fx_available = lambda: False` would silence the import
+    and change which code path the model takes, which is the kind of quiet
+    behaviour change this study spends its time hunting.
+    """
+    try:
+        import transformers.utils as _u
+        import transformers.utils.import_utils as _iu
+    except Exception:                              # pragma: no cover
+        return
+    restored = []
+    for name in ("is_torch_fx_available", "is_torch_fx_proxy",
+                 "is_torchdynamo_compiling"):
+        if not hasattr(_iu, name) and hasattr(_u, name):
+            setattr(_iu, name, getattr(_u, name))
+            restored.append(name)
+    if restored:
+        print(f"[capture] re-exported {', '.join(restored)} onto "
+              "transformers.utils.import_utils for a trust_remote_code module "
+              "pinned to an older layout")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -528,6 +564,7 @@ def main() -> int:
           f"batches of {args.batch_size}")
 
     _disable_torch_extensions()
+    _shim_moved_transformers_helpers()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"[capture] loading {cfg.hf_repo} (first run downloads to HF_HOME)")
