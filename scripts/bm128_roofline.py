@@ -17,12 +17,23 @@ four were built to answer, and asks it with a stopwatch:
     as deep as the card allows, and divide the achieved TFLOP/s by the dense bf16
     rate THIS card was measured at.
 
-Two outcomes, and they are the study's fork:
+Three outcomes, and they are the study's fork:
 
-  * throughput rises and then PLATEAUS below the roof -> the ceiling is real and
-    it binds in the regime production actually runs.
+  * throughput rises and then PLATEAUS below the roof, AND the control tile
+    REACHES the roof -> the ceiling is real, it binds in the regime production
+    actually runs, and the instrument has been shown able to see a tile arrive
+    at the roof it is being said not to reach.
   * throughput REACHES the roof -> the ceiling is not binding, and the study's
     central claim is about a regime that does not occur.
+  * throughput plateaus below the roof and the control beats it there, but the
+    control does not reach the roof EITHER -> TILE-DEPENDENT GAP, CEILING
+    UNLOCATED. A difference between two tiles is established and its height is
+    not: something below the roof binds both of them, this measurement does not
+    say what, and the study may quote the gap and not the ceiling. That third
+    outcome is not hypothetical. No tile in this repository's published corpus
+    reaches 0.95 of ridge x bandwidth: the BLOCK_M=256 control peaks at
+    0.48-0.54 of the roof on the H200 and 0.56-0.64 on the A100, so on today's
+    evidence this is the outcome the pod arm should expect.
 
 WHY 128 AND NOT A --block-m FLAG. 128 is the only production-relevant regime.
 From the one published arm that RECORDS the tile vLLM chose:
@@ -35,11 +46,43 @@ From the one published arm that RECORDS the tile vLLM chose:
 
 The re-read term only exists when there is more than one M-tile per expert. At
 16, 32 and 64 vLLM never runs multi-tile, so the caps computed for those tiles
-are real and NEVER APPROACHED; at 128 it runs up to 32 tiles per expert and the
-cap sits near 150 FLOP/byte against a ridge near 163. A `--block-m` flag would
-let a run answer a different question under this script's name, so there is not
-one. The tile that IS a parameter is the control, `--control`, and it is a
-parameter because which tile can serve as a control depends on the card.
+are real and NEVER APPROACHED; at 128 it runs up to 32 tiles per expert. A
+`--block-m` flag would let a run answer a different question under this script's
+name, so there is not one. The tile that IS a parameter is the control,
+`--control`, and it is a parameter because which tile can serve as a control
+depends on the card.
+
+WHAT THE FIT SAYS ABOUT 128, AND WHY NO CAP IS QUOTED HERE. This paragraph used
+to read "the cap sits near 150 FLOP/byte against a ridge near 163", computed as
+2 BM / (alpha b) at alpha 0.85. Both halves are retracted, for two independent
+reasons, and the retraction is the reason this script exists.
+
+  * THE ESTIMATOR. Every alpha in this study comes from `LadderFit.alpha`, which
+    is B/(A+B): the per-tile slope over the fitted level at n=1.
+    `moe.bench.ai_model` writes out what that estimator returns over the real
+    three-term traffic,
+
+        alpha_fitted = (alpha_b + phi) / (1 + phi + delta)                (EXA)
+
+    with `phi` one M-tile's activation-and-output traffic in units of one full
+    weight read and `delta` the fused layer's fixed cost in the same units. So
+    2 BM / (alpha_fitted b) is NOT the cap: it is the cap multiplied by
+    (1 + phi + delta) (`ai_model.lin_overstatement`), which at BLOCK_M=128 with
+    BLOCK_SIZE_N=64 on mixtral is about a third too high. `ai_model.cap_from_
+    fitted` is the corrected reading and it REFUSES a fitted alpha the three-term
+    model cannot produce, which several of this study's published alphas are.
+  * THE ALPHA. 0.85 is not what the ladders read. At the swizzle this script
+    pins by default (GROUP_SIZE_M=1) the direct ladders on both cards give
+    0.92-1.02, which puts even the UNCORRECTED cap at 128-139 Op/B: BELOW a ridge
+    of 163.7, not near it. Through (EXA) it is lower still. At GROUP_SIZE_M=16
+    the same ladders give 0.63-0.66 and the uncorrected cap clears the ridge. The
+    sign of the answer is a function of the swizzle, which is what `--group-m` is
+    for and why it is in the run id.
+
+So this file quotes no cap and computes no verdict from one. It measures the
+fraction of a MEASURED roof with a stopwatch, and the only place a fitted alpha
+enters is choosing the control tile and printing a pre-registered band that is
+scored against nothing.
 
 WHAT MULTI-TILE ONSET IS, COMPUTED AND NOT HARDCODED. One M-tile per expert
 holds `BLOCK_M` rows, an expert receives `r = T k / E` rows under balanced
@@ -93,6 +136,28 @@ a difference cancels every term the two tiles share. If both tiles plateau at th
 same fraction, the shortfall belongs to the layer and not to the tile, and that
 is a result this script reports rather than a failure it hides.
 
+AND THE CONTROL HAS TO ARRIVE, or the word "ceiling" is not earned. A difference
+of 0.10 of the roof between two tiles that both stop at 0.5 says the tiles differ
+and says nothing about where the ceiling is: the instrument has not been shown
+able to see ANY tile reach the roof, so an absence at the subject is an absence
+recorded by an instrument never shown to detect a presence. Gate C4 therefore
+requires the control to reach ROOF_REACHED before the headline may be issued, and
+without it the verdict is TILE-DEPENDENT GAP, CEILING UNLOCATED. This was added
+on 2026-09-02: the gate set could previously declare the ceiling BINDING on the
+gap alone, and no tile in the published corpus has ever reached 0.95 of ridge x
+bandwidth, so the headline would have been published on a positive control that
+never went positive.
+
+THE ONE CONFOUND NO GATE HERE REMOVES, stated in every verdict this script can
+reach and not only in the ones it embarrasses. The subject and the control differ
+in OCCUPANCY as well as in tile: at the production pin of num_stages=4 the
+resident-block ratio is 2:1, at 2 stages it is still 2:1, at 3 it is 3:1, and the
+only matched setting is 5 stages, which sm_80 cannot run and which unpins the
+comparison from every published arm. No `--num-stages` choice disambiguates a C3
+result. `scripts/occupancy_vs_swizzle.py` measures the residency effect directly,
+and its size is what has to be subtracted from any gap before the gap is read as
+tile-attributable.
+
 256 is not free: one CTA needs 4 x (256x64 + 64x64) x 2 B = 160 KiB of shared
 memory, which fits sm_90's 227 KiB and fits sm_80's 163 KiB by three, and its
 64x64 fp32 accumulator is 64 registers per thread against a ceiling of 255. Both
@@ -113,17 +178,32 @@ noise. That is why `--reps` defaults to 3 and not to 1.
 THROTTLING INVALIDATES A THROUGHPUT MEASUREMENT MORE THAN A LATENCY ONE. A cell
 timed while the SM clock sagged reports less throughput for a reason that has
 nothing to do with tiles, and a sag that happens to land on the deep end of the
-sweep manufactures a plateau. Every cell therefore records the SM clock and
-temperature either side of its own timed interval; a cell whose clock drops more
-than 5% across it, or which runs more than 5% below the session's own modal
-clock, is EXCLUDED from every gate and printed with an x on the plot. The
-exclusions are counted, and a run that excluded so much that the doubling chain
-no longer spans the required distance says so instead of scoring.
+sweep manufactures a plateau. Every cell therefore carries the SM clock sampled
+UNDER LOAD by `moe.bench.timing.time_kernel`, and the two verdicts that clock
+supports: LEVEL (the loaded clock is at least 95% of the clock the ROOF was
+measured at) and DRIFT (the first and last under-load samples agree within 5%).
+A cell that fails either is EXCLUDED from every gate and printed with an x on
+the plot. The exclusions are counted, and a run that excluded so much that the
+doubling chain no longer spans the required distance says so instead of scoring.
+
+WHY UNDER LOAD, AND WHY AGAINST THE ROOF'S CLOCK. Until 2026-09-02 this file
+sampled the clock with `ClockState.sample()` immediately after a synchronise --
+an IDLE INSTANT -- took the session's modal value of those samples, and compared
+it to the roof's under-load 1515 MHz within 10%. The H200 idles at 1980 and runs
+a dense GEMM at about 1515, so the verdict depended on which of the two modes
+the post-sync sample happened to land in: an idle-instant session reads 1980,
+which is +31% against the roof's clock and FAILS a 10% gate that nothing was
+wrong with, while a genuinely cold session that also idles high PASSES. Two
+operating points were being compared through a sample taken at neither. The
+instrument now polls the clock on a background thread WHILE the kernels run and
+reports the median of those samples, and `timing.clock_flags` scores it against
+the clock the calibration's own dense GEMM ran at. Both numbers are then under
+load and the comparison means something.
 
 AND THE CLOCK THE ROOF WAS MEASURED AT IS PART OF THE ROOF. The H200's dense
 bf16 ceiling was taken at 1515 MHz -- a dense GEMM pulls the clock down from
-1980 -- so a MoE layer running at 1800 MHz is being compared against a
-measurement made at a different operating point. The direction is stated rather
+1980 -- so a MoE layer running at 1800 MHz under load is being compared against
+a measurement made at a different operating point. The direction is stated rather
 than corrected: a run clocked ABOVE the roof's clock has its fraction
 OVERSTATED, which is conservative for a claim that the fraction stays below 1;
 a run clocked BELOW it has the fraction understated, and a plateau found there
@@ -138,19 +218,36 @@ between 0.77 and 1.00 of the roof. A prediction that spans a quarter of the
 range it is predicting is not a prediction, and that width IS the reason this
 experiment exists.
 
-A NOTE ON REUSE. The geometry, the pinned constants, the cell model, the timing
-loop, the compile assay and the resource bill are IMPORTED from
+A NOTE ON REUSE. The geometry, the pinned constants, the cell model, the compile
+assay, the cost model and the resource bill are IMPORTED from
 `scripts/block_m_crossing_sweep.py` and called, never copied: this measurement
 has to be commensurable with the sweep the study publishes, and a private copy
 would drift. `_load_sweep` probes SIGNATURES as well as names, because that file
 is under active edit and a renamed argument must produce a sentence on a laptop
-rather than a TypeError two minutes into a metered pod session.
+rather than a TypeError two minutes into a metered pod session. The TIMING comes
+from one level lower still: `moe.bench.timing.time_kernel`, the same queue-deep,
+L2-flushing, clock-sampling loop the compute roof itself was measured with. It
+replaced a private per-iteration-synchronise loop (`SWEEP.time_call`, retired the
+same day) that created its events inside the loop and let 0.18-0.30 ms of host
+enqueue time per call inside the measured interval -- a per-card bias, of the
+same order as the cross-card effect this study registered, in a number that is
+divided by a roof measured the other way. Every cell records the instrument's own
+name, its warmup duration, its iteration and trial counts, its flush state and
+its under-load clock verdicts, because those columns are what make a row
+comparable with the roof or not.
+
+THE EXIT CODE IS THE CONTRACT. `moe.bench.exit_codes` owns the table: 0 DONE, 1
+CLAIM_FAIL (measured, a pre-registered claim did not hold -- a RESULT, never a
+retry), 2 REFUSED (nothing measured, nothing spent), 3 INVALID (measured and a
+VALIDITY gate failed, so nothing on the page may be quoted), 4 ERROR. Every
+scored gate prints exactly one `RESULT: KIND NAME VERDICT detail` line at column
+zero and nothing else here starts with that prefix, so a driver reads the gates
+without reading prose.
 """
 from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import importlib.util
 import json
 import math
@@ -160,12 +257,14 @@ import statistics
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.roofline import HARDWARE_DIR  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 
@@ -184,11 +283,17 @@ def _load_sweep():
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault(spec.name, module)
     spec.loader.exec_module(module)
+    # `time_call` is deliberately NOT here. It was retired on 2026-09-02 and
+    # this script no longer calls it; requiring the symbol would tie a laptop
+    # `--dry-run` to a name the sweep keeps only so its three other consumers
+    # abort on their first timed cell rather than at import.
     needed = ("FIXED", "COMPUTE_BOUND_FRACTION", "ALPHA", "ALPHA_BY_BLOCK_M",
               "PASS", "FAIL", "UNDECIDED", "ai_cap", "make_cell", "model_ms",
               "tokens_for_rows", "rows_quantum", "rows_step", "results_root",
-              "scaled_iters", "useful_flops", "tiles_per_expert",
-              "find_override", "arm_triton_cache", "count_new", "time_call",
+              "planned_iters", "estimated_seconds", "useful_flops",
+              "tiles_per_expert", "timing_basis", "reference_clock_mhz",
+              "SYNTHETIC_INSTRUMENT",
+              "find_override", "arm_triton_cache", "count_new",
               "balanced_ids", "missing_gpu_stack", "tile_resource_plan",
               "resolve_capability", "gate_0_override", "_measured_yaml")
     missing = [n for n in needed if not hasattr(module, n)]
@@ -199,8 +304,13 @@ def _load_sweep():
             "file's geometry and timing rather than a private copy, so the two "
             "move together. Re-point the import; do not fork it.")
     import inspect
-    for name, required in (("make_cell", ("sm_count", "block_n")),
+    for name, required in (("make_cell", ("sm_count", "block_n", "instrument",
+                                          "warmup_ms", "trials",
+                                          "sm_clock_load_mhz", "clock_level_ok",
+                                          "clock_drift_ok", "l2_flush")),
                            ("model_ms", ("alpha", "ridge", "bandwidth_gbps")),
+                           ("estimated_seconds", ("warmup_ms", "trials",
+                                                  "cell_budget_ms")),
                            ("tile_resource_plan",
                             ("pinned", "block_sizes", "dtype_bytes",
                              "capability")),
@@ -270,10 +380,23 @@ DEFAULT_PLATEAU_DOUBLINGS = 2
 #: make a slope with no residual; three can disagree with themselves.
 MIN_MULTI_TILE_POINTS = 3
 
-#: Percent drop in SM clock ACROSS a cell's own timed interval that marks it
-#: throttled. The same 5% `moe.bench.timing.clock_drift` uses, so one number
-#: means one thing in this repo.
+#: Percent disagreement between the FIRST and LAST under-load SM clock samples
+#: of a cell that marks it throttled. Mirrored from
+#: `moe.bench.timing.DRIFT_FRACTION` rather than imported, because that module
+#: imports torch at module scope and this file is documented to plan a run on a
+#: laptop that has none; `test_the_mirrored_clock_constants_are_the_instruments_
+#: own` asserts the two against it wherever torch imports. The verdict itself is
+#: the instrument's `clock_drift_ok`, not a comparison recomputed here: this
+#: number exists so the printed sentence can say what the instrument used.
 THROTTLE_DRIFT_PCT = 5.0
+
+#: How far below the clock the ROOF WAS MEASURED AT a cell's under-load clock
+#: may sit and still be read. Mirrored from `moe.bench.timing.LEVEL_FRACTION`,
+#: and the reference moved on 2026-09-02 from the session's own modal clock to
+#: the roof's: a session that ran uniformly cold has a cold modal clock and
+#: excludes nothing, which is exactly the session whose fractions are wrong. The
+#: verdict is the instrument's `clock_level_ok`.
+CLOCK_FLOOR_FRACTION = 0.95
 
 #: Fraction of this session's cells that may throttle before the session itself
 #: is unreadable. A single sagging cell is EXCLUDED and the run goes on -- that
@@ -281,11 +404,6 @@ THROTTLE_DRIFT_PCT = 5.0
 #: them would be a gate that fails on weather. A tenth of them sagging is a box
 #: whose surviving medians are not trustworthy either, and that is a refusal.
 THROTTLED_CELL_FRACTION = 0.10
-
-#: How far below the session's modal SM clock a cell may start and still be
-#: read. A cell that began 10% cold is not measuring the same silicon as its
-#: neighbours, and a cold cell at the deep end manufactures a plateau.
-CLOCK_FLOOR_FRACTION = 0.95
 
 #: How far this run's clocks may sit from the clock the ROOF was measured at
 #: before the fraction is a comparison of two operating points. The H200's dense
@@ -300,6 +418,23 @@ ROOF_CLOCK_TOLERANCE = 0.10
 #: PREDICTED plateau it implies spans 0.77 to 1.00 of the roof, and a prediction
 #: that wide is the reason this experiment measures instead of computing.
 ALPHA_128_BAND = (SWEEP.ALPHA_BY_BLOCK_M.get(SUBJECT_BLOCK_M, SWEEP.ALPHA), 1.02)
+
+#: THE NOISE THIS ARM'S PLAN IS SIZED AGAINST, as a relative spread on one
+#: cell's milliseconds. 0.0140 is `timing_spread_median` from the one published
+#: arm that recorded one, `results/published/2026-09-01-nvidia_h200-alpha-
+#: surface-s4/mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json`, measured with
+#: the RETIRED instrument -- so it is an upper bound on what `time_kernel`'s
+#: queue-deep loop should produce, which is the safe direction for sizing.
+#: `--plan-noise` overrides it, and the plan prints which number it used.
+#: It sizes an MDE and nothing else: every verdict below uses the spread this
+#: run actually measured, and gate C2 refuses when that spread cannot resolve
+#: the threshold it is asked to score.
+DEFAULT_PLAN_NOISE_REL = 0.0140
+
+#: Two-sided 5% at 80% power, the convention `scripts/replicate_noise_floor.py`
+#: uses for every MDE in this study. Named here so the plan line can say what
+#: test it is quoting rather than printing a number with no design attached.
+MDE_LEVEL, MDE_POWER = 0.05, 0.80
 
 #: Rows per expert the grid starts at, and the deepest it goes. 32 is a quarter
 #: of one tile, so the pre-onset points show the padding regime TEMPO describes;
@@ -390,6 +525,118 @@ def doubling_rows(cfg, r_min: int, r_max: int, block_m: int) -> list[int]:
         raise SystemExit(f"--r-min {r_min} is above --r-max {r_max}; nothing "
                          "to measure.")
     return rows
+
+
+def instrument_name() -> str:
+    """The name of the loop that will time these cells, or why it has none here.
+
+    `SWEEP.timing_basis()` returns `moe.bench.timing.TIMING_BASIS` when torch
+    imports and None when it does not, which is exactly the laptop `--dry-run`
+    and `--self-test` case where nothing is measured either. A sentence rather
+    than a blank, because a plan that printed an empty instrument would read as
+    a plan whose instrument nobody wrote down, and this repository has already
+    published 26 reports of that shape.
+    """
+    return SWEEP.timing_basis() or (
+        "NOT NAMEABLE HERE: torch does not import on this machine, so the "
+        "instrument cannot be named. A pod names it on every row it writes")
+
+
+def _load_power():
+    """`scripts/replicate_noise_floor.py`'s power arithmetic, loaded by path.
+
+    ADOPTED rather than reimplemented, for the reason `gate_v1_pin` adopts the
+    sweep's override assay: this repository has exactly one definition of what a
+    minimum detectable effect is, that file owns it, and a second t quantile
+    written here would be a second thing to keep in step. It is stdlib-only, so
+    loading it costs a laptop nothing.
+
+    REFUSES rather than falling back on a normal approximation. An MDE quoted
+    from a z where the design has 4 degrees of freedom is 35% too generous, and
+    the whole point of printing one is to say what this run CANNOT resolve.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "replicate_noise_floor", ROOT / "scripts" / "replicate_noise_floor.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:                            # noqa: BLE001
+        raise SystemExit(
+            "REFUSED: scripts/replicate_noise_floor.py, which owns this "
+            f"study's power arithmetic, did not import ({type(exc).__name__}: "
+            f"{exc}). The plan's MDE line comes from its two-sample t and there "
+            "is no approximation of it this file is allowed to substitute: a "
+            "normal quantile at these degrees of freedom is 35% too generous "
+            "and would advertise a resolution this run does not have.") from exc
+    missing = [n for n in ("mde_two_sample", "replicates_for") if not hasattr(module, n)]
+    if missing:
+        raise SystemExit(
+            "REFUSED: scripts/replicate_noise_floor.py no longer exports "
+            f"{', '.join(missing)}, so the MDE this plan prints cannot be "
+            "computed from the study's own definition. Re-point the call; do "
+            "not inline a second one.")
+    return module
+
+
+def mde_lines(*, reps: int, noise_rel: float, noise_source: str,
+              gap_threshold: float = CONTROL_SEPARATION,
+              gain_threshold: float = PLATEAU_GAIN_PER_DOUBLING,
+              plateau_fraction: float = 0.5) -> list[str]:
+    """What this run could resolve, from ONE stated noise assumption. B14.
+
+    The audit's finding was that no arm in this study stated an MDE, so every
+    threshold in every gate was a prior with nothing behind it and a reader
+    could not tell a gate this run can settle from one it cannot. Two thresholds
+    here are worth sizing before a pod is rented:
+
+      * GATE C3's separation, `CONTROL_SEPARATION` of the roof. Two tiles, each
+        the median of `--reps` repeats at one batch, compared as a difference:
+        a two-sample t at n = reps per condition on a standard deviation of
+        `noise_rel * plateau_fraction` of the roof, because a relative spread on
+        milliseconds is the same relative spread on a throughput and the
+        fractions this compares sit near `plateau_fraction`.
+      * GATE C2's gain per doubling, `PLATEAU_GAIN_PER_DOUBLING`. That is a
+        RATIO of two per-tread medians, so its spread is
+        `noise_rel * sqrt(2) / sqrt(reps)` -- the same arithmetic `plateau_of`
+        applies to the spread this run actually measures, quoted here in advance
+        against the assumption instead.
+
+    Both are printed with the verdict RESOLVABLE or NOT RESOLVABLE and, when not,
+    the `--reps` that would be. Neither is a gate: the gates score the measured
+    spread, and C2 already refuses when it cannot resolve its own threshold.
+    """
+    power = _load_power()
+    sd = noise_rel * plateau_fraction
+    out = [f"MDE          noise assumption {noise_rel:.2%} relative spread per "
+           f"cell, {noise_source}",
+           f"             two-sided {MDE_LEVEL:.0%} at {MDE_POWER:.0%} power, "
+           "the convention scripts/replicate_noise_floor.py uses"]
+    if reps < 2:
+        out.append(f"             at --reps {reps} there is no within-cell "
+                   "spread and no two-sample test exists, so NOTHING here is "
+                   "resolvable and C2 will refuse. Raise --reps.")
+        return out
+    gap_mde = power.mde_two_sample(sd, reps, level=MDE_LEVEL, power=MDE_POWER)
+    need = power.replicates_for(gap_threshold, sd, level=MDE_LEVEL, power=MDE_POWER)
+    out.append(
+        f"             C3 gap: at --reps {reps} the MDE on the control-minus-"
+        f"subject difference is {gap_mde:.4f} of the roof against a gate of "
+        f"{gap_threshold:.2f}: "
+        + ("RESOLVABLE." if gap_mde <= gap_threshold else
+           "NOT RESOLVABLE -- "
+           + (f"--reps {need} would be." if need else
+              "no --reps under 500 would be, at this spread.")))
+    ratio_sd = noise_rel * math.sqrt(2.0) / math.sqrt(reps)
+    out.append(
+        f"             C2 gain: the ratio of two per-tread medians carries "
+        f"{ratio_sd:.3%} at --reps {reps} against a gate of "
+        f"{gain_threshold:.1%}: "
+        + ("RESOLVABLE." if ratio_sd <= gain_threshold else
+           f"NOT RESOLVABLE -- --reps "
+           f"{math.ceil(2.0 * (noise_rel / gain_threshold) ** 2)} would be.")
+        + " Scored on the spread this run MEASURES, not on this assumption.")
+    return out
 
 
 def regime_of(rows: int, block_m: int) -> str:
@@ -541,6 +788,206 @@ def resolve_roof(dtype: str, *, synthetic: bool) -> Roof:
 
 
 # --------------------------------------------------------------------------
+# What the arm ALREADY published for the configuration being asked for.
+# --------------------------------------------------------------------------
+
+#: Where `published_prediction` looks. Every committed arm writes its
+#: `<model>-<dtype>-r<r>-g<G>-n<BN>-<hash>.report.json` under a dated,
+#: card-slugged directory, and the ladder inside carries `(n_tiles, ms)` per
+#: BLOCK_M -- which is a throughput once it is divided by a roof.
+PUBLISHED_DIR = ROOT / "results" / "published"
+
+
+@dataclass(frozen=True)
+class PriorArm:
+    """One published ladder pair, read back as roof fractions. R2 / audit A8.
+
+    THE POINT IS TO MAKE AN ARM PREDICTABLE BEFORE IT IS RENTED. The audit's
+    finding was that the scheduled headline run at BLOCK_SIZE_N=64,
+    GROUP_SIZE_M=1 has an outcome already computable from arms in this
+    repository -- subject 0.468, control 0.526, a gap of 0.058 under a
+    CONTROL_SEPARATION of 0.10, so "PLATEAU IS NOT TILE-ATTRIBUTABLE" -- and
+    that no output said so. A run whose result is known is not an experiment; it
+    is a confirmation, and the operator is entitled to read that off the plan
+    rather than off the invoice.
+    """
+
+    path: str
+    fixed: dict
+    subject_peak: float | None
+    control_peak: float | None
+    roof_tflops: float
+    control_block_m: int
+
+    @property
+    def gap(self) -> float | None:
+        if self.subject_peak is None or self.control_peak is None:
+            return None
+        return self.control_peak - self.subject_peak
+
+    def outcome(self) -> str:
+        """The verdict these numbers would produce, in this script's own words."""
+        if self.gap is None:
+            return UNSETTLED
+        if self.subject_peak is not None and self.subject_peak >= ROOF_REACHED:
+            return NOT_BINDING
+        if self.gap < CONTROL_SEPARATION:
+            return NOT_TILE
+        if self.control_peak is not None and self.control_peak < ROOF_REACHED:
+            return GAP_UNLOCATED
+        return BINDING
+
+
+def _ladder_peak(ladder: dict, cfg, block_m: int, key: str) -> float | None:
+    """Best useful TFLOP/s on one published ladder, or None when it has none.
+
+    The ladder is `(n_tiles, ms)` at exactly-full stacks, so rows per expert is
+    `n * BLOCK_M` and the flop count is the sweep's own `useful_flops` over
+    `E * rows`. Nothing is inferred: a BLOCK_M the arm did not run has no entry
+    and this returns None rather than a zero, because a zero would plot.
+    """
+    entry = ladder.get(key)
+    points = (entry or {}).get("points") or []
+    best = None
+    for item in points:
+        try:
+            tiles, ms = int(item[0]), float(item[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if ms <= 0 or tiles <= 0:
+            continue
+        rows = tiles * block_m
+        tflops = SWEEP.useful_flops(cfg, cfg.num_experts * rows) / (ms * 1e-3) / 1e12
+        best = tflops if best is None else max(best, tflops)
+    return best
+
+
+def roof_card_slug(roof: Roof) -> str:
+    """The card the roof belongs to, as the published directories spell it.
+
+    `load_hardware` names a calibrated card `"NVIDIA H200 (measured)"`, and the
+    directories are slugged from the driver's `"NVIDIA H200"`. The suffix is
+    stripped here rather than the slug being taken from `--card`, because the
+    condition that has to hold is that the ladders and the denominator come from
+    ONE card: matching arms to the roof itself is that condition, and matching
+    them to a flag is a different and weaker one.
+    """
+    return PV.card_slug(roof.device).removesuffix("_measured")
+
+
+def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
+                         control_block_m: int,
+                         published_dir: Path | None = None) -> tuple[PriorArm | None, str]:
+    """The outcome this configuration's own published arms already imply.
+
+    Returns `(arm, why)`. `arm` is None when nothing in the corpus matches, and
+    `why` ALWAYS says what was looked for and what was found, because "it cannot"
+    is a legitimate and common answer here: the corpus has no BLOCK_M=256 ladder
+    at BLOCK_SIZE_N=256 at all, since that tile cannot be pinned there (its
+    256x256 fp32 accumulator needs 256 registers per thread against a hardware
+    maximum of 255), and an operator asking for the production swizzle deserves
+    to be told that the control's half of the prediction does not exist rather
+    than to be shown a half table.
+
+    Matched on model, BLOCK_SIZE_N, GROUP_SIZE_M and the CARD -- the card
+    because every number here is a fraction of a per-card roof, and dividing an
+    A100 ladder by an H200 roof is the exact defect that put a stale ridge into
+    seven published reports.
+    """
+    directory = published_dir or PUBLISHED_DIR
+    slug = roof_card_slug(roof)
+    want = (f"model={cfg.name}, BLOCK_SIZE_N={block_n}, GROUP_SIZE_M={group_m}, "
+            f"card={slug}")
+    if not directory.is_dir():
+        return None, f"no published corpus at {directory} to predict {want} from"
+    hits: list[PriorArm] = []
+    scanned = 0
+    for path in sorted(directory.glob(f"*{slug}*/*.report.json")):
+        try:
+            doc = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        scanned += 1
+        fixed = doc.get("fixed") or {}
+        if doc.get("model") != cfg.name:
+            continue
+        if fixed.get("BLOCK_SIZE_N") != block_n or fixed.get("GROUP_SIZE_M") != group_m:
+            continue
+        ladder = doc.get("ladder") or {}
+        hits.append(PriorArm(
+            path=str(path.relative_to(ROOT)), fixed=fixed,
+            subject_peak=_frac(_ladder_peak(ladder, cfg, SUBJECT_BLOCK_M,
+                                            str(SUBJECT_BLOCK_M)), roof),
+            control_peak=_frac(_ladder_peak(ladder, cfg, control_block_m,
+                                            str(control_block_m)), roof),
+            roof_tflops=roof.tflops, control_block_m=control_block_m))
+    if not hits:
+        return None, (f"no published arm matches {want} ({scanned} report(s) "
+                      "read on this card), so this configuration's outcome "
+                      "cannot be predicted from the corpus and the run is a "
+                      "real experiment")
+    arm = max(hits, key=lambda a: (a.gap is not None, a.subject_peak or 0.0))
+    if arm.control_peak is None:
+        return arm, (f"the matching arm {arm.path} has no BLOCK_M="
+                     f"{control_block_m} ladder, so the CONTROL half of the "
+                     "prediction does not exist and the outcome cannot be "
+                     "predicted; only the subject's peak is known")
+    return arm, f"predicted from {arm.path}, the published arm at {want}"
+
+
+def prior_arm_lines(cfg, roof: Roof, *, block_n: int, group_m: int,
+                    control_block_m: int,
+                    published_dir: Path | None = None) -> list[str]:
+    """The plan's PREDICTED OUTCOME section: what the corpus already says.
+
+    Printed before a pod is rented, because an arm whose result is computable
+    from committed data is a confirmation and not an experiment, and the
+    operator is entitled to decide which one they are buying. When the corpus
+    cannot answer -- no arm at this swizzle, or an arm with no control ladder --
+    that is said in the same place, in those words.
+    """
+    arm, why = published_prediction(cfg, roof, block_n=block_n,
+                                    group_m=group_m,
+                                    control_block_m=control_block_m,
+                                    published_dir=published_dir)
+    out = ["PREDICTION   from arms already in this repository, at "
+           f"BLOCK_SIZE_N={block_n}, GROUP_SIZE_M={group_m}, "
+           f"{roof_card_slug(roof)}",
+           f"             {why}"]
+    if arm is None:
+        out.append("             THIS ARM IS NOT PREDICTABLE FROM THE CORPUS. "
+                   "That is the good case: it is an experiment.")
+        return out
+    sub = ("not measured" if arm.subject_peak is None
+           else f"{arm.subject_peak:.3f} of the roof")
+    ctl = ("NOT MEASURED -- the corpus has no ladder for this tile at this "
+           "BLOCK_SIZE_N" if arm.control_peak is None
+           else f"{arm.control_peak:.3f} of the roof")
+    out.append(f"             BLOCK_M={SUBJECT_BLOCK_M} peaked at {sub}; "
+               f"BLOCK_M={control_block_m} {ctl}")
+    if arm.gap is None:
+        out.append("             so the gap, and with it the outcome, cannot "
+                   "be predicted. Only the subject's half is known.")
+        return out
+    out.append(f"             gap {arm.gap:+.3f} against a "
+               f"CONTROL_SEPARATION of {CONTROL_SEPARATION:.2f} and a "
+               f"ROOF_REACHED of {ROOF_REACHED:.2f}: this run's expected "
+               f"verdict is {VERDICT_NAMES[arm.outcome()]} "
+               f"({arm.outcome()}).")
+    out.append("             A PREDICTION AND NOT A RESULT. It is computed "
+               "from ladders timed by the RETIRED per-call instrument, so it "
+               "is what the corpus says, not what this run will measure.")
+    return out
+
+
+def _frac(tflops: float | None, roof: Roof) -> float | None:
+    """A TFLOP/s as a fraction of this roof, or None for a ladder that has none."""
+    if tflops is None or roof.tflops <= 0:
+        return None
+    return tflops / roof.tflops
+
+
+# --------------------------------------------------------------------------
 # One timing.
 # --------------------------------------------------------------------------
 
@@ -554,6 +1001,20 @@ class Timing:
     and skip the other two, silently reporting a quarter-full tile's throughput
     under a full one's label. The sibling depth script keys on tiles safely only
     because it measures nothing below one full stack.
+
+    THE STATE THE ROW WAS TIMED IN IS A COLUMN, exactly as it is on the sweep's
+    `Cell`. `instrument`, `warmup_ms`, `iters`, `trials`, `sm_clock_load_mhz`,
+    `clock_level_ok`, `clock_drift_ok` and `l2_flush` are what
+    `moe.bench.timing.time_kernel` reports about the measurement it just made,
+    and they are written per row because they are what makes a row comparable
+    with the roof or not. Before 2026-09-02 this file carried an iteration count
+    and a pair of idle-instant clock samples, and a reader could not tell a cell
+    timed at 1980 MHz from one timed at 1500.
+
+    THE THREE CLOCK VERDICTS ARE OPTIONAL AND None MEANS "NOT DETERMINED", never
+    "fine". A container without NVML, a trial too short for the poller to land a
+    sample and a replayed CSV all produce None, and a filter that read None as
+    True would re-admit exactly the rows these columns exist to keep out.
     """
 
     block_m: int
@@ -565,37 +1026,107 @@ class Timing:
     ms_min: float
     ms_stdev: float
     iters: int
-    sm_clock_start_mhz: int = 0
-    sm_clock_end_mhz: int = 0
-    temp_start_c: int = 0
-    temp_end_c: int = 0
-    clock_drift_pct: float = 0.0
-    throttled: bool = False
+    #: Median of the SM clock samples taken WHILE this cell's kernels ran. None
+    #: is "no usable sample", which is not zero and not a pass.
+    sm_clock_load_mhz: float | None = None
+    #: First and last under-load samples, which is what DRIFT is computed over.
+    sm_clock_start_mhz: float | None = None
+    sm_clock_end_mhz: float | None = None
+    #: `timing.clock_flags`: loaded clock at least CLOCK_FLOOR_FRACTION of the
+    #: clock the ROOF was measured at, and first-to-last agreement within
+    #: THROTTLE_DRIFT_PCT.
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
+    #: `moe.bench.timing.TIMING_BASIS` of the loop that produced `ms_p50`, or
+    #: `SWEEP.SYNTHETIC_INSTRUMENT` on a planted row. Empty means a row from
+    #: before the instrument had a name.
+    instrument: str = ""
+    #: Milliseconds of DELIVERED GPU load the warmup ran for, not a call count.
+    warmup_ms: float = 0.0
+    trials: int = 0
+    l2_flush: bool = False
     status: str = "ok"
     detail: str = ""
 
     @property
     def clock_seen(self) -> bool:
-        """Did anything actually read a clock for this cell?
+        """Did anything actually sample a clock under load for this cell?
 
-        NON-VACUITY at the level of one row. `ClockState.sample` returns zeros
-        when NVML is absent and when nvidia-smi is restricted, and a throttle
-        check over rows like that examines nothing and reports no failures.
+        NON-VACUITY at the level of one row. The poller lands no sample when
+        NVML is absent, when the container forbids it, and when a trial is
+        shorter than one poll interval; a throttle check over rows like that
+        examines nothing and reports no failures.
         """
-        return self.sm_clock_start_mhz > 0 and self.sm_clock_end_mhz > 0
+        return self.sm_clock_load_mhz is not None
+
+    @property
+    def throttled(self) -> bool:
+        """Did the clock move across this cell's own trials.
+
+        Derived rather than stored, and False for None on purpose: an EXCLUSION
+        has to be positively established, and a row whose clock was never read
+        is unknown rather than bad. `excluded` is the union this file filters
+        on; V3 counts these two separately because they are different faults.
+        """
+        return self.clock_drift_ok is False
+
+    @property
+    def cold(self) -> bool:
+        """Did this cell run below the clock the ROOF was measured at."""
+        return self.clock_level_ok is False
+
+    @property
+    def excluded(self) -> bool:
+        return self.throttled or self.cold
 
 
 TIMING_FIELDS = list(Timing.__dataclass_fields__)
 
+#: Provenance columns appended to every cells.csv row, after the measurement
+#: columns. `Provenance.as_columns` prefixes every one with `prov_`, so a
+#: provenance column can never collide with a measurement column that happens to
+#: share its name. Written per ROW rather than once per file, because a resumed
+#: cells.csv is written by two processes on two days and possibly two commits,
+#: and a header cannot say that.
+PROVENANCE_COLUMNS = sorted(PV.Provenance().as_columns())
 
-def append_timing(path: Path, row: Timing) -> None:
-    """One row, flushed. An abort costs the cell in flight and nothing else."""
+
+def _opt_float(text) -> float | None:
+    """A CSV cell back to a float, or None for the empty one None was written as."""
+    return None if text in (None, "", "None") else float(text)
+
+
+def _opt_bool(text) -> bool | None:
+    """A CSV cell back to a three-state flag.
+
+    None round-trips as the empty string and is READ BACK as None, never as
+    False: a replayed row whose clock verdict was "not determined" must not
+    become "determined, and fine".
+    """
+    if text in (None, "", "None"):
+        return None
+    return str(text).strip().lower() in ("true", "1", "yes")
+
+
+def append_timing(path: Path, row: Timing, prov=None) -> None:
+    """One row, flushed. An abort costs the cell in flight and nothing else.
+
+    SIGNATURE EXTENDED, never narrowed: `prov` is optional and a caller that
+    omits it writes the measurement columns alone, which is what the tests do.
+    When it is given, the row also carries the commit, the card, the instrument
+    and the two ruler sources that made it, so a cells.csv on a network volume
+    that outlives the pod stays attributable to a code version.
+    """
     new = not path.exists()
+    fields = TIMING_FIELDS + (PROVENANCE_COLUMNS if prov is not None else [])
+    payload = asdict(row)
+    if prov is not None:
+        payload.update(prov.as_columns())
     with path.open("a", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=TIMING_FIELDS)
+        writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
         if new:
             writer.writeheader()
-        writer.writerow(asdict(row))
+        writer.writerow(payload)
         fh.flush()
 
 
@@ -613,12 +1144,15 @@ def read_timings(path: Path) -> tuple[set[tuple[int, int, int]], list[Timing]]:
                 rep=int(row["rep"]), ms_p50=float(row["ms_p50"]),
                 ms_min=float(row["ms_min"]), ms_stdev=float(row["ms_stdev"]),
                 iters=int(row["iters"]),
-                sm_clock_start_mhz=int(float(row.get("sm_clock_start_mhz") or 0)),
-                sm_clock_end_mhz=int(float(row.get("sm_clock_end_mhz") or 0)),
-                temp_start_c=int(float(row.get("temp_start_c") or 0)),
-                temp_end_c=int(float(row.get("temp_end_c") or 0)),
-                clock_drift_pct=float(row.get("clock_drift_pct") or 0.0),
-                throttled=str(row.get("throttled", "")).lower() in ("true", "1"),
+                sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                sm_clock_start_mhz=_opt_float(row.get("sm_clock_start_mhz")),
+                sm_clock_end_mhz=_opt_float(row.get("sm_clock_end_mhz")),
+                clock_level_ok=_opt_bool(row.get("clock_level_ok")),
+                clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
+                instrument=row.get("instrument", ""),
+                warmup_ms=float(row.get("warmup_ms") or 0.0),
+                trials=int(float(row.get("trials") or 0)),
+                l2_flush=bool(_opt_bool(row.get("l2_flush"))),
                 status=row.get("status", "ok"), detail=row.get("detail", "")))
     # Only SUCCEEDED timings count as done: the common failure here is a pod
     # that lost its device, which a re-run can leave behind, and a real failure
@@ -652,6 +1186,16 @@ class Point:
     throttled_reps: int
     retained: bool
     excluded_why: str
+    #: The state the surviving repeats were timed in, carried from `Timing` so
+    #: the figure CSV says which instrument drew it. Defaulted because the tests
+    #: and the plotting helpers build points without a pod.
+    instrument: str = ""
+    warmup_ms: float = 0.0
+    iters: int = 0
+    trials: int = 0
+    l2_flush: bool = False
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
 
     @property
     def aligned(self) -> bool:
@@ -659,13 +1203,21 @@ class Point:
 
 
 def modal_clock(timings: list[Timing]) -> int:
-    """The clock this session mostly ran at, or 0 when none was ever read.
+    """The clock this session's KERNELS ran at, or 0 when none was ever read.
 
-    The MEDIAN of every start sample rather than the maximum: one spuriously
-    high reading taken during a ramp would put every other cell below the floor
-    and exclude the whole run.
+    The median of the per-cell UNDER-LOAD medians. Two properties, and the audit
+    found the old version had neither. It is a median rather than a maximum, so
+    one spuriously high reading taken during a ramp cannot put every other cell
+    below the floor and exclude the whole run. And it is taken under load rather
+    than at the idle instant after a synchronise: the H200 idles at 1980 MHz and
+    runs a dense GEMM at about 1515, so a session of post-sync samples reported
+    1980 and was then compared with the roof's 1515 -- a 31% disagreement
+    manufactured entirely by which of the card's two operating points the sample
+    landed in.
+
+    0 when nothing was sampled, which V3 reads as UNKNOWN rather than as a pass.
     """
-    seen = [t.sm_clock_start_mhz for t in timings
+    seen = [t.sm_clock_load_mhz for t in timings
             if t.status == "ok" and t.clock_seen]
     return int(statistics.median(seen)) if seen else 0
 
@@ -678,10 +1230,18 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
     call at a fresh point in the pod's thermal history, and a throughput read
     from one pass cannot tell a sagging clock from a tile effect.
 
-    A point is dropped when EVERY repeat of it was throttled, and kept on the
-    unthrottled ones otherwise -- with the count of what was dropped carried on
+    A point is dropped when EVERY repeat of it was excluded, and kept on the
+    surviving ones otherwise -- with the count of what was dropped carried on
     the point, because a point standing on one of five repeats is not the same
     measurement as one standing on five.
+
+    THE EXCLUSION RULE IS THE INSTRUMENT'S, not a comparison recomputed here:
+    `clock_drift_ok is False` (the clock moved across the cell's own trials) or
+    `clock_level_ok is False` (the cell ran below the clock the ROOF was
+    measured at). `clock_ref` is the session's own under-load modal clock; it is
+    carried onto the point and printed, and it is deliberately NOT the reference
+    the exclusion uses, because a session that ran uniformly cold has a cold
+    modal clock and would exclude nothing.
     """
     by: dict[int, list[Timing]] = {}
     for t in timings:
@@ -690,23 +1250,37 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
     out: list[Point] = []
     for rows in sorted(by):
         group = by[rows]
-        cold = [t for t in group
-                if clock_ref and t.clock_seen
-                and t.sm_clock_start_mhz < clock_ref * CLOCK_FLOOR_FRACTION]
-        bad = {id(t) for t in group if t.throttled} | {id(t) for t in cold}
+        bad = {id(t) for t in group if t.excluded}
         good = [t for t in group if id(t) not in bad]
         used = good or group
         ms = statistics.median([t.ms_p50 for t in used])
         spread = (statistics.pstdev([t.ms_p50 for t in used]) / ms
                   if len(used) > 1 and ms > 0 else None)
-        cell = SWEEP.make_cell(cfg, rows, block_m, ms, sm_count=sm_count,
-                               block_n=block_n)
-        clocks = [t.sm_clock_start_mhz for t in used if t.clock_seen]
+        # The timing STATE the point carries is the first surviving repeat's.
+        # Every repeat of one point is timed by one instrument at one warmup and
+        # one flush setting -- those come from argv, not from the cell -- so the
+        # only fields that could differ across repeats are the clock verdicts,
+        # and a repeat whose verdicts differ has already been excluded above.
+        state = used[0]
+        cell = SWEEP.make_cell(
+            cfg, rows, block_m, ms, sm_count=sm_count, block_n=block_n,
+            ms_min=min(t.ms_min for t in used),
+            ms_stdev=statistics.pstdev([t.ms_p50 for t in used]) if len(used) > 1 else 0.0,
+            iters=state.iters, instrument=state.instrument,
+            warmup_ms=state.warmup_ms, trials=state.trials,
+            sm_clock_load_mhz=state.sm_clock_load_mhz,
+            clock_level_ok=state.clock_level_ok,
+            clock_drift_ok=state.clock_drift_ok, l2_flush=state.l2_flush)
+        clocks = [t.sm_clock_load_mhz for t in used if t.clock_seen]
         why = ""
         if not good:
-            why = (f"every one of {len(group)} repeats was throttled or ran "
-                   f"below {CLOCK_FLOOR_FRACTION:.0%} of the session's "
-                   f"{clock_ref} MHz modal clock")
+            n_drift = sum(1 for t in group if t.throttled)
+            n_cold = sum(1 for t in group if t.cold)
+            why = (f"every one of {len(group)} repeats was excluded: "
+                   f"{n_drift} drifted more than {THROTTLE_DRIFT_PCT:.0f}% "
+                   f"across their own trials, {n_cold} ran below "
+                   f"{CLOCK_FLOOR_FRACTION:.0%} of the clock the roof was "
+                   "measured at")
         out.append(Point(
             block_m=block_m, rows_per_expert=rows, tiles=cell.tiles_per_expert,
             tokens=cell.tokens, regime=regime_of(rows, block_m),
@@ -715,7 +1289,11 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
             roof_fraction=(cell.useful_tflops / roof.tflops
                            if roof.tflops > 0 else 0.0),
             sm_clock_mhz=int(statistics.median(clocks)) if clocks else 0,
-            throttled_reps=len(bad), retained=bool(good), excluded_why=why))
+            throttled_reps=len(bad), retained=bool(good), excluded_why=why,
+            instrument=state.instrument, warmup_ms=state.warmup_ms,
+            iters=state.iters, trials=state.trials, l2_flush=state.l2_flush,
+            clock_level_ok=state.clock_level_ok,
+            clock_drift_ok=state.clock_drift_ok))
     return out
 
 
@@ -919,7 +1497,11 @@ def point_table(series: list[Series]) -> list[str]:
 # Gates.
 # --------------------------------------------------------------------------
 
-VALIDITY, CLAIM = "VALIDITY", "CLAIM"
+#: Taken from `moe.bench.exit_codes` rather than spelled again, because
+#: `classify` refuses a kind it does not know rather than letting it fall
+#: through a comparison and be scored as whatever the fallthrough happened to
+#: be. The two names were already identical; now they cannot drift apart.
+VALIDITY, CLAIM = exit_codes.VALIDITY, exit_codes.CLAIM
 
 
 @dataclass(frozen=True)
@@ -940,9 +1522,51 @@ class Gate:
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def token(self) -> str:
+        """The one-word name this gate answers to on its `RESULT:` line.
+
+        A slug of `name`, because `exit_codes.result_line` requires a name with
+        no whitespace and a hand-kept table of tokens is a second thing to keep
+        in step with the names. `"C1 roof"` becomes `C1_roof` and
+        `"S hypothesis roof refused"` becomes `S_hypothesis_roof_refused`, so a
+        driver's grep is stable for as long as the gate's name is.
+        """
+        slug = re.sub(r"[^A-Za-z0-9]+", "_", self.name).strip("_")
+        if not slug:
+            raise exit_codes.MalformedResultLine(
+                f"gate name {self.name!r} slugs to nothing, so it cannot be "
+                "named on a RESULT line")
+        return slug
+
+    @property
+    def verdict(self) -> str:
+        """PASS / FAIL / UNKNOWN in `exit_codes`'s vocabulary.
+
+        The property `exit_codes.classify` reads off this object directly, so a
+        gate list can be handed to it without a translation step that could
+        disagree with what was printed.
+        """
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.passed]
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        Rendered by `exit_codes.result_line` and read back by
+        `parse_result_lines`, anchored at column zero on the `RESULT: ` prefix.
+        The bracketed line below it is for a human and for the session driver's
+        existing regex; both are kept because they have different readers, and
+        only this one is the machine contract. Nothing else this file prints
+        starts with `RESULT: `.
+        """
+        detail = f"{self.prediction} | saw {self.observed} | gate {self.rule}"
+        return exit_codes.result_line(self.kind, self.token, self.verdict,
+                                      " ".join(detail.split()))
+
     def render(self) -> list[str]:
-        tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
-        out = [f"[{tag}] {self.kind:8s} {self.name}  {self.prediction}",
+        out = [self.result_line(),
+               f"[{self.verdict}] {self.kind:8s} {self.name}  {self.prediction}",
                f"         gate: {self.rule}",
                f"         saw:  {self.observed}"]
         if self.passed is not True and self.invalidates:
@@ -1041,6 +1665,15 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
     latency is wrong by the clock ratio, while a throughput read at a sagging
     clock is wrong AND looks exactly like the flattening this script is trying
     to detect.
+
+    EVERY NUMBER HERE IS SAMPLED UNDER LOAD. `clock_ref` is the median of the
+    per-cell under-load medians and `roof.clock_mhz` is the clock the
+    calibration's own dense GEMM ran at, so the ratio at the end compares two
+    measurements of the same kind. The audit's finding was that it did not: the
+    session number was a median of post-synchronise idle instants, which on an
+    H200 reads 1980 MHz against a roof measured at 1515, and the 10% gate then
+    turned on which of the card's two operating points the sample happened to
+    catch rather than on anything about this run.
     """
     ok_rows = [t for t in timings if t.status == "ok"]
     with_clock = [t for t in ok_rows if t.clock_seen]
@@ -1050,20 +1683,22 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
             f"no cell throttled past {THROTTLE_DRIFT_PCT:.0f}%, and the "
             f"session clock within {ROOF_CLOCK_TOLERANCE:.0%} of the roof's",
             None,
-            f"no clock was read on any of {len(ok_rows)} cells; NVML and "
-            "nvidia-smi both returned nothing",
+            f"no under-load clock sample landed on any of {len(ok_rows)} "
+            "cells; the poller reported none and NVML may be absent",
             "the throttle exclusions and the roof comparison. A throttle check "
             "over rows with no clocks examined nothing and would report no "
             "failures",
             ["NON-VACUITY: this gate refuses to PASS on an instrument that "
              "never took a reading."])
     throttled = [t for t in with_clock if t.throttled]
+    cold = [t for t in with_clock if t.cold]
     dropped = [p for p in points if not p.retained]
-    lines = [f"{len(with_clock)} of {len(ok_rows)} cells carry a clock; "
-             f"session modal clock {clock_ref} MHz",
+    lines = [f"{len(with_clock)} of {len(ok_rows)} cells carry an under-load "
+             f"clock; session median of those {clock_ref} MHz",
              f"{len(throttled)} cells drifted past {THROTTLE_DRIFT_PCT:.0f}% "
-             f"across their own timed interval; {len(dropped)} points lost "
-             "every repeat and are excluded"]
+             f"between their first and last under-load sample and {len(cold)} "
+             f"ran below {CLOCK_FLOOR_FRACTION:.0%} of the roof's clock; "
+             f"{len(dropped)} points lost every repeat and are excluded"]
     if not roof.clock_mhz:
         return Gate(
             VALIDITY, "V3 clocks", "every cell was timed at one clock",
@@ -1090,7 +1725,12 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
            "the roof's clock could be the clocks rather than the tile. The "
            "magnitude is not stated because a memory-bound tread does not "
            "follow the SM clock at all and a compute-bound one nearly does."))
-    share = len(throttled) / len(with_clock)
+    # The share counts BOTH faults, because both are reasons a cell's
+    # throughput is not this card's: a drifting clock and a steadily cold one
+    # are different faults and either one at a tenth of the cells is a box whose
+    # surviving medians are not trustworthy either.
+    excluded = [t for t in with_clock if t.excluded]
+    share = len(excluded) / len(with_clock)
     ok = share <= THROTTLED_CELL_FRACTION and abs(rel) <= ROOF_CLOCK_TOLERANCE
     if dropped:
         lines.append(
@@ -1102,9 +1742,10 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
         VALIDITY, "V3 clocks", "every cell was timed at one clock, and at the "
         "clock the roof was measured at",
         f"<= {THROTTLED_CELL_FRACTION:.0%} of cells drifting past "
-        f"{THROTTLE_DRIFT_PCT:.0f}%, and the session clock within "
+        f"{THROTTLE_DRIFT_PCT:.0f}% or below {CLOCK_FLOOR_FRACTION:.0%} of the "
+        f"roof's clock, and the session's under-load clock within "
         f"{ROOF_CLOCK_TOLERANCE:.0%} of {roof.clock_mhz} MHz",
-        ok, f"{len(throttled)} of {len(with_clock)} cells throttled "
+        ok, f"{len(excluded)} of {len(with_clock)} cells excluded "
             f"({share:.1%}); session {clock_ref} MHz, {rel:+.1%} against the "
             "roof's",
         "the fractions, in the direction stated below. Individual sagging cells "
@@ -1268,25 +1909,95 @@ def gate_c3_attribution(subject: list[Point], control: list[Point],
             f"the control REACHED the roof ({peak_c:.3f} >= "
             f"{ROOF_REACHED:.2f}), so this instrument is demonstrably able to "
             "see a tile reach it, and an absence at the subject is evidence of "
-            "absence rather than a shrug.")
+            "absence rather than a shrug. Gate C4 scores that separately.")
     else:
         lines.append(
             f"the control did NOT reach the roof either ({peak_c:.3f} < "
             f"{ROOF_REACHED:.2f}). The gap below is then the whole of the "
             "evidence: what the two tiles share has cancelled, but the height "
-            "of the ceiling has not been demonstrated.")
+            "of the ceiling has not been demonstrated. Gate C4 is where that "
+            "is scored, and the verdict it produces is TILE-DEPENDENT GAP, "
+            "CEILING UNLOCATED rather than the study's headline.")
     if control_plateau.plateaued is True and abs(gap) < CONTROL_SEPARATION:
         lines.append(
             "BOTH TILES PLATEAU TOGETHER, at fractions this gate cannot "
             "separate. That is a result: the shortfall is a property of the "
             "fused layer, and whatever binds it is not the tile-dependent AI "
             "ceiling this study proposed.")
+    # NAMED WHATEVER THIS GATE SAYS, not only when it FAILs. The audit's finding
+    # was that the residency confound appeared in the NOT_TILE branch alone, so
+    # a PASS -- the branch on which the study's headline is written -- printed a
+    # difference of two tiles with no mention that the two also differ 2:1 in
+    # resident blocks. A confound that can produce the gap has to be beside the
+    # gap, and most of all when the gap is the result being quoted.
+    lines += RESIDENCY_CONFOUND
     return Gate(
         CLAIM, "C3 tile attribution",
         f"the shortfall belongs to BLOCK_M={SUBJECT_BLOCK_M}, not to the fused "
         "layer both tiles run inside",
         f"control peak - subject peak >= {CONTROL_SEPARATION:.2f} of the roof",
         gap >= CONTROL_SEPARATION, f"gap {gap:+.3f} of the roof", "", lines)
+
+
+def gate_c4_ceiling_located(control: list[Point], control_block_m: int,
+                            roof: Roof) -> Gate:
+    """THE POSITIVE CONTROL, scored. Did any tile in this run reach the roof.
+
+    WHY THIS IS A GATE AND NOT A PRINTED LINE. Until 2026-09-02 the control's
+    peak was printed inside C3 and gated on nothing, so the headline verdict
+    "the ceiling is real and it binds" could be issued with the subject at 0.58
+    and the control at 0.70, both stopped far below the roof for reasons this
+    study's model does not describe. That is a tile-dependent GAP and it is not
+    a ceiling: naming a mechanism from a difference, without the positive
+    control ever going positive, is the benchmarking crime this gate exists to
+    make impossible.
+
+    IT IS EXPECTED TO FAIL ON TODAY'S EVIDENCE, and that is the point of
+    pre-registering it. No tile in this repository's published corpus reaches
+    0.95 of ridge x bandwidth: BLOCK_M=256 peaks at 0.48-0.54 of the roof on the
+    H200 and 0.56-0.64 on the A100. `docs/FINDINGS.md`'s "structurally incapable
+    of reaching its compute roof" has no positive control behind it, and a FAIL
+    here is this run saying so in its own output rather than a reviewer saying
+    it later.
+
+    A FAIL does not void the gap. It changes the sentence the gap earns, from
+    CEILING BINDING to TILE-DEPENDENT GAP, CEILING UNLOCATED.
+    """
+    deep = multi_tile(control)
+    if not deep:
+        return Gate(
+            CLAIM, "C4 ceiling located",
+            f"the control BLOCK_M={control_block_m} reaches this card's roof, "
+            "so the roof is somewhere this instrument can see",
+            f"control peak roof fraction >= {ROOF_REACHED:.2f}", None,
+            "no retained full-stack multi-tile control points", "",
+            ["Nothing reached anything, so nothing located the ceiling. V4 says "
+             "whether the control ran at all."])
+    peak = max(p.roof_fraction for p in deep)
+    best = max(deep, key=lambda p: p.roof_fraction)
+    lines = [
+        f"the control's best point is n={best.tiles} M-tiles per expert at "
+        f"T={best.tokens}: {best.useful_tflops:.1f} of {roof.tflops:.1f} "
+        f"TFLOP/s, {peak:.3f} of the roof.",
+        "the fraction UNDERSTATES the GEMM's efficiency by whatever the fused "
+        "layer spends outside its GEMMs, so a control below the roof is not "
+        "proof that no tile can reach it -- it is a failure to DEMONSTRATE "
+        "that this instrument can see one arrive, which is all this gate "
+        "claims.",
+    ]
+    if peak < ROOF_REACHED:
+        lines.append(
+            f"the published corpus agrees: BLOCK_M=256 peaks at 0.48-0.54 of "
+            "the roof on the H200 and 0.56-0.64 on the A100, so a FAIL here is "
+            "the expected reading and the verdict below is "
+            f"{GAP_UNLOCATED!r}.")
+    lines += RESIDENCY_CONFOUND
+    return Gate(
+        CLAIM, "C4 ceiling located",
+        f"the control BLOCK_M={control_block_m} reaches this card's roof, so "
+        "the roof is somewhere this instrument can see a tile arrive",
+        f"control peak roof fraction >= {ROOF_REACHED:.2f}",
+        peak >= ROOF_REACHED, f"control peak {peak:.3f} of the roof", "", lines)
 
 
 # --------------------------------------------------------------------------
@@ -1297,14 +2008,48 @@ BINDING = "CEILING BINDING AT THE PRODUCTION TILE"
 NOT_BINDING = "CEILING NOT BINDING"
 STILL_RISING = "STILL RISING AT THE LARGEST BATCH MEASURED"
 NOT_TILE = "PLATEAU IS NOT TILE-ATTRIBUTABLE"
+#: The third outcome, added 2026-09-02. A gap between the tiles is established
+#: and the height of the ceiling is not, because the positive control never went
+#: positive. It is a RESULT and the study may quote the gap; it is not the
+#: headline and the study may not quote a ceiling.
+GAP_UNLOCATED = "TILE-DEPENDENT GAP, CEILING UNLOCATED"
 UNSETTLED = "NOT SETTLED"
+
+#: Printed under EVERY verdict this script can reach. The audit found it under
+#: one of them: the NOT_TILE branch, where it embarrassed nobody, and not under
+#: BINDING, where the study's headline sentence is written and where a confound
+#: able to produce the whole gap belongs most.
+RESIDENCY_CONFOUND = [
+    "ONE CONFOUND NO GATE HERE REMOVES. The subject and the control differ in "
+    "OCCUPANCY as well as in tile: at the production pin of num_stages=4 the "
+    "resident-block ratio is 2:1, at 2 stages it is still 2:1, at 3 it is 3:1, "
+    "and the only matched setting is 5 stages, which sm_80 cannot run and which "
+    "unpins the comparison from every published arm. So no --num-stages choice "
+    "disambiguates a result here, in either direction: a gap can be residency "
+    "rather than tile, and an absent gap can be residency cancelling a tile "
+    "effect. scripts/occupancy_vs_swizzle.py measures the residency effect "
+    "directly, and its size is what to subtract before this verdict is read as "
+    "being about the tile at all.",
+]
 
 
 def verdict(gates: list[Gate]) -> tuple[str, list[str]]:
-    """One sentence, derived from the gates and from nothing else."""
+    """One sentence, derived from the gates and from nothing else.
+
+    Every branch returns through one place at the bottom, which is how
+    `RESIDENCY_CONFOUND` reaches every one of them: a confound appended by hand
+    in each branch is a confound that goes missing from the branch nobody
+    revisits, and that is exactly what happened here.
+    """
+    call, why = _verdict_call(gates)
+    return call, why + RESIDENCY_CONFOUND
+
+
+def _verdict_call(gates: list[Gate]) -> tuple[str, list[str]]:
+    """The branch table itself. See `verdict`, which is the entry point."""
     by = {g.name.split()[0]: g for g in gates}
     invalid = [g for g in gates if g.kind == VALIDITY and g.passed is not True]
-    c1, c2, c3 = by.get("C1"), by.get("C2"), by.get("C3")
+    c1, c2, c3, c4 = by.get("C1"), by.get("C2"), by.get("C3"), by.get("C4")
     if invalid:
         return UNSETTLED, [
             "The instrument did not qualify: "
@@ -1335,23 +2080,35 @@ def verdict(gates: list[Gate]) -> tuple[str, list[str]]:
             "and the control tile plateaued with it. What the two tiles share "
             "has cancelled and the gap did not survive.",
             "The shortfall is a property of the fused layer, not of the tile, "
-            "and it is not the ceiling this study proposed.",
-            "ONE CONFOUND THIS GATE CANNOT REMOVE. The subject and the control "
-            "differ in OCCUPANCY as well as in tile: at the production pin of "
-            "num_stages=4 the resident-block ratio is 2:1, at 2 stages it is "
-            "still 2:1, at 3 it is 3:1, and the only matched setting is 5 "
-            "stages, which sm_80 cannot run and which unpins the comparison "
-            "from every published arm. So no --num-stages choice disambiguates "
-            "a C3 result here. The residency effect is measured DIRECTLY by "
-            "scripts/occupancy_vs_swizzle.py, and its size is what to subtract "
-            "before reading this verdict as tile-attributable or not."]
+            "and it is not the ceiling this study proposed."]
     if c1 is not None and c1.passed and c2 is not None and c2.passed and \
             c3 is not None and c3.passed:
+        if c4 is None:
+            return UNSETTLED, [
+                "C1, C2 and C3 all passed, and C4 -- whether the control ever "
+                "reached the roof -- was not scored. The headline may not be "
+                "issued on a positive control that was never read: without C4 "
+                "this is a gap of unknown height."]
+        if c4.passed is not True:
+            return GAP_UNLOCATED, [
+                f"At BLOCK_M={SUBJECT_BLOCK_M} throughput rose and then stopped "
+                "below this card's own measured dense rate, and the control "
+                "tile did materially better on the same batches, so the "
+                "difference is real and it is tile-dependent.",
+                "But the control did not reach the roof either, so the height "
+                "of the ceiling is NOT located: something below the roof binds "
+                "both tiles, this measurement does not say what, and the study "
+                "may quote the gap and may not quote a ceiling.",
+                "This is a result and not a failure. It is also the outcome the "
+                "published corpus predicts, where no tile exceeds 0.54 of the "
+                "roof on the H200 or 0.64 on the A100."]
         return BINDING, [
             f"At BLOCK_M={SUBJECT_BLOCK_M}, the tile vLLM actually runs "
             "multi-tile, throughput rose and then stopped below this card's own "
             "measured dense rate, while a tile whose cap is far above the ridge "
-            "did materially better on the same batches.",
+            "did materially better on the same batches AND reached the roof, so "
+            "the roof is somewhere this instrument was shown able to see a tile "
+            "arrive.",
             "The ceiling is real and it binds in the regime production runs. "
             "Nothing in this sentence came from a fit."]
     return UNSETTLED, ["The claim gates did not resolve; read them individually."]
@@ -1398,13 +2155,28 @@ def predictions_text(cfg, roof: Roof, b: int, control_block_m: int,
         f"{doublings:g} doublings, by "
         f"n={max(rows) // SUBJECT_BLOCK_M} M-tiles.",
         "  P4  the control does NOT plateau below the roof over the same span.",
+        f"  P5  the control REACHES the roof ({ROOF_REACHED:.2f} of "
+        f"{roof.tflops:.1f} = {ROOF_REACHED * roof.tflops:.0f} TFLOP/s), which "
+        "is what makes the subject's",
+        "      shortfall a located ceiling rather than a gap of unknown height. "
+        "REGISTERED AS THE ONE THIS",
+        "      STUDY EXPECTS TO FAIL: no tile in the published corpus reaches "
+        "0.95 of ridge x bandwidth,",
+        "      the BLOCK_M=256 control peaking at 0.48-0.54 of the roof on the "
+        "H200 and 0.56-0.64 on the A100.",
         "",
-        "  THE FORK. Throughput rises and plateaus below the roof -> the "
-        "ceiling is real and binds where",
-        "  production runs. Throughput reaches the roof -> the ceiling is not "
-        "binding and the study's central",
-        "  claim is about a regime that does not occur. Both are results; only "
-        "one is the study's.",
+        "  THE FORK, in three ways. Throughput reaches the roof -> the ceiling "
+        "is not binding and the study's",
+        "  central claim is about a regime that does not occur. It plateaus "
+        "below the roof and the control",
+        "  plateaus with it -> the shortfall is the fused layer's, not the "
+        "tile's. It plateaus below the roof,",
+        "  the control beats it by the separation, and the control reaches the "
+        "roof -> the ceiling is real and",
+        "  binds where production runs; the control beats it and does NOT reach "
+        "the roof -> a tile-dependent",
+        "  gap with the ceiling unlocated. All four are results; only one is "
+        "the study's.",
     ])
 
 
@@ -1421,13 +2193,15 @@ class Plan:
     subject_rows: list[int]
     control_rows: list[int]
     reps: int
-    iters: int
-    warmup: int
+    warmup_ms: float
+    trials: int
+    l2_flush: bool
     cell_budget_ms: float
     estimated_seconds: float
     cells: int
     resources: dict
     refusals: dict
+    instrument: str
 
     def lines(self, cfg) -> list[str]:
         return [
@@ -1441,8 +2215,14 @@ class Plan:
             f"{self.control_rows} -- the same batches, a tile with no ceiling",
             f"repeats      {self.reps} round-robin passes per tile, so a "
             "throttled cell can be told from a tile effect",
-            f"timing       {self.warmup} warmup + up to {self.iters} iters, cut "
-            f"to keep a cell inside {self.cell_budget_ms:.0f} ms",
+            f"timing       {self.instrument}",
+            f"             {self.warmup_ms:.0f} ms of delivered GPU load to "
+            f"warm, then {self.trials} queue-deep trials each sized by the "
+            f"instrument to hold {self.cell_budget_ms:.0f} ms of kernel time",
+            "             L2 " + ("flushed between iterations, as the roof was"
+                                  if self.l2_flush else
+                                  "NOT flushed, so these cells are not "
+                                  "comparable with the roof"),
             f"cells        {self.cells} timings",
             f"estimate     {self.estimated_seconds:.0f} s of GPU at the model's "
             "own timings, excluding compiles and allocation",
@@ -1451,6 +2231,15 @@ class Plan:
 
 
 def build_plan(args, cfg, b: int, roof: Roof, capability) -> Plan:
+    """The grid, the resource bill and the cost, at the instrument that will run.
+
+    THE COST IS THE SWEEP'S OWN `estimated_seconds`, called and not copied, and
+    it is called with `warmup_ms=` and `trials=` -- the keywords that price
+    `time_kernel` -- rather than with `iters=`/`warmup=`, which price the
+    retired per-call loop. That function REFUSES a call that mixes the two
+    because the two answers differ by about 5x, and the whole reason an operator
+    reads this number is to decide whether to rent the pod.
+    """
     pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
                   num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
                   BLOCK_SIZE_N=args.block_n, BLOCK_SIZE_K=args.block_k)
@@ -1460,16 +2249,65 @@ def build_plan(args, cfg, b: int, roof: Roof, capability) -> Plan:
     resources, refusals = SWEEP.tile_resource_plan(pinned, tiles, b, capability)
     total = 0.0
     for bm, rows in ((SUBJECT_BLOCK_M, subject_rows), (args.control, control_rows)):
-        for r in rows:
-            ms = SWEEP.model_ms(cfg, r, bm, alpha=args.alpha, ridge=roof.ridge,
-                                bandwidth_gbps=roof.bandwidth_gbps, b=b)
-            iters = SWEEP.scaled_iters(ms, args.iters, args.cell_budget_ms)
-            total += args.reps * ms * (args.warmup + iters)
+        total += args.reps * SWEEP.estimated_seconds(
+            cfg, rows, [bm], alpha=args.alpha, ridge=roof.ridge,
+            bandwidth_gbps=roof.bandwidth_gbps, b=b,
+            cell_budget_ms=args.cell_budget_ms, warmup_ms=args.warmup,
+            trials=args.trials)
     return Plan(args.model, args.dtype, pinned, args.control, subject_rows,
-                control_rows, args.reps, args.iters, args.warmup,
-                args.cell_budget_ms, total / 1e3,
+                control_rows, args.reps, args.warmup, args.trials,
+                not args.no_l2_flush, args.cell_budget_ms, total,
                 args.reps * (len(subject_rows) + len(control_rows)),
-                resources, refusals)
+                resources, refusals, instrument_name())
+
+
+def control_resource_hint(args, b: int, capability) -> str:
+    """The pins under which the REQUESTED configuration would fit, or none exist.
+
+    R2 / audit A8. The driver is adding a second roofline arm at the production
+    tuning vLLM actually ships for mixtral on the H200 -- BLOCK_SIZE_N=256 with
+    GROUP_SIZE_M 16 or 32 -- and at the default pins that arm cannot run: a
+    256x256 fp32 accumulator needs 256 registers per thread at num_warps=8
+    against a hardware maximum of 255, and 4 stages of (256x64 + 64x256) is 256
+    KiB of shared memory against sm_90's 227 KiB. Both are hard facts about the
+    hardware, so the refusal is correct and stays.
+
+    What was missing is the next sentence. "Change --num-stages, --block-n or
+    --control" sends an operator to guess, on a rented pod, at a bill this file
+    can compute for free: the accumulator is the ceiling and only more warps
+    move it, then the stages have to come down for the shared memory. So this
+    searches the same `tile_resource_plan` the refusal came from, over the warp
+    and stage counts Triton will take, and names the first setting that fits --
+    or says plainly that none does, which is also an answer and a cheaper one
+    than finding out at the pod.
+
+    THE SETTING APPLIES TO BOTH TILES. That is not a caveat, it is the design:
+    C3 rests on the subject and the control differing in the tile and in nothing
+    else, so a hint that lowered the stages for the control alone would buy a
+    measurement that cannot be compared.
+    """
+    tiles = (SUBJECT_BLOCK_M, args.control)
+    for warps in (8, 16, 32):
+        for stages in (args.num_stages, 4, 3, 2, 1):
+            pinned = dict(SWEEP.FIXED, num_stages=stages, num_warps=warps,
+                          GROUP_SIZE_M=args.group_m,
+                          BLOCK_SIZE_N=args.block_n,
+                          BLOCK_SIZE_K=args.block_k)
+            _, refusals = SWEEP.tile_resource_plan(pinned, tiles, b, capability)
+            if not refusals:
+                if (warps, stages) == (args.num_warps, args.num_stages):
+                    continue
+                return (
+                    f"THE REQUESTED CONFIGURATION DOES FIT, at --num-warps "
+                    f"{warps} --num-stages {stages}. Both tiles move together "
+                    "under those pins, which is what C3 needs; re-run with them "
+                    "and the run id changes with them.")
+    return ("NO --num-warps/--num-stages combination this file will try fits "
+            f"BLOCK_M={args.control} at BLOCK_SIZE_N={args.block_n} on this "
+            "capability. The accumulator, not the shared memory, is usually the "
+            "wall, and it does not move with stages. Choose a smaller "
+            "--control or a smaller --block-n; there is no pin that rescues "
+            "this one.")
 
 
 def check_control(control_block_m: int, alpha: float, ridge: float, b: int
@@ -1504,7 +2342,8 @@ def check_control(control_block_m: int, alpha: float, ridge: float, b: int
 # --------------------------------------------------------------------------
 
 def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
-                    cache_root: Path, pinned: dict, done, timings: list[Timing]
+                    cache_root: Path, pinned: dict, done, timings: list[Timing],
+                    *, reference_clock: float | None, prov=None
                     ) -> tuple[int, int]:
     """Time one tile, `--reps` round-robin passes over its batches.
 
@@ -1515,14 +2354,25 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
     whole grid per repeat spreads that drift across the curve instead of
     aligning it with the x axis.
 
-    The clocks are sampled immediately either side of the RECORDED timing, not
-    around the compile and the calibration call as well, so the drift on a row
-    is the drift during the milliseconds that row reports.
+    ONE INSTRUMENT, AND IT IS THE ROOF'S. `moe.bench.timing.time_kernel` warms
+    for a DURATION of delivered GPU load, sizes its own iteration count from
+    that warmup's queue-deep per-call time, flushes L2 before every call, and
+    polls the SM clock on a background thread WHILE the kernels run. The roof
+    this cell's throughput is divided by was measured by the same loop. The
+    private per-iteration-synchronise loop this replaced created its events
+    inside the timed region and let 0.18-0.30 ms of host enqueue time per call
+    into the measured interval, which is a per-card bias in a number that is
+    then compared across cards.
+
+    `reference_clock` is the clock the CALIBRATION's dense GEMM ran at, resolved
+    once for the whole arm before any cell so a mid-run yaml rewrite cannot move
+    it. Without it every cell's `clock_level_ok` is None, which means "not
+    determined" and excludes nothing; the caller prints that it happened.
     """
     import torch
 
     from moe.baselines._framework_config import vllm_call_kwargs
-    from moe.bench.timing import ClockState, clock_drift
+    from moe.bench import timing
     from moe.reference.torch_ref import make_inputs
     from moe.spec import BenchSpec, RoutingSpec
 
@@ -1566,16 +2416,22 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                     call()
                     torch.cuda.synchronize()
                     compiles += SWEEP.count_new(cache_root, seen)
-                    ms0, _, _ = SWEEP.time_call(call, 1, 3)
-                    iters = SWEEP.scaled_iters(ms0, args.iters,
-                                               args.cell_budget_ms)
-                    start = ClockState.sample()
-                    ms, mn, sd = SWEEP.time_call(call, args.warmup, iters)
-                    end = ClockState.sample()
-                drift, throttled = clock_drift(start, end)
-                row = Timing(block_m, r, tiles, tokens, rep, ms, mn, sd, iters,
-                             start.sm_clock_mhz, end.sm_clock_mhz,
-                             start.temp_c, end.temp_c, drift, throttled)
+                    t = timing.time_kernel(
+                        call, warmup_ms=args.warmup,
+                        target_ms=args.cell_budget_ms, trials=args.trials,
+                        l2_flush=not args.no_l2_flush,
+                        reference_clock_mhz=reference_clock)
+                row = Timing(block_m, r, tiles, tokens, rep, t.ms_p50, t.ms_min,
+                             t.ms_std, t.iters,
+                             sm_clock_load_mhz=t.sm_clock_load_mhz,
+                             sm_clock_start_mhz=t.sm_clock_start_mhz,
+                             sm_clock_end_mhz=t.sm_clock_end_mhz,
+                             clock_level_ok=t.clock_level_ok,
+                             clock_drift_ok=t.clock_drift_ok,
+                             instrument=t.instrument, warmup_ms=t.warmup_ms,
+                             trials=t.trials, l2_flush=t.l2_flush)
+                if t.clock_level_ok is False or t.host_bound:
+                    print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
             except Exception as exc:                    # noqa: BLE001
                 row = Timing(block_m, r, tiles, tokens, rep, 0.0, 0.0, 0.0, 0,
                              status="failed",
@@ -1587,11 +2443,13 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                           "for one tile alone would unpin the comparison, which "
                           "is the only thing C3 has.")
             timings.append(row)
-            append_timing(csv_path, row)
+            append_timing(csv_path, row, prov)
+            load = ("    ? MHz" if row.sm_clock_load_mhz is None
+                    else f"{row.sm_clock_load_mhz:5.0f} MHz")
             print(f"  BM={block_m:3d} r={r:5d} n={tiles:3d} T={tokens:7d} "
-                  f"rep={rep:2d}  {row.ms_p50:9.4f} ms  "
-                  f"{row.sm_clock_start_mhz:4d}->{row.sm_clock_end_mhz:4d} MHz"
-                  + ("  THROTTLED" if row.throttled else ""))
+                  f"rep={rep:2d}  {row.ms_p50:9.4f} ms  {load} under load"
+                  + ("  DRIFTED" if row.throttled else "")
+                  + ("  BELOW THE ROOF'S CLOCK" if row.cold else ""))
     return compiles, executed
 
 
@@ -1623,15 +2481,24 @@ def figure_rows(series: list[Series], roof: Roof, card: str) -> list[dict]:
                 "sm_clock_mhz": p.sm_clock_mhz,
                 "throttled_reps": p.throttled_reps,
                 "retained": p.retained, "excluded_why": p.excluded_why,
+                "instrument": p.instrument, "warmup_ms": p.warmup_ms,
+                "iters": p.iters, "trials": p.trials, "l2_flush": p.l2_flush,
+                "clock_level_ok": p.clock_level_ok,
+                "clock_drift_ok": p.clock_drift_ok,
             })
     return out
 
 
+#: The instrument columns ride on every plotted row for the same reason the roof
+#: does: a figure redrawn months later from a committed CSV must be able to say
+#: which loop produced the milliseconds, and a mixed-instrument figure is the
+#: defect the whole 2026-09-02 timing rebuild was about.
 FIGURE_FIELDS = ["card", "roof_tflops", "roof_source", "roof_clock_mhz",
                  "block_m", "tokens", "rows_per_expert", "tiles", "regime",
                  "tile_eff", "reps", "ms_p50", "ms_spread_rel", "useful_tflops",
                  "roof_fraction", "sm_clock_mhz", "throttled_reps", "retained",
-                 "excluded_why"]
+                 "excluded_why", "instrument", "warmup_ms", "iters", "trials",
+                 "l2_flush", "clock_level_ok", "clock_drift_ok"]
 
 
 def write_figure_csv(path: Path, rows: list[dict]) -> None:
@@ -1671,6 +2538,7 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *, control_block_m: int,
         gate_c1_roof(subject, sub_plateau, roof, predicted),
         gate_c2_plateau(sub_plateau, subject),
         gate_c3_attribution(subject, control, ctl_plateau, control_block_m, roof),
+        gate_c4_ceiling_located(control, control_block_m, roof),
     ]
     call, why = verdict(gates)
 
@@ -1695,9 +2563,11 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *, control_block_m: int,
         "subject_plateau": asdict(sub_plateau),
         "control_plateau": asdict(ctl_plateau),
         "points": figure_rows(series, roof, roof.device),
-        "gates": [asdict(g) | {"verdict": {True: "PASS", False: "FAIL",
-                                           None: "UNKNOWN"}[g.passed]}
+        "gates": [asdict(g) | {"verdict": g.verdict, "name_token": g.token,
+                               "result_line": g.result_line()}
                   for g in gates],
+        "exit_code": exit_codes.classify(gates),
+        "exit_code_meaning": exit_codes.describe(exit_codes.classify(gates)),
     }
     return lines, gates, payload, series
 
@@ -1709,12 +2579,28 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *, control_block_m: int,
 def planted_timings(cfg, roof: Roof, b: int, rows_by_tile: dict[int, list[int]],
                     *, alpha: float, overhead_ms: float, reps: int,
                     noise: float, seed: int, clock_mhz: int = 1500,
+                    gemm_share: float = 1.0,
                     throttle: tuple[int, int] | None = None) -> list[Timing]:
     """Timings generated FROM the study's own model, so the gates have an answer.
 
-    `throttle` plants ONE (block_m, rows) cell with a collapsed end clock, which
-    is how the exclusion machinery gets exercised without a pod that overheats
-    on demand.
+    `throttle` plants ONE (block_m, rows) cell whose clock DRIFTED across its
+    own trials, which is how the exclusion machinery gets exercised without a
+    pod that overheats on demand.
+
+    `gemm_share` is the fraction of the fused layer's time its GEMMs get, and it
+    divides BOTH tiles' milliseconds by the same number. It is the only knob
+    that can plant the world the audit found missing: a layer that spends part
+    of itself outside the GEMMs holds both tiles to the same fraction of the
+    roof, which is a plateau below the roof that is NOT tile-attributable, and
+    at a value below 1 it also keeps the control off the roof, which is a gap
+    whose ceiling is unlocated. `model_ms` cannot express either, because
+    `overhead_ms` is a FIXED cost and a fixed cost is outgrown: it makes a curve
+    that is still rising, which is a third and different world.
+
+    The rows carry `SWEEP.SYNTHETIC_INSTRUMENT`, never `TIMING_BASIS`. A reader
+    who greps a cells.csv for the instrument has to be able to tell a pod row
+    from a generated one, and a self-test that stamped the real basis on its own
+    fabrications would make that impossible.
     """
     rng = random.Random(seed)
     out: list[Timing] = []
@@ -1724,48 +2610,82 @@ def planted_timings(cfg, roof: Roof, b: int, rows_by_tile: dict[int, list[int]],
                 ms = SWEEP.model_ms(cfg, r, block_m, alpha=alpha,
                                     ridge=roof.ridge,
                                     bandwidth_gbps=roof.bandwidth_gbps, b=b,
-                                    overhead_ms=overhead_ms)
+                                    overhead_ms=overhead_ms) / gemm_share
                 if noise:
                     ms *= math.exp(rng.gauss(0.0, noise))
-                end = clock_mhz
+                end = float(clock_mhz)
                 if throttle == (block_m, r):
-                    end = int(clock_mhz * 0.80)
-                drift = (clock_mhz - end) / clock_mhz * 100.0
+                    end = clock_mhz * 0.80
                 out.append(Timing(
                     block_m, r, SWEEP.tiles_per_expert(r, block_m),
-                    SWEEP.tokens_for_rows(cfg, r), rep, ms, ms, ms * noise,
-                    0, clock_mhz, end, 50, 50, drift,
-                    drift > THROTTLE_DRIFT_PCT))
+                    SWEEP.tokens_for_rows(cfg, r), rep, ms, ms, ms * noise, 0,
+                    sm_clock_load_mhz=float(clock_mhz),
+                    sm_clock_start_mhz=float(clock_mhz), sm_clock_end_mhz=end,
+                    clock_level_ok=True,
+                    clock_drift_ok=abs(clock_mhz - end) / clock_mhz
+                    <= THROTTLE_DRIFT_PCT / 100.0,
+                    instrument=SWEEP.SYNTHETIC_INSTRUMENT, warmup_ms=0.0,
+                    trials=0, l2_flush=True))
     return out
 
 
-#: The three worlds, their planted parameters, and the gate verdict each MUST
-#: produce. A gate that answers the same in every world cannot settle this
-#: experiment, which is the only thing this self test is for.
+#: The worlds, their planted parameters, the gate each MUST move, and the
+#: verdict each MUST reach. A gate that answers the same in every world cannot
+#: settle this experiment, which is the only thing this self test is for; and a
+#: VERDICT that no world reaches is a branch nobody has executed, which is how
+#: the (C1 PASS, C2 PASS, C3 FAIL) path stayed unexercised until 2026-09-02.
+#:
+#: Each row is `(name, alpha, overhead_ms, gemm_share, gate, expected, verdict)`.
 SELF_TEST_WORLDS = (
     # cap(128) = 128 Op/B against a ridge of ~163: the memory branch binds at
     # every tread and the curve is flat below the roof. cap(256) = 256 Op/B is
-    # above the ridge, so the control is compute bound and reaches it.
-    ("capped     alpha 1.00", 1.00, 0.05, "C2", True),
+    # above the ridge, so the control is compute bound, reaches the roof, and
+    # C4 locates the ceiling. This is the study's own hypothesis.
+    ("capped      alpha 1.00", 1.00, 0.05, 1.00, "C2", True, BINDING),
     # The retracted world. cap(128) = 1280 Op/B, ten times the H200 ridge, so
     # nothing is memory bound and the subject reaches the roof.
-    ("uncapped   alpha 0.10", 0.10, 0.05, "C1", False),
-    # A fused layer with a 5 ms fixed cost. Nothing is capped; throughput climbs
+    ("uncapped    alpha 0.10", 0.10, 0.05, 1.00, "C1", False, NOT_BINDING),
+    # A fused layer with a 5 ms FIXED cost. Nothing is capped; throughput climbs
     # toward the roof and is still climbing at the deepest point, which is what
     # a derivative gate has to be able to say.
-    ("overhead   alpha 0.10, D = 5 ms", 0.10, 5.00, "C2", False),
+    ("overhead    alpha 0.10, D = 5 ms", 0.10, 5.00, 1.00, "C2", False,
+     STILL_RISING),
+    # THE (P, P, F) WORLD, planted 2026-09-02. Nothing is capped, but the fused
+    # layer keeps a quarter of its own time outside the GEMMs, so BOTH tiles
+    # plateau at 0.75 of the roof and the gap between them is nothing. C3 has to
+    # be able to say that the shortfall is the layer's, and until this row
+    # existed the branch that says it was never executed.
+    ("layer-bound alpha 0.10, GEMMs get 0.75", 0.10, 0.05, 0.75, "C3", False,
+     NOT_TILE),
+    # THE WORLD THE PUBLISHED CORPUS DESCRIBES. Capped at 128 and the layer
+    # keeps 45% of itself, so the subject sits at 0.42 and the control at 0.55:
+    # a real, tile-dependent gap of 0.13, with the control nowhere near the
+    # roof. C4 FAILs and the verdict is the third outcome. The published H200
+    # arm reads 0.468 and 0.526 at BLOCK_SIZE_N=64, GROUP_SIZE_M=1.
+    ("unlocated   alpha 1.00, GEMMs get 0.55", 1.00, 0.05, 0.55, "C4", False,
+     GAP_UNLOCATED),
 )
+
+#: The verdict strings, by the name the source spells them. Printed beside the
+#: sentence so `--self-test` output contains the IDENTIFIER a driver or a test
+#: greps for (NOT_TILE, GAP_UNLOCATED) and not only the prose it renders as.
+VERDICT_NAMES = {BINDING: "BINDING", NOT_BINDING: "NOT_BINDING",
+                 STILL_RISING: "STILL_RISING", NOT_TILE: "NOT_TILE",
+                 GAP_UNLOCATED: "GAP_UNLOCATED", UNSETTLED: "UNSETTLED"}
 
 
 def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
               control_block_m: int, doublings: float, reps: int = 3,
               noise: float = 0.002, seed: int = 0
               ) -> tuple[list[str], list[Gate]]:
-    """Three planted worlds and the verdicts they must produce.
+    """Planted worlds and the verdicts they must produce.
 
     The point is not that the code runs; it is that the gates DISCRIMINATE. Each
     world is named with the gate it is planted to move, and a world whose gate
-    agrees with another world's is a world this test would have missed.
+    agrees with another world's is a world this test would have missed. Each is
+    ALSO scored on the whole verdict it reaches, because a gate table that
+    discriminates and a verdict function that collapses its outcomes onto one
+    word are two different things and only the second is what gets published.
     """
     subject_rows = doubling_rows(cfg, r_min, r_max, SUBJECT_BLOCK_M)
     control_rows = [r for r in subject_rows if r % control_block_m == 0]
@@ -1777,23 +2697,24 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
 
     out = ["", "## Self test: planted worlds, real gates", "",
            "  Every world below runs on the HYPOTHESIS roof, so V0 fails in all "
-           "three and the real",
-           "  verdict is NOT SETTLED in all three -- which is the point of V0 "
+           "of them and the real",
+           "  verdict is NOT SETTLED in all of them -- which is the point of V0 "
            "and is asserted below.",
            "  The `would-be` column is `verdict()` applied to the CLAIM gates "
            "alone, i.e. what this",
            "  run would have concluded had it been measured on a calibrated "
            "card.", "",
-           f"{'world':34s} {'subject peak':>12s} {'gain/doubling':>14s} "
-           f"{'C1':>8s} {'C2':>8s} {'C3':>8s}  would-be verdict"]
+           f"{'world':38s} {'subject peak':>12s} {'control peak':>12s} "
+           f"{'gain/doubling':>14s} {'C1':>7s} {'C2':>7s} {'C3':>7s} {'C4':>7s}"
+           "  would-be verdict"]
     gates: list[Gate] = []
     verdicts: set[str] = set()
-    triples: set[tuple] = set()
+    quads: set[tuple] = set()
     real_verdicts: set[str] = set()
-    for name, alpha, overhead, moves, expect in SELF_TEST_WORLDS:
+    for name, alpha, overhead, share, moves, expect, want in SELF_TEST_WORLDS:
         timings = planted_timings(cfg, roof, b, grid, alpha=alpha,
                                   overhead_ms=overhead, reps=reps, noise=noise,
-                                  seed=seed)
+                                  seed=seed, gemm_share=share)
         _, world_gates, payload, series = analyse(
             timings, cfg, roof, control_block_m=control_block_m, b=b,
             sm_count=SWEEP.DEFAULT_SM_COUNT, block_n=SWEEP.FIXED["BLOCK_SIZE_N"],
@@ -1802,46 +2723,56 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         by = {g.name.split()[0]: g for g in world_gates}
         tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}
         subject = [s for s in series if s.marker == "#"][0]
+        control = [s for s in series if s.marker == "o"][0]
         peak = max((p.roof_fraction for p in multi_tile(subject.points)),
                    default=0.0)
+        peak_c = max((p.roof_fraction for p in multi_tile(control.points)),
+                     default=0.0)
         plateau = payload["subject_plateau"]["gain_per_doubling"]
         # `verdict()` over the CLAIM gates alone: what this world would have
         # concluded on a calibrated card. The real verdict is collected too,
         # because "a hypothesis roof cannot produce one" is itself an invariant.
         would_be, _ = verdict([g for g in world_gates if g.kind == CLAIM])
         out.append(
-            f"{name:34s} {peak:12.3f} "
+            f"{name:38s} {peak:12.3f} {peak_c:12.3f} "
             + (f"{plateau:+13.2%} " if plateau is not None else f"{'n/a':>14s}")
-            + f"{tag[by['C1'].passed]:>8s} {tag[by['C2'].passed]:>8s} "
-              f"{tag[by['C3'].passed]:>8s}  {would_be}")
+            + f"{tag[by['C1'].passed]:>7s} {tag[by['C2'].passed]:>7s} "
+              f"{tag[by['C3'].passed]:>7s} {tag[by['C4'].passed]:>7s}  "
+              f"{VERDICT_NAMES[would_be]} ({would_be})")
         verdicts.add(would_be)
         real_verdicts.add(payload["verdict"])
-        triples.add((by["C1"].passed, by["C2"].passed, by["C3"].passed))
+        quads.add((by["C1"].passed, by["C2"].passed, by["C3"].passed,
+                   by["C4"].passed))
         got = by[moves].passed
         gates.append(Gate(
             VALIDITY, f"S {name.split()[0]}",
             f"the planted world moves {moves} to "
-            f"{'PASS' if expect else 'FAIL'}",
-            f"{moves} verdict is {'PASS' if expect else 'FAIL'}", got is expect,
-            f"{moves} came out {tag[got]}",
+            f"{'PASS' if expect else 'FAIL'} and reaches "
+            f"{VERDICT_NAMES[want]}",
+            f"{moves} verdict is {'PASS' if expect else 'FAIL'} and the "
+            f"would-be verdict is {VERDICT_NAMES[want]}",
+            got is expect and would_be == want,
+            f"{moves} came out {tag[got]} and the verdict was "
+            f"{VERDICT_NAMES[would_be]}",
             "the self test itself: gates that answer the same in every world "
-            "cannot settle this experiment"))
+            "cannot settle this experiment, and a verdict branch no world "
+            "reaches is a branch nobody has executed"))
 
-    # NON-VACUITY over the worlds themselves. Three planted worlds that all
-    # produce one reading prove nothing about the instrument, however many of
-    # them there are. Scored on the claim-gate TRIPLE as well as on the verdict,
-    # because a verdict function that collapsed three different triples onto one
+    # NON-VACUITY over the worlds themselves. Planted worlds that all produce
+    # one reading prove nothing about the instrument, however many of them there
+    # are. Scored on the claim-gate QUADRUPLE as well as on the verdict, because
+    # a verdict function that collapsed several different quadruples onto one
     # word would pass a check that only looked at the word.
     gates.append(Gate(
         VALIDITY, "S discrimination",
         "the worlds do not all land on one reading",
-        f"{len(SELF_TEST_WORLDS)} distinct (C1, C2, C3) triples and "
+        f"{len(SELF_TEST_WORLDS)} distinct (C1, C2, C3, C4) quadruples and "
         f"{len(SELF_TEST_WORLDS)} distinct would-be verdicts across "
         f"{len(SELF_TEST_WORLDS)} worlds",
-        len(triples) == len(SELF_TEST_WORLDS)
+        len(quads) == len(SELF_TEST_WORLDS)
         and len(verdicts) == len(SELF_TEST_WORLDS),
-        f"{len(triples)} distinct triples, {len(verdicts)} distinct verdicts: "
-        f"{sorted(verdicts)}",
+        f"{len(quads)} distinct quadruples, {len(verdicts)} distinct verdicts: "
+        f"{sorted(VERDICT_NAMES[v] for v in verdicts)}",
         "the self test itself"))
 
     # AND THE REFUSAL. A synthetic run stands on a roof no device produced, so
@@ -1856,9 +2787,11 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         "the self test itself: if a hypothesis roof could produce a verdict, "
         "every --dry-run and --self-test on a laptop would be quotable"))
 
-    # And the exclusion machinery, which no world above exercises: plant one
-    # throttled cell and check it leaves the gated set rather than being
-    # averaged into it.
+    # And the exclusion machinery, which no world above exercises, once for each
+    # of the instrument's TWO clock verdicts. They are different faults -- a
+    # clock that moved during the trials, and a clock that sat steadily below
+    # the one the roof was measured at -- and a run can have either without the
+    # other, so both branches are planted rather than one standing in for both.
     timings = planted_timings(cfg, roof, b, grid, alpha=1.0, overhead_ms=0.05,
                               reps=1, noise=0.0, seed=seed,
                               throttle=(SUBJECT_BLOCK_M, r_max))
@@ -1868,14 +2801,40 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
                           clock_ref=modal_clock(timings))
     dropped = [p for p in points if not p.retained]
     gates.append(Gate(
-        VALIDITY, "S throttle exclusion",
-        "a throttled cell leaves the gated set",
-        "the one planted throttled point is the one excluded point",
+        VALIDITY, "S drift exclusion",
+        "a cell whose clock moved across its own trials leaves the gated set",
+        "the one planted drifting point is the one excluded point",
         len(dropped) == 1 and dropped[0].rows_per_expert == r_max,
         f"{len(dropped)} excluded: "
         f"{[p.rows_per_expert for p in dropped]} rows per expert",
         "the self test itself: an exclusion path never exercised is an "
         "exclusion path that does not work"))
+
+    # The LEVEL branch. The instrument sets `clock_level_ok` False on a cell it
+    # timed below the roof's clock; here that flag is planted directly, because
+    # what is being tested is that this file EXCLUDES on it, not that
+    # `timing.clock_flags` computes it (which `tests/test_timing.py` owns).
+    steady_cold = planted_timings(cfg, roof, b, {SUBJECT_BLOCK_M: [r_max]},
+                                  alpha=1.0, overhead_ms=0.05, reps=1,
+                                  noise=0.0, seed=seed)
+    cold_rows = [replace(t, clock_level_ok=False) for t in steady_cold]
+    cold_points = build_points(cold_rows, cfg, SUBJECT_BLOCK_M, roof,
+                               sm_count=SWEEP.DEFAULT_SM_COUNT,
+                               block_n=SWEEP.FIXED["BLOCK_SIZE_N"],
+                               clock_ref=modal_clock(cold_rows))
+    cold_dropped = [p for p in cold_points if not p.retained]
+    steady = all(t.clock_drift_ok is not False for t in cold_rows)
+    gates.append(Gate(
+        VALIDITY, "S level exclusion",
+        "a cell timed below the roof's clock leaves the gated set even though "
+        "its clock never moved",
+        "the planted cold point is excluded, and it is not excluded for drift",
+        len(cold_dropped) == 1 and steady,
+        f"{len(cold_dropped)} of {len(cold_points)} excluded; drift verdicts "
+        f"{sorted({t.clock_drift_ok for t in cold_rows})}",
+        "the self test itself: a steady low clock is the failure a drift-only "
+        "check reports as no failure at all, which is what the pre-2026-09-02 "
+        "flag did"))
     return out, gates
 
 
@@ -1924,35 +2883,51 @@ def detect_card_slug() -> str | None:
 def default_run_id(args, card: str) -> str:
     """Derived from EVERY swept parameter AND the card, so two runs cannot collide.
 
-    This repo has lost an arm to this twice. Once to a run id that omitted
-    GROUP_SIZE_M -- the second run resumed into the first's directory, found
-    every cell present, skipped all of them, and printed the first run's timings
-    under the second's heading. Once to a run id that omitted THE CARD, and the
-    proof is in the tree: two published directories, one A100 and one H200,
-    contain a report file of the same name.
+    `moe.bench.provenance.run_id` builds it, and this function's only job is to
+    decide WHICH knobs are swept. That split is the point: the id format, the
+    card slug, the sort-before-hash and the refusal on a None or empty value are
+    one implementation for the whole repository, and the three collisions its
+    docstring records -- GROUP_SIZE_M, the card, and the timing knobs -- are
+    each a knob that a private id builder left out.
 
-    The card is the sharpest of them here, because every number this script
-    prints is a fraction of a PER-CARD measured roof -- 712 TFLOP/s on the H200
-    against a different figure on the A100 -- and `results_root()` prefers a
-    network volume that outlives the pod.
+    This repo has lost an arm to two of them. Once to an id that omitted
+    GROUP_SIZE_M: the second run derived the first's directory, found every cell
+    present, skipped all of them, and printed the first run's timings under the
+    second's heading. Once to an id that omitted THE CARD, and the proof is in
+    the tree, where two published directories, one A100 and one H200, contain a
+    report file of the same name. The card is the sharpest of them here, because
+    every number this script prints is a fraction of a PER-CARD measured roof
+    and `results_root()` prefers a network volume that outlives the pod.
+
+    THE TIMING KNOBS ARE SWEPT KNOBS. `--warmup`, `--trials`, `--cell-budget-ms`
+    and the L2 flush set the measured milliseconds of every cell, so a directory
+    must not be resumed into across a change to any of them. There is no
+    `--iters` to include: the instrument sizes the iteration count per cell from
+    the warmup's own queue-deep per-call time, and a flag that named a sample
+    size nothing uses would be a knob in the id and nowhere else.
 
     `--alpha` stays OUT: it selects the control and prints a prediction, and it
     re-reads a set of timings rather than changing one, so two analyses of one
-    sweep belong in one directory.
+    sweep belong in one directory. `SUBJECT_BLOCK_M` stays out because it is a
+    constant and not a knob; a value that cannot vary is not part of an identity.
+
+    THE KEYS ARE ONE OR TWO LETTERS, and that is a decision about the VISIBLE
+    part rather than about the key. `run_id` truncates the readable prefix at 96
+    characters and hashes the whole key regardless, so long names cost nothing in
+    correctness and cost the operator the ability to read `--num-stages` off an
+    `ls`. The table, once:
+
+        m  model      d  dtype       c  --control      g  GROUP_SIZE_M
+        n  BLOCK_N    k  BLOCK_K     s  num_stages     w  num_warps
+        lo --r-min    hi --r-max     x  --reps         e  --seed
+        u  --warmup (ms)             t  --trials       b  --cell-budget-ms
+        f  L2 flushed
     """
-    key = json.dumps({"card": card, "model": args.model, "dtype": args.dtype,
-                      "r_min": args.r_min, "r_max": args.r_max,
-                      "reps": args.reps, "iters": args.iters,
-                      "warmup": args.warmup, "budget": args.cell_budget_ms,
-                      "seed": args.seed, "group_m": args.group_m,
-                      "block_n": args.block_n, "block_k": args.block_k,
-                      "num_stages": args.num_stages, "num_warps": args.num_warps,
-                      "subject": SUBJECT_BLOCK_M, "control": args.control},
-                     sort_keys=True)
-    return (f"{card}-{args.model}-{args.dtype}-r{args.r_min}_{args.r_max}"
-            f"-c{args.control}-g{args.group_m}-n{args.block_n}-k{args.block_k}"
-            f"-s{args.num_stages}-w{args.num_warps}-x{args.reps}-"
-            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+    return PV.run_id(
+        card=card, m=args.model, d=args.dtype, lo=args.r_min, hi=args.r_max,
+        x=args.reps, u=args.warmup, t=args.trials, f=not args.no_l2_flush,
+        b=args.cell_budget_ms, e=args.seed, g=args.group_m, n=args.block_n,
+        k=args.block_k, s=args.num_stages, w=args.num_warps, c=args.control)
 
 
 # --------------------------------------------------------------------------
@@ -2011,10 +2986,35 @@ def build_parser() -> argparse.ArgumentParser:
                          "and both move together; lowering it for one tile "
                          "alone unpins the comparison C3 rests on")
     ap.add_argument("--num-warps", type=int, default=SWEEP.FIXED["num_warps"])
-    ap.add_argument("--iters", type=int, default=50)
-    ap.add_argument("--warmup", type=int, default=20)
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. THE UNIT IS THE INSTRUMENT'S: a 1 "
+                         "ms kernel needs hundreds of calls before the clock "
+                         "governor reacts and a 30 ms one needs a handful, so a "
+                         "count warms the two cells of one curve to different "
+                         "clock states and the difference lands in the "
+                         "derivative this script measures")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per cell; the percentiles are over "
+                         "iters x trials samples, and the iteration count is "
+                         "sized by the instrument from --cell-budget-ms")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do NOT evict L2 between timed iterations. Off by "
+                         "default because the roof was measured flushed and a "
+                         "warm-L2 cell is not comparable with it. Recorded per "
+                         "cell and in the run id, so a flushed and an unflushed "
+                         "sweep can never share a directory")
     ap.add_argument("--cell-budget-ms", type=float, default=400.0,
-                    help="iterations are cut so one cell stays inside this")
+                    help="target measured KERNEL time per trial; the "
+                         "instrument sizes its iteration count from it")
+    ap.add_argument("--plan-noise", type=float, default=DEFAULT_PLAN_NOISE_REL,
+                    metavar="REL",
+                    help="relative per-cell timing spread the plan's MDE line "
+                         "is sized against. It sizes an ESTIMATE of what this "
+                         "run could resolve and nothing else: every gate scores "
+                         "the spread the run actually measured. The default is "
+                         "the one published arm that recorded a spread")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sm-count", type=int, default=0,
                     help="0 asks the driver; only needed off-GPU")
@@ -2043,10 +3043,13 @@ def build_parser() -> argparse.ArgumentParser:
                     help="plant three worlds from the study's own model and "
                          "check the gates tell them apart, off GPU")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes. Off by "
-                         "default: this experiment has two outcomes and only "
-                         "one of them is the study's, so a FAIL here is a "
-                         "result and not an error")
+                    help="ACCEPTED AND REDUNDANT since 2026-09-02, kept because "
+                         "scripts/h200_gaps_session.sh documents it. Exit codes "
+                         "now come from moe.bench.exit_codes.classify: 0 every "
+                         "gate PASSED, 1 a CLAIM gate did not (a RESULT, not an "
+                         "error and not a retry), 2 nothing was measured, 3 a "
+                         "VALIDITY gate failed after measuring. There is no "
+                         "longer a mode in which a failed gate exits 0")
     return ap
 
 
@@ -2060,12 +3063,12 @@ def _main(argv=None) -> int:
         roof = resolve_roof(args.dtype, synthetic=synthetic)
     except RoofUnavailable as exc:
         print(f"REFUSED: {exc}")
-        return 2
+        return exit_codes.REFUSED
 
     refusal = check_control(args.control, args.alpha, roof.ridge, b)
     if refusal:
         print(f"REFUSED: {refusal}")
-        return 2
+        return exit_codes.REFUSED
 
     capability = SWEEP.resolve_capability(args, synthetic=synthetic)
     plan = build_plan(args, cfg, b, roof, capability)
@@ -2075,7 +3078,8 @@ def _main(argv=None) -> int:
             print(f"  BLOCK_M={bm}: {why}")
         print("A spilled or oversized kernel still returns a time, and that "
               "time still plots. Change --num-stages, --block-n or --control.")
-        return 2
+        print(control_resource_hint(args, b, capability))
+        return exit_codes.REFUSED
 
     lines = [f"experiment  bm128_roofline: at BLOCK_M={SUBJECT_BLOCK_M}, does "
              "achieved throughput plateau BELOW", "            this card's own "
@@ -2091,7 +3095,7 @@ def _main(argv=None) -> int:
               f"{detected!r}. --card may name a card that is ABSENT, so a "
               "laptop can print the pod's real path; it may never contradict "
               "one that is present. Nothing measured.")
-        return 2
+        return exit_codes.REFUSED
     run_id = args.run_id or default_run_id(args, card)
     out_dir = (args.out or SWEEP.results_root()) / "bm128_roofline" / run_id
     csv_path = out_dir / "cells.csv"
@@ -2099,6 +3103,9 @@ def _main(argv=None) -> int:
     card_path = out_dir / "CARD"
     cache_root = out_dir / "triton-cache"
 
+    noise_source = ("--plan-noise" if args.plan_noise != DEFAULT_PLAN_NOISE_REL
+                    else "timing_spread_median of the published "
+                         "alpha-surface-s4 mixtral g1/n64 arm")
     lines += ["", "## The plan", ""] + plan.lines(cfg) + roof.lines() + [
         f"card         {card}" + ("" if detected else
                                   f"  (NO DEVICE ATTACHED: the id above is the "
@@ -2106,8 +3113,14 @@ def _main(argv=None) -> int:
                                   "pod derives; pass --card <slug> for that)"),
         f"WRITES TO    {out_dir}",
         f"             {git_visibility(out_dir)}",
-        "             cells.csv (one row per repeat, flushed), figure.csv (the "
-        "plot's data), CARD, report.txt, report.json, triton-cache/"]
+        "             cells.csv (one row per repeat, flushed, with the "
+        "instrument and provenance columns), figure.csv (the",
+        "             plot's data), CARD, report.txt, report.json, "
+        "triton-cache/"] + mde_lines(
+        reps=args.reps, noise_rel=args.plan_noise,
+        noise_source=noise_source) + prior_arm_lines(
+        cfg, roof, block_n=args.block_n, group_m=args.group_m,
+        control_block_m=args.control)
 
     if args.self_test:
         more, gates = self_test(cfg, roof, b, r_min=args.r_min, r_max=args.r_max,
@@ -2116,8 +3129,12 @@ def _main(argv=None) -> int:
                                 reps=max(2, args.reps), seed=args.seed)
         lines += more + ["", "## Gates", ""] + render_gates(gates)
         print("\n".join(lines))
-        return 1 if (args.fail_on_gate
-                     and any(g.passed is not True for g in gates)) else 0
+        # Through the same table as a measured run, and unconditionally. The
+        # self test's gates are all VALIDITY -- they are the claim that this
+        # instrument discriminates -- so a failure is INVALID (3) and never 0.
+        # It used to exit 0 unless --fail-on-gate was passed, which is a broken
+        # self test reporting success to anything that did not know to ask.
+        return exit_codes.classify(gates)
 
     if args.dry_run:
         lo, hi = predicted_plateau_band(roof.ridge, b)
@@ -2135,18 +3152,25 @@ def _main(argv=None) -> int:
                   f"--dtype {args.dtype} --control {args.control} \\",
                   f"        --r-min {args.r_min} --r-max {args.r_max} --reps "
                   f"{args.reps} --plateau-doublings "
-                  f"{args.plateau_doublings:g}",
-                  "  Without --fail-on-gate, deliberately: this experiment has two",
-                  "  outcomes and a C1 FAIL (the tile REACHED the roof) is one of",
-                  "  them. Gate the arm on exit code 2 and the ## Verdict line."]
+                  f"{args.plateau_doublings:g} \\",
+                  f"        --group-m {args.group_m} --block-n {args.block_n} "
+                  f"--num-stages {args.num_stages} --num-warps {args.num_warps} "
+                  f"--warmup {args.warmup:g} --trials {args.trials}",
+                  "  READ THE EXIT CODE, not the prose: "
+                  + exit_codes.describe(exit_codes.DONE) + "; "
+                  + exit_codes.describe(exit_codes.CLAIM_FAIL) + ";",
+                  "  " + exit_codes.describe(exit_codes.REFUSED) + "; "
+                  + exit_codes.describe(exit_codes.INVALID) + ".",
+                  "  A CLAIM_FAIL is one of this experiment's registered "
+                  "outcomes and must never be queued for a retry."]
         print("\n".join(lines))
-        return 0
+        return exit_codes.DONE
 
     visibility = git_visibility(out_dir)
     if args.require_git_visible and visibility.startswith("IGNORED"):
         print("\n".join(lines))
         print(f"\nREFUSING: {visibility}")
-        return 2
+        return exit_codes.REFUSED
 
     missing = SWEEP.missing_gpu_stack()
     if missing:
@@ -2157,7 +3181,7 @@ def _main(argv=None) -> int:
               "discriminate\n"
               "  --dry-run    the pod plan, the grid, the predictions and the "
               "cost")
-        return 2
+        return exit_codes.REFUSED
 
     import torch
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2187,6 +3211,28 @@ def _main(argv=None) -> int:
     executed: dict[int, int] = {}
     started = time.time()
 
+    # THE CLOCK THE ROOF WAS MEASURED AT, resolved ONCE before any cell, so the
+    # whole arm is scored against one number and a mid-sweep yaml rewrite cannot
+    # move it. Without it every cell's LEVEL verdict is None, which means "not
+    # determined" and excludes nothing -- which is a state this run says out
+    # loud rather than one it discovers in the gates.
+    reference_clock, clock_source = SWEEP.reference_clock_mhz()
+    print("\nreference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT RESOLVED ({clock_source}); every cell's clock LEVEL "
+                  "verdict will be None, no cell can be excluded for running "
+                  "cold, and V3 will say so"))
+
+    # THE PROVENANCE BLOCK, built once and written onto every cells.csv row and
+    # into report.json. It NEVER raises: what it could not determine is None and
+    # `missing[field]` says why, because a block that guessed would be worse
+    # than one with a hole in it.
+    prov = PV.provenance_block(
+        repo_root=ROOT, instrument=instrument_name(), ridge=roof.ridge,
+        ridge_source=roof.source, bandwidth=roof.bandwidth_gbps,
+        bandwidth_source=roof.source, warmup_ms=args.warmup,
+        target_ms=args.cell_budget_ms)
+
     # THE CONTROL FIRST. It is the cheaper half (five batches against eight) and
     # it is the half that decides whether the subject's numbers can be read at
     # all: if the control cannot be pinned or cannot run, the subject's cells
@@ -2194,12 +3240,14 @@ def _main(argv=None) -> int:
     # order.
     print(f"\n-- control tile, BLOCK_M={args.control} --")
     c, e = measure_setting(args, cfg, args.control, plan.control_rows, csv_path,
-                           cache_root, plan.pinned, done, timings)
+                           cache_root, plan.pinned, done, timings,
+                           reference_clock=reference_clock, prov=prov)
     compiles[args.control], executed[args.control] = c, e
 
     print(f"\n-- subject tile, BLOCK_M={SUBJECT_BLOCK_M} --")
     c, e = measure_setting(args, cfg, SUBJECT_BLOCK_M, plan.subject_rows,
-                           csv_path, cache_root, plan.pinned, done, timings)
+                           csv_path, cache_root, plan.pinned, done, timings,
+                           reference_clock=reference_clock, prov=prov)
     compiles[SUBJECT_BLOCK_M], executed[SUBJECT_BLOCK_M] = c, e
     print(f"\nmeasured in {time.time() - started:.0f} s")
 
@@ -2211,6 +3259,12 @@ def _main(argv=None) -> int:
                                 if r > SUBJECT_BLOCK_M]))
     payload["gpu"] = torch.cuda.get_device_name(0)
     payload["run_id"] = run_id
+    payload["reference_clock_mhz"] = reference_clock
+    payload["reference_clock_source"] = clock_source
+    # `stamp` puts the block under "provenance" and the five keys the audit's
+    # publish gate checks at the TOP level, and raises rather than layering a
+    # second block over a first.
+    payload = prov.stamp(payload)
     write_figure_csv(figure_path, figure_rows(series, roof, card))
 
     text = "\n".join(lines + more + ["", "## Gates", ""] + render_gates(gates))
@@ -2226,12 +3280,13 @@ def _main(argv=None) -> int:
         # repo has already lost every published figure to a pattern that matched
         # at a depth nobody checked.
         print(f"{label:8s} {path}\n         {git_visibility(path)}")
-    return 1 if (args.fail_on_gate
-                 and any(g.passed is not True for g in gates)) else 0
+    code = exit_codes.classify(gates)
+    print(f"\nexit {exit_codes.describe(code)}")
+    return code
 
 
 def main(argv=None) -> int:
-    """Convert a string SystemExit into exit code 2, which is what REFUSED means.
+    """Convert a string SystemExit into REFUSED, and an unplanned crash to ERROR.
 
     `raise SystemExit("some sentence")` exits ONE. Every refusal in this file
     was written that way, so a run that refused before measuring anything --
@@ -2251,7 +3306,7 @@ def main(argv=None) -> int:
         if isinstance(exc.code, str):
             msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
             print(msg, file=sys.stderr)
-            return 2
+            return exit_codes.REFUSED
         raise
 
 
