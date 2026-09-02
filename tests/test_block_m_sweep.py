@@ -623,6 +623,58 @@ def test_the_run_id_is_derived_from_the_arguments_so_a_rerun_resumes_itself():
     assert "mixtral" in BM.default_run_id(a)
 
 
+def test_every_pinned_knob_changes_the_run_id():
+    """The resume path makes a shared id a SILENT WRONG ANSWER, not a clash.
+
+    cells.csv is appended per cell and completed cells are skipped on resume, so
+    two runs that derive the same id do not collide loudly: the second finds
+    every cell already on disk, skips all of them, and prints the FIRST run's
+    timings under the second run's heading -- because the report renders
+    `pinned` from argv rather than from the cells it actually read. That is
+    indistinguishable from a successful run.
+
+    GROUP_SIZE_M, BLOCK_SIZE_N and num_stages were all absent from the key while
+    they were unreachable constants. The moment --group-m and --block-n existed,
+    an alpha-versus-swizzle sweep would have reported alpha(G=1) four times over
+    and called it a curve.
+    """
+    parser = BM.build_parser()
+    base = parser.parse_args([])
+    for flag, value in (("--group-m", "16"),
+                        ("--block-n", "256"),
+                        ("--num-stages", "3")):
+        other = parser.parse_args([flag, value])
+        assert BM.default_run_id(base) != BM.default_run_id(other), (
+            f"{flag} does not change the run id, so a sweep over it would "
+            f"resume into the previous setting's directory and report its "
+            f"numbers")
+
+
+def test_the_run_id_names_the_swizzle_and_the_n_tile_in_plain_text():
+    """A hash nobody can invert is not a label. Two alpha runs differing only in
+    the swizzle have to be tellable apart in `ls`, because that listing is what
+    a reader of the paper's data directory sees."""
+    parser = BM.build_parser()
+    rid = BM.default_run_id(parser.parse_args(["--group-m", "16",
+                                               "--block-n", "256"]))
+    assert "-g16-" in rid
+    assert "-n256-" in rid
+
+
+def test_group_m_and_block_n_actually_reach_the_pinned_config():
+    """The flags must land in `pinned`, which is what is forced onto every
+    setting and what the report prints. A flag parsed and then dropped would
+    leave the sweep running the default while every table said otherwise."""
+    parser = BM.build_parser()
+    args = parser.parse_args(["--group-m", "16", "--block-n", "256"])
+    pinned = dict(BM.FIXED, num_stages=args.num_stages,
+                  GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
+    assert pinned["GROUP_SIZE_M"] == 16
+    assert pinned["BLOCK_SIZE_N"] == 256
+    assert BM.FIXED["GROUP_SIZE_M"] == 1, "the default must stay the fallback's"
+    assert BM.FIXED["BLOCK_SIZE_N"] == 64
+
+
 def test_the_results_root_prefers_the_network_volume_that_outlives_the_pod(monkeypatch, tmp_path):
     """`$MOE_RESULTS_DIR`, else `/workspace`, else the repo -- the order
     `run_all.sh` resolves it in, so this experiment lands beside every other arm

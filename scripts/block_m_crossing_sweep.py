@@ -1863,12 +1863,25 @@ def default_run_id(args) -> str:
 
     A random id would make every re-run a new directory and turn the resume
     path into dead code the first time anyone used it.
+
+    EVERY pinned knob has to be in this key. It used to omit GROUP_SIZE_M,
+    BLOCK_SIZE_N and num_stages, which was safe only while all three were
+    unreachable constants. The moment --group-m existed it became a silent
+    overwrite: a G=16 run would derive the SAME id as the G=1 run, resume into
+    its directory, find every cell already on disk, skip all of them, and report
+    G=1's timings under a G=16 heading. Nothing would have looked wrong, because
+    the report prints `pinned` from argv rather than from the cells it read. The
+    knobs are in the visible name too, so two runs are distinguishable in `ls`
+    and not only by a hash nobody can invert.
     """
     key = json.dumps({"model": args.model, "dtype": args.dtype,
                       "tiles": args.tiles, "r_max": args.r_max,
                       "row_step": args.row_step, "probes": args.step_probes,
-                      "seed": args.seed}, sort_keys=True)
+                      "seed": args.seed, "group_m": args.group_m,
+                      "block_n": args.block_n, "num_stages": args.num_stages},
+                     sort_keys=True)
     return f"{args.model}-{args.dtype}-r{args.r_max}-" \
+           f"g{args.group_m}-n{args.block_n}-" \
            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}"
 
 
@@ -1903,6 +1916,31 @@ def build_parser() -> argparse.ArgumentParser:
                          "shared memory, and a card that refuses it fails that "
                          "setting alone, which would unpin the sweep. Lower it "
                          "here and every setting moves together")
+    ap.add_argument("--group-m", type=int, default=FIXED["GROUP_SIZE_M"],
+                    help="the swizzle width, applied to EVERY setting. Pinned to "
+                         "1 by default and by design: 1 is the setting vLLM's "
+                         "FALLBACK ladder holds across the whole decode range, so "
+                         "it is the one a deployment without a tuned file "
+                         "actually runs. It is NOT a neutral choice, because "
+                         "GROUP_SIZE_M is what groups consecutive M-tiles onto "
+                         "one weight read, and alpha measured here is therefore "
+                         "alpha AT THIS SWIZZLE rather than a property of the "
+                         "kernel. Sweeping it is the point: the 2026-09-01 "
+                         "session measured alpha 0.92-1.02 at 1 and 0.58-0.62 at "
+                         "8 and above, so the ceiling 2*BM/(alpha*b) -- and "
+                         "therefore whether a given tile can EVER reach the "
+                         "compute roof -- moves with this number")
+    ap.add_argument("--block-n", type=int, default=FIXED["BLOCK_SIZE_N"],
+                    help="the N tile, applied to EVERY setting. Exists to bound "
+                         "the ACTIVATION confound rather than to tune anything. "
+                         "An extra M-tile re-reads activations as well as "
+                         "weights, in the ratio BLOCK_M/BLOCK_N, so at the "
+                         "default 64 a BLOCK_M=64 setting re-reads them one for "
+                         "one and a BLOCK_M=256 setting four times over -- which "
+                         "means alpha fitted across that grid is NOT bounded by "
+                         "the 0.25 this study quotes elsewhere. Raise this to "
+                         "256 and the ratio at BLOCK_M=64 falls to 0.25; if "
+                         "alpha does not move, the weight-traffic reading holds")
     ap.add_argument("--step-probes", type=int, default=6,
                     help="tile boundaries per block size to bracket for gate 1")
     ap.add_argument("--iters", type=int, default=50)
@@ -1985,7 +2023,8 @@ def main(argv=None) -> int:
     grid = build_grid(cfg, block_sizes, args.r_max, args.row_step,
                       args.step_probes)
     step = rows_step(cfg)
-    pinned = dict(FIXED, num_stages=args.num_stages)
+    pinned = dict(FIXED, num_stages=args.num_stages,
+                  GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
 
     run_id = args.run_id or default_run_id(args)
     out_dir = (args.out or results_root()) / "block_m_crossing" / run_id
