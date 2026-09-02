@@ -7,56 +7,56 @@ source_note: Achievable ceilings, not datasheet peaks. Nsight Compute is unavail
   Bandwidth is the 'triad' pattern; every pattern measured is under `detail` so a
   different denominator can be applied without re-running.
 checked_by: scripts/calibrate_hardware.py
-checked_on: '2026-09-01'
-measured_commit: d9190b276b8c9fe4c5caca14b5da95dfe49ab817
+checked_on: '2026-09-02'
+measured_commit: 63de5b9fb4522bd673c549529438db36de994d52
 measured_dirty: false
 memory:
-  bandwidth_tb_s: 4.373883899304316
+  bandwidth_tb_s: 4.374763038177949
 compute_dense_tflops:
-  bf16: 715.999417539747
-  fp16: 715.999417539747
-  fp8_e4m3: 1443.4135858041589
-  fp8_e5m2: 1443.4135858041589
+  bf16: 712.2591737976092
+  fp16: 712.2591737976092
+  fp8_e4m3: 1447.7011450166315
+  fp8_e5m2: 1447.7011450166315
 detail:
   gpu_name: NVIDIA H200
-  achieved_bandwidth_gbps: 4373.8838993043155
+  achieved_bandwidth_gbps: 4374.763038177949
   ceiling_pattern: triad
-  achieved_bf16_tflops: 715.999417539747
+  achieved_bf16_tflops: 712.2591737976092
   bandwidth_patterns:
   - pattern: read
     bytes_moved: 8589934592
-    ms_p50: 1.9222720265388489
-    ms_min: 1.916416049003601
-    gbps: 4468.636318589428
-    gbps_peak_min: 4482.291095644993
+    ms_p50: 1.9218559861183167
+    ms_min: 1.9156800508499146
+    gbps: 4469.60368208941
+    gbps_peak_min: 4484.01317756009
     note: closest analogue to streaming expert weights; reduced along the contiguous
       axis so the tree does not bound it
     sm_clock_start_mhz: 1980
     sm_clock_end_mhz: 1980
   - pattern: copy
     bytes_moved: 17179869184
-    ms_p50: 3.9948160648345947
-    ms_min: 3.9922239780426025
-    gbps: 4300.540727076337
-    gbps_peak_min: 4303.332998972501
+    ms_p50: 3.994655966758728
+    ms_min: 3.9913599491119385
+    gbps: 4300.71308442108
+    gbps_peak_min: 4304.2645622133
     note: ''
     sm_clock_start_mhz: 1980
     sm_clock_end_mhz: 1980
   - pattern: triad
     bytes_moved: 25769803776
-    ms_p50: 5.891743898391724
-    ms_min: 5.883584022521973
-    gbps: 4373.8838993043155
-    gbps_peak_min: 4379.949989216588
+    ms_p50: 5.890559911727905
+    ms_min: 5.884768009185791
+    gbps: 4374.763038177949
+    gbps_peak_min: 4379.068764609716
     note: canonical STREAM metric; the default ceiling
     sm_clock_start_mhz: 1980
     sm_clock_end_mhz: 1980
   - pattern: write
     bytes_moved: 8589934592
-    ms_p50: 1.8348159790039062
-    ms_min: 1.831936001777649
-    gbps: 4681.63275788744
-    gbps_peak_min: 4688.992728820557
+    ms_p50: 1.8345119953155518
+    ms_min: 1.8323520421981812
+    gbps: 4682.40851732477
+    gbps_peak_min: 4687.92808050962
     note: 1N proven (2N would exceed the pin rate by 94%); unflushed so the timed
       window cannot shed writeback
     sm_clock_start_mhz: 1980
@@ -65,27 +65,28 @@ detail:
   - 8192
   - 8192
   - 8192
-  gemm_clock_mhz: 1935
-  achieved_fp8_tflops: 1443.4135858041589
-  fp8_gemm_clock_mhz: 1515
+  gemm_clock_mhz: 1515
+  achieved_fp8_tflops: 1447.7011450166315
+  fp8_gemm_clock_mhz: 1905
   buffer_bytes: 8589934592
   clocks:
-    sm_start_mhz: 1500
+    sm_start_mhz: 1455
     sm_end_mhz: 1980
-    temp_start_c: 56
+    temp_start_c: 55
     temp_end_c: 44
-    drift_pct: -32.0
+    drift_pct: -36.08
     throttled: false
   settle:
     settled: true
     clock_history_mhz:
-    - 1500
-    - 1470
     - 1515
-    - 1500
+    - 1455
+    - 1485
+    - 1455
+    - 1485
     - 1470
-    - 1500
-    final_mhz: 1500
+    - 1470
+    final_mhz: 1470
     max_seconds: 30.0
     load: compute
     bandwidth_settle:
@@ -98,19 +99,19 @@ detail:
       max_seconds: 30.0
       load: memory
   warmup_pass:
-    read: 4468.1
-    copy: 4300.3
-    triad: 4374.0
-    write: 4681.7
-  sustained_peak_tflops: 1046.2
-  gemm_efficiency_pct: 68.4
-  sustained_peak_fp8_tflops: 1638.2
-  fp8_over_bf16_achieved: 2.016
+    read: 4469.9
+    copy: 4300.7
+    triad: 4374.2
+    write: 4682.2
+  sustained_peak_tflops: 819.1
+  gemm_efficiency_pct: 87.0
+  sustained_peak_fp8_tflops: 2060.0
+  fp8_over_bf16_achieved: 2.033
   ridge_by_pattern:
-    read: 160.2
-    copy: 166.5
-    triad: 163.7
-    write: 152.9
+    read: 159.4
+    copy: 165.6
+    triad: 162.8
+    write: 152.1
 observed:
   l2_bytes: 62914560
   sm_count: 132
