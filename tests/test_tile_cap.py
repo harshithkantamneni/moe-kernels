@@ -70,6 +70,7 @@ CAP = _load_script("tile_cap_test")
 SWEEP = CAP.SWEEP
 
 from moe.baselines._framework_config import CONFIG_KEY_TO_COLUMN  # noqa: E402
+from moe.bench import exit_codes  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
@@ -397,39 +398,82 @@ def test_a_control_that_never_reached_a_roof_voids_the_page():
     assert verdicts(report)["V2"] == "FAIL"
 
 
-def test_a_sweep_where_nothing_reached_the_roof_voids_c1_and_keeps_c2():
-    """The state the sibling found in all 26 published reports.
-
-    Their plateaus ran 46.5-75.6% of the card's own `ridge x bandwidth`, so
-    nothing in any of those sweeps reached a compute roof. Simulated by slowing
-    every cell by the same factor, which leaves the ladder SHAPES untouched --
-    V2 still passes, the control is still proportional and still flat -- and
-    moves only the LEVEL.
-
-    C1 compares a throughput with the roof, so it is void. C2 fits the cap
-    tile's own re-read fraction and never needs a roof, so it stands. That
-    split is the whole reason C2 is in the report, and a V3 whose consequence
-    said "the page is void" would throw the surviving claim away with the dead
-    one.
-    """
+def _slowed(factor: float):
+    """Every cell slowed by one factor, which moves the LEVEL and no shape."""
     _, cells = cells_at(REFIT)
-    slowed = [SWEEP.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
-                              c.ms_p50 * 2.0, sm_count=132, block_n=64,
-                              ms_min=c.ms_min * 2.0, ms_stdev=c.ms_stdev * 2.0)
-              for c in cells]
-    report = CAP.analyse(
-        slowed, MIXTRAL, cap_tile=16, control_tile=256, alpha=REFIT, ridge=RIDGE,
+    return [SWEEP.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
+                            c.ms_p50 * factor, sm_count=132, block_n=64,
+                            ms_min=c.ms_min * factor,
+                            ms_stdev=c.ms_stdev * factor)
+            for c in cells]
+
+
+def _report_of(cells):
+    return CAP.analyse(
+        cells, MIXTRAL, cap_tile=16, control_tile=256, alpha=REFIT, ridge=RIDGE,
         bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b", dtype="bf16",
         compiles={16: 1, 256: 1}, executed={16: 1, 256: 1}, sm_count=132,
         sm_source="test", depth=CAP.required_depth(16, b=2, ridge_band=BAND),
-        planned_cells=len(slowed), header=[])
+        planned_cells=len(cells), header=[])
+
+
+def test_the_published_fused_layer_level_is_a_pass_and_not_a_void_page():
+    """THE STATE OF ALL 26 PUBLISHED REPORTS, AND IT IS NOT AN INVALID RUN.
+
+    Their plateaus ran 46.5-75.6% of the card's `ridge x bandwidth`, which is
+    the DENSE cuBLAS peak. V3 used to demand 0.95 of that product from a FUSED
+    layer -- a gate, an alignment kernel, two GEMMs, a SiLU and a reduction,
+    with only the two GEMMs' FLOPs in the numerator -- so it failed on every
+    card that exists, and a VALIDITY FAIL makes the page unquotable. The arm was
+    INVALID by construction before it was scheduled.
+
+    Simulated by slowing every cell by one factor, which leaves the ladder
+    SHAPES untouched (V2 still passes) and moves only the LEVEL. At 2x the
+    control lands at ~0.50 of the dense peak, inside the published fused-layer
+    band, and V3 must PASS.
+    """
+    report = _report_of(_slowed(2.0))
+    v = verdicts(report)
+    assert v["V2"] == "PASS", "the shapes did not change, only the level"
+    assert v["V3"] == "PASS", (
+        "0.50 of the dense peak is where every published fused-layer arm sits; "
+        "a validity gate that voids the page there cannot pass on any card")
+    assert report.payload["plateau_tflops"] / report.payload["model_roof_tflops"] < 0.6
+    assert (report.payload["fused_layer_roof_tflops"]
+            == pytest.approx(CAP.FUSED_ROOF_FLOOR
+                             * report.payload["model_roof_tflops"]))
+
+
+def test_a_sweep_far_under_even_the_fused_roof_voids_c1_and_keeps_c2():
+    """Below the fused-layer band nothing reached ANY roof, and V3 must fail.
+
+    C1 compares a throughput with a roof, so it is void. C2 fits the cap tile's
+    own re-read fraction and never needs a roof, so it stands. That split is the
+    whole reason C2 is in the report, and a V3 whose consequence said "the page
+    is void" would throw the surviving claim away with the dead one.
+    """
+    report = _report_of(_slowed(4.0))
     v = verdicts(report)
     assert v["V2"] == "PASS", "the shapes did not change, only the level"
     assert v["V3"] == "FAIL"
     v3 = next(g for g in report.gates if g.tag == "V3")
     assert "C2 SURVIVES" in v3.consequence
-    assert report.payload["plateau_tflops"] / report.payload["model_roof_tflops"] < 0.6
+    assert report.payload["peak_roof_fraction"]["256"] < CAP.FUSED_ROOF_FLOOR
     assert v["C2"] == "PASS"
+
+
+def test_a_control_above_the_dense_peak_refuses_instead_of_passing():
+    """A fused layer counting only its GEMM FLOPs cannot beat the dense peak.
+
+    Above it the ridge, the bandwidth or the FLOP count belongs to another
+    machine, and a gate that reported PASS there would be reading a broken ruler
+    as a strong kernel. UNDECIDED is not PASS, and a validity gate that is not
+    PASS voids the page, which is the point.
+    """
+    report = _report_of(_slowed(0.5))
+    assert verdicts(report)["V3"] == CAP.UNDECIDED
+    v3 = next(g for g in report.gates if g.tag == "V3")
+    assert "ABOVE the dense peak" in " ".join(v3.lines)
 
 
 def test_the_control_gate_cannot_be_satisfied_by_the_sweeps_own_maximum():
@@ -561,7 +605,12 @@ def test_the_self_test_is_hermetic_and_does_not_read_this_machine(tmp_path, monk
         return 1.0, "a calibration that must not be read"
     monkeypatch.setattr(SWEEP, "resolve_bandwidth", absurd)
     out = tmp_path / "a"
-    rc = CAP.main(["--self-test", "0.558", "--out", str(out)])
+    # `--plant-noise 0` because THIS test is about hermeticity, not about
+    # noise: the default plants the published per-cell spread, whose max over a
+    # ladder moves the plateau by a few per cent and would make the two exact
+    # numbers below a statement about the seed.
+    rc = CAP.main(["--self-test", "0.558", "--plant-noise", "0",
+                   "--out", str(out)])
     assert rc == 0
     payload = json.loads(
         next(out.rglob("report.json")).read_text())
@@ -581,14 +630,20 @@ def test_the_run_writes_where_it_said_and_the_dry_run_writes_nothing(tmp_path, c
 
 
 def test_exit_codes_separate_a_void_run_from_a_falsified_claim(tmp_path):
-    # 0: the page is readable whatever the claims said. 1: a validity gate did
-    # not pass. Confusing the two is how a broken run gets published as a
-    # negative result.
-    assert CAP.main(["--self-test", "0.10", "--out", str(tmp_path / "b")]) == 0
+    # `moe.bench.exit_codes` owns the table now, and the three states here are
+    # the three a driver must tell apart. DONE: the page is readable whatever
+    # the claims said, because a falsified pre-registered claim is a result and
+    # not a retry. INVALID: a validity gate did not pass AFTER measuring, so
+    # nothing may be quoted and re-running repeats the failure. REFUSED:
+    # nothing was measured at all. Confusing the first two is how a broken run
+    # gets published as a negative result; confusing the last two is how a free
+    # refusal gets queued for a second pod.
+    assert CAP.main(["--self-test", "0.10",
+                     "--out", str(tmp_path / "b")]) == exit_codes.DONE
     assert CAP.main(["--self-test", "0.10", "--r-max", "512",
-                     "--out", str(tmp_path / "c")]) == 1
+                     "--out", str(tmp_path / "c")]) == exit_codes.INVALID
     assert CAP.main(["--cap-tile", "8", "--dry-run",
-                     "--out", str(tmp_path / "d")]) == 2
+                     "--out", str(tmp_path / "d")]) == exit_codes.REFUSED
 
 
 class MovedSibling:
