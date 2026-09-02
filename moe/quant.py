@@ -24,8 +24,24 @@ for every implementation, while kernel error is what the gate exists to catch.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-import torch
+# TORCH IS IMPORTED INSIDE THE FUNCTIONS THAT USE A TENSOR, never here.
+#
+# WHY. `FP8_DTYPES` is a four-line dict of format names, and
+# `moe/bench/tile_resolve.py` imports exactly that and nothing else, to decide
+# whether a row's dtype is fp8 before looking up vLLM's tuned tile. That path
+# runs on a laptop over published CSVs. With `import torch` at module scope it
+# could not: the audit found `moe.bench.tile_resolve`, and through it
+# `scripts/alpha_refit.py`, unable to start in an environment holding only the
+# four dependencies `pyproject.toml` declares, of which torch is not one.
+#
+# The annotations survive because of `from __future__ import annotations`: they
+# are strings at runtime and only a type checker ever resolves them, which is
+# what the TYPE_CHECKING import below is for.
+
+if TYPE_CHECKING:                                    # pragma: no cover
+    import torch
 
 #: Names this module quantises to, mapped to the torch dtype. Closed on purpose:
 #: an unrecognised string must raise rather than silently fall through to a cast.
@@ -37,6 +53,8 @@ FP8_DTYPES: dict[str, str] = {
 
 def torch_fp8_dtype(dtype: str):
     """Resolve a harness dtype name to a torch fp8 dtype, or raise."""
+    import torch
+
     name = FP8_DTYPES.get(dtype)
     if name is None:
         raise ValueError(
@@ -61,6 +79,8 @@ def quantize_per_expert(w: torch.Tensor, dtype: str
     its scale is clamped to 1.0: the quantised values are zero either way, and a
     finite scale keeps the tensor usable.
     """
+    import torch
+
     resolved = torch_fp8_dtype(dtype)
     if w.ndim < 2:
         raise ValueError(f"expected [E, ...] weights, got shape {tuple(w.shape)}")

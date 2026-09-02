@@ -122,9 +122,30 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 
-import torch
-
-from . import timing as T
+# TORCH AND `timing` ARE IMPORTED INSIDE THE FUNCTIONS THAT MEASURE, never here.
+#
+# WHY. Half of this module is arithmetic over a YAML file that was written on a
+# pod: `read_stamp`, `ridge_flop_per_byte`, `implied_traffic_ratio` and
+# `l2_absorbed_bytes` never touch a device. `moe/bench/published.py`,
+# `moe/bench/tile_resolve.py` and `scripts/alpha_refit.py` reach them from a
+# laptop, and `alpha_refit`'s own docstring promises "no GPU, no torch". With
+# `import torch` at module scope that promise was false: the audit found the
+# three off-GPU analysis entry points unable to start in an environment holding
+# only the four declared dependencies (numpy, pandas, matplotlib, pyyaml), and
+# torch is in none of them. `published.py` had already worked around it once,
+# with a deferred `from .calibrate import read_stamp` and a comment saying why;
+# a workaround at one call site does not fix the module that needs it.
+#
+# `from . import timing as T` moves for the same reason and not a different one:
+# `moe/bench/timing.py` imports torch at ITS module scope, so leaving the timing
+# import here would keep torch on the import path of every reader of a stamp,
+# and the lazy `import torch` below would buy nothing.
+#
+# THE RULE, so this does not drift back: a function that calls `torch.` or `T.`
+# imports them as its first statements. A function that only reads a file must
+# still import cleanly with neither installed, and
+# `tests/test_analysis_tools.py::test_calibrate_imports_without_torch` blocks
+# torch at the finder and asserts exactly that.
 
 #: Pattern whose figure becomes `achieved_bandwidth_gbps` unless overridden.
 #: DELIBERATELY STILL triad. See the module docstring: every row in
@@ -466,6 +487,8 @@ def _power_draw_w() -> float:
     to separate a power-capped GEMM from a clock-limited one, and an unavailable
     reading leaves that question open rather than answering it wrongly.
     """
+    from . import timing as T
+
     vals = T._nvidia_smi("power.draw")
     if not vals:
         return 0.0
@@ -499,6 +522,10 @@ def clock_under_load(step, label: str, samples: int = 5,
     is the floor because two cannot disagree with each other.
     """
     import time
+
+    import torch
+
+    from . import timing as T
 
     T.require_cuda()
     step()
@@ -540,6 +567,8 @@ def clock_under_load(step, label: str, samples: int = 5,
 
 def _load_compute():
     """Dense bf16 matmul: saturates tensor cores, high power, LOW clock."""
+    import torch
+
     a = torch.randn((8192, 8192), device="cuda", dtype=torch.bfloat16)
     out = torch.empty_like(a)
 
@@ -557,6 +586,8 @@ def _load_memory():
     settling under `_load_compute` and then measuring bandwidth measures the
     wrong plateau.
     """
+    import torch
+
     n = DEFAULT_BUFFER_BYTES // 4
     a = torch.empty(n, dtype=torch.float32, device="cuda").uniform_(0.0, 1.0)
     b = torch.empty_like(a)
@@ -596,6 +627,10 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     GEMM.
     """
     import time
+
+    import torch
+
+    from . import timing as T
 
     step = SETTLE_LOADS[load]   # KeyError for an unknown load, before any work
     T.require_cuda()
@@ -658,6 +693,10 @@ def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,
     read-dominated workload, and the only one whose timed window can shed
     writeback.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     n = _elems(target_bytes)
     nbytes = n * 4
@@ -815,6 +854,8 @@ def sustained_peak_tflops_fp8(sm_clock_mhz: float) -> float | None:
     None on Ampere is the point: the A100 has no fp8 tensor cores, and a number
     here would be a peak for a format the part cannot execute.
     """
+    import torch
+
     if not torch.cuda.is_available():
         return None
     per_clk = _DENSE_FP8_FLOP_PER_SM_CLK.get(torch.cuda.get_device_capability())
@@ -840,6 +881,10 @@ def measure_fp8_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     ridge_fp8 = 2 * ridge_bf16 from the datasheet ratio; this measures whether
     fp8 reaches the same fraction of its peak that bf16 reaches of its own.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     if sustained_peak_tflops_fp8(1000.0) is None:
         return None
@@ -892,6 +937,10 @@ def measure_bf16_gemm(n: int = 8192, warmup: int = 5, iters: int = 20,
     A square GEMM at n=8192 is comfortably compute bound and is what a tuned
     library achieves, so it is the fair ceiling for a hand-written kernel.
     """
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     a = torch.randn((n, n), device="cuda", dtype=torch.bfloat16)
     b = torch.randn((n, n), device="cuda", dtype=torch.bfloat16)
@@ -945,6 +994,10 @@ def demote_invalid_reads(patterns) -> tuple[BandwidthResult, ...]:
 def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
               ceiling: str = DEFAULT_CEILING, settle: bool = True,
               settle_seconds: float = 30.0) -> Calibration:
+    import torch
+
+    from . import timing as T
+
     T.require_cuda()
     # Settle FIRST. Measuring from idle put this machine's first pattern at
     # 840 MHz and its last at 1980, which is a bigger effect than anything the

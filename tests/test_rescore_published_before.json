@@ -5,10 +5,10 @@
     0.588
   ],
   "retracted_alpha": 0.1,
-  "ridge": 162.8,
+  "ridge": 160.3,
   "ridge_band": [
-    152.1,
-    165.6
+    160.3,
+    176.2
   ],
   "dtype_bytes": 2,
   "model": "mixtral-8x7b",
@@ -18,21 +18,21 @@
     "BLOCK_SIZE_K": 64,
     "GROUP_SIZE_M": 1,
     "num_warps": 8,
-    "num_stages": 4
+    "num_stages": 3
   },
-  "plateau_tflops": 374.59765640812907,
-  "timing_spread_median": 0.013998897948922796,
-  "overhead_ms": 0.16732805967330933,
+  "plateau_tflops": 165.80141283093363,
+  "timing_spread_median": 0.005057400917721764,
+  "overhead_ms": 0.1402878761291504,
   "compute_reference": {
     "block_m": 256,
-    "overhead_ms": 0.16732805967330933,
-    "slope_per_tile": 1.9409823973973592,
-    "mean_rel_err": 0.019236808878059408,
-    "note": "BLOCK_M=256 ladder, 4 treads, proportional to 1.9%: compute branch 1.9410 ms per tile, fixed cost 0.1673 ms"
+    "overhead_ms": 0.1402878761291504,
+    "slope_per_tile": 4.359764353434245,
+    "mean_rel_err": 0.007510728366269348,
+    "note": "BLOCK_M=256 ladder, 4 treads, proportional to 0.8%: compute branch 4.3598 ms per tile, fixed cost 0.1403 ms"
   },
-  "sm_count": 132,
+  "sm_count": 108,
   "sm_source": "reported by the driver",
-  "alpha_measured": 0.9327218206297763,
+  "alpha_measured": 0.9358450543842207,
   "alpha_source": "measured at BLOCK_M=64 over 16 memory-bound treads, activation traffic subtracted",
   "predictions": {
     "32": {
@@ -49,14 +49,14 @@
     },
     "128": {
       "ai_cap": 229.3906810035842,
-      "crossing_rows_ridge_lo": 236.9718,
-      "crossing_rows_ridge_hi": 350.4096,
+      "crossing_rows_ridge_lo": 249.74740000000003,
+      "crossing_rows_ridge_hi": 372.8392,
       "first_compute_tread": 2
     },
     "256": {
       "ai_cap": 458.7813620071684,
-      "crossing_rows_ridge_lo": 152.1,
-      "crossing_rows_ridge_hi": 165.6,
+      "crossing_rows_ridge_lo": 160.3,
+      "crossing_rows_ridge_hi": 176.2,
       "first_compute_tread": 1
     }
   },
@@ -65,259 +65,259 @@
       "points": [
         [
           1,
-          0.8405439853668213
+          1.9263359904289246
         ],
         [
           2,
-          1.487231969833374
+          3.345968008041382
         ],
         [
           3,
-          2.21998393535614
+          4.8927998542785645
         ],
         [
           4,
-          2.921615958213806
+          6.613327980041504
         ],
         [
           5,
-          3.6670080423355103
+          8.032032012939453
         ],
         [
           6,
-          4.403536081314087
+          9.92302417755127
         ],
         [
           7,
-          5.106703996658325
+          11.744671821594238
         ],
         [
           8,
-          5.809664011001587
+          13.438655853271484
         ],
         [
           9,
-          6.487712144851685
+          14.89401626586914
         ],
         [
           10,
-          7.268032073974609
+          16.827392578125
         ],
         [
           11,
-          7.881648063659668
+          18.465248107910156
         ],
         [
           12,
-          8.704383850097656
+          20.14944076538086
         ],
         [
           13,
-          9.29980754852295
+          21.92414379119873
         ],
         [
           14,
-          10.144959926605225
+          23.629119873046875
         ],
         [
           15,
-          10.852368354797363
+          25.308319091796875
         ],
         [
           16,
-          11.571392059326172
+          27.06395149230957
         ],
         [
           17,
-          12.250752449035645
+          28.730031967163086
         ],
         [
           18,
-          12.95580768585205
+          30.460927963256836
         ],
         [
           19,
-          13.665151596069336
+          31.357759475708008
         ],
         [
           20,
-          14.39350414276123
+          33.807743072509766
         ],
         [
           21,
-          15.118640422821045
+          35.57017517089844
         ],
         [
           22,
-          15.815391540527344
+          36.8964958190918
         ],
         [
           23,
-          16.54096031188965
+          38.96516799926758
         ],
         [
           24,
-          17.24470329284668
+          40.57603073120117
         ],
         [
           25,
-          17.927824020385742
+          39.612159729003906
         ],
         [
           26,
-          18.660767555236816
+          43.92086410522461
         ],
         [
           27,
-          19.431632041931152
+          45.768062591552734
         ],
         [
           28,
-          20.11691188812256
+          47.26190376281738
         ],
         [
           29,
-          20.823007583618164
+          48.98102378845215
         ],
         [
           30,
-          21.597888946533203
+          50.36880111694336
         ],
         [
           31,
-          22.638656616210938
+          50.72547149658203
         ],
         [
           32,
-          23.429423332214355
+          54.23107147216797
         ],
         [
           33,
-          24.523391723632812
+          55.90857696533203
         ]
       ],
       "memory_points": 33,
-      "alpha": 1.0156797037940877,
-      "alpha_corrected": 1.0072718601804054,
-      "alpha_upper": 1.3272288285833125,
-      "slope_memory": 0.7240104254952726,
+      "alpha": 1.0176229630722506,
+      "alpha_corrected": 1.0087964263626106,
+      "alpha_upper": 1.1121492786795792,
+      "slope_memory": 1.6796445794762138,
       "slope_compute": null,
-      "slope_compute_ref": 0.2426227996746699,
+      "slope_compute_ref": 0.5449705441792806,
       "crosses": false,
       "basis": "membership from the compute branch scaled off BLOCK_M=256",
-      "mean_rel_err": 0.013303577579889932
+      "mean_rel_err": 0.014642138717471415
     },
     "64": {
       "points": [
         [
           1,
-          0.9141919910907745
+          2.0198240280151367
         ],
         [
           2,
-          1.5520159602165222
+          3.8260799646377563
         ],
         [
           3,
-          2.4309600591659546
+          5.5017759799957275
         ],
         [
           4,
-          3.0889439582824707
+          7.3080480098724365
         ],
         [
           5,
-          3.88430392742157
+          9.061583995819092
         ],
         [
           6,
-          4.620832204818726
+          10.921552181243896
         ],
         [
           7,
-          5.356544017791748
+          12.661456108093262
         ],
         [
           8,
-          6.18831992149353
+          14.43833589553833
         ],
         [
           9,
-          6.920464038848877
+          16.477855682373047
         ],
         [
           10,
-          7.705600023269653
+          18.254304885864258
         ],
         [
           11,
-          8.477599620819092
+          20.143583297729492
         ],
         [
           12,
-          9.273360252380371
+          21.693615913391113
         ],
         [
           13,
-          9.97439956665039
+          23.787296295166016
         ],
         [
           14,
-          10.84665584564209
+          25.682111740112305
         ],
         [
           15,
-          11.649215698242188
+          27.4060001373291
         ],
         [
           16,
-          12.412735939025879
+          28.857471466064453
         ]
       ],
       "memory_points": 16,
-      "alpha": 0.9474865253211419,
-      "alpha_corrected": 0.9327218206297763,
-      "alpha_upper": 1.1934674660000983,
-      "slope_memory": 0.7692206668064875,
+      "alpha": 0.9511321331769658,
+      "alpha_corrected": 0.9358450543842207,
+      "alpha_upper": 1.0267000416557317,
+      "slope_memory": 1.8128721277503406,
       "slope_compute": null,
-      "slope_compute_ref": 0.4852455993493398,
+      "slope_compute_ref": 1.0899410883585612,
       "crosses": false,
       "basis": "membership from the compute branch scaled off BLOCK_M=256",
-      "mean_rel_err": 0.01448831926888356
+      "mean_rel_err": 0.01094266145278745
     },
     "128": {
       "points": [
         [
           1,
-          1.1753439903259277
+          2.625216007232666
         ],
         [
           2,
-          2.261088013648987
+          4.926208019256592
         ],
         [
           3,
-          3.353023886680603
+          7.2677600383758545
         ],
         [
           4,
-          4.3570239543914795
+          9.57809591293335
         ],
         [
           5,
-          5.482144117355347
+          11.876976013183594
         ],
         [
           6,
-          6.548176050186157
+          14.339936256408691
         ],
         [
           7,
-          7.590767860412598
+          16.64112091064453
         ],
         [
           8,
-          8.660336017608643
+          19.06377601623535
         ]
       ],
       "memory_points": 0,
@@ -325,29 +325,29 @@
       "alpha_corrected": null,
       "alpha_upper": null,
       "slope_memory": null,
-      "slope_compute": 1.060189791169821,
-      "slope_compute_ref": 0.9704911986986796,
+      "slope_compute": null,
+      "slope_compute_ref": 2.1798821767171224,
       "crosses": null,
-      "basis": "membership from the compute branch scaled off BLOCK_M=256",
-      "mean_rel_err": 0.009569512442794593
+      "basis": "membership from the compute branch scaled off BLOCK_M=256; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "mean_rel_err": 0.08246049864509859
     },
     "256": {
       "points": [
         [
           1,
-          2.056112051010132
+          4.478960037231445
         ],
         [
           2,
-          3.927280068397522
+          8.73033618927002
         ],
         [
           3,
-          5.8331358432769775
+          13.07419204711914
         ],
         [
           4,
-          7.704848051071167
+          17.40768051147461
         ]
       ],
       "memory_points": 0,
@@ -355,20 +355,20 @@
       "alpha_corrected": null,
       "alpha_upper": null,
       "slope_memory": null,
-      "slope_compute": 1.8852063775062562,
-      "slope_compute_ref": 1.9409823973973592,
+      "slope_compute": 4.313001728057861,
+      "slope_compute_ref": 4.359764353434245,
       "crosses": null,
       "basis": "the reference ladder itself: compute bound at every tread",
-      "mean_rel_err": 0.0016448259361959493
+      "mean_rel_err": 0.0027809395202539364
     }
   },
   "bracketing": {
     "reached_rows": 1024.0,
     "reached_tiles": 16,
-    "horizon_rows": 423.28000000000003,
+    "horizon_rows": 416.78000000000003,
     "positive_control": 256,
     "saturation": 0.9528281750266809,
-    "last_gain": 0.001054895485044005
+    "last_gain": 0.013015532131021468
   },
   "gates": [
     {
@@ -382,41 +382,29 @@
       "number": 1,
       "claim": "time steps at T = n x BLOCK_M x E/k",
       "verdict": "PASS",
-      "measured": "median step minus tread +15.28%",
-      "gate": ">= +6.37% (half the model's step) and > 3x noise (4.20%)"
+      "measured": "median step minus tread +12.68%",
+      "gate": ">= +6.37% (half the model's step) and > 3x noise (1.52%)"
     },
     {
       "number": 2,
       "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
       "verdict": "PASS",
-      "measured": "ms(BM=32) / ms(BM=256) = 3.041x at 1024 rows per expert",
+      "measured": "ms(BM=32) / ms(BM=256) = 3.115x at 1024 rows per expert",
       "gate": ">= 1.50x"
     },
     {
       "number": 3,
       "claim": "the BLOCK_M=128 crossing sits Q above the BLOCK_M=256 one",
       "verdict": "PASS",
-      "measured": "1.933x",
+      "measured": "1.936x",
       "gate": "> 1.33x (rules out alpha=0.1)"
     },
     {
       "number": 4,
       "claim": "BLOCK_M=64 never reaches the compute roof",
       "verdict": "PASS",
-      "measured": "peak roof fraction 0.629",
+      "measured": "peak roof fraction 0.603",
       "gate": "<= 0.85"
     }
-  ],
-  "ridge_source": "measured_nvidia_h200.yaml",
-  "ridge_band_source": "this device's own bandwidth patterns (copy, read, triad, write), carried as a ratio against the triad ceiling",
-  "bandwidth_source": "measured_nvidia_h200.yaml, 4374.8 GB/s (triad pattern), the denominator of the ridge above",
-  "rescored_utc": "2026-09-02T21:21:28Z",
-  "rescored_from": {
-    "ridge": 160.3,
-    "ridge_band": [
-      160.3,
-      176.2
-    ],
-    "why": "the 2026-08-26 H200 figure, passed on the command line to arms on two different cards; see this arm's NOTE.md"
-  }
+  ]
 }

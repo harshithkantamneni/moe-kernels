@@ -10,12 +10,41 @@ The surface is alpha against the two things that set REUSE DISTANCE: the swizzle
 width, which decides how many M-tiles share one weight read, and the per-expert
 footprint, which decides how much else evicts it in between. Neither is "does the
 expert fit in L2": qwen2's 37 MB expert fits in 60 MiB and still pays alpha 0.71.
+
+TWO DEFECTS FIXED 2026-09-02, both of which made the tables unquotable rather
+than wrong-by-a-little (audit S38). The glob could not read the layout the
+published arms actually use, so this script printed "no report.json under ..."
+on every one of them and the committed SURFACE.txt files were unregenerable.
+And the lever levels were sorted as TEXT, so the paired-change line named
+1 -> 8 as the swizzle's extremes when the sweep runs 1 -> 64. The committed
+summaries were regenerated from the reports at the same time, and the pooled
+versions they replace are kept beside them as SURFACE.pooled.txt.
+
+Every paired comparison now prints an MDE first, from the measured floor in
+`results/published/NOISE_FLOOR.json`, because a lever effect quoted without one
+cannot be told from a lever effect this design could not have found (B14).
 """
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
+
+# THE SHIM EVERY OTHER SCRIPT HAS. Without it `python scripts/alpha_surface.py`
+# cannot import `moe` unless the repo happens to be installed or PYTHONPATH
+# happens to be set, and no document says to do either (audit R19/B11). It is
+# the first thing here because the imports below depend on it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from moe.bench.published import Z_SUM_90_80, paired_mde  # noqa: E402
+
+#: The noise this surface's paired comparisons are read against, and the file
+#: that measured it. `prior_sd` is the s3-vs-s4 paired sd over 11 matched cells
+#: divided by sqrt(2); the file itself calls it an upper bound, because those
+#: two arms differ in `num_stages` as well as in nothing, so it prices a real
+#: replicate floor plus one uncontrolled knob.
+NOISE_FLOOR = Path(__file__).resolve().parent.parent / "results" / "published" \
+    / "NOISE_FLOOR.json"
 
 #: Below this many memory-bound treads the fit is not a measurement. The sweep
 #: itself refuses a verdict under 3 and says so; this refuses to TABLE it, so a
@@ -31,12 +60,101 @@ MIN_TREADS = 3
 REFUSED = "REF!"
 
 
+def report_paths(root: Path) -> list[Path]:
+    """Every block_m report under `root`, in BOTH committed layouts.
+
+    THE BUG THIS FIXES. The published arms hold `<name>.report.json` -- one file
+    per (model, GROUP_SIZE_M, BLOCK_SIZE_N) cell, named after the cell -- and
+    this script globbed for the bare `report.json` a single-cell run writes. It
+    therefore printed "no report.json under ..." on all three published surface
+    arms, so the committed SURFACE.txt files could not be regenerated from the
+    repository at all, and the only version that COULD run was the pooled one
+    they were produced by (audit S38).
+
+    A set, then sorted: a directory holding both spellings must not yield the
+    same file twice, because every median and every paired count below is over
+    this list.
+    """
+    return sorted({*root.rglob("report.json"), *root.rglob("*.report.json")})
+
+
+def level_sort_key(value):
+    """Sort a lever's levels NUMERICALLY where they are numbers.
+
+    THE BUG THIS FIXES. `sorted(..., key=str)` put GROUP_SIZE_M in the order
+    1, 16, 64, 8, so `vals[0]` and `vals[-1]` were 1 and 8 and the paired-change
+    line reported the swizzle sweeping 1 -> 8 when it sweeps 1 -> 64. The number
+    printed was a real paired median; it was a paired median of the wrong pair,
+    and the lever's actual extremes never appeared (audit S38).
+
+    Numbers first and in numeric order, then everything else lexically, then
+    None last. A lever whose levels are model names still sorts as before.
+    """
+    if value is None:
+        return (2, 0.0, "")
+    try:
+        return (0, float(value), "")
+    except (TypeError, ValueError):
+        return (1, 0.0, str(value))
+
+
 def reports(root: Path):
-    for p in sorted(root.rglob("report.json")):
+    for p in report_paths(root):
         try:
             yield p, json.loads(p.read_text())
         except Exception as exc:                      # noqa: BLE001
             print(f"  UNREADABLE {p}: {type(exc).__name__}", file=sys.stderr)
+
+
+def prior_sd() -> tuple[float | None, str]:
+    """`(sd of one alpha, where it came from)`, or `(None, why not)`.
+
+    Read from `results/published/NOISE_FLOOR.json` rather than written here, so
+    the MDE moves when the measured floor does and cannot become a constant
+    somebody chose. None when the file is absent or carries no `prior_sd`: the
+    MDE line then says the surface has no noise model, which is a statement
+    about the study and not a reason to invent one.
+    """
+    try:
+        doc = json.loads(NOISE_FLOOR.read_text())
+    except (OSError, ValueError) as exc:                  # noqa: BLE001
+        return None, f"{NOISE_FLOOR.name} unreadable ({type(exc).__name__})"
+    sd = doc.get("prior_sd")
+    if not sd:
+        return None, f"{NOISE_FLOOR.name} records no prior_sd"
+    return float(sd), f"{NOISE_FLOOR.name}: {doc.get('prior_sd_source', 'unsourced')}"
+
+
+def print_mde(n_pairs: int) -> None:
+    """The smallest paired lever effect this many matched cells could find.
+
+    Printed BEFORE the paired medians, not after, because a reader who sees the
+    medians first has already formed a view of them. Audit B14: not one arm in
+    this study states an MDE, so every "the levers move it" and every "it does
+    not move" below has been read without the one number that says which of them
+    the design could have detected.
+    """
+    sd, source = prior_sd()
+    if sd is None:
+        print(f"  MDE: NOT STATED -- {source}. Every paired change below is "
+              "therefore")
+        print("  uncompared with the smallest change this design could have "
+              "found.")
+        return
+    sd_diff = sd * (2 ** 0.5)
+    if n_pairs < 2:
+        print(f"  MDE: only {n_pairs} matched cell(s); a paired MDE needs two, "
+              "so no")
+        print("  paired change here is comparable with anything.")
+        return
+    mde = paired_mde(sd_diff, n_pairs)
+    print(f"  MDE {mde:.3f} alpha over {n_pairs} matched cells (paired, 90% "
+          f"two-sided, 80% power,")
+    print(f"  z-sum {Z_SUM_90_80:.4f}, sd of one alpha {sd:.4f} so sd of a "
+          f"paired difference {sd_diff:.4f}).")
+    print(f"  ASSUMPTION, and it is an upper bound: {source}.")
+    print("  A paired median below this is an unmeasured change, not a small "
+          "one.")
 
 
 def main() -> int:
@@ -145,7 +263,7 @@ def main() -> int:
     for lever, label in (("g", "GROUP_SIZE_M, the swizzle width"),
                          ("model", "model, i.e. per-expert footprint"),
                          ("bn", "BLOCK_SIZE_N, the activation-confound control")):
-        vals = sorted({x[lever] for x in ident}, key=str)
+        vals = sorted({x[lever] for x in ident}, key=level_sort_key)
         if len(vals) < 2:
             continue
         keys = others[lever]
@@ -157,6 +275,7 @@ def main() -> int:
         full = [c for c in cells.values() if set(c) == set(vals)]
         print()
         print(f"alpha against {label}:")
+        print_mde(len(full))
         if not full:
             print(f"  no {'/'.join(keys)} cell holds every level of this lever, "
                   "so it cannot be compared without pooling. Not reported.")

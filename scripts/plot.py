@@ -11,10 +11,17 @@ Three views, each answering a question the project actually asks:
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import defaultdict
 from pathlib import Path
 
-import matplotlib
+# THE SHIM EVERY OTHER SCRIPT HAS. Without it `.venv/bin/python scripts/plot.py`
+# fails at the `moe` import unless the repo happens to be installed or
+# PYTHONPATH happens to be set, and `docs/STUDY.md` lists this script as
+# runnable "anywhere" while naming neither (audit R19/B11).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")  # must precede pyplot; no display on a headless pod
 
@@ -175,6 +182,39 @@ def dtypes_present(rows, requested: str | None = None) -> list[str]:
     return [requested] if requested in have else []
 
 
+#: The calibration `publish_results.sh` copies in beside an arm's CSVs.
+ARM_CALIBRATION = "measured.yaml"
+
+
+def arm_profile(results: Path) -> str | None:
+    """The profile NAME for the calibration sitting beside these CSVs, or None.
+
+    THE BUG THIS FIXES. `main` used to call `RL.load_measured()` with no
+    argument, which reads the calibration of the GPU ATTACHED TO THIS PROCESS.
+    On a laptop that returns None and the script fell through to
+    `RL.for_device`, which on "NVIDIA H200" is ambiguous between h200_sxm and
+    h200_nvl and so refused: `plot.py --results results/published/<arm>` did not
+    run as documented, and the only thing that worked was an undocumented
+    `--hardware measured_nvidia_h200`. On a pod it is worse than a refusal: the
+    attached card's ceilings would silently roof another arm's rows. Meanwhile
+    the arm's OWN `measured.yaml` was sitting next to the CSVs being read, and
+    for the whole-layer and fp8-refixed arms it differs from the committed
+    per-device file by 7.6% in bf16 compute (audit R14/B11).
+
+    HOW THE NAME REACHES THE ROOF, because it looks like a coincidence and is
+    not. `roofline.load_hardware` builds its path as
+    `(directory or HARDWARE_DIR) / f"{name}.yaml"`, and `roofline.plot` offers
+    no `directory`. Joining an ABSOLUTE right-hand side onto any path yields the
+    absolute path, by pathlib's documented rule, so an absolute path stem passed
+    as the profile name resolves to exactly that file. It is the only seam
+    `roofline.plot` gives a calibration that does not live in the hardware
+    directory, and the resolution is pinned by
+    `tests/test_analysis_tools.py::test_arm_profile_resolves_the_arms_own_yaml`.
+    """
+    cal = (results / ARM_CALIBRATION).resolve()
+    return str(cal.with_suffix("")) if cal.exists() else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, default=Path("results"))
@@ -182,28 +222,33 @@ def main() -> int:
     ap.add_argument("--dtype", default=None,
                     help="one dtype; default draws every dtype in the rows")
     ap.add_argument("--hardware", default=None,
-                    help="hardware profile; defaults to the measured "
-                         "calibration when present, else the datasheet")
+                    help="hardware profile; OVERRIDES the arm's own "
+                         f"{ARM_CALIBRATION}. Without it the calibration "
+                         "published beside these CSVs is used, and a results "
+                         "directory carrying none is REFUSED rather than "
+                         "roofed against this machine's card")
     ap.add_argument("--allow-unverified-roof", action="store_true")
     args = ap.parse_args()
 
     if args.hardware is None:
-        # Prefer measured ceilings: the CSV efficiency columns use them, so a
-        # datasheet-roofed plot would disagree with its own data. Otherwise pick
-        # the datasheet profile that actually describes the GPU the rows came
-        # from, rather than defaulting to one part.
-        # "measured" is a sentinel, not a filename: hardware_for_rows resolves
-        # it against the device the ROWS were measured on.
-        if RL.load_measured():
-            args.hardware = "measured"
-        else:
-            seen = {r.get("gpu_name", "") for r in load_rows(args.results)} - {""}
-            args.hardware = RL.for_device(next(iter(seen))) if seen else None
-            if args.hardware is None:
-                print(f"[plot] no hardware profile matches {seen or 'these rows'}; "
-                      f"available: {RL.available_profiles()}. Run "
-                      "scripts/calibrate_hardware.py or pass --hardware.")
-                return 1
+        # THE ARM'S OWN RULER, NOT THIS MACHINE'S. The efficiency columns in
+        # these CSVs were computed against the yaml published beside them, so
+        # that is the only file whose roof the plotted points agree with.
+        args.hardware = arm_profile(args.results)
+        if args.hardware is None:
+            print(f"[plot] REFUSING: {args.results} carries no "
+                  f"{ARM_CALIBRATION}, so these rows have no published roof to "
+                  "be drawn against.")
+            print("[plot] The ceilings of whatever GPU happens to be attached "
+                  "to this process are")
+            print("[plot] not this arm's, and every efficiency number drawn "
+                  "from them would be")
+            print("[plot] wrong by the ratio of two calibrations. Pass "
+                  "--hardware to assert one")
+            print(f"[plot] yourself; available: {RL.available_profiles()}.")
+            return 1
+        print(f"[plot] roof: {args.results / ARM_CALIBRATION}, the calibration "
+              "published with these rows")
 
     rows = load_rows(args.results)
     if rows:

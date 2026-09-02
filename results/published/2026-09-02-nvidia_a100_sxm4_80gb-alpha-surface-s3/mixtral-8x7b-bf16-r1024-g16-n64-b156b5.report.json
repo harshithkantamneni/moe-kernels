@@ -5,10 +5,10 @@
     0.588
   ],
   "retracted_alpha": 0.1,
-  "ridge": 160.3,
+  "ridge": 145.8,
   "ridge_band": [
-    160.3,
-    176.2
+    139.6,
+    149.3
   ],
   "dtype_bytes": 2,
   "model": "mixtral-8x7b",
@@ -49,14 +49,14 @@
     },
     "128": {
       "ai_cap": 229.3906810035842,
-      "crossing_rows_ridge_lo": 249.74740000000003,
-      "crossing_rows_ridge_hi": 372.8392,
+      "crossing_rows_ridge_lo": 217.4968,
+      "crossing_rows_ridge_hi": 232.60940000000002,
       "first_compute_tread": 2
     },
     "256": {
       "ai_cap": 458.7813620071684,
-      "crossing_rows_ridge_lo": 160.3,
-      "crossing_rows_ridge_hi": 176.2,
+      "crossing_rows_ridge_lo": 139.6,
+      "crossing_rows_ridge_hi": 149.3,
       "first_compute_tread": 1
     }
   },
@@ -365,7 +365,7 @@
   "bracketing": {
     "reached_rows": 1024.0,
     "reached_tiles": 16,
-    "horizon_rows": 416.78000000000003,
+    "horizon_rows": 349.92,
     "positive_control": 256,
     "saturation": 0.9528281750266809,
     "last_gain": 0.01074602553130899
@@ -406,5 +406,17 @@
       "measured": "peak roof fraction 0.807",
       "gate": "<= 0.85"
     }
-  ]
+  ],
+  "ridge_source": "measured_nvidia_a100_sxm4_80gb.yaml",
+  "ridge_band_source": "this device's own bandwidth patterns (copy, triad, write), carried as a ratio against the triad ceiling; ['read'] excluded as disowned by the calibration",
+  "bandwidth_source": "measured_nvidia_a100_sxm4_80gb.yaml, 1799.4 GB/s (triad pattern), the denominator of the ridge above",
+  "rescored_utc": "2026-09-02T21:21:28Z",
+  "rescored_from": {
+    "ridge": 160.3,
+    "ridge_band": [
+      160.3,
+      176.2
+    ],
+    "why": "the 2026-08-26 H200 figure, passed on the command line to arms on two different cards; see this arm's NOTE.md"
+  }
 }

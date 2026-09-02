@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Refit `alpha`, the cost of an extra M-tile, against the DERIVED tile.
 
-    python scripts/alpha_refit.py results/published/*/run_*.csv \
+    python scripts/alpha_refit.py --pinned-set \
         --original-estimator --adversarial
+
+`--pinned-set` reads `results/published/REFIT_SET.txt`, the ten arms
+`docs/FINDINGS.md` fitted, and reproduces its 0.558 / 10,813 rows / 3,124
+discriminating / 0.529-0.588. Pass CSV paths instead to fit whatever the tree
+holds today; the header names which of the two you got, because the documented
+glob now reads fourteen arms and answers 0.560 / 11,181 / 3,181 / 0.529-0.593.
 
 `alpha` is the one free parameter in the tile-corrected roofline
 (`docs/FINDINGS.md`, "The tile-corrected roofline"). One expert holding `r` rows
@@ -50,7 +56,12 @@ the direction that matters against TEMPO's `b2/b`, a pure byte ratio.
 `--adversarial` prints a consequence of that bound which this study's own
 measured crossings contradict.
 
-Everything here is arithmetic over published CSVs: no GPU, no torch.
+Everything here is arithmetic over published CSVs: no GPU, no torch. That was
+a promise this file could not keep until 2026-09-02: `moe.bench.tile_resolve`
+imported `moe.quant`, which imported torch at module scope, and torch is not one
+of the four dependencies `pyproject.toml` declares. Both imports are lazy now,
+and `tests/test_analysis_tools.py` blocks torch at the import finder and asserts
+this path still runs.
 """
 from __future__ import annotations
 
@@ -71,7 +82,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from moe.bench import schema as SC  # noqa: E402
 from moe.bench.bytes_model import weight_bytes_for_stage  # noqa: E402
 from moe.bench.crossing import m_tiles_for_row  # noqa: E402
-from moe.bench.published import filter_superseded, superseded_impls  # noqa: E402
+from moe.bench.published import (  # noqa: E402
+    dirty_share,
+    dirty_share_line,
+    filter_superseded,
+    mde_line,
+    sd_from_band,
+    superseded_impls,
+    two_sample_mde,
+)
 from moe.bench.ridge import rows_per_expert  # noqa: E402
 from moe.bench.tile_resolve import (  # noqa: E402
     VLLM_IMPLS,
@@ -86,9 +105,22 @@ from moe.stages import CANONICAL_STAGES  # noqa: E402
 REPO_PUBLISHED_ALPHA = 0.10
 TEMPO_ALPHA = 0.33
 
-#: The measured H200 ridge band, `docs/FINDINGS.md`. A band and not a number
-#: because three calibrations of the same card disagree by 9.9% on the compute
-#: term, so every absolute AI statement carries both ends.
+#: THE WITHDRAWN BAND, and what it actually is. Both ends are H200 numbers from
+#: two calibrations of the SAME card: 160.3 is 701.6 TFLOP/s over 4377.2 GB/s
+#: (`fp8-three-kernel`, `v2lite`) and 176.2 is 770.9 over 4374.5
+#: (`fp8-refixed`, `whole-layer`), `docs/INSTRUMENTATION.md`'s six-calibration
+#: table. Bandwidth reproduces to 0.06% across all six and the compute term does
+#: not, so this band measures how badly the compute ceiling REPRODUCES, not how
+#: wide any device's ridge is. It was then quoted on A100 arms, whose own ridge
+#: is 145.8, where neither end belongs to the attached card at all. On
+#: 2026-09-02 it was withdrawn from all 26 published reports by
+#: `scripts/rescore_published_reports.py`.
+#:
+#: NOTHING IN THIS FILE SCORES AGAINST IT ANY MORE. `card_ridge_bands()` is
+#: where a ceiling comes from. The name survives only because
+#: `scripts/group_m_alpha_sweep.py` and two test modules import it, and deleting
+#: a constant out from under other people's files is not this slice's to do;
+#: those callers are the next thing to move onto per-card bands.
 RIDGE_BAND = (160.3, 176.2)
 
 #: torch's `grouped_mm` tile, OBSERVED under claim C1 by reading the CUTLASS
@@ -97,6 +129,14 @@ RIDGE_BAND = (160.3, 176.2)
 #: tree, which is why these rows are collected separately and labelled.
 CUTLASS_BLOCK_M = 64
 CUTLASS_IMPLS = frozenset({"torch_grouped_mm_up", "torch_grouped_mm_down"})
+
+#: The manifest that pins the pool FINDINGS' numbers were fitted on. See the
+#: file itself for why a glob is not a reproducible input set (audit B8).
+DEFAULT_REFIT_SET = (Path(__file__).resolve().parent.parent / "results"
+                     / "published" / "REFIT_SET.txt")
+
+#: Where a pinned arm's rows live, relative to the manifest's directory.
+REFIT_SET_GLOB = "run_*.csv"
 
 #: The arm the published 0.10 was fitted on. Named, because "torch grouped_mm
 #: rows" is not a reproduction: pooled over every current arm those are 1,728
@@ -160,6 +200,23 @@ class Observation:
     cuda_graph: bool
     #: Just `TILE_COLUMNS`, so `at_block_m` can recount tiles.
     tile_columns: tuple[tuple[str, str], ...]
+    #: The published arm directory this row came from. A LEVEL OF THE CLUSTER
+    #: BOOTSTRAP, not decoration: rows inside one arm share a pod, a session, a
+    #: thermal state and one calibration, so they are nowhere near independent
+    #: of each other, and a band that resamples cells alone treats fourteen
+    #: pods' worth of shared state as 562 independent observations.
+    #:
+    #: DEFAULTED so a synthetic Observation built by a test does not have to
+    #: invent a provenance it does not have. Every observation `collect` builds
+    #: carries the real directory name.
+    arm: str = ""
+    #: `git_dirty` off the row, AS THE RAW COLUMN and not as a bool. 44,872 of
+    #: the 100,144 published rows were measured from a tree with uncommitted
+    #: changes and no analysis path in this repository read the column (audit
+    #: A6). The raw string is kept because "" means the arm predates the column
+    #: and cannot answer, which is not the same as clean, and a bool would
+    #: silently fold the two together.
+    dirty_raw: str = ""
 
     @property
     def extra_tile_bytes(self) -> float:
@@ -179,6 +236,27 @@ class Observation:
     def mode(self) -> str:
         return ("L2-cold" if self.l2_flush else "L2-warm") + (
             "/graph" if self.cuda_graph else "/eager")
+
+    @property
+    def dirty(self) -> bool:
+        """Was this row measured from a tree with uncommitted changes?
+
+        False for a row that never recorded the column, which `dirty_share`
+        counts and reports separately; see `dirty_raw`.
+        """
+        return dirty_share([{"git_dirty": self.dirty_raw}])[0] == 1
+
+    @property
+    def context(self) -> tuple:
+        """`cell_key` with the two timing-mode flags REMOVED.
+
+        The unit of the paired basis contrast. A context is one physical cell --
+        one model, dtype, card, implementation and token count -- observed under
+        whichever timing modes that arm happened to run, and pairing on it is
+        what turns "alpha differs between modes" into a statement about the
+        instrument rather than about which models each mode was pointed at.
+        """
+        return (self.model, self.dtype, self.gpu, self.impl, self.tokens)
 
     def at_block_m(self, block_m: int) -> Observation | None:
         """The same row scheduled at another tile height, or None if uncountable.
@@ -290,7 +368,9 @@ def collect(paths, census: collections.Counter, *, cutlass: bool = False,
                 routing=str(row.get("routing_kind", "")),
                 l2_flush=SC.row_bool(row, "l2_flush"),
                 cuda_graph=SC.row_bool(row, "cuda_graph"),
-                tile_columns=tuple((c, str(row.get(c, ""))) for c in TILE_COLUMNS)))
+                tile_columns=tuple((c, str(row.get(c, ""))) for c in TILE_COLUMNS),
+                arm=path.parent.name,
+                dirty_raw=str(row.get("git_dirty", ""))))
             census["ADMITTED"] += 1
     return out
 
@@ -388,26 +468,57 @@ def fit_alpha(observations, keyfn=cell_key, *, group_ids=None,
     return (left + right) / 2.0
 
 
+#: The units a band may resample, and what each one buys.
+#:
+#: `cell` is the original: one (model, dtype, card, impl, timing mode, token
+#: count) cell, which is the unit the FIT has an independent intercept for.
+#: `arm`  is a published result directory: one pod, one session, one thermal
+#:        state, one calibration. Rows in different cells of one arm share all
+#:        of that, and the cell-level band prices none of it.
+#: `card` is the physical part. Two levels, and that IS the finding: an
+#:        interval built over two clusters is a statement about how little
+#:        independent information the corpus holds at that level, not a
+#:        narrower answer.
+#:
+#: All three are reported. Audit S34: the published band resampled cells alone
+#: while the model split spanned 0.29 and the routing split 0.19, six to ten
+#: times its width, and the text beside it read "stable".
+CLUSTER_LEVELS = {
+    "cell": cell_key,
+    "arm": lambda o: (o.arm,),
+    "card": lambda o: (o.gpu,),
+}
+
+
 def bootstrap_band(observations, draws: int, seed: int,
-                   quantiles: tuple[float, float] = (0.05, 0.95)
-                   ) -> tuple[float, float] | None:
-    """A CLUSTER bootstrap over the fixed-effect groups, not over rows.
+                   quantiles: tuple[float, float] = (0.05, 0.95),
+                   level: str = "cell") -> tuple[float, float] | None:
+    """A CLUSTER bootstrap at `level`, never over rows.
 
-    Rows inside one group are replicates of one cell measured at several seeds
-    and trials, so resampling them independently would treat six views of one
-    thermal state as six measurements and return a band several times too
-    narrow. The group is the unit the fit has independent information about.
+    Rows inside one cell are replicates of one measurement taken at several
+    seeds and trials, so resampling them independently would treat six views of
+    one thermal state as six measurements and return a band several times too
+    narrow.
 
-    Each DRAWN COPY of a group gets its own intercept, so drawing the same cell
-    twice gives two independent observations of it rather than one with double
-    weight -- which is what sharing an intercept between the copies would mean.
+    THE FIXED EFFECTS STAY AT THE CELL WHATEVER THE CLUSTER IS. Each DRAWN COPY
+    of a cluster gets its own intercept per cell it contains, so drawing the
+    same arm twice gives two independent observations of every cell in it rather
+    than one with double weight. At `level="cell"` a cluster holds exactly one
+    cell and this reduces, identically, to the intercept-per-copy the published
+    band was computed with -- which is why `--pinned-set` still prints
+    0.529-0.588.
 
-    None when fewer than two groups survive; a band over one cluster is not a
-    band.
+    `KeyError` for an unknown level, deliberately: a mistyped level silently
+    falling back to `cell` would print a cell-level band under an arm-level
+    heading, which is the exact mislabelling this parameter was added to fix.
+
+    None when fewer than two clusters survive; a band over one cluster is not a
+    band, and at `level="card"` on a single-card pool that is the honest answer.
     """
+    keyfn = CLUSTER_LEVELS[level]
     groups: dict = collections.defaultdict(list)
     for o in observations:
-        groups[cell_key(o)].append(o)
+        groups[keyfn(o)].append(o)
     keys = list(groups)
     if len(keys) < 2:
         return None
@@ -416,10 +527,13 @@ def bootstrap_band(observations, draws: int, seed: int,
     for _ in range(draws):
         rows: list[Observation] = []
         ids: list[int] = []
+        intercepts: dict = {}
         for copy in range(len(keys)):
             members = groups[rng.choice(keys)]
             rows.extend(members)
-            ids.extend([copy] * len(members))
+            for o in members:
+                ids.append(intercepts.setdefault((copy, cell_key(o)),
+                                                 len(intercepts)))
         samples.append(fit_alpha(rows, group_ids=ids))
     samples.sort()
     return _percentile(samples, quantiles[0]), _percentile(samples, quantiles[1])
@@ -486,6 +600,65 @@ def max_alpha_that_still_crosses(block_m: int, ridge: float,
                                  dtype_bytes: int = 2) -> float:
     """The largest `alpha` at which `block_m` can still reach `ridge`."""
     return 2.0 * block_m / (ridge * dtype_bytes)
+
+
+def card_ridge_bands(dtype: str = "bf16") -> list[tuple[str, float, list[float]]]:
+    """`(card, ridge, band)` for every card with a committed calibration.
+
+    WHAT FAILURE THIS PREVENTS. The AI-cap table below decided "NEVER crosses"
+    against `RIDGE_BAND`, which is the gap between two H200 calibrations of the
+    same card and is not any device's ceiling. A cap verdict is a claim about a
+    specific card, so it is now scored card by card against each one's own
+    ridge, from each one's own `measured_*.yaml`, with the card named in the
+    column header. Two cards disagreeing about whether a tile crosses is a
+    result; hiding that behind one band belonging to neither was not.
+
+    WHAT THESE BANDS DO NOT CARRY. Each is the spread of ONE calibration's
+    surviving DRAM patterns, so it is a bandwidth band. The 9.9% disagreement
+    between the H200's own compute ceilings is a separate open number and no
+    band here contains it; `docs/INSTRUMENTATION.md` is where that lives.
+
+    RESOLVED THROUGH THE RESCORER RATHER THAN RE-DERIVED.
+    `scripts/rescore_published_reports.py` already resolves a card's ridge and
+    band for the 26 published reports, and it does so through the sweep's
+    `ridge_band_from_detail`, which drops the bandwidth patterns a calibration
+    disowned. Recomputing that here would be a second implementation free to
+    drift from the one the reports were rescored with.
+
+    Returns an EMPTY list when nothing resolves, and the caller refuses on it
+    rather than reaching for a constant.
+    """
+    import importlib.util
+
+    path = Path(__file__).resolve().with_name("rescore_published_reports.py")
+    if not path.exists():                     # pragma: no cover - repo invariant
+        return []
+    spec = importlib.util.spec_from_file_location("_alpha_refit_rescore", path)
+    rescore = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, rescore)
+    spec.loader.exec_module(rescore)
+    sweep = rescore.load_sweep()
+
+    out = []
+    for card, profile in sorted(rescore.measured_profiles().items()):
+        try:
+            ridge, band, *_ = rescore.calibration(profile, dtype, sweep)
+        except (ValueError, KeyError, FileNotFoundError):
+            continue
+        out.append((card, ridge, band))
+    return out
+
+
+def cap_verdict(cap: float, band: list[float]) -> str:
+    """What a tile's AI cap says about one card's band. The whole vocabulary.
+
+    Three answers and no fourth: below the low end the tile cannot reach that
+    card's ridge at any batch size, above the high end it always can, and
+    between them the calibration's own spread decides and this study cannot.
+    """
+    lo, hi = band[0], band[-1]
+    return ("NEVER crosses" if cap < lo
+            else "crosses" if cap > hi else "inside the band")
 
 
 def count_excluded_memory_bound(paths, alpha: float,
@@ -559,6 +732,12 @@ def count_excluded_memory_bound(paths, alpha: float,
 # reporting
 # --------------------------------------------------------------------------
 
+#: A split needs at least this many discriminating rows before its alpha is a
+#: number rather than a restatement of the pool. Named once so `_split_line`'s
+#: table and `split_range`'s ranges cannot drift apart on the same pool.
+MIN_DISCRIMINATING = 10
+
+
 def _split_line(label: str, subset: list[Observation], width: int = 24) -> str:
     """One split of the pool, with its discriminating count beside its answer.
 
@@ -568,9 +747,120 @@ def _split_line(label: str, subset: list[Observation], width: int = 24) -> str:
     """
     n_disc = sum(1 for o in subset if o.discriminating)
     head = f"  {label:<{width}} n={len(subset):>6}  discriminating={n_disc:>5}  "
-    if n_disc < 10 or len(subset) < 2:
+    if n_disc < MIN_DISCRIMINATING or len(subset) < 2:
         return head + "alpha=n/a (nothing in this split can move it)"
     return head + f"alpha={fit_alpha(subset):.3f}"
+
+
+#: This checkout's root, used only to print paths relative to it.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def repo_relative(path) -> str:
+    """`results/published/REFIT_SET.txt`, not `/private/tmp/.../results/...`.
+
+    Every path this script prints goes through here. An absolute path is a fact
+    about the machine that ran the tool and not about the study, and audit A6
+    found one embedded in a committed artefact (`ANCHOR_RESCORE.txt` carries the
+    pod's own repo root), which makes the artefact unreproducible for the
+    trivial reason that nobody else's checkout is at that path. Falls back to the
+    absolute form for a path outside the repository, which is honest: it really
+    is somewhere else.
+    """
+    try:
+        return str(Path(path).resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+class PinnedSetBroken(SystemExit):
+    """A manifest that does not describe the tree it is being read against.
+
+    `SystemExit` so an unhandled one exits without a traceback, and with a
+    message, because the only useful response is to fix the manifest or the
+    tree. Refusing is the point: a pinned set that quietly drops a missing arm
+    would answer with a different pool under the heading that promises this one,
+    which is the failure the manifest exists to close.
+    """
+
+
+def read_refit_set(manifest: Path) -> tuple[list[str], list[Path]]:
+    """`(arm names, csv paths)` from a pinned-set manifest.
+
+    Blank lines and `#` comments out. Every named arm must exist under the
+    manifest's own directory and must hold at least one `run_*.csv`; anything
+    else raises `PinnedSetBroken` naming every arm at fault at once, so a
+    reviewer fixes one file rather than rediscovering the next failure per run.
+    """
+    if not manifest.exists():
+        raise PinnedSetBroken(
+            f"no pinned-set manifest at {manifest}. Write one (see "
+            f"{DEFAULT_REFIT_SET.name} in this repository for the format) or "
+            "pass the CSVs yourself.")
+    root = manifest.parent
+    arms = [line.strip() for line in manifest.read_text().splitlines()]
+    arms = [a for a in arms if a and not a.startswith("#")]
+    if not arms:
+        raise PinnedSetBroken(f"{manifest} lists no arms; an empty pinned set "
+                              "is not a set")
+    missing, empty, csvs = [], [], []
+    for arm in arms:
+        found = sorted((root / arm).glob(REFIT_SET_GLOB))
+        if not (root / arm).is_dir():
+            missing.append(arm)
+        elif not found:
+            empty.append(arm)
+        csvs.extend(found)
+    if missing or empty:
+        parts = []
+        if missing:
+            parts.append(f"absent from {root}: {', '.join(missing)}")
+        if empty:
+            parts.append(f"present but holding no {REFIT_SET_GLOB}: "
+                         f"{', '.join(empty)}")
+        raise PinnedSetBroken(
+            f"{manifest} does not describe this tree -- " + "; ".join(parts)
+            + ". The pinned set is refused rather than shrunk: a fit over "
+              "fewer arms than the manifest names is not the fit the manifest "
+              "promises.")
+    return arms, csvs
+
+
+def _report_inputs(args, arms: list[str] | None) -> None:
+    """WHICH ROWS THIS RUN READ, at the top, before any number.
+
+    Audit B8: FINDINGS' 0.558 / 10,813 / 3,124 / 0.529-0.588 reproduce on ten
+    arms and the documented glob reads fourteen, and nothing in either the
+    document or the output said which set was in front of the reader. A number
+    whose input set is not printed beside it is not reproducible, however
+    deterministic the arithmetic is.
+    """
+    print("## the input set")
+    print()
+    if arms is not None:
+        print(f"  PINNED by {repo_relative(args.pinned_set)}")
+        print(f"  {len(arms)} arm(s), {len(args.csvs)} csv(s):")
+        for arm in arms:
+            print(f"    {arm}")
+        print()
+        print("  This is the set `docs/FINDINGS.md` quotes. Run without "
+              "--pinned-set to")
+        print("  read whatever the tree holds today and watch the two "
+              "disagree.")
+    else:
+        seen: list[str] = []
+        for path in args.csvs:
+            name = Path(path).parent.name
+            if name not in seen:
+                seen.append(name)
+        print(f"  the caller's own paths: {len(args.csvs)} csv(s) across "
+              f"{len(seen)} arm(s):")
+        for arm in seen:
+            print(f"    {arm}")
+        print()
+        print(f"  NOT the pinned set. `--pinned-set` reads "
+              f"{DEFAULT_REFIT_SET.name} and reproduces")
+        print("  the numbers in docs/FINDINGS.md; this run does not claim to.")
 
 
 def _report_pool(triton: list[Observation], census: collections.Counter) -> None:
@@ -594,23 +884,240 @@ def _report_pool(triton: list[Observation], census: collections.Counter) -> None
     print()
     print("  tile provenance: "
           f"{dict(collections.Counter(o.tile_provenance for o in triton))}")
+    print()
+    # THE EXPOSURE, PRINTED WHATEVER IT IS. Audit A6: `calibrate_hardware.py`
+    # writes a TRACKED yaml, so a session sweeping right after a calibration
+    # stamps every row `git_dirty=True`, and 44,872 of the 100,144 published
+    # rows carry it. Until 2026-09-02 no analysis path in this repository read
+    # the column, so the number below has never appeared beside an answer.
+    rows_for_dirt = [{"git_dirty": o.dirty_raw} for o in triton]
+    print(dirty_share_line(rows_for_dirt, "admitted rows"))
+    dirty, _unrecorded, total = dirty_share(rows_for_dirt)
+    if dirty:
+        by_arm = collections.Counter(o.arm for o in triton if o.dirty)
+        print("  those rows cannot be tied to a commit, so a stranger cannot "
+              "rebuild the")
+        print("  code that produced them. They are NOT dropped -- that would "
+              "discard most of")
+        print("  the study -- and the share is stated so the reader prices "
+              "it. By arm: "
+              + ", ".join(f"{a} {n}" for a, n in by_arm.most_common()))
+    elif total:
+        print("  every admitted row was measured from a clean tree, which is a "
+              "finding and")
+        print("  is printed for that reason rather than omitted as an absence.")
+
+
+def split_range(triton: list[Observation], keyfn
+                ) -> tuple[float, float, int] | None:
+    """`(lowest alpha, highest alpha, splits fitted)` over one lever's levels.
+
+    None when fewer than two levels can be fitted at all, which is the honest
+    answer for a lever the pool does not vary.
+
+    THIS IS THE NUMBER THE BAND HAS TO BE READ AGAINST. The band says how
+    precisely the POOLED alpha is located; this says how far alpha moves when
+    one thing about the rows changes. Audit S34: the published band was 0.03
+    wide and the model split spanned 0.29, and the sentence beside them called
+    alpha stable.
+    """
+    alphas = []
+    for level in sorted({keyfn(o) for o in triton}, key=str):
+        subset = [o for o in triton if keyfn(o) == level]
+        if sum(1 for o in subset if o.discriminating) < MIN_DISCRIMINATING:
+            continue
+        if len(subset) < 2:
+            continue
+        alphas.append(fit_alpha(subset))
+    if len(alphas) < 2:
+        return None
+    return min(alphas), max(alphas), len(alphas)
 
 
 def _report_fit(triton: list[Observation], alpha: float, args) -> None:
     print("## the fit")
     print()
-    band = bootstrap_band(triton, args.bootstrap, args.seed)
     n_groups = len({cell_key(o) for o in triton})
     n_disc = sum(1 for o in triton if o.discriminating)
     print(f"  alpha = {alpha:.3f}")
-    if band:
-        print(f"  90% cluster-bootstrap band: {band[0]:.3f} .. {band[1]:.3f}"
-              f"  ({args.bootstrap} draws over {n_groups} groups)")
     print(f"  n = {len(triton)} rows, {n_disc} discriminating, {n_groups} intercepts")
+    print()
+
+    # THREE BANDS, NOT ONE, AND THE WIDEST IS THE ANSWER. Cells are nested in
+    # arms and arms in cards, so each level prices a kind of shared state the
+    # one below it treats as independent. The published band was the first row
+    # of this table quoted on its own.
+    print("  90% cluster-bootstrap bands, by what the draw resamples:")
+    bands: dict[str, tuple[float, float] | None] = {}
+    for level in CLUSTER_LEVELS:
+        n_clusters = len({CLUSTER_LEVELS[level](o) for o in triton})
+        band = bootstrap_band(triton, args.bootstrap, args.seed, level=level)
+        bands[level] = band
+        if band is None:
+            print(f"    {level:<5} REFUSED: {n_clusters} cluster(s); a band "
+                  "over one cluster is not a band")
+            continue
+        print(f"    {level:<5} {band[0]:.3f} .. {band[1]:.3f}   "
+              f"({args.bootstrap} draws over {n_clusters} cluster(s))")
+    if bands.get("card") is not None:
+        print("    the card row is TWO clusters wide. Read it as a statement "
+              "about how")
+        print("    little independent information the corpus holds at that "
+              "level, never as")
+        print("    a tighter answer than the rows above it.")
+
+    # THE MDE, DERIVED FROM THE BAND THAT WAS JUST PRINTED. Audit B14: no arm in
+    # this study states one, so no split-to-split difference below has ever been
+    # compared with the smallest difference this design could have found.
+    print()
+    widest = max((b for b in bands.values() if b is not None),
+                 key=lambda b: b[1] - b[0], default=None)
+    if widest is None:
+        print("  MDE: NOT STATED -- no level of this pool supports a band, so "
+              "no split")
+        print("  comparison below is comparable with anything.")
+    else:
+        print(mde_line(widest[0], widest[1], "alpha",
+                       "the widest cluster-bootstrap band above"))
+
+    # THE RANGES THE BAND HAS TO BE READ AGAINST, on the same screen as the
+    # band. Between-basis is called out by name because FINDINGS quotes it as
+    # "stable across timing modes (0.48-0.59)" and the paired contrast below
+    # shows most of that spread is composition, not instrument.
+    print()
+    print("  and what alpha does when one thing about the rows changes:")
+    for label, keyfn in (("between model", lambda o: o.model),
+                         ("between card", lambda o: o.gpu),
+                         ("between basis", lambda o: o.mode),
+                         ("between routing", lambda o: o.routing),
+                         ("between arm", lambda o: o.arm)):
+        rng = split_range(triton, keyfn)
+        if rng is None:
+            print(f"    {label:<16} only one level fits; not a range")
+            continue
+        lo, hi, n = rng
+        mde = (None if widest is None
+               else two_sample_mde(sd_from_band(widest[0], widest[1])))
+        verdict = ("no MDE" if mde is None else
+                   "READABLE" if hi - lo > mde else
+                   "inside the MDE: UNMEASURED")
+        print(f"    {label:<16} {lo:.3f} .. {hi:.3f}  (span {hi - lo:.3f} over "
+              f"{n} levels)  {verdict}")
     print()
     print(f"  vs this repo's published {REPO_PUBLISHED_ALPHA:.2f}: "
           f"{alpha / REPO_PUBLISHED_ALPHA:.1f}x")
     print(f"  vs TEMPO's {TEMPO_ALPHA:.2f}:                 {alpha / TEMPO_ALPHA:.1f}x")
+
+
+#: The two axes of the timing basis, each as `(name, accessor, low, high)`.
+#: `low`/`high` are the words the report prints for the False and True levels,
+#: so the table reads as a comparison rather than as two booleans.
+BASIS_AXES = (
+    ("cuda_graph", lambda o: o.cuda_graph, "eager", "graph"),
+    ("l2_flush", lambda o: o.l2_flush, "L2-warm", "L2-cold"),
+)
+
+
+def paired_basis_contrast(triton: list[Observation], level_of
+                          ) -> tuple[list[Observation], list[Observation]]:
+    """The two halves of one basis axis, restricted to CONTEXTS present in both.
+
+    A context is `Observation.context`: the physical cell, with the timing mode
+    taken out. Keeping only contexts observed at both levels makes the two
+    halves comparable by construction, which the marginal split is not.
+
+    WHY THE MARGINAL SPLIT IS NOT A CONTRAST. `docs/FINDINGS.md` reads the
+    per-basis fits (L2-cold/eager 0.538, L2-cold/graph 0.480, L2-warm/eager
+    0.597, L2-warm/graph 0.505) as "stable across timing modes (0.48-0.59)", and
+    the audit's refuter found the split composition-confounded: 98% of the
+    graph-mode discriminating rows are deepseek-v2-lite, which is the
+    lowest-alpha model in the pool. The split was mostly measuring which models
+    each mode was pointed at. Held to shared contexts the basis moves alpha by
+    about one band width, not by 1.9 of them.
+
+    Returns `(low rows, high rows)`, both empty when no context holds both.
+    """
+    by_context: dict = collections.defaultdict(set)
+    for o in triton:
+        by_context[o.context].add(bool(level_of(o)))
+    shared = {c for c, levels in by_context.items() if levels == {False, True}}
+    low = [o for o in triton if o.context in shared and not level_of(o)]
+    high = [o for o in triton if o.context in shared and level_of(o)]
+    return low, high
+
+
+def _composition(rows: list[Observation]) -> str:
+    """The model mix of the DISCRIMINATING rows, which is the confounded part.
+
+    Only the discriminating rows, because those are the only ones that move
+    alpha: a split can be balanced in rows and still be one model's answer.
+    """
+    disc = [o for o in rows if o.discriminating]
+    if not disc:
+        return "no discriminating rows"
+    counts = collections.Counter(o.model for o in disc).most_common()
+    return ", ".join(f"{m} {n / len(disc):.0%}" for m, n in counts)
+
+
+def _report_basis_contrast(triton: list[Observation], args) -> None:
+    """The instrument's effect on alpha, once composition is held fixed."""
+    print("## does the timing basis move alpha, or move the composition?")
+    print()
+    print("Marginal first, then paired. The marginal rows are the ones FINDINGS "
+          "quotes;")
+    print("the paired rows are the same question asked of cells that were "
+          "measured BOTH")
+    print("ways, so the two halves cannot differ in which models they contain.")
+    for name, level_of, low_word, high_word in BASIS_AXES:
+        print()
+        print(f"  axis {name}: {low_word} against {high_word}")
+        marg_low = [o for o in triton if not level_of(o)]
+        marg_high = [o for o in triton if level_of(o)]
+        for word, rows in ((low_word, marg_low), (high_word, marg_high)):
+            n_disc = sum(1 for o in rows if o.discriminating)
+            if n_disc < MIN_DISCRIMINATING or len(rows) < 2:
+                print(f"    marginal {word:<8} n={len(rows):>6} "
+                      f"discriminating={n_disc:>5}  alpha=n/a")
+                continue
+            print(f"    marginal {word:<8} n={len(rows):>6} "
+                  f"discriminating={n_disc:>5}  alpha={fit_alpha(rows):.3f}")
+            print(f"      composition: {_composition(rows)}")
+        low, high = paired_basis_contrast(triton, level_of)
+        n_contexts = len({o.context for o in low})
+        if not low or not high:
+            print("    PAIRED: no cell in this pool was measured both ways, so "
+                  "this axis")
+            print("    cannot be contrasted here at all. The marginal numbers "
+                  "above are a")
+            print("    comparison of two different sets of cells and must not "
+                  "be read as one.")
+            continue
+        alphas = {}
+        for word, rows in ((low_word, low), (high_word, high)):
+            n_disc = sum(1 for o in rows if o.discriminating)
+            if n_disc < MIN_DISCRIMINATING or len(rows) < 2:
+                print(f"    paired   {word:<8} n={len(rows):>6} "
+                      f"discriminating={n_disc:>5}  alpha=n/a")
+                continue
+            alphas[word] = fit_alpha(rows)
+            print(f"    paired   {word:<8} n={len(rows):>6} "
+                  f"discriminating={n_disc:>5}  alpha={alphas[word]:.3f}")
+            print(f"      composition: {_composition(rows)}")
+        print(f"    over {n_contexts} context(s) measured both ways "
+              "(model, dtype, card, impl, tokens)")
+        if len(alphas) == 2:
+            delta = alphas[high_word] - alphas[low_word]
+            band = bootstrap_band(low + high, args.bootstrap, args.seed)
+            print(f"    PAIRED SHIFT {high_word} - {low_word} = {delta:+.3f}")
+            if band is None:
+                print("    no band over the paired pool, so the shift is "
+                      "unscored")
+            else:
+                mde = two_sample_mde(sd_from_band(band[0], band[1]))
+                verdict = ("READABLE" if abs(delta) > mde
+                           else "inside the MDE: UNMEASURED")
+                print(f"    against MDE {mde:.3f} from the paired pool's own "
+                      f"cell band {band[0]:.3f}..{band[1]:.3f}: {verdict}")
 
 
 def _report_splits(triton: list[Observation]) -> None:
@@ -763,26 +1270,61 @@ def _report_adversarial(triton: list[Observation], alpha: float, args) -> None:
     print("  coefficient it is an UPPER bound. That bound caps arithmetic intensity at")
     print("  2 BM / (alpha b), in rows per expert:")
     print()
-    print("  | BLOCK_M | AI cap | vs ridge band "
-          f"{RIDGE_BAND[0]}-{RIDGE_BAND[1]} |")
-    print("  |---:|---:|---|")
+    print_ai_cap_table(alpha)
+
+
+def print_ai_cap_table(alpha: float) -> None:
+    """The AI-cap table, and the C2 comparison, each against a NAMED card's band.
+
+    A SEPARATE FUNCTION SO ITS REFUSALS CAN BE PLANTED. Both failure branches
+    here -- no calibration at all, and no H200 calibration for a paragraph about
+    H200 rows -- have to be reachable in a test, and they are not while the only
+    way in is a full adversarial run over the corpus.
+    """
+    bands = card_ridge_bands()
+    if not bands:
+        print("  REFUSED: no committed calibration resolves, so there is no ceiling")
+        print("  this table is entitled to score against. It is NOT printed against")
+        print("  the withdrawn cross-machine band, which belongs to no device.")
+        return
+    print("  Scored against EACH CARD'S OWN band, off its own measured_*.yaml. The")
+    print("  cross-machine 160.3-176.2 this table used to quote was withdrawn from")
+    print("  all 26 published reports on 2026-09-02 and is not a ceiling of anything.")
+    print()
+    print("  | BLOCK_M | AI cap | "
+          + " | ".join(f"vs {card} {band[0]}-{band[-1]}"
+                       for card, _ridge, band in bands) + " |")
+    print("  |---:|---:|" + "---|" * len(bands))
     for block_m in (16, 32, 64, 128, 256):
         cap = ai_cap(block_m, alpha)
-        verdict = ("NEVER crosses" if cap < RIDGE_BAND[0]
-                   else "crosses" if cap > RIDGE_BAND[1] else "inside the band")
-        print(f"  | {block_m} | {cap:.0f} | {verdict} |")
+        print(f"  | {block_m} | {cap:.0f} | "
+              + " | ".join(cap_verdict(cap, band) for _c, _r, band in bands) + " |")
     print()
+
+    # FINDINGS C2's crossing was measured on the H200, so the ceiling it is
+    # weighed against has to be the H200's own low end and not whichever card
+    # sorts first. No H200 calibration, no paragraph: the alternative is
+    # comparing one card's rows with another card's ridge, which is the exact
+    # substitution this section now exists to have stopped doing.
+    h200 = [entry for entry in bands if "h200" in entry[0]]
+    if not h200:
+        print("  The C2 comparison below needs the H200's own band and no committed")
+        print("  H200 calibration resolved, so it is REFUSED rather than scored")
+        print("  against another card.")
+        return
+    card, _ridge, band = h200[0]
     measured = rows_per_expert("mixtral-8x7b", MIXTRAL_ONE_STAGE_CROSSING_TOKENS)
-    ceiling = max_alpha_that_still_crosses(CUTLASS_BLOCK_M, RIDGE_BAND[0])
+    ceiling = max_alpha_that_still_crosses(CUTLASS_BLOCK_M, band[0])
     print("  AND THAT IS REFUTED BY THIS STUDY'S OWN ROWS. torch grouped_mm runs at")
     print(f"  CUTLASS BLOCK_M={CUTLASS_BLOCK_M} and DOES cross: FINDINGS C2 puts mixtral's")
     print(f"  one-stage bf16 crossing at {MIXTRAL_ONE_STAGE_CROSSING_TOKENS} tokens, "
           f"which is {measured:.0f} rows per expert,")
     print(f"  well above the {ai_cap(CUTLASS_BLOCK_M, alpha):.0f} this alpha allows.")
+    print(f"  Those rows are {card} rows, and the band below is {card}'s.")
     print()
     print("  So one of three things is true, and this pool cannot say which:")
     print(f"   - the TRAFFIC coefficient is at most {ceiling:.3f}, the largest value at")
-    print(f"     which BLOCK_M={CUTLASS_BLOCK_M} still reaches a ridge of {RIDGE_BAND[0]}, and the")
+    print(f"     which BLOCK_M={CUTLASS_BLOCK_M} still reaches a ridge of {band[0]}, and the")
     print(f"     gap up to {alpha:.2f} is an extra tile's NON-traffic cost;")
     print("   - the bounded-AI consequence does not follow from a time-fitted alpha;")
     print("   - or the one-stage crossings are tile steps rather than the ridge, which")
@@ -791,15 +1333,17 @@ def _report_adversarial(triton: list[Observation], alpha: float, args) -> None:
     print("  FINDINGS already names.")
 
 
-def report(args) -> int:
+def report(args, arms: list[str] | None = None) -> int:
     census: collections.Counter = collections.Counter()
     triton = collect(args.csvs, census, include_throttled=args.include_throttled)
 
     print("# alpha, refit against the derived tile")
     print()
     print("Every BLOCK_M under a vLLM span below is DERIVED from vLLM 0.27.1's config")
-    print("lookup plus the row's own gpu_name, and never observed: all ten published")
+    print("lookup plus the row's own gpu_name, and never observed: the published")
     print("arms are schema v3 and record no tile. torch's 64 is OBSERVED, under C1.")
+    print()
+    _report_inputs(args, arms)
     print()
     _report_pool(triton, census)
     if len(triton) < 2:
@@ -809,6 +1353,8 @@ def report(args) -> int:
     alpha = fit_alpha(triton)
     print()
     _report_fit(triton, alpha, args)
+    print()
+    _report_basis_contrast(triton, args)
     print()
     _report_splits(triton)
     if args.original_estimator:
@@ -828,7 +1374,20 @@ def report(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("csvs", nargs="+", type=Path)
+    parser.add_argument("csvs", nargs="*", type=Path,
+                        help="the CSVs to fit. Omit them and pass --pinned-set "
+                             "to read the manifest instead; giving both is "
+                             "refused, because only one of them can be the "
+                             "input set the header then names")
+    parser.add_argument("--pinned-set", nargs="?", type=Path,
+                        const=DEFAULT_REFIT_SET, default=None,
+                        metavar="MANIFEST",
+                        help="read the arms named in MANIFEST (default "
+                             f"{DEFAULT_REFIT_SET.name} beside the published "
+                             "arms) instead of a glob. This is the set "
+                             "docs/FINDINGS.md quotes; a glob over the tree "
+                             "reads whatever has landed since and answers "
+                             "differently")
     parser.add_argument("--bootstrap", type=int, default=200,
                         help="cluster-bootstrap draws for the band (default 200)")
     parser.add_argument("--seed", type=int, default=0)
@@ -840,7 +1399,20 @@ def main(argv: list[str] | None = None) -> int:
                              "the rows it was originally run on")
     parser.add_argument("--adversarial", action="store_true",
                         help="the checks against this fit's own answer")
-    return report(parser.parse_args(argv))
+    args = parser.parse_args(argv)
+    # REFUSED RATHER THAN MERGED OR SILENTLY PREFERRED. With both given, one of
+    # them is not the input set, and the header would name a set that is not
+    # what was read -- which is the defect `--pinned-set` was added to close.
+    if args.csvs and args.pinned_set is not None:
+        parser.error("pass CSVs or --pinned-set, not both: with both given the "
+                     "header cannot honestly name the input set")
+    arms = None
+    if args.pinned_set is not None:
+        arms, args.csvs = read_refit_set(args.pinned_set)
+    if not args.csvs:
+        parser.error("no input: pass CSVs, or --pinned-set to read "
+                     f"{DEFAULT_REFIT_SET.name}")
+    return report(args, arms)
 
 
 if __name__ == "__main__":
