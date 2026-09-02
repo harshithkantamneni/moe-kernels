@@ -3545,10 +3545,10 @@ def count_new(root: Path, seen: set[Path]) -> int:
     return len(fresh)
 
 
-class RetiredInstrument(BaseException):
+class RetiredInstrument(SystemExit):
     """`time_call` was called. It no longer times anything, by design.
 
-    NOT AN `Exception`, AND THAT IS THE WHOLE MECHANISM. All four sibling arms
+    A `SystemExit`, AND THAT IS THE WHOLE MECHANISM. All four sibling arms
     time inside a per-cell `except Exception` (`scripts/bm128_roofline.py:1564`,
     `bm128_depth.py:1620`, `bn_decomposition.py:2303`,
     `occupancy_vs_swizzle.py:1309`), which turns any per-cell failure into a
@@ -3556,14 +3556,21 @@ class RetiredInstrument(BaseException):
     swallowed by every one of them: the arm compiled and ran its whole grid,
     recorded a failed row per cell and only then reached its gates, so
     `bm128_roofline` -- the arm scheduled to settle the BLOCK_M=128 question --
-    would have burned a pod allocation to produce no usable cell. Deriving from
-    `BaseException` puts it outside every one of those handlers, so the first
-    cell any of them tries to time stops the arm with the fix in the message,
-    which is what the retirement was for.
+    would have burned a pod allocation to produce no usable cell.
 
-    See `time_call` for what to call instead and why this is a refusal rather
-    than a redirect.
+    `SystemExit` derives from `BaseException`, not `Exception`, so it is outside
+    every one of those per-cell handlers and the first cell any arm tries to
+    time stops that arm with the fix in the message. It is `SystemExit` rather
+    than a bare `BaseException` for the delivery: an arm's top-level
+    `except Exception` does not swallow it, the interpreter prints nothing and
+    exits with `code`, and a caller that wants to handle it can name it. A bare
+    `BaseException` escaped the top-level handlers too, which turned a refusal
+    with a remedy in its message into a traceback and an exit code that means
+    something else. That is the same delivery defect `BandwidthUnavailable` was
+    fixed for, one exception over.
     """
+
+    code = exit_codes.REFUSED
 
 
 def time_call(fn, warmup: int, iters: int):
@@ -4478,9 +4485,16 @@ class BandwidthUnavailable(SystemExit, RuntimeError):
     the fix for it. As a `SystemExit` carrying `code = REFUSED` the same
     uncaught refusal leaves the process at 2 with no traceback, which is what it
     means, and `except (RidgeUnavailable, BandwidthUnavailable)` in `main` still
-    catches it by name because it is still a `RuntimeError` too. It is
-    deliberately NOT caught by a blanket `except Exception`: a refusal that a
-    caller can swallow by accident is the state this class exists to end.
+    catches it by name because it is still a `RuntimeError` too.
+
+    BEING A `RuntimeError` MEANS A BLANKET `except Exception` DOES CATCH IT, and
+    that is the price of the compatible path, not a protection this class has.
+    The MRO is `SystemExit` then `RuntimeError` then `Exception`, so a caller
+    that swallows everything still swallows this. Two things make that survivable
+    and neither is the class: the reason is printed at the raise site before it
+    propagates, and no caller in this repository wraps `resolve_bandwidth` in a
+    blanket handler. If one ever does, the refusal becomes a silent default
+    again, so the check belongs in review of the caller.
 
     THE MESSAGE IS PRINTED AT THE RAISE SITE, once, by `_refuse_bandwidth`,
     because an unhandled `SystemExit` whose code is an int prints nothing at
