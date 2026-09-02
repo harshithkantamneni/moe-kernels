@@ -396,6 +396,36 @@ def test_alpha_b_from_fitted_refuses_a_result_outside_zero_one():
         cap_from_fitted(0.5, block_m=0, b=2, phi=p, delta=0.0)
 
 
+def test_the_wall_tolerance_absorbs_rounding_and_nothing_wider():
+    """`alpha_b_from_fitted` computes alpha_fitted*level - phi, and that
+    multiply-subtract can land a rounding hair past 0 or 1 when the true value
+    sits on the wall. The module clamps a hair (1e-9) to the wall and refuses
+    anything wider. The exact-wall assertions in the test above pass whether
+    or not that clamp exists, so this test plants both sides of it: 5e-10 past
+    each wall must come back as EXACTLY the wall, and 2e-9 past it must
+    refuse. A widened tolerance, which is a silent fallback wearing a
+    rounding costume, fails the second half."""
+    p = phi(N, K, block_m=128, block_n=64, alpha_a=0.143)
+    level = 1.0 + p
+
+    def fitted_for(alpha_b):
+        # the (EXA) forward map, so the inverse lands at alpha_b to ~1e-16
+        return (alpha_b + p) / level
+
+    # inside the hair: clamped to the wall, not returned as a negative or a
+    # value above one that would then be handed to cap_from_fitted
+    assert alpha_b_from_fitted(fitted_for(-5e-10), phi=p, delta=0.0) == 0.0
+    assert alpha_b_from_fitted(fitted_for(1.0 + 5e-10), phi=p, delta=0.0) == 1.0
+    # outside the hair: refused, naming the wall
+    with pytest.raises(AIModelRefused, match="below the floor"):
+        alpha_b_from_fitted(fitted_for(-2e-9), phi=p, delta=0.0)
+    with pytest.raises(AIModelRefused, match="above the ceiling"):
+        alpha_b_from_fitted(fitted_for(1.0 + 2e-9), phi=p, delta=0.0)
+    # and a value well inside the band is returned untouched, so the clamp is
+    # a wall treatment and not a rounding of every result
+    assert alpha_b_from_fitted(fitted_for(0.25), phi=p, delta=0.0) == pytest.approx(0.25, abs=1e-12)
+
+
 def test_a_ladder_fit_cannot_exceed_one_so_a_reading_above_one_is_a_missing_term():
     """The earlier version of this test said fits above 1.0 were 'not
     impossible for the quantity actually being reported'. Under (EXA) they

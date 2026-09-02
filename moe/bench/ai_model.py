@@ -60,11 +60,13 @@ first version of this module asserted instead
     alpha_fitted = alpha_b + alpha_a*(BM/BN) + BM/K                        (LIN)
 
 which is what a fit would return if it divided the slope by the WEIGHT BYTES
-alone. No estimator in this repository does that. (LIN) is (EXA) linearised at
-small phi with the (1-alpha_a)*BM/N term dropped, and at the tiles this study
-argues about phi is not small: 0.16, 0.32 and 0.64 at BM = 64, 128, 256 with
-BN = 64 on mixtral. scripts/bn_decomposition.py derived (EXA) at the same HEAD
-and said the two are not interchangeable here. It was right.
+alone. No estimator in this repository does that. (LIN) is (EXA)'s NUMERATOR,
+the slope alpha_b + phi with the level taken as 1 and the once-read slab
+(1-alpha_a)*BM/N dropped. It is not even (EXA)'s first-order expansion, which
+is alpha_b + (1-alpha_b)*phi; the two agree only as phi -> 0, and at the tiles
+this study argues about phi is not small: 0.16, 0.32 and 0.64 at BM = 64, 128,
+256 with BN = 64 on mixtral. scripts/bn_decomposition.py derived (EXA) at the
+same HEAD and said the two are not interchangeable here. It was right.
 
 WHAT THAT CHANGES. Under (LIN), 2*BM/(alpha_fitted*b) is the three-term cap
 exactly, and commit f732035 and the first version of this docstring said so and
@@ -82,9 +84,13 @@ ALPHA_BY_BLOCK_M through (LIN); the same two points solved through (EXA) give
 alpha_b = 0.07 and alpha_a = 0.72, and ALPHA_BY_BLOCK_M comes from a third
 estimator (scripts/alpha_refit.py) that matches neither form. Two points cannot
 choose a reading. And the "alpha_b = 0.307 agrees with TEMPO's b2/b = 0.311 to
-2%" line was a unit artefact of reading through (LIN): through (EXA) the same
-G=1 ladders read alpha_b near 0.92 (scripts/bn_decomposition.py, LADDER column),
-which is nowhere near TEMPO and is the number that has to be explained.
+2%" line was a unit artefact of reading through (LIN): through (EXA), with
+alpha_a held at the (LIN)-era 0.143, the same G=1 ladders read alpha_b near
+0.92 (scripts/bn_decomposition.py, LADDER column), which is nowhere near TEMPO
+and is the number that has to be explained. Held is the operative word: solved
+jointly, the BN=64 and BN=256 points give alpha_a = 4.7 under (EXA), so that
+pair has no consistent (alpha_b, alpha_a) at all, which is the experiment
+scripts/bn_decomposition.py exists to run.
 
 HISTORY. Derived 2026-09-02 as (LIN) and pinned by a test that rearranged its
 own definition; no fit was ever called. Corrected the same day by the audit
@@ -131,12 +137,15 @@ class Traffic:
                 "output": self.output_bytes / t}
 
 
-def _check(M: int, N: int, K: int, block_m: int, block_n: int,
-           alpha_b: float, alpha_a: float, b: int) -> None:
-    for name, v in (("M", M), ("N", N), ("K", K),
-                    ("block_m", block_m), ("block_n", block_n), ("b", b)):
+def _check_positive(**dims: int) -> None:
+    """Every shape, tile and byte width named here is a count; zero or less is
+    not a GEMM and is refused by name rather than divided by."""
+    for name, v in dims.items():
         if v <= 0:
             raise AIModelRefused(f"{name}={v} must be positive")
+
+
+def _check_alphas(alpha_b: float, alpha_a: float) -> None:
     # alpha is a MISS FRACTION on a re-read. Outside [0, 1] it is not that
     # quantity, and a fit that returns one is reporting something else, which
     # is the whole reason this module exists. Refuse rather than extrapolate.
@@ -146,6 +155,12 @@ def _check(M: int, N: int, K: int, block_m: int, block_n: int,
                 f"{name}={a} is outside [0, 1]. A miss fraction cannot exceed a "
                 "full re-read; a value above 1 means the quantity being divided "
                 "by the operand bytes contains more than that operand's traffic")
+
+
+def _check(M: int, N: int, K: int, block_m: int, block_n: int,
+           alpha_b: float, alpha_a: float, b: int) -> None:
+    _check_positive(M=M, N=N, K=K, block_m=block_m, block_n=block_n, b=b)
+    _check_alphas(alpha_b, alpha_a)
 
 
 def traffic(M: int, N: int, K: int, *, block_m: int, block_n: int,
@@ -203,8 +218,9 @@ def cap(N: int, K: int, *, block_m: int, block_n: int,
     is 0.4-0.8% of the denominator (audit X66). `exact_cap()` keeps it; this
     function keeps the three-term form the study quotes, because
     tests/test_memory_branch_anchor.py pins `memory_branch_anchor.ai_cap` to it
-    and that file is not this one's to move. Wherever "exactly" is claimed
-    below, it is claimed against `exact_cap`, never against this.
+    and the quoted form should stay where the study quotes it. Wherever
+    "exactly" is claimed below, it is claimed against `exact_cap`, never
+    against this.
 
     WHAT TO PUT IN THE alpha_b SLOT. A `LadderFit` alpha is NOT alpha_b, and
     2*BM/(alpha_fitted*b) is NOT this cap; see `cap_from_fitted`.
@@ -225,9 +241,11 @@ def phi(N: int, K: int, *, block_m: int, block_n: int, alpha_a: float,
     re-read per N-tile, the output write, and the once-read activation slab.
     alpha_b does not enter: phi is the part of the slope that is NOT weights.
 
-    This is the quantity that separates (EXA) from (LIN). On mixtral at BN=64 it
-    is 0.16 / 0.32 / 0.64 at BM = 64 / 128 / 256, which is why "linearised at
-    small phi" is not an approximation this study may use.
+    This is the quantity that separates (EXA) from (LIN): (LIN) is the slope
+    alpha_b + phi with the level 1 + phi + delta replaced by 1, so the two agree
+    only as phi -> 0. On mixtral at BN=64 phi is 0.16 / 0.32 / 0.64 at
+    BM = 64 / 128 / 256, which is why that replacement is not an approximation
+    this study may use.
     """
     one_tile = traffic(block_m, N, K, block_m=block_m, block_n=block_n,
                        alpha_b=0.0, alpha_a=alpha_a, b=b)
@@ -366,12 +384,14 @@ def lin_blend(K: int, *, block_m: int, block_n: int, alpha_b: float,
     compared against.
 
     What a fit would return if it divided the per-tile slope by the weight
-    bytes alone and the once-read activation slab were free. No estimator in
-    this repository does that. Handing this to 2*BM/(x*b) reproduces `cap()`,
-    which is the identity commit f732035 mistook for a statement about
-    `LadderFit`. It is a statement about this function.
+    bytes alone and the once-read activation slab were free: (EXA)'s numerator
+    with its level taken as 1, which agrees with (EXA) only as phi -> 0. No
+    estimator in this repository does that. Handing this to 2*BM/(x*b)
+    reproduces `cap()`, which is the identity commit f732035 mistook for a
+    statement about `LadderFit`. It is a statement about this function.
     """
-    _check(1, 1, K, block_m, block_n, alpha_b, alpha_a, 1)
+    _check_positive(K=K, block_m=block_m, block_n=block_n)
+    _check_alphas(alpha_b, alpha_a)
     return alpha_b + alpha_a * (block_m / block_n) + block_m / K
 
 
@@ -391,8 +411,11 @@ def lin_overstatement(*, phi: float, delta: float) -> float:
 
 
 #: How far past 0 or 1 a recovered alpha_b may land by rounding before it is a
-#: refusal rather than a wall. 1e-9 is a thousand times the double-precision
-#: error of the one multiply and one subtract that produce it.
+#: refusal rather than a wall. The one multiply and one subtract that produce
+#: it round at about 1e-16 for values near 1, so 1e-9 is seven orders of
+#: magnitude above the rounding it absorbs and seven below any alpha this
+#: study reports to four places. Widening it would turn a wall into a silent
+#: fallback; tests/test_ai_model.py pins both sides of it.
 _WALL_TOL = 1e-9
 
 
@@ -449,7 +472,6 @@ def cap_from_fitted(alpha_fitted: float, *, block_m: int, b: int,
     2*BM/(alpha_fitted*b) divided by `lin_overstatement`. Refuses, through
     `alpha_b_from_fitted`, whenever the recovered miss fraction is not one.
     """
-    if block_m <= 0 or b <= 0:
-        raise AIModelRefused(f"block_m={block_m} and b={b} must be positive")
+    _check_positive(block_m=block_m, b=b)
     alpha_b = alpha_b_from_fitted(alpha_fitted, phi=phi, delta=delta)
     return 2.0 * block_m / (b * (alpha_b + phi))
