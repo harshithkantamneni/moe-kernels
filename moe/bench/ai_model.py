@@ -88,8 +88,11 @@ choose a reading. And the "alpha_b = 0.307 agrees with TEMPO's b2/b = 0.311 to
 alpha_a held at the (LIN)-era 0.143, the same G=1 ladders read alpha_b near
 0.92 (scripts/bn_decomposition.py, LADDER column), which is nowhere near TEMPO
 and is the number that has to be explained. Held is the operative word: solved
-jointly, the BN=64 and BN=256 points give alpha_a = 4.7 under (EXA), so that
-pair has no consistent (alpha_b, alpha_a) at all, which is the experiment
+jointly under the FUSED-LAYER byte model of scripts/bn_decomposition.py (which
+carries the layer's own W, and is not the single-GEMM model written here), the
+BN=64 and BN=256 points give alpha_a = 4.7, impossible for a miss fraction, so
+that pair has no consistent (alpha_b, alpha_a) under that model at all. Two
+BN values cannot separate the two readings; three can, which is the experiment
 scripts/bn_decomposition.py exists to run.
 
 HISTORY. Derived 2026-09-02 as (LIN) and pinned by a test that rearranged its
@@ -433,6 +436,17 @@ def alpha_b_from_fitted(alpha_fitted: float, *, phi: float, delta: float) -> flo
     alpha_b = 1 reads (1+phi)/(1+phi+delta); a fitted value outside that band
     cannot have come from the three-term model with these inputs.
     """
+    # NaN fails every comparison below, so it would fall through the whole
+    # wall-and-refusal ladder and be RETURNED as an alpha_b. A degenerate fit
+    # produces one easily: zero-variance treads give a 0/0 slope. Refuse here,
+    # before any comparison, or the gate has a hole exactly where the numbers
+    # are least trustworthy.
+    for name, value in (("alpha_fitted", alpha_fitted), ("phi", phi), ("delta", delta)):
+        if math.isnan(value):
+            raise AIModelRefused(
+                f"{name} is NaN, which no comparison can bound. A NaN here is a "
+                "degenerate ladder fit (a zero-variance or single-point branch), "
+                "not a miss fraction: fix the fit rather than reading a cap from it")
     level = lin_overstatement(phi=phi, delta=delta)
     floor = phi / level
     ceiling = (1.0 + phi) / level

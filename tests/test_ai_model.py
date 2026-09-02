@@ -23,6 +23,7 @@ bytes, which no estimator in this repository does.
 from __future__ import annotations
 
 import importlib.util
+import math
 import sys
 from pathlib import Path
 
@@ -514,3 +515,24 @@ def test_the_byte_ladder_is_affine_and_a_non_affine_one_is_refused(monkeypatch):
     monkeypatch.setattr(m, "traffic", bent)
     with pytest.raises(AIModelRefused, match="not affine"):
         m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+
+
+def test_a_nan_is_refused_before_it_can_pass_the_wall_comparisons():
+    """THE HOLE THE AUDIT'S SECOND REVIEW FOUND. NaN fails every comparison,
+    so `alpha_b < 0.0`, `alpha_b > 1.0` and both wall tolerances are all False
+    and the value falls through to `return alpha_b` as if it were in band. A
+    degenerate ladder produces NaN easily (a zero-variance or single-point
+    memory branch gives a 0/0 slope), which is precisely when a cap must not
+    be read. Every NaN input is refused before the ladder of comparisons."""
+    for kwargs in ({"alpha_fitted": math.nan, "phi": 0.3, "delta": 0.0},
+                   {"alpha_fitted": 0.5, "phi": math.nan, "delta": 0.0},
+                   {"alpha_fitted": 0.5, "phi": 0.3, "delta": math.nan}):
+        with pytest.raises(AIModelRefused, match="NaN"):
+            alpha_b_from_fitted(**kwargs)
+
+
+def test_an_infinity_is_still_refused_by_the_band():
+    """The sibling case, kept beside it: infinity DOES order against the walls,
+    so it is caught by the band refusal rather than the NaN guard."""
+    with pytest.raises(AIModelRefused):
+        alpha_b_from_fitted(alpha_fitted=math.inf, phi=0.3, delta=0.0)
