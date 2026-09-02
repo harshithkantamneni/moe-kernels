@@ -53,19 +53,23 @@ PY="${MOE_PYTHON:-$WORKSPACE/venvs/base/bin/python}"
 [[ -x "$PY" ]] || PY="python3"
 
 RUN_IDS=()
+REPORTS=()
 ALL=0
 LABEL=""
 PUSH=1
 DRY=0
 FOREIGN_CAL=0
+MISSING_SHA_REASON=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --run-id)  RUN_IDS+=("$2"); shift 2 ;;
+    --reports) REPORTS+=("$2"); shift 2 ;;
     --all)     ALL=1; shift ;;
     --label)   LABEL="$2"; shift 2 ;;
     --no-push) PUSH=0; shift ;;
     --dry-run) DRY=1; shift ;;
     --allow-foreign-calibration) FOREIGN_CAL=1; shift ;;
+    --allow-missing-sha) MISSING_SHA_REASON="${2:?--allow-missing-sha needs a reason, which is written into SUMMARY.md}"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -237,20 +241,121 @@ then
   exit 1
 fi
 
-# Figures belong with the data they were drawn from, not in the repo root.
-if [[ -d plots ]]; then
-  mkdir -p "$DEST/plots"
-  cp plots/*.png "$DEST/plots/" 2>/dev/null && \
-    log "included $(ls "$DEST/plots" | wc -l | tr -d ' ') figure(s)" || true
+# --------------------------------------------------------------------------
+# the report/cells pairs this arm carries
+# --------------------------------------------------------------------------
+# `find results/published -name cells.csv` returned ZERO across every published
+# arm. `scaled_iters` promises that the CSV shows which numbers rest on 5
+# samples and which on 50, and the file it promises never reached the repo, so
+# the only per-cell p50s that survive anywhere are in one session log. A report
+# without its cells is a verdict without the measurement under it.
+#
+# The experiment scripts write `<dir>/report.json` beside `<dir>/cells.csv`, so
+# they travel together or not at all: a report copied without its cells is
+# refused here rather than discovered missing by a reader three days later.
+for rdir in "${REPORTS[@]+"${REPORTS[@]}"}"; do
+  stem="$(basename "${rdir%/}")"
+  [[ -f "$rdir/report.json" ]] || die "no report.json in $rdir"
+  [[ -f "$rdir/cells.csv" ]] || die \
+    "$rdir has a report.json and no cells.csv. Publishing the verdict without
+[publish] the measurements under it is how every published report came to have
+[publish] no cells beside it. Re-run the arm, or publish the directory that has
+[publish] both."
+  cp "$rdir/report.json" "$DEST/${stem}.report.json"
+  cp "$rdir/cells.csv" "$DEST/${stem}.cells.csv"
+  log "included report + cells for $stem"
+done
+
+# Figures belong with the data they were drawn from, AND THEY MUST BE DRAWN FROM
+# IT. This used to copy every PNG out of the repo-root `plots/` directory that
+# `run_all.sh` had filled from the whole `/workspace/results` volume: the
+# ridge-resolution arm shipped a `scaling_toy_bf16.png` its CSVs do not contain,
+# and the bf16-only alpha-0558 arm shipped six fp8 figures byte-identical to
+# another arm's. Commit bd8b5b4 said the figures were "regenerable from the
+# committed CSVs"; they were not, and no reader could have told. plot.py is now
+# pointed at the arm, so a figure that is not in these rows cannot be drawn.
+if "$PY" scripts/plot.py --results "$DEST" --out "$DEST/plots" >/dev/null 2>&1; then
+  log "drew $(ls "$DEST/plots" 2>/dev/null | wc -l | tr -d ' ') figure(s) from this arm's own CSVs"
+else
+  log "plotting skipped (matplotlib absent, or these rows support no figure)"
+  rmdir "$DEST/plots" 2>/dev/null || true
+fi
+
+# --------------------------------------------------------------------------
+# every row's commit must exist
+# --------------------------------------------------------------------------
+# A row's git_sha is the whole of its attribution and nothing checked it.
+# 2,100 published rows cite a commit that exists nowhere, rewritten by the very
+# `git pull --rebase` this script recommends when a push is rejected. The check
+# is scoped to THIS arm, so the historical miss does not block a new publish,
+# and the report goes into the arm either way.
+#
+# WHY THIS REFUSES THE COMMIT AND NOT THE STAGING. A dry run's contract is
+# "stage it, touch no git", and the finding is worth more staged than withheld:
+# the report goes into the arm and into SUMMARY.md, where the operator reads it
+# before deciding. What must not happen quietly is the COMMIT, so that is what
+# is refused. A calibration mismatch is refused earlier and harder because it
+# makes the arm's numbers uninterpretable; an unresolvable sha leaves the
+# numbers readable and their provenance uncheckable, and the remedy (push the
+# commit that made them) belongs to the act of publishing.
+SHA_REPORT="$DEST/GIT_SHA_CHECK.txt"
+SHA_OK=1
+if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
+     > "$SHA_REPORT" 2>&1; then
+  log "every recorded git_sha in this arm resolves"
+else
+  SHA_OK=0
+  sed 's/^/[publish]   /' "$SHA_REPORT"
+fi
+
+# AND THE SAME QUESTION FROM A STRANGER'S SIDE, ASKED BEFORE THE COMMIT.
+# A sha that resolves HERE and on no remote branch is one a stranger who clones
+# cannot reach, which is the same nothing as a missing commit from their side.
+#
+# THIS USED TO RUN AFTER THE PUSH AND APPEND TO A FILE ALREADY COMMITTED. Two
+# things were wrong with that. Every successful publish ended with a TRACKED
+# file modified in the working tree, which is the dirty-tree defect this whole
+# session shell is being repaired for: the next thing measured on that pod
+# stamps git_dirty=True on every row. And the verdict reached neither the
+# committed arm nor SUMMARY.md, which quotes this file as it stands when the
+# summary is generated, so the one reader it was written for never saw it.
+#
+# Asked before the push, the honest answer for a sha this very publish is about
+# to push would be UNPUSHED, which is why --will-push exists: the checker
+# reports PENDING for a sha that `git push origin HEAD` will place on the
+# remote, and UNPUSHED only for one that nothing here will. If the push then
+# fails, the failure branch below says so rather than leaving PENDING to be read
+# as done. Advisory either way: the rows are readable, only their reachability
+# is in question.
+REMOTE_ARGS=(--require-remote)
+if (( PUSH && ! DRY )); then
+  REMOTE_ARGS+=(--will-push HEAD)
+fi
+{ echo; echo "# reachability from a remote, asked before this publish committed"; } \
+  >> "$SHA_REPORT"
+if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
+     "${REMOTE_ARGS[@]}" >> "$SHA_REPORT" 2>&1; then
+  log "every git_sha in this arm is on a remote, or on the HEAD this publish pushes"
+else
+  # Deliberately not asserting which gate failed: this invocation re-scores
+  # resolvability as well, so its exit code is also 1 for the MISSING case the
+  # block above already reported, and a line that named the remote as the cause
+  # would be wrong half the time.
+  log "WARNING: the reachability check did not come back clean. Either a sha is"
+  log "  on no remote branch and nothing here will push it, or it does not"
+  log "  resolve at all. Either way a stranger who clones cannot reach the code"
+  log "  those rows name. Verdicts in $SHA_REPORT, and in SUMMARY.md, which"
+  log "  quotes it. Reported and not blocking: the numbers are readable."
 fi
 
 # A summary a human can read without opening the CSV.
-"$PY" - "$DEST" > "$DEST/SUMMARY.md" <<'SUMMARY'
-import sys, collections, pathlib
+"$PY" - "$DEST" "$MISSING_SHA_REASON" > "$DEST/SUMMARY.md" <<'SUMMARY'
+import sys, collections, pathlib, statistics
 sys.path.insert(0, ".")
 from moe.bench.schema import passed, read_csv, row_float
 
 dest = pathlib.Path(sys.argv[1])
+missing_sha_reason = sys.argv[2] if len(sys.argv) > 2 else ""
 rows = []
 for p in sorted(dest.glob("run_*.csv")):
     rows.extend(read_csv(p))
@@ -283,23 +388,111 @@ if fails:
         print(f"- `{r['impl']}` {r['model']}/T{r['num_tokens']} "
               f"rel={row_float(r,'rel_err'):.3e} tol={row_float(r,'tol_rel_max'):.3e}")
 
-print("\n## Fastest per (impl, model, tokens), L2-flushed eager rows\n")
-best = collections.defaultdict(list)
+# WHICH COMMITS THESE ROWS NAME, and whether they exist. Written here because
+# SUMMARY.md is the file a reader opens, and "clean at 7eecff4" was
+# unverifiable for three days in a file that said nothing about it.
+check = dest / "GIT_SHA_CHECK.txt"
+if check.is_file():
+    print("\n## Commit resolvability\n")
+    print("```")
+    print(check.read_text().strip())
+    print("```")
+    if missing_sha_reason:
+        print(f"\n**Published with `--allow-missing-sha`.** Reason given: "
+              f"{missing_sha_reason}\n")
+        print("Some rows above name a commit this repository does not contain, "
+              "so the code that produced them cannot be inspected.")
+
+# THE BASIS IS READ OFF THE ROWS, NOT ASSERTED IN THE HEADING. This table used
+# to be headed "Fastest per (impl, model, tokens), L2-flushed eager rows" and
+# filtered to l2_flush=True, cuda_graph=False. The alpha-0558 arm has ZERO
+# flushed rows -- all 3,696 are l2_flush=False -- so its table was EMPTY under a
+# heading naming a basis the arm never ran, and any arm that did have flushed
+# rows got a best-of table on top of that.
+#
+# Two changes. The heading names the bases actually present, so an arm that ran
+# one basis says so and an arm that ran two is not silently collapsed into one.
+# And the number is the MEDIAN with its spread rather than the minimum: picking
+# the fastest of N is the best-of report van der Kouwe names, it moves with N,
+# and the spread is the only part of it that tells a reader whether the
+# difference beside it means anything.
+BASES = {("True", "False"): "L2-flushed eager",
+         ("False", "False"): "warm-L2 eager",
+         ("True", "True"): "L2-flushed cuda-graph",
+         ("False", "True"): "warm-L2 cuda-graph"}
+
+
+def basis_of(r):
+    key = (r.get("l2_flush", ""), r.get("cuda_graph", ""))
+    return BASES.get(key, f"l2_flush={key[0] or '?'} cuda_graph={key[1] or '?'}")
+
+
+groups = collections.defaultdict(list)
 for r in ok:
-    if r.get("l2_flush") == "True" and r.get("cuda_graph") == "False":
-        best[(r["impl"], r["model"], int(row_float(r, "num_tokens")))].append(r)
-print("| impl | covers | model | tokens | ms p50 | TFLOP/s | AI |")
-print("|---|---|---|---:|---:|---:|---:|")
-for key in sorted(best)[:60]:
-    r = min(best[key], key=lambda x: row_float(x, "ms_p50"))
+    groups[(basis_of(r), r["impl"], r["model"],
+            int(row_float(r, "num_tokens")))].append(r)
+present = sorted({k[0] for k in groups})
+print("\n## Median ms_p50 per (impl, model, tokens), by timing basis\n")
+print(f"Bases present in these rows: {', '.join(present) or 'none'}. "
+      "The bases are NOT comparable with each other: a flushed row pays a cold "
+      "L2 on every call and a graph row pays no launch.\n")
+print("| basis | impl | covers | model | tokens | n | ms p50 median | spread % | TFLOP/s | AI |")
+print("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
+for key in sorted(groups)[:80]:
+    cell = groups[key]
+    ms = sorted(row_float(r, "ms_p50") for r in cell)
+    med = statistics.median(ms)
+    spread = 100.0 * (ms[-1] - ms[0]) / med if med else 0.0
+    r = cell[len(cell) // 2]
     # `covers` is in the table because these ms are NOT comparable across rows
     # with different extents: one GEMM against a five-stage fused block.
-    print(f"| {key[0]} | {r.get('covers','')} | {key[1]} | {key[2]} | "
-          f"{row_float(r,'ms_p50'):.4f} | {row_float(r,'tflops'):.1f} | "
+    print(f"| {key[0]} | {key[1]} | {r.get('covers','')} | {key[2]} | {key[3]} | "
+          f"{len(cell)} | {med:.4f} | {spread:.1f} | "
+          f"{statistics.median([row_float(x,'tflops') for x in cell]):.1f} | "
           f"{row_float(r,'arith_intensity_compulsory'):.1f} |")
 SUMMARY
 
 log "wrote $DEST/SUMMARY.md"
+
+# THE INVARIANT, checked on the arm rather than trusted. It also catches a
+# report copied in by hand, which is how the three alpha-surface arms came to
+# ship twelve report.json files and no cells at all.
+orphans=0
+for report in "$DEST"/*report.json; do
+  [[ -e "$report" ]] || continue
+  stem="${report%.report.json}"
+  [[ -f "${stem}.cells.csv" || -f "$DEST/cells.csv" ]] && continue
+  log "ORPHAN  $(basename "$report") has no cells beside it"
+  orphans=$((orphans + 1))
+done
+if (( orphans )); then
+  log "$DEST is staged on disk and was NOT committed"
+  die "REFUSING TO PUBLISH: $orphans report(s) carry no cells.csv. A report is a
+[publish] verdict and the cells are the measurement it was read off; published
+[publish] apart, the verdict cannot be rechecked and nobody can tell which
+[publish] numbers rest on 5 samples and which on 50. Copy the cells in with
+[publish] --reports <the directory that holds both>."
+fi
+
+if (( SHA_OK == 0 )); then
+  if [[ -n "$MISSING_SHA_REASON" ]]; then
+    log "OVERRIDDEN with --allow-missing-sha: $MISSING_SHA_REASON"
+    log "  the admission is in $DEST/SUMMARY.md"
+  elif (( DRY )); then
+    log "WOULD REFUSE TO COMMIT: a row names a commit this repository does not"
+    log "  have (report in $SHA_REPORT). Rows that cite code nobody can check"
+    log "  are not reproducible. Push the commit that made them if it exists,"
+    log "  or publish with --allow-missing-sha 'why this is acceptable' and the"
+    log "  reason goes into SUMMARY.md where a reader will find it."
+  else
+    log "$DEST is staged on disk and was NOT committed"
+    die "REFUSING TO PUBLISH: a row names a commit this repository does not have
+[publish] (report in $SHA_REPORT). Rows that cite code nobody can check are not
+[publish] reproducible. Push the commit that made them if it exists, or publish
+[publish] with --allow-missing-sha 'why this is acceptable' and the reason goes
+[publish] into SUMMARY.md where a reader will find it."
+  fi
+fi
 
 if (( DRY )); then
   log "dry run: $DEST is staged on disk, nothing was committed"
@@ -323,6 +516,10 @@ if (( PUSH )); then
   # repo, so a diverged branch is the normal state, not an exception.
   if err="$(git push origin HEAD 2>&1)"; then
     log "pushed. The result set is now on GitHub."
+    # NOTHING IS APPENDED TO THE ARM HERE. The reachability verdict was taken
+    # before the commit, so it is inside the arm that was just pushed; writing
+    # to it now would modify a tracked file and dirty the tree behind a publish
+    # that succeeded.
   else
     log "push failed. git said:"
     printf '%s\n' "$err" | sed 's/^/[publish]   /'
@@ -332,6 +529,8 @@ if (( PUSH )); then
     elif printf '%s' "$err" | grep -qi 'authentication\|could not read\|permission'; then
       log "  no credentials. run: gh auth login"
     fi
-    log "  the commit is safe locally either way"
+    log "  the commit is safe locally either way, but nothing this arm's"
+    log "  GIT_SHA_CHECK.txt calls PENDING reached the remote: that verdict was"
+    log "  taken on the promise of the push that just failed."
   fi
 fi

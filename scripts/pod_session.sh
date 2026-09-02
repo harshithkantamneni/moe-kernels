@@ -260,15 +260,22 @@ ledger() {
 #   verdict <id> <name> <ok:0|1> <observed> <gate> <policy:fatal|soft> <consequence>
 # `ok` is an exit-code convention: 0 is true, so `[[ ... ]]; verdict ... $? ...`
 # reads correctly.
+#
+# THE ID LEADS THE LINE. It used to be in the ledger and nowhere on screen, so
+# `bash scripts/pod_session.sh --dry-run | grep '^P7'` -- the obvious way to
+# check one gate, and the way the audit's own reproduction was written --
+# matched nothing at all, while the ledger row it was quoting looked like a
+# printed line. The id is what `--from` and `--only` speak, so it is what the
+# line a human reads should start with.
 verdict() {
   local id="$1" name="$2" ok="$3" observed="$4" gate="$5" policy="$6" consequence="${7:-}"
   if [[ "$ok" == "0" ]]; then
-    printf '  %sPASS%s  %-34s %s  (gate: %s)\n' "$BOLD" "$OFF" "$name" "$observed" "$gate"
+    printf '%-5s %sPASS%s  %-34s %s  (gate: %s)\n' "$id" "$BOLD" "$OFF" "$name" "$observed" "$gate"
     ledger "$id" "$name" PASS "$observed" "$gate" ""
     N_PASS=$((N_PASS + 1))
     return 0
   fi
-  printf '  %sFAIL%s  %-34s %s  (gate: %s)\n' "$BOLD" "$OFF" "$name" "$observed" "$gate"
+  printf '%-5s %sFAIL%s  %-34s %s  (gate: %s)\n' "$id" "$BOLD" "$OFF" "$name" "$observed" "$gate"
   [[ -n "$consequence" ]] && printf '        %s\n' "$consequence"
   ledger "$id" "$name" FAIL "$observed" "$gate" "$consequence"
   if [[ "$policy" == "fatal" ]]; then
@@ -287,7 +294,7 @@ verdict() {
 
 skipped() {
   local id="$1" name="$2" why="$3"
-  printf '  %sSKIP%s  %-34s %s\n' "$DIM" "$OFF" "$name" "$why"
+  printf '%-5s %sSKIP%s  %-34s %s\n' "$id" "$DIM" "$OFF" "$name" "$why"
   ledger "$id" "$name" SKIP "$why" "" ""
   N_SKIP=$((N_SKIP + 1))
 }
@@ -785,9 +792,36 @@ PYEOF
   note "volume ${vol_free:-?} GiB free at $WORKSPACE, container ${ctr_free:-?} GiB free at /"
   # mixtral-8x7b is 93.4 GB; 110 leaves room for the shards plus the HF blob
   # cache holding a second copy mid-verification.
-  [[ "${vol_free:-0}" -ge 110 ]]; verdict P6a "volume free space" $? \
-    "${vol_free:-0} GiB" ">= 110 GiB" soft \
-    "Step 7 (traces) cannot pull mixtral. Grow the Network Volume, or run this session with --no-download and capture deepseek-v2-lite (31 GB) instead. Everything else fits in 100 GB."
+  #
+  # ON A NETWORK VOLUME THIS NUMBER IS NOT YOUR QUOTA. RunPod's volume is
+  # MooseFS, and `df` on it reports the SHARED CLUSTER: the figure is enormous,
+  # it has nothing to do with how much of your volume is left, and the gate
+  # therefore cannot fail where it matters. On a laptop the same gate fails on
+  # every run for a download that is never going to happen there. Both readings
+  # teach an operator to skip FAIL lines, so where the number is not a quota it
+  # is reported as INFORMATIONAL and the line says which reading you are
+  # looking at. It stays a real gate in the one place it can be one: a pod
+  # whose workspace is container-local, where df does measure what will fill up.
+  local vol_dev root_dev
+  vol_dev="$(df -P "$WORKSPACE" 2>/dev/null | awk 'NR==2 {print $1}')"
+  root_dev="$(df -P / 2>/dev/null | awk 'NR==2 {print $1}')"
+  if [[ "$HAVE_GPU" == "0" ]]; then
+    ledger P6a "volume free space" INFO \
+      "${vol_free:-?} GiB at $WORKSPACE (not a pod; step 7 downloads nothing here)" \
+      informational ""
+    note "P6a INFORMATIONAL: not on a pod, so nothing will be downloaded here"
+  elif [[ -n "$vol_dev" && "$vol_dev" != "$root_dev" ]]; then
+    ledger P6a "volume free space" INFO \
+      "${vol_free:-?} GiB reported by df on $vol_dev (a network volume: this is the CLUSTER, not your quota)" \
+      informational ""
+    note "P6a INFORMATIONAL: $WORKSPACE is on '$vol_dev', a network mount, and"
+    note "  df reports the shared cluster there. Check the volume size in the"
+    note "  RunPod console; 100 GB covers everything except mixtral capture."
+  else
+    [[ "${vol_free:-0}" -ge 110 ]]; verdict P6a "volume free space" $? \
+      "${vol_free:-0} GiB on container-local $WORKSPACE" ">= 110 GiB" soft \
+      "Step 7 (traces) cannot pull mixtral. Grow the Network Volume, or run this session with --no-download and capture deepseek-v2-lite (31 GB) instead. Everything else fits in 100 GB."
+  fi
   [[ "${ctr_free:-0}" -ge 10 ]]; verdict P6b "container disk free" $? \
     "${ctr_free:-0} GiB" ">= 10 GiB" soft \
     "Wheel extraction for vLLM and SGLang needs several GB of temp space; running out mid-install is a slow failure on a metered box."
@@ -795,23 +829,96 @@ PYEOF
   head2 "P7  the calibration provenance machinery still refuses what it should"
   # entitled_ridge is the guard that stops an arm being quoted against a ruler
   # measured in another session (defect 7, which cost claim C5 its target for
-  # three days). Two of the ten published arms must be refused. A change that
-  # silently stops refusing is invisible in any table, so it is checked here
-  # against a count.
+  # three days). A change that silently stops refusing is invisible in any
+  # table, so it is checked here.
+  #
+  # THIS GATE COULD NOT PASS. It compared the refusal census against the
+  # literal string "2 10", written when there were ten published arms. There
+  # are fourteen and five refuse, so P7 printed FAIL on every run at HEAD
+  # regardless of card, and because `main` returns 1 on any soft FAIL the
+  # session's exit status was 1 whatever the GPU did. A gate that always fails
+  # teaches the operator to skip FAIL lines, which is the failure the runbook
+  # already warns about for test counts, and it makes a genuine regression in
+  # entitled_ridge indistinguishable from staleness.
+  #
+  # The expected set now comes from results/published/CALIBRATION_PROVENANCE.md,
+  # which is generated by `moe.bench.published.provenance_report` and
+  # regenerated whenever an arm lands, so adding an arm updates the expectation
+  # in the same commit that creates the reason for it. The comparison is by
+  # NAME, not by count: two arms swapping refusal states is a regression a
+  # count cannot see.
+  #
+  # AND THE TWO KINDS OF REFUSAL ARE SEPARATED. "No rows" (an arm whose CSVs
+  # carry no dtype at all, so there is no single ridge to ask for: the three
+  # alpha-surface arms, which ship report.json files and no run_*.csv) is a
+  # statement about what was published. A provenance refusal (ceilings that
+  # disagree, or no ceiling for the dtype the rows were swept in) is the guard
+  # doing its job. Folding them into one number is how "5" looked like a
+  # regression when four of the five were the first kind.
   local refusals
   refusals="$("$PY_BASE" - <<'PYEOF' 2>/dev/null
+import re
 import sys
 sys.path.insert(0, ".")
 from pathlib import Path
 from moe.bench.published import entitled_ridge
-arms = sorted(p for p in Path("results/published").iterdir() if p.is_dir())
-print(sum(1 for a in arms if entitled_ridge(a)[0] is None), len(arms))
+
+root = Path("results/published")
+arms = sorted(p for p in root.iterdir() if p.is_dir())
+
+live_norows, live_prov = set(), set()
+for arm in arms:
+    ridge, why = entitled_ridge(arm)
+    if ridge is not None:
+        continue
+    # The reason distinguishes them, and it is the reason entitled_ridge
+    # itself writes, so this cannot drift from the module.
+    if "dtypes" in why and "no single ridge" in why:
+        live_norows.add(arm.name)
+    else:
+        live_prov.add(arm.name)
+
+doc = root / "CALIBRATION_PROVENANCE.md"
+expected, documented = set(), set()
+if doc.is_file():
+    for line in doc.read_text().splitlines():
+        # NO BACKTICKS AND NO APOSTROPHES IN THIS HEREDOC. It sits inside a
+        # command substitution, and bash tracks both through it: one literal
+        # backtick here is a syntax error hundreds of lines away. The arm name
+        # in the census table is wrapped in them, so the character is built.
+        tick = chr(96)
+        m = re.match(r"^\|\s*" + tick + r"([^" + tick + r"]+)" + tick
+                     + r"\s*\|.*\|\s*([^|]*)\|\s*$", line)
+        if not m:
+            continue
+        documented.add(m.group(1))
+        if "refused" in m.group(2):
+            expected.add(m.group(1))
+
+live = live_norows | live_prov
+new = sorted(live - expected)
+gone = sorted(expected - live)
+unlisted = sorted({a.name for a in arms} - documented) if documented else []
+state = "ok" if (documented and not new and not gone and not unlisted) else "drift"
+print("|".join([
+    state,
+    f"{len(live)} of {len(arms)} refuse "
+    f"({len(live_prov)} on provenance, {len(live_norows)} for having no rows)",
+    ("newly refusing: " + ",".join(new) if new else "")
+    + ("; stopped refusing: " + ",".join(gone) if gone else "")
+    + ("; not in CALIBRATION_PROVENANCE.md: " + ",".join(unlisted) if unlisted else "")
+    + ("" if doc.is_file() else "no results/published/CALIBRATION_PROVENANCE.md to compare against"),
+]))
 PYEOF
 )"
-  note "entitled_ridge refuses ${refusals:-?} (expected: 2 of 10, the fp8-three-kernel and whole-layer arms)"
-  [[ "$refusals" == "2 10" ]]; verdict P7 "provenance gate refuses 2 of 10" $? \
-    "${refusals:-none}" "== '2 10'" soft \
-    "The guard that would catch a borrowed calibration has changed behaviour. Publishing from this session is still safe, but re-read moe/bench/published.py before quoting any absolute efficiency number."
+  local p7state p7count p7detail
+  IFS='|' read -r p7state p7count p7detail <<< "$refusals"
+  note "entitled_ridge: ${p7count:-unreadable}"
+  note "expected set from results/published/CALIBRATION_PROVENANCE.md"
+  [[ "${p7state:-drift}" == "ok" ]]; verdict P7 "provenance refusals match the published census" $? \
+    "${p7count:-none}${p7detail:+ -- $p7detail}" \
+    "the same arms CALIBRATION_PROVENANCE.md marks refused" soft \
+    "Either the guard that would catch a borrowed calibration has changed behaviour, or an arm landed without the census being regenerated. Publishing from this session is still safe, but regenerate the census (python -m moe.bench.published results/published/*/ > results/published/CALIBRATION_PROVENANCE.md) and re-read moe/bench/published.py before quoting any absolute efficiency number."
 
   head2 "P8  the weights step 7 pulls are actually reachable"
   # THIS USED TO CHECK FOR A TOKEN, WHICH IS NOT THE REQUIREMENT. It ran
@@ -883,17 +990,27 @@ PYEOF
   # `*.qdrep` still match at any depth ON PURPOSE, which is why step 5's dumps
   # leave as a tarball. This probes the real paths rather than trusting either.
   local probe_dir="results/published/_preflight_probe" ignored=0 ig_report=""
-  mkdir -p "$probe_dir/plots"
+  mkdir -p "$probe_dir/plots" "$probe_dir/ptx"
   : > "$probe_dir/plots/probe.png"
   : > "$probe_dir/ISA_CENSUS.txt"
   : > "$probe_dir/ptx-h200.tar.gz"
   : > "$probe_dir/session.log"
   : > "$probe_dir/merged.csv"
+  : > "$probe_dir/cells.csv"
+  # THE RAW EVIDENCE, which was ignored at any depth until the re-include block
+  # at the end of .gitignore. `*.ptx` and `*.nsys-rep` matched inside
+  # results/published/ exactly as the unanchored `plots/` line did, so the C3
+  # PTX evidence survives only as tarballs and a counter capture could not be
+  # committed at all. These two paths are the probe of that fix.
+  : > "$probe_dir/ptx/kernel.ptx"
+  : > "$probe_dir/counters.nsys-rep"
   mkdir -p traces && : > traces/_probe.npz
   local f
   for f in "$probe_dir/plots/probe.png" "$probe_dir/ISA_CENSUS.txt" \
            "$probe_dir/ptx-h200.tar.gz" "$probe_dir/session.log" \
-           "$probe_dir/merged.csv" traces/_probe.npz; do
+           "$probe_dir/merged.csv" "$probe_dir/cells.csv" \
+           "$probe_dir/ptx/kernel.ptx" "$probe_dir/counters.nsys-rep" \
+           traces/_probe.npz; do
     if git check-ignore -q "$f" 2>/dev/null; then
       ignored=$((ignored + 1))
       ig_report="$ig_report $(git check-ignore -v "$f" 2>/dev/null | tr '\t' ' ')"
@@ -901,9 +1018,9 @@ PYEOF
   done
   rm -rf "$probe_dir" traces/_probe.npz
   [[ "$ignored" == "0" ]]; verdict P9 "exfil paths are committable" $? \
-    "$ignored of 6 ignored${ig_report:+ --$ig_report}" "== 0" fatal \
+    "$ignored of 9 ignored${ig_report:+ --$ig_report}" "== 0" fatal \
     "Anything ignored here is lost at teardown even after a successful publish, and the loss is silent: git add reports nothing. Fix the rule or change the exfil filename before spending an hour producing the artefact."
-  note "reminder: *.ptx *.so *.nsys-rep *.qdrep are ignored at any depth by design, so raw dumps exfil as .tar.gz"
+  note "under results/published/ the raw evidence extensions are re-included on purpose (.ptx .cubin .nsys-rep .ncu-rep .qdrep); everywhere ELSE they are still ignored at any depth, and weight formats (.safetensors .bin .pt .gguf) are ignored everywhere including here, so a dump with a weight extension still exfils as .tar.gz"
 
   head2 "P10  which profiler is actually available"
   # ncu fails on a rented pod with ERR_NVGPUCTRPERM because GPU performance
@@ -1005,6 +1122,62 @@ PYEOF
     [[ "${temp:-100}" -le 60 ]]; verdict P13b "cold start" $? \
       "${temp:-?} C" "<= 60 C" soft \
       "The calibration in step 1 is measured on a hot card and every efficiency figure this session is quoted against it."
+  fi
+
+  head2 "P13c  the clock sampler has a source, or every row records none"
+  # THE FIX A7 MADE, AND THE ONE PACKAGE THAT DEFEATS IT.
+  # moe/bench/timing.py now samples the SM clock UNDER LOAD, from a background
+  # poller, through torch.cuda.clock_rate -- which is torch's NVML binding --
+  # and it deliberately refuses to fall back to forking nvidia-smi inside a
+  # timed region, because a fork plus an NVML init per read is tens of
+  # milliseconds on the host thread that is enqueueing work: not a clock
+  # sample, a perturbation of the thing being measured.
+  #
+  # torch does not depend on nvidia-ml-py, and the pod's base venv shipped
+  # without it. On such a box every KernelTiming silently records
+  # clock_source "none", clock_level_ok is None on every row, and the whole
+  # point of sampling under load is gone. That is invisible until a session has
+  # been paid for, which is why it is a pre-flight gate and not a note.
+  #
+  # TWO HALVES, because only one of them can be answered off a GPU. The
+  # requirement half is a text check and runs anywhere, so a laptop rehearsal
+  # catches the line being deleted from requirements/base.txt. The reader half
+  # needs a card and is skipped without one.
+  local req_base="${MOE_REQUIREMENTS_DIR:-$REPO_ROOT/requirements}/base.txt"
+  local has_req="no"
+  grep -qiE '^[[:space:]]*(nvidia[-_]ml[-_]py|pynvml)([[:space:]<>=!~].*)?$' \
+    "$req_base" 2>/dev/null && has_req="yes"
+  [[ "$has_req" == "yes" ]]; verdict P13c "nvidia-ml-py is a declared requirement" $? \
+    "$(basename "$req_base") ${has_req}" "names nvidia-ml-py" soft \
+    "Without it the pod venv has no NVML, torch.cuda.clock_rate raises, and every row this session times records clock_source 'none' with the clock LEVEL flag None. Add nvidia-ml-py to requirements/base.txt."
+
+  if [[ "$HAVE_GPU" == "0" ]]; then
+    skipped P13d "clock is readable under load" "$(absent_reason gpu); there is no clock to read here"
+  else
+    local clockread
+    clockread="$("$PY_BASE" - <<'PYEOF' 2>&1
+import sys
+sys.path.insert(0, ".")
+try:
+    import torch
+except Exception as exc:
+    print(f"no-torch: {type(exc).__name__}")
+    raise SystemExit(0)
+if not torch.cuda.is_available():
+    print("no-cuda")
+    raise SystemExit(0)
+try:
+    mhz = int(torch.cuda.clock_rate(0))
+except Exception as exc:
+    print(f"unreadable: {type(exc).__name__}: {exc}"[:200])
+    raise SystemExit(0)
+print(f"ok {mhz} MHz" if mhz > 0 else "zero: NVML answered 0 MHz")
+PYEOF
+)"
+    note "torch.cuda.clock_rate(0) -> $clockread"
+    [[ "$clockread" == ok\ * ]]; verdict P13d "clock is readable under load" $? \
+      "${clockread:-no answer}" "torch.cuda.clock_rate(0) returns a positive clock" soft \
+      "moe/bench/timing.py will record clock_source 'none' on every cell this session, so clock_level_ok is None everywhere and no row can be filtered on the clock it ran at. Fix: install nvidia-ml-py into $PY_BASE (uv pip install --python $PY_BASE nvidia-ml-py). A container that forbids NVML outright cannot be fixed that way, and then every clock column must be read as absent rather than fine."
   fi
 
   head2 "P14  results survive teardown"
@@ -1115,7 +1288,15 @@ step0_download() {
   # backgrounding, same `$!` read, same pid file. It costs milliseconds and it
   # covers the structure, which is the part that was wrong.
   if [[ "$DRY_RUN" == "1" ]]; then
-    say "  \$ (background) huggingface-cli download mistralai/Mixtral-8x7B-Instruct-v0.1"
+    # THE COMMAND PRINTED MUST BE THE COMMAND RUN. This used to print
+    # `huggingface-cli download ...`, which is not what the real branch below
+    # does and is not even on PATH: the CLI lives inside the venv, which is
+    # exactly what docs/POD_RUNBOOK.md warns about for the login one-liner. An
+    # operator who copied the dry run's line got "command not found" and had no
+    # way to tell whether the session was broken or the line was.
+    say "  \$ (background) $PY_BASE -c \"from huggingface_hub import snapshot_download;"
+    say "      snapshot_download('mistralai/Mixtral-8x7B-Instruct-v0.1',"
+    say "      allow_patterns=['*.json','*.safetensors','*.model'], max_workers=8)\""
     ( : ) >> "$dlog" 2>&1 &
     # set +u around the read, because `${!:-}` does NOT rescue an unset `$!`:
     # bash treats the `!` as indirect expansion and still aborts under set -u,
@@ -1193,10 +1374,34 @@ TXT
     skipped S1 "calibration" "$(absent_reason gpu)"; return 0
   fi
   local clog="$SESSION/logs/calibrate.log"
-  run_logged "$clog" "$PY_BASE" scripts/calibrate_hardware.py
+  # --publish IS DELIBERATE AND IT IS THE ONE PLACE THIS SESSION ASKS FOR IT.
+  # calibrate_hardware.py now writes to an untracked session path by default,
+  # so running it never dirties the tree by accident; but roofline.load_measured
+  # reads moe/bench/hardware/, and steps 2 through 6 quote every efficiency
+  # column against whatever is there. So the tracked copy is requested here, on
+  # purpose, after P1 has already recorded the tree state -- and the rows this
+  # session writes will carry git_dirty=True until the yaml is committed, which
+  # is a fact about them worth knowing rather than a surprise to discover in
+  # the published CSV.
+  run_logged "$clog" "$PY_BASE" scripts/calibrate_hardware.py --publish
   local rc=$?
-  [[ "$rc" == "0" ]]; verdict S1a "calibrate_hardware exit" $? "exit $rc" "== 0" fatal \
-    "Without a calibration for this machine the sweep runs with EMPTY efficiency columns, which is how an H100 pod once silently satisfied the repo's H200 yaml. Log at $clog."
+  # THE EXIT CODE IS THE SHARED TABLE'S. 0 DONE, 1 CLAIM_FAIL (measured, and a
+  # pre-registered expectation about the card did not hold), 2 REFUSED (nothing
+  # measured: no GPU), 3 INVALID (measured, and a VALIDITY gate failed, so
+  # nothing normalised by the clock may be quoted), 4 ERROR. Folding all of
+  # those into "not 0" is what made an INVALID anchor run read as REFUSED
+  # elsewhere in this project, and the two demand opposite responses.
+  case "$rc" in
+    0) verdict S1a "calibrate_hardware exit" 0 "exit 0 DONE" "== 0 DONE" fatal "" ;;
+    1) verdict S1a "calibrate_hardware exit" 1 "exit 1 CLAIM_FAIL" "== 0 DONE" soft \
+         "The ceilings were measured and a pre-registered claim about them failed (the RESULT lines in $clog name which: a pattern above the pin rate, a clock that moved across the patterns, or a throttling card). The yaml is written and the numbers that do not depend on the failing claim stand." ;;
+    2) verdict S1a "calibrate_hardware exit" 1 "exit 2 REFUSED" "== 0 DONE" fatal \
+         "Nothing was measured; the first stderr line in $clog says what was missing. Without a calibration for this machine the sweep runs with EMPTY efficiency columns, which is how an H100 pod once silently satisfied the repo's H200 yaml." ;;
+    3) verdict S1a "calibrate_hardware exit" 1 "exit 3 INVALID" "== 0 DONE" fatal \
+         "The ceilings were measured and a VALIDITY gate failed after measuring, almost certainly the clock: sustained_peak_tflops and gemm_efficiency_pct are normalised by it and may not be quoted. Do not sweep against this ruler. Let the card settle and re-run step 1 with --force." ;;
+    *) verdict S1a "calibrate_hardware exit" 1 "exit $rc, outside the table" "== 0 DONE" fatal \
+         "The script crashed or was killed; read the traceback at the end of $clog. A code nobody chose carries no information about what happened." ;;
+  esac
   halted && return 2
 
   # Read the numbers back out of the file the sweep will actually resolve, not
