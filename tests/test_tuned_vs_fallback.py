@@ -573,7 +573,14 @@ def test_with_no_gpu_the_script_prints_the_plan_and_refuses_to_call_it_a_result(
 
 
 def test_the_plan_survives_to_disk_even_when_nothing_is_measured(tmp_path):
-    TVF.main(["--plan-only", "--out-dir", str(tmp_path), "--tokens", "1,32"])
+    # --gpu-name IS THE PLAN'S PREMISE and is now passed rather than defaulted.
+    # Until 2026-09-02 a run that named no card silently looked its tuned
+    # configs up on an H200, and the two default models are among the few shapes
+    # that ship a tuned H200 file, so these four cells existed by construction
+    # on any machine. There is no lookup device without a flag now, so the plan
+    # has to say which card it is a plan FOR.
+    TVF.main(["--plan-only", "--gpu-name", "NVIDIA H200",
+              "--out-dir", str(tmp_path), "--tokens", "1,32"])
     plans = list(tmp_path.rglob("plan.json"))
     assert len(plans) == 1
     import json

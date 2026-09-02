@@ -52,6 +52,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
+
 
 def _load_script():
     """Load the script by path. `scripts/` is not a package and never has been.
@@ -403,22 +406,41 @@ def test_store_round_trips_an_arm(tmp_path, planned):
     assert back.observed_config == written.observed_config
 
 
+#: The plan payload the id is derived from. Written once here so that a knob
+#: added to the script and not to the id fails the "every field" test below
+#: rather than being quietly untested.
+def _plan_payload(**over):
+    base = {"models": list(DTC.DEFAULT_MODELS),
+            "tokens": list(DTC.DEFAULT_TOKENS), "dtypes": list(DTC.DTYPES),
+            "arms": list(DTC.ARMS), "reps": 3, "iters": 15, "warmup": 300.0,
+            "budget": 200.0, "trials": 3, "flush": True,
+            "seed": 0, "routing": "uniform", "lookup_gpu": H200,
+            "calibration": DTC.DEFAULT_CALIBRATION, "vllm_tag": DTC.VLLM_TAG,
+            "self_test": "None", "self_test_alpha": "None",
+            "self_test_noise": "0.0",
+            "self_test_overhead_ms": "0.0", "self_test_fp8_activations": False}
+    base.update(over)
+    return base
+
+
 @pytest.mark.parametrize("changed", [
     {"models": ["qwen2-57b-a14b"]},
     {"tokens": [32, 64, 128, 256, 512, 1024]},
     {"dtypes": ["bf16"]},
-    {"arms": ["native"]},
     {"reps": 5},
     {"iters": 30},
-    {"warmup": 16},
+    {"warmup": 16.0},
+    {"budget": 400.0},
+    {"trials": 5},
+    {"flush": False},
     {"seed": 1},
     {"routing": "zipf"},
     {"lookup_gpu": "NVIDIA_A100-SXM4-80GB"},
     {"calibration": "measured_nvidia_a100_sxm4_80gb"},
-    {"self_test": 2.4},
-    {"self_test_alpha": 0.2},
-    {"self_test_noise": 0.01},
-    {"self_test_overhead_ms": 0.05},
+    {"self_test": "2.4"},
+    {"self_test_alpha": "0.2"},
+    {"self_test_noise": "0.01"},
+    {"self_test_overhead_ms": "0.05"},
     {"self_test_fp8_activations": True},
 ])
 def test_run_id_changes_with_every_swept_parameter(changed):
@@ -428,27 +450,59 @@ def test_run_id_changes_with_every_swept_parameter(changed):
     derived the same id, resumed the first's directory, skipped every completed
     cell and printed the first's timings under the second's heading. Nothing
     looked wrong. So every key in the plan payload gets its own case here.
+
+    THE FOUR TIMING KNOBS ARE NEW HERE (2026-09-02) and they are the ones that
+    would have cost most: `warmup`, `budget`, `trials` and `flush` set the
+    measured milliseconds of every row, so a re-run at a different one landing
+    in the same directory prints the old numbers under the new label.
     """
-    base = {"models": list(DTC.DEFAULT_MODELS),
-            "tokens": list(DTC.DEFAULT_TOKENS), "dtypes": list(DTC.DTYPES),
-            "arms": list(DTC.ARMS), "reps": 3, "iters": 15, "warmup": 8,
-            "seed": 0, "routing": "uniform", "lookup_gpu": H200,
-            "calibration": DTC.DEFAULT_CALIBRATION, "vllm_tag": DTC.VLLM_TAG,
-            "self_test": None, "self_test_alpha": None, "self_test_noise": 0.0,
-            "self_test_overhead_ms": 0.0, "self_test_fp8_activations": False}
+    base = _plan_payload()
     other = dict(base, **changed)
     assert set(other) == set(base), f"{changed} is not in the plan payload"
-    assert DTC.plan_run_id(base) != DTC.plan_run_id(other)
+    assert (DTC.plan_run_id(base, H200)
+            != DTC.plan_run_id(other, H200))
+
+
+def test_the_run_id_carries_the_card_and_two_cards_cannot_share_a_directory():
+    """The omission that cost a published arm, and it was not this script's.
+
+    `results/published/2026-09-01-nvidia_h200-cross-card-s3` and
+    `2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3` both contain
+    `mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json`: one id, two cards, two
+    different `sm_count`s and two different ridges. Nothing downstream noticed,
+    because the resume key carries no device. This script resumes on
+    (model, tokens, arm, dtype) and had the same hole.
+    """
+    payload = _plan_payload()
+    h200 = DTC.plan_run_id(payload, H200)
+    a100 = DTC.plan_run_id(payload, "NVIDIA A100-SXM4-80GB")
+    assert h200 != a100
+    assert h200.startswith("nvidia_h200-")
+    assert a100.startswith("nvidia_a100_sxm4_80gb-")
+
+
+def test_the_run_id_refuses_a_plan_knob_it_does_not_carry():
+    """The FAIL branch of the guard, planted.
+
+    A knob added to the plan and forgotten in the id is the whole failure mode,
+    and a guard nobody has seen refuse is a guard nobody has tested.
+    """
+    with pytest.raises(ValueError) as excinfo:
+        DTC.plan_run_id(_plan_payload(some_new_knob=7), H200)
+    assert "some_new_knob" in str(excinfo.value)
+
+
+def test_the_run_id_refuses_a_run_with_no_card():
+    """No card, no id. A directory named without one collides across pods."""
+    with pytest.raises(PV.NoCard):
+        DTC.plan_run_id(_plan_payload(), "")
 
 
 def test_run_id_is_stable_for_the_same_plan():
     """Resume is the default, so the same command must derive the same id."""
-    base = {"models": ["mixtral-8x7b"], "tokens": [32, 64], "dtypes": ["bf16"],
-            "arms": ["native"], "reps": 1, "iters": 1, "warmup": 1, "seed": 0,
-            "routing": "uniform", "lookup_gpu": H200,
-            "calibration": DTC.DEFAULT_CALIBRATION, "vllm_tag": DTC.VLLM_TAG,
-            "self_test": None}
-    assert DTC.plan_run_id(base) == DTC.plan_run_id(dict(base))
+    base = _plan_payload(models=["mixtral-8x7b"], tokens=[32, 64],
+                         dtypes=["bf16"], arms=["native"], reps=1)
+    assert DTC.plan_run_id(base, H200) == DTC.plan_run_id(dict(base), H200)
 
 
 def test_every_path_the_script_writes_is_checked_against_gitignore(tmp_path):
@@ -736,10 +790,15 @@ def test_format_config_prints_every_knob():
 
 def test_dry_run_prints_the_plan_the_predictions_and_the_cost(tmp_path, capsys):
     """The reviewable artefact: it must need no GPU and must measure nothing."""
-    code = DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
+    code = DTC.main(["--dry-run", "--card", H200, "--out-dir", str(tmp_path)])
     assert code == DTC.EXIT_NOT_MEASURED
+    assert code == exit_codes.REFUSED, (
+        "a dry run spent nothing; REFUSED is the code for that, and the 3 this "
+        "script used to return is INVALID, which the driver reads as 'measured, "
+        "and its cells must not be quoted'")
     out = capsys.readouterr().out
     assert "Predictions, registered before the run" in out
+    assert "MDE" in out, "no arm may plan without stating what it could see"
     assert "COST" in out
     assert "distinct Triton specialisations" in out
     assert "NOT A RESULT" in out
@@ -755,26 +814,137 @@ def test_dry_run_prints_the_plan_the_predictions_and_the_cost(tmp_path, capsys):
 def test_predictions_are_printed_before_any_measurement(tmp_path, capsys):
     """Registered BEFORE, not beside. A prediction after the data is worthless."""
     DTC.main(["--self-test", "2.033", "--self-test-alpha", "0.2",
-              "--out-dir", str(tmp_path)])
+              "--card", H200, "--out-dir", str(tmp_path)])
     out = capsys.readouterr().out
     assert out.index("Predictions, registered before the run") < out.index(
         "The measurement: the fp8/bf16 ratio")
 
 
-def test_self_test_exits_zero_when_only_a_claim_gate_fails(tmp_path):
-    """A falsified claim is a result, not a broken run."""
+def test_a_synthetic_run_exits_invalid_and_still_says_which_claim_failed(
+        tmp_path, capsys):
+    """A page built from generated rows may not be quoted, and says so in ONE
+    number.
+
+    THE CODE CHANGED ON 2026-09-02 and this is why. `--self-test` demotes every
+    box VALIDITY gate to UNKNOWN by construction -- no kernel ran, so there is
+    no weight dtype and no oracle -- and under the shared table an UNKNOWN
+    VALIDITY gate is INVALID: the instrument's soundness was not shown, so
+    nothing on the page is quotable. That is exactly true of a synthetic run,
+    and returning 0 for it let a generated report be logged as a measurement.
+
+    The self test keeps its discriminating power through the RESULT lines,
+    which is what the second half asserts: two planted worlds give the same
+    INVALID page and opposite C3 verdicts on it.
+    """
     code = DTC.main(["--self-test", "2.400", "--self-test-alpha", "0.2",
-                     "--out-dir", str(tmp_path)])
-    assert code == DTC.EXIT_OK
+                     "--card", H200, "--out-dir", str(tmp_path)])
+    assert code == DTC.EXIT_INVALID
+    refuted = capsys.readouterr().out
+    assert "claims   " in refuted
+    # The FAIL branch: a planted fp8 peak the model cannot explain tilts the
+    # matched arms out of C3's window.
+    assert _result(refuted, "C3") == DTC.FAIL
+    # The PASS branch of the same gate, same code for the page.
+    code = DTC.main(["--self-test", "2.033", "--self-test-alpha", "0.2",
+                     "--card", H200, "--out-dir", str(tmp_path)])
+    assert code == DTC.EXIT_INVALID
+    assert _result(capsys.readouterr().out, "C3") == DTC.PASS
+
+
+def _result(text: str, name: str) -> str:
+    """The verdict of one gate, read back out of the log's RESULT lines.
+
+    Through `parse_result_lines` rather than a regex written here, so a test
+    cannot pass against a line shape the driver would not match.
+    """
+    by_name = {r.name: r.verdict for r in exit_codes.parse_result_lines(text)}
+    assert name in by_name, f"no RESULT line for {name}: {sorted(by_name)}"
+    return by_name[name]
+
+
+def test_the_log_and_the_exit_code_cannot_disagree(tmp_path, capsys):
+    """`classify_text` over what was printed must recompute what was returned.
+
+    The defect the shared table is named against is a script printing one thing
+    and exiting another; the check is free, so it is a test rather than a
+    convention.
+    """
     code = DTC.main(["--self-test", "2.400", "--self-test-alpha", "0.2",
-                     "--fail-on-claim", "--out-dir", str(tmp_path)])
-    assert code == DTC.EXIT_GATE_FAILED
+                     "--card", H200, "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert exit_codes.classify_text(out) == code
+
+
+def test_a_claim_failure_is_returned_and_not_folded_into_done():
+    """The branch the old code took and no test could reach.
+
+    Until 2026-09-02 `main` computed `rc = classify(...)` and then returned DONE
+    when rc was CLAIM_FAIL and `--fail-on-claim` was absent, so the log printed
+    `RESULT: CLAIM C3 FAIL` and the process said 0 -- the one disagreement
+    `exit_codes` exists to detect, under a comment claiming it could not happen.
+    Nothing exercised it: every `--self-test` demotes the box VALIDITY gates to
+    UNKNOWN and therefore classifies INVALID, so the only page that could make
+    the log and the process disagree was the one page nothing produced. Planted
+    here through `final_exit`, which is now the single place `main` ends.
+
+    All three codes, and `classify_text` over the same gates' RESULT lines, so
+    the property is checked in both directions rather than asserted.
+    """
+    def gate(name, kind, verdict):
+        return DTC.Gate(name=name, kind=kind, prediction="p", rule="r",
+                        verdict=verdict, observed="saw")
+
+    def check(gates, want):
+        assert DTC.final_exit(gates) == want
+        log = "prose that mentions PASS\n" + "\n".join(
+            g.result_line() for g in gates)
+        assert exit_codes.classify_text(log) == want
+
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.PASS)], exit_codes.DONE)
+    # THE PLANTED DISAGREEMENT: validity holds, a claim does not.
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.FAIL)], exit_codes.CLAIM_FAIL)
+    # And UNKNOWN on a claim is not a pass either.
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.UNKNOWN)], exit_codes.CLAIM_FAIL)
+    # A validity failure outranks a passing claim.
+    check([gate("V0 ceilings", "VALIDITY", DTC.FAIL),
+           gate("C3 tilt", "CLAIM", DTC.PASS)], exit_codes.INVALID)
+    # A page with no gate on it has no verdict to exit with.
+    with pytest.raises(exit_codes.NoGatesScored):
+        DTC.final_exit([])
+
+
+def test_the_retired_fail_on_claim_flag_still_parses_and_changes_nothing():
+    """Driver lines in `scripts/h200_gaps_session.sh` still pass it. It has to
+    be accepted, and it must not resurrect the masking."""
+    assert DTC.build_parser().parse_args(["--fail-on-claim"]).fail_on_claim
+    source = (ROOT / "scripts" / "dtype_tile_confound.py").read_text()
+    assert "if rc == exit_codes.CLAIM_FAIL" not in source
+    assert "return exit_codes.DONE" not in source
+
+
+def test_a_dry_run_prints_no_result_line_at_all(tmp_path, capsys):
+    """A REFUSED log must carry none, or the driver recomputes DONE from it.
+
+    The dry run DECIDES C1 and C2 off GPU and prints both verdicts, which is
+    the point of the free half. If it also printed their RESULT lines,
+    `classify_text` would read two passing claims, return DONE, and disagree
+    with the REFUSED the process returns.
+    """
+    code = DTC.main(["--dry-run", "--card", H200, "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(out)
 
 
 def test_self_test_writes_a_report_and_a_summary_that_carry_the_refusals(
         tmp_path):
     DTC.main(["--self-test", "2.033", "--self-test-alpha", "0.2",
-              "--out-dir", str(tmp_path)])
+              "--card", H200, "--out-dir", str(tmp_path)])
     summaries = list(tmp_path.glob("*/summary.json"))
     assert len(summaries) == 1
     payload = json.loads(summaries[0].read_text())
@@ -792,10 +962,10 @@ def test_self_test_writes_a_report_and_a_summary_that_carry_the_refusals(
 
 def test_e5m2_is_refused_rather_than_mapped_onto_e4m3(tmp_path):
     with pytest.raises(SystemExit):
-        DTC.main(["--dtypes", "bf16,fp8_e5m2", "--dry-run",
+        DTC.main(["--dtypes", "bf16,fp8_e5m2", "--dry-run", "--card", H200,
                   "--out-dir", str(tmp_path)])
     with pytest.raises(SystemExit):
-        DTC.main(["--dtypes", "fp8_e4m3", "--dry-run",
+        DTC.main(["--dtypes", "fp8_e4m3", "--dry-run", "--card", H200,
                   "--out-dir", str(tmp_path)])
 
 
@@ -928,8 +1098,10 @@ def test_a_bf16_only_run_completes_end_to_end_and_says_what_it_refused(
         tmp_path, capsys):
     """The largest defensible subset has to be a real, runnable mode."""
     code = DTC.main(["--dtypes", "bf16", "--self-test", "2.033",
-                     "--out-dir", str(tmp_path)])
-    assert code == DTC.EXIT_OK
+                     "--card", H200, "--out-dir", str(tmp_path)])
+    assert code == DTC.EXIT_INVALID, (
+        "synthetic rows, so every box VALIDITY gate is UNKNOWN and the page is "
+        "not quotable; the run still completes and still names what it refused")
     out = capsys.readouterr().out
     assert "REFUSED" in out
     assert "UnpairableComparison" in out
@@ -946,6 +1118,7 @@ def test_a_calibration_with_no_fp8_peak_refuses_before_it_plans_anything(
     """
     code = DTC.main(["--dry-run", "--calibration",
                      "measured_nvidia_a100_sxm4_80gb",
+                     "--card", "NVIDIA A100-SXM4-80GB",
                      "--out-dir", str(tmp_path)])
     assert code == DTC.EXIT_NOT_MEASURED
     out = capsys.readouterr().out
@@ -960,6 +1133,7 @@ def test_the_named_fallback_actually_runs_on_that_calibration(tmp_path, capsys):
     code = DTC.main(["--dry-run", "--dtypes", "bf16", "--calibration",
                      "measured_nvidia_a100_sxm4_80gb",
                      "--gpu-name", "NVIDIA_A100-SXM4-80GB",
+                     "--card", "NVIDIA A100-SXM4-80GB",
                      "--out-dir", str(tmp_path)])
     assert code == DTC.EXIT_NOT_MEASURED
     out = capsys.readouterr().out
@@ -983,7 +1157,7 @@ def test_the_dry_run_renders_c1_and_c2_as_pass_or_fail(tmp_path, capsys):
     worth buying, and the free half is where that has to be visible before the
     box is rented.
     """
-    code = DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
+    code = DTC.main(["--dry-run", "--card", H200, "--out-dir", str(tmp_path)])
     assert code == DTC.EXIT_NOT_MEASURED
     out = capsys.readouterr().out
     assert f"[{DTC.PASS:7s}] CLAIM    C1" in out
@@ -1011,10 +1185,13 @@ def test_the_dry_run_verdicts_come_from_the_shipped_gate_builder(tmp_path, capsy
     by_name = {g.name.split()[0]: g for g in gates}
     assert by_name["C1"].verdict == DTC.PASS
     assert by_name["C2"].verdict == DTC.PASS
-    DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
+    DTC.main(["--dry-run", "--card", H200, "--out-dir", str(tmp_path)])
     out = capsys.readouterr().out
-    assert by_name["C1"].render() in out
-    assert by_name["C2"].render() in out
+    # `with_result=False`: a dry run measured nothing and exits REFUSED, so it
+    # prints the verdicts as prose and no RESULT line. Everything else about
+    # the block is the shipped renderer's.
+    assert by_name["C1"].render(with_result=False) in out
+    assert by_name["C2"].render(with_result=False) in out
 
 
 def test_a_missing_fp8_peak_costs_the_predicted_band_and_nothing_else():
@@ -1039,3 +1216,323 @@ def test_a_missing_fp8_peak_costs_the_predicted_band_and_nothing_else():
                              synthetic=True)}
     assert gates["C1"].verdict == DTC.PASS
     assert gates["C2"].verdict == DTC.PASS
+
+
+# --------------------------------------------------------------------------
+# C4, whose PASS branch was never planted
+# --------------------------------------------------------------------------
+
+def _planted_shift(model: str, arm: str, tilt: float):
+    """A `Shift` whose tilt is exactly `tilt` and whose branches are absent.
+
+    C4 reads `tilt` and nothing else, so everything else on the record is set to
+    the value that says "this is not a measurement": no points, no branches, no
+    slopes. A planted record that carried plausible branches would let a later
+    gate read it as data.
+    """
+    return DTC.Shift(arm=arm, model=model, points=(), low_tokens=(),
+                     high_tokens=(), r_low=tilt, r_high=1.0,
+                     memory_tokens=(), compute_tokens=(), rm=None, rc=None,
+                     memory_slope_bf16=None, compute_slope_bf16=None,
+                     log_slope=None, unpaired=())
+
+
+def _c4(ceilings, native: float, matched: float, models=("mixtral-8x7b",)):
+    """Score C4 alone over planted tilts. The SHIPPED gate builder, not a copy."""
+    analysis = DTC.Analysis(models=list(models))
+    for model in models:
+        analysis.shifts[(model, DTC.NATIVE_ARM)] = _planted_shift(
+            model, DTC.NATIVE_ARM, native)
+        for arm in DTC.MATCHED_ARMS:
+            analysis.shifts[(model, arm)] = _planted_shift(model, arm, matched)
+    gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), fp8_note="")
+    return next(g for g in gates if g.name.startswith("C4"))
+
+
+def test_c4_passes_when_pinning_the_config_removes_most_of_the_excess(ceilings):
+    """THE BRANCH NOTHING HAD EVER PLANTED.
+
+    `--self-test` cannot reach it: the surviving confound runs through
+    BLOCK_SIZE_K, `predicted_ms` does not read BLOCK_SIZE_K, so every synthetic
+    matched arm tilts by ~1.000 and the share it apportions is ~0. C4 therefore
+    printed FAIL or UNKNOWN in every off-GPU run this repository has ever done,
+    and a gate whose PASS branch has never been seen is a gate nobody has
+    tested. Planted here at the tilts a PASSING pod run would produce: the
+    native arm 1.20, the pinned arms 1.04, so the config carries
+    (1.20 - 1.04) / 0.20 = 80% of the excess, comfortably over the 50% rule.
+    """
+    gate = _c4(ceilings, native=1.20, matched=1.04)
+    assert gate.verdict == DTC.PASS
+    assert "80" in gate.observed
+    assert gate.result_line().startswith("RESULT: CLAIM C4 PASS")
+
+
+def test_c4_fails_when_the_excess_survives_pinning_the_config(ceilings):
+    """The FAIL branch beside it, so the PASS above is not a gate that
+    always passes. Native 1.20 against matched 1.18 leaves the config 10%."""
+    gate = _c4(ceilings, native=1.20, matched=1.18)
+    assert gate.verdict == DTC.FAIL
+    assert "10" in gate.observed
+    assert "the confounded excess is mostly NOT the config" in gate.invalidates
+
+
+def test_c4_is_unknown_rather_than_huge_when_there_is_no_excess(ceilings):
+    """A native arm at or below 1.0 has nothing to apportion.
+
+    Dividing by `tilt_native - 1` there would print a share of some thousands
+    of percent and the gate would read PASS on a run where the effect it
+    explains does not exist.
+    """
+    gate = _c4(ceilings, native=0.98, matched=0.90)
+    assert gate.verdict == DTC.UNKNOWN
+    assert "no excess over 1.0 to apportion" in gate.observed
+
+
+# --------------------------------------------------------------------------
+# the quoted constants, and what they are allowed to claim
+# --------------------------------------------------------------------------
+
+def test_the_published_numbers_are_the_uniform_only_rescoring():
+    """Pooling four routing kinds into one crossing is invalid by this repo's
+    own rule, and these constants were the pooled numbers.
+
+    Regenerated with `scripts/crossing_report.py ... --routing uniform` over the
+    canonical four-arm bf16 pool and the two fp8 arms; the ratios below are
+    those two outputs divided cell for cell. The pooled table was
+    454/810/922/3240 with a headline of 1.149 +/- 0.069.
+    """
+    assert DTC.PUBLISHED_BF16_CROSSING == {
+        "mixtral-8x7b": 313.0, "qwen2-57b-a14b": 730.0,
+        "deepseek-v2-lite": 931.0, "deepseek-v3": 2925.0}
+    fp8_vllm = {"mixtral-8x7b": 391.0, "qwen2-57b-a14b": 806.0,
+                "deepseek-v2-lite": 962.0, "deepseek-v3": 2930.0}
+    for model, bf16 in DTC.PUBLISHED_BF16_CROSSING.items():
+        assert DTC.PUBLISHED_CROSSING_RATIO[model]["vllm"] == pytest.approx(
+            fp8_vllm[model] / bf16, abs=0.005), model
+    ratios = [DTC.PUBLISHED_CROSSING_RATIO[m][k]
+              for m in DTC.PUBLISHED_CROSSING_RATIO for k in ("vllm", "sglang")]
+    assert DTC.PUBLISHED_SHIFT == pytest.approx(
+        sum(ratios) / len(ratios), abs=0.005)
+    # The dispersion is the half that MOVED: pooling narrowed it by a third.
+    assert DTC.PUBLISHED_SHIFT_SD > 0.09
+
+
+def test_the_alpha_curve_is_labelled_pooled_and_says_the_a100_disagrees():
+    """The comment used to assert "monotone and saturating, reproduced on both
+    the H200 and the A100". The A100's own surface runs the other way.
+
+    Checked as a test rather than left as prose because the constants are one
+    card's unpaired medians and the next reader will otherwise take the four
+    numbers for a measured curve, which is what the last one did.
+    """
+    assert DTC.ALPHA_BY_GROUP_M is DTC.ALPHA_BY_GROUP_M_POOLED
+    doc = DTC.__doc__ or ""
+    assert "monotone and saturating" not in doc
+    source = (ROOT / "scripts" / "dtype_tile_confound.py").read_text()
+    head = source.split("ALPHA_BY_GROUP_M_POOLED")[0]
+    assert "POOLED, UNPAIRED MEDIANS" in head
+    assert "0.736" in head and "0.745" in head and "0.782" in head
+    # And the numbers are still exactly the H200 s4 medians they came from.
+    assert DTC.ALPHA_BY_GROUP_M_POOLED == {1: 0.84, 8: 0.73, 16: 0.68, 64: 0.67}
+
+
+def test_the_a100_surface_really_does_run_the_other_way():
+    """Not a number typed into a comment: read out of the committed arm.
+
+    If the A100 arm is ever re-run and the medians change, this fails and the
+    docstring that quotes them has to be rewritten, which is the point.
+    """
+    text = (ROOT / "results" / "published"
+            / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
+            / "SURFACE.txt").read_text()
+    block = text.split("alpha against GROUP_SIZE_M")[1].split("alpha against")[0]
+    medians = {}
+    for line in block.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0].isdigit() and "median" in line:
+            medians[int(parts[0])] = float(parts[-1] if "corrected" not in line
+                                           else parts[-3])
+    assert medians[8] < medians[16] < medians[64], medians
+    assert DTC.ALPHA_BY_GROUP_M_POOLED[8] > DTC.ALPHA_BY_GROUP_M_POOLED[16]
+
+
+# --------------------------------------------------------------------------
+# the instrument, the provenance and the card
+# --------------------------------------------------------------------------
+
+def test_the_private_timing_loop_is_gone():
+    """`grep -c "def time_call" scripts/*.py` must be 0 for this file.
+
+    The copy that used to live here created its events inside the loop and
+    synchronised every iteration, while the roof its ratios are read against
+    was measured queue-deep. Two instruments, one comparison.
+    """
+    source = (ROOT / "scripts" / "dtype_tile_confound.py").read_text()
+    assert "def time_call" not in source
+    assert "def time_calls" not in source
+    assert "timing.time_kernel(" in source
+
+
+def test_every_timing_column_reaches_the_csv_header():
+    """A column the row carries and the header does not is a column csv drops."""
+    for name in DTC.TIMING_CSV_COLUMNS:
+        assert name in DTC.CSV_COLUMNS, name
+    for name in ("prov_git_sha", "prov_gpu_name", "prov_instrument"):
+        assert name in DTC.CSV_COLUMNS, name
+
+
+def test_the_timing_columns_survive_a_write_and_a_resume(tmp_path, planned):
+    """A resumed row must carry the state it was measured in, not this run's.
+
+    The tri-state flags are the load-bearing part: an empty cell is NOT
+    DETERMINED and must come back as None, because reading it as False drops a
+    good cell and reading it as True keeps a throttled one.
+    """
+    cells, _ = planned
+    cell = cells[0]
+    prov = PV.provenance_block(instrument=DTC.timing.TIMING_BASIS)
+    store = DTC.Store(tmp_path / "timings.csv", prov=prov)
+    result = DTC.ArmResult(cell.model, cell.num_tokens, DTC.NATIVE_ARM,
+                           DTC.BF16, ms_median=1.0, n_samples=3,
+                           instrument=DTC.timing.TIMING_BASIS, warmup_ms=300.0,
+                           iters=120, trials=3, sm_clock_load_mhz=1490.0,
+                           clock_level_ok=False, clock_drift_ok=True,
+                           l2_flush=True, host_bound=None)
+    meta = {"run_id": "r", "gpu_name": "g", "torch_version": "t",
+            "vllm_version": "v", "routing": "uniform", "seed": 0}
+    store.write(result, cell, meta)
+    store.close()
+    back = DTC.Store(tmp_path / "timings.csv").restore(result.key)
+    assert back.instrument == DTC.timing.TIMING_BASIS
+    assert back.iters == 120 and back.trials == 3
+    assert back.warmup_ms == pytest.approx(300.0)
+    assert back.sm_clock_load_mhz == pytest.approx(1490.0)
+    assert back.clock_level_ok is False
+    assert back.clock_drift_ok is True
+    assert back.l2_flush is True
+    assert back.host_bound is None, "an empty flag is NOT DETERMINED, not False"
+    header = (tmp_path / "timings.csv").read_text().splitlines()[0]
+    assert "prov_git_sha" in header
+
+
+def test_one_bad_repeat_makes_the_whole_arm_say_so():
+    """`summarise_timings` folds the repeats so a filter cannot be more
+    permissive than the repeats it summarises."""
+    class T:
+        def __init__(self, level, drift, host):
+            self.instrument = DTC.timing.TIMING_BASIS
+            self.l2_flush = True
+            self.iters, self.trials, self.warmup_ms = 100, 3, 300.0
+            self.sm_clock_load_mhz = 1500.0
+            self.clock_level_ok, self.clock_drift_ok = level, drift
+            self.host_bound = host
+
+    good = DTC.ArmResult("m", 1, "native", DTC.BF16)
+    DTC.summarise_timings(good, [T(True, True, False), T(True, True, False)])
+    assert (good.clock_level_ok, good.clock_drift_ok, good.host_bound) == (
+        True, True, False)
+    bad = DTC.ArmResult("m", 1, "native", DTC.BF16)
+    DTC.summarise_timings(bad, [T(True, True, False), T(False, True, True)])
+    assert bad.clock_level_ok is False
+    assert bad.host_bound is True
+    unknown = DTC.ArmResult("m", 1, "native", DTC.BF16)
+    DTC.summarise_timings(unknown, [T(True, True, False), T(None, None, None)])
+    assert unknown.clock_level_ok is None
+    assert unknown.host_bound is None
+
+
+def test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200(
+        tmp_path, capsys):
+    """R6. The literal "NVIDIA H200" was the fallback, and it did two jobs.
+
+    It named the plan for a card the machine might not be, and, because the
+    lookup device decides which of vLLM's tuned files `resolve_tile` reads, it
+    chose the tuned half of the confound for a card that may ship no tuned file
+    at all. There is no CUDA device in this test process, which is the live
+    case.
+    """
+    code = DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
+    assert code == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "NoCardToLabel" in out
+    assert "--card" in out
+    assert not list(tmp_path.glob("*/plan.json")), "it planned anyway"
+
+
+def test_the_named_flag_is_what_makes_the_refused_run_go(tmp_path, capsys):
+    """The refusal above points at --card, so --card had better be enough."""
+    assert DTC.main(["--dry-run", "--card", H200,
+                     "--out-dir", str(tmp_path)]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert "NoCardToLabel" not in out
+    plans = list(tmp_path.glob("*/plan.json"))
+    assert len(plans) == 1
+    plan = json.loads(plans[0].read_text())
+    for key in ("git_sha", "gpu_name", "ridge_source", "bandwidth_source",
+                "instrument"):
+        assert key in plan, key
+    assert plan["provenance"]["instrument"] == DTC.timing.TIMING_BASIS
+    assert plan["provenance"]["missing"]["gpu_name"], (
+        "off GPU the block must say WHY it has no card, not leave it blank")
+
+
+def test_the_summary_carries_the_provenance_block(tmp_path):
+    DTC.main(["--self-test", "2.033", "--self-test-alpha", "0.2",
+              "--card", H200, "--out-dir", str(tmp_path)])
+    summary = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
+    assert summary["instrument"] == DTC.timing.TIMING_BASIS
+    assert summary["provenance"]["ridge_source"].endswith(
+        "measured_nvidia_h200.yaml")
+    assert summary["card"] == H200
+
+
+# --------------------------------------------------------------------------
+# the MDE, which no arm in this study used to state
+# --------------------------------------------------------------------------
+
+def test_the_mde_is_derived_from_the_measured_spread_not_a_prior():
+    """B14. The convention this repo used was a 0.5% assumption, below the whole
+    measured range; the spread here is the 26 published reports' own."""
+    assert DTC.MEASURED_SPREAD_MEDIAN > 0.005
+    assert DTC.MEASURED_SPREAD_MAX > DTC.MEASURED_SPREAD_MEDIAN
+    wide = DTC.mde_of_ratio(DTC.MEASURED_SPREAD_MAX, 3)
+    narrow = DTC.mde_of_ratio(DTC.MEASURED_SPREAD_MEDIAN, 3)
+    assert wide > narrow, "more noise must cost resolution, not buy it"
+    assert DTC.mde_of_ratio(DTC.MEASURED_SPREAD_MEDIAN, 12) < narrow
+    with pytest.raises(ValueError):
+        DTC.mde_of_ratio(0.0, 3)
+    with pytest.raises(ValueError):
+        DTC.mde_of_ratio(0.01, 0)
+
+
+def test_the_measured_spread_is_what_the_published_reports_say():
+    """Read out of the corpus, so a re-published arm moves the number here."""
+    import glob
+    import statistics as st
+    values = []
+    for path in glob.glob(str(ROOT / "results" / "published"
+                              / "*" / "*.report.json")):
+        spread = json.loads(Path(path).read_text()).get("timing_spread_median")
+        if spread:
+            values.append(float(spread))
+    assert len(values) >= 20, "the corpus this constant is taken from is gone"
+    assert DTC.MEASURED_SPREAD_MEDIAN == pytest.approx(st.median(values),
+                                                       abs=0.0005)
+    assert DTC.MEASURED_SPREAD_MAX == pytest.approx(max(values), abs=0.0005)
+
+
+def test_the_mde_line_says_when_the_design_cannot_see_the_effect():
+    """The FAIL branch of the MDE report, which is the branch that matters:
+    a design that cannot resolve its own effect has to say so before the box
+    is rented, not after."""
+    args = DTC.build_parser().parse_args(["--reps", "1"])
+    # PLANTED, because on the real corpus the design passes at both ends: even
+    # one repeat at the worst measured spread resolves 0.072 against an effect
+    # of 0.131. A branch that the shipped numbers cannot reach is still a branch
+    # the reader will meet the first time a noisier pod appears, so it is
+    # planted here at a spread five times the worst one measured.
+    planted = DTC.render_mde(args, spreads=(("median", 0.0077),
+                                            ("planted", 0.09)))
+    assert "CANNOT resolve the effect" in planted
+    assert "resolves the effect" in planted
+    assert "CANNOT resolve" not in DTC.render_mde(args)

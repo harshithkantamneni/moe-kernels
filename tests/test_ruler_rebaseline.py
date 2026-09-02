@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from moe.bench import exit_codes
 from moe.bench.calibrate import (
     CLOCK_SPREAD_TOL_PCT,
     DISOWNED,
@@ -579,8 +580,13 @@ def test_corpus_only_runs_off_gpu_and_is_reproducible(tmp_path):
     twice. A replay that read the hardware would not be a replay."""
     first = tmp_path / "a"
     second = tmp_path / "b"
-    assert RB.main(["--corpus-only", "--out", str(first)]) == 0
-    assert RB.main(["--corpus-only", "--out", str(second)]) == 0
+    # 1 CLAIM_FAIL, not 0. C5 is refuted by the committed corpus -- 90 flips in
+    # 53188 rows -- and the log has said so all along; until 2026-09-02 the
+    # process folded that into 0 unless --fail-on-gate was passed, which is the
+    # log-versus-exit-code split `moe.bench.exit_codes` exists to detect. The
+    # code is the corpus answer and is as reproducible as the report beside it.
+    assert RB.main(["--corpus-only", "--out", str(first)]) == exit_codes.CLAIM_FAIL
+    assert RB.main(["--corpus-only", "--out", str(second)]) == exit_codes.CLAIM_FAIL
     reports = list(first.rglob("report.txt")) + list(second.rglob("report.txt"))
     assert len(reports) == 2
     # The destination path is in the report on purpose, so it is normalised

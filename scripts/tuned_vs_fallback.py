@@ -97,8 +97,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import csv
-import hashlib
 import json
+import math
 import os
 import random
 import statistics
@@ -114,6 +114,11 @@ from moe.baselines._framework_config import (  # noqa: E402
     recording_tile_config,
     vllm_call_kwargs,
 )
+from moe.bench import (  # noqa: E402
+    exit_codes,
+    timing,
+)
+from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.tile_resolve import (  # noqa: E402
     DERIVED_TUNED,
     VLLM_TAG,
@@ -200,18 +205,50 @@ BOOTSTRAP_REPS = 10_000
 BOOTSTRAP_SEED = 20260901
 BOOTSTRAP_BAND = 0.90
 
-EXIT_OK, EXIT_GATE_FAILED, EXIT_NOT_MEASURED = 0, 1, 3
+#: Exit codes, ALIASED TO `moe.bench.exit_codes` ON 2026-09-02 rather than
+#: chosen here. The names survive because callers use them; the integers behind
+#: two of them moved.
+#:
+#:   EXIT_NOT_MEASURED was 3. Three is INVALID in the one table: measured, and a
+#:   VALIDITY gate failed after the pod minutes were spent, so the directory is
+#:   full of cells that must NOT be scored. Every refusal here returned it --
+#:   --plan-only, no CUDA, no vLLM, no tuned side on this card, and the card
+#:   refusal this file added -- so a run that cost nothing announced INVALID to
+#:   the driver, which then kept a directory that does not exist and queued no
+#:   retry for an arm that never ran. It is REFUSED (2).
+#:
+#:   EXIT_GATE_FAILED was 1 for any failed gate. G0-G3 are VALIDITY and a
+#:   failure there is INVALID (3); G4-G7 are CLAIM and a failure there is a
+#:   RESULT (1). `exit_codes.classify` over the same gate objects that printed
+#:   the RESULT lines decides which, so the name survives only as the
+#:   claim-failure code and nothing reads it to build the exit any more.
+EXIT_OK = exit_codes.DONE
+EXIT_GATE_FAILED = exit_codes.CLAIM_FAIL
+EXIT_NOT_MEASURED = exit_codes.REFUSED
+EXIT_INVALID = exit_codes.INVALID
+
+#: The columns `timing.KernelTiming` contributes to every measured row. Named
+#: as a group so the header and the row builder cannot drift apart.
+TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
+                      "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
+                      "l2_flush", "host_bound")
 
 CSV_COLUMNS = (
     "run_id", "utc", "gpu_name", "vllm_version", "torch_version", "vllm_tag",
     "model", "num_experts", "intermediate_n", "dtype", "routing", "seed",
     "num_tokens", "arm", "config_origin", "identical_to_tuned",
+    # `provenance` here is the TILE's provenance, which predates the run-level
+    # block and keeps its name; the run-level fields all carry the `prov_`
+    # prefix `moe.bench.provenance` gives them, so the two cannot collide.
     "config_file", "config_key", "provenance",
     "BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M",
     "num_warps", "num_stages",
     "observed_config", "override_verified",
     "ms_median", "ms_mean", "ms_stdev", "ms_min", "n_samples",
-    "rel_err_vs_native", "error",
+    "rel_err_vs_native",
+    *TIMING_CSV_COLUMNS,
+    *PV.Provenance().as_columns(),
+    "error",
 )
 
 
@@ -480,11 +517,56 @@ class Gate:
     passed: bool | None
     observed: str
 
-    def render(self) -> str:
-        tag = {True: "PASS", False: "FAIL", None: "UNKNOWN"}[self.passed]
-        return (f"[{tag}] {self.name}  {self.prediction}\n"
-                f"         gate: {self.rule}\n"
-                f"         saw:  {self.observed}")
+    @property
+    def token(self) -> str:
+        """The gate's name as ONE whitespace-free token, for `RESULT:`.
+
+        `name` reads "G5 size" so a human can read the table; a result line's
+        name field is one token by the parser's rule, and every name here
+        starts with its own G<n>, so two gates cannot collide on it.
+        """
+        return self.name.split()[0]
+
+    @property
+    def kind(self) -> str:
+        """VALIDITY for G0 to G3, CLAIM for G4 upwards.
+
+        The split was already in `build_gates`'s docstring and in the order the
+        gates are appended in; it had never been a field, so nothing downstream
+        could act on it and the process exited 1 for either. It decides the exit
+        code now: a VALIDITY failure is INVALID and a CLAIM failure is a RESULT.
+        """
+        number = self.token.lstrip("G")
+        return (exit_codes.VALIDITY
+                if number.isdigit() and int(number) <= 3 else exit_codes.CLAIM)
+
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.passed]
+
+    def result_line(self) -> str:
+        """The ONE line the session driver may grep for this gate.
+
+        Rendered by `moe.bench.exit_codes.result_line`, so the prefix, the
+        field order and the refusals are identical in every script. The human
+        block below it is prose: a line that merely contains "PASS" is not a
+        result, which is what the driver's old free-text grep was reading
+        pre-registered expectations out of.
+        """
+        return exit_codes.result_line(self.kind, self.token, self.verdict,
+                                      self.observed.replace("\n", " ")[:160])
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, name, verdict)` for `exit_codes.classify`."""
+        return (self.kind, self.token, self.verdict)
+
+    def render(self, with_result: bool = True) -> str:
+        out = ([self.result_line()] if with_result else [])
+        out.append(f"[{self.verdict}] {self.name}  {self.prediction}\n"
+                   f"         gate: {self.rule}\n"
+                   f"         saw:  {self.observed}")
+        return "\n".join(out)
 
 
 def render_gates(gates: list[Gate]) -> str:
@@ -519,19 +601,136 @@ def default_out_dir() -> Path:
 
 def plan_run_id(models: list[str], tokens: list[int], dtype: str,
                 gpu_name: str, reps: int, iters: int, seed: int,
-                routing: str) -> str:
-    """A run id that is a HASH OF THE PLAN, so a rerun resumes by default.
+                routing: str, *, card: str | None = None,
+                warmup: float = 300.0, budget: float = 200.0,
+                trials: int = 3, l2_flush: bool = True) -> str:
+    """A run id that is a HASH OF THE PLAN UNDER THE CARD, so a rerun resumes.
 
     An idempotent script whose default run id is random is not idempotent in
     practice: the second invocation writes a second directory and repeats every
     cell. Hashing the plan means "run the same command again" is the resume
     command, and changing any parameter that would invalidate the old rows
     changes the directory instead of silently mixing two experiments.
+
+    THE CARD AND THE FOUR TIMING KNOBS WERE MISSING UNTIL 2026-09-02. The card
+    is not swept by the script, it is swept by the operator moving to another
+    pod, and the results root prefers `$MOE_RESULTS_DIR` then
+    `/workspace/results`, a network volume that outlives a pod on purpose. The
+    sibling sweep has the proof of what that costs in the repo: one report
+    filename appears under both `2026-09-01-nvidia_h200-cross-card-s3` and
+    `2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`, one id and two cards.
+    `--warmup`, `--cell-budget-ms`, `--trials` and the flush state each set the
+    measured milliseconds of every row, so a re-run at a different one landing
+    in the same directory would print the old numbers under the new label.
+
+    `gpu_name` stays in the key beside `card` and they are not the same thing:
+    `gpu_name` is the device the CONFIG LOOKUP is derived for, which the
+    operator may deliberately set to a card they are about to rent, while
+    `card` is what the run is labelled and stored as.
+
+    `card` defaults to `gpu_name` because a caller who named only one card
+    named the one this run is about; the two diverge only when the operator
+    deliberately derives a plan for a card they are about to rent, and then
+    both are in the key. The timing knobs default to the parser's defaults, so
+    an older caller that passes eight positionals still gets an id for the
+    configuration that caller would have run.
+
+    Built by `moe.bench.provenance.run_id`, which refuses a missing card and a
+    None knob, sorts before hashing, and puts the card slug at the front where
+    `ls` shows it.
     """
-    payload = json.dumps({"models": models, "tokens": tokens, "dtype": dtype,
-                          "gpu": gpu_name, "reps": reps, "iters": iters,
-                          "seed": seed, "routing": routing}, sort_keys=True)
-    return hashlib.sha256(payload.encode()).hexdigest()[:12]
+    card = card or gpu_name
+    return PV.run_id(card=card, model=models, tokens=tokens, dtype=dtype,
+                     lookup=gpu_name, reps=reps, iters=iters, seed=seed,
+                     routing=routing, warmup=warmup, budget=budget,
+                     trials=trials, flush=l2_flush)
+
+
+class NoCardToLabel(ValueError):
+    """A run that will MEASURE could not name the card it is measuring.
+
+    Raised only on the measuring path. A plan-only run has an answer that is
+    not a refusal (`ASSUMED_CARD` below); a run about to time kernels does not,
+    because its rows would carry a card name nothing checked.
+    """
+
+
+#: The card a plan-only run off GPU is derived for when the operator names none,
+#: AND THE PREFIX IS PART OF IT. The old fallback was the bare literal
+#: "NVIDIA H200" (A5/R6), which did two jobs at once and hid both: it named the
+#: plan for a card the machine might not be, and, because the lookup device
+#: decides which tuned file `resolve_tile` reads, it decided whether there was a
+#: tuned side to compare against AT ALL -- the two default models have a tuned
+#: H200 file and almost nothing else does, so the default made the premise true
+#: by construction on every machine.
+#:
+#: A LABEL AND NOT A LOOKUP, which is the whole of the 2026-09-02 fix. A run
+#: that named no card still has to be able to say whose plan it is NOT, and this
+#: is that word. It is in the run id, the directory name, the header and `card`
+#: on every row, so no artefact of an off-GPU run carries a bare H200 label.
+ASSUMED_CARD = "ASSUMED NVIDIA H200"
+
+#: The lookup device of a run that named no card. There is not one, and `None`
+#: is the honest answer rather than a card that happens to have tuned files.
+#:
+#: WHAT THE OLD DEFAULT DID. It was the bare literal "NVIDIA H200", and the
+#: label half of that was only the visible half. The lookup decides which tuned
+#: file `resolve_tile` reads, so it decides whether there is a TUNED SIDE TO
+#: COMPARE AGAINST AT ALL: the two default models have a tuned H200 file and
+#: almost nothing else does, so on any machine that named no card the plan came
+#: out fully covered and the premise of the whole experiment was true by
+#: construction. Naming the assumption in the label and keeping it in the lookup
+#: fixed the half a reader can see and left the half that decides the answer.
+#:
+#: Now: no card, no lookup, no cells, and the note says which flag supplies one.
+#: `--gpu-name` still derives a plan for a card the operator is about to rent,
+#: which is the supported and useful case this refusal must not take away.
+NO_LOOKUP_GPU = None
+
+#: What stands in for the lookup device in the run id when there is not
+#: one. `provenance.run_id` refuses a None knob on purpose -- an
+#: unresolved knob missing from an id is how two settings come to share a
+#: directory -- so the absence is spelled out rather than dropped.
+NO_LOOKUP_LABEL = "no-lookup-device"
+
+
+def resolve_lookup_gpu(args, env: dict) -> tuple[str | None, str, str]:
+    """`(lookup device or None, card label, note)`, in falling order of directness.
+
+    `--gpu-name` overrides the lookup, because deriving a plan for a card you
+    are about to rent is a supported and useful thing to do; `--card` names
+    what the run is labelled and stored as; the live device answers both when
+    there is one. With none of the three there is NO lookup device: the plan
+    resolves no tuned file, prints no coverage, and says which flag to pass.
+    """
+    lookup = args.gpu_name or args.card or env.get("gpu_name")
+    card = args.card or env.get("gpu_name") or args.gpu_name
+    if lookup and card:
+        return str(lookup), str(card), ""
+    return NO_LOOKUP_GPU, ASSUMED_CARD, (
+        "NO CARD WAS NAMED, so there is NO CONFIG LOOKUP DEVICE and the plan "
+        "below has no cells. The lookup is what decides which tuned file is "
+        "read, and defaulting it to an H200 made this experiment's premise -- "
+        "that there is a tuned side to price the ladder against -- true by "
+        "construction on every machine. Pass --gpu-name 'NVIDIA H200' to derive "
+        "a plan for a card you are about to rent, or --card for one you are on; "
+        f"everything this run writes is labelled {ASSUMED_CARD!r} either way, "
+        "and the measuring path REFUSES without --card.")
+
+
+def require_card_to_measure(card: str) -> None:
+    """Refuse to time anything under an assumed card.
+
+    A plan is arithmetic and can say what it assumed. A row of milliseconds
+    cannot: it is compared against a per-card ridge and a per-card bandwidth by
+    everything downstream, and an assumed label on one is how a stale H200 band
+    ended up in seven published A100 reports.
+    """
+    if card == ASSUMED_CARD:
+        raise NoCardToLabel(
+            "this run would MEASURE, and no card was named. Pass --card "
+            "'NVIDIA H200' (as nvidia-smi spells it). --plan-only runs off GPU "
+            f"without one and label everything {ASSUMED_CARD!r}.")
 
 
 @dataclass
@@ -558,6 +757,21 @@ class ArmResult:
     rel_err_vs_native: float | None = None
     observed_config: dict | None = None
     override_verified: bool | None = None
+    #: The state the number was measured in, from `timing.KernelTiming`. A row
+    #: with no `instrument` is a row from before 2026-09-02, measured by the
+    #: retired private loop, and is not comparable with a roof. The three flags
+    #: are tri-state and None means NOT DETERMINED; `clock_level_ok` and
+    #: `clock_drift_ok` must BOTH be read, since the old drop-only flag is the
+    #: defect they replace.
+    instrument: str = ""
+    warmup_ms: float | None = None
+    iters: int = 0
+    trials: int = 0
+    sm_clock_load_mhz: float | None = None
+    clock_level_ok: bool | None = None
+    clock_drift_ok: bool | None = None
+    l2_flush: bool | None = None
+    host_bound: bool | None = None
     error: str = ""
 
     @property
@@ -597,6 +811,19 @@ class ArmResult:
             "n_samples": self.n_samples,
             "rel_err_vs_native": "" if self.rel_err_vs_native is None
                                  else f"{self.rel_err_vs_native:.3e}",
+            "instrument": self.instrument,
+            "warmup_ms": "" if self.warmup_ms is None else f"{self.warmup_ms:.1f}",
+            "iters": self.iters, "trials": self.trials,
+            "sm_clock_load_mhz": ("" if self.sm_clock_load_mhz is None
+                                  else f"{self.sm_clock_load_mhz:.0f}"),
+            "clock_level_ok": _flag(self.clock_level_ok),
+            "clock_drift_ok": _flag(self.clock_drift_ok),
+            "l2_flush": _flag(self.l2_flush),
+            "host_bound": _flag(self.host_bound),
+            # One column per provenance field, under `prov_`. A row read on its
+            # own then names the commit, the card and the instrument that made
+            # it; the 26 published reports name none of the three.
+            **(meta["prov"].as_columns() if meta.get("prov") else {}),
             "error": self.error,
         }
 
@@ -666,6 +893,18 @@ class Store:
                             if row.get("observed_config") else None,
             override_verified=None if str(row.get("override_verified", "")) == ""
                               else str(row["override_verified"]) == "1",
+            # A CSV written before 2026-09-02 has none of these columns, and an
+            # absent instrument is the marker that says so. Restored as ""/None
+            # rather than defaulted, so a resumed run cannot claim the current
+            # instrument for rows the retired one measured.
+            instrument=row.get("instrument", ""),
+            warmup_ms=num("warmup_ms"),
+            iters=num("iters", int) or 0, trials=num("trials", int) or 0,
+            sm_clock_load_mhz=num("sm_clock_load_mhz"),
+            clock_level_ok=_unflag(row.get("clock_level_ok", "")),
+            clock_drift_ok=_unflag(row.get("clock_drift_ok", "")),
+            l2_flush=_unflag(row.get("l2_flush", "")),
+            host_bound=_unflag(row.get("host_bound", "")),
             error=row.get("error", ""))
 
     def write(self, result: ArmResult, cell: Cell, meta: dict) -> None:
@@ -712,37 +951,88 @@ def find_vllm_hooks():
         "config and the comparison would be vacuous.")
 
 
-def time_calls(fn, warmup: int, iters: int) -> list[float]:
-    """Per-iteration milliseconds from CUDA events. No L2 flush.
-
-    No flush on purpose: the arms differ only in the tile schedule and run on
-    identical data, and a flush would add a large fixed term to every arm plus
-    its own variance, which widens the placebo band without moving the ratio the
-    script is trying to resolve.
-    """
-    import torch
-
-    for _ in range(warmup):
-        fn()
-    torch.cuda.synchronize()
-    out = []
-    for _ in range(iters):
-        start, end = (torch.cuda.Event(enable_timing=True) for _ in range(2))
-        start.record()
-        fn()
-        end.record()
-        torch.cuda.synchronize()
-        out.append(start.elapsed_time(end))
-    return out
+#: RETIRED 2026-09-02. This file carried a verbatim copy of
+#: `block_m_crossing_sweep.time_call`: events created inside the loop, a
+#: synchronise after every iteration, no L2 flush, no clock read. It was one of
+#: six copies, and the audit (A7) bounded the host prefix they expose at
+#: ~0.18 ms per fused_experts call on the H200 pod and ~0.30 ms on the A100.
+#: A ratio between two arms cancels a CONSTANT prefix, which is why this script
+#: survived it better than the ladders did, but it does not cancel one that
+#: scales with launches, and the fallback arm at BLOCK_SIZE_M=16 launches more
+#: tiles than the tuned one. `timing.time_kernel` is the one instrument, and
+#: `timing.TIMING_BASIS` travels in every row it produces.
 
 
 def summarise_samples(result: ArmResult, samples: list[float]) -> ArmResult:
+    """Reduce the per-repeat p50s to the arm's headline numbers.
+
+    THE UNIT CHANGED ON 2026-09-02 AND THE ARITHMETIC DID NOT. `samples` used
+    to be individual `time_calls` iterations; it is now one queue-deep p50 per
+    round-robin repeat. `ms_stdev` is therefore the BETWEEN-REPEAT spread,
+    which is what the G3 placebo band is about, rather than the within-cell
+    jitter the column used to hold.
+    """
     result.ms_median = statistics.median(samples)
     result.ms_mean = statistics.fmean(samples)
     result.ms_stdev = statistics.pstdev(samples) if len(samples) > 1 else 0.0
     result.ms_min = min(samples)
     result.n_samples = len(samples)
     return result
+
+
+def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
+    """Fold the repeats' `KernelTiming` records into the arm's row.
+
+    One repeat is one `time_kernel` call, so an arm has several; the row has one
+    of each column. The reductions are chosen so a filter over the row cannot be
+    more permissive than a filter over the repeats: the flags are folded with
+    the BAD value dominating and None absorbing, so one throttled repeat makes
+    the arm throttled and an undetermined one stays undetermined; `iters`,
+    `trials` and `warmup_ms` are per-repeat medians, not totals, so a reader
+    can check them against `n_samples`.
+    """
+    if not timings:
+        return result
+    result.instrument = timings[0].instrument
+    result.l2_flush = bool(timings[0].l2_flush)
+    result.iters = int(statistics.median([t.iters for t in timings]))
+    result.trials = int(statistics.median([t.trials for t in timings]))
+    result.warmup_ms = float(statistics.median([t.warmup_ms for t in timings]))
+    clocks = [t.sm_clock_load_mhz for t in timings if t.sm_clock_load_mhz]
+    result.sm_clock_load_mhz = statistics.median(clocks) if clocks else None
+    result.clock_level_ok = _fold_flag([t.clock_level_ok for t in timings])
+    result.clock_drift_ok = _fold_flag([t.clock_drift_ok for t in timings])
+    result.host_bound = _fold_flag([t.host_bound for t in timings], bad=True)
+    return result
+
+
+def _fold_flag(values: list, bad: bool = False) -> bool | None:
+    """Fold a tri-state flag over repeats so one bad repeat wins, None absorbing.
+
+    `bad` is the DOMINATING value: False for the two clock flags, whose False
+    means throttled or drifting, True for `host_bound`, whose True means the
+    interval carried host time. One function with the polarity as an argument
+    rather than two that differ by a negation, because that difference is how a
+    filter comes to pass a row it should have dropped.
+    """
+    if any(v is bad for v in values):
+        return bad
+    if any(v is None for v in values):
+        return None
+    return not bad
+
+
+def _flag(value: bool | None) -> str:
+    """A tri-state flag as a CSV cell: "1", "0", or empty for NOT DETERMINED."""
+    return "" if value is None else str(int(value))
+
+
+def _unflag(cell: str) -> bool | None:
+    """`_flag` read back. An empty cell is None, which is NOT False."""
+    text = str(cell).strip()
+    if text == "":
+        return None
+    return text not in ("0", "False", "false")
 
 
 def measure_cell(cell: Cell, arms: list[str], args, store: Store, meta: dict,
@@ -864,19 +1154,37 @@ def measure_cell(cell: Cell, arms: list[str], args, store: Store, meta: dict,
     # cold instruction cache.
     samples: dict[str, list[float]] = {arm: [] for arm in pending
                                        if not results[arm].error}
+    #: One `KernelTiming` per arm per repeat. Kept rather than reduced on the
+    #: spot because a repeat that throttled has to be able to make the whole
+    #: arm's row say so; see `summarise_timings`.
+    records: dict[str, list] = {arm: [] for arm in samples}
     for _ in range(args.reps):
         for arm in list(samples):
             try:
                 with context(arm):
-                    samples[arm].extend(time_calls(call, args.warmup, args.iters))
+                    # ONE INSTRUMENT (A7). This used to be a private
+                    # `time_calls` whose events were created inside the loop
+                    # and which synchronised after every iteration, with no
+                    # flush and no clock read. `time_kernel` is the queue-deep
+                    # loop the roof was measured with, and it reports the clock
+                    # it ran at beside the time.
+                    t = timing.time_kernel(
+                        call, warmup_ms=args.warmup,
+                        target_ms=args.cell_budget_ms, trials=args.trials,
+                        l2_flush=not args.no_l2_flush,
+                        reference_clock_mhz=meta.get("reference_clock_mhz"))
+                samples[arm].append(t.ms_p50)
+                records[arm].append(t)
             except Exception as exc:  # noqa: BLE001
                 results[arm].error = f"{type(exc).__name__}: {exc}"[:300]
                 samples.pop(arm, None)
+                records.pop(arm, None)
 
     for arm in pending:
         got = samples.get(arm)
         if got:
             summarise_samples(results[arm], got)
+            summarise_timings(results[arm], records.get(arm) or [])
         store.write(results[arm], cell, meta)
     del native_out
     return results
@@ -1188,6 +1496,76 @@ def render_census(rows: list[tuple[str, str, bool, str]]) -> str:
     return "\n".join(lines)
 
 
+#: The timing spread this design is sized against, as a fraction of one cell's
+#: time. MEASURED, not assumed: the range and median of `timing_spread_median`
+#: over the 26 published `*.report.json` files under `results/published`, which
+#: is every arm this repository has that records one (min 0.0039, median 0.0077,
+#: max 0.0182 on 2026-09-02).
+MEASURED_SPREAD_MEDIAN = 0.0077
+MEASURED_SPREAD_MAX = 0.0182
+
+#: Two-sided 5% at 80% power, the convention `replicate_noise_floor` uses for
+#: every MDE it prints. Named rather than inlined so a reader can see nothing
+#: here was chosen to make a gate pass.
+MDE_LEVEL = 0.05
+MDE_POWER = 0.80
+
+
+def mde_of_ratio(spread: float, reps: int) -> float:
+    """Smallest fallback/tuned PENALTY this design can resolve, as a fraction.
+
+    The design is one number per arm per cell compared as a ratio, so the
+    quantity that must clear the noise is a difference of two log times, each a
+    median over `reps` repeats; a ratio inherits both spreads, hence the
+    sqrt(2). With sigma imported rather than estimated inside the run the test
+    is a known-variance z test, the stricter of the two forms available and the
+    only one evaluable at these repeat counts. `statistics.NormalDist` supplies
+    the quantiles so no distribution code is written twice in this repository.
+    """
+    if reps < 1:
+        raise ValueError(f"an MDE needs at least one repeat, got {reps}")
+    if spread <= 0:
+        raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    normal = statistics.NormalDist()
+    z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
+    return z * spread * math.sqrt(2.0 / reps)
+
+
+def render_mde(args, spreads=None) -> str:
+    """What this design can see, printed BEFORE the box is rented.
+
+    B14: no arm in this study stated a minimum detectable effect, so G5 could
+    pass or fail without anyone knowing whether the design could resolve the
+    difference either way. The effect G5 is about is `MATERIAL_PENALTY - 1`,
+    the 15% the study named in advance. Both ends of the measured spread are
+    printed because the answer can differ between them and one number would
+    hide which. `spreads` overrides the pair, which is how the
+    CANNOT-RESOLVE branch is planted in the tests.
+    """
+    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
+                          ("worst", MEASURED_SPREAD_MAX))
+    effect = MATERIAL_PENALTY - 1.0
+    lines = ["## What this design can see (MDE)", "",
+             f"Effect under test: G5's registered {effect:.0%} penalty.",
+             "Noise assumption: per-cell timing spread, MEASURED over the 26 "
+             f"published reports; median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+             f"{MEASURED_SPREAD_MAX:.2%}.",
+             f"Design: {args.reps} round-robin repeats per arm, compared as a "
+             "ratio against the tuned arm.", ""]
+    for label, spread in spreads:
+        mde = mde_of_ratio(spread, args.reps)
+        verdict = ("resolves the effect" if mde <= effect
+                   else "CANNOT resolve the effect")
+        lines.append(f"  at the {label:<7} spread {spread:.2%}:  MDE "
+                     f"{mde:.3f}   {verdict}")
+    lines += ["",
+              "An MDE above the effect does not make a PASS wrong; it makes a "
+              "FAIL uninformative,",
+              "and it is the number to raise --reps against before spending "
+              "pod minutes."]
+    return "\n".join(lines)
+
+
 def render_plan(cells: list[Cell], notes: list[str]) -> str:
     """Both configs of every cell, and which knob groups differ.
 
@@ -1415,8 +1793,38 @@ def build_parser() -> argparse.ArgumentParser:
                     help=f"comma list from {','.join(ARM_ORDER)}, or 'all'")
     ap.add_argument("--reps", type=int, default=3,
                     help="round-robin repeats; arms are interleaved inside each")
-    ap.add_argument("--iters", type=int, default=15, help="timed calls per arm per rep")
-    ap.add_argument("--warmup", type=int, default=8)
+    ap.add_argument("--iters", type=int, default=15,
+                    help="RETIRED as a timing knob on 2026-09-02 and kept in "
+                         "the run id. moe.bench.timing.time_kernel sizes the "
+                         "iteration count per arm from --cell-budget-ms and "
+                         "the warmup's own queue-deep per-call time, which is "
+                         "the only sizing that holds a trial to a duration. It "
+                         "stays in the id because rows measured at a different "
+                         "count exist on disk and must not be resumed into")
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. UNITS CHANGED 2026-09-02: a T=1 "
+                         "decode cell and a T=4096 prefill cell need three "
+                         "orders of magnitude of different call counts to reach "
+                         "the same clock, and this grid spans exactly that")
+    ap.add_argument("--cell-budget-ms", type=float, default=200.0,
+                    help="target duration of ONE trial; the iteration count is "
+                         "derived from it and the warmup's per-call time")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per time_kernel call")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="time with L2 warm. The default FLUSHES, the opposite "
+                         "of what this script did before 2026-09-02: the arms "
+                         "differ in TILE SHAPE, which is exactly what decides "
+                         "how much of an expert's weights are still resident "
+                         "when the next tile asks for them, so a warm L2 is "
+                         "not a constant across the comparison")
+    ap.add_argument("--card", default=None,
+                    help="the card this run is for, as nvidia-smi names it. "
+                         "Used for the run id and the results directory. There "
+                         "is no default: a run labelled with a card it did not "
+                         "run on is worse than a run with no label")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--gpu-name", default=None,
                     help="override the device name used for the CONFIG LOOKUP; "
@@ -1446,25 +1854,44 @@ def main(argv: list[str] | None = None) -> int:
                          "they are the two sides of the comparison")
 
     env = detect_environment()
-    gpu_name = args.gpu_name or env["gpu_name"] or "NVIDIA H200"
-    run_id = args.run_id or plan_run_id(models, tokens, args.dtype, gpu_name,
+    gpu_name, card, card_note = resolve_lookup_gpu(args, env)
+    run_id = args.run_id or plan_run_id(models, tokens, args.dtype,
+                                        gpu_name or NO_LOOKUP_LABEL,
                                         args.reps, args.iters, args.seed,
-                                        args.routing)
+                                        args.routing, card=card,
+                                        warmup=args.warmup,
+                                        budget=args.cell_budget_ms,
+                                        trials=args.trials,
+                                        l2_flush=not args.no_l2_flush)
     out_dir = (args.out_dir or (default_out_dir() / "tuned_vs_fallback")) / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path, report_path = out_dir / "timings.csv", out_dir / "report.md"
 
-    cells, notes = plan_cells(models, tokens, args.dtype, gpu_name)
+    # NO LOOKUP, NO CELLS. `plan_cells` would otherwise be handed a card the
+    # operator never named and would answer with that card's tuned files; see
+    # `NO_LOOKUP_GPU`. The census below is per-card arithmetic that needs no
+    # lookup at all and still prints, so the reader keeps the 79.2% context.
+    if gpu_name is None:
+        cells, notes = [], [
+            "no config lookup device: --gpu-name or --card names one, and "
+            "without it no tuned file is resolved and no cell is planned"]
+    else:
+        cells, notes = plan_cells(models, tokens, args.dtype, gpu_name)
     census = coverage_census(
         [m for m in MODEL_CONFIGS if m != "toy"], list(CENSUS_GPUS), args.dtype)
 
     header = [
         "# What does vLLM's fallback config cost?",
         "",
-        f"run id {run_id}   config lookup device `{gpu_name}`   dtype "
-        f"{args.dtype}   routing {args.routing}   seed {args.seed}",
-        f"reps {args.reps} x {args.iters} timed calls per arm, round-robin, "
-        f"{args.warmup} warmup per arm per rep",
+        f"run id {run_id}   config lookup device "
+        f"{('`' + gpu_name + '`') if gpu_name else 'NONE (no card named)'}"
+        f"   dtype {args.dtype}   routing {args.routing}   seed {args.seed}",
+        f"card `{card}`   instrument {timing.TIMING_BASIS}",
+        *(["", card_note] if card_note else []),
+        f"reps {args.reps} per arm, round-robin; each repeat is one "
+        f"time_kernel call of {args.trials} queue-deep trials sized to "
+        f"{args.cell_budget_ms:.0f} ms, after {args.warmup:.0f} ms of warmup, "
+        "L2 " + ("flushed" if not args.no_l2_flush else "WARM (--no-l2-flush)"),
         "",
         f"EVERYTHING IS SAVED TO  {out_dir}",
         f"  rows   {csv_path}",
@@ -1478,14 +1905,20 @@ def main(argv: list[str] | None = None) -> int:
         "",
         render_plan(cells, notes),
         "",
+        render_mde(args),
+        "",
         PREDICTIONS_TEXT,
     ]
     warning = version_warning(env)
     if warning:
         header += ["", warning]
     print("\n".join(header))
-    (out_dir / "plan.json").write_text(json.dumps(
-        {"run_id": run_id, "gpu_name": gpu_name, "dtype": args.dtype,
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS,
+                               warmup_ms=args.warmup,
+                               target_ms=args.cell_budget_ms)
+    (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
+        {"run_id": run_id, "card": card, "lookup_gpu": gpu_name,
+         "dtype": args.dtype,
          "routing": args.routing, "seed": args.seed, "models": models,
          "tokens": tokens, "arms": arms, "vllm_tag": VLLM_TAG,
          "cells": [{"model": c.model, "num_tokens": c.num_tokens,
@@ -1493,7 +1926,19 @@ def main(argv: list[str] | None = None) -> int:
                     "differing_groups": list(c.differing_groups),
                     "config_file": c.tile.config_file,
                     "config_key": c.tile.config_key_derived} for c in cells],
-         "dropped": notes}, indent=2))
+         "dropped": notes}), indent=2))
+
+    if not (args.plan_only or not (env["cuda"] and env["vllm"])):
+        # BEFORE the store is opened and before a single kernel runs: a row of
+        # milliseconds under an assumed card is what this refuses.
+        try:
+            require_card_to_measure(card)
+        except NoCardToLabel as exc:
+            print("\n".join(["", "=" * 72,
+                             "REFUSED. Nothing was measured.",
+                             f"  NoCardToLabel: {exc}",
+                             "=" * 72]))
+            return EXIT_NOT_MEASURED
 
     blocked = args.plan_only or not (env["cuda"] and env["vllm"])
     if blocked:
@@ -1511,7 +1956,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_NOT_MEASURED
     if not cells:
         print("\nNOT A RESULT: no shape in --models has a tuned config on "
-              f"{gpu_name}, so there is no tuned side to price the ladder "
+              f"{gpu_name or 'any named card'}, so there is no tuned side to price the ladder "
               "against. Pick a card that ships tuned files, or a model that has "
               "one. See the dropped list above.")
         return EXIT_NOT_MEASURED
@@ -1522,7 +1967,13 @@ def main(argv: list[str] | None = None) -> int:
     meta = {"run_id": run_id, "gpu_name": env["gpu_name"] or gpu_name,
             "vllm_version": env["vllm_version"],
             "torch_version": env["torch_version"], "routing": args.routing,
-            "seed": args.seed}
+            "seed": args.seed, "prov": prov,
+            # The clock the roof was measured at, so `time_kernel` can score
+            # LEVEL. None here rather than a guess: this script reads no
+            # calibration, and `clock_flags` returns None for the level when it
+            # is not given a reference, which is "not determined" and excludes
+            # nothing. Threading it is what lets a caller supply one.
+            "reference_clock_mhz": None}
     store = Store(csv_path, fresh=args.fresh)
     results: dict[tuple[str, int], dict[str, ArmResult]] = {}
     started = time.time()
@@ -1547,8 +1998,11 @@ def main(argv: list[str] | None = None) -> int:
     gates = build_gates(analysis)
     report_path.write_text(
         render_report("\n".join(header), analysis, gates, stopped) + "\n")
-    (out_dir / "summary.json").write_text(json.dumps({
-        "run_id": run_id, "gpu_name": meta["gpu_name"],
+    (out_dir / "summary.json").write_text(json.dumps(prov.stamp({
+        # `gpu_name` belongs to the PROVENANCE block: the device torch reported
+        # at run time, or null with a reason. This is what the rows were
+        # labelled with, and `stamp` refuses the collision if they share a key.
+        "run_id": run_id, "card": card, "row_label_gpu": meta["gpu_name"],
         "vllm_version": meta["vllm_version"], "vllm_tag": VLLM_TAG,
         "sign": "penalty = fallback_time / tuned_time; >1 means fallback SLOWER",
         "headline_median_penalty": analysis.headline,
@@ -1559,9 +2013,10 @@ def main(argv: list[str] | None = None) -> int:
         "knob_share_median": analysis.knob_share_median,
         "cells_measured": len(analysis.measured), "cells_planned": len(cells),
         "partial": stopped,
-        "gates": [{"name": g.name, "passed": g.passed, "rule": g.rule,
+        "gates": [{"name": g.name, "kind": g.kind, "passed": g.passed,
+                   "verdict": g.verdict, "rule": g.rule,
                    "observed": g.observed} for g in gates],
-    }, indent=2))
+    }), indent=2))
 
     print("\n" + render_results(analysis))
     print("\n" + render_decomposition(analysis))
@@ -1573,7 +2028,15 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nEVERYTHING IS SAVED TO {out_dir}")
     print(f"  rows {csv_path}\n  report {report_path}\n"
           f"  summary {out_dir / 'summary.json'}")
-    return EXIT_GATE_FAILED if any(g.passed is False for g in gates) else EXIT_OK
+    # THE EXIT CODE COMES FROM THE SHARED TABLE, over the SAME gate objects that
+    # printed the RESULT lines above, so `exit_codes.classify_text` on this log
+    # recomputes the code the process returned. It also finally separates the
+    # two outcomes this script used to fold into 1: a VALIDITY failure (G0-G3)
+    # is INVALID, its numbers are not to be believed; a CLAIM failure (G4-G7) is
+    # a RESULT, and the run is finished rather than broken.
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
 
 
 if __name__ == "__main__":                                # pragma: no cover

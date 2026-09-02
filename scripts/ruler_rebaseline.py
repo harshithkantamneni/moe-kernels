@@ -96,8 +96,8 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
+import math
 import os
 import statistics
 import subprocess
@@ -108,6 +108,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.calibrate import (  # noqa: E402
     DEFAULT_CEILING,
     DISOWNED,
@@ -175,6 +177,10 @@ GATE1_CLOCK_DELTA_PCT = 5.0
 #: Prediction 4. The numerator's session-to-session spread must be at least this
 #: many times the denominator choice, or the re-baseline really is about the
 #: denominator after all. 9.9% against 2.2% is 4.5x; 3x leaves room.
+#: What the 2026-08-27 read-shape change was worth, as a fraction. Gate 3's
+#: effect, and the number the MDE line is scored against.
+READ_SHAPE_EFFECT = 0.017
+
 GATE4_SPREAD_RATIO = 3.0
 
 #: Prediction 5. How many published rows may change memory/compute
@@ -193,6 +199,27 @@ IDENTITY_REL_TOL = 1e-9
 #: found none. These are what make gate 5 mean something.
 MIN_ARMS = 5
 MIN_ROWS = 10_000
+
+#: The run-to-run timing spread this run's fresh calibration is sized against,
+#: as a fraction of one measurement. MEASURED, not assumed: the median and worst
+#: `timing_spread_median` over the 26 published `*.report.json` files in
+#: `results/published`, which is every arm in this repository that records one
+#: (min 0.0039, median 0.0077, max 0.0182 on 2026-09-02). The old convention in
+#: this repo was to assume 0.5%, which sits below the whole measured range.
+MEASURED_SPREAD_MEDIAN = 0.0077
+MEASURED_SPREAD_MAX = 0.0182
+
+#: Two-sided 5% at 80% power, the convention every MDE in this study is quoted
+#: at, named here rather than inlined so a reader can see that nothing was
+#: chosen to make a gate pass.
+MDE_LEVEL = 0.05
+MDE_POWER = 0.80
+
+#: Trials behind one bandwidth pattern, from `calibrate.measure_bandwidth`'s
+#: default. It is not a flag on this script, so the MDE is a property of the
+#: apparatus rather than of the invocation, and printing it is the only way a
+#: reader learns the design is fixed at this resolution before the pod is rented.
+CALIBRATION_TRIALS = 3
 
 
 @dataclass(frozen=True)
@@ -281,9 +308,52 @@ class Gate:
     threshold: str
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def token(self) -> str:
+        """The gate's identifier as ONE whitespace-free token, for `RESULT:`.
+
+        `kind` and `number` are separate fields here, and a result line's name
+        must be one token, so the two are joined: `VALIDITY 3` becomes `V3` and
+        `CLAIM 2` becomes `C2`. Joined rather than truncated to the number,
+        because this script has both a VALIDITY 3 and a CLAIM 3 and they would
+        otherwise be indistinguishable to the driver.
+        """
+        return f"{self.kind[0]}{self.number}"
+
+    def result_line(self) -> str | None:
+        """The one line the session driver may grep for this gate, or None.
+
+        None for an UNDECIDED gate, and the distinction is deliberate. UNDECIDED
+        here does not mean "scored and could not decide", which is what
+        `exit_codes.UNKNOWN` means and which counts against the gate; it means
+        the gate could not RUN on this machine at all -- `--corpus-only` has no
+        GPU, so gates 1 to 3 have no measurement to read. Printing UNKNOWN for
+        those would classify every corpus-only run as a failed claim, and
+        printing PASS would be the vacuous pass this project's rules forbid.
+        They stay in the human table below, named and marked, and the closing
+        summary says how many were never scored.
+        """
+        if self.verdict == UNDECIDED:
+            return None
+        return exit_codes.result_line(
+            exit_codes.VALIDITY if self.kind == VALIDITY else exit_codes.CLAIM,
+            self.token, self.verdict,
+            f"{self.claim}: measured {self.measured}")
+
+    def scored(self) -> tuple[str, str, str] | None:
+        """`(kind, name, verdict)` for `exit_codes.classify`, or None if the
+        gate never ran. Same rule as `result_line`, so the log and the exit
+        code are computed from exactly the same set of gates."""
+        if self.verdict == UNDECIDED:
+            return None
+        return (exit_codes.VALIDITY if self.kind == VALIDITY else exit_codes.CLAIM,
+                self.token, self.verdict)
+
     def render(self) -> list[str]:
-        out = [f"{self.kind} {self.number}  {self.verdict:9s} {self.claim}",
-               f"{'':>11}measured {self.measured}   gate {self.threshold}"]
+        line = self.result_line()
+        out = [line] if line else []
+        out += [f"{self.kind} {self.number}  {self.verdict:9s} {self.claim}",
+                f"{'':>11}measured {self.measured}   gate {self.threshold}"]
         out += [f"{'':>11}{line}" for line in self.lines]
         return out
 
@@ -1079,8 +1149,38 @@ def results_root() -> Path:
     return Path(__file__).resolve().parents[1] / "results"
 
 
+#: The card label a run that measures NOTHING carries. `--corpus-only` prices
+#: the published rows of several devices at once and `--dry-run` prices none, so
+#: neither has a card, and `provenance.run_id` refuses an id without one. This
+#: is that card: a name no `nvidia-smi` can produce, so it can never be confused
+#: with a real one, and it sorts its runs together in `ls`.
+NO_CARD = "no-card-nothing-measured"
+
+
+def resolve_card(args) -> str:
+    """The card this run is about, or `NO_CARD` when there is not one.
+
+    `--card`, else the live device, else `NO_CARD` for the two modes that touch
+    no GPU. `main` refuses to MEASURE under `NO_CARD`: gates 1 to 3 compare a
+    fresh calibration against this card's registered constants, and running
+    them against a card nobody named is how a stale H200 band ended up in seven
+    published A100 reports.
+    """
+    if getattr(args, "card", None):
+        return str(args.card)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    except Exception:                                   # noqa: BLE001
+        pass
+    return NO_CARD
+
+
 def default_run_id(args) -> str:
-    """Derived from EVERY argument that changes what is measured.
+    """Derived from EVERY argument that changes what is measured, card FIRST.
 
     A run id that omits a swept parameter is how two settings come to share a
     directory, and the second then reports the first's numbers under its own
@@ -1088,15 +1188,28 @@ def default_run_id(args) -> str:
     ceilings; `--ceiling` because it changes which pattern the report calls the
     old ruler; `--corpus` because pointing at a different corpus is a different
     experiment with the same code.
+
+    THE CARD WAS THE OMISSION (A5/P5), and it is the worst one this script could
+    have had. The output directory is `<results root>/ruler_rebaseline/<id>`,
+    the results root is `$MOE_RESULTS_DIR` or `/workspace/results` -- a network
+    volume that outlives the pod on purpose -- and both `report.txt` and
+    `report.json` are written with `write_text`, which TRUNCATES. So measuring
+    the H200 and then the A100 with the same flags did not collide quietly: the
+    second run silently overwrote the first's report, and the first card's
+    measurement was gone. The card slug now leads the id.
+
+    Built by `moe.bench.provenance.run_id` rather than hashed here: it refuses a
+    missing card and a None value, sorts before hashing so the id does not
+    depend on the order the knobs were named in, and puts the card at the front
+    where `ls` shows it.
     """
-    key = json.dumps({"buffer_gb": args.buffer_gb, "gemm_n": args.gemm_n,
-                      "ceiling": args.ceiling,
-                      "settle_seconds": args.settle_seconds,
-                      "settle": args.settle, "corpus": str(args.corpus),
-                      "corpus_only": args.corpus_only}, sort_keys=True)
-    tag = "corpus" if args.corpus_only else "measured"
-    return (f"{tag}-b{args.buffer_gb:g}-n{args.gemm_n}-{args.ceiling}-"
-            f"{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+    card = resolve_card(args)
+    return PV.run_id(
+        card=card,
+        **{"1mode": "corpus" if args.corpus_only else "measured",
+           "2buf": args.buffer_gb, "3gemm": args.gemm_n,
+           "4ceil": args.ceiling, "5settle": args.settle,
+           "6settlesec": args.settle_seconds, "7corpus": str(args.corpus)})
 
 
 def estimated_seconds(args) -> float:
@@ -1115,6 +1228,81 @@ def estimated_seconds(args) -> float:
     passes = 2 * 12.0          # five patterns, 30 iters x 3 trials, flushed
     compile_s = 10.0           # first Triton compile of the stream probe
     return settles + gemms + clocks + passes + compile_s
+
+
+def mde_of_pattern(spread: float, trials: int) -> float:
+    """Smallest bandwidth SHIFT this run could resolve, as a fraction.
+
+    The quantity gates 2 and 3 test is a difference between this run's GB/s for
+    one pattern and a committed GB/s for the same pattern, and BOTH sides were
+    measured, each as a median over `trials` trials, so the difference inherits
+    two spreads: hence the sqrt(2). With sigma imported from the published
+    corpus rather than estimated inside this run the test is a known-variance z
+    test, which is the stricter of the two forms available at three trials.
+    `statistics.NormalDist` supplies the quantiles so no distribution code is
+    written twice in this repository.
+    """
+    if trials < 1:
+        raise ValueError(f"an MDE needs at least one trial, got {trials}")
+    if spread <= 0:
+        raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    normal = statistics.NormalDist()
+    z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
+    return z * spread * math.sqrt(2.0 / trials)
+
+
+def mde_lines(spreads=None, trials: int = CALIBRATION_TRIALS) -> list[str]:
+    """What the fresh calibration could see, printed BEFORE the pod is rented.
+
+    B14: no arm in this study stated a minimum detectable effect, so a gate
+    could pass or fail without anyone knowing whether the design could have
+    resolved the difference either way. This one matters more than most, because
+    two of its three measured gates are stated as TOLERANCES rather than as
+    effects: gate 2 passes when every pattern lands within
+    `GATE2_PATTERN_TOL_PCT`% of the committed figure, and a tolerance TIGHTER
+    than the MDE turns a FAIL into a coin toss dressed as a refutation. Gate 3's
+    effect is the 1.7% the 2026-08-27 shape change was worth.
+
+    `spreads` overrides the measured pair, which is how the CANNOT-SEE branch is
+    planted in the tests: on today's corpus this design cannot resolve gate 2's
+    0.5% at either end, and that is a fact about the apparatus a reader has to
+    be told rather than a branch nobody can reach.
+    """
+    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
+                          ("worst", MEASURED_SPREAD_MAX))
+    out = [
+        "MDE. What a fresh calibration on this design could actually resolve.",
+        "  noise assumption: run-to-run timing spread MEASURED over the 26 "
+        "published reports,",
+        f"                    median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+        f"{MEASURED_SPREAD_MAX:.2%}; {trials} trials per pattern, both sides "
+        f"measured.",
+        f"  effects under test: gate 2's reproduction tolerance "
+        f"{GATE2_PATTERN_TOL_PCT / 100:.2%}, gate 3's read-shape gain "
+        f"{READ_SHAPE_EFFECT:.2%}.",
+    ]
+    for label, spread in spreads:
+        mde = mde_of_pattern(spread, trials)
+        for name, effect in (("gate 2", GATE2_PATTERN_TOL_PCT / 100.0),
+                             ("gate 3", READ_SHAPE_EFFECT)):
+            seen = "resolves it" if mde <= effect else "CANNOT resolve it"
+            out.append(f"  at the {label:<6} spread {spread:.2%}: MDE "
+                       f"{mde:.2%} against {name}'s {effect:.2%}  {seen}")
+    out += [
+        "  An MDE above the effect does not make a PASS wrong; it makes a FAIL "
+        "uninformative.",
+        "  The spread is imported from KERNEL arms, which is the only measured "
+        "one this repository",
+        "  has; a bandwidth pattern's own is plausibly tighter, so these are "
+        "upper bounds and a",
+        "  design that clears them clears its own. Nobody has measured the "
+        "pattern's spread, and",
+        "  until somebody does, gate 2's 0.5% tolerance is not known to be "
+        "above this run's noise.",
+        "  Gates 4 and 5 are arithmetic over committed rows and have no timing "
+        "noise to clear.",
+    ]
+    return out
 
 
 def missing_gpu_stack() -> str:
@@ -1266,18 +1454,27 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also write the new calibration here. Off by default: "
                          "overwriting measured_<device>.yaml mid-session is how "
                          "an arm came to ship a ruler it never used")
+    ap.add_argument("--card", default=None,
+                    help="the card this run measures, as nvidia-smi names it. "
+                         "Defaults to the live device; --corpus-only and "
+                         "--dry-run touch no GPU and are labelled "
+                         f"{NO_CARD!r}. The measuring path REFUSES without one")
     ap.add_argument("--run-id", default="")
     ap.add_argument("--out", type=Path, default=None,
                     help="overrides the results root entirely")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes; off by "
-                         "default because a falsified prediction is a "
-                         "successful run")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         f"still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "reads as a finished result rather than a retry; "
+                         "folding it into 0 made the log disagree with the "
+                         "process")
     return ap
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    card = resolve_card(args)
     run_id = args.run_id or default_run_id(args)
     out_dir = (args.out or results_root()) / "ruler_rebaseline" / run_id
     paths = {"report.txt": out_dir / "report.txt",
@@ -1299,7 +1496,7 @@ def main(argv=None) -> int:
     ]
     for pred in PREDICTIONS:
         header += [""] + [f"  {line}" for line in pred.render()]
-    header += ["", "=" * 78]
+    header += [""] + mde_lines() + ["", "=" * 78]
     print("\n".join(header))
 
     if args.dry_run:
@@ -1318,10 +1515,23 @@ def main(argv=None) -> int:
 
     cal = None
     if not args.corpus_only:
+        if card == NO_CARD:
+            # BEFORE the calibration runs. Gates 1 to 3 compare a fresh
+            # measurement against THIS CARD's registered constants, and both
+            # reports are written with `write_text`, which truncates whatever a
+            # differently-carded run left in the same directory.
+            print("\nREFUSED. Nothing was measured.")
+            print("  This run would MEASURE and no card was named. Pass --card "
+                  "as nvidia-smi spells it:")
+            print("  the run id, the output directory and the registered "
+                  "constants gates 1 to 3 are")
+            print("  scored against are all per-card. --corpus-only prices the "
+                  "published rows without one.")
+            return exit_codes.REFUSED
         missing = missing_gpu_stack()
         if missing:
             print("\n" + missing)
-            return 2
+            return exit_codes.REFUSED
         from moe.bench.calibrate import calibrate
         started = time.time()
         cal = calibrate(int(args.buffer_gb * (1 << 30)), args.gemm_n,
@@ -1356,8 +1566,14 @@ def main(argv=None) -> int:
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "report.txt").write_text(text + "\n")
-    payload = {
-        "run_id": run_id,
+    # PROVENANCE GOES IN THE JSON AND NOT IN report.txt, on purpose. The block
+    # carries a UTC timestamp and a git dirty count, and `report.txt` is the
+    # artefact two corpus-only runs are compared byte for byte to prove the
+    # replay reads no hardware. A timestamp in there would make that comparison
+    # fail for a reason that has nothing to do with reproducibility.
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS)
+    payload = prov.stamp({
+        "run_id": run_id, "card": card,
         "predictions": [asdict(p) for p in PREDICTIONS],
         "gates": [asdict(g) for g in gates],
         "corpus": {"arms": corpus.arms, "rows": corpus.rows,
@@ -1368,7 +1584,7 @@ def main(argv=None) -> int:
                    "denominator": [asdict(s) for s in corpus.denominator],
                    "session": [asdict(s) for s in corpus.session]},
         "calibration": cal.as_dict() if cal is not None else None,
-    }
+    })
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2))
     print(f"\nreport   {out_dir / 'report.txt'}")
     print(f"json     {out_dir / 'report.json'}")
@@ -1382,9 +1598,40 @@ def main(argv=None) -> int:
         print("  NOTE this is the detail block only, not the full schema "
               "scripts/calibrate_hardware.py writes. Use that to publish.")
 
-    if args.fail_on_gate and any(g.verdict != PASS for g in gates):
-        return 1
-    return 0
+    # THE EXIT CODE COMES FROM THE SHARED TABLE, over the gates that were
+    # actually SCORED -- `Gate.scored` returns None for an UNDECIDED gate, the
+    # same set `result_line` prints -- so `exit_codes.classify_text` on this log
+    # recomputes the code the process returned.
+    #
+    # A GATE THAT NEVER RAN IS NOT A FAILED CLAIM. `--corpus-only` cannot reach
+    # gates 1 to 3 at all: there is no GPU and no fresh calibration to read.
+    # Scoring them UNKNOWN would classify every corpus-only replay as
+    # CLAIM_FAIL, which is a statement about the world rather than about the
+    # machine, and this run made no such statement. They are named in the human
+    # table and counted in the line below instead.
+    scored = [g.scored() for g in gates if g.scored() is not None]
+    undecided = [g.token for g in gates if g.verdict == UNDECIDED]
+    if undecided:
+        print(f"\nNOT SCORED: {', '.join(undecided)} could not run here, so "
+              f"they print no RESULT line and are not in the exit code. "
+              f"Run the bare command on the pod to decide them.")
+    if not scored:
+        print("\nNON-VACUITY: no gate could be scored at all, so nothing above "
+              "is a result.")
+        return exit_codes.REFUSED
+    # NOTHING IS FOLDED INTO DONE, and `--fail-on-gate` is why this is a
+    # paragraph and not a branch. Until 2026-09-02 a CLAIM_FAIL was described in
+    # words and RETURNED AS 0 unless the flag was passed, so `--corpus-only`
+    # printed `RESULT: CLAIM C5 FAIL 90 flips in 53188 classified rows` and the
+    # process said DONE: the exact log-versus-exit-code split the comment above
+    # claims cannot happen here, in the file that prints it. The masking was
+    # obsolete anyway once the shared table landed. CLAIM_FAIL (1) is in
+    # `FINISHED_CODES` and `ledger_state(1)` is "CLAIM_FAIL", so 1 already tells
+    # the driver "this is a result, do not retry it" and 0 protects nothing. The
+    # flag is accepted and ignored so an old driver line still parses.
+    rc = exit_codes.classify(scored)
+    print(f"exit     {exit_codes.describe(rc)}")
+    return rc
 
 
 if __name__ == "__main__":

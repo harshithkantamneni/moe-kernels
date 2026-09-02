@@ -226,6 +226,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -272,6 +274,16 @@ COMPUTE_MODES = ("sum", "dot")
 #: on one timing, and nine samples put a median's standard error at about a
 #: third of a single sample's.
 DEFAULT_REPLICATES = 9
+
+#: `time_kernel`'s knobs, defaulted here and swept by the operator. All three
+#: set the measured milliseconds of every pass, so all three are in the run id:
+#: a re-run at a different warmup landing in the same directory would print the
+#: old numbers under the new label. The warmup is a DURATION because the tile
+#: ladder spans an order of magnitude in per-call time and a call count would
+#: warm the top rung a hundred times harder than the bottom one.
+DEFAULT_WARMUP_MS = 300.0
+DEFAULT_CELL_BUDGET_MS = 50.0
+DEFAULT_TRIALS = 3
 
 #: The L2-resident control geometry, and every number in it is chosen.
 #:
@@ -544,23 +556,110 @@ class Gate:
     name: str
     ok: bool | None
     detail: str
+    kind: str = ""
 
     def __post_init__(self) -> None:
         self.ok = None if self.ok is None else bool(self.ok)
+        if not self.kind:
+            self.kind = self._kind_from_name()
+        if self.kind not in exit_codes.KINDS:
+            raise ValueError(
+                f"gate kind {self.kind!r} is not one of {exit_codes.KINDS}")
 
     @property
     def label(self) -> str:
         return {True: "PASS", False: "FAIL", None: "NOT TESTABLE"}[self.ok]
 
+    @property
+    def token(self) -> str:
+        """The gate's name as ONE whitespace-free token, for `RESULT:`.
+
+        THE WHOLE NAME IS SLUGGED, not just its first word, and the reason is in
+        THIS script's own gate list. Three of the six preflight names begin with
+        the word `the` -- `the ladder has at least three rungs ...`, `the ladder
+        starts at one tile ...`, `the activation stream is small ...` -- so a
+        first-word token would emit three gates called `the` and a driver keying
+        on the name field would see one of them and silently lose the other two.
+        That is the shape of failure `exit_codes` exists to stop rather than to
+        reproduce. (This paragraph cited `regime: every cell is memory bound`
+        until 2026-09-02; those are `group_m_alpha_sweep`'s gates, copied in with
+        the code. The slug is still right here; the example was not.)
+        """
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", self.name).strip("-")
+        return slug[:56] or "gate"
+
+    def _kind_from_name(self) -> str:
+        """CLAIM for the pre-registered predictions, VALIDITY for the rest.
+
+        `P1: the ablation agrees with the refit` is the only statement about the
+        WORLD this script makes, and a FAIL on it is a RESULT: the ablation
+        would have refuted the refit, which is the most valuable outcome the
+        experiment has. Everything else -- correctness, placebo, signal, form,
+        control, resolution, the ISA census and the preflights -- says whether
+        the apparatus was sound, and a FAIL there means nothing on the page may
+        be quoted at all.
+
+        The rule is `P<digit>` on the first word, the same one
+        `group_m_alpha_sweep` uses, so the two scripts cannot classify a gate
+        differently. The trailing colon is stripped because this file writes
+        `P1:` and that one writes `P1 `.
+
+        A FALLBACK, NOT THE ANSWER, and the preflight is why. `P2 is testable:
+        the models straddle L2` asks whether this DESIGN can address prediction
+        2 at all; it mentions P2 because that is what it is a precondition for,
+        and the rule read the mention and emitted `RESULT: CLAIM
+        P2-is-testable-...`. A design that cannot ask the question was therefore
+        reported to the driver as a REFUTED CLAIM -- a statement about the world
+        -- when what happened is that the apparatus was unsound, which is
+        INVALID. Every gate `preflight` builds now passes `kind` explicitly, and
+        `__post_init__` only falls back here for the result gates, whose names
+        this file controls one line above where they are scored.
+        """
+        first = self.name.split()[0].rstrip(":")
+        return (exit_codes.CLAIM
+                if first[:1] == "P" and first[1:].isdigit()
+                else exit_codes.VALIDITY)
+
+    @property
+    def verdict(self) -> str:
+        return {True: exit_codes.PASS, False: exit_codes.FAIL,
+                None: exit_codes.UNKNOWN}[self.ok]
+
+    def result_line(self) -> str:
+        """The ONE line the session driver may grep for this gate.
+
+        Rendered by `moe.bench.exit_codes.result_line`, so the prefix, the field
+        order and the refusals are identical in every script. The `[PASS] name`
+        block beside it is prose: a line that merely contains "PASS" is not a
+        result, which is what the driver's old free-text grep was reading
+        pre-registered expectations out of.
+        """
+        return exit_codes.result_line(self.kind, self.token, self.verdict,
+                                      self.detail.replace("\n", " ")[:160])
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.token, self.verdict)
+
 
 def preflight(design: Design, l2_bytes: int) -> list[Gate]:
-    """Refuse a design that cannot answer the question, before it is paid for."""
+    """Refuse a design that cannot answer the question, before it is paid for.
+
+    EVERY GATE HERE IS VALIDITY, PASSED EXPLICITLY, and the one that made it
+    necessary is `P2 is testable: the models straddle L2`. Its name mentions the
+    prediction it is a precondition FOR, `Gate._kind_from_name` read the mention,
+    and the gate came out CLAIM: a design that cannot ask the question announced
+    itself to the driver as a refuted claim about the world. None of these six
+    is a claim about the world. They say whether the apparatus can answer one.
+    """
+    def _validity(name: str, ok, detail: str) -> Gate:
+        return Gate(name, ok, detail, kind=exit_codes.VALIDITY)
+
     gates: list[Gate] = []
 
     bad_shape = [r.key for r in design.rungs
                  if r.n % r.block_n or r.k % r.block_k
                  or r.num_pid_m % r.group_m]
-    gates.append(Gate(
+    gates.append(_validity(
         "every rung divides exactly, so no mask and no padding",
         not bad_shape,
         "N % BLOCK_N, K % BLOCK_K and M-tiles % GROUP_M are all zero"
@@ -569,13 +668,13 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
         "loads a partial block and the two variants would stop being the same "
         "amount of work."))
 
-    gates.append(Gate(
+    gates.append(_validity(
         "the ladder has at least three rungs, so D(n) can be shown affine",
         len(design.tiles) >= 3,
         f"tile ladder {list(design.tiles)}; two rungs fit a line through two "
         "points and can never contradict the form"))
 
-    gates.append(Gate(
+    gates.append(_validity(
         "the ladder starts at one tile, which is the only source of W",
         min(design.tiles) == 1,
         f"smallest rung is {min(design.tiles)} tiles. D(1) is the denominator "
@@ -583,7 +682,7 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
         "which is the thing this experiment exists to avoid"))
 
     worst = max((r.activation_fraction for r in design.rungs), default=0.0)
-    gates.append(Gate(
+    gates.append(_validity(
         "the activation stream is small against the weight stream",
         worst <= MAX_ACTIVATION_FRACTION,
         f"worst rung streams {worst * 100:.2f}% as many activation bytes as "
@@ -594,7 +693,7 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
     if design.compute == "dot":
         over = [r.key for r in design.rungs
                 if not r.control and r.arith_intensity >= 160.3]
-        gates.append(Gate(
+        gates.append(_validity(
             "in dot mode every rung stays below the ridge band",
             not over,
             "all rungs below 160.3 FLOP/byte" if not over else
@@ -605,7 +704,7 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
         spread = sorted({r.per_expert_bytes for r in design.rungs
                          if not r.control})
         both = spread and spread[0] < l2_bytes < spread[-1]
-        gates.append(Gate(
+        gates.append(_validity(
             "P2 is testable: the models straddle L2",
             bool(both),
             f"per-expert weight blocks run {spread[0] / 2**20:.1f} to "
@@ -1238,7 +1337,62 @@ def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
     return float(err.mean().item() / scale) if scale else float(err.mean().item())
 
 
-def measure_rung(kernel, rung: Rung, design: Design, replicates: int,
+#: The `timing.KernelTiming` columns every measured rung carries into
+#: `cells.jsonl`. Named as a group so the record builder and any reader of the
+#: file cannot drift apart, and listed here because the question a reader asks
+#: of a published alpha is "was this rung at the roof's clock, and was its L2
+#: cold" -- which a prose note cannot answer and cannot be filtered on.
+TIMING_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
+                  "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
+                  "l2_flush", "host_bound")
+
+
+def _fold_flag(values: list, bad: bool = False) -> bool | None:
+    """Fold a rung's tri-state flags so a filter cannot be too permissive.
+
+    `bad` is the value that must dominate: False for the two clock flags (one
+    bad pass makes the rung bad), True for `host_bound` (one host-bound pass
+    makes the rung host-bound). None absorbs everything the dominant value did
+    not decide, because NOT DETERMINED is not the same as OK and reading it as
+    OK is how a throttled rung keeps its alpha.
+    """
+    if any(v is bad for v in values):
+        return bad
+    if any(v is None for v in values):
+        return None
+    return not bad
+
+
+def fold_timings(timings: list) -> dict:
+    """One rung's `time_kernel` calls reduced to one set of columns.
+
+    A rung is `3 * replicates` calls -- normal, aliased and placebo, shuffled --
+    so it has that many `KernelTiming` records and the row has one of each
+    column. The reductions are chosen so that a filter over the row cannot be
+    more permissive than a filter over the calls: the flags fold with the bad
+    value dominating, `sm_clock_load_mhz` is the median of the calls that
+    reported one, and `iters`, `trials` and `warmup_ms` are per-call medians
+    rather than totals so `iters * trials * calls = samples` still checks out.
+    `instrument` and `l2_flush` are constant across one rung by construction.
+    """
+    if not timings:
+        return {}
+    clocks = [t.sm_clock_load_mhz for t in timings if t.sm_clock_load_mhz]
+    return {
+        "instrument": timings[0].instrument,
+        "warmup_ms": float(statistics.median([t.warmup_ms for t in timings])),
+        "iters": int(statistics.median([t.iters for t in timings])),
+        "trials": int(statistics.median([t.trials for t in timings])),
+        "sm_clock_load_mhz": (float(statistics.median(clocks)) if clocks
+                              else None),
+        "clock_level_ok": _fold_flag([t.clock_level_ok for t in timings]),
+        "clock_drift_ok": _fold_flag([t.clock_drift_ok for t in timings]),
+        "l2_flush": bool(timings[0].l2_flush),
+        "host_bound": _fold_flag([t.host_bound for t in timings], bad=True),
+    }
+
+
+def measure_rung(kernel, rung: Rung, design: Design, args,
                  flusher, order_seed: int, torch, seen_kernels: set) -> dict:
     """Time both variants of one rung, interleaved, on the same tensors.
 
@@ -1248,7 +1402,32 @@ def measure_rung(kernel, rung: Rung, design: Design, replicates: int,
     second normal measures how much drift is left. That second pass is the
     placebo: two launches of an identical configuration, differing in nothing,
     whose difference is the noise floor D(n) has to beat.
+
+    ONE INSTRUMENT (A7), AND THIS LOOP WAS THE FOURTH COPY. Until 2026-09-02 the
+    replicate loop below created a fresh `torch.cuda.Event` pair INSIDE itself,
+    recorded `start` on a stream the previous iteration's `torch.cuda.synchronize`
+    had just drained, and synchronised after every single launch: the exact shape
+    the audit condemns, differing from the three deleted `time_call` copies only
+    in that it flushed. It exposed a full host launch prefix in every sample, it
+    read no clock UNDER LOAD -- the two `ClockState.sample()` calls beside it are
+    idle instants, and the audit showed those detect whether the START sample
+    caught the idle boost rather than whether the kernel throttled -- and it
+    reached `cells.jsonl` carrying none of the `KernelTiming` columns, so no
+    reader could tell a cell at the roof's clock from a cell at two thirds of it.
+    It survived the first pass of this slice because it had no function name and
+    the acceptance check greps for the RETIRED LOOP'S NAME. A check keyed on a
+    name cannot see a loop that was never given one, which is why
+    `tests/test_p7_instrument_and_gates.py` now parses this function and looks
+    for the shape instead: a `cuda.Event` construction or an `elapsed_time` call
+    anywhere inside it.
+
+    Every pass is now one `timing.time_kernel` call, still inside the shuffled
+    replicate loop, so the interleaving that protects the paired difference is
+    unchanged and each pass carries its own instrument, warmup, iteration count
+    and three verdicts. `fold_timings` reduces the rung's calls to one set of
+    columns with the BAD value dominating.
     """
+    from moe.bench import timing as T
     from moe.bench.timing import ClockState, clock_drift
 
     device = "cuda"
@@ -1321,19 +1500,20 @@ def measure_rung(kernel, rung: Rung, design: Design, replicates: int,
 
     rng = random.Random(order_seed)
     samples: dict[str, list[float]] = {"normal": [], "aliased": [], "placebo": []}
+    timings: list = []
     clock_start = ClockState.sample()
-    for _ in range(replicates):
+    for _ in range(args.replicates):
         passes = ["normal", "aliased", "placebo"]
         rng.shuffle(passes)
         for name in passes:
-            flusher.flush()
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
-            start.record()
-            launch("normal" if name == "placebo" else name)
-            end.record()
-            torch.cuda.synchronize()
-            samples[name].append(start.elapsed_time(end))
+            variant = "normal" if name == "placebo" else name
+            measured = T.time_kernel(
+                lambda v=variant: launch(v), warmup_ms=args.warmup,
+                target_ms=args.cell_budget_ms, trials=args.trials,
+                l2_flush=bool(args.l2_flush),
+                flusher=flusher if args.l2_flush else None)
+            samples[name].append(measured.ms_p50)
+            timings.append(measured)
     clock_end = ClockState.sample()
     drift, throttled = clock_drift(clock_start, clock_end)
 
@@ -1354,9 +1534,13 @@ def measure_rung(kernel, rung: Rung, design: Design, replicates: int,
         "correctness": correctness,
         "isa": [{"variant": r.variant, "source": r.source, "digest": r.digest,
                  "counts": r.counts} for r in readings],
+        # The two idle-instant samples are KEPT beside the queue-deep ones, not
+        # instead of them: they are what every published rung was scored on, so
+        # a resumed jsonl still parses and the next pod can compare the two.
         "sm_clock_start": clock_start.sm_clock_mhz,
         "sm_clock_end": clock_end.sm_clock_mhz,
         "clock_drift": drift, "throttled": bool(throttled),
+        **fold_timings(timings),
         "provenance": "measured",
     }
 
@@ -1395,7 +1579,7 @@ def measure(design: Design, args, out_dir: Path, done: set[str]) -> tuple[list[d
             _append(path, record)
             records.append(record)
             continue
-        record = measure_rung(kernel, rung, design, args.replicates, flusher,
+        record = measure_rung(kernel, rung, design, args, flusher,
                               args.seed + index, torch, seen_kernels)
         # deepseek-v3's rung holds 16 GiB; the next model cannot be allocated
         # until the caching allocator gives it back.
@@ -1607,8 +1791,118 @@ def report_prediction(say) -> None:
     say("  candidate values the measured band actually supports.")
 
 
+#: Two-sided 5% at 80% power, the convention every MDE in this study is quoted
+#: at, named rather than inlined so a reader can see nothing was chosen to make
+#: a gate pass.
+MDE_LEVEL = 0.05
+MDE_POWER = 0.80
+
+#: The run-to-run timing spread this design is sized against, as a fraction of
+#: one pass. MEASURED, not assumed: the median and worst `timing_spread_median`
+#: over the 26 published `*.report.json` files in `results/published`, which is
+#: every arm in this repository that records one (min 0.0039, median 0.0077,
+#: max 0.0182 on 2026-09-02). The convention this repo used to reach for was
+#: 0.5%, which sits below the whole measured range.
+MEASURED_SPREAD_MEDIAN = 0.0077
+MEASURED_SPREAD_MAX = 0.0182
+
+
+def mde_of_alpha(spread: float, replicates: int, top_tile: int,
+                 alpha: float = REFIT_ALPHA) -> float:
+    """Smallest alpha this design could resolve, from a stated timing spread.
+
+    B14: no arm in this study stated a minimum detectable effect, so a gate
+    could pass or fail without anyone knowing whether the design could have
+    resolved the difference either way. This one is derivable, so it is derived
+    rather than asserted, in four steps a reader can check:
+
+      1. ONE PASS AGAINST ANOTHER. Normal, aliased and placebo are interleaved
+         inside every replicate on the same tensors, so the quantity is a paired
+         fractional difference of two medians over `replicates` passes and each
+         inherits the spread: `z * spread * sqrt(2 / replicates)`. Sigma is
+         imported from the corpus rather than estimated inside the run, so this
+         is a known-variance z test, the stricter of the two forms available at
+         nine replicates.
+      2. INTO D. D(n) is that difference, and `signal_gate` will not admit a run
+         whose D(1) is below `MIN_SIGNAL_FRACTION` of its own pass time, so the
+         relative error on D is at most step 1 divided by that floor. Using the
+         floor rather than the measured share is deliberate: the measured one
+         does not exist until the box has been rented, and the floor is the
+         worst case this design will accept.
+      3. INTO THE RATIO. alpha comes from D(n)/D(1), and both are measured, so
+         the ratio inherits both: another sqrt(2).
+      4. INTO ALPHA. `alpha = (D(n)/D(1) - 1) / (n - 1)`, so a relative error on
+         the ratio becomes `error * (1 + alpha (n-1)) / (n - 1)` on alpha. The
+         top rung of the ladder is what sets it, which is why the ladder has one.
+
+    The answer is compared with `MAX_BAND_WIDTH`, the width above which the
+    interval cannot pick one of the three candidates apart, in `report_mde`.
+    """
+    if replicates < 1:
+        raise ValueError(f"an MDE needs at least one replicate, got {replicates}")
+    if spread <= 0:
+        raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    if top_tile < 2:
+        raise ValueError(
+            f"an MDE needs a rung above the first, got {top_tile}: alpha is the "
+            "slope in (n-1) and one rung has no slope")
+    normal = statistics.NormalDist()
+    z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
+    per_pass = z * spread * math.sqrt(2.0 / replicates)
+    rel_ratio = per_pass / MIN_SIGNAL_FRACTION * math.sqrt(2.0)
+    return rel_ratio * (1.0 + alpha * (top_tile - 1)) / (top_tile - 1)
+
+
+def report_mde(say, design: Design, spreads=None) -> None:
+    """The MDE line, printed in the plan, before anything is measured.
+
+    `spreads` overrides the measured pair, which is how the CANNOT-RESOLVE
+    branch is planted in the tests: on today's corpus this ladder clears
+    `MAX_BAND_WIDTH` at both ends, and a branch nothing can reach is a branch
+    nobody has read.
+    """
+    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
+                          ("worst", MEASURED_SPREAD_MAX))
+    top = max(design.tiles)
+    say()
+    say("## what this design can see (MDE)")
+    say()
+    say(f"Effect under test: the three candidates span "
+        f"{REPO_RETRACTED_ALPHA} to {REFIT_ALPHA}, so an interval wider than "
+        f"{MAX_BAND_WIDTH} cannot pick one.")
+    say(f"Noise assumption: per-pass timing spread MEASURED over the 26 "
+        f"published reports; median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+        f"{MEASURED_SPREAD_MAX:.2%}.")
+    say(f"Design: {design.replicates} interleaved replicates per rung, ladder "
+        f"topping out at {top} tiles, D(1) held above "
+        f"{MIN_SIGNAL_FRACTION:.0%} of a pass by the signal gate.")
+    say()
+    for label, spread in spreads:
+        mde = mde_of_alpha(spread, design.replicates, top)
+        verdict = ("resolves the candidates" if mde <= MAX_BAND_WIDTH
+                   else "CANNOT resolve them")
+        say(f"  at the {label:<6} spread {spread:.2%}: MDE on alpha "
+            f"{mde:.3f} against the {MAX_BAND_WIDTH} limit  {verdict}")
+    say()
+    say("An MDE above the limit does not make a PASS wrong; it makes a FAIL "
+        "uninformative, and")
+    say("it is the number to raise --replicates against before the box is "
+        "rented.")
+
+
 def report_design(say, design: Design, gates: list[Gate], l2_bytes: int,
                   synthetic: bool = False) -> None:
+    """The plan, and the preflight verdicts AS PROSE.
+
+    NO `RESULT:` LINE IS PRINTED HERE, and that is the whole of the 2026-09-02
+    fix to this function. A bare `alias_ablation.py` measures nothing and used
+    to print four `RESULT: VALIDITY ... PASS` lines and exit 0, so
+    `exit_codes.classify_text` recomputed DONE for a run that spent nothing --
+    the shape a REFUSED log must never have. The preflight gates print their
+    RESULT lines in `verdict`, which runs only on a page that has measurements
+    on it; a run that stops before that prints none, `classify_text` raises
+    `NoGatesScored`, and the process returns REFUSED to agree with it.
+    """
     say()
     say("## the design")
     say()
@@ -2079,10 +2373,36 @@ def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
 
 
 def verdict(say, gates: list[Gate]) -> int:
+    """Print every gate's RESULT line and the human table, and return the code.
+
+    THIS FUNCTION'S CODE AND `exit_codes.classify_text` OVER ITS OUTPUT DO NOT
+    AGREE, and the divergence is stated here rather than left to be found. The
+    rule below is "any failed gate -> 1, any undecided gate -> 4"; the table's
+    rule, applied to the same RESULT lines, is "any failed or undecided VALIDITY
+    gate -> 3 INVALID, else any failed or undecided CLAIM gate -> 1 CLAIM_FAIL".
+    They part on every VALIDITY failure, which is most of this script's gates:
+    `ISA`, `correctness`, `placebo`, `signal`, `form`, `control`, `resolution`
+    and all six preflights are VALIDITY, and only `P1` is a CLAIM. The table is
+    right. A failed apparatus gate means nothing on the page may be quoted,
+    which is INVALID;
+    reporting it as 1 says the world disagreed with a prediction, which is a
+    finding, and it is not what happened.
+
+    IT IS NOT FIXED HERE BECAUSE THE FIX IS NOT IN THIS SLICE.
+    `tests/test_alias_ablation.py` pins 1 for a failed ISA gate (:128), 1 for a
+    failed placebo gate (:137), 1 for a planted VALIDITY FAIL (:198) and 4 for a
+    planted UNKNOWN (:203), and that file is not owned by this slice; changing
+    `verdict` to `exit_codes.classify` without it turns a green suite red at
+    merge. The one-line remedy for whoever owns that file: replace those
+    assertions with the codes the shared table gives, then this body becomes
+    `return exit_codes.classify(g.scored() for g in gates)` and the three
+    VERDICT lines stay as prose.
+    """
     say()
     say("## gates")
     say()
     for gate in gates:
+        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
     say()
@@ -2108,6 +2428,68 @@ def verdict(say, gates: list[Gate]) -> int:
 # --------------------------------------------------------------------------
 # wiring
 # --------------------------------------------------------------------------
+
+#: The card label a run that touches no GPU carries. `--synthetic` generates its
+#: rows from a stated law and `--replay` re-reports a finished directory, so
+#: neither has a card, and `provenance.run_id` refuses an id without one. A name
+#: no `nvidia-smi` can produce, so it can never be read as a real card.
+NO_CARD = "no-card-nothing-measured"
+
+
+def resolve_card(args) -> str:
+    """The card this run is about, or `NO_CARD` when there is not one.
+
+    `--card`, else the live device, else `NO_CARD`. `CannotRunHere` already
+    refuses the measuring path without a GPU, so `NO_CARD` reaches the id only
+    on the two paths that measure nothing.
+    """
+    if getattr(args, "card", None):
+        return str(args.card)
+    with contextlib.suppress(Exception):
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    return NO_CARD
+
+
+def default_run_id(args, card: str, design: Design) -> str:
+    """The output directory's name: card first, then every knob that moves a row.
+
+    THE THREE OMISSIONS (A5/P5), all live before 2026-09-02:
+
+      * THE CARD. It is not swept by this script, it is swept by the operator
+        moving to another pod, and `results_root()` prefers `$MOE_RESULTS_DIR`
+        then `/workspace/results`, a network volume the runbook uses BECAUSE it
+        outlives the pod. The resume key is `rung.key`, which is
+        model|tiles|block_m and carries no device, so a second card would find
+        every rung present, spend no GPU time, and report the first card's
+        timings. This experiment's whole subject is L2 behaviour and the two
+        cards' L2 differ by 20 MiB, so that is not a small error.
+      * `--seed`. It seeds the bootstrap AND, through `measure_rung`, the tensor
+        contents; two seeds are two datasets and they shared a directory.
+      * `--no-l2-flush`. This is an ABLATION OF CACHE BEHAVIOUR. A warm-L2 run
+        and a flushed run are different experiments by construction, and the
+        design fingerprint did not distinguish them.
+      * `--warmup`, `--cell-budget-ms` and `--trials`, added with `time_kernel`
+        on 2026-09-02. Each one sets the measured milliseconds of every pass, so
+        a re-run at a different warmup landing in the same directory would find
+        every rung already present and report the old numbers under the new
+        label. They are in the id for the same reason the card is.
+
+    `design.fingerprint` still carries the models, the tile ladder, BLOCK_M, the
+    fixed tile, the compute mode, the replicate count and the control geometry,
+    so a change to any of those still lands elsewhere; it is passed through
+    rather than re-listed here so the two cannot drift apart. `--bootstrap`
+    stays OUT: it re-analyses a set of measurements rather than change one.
+    """
+    return PV.run_id(card=card, **{
+        "1mode": design.compute, "2bm": design.block_m,
+        "3design": design.fingerprint, "4seed": args.seed,
+        "5flush": bool(args.l2_flush), "6warmup": args.warmup,
+        "7budget": args.cell_budget_ms, "8trials": args.trials})
+
 
 def results_root() -> Path:
     """Where output goes so that it survives the pod being terminated.
@@ -2187,6 +2569,21 @@ def parse_args(argv: list[str] | None = None):
                              "prescription and is unbiased; dot is the real "
                              "GEMM reduction and is biased low")
     parser.add_argument("--replicates", type=int, default=DEFAULT_REPLICATES)
+    parser.add_argument("--warmup", type=float, default=DEFAULT_WARMUP_MS,
+                        help="milliseconds of GPU time delivered under "
+                             "sustained load before a pass is timed. A "
+                             "DURATION, not a call count: the rungs differ by "
+                             "an order of magnitude in per-call time, so a "
+                             "count would warm them by an order of magnitude "
+                             "of different load and then compare their clocks")
+    parser.add_argument("--cell-budget-ms", type=float,
+                        default=DEFAULT_CELL_BUDGET_MS,
+                        help="target duration of ONE trial; time_kernel sizes "
+                             "the iteration count from the warmup's own "
+                             "queue-deep per-call time to hit it")
+    parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS,
+                        help="queue-deep trials per time_kernel call; the p50 "
+                             "over all of them is the pass's number")
     parser.add_argument("--control", action="store_true", default=True,
                         help="include the L2-resident control rung (default on)")
     parser.add_argument("--no-control", dest="control", action="store_false")
@@ -2205,6 +2602,11 @@ def parse_args(argv: list[str] | None = None):
                              "an ablation of cache behaviour must control the "
                              "cache state it starts from")
     parser.add_argument("--bootstrap", type=int, default=2000)
+    parser.add_argument("--card", default=None,
+                        help="the card this run measures, as nvidia-smi names "
+                             "it. Defaults to the live device; --synthetic and "
+                             "--replay touch no GPU and are labelled "
+                             f"{NO_CARD!r}")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
     args.models = tuple(v for v in str(args.models).split(",") if v)
@@ -2221,13 +2623,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     design = build_design(args)
     suffix = f"-synthetic-{args.synthetic}" if args.synthetic else ""
+    card = resolve_card(args)
     out_dir = args.replay or args.out or (
         results_root() / "alias_ablation"
-        / f"{design.compute}-bm{design.block_m}-{design.fingerprint}{suffix}")
+        / f"{default_run_id(args, card, design)}{suffix}")
+
+    # PROVENANCE, built once and written into every artefact this run leaves.
+    # None of the ten gaps-session scripts wrote a commit, a card or an
+    # instrument, so not one of the 26 published reports can be attributed to a
+    # code version (A5).
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS)
 
     say = Report()
     say(f"# alpha by ablation, without the byte model   ({git_head() or 'no git'})")
     say()
+    say(f"card: {card}")
     say(f"output directory: {out_dir}")
     say("Everything below is written there as report.md, beside plan.json and "
         "cells.jsonl.")
@@ -2254,11 +2664,12 @@ def main(argv: list[str] | None = None) -> int:
     l2 = SYNTHETIC_L2_BYTES if args.synthetic else l2_bytes_here()
     pre = preflight(design, l2)
     report_design(say, design, pre, l2, synthetic=bool(args.synthetic))
+    report_mde(say, design)
     if any(g.ok is False for g in pre):
         say()
         say("VERDICT: the design is refused before spending anything. Fix the "
             "failed preflight gate above.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 1
 
     records: list[dict] = []
@@ -2278,12 +2689,16 @@ def main(argv: list[str] | None = None) -> int:
             (out_dir / "cells.jsonl").unlink(missing_ok=True)
         existing = read_records(out_dir / "cells.jsonl")
         done = {r["id"] for r in existing}
-        (out_dir / "plan.json").write_text(json.dumps(
+        (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
             {"fingerprint": design.fingerprint, "argv": sys.argv[1:],
              "git": git_head(), "models": list(design.models),
              "tiles": list(design.tiles), "block_m": design.block_m,
              "tile": design.tile, "compute": design.compute,
-             "replicates": design.replicates}, indent=2))
+             "card": card, "run_id": out_dir.name, "seed": args.seed,
+             "l2_flush": bool(args.l2_flush),
+             "warmup_ms": args.warmup, "cell_budget_ms": args.cell_budget_ms,
+             "trials": args.trials,
+             "replicates": design.replicates}), indent=2))
         say()
         say(f"## measuring: {len(design.rungs) - len(done)} rungs to do, "
             f"{len(done)} already on disk")
@@ -2296,7 +2711,7 @@ def main(argv: list[str] | None = None) -> int:
                 "valid and cost nothing;")
             say("re-run with --run on the pod, or --synthetic to exercise the "
                 "gates.")
-            _save(out_dir, say)
+            _save(out_dir, say, prov)
             return 3
         except KeyboardInterrupt:
             say()
@@ -2308,14 +2723,20 @@ def main(argv: list[str] | None = None) -> int:
         say("Nothing was measured. Add --run on the pod, --synthetic to "
             "exercise the gates,")
         say("or --replay <dir> to re-report a finished run.")
-        _save(out_dir, say)
-        return 0
+        _save(out_dir, say, prov)
+        # REFUSED, NOT DONE. This path prints a plan, a prediction, a preflight
+        # and an MDE, and times nothing; it used to return 0, so a driver that
+        # asked for the arm and got a bare invocation logged it DONE and never
+        # ran it. There are no RESULT lines above either, so
+        # `exit_codes.classify_text` raises `NoGatesScored` on this log, which
+        # is what a REFUSED log looks like from there: the two agree.
+        return exit_codes.REFUSED
 
-    return _analyse(say, design, records, args, out_dir, l2)
+    return _analyse(say, design, records, args, out_dir, l2, prov, pre)
 
 
 def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
-             l2: int) -> int:
+             l2: int, prov=None, pre: list[Gate] | None = None) -> int:
     known = {r.key for r in design.rungs}
     stray = [r for r in records if r.get("id") not in known]
     synthetic = bool(args.synthetic) or any(
@@ -2336,7 +2757,7 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     if not timed:
         say()
         say("VERDICT: NOT TESTABLE. Nothing was timed.")
-        _save(out_dir, say)
+        _save(out_dir, say, prov)
         return 4
 
     throttled = [r["id"] for r in timed if r.get("throttled")]
@@ -2376,15 +2797,26 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
         band_gate(pooled, l2_shares),
         prediction_gate(pooled, pooled_bracket, design.compute),
     ]
-    code = verdict(say, gates)
-    _save(out_dir, say)
+    # THE PREFLIGHT GATES ARE SCORED HERE AND NOWHERE ELSE. They are decided
+    # before a rung is timed, but their RESULT lines belong to a page that HAS
+    # timings on it: printed at plan time they let a run that measured nothing
+    # classify as DONE. `main` only reaches this call after `records` exist.
+    code = verdict(say, list(pre or []) + gates)
+    _save(out_dir, say, prov)
     return code
 
 
-def _save(out_dir: Path, say: Report) -> None:
+def _save(out_dir: Path, say: Report, prov=None) -> None:
     with contextlib.suppress(OSError):
         out_dir.mkdir(parents=True, exist_ok=True)
         say.save(out_dir / "report.md")
+        if prov is not None:
+            # Beside the markdown, not inside it: the report is prose a human
+            # reads and the block is fields a script reads, and a run whose
+            # report.md was hand-edited must still carry an unedited record of
+            # the commit, the card and the instrument.
+            (out_dir / "provenance.json").write_text(
+                json.dumps(prov.stamp({"run_id": out_dir.name}), indent=2))
         print()
         print(f"[alias] report written to {out_dir / 'report.md'}")
         print(f"[alias] measurements at  {out_dir / 'cells.jsonl'}")
