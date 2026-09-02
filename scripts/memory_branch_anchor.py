@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """alpha's denominator, measured instead of extrapolated.
 
+    python scripts/memory_branch_anchor.py --self-test           # planted worlds
     python scripts/memory_branch_anchor.py --rescore            # free, no GPU
-    python scripts/memory_branch_anchor.py --rescore --dry-run  # plan only
-    python scripts/memory_branch_anchor.py --measure --dry-run  # plan + cost
+    python scripts/memory_branch_anchor.py --rescore --publish  # ... into the tree
+    python scripts/memory_branch_anchor.py --measure --dry-run  # plan + cost + MDE
     python scripts/memory_branch_anchor.py --measure --model qwen2-57b-a14b \
         --tiles 32,64 --group-m 1,8,16,64
 
@@ -121,11 +122,13 @@ below every G=1 value. This file therefore does not correct for the swizzle. It
 brackets, which needs no mechanism, and it prints the residual profile so the
 mechanism claim can be read off the data instead of asserted.
 
-TWO MODES.
+THREE MODES.
 
   --rescore  Free. Scores every committed report under `results/published/`,
              emits the bracket for every anchorable fit, and states the size of
              the correction to every published alpha. No GPU, no pod, seconds.
+             Writes to an UNTRACKED session path; `--publish` is the only thing
+             that rewrites the committed ANCHOR_RESCORE pair.
   --measure  The GPU arm. Re-measures the anchor tread at every GROUP_SIZE_M so
              the objection "the anchor is measured at a different reuse
              condition" is answered by measurement rather than by argument; and
@@ -133,17 +136,85 @@ TWO MODES.
              from one process at one clock state. It also re-times the read
              ceiling on the ACTUAL weight buffers and refuses to score if the
              committed calibration is below what those buffers achieve, because
-             a ceiling under the data is not a ceiling.
+             a ceiling under the data is not a ceiling. Every cell carries its
+             own pin assay; see below.
+  --self-test  Free, no device, seconds. Scores the PLANTED worlds registered in
+             `SELF_TEST_WORLDS`, one per FAIL branch of every M gate plus the
+             world in which the tile pin silently failed, and checks each one
+             against the exit code this file has registered for it.
 
-EXIT CODES. 0 every gate passed. 1 only CLAIM gates failed, which is a result
-and not a broken run: the claims those gates carry are refuted and the report
-says which. 2 a VALIDITY gate failed, so the instrument is broken and no number
-on the page may be quoted. 3 nothing was scored or measured.
+THE PIN ASSAY, WITHOUT WHICH THE OTHER GATES MEAN NOTHING. `--measure` forces
+BLOCK_SIZE_M and GROUP_SIZE_M through vLLM's own `override_config`. Until
+2026-09-02 it entered that context and assumed it took, and this arm's headline
+result -- "t(1) does not depend on the swizzle" -- is EXACTLY the signature a
+silently failed override produces: one kernel ran at every setting, so every
+difference is zero and the report reads as a tidy null. That was not argued, it
+was executed. The audit fed `score_measured` 128 synthetic cells carrying the
+failed-pin signature (one anchor and one slope, repeated at G=1, 8, 16 and 64)
+and gates M0 through M5 all returned PASS, exit 0. Gate M6 now stands in front
+of them, on three legs, two of them recorded per cell in `cells.json`:
+
+  WHETHER THE HOOK TOOK. The tile is forced through
+  `moe.baselines._framework_config.forcing_tile_config`, which probes the hook
+  the way this file used to and then reads `get_config()` back, refusing a
+  context that was entered and did not take. A cell it refuses is recorded
+  `failed` with `PIN NOT HONOURED` and never timed.
+
+  WHAT vLLM HANDED THE KERNEL. The first call of every cell runs inside
+  `moe.baselines._framework_config.recording_tile_config`, which watches
+  `try_get_optimal_moe_config` return the config the kernel is actually built
+  from. The six tile constants that came back are written into `cells.json`
+  beside the six that were asked for, and a cell whose observed tile is not its
+  requested tile, or whose source is not the override, voids the run: INVALID,
+  not a retry.
+
+  WHETHER A NEW KERNEL WAS BUILT. `TRITON_CACHE_DIR` is pointed at a fresh
+  directory per (BLOCK_SIZE_M, GROUP_SIZE_M) and the artefacts that appear while
+  that setting first runs are counted -- the assay
+  `scripts/block_m_crossing_sweep.py:gate_0_override` calls "the gate that
+  decides whether the other four mean anything". A setting that ran cells and
+  compiled nothing new ran a kernel that already existed, which at a new tile
+  constant is the same failure seen from the other side.
+
+Neither assay is sufficient alone. A hook that stores an override can echo it
+back to a reader while the kernel ignores it, so the read-back needs the compile
+count; a warm cache compiles nothing while the override works perfectly, so the
+compile count needs the read-back. Both are recorded PER CELL and both are
+persisted, so a resumed run inherits the evidence of the session that measured
+the cells instead of failing for want of an assay it cannot repeat.
+
+THE INSTRUMENT IS THE SWEEP'S. Every cell, and the stream check, are timed by
+`moe.bench.timing.time_kernel` at the ladders' own warmup DURATION, because the
+anchor has to be the same physical event those ladders measured and since
+2026-09-02 they are queue-deep, flush L2 between iterations and sample the SM
+clock under load. The verbatim `time_call` this file used to carry did none of
+that: it synchronised every iteration with events created inside the loop, which
+puts 0.18-0.30 ms of host enqueue time inside the measured interval, and it
+warmed for 5 CALLS against the ladders' 20 while the two were compared tread for
+tread. Every `KernelTiming` column travels into `cells.json`, so the state each
+cell was timed in is on the page rather than in the operator's memory.
+
+EXIT CODES ARE `moe/bench/exit_codes.py`'s, AND THIS FILE USED TO INVERT THEM.
+0 DONE, 1 CLAIM_FAIL (measured; a pre-registered claim was refuted, which is a
+result and not a retry), 2 REFUSED (nothing was measured; free), 3 INVALID
+(measured, and a VALIDITY gate failed; nothing on the page may be quoted),
+4 ERROR. The table this file documented until 2026-09-02 read 2 for "a VALIDITY
+gate failed AFTER the eight-minute measurement" and 3 for "nothing measured",
+the exact opposite of the session driver's, so an invalid run was recorded
+REFUSED under the driver's heading "REFUSED BEFORE MEASURING. Nothing below is a
+gate", while every genuine refusal was queued as a retry. The stream check is
+stored in `cells.json` beside the cells it was measured with for the same
+family of reason: it runs only on a freshly timed cell, so a fully resumed run
+used to fail M0 for ever and could never reach DONE.
+
+Every scored gate prints one `RESULT: ` line, rendered by `exit_codes`, and
+nothing else this file prints starts with that prefix. `--self-test` prints
+none at all: a planted world's verdict is not a result about this machine, and a
+driver that grepped one would read a plant as a measurement.
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import os
@@ -151,19 +222,53 @@ import re
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+import traceback
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+
+#: `moe.bench.timing` is imported LAZILY, everywhere, and this comment is the
+#: reason: it imports torch at module scope, while `--rescore`, `--dry-run` and
+#: `--self-test` are documented to run on a laptop with no torch at all, and an
+#: import here would turn those three into an ImportError before argparse ran.
+#: `exit_codes` and `provenance` import nothing heavier than the standard
+#: library, so they are imported normally. The same rule covers
+#: `moe.baselines._framework_config`, which reaches torch through `moe.quant`.
 
 REPO = Path(__file__).resolve().parents[1]
 HARDWARE_DIR = REPO / "moe" / "bench" / "hardware"
 PUBLISHED = REPO / "results" / "published"
 
-PASS, FAIL, REFUSED = "PASS", "FAIL", "REFUSED"
+#: The verdict and kind vocabulary is `moe.bench.exit_codes`', not this file's.
+#: Two spellings of PASS in one repository is how a verdict falls through a
+#: comparison and is scored as whatever the fallthrough happened to be.
+PASS, FAIL, UNKNOWN = exit_codes.PASS, exit_codes.FAIL, exit_codes.UNKNOWN
+VALIDITY, CLAIM = exit_codes.VALIDITY, exit_codes.CLAIM
+
+
+def timing_basis() -> str | None:
+    """The name of the instrument this file times with, or None off-torch.
+
+    None is not a default: it says the instrument could not be NAMED on this
+    machine because torch is absent, which is the laptop `--dry-run`,
+    `--rescore` and `--self-test` case, where nothing was timed either.
+    """
+    try:
+        from moe.bench.timing import TIMING_BASIS
+    except Exception:                                   # noqa: BLE001
+        # Broad on purpose: a torch that is INSTALLED and broken raises OSError
+        # on a missing libcudart rather than ImportError (the pod failure
+        # `moe/bench/provenance.py` records), and naming the instrument is
+        # never worth taking a whole report down for.
+        return None
+    return TIMING_BASIS
 
 #: alpha is a fraction of a weight re-read. Outside [0, 1] it is not a physical
 #: quantity, so a bracket end past either edge is CLIPPED and the clip is
@@ -203,6 +308,52 @@ MIN_SCORED_FITS = 20
 
 #: The pooled refit the 2026-09-01 arm published and SURFACE.txt scores against.
 POOLED_ALPHA = 0.558
+
+#: THE NOISE ASSUMPTION, named once so every MDE in this file's plan output is
+#: derived from a number a reader can disagree with rather than from a habit.
+#: It is the relative spread of a repeated cell timing: the published H200
+#: replicates run 0.76% to 1.82% with a median of 0.77%, so the median is the
+#: default and the range is why `--noise` exists. It is an ASSUMPTION about the
+#: pod this arm has not yet run on, not a measurement of it, and the plan says
+#: so where it prints it.
+CELL_SPREAD_REL = 0.0077
+
+#: Two-sided, 5% size, 80% power: 1.96 + 0.84. The multiplier that turns a
+#: standard deviation into a smallest detectable difference, written out so the
+#: convention behind every MDE below is visible instead of folded into a
+#: constant.
+MDE_Z = 2.80
+
+#: C5's threshold, AND IT IS A PRIOR. It is the precision published alphas are
+#: quoted at (three decimals, so a shift of 0.05 is 50 times the last digit),
+#: not a quantity derived from `CELL_SPREAD_REL`, and the plan prints it beside
+#: the MDE so the two are never confused. The audit found this literal carrying
+#: no justification at all; it now carries this one, which is a statement about
+#: how the number is REPORTED rather than about how well it was measured.
+C5_SHIFT_PRIOR = 0.05
+
+
+def mde_ratio(spread_rel: float = CELL_SPREAD_REL) -> float:
+    """Smallest RATIO of two cell timings this instrument can call different.
+
+    `z sigma sqrt(2)`: two independent cells, each carrying `spread_rel` of
+    relative noise, compared to each other. This is what M1's thresholds have to
+    clear to mean anything, and printing it beside them is the only way a reader
+    can tell a threshold that can decide from one that cannot.
+    """
+    return MDE_Z * spread_rel * math.sqrt(2.0)
+
+
+def mde_alpha(alpha: float = POOLED_ALPHA, act1_over_w: float = 0.0,
+              spread_rel: float = CELL_SPREAD_REL) -> float:
+    """The same difference, carried through (*) into alpha.
+
+    `alpha_lo = B (W + Act1) / (t(1) W) - Act1/W`, so a relative perturbation
+    `eps` of `t(1)` moves it by `eps (alpha + Act1/W)`. A LOWER BOUND on the
+    real MDE, and labelled as one wherever it is printed: it propagates the
+    anchor's noise only, and the branch slope carries its own.
+    """
+    return mde_ratio(spread_rel) * (alpha + act1_over_w)
 
 
 # --------------------------------------------------------------------------
@@ -421,6 +572,14 @@ class Calibration:
     pin_gbps: float
     dense_tflops: dict[str, float]
     ridge: float
+    #: The SM clock the ROOF was measured at, for `timing.clock_flags`' LEVEL
+    #: verdict. None means this calibration records no clock, and then LEVEL is
+    #: None on every cell -- "not determined", never "fine". A guessed reference
+    #: would exclude real cells or admit throttled ones, both silently.
+    reference_clock_mhz: float | None = None
+    #: Which field the clock came from, because the three that could supply it
+    #: have disagreed by 450 MHz on one H200.
+    reference_clock_source: str = ""
 
     def describe(self) -> str:
         pats = ", ".join(f"{k} {v:.0f}" for k, v in sorted(self.patterns.items()))
@@ -475,11 +634,46 @@ def load_calibration(slug: str, directory: Path | None = None) -> Calibration:
     dense = {k: float(v) for k, v in (data.get("compute_dense_tflops") or {}).items() if v}
     if not dense:
         raise ValueError(f"{path} records no dense compute peak; the ridge is undefined")
+    clock, clock_source = reference_clock_from(detail, slug)
     return Calibration(
         slug=slug, name=data.get("name", slug), checked_on=str(data.get("checked_on", "")),
         measured_commit=str(data.get("measured_commit", "")), patterns=patterns,
         ceiling_pattern=ceiling_pattern, ceiling_gbps=patterns[ceiling_pattern], pin_gbps=pin,
-        dense_tflops=dense, ridge=dense.get("bf16", max(dense.values())) / bw_tb_s)
+        dense_tflops=dense, ridge=dense.get("bf16", max(dense.values())) / bw_tb_s,
+        reference_clock_mhz=clock, reference_clock_source=clock_source)
+
+
+def reference_clock_from(detail: dict, slug: str) -> tuple[float | None, str]:
+    """The clock the roof was measured at, and which field said so.
+
+    THE SAME THREE FIELDS IN THE SAME ORDER as `block_m_crossing_sweep`'s
+    `reference_clock_mhz`, deliberately: the ladders this arm re-anchors take
+    their LEVEL verdict from that order, and an anchor scored against a
+    different reference would be excluded (or admitted) on a rule the ladders
+    never applied. Most direct first: samples taken WHILE the calibration's
+    dense GEMM ran, then the scalar that GEMM published, then the compute
+    settle's final plateau. They have disagreed -- eleven calibrations of one
+    H200 recorded 1485-1935 MHz for the scalar while their own settle histories
+    sat at 1455-1515 -- so the field that answered is returned with the number.
+
+    `(None, reason)` when the calibration carries no clock at all. That is not a
+    failure: `clock_level_ok` is then None on every cell, which is "not
+    determined", and nothing is excluded on a number nobody measured.
+    """
+    median = ((detail.get("gemm_clock") or {}).get("median_mhz"))
+    if median:
+        return float(median), (f"{slug}: median of the samples taken while the "
+                               "calibration's dense GEMM ran")
+    scalar = detail.get("gemm_clock_mhz")
+    if scalar:
+        return float(scalar), (f"{slug}: gemm_clock_mhz, the scalar the "
+                               "calibration published for its dense GEMM")
+    plateau = (detail.get("settle") or {}).get("final_mhz")
+    if plateau:
+        return float(plateau), (f"{slug}: the compute settle's final plateau; "
+                                "the calibration recorded no GEMM clock")
+    return None, (f"{slug}: the calibration carries no clock, so the LEVEL of "
+                  "every cell's under-load clock is not determinable here")
 
 
 def calibration_slug_for(arm_name: str, slugs) -> str | None:
@@ -704,22 +898,85 @@ def scan_published(root: Path) -> tuple[list[ScoredFit], list[Refusal], dict[str
 # the page; CLAIM gates carry the findings and a FAIL there is a result.
 # --------------------------------------------------------------------------
 
+#: The one-token name each gate answers to on its `RESULT:` line. A name is one
+#: run of non-whitespace by `moe.bench.exit_codes.result_line`'s own rule, and
+#: these are the words a driver greps, so they are fixed here rather than
+#: derived from the claim text -- which is prose and gets edited.
+GATE_NAMES = {
+    "V1": "scored_something",
+    "V2": "slope_reproduction",
+    "V3": "anchor_present",
+    "V4": "poisoned_reference_fires",
+    "V5": "bracket_ordered",
+    "V6": "assumption_a",
+    "C1": "physicality",
+    "C2": "containment",
+    "C3": "tile_cap",
+    "C4": "pooled_alpha_excluded",
+    "C5": "correction_smaller_than_the_prior",
+    "M0": "stream_ceiling",
+    "M1": "anchor_swizzle_invariant",
+    "M2": "anchor_rate_in_band",
+    "M3": "slope_independent",
+    "M4": "measured_bracket_ordered",
+    "M5": "every_cell_measured",
+    "M6": "pin_took_effect",
+}
+
+
 @dataclass
 class Gate:
     number: str
-    kind: str            # "VALIDITY" or "CLAIM"
+    kind: str            # VALIDITY or CLAIM, in exit_codes' spelling
     claim: str
-    verdict: str
+    verdict: str         # PASS, FAIL or UNKNOWN, in exit_codes' spelling
     measured: str
     threshold: str
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
 
+    @property
+    def name(self) -> str:
+        """The token on the RESULT line. Missing from `GATE_NAMES` is a bug at
+        the definition site, not something to paper over with a fallback: a
+        gate whose name changed shape would quietly leave a driver's summary."""
+        return GATE_NAMES[self.number]
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, name, verdict)` in `moe.bench.exit_codes`' vocabulary."""
+        return self.kind, self.name, self.verdict
+
+    def result_line(self) -> str:
+        """The ONE line a driver may grep for this gate.
+
+        `exit_codes.result_line` renders it and `parse_result_lines` reads it
+        back, anchored at column zero. The human `GATE V1 ...` block below is
+        for a reader; only this line is the machine contract, and nothing else
+        this file prints begins with `RESULT: `. The old summary grep matched
+        free text (`floor|sigma`) and printed a refused arm's imported constants
+        as measured output; that is what this format exists against.
+        """
+        detail = f"{self.claim} | measured {self.measured} | gate {self.threshold}"
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
     def render(self) -> list[str]:
-        out = [f"GATE {self.number:3s} {self.kind:8s} {self.verdict:7s} {self.claim}",
-               f"                        measured {self.measured}   gate {self.threshold}"]
+        """The gate as a block of lines, RESULT line first. Always.
+
+        NO SUPPRESSION SWITCH, and the one that used to sit here was worse than
+        useless: it documented `--self-test` as the caller that passed False,
+        and `self_test` has never called this method at all. It prints its own
+        `[PASS] <world>` lines, which is what actually keeps a planted verdict
+        out of the machine format -- a driver that grepped a plant out of a
+        self-test log would be reading it as a measurement, the same defect in
+        the other direction as a refused arm's log matching a gate regex. A flag
+        would have made that guarantee something a caller has to remember to
+        ask for; having no flag is the same guarantee with nothing to forget.
+        """
+        out = [self.result_line()]
+        out += [f"GATE {self.number:3s} {self.kind:8s} {self.verdict:7s} {self.claim}",
+                f"                        measured {self.measured}   gate {self.threshold}"]
         out += [f"                        {line}" for line in self.lines]
-        if self.verdict == FAIL and self.invalidates:
+        if self.verdict != PASS and self.invalidates:
             out.append(f"                        INVALIDATES: {self.invalidates}")
         return out
 
@@ -728,7 +985,7 @@ def gate_v1_non_vacuity(fits, refusals) -> Gate:
     cards = {f.card for f in fits}
     ok = len(fits) >= MIN_SCORED_FITS and len(cards) >= 1
     return Gate(
-        "V1", "VALIDITY", "the run actually scored something",
+        "V1", VALIDITY, "the run actually scored something",
         PASS if ok else FAIL,
         f"{len(fits)} fits over {len(cards)} card(s), {len(refusals)} refusal(s)",
         f">= {MIN_SCORED_FITS} fits on >= 1 card",
@@ -744,12 +1001,12 @@ def gate_v2_slope_reproduction(fits) -> Gate:
         if rel > worst:
             worst, where = rel, f"{f.arm}/{f.model} G={f.group_m} BM={f.block_m}"
     if worst < 0.0:
-        return Gate("V2", "VALIDITY", "OLS on the published prefix returns the "
+        return Gate("V2", VALIDITY, "OLS on the published prefix returns the "
                     "published slope", FAIL, "no fits to reproduce",
                     f"<= {SLOPE_REPRODUCTION_REL:.0e}", "the correction table")
     ok = worst <= SLOPE_REPRODUCTION_REL
     return Gate(
-        "V2", "VALIDITY", "OLS on the published prefix returns the published slope",
+        "V2", VALIDITY, "OLS on the published prefix returns the published slope",
         PASS if ok else FAIL,
         f"worst relative difference {worst:.2e} at {where or 'n/a'}",
         f"<= {SLOPE_REPRODUCTION_REL:.0e}",
@@ -762,7 +1019,7 @@ def gate_v3_anchor_present(fits, refusals) -> Gate:
     missing = [r for r in refusals if "no n=1 tread" in r.reason]
     ok = all(f.anchor_ms > 0 for f in fits)
     return Gate(
-        "V3", "VALIDITY", "every scored fit carries a MEASURED n=1 tread",
+        "V3", VALIDITY, "every scored fit carries a MEASURED n=1 tread",
         PASS if ok else FAIL,
         f"{len(fits)} scored with an anchor, {len(missing)} refused for want of one",
         "no scored fit may have anchor_ms <= 0",
@@ -782,7 +1039,7 @@ def gate_v4_poisoned_reference(refusals, expected_arms: int) -> Gate:
     fired = {r.arm + "/" + r.model for r in refusals if "compute reference" in r.reason}
     ok = len(fired) >= expected_arms
     return Gate(
-        "V4", "VALIDITY", "the poisoned-compute-reference check fires on the known case",
+        "V4", VALIDITY, "the poisoned-compute-reference check fires on the known case",
         PASS if ok else FAIL,
         f"fired on {len(fired)} arm/model pair(s): {', '.join(sorted(fired)) or 'none'}",
         f">= {expected_arms} (the BN=256 arms, whose reference is 43.6x too slow "
@@ -800,12 +1057,12 @@ def gate_v5_bracket_order(fits) -> Gate:
     """
     tight = max(fits, key=lambda f: f.bw_anchor_gbps / f.bw_ceiling_gbps, default=None)
     if tight is None:
-        return Gate("V5", "VALIDITY", "the bracket is ordered", FAIL, "no fits", "lo <= hi",
+        return Gate("V5", VALIDITY, "the bracket is ordered", FAIL, "no fits", "lo <= hi",
                     "everything below")
     ratio = tight.bw_anchor_gbps / tight.bw_ceiling_gbps
     ok = all(f.alpha_lo <= f.alpha_hi + 1e-12 for f in fits) and ratio <= 1.0
     return Gate(
-        "V5", "VALIDITY", "the anchor rate never exceeds the card's measured ceiling",
+        "V5", VALIDITY, "the anchor rate never exceeds the card's measured ceiling",
         PASS if ok else FAIL,
         f"tightest {ratio:.1%} at {tight.arm}/{tight.model} G={tight.group_m} "
         f"BM={tight.block_m} ({tight.bw_anchor_gbps:.0f} against "
@@ -834,7 +1091,7 @@ def gate_v6_assumption_a(fits) -> Gate:
     ok = all(abs(f.elevation_in_spreads) <= ANCHOR_BELOW_BRANCH_SPREADS
              for f in below)
     return Gate(
-        "V6", "VALIDITY", "ASSUMPTION A: no branch runs slower than its own anchor",
+        "V6", VALIDITY, "ASSUMPTION A: no branch runs slower than its own anchor",
         PASS if ok else FAIL,
         (f"{len(below)} of {len(fits)} anchors sit below the fitted branch; "
          f"deepest {worst.elevation_in_spreads:+.2f} spreads "
@@ -852,7 +1109,7 @@ def gate_c1_physicality(fits) -> Gate:
     bad = [f for f in fits if not f.physical_vs_pin]
     worst = max(fits, key=lambda f: f.bw_published_gbps / f.bw_pin_gbps, default=None)
     return Gate(
-        "C1", "CLAIM", "every published alpha implies a bandwidth the card has",
+        "C1", CLAIM, "every published alpha implies a bandwidth the card has",
         PASS if not bad else FAIL,
         f"{len(bad)} of {len(fits)} fits imply more than the pin rate; worst "
         f"{worst.bw_published_gbps:.0f} GB/s against {worst.bw_pin_gbps:.0f} "
@@ -920,7 +1177,7 @@ def why_outside(f: ScoredFit) -> str:
 def gate_c2_containment(fits) -> Gate:
     out = [f for f in fits if not f.contains_published_corrected]
     return Gate(
-        "C2", "CLAIM", "every published alpha lies inside its own anchor bracket",
+        "C2", CLAIM, "every published alpha lies inside its own anchor bracket",
         PASS if not out else FAIL,
         f"{len(out)} of {len(fits)} published alpha-corrected values fall outside",
         "0 outside",
@@ -947,7 +1204,7 @@ def gate_c3_tile_cap(fits) -> Gate:
     """
     small = [f for f in fits if f.block_m <= 64]
     if not small:
-        return Gate("C3", "CLAIM", "BLOCK_M <= 64 caps below the ridge", FAIL,
+        return Gate("C3", CLAIM, "BLOCK_M <= 64 caps below the ridge", FAIL,
                     "no BLOCK_M <= 64 fits scored", "< 1.0 for every fit",
                     "the study's one surviving result, which cannot be checked here")
     worst = max(small, key=lambda f: f.cap_over_ridge_at_lo)
@@ -956,7 +1213,7 @@ def gate_c3_tile_cap(fits) -> Gate:
     for f in small:
         by_bm.setdefault(f.block_m, []).append(f.cap_over_ridge_at_lo)
     return Gate(
-        "C3", "CLAIM", "at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge",
+        "C3", CLAIM, "at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge",
         PASS if ok else FAIL,
         f"worst {worst.cap_over_ridge_at_lo:.3f} of the ridge at {worst.arm[:26]}/"
         f"{worst.model} G={worst.group_m} BM={worst.block_m}",
@@ -971,7 +1228,7 @@ def gate_c4_pooled_alpha(fits) -> Gate:
     """SURFACE.txt's `0 of 12 fits within 0.05 of 0.558`, re-scored."""
     hits = [f for f in fits if f.contains_pooled]
     return Gate(
-        "C4", "CLAIM", f"no anchor bracket admits the pooled alpha {POOLED_ALPHA}",
+        "C4", CLAIM, f"no anchor bracket admits the pooled alpha {POOLED_ALPHA}",
         PASS if not hits else FAIL,
         f"{len(hits)} of {len(fits)} brackets contain {POOLED_ALPHA}",
         "0 brackets",
@@ -985,21 +1242,34 @@ def gate_c4_pooled_alpha(fits) -> Gate:
 
 
 def gate_c5_correction_size(fits) -> Gate:
-    """How big the correction is, as a gate so it cannot be read as a footnote."""
+    """How big the correction is, as a gate so it cannot be read as a footnote.
+
+    THE THRESHOLD IS A PRIOR AND THE GATE SAYS SO. `C5_SHIFT_PRIOR` is the
+    precision a published alpha is quoted at, not a quantity derived from the
+    arm's noise; the plan prints it beside `mde_alpha()` so a reader can see
+    that it is about 3x the smallest shift the instrument could resolve, and
+    can therefore tell a claim about REPORTING from a claim about MEASUREMENT.
+    A threshold whose origin is not printed is a number the next reader has to
+    take on trust, which is how this literal survived unexamined until the
+    2026-09-02 audit.
+    """
     if not fits:
-        return Gate("C5", "CLAIM", "the anchor correction is small", FAIL, "no fits",
-                    "median |published - bracket midpoint| <= 0.05", "the whole table")
+        return Gate("C5", CLAIM, "the anchor correction is small", FAIL, "no fits",
+                    f"median |published - bracket midpoint| <= {C5_SHIFT_PRIOR} "
+                    "(a PRIOR)", "the whole table")
     shifts = [abs(f.alpha_published_corrected - 0.5 * (f.alpha_lo + f.alpha_hi))
               for f in fits]
     widths = [f.alpha_hi - f.alpha_lo for f in fits]
     med = statistics.median(shifts)
-    ok = med <= 0.05
+    ok = med <= C5_SHIFT_PRIOR
     return Gate(
-        "C5", "CLAIM", "re-anchoring moves the published alpha by less than 0.05",
+        "C5", CLAIM, "re-anchoring moves the published alpha by less than the "
+        f"{C5_SHIFT_PRIOR} it is quoted to",
         PASS if ok else FAIL,
         f"median shift {med:.3f} (max {max(shifts):.3f}); median bracket width "
         f"{statistics.median(widths):.3f} (max {max(widths):.3f})",
-        "median shift <= 0.05",
+        f"median shift <= {C5_SHIFT_PRIOR}, a PRIOR (the quoted precision), not "
+        f"noise-derived; the anchor MDE is {mde_alpha():.3f}",
         "any published alpha quoted to three decimals. The anchor moves the "
         "number by more than the precision it is quoted at, so it may only be "
         "quoted as an interval.")
@@ -1092,29 +1362,55 @@ def git_ignored(path: Path) -> bool | None:
     return None
 
 
-#: The re-scoring lands as two FILES beside `CALIBRATION_PROVENANCE.md` and
-#: `NOISE_FLOOR.json`, not as a dated directory. `results/published/*/` is the
-#: namespace for measurement ARMS: `moe/bench/published.py` and
-#: `tests/test_calibration_provenance.py` both enumerate arms with `is_dir()`,
-#: so a `2026-09-01-anchor-rescore/` directory would be counted as an eleventh
-#: arm and asked for a calibration provenance it does not have. It is a
-#: cross-arm artefact, and the stable names also make a re-run idempotent
-#: instead of leaving one directory per day.
+#: WHEN PUBLISHED, the re-scoring lands as two FILES beside
+#: `CALIBRATION_PROVENANCE.md` and `NOISE_FLOOR.json`, not as a dated directory.
+#: `results/published/*/` is the namespace for measurement ARMS:
+#: `moe/bench/published.py` and `tests/test_calibration_provenance.py` both
+#: enumerate arms with `is_dir()`, so a `2026-09-01-anchor-rescore/` directory
+#: would be counted as an eleventh arm and asked for a calibration provenance it
+#: does not have. It is a cross-arm artefact, and the stable names also make a
+#: re-run idempotent instead of leaving one directory per day.
 RESCORE_STEM = "ANCHOR_RESCORE"
 
 
+def repo_relative(path: Path) -> str:
+    """`results/published`, not `/Users/somebody/Desktop/moe-kernels/results/...`.
+
+    An absolute path is a fact about ONE laptop, and this one was being written
+    into a tracked file: `--rescore` rewrote `results/published/ANCHOR_RESCORE.txt`
+    with the author's home directory in it on every run, including from the
+    session driver's own `--dry-run`, so the tree was dirty from arm one and
+    44,872 of 100,144 published rows carry `git_dirty=True`. Falls back to the
+    absolute form for a path outside the repo, which is every pod path, because
+    there the absolute name is the only true one.
+    """
+    try:
+        return str(Path(path).resolve().relative_to(REPO))
+    except ValueError:
+        return str(path)
+
+
 def report_output_paths(out_dir: Path, lines: list[str], payload: dict) -> list[str]:
+    """Write the pair and say, per file, what git will do with it.
+
+    THE DEFAULT DESTINATION IS UNTRACKED, and `--publish` is the only way into
+    the tree. Nothing here decides that; `main` picks the directory. What this
+    function guarantees is that the operator is TOLD which of the two they got,
+    because the failure it is named against is a tracked file rewritten by a
+    command nobody thought was a write.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     txt = out_dir / f"{RESCORE_STEM}.txt"
     js = out_dir / f"{RESCORE_STEM}.json"
     txt.write_text("\n".join(lines) + "\n")
     js.write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n")
     notes = []
-    for p in (txt, js):
-        ig = git_ignored(p)
-        state = "IGNORED BY GIT -- this file will not be committed" if ig else (
-            "tracked path" if ig is False else "git could not answer")
-        notes.append(f"  {p}  [{state}]")
+    for path in (txt, js):
+        ig = git_ignored(path)
+        state = ("untracked; git will not commit it" if ig else
+                 "TRACKED: this write changes the repository" if ig is False else
+                 "git could not answer; outside the work tree")
+        notes.append(f"  {path}  [{state}]")
     return notes
 
 
@@ -1283,7 +1579,7 @@ def run_rescore(args) -> int:
     say("=" * 78)
     say("MEMORY BRANCH ANCHOR -- alpha's denominator, measured instead of extrapolated")
     say("=" * 78)
-    say(f"published root : {args.published}")
+    say(f"published root : {repo_relative(args.published)}")
     say("mode           : --rescore (no GPU, no measurement, seconds)")
     say("")
     say("THE MODEL, so every column below can be checked by hand:")
@@ -1311,7 +1607,11 @@ def run_rescore(args) -> int:
     say("  C2 containment            0 published alphas outside their bracket")
     say("  C3 tile cap               cap/ridge < 1.000 for every BLOCK_M <= 64 fit")
     say(f"  C4 pooled alpha           0 brackets contain {POOLED_ALPHA}")
-    say("  C5 correction size        median |published - bracket midpoint| <= 0.05")
+    say(f"  C5 correction size        median |published - bracket midpoint| <= "
+        f"{C5_SHIFT_PRIOR} (a PRIOR)")
+    say("")
+    for line in render_mde(MODEL_CONFIGS["mixtral-8x7b"], "bf16", 32, args.noise):
+        say(line)
     say("")
 
     if args.dry_run:
@@ -1320,8 +1620,9 @@ def run_rescore(args) -> int:
         for r in reports:
             say(f"  {r.relative_to(REPO)}")
         say("")
-        say("Nothing was measured and nothing was written.")
-        return 3
+        say("Nothing was measured and nothing was written. "
+            + exit_codes.describe(exit_codes.REFUSED))
+        return exit_codes.REFUSED
 
     fits, refusals, cals = scan_published(args.published)
     say("CARD CALIBRATIONS USED (the bracket's upper end, and the ridge for C3)")
@@ -1350,8 +1651,9 @@ def run_rescore(args) -> int:
             say(f"      {r.reason}")
         say("")
     if not fits:
-        say("NOTHING SCORED. No report carried an identifiable ladder with an anchor.")
-        return 3
+        say("NOTHING SCORED. No report carried an identifiable ladder with an "
+            "anchor. " + exit_codes.describe(exit_codes.REFUSED))
+        return exit_codes.REFUSED
 
     for line in render_fit_table(fits):
         say(line)
@@ -1386,22 +1688,43 @@ def run_rescore(args) -> int:
 
     payload = {
         "generated_by": "scripts/memory_branch_anchor.py --rescore",
+        "published_root": repo_relative(args.published),
         "pooled_alpha": POOLED_ALPHA,
+        "noise_assumption_rel": args.noise,
+        "c5_shift_prior": C5_SHIFT_PRIOR,
+        "mde_alpha": mde_alpha(POOLED_ALPHA, 0.0, args.noise),
         "calibrations": {s: asdict(c) for s, c in cals.items()},
         "gates": [asdict(g) for g in gates],
         "refusals": [asdict(r) for r in refusals],
         "fits": [asdict(f) for f in fits],
     }
+    payload = PV.provenance_block(
+        # NOTHING WAS TIMED HERE and the field says so in words. The numbers
+        # scored above were timed by the committed reports' own instrument,
+        # which is not this repository's current one; a run of `--measure`
+        # carries `timing.TIMING_BASIS` instead, and the difference between the
+        # two strings is exactly the open question the audit left on the table.
+        instrument="imported: the committed reports' own timings; --rescore "
+                   "times nothing",
+        # Per-card, so no single number belongs at the top level. The source is
+        # given without a number, which `provenance_block` accepts; a number
+        # without a source is what it lists as missing.
+        ridge_source="each card's own moe/bench/hardware/measured_<slug>.yaml; "
+                     "see calibrations",
+        bandwidth_source="each card's own measured_<slug>.yaml, largest "
+                         "demonstrated pattern; see calibrations",
+    ).stamp(payload)
     say("")
     say("WROTE")
     for note in report_output_paths(args.out_dir, lines, payload):
         print(note)
+    if not args.publish:
+        print("  (default destination, untracked. --publish rewrites the "
+              f"committed {repo_relative(PUBLISHED)}/{RESCORE_STEM}.txt/.json.)")
 
-    validity_failed = any(g.verdict == FAIL and g.kind == "VALIDITY" for g in gates)
-    claim_failed = any(g.verdict == FAIL and g.kind == "CLAIM" for g in gates)
-    if validity_failed:
-        return 2
-    return 1 if claim_failed else 0
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(exit_codes.describe(rc))
+    return rc
 
 
 # --------------------------------------------------------------------------
@@ -1434,6 +1757,20 @@ def detect_card() -> tuple[str, str] | None:
     return name, re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
+#: Plan field -> the short knob name `run_id` hashes and shows. Every field
+#: except the card appears here; `MeasurePlan.run_id` raises `KeyError` on a
+#: field that does not, which is the point. The short names are what makes a
+#: directory readable in `ls`; the completeness is what stops two different
+#: runs sharing one.
+ID_KNOBS = {
+    "model": "model", "dtype": "dtype", "block_sizes": "bm",
+    "group_sizes": "g", "slope_tiles": "treads", "block_n": "n",
+    "block_k": "k", "num_warps": "w", "num_stages": "s", "seed": "seed",
+    "warmup_ms": "warmup", "cell_budget_ms": "budget", "trials": "trials",
+    "l2_flush": "flush",
+}
+
+
 @dataclass(frozen=True)
 class MeasurePlan:
     #: WHICH CARD. Not decorative and not derivable from the rest of the plan.
@@ -1456,9 +1793,20 @@ class MeasurePlan:
     num_warps: int
     num_stages: int
     seed: int
-    iters: int
-    warmup: int
-    stream_reps: int
+    #: MILLISECONDS of delivered GPU load, not a call count. `--iters` and
+    #: `--warmup 5` are retired: `timing.time_kernel` warms for a DURATION and
+    #: sizes its own iteration count from `cell_budget_ms`, and a count is the
+    #: wrong unit for a warmup anyway. The old default warmed this arm for 5
+    #: calls while the ladders it re-anchors warmed for 20, and the two were
+    #: then compared tread for tread.
+    warmup_ms: float
+    #: Target KERNEL time per trial; the instrument sizes `iters` from it.
+    cell_budget_ms: float
+    trials: int
+    #: Whether every timed iteration starts on a cold L2. In the id because a
+    #: flushed and an unflushed cell are different measurements and must never
+    #: share a directory, and the ladders are flushed.
+    l2_flush: bool
 
     @property
     def cells(self) -> list[tuple[int, int, int]]:
@@ -1471,41 +1819,89 @@ class MeasurePlan:
         return out
 
     def run_id(self) -> str:
-        """EVERY swept knob is in the key AND in the visible name.
+        """EVERY field of this plan is in the key, by construction.
 
-        The sweep this study already ships lost a whole G=16 arm to an id that
-        omitted GROUP_SIZE_M: the run derived the G=1 id, resumed into its
-        directory, skipped every cell as already done, and printed G=1's timings
-        under a G=16 heading. Nothing looked wrong. The knobs are in the name so
-        two runs are also distinguishable in `ls`.
+        `moe.bench.provenance.run_id` builds it as of 2026-09-02, not a private
+        hash here: that function raises `NoCard` on a missing card and
+        `UnresolvedKnob` on a None or empty value, hashes the knobs in sorted
+        order so the id does not depend on the order they were named in, and
+        puts the card slug at the FRONT where `ls` shows it. Three scripts had
+        each re-implemented a subset of it and each had left a different knob
+        out; the collisions that cost are in that module's docstring, and two of
+        them are this arm's own hazards -- GROUP_SIZE_M, which lost a whole G=16
+        arm to a resumed G=1 directory, and THE CARD, which the operator sweeps
+        by moving to another pod while the results root is a network volume that
+        outlives it.
 
-        THE CARD IS ONE OF THE KNOBS. It is not something this script sweeps, it
-        is something the OPERATOR sweeps by moving to another pod, and the
-        results root is a network volume that outlives the pod. The failure is
-        the same shape as the GROUP_SIZE_M one and is worse, because a bracket's
-        upper end is a per-card ceiling: the second card would publish the first
-        card's timings against its own ridge and its own pin rate.
+        The knob names come from `ID_KNOBS`, and a field missing from that map
+        raises `KeyError` here rather than dropping quietly out of the key. That
+        is the whole point of the indirection: the failure mode being defended
+        against is a knob that was added to the plan and never added to the id.
         """
-        key = json.dumps(asdict(self), sort_keys=True)
-        groups = "_".join(str(g) for g in self.group_sizes)
-        tiles = "_".join(str(t) for t in self.block_sizes)
-        return (f"{self.card}-{self.model}-{self.dtype}-bm{tiles}-g{groups}"
-                f"-n{self.block_n}-k{self.block_k}-w{self.num_warps}"
-                f"-s{self.num_stages}"
-                f"-{hashlib.sha1(key.encode()).hexdigest()[:6]}")
+        knobs = {ID_KNOBS[f.name]: getattr(self, f.name)
+                 for f in fields(self) if f.name != "card"}
+        return PV.run_id(card=self.card, **knobs)
 
-    def estimated_seconds(self, per_cell_s: float = 6.0, compile_s: float = 12.0) -> float:
+    def estimated_seconds(self, compile_s: float = 12.0) -> float:
         """Timed work plus one Triton compile per distinct (BLOCK_M, GROUP_SIZE_M).
 
         Deliberately crude and stated as such. Its job is to stop a run being
-        started without a wall-clock number attached, not to be accurate.
+        started without a wall-clock number attached, not to be accurate. The
+        per-cell term is now the instrument's OWN budget -- one warmup plus
+        `trials` trials of `cell_budget_ms` -- rather than a flat 6 seconds,
+        because those are the two knobs that set it and a cost estimate that
+        ignored them would not move when the operator doubled the budget.
         """
         settings = len(self.block_sizes) * len(self.group_sizes)
-        return len(self.cells) * per_cell_s + settings * compile_s + self.stream_reps * 2.0
+        per_cell_s = (self.warmup_ms + self.trials * self.cell_budget_ms) / 1e3
+        # +1 cell for the stream check, which is timed by the same instrument.
+        return (len(self.cells) + 1) * per_cell_s + settings * compile_s
 
 
-def render_plan(plan: MeasurePlan, out_dir: Path) -> list[str]:
+def render_mde(cfg, dtype: str, block_m: int, spread_rel: float) -> list[str]:
+    """The smallest difference this grid can call, from a STATED assumption.
+
+    B14: no arm in this study stated one, so every threshold in it read as a
+    number the author liked. These four lines say what noise is assumed, where
+    the assumption came from, what it implies for the two quantities this file
+    gates on, and which of its thresholds is a prior rather than a derivation.
+    A reader who disagrees with the assumption can change it with `--noise` and
+    read the consequences off the same block.
+    """
+    w_bytes, act1 = anchor_bytes(cfg, dtype, block_m)
+    c = act1 / w_bytes
+    ratio = mde_ratio(spread_rel)
+    alpha_mde = mde_alpha(POOLED_ALPHA, c, spread_rel)
+    return [
+        "  MINIMUM DETECTABLE EFFECT, from a stated assumption and not from habit:",
+        f"    noise assumption   sigma = {spread_rel:.2%} relative spread on a "
+        "repeated cell timing",
+        f"                       ({CELL_SPREAD_REL:.2%} is the median of the "
+        "published H200 replicates, which run 0.76-1.82%; --noise overrides it. "
+        "It is an",
+        "                       ASSUMPTION about a pod this arm has not run on, "
+        "not a measurement of one.)",
+        f"    two-sided, 5% size, 80% power: z = {MDE_Z}",
+        f"    smallest anchor RATIO callable   {ratio:.2%}   (z sigma sqrt2, two "
+        "independent cells)",
+        f"      M1 gates the anchor spread at {ANCHOR_INVARIANCE_SMALL_G:.1%} "
+        f"across G<=16 and {ANCHOR_INVARIANCE_ALL_G:.1%} across all G, so both "
+        "sit above the MDE and can decide.",
+        f"    smallest ALPHA shift callable    {alpha_mde:.3f}   (that ratio x "
+        f"(alpha + Act1/W) at alpha={POOLED_ALPHA}, BLOCK_M={block_m})",
+        "      A LOWER BOUND: it propagates the anchor's noise only, and the "
+        "branch slope carries its own.",
+        f"    C5's <= {C5_SHIFT_PRIOR} is a PRIOR, not derived from this noise: "
+        f"it is {C5_SHIFT_PRIOR / alpha_mde:.1f}x the MDE and is the precision a",
+        "      published alpha is QUOTED at. Read it as a claim about reporting, "
+        "not about resolution.",
+    ]
+
+
+def render_plan(plan: MeasurePlan, out_dir: Path,
+                spread_rel: float = CELL_SPREAD_REL) -> list[str]:
     cells = plan.cells
+    cfg = MODEL_CONFIGS[plan.model]
     lines = [
         "MEASURE PLAN",
         f"  model / dtype        {plan.model} / {plan.dtype}",
@@ -1516,14 +1912,26 @@ def render_plan(plan: MeasurePlan, out_dir: Path) -> list[str]:
         f"  branch treads        n = {', '.join(str(t) for t in plan.slope_tiles)}",
         f"  pinned               BLOCK_SIZE_N={plan.block_n} BLOCK_SIZE_K={plan.block_k} "
         f"num_warps={plan.num_warps} num_stages={plan.num_stages}",
-        f"  timing               {plan.warmup} warmup, {plan.iters} timed, seed {plan.seed}",
-        f"  stream check         {plan.stream_reps} repeats over the real w1/w2 buffers",
+        f"  instrument           {timing_basis() or 'NOT NAMEABLE HERE (no torch)'}",
+        f"  timing               {plan.warmup_ms:.0f} ms warmup, {plan.trials} "
+        f"trials of {plan.cell_budget_ms:.0f} ms, L2 flush "
+        f"{'on' if plan.l2_flush else 'OFF'}, seed {plan.seed}",
+        "                       iters is NOT a knob: the instrument sizes it per "
+        "cell from the budget and the",
+        "                       warmup's own queue-deep per-call time, and every "
+        "cell records what it used.",
+        "  stream check         one cell's worth of the same instrument over the "
+        "real w1/w2 buffers",
+        "  pin assay            per-cell tile read-back + fresh Triton artefacts "
+        "per (BLOCK_M, GROUP_SIZE_M)",
         "",
         f"  cells                {len(cells)} "
         f"({len(plan.block_sizes)} BLOCK_M x {len(plan.group_sizes)} G x "
         f"{1 + len(plan.slope_tiles)} treads)",
         f"  estimated wall time  {plan.estimated_seconds() / 60.0:.1f} min "
-        f"(crude: {len(cells)} cells at 6 s plus one compile per setting)",
+        f"(crude: {len(cells)} cells at "
+        f"{(plan.warmup_ms + plan.trials * plan.cell_budget_ms) / 1e3:.1f} s "
+        "plus one compile per setting)",
         f"  run id               {plan.run_id()}",
         f"  output               {out_dir}",
         "",
@@ -1549,30 +1957,21 @@ def render_plan(plan: MeasurePlan, out_dir: Path) -> list[str]:
         "  counter; ncu returns ERR_NVGPUCTRPERM on rented pods and the image's "
         "nsys cannot",
         "  convert its own capture. The deliverable is the interval, not a point.",
+        "",
     ]
+    lines += render_mde(cfg, plan.dtype, min(plan.block_sizes), spread_rel)
     return lines
 
 
-def find_override_config():
-    """vLLM's own tuning hook, probed rather than assumed.
-
-    Duplicated from `scripts/block_m_crossing_sweep.py` on purpose: that file is
-    under concurrent edit by another workflow, and an anchor measurement that
-    changes because someone refactored a helper is not an anchor. Fifteen lines
-    is a cheap price for an arm that cannot be moved out from under it.
-    """
-    import importlib
-    for name in ("vllm.model_executor.layers.fused_moe",
-                 "vllm.model_executor.layers.fused_moe.fused_moe",
-                 "vllm.model_executor.layers.fused_moe.config"):
-        try:
-            mod = importlib.import_module(name)
-        except ImportError:
-            continue
-        fn = getattr(mod, "override_config", None)
-        if fn is not None:
-            return fn, name
-    raise SystemExit("could not find vLLM's override_config; check the installed version")
+# `find_override_config` lived here until 2026-09-02 and is GONE, not moved. It
+# probed the same three module names as two other scripts, in a third order, and
+# then entered the hook it found WITHOUT reading get_config() back -- so a
+# context that was entered and did not take looked exactly like one that did.
+# `moe.baselines._framework_config.forcing_tile_config` probes and verifies, and
+# `run_measure` uses it. The duplication was defended here on the grounds that
+# an arm should not change because someone refactored a helper; what actually
+# happened is that the arm ran eight GPU minutes at a time with no assay at all
+# while every sibling arm carried one.
 
 
 #: P1's threshold. The anchor may not depend on the swizzle by more than this,
@@ -1676,17 +2075,134 @@ def fits_from_cells(cells, cfg, model_dtype: str, block_n: int,
     return fits, refusals
 
 
+#: The `tile_config_source` a cell measured inside `override_config` has to
+#: carry. The string duplicates `moe.bench.force_tile.TILE_SOURCE_OVERRIDE`,
+#: which cannot be imported at module scope here without pulling torch in
+#: through `moe.quant` and breaking the laptop `--rescore`/`--self-test` path.
+#: The two are pinned to each other by
+#: `tests/test_memory_branch_anchor.py::test_the_pin_source_string_has_not_drifted`,
+#: so the duplicate cannot drift in silence.
+PIN_SOURCE_OVERRIDE = "vllm_override"
+
+#: The six constants a cell asks `override_config` for, and the six it has to be
+#: SHOWN to have run. Not four: BLOCK_SIZE_K, num_warps and num_stages are
+#: pinned too, and a vLLM that honoured the two this arm sweeps while silently
+#: substituting the other four would still be running a kernel nobody asked for.
+PIN_KEYS = ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M",
+            "num_warps", "num_stages")
+
+
+def pin_disagreement(row: dict) -> str:
+    """"" when this cell showed the tile it asked for, else what went wrong.
+
+    Four distinguishable failures, and they are kept apart because they have
+    different fixes: no assay was recorded at all (a cell from before the assay
+    existed, or a synthetic one); the recorder saw nothing (vLLM memoised the
+    lookup, or the call never reached it); the source was not the override (the
+    hook stored the config and the kernel took its own); and a constant came
+    back different from the one requested (the override was honoured in part).
+    A cell that cannot produce the evidence is not a smaller failure than one
+    that produces contradicting evidence: both leave a row that CLAIMS a tile
+    it cannot show, which is worse than an unpinned row, because an unpinned row
+    at least records vLLM's own choice honestly.
+    """
+    pin = row.get("pin")
+    if not isinstance(pin, dict):
+        return "no pin assay recorded for this cell"
+    requested, observed = pin.get("requested") or {}, pin.get("observed") or {}
+    if not requested:
+        return "the cell recorded no requested tile, so nothing can be compared"
+    for key, column in (("BLOCK_SIZE_M", "block_m"), ("GROUP_SIZE_M", "group_m")):
+        if column in row and requested.get(key) != row.get(column):
+            return (f"the row is labelled {column}={row.get(column)} and its "
+                    f"requested tile says {key}={requested.get(key)}")
+    if not observed:
+        return ("nothing was read back out of vLLM during this cell, so which "
+                "tile ran is unrecorded")
+    source = pin.get("source")
+    if source != PIN_SOURCE_OVERRIDE:
+        return (f"the config vLLM handed the kernel came from {source!r}, not "
+                f"{PIN_SOURCE_OVERRIDE!r}: the override was entered and the "
+                "kernel took its own tile")
+    wrong = [f"{k}: asked {requested.get(k)}, ran {observed.get(k)}"
+             for k in PIN_KEYS if observed.get(k) != requested.get(k)]
+    return "; ".join(wrong)
+
+
+def gate_m6_pin(cells) -> Gate:
+    """VALIDITY. Did the tile pin reach the kernel, at every cell.
+
+    THE GATE THAT DECIDES WHETHER THE OTHER SIX MEAN ANYTHING, and the one this
+    arm ran eight GPU minutes at a time without. Its three legs are described in
+    the module docstring; here is why the verdict is one gate and not three.
+    A cell needs all of them to be quotable -- an echoed-back override with no
+    fresh kernel, or a fresh kernel whose config was never read back, each
+    leaves the same question open -- so a single verdict carrying both counts in
+    `measured` is the honest shape, and the failing side is named in the lines.
+    The first leg cannot reach this gate as a verdict at all: a cell whose hook
+    did not take is never timed, so it arrives as a `failed` row and gate M5
+    counts it.
+
+    THE COMPILE COUNT IS PER SETTING, NOT PER CELL. One (BLOCK_SIZE_M,
+    GROUP_SIZE_M) is one Triton specialisation: its first cell compiles and its
+    other fifteen legitimately do not. So the count is taken as the maximum over
+    a setting's cells and the gate asks for at least one artefact per setting.
+
+    A RESUMED CELL CARRIES ITS OWN ASSAY. The evidence is written into
+    `cells.json` when the cell is measured, so a run that resumes every cell
+    inherits it rather than going UNKNOWN for want of an experiment it cannot
+    repeat. That is the difference from `block_m_crossing_sweep.gate_0_override`,
+    which keeps its counts in memory and must go UNDECIDED on a full resume.
+    The cells a resumed session RE-measures are the other half of that, and they
+    need the opposite treatment: an inherited count is evidence, an inherited
+    Triton cache is not, because a warm one makes a legitimate compile
+    invisible and reads out here as "compiled nothing new". `session_cache_root`
+    is why the count of a re-measured cell still means something.
+    """
+    ok = [c for c in cells if c.get("status") == "ok"]
+    if not ok:
+        return Gate("M6", VALIDITY, "the forced tile is the tile that ran", FAIL,
+                    "no cell measured, so no cell was assayed", "every ok cell "
+                    "shows its requested tile, and every setting compiled",
+                    "every gate below, which would be scoring an empty set")
+    bad = [(c, why) for c in ok if (why := pin_disagreement(c))]
+    settings: dict[tuple[int, int], int] = {}
+    for c in ok:
+        key = (int(c.get("block_m", 0)), int(c.get("group_m", 0)))
+        fresh = ((c.get("pin") or {}).get("fresh_artefacts")
+                 if isinstance(c.get("pin"), dict) else None)
+        settings[key] = max(settings.get(key, 0), int(fresh or 0))
+    cold = sorted(k for k, n in settings.items() if n < 1)
+    lines = [f"  BM={c.get('block_m')} G={c.get('group_m')} n={c.get('tiles')}: {why}"
+             for c, why in bad[:10]]
+    if cold:
+        lines.append("  compiled nothing new: "
+                     + ", ".join(f"BM={bm} G={g}" for bm, g in cold))
+    return Gate(
+        "M6", VALIDITY, "the forced tile is the tile that ran",
+        PASS if not bad and not cold else FAIL,
+        f"{len(ok) - len(bad)} of {len(ok)} cells showed their requested tile; "
+        f"{len(settings) - len(cold)} of {len(settings)} settings compiled at "
+        "least one fresh Triton artefact",
+        "every ok cell shows its requested tile, and every setting compiled",
+        "EVERY M GATE. A run in which the override never reached the kernel is "
+        "one kernel measured at every setting, so M1's 'the anchor does not "
+        "depend on the swizzle' passes by construction and the report reads as "
+        "a tidy null result. That world was executed against this file's scorer "
+        "on 2026-09-02: M0-M5 all returned PASS.", lines)
+
+
 def gate_m0_stream(stream: dict | None, cal: Calibration) -> Gate:
     """Is the committed ceiling actually above what these buffers achieve."""
     if not stream:
-        return Gate("M0", "VALIDITY", "the committed ceiling is above the measured "
+        return Gate("M0", VALIDITY, "the committed ceiling is above the measured "
                     "read rate on the real weight buffers", FAIL,
                     "the stream check did not run", "measured <= ceiling",
                     "the bracket's upper end, which would then rest on a ceiling "
                     "this run never checked")
     ratio = stream["gbps"] / cal.ceiling_gbps
     return Gate(
-        "M0", "VALIDITY", "the committed ceiling is above the measured read rate "
+        "M0", VALIDITY, "the committed ceiling is above the measured read rate "
         "on the real weight buffers",
         PASS if ratio <= 1.0 else FAIL,
         f"{stream['gbps']:.1f} GB/s against a ceiling of {cal.ceiling_gbps:.1f} "
@@ -1712,7 +2228,7 @@ def gate_m1_anchor_invariance(fits) -> Gate:
     ok = (worst_small <= ANCHOR_INVARIANCE_SMALL_G
           and worst_all <= ANCHOR_INVARIANCE_ALL_G)
     return Gate(
-        "M1", "CLAIM", "P1: the anchor t(1) does not depend on the swizzle",
+        "M1", CLAIM, "P1: the anchor t(1) does not depend on the swizzle",
         PASS if ok else FAIL,
         f"worst spread {worst_small:.2%} across G<=16, {worst_all:.2%} across all G",
         f"<= {ANCHOR_INVARIANCE_SMALL_G:.1%} and <= {ANCHOR_INVARIANCE_ALL_G:.1%}",
@@ -1725,7 +2241,7 @@ def gate_m2_anchor_rate(fits, cal: Calibration, block_m: int = 32) -> Gate:
     """P2, scored. Is this the same physical event the committed arms measured."""
     sel = [f for f in fits if f.block_m == block_m]
     if not sel:
-        return Gate("M2", "CLAIM", f"P2: the BLOCK_M={block_m} anchor rate is in band",
+        return Gate("M2", CLAIM, f"P2: the BLOCK_M={block_m} anchor rate is in band",
                     FAIL, f"no BLOCK_M={block_m} cells measured",
                     f"{ANCHOR_RATE_BAND[0]:.0%}-{ANCHOR_RATE_BAND[1]:.0%} of pin",
                     "the carry-across to the committed arms, which is scored at "
@@ -1734,7 +2250,7 @@ def gate_m2_anchor_rate(fits, cal: Calibration, block_m: int = 32) -> Gate:
     hi = max(f.anchor_rate_of_pin for f in sel)
     ok = ANCHOR_RATE_BAND[0] <= lo and hi <= ANCHOR_RATE_BAND[1]
     return Gate(
-        "M2", "CLAIM", f"P2: the BLOCK_M={block_m} anchor rate is in band",
+        "M2", CLAIM, f"P2: the BLOCK_M={block_m} anchor rate is in band",
         PASS if ok else FAIL,
         f"{lo:.1%}-{hi:.1%} of the {cal.pin_gbps:.0f} GB/s pin rate over "
         f"{len(sel)} cells",
@@ -1747,13 +2263,13 @@ def gate_m2_anchor_rate(fits, cal: Calibration, block_m: int = 32) -> Gate:
 def gate_m3_slope_independence(fits) -> Gate:
     """P3, scored. Are the two ends of the bracket independent."""
     if not fits:
-        return Gate("M3", "CLAIM", "P3: the slope does not depend on the anchor",
+        return Gate("M3", CLAIM, "P3: the slope does not depend on the anchor",
                     FAIL, "no cells", f"<= {SLOPE_INDEPENDENCE_REL:.1%}",
                     "the independence of the bracket's two ends")
     worst = max(fits, key=lambda f: f.slope_shift)
     ok = worst.slope_shift <= SLOPE_INDEPENDENCE_REL
     return Gate(
-        "M3", "CLAIM", "P3: the slope does not depend on the anchor",
+        "M3", CLAIM, "P3: the slope does not depend on the anchor",
         PASS if ok else FAIL,
         f"worst {worst.slope_shift:.2%} at BM={worst.block_m} G={worst.group_m} "
         f"over {worst.treads} treads",
@@ -1765,13 +2281,13 @@ def gate_m3_slope_independence(fits) -> Gate:
 def gate_m4_bracket_order(fits, cal: Calibration) -> Gate:
     """P4, scored."""
     if not fits:
-        return Gate("M4", "VALIDITY", "P4: the bracket is ordered", FAIL, "no cells",
+        return Gate("M4", VALIDITY, "P4: the bracket is ordered", FAIL, "no cells",
                     "anchor rate <= ceiling", "every interval below")
     tight = max(fits, key=lambda f: f.bw_anchor_gbps)
     ratio = tight.bw_anchor_gbps / cal.ceiling_gbps
     ok = ratio <= 1.0 and all(f.alpha_lo <= f.alpha_hi + 1e-12 for f in fits)
     return Gate(
-        "M4", "VALIDITY", "P4: the anchor rate never exceeds the measured ceiling",
+        "M4", VALIDITY, "P4: the anchor rate never exceeds the measured ceiling",
         PASS if ok else FAIL,
         f"tightest {ratio:.1%} at BM={tight.block_m} G={tight.group_m}", "<= 100%",
         "the bracket outright on this card: an anchor above the ceiling inverts "
@@ -1784,7 +2300,7 @@ def gate_m5_completeness(cells, planned: int) -> Gate:
     ok = len(ok_cells) == planned and planned > 0
     failed = [c for c in cells if c.get("status") != "ok"]
     return Gate(
-        "M5", "VALIDITY", "every planned cell measured",
+        "M5", VALIDITY, "every planned cell measured",
         PASS if ok else FAIL,
         f"{len(ok_cells)} of {planned} planned cells ok, {len(failed)} failed",
         "all planned cells ok",
@@ -1818,6 +2334,10 @@ def score_measured(cells, cfg, dtype: str, block_n: int, cal: Calibration,
     """The GPU arm's whole verdict path, with no device in it."""
     fits, refusals = fits_from_cells(cells, cfg, dtype, block_n, cal)
     gates = [
+        # M6 FIRST, whatever its number: it is the gate that decides whether the
+        # rest mean anything, and a reader who stops at the first FAIL has to
+        # meet it before meeting a null result it would explain.
+        gate_m6_pin(cells),
         gate_m5_completeness(cells, planned),
         gate_m0_stream(stream, cal),
         gate_m4_bracket_order(fits, cal),
@@ -1829,29 +2349,393 @@ def score_measured(cells, cfg, dtype: str, block_n: int, cal: Calibration,
     return fits, refusals, gates, lines
 
 
-def time_call(fn, warmup: int, iters: int) -> tuple[float, float, float]:
-    """Median, min and stdev milliseconds over CUDA events.
+# --------------------------------------------------------------------------
+# Planted worlds. The whole measured verdict path, off-GPU, with the FAIL branch
+# of every M gate planted -- including the world the 2026-09-02 audit executed
+# against this file's scorer and got exit 0 out of.
+# --------------------------------------------------------------------------
 
-    No L2 flush, matching the sweep this re-anchors: the anchor has to be the
-    same physical event those ladders measured, and a flush the ladders did not
-    do would make it a different one.
+#: The card the planted worlds run on: the A100's own committed calibration,
+#: transcribed so a self-test does not depend on a yaml being present. The pin
+#: rate and the write-pattern ceiling are what M2 and M4 are scored against, so
+#: they are the numbers that decide which plant lands inside a band and which
+#: outside; changing them changes what the worlds mean.
+SELF_TEST_CALIBRATION = Calibration(
+    slug="nvidia_a100_sxm4_80gb", name="A100-SXM4-80GB (planted)",
+    checked_on="2026-09-02", measured_commit="planted",
+    patterns={"triad": 1799.4, "write": 1879.1}, ceiling_pattern="write",
+    ceiling_gbps=1879.1, pin_gbps=2039.0,
+    dense_tflops={"bf16": 262.3712016979615}, ridge=145.81,
+    reference_clock_mhz=1410.0,
+    reference_clock_source="planted: the A100 calibration's GEMM clock")
+
+
+def plant_ladder(alpha: float, *, bw_anchor_gbps: float, bw_branch_gbps: float,
+                 fixed_ms: float, cfg, dtype: str = "bf16", block_m: int = 32,
+                 treads: int = 16) -> list[tuple[int, float]]:
+    """`t(n)` from a stated alpha, with the ANCHOR allowed its own bandwidth.
+
+    The anchor running slower than the branch is the pathology in the committed
+    data -- the measured n=1 tread stands above the fitted line in 12 of 12 A100
+    fits -- so the plant has to be able to express it, or every world would be
+    one in which nothing is wrong. `treads` counts the anchor: `treads=16` is
+    n = 1..16, the anchor plus the fifteen branch treads the CLI defaults to.
     """
-    import torch
-    for _ in range(warmup):
-        fn()
-    torch.cuda.synchronize()
+    w, act1 = anchor_bytes(cfg, dtype, block_m)
     out = []
-    for _ in range(iters):
-        s, e = (torch.cuda.Event(enable_timing=True) for _ in range(2))
-        s.record()
-        fn()
-        e.record()
-        torch.cuda.synchronize()
-        out.append(s.elapsed_time(e))
-    return statistics.median(out), min(out), statistics.pstdev(out)
+    for n in range(1, treads + 1):
+        bw = bw_anchor_gbps if n == 1 else bw_branch_gbps
+        bytes_n = w * (1.0 + alpha * (n - 1)) + act1 * n
+        out.append((n, fixed_ms + bytes_n / (bw * 1e9) * 1e3))
+    return out
 
 
-def stream_check(weights, reps: int) -> dict:
+#: How a planted cell records its pin assay. The four modes are the four
+#: distinguishable states gate M6 exists to separate, and every one of them
+#: except "ok" was indistinguishable from "ok" before that gate existed.
+PIN_MODES = ("ok", "default_tile", "missing", "warm_cache")
+
+
+def plant_pin(mode: str, requested: dict) -> dict | None:
+    """The `pin` record a planted cell carries, or None for "no record at all".
+
+    `default_tile` is vLLM's hardcoded fallback ladder at these row counts
+    (BLOCK_SIZE_M 64, GROUP_SIZE_M 1, BLOCK_SIZE_N 64) reached through the tuned
+    lookup: the shape a cell has when `override_config` was entered and the
+    kernel took its own tile anyway. `warm_cache` is the other half of the
+    assay: the right tile, read back correctly, and no kernel built for it,
+    which is either a cache serving a previous run or an override that changed
+    nothing.
+    """
+    if mode == "missing":
+        return None
+    if mode == "default_tile":
+        observed = dict(requested)
+        observed.update({"BLOCK_SIZE_M": 64, "GROUP_SIZE_M": 1})
+        return {"requested": requested, "observed": observed,
+                "source": "vllm_default", "hook": "planted", "fresh_artefacts": 0}
+    return {"requested": requested, "observed": dict(requested),
+            "source": PIN_SOURCE_OVERRIDE, "hook": "planted",
+            "fresh_artefacts": 0 if mode == "warm_cache" else 17}
+
+
+def plant_cells(cfg, *, alpha: float = POOLED_ALPHA,
+                anchor_bw_by_g: dict[int, float] | None = None,
+                bw_branch_gbps: float = 1750.0, fixed_ms: float = 0.05,
+                block_m: int = 32, block_n: int = 64, block_k: int = 64,
+                num_warps: int = 8, num_stages: int = 3, treads: int = 16,
+                pin: str = "ok") -> list[dict]:
+    """A whole `--measure` grid as `cells.json` rows, with its pin assay.
+
+    `anchor_bw_by_g` is the lever every M gate's world is built with: one
+    bandwidth per GROUP_SIZE_M for the n=1 tread. Equal values across G are what
+    a HEALTHY run looks like (the anchor does not depend on the swizzle, which
+    is P1) AND what a run whose pin never reached the kernel looks like (one
+    kernel measured four times). The two are separated by the pin record and by
+    nothing else in the file, which is the whole reason gate M6 exists.
+    """
+    if pin not in PIN_MODES:
+        raise ValueError(f"pin mode {pin!r} is not one of {PIN_MODES}")
+    anchor_bw_by_g = anchor_bw_by_g or {1: 1450.0, 8: 1450.0, 16: 1450.0,
+                                        64: 1450.0}
+    rows: list[dict] = []
+    for g, bw_anchor in sorted(anchor_bw_by_g.items()):
+        points = plant_ladder(alpha, bw_anchor_gbps=bw_anchor,
+                              bw_branch_gbps=bw_branch_gbps, fixed_ms=fixed_ms,
+                              cfg=cfg, block_m=block_m, treads=treads)
+        requested = {"BLOCK_SIZE_M": block_m, "BLOCK_SIZE_N": block_n,
+                     "BLOCK_SIZE_K": block_k, "GROUP_SIZE_M": g,
+                     "num_warps": num_warps, "num_stages": num_stages}
+        for n, ms in points:
+            row = {"block_m": block_m, "group_m": g, "tiles": n,
+                   "rows_per_expert": block_m * n, "tokens": 0,
+                   "ms_p50": ms, "ms_p90": ms, "ms_min": ms, "ms_stdev": 0.0,
+                   "instrument": "planted: no kernel ran", "warmup_ms": 0.0,
+                   "iters": 0, "trials": 0, "l2_flush": True,
+                   "sm_clock_load_mhz": None, "clock_level_ok": None,
+                   "clock_drift_ok": None, "host_bound": None,
+                   "host_enqueue_ms": None, "clock_note": "", "host_note": "",
+                   "status": "ok", "detail": ""}
+            record = plant_pin(pin, requested)
+            if record is not None:
+                row["pin"] = record
+            rows.append(row)
+    return rows
+
+
+@dataclass(frozen=True)
+class PlantedWorld:
+    """One world, its registered exit code, and what it is for.
+
+    `must_fail` and `must_pass` are named gates, not counts: a world that
+    reached the right exit code through the wrong gate has not exercised the
+    branch it claims to. `must_pass` is what makes the `pin_failed` world an
+    argument rather than an assertion -- it requires M0 through M5 to PASS while
+    M6 fails, which is the state the audit produced and called exit 0.
+    """
+
+    name: str
+    what: str
+    expect: int
+    must_fail: tuple[str, ...]
+    must_pass: tuple[str, ...] = ()
+    cells: dict = field(default_factory=dict)
+    stream_gbps: float | None = 1500.0
+    planned_delta: int = 0
+
+
+ALL_M_GATES = ("M0", "M1", "M2", "M3", "M4", "M5", "M6")
+
+SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
+    PlantedWorld(
+        "clean", "a run that obeys the model at every swizzle, correctly pinned",
+        exit_codes.DONE, (), ALL_M_GATES),
+    PlantedWorld(
+        "pin_failed",
+        "THE AUDIT'S WORLD: one kernel measured at every GROUP_SIZE_M because "
+        "the override never reached it. Numerically identical to `clean`; the "
+        "only difference on the page is the tile vLLM handed the kernel",
+        exit_codes.INVALID, ("M6",), tuple(g for g in ALL_M_GATES if g != "M6"),
+        cells={"pin": "default_tile"}),
+    PlantedWorld(
+        "unassayed",
+        "the 128 synthetic cells the refuter fed this scorer: no pin record at "
+        "all. A cell that cannot show its tile is not a smaller failure than "
+        "one that shows the wrong tile",
+        exit_codes.INVALID, ("M6",), tuple(g for g in ALL_M_GATES if g != "M6"),
+        cells={"pin": "missing"}),
+    PlantedWorld(
+        "warm_cache",
+        "the right tile read back, and no Triton artefact built for it: a cache "
+        "serving a previous run, or an override that changed no constant",
+        exit_codes.INVALID, ("M6",), tuple(g for g in ALL_M_GATES if g != "M6"),
+        cells={"pin": "warm_cache"}),
+    PlantedWorld(
+        "swizzle_dependent_anchor",
+        "P1 refuted: t(1) is 45% slower at G=16 than at G=1, so it is a "
+        "condition-specific number and not a condition-free bound on L",
+        exit_codes.CLAIM_FAIL, ("M1",), ("M0", "M4", "M5", "M6"),
+        cells={"anchor_bw_by_g": {1: 1450.0, 16: 1000.0}}),
+    PlantedWorld(
+        "anchor_out_of_band",
+        "P2 refuted: the anchor rate is 59% of pin, below the 64-78% band the "
+        "committed arms measured, so this is not the same physical event and "
+        "the brackets may not be carried across to them",
+        exit_codes.CLAIM_FAIL, ("M2",), ("M0", "M4", "M5", "M6"),
+        cells={"anchor_bw_by_g": {1: 1200.0, 16: 1200.0}}),
+    PlantedWorld(
+        "slope_depends_on_anchor",
+        "P3 refuted: an anchor far off the branch moves the fitted slope by "
+        "more than 1.5% when it is dropped, so B / t(1) is partly a restatement "
+        "of t(1) and not a bound on it",
+        exit_codes.CLAIM_FAIL, ("M3",), ("M0", "M4", "M5", "M6"),
+        cells={"anchor_bw_by_g": {1: 700.0, 16: 700.0}}),
+    PlantedWorld(
+        "anchor_above_ceiling",
+        "P4 refuted: the n=1 tread moves bytes faster than the card's largest "
+        "demonstrated pattern, so the ceiling is not one and the bracket inverts",
+        exit_codes.INVALID, ("M4",), ("M5", "M6"),
+        cells={"anchor_bw_by_g": {1: 2000.0, 16: 2000.0}}),
+    PlantedWorld(
+        "ceiling_below_the_data",
+        "the committed ceiling sits BELOW the read rate these very buffers "
+        "achieved, so every alpha_hi computed from it is too low",
+        exit_codes.INVALID, ("M0",), ("M1", "M4", "M5", "M6"),
+        stream_gbps=1900.0),
+    PlantedWorld(
+        "cells_missing",
+        "the grid the plan printed is not the grid that ran: a bracket built on "
+        "a different set of cells from the one the report describes",
+        exit_codes.INVALID, ("M5",), ("M0", "M1", "M4", "M6"),
+        planned_delta=1),
+)
+
+
+def self_test(verbose: bool = True) -> int:
+    """Score every planted world and compare with what this file registered.
+
+    Returns DONE when every world agrees and INVALID when one does not: a
+    scorer that misreads a world whose answer is known cannot be trusted with a
+    world whose answer is not, and that is an instrument failure rather than a
+    refuted claim.
+
+    NO `RESULT:` LINES ARE PRINTED HERE. A planted world's verdict is not a
+    result about this machine, and a driver that grepped one out of a self-test
+    log would be reading a plant as a measurement -- the same defect, from the
+    other side, as the refused arm whose log matched a summary regex 18 times
+    and printed an imported constant under the heading "floor".
+
+    The proof that this function can return non-zero is not in here: it is in
+    `tests/test_memory_branch_anchor.py::test_the_self_test_fails_when_a_world_is_mis_registered`,
+    which plants a wrong expectation and asserts the INVALID.
+    """
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    bad = 0
+    for world in SELF_TEST_WORLDS:
+        cells = plant_cells(cfg, **world.cells)
+        stream = {"gbps": world.stream_gbps} if world.stream_gbps else None
+        planned = len(cells) + world.planned_delta
+        _, _, gates, _ = score_measured(cells, cfg, "bf16", 64,
+                                        SELF_TEST_CALIBRATION, stream, planned)
+        rc = exit_codes.classify(g.scored() for g in gates)
+        verdicts = {g.number: g.verdict for g in gates}
+        wrong_fail = [n for n in world.must_fail if verdicts[n] == PASS]
+        wrong_pass = [n for n in world.must_pass if verdicts[n] != PASS]
+        ok = rc == world.expect and not wrong_fail and not wrong_pass
+        bad += not ok
+        if verbose:
+            print(f"[{'PASS' if ok else 'FAIL'}] {world.name:26s} "
+                  f"-> {exit_codes.CODE_NAMES[rc]:10s} "
+                  f"(registered {exit_codes.CODE_NAMES[world.expect]})")
+            print(f"           {world.what}")
+            print("           " + "  ".join(f"{n}:{verdicts[n]}"
+                                            for n in sorted(verdicts)))
+            if wrong_fail:
+                print(f"           EXPECTED TO FAIL AND PASSED: {wrong_fail}")
+            if wrong_pass:
+                print(f"           EXPECTED TO PASS AND DID NOT: {wrong_pass}")
+    if verbose:
+        print()
+        print(f"{len(SELF_TEST_WORLDS) - bad} of {len(SELF_TEST_WORLDS)} planted "
+              "worlds scored as registered.")
+        print("Nothing was measured: every number above is planted, and no "
+              "RESULT line was printed for that reason.")
+    return exit_codes.DONE if bad == 0 else exit_codes.INVALID
+
+
+def timing_columns(t) -> dict:
+    """The `KernelTiming` columns every timed row of this arm carries.
+
+    ALL of them, including the three verdicts. A row that recorded a time and
+    not the clock it was taken at cannot be compared with the roof, and this
+    study has 13,460 driver rows that drift 100 MHz inside one cell and nine
+    session scripts that record no clock at all. `clock_level_ok` and
+    `clock_drift_ok` are Optional and None means "not determined", never "fine";
+    `clock_note` says which.
+    """
+    return {
+        "ms_p50": t.ms_p50, "ms_p90": t.ms_p90, "ms_min": t.ms_min,
+        "ms_stdev": t.ms_std,
+        "instrument": t.instrument, "warmup_ms": t.warmup_ms, "iters": t.iters,
+        "trials": t.trials, "l2_flush": t.l2_flush,
+        "sm_clock_load_mhz": t.sm_clock_load_mhz,
+        "clock_level_ok": t.clock_level_ok, "clock_drift_ok": t.clock_drift_ok,
+        "host_bound": t.host_bound, "host_enqueue_ms": t.host_enqueue_ms,
+        "clock_note": t.clock_note, "host_note": t.host_note,
+    }
+
+
+def arm_triton_cache(root: Path, block_m: int, group_m: int) -> Path:
+    """Point Triton at a fresh directory for THIS setting, before it compiles.
+
+    Set before the first compile of the setting, because Triton reads the
+    variable at compile time. Within one process each (BLOCK_SIZE_M,
+    GROUP_SIZE_M) is a distinct specialisation and so a distinct cache entry
+    anyway; the per-setting directory is what makes "did this setting compile
+    anything" a countable question instead of an assumption.
+
+    Six lines transcribed from `scripts/block_m_crossing_sweep.py` rather than
+    imported, for the reason `find_override_config` used to give: importing one
+    script from another makes an arm's measurement depend on an unrelated file's
+    refactor. The keyed setting is the pair, not the tile alone, because this
+    arm sweeps the swizzle and the swizzle is the constant its headline gate is
+    about.
+    """
+    directory = root / f"bm{block_m}-g{group_m}"
+    directory.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_CACHE_DIR"] = str(directory)
+    return directory
+
+
+def session_cache_root(out_dir: Path) -> Path:
+    """An EMPTY Triton cache directory belonging to this session alone.
+
+    The artefact count is only evidence if the cache it counts into started
+    empty. A single `out_dir/triton-cache` is not that: `out_dir` is the resume
+    directory, so a second session finds the first session's compiled artefacts
+    already on disk, the per-setting baseline absorbs them, every re-measured
+    cell loads from the warm cache and records `fresh_artefacts = 0`, and gate
+    M6 fails "compiled nothing new" on a run that is otherwise sound. That is
+    the shape of the M0-forever-fail-on-resume defect the persisted stream check
+    was written to remove -- the stream check was carried across sessions, the
+    artefact count was not, and the count cannot be carried because it is a
+    statement about a directory rather than about a cell. So the directory
+    moves instead, and each session compiles once per setting into its own.
+
+    `mkdtemp` rather than a timestamp: two calls in one second in one process
+    would collide on a stamp, and the whole point of the directory is that
+    nothing has written into it. Earlier sessions' directories are LEFT ALONE.
+    They are that session's evidence, and a script handed `--out-dir` by a
+    human has no business deleting what it finds there.
+    """
+    root = out_dir / "triton-cache"
+    root.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="session-", dir=root))
+
+
+def count_new(root: Path, seen: set[Path]) -> int:
+    """How many files have appeared under `root` since the last call."""
+    fresh = [p for p in root.rglob("*") if p.is_file() and p not in seen]
+    seen.update(fresh)
+    return len(fresh)
+
+
+def observed_pin(capture) -> tuple[dict, str]:
+    """What vLLM handed the kernel this cell, and where that config came from.
+
+    `capture` is a `TileCapture` filled by `recording_tile_config` around ONE
+    call. The first recorded call is the one that describes the time (vLLM
+    re-derives the config only per chunk above VLLM_FUSED_MOE_CHUNK_SIZE, and
+    the first chunk is the full-size one).
+
+    THE SOURCE IS DERIVED FROM WHAT THE LOOKUP DID, not asserted from the fact
+    that a context was entered. `tile_meta_from_capture(override_active=True)`
+    labels any capture "vllm_override" because its caller said so, which is the
+    tautology this gate exists to avoid. vLLM's `try_get_optimal_moe_config`
+    consults `get_config()` first and returns the override WITHOUT reaching
+    `get_moe_configs`; so a call that skipped the tuned-file lookup took the
+    override, and a call that ran the lookup went to vLLM's own tuned file or
+    its hardcoded fallback ladder, which is the override failing.
+
+    KNOWN LIMIT, and it is WIDER THAN "the recorder found nothing to wrap".
+    `lookup_observed` is False in three worlds, not two, and this function can
+    only see that it is False:
+
+      * the override took, and the lookup was skipped because it was;
+      * vLLM exposed no `get_moe_configs` binding, so nothing watched the
+        lookup that did run;
+      * vLLM memoised `try_get_optimal_moe_config` itself, so the observation
+        call hit that cache and never re-entered the lookup. That is the
+        degradation `recording_tile_config` names in its own docstring, and it
+        returns real tile ints with no observation behind them.
+
+    The last two are labelled `vllm_override` here. That is deliberate and it is
+    the opposite of what `tile_meta_from_capture` does with the same input,
+    where an unobserved lookup writes "unrecorded": that function labels rows
+    for a tile-source CSV in which nobody asserted a tile, so the conservative
+    answer is to name no source. Here the caller HAS entered an override and the
+    only question is whether it took; writing "unrecorded" would make the source
+    leg unable to return PASS in the healthy world, which is not conservatism,
+    it is deleting the leg.
+
+    WHAT BOUNDS THE RESIDUAL is that the label alone passes nothing. Gate M6
+    needs `pin_disagreement` to find the six PIN_KEYS read back EQUAL to the six
+    requested, and it needs the setting to have compiled a fresh Triton
+    artefact; neither depends on the recorder's reach. In both degraded worlds
+    the config in hand is vLLM's own choice, so the six constants agree with the
+    six requested only where vLLM would have chosen the pinned tile anyway --
+    a cell that measures the requested kernel either way.
+    """
+    if not capture.calls:
+        return {}, "unrecorded"
+    call = capture.calls[0]
+    conf = {k: v for k, v in (call.config or {}).items() if k in PIN_KEYS}
+    if call.lookup_observed:
+        return conf, ("vllm_default" if call.tuned_keys is None else "vllm_tuned")
+    return conf, PIN_SOURCE_OVERRIDE
+
+
+def stream_check(weights, plan: MeasurePlan, reference_clock_mhz: float | None) -> dict:
     """Read the real weight buffers and report GB/s.
 
     A REDUCTION along the contiguous axis, which is what
@@ -1861,10 +2745,16 @@ def stream_check(weights, reps: int) -> dict:
     which is the direction that makes it a valid CHECK on the ceiling: if this
     lower bound exceeds the committed ceiling, the ceiling is wrong.
 
+    Timed by the same `time_kernel` and at the same warmup, budget, trial count
+    and flush setting as the cells, because a ceiling checked with a different
+    instrument from the data it bounds is not a check on that data.
+
     No custom kernel. The probe kernel in `moe/bench/read_probe.py` would be a
     tighter instrument and it belongs to another workflow; this arm only needs
     to know whether the ceiling is above the floor.
     """
+    from moe.bench import timing
+
     total = 0
     views = []
     for t in (weights.w1, weights.w2):
@@ -1880,10 +2770,70 @@ def stream_check(weights, reps: int) -> dict:
         for v in views:
             v.sum(dim=1)
 
-    ms, mn, sd = time_call(once, warmup=3, iters=reps)
-    return {"bytes": total, "ms_p50": ms, "ms_min": mn, "ms_stdev": sd,
-            "gbps": total / (ms * 1e-3) / 1e9,
-            "gbps_from_min": total / (mn * 1e-3) / 1e9}
+    t = timing.time_kernel(once, warmup_ms=plan.warmup_ms,
+                           target_ms=plan.cell_budget_ms, trials=plan.trials,
+                           l2_flush=plan.l2_flush,
+                           reference_clock_mhz=reference_clock_mhz)
+    return {"bytes": total, **timing_columns(t),
+            "gbps": total / (t.ms_p50 * 1e-3) / 1e9,
+            "gbps_from_min": total / (t.ms_min * 1e-3) / 1e9}
+
+
+class ResumeRefused(RuntimeError):
+    """A `cells.json` this run may not resume into.
+
+    Raised rather than started over: silently discarding a measured file is its
+    own way to lose an arm, and the two cases here are both cases where the
+    operator has to look at the directory before any more pod minutes are spent.
+    """
+
+
+def restore_cells(path: Path, card: str) -> tuple[list[dict], set, dict | None]:
+    """`(rows, done, stream_check)` from a previous session's `cells.json`.
+
+    Pure enough to test off-GPU, which is the point: every branch below is a
+    refusal or a carry-forward that used to live inside `run_measure` and could
+    therefore only be exercised on a rented pod.
+
+    THE RESUME IS GUARDED ON THE CARD, belt as well as braces. The card is in
+    the run id, so a second card lands in a different directory and cannot
+    normally reach a foreign `cells.json` at all. This check is what catches the
+    ways it could anyway: an explicit `--out-dir` pointing both runs at one
+    place, a directory copied between pods, or a file written before the card
+    entered the id. The legacy shape -- a bare list, with no record of which
+    card wrote it -- is refused for the same reason: it is exactly the unknown
+    the guard exists for, so it is not assumed to be ours.
+
+    THE STREAM CHECK COMES BACK WITH THE CELLS. It is measured once, on the
+    first freshly timed cell, so a run that resumes every cell measures none and
+    used to hand gate M0 a None: VALIDITY FAIL, exit 2 under this file's old
+    inverted table, REFUSED in the driver's ledger, and the arm could never
+    reach DONE however many times it was resumed. The check belongs to the
+    session that measured the cells, and it is stored with them.
+
+    ONLY CELLS THAT SUCCEEDED COUNT AS DONE. A failure is retried, because the
+    common ones here are a lost device and a shared-memory rejection, and a real
+    failure fails again in milliseconds.
+    """
+    if not path.exists():
+        return [], set(), None
+    stored = json.loads(path.read_text())
+    if isinstance(stored, dict):
+        written_by = str(stored.get("card") or "")
+        rows = list(stored.get("cells") or [])
+        stream = stored.get("stream_check")
+    else:
+        written_by, rows, stream = "", list(stored), None
+    if written_by != card:
+        raise ResumeRefused(
+            f"will not resume {path}: it was written by card "
+            f"{written_by or '<unrecorded, pre-card-in-id>'!r} and this run is "
+            f"{card!r}. Resuming would publish one card's timings under the "
+            "other's calibration, which is the exact defect the card in the run "
+            "id closes. Move or delete that file deliberately. Nothing measured.")
+    done = {(int(r["block_m"]), int(r["group_m"]), int(r["tiles"]))
+            for r in rows if r.get("status") == "ok"}
+    return rows, done, stream
 
 
 def run_measure(args) -> int:
@@ -1902,18 +2852,19 @@ def run_measure(args) -> int:
               f"{detected[0]!r} (slug {detected[1]!r}). --card may name a card "
               "that is absent, never contradict one that is present. "
               "Nothing measured.")
-        return 3
+        return exit_codes.REFUSED
     plan = MeasurePlan(
         card=card, model=args.model, dtype=args.dtype,
         block_sizes=tuple(int(v) for v in args.tiles.split(",")),
         group_sizes=tuple(int(v) for v in args.group_m.split(",")),
         slope_tiles=tuple(int(v) for v in args.slope_tiles.split(",")),
         block_n=args.block_n, block_k=args.block_k, num_warps=args.num_warps,
-        num_stages=args.num_stages, seed=args.seed, iters=args.iters,
-        warmup=args.warmup, stream_reps=args.stream_reps)
+        num_stages=args.num_stages, seed=args.seed, warmup_ms=args.warmup,
+        cell_budget_ms=args.cell_budget_ms, trials=args.trials,
+        l2_flush=not args.no_l2_flush)
     out_dir = args.out_dir / plan.run_id()
 
-    for line in render_plan(plan, out_dir):
+    for line in render_plan(plan, out_dir, args.noise):
         print(line)
     if card == UNKNOWN_CARD_SLUG:
         print()
@@ -1934,18 +2885,19 @@ def run_measure(args) -> int:
     print()
 
     if args.dry_run:
-        print("DRY RUN. Nothing was measured, nothing was written, no GPU was used.")
-        return 3
+        print("DRY RUN. Nothing was measured, nothing was written, no GPU was "
+              f"used. {exit_codes.describe(exit_codes.REFUSED)}")
+        return exit_codes.REFUSED
 
     try:
         import torch
     except ImportError:
         print("REFUSED: torch is not installed. Nothing measured.")
-        return 3
+        return exit_codes.REFUSED
     if not torch.cuda.is_available():
         print("REFUSED: no CUDA device. The anchor is a measured time and there is "
               "nothing here to measure it on. Nothing measured.")
-        return 3
+        return exit_codes.REFUSED
 
     from moe.reference.torch_ref import make_inputs
     from moe.spec import BenchSpec, RoutingSpec
@@ -1959,28 +2911,53 @@ def run_measure(args) -> int:
         print(f"REFUSED: the plan was built for card {plan.card!r} and the "
               f"attached device is now {slug!r}. The run id, and so the resume "
               "directory, belongs to the first. Nothing measured.")
-        return 3
+        return exit_codes.REFUSED
     slugs = available_calibrations()
     match = calibration_slug_for(slug, slugs) or (slug if slug in slugs else None)
     if match is None:
         print(f"REFUSED: no measured calibration for {gpu!r} (slug {slug!r}). "
               f"Known: {', '.join(slugs) or 'none'}. The bracket's upper end must "
               "be a measured ceiling for THIS card. Nothing measured.")
-        return 3
+        return exit_codes.REFUSED
     cal = load_calibration(match)
     print(f"device: {gpu}")
     print(f"ceiling: {cal.describe()}")
+    print("reference clock: "
+          + (f"{cal.reference_clock_mhz:.0f} MHz, {cal.reference_clock_source}"
+             if cal.reference_clock_mhz else
+             f"NOT RESOLVED ({cal.reference_clock_source}); every cell's clock "
+             "LEVEL verdict will be None and no cell can be excluded for it"))
     print()
 
     cfg = MODEL_CONFIGS[plan.model]
-    override_config, where = find_override_config()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # BEFORE vLLM is imported. Triton may snapshot this variable at import in
+    # some versions, and a warm cache compiles and dumps nothing -- the bug that
+    # cost this project its A100 PTX dump. Pointing it at this SESSION's own
+    # empty directory first makes the count fresh whatever the per-setting
+    # redirect below manages, and the count is taken over the whole root so the
+    # assay works either way. Per session, not per out_dir: see
+    # `session_cache_root`, or a resumed run reports zero fresh artefacts for
+    # every setting it re-measures and fails M6 for ever.
+    cache_root = session_cache_root(out_dir)
+    os.environ["TRITON_CACHE_DIR"] = str(cache_root)
+
     from vllm.model_executor.layers.fused_moe import fused_experts
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
 
-    from moe.baselines._framework_config import vllm_call_kwargs
-    print(f"override hook: {where}.override_config")
+    from moe.baselines._framework_config import (
+        ForceTileNotHonoured,
+        TileCapture,
+        forcing_tile_config,
+        recording_tile_config,
+        vllm_call_kwargs,
+    )
+    from moe.bench import timing
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"instrument: {timing.TIMING_BASIS}")
+    print(f"triton cache: {cache_root} (this session's own, empty)")
+
     cells_path = out_dir / "cells.json"
     # RESUME. The run id is derived from every swept knob precisely so that
     # re-running the same command lands in the same directory and finishes the
@@ -1997,37 +2974,37 @@ def run_measure(args) -> int:
     # place, a directory copied between pods, or a cells.json written before the
     # card entered the id. It REFUSES rather than starting over, because
     # silently discarding a measured file is its own way to lose an arm.
-    rows: list[dict] = []
-    done: set[tuple[int, int, int]] = set()
+    #
+    # THE STREAM CHECK IS PART OF THE RESUMED STATE. It is measured once, on the
+    # first freshly timed cell, so a run that resumes every cell measures none
+    # and used to hand gate M0 a None -- VALIDITY FAIL, exit 2 under the old
+    # table, REFUSED in the ledger, and the arm could never reach DONE however
+    # many times it was resumed. The check belongs to the session that measured
+    # the cells and is stored with them.
+    try:
+        rows, done, stream = restore_cells(cells_path, plan.card)
+    except ResumeRefused as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
     if cells_path.exists():
-        stored = json.loads(cells_path.read_text())
-        if isinstance(stored, dict):
-            written_by = str(stored.get("card") or "")
-            rows = list(stored.get("cells") or [])
-        else:
-            # The legacy shape: a bare list, with no record of which card wrote
-            # it. That is precisely the unknown this guard exists for, so it is
-            # refused instead of assumed to be ours.
-            written_by, rows = "", list(stored)
-        if written_by != plan.card:
-            print(f"REFUSED to resume {cells_path}: it was written by card "
-                  f"{written_by or '<unrecorded, pre-card-in-id>'!r} and this "
-                  f"run is {plan.card!r}. Resuming would publish one card's "
-                  "timings under the other's calibration, which is the exact "
-                  "defect the card in the run id closes. Move or delete that "
-                  "file deliberately. Nothing measured.")
-            return 3
-        done = {(int(r["block_m"]), int(r["group_m"]), int(r["tiles"]))
-                for r in rows if r.get("status") == "ok"}
-        print(f"resuming: {len(done)} of {len(plan.cells)} cells already measured")
-    stream: dict | None = None
+        print(f"resuming: {len(done)} of {len(plan.cells)} cells already measured"
+              + (f", stream check {stream['gbps']:.1f} GB/s carried forward"
+                 if stream else ", no stream check stored"))
     inputs: dict[int, tuple] = {}
+    seen_files: set[Path] = set()
     started = time.time()
 
     from moe.routing.distributions import realize_counts
 
+    def write_cells() -> None:
+        cells_path.write_text(json.dumps(
+            {"card": plan.card, "run_id": plan.run_id(), "stream_check": stream,
+             "cells": rows}, indent=1) + "\n")
+
     for bm in plan.block_sizes:
         for g in plan.group_sizes:
+            arm_triton_cache(cache_root, bm, g)
+            count_new(cache_root, seen_files)
             for n in (1, *plan.slope_tiles):
                 if (bm, g, n) in done:
                     continue
@@ -2054,31 +3031,60 @@ def run_measure(args) -> int:
                 conf = {"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": plan.block_n,
                         "BLOCK_SIZE_K": plan.block_k, "GROUP_SIZE_M": g,
                         "num_warps": plan.num_warps, "num_stages": plan.num_stages}
+                pin = {"requested": conf, "observed": {}, "source": "unrecorded",
+                       "hook": "", "fresh_artefacts": 0}
 
                 def call(_x=x, _w=weights, _ids=ids, _tw=w, _kw=kw):
                     return fused_experts(hidden_states=_x, w1=_w.w1, w2=_w.w2,
                                          topk_weights=_tw, topk_ids=_ids, **_kw)
 
+                timed: dict = {}
                 try:
-                    with override_config(conf):
-                        call()
+                    # `forcing_tile_config`, not a bare `override_config`: it
+                    # probes the hook the way this file used to and then READS
+                    # get_config() BACK, refusing a context that was entered and
+                    # did not take. That is the first of gate M6's three legs;
+                    # the recorder below is the second (what vLLM handed the
+                    # kernel) and the artefact count the third (whether a kernel
+                    # was built for this setting at all).
+                    with forcing_tile_config(conf) as hook:
+                        pin["hook"] = hook
+                        capture = TileCapture()
+                        with recording_tile_config(capture):
+                            call()
                         torch.cuda.synchronize()
-                        ms, mn, sd = time_call(call, plan.warmup, plan.iters)
+                        pin["fresh_artefacts"] = count_new(cache_root, seen_files)
+                        pin["observed"], pin["source"] = observed_pin(capture)
+                        t = timing.time_kernel(
+                            call, warmup_ms=plan.warmup_ms,
+                            target_ms=plan.cell_budget_ms, trials=plan.trials,
+                            l2_flush=plan.l2_flush,
+                            reference_clock_mhz=cal.reference_clock_mhz)
+                    timed = timing_columns(t)
                     status, detail = "ok", ""
+                    if t.clock_level_ok is False or t.host_bound:
+                        print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+                except ForceTileNotHonoured as exc:
+                    # Named separately from the generic failure because it is
+                    # the one this arm was blind to for its whole life: the pin
+                    # did not reach the kernel, so the cell is not a slow cell
+                    # or an OOM, it is a cell that would have measured the wrong
+                    # kernel and reported it as the right one.
+                    pin["source"] = "not_honoured"
+                    status, detail = "failed", f"PIN NOT HONOURED: {exc}"
                 except Exception as exc:                       # noqa: BLE001
-                    ms = mn = sd = 0.0
                     status, detail = "failed", f"{type(exc).__name__}: {exc}"
                 if stream is None and status == "ok":
-                    stream = stream_check(weights, plan.stream_reps)
-                rows.append({"block_m": bm, "group_m": g, "tiles": n,
-                             "rows_per_expert": rows_per_expert, "tokens": tokens,
-                             "ms_p50": ms, "ms_min": mn, "ms_stdev": sd,
-                             "status": status, "detail": detail})
-                cells_path.write_text(json.dumps(
-                    {"card": plan.card, "run_id": plan.run_id(), "cells": rows},
-                    indent=1) + "\n")
+                    stream = stream_check(weights, plan, cal.reference_clock_mhz)
+                row = {"block_m": bm, "group_m": g, "tiles": n,
+                       "rows_per_expert": rows_per_expert, "tokens": tokens,
+                       "ms_p50": 0.0, "ms_min": 0.0, "ms_stdev": 0.0,
+                       **timed, "status": status, "detail": detail, "pin": pin}
+                rows.append(row)
+                write_cells()
                 print(f"  BM={bm:3d} G={g:3d} n={n:3d} r={rows_per_expert:5d} "
-                      f"{ms:9.4f} ms  {status}{('  ' + detail) if detail else ''}")
+                      f"{row['ms_p50']:9.4f} ms  {status}"
+                      f"{('  ' + detail) if detail else ''}")
 
     elapsed = time.time() - started
     print()
@@ -2088,11 +3094,26 @@ def run_measure(args) -> int:
               f"(ceiling {cal.ceiling_gbps:.1f})")
     fits, refusals, gates, table = score_measured(
         rows, cfg, plan.dtype, plan.block_n, cal, stream, len(plan.cells))
+    timed_iters = [int(r["iters"]) for r in rows
+                   if r.get("status") == "ok" and r.get("iters")]
     payload = {"plan": asdict(plan), "run_id": plan.run_id(), "gpu": gpu,
                "calibration": asdict(cal), "stream_check": stream, "cells": rows,
                "elapsed_s": elapsed, "fits": [asdict(f) for f in fits],
                "refusals": [asdict(r) for r in refusals],
-               "gates": [asdict(g) for g in gates]}
+               "gates": [asdict(g) for g in gates],
+               "noise_assumption_rel": args.noise}
+    payload = PV.provenance_block(
+        instrument=timing.TIMING_BASIS,
+        ridge=cal.ridge,
+        ridge_source=f"measured_{cal.slug}.yaml, this card's own calibration",
+        bandwidth=cal.ceiling_gbps,
+        bandwidth_source=f"measured_{cal.slug}.yaml:{cal.ceiling_pattern}",
+        warmup_ms=plan.warmup_ms, target_ms=plan.cell_budget_ms,
+        # The MEDIAN the cells were actually timed at, not a flag: `time_kernel`
+        # sizes the count per cell from the budget, so a knob's default here
+        # would contradict every row.
+        iters=(int(statistics.median(timed_iters)) if timed_iters else None),
+    ).stamp(payload)
     (out_dir / "measure.json").write_text(json.dumps(payload, indent=1) + "\n")
     for line in table:
         print(line)
@@ -2107,11 +3128,9 @@ def run_measure(args) -> int:
     print(f"wrote {out_dir / 'measure.json'}")
     print("The brackets above stand on their own. To carry them onto the "
           "committed arms, run --rescore, whose P2 band is what licenses that.")
-    if any(g.verdict == FAIL and g.kind == "VALIDITY" for g in gates):
-        return 2
-    return 1 if any(g.verdict == FAIL for g in gates) else 0
-
-
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(exit_codes.describe(rc))
+    return rc
 def run_score_measured(args) -> int:
     """Score a `measure.json` a pod already wrote, on any machine.
 
@@ -2121,7 +3140,7 @@ def run_score_measured(args) -> int:
     path = args.score_measured
     if not path.exists():
         print(f"REFUSED: no such file {path}. Nothing scored.")
-        return 3
+        return exit_codes.REFUSED
     payload = json.loads(path.read_text())
     plan = payload["plan"]
     cfg = MODEL_CONFIGS[plan["model"]]
@@ -2142,11 +3161,13 @@ def run_score_measured(args) -> int:
     for g in gates:
         for line in g.render():
             print(line)
-    if not fits:
-        return 3
-    if any(g.verdict == FAIL and g.kind == "VALIDITY" for g in gates):
-        return 2
-    return 1 if any(g.verdict == FAIL for g in gates) else 0
+    # NO `if not fits: return REFUSED` HERE ANY MORE. A measure.json with no
+    # anchorable cell is a run that MEASURED and produced nothing scoreable,
+    # which is what gates M5 and M6 are for; calling it REFUSED would file a
+    # spent arm under "free, nothing attempted" and hide the failing gate.
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(exit_codes.describe(rc))
+    return rc
 
 
 # --------------------------------------------------------------------------
@@ -2178,15 +3199,34 @@ def build_parser() -> argparse.ArgumentParser:
                       help="the GPU arm: re-measure the anchor at every GROUP_SIZE_M")
     mode.add_argument("--score-measured", type=Path, default=None,
                       help="score a measure.json a pod already wrote; no GPU needed")
+    mode.add_argument("--self-test", action="store_true",
+                      help="score the planted worlds in SELF_TEST_WORLDS, one "
+                           "per FAIL branch of every M gate plus the world in "
+                           "which the tile pin silently failed. No GPU, no "
+                           "device, and no RESULT lines: nothing is measured")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the full plan and its cost, measure nothing, exit 3")
     ap.add_argument("--published", type=Path, default=PUBLISHED,
                     help="root of the committed reports")
     ap.add_argument("--out-dir", type=Path, default=None,
-                    help="directory the report lands in; defaults to "
-                         "results/published (as ANCHOR_RESCORE.txt/.json, files "
-                         "and not an arm directory) for --rescore, and to the "
-                         "results volume for --measure")
+                    help="directory the report lands in. Defaults to an "
+                         "UNTRACKED session path under the results root for "
+                         "both modes; --publish is the only thing that writes "
+                         "the committed results/published/ANCHOR_RESCORE pair")
+    ap.add_argument("--publish", action="store_true",
+                    help="write the rescore to the tracked "
+                         "results/published/ANCHOR_RESCORE.txt/.json. Until "
+                         "2026-09-02 every --rescore did this, including the "
+                         "one the session driver runs under --dry-run, so the "
+                         "tree was dirty from arm one and the file carried the "
+                         "author's home directory in it")
+    ap.add_argument("--noise", type=float, default=CELL_SPREAD_REL,
+                    metavar="REL",
+                    help="assumed relative spread of a repeated cell timing, "
+                         "the one number every MDE in the plan output is "
+                         "derived from. Default is the median of the published "
+                         "H200 replicates; they run 0.76%% to 1.82%%, so a "
+                         "reader who wants the pessimistic end passes 0.0182")
     ap.add_argument("--residuals", action="store_true",
                     help="print the per-tread residual profile of every fit")
     ap.add_argument("--expect-poisoned", type=int, default=2,
@@ -2214,14 +3254,36 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--num-warps", type=int, default=8)
     ap.add_argument("--num-stages", type=int, default=3)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--iters", type=int, default=30)
-    ap.add_argument("--warmup", type=int, default=5)
-    ap.add_argument("--stream-reps", type=int, default=20)
+    ap.add_argument("--warmup", "--warmup-ms", type=float, default=300.0,
+                    dest="warmup", metavar="MS",
+                    help="MILLISECONDS of delivered GPU load to warm up for, "
+                         "not a call count. THE SWEEP'S OWN DEFAULT, because "
+                         "the anchor has to be the same physical event the "
+                         "ladders measured and they warm for 300 ms; this arm "
+                         "warmed for 5 CALLS against their 20 while the two "
+                         "were compared tread for tread")
+    ap.add_argument("--cell-budget-ms", type=float, default=400.0,
+                    help="target measured KERNEL time per trial; the "
+                         "instrument sizes its own iteration count from it. "
+                         "`--iters` is retired: it was a count this arm chose "
+                         "and the ladders derived, so the two could not be the "
+                         "same measurement")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="queue-deep trials per cell; the percentiles are over "
+                         "iters x trials samples")
+    ap.add_argument("--no-l2-flush", action="store_true",
+                    help="do NOT evict L2 between timed iterations. Off by "
+                         "default because the roof and the ladders are flushed "
+                         "and a warm-L2 cell is not comparable with either. In "
+                         "the run id, so a flushed and an unflushed run can "
+                         "never share a directory")
     return ap
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.self_test:
+        return self_test()
     if args.score_measured is not None:
         return run_score_measured(args)
     if not args.measure:
@@ -2229,23 +3291,47 @@ def main(argv=None) -> int:
     if args.out_dir is None:
         if args.measure:
             args.out_dir = results_root() / "memory_branch_anchor"
-        else:
+        elif args.publish:
             # results/published itself, NOT a dated subdirectory: see RESCORE_STEM.
             args.out_dir = PUBLISHED
+        else:
+            # UNTRACKED BY DEFAULT. `results/*` is git-ignored with only
+            # `!results/published/` excepted, so this path cannot dirty the tree
+            # however often it is re-run -- which the session driver does on
+            # every dry run.
+            args.out_dir = results_root() / "anchor_rescore"
+    # A BAD FLAG IS A REFUSAL, not a crash and not a claim failure. `raise
+    # SystemExit(msg)` exits 1, which is CLAIM_FAIL in the shared table, so a
+    # mistyped --slope-tiles used to be recorded as "measured, and a
+    # pre-registered claim was refuted".
     branch = [int(t) for t in args.slope_tiles.split(",")]
     if len(branch) < MIN_BRANCH_TREADS:
-        raise SystemExit(
-            f"--slope-tiles gives {len(branch)} branch treads and P3 needs at least "
-            f"{MIN_BRANCH_TREADS}. On a planted ladder the slope moves 3.2% when the "
-            "anchor is dropped at 8 treads, 1.4% at 12 and 0.8% at 16, against a "
-            f"{SLOPE_INDEPENDENCE_REL:.1%} threshold taken from the committed 16- and "
-            "33-tread fits. A short branch would fail P3 for a reason that is about "
-            "the grid and not about the kernel.")
+        print(
+            f"REFUSED: --slope-tiles gives {len(branch)} branch treads and P3 needs "
+            f"at least {MIN_BRANCH_TREADS}. On a planted ladder the slope moves 3.2% "
+            "when the anchor is dropped at 8 treads, 1.4% at 12 and 0.8% at 16, "
+            f"against a {SLOPE_INDEPENDENCE_REL:.1%} threshold taken from the "
+            "committed 16- and 33-tread fits. A short branch would fail P3 for a "
+            "reason that is about the grid and not about the kernel. Nothing "
+            "measured.")
+        return exit_codes.REFUSED
     if any(t < 2 for t in branch):
-        raise SystemExit("--slope-tiles must all be >= 2: the anchor may not be "
-                         "inside the slope it is compared against")
+        print("REFUSED: --slope-tiles must all be >= 2: the anchor may not be "
+              "inside the slope it is compared against. Nothing measured.")
+        return exit_codes.REFUSED
     return run_measure(args) if args.measure else run_rescore(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except BaseException:                                   # noqa: BLE001
+        # ERROR (4), not the interpreter's 1. An unhandled exception exiting 1
+        # would be read as CLAIM_FAIL -- "measured, and a pre-registered claim
+        # was refuted" -- by the one table the driver reads, and a traceback is
+        # the opposite of a result. 4 is RETRY in the ledger, which is what a
+        # crash and an interrupt both deserve.
+        traceback.print_exc()
+        sys.exit(exit_codes.ERROR)
