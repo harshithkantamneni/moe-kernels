@@ -205,7 +205,27 @@ BOOTSTRAP_REPS = 10_000
 BOOTSTRAP_SEED = 20260901
 BOOTSTRAP_BAND = 0.90
 
-EXIT_OK, EXIT_GATE_FAILED, EXIT_NOT_MEASURED = 0, 1, 3
+#: Exit codes, ALIASED TO `moe.bench.exit_codes` ON 2026-09-02 rather than
+#: chosen here. The names survive because callers use them; the integers behind
+#: two of them moved.
+#:
+#:   EXIT_NOT_MEASURED was 3. Three is INVALID in the one table: measured, and a
+#:   VALIDITY gate failed after the pod minutes were spent, so the directory is
+#:   full of cells that must NOT be scored. Every refusal here returned it --
+#:   --plan-only, no CUDA, no vLLM, no tuned side on this card, and the card
+#:   refusal this file added -- so a run that cost nothing announced INVALID to
+#:   the driver, which then kept a directory that does not exist and queued no
+#:   retry for an arm that never ran. It is REFUSED (2).
+#:
+#:   EXIT_GATE_FAILED was 1 for any failed gate. G0-G3 are VALIDITY and a
+#:   failure there is INVALID (3); G4-G7 are CLAIM and a failure there is a
+#:   RESULT (1). `exit_codes.classify` over the same gate objects that printed
+#:   the RESULT lines decides which, so the name survives only as the
+#:   claim-failure code and nothing reads it to build the exit any more.
+EXIT_OK = exit_codes.DONE
+EXIT_GATE_FAILED = exit_codes.CLAIM_FAIL
+EXIT_NOT_MEASURED = exit_codes.REFUSED
+EXIT_INVALID = exit_codes.INVALID
 
 #: The columns `timing.KernelTiming` contributes to every measured row. Named
 #: as a group so the header and the row builder cannot drift apart.
@@ -644,37 +664,58 @@ class NoCardToLabel(ValueError):
 #: H200 file and almost nothing else does, so the default made the premise true
 #: by construction on every machine.
 #:
-#: It is still a default, because a plan-only run must be able to print a plan
-#: and there is no card to detect off GPU. What changed is that it can no longer
-#: be mistaken for a measurement: the assumption is in the run id, in the
-#: directory name, in the header and in `card` on every row, so no off-GPU run
-#: writes a bare H200 label anywhere. The measuring path refuses instead.
+#: A LABEL AND NOT A LOOKUP, which is the whole of the 2026-09-02 fix. A run
+#: that named no card still has to be able to say whose plan it is NOT, and this
+#: is that word. It is in the run id, the directory name, the header and `card`
+#: on every row, so no artefact of an off-GPU run carries a bare H200 label.
 ASSUMED_CARD = "ASSUMED NVIDIA H200"
 
-#: What `ASSUMED_CARD` assumes, once, for `resolve_tile`: the config lookup
-#: needs a real device selector and "ASSUMED ..." is not one.
-ASSUMED_LOOKUP_GPU = "NVIDIA H200"
+#: The lookup device of a run that named no card. There is not one, and `None`
+#: is the honest answer rather than a card that happens to have tuned files.
+#:
+#: WHAT THE OLD DEFAULT DID. It was the bare literal "NVIDIA H200", and the
+#: label half of that was only the visible half. The lookup decides which tuned
+#: file `resolve_tile` reads, so it decides whether there is a TUNED SIDE TO
+#: COMPARE AGAINST AT ALL: the two default models have a tuned H200 file and
+#: almost nothing else does, so on any machine that named no card the plan came
+#: out fully covered and the premise of the whole experiment was true by
+#: construction. Naming the assumption in the label and keeping it in the lookup
+#: fixed the half a reader can see and left the half that decides the answer.
+#:
+#: Now: no card, no lookup, no cells, and the note says which flag supplies one.
+#: `--gpu-name` still derives a plan for a card the operator is about to rent,
+#: which is the supported and useful case this refusal must not take away.
+NO_LOOKUP_GPU = None
+
+#: What stands in for the lookup device in the run id when there is not
+#: one. `provenance.run_id` refuses a None knob on purpose -- an
+#: unresolved knob missing from an id is how two settings come to share a
+#: directory -- so the absence is spelled out rather than dropped.
+NO_LOOKUP_LABEL = "no-lookup-device"
 
 
-def resolve_lookup_gpu(args, env: dict) -> tuple[str, str, str]:
-    """`(lookup device, card label, note)`, in falling order of directness.
+def resolve_lookup_gpu(args, env: dict) -> tuple[str | None, str, str]:
+    """`(lookup device or None, card label, note)`, in falling order of directness.
 
     `--gpu-name` overrides the lookup, because deriving a plan for a card you
     are about to rent is a supported and useful thing to do; `--card` names
     what the run is labelled and stored as; the live device answers both when
-    there is one. With none of the three the answer is `ASSUMED_CARD`, and the
-    note says so in the words the header prints.
+    there is one. With none of the three there is NO lookup device: the plan
+    resolves no tuned file, prints no coverage, and says which flag to pass.
     """
     lookup = args.gpu_name or args.card or env.get("gpu_name")
     card = args.card or env.get("gpu_name") or args.gpu_name
     if lookup and card:
         return str(lookup), str(card), ""
-    return ASSUMED_LOOKUP_GPU, ASSUMED_CARD, (
-        f"NO CARD WAS NAMED. The config lookup below is derived for "
-        f"{ASSUMED_LOOKUP_GPU} because nothing on this machine says otherwise, "
-        f"and every artefact this run writes is labelled {ASSUMED_CARD!r} so "
-        f"it cannot be read as a measurement of one. Pass --card to say which "
-        f"card you mean; the measuring path REFUSES without it.")
+    return NO_LOOKUP_GPU, ASSUMED_CARD, (
+        "NO CARD WAS NAMED, so there is NO CONFIG LOOKUP DEVICE and the plan "
+        "below has no cells. The lookup is what decides which tuned file is "
+        "read, and defaulting it to an H200 made this experiment's premise -- "
+        "that there is a tuned side to price the ladder against -- true by "
+        "construction on every machine. Pass --gpu-name 'NVIDIA H200' to derive "
+        "a plan for a card you are about to rent, or --card for one you are on; "
+        f"everything this run writes is labelled {ASSUMED_CARD!r} either way, "
+        "and the measuring path REFUSES without --card.")
 
 
 def require_card_to_measure(card: str) -> None:
@@ -1814,7 +1855,8 @@ def main(argv: list[str] | None = None) -> int:
 
     env = detect_environment()
     gpu_name, card, card_note = resolve_lookup_gpu(args, env)
-    run_id = args.run_id or plan_run_id(models, tokens, args.dtype, gpu_name,
+    run_id = args.run_id or plan_run_id(models, tokens, args.dtype,
+                                        gpu_name or NO_LOOKUP_LABEL,
                                         args.reps, args.iters, args.seed,
                                         args.routing, card=card,
                                         warmup=args.warmup,
@@ -1825,15 +1867,25 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path, report_path = out_dir / "timings.csv", out_dir / "report.md"
 
-    cells, notes = plan_cells(models, tokens, args.dtype, gpu_name)
+    # NO LOOKUP, NO CELLS. `plan_cells` would otherwise be handed a card the
+    # operator never named and would answer with that card's tuned files; see
+    # `NO_LOOKUP_GPU`. The census below is per-card arithmetic that needs no
+    # lookup at all and still prints, so the reader keeps the 79.2% context.
+    if gpu_name is None:
+        cells, notes = [], [
+            "no config lookup device: --gpu-name or --card names one, and "
+            "without it no tuned file is resolved and no cell is planned"]
+    else:
+        cells, notes = plan_cells(models, tokens, args.dtype, gpu_name)
     census = coverage_census(
         [m for m in MODEL_CONFIGS if m != "toy"], list(CENSUS_GPUS), args.dtype)
 
     header = [
         "# What does vLLM's fallback config cost?",
         "",
-        f"run id {run_id}   config lookup device `{gpu_name}`   dtype "
-        f"{args.dtype}   routing {args.routing}   seed {args.seed}",
+        f"run id {run_id}   config lookup device "
+        f"{('`' + gpu_name + '`') if gpu_name else 'NONE (no card named)'}"
+        f"   dtype {args.dtype}   routing {args.routing}   seed {args.seed}",
         f"card `{card}`   instrument {timing.TIMING_BASIS}",
         *(["", card_note] if card_note else []),
         f"reps {args.reps} per arm, round-robin; each repeat is one "
@@ -1904,7 +1956,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_NOT_MEASURED
     if not cells:
         print("\nNOT A RESULT: no shape in --models has a tuned config on "
-              f"{gpu_name}, so there is no tuned side to price the ladder "
+              f"{gpu_name or 'any named card'}, so there is no tuned side to price the ladder "
               "against. Pick a card that ships tuned files, or a model that has "
               "one. See the dropped list above.")
         return EXIT_NOT_MEASURED

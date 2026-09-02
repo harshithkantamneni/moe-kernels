@@ -875,6 +875,56 @@ def test_the_log_and_the_exit_code_cannot_disagree(tmp_path, capsys):
     assert exit_codes.classify_text(out) == code
 
 
+def test_a_claim_failure_is_returned_and_not_folded_into_done():
+    """The branch the old code took and no test could reach.
+
+    Until 2026-09-02 `main` computed `rc = classify(...)` and then returned DONE
+    when rc was CLAIM_FAIL and `--fail-on-claim` was absent, so the log printed
+    `RESULT: CLAIM C3 FAIL` and the process said 0 -- the one disagreement
+    `exit_codes` exists to detect, under a comment claiming it could not happen.
+    Nothing exercised it: every `--self-test` demotes the box VALIDITY gates to
+    UNKNOWN and therefore classifies INVALID, so the only page that could make
+    the log and the process disagree was the one page nothing produced. Planted
+    here through `final_exit`, which is now the single place `main` ends.
+
+    All three codes, and `classify_text` over the same gates' RESULT lines, so
+    the property is checked in both directions rather than asserted.
+    """
+    def gate(name, kind, verdict):
+        return DTC.Gate(name=name, kind=kind, prediction="p", rule="r",
+                        verdict=verdict, observed="saw")
+
+    def check(gates, want):
+        assert DTC.final_exit(gates) == want
+        log = "prose that mentions PASS\n" + "\n".join(
+            g.result_line() for g in gates)
+        assert exit_codes.classify_text(log) == want
+
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.PASS)], exit_codes.DONE)
+    # THE PLANTED DISAGREEMENT: validity holds, a claim does not.
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.FAIL)], exit_codes.CLAIM_FAIL)
+    # And UNKNOWN on a claim is not a pass either.
+    check([gate("V0 ceilings", "VALIDITY", DTC.PASS),
+           gate("C3 tilt", "CLAIM", DTC.UNKNOWN)], exit_codes.CLAIM_FAIL)
+    # A validity failure outranks a passing claim.
+    check([gate("V0 ceilings", "VALIDITY", DTC.FAIL),
+           gate("C3 tilt", "CLAIM", DTC.PASS)], exit_codes.INVALID)
+    # A page with no gate on it has no verdict to exit with.
+    with pytest.raises(exit_codes.NoGatesScored):
+        DTC.final_exit([])
+
+
+def test_the_retired_fail_on_claim_flag_still_parses_and_changes_nothing():
+    """Driver lines in `scripts/h200_gaps_session.sh` still pass it. It has to
+    be accepted, and it must not resurrect the masking."""
+    assert DTC.build_parser().parse_args(["--fail-on-claim"]).fail_on_claim
+    source = (ROOT / "scripts" / "dtype_tile_confound.py").read_text()
+    assert "if rc == exit_codes.CLAIM_FAIL" not in source
+    assert "return exit_codes.DONE" not in source
+
+
 def test_a_dry_run_prints_no_result_line_at_all(tmp_path, capsys):
     """A REFUSED log must carry none, or the driver recomputes DONE from it.
 

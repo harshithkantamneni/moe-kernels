@@ -162,9 +162,10 @@ config carries, has no predicted value at all. It can only be measured, and
 
 PREDICTIONS ARE REGISTERED BELOW AND PRINTED BEFORE ANY MEASUREMENT, with their
 numbers, split into VALIDITY gates (a FAIL means nothing on the page may be
-quoted) and CLAIM gates (a FAIL is a result, and exits 0 unless
-`--fail-on-claim`). C1 and C2 are decided by `--dry-run` on a laptop; C3 and C4
-need the box.
+quoted, and exits 3 INVALID) and CLAIM gates (a FAIL is a result about the
+world, and exits 1 CLAIM_FAIL, which the ledger reads as finished rather than
+as a retry). C1 and C2 are decided by `--dry-run` on a laptop; C3 and C4 need
+the box.
 
 `--self-test RATIO` generates every cell from the model at a planted fp8/bf16
 FLOP ratio and runs the entire analysis on it, so "C3 can tell a small dtype
@@ -2911,6 +2912,23 @@ def render_mde(args, spreads=None) -> str:
     return "\n".join(lines)
 
 
+def final_exit(gates: list[Gate]) -> int:
+    """The one exit code a scored page ends with. The seam the tests plant on.
+
+    `main` ends here and nowhere else, so "the log and the exit code cannot
+    disagree" is a property of one three-line function instead of a property of
+    the end of a 400-line `main` that no off-GPU test could reach. It exists
+    because the branch that USED to sit here -- fold CLAIM_FAIL into DONE unless
+    `--fail-on-claim` -- was unplantable: every synthetic run demotes the box
+    VALIDITY gates to UNKNOWN and classifies INVALID, so the one branch that
+    made the log and the process disagree was the one branch nothing exercised.
+    `tests/test_dtype_tile_confound.py` now hands this function a planted
+    VALIDITY-PASS/CLAIM-FAIL page and asserts 1, beside the INVALID and DONE
+    pages, and asserts `classify_text` over the same gates' RESULT lines agrees.
+    """
+    return exit_codes.classify(g.scored() for g in gates)
+
+
 def render_gate_summary(gates: list[Gate]) -> str:
     lines = [g.render() for g in gates]
     counts = {v: sum(1 for g in gates if g.verdict == v)
@@ -3413,9 +3431,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "fixed cost inflates rm and rc together, so this checks "
                          "the gates survive it")
     ap.add_argument("--fail-on-claim", action="store_true",
-                    help="exit non-zero when a CLAIM gate fails. Off by default "
-                         "because a falsified prediction is a successful run; a "
-                         "VALIDITY failure exits non-zero either way")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         "still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "already reads as a finished result rather than a "
+                         "retry; folding it into 0 made the log disagree with "
+                         "the process")
     ap.add_argument("--max-minutes", type=float, default=None,
                     help="stop cleanly after this long and report what exists")
     return ap
@@ -3855,7 +3876,7 @@ def main(argv: list[str] | None = None) -> int:
     # things in two files is the defect that module is named against, and this
     # script was one of the three that refused with 3 while the driver read 3 as
     # "measured and invalid".
-    rc = exit_codes.classify(g.scored() for g in gates)
+    rc = final_exit(gates)
     # The CLAIM half on its own, so a --self-test can still say which world it
     # was in. A synthetic run classifies INVALID whatever its claims do, because
     # every box VALIDITY gate is demoted to UNKNOWN by construction and UNKNOWN
@@ -3865,16 +3886,18 @@ def main(argv: list[str] | None = None) -> int:
     claims = [g.scored() for g in gates if g.kind == "CLAIM"]
     if claims:
         print(f"claims   {exit_codes.describe(exit_codes.classify(claims))}")
-    if rc == exit_codes.CLAIM_FAIL and not args.fail_on_claim:
-        # DESCRIBED AS WHAT HAPPENED, not as the code returned. A falsified
-        # pre-registered claim is the most valuable outcome an experiment has;
-        # it must not stop a pipeline, and the log must still say it happened.
-        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
-        print(f"         reported as exit {exit_codes.DONE} without "
-              f"--fail-on-claim: a claim that did not pass is a RESULT, not a "
-              f"broken run. Pass --fail-on-claim to return "
-              f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL instead.")
-        return exit_codes.DONE
+    # NOTHING IS FOLDED INTO DONE ANY MORE, and `--fail-on-claim` is why this
+    # paragraph exists rather than a branch. Until 2026-09-02 a CLAIM_FAIL was
+    # reported in words and RETURNED AS 0 unless the flag was passed, so the log
+    # said `RESULT: CLAIM C3 FAIL` and the process said DONE -- the exact
+    # disagreement `exit_codes.classify_text` exists to detect, in the file that
+    # printed the comment above claiming it could not happen. The masking was
+    # also obsolete the moment the shared table landed: CLAIM_FAIL (1) is in
+    # `FINISHED_CODES` and `ledger_state(1)` is "CLAIM_FAIL", so 1 already means
+    # "this is a result, do not retry it" to the only reader that matters, and
+    # there is nothing left for 0 to protect. The flag is kept, accepted and
+    # ignored, so a driver line that still passes it does not die on an unknown
+    # argument; its help text says it is retired.
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 

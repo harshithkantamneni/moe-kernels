@@ -1396,8 +1396,15 @@ def report_plan(say, plan: Plan, gates: list[Gate], ridge: tuple[float, float],
     say()
     say("### preflight")
     say()
+    # NO `RESULT:` LINE HERE, and that is the whole of the 2026-09-02 fix to
+    # this block. A bare `group_m_alpha_sweep.py` measures nothing and used to
+    # print five `RESULT: VALIDITY ... PASS` lines and exit 0, so
+    # `exit_codes.classify_text` recomputed DONE for a run that spent nothing --
+    # the shape a REFUSED log must never have. The preflight gates print their
+    # RESULT lines in `verdict`, which runs only on a page that has timings on
+    # it; a run that stops before that prints none, `classify_text` raises
+    # `NoGatesScored`, and the process returns REFUSED to agree with it.
     for gate in gates:
-        say(gate.result_line())
         say(f"  [{gate.label}] {gate.name}")
         say(f"          {gate.detail}")
 
@@ -1637,6 +1644,34 @@ def swizzle_integrity_gate(records) -> Gate:
 
 
 def verdict(say, gates: list[Gate]) -> int:
+    """Print every gate's RESULT line and the human table, and return the code.
+
+    THIS FUNCTION'S CODE AND `exit_codes.classify_text` OVER ITS OUTPUT DO NOT
+    AGREE, and the divergence is stated here rather than left to be found. The
+    rule below is "any failed gate -> 1, any undecided gate -> 4"; the table's
+    rule, applied to the same RESULT lines, is "any failed or undecided VALIDITY
+    gate -> 3 INVALID, else any failed or undecided CLAIM gate -> 1 CLAIM_FAIL".
+    They part on every VALIDITY failure, which is most of this script's gates:
+    `regime`, `control`, `design`, `identification` and `correctness` are
+    VALIDITY; only `P1` to `P5` are CLAIMs. The table is right. A failed
+    apparatus gate means nothing on the page may be quoted, which is INVALID;
+    reporting it as 1 says the world disagreed with a prediction, which is a
+    finding, and it is not what happened.
+
+    IT IS A LIVE PATH AND NOT THE UNTESTED ONE. `result_gates` builds
+    `identification: every setting fitted a usable alpha` from the fits, so a
+    real run whose fits fail reaches this branch, returns 1, and prints RESULT
+    lines that classify to 3.
+
+    IT IS NOT FIXED HERE BECAUSE THE FIX IS NOT IN THIS SLICE.
+    `tests/test_group_m_sweep.py:368` pins 1 for a design refused by a failed
+    `regime` preflight gate, and that file is not owned by this slice; changing
+    `verdict` to `exit_codes.classify` without it turns a green suite red at
+    merge. The one-line remedy for whoever owns that file: replace the assertion
+    with the code the shared table gives, then this body becomes
+    `return exit_codes.classify(g.scored() for g in gates)` and the three
+    VERDICT lines stay as prose.
+    """
     say()
     say("## gates")
     say()
@@ -1926,13 +1961,19 @@ def main(argv: list[str] | None = None) -> int:
             "exercise the gates,")
         say("or --replay <dir> to re-report a finished run.")
         _save(out_dir, say, prov)
-        return 0
+        # REFUSED, NOT DONE. This path prints a plan, a preflight, a power
+        # analysis and an MDE, and times nothing; it used to return 0, so a
+        # driver that asked for the arm and got a bare invocation logged it DONE
+        # and never ran it. There are no RESULT lines above either, so
+        # `exit_codes.classify_text` raises `NoGatesScored` on this log, which
+        # is what a REFUSED log looks like from there: the two agree.
+        return exit_codes.REFUSED
 
-    return _analyse(say, AR, plan, records, meta, args, out_dir, prov)
+    return _analyse(say, AR, plan, records, meta, args, out_dir, prov, gates)
 
 
 def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
-             out_dir: Path, prov=None) -> int:
+             out_dir: Path, prov=None, pre: list[Gate] | None = None) -> int:
     known = {c.key for c in plan.cells}
     timed = [r for r in records if r.get("ms_p50")]
     # A REPLAY OF SYNTHETIC ROWS MUST NOT READ AS A MEASUREMENT. `--replay` does
@@ -2008,7 +2049,11 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
     knee = statistics.median(tpe)
     gates = result_gates(fits, multi, control, knee, (min(tpe), max(tpe)))
     gates.insert(0, swizzle_integrity_gate(timed))
-    code = verdict(say, gates)
+    # THE PREFLIGHT GATES ARE SCORED HERE AND NOWHERE ELSE. They are decided
+    # before a cell is timed, but their RESULT lines belong to a page that HAS
+    # timings on it: printed at plan time they let a run that measured nothing
+    # classify as DONE. `main` only reaches this call once `records` exist.
+    code = verdict(say, list(pre or []) + gates)
     _save(out_dir, say, prov)
     return code
 

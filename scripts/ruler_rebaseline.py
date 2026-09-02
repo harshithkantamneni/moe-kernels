@@ -97,6 +97,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import os
 import statistics
 import subprocess
@@ -176,6 +177,10 @@ GATE1_CLOCK_DELTA_PCT = 5.0
 #: Prediction 4. The numerator's session-to-session spread must be at least this
 #: many times the denominator choice, or the re-baseline really is about the
 #: denominator after all. 9.9% against 2.2% is 4.5x; 3x leaves room.
+#: What the 2026-08-27 read-shape change was worth, as a fraction. Gate 3's
+#: effect, and the number the MDE line is scored against.
+READ_SHAPE_EFFECT = 0.017
+
 GATE4_SPREAD_RATIO = 3.0
 
 #: Prediction 5. How many published rows may change memory/compute
@@ -194,6 +199,27 @@ IDENTITY_REL_TOL = 1e-9
 #: found none. These are what make gate 5 mean something.
 MIN_ARMS = 5
 MIN_ROWS = 10_000
+
+#: The run-to-run timing spread this run's fresh calibration is sized against,
+#: as a fraction of one measurement. MEASURED, not assumed: the median and worst
+#: `timing_spread_median` over the 26 published `*.report.json` files in
+#: `results/published`, which is every arm in this repository that records one
+#: (min 0.0039, median 0.0077, max 0.0182 on 2026-09-02). The old convention in
+#: this repo was to assume 0.5%, which sits below the whole measured range.
+MEASURED_SPREAD_MEDIAN = 0.0077
+MEASURED_SPREAD_MAX = 0.0182
+
+#: Two-sided 5% at 80% power, the convention every MDE in this study is quoted
+#: at, named here rather than inlined so a reader can see that nothing was
+#: chosen to make a gate pass.
+MDE_LEVEL = 0.05
+MDE_POWER = 0.80
+
+#: Trials behind one bandwidth pattern, from `calibrate.measure_bandwidth`'s
+#: default. It is not a flag on this script, so the MDE is a property of the
+#: apparatus rather than of the invocation, and printing it is the only way a
+#: reader learns the design is fixed at this resolution before the pod is rented.
+CALIBRATION_TRIALS = 3
 
 
 @dataclass(frozen=True)
@@ -1204,6 +1230,81 @@ def estimated_seconds(args) -> float:
     return settles + gemms + clocks + passes + compile_s
 
 
+def mde_of_pattern(spread: float, trials: int) -> float:
+    """Smallest bandwidth SHIFT this run could resolve, as a fraction.
+
+    The quantity gates 2 and 3 test is a difference between this run's GB/s for
+    one pattern and a committed GB/s for the same pattern, and BOTH sides were
+    measured, each as a median over `trials` trials, so the difference inherits
+    two spreads: hence the sqrt(2). With sigma imported from the published
+    corpus rather than estimated inside this run the test is a known-variance z
+    test, which is the stricter of the two forms available at three trials.
+    `statistics.NormalDist` supplies the quantiles so no distribution code is
+    written twice in this repository.
+    """
+    if trials < 1:
+        raise ValueError(f"an MDE needs at least one trial, got {trials}")
+    if spread <= 0:
+        raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    normal = statistics.NormalDist()
+    z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
+    return z * spread * math.sqrt(2.0 / trials)
+
+
+def mde_lines(spreads=None, trials: int = CALIBRATION_TRIALS) -> list[str]:
+    """What the fresh calibration could see, printed BEFORE the pod is rented.
+
+    B14: no arm in this study stated a minimum detectable effect, so a gate
+    could pass or fail without anyone knowing whether the design could have
+    resolved the difference either way. This one matters more than most, because
+    two of its three measured gates are stated as TOLERANCES rather than as
+    effects: gate 2 passes when every pattern lands within
+    `GATE2_PATTERN_TOL_PCT`% of the committed figure, and a tolerance TIGHTER
+    than the MDE turns a FAIL into a coin toss dressed as a refutation. Gate 3's
+    effect is the 1.7% the 2026-08-27 shape change was worth.
+
+    `spreads` overrides the measured pair, which is how the CANNOT-SEE branch is
+    planted in the tests: on today's corpus this design cannot resolve gate 2's
+    0.5% at either end, and that is a fact about the apparatus a reader has to
+    be told rather than a branch nobody can reach.
+    """
+    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
+                          ("worst", MEASURED_SPREAD_MAX))
+    out = [
+        "MDE. What a fresh calibration on this design could actually resolve.",
+        "  noise assumption: run-to-run timing spread MEASURED over the 26 "
+        "published reports,",
+        f"                    median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+        f"{MEASURED_SPREAD_MAX:.2%}; {trials} trials per pattern, both sides "
+        f"measured.",
+        f"  effects under test: gate 2's reproduction tolerance "
+        f"{GATE2_PATTERN_TOL_PCT / 100:.2%}, gate 3's read-shape gain "
+        f"{READ_SHAPE_EFFECT:.2%}.",
+    ]
+    for label, spread in spreads:
+        mde = mde_of_pattern(spread, trials)
+        for name, effect in (("gate 2", GATE2_PATTERN_TOL_PCT / 100.0),
+                             ("gate 3", READ_SHAPE_EFFECT)):
+            seen = "resolves it" if mde <= effect else "CANNOT resolve it"
+            out.append(f"  at the {label:<6} spread {spread:.2%}: MDE "
+                       f"{mde:.2%} against {name}'s {effect:.2%}  {seen}")
+    out += [
+        "  An MDE above the effect does not make a PASS wrong; it makes a FAIL "
+        "uninformative.",
+        "  The spread is imported from KERNEL arms, which is the only measured "
+        "one this repository",
+        "  has; a bandwidth pattern's own is plausibly tighter, so these are "
+        "upper bounds and a",
+        "  design that clears them clears its own. Nobody has measured the "
+        "pattern's spread, and",
+        "  until somebody does, gate 2's 0.5% tolerance is not known to be "
+        "above this run's noise.",
+        "  Gates 4 and 5 are arithmetic over committed rows and have no timing "
+        "noise to clear.",
+    ]
+    return out
+
+
 def missing_gpu_stack() -> str:
     """Which half of the stack is absent, and what to run instead."""
     try:
@@ -1362,9 +1463,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--out", type=Path, default=None,
                     help="overrides the results root entirely")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes; off by "
-                         "default because a falsified prediction is a "
-                         "successful run")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         f"still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "reads as a finished result rather than a retry; "
+                         "folding it into 0 made the log disagree with the "
+                         "process")
     return ap
 
 
@@ -1392,7 +1496,7 @@ def main(argv=None) -> int:
     ]
     for pred in PREDICTIONS:
         header += [""] + [f"  {line}" for line in pred.render()]
-    header += ["", "=" * 78]
+    header += [""] + mde_lines() + ["", "=" * 78]
     print("\n".join(header))
 
     if args.dry_run:
@@ -1515,13 +1619,17 @@ def main(argv=None) -> int:
         print("\nNON-VACUITY: no gate could be scored at all, so nothing above "
               "is a result.")
         return exit_codes.REFUSED
+    # NOTHING IS FOLDED INTO DONE, and `--fail-on-gate` is why this is a
+    # paragraph and not a branch. Until 2026-09-02 a CLAIM_FAIL was described in
+    # words and RETURNED AS 0 unless the flag was passed, so `--corpus-only`
+    # printed `RESULT: CLAIM C5 FAIL 90 flips in 53188 classified rows` and the
+    # process said DONE: the exact log-versus-exit-code split the comment above
+    # claims cannot happen here, in the file that prints it. The masking was
+    # obsolete anyway once the shared table landed. CLAIM_FAIL (1) is in
+    # `FINISHED_CODES` and `ledger_state(1)` is "CLAIM_FAIL", so 1 already tells
+    # the driver "this is a result, do not retry it" and 0 protects nothing. The
+    # flag is accepted and ignored so an old driver line still parses.
     rc = exit_codes.classify(scored)
-    if rc == exit_codes.CLAIM_FAIL and not args.fail_on_gate:
-        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
-        print(f"         reported as exit {exit_codes.DONE} without "
-              f"--fail-on-gate: a claim that did not pass is a RESULT, not a "
-              f"broken run.")
-        return exit_codes.DONE
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
 

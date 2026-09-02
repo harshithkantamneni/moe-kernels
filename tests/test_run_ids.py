@@ -208,6 +208,11 @@ def test_the_alias_run_id_carries_the_card_slug():
 @pytest.mark.parametrize("knob,value", [
     ("seed", 11), ("l2_flush", False), ("compute", "dot"), ("block_m", 32),
     ("replicates", 3), ("tiles", (1, 2)), ("models", ("mixtral-8x7b",)),
+    # `time_kernel`'s three knobs, added 2026-09-02 with the instrument. Each
+    # one sets the measured milliseconds of every pass, so a re-run at a
+    # different warmup must not resume into the directory holding the old
+    # numbers: the resume key is `rung.key`, which carries none of them.
+    ("warmup", 50.0), ("cell_budget_ms", 10.0), ("trials", 7),
 ])
 def test_every_alias_knob_changes_the_run_id(knob, value):
     base_args, base_design = _ab()
