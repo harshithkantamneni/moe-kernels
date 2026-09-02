@@ -1,11 +1,20 @@
 """Arithmetic intensity of one tiled GEMM, with BOTH operand re-reads.
 
-WHAT THIS CORRECTS. docs/FINDINGS.md states the model as
+WHAT THIS IS. docs/FINDINGS.md states the model as
 
     AI(r) = (2r/b) / Q(r),   Q(r) = 1 + alpha*(ceil(r/BLOCK_M) - 1)
 
-which counts the WEIGHT re-read and nothing else. Two terms are missing and one
-of them is not small.
+which NAMES only the weight re-read. This module writes out all three terms.
+They are the same formula -- see `test_the_two_term_cap_with_a_fitted_alpha_is_
+exactly_the_three_term_cap` -- because what a ladder fit returns is not the
+weight miss fraction but the blend alpha_b + alpha_a*(BM/BN) + BM/K, and
+substituting that back reproduces every term exactly. So the study's published
+CAP NUMBERS ARE CORRECT. What this module fixes is the NAME on the quantity:
+the blend was called an L2 miss fraction, compared against published miss
+fractions, and its drift with BLOCK_M called unexplainable. Written out, the
+three terms say which knob moves which ceiling and let alpha_b be compared
+against TEMPO's b2/b like for like -- which is mechanism and prior art, not a
+correction to the arithmetic.
 
 Start from the standard GEMM basis. For C[M,N] = A[M,K] @ B[K,N] the compulsory
 traffic is MK + KN + MN elements and the arithmetic is 2MNK, so
@@ -14,8 +23,8 @@ traffic is MK + KN + MN elements and the arithmetic is 2MNK, so
 
 Now tile it. The grid is n = ceil(M/BM) by m = ceil(N/BN), and EACH tile reads a
 BM x K slice of A and a K x BN slice of B. So A is read m times and B is read n
-times -- the weight re-read the study models is the B side, and there is a
-SYMMETRIC re-read on the A side that it does not model at all:
+times -- the weight re-read the study NAMES is the B side, and there is a
+SYMMETRIC re-read on the A side that its fitted alpha carries without naming:
 
     A bytes = M*K*b * (1 + alpha_a*(m - 1))     activations, re-read per N-tile
     B bytes = K*N*b * (1 + alpha_b*(n - 1))     weights,     re-read per M-tile
@@ -26,12 +35,13 @@ SYMMETRIC re-read on the A side that it does not model at all:
 alpha_b is the study's `alpha`. alpha_a is its counterpart on the activations and
 has never been measured here.
 
-WHY IT MATTERS RATHER THAN BEING A ROUNDING TERM. The ratio of the two re-read
-costs is exactly BM/BN, which the study already knows -- it quotes it as the
-"activation confound" bound on the alpha FIT -- but it does not appear in the AI
-formula the roofline is drawn from. At the sweep's own pinned BLOCK_N=64 with
-BLOCK_M=64 the ratio is 1.0, so the term it drops is the same size as the term it
-keeps.
+WHY WRITING IT OUT MATTERS. The ratio of the two re-read costs is exactly BM/BN,
+which the study already knows -- it quotes it as the "activation confound" bound
+on the alpha FIT. At the sweep's own pinned BLOCK_N=64 with BLOCK_M=64 that
+ratio is 1.0: the activation term is as large as the weight term. The blended
+formula carries it correctly. It just cannot SAY so, and a reader of "alpha =
+0.95, the L2 miss fraction on weight re-reads" is told something half of which
+is activations.
 
 AND IT EXPLAINS A DRIFT THE STUDY RECORDS AS UNEXPLAINED.
 scripts/block_m_crossing_sweep.py:144 carries ALPHA_BY_BLOCK_M = {64: 0.466,
@@ -144,11 +154,13 @@ def cap(N: int, K: int, *, block_m: int, block_n: int,
     output traffic, in fixed proportion. So batching stops helping, and where it
     stops is set by the two tile dimensions and the output width -- not by M.
 
-    THE THREE TERMS ARE THREE SEPARATE CEILINGS and the smallest tile wins:
-      alpha_b/BM   weight re-reads, the study's Q term
-      alpha_a/BN   activation re-reads, absent from the study's formula
+    THE THREE TERMS ARE THREE SEPARATE CEILINGS and the largest term wins:
+      alpha_b/BM   weight re-reads, the part the study NAMES
+      alpha_a/BN   activation re-reads, carried inside alpha_fitted unnamed
       1/K          the output write, which caps AI at 2K/b even with PERFECT
-                   caching -- the study's form says infinity there
+                   caching. The blended form reaches the same value; only a
+                   reader who mistakes alpha_fitted for alpha_b and sets it to
+                   zero would conclude infinity.
     """
     _check(1, N, K, block_m, block_n, alpha_b, alpha_a, b)
     denom = alpha_b / block_m + alpha_a / block_n + 1.0 / K

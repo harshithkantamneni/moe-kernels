@@ -1,9 +1,19 @@
 """The AI model with BOTH operand re-reads, and the ceilings it implies.
 
-The defect being fixed: docs/FINDINGS.md draws its roofline from
-AI(r) = (2r/b)/Q(r), which counts the weight re-read and drops the activation
-re-read and the output write entirely. At the sweep's own pinned BLOCK_N=64 with
-BLOCK_M=64 the dropped activation term is the SAME SIZE as the one kept.
+WHAT THIS IS AND IS NOT. docs/FINDINGS.md draws its roofline from
+AI(r) = (2r/b)/Q(r), which names only the weight re-read. This module writes out
+all three terms -- weight re-read, activation re-read, output write -- and
+shows they are the SAME formula once you know what the fitted quantity is:
+
+    alpha_fitted = alpha_b + alpha_a*(BM/BN) + BM/K
+    2*BM/(alpha_fitted*b)  ==  2/(b*(alpha_b/BM + alpha_a/BN + 1/K))   exactly
+
+So every cap the study published is arithmetically correct. The error was one
+of NAMING: alpha_fitted was called an L2 miss fraction, compared against
+published miss fractions, and its drift with BLOCK_M called unexplainable when
+a blend of three terms containing BM twice must drift. The value of the
+decomposition is mechanism and prior-art comparison -- which knob moves which
+term, and that alpha_b lands on TEMPO's b2/b -- not a correction to the cap.
 """
 from __future__ import annotations
 
@@ -46,13 +56,15 @@ def test_intensity_converges_to_the_cap():
         assert big < c, "AI approaches the cap from below and never exceeds it"
 
 
-def test_the_activation_term_is_not_negligible_at_the_swept_tiles():
-    """The reason this module exists. At BLOCK_M = BLOCK_N the two re-read costs
-    are EQUAL, so the study's weights-only cap is 2x too high there -- and the
-    error grows as BLOCK_N shrinks relative to BLOCK_M."""
-    weights_only = 2 * 64 / (0.95 * 2)                  # the published form
+def test_plugging_a_component_where_the_blend_belongs_overstates_the_cap():
+    """THE NAMING ERROR, made concrete. The two-term form wants alpha_fitted.
+    Hand it alpha_b instead -- a component -- and at BLOCK_M = BLOCK_N, where
+    the activation term equals the weight term, the cap comes out 2x too high.
+    That is not a defect in the formula; it is what happens when a component is
+    read as the whole. The error grows as BLOCK_N shrinks against BLOCK_M."""
+    component_in_blend_slot = 2 * 64 / (0.95 * 2)       # alpha_b where alpha_fitted goes
     full = cap(N, K, block_m=64, block_n=64, alpha_b=0.95, alpha_a=0.95)
-    assert full < weights_only / 1.9
+    assert full < component_in_blend_slot / 1.9
     # and it is the BM/BN ratio that governs, exactly as the study's own
     # "activation confound" bound says
     wide = cap(N, K, block_m=64, block_n=256, alpha_b=0.95, alpha_a=0.95)
@@ -128,3 +140,46 @@ def test_traffic_splits_by_operand_so_a_dropped_term_is_visible():
     assert shares["activations"] > 0.05, (
         "at BLOCK_N=64 the activation traffic is a large share, which is the "
         "reason the weights-only formula is wrong here")
+
+
+def test_the_two_term_cap_with_a_fitted_alpha_is_exactly_the_three_term_cap():
+    """THE RESULT THAT MAKES EVERY PUBLISHED CAP NUMBER CORRECT.
+
+    The study computes cap = 2*BM/(alpha*b) and the corrected model says
+    cap = 2/(b*(alpha_b/BM + alpha_a/BN + 1/K)). These looked like different
+    formulas, and for two hours on 2026-09-02 the second was described as a
+    correction to the first. It is not. What a ladder fit returns is
+
+        alpha_fitted = alpha_b + alpha_a*(BM/BN) + BM/K
+
+    and substituting that into the two-term form and dividing through by BM
+    reproduces the three-term form EXACTLY. The "missing" terms were never
+    missing; they were inside the fitted quantity in the right proportion,
+    because the fit divides every per-tile cost by the same weight bytes.
+
+    So the published caps stand. What was wrong was naming: alpha_fitted was
+    called an L2 miss fraction, compared against published miss fractions, and
+    its drift with BLOCK_M called unexplainable when it must drift. This test
+    pins the equivalence so that distinction cannot be lost again.
+    """
+    b = 2
+    for bm, bn, ab, aa in ((32, 64, 0.307, 0.143), (64, 64, 0.307, 0.143),
+                           (128, 64, 0.307, 0.143), (128, 256, 0.307, 0.143),
+                           (64, 256, 0.5, 0.2), (256, 32, 0.9, 0.9)):
+        alpha_fitted = ab + aa * (bm / bn) + bm / K
+        two_term = 2 * bm / (alpha_fitted * b)
+        three_term = cap(N, K, block_m=bm, block_n=bn, alpha_b=ab, alpha_a=aa, b=b)
+        assert two_term == pytest.approx(three_term, rel=1e-12), (
+            f"BM={bm} BN={bn}: two-term {two_term} vs three-term {three_term}")
+
+
+def test_alpha_fitted_is_not_bounded_by_one_even_though_its_components_are():
+    """A blend of three terms can exceed 1.0; a miss fraction cannot. Fits above
+    1.0 were read as impossible during the study. They are not impossible for
+    the quantity actually being reported -- they are a large BM/BN ratio."""
+    ab, aa = 0.9, 0.9                       # both legal miss fractions
+    blend = ab + aa * (256 / 64) + 256 / K   # BM=256, BN=64
+    assert blend > 1.0
+    # and the cap computed from it is still finite, positive and correct
+    assert 2 * 256 / (blend * 2) == pytest.approx(
+        cap(N, K, block_m=256, block_n=64, alpha_b=ab, alpha_a=aa), rel=1e-12)
