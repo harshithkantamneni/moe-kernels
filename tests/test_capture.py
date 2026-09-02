@@ -6,6 +6,7 @@ that expensive session: locating the gate modules in an unfamiliar model layout,
 accumulating counts correctly, and writing a well-formed trace file.
 """
 import importlib.util
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -552,3 +553,50 @@ def test_a_working_torchvision_is_left_alone(monkeypatch):
     mod = _capture_traces_module()
     mod._disable_torch_extensions()
     assert _sys.modules["torchvision"] is sentinel
+
+
+def test_a_deleted_predicate_is_stubbed_not_silently_skipped(monkeypatch, capsys):
+    """The first shim was a NO-OP and the run failed again with the same error.
+
+    It restored a name only when `transformers.utils` still had it, which is the
+    MOVED case. `is_torch_fx_available` was DELETED, so the guard was false, it
+    restored nothing, printed nothing, and looked like it had worked. Two GPU
+    minutes and a fourth attempt.
+
+    The stub answers False, and that direction is the whole safety argument:
+    these guard optional paths -- fx.wrap of the attention-mask builder -- so
+    False skips a feature rather than routing the model through different
+    arithmetic. This script runs forward passes under hooks and never traces.
+    """
+    import types
+    mod = _capture_traces_module()
+    fake_u = types.ModuleType("transformers.utils")
+    fake_iu = types.ModuleType("transformers.utils.import_utils")
+    fake_u.import_utils = fake_iu
+    monkeypatch.setitem(sys.modules, "transformers", types.ModuleType("transformers"))
+    monkeypatch.setitem(sys.modules, "transformers.utils", fake_u)
+    monkeypatch.setitem(sys.modules, "transformers.utils.import_utils", fake_iu)
+
+    mod._shim_moved_transformers_helpers()
+
+    assert fake_iu.is_torch_fx_available() is False
+    assert "STUBBED" in capsys.readouterr().out
+
+
+def test_an_unknown_missing_helper_is_left_missing(monkeypatch, capsys):
+    """Stubbing whatever happens to be absent is how a run reports numbers from
+    a model that quietly took a different path. Only the named predicates, whose
+    False branch is known to skip a feature, are filled in."""
+    import types
+    mod = _capture_traces_module()
+    fake_u = types.ModuleType("transformers.utils")
+    fake_iu = types.ModuleType("transformers.utils.import_utils")
+    fake_u.import_utils = fake_iu
+    monkeypatch.setitem(sys.modules, "transformers", types.ModuleType("transformers"))
+    monkeypatch.setitem(sys.modules, "transformers.utils", fake_u)
+    monkeypatch.setitem(sys.modules, "transformers.utils.import_utils", fake_iu)
+
+    mod._shim_moved_transformers_helpers()
+
+    assert not hasattr(fake_iu, "is_flash_attn_2_available")
+    assert "is_torch_fx_available" in mod._ABSENT_TRANSFORMERS_PREDICATES

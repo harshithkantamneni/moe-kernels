@@ -468,40 +468,65 @@ def _disable_torch_extensions() -> None:
               "against a different torch. Nothing here processes images or audio.")
 
 
+#: Availability predicates a frozen trust_remote_code module imports and that
+#: modern transformers no longer defines anywhere. Each is stubbed to FALSE, and
+#: false is the load-bearing direction: every one of these guards an OPTIONAL
+#: code path, so answering "not available" skips a feature rather than changing
+#: how the model computes. `is_torch_fx_available` gates a torch.fx.wrap of the
+#: attention-mask builder, which matters only for symbolic tracing -- and this
+#: script runs ordinary forward passes under hooks, never traces.
+_ABSENT_TRANSFORMERS_PREDICATES = ("is_torch_fx_available", "is_torch_fx_proxy")
+
+
 def _shim_moved_transformers_helpers() -> None:
-    """Restore names that trust_remote_code modules import from private paths.
+    """Restore names a frozen trust_remote_code module imports from a private path.
 
         ImportError: cannot import name 'is_torch_fx_available' from
                      'transformers.utils.import_utils'
 
-    DeepSeek-V2-Lite ships its own modeling_deepseek.py, pinned to a revision
-    from 2024, and it imports helpers out of `transformers.utils.import_utils` --
-    a private path that has since been reorganised. The name still exists on
-    `transformers.utils`; only the submodule it used to live in changed. The
-    model is frozen on the Hub and cannot be updated, so the choice is to shim or
-    to pin transformers back for every other model too.
+    DeepSeek-V2-Lite ships modeling_deepseek.py pinned to a 2024 revision, and it
+    imports helpers out of `transformers.utils.import_utils`. The model is frozen
+    on the Hub -- re-downloading fetches the same broken import -- so the choice
+    is to shim or to pin transformers backwards for every other model too.
 
-    Only names that ALREADY EXIST elsewhere in transformers are re-exported. A
-    missing helper is left missing rather than stubbed with a plausible default:
-    inventing `is_torch_fx_available = lambda: False` would silence the import
-    and change which code path the model takes, which is the kind of quiet
-    behaviour change this study spends its time hunting.
+    TWO CASES, AND THE FIRST ATTEMPT ONLY HANDLED ONE. Some names merely MOVED
+    and are re-exported from wherever they now live. Others were DELETED, and for
+    those a re-export is a silent no-op: the first version of this guarded on
+    `hasattr(transformers.utils, name)`, which is false for a deleted name, so it
+    restored nothing, printed nothing, and the run failed again with the same
+    ImportError it was written to fix.
+
+    Deleted predicates are therefore stubbed to False, but only the ones named in
+    _ABSENT_TRANSFORMERS_PREDICATES, and only because each guards an optional
+    path where False means "skip a feature" rather than "take a different route
+    through the arithmetic". A predicate not on that list is still left missing:
+    stubbing an unknown helper to a plausible default is how a run produces
+    numbers from a model that quietly did something else.
     """
     try:
         import transformers.utils as _u
         import transformers.utils.import_utils as _iu
     except Exception:                              # pragma: no cover
         return
-    restored = []
+    moved, stubbed = [], []
     for name in ("is_torch_fx_available", "is_torch_fx_proxy",
                  "is_torchdynamo_compiling"):
-        if not hasattr(_iu, name) and hasattr(_u, name):
+        if hasattr(_iu, name):
+            continue
+        if hasattr(_u, name):
             setattr(_iu, name, getattr(_u, name))
-            restored.append(name)
-    if restored:
-        print(f"[capture] re-exported {', '.join(restored)} onto "
-              "transformers.utils.import_utils for a trust_remote_code module "
-              "pinned to an older layout")
+            moved.append(name)
+        elif name in _ABSENT_TRANSFORMERS_PREDICATES:
+            setattr(_iu, name, lambda *a, **k: False)
+            stubbed.append(name)
+    if moved:
+        print(f"[capture] re-exported {', '.join(moved)} onto "
+              "transformers.utils.import_utils")
+    if stubbed:
+        print(f"[capture] STUBBED {', '.join(stubbed)} -> False. These no longer "
+              "exist in transformers at all; each guards an optional path "
+              "(torch.fx tracing), and this script runs forward passes under "
+              "hooks rather than tracing.")
 
 
 def main() -> int:
