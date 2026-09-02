@@ -1919,21 +1919,38 @@ def regression_alpha(blob):
     return None
 
 
+def verdict_line(blob, marker):
+    for line in blob.splitlines():
+        if line.startswith(marker):
+            return line.strip()
+    return ""
+
+
 def ablation_alpha(blob):
-    """The pooled bracket and the 90% interval around it."""
+    """The pooled bracket and the 90% interval around it, IF it is usable.
+
+    A NUMBER FROM A REFUTED FIT IS NOT A MEASUREMENT. On 2026-09-01 the ablation
+    printed `VERDICT: REFUTED or VOID. 2 gate(s) failed: signal ...; form: D(n)
+    is affine in (n-1), as W(1+alpha(n-1)) requires` -- and this function handed
+    its interval to the reconciler anyway, which compared it to the published
+    0.558, found the ranges overlapping, and reported PASS "the two alphas
+    agree". The `form` failure is the one that makes that meaningless: D(n)
+    affine in (n-1) is the equation alpha is DEFINED by, so if the data reject
+    it there is no single alpha to bracket and the interval is a fit of a model
+    that does not hold.
+
+    It looked like corroboration and it was the estimator's own refusal, printed
+    three lines below the verdict that ignored it.
+    """
+    verdict = verdict_line(blob, "VERDICT:")
+    if "REFUTED" in verdict.upper() or "VOID" in verdict.upper():
+        return None
     m = re.search(r"POOLED[^\n]*?alpha is in ([0-9.]+) to ([0-9.]+), "
                   r"90% interval ([0-9.]+) to ([0-9.]+)", blob)
     if not m:
         return None
     lo, hi, ilo, ihi = (float(g) for g in m.groups())
     return lo, hi, ilo, ihi
-
-
-def verdict_line(blob, marker):
-    for line in blob.splitlines():
-        if line.startswith(marker):
-            return line.strip()
-    return ""
 
 
 gblob = text(group_log)
@@ -1974,6 +1991,15 @@ if abl is None:
     out.append("            rests on one regression against a byte model with no")
     out.append("            tile term in it, and that is the thing step 2b exists")
     out.append("            to fix. Re-run with --only 2b before publishing.")
+    _v = verdict_line(ablob, "VERDICT:")
+    if _v:
+        out.append("")
+        out.append("            step 2b DID run and its interval is REFUSED here,")
+        out.append("            because it failed its own gates:")
+        out.append("              " + _v)
+        out.append("            An interval from a fit whose form gate failed is")
+        out.append("            not a second opinion; scoring the published alpha")
+        out.append("            against it would manufacture agreement.")
     out.append("")
     out.append("VERDICT     one estimate only. Nothing is reconciled.")
 else:
