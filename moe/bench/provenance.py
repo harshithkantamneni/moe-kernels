@@ -35,13 +35,25 @@ what the run used, but its `*_source` is listed in `missing` with the reason
 report, which is the intended outcome: the number came from somewhere and the
 script has to say where.
 
+"Never raises" includes a torch that is installed and broken. The pod notes
+record an ABI mismatch between torch and a model library that made `import
+torch` die with an OSError on a missing `libcudart.so`; that is not an
+ImportError, and a block
+that let it propagate would take the whole report down with it. So the import
+is wrapped in `except Exception`, and the exception's name is the reason in
+`missing["gpu_name"]`: "torch import failed: OSError". A card name torch
+returns as an empty string is refused the same way, because "" is not a card.
+
 WHAT COUNTS AS DIRTY
 --------------------
-`git status --porcelain` including untracked files. The stricter reading is
-deliberate: on 2026-09-01 the pod ledger recorded "0 dirty file(s)" for a
-session in which `calibrate` had already rewritten a tracked yaml and every
-later arm ran on a modified checkout. Untracked files are part of the tree the
-code ran against, and a count of them is cheaper to explain than to omit.
+`git status --porcelain --untracked-files=all`, so the count is a count of
+FILES, with every file inside an untracked directory counted on its own rather
+than the directory as one entry. The stricter reading is deliberate: on
+2026-09-01 the pod ledger recorded "0 dirty file(s)" for a session in which
+`calibrate` had already rewritten a tracked yaml and every later arm ran on a
+modified checkout. Untracked files are part of the tree the code ran against,
+and a count of them is cheaper to explain than to omit. Ignored files are not
+counted; git does not list them and neither does this.
 
 THE THREE RESUME COLLISIONS `run_id` EXISTS TO PREVENT
 ------------------------------------------------------
@@ -160,7 +172,9 @@ class Provenance:
     missing: dict[str, str] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
-        """Flat, JSON-serialisable, in declaration order; `missing` last."""
+        """JSON-serialisable, one level deep: every field in declaration order,
+        then `missing` nested last as its own dict. `as_columns` is the flat
+        form."""
         out: dict[str, Any] = {}
         for f in fields(self):
             if f.name == "missing":
@@ -190,6 +204,13 @@ class Provenance:
         Raises `ProvenanceCollision` if the payload already carries any of
         those keys with a different value, so two provenance blocks can never
         be layered over one report without someone noticing.
+
+        A key whose value is None is STILL written, as None: an off-GPU stamp
+        gives `gpu_name: null` beside `provenance.missing.gpu_name: "no CUDA"`.
+        That is the honest record. It also means a publish gate that checks
+        only for the PRESENCE of these keys is rubber-stamping; the gate has to
+        test that each value is non-None, and this module cannot do that for it
+        because the whole point of the block is to say what it does not know.
         """
         block = self.as_dict()
         out = dict(payload)
@@ -223,7 +244,7 @@ def _git(root: Path | None) -> tuple[str | None, bool | None, int | None, str | 
                                   if not err else f"git rev-parse: {err[0]}")
     try:
         status = subprocess.run(["git", "-C", str(root), "status", "--porcelain",
-                                 "--untracked-files=normal"],
+                                 "--untracked-files=all"],
                                 capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.SubprocessError) as exc:
         return sha.stdout.strip(), None, None, (
@@ -234,19 +255,33 @@ def _git(root: Path | None) -> tuple[str | None, bool | None, int | None, str | 
     return sha.stdout.strip(), bool(lines), len(lines), None
 
 
-def _import_torch():
-    """torch or None. Kept separate so a test can hand in a fake."""
+def _import_torch() -> tuple[Any, str | None]:
+    """`(torch, None)` or `(None, reason)`. Kept separate so a test can hand in
+    a fake.
+
+    Catches Exception, not ImportError: a torch that is installed and breaks on
+    import (OSError on a missing libcudart, RuntimeError from a bad ABI) is the
+    documented pod failure, and `provenance_block` has promised not to raise
+    for anything the machine did.
+    """
     try:
         import torch
     except ImportError:
-        return None
-    return torch
+        return None, "torch not importable"
+    except Exception as exc:                            # noqa: BLE001
+        return None, f"torch import failed: {exc.__class__.__name__}"
+    return torch, None
 
 
-def _gpu(torch_mod) -> tuple[str | None, str | None, str | None]:
-    """`(gpu_name, cuda_version, reason)` from an imported torch, or the reason."""
+def _gpu(torch_mod, import_reason: str | None = None) -> tuple[str | None, str | None, str | None]:
+    """`(gpu_name, cuda_version, reason)` from an imported torch, or the reason.
+
+    The reason is never None when the name is: a None or empty device name is
+    refused with its own reason, so `missing["gpu_name"]` always has an entry
+    to give and "" can never be recorded as a card.
+    """
     if torch_mod is None:
-        return None, None, "torch not importable"
+        return None, None, import_reason or "torch not importable"
     try:
         if not torch_mod.cuda.is_available():
             return None, None, "no CUDA"
@@ -254,8 +289,10 @@ def _gpu(torch_mod) -> tuple[str | None, str | None, str | None]:
     except Exception as exc:                            # noqa: BLE001
         # A driver that is present but unusable is not a card identity.
         return None, None, f"CUDA query failed: {exc.__class__.__name__}"
+    if not name:
+        return None, None, "torch returned an empty device name"
     cuda = getattr(getattr(torch_mod, "version", None), "cuda", None)
-    return name, (cuda or None), None
+    return str(name), (cuda or None), None
 
 
 def _nvidia_smi_driver_version() -> tuple[str | None, str | None]:
@@ -333,8 +370,8 @@ def provenance_block(*, repo_root: Path | str | None = None, **known) -> Provena
     if reason:
         missing["hostname"] = reason
 
-    torch_mod = _import_torch()
-    gpu_name, cuda_version, reason = _gpu(torch_mod)
+    torch_mod, import_reason = _import_torch()
+    gpu_name, cuda_version, reason = _gpu(torch_mod, import_reason)
     values["gpu_name"], values["cuda_version"] = gpu_name, cuda_version
     if reason:
         missing["gpu_name"] = reason
@@ -383,9 +420,17 @@ _VISIBLE_MAX = 96
 
 
 def card_slug(card: str) -> str:
-    """`"NVIDIA H200"` -> `"nvidia_h200"`, the same rule the calibration file
-    stems use, so a run directory and its calibration sort together."""
-    slug = re.sub(r"[^a-z0-9]+", "_", str(card).lower()).strip("_")
+    """`"NVIDIA H200"` -> `"nvidia_h200"`, the calibration file's stem without
+    its `measured_` prefix, so a run directory and its calibration sort together.
+
+    Derived from `roofline.measured_slug` rather than re-implemented, so the two
+    cannot drift: a rule written twice once differed on non-ASCII alphanumerics,
+    which no real card name has, and that is exactly the kind of difference that
+    is not worth being able to have.
+    """
+    from .roofline import measured_slug
+    stem = measured_slug(str(card))
+    slug = stem.removeprefix("measured_")
     if not slug:
         raise NoCard(f"card {card!r} has no alphanumeric characters to slug")
     return slug
@@ -396,6 +441,9 @@ def _canonical(value: Any) -> Any:
     lists, Paths strings; anything else must already be JSON-native."""
     if value is None:
         raise UnresolvedKnob("a swept knob is None; resolve it or leave it out")
+    if isinstance(value, str) and not value.strip():
+        raise UnresolvedKnob("a swept knob is an empty string; an argparse default of '' "
+                             "is as unresolved as None, resolve it or leave it out")
     if isinstance(value, (set, frozenset)):
         return sorted(_canonical(v) for v in value)
     if isinstance(value, (list, tuple)):
@@ -424,8 +472,10 @@ def _visible(value: Any) -> str:
 def run_id(*, card: str, **swept) -> str:
     """`<card_slug>-<k1><v1>-<k2><v2>-...-<hash8>`, deterministic, card first.
 
-    Raises `NoCard` on a None or empty card and `UnresolvedKnob` on a None
-    value. Knobs are sorted by name before rendering and hashing, so the id is
+    Raises `NoCard` on a None or empty card and `UnresolvedKnob` on a None or
+    empty-string value (an argparse default of "" is as unresolved as None, and
+    would otherwise name a run without saying what the knob was). Knobs are
+    sorted by name before rendering and hashing, so the id is
     identical whatever order the caller passed them in, and any change to any
     value changes the hash. The visible part is truncated at `_VISIBLE_MAX`
     characters; the hash is over the full key.

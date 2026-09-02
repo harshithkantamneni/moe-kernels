@@ -240,7 +240,13 @@ def ledger_state(rc: int) -> str:
 
 
 def describe(rc: int) -> str:
-    """`"3 INVALID: measured; a VALIDITY gate failed ..."`, or the RETRY form."""
+    """`"3 INVALID: measured; a VALIDITY gate failed ..."`, or the RETRY form.
+
+    Same type guard as `ledger_state`: a bool is not an exit code even though
+    `True == 1` would otherwise describe it as CLAIM_FAIL.
+    """
+    if isinstance(rc, bool) or not isinstance(rc, int):
+        raise TypeError(f"exit code must be an int, got {rc!r}")
     if rc in CODE_NAMES:
         return f"{rc} {CODE_NAMES[rc]}: {CODE_MEANINGS[rc]}"
     return f"{rc} RETRY: not in the exit-code table; read the log"
@@ -313,9 +319,14 @@ def classify_text(text: str) -> int:
     """The exit code a log's RESULT lines imply. Raises `NoGatesScored` if none.
 
     Lets the driver recompute a script's verdict from what it printed and
-    compare it with the code the process actually returned. The two can only
-    differ if a script printed one thing and exited another, which is the exact
-    defect this module exists to prevent.
+    compare it with the code the process actually returned. They differ in two
+    cases and the driver must tell them apart. One: the script printed one
+    thing and exited another, the defect this module exists to prevent. Two:
+    the script printed every RESULT line and THEN crashed, so the log implies
+    DONE or CLAIM_FAIL and the process returned ERROR (4) or a signal; that is
+    a legitimate disagreement, the process code wins, and the arm is RETRY
+    with the traceback as the reason. A log with no RESULT lines at all raises
+    `NoGatesScored`, which is what a REFUSED log looks like from here.
     """
     return classify([(r.kind, r.verdict) for r in parse_result_lines(text)])
 
@@ -339,9 +350,14 @@ SELF_TEST_TABLE: tuple[tuple[tuple[tuple[str, str], ...], int], ...] = (
 def self_test() -> int:
     """Exercise the table off-GPU. Returns 0 when every row agrees, 1 otherwise.
 
-    Plants the FAIL branch deliberately: the last check feeds `classify` a list
-    that must NOT come out DONE and confirms it does not, so a regression that
-    makes every gate list read DONE is caught here rather than on a pod.
+    Four checks: every row of `SELF_TEST_TABLE` through `classify`; every code
+    through `ledger_state`; one RESULT line rendered, buried in prose that
+    mentions PASS and floor, and read back alone; and a positive assertion that
+    a VALIDITY FAIL does not classify as DONE. Each check prints one `[PASS]` or
+    `[FAIL]` line so a broken row is named, not just counted. The proof that
+    this function can itself return 1 is not in here: it lives in
+    `tests/test_exit_codes.py::test_self_test_fails_when_the_table_is_broken`,
+    which plants a wrong expectation in the table and asserts the 1.
     """
     bad = 0
     for gates, want in SELF_TEST_TABLE:

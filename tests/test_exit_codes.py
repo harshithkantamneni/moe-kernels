@@ -85,6 +85,13 @@ def test_describe_names_every_code_and_the_retry_form():
     assert X.describe(99).startswith("99 RETRY")
 
 
+def test_describe_refuses_non_integers_like_ledger_state():
+    """`True == 1` would otherwise describe a bool as CLAIM_FAIL."""
+    for bad in (True, False, "1", None, 1.0):
+        with pytest.raises(TypeError):
+            X.describe(bad)
+
+
 # --------------------------------------------------------------------------
 # 3. classify
 # --------------------------------------------------------------------------
@@ -256,6 +263,27 @@ def test_classify_text_agrees_with_classify_on_the_same_gates():
             name = g[1] if len(g) == 3 else f"G{i}"
             lines.append(X.result_line(kind, name, verdict, "detail"))
         assert X.classify_text("\n".join(lines)) == want
+
+
+def test_classify_text_can_disagree_with_a_crash_after_every_result_line():
+    """The second legitimate cause of log/process disagreement: every RESULT
+    line printed, then a traceback. The log implies DONE; the process said
+    ERROR; the driver must take the process code and mark RETRY."""
+    log = "\n".join([
+        X.result_line(X.VALIDITY, "V0", X.PASS),
+        X.result_line(X.CLAIM, "C1", X.PASS, "0.563 within band"),
+        "Traceback (most recent call last):",
+        "  File \"scripts/x.py\", line 9, in <module>",
+        "ZeroDivisionError: division by zero",
+    ])
+    assert X.classify_text(log) == X.DONE
+    assert X.ledger_state(X.ERROR) == "RETRY"
+    assert X.ERROR not in X.MEASURED_CODES
+
+
+def test_classify_text_of_a_refused_log_raises_no_gates_scored():
+    with pytest.raises(X.NoGatesScored):
+        X.classify_text("REFUSED: no calibration for NVIDIA H200\nnothing measured\n")
 
 
 # --------------------------------------------------------------------------
