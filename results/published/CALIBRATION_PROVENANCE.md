@@ -27,8 +27,9 @@ and did not catch the one real defect, which happened inside a single day.
 | `2026-08-28-nvidia_h200-h200-v2lite` | same_session | agree | matches | within the sweep | 160.3 |
 | `2026-08-28-nvidia_h200-h200-whole-layer` | ceilings_disagree | disagree | n/a | n/a | **refused** |
 | `2026-08-28-nvidia_h200-ridge-resolution` | different_session | agree | differs | within the sweep | 162.8 |
+| `2026-09-01-nvidia_h200-alpha-0558` | same_session | agree | matches | within the sweep | 163.7 |
 
-**9 of 10 arms pass**: their calibration is either their own or declared derived. 1 does not.
+**10 of 11 arms pass**: their calibration is either their own or declared derived. 1 does not.
 
 - `2026-08-28-nvidia_h200-h200-whole-layer`: the calibration shipped with this arm is not the one its rows were quoted against: rows carry achieved_bw_gbps 4377.212185, measured.yaml reports 4374.489664; rows carry achieved_peak_tflops 701.612906 for dtype 'bf16', measured.yaml reports 770.916292
 

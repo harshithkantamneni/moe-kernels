@@ -416,24 +416,41 @@ def test_the_published_corpus_splits_into_tuned_and_ladder_the_way_findings_says
         "deepseek-v3", "deepseek-v2-lite"}
 
 
-def test_no_published_row_is_a_v4_row_so_none_of_this_is_checkable_against_a_run():
-    """The standing caveat, kept as an executable statement. The day a v4 arm
-    lands here this test fails, and the thing to do then is not to delete it but
-    to run `disagreement_with_observed` over the arm."""
-    for row in _published_vllm_rows():
-        assert not SC.has_tile_config(row)
+def test_the_derivation_matches_what_vllm_actually_did_on_every_v4_row():
+    """THE CAVEAT IS DISCHARGED. This used to assert the opposite -- that no
+    published row carried an observed tile config, so nothing here was checkable
+    against a run -- and it said that the day a v4 arm landed the fix was to run
+    `disagreement_with_observed` over it rather than delete the test. The
+    alpha-0558 arm landed on 2026-09-01 and that is what this now does.
+
+    It converts the whole module from an argument into a validated claim. Every
+    GROUP_SIZE_M and BLOCK_SIZE_M this study attributes to a v3 row is DERIVED by
+    reimplementing vLLM 0.27.1's lookup offline, including the ones the published
+    alpha refit stratifies by; until now nothing had ever confirmed that
+    reimplementation against vLLM itself.
+    """
+    rows = _published_vllm_rows()
+    comparable = [r for r in rows if SC.has_tile_config(r)]
+    assert len(comparable) >= 900, (
+        f"only {len(comparable)} rows carry an observed tile config; the v4 arm "
+        "is missing or its tile columns are unpopulated, and this test would "
+        "then be passing vacuously")
+    disagreements = [d for r in comparable
+                     if (d := TR.disagreement_with_observed(r)) is not None]
+    assert disagreements == [], (
+        f"{len(disagreements)} of {len(comparable)} rows disagree, e.g. "
+        f"{disagreements[:3]}")
 
 
-def test_the_census_command_covers_every_derivable_row_and_says_nothing_is_observed(
+def test_the_census_command_covers_every_derivable_row(
         capsys):
-    """The deliverable as a command. It exits 0 with an explicit statement that
-    the derivation has NOT been validated against a run, which is the honest
-    reading of an all-v3 corpus and is not the same as a pass."""
+    """The deliverable as a command. It no longer has to disclaim validation:
+    the corpus now holds 924 v4 rows and the derivation agrees with all of
+    them, which the test above checks directly."""
     assert TR._main([str(p) for p in sorted(PUBLISHED.glob("*/run_*.csv"))]) == 0
     out = capsys.readouterr().out
     assert "DERIVED" in out
     assert "vllm_tuned_derived" in out and "vllm_default_derived" in out
-    assert "NOT a pass" in out
 
 
 def test_the_census_shows_the_fp8_rescope_c3_states():

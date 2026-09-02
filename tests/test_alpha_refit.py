@@ -339,8 +339,12 @@ def test_the_derived_pool_is_the_size_the_report_claims(triton_pool):
     """A pin on the pool, so a change in `crossing.m_tiles_for_row`,
     `published.filter_superseded` or the tile resolver shows up here rather than
     silently moving a published alpha."""
-    assert len(triton_pool) == 10_813
-    assert sum(1 for o in triton_pool if o.discriminating) == 3_124
+    # 10,813 until 2026-09-01, when the alpha-0558 arm added 368 admissible
+    # rows. The number is asserted rather than computed on purpose: it is
+    # what the published refit quotes, so it has to move deliberately and
+    # be re-quoted, not drift under the text that cites it.
+    assert len(triton_pool) == 11_181
+    assert sum(1 for o in triton_pool if o.discriminating) == 3_181
     assert {o.dtype for o in triton_pool} == {"bf16"}
 
 

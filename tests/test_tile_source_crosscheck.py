@@ -393,8 +393,21 @@ def test_every_published_row_is_skipped_for_a_reason_this_file_can_name():
     report = crosscheck_files(published_arms())
     assert len(report.verdicts) > 30_000
     reasons = report.skipped_by_reason()
-    assert set(reasons) <= {"predates schema v4", "no tile_config_source column"}
+    # The first v4 arm (2026-09-01) added two reasons that could not occur while
+    # the corpus was all-v3: its cutlass and sglang spans DO carry a
+    # tile_config_source, and that source names an engine rather than a vLLM
+    # config file, so there is nothing for this check to compare against. That
+    # is a skip with a name, which is what this test is guarding -- the failure
+    # mode being prevented is a row falling through into an UNNAMED state, not a
+    # row being skipped.
+    assert set(reasons) <= {"predates schema v4", "no tile_config_source column",
+                            "source 'cutlass_static' claims nothing about a file",
+                            "source 'sglang' claims nothing about a file"}
     assert len(report.checked) + sum(reasons.values()) == len(report.verdicts)
+    # And the check is no longer vacuous: 924 vLLM rows really were compared.
+    assert len(report.checked) >= 900, (
+        f"only {len(report.checked)} rows were actually checked; a corpus that "
+        "skips everything reports zero failures too")
 
 
 def main(argv: list[str]) -> int:

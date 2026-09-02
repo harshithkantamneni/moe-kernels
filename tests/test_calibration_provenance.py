@@ -348,7 +348,7 @@ def test_a_calibration_missing_its_provenance_fields_is_read_not_rejected(tmp_pa
 # --- the ten arms actually published -----------------------------------------
 
 @published_only
-def test_the_ten_published_arms_have_these_verdicts():
+def test_the_eleven_published_arms_have_these_verdicts():
     """The state this check exists for, and the place a new one gets declared on
     purpose rather than discovered by md5-ing directories three days later.
 
@@ -367,6 +367,12 @@ def test_the_ten_published_arms_have_these_verdicts():
         "2026-08-28-nvidia_h200-h200-v2lite": SAME_SESSION,
         "2026-08-28-nvidia_h200-h200-whole-layer": CEILINGS_DISAGREE,
         "2026-08-28-nvidia_h200-ridge-resolution": DIFFERENT_SESSION,
+        # The first arm published by scripts/pod_session.sh, and the first to
+        # clear this check on every axis at once: the calibration was measured
+        # in step 1 of the same session, at the same commit, inside the row
+        # span. That is what the gate was written to reward and no earlier arm
+        # had managed it.
+        "2026-09-01-nvidia_h200-alpha-0558": SAME_SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}
@@ -375,7 +381,7 @@ def test_the_ten_published_arms_have_these_verdicts():
 
 @published_only
 def test_exactly_one_published_arm_cannot_prove_its_calibration_is_its_own():
-    """Nine of ten pass. The one that does not is the one C5 needed."""
+    """Ten of eleven pass. The one that does not is the one C5 needed."""
     blocked = [p.name for p in sorted(PUBLISHED.iterdir()) if p.is_dir()
                and calibration_provenance(p).blocking_reason]
     assert blocked == ["2026-08-28-nvidia_h200-h200-whole-layer"]
@@ -497,7 +503,21 @@ def test_publishing_an_arm_whose_calibration_is_not_its_own_fails_loudly(
     r = run_publish(results, publish_root, "--all", "--label", "whole-layer")
     assert r.returncode != 0, r.stdout
     assert "REFUSING TO PUBLISH" in r.stderr
-    assert "4377.212185" in r.stderr and "4374.489664" in r.stderr
+    # BOTH numbers, because naming only one is what makes a mismatch message
+    # useless: the reader needs the row's figure and the file's figure side by
+    # side to see which is which. The row's is planted by the fixture; the
+    # file's is READ from the yaml rather than written down here, because this
+    # hard-coded 4374.489664 and broke the moment the H200 was recalibrated on
+    # 2026-09-01 -- a test failing because the instrument was re-measured, which
+    # is the one thing this project does on every pod.
+    import yaml
+    on_disk = yaml.safe_load(
+        (Path(__file__).resolve().parents[1] / "moe" / "bench" /
+         "hardware" / "measured_nvidia_h200.yaml").read_text())
+    file_bw = on_disk["detail"]["achieved_bandwidth_gbps"]
+    assert "4377.212185" in r.stderr, "the ROW's bandwidth is not named"
+    assert f"{file_bw:.6f}" in r.stderr, (
+        f"the FILE's bandwidth {file_bw:.6f} is not named in:\n{r.stderr}")
 
 
 def test_the_refused_arm_is_left_on_disk_and_is_not_committed(foreign_calibration):
