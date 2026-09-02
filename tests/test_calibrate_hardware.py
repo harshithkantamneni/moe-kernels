@@ -82,8 +82,15 @@ def verdicts(cal, pin=H200_PIN) -> dict[str, str]:
 
 
 def test_a_sound_calibration_passes_every_gate_and_exits_done():
+    """All six, named here so a gate added later cannot slip in untested: the
+    docstring on `score` claimed five while emitting six, and the sixth had no
+    FAIL branch anywhere in this file."""
     cal = calibration()
     scored = CH.score(cal, H200_PIN)
+    assert {n for _k, n, _v, _d in scored} == {
+        "clock_established", "ceiling_pattern_measured",
+        "no_pattern_exceeds_the_pin_rate", "write_rate_is_a_store_rate",
+        "clock_steady_across_patterns", "not_throttled"}
     assert {v for _k, _n, v, _d in scored} == {EX.PASS}
     assert EX.classify([(k, v) for k, _n, v, _d in scored]) == EX.DONE
 
@@ -128,6 +135,42 @@ def test_a_pattern_above_the_pin_rate_is_a_failed_claim():
     cal = calibration(bandwidth_patterns=(pattern("triad", 5200.0),))
     assert verdicts(cal)["no_pattern_exceeds_the_pin_rate"] == EX.FAIL
     assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.CLAIM_FAIL
+
+
+def test_a_write_rate_above_the_pin_rate_fails_its_own_gate():
+    """The gate whose FAIL branch nobody had ever run.
+
+    `write_rate_is_a_store_rate` is the arithmetic check on the store path: a
+    write that reports N bytes per second when the hardware must move 2N for a
+    read-for-ownership is measuring its own accounting, not the card. Every
+    fixture here put write at 3900 GB/s against a 4916.7 pin rate, and the one
+    fixture that goes over the pin drops every pattern but `triad`, so this gate
+    was not even emitted in it. Both are now covered: the gate is emitted, and
+    it fails.
+    """
+    cal = calibration(bandwidth_patterns=(pattern("triad", 4374.0),
+                                          pattern("write", 5200.0)))
+    scored = verdicts(cal)
+    assert scored["write_rate_is_a_store_rate"] == EX.FAIL
+    # and the general pin gate is failed by the same row, which is the point:
+    # a write over the pin rate is a pattern over the pin rate.
+    assert scored["no_pattern_exceeds_the_pin_rate"] == EX.FAIL
+    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.CLAIM_FAIL
+    detail = {n: d for _k, n, _v, d in CH.score(cal, H200_PIN)}
+    assert "read-for-ownership" in detail["write_rate_is_a_store_rate"]
+
+
+def test_a_calibration_with_no_write_pattern_omits_the_store_rate_gate():
+    """A gate that was not scored must not read as one that passed.
+
+    This is the shape that hid the missing FAIL branch above: the over-the-pin
+    fixture had no write pattern, so `write_rate_is_a_store_rate` was silently
+    absent from its verdicts and a test asking only about the gates present saw
+    nothing wrong. Asserted directly so the conditional stays visible.
+    """
+    cal = calibration(bandwidth_patterns=(pattern("triad", 4374.0),))
+    assert "write_rate_is_a_store_rate" not in verdicts(cal)
+    assert "write_rate_is_a_store_rate" in verdicts(calibration())
 
 
 def test_an_unknown_bus_width_leaves_the_pin_claim_untested_not_passed():

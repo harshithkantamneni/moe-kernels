@@ -308,6 +308,46 @@ else
   sed 's/^/[publish]   /' "$SHA_REPORT"
 fi
 
+# AND THE SAME QUESTION FROM A STRANGER'S SIDE, ASKED BEFORE THE COMMIT.
+# A sha that resolves HERE and on no remote branch is one a stranger who clones
+# cannot reach, which is the same nothing as a missing commit from their side.
+#
+# THIS USED TO RUN AFTER THE PUSH AND APPEND TO A FILE ALREADY COMMITTED. Two
+# things were wrong with that. Every successful publish ended with a TRACKED
+# file modified in the working tree, which is the dirty-tree defect this whole
+# session shell is being repaired for: the next thing measured on that pod
+# stamps git_dirty=True on every row. And the verdict reached neither the
+# committed arm nor SUMMARY.md, which quotes this file as it stands when the
+# summary is generated, so the one reader it was written for never saw it.
+#
+# Asked before the push, the honest answer for a sha this very publish is about
+# to push would be UNPUSHED, which is why --will-push exists: the checker
+# reports PENDING for a sha that `git push origin HEAD` will place on the
+# remote, and UNPUSHED only for one that nothing here will. If the push then
+# fails, the failure branch below says so rather than leaving PENDING to be read
+# as done. Advisory either way: the rows are readable, only their reachability
+# is in question.
+REMOTE_ARGS=(--require-remote)
+if (( PUSH && ! DRY )); then
+  REMOTE_ARGS+=(--will-push HEAD)
+fi
+{ echo; echo "# reachability from a remote, asked before this publish committed"; } \
+  >> "$SHA_REPORT"
+if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
+     "${REMOTE_ARGS[@]}" >> "$SHA_REPORT" 2>&1; then
+  log "every git_sha in this arm is on a remote, or on the HEAD this publish pushes"
+else
+  # Deliberately not asserting which gate failed: this invocation re-scores
+  # resolvability as well, so its exit code is also 1 for the MISSING case the
+  # block above already reported, and a line that named the remote as the cause
+  # would be wrong half the time.
+  log "WARNING: the reachability check did not come back clean. Either a sha is"
+  log "  on no remote branch and nothing here will push it, or it does not"
+  log "  resolve at all. Either way a stranger who clones cannot reach the code"
+  log "  those rows name. Verdicts in $SHA_REPORT, and in SUMMARY.md, which"
+  log "  quotes it. Reported and not blocking: the numbers are readable."
+fi
+
 # A summary a human can read without opening the CSV.
 "$PY" - "$DEST" "$MISSING_SHA_REASON" > "$DEST/SUMMARY.md" <<'SUMMARY'
 import sys, collections, pathlib, statistics
@@ -476,18 +516,10 @@ if (( PUSH )); then
   # repo, so a diverged branch is the normal state, not an exception.
   if err="$(git push origin HEAD 2>&1)"; then
     log "pushed. The result set is now on GitHub."
-    # A sha that resolves HERE and on no remote branch is one a stranger who
-    # clones cannot reach, which is the same nothing as a missing commit from
-    # their side. Advisory: the push has already happened and the rows are
-    # already committed, so this reports rather than blocks.
-    if "$PY" scripts/check_published_shas.py --arm "$DEST" --repo "$REPO_ROOT" \
-         --require-remote >> "$SHA_REPORT" 2>&1; then
-      log "every git_sha in this arm is on a remote branch"
-    else
-      log "WARNING: a git_sha in this arm is on no remote branch; a stranger who"
-      log "  clones this repository cannot reach the code these rows name."
-      log "  Details appended to $SHA_REPORT (push the branch that has it)."
-    fi
+    # NOTHING IS APPENDED TO THE ARM HERE. The reachability verdict was taken
+    # before the commit, so it is inside the arm that was just pushed; writing
+    # to it now would modify a tracked file and dirty the tree behind a publish
+    # that succeeded.
   else
     log "push failed. git said:"
     printf '%s\n' "$err" | sed 's/^/[publish]   /'
@@ -497,6 +529,8 @@ if (( PUSH )); then
     elif printf '%s' "$err" | grep -qi 'authentication\|could not read\|permission'; then
       log "  no credentials. run: gh auth login"
     fi
-    log "  the commit is safe locally either way"
+    log "  the commit is safe locally either way, but nothing this arm's"
+    log "  GIT_SHA_CHECK.txt calls PENDING reached the remote: that verdict was"
+    log "  taken on the promise of the push that just failed."
   fi
 fi

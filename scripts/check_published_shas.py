@@ -30,6 +30,13 @@ WHAT EACH VERDICT MEANS
     UNPUSHED    resolves here, but no remote branch contains it (--require-remote).
                 A stranger cloning the repo cannot reach it, so for them it is
                 MISSING; for you it is one `git push` away.
+    PENDING     resolves here, no remote branch contains it YET, and it is an
+                ancestor of the ref `--will-push` names, so the push this check
+                is part of is what puts it on the remote. Reported and not
+                blocking. Without this verdict the honest moment to ask the
+                question does not exist: asked before the push every such sha is
+                UNPUSHED, and asked after it the answer arrives too late to go
+                into the arm that is already committed.
 
 WHY UNRECORDED DOES NOT FAIL THE GATE. A gate has to be able to pass, and a gate
 that fails on every legacy arm is one an operator learns to skip, which is the
@@ -73,8 +80,8 @@ _FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 #: hand-written CSV produces.
 _UNRECORDED = {"", "unrecorded", "UNRECORDED", "none", "None", "n/a"}
 
-PRESENT, MISSING, MALFORMED, UNRECORDED, UNPUSHED = (
-    "PRESENT", "MISSING", "MALFORMED", "UNRECORDED", "UNPUSHED")
+PRESENT, MISSING, MALFORMED, UNRECORDED, UNPUSHED, PENDING = (
+    "PRESENT", "MISSING", "MALFORMED", "UNRECORDED", "UNPUSHED", "PENDING")
 
 
 class GitUnavailable(RuntimeError):
@@ -133,12 +140,20 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def classify_shas(records: dict[str, ShaRecord], repo: Path,
-                  require_remote: bool = False) -> dict[str, ShaRecord]:
+                  require_remote: bool = False,
+                  will_push: str | None = None) -> dict[str, ShaRecord]:
     """Give every record its verdict. Mutates and returns `records`.
 
     `git cat-file -e <sha>^{commit}` rather than `-t`: the peel refuses a blob
     or a tree that happens to share the abbreviation, and the rows claim a
     COMMIT.
+
+    `will_push` names a local ref whose push is part of the same act as this
+    check: a sha no remote branch contains yet, but which that ref already
+    reaches, becomes PENDING rather than UNPUSHED. It is what lets
+    `publish_results.sh` ask the remote question BEFORE it commits the answer
+    into the arm, instead of appending the verdict to a file it has already
+    committed and leaving the tree dirty behind every publish.
     """
     probe = _git(repo, "rev-parse", "--git-dir")
     if probe.returncode != 0:
@@ -165,9 +180,19 @@ def classify_shas(records: dict[str, ShaRecord], repo: Path,
         if require_remote:
             out = _git(repo, "branch", "-r", "--contains", value)
             if out.returncode != 0 or not out.stdout.strip():
-                rec.verdict = UNPUSHED
-                rec.note = ("resolves locally, but no remote branch contains "
-                            "it: a stranger who clones cannot reach it")
+                reaches = will_push is not None and _git(
+                    repo, "merge-base", "--is-ancestor", value,
+                    will_push).returncode == 0
+                if reaches:
+                    rec.verdict = PENDING
+                    rec.note = (f"on no remote branch yet, but {will_push} "
+                                "reaches it, and pushing that ref is what "
+                                "delivers it")
+                else:
+                    rec.verdict = UNPUSHED
+                    rec.note = ("resolves locally, but no remote branch "
+                                "contains it: a stranger who clones cannot "
+                                "reach it")
                 continue
         rec.verdict = PRESENT
         rec.note = ""
@@ -176,7 +201,8 @@ def classify_shas(records: dict[str, ShaRecord], repo: Path,
 
 def render(records: dict[str, ShaRecord]) -> list[str]:
     """One line per distinct sha, worst verdict first, then by row count."""
-    order = {MISSING: 0, MALFORMED: 1, UNPUSHED: 2, UNRECORDED: 3, PRESENT: 4}
+    order = {MISSING: 0, MALFORMED: 1, UNPUSHED: 2, PENDING: 3, UNRECORDED: 4,
+             PRESENT: 5}
     lines = []
     for rec in sorted(records.values(),
                       key=lambda r: (order.get(r.verdict, 9), -r.rows, r.value)):
@@ -196,6 +222,7 @@ def gates(records: dict[str, ShaRecord], require_remote: bool) -> list[tuple[str
     missing = [r for r in records.values() if r.verdict == MISSING]
     malformed = [r for r in records.values() if r.verdict == MALFORMED]
     unpushed = [r for r in records.values() if r.verdict == UNPUSHED]
+    pending = [r for r in records.values() if r.verdict == PENDING]
     unrecorded = sum(r.rows for r in records.values() if r.verdict == UNRECORDED)
 
     out = [
@@ -213,17 +240,21 @@ def gates(records: dict[str, ShaRecord], require_remote: bool) -> list[tuple[str
           + " ".join(r.value or "(empty)" for r in malformed))),
     ]
     if require_remote:
+        pend = (f"; {len(pending)} of them reach one only through the ref this "
+                "publish pushes: " + " ".join(r.value[:12] for r in pending)
+                if pending else "")
         out.append((EX.CLAIM, "shas_on_a_remote",
                     EX.PASS if not unpushed else EX.FAIL,
-                    ("every resolvable sha is on a remote branch" if not unpushed
+                    ("every resolvable sha is on a remote branch" + pend
+                     if not unpushed
                      else f"{len(unpushed)} sha(s) are local only: "
-                          + " ".join(r.value[:12] for r in unpushed))))
+                          + " ".join(r.value[:12] for r in unpushed) + pend)))
     return out
 
 
 def run(published: Path, arms: list[Path] | None, repo: Path,
         require_remote: bool, json_out: Path | None,
-        stream=sys.stdout) -> int:
+        stream=sys.stdout, will_push: str | None = None) -> int:
     """Check, print, and return the exit code the table gives.
 
     REFUSED when there is nothing to check: an empty published tree is not a
@@ -248,7 +279,8 @@ def run(published: Path, arms: list[Path] | None, repo: Path,
         return EX.REFUSED
 
     try:
-        classify_shas(records, repo, require_remote=require_remote)
+        classify_shas(records, repo, require_remote=require_remote,
+                      will_push=will_push)
     except GitUnavailable as exc:
         # INVALID, not REFUSED: the rows were read, and the reason nothing can
         # be said about them is the instrument, not the world.
@@ -260,6 +292,9 @@ def run(published: Path, arms: list[Path] | None, repo: Path,
     print(f"# git_sha resolvability over {len(files)} CSV(s) under {where}",
           file=stream)
     print(f"# repository {repo}", file=stream)
+    if will_push:
+        print(f"# checked before the push of {will_push}, which counts as "
+              "reaching the remote", file=stream)
     for line in render(records):
         print(line, file=stream)
     print(file=stream)
@@ -320,32 +355,42 @@ def _fixture(root: Path, shas: list[str]) -> tuple[Path, Path]:
 
 
 def self_test() -> int:
-    """Exercise every branch off-GPU. Returns 0 when all four cases agree.
+    """Exercise every branch off-GPU. Returns 0 when all six cases agree.
 
     The cases, and why each is here:
       clean       one resolvable sha            -> DONE
       missing     a 40-hex commit nobody has    -> CLAIM_FAIL on shas_resolvable
       malformed   the twelve-hex pod hostname   -> CLAIM_FAIL on shas_well_formed
       unrecorded  an empty column               -> DONE, reported and not blocking
+      unpushed    resolvable, on no remote      -> CLAIM_FAIL on shas_on_a_remote
+      pending     the same sha, with --will-push reaching it -> DONE
+    The last two are the same fixture and differ only in whether the caller
+    declared the push it is about to make, which is the whole of what
+    `publish_results.sh` gained: the remote question, asked while the answer can
+    still go into the arm.
+
     The proof that this function can return 1 lives in
-    `tests/test_shell_gates.py::test_sha_self_test_fails_when_a_case_is_broken`,
-    which plants a wrong expectation and asserts the 1.
+    `tests/test_shell_gates.py::test_the_sha_checker_self_test_can_fail`,
+    which makes every case report DONE and asserts the 1.
     """
     import io
     cases = [
-        ("clean", ["HEAD"], EX.DONE, ()),
+        ("clean", ["HEAD"], False, None, EX.DONE, ()),
         ("missing", ["HEAD", "7eecff427626c40795b9543a10122a6d86595ab2"],
-         EX.CLAIM_FAIL, ("shas_resolvable",)),
-        ("malformed", ["HEAD", "0b23ff0a8486"], EX.CLAIM_FAIL,
+         False, None, EX.CLAIM_FAIL, ("shas_resolvable",)),
+        ("malformed", ["HEAD", "0b23ff0a8486"], False, None, EX.CLAIM_FAIL,
          ("shas_well_formed",)),
-        ("unrecorded", ["HEAD", ""], EX.DONE, ()),
+        ("unrecorded", ["HEAD", ""], False, None, EX.DONE, ()),
+        ("unpushed", ["HEAD"], True, None, EX.CLAIM_FAIL, ("shas_on_a_remote",)),
+        ("pending push", ["HEAD"], True, "HEAD", EX.DONE, ()),
     ]
     bad = 0
-    for name, shas, want, failing in cases:
+    for name, shas, remote, will_push, want, failing in cases:
         with tempfile.TemporaryDirectory() as tmp:
             repo, published = _fixture(Path(tmp), shas)
             buf = io.StringIO()
-            got = run(published, None, repo, False, None, stream=buf)
+            got = run(published, None, repo, remote, None, stream=buf,
+                      will_push=will_push)
             lines = EX.parse_result_lines(buf.getvalue())
             failed = tuple(sorted(r.name for r in lines if r.verdict != EX.PASS))
             ok = got == want and failed == tuple(sorted(failing))
@@ -379,7 +424,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--require-remote", action="store_true",
                     help="also require that a remote branch contains each sha, "
                          "which is what a stranger cloning the repo needs. Used "
-                         "by publish_results.sh AFTER its push")
+                         "by publish_results.sh BEFORE the commit it pushes")
+    ap.add_argument("--will-push", default=None, metavar="REF",
+                    help="a local ref this caller is about to push: a sha no "
+                         "remote branch contains yet, but which REF reaches, is "
+                         "PENDING rather than UNPUSHED. Without it the verdict "
+                         "can only be taken after the push, which is too late "
+                         "to record in the arm being published")
     ap.add_argument("--json", type=Path, default=None,
                     help="write the verdicts and a provenance block here")
     ap.add_argument("--self-test", action="store_true",
@@ -388,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.self_test:
         return self_test()
-    return run(args.published, args.arm, args.repo, args.require_remote, args.json)
+    return run(args.published, args.arm, args.repo, args.require_remote,
+               args.json, will_push=args.will_push)
 
 
 if __name__ == "__main__":

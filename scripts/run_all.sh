@@ -23,10 +23,13 @@
 #
 # The default is now AUTO: the venvs that exist and import are the envs that
 # run, which is the same detection `scripts/pod_session.sh` already does before
-# calling this script. And when the profile's own spans need a framework that
-# will not run, this REFUSES rather than sweeping a third of the experiment
+# calling this script. Setup installs the union of that and what the profile is
+# priced for, so a FRESH pod bootstraps the three-way arm from this one command
+# instead of detecting "base", installing "base", and refusing. And when the
+# profile's own spans still need a framework that will not run -- an install
+# that failed -- this REFUSES rather than sweeping a third of the experiment
 # under the profile's name. `--envs` still names them explicitly, for the case
-# where torch alone is the point.
+# where torch alone is the point, and is never widened.
 set -euo pipefail
 
 PROFILE="standard"
@@ -251,9 +254,40 @@ if [[ -n "$(git status --porcelain)" ]]; then
   git status --porcelain | sed 's/^/[run_all]   /' | head -5
 fi
 
+# WHAT SETUP INSTALLS IS WHAT THE PROFILE NEEDS, NOT ONLY WHAT IS ALREADY HERE.
+# Driving this from the detection alone made a FRESH pod unbootstrappable by the
+# documented command: nothing is installed, so "base" is detected, "base" is
+# installed, "base" is re-detected, and the refusal below fires on the very
+# `bash scripts/run_all.sh --profile standard` that docs/RUNPOD.md gives. The
+# operator's only way out was `--envs base,vllm,sglang`, the undocumented flag
+# this requirement exists to remove. So the auto path installs the UNION of what
+# is here and what the profile is priced for, and the refusal below keeps its
+# job: it now fires when an install actually failed, which is the case it is
+# for.
+#
+# `--envs` is left alone. That is a decision an operator typed, and `--envs
+# base` must not quietly grow a vLLM install because the profile would like one.
+setup_envs() {
+  local envs="$1" needed="" name
+  if [[ -z "$ENVS" ]]; then
+    needed="$(profile_needs "$PROFILE")"
+  fi
+  for name in ${needed//,/ }; do
+    case ",$envs," in
+      *",$name,"*) ;;
+      *) envs="$envs,$name" ;;
+    esac
+  done
+  printf '%s\n' "$envs"
+  return 0
+}
+
 if [[ -z "$SKIP_SETUP" ]]; then
   log "environment"
-  bash scripts/setup_runpod.sh ${RESOLVED_ENVS//,/ }
+  SETUP_ENVS="$(setup_envs "$RESOLVED_ENVS")"
+  [[ "$SETUP_ENVS" == "$RESOLVED_ENVS" ]] || \
+    log "installing $SETUP_ENVS: profile '$PROFILE' is priced for more than this box has"
+  bash scripts/setup_runpod.sh ${SETUP_ENVS//,/ }
 fi
 
 # Re-detect AFTER setup: an install that just succeeded adds an env, and one

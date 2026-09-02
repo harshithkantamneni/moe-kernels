@@ -129,12 +129,23 @@ def test_the_plan_states_a_minimum_detectable_effect(tmp_path):
     assert "sigma" in line[0] and "published rows" in line[0], line[0]
 
 
-def test_no_dry_run_writes_anything_into_the_tree(tmp_path):
+def test_no_dry_run_writes_anything_into_the_tree_except_pod_sessions_test_step(tmp_path):
     """R8, over all three scripts that have a dry run.
 
     A rehearsal that dirties the checkout makes every row of the session that
     follows it carry git_dirty=True, which is how 44,872 of 100,144 published
     rows became unreproducible from the commit they name.
+
+    WHAT THIS DOES NOT COVER, SAID IN THE NAME BECAUSE IT WAS ONCE HIDDEN IN A
+    FLAG. `pod_session.sh` is run here with `--skip-tests`, and that flag skips
+    P12, the one dry-run step that still writes a tracked file: P12 runs the
+    repository's own suite, and a test in it rescores into
+    `results/published/ANCHOR_RESCORE.txt` through `scripts/memory_branch_anchor.py`,
+    which this slice does not own and must not edit. Reading this test as proof
+    of the whole requirement is exactly the mistake the flag invited. The rest
+    of the requirement -- every dry-run step other than that one, P12 included
+    when the suite it runs does not itself write -- is covered by
+    `test_the_pod_dry_run_writes_nothing_when_its_test_step_runs_too`.
     """
     before = tree_state()
     sh(RUN_ALL, "--profile", "standard", "--dry-run",
@@ -143,6 +154,127 @@ def test_no_dry_run_writes_anything_into_the_tree(tmp_path):
     sh(POD, "--dry-run", "--skip-tests", "--no-download",
        "--session-dir", str(tmp_path / "session"))
     assert tree_state() == before, "a dry run modified the working tree"
+
+
+def _stand_in_farm(tmp_path: Path) -> Path:
+    """A repo checkout whose `tests/` is one trivial test and nothing else.
+
+    P12 runs `pytest tests/` from the repository root, so pointing the root at a
+    farm swaps the suite without touching either script. The scripts under test
+    stay byte-identical: only the suite they run is a stand-in.
+    """
+    root = tmp_path / "standin"
+    (root / "scripts").mkdir(parents=True)
+    for name in ("moe", "requirements", "pyproject.toml"):
+        (root / name).symlink_to(REPO / name)
+    (root / "scripts" / "pod_session.sh").symlink_to(POD)
+    (root / "tests").mkdir()
+    (root / "tests" / "test_stand_in.py").write_text(
+        "def test_stand_in():\n    assert True\n")
+    (root / "results" / "published").mkdir(parents=True)
+    (root / ".gitignore").write_text(
+        "/moe\n/requirements\n/pyproject.toml\n/scripts\n__pycache__/\n"
+        ".pytest_cache/\n")
+    for args in (["init", "-q", "-b", "main"],
+                 ["config", "user.email", "t@example.com"],
+                 ["config", "user.name", "t"],
+                 ["add", "-A"], ["commit", "-qm", "fixture"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
+    return root
+
+
+def test_the_pod_dry_run_writes_nothing_when_its_test_step_runs_too(tmp_path):
+    """R8 without the `--skip-tests` scoping: P12 runs, and nothing is written.
+
+    The step skipped by the other test is the one that writes, so a requirement
+    tested only with it skipped is a requirement nobody tested. Here the whole
+    dry run executes -- P12 included -- against a checkout whose suite is a
+    single trivial test, and the checkout is asked afterwards whether anything
+    changed. That isolates the two claims: what `pod_session.sh` itself writes
+    (nothing, which is this test), and what the repository's own suite writes
+    (`ANCHOR_RESCORE.txt`, whose writer lives in another slice).
+    """
+    root = _stand_in_farm(tmp_path)
+    before_repo = tree_state()
+    r = sh(root / "scripts" / "pod_session.sh", "--dry-run", "--no-download",
+           "--session-dir", str(tmp_path / "session"), cwd=root,
+           env={"PYTHONPATH": str(REPO)})
+    line = [ln for ln in r.stdout.splitlines() if ln.startswith("P12")]
+    assert line and "PASS" in line[0], r.stdout
+    assert "1 passed" in line[0], "the stand-in suite is what ran"
+    dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                           capture_output=True, text=True).stdout
+    assert dirty == "", f"the dry run wrote into the checkout:\n{dirty}"
+    assert tree_state() == before_repo, "and it wrote into the real one"
+
+
+def _setup_farm(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A repo root whose `setup_runpod.sh` records its arguments and installs
+    nothing.
+
+    Returns `(root, log, venv_root)`. `run_all.sh` is symlinked, so the script under test is
+    byte-identical to the one that ships; only the installer it calls is a stub,
+    which is the only way to see what a FRESH pod would have been told to
+    install without spending an hour installing it.
+    """
+    root = tmp_path / "setupfarm"
+    (root / "scripts").mkdir(parents=True)
+    (root / "moe").symlink_to(REPO / "moe")
+    (root / "scripts" / "run_all.sh").symlink_to(RUN_ALL)
+    log = tmp_path / "setup.log"
+    stub = root / "scripts" / "setup_runpod.sh"
+    stub.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$*" > "$SETUP_LOG"\n')
+    stub.chmod(0o755)
+    # A base venv that exists and refuses everything. Past the setup step
+    # `run_all.sh` switches to `$MOE_VENV_ROOT/base/bin/python` and runs the
+    # calibration with --publish, which writes a TRACKED file -- and `moe/` here
+    # is a symlink into the real checkout, so a real interpreter would write it
+    # into the repository this suite is asserting about. A stub that exits 1
+    # takes the same branches and cannot.
+    venv = tmp_path / "stubvenv"
+    (venv / "base" / "bin").mkdir(parents=True)
+    py = venv / "base" / "bin" / "python"
+    py.write_text("#!/bin/sh\nexit 1\n")
+    py.chmod(0o755)
+    return root, log, venv
+
+
+def test_a_fresh_pod_is_told_to_install_what_the_profile_is_priced_for(tmp_path):
+    """The one-command session could not bootstrap itself.
+
+    Setup was driven by `detect_envs` -- what is installed -- rather than by
+    `profile_needs` -- what the profile is priced for. On a fresh pod that is a
+    closed loop: nothing is installed, so `base` is detected, `setup_runpod.sh
+    base` runs, `base` is re-detected, and the refusal fires on the very command
+    `docs/RUNPOD.md` gives for every session. The only way out was
+    `--envs base,vllm,sglang`, the undocumented flag R1 exists to remove.
+    """
+    root, log, venv = _setup_farm(tmp_path)
+    r = sh(root / "scripts" / "run_all.sh", "--profile", "standard", cwd=root,
+           env={"MOE_NO_PULL": "1", "SETUP_LOG": str(log),
+                "MOE_VENV_ROOT": str(venv), "PYTHONPATH": str(REPO)})
+    installed = sorted(log.read_text().split())
+    assert installed == ["base", "sglang", "vllm"], log.read_text()
+    # And the refusal keeps the job it is actually for: the stub installed
+    # nothing, so the re-detection still finds only base and the session stops
+    # rather than sweeping a third of the experiment.
+    assert r.returncode != 0
+    assert "REFUSE" in r.stderr and "stopping before anything is spent" in r.stderr
+
+
+def test_naming_the_environments_never_widens_what_setup_installs(tmp_path):
+    """The other branch. `--envs base` is a decision an operator typed, and it
+    must not quietly grow a vLLM install because the profile would like one:
+    the warning path says the arm is not comparable and runs what was asked."""
+    root, log, venv = _setup_farm(tmp_path)
+    before = tree_state()
+    sh(root / "scripts" / "run_all.sh", "--profile", "standard",
+       "--envs", "base", "--skip-tests", cwd=root,
+       env={"MOE_NO_PULL": "1", "SETUP_LOG": str(log),
+            "MOE_VENV_ROOT": str(venv), "PYTHONPATH": str(REPO)})
+    assert log.read_text().split() == ["base"], log.read_text()
+    assert tree_state() == before, "the run past the refusal wrote into the tree"
 
 
 # --------------------------------------------------------------------------
@@ -509,14 +641,152 @@ def test_publishing_a_row_whose_commit_is_lost_refuses_the_commit(tmp_path):
     assert "MISSING" in (dest / "GIT_SHA_CHECK.txt").read_text()
 
 
-def test_the_refusal_is_wired_to_the_commit_not_only_to_the_message():
-    """The line that does it, asserted directly: a refusal that only ever runs
-    under --dry-run would be a message and not a gate."""
+def test_the_checks_all_run_before_the_commit_and_not_after_it():
+    """Source order, which no run can assert about a step it did not reach.
+
+    Both sha checks must precede `git add`: the first because its refusal is
+    what stops the commit, the second because its verdict has to be INSIDE the
+    arm being committed. The remote half used to run after the push and append
+    to `GIT_SHA_CHECK.txt`, a file already committed, so every successful
+    publish ended with a tracked file modified in the working tree and the next
+    thing measured on that pod stamped git_dirty=True on every row.
+    """
     text = PUBLISH.read_text()
     assert "REFUSING TO PUBLISH: a row names a commit" in text
     assert "SHA_OK == 0" in text
-    # and the check itself runs before the commit, not after it
-    assert text.index("check_published_shas.py --arm") < text.index('git add "$DEST"')
+    add = text.index('git add "$DEST"')
+    assert text.index("check_published_shas.py --arm") < add
+    assert text.rindex("check_published_shas.py --arm") < add
+    assert text.index("--require-remote") < add
+
+
+def _real_repo(tmp_path: Path, *, remote: str | None = None) -> tuple[Path, str]:
+    """A throwaway checkout the publish path can really commit into.
+
+    `publish_results.sh` takes its repository root from its own location, so a
+    symlinked `scripts/` puts the real script in charge of a fixture repo. The
+    code is symlinked and gitignored there; the only thing this repo can gain is
+    the published arm, which is what the assertions are about.
+
+    Returns `(root, head_sha)`. `remote` is the URL to add as `origin`: a bare
+    repository makes the push succeed, a path to nothing makes it fail, and
+    None leaves the caller to pass `--no-push`.
+    """
+    root = tmp_path / "realrepo"
+    root.mkdir()
+    for name in ("moe", "scripts", "requirements", "pyproject.toml"):
+        (root / name).symlink_to(REPO / name)
+    (root / ".gitignore").write_text(
+        "/moe\n/scripts\n/requirements\n/pyproject.toml\n__pycache__/\n")
+    for args in (["init", "-q", "-b", "main"],
+                 ["config", "user.email", "t@example.com"],
+                 ["config", "user.name", "t"],
+                 ["add", ".gitignore"], ["commit", "-qm", "fixture"]):
+        subprocess.run(["git", "-C", str(root), *args], check=True,
+                       capture_output=True)
+    head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                          check=True, capture_output=True, text=True).stdout.strip()
+    if remote:
+        subprocess.run(["git", "-C", str(root), "remote", "add", "origin", remote],
+                       check=True, capture_output=True)
+    return root, head
+
+
+def _status(root: Path) -> str:
+    return subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                          capture_output=True, text=True).stdout
+
+
+def _commits(root: Path) -> int:
+    out = subprocess.run(["git", "-C", str(root), "rev-list", "--count", "HEAD"],
+                         capture_output=True, text=True).stdout.strip()
+    return int(out or 0)
+
+
+def _real_publish(root: Path, results: Path, *args: str):
+    return sh(root / "scripts" / "publish_results.sh", *args, cwd=root,
+              env={"MOE_RESULTS_DIR": str(results),
+                   "MOE_PUBLISH_ROOT": str(root / "results" / "published"),
+                   "PYTHONPATH": str(REPO)})
+
+
+def test_a_lost_commit_stops_the_real_publish_at_the_commit(tmp_path):
+    """The FAIL branch of the gate, EXECUTED rather than grepped for.
+
+    Every publish test before this one passed `--dry-run`, so the `die` this
+    requirement is about had never run: a refactor that moved the refusal below
+    `git commit` would have left both string assertions green and published the
+    arm anyway. Here a real publish into a real repository is asked to commit a
+    row citing the commit that 2,100 published rows cite and nobody has.
+    """
+    root, _head = _real_repo(tmp_path)
+    results = tmp_path / "results"
+    results.mkdir()
+    _write_run(results, "aa1", "base", [("True", "False", 1.0)],
+               git_sha="7eecff427626c40795b9543a10122a6d86595ab2")
+    before = _commits(root)
+    r = _real_publish(root, results, "--no-push", "--label", "lost-commit")
+    assert r.returncode != 0, r.stdout
+    assert "REFUSING TO PUBLISH: a row names a commit" in r.stderr, r.stderr
+    assert _commits(root) == before, "the arm was committed anyway"
+    # and the arm is still on disk with its report in it, which is the whole
+    # point of refusing the commit rather than the staging.
+    dest = next(iter(sorted((root / "results" / "published").glob("*"))))
+    assert "MISSING" in (dest / "GIT_SHA_CHECK.txt").read_text()
+
+
+def test_a_real_publish_commits_pushes_and_leaves_no_tracked_file_modified(tmp_path):
+    """The PASS branch of the same act, and R8's requirement on the publish path.
+
+    The remote check used to run after the push and append to a file the commit
+    above it already contained, so a publish that worked ended with a modified
+    tracked file. Both halves are asserted: the tree is clean afterwards, and
+    the reachability verdict is inside the commit rather than in a change made
+    to it. PENDING is the verdict here because the row cites a commit that no
+    remote had when the question was asked and that this publish's own push is
+    what delivers.
+    """
+    bare = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+    root, head = _real_repo(tmp_path, remote=str(bare))
+    results = tmp_path / "results"
+    results.mkdir()
+    _write_run(results, "aa1", "base", [("True", "False", 1.0)], git_sha=head)
+    r = _real_publish(root, results, "--label", "real-push")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "pushed" in r.stdout
+    assert _status(root) == "", f"a successful publish dirtied the tree:\n{_status(root)}"
+    name = next(iter(sorted((root / "results" / "published").glob("*")))).name
+    committed = subprocess.run(
+        ["git", "-C", str(root), "show",
+         f"HEAD:results/published/{name}/GIT_SHA_CHECK.txt"],
+        capture_output=True, text=True, check=True).stdout
+    assert "reachability from a remote" in committed
+    assert "RESULT: CLAIM shas_on_a_remote PASS" in committed
+    assert f"PENDING    {head}" in committed
+    summary = subprocess.run(
+        ["git", "-C", str(root), "show", f"HEAD:results/published/{name}/SUMMARY.md"],
+        capture_output=True, text=True, check=True).stdout
+    assert "shas_on_a_remote" in summary, "the verdict has to reach the file a reader opens"
+
+
+def test_a_push_that_fails_says_the_pending_verdict_did_not_come_true(tmp_path):
+    """PENDING is a promise about a push, so a push that fails has to retract it.
+
+    Without this the operator reads "on no remote branch yet, but HEAD reaches
+    it and this publish pushes that" in an arm whose push was rejected, which is
+    the reassurance the old post-push check at least never gave.
+    """
+    root, head = _real_repo(tmp_path, remote=str(tmp_path / "nothing-here.git"))
+    results = tmp_path / "results"
+    results.mkdir()
+    _write_run(results, "aa1", "base", [("True", "False", 1.0)], git_sha=head)
+    r = _real_publish(root, results, "--label", "failed-push")
+    assert "push failed" in r.stdout, r.stdout
+    assert "calls PENDING reached the remote" in r.stdout
+    # the commit is still local and complete, and the tree is still clean
+    assert _commits(root) == 2
+    assert _status(root) == ""
 
 
 def test_the_override_writes_its_reason_into_the_summary(tmp_path):

@@ -281,8 +281,19 @@ def write_cells(path: Path, cal, prov) -> Path:
 def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
     """`(kind, name, verdict, detail)` for every gate this calibration scores.
 
-    Each one can PASS and can FAIL, and `tests/test_calibrate_hardware.py`
-    plants both branches of all five against a synthetic `Calibration`.
+    SIX gates, and `tests/test_calibrate_hardware.py` plants both branches of
+    every one of them against a synthetic `Calibration`: clock_established,
+    ceiling_pattern_measured, no_pattern_exceeds_the_pin_rate,
+    write_rate_is_a_store_rate, clock_steady_across_patterns, not_throttled.
+    The docstring said five and the tests planted five, and the one left out was
+    `write_rate_is_a_store_rate`, whose FAIL branch had therefore never run:
+    the sound fixture puts write below the pin rate and the over-the-pin fixture
+    drops the write pattern entirely, so the gate was not even emitted there.
+
+    Two of the six are CONDITIONAL, and a gate that is absent is not a gate that
+    passed: `write_rate_is_a_store_rate` is scored only when a write pattern was
+    measured, and neither pin-rate gate can be scored without a bus width, which
+    is what the UNKNOWN below is for.
 
     UNKNOWN is used where the run could not decide rather than where it decided
     "fine": no settle means no clock plateau to check against, and a card
