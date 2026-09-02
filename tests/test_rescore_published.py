@@ -127,6 +127,57 @@ def test_the_a100_note_exists_and_names_both_numbers():
     assert "gate" in note.lower()
 
 
+# --- every rescored arm explains itself, from its own reports ----------------
+#
+# MEASURED, 2026-09-02 (audit B2). Only the A100 arm got a NOTE, while the two
+# H200 arms were rescored 160.3 -> 162.8 with nothing inside their directories
+# saying so -- and every report in all three points a reader at "this arm's
+# NOTE.md", so on two of the three that pointer resolved to nothing. The three
+# checks below are what a copied NOTE fails: it names the wrong directory, it
+# states the wrong report count, and it quotes a ridge its own reports do not
+# carry.
+
+def _rescored_arms() -> dict[Path, list[Path]]:
+    arms: dict[Path, list[Path]] = {}
+    for path in RS.report_paths(PUBLISHED):
+        arms.setdefault(path.parent, []).append(path)
+    return arms
+
+
+def test_every_rescored_arm_has_a_note_written_from_its_own_reports():
+    arms = _rescored_arms()
+    assert len(arms) == 3, sorted(a.name for a in arms)
+    for arm, reports in arms.items():
+        note = (arm / "NOTE.md")
+        assert note.exists(), f"{arm.name} was rescored and says nothing about it"
+        text = note.read_text()
+        assert f"results/published/{arm.name}" in text, arm.name
+        assert f"{len(reports)} `*.report.json`" in text, arm.name
+        ridges = {json.loads(p.read_text())["ridge"] for p in reports}
+        assert len(ridges) == 1, (arm.name, ridges)
+        assert str(ridges.pop()) in text, arm.name
+
+
+def test_every_report_carries_the_current_why():
+    """`rescored_from` is stamped once and never rewritten, so it can drift.
+
+    `stamp` preserves an existing `rescored_from` on purpose: a second pass
+    reading its own output would otherwise overwrite the withdrawn ridge with
+    the current one. The cost is that editing `WITHDRAWN_RIDGE_WHY` does NOT
+    reach the 26 already-stamped reports, and nothing else would notice. This
+    notices.
+
+    The `2026-08-26` clause is checked by name because that is what the string
+    said until this test existed, and it was false: the arms of that date quote
+    160.4 and 162.8, while 160.3 is calibration md5 4d84542b from 2026-08-28.
+    """
+    assert "2026-08-26" not in RS.WITHDRAWN_RIDGE_WHY
+    assert "NOTE.md" in RS.WITHDRAWN_RIDGE_WHY
+    for path in RS.report_paths(PUBLISHED):
+        doc = json.loads(path.read_text())
+        assert doc["rescored_from"]["why"] == RS.WITHDRAWN_RIDGE_WHY, path
+
+
 def test_the_invocation_the_docstring_opens_with_actually_runs():
     """The first documented command used to be `argparse` error 2.
 

@@ -1,24 +1,56 @@
 THIS FILE IS THE SUPERSEDED, POOLED VERSION OF SURFACE.txt.
 
-It was produced by the version of scripts/alpha_surface.py that averaged each
-lever OVER THE OTHERS. The grid is ragged -- this session's H200 run had ten
-identifiable mixtral fits against seven for qwen2, spread differently over
-GROUP_SIZE_M -- and on a ragged grid a marginal median is not a comparison. The
-pooled model medians below read 0.731 and 0.713, a footprint effect of 0.018;
-the PAIRED medians at matched (G=1, BN=64) read 1.016 and 0.721. The pooling did
-not measure a small effect, it averaged a large one away.
+THE ARM THIS HEADER DESCRIBES is the one it sits in and no other: the
+A100-SXM4-80GB leg of the cross-card pair,
+/workspace/session/20260902T012557Z/cross_card/nvidia_a100_sxm4_80gb-s3. A
+different card, a different session and a different grid from either H200 arm.
+It holds 12 identifiable fits out of 28 block sizes swept: 4 mixtral-8x7b and
+8 qwen2-57b-a14b. Every number below is from those 12.
 
-It is kept, rather than deleted, because these are the numbers that were
-published and that other documents quote. SURFACE.txt beside it is the paired
-version, regenerated 2026-09-02 from the committed reports by
+THE HEADER THIS FILE CARRIED UNTIL 2026-09-02 WAS THE H200 s4 ARM'S. When the
+paired version of scripts/alpha_surface.py replaced the pooled SURFACE.txt
+files, one superseded-header block was written into all three arms, so this file
+opened by calling itself "this session's H200 run" and stating ten mixtral fits
+and the medians 0.731 and 0.713 as facts about the grid below, which was
+measured on an A100, has four mixtral fits, and contains neither number. A
+header that describes the wrong arm is worse than no header, because it reads as
+provenance.
+
+WHAT THE POOLED VERSION COMPUTED, AND WHY IT WAS SUPERSEDED. One median per
+lever level, taken over whatever else that level happened to be measured with.
+On this card that gets the SIGN of a lever wrong:
+
+  The swizzle column falls from 0.896 (G=1, n=4) to 0.782 (G=64, n=2), a step of
+  0.114 downward. The one cell of (model, BLOCK_SIZE_N, BLOCK_M) that holds
+  every swizzle level, (qwen2, 64, 32), moves the other way: 0.651 to 0.679,
+  +0.028. The pooled fall is composition. Its G=1 median is two mixtral fits and
+  two qwen2 fits while both G=64 fits are qwen2, so what the column reports as
+  the swizzle is mostly the footprint contrast underneath it. With a single
+  matched cell no paired MDE exists, so SURFACE.txt refuses one rather than
+  presenting +0.028 as a measured change.
+
+  The model column reads mixtral 0.866 against qwen2 0.745. Paired over the 4
+  cells that hold both models the median difference is 0.070, against a paired
+  MDE of 0.040, and it is NOT one-signed: (16, 64, 32) moves +0.092 while the
+  other three move -0.367, -0.110 and -0.030. A marginal median cannot show a
+  lever that changes sign under it, and this one does.
+
+WHY IT IS KEPT RATHER THAN DELETED. These are the numbers that were published
+and that other documents quote. Deleting them would leave those quotations with
+no source.
+
+THE PAIRED FILE BESIDE IT is SURFACE.txt, regenerated 2026-09-02 from THIS arm's
+committed reports by
 
     python scripts/alpha_surface.py results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3
 
 which the pooled script could not do at all: it globbed for a bare
-"report.json" and this arm holds "<name>.report.json", so it printed
+"report.json" and this arm holds seven "<name>.report.json" files, so it printed
 "no report.json under ..." and the committed summary was unregenerable from the
-repository. It also sorted GROUP_SIZE_M as strings, so its paired-change line
-would have reported the lever sweeping 1 -> 8 rather than 1 -> 64.
+repository. It also sorted GROUP_SIZE_M as text, which is why the swizzle column
+below runs 1, 16, 64, 8; the paired code takes a lever's extremes from that
+order, so until the fix it named the sweep 1 -> 8 rather than 1 -> 64 (audit
+S38).
 
 --------------------------------------------------------------------------
 

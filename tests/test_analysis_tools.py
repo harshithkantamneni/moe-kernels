@@ -27,6 +27,13 @@ and each has its own section:
    printed "No row observed a tile to check the derivation against ... it is NOT
    a pass" after comparing 924 rows and finding zero disagreements.
 
+5. A HEADER THAT DESCRIBED A DIFFERENT ARM (B1). Fixing 3 replaced the pooled
+   `SURFACE.txt` files, and the block explaining the supersession was written
+   once and copied into all three arms, so two of them stated the s4 arm's fit
+   counts and medians as facts about their own tables and carried the s4 arm's
+   regeneration command. The numbers were real; the arm they belonged to was
+   not the one they headed.
+
 Plus the two things this slice added and that a later edit could quietly
 weaken: the pinned input set for `alpha_refit`, and the MDE lines.
 
@@ -36,6 +43,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import textwrap
@@ -49,6 +57,17 @@ sys.path.insert(0, str(ROOT))
 PUBLISHED = ROOT / "results" / "published"
 H200_S4 = PUBLISHED / "2026-09-01-nvidia_h200-alpha-surface-s4"
 RIDGE_ARM = PUBLISHED / "2026-08-28-nvidia_h200-ridge-resolution"
+
+#: The three arms that hold a paired SURFACE.txt and the pooled version it
+#: replaced. Named once because two tests below iterate all three: the defect
+#: they exist for was ONE header copied into all of them, so a test that checked
+#: a single arm would have passed on the day it happened.
+POOLED_ARMS = ("2026-09-01-nvidia_h200-alpha-surface-s4",
+               "2026-09-01-nvidia_h200-cross-card-s3",
+               "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3")
+
+#: Separates the superseded-header prose from the pooled table it heads.
+POOLED_DIVIDER = "-" * 74
 
 #: Injected as `sitecustomize.py` into a subprocess's PYTHONPATH. A meta-path
 #: finder that RAISES on torch is stricter than uninstalling it: it also catches
@@ -270,12 +289,72 @@ def test_the_committed_surface_files_regenerate_byte_for_byte():
 
 
 def test_the_pooled_surface_is_kept_and_says_it_is_superseded():
-    for arm in ("2026-09-01-nvidia_h200-alpha-surface-s4",
-                "2026-09-01-nvidia_h200-cross-card-s3",
-                "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"):
+    for arm in POOLED_ARMS:
         pooled = (PUBLISHED / arm / "SURFACE.pooled.txt").read_text()
         assert pooled.startswith("THIS FILE IS THE SUPERSEDED, POOLED VERSION")
         assert "no report.json under" in pooled or "unregenerable" in pooled
+
+
+# --- a superseded header must describe the arm it sits in --------------------
+#
+# MEASURED, 2026-09-02 (audit B1). The superseded-header block was written once
+# and copied into all three pooled files, so the cross-card and A100 files
+# opened by stating the s4 arm's counts ("ten identifiable mixtral fits against
+# seven for qwen2") and the s4 arm's pooled medians (0.731 and 0.713) as facts
+# about grids that hold neither. Both files even carried the regeneration
+# command for the arm they were copied FROM, so a reader who ran it got a third
+# arm's table. A header that describes the wrong arm is worse than no header:
+# it reads as provenance, and the numbers in it are quotable.
+#
+# The two checks below are the two halves of that defect, and each fails on a
+# copied header for a different reason: the command must point at its own
+# directory, and the counts must match the body underneath.
+
+def _pooled_header(arm: str) -> str:
+    """The prose above the divider, with runs of whitespace collapsed.
+
+    Collapsed because the header is hand-wrapped prose: a phrase that must
+    appear in it can be broken across a line at any word, and a test that only
+    matched the unwrapped spelling would fail on a reflow and pass on a lie.
+    """
+    text = (PUBLISHED / arm / "SURFACE.pooled.txt").read_text()
+    return " ".join(text.split(POOLED_DIVIDER)[0].split())
+
+
+def test_each_pooled_header_regenerates_the_file_beside_it_and_no_other():
+    for arm in POOLED_ARMS:
+        header = _pooled_header(arm)
+        assert f"scripts/alpha_surface.py results/published/{arm}" in header, arm
+        for other in POOLED_ARMS:
+            if other != arm:
+                assert f"results/published/{other}" not in header, (arm, other)
+
+
+def test_each_pooled_header_states_its_own_arms_fit_counts():
+    """The counts in the header are read back out of the table below it.
+
+    Total, block sizes swept, and one count per model. A header copied from
+    another arm disagrees with its own body on every one of them, which is what
+    made the defect visible; asserting it keeps the next copy visible too.
+    """
+    for arm in POOLED_ARMS:
+        text = (PUBLISHED / arm / "SURFACE.pooled.txt").read_text()
+        header, body = _pooled_header(arm), text.split(POOLED_DIVIDER)[1]
+
+        total, swept = re.search(
+            r"(\d+) identifiable fit\(s\) of (\d+) block sizes swept", body).groups()
+        assert f"{total} identifiable fits out of {swept} block sizes swept" \
+            in header, arm
+
+        # The model block only: a blank line ends it, and the BLOCK_SIZE_N
+        # block that follows in the s4 arm has the same row shape.
+        block = body.split("alpha against model")[1].split("\n\n")[0]
+        models = re.findall(r"^  ([a-z0-9-]+)\s+n=(\d+)\s+median alpha",
+                            block, re.M)
+        assert models, arm
+        assert sum(int(n) for _m, n in models) == int(total), (arm, models)
+        for model, n in models:
+            assert f"{n} {model}" in header, (arm, model, n)
 
 
 def test_the_surface_states_an_mde_or_says_it_has_none():

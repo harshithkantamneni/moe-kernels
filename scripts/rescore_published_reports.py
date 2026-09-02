@@ -11,14 +11,26 @@ are a contradiction about whether the tree is allowed to change, and picking a
 winner for the caller is how an unintended rewrite happens.
 
 WHAT WAS WRONG. All 26 committed `*.report.json` files under
-`results/published/` carry `ridge = 160.3` and `ridge_band = [160.3, 176.2]`.
-That is the 2026-08-26 H200 figure, and it was passed on the command line to
-every sweep in three later arms, including seven that ran on an A100. The A100's
-own contemporaneous calibration puts its ridge at 145.8, 9.9% away; the H200
-s3/s4 arms' own is 162.8, inside the old band. `results/published/
-CALIBRATION_PROVENANCE.md` lists all three arms as unknown or refused,
-`ANCHOR_RESCORE.txt` and `docs/COUNTERS.md` disclose it, and nothing INSIDE the
-arm directories said a word (audit B2/R13/P2, fix B4).
+`results/published/` carried `ridge = 160.3` and `ridge_band = [160.3, 176.2]`.
+That is an H200 figure, 701.6 TFLOP/s over 4377.2 GB/s, calibration md5
+`4d84542b` in `docs/INSTRUMENTATION.md`'s six-calibration table. It is NOT the
+2026-08-26 one, which the arms of that date quote as 160.4 and 162.8; `4d84542b`
+ships beside the 2026-08-28 `-h200-v2lite` and `-h200-fp8-three-kernel` arms.
+It was passed on the command line to every sweep in three later arms: twelve
+reports on the H200 alpha-surface arm, seven on the H200 cross-card arm, and
+seven that ran on an A100.
+
+The A100's committed calibration puts its ridge at 145.8, 9.9% away, so there
+the NUMBER was wrong. The H200's committed calibration gives 162.8, 1.6% away
+and inside this run's own MDE, so on those two arms what was wrong is that the
+ceiling named no card and no file. Neither figure is established as the arm's
+OWN: `results/published/CALIBRATION_PROVENANCE.md` lists all three arms
+`unknown` and entitles them to no ridge, because none published a `measured.yaml`
+or timed rows carrying `achieved_peak_tflops`, and that verdict is unchanged by
+this rescoring. `ANCHOR_RESCORE.txt` and `docs/COUNTERS.md` disclosed the
+substitution and nothing INSIDE the arm directories said a word; each of the
+three now carries its own `NOTE.md`, written from its own reports (audit
+B2/R13/P2, fix B4).
 
 WHAT IS AND IS NOT TAINTED, because this rescoring is deliberately narrow. The
 audit's refuters established that every gate verdict in those reports is
@@ -91,6 +103,18 @@ RESCORED_BRACKETING = ("horizon_rows",)
 #: a rescored report quoting more digits would claim a precision its cited source
 #: does not. The reports being replaced carry `160.3`, the same convention.
 RIDGE_DECIMALS = 1
+
+#: What `rescored_from` says about the ceiling it withdrew. Named as a constant
+#: because it is written into committed evidence and a test compares the 26
+#: stamped reports against it. It carries NO DATE: the earlier wording called
+#: 160.3 "the 2026-08-26 H200 figure", which is the one thing it is not. The
+#: arms of that date quote 160.4 and 162.8; 160.3 is calibration md5 `4d84542b`,
+#: 701.6 TFLOP/s over 4377.2 GB/s, shipped with the 2026-08-28 arms. A wrong
+#: date on a provenance field is worse than no date, because it is quotable.
+WITHDRAWN_RIDGE_WHY = (
+    "an H200 figure (701.6 TFLOP/s over 4377.2 GB/s, calibration md5 4d84542b), "
+    "passed on the command line to arms on two different cards; "
+    "see this arm's NOTE.md")
 
 #: `json.dumps(payload, indent=2)` with no trailing newline reproduces every one
 #: of the 26 committed files byte for byte. Pinned here, and asserted by
@@ -262,6 +286,13 @@ def stamp(payload: dict, original: dict, ridge_source: str, band_source: str,
     report said BEFORE the first rescoring, and a second pass reading its own
     output would otherwise overwrite `160.3` with `145.8` and erase the very
     fact it was written to keep.
+
+    The consequence, and it is a trap rather than a cost: `WITHDRAWN_RIDGE_WHY`
+    reaches a report exactly once, on the pass that first rescores it, so
+    editing that string does NOT propagate to the 26 already stamped. When the
+    wording has to change, the committed files have to be edited beside it, and
+    `tests/test_rescore_published.py::test_every_report_carries_the_current_why`
+    is what stops the two drifting apart silently.
     """
     for key in ("ridge_source", "ridge_band_source", "bandwidth_source",
                 "rescored_utc", "rescored_from"):
@@ -273,8 +304,7 @@ def stamp(payload: dict, original: dict, ridge_source: str, band_source: str,
     payload["rescored_from"] = original.get("rescored_from") or {
         "ridge": original["ridge"],
         "ridge_band": list(original["ridge_band"]),
-        "why": ("the 2026-08-26 H200 figure, passed on the command line to "
-                "arms on two different cards; see this arm's NOTE.md"),
+        "why": WITHDRAWN_RIDGE_WHY,
     }
     return payload
 
