@@ -24,7 +24,8 @@ FOUR GROUPS.
     overwrote a whole arm once already.
   - THE SELF TEST, which is the claim that these gates DISCRIMINATE. A gate that
     answers the same in every planted world cannot settle this experiment, and
-    the three worlds are checked to come out differently.
+    the four worlds are checked to come out differently -- per gate, and in the
+    one integer a session driver can see.
 
 The script is loaded by path, because `scripts/` is not a package.
 """
@@ -592,10 +593,11 @@ def test_the_undecided_outcomes_are_reported_and_not_treated_as_none(bm):
 def test_a_throttled_tread_is_excluded_from_the_fit_and_counted(bm):
     """R7. The instrument's clock columns have to reach the fit.
 
-    A tread timed at 1500 MHz against a roof measured at 1980 sits ~30% above
-    the compute branch for a reason that has nothing to do with weight re-reads.
-    Before the columns travelled, a ladder fitted across a throttling episode
-    was indistinguishable from one that was not.
+    A tread timed at `SELF_TEST_LOW_CLOCK_MHZ` against a roof measured at
+    `SELF_TEST_REFERENCE_CLOCK_MHZ` sits well above the compute branch for a
+    reason that has nothing to do with weight re-reads. Before the columns
+    travelled, a ladder fitted across a throttling episode was
+    indistinguishable from one that was not.
     """
     from moe.spec import MODEL_CONFIGS
     cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
@@ -647,6 +649,294 @@ def test_the_law_gate_is_a_validity_check_and_says_it_is_not_a_prediction(bm):
     assert law.kind == bm.VALIDITY
     assert not any(g.tag == "C3" for g in gates)
     assert "NOT A PREDICTION" in " ".join(law.lines)
+
+
+def _world(bm, name):
+    return {w.name: w for w in bm.SELF_TEST_WORLDS}[name]
+
+
+def _run_world(bm, world, *, seed=0, noise=None, low_clock=None):
+    """One planted world through `analyse_run`, the way `self_test` runs it."""
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
+    samples = bm.planted_samples(
+        cfg, alpha=world.alpha, rho=world.rho,
+        bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
+        noise=bm.PUBLISHED_LADDER_SPREAD if noise is None else noise, seed=seed,
+        low_clock_treads=(world.low_clock_treads if low_clock is None
+                          else low_clock))
+    return bm.analyse_run(
+        samples, cfg, 2,
+        ceiling_tflops=world.rho * bm.SELF_TEST_BANDWIDTH * 1e9 / 1e12,
+        ceiling_source="test", compiles={128: 1, 256: 1},
+        executed={128: 40, 256: 20}, ridge=world.rho,
+        bandwidth_gbps=bm.SELF_TEST_BANDWIDTH, seed=seed, draws=200)
+
+
+# --------------------------------------------------------------------------
+# The exit code each world would return on a pod, which is all a driver sees.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4, 5])
+def test_every_world_returns_its_registered_exit_code_at_every_seed(bm, seed):
+    """THE NUMBER THE SESSION DRIVER READS, and the one the fixture never had.
+
+    `scripts/h200_gaps_session.sh` lists 0 as this arm's only done code and
+    turns everything else into RETRY with "nothing on the page may be quoted".
+    The four S gates scored per-gate verdicts and never the exit code, so for
+    one commit all four passed while every world would have exited INVALID on a
+    pod. Registered per world now, and checked across seeds because a
+    registration that only holds at seed 0 is a registration on a coin flip.
+    """
+    for world in bm.SELF_TEST_WORLDS:
+        _, gates, _ = _run_world(bm, world, seed=seed)
+        rc = exit_codes.classify(g.scored() for g in gates)
+        assert rc == world.exit_code, (
+            f"{world.name} at seed {seed}: registered "
+            f"{exit_codes.describe(world.exit_code)}, got "
+            f"{exit_codes.describe(rc)}")
+
+
+def test_the_arms_own_expected_outcome_is_a_result_and_not_a_void_page(bm):
+    """THE STRADDLE WORLD IS WHERE BOTH CARDS SIT, and it must not be RETRY.
+
+    `undecided_parallel_branch` is what every published H200 BLOCK_M=128 arm
+    returns: `B/C` inside `PARALLEL_BRANCH_TOLERANCE`, so the fit LOOKED and
+    declined to name a branch. When `C3` was relabelled to a VALIDITY gate that
+    declined on `fit.undecided`, this condition -- the arm's own registered
+    expectation -- produced INVALID, and the twelve metered minutes were RETRY
+    by construction on both cards. C1's UNKNOWN is the verdict, CLAIM_FAIL is
+    the code, and `_exit_code` reports it as DONE without `--fail-on-gate`.
+    """
+    world = _world(bm, "straddle")
+    assert world.exit_code == exit_codes.CLAIM_FAIL
+    _, gates, payload = _run_world(bm, world)
+    assert payload["ladder_outcome"] == "undecided_parallel_branch"
+    by = {g.tag: g for g in gates}
+    assert by["C1"].passed is None, "the depth verdict is C1's"
+    assert by["C1"].kind == bm.CLAIM
+    assert all(g.passed is True for g in gates if g.kind == bm.VALIDITY), \
+        [(g.tag, g.observed) for g in gates
+         if g.kind == bm.VALIDITY and g.passed is not True]
+    assert exit_codes.classify(g.scored() for g in gates) != exit_codes.INVALID
+
+
+def test_a_world_whose_exit_code_is_wrong_fails_the_self_test(bm, monkeypatch,
+                                                              capsys):
+    """The FAIL branch of the exit-code registration, planted.
+
+    Every registered gate still matches; only the integer is wrong. A fixture
+    that could not notice that is the fixture that shipped V6 as a VALIDITY
+    gate.
+    """
+    world = _world(bm, "escape-up")
+    assert world.exit_code == exit_codes.DONE
+    wrong = bm.PlantedWorld(world.name, world.alpha, world.rho, world.why,
+                            world.expect, exit_code=exit_codes.INVALID,
+                            low_clock_treads=world.low_clock_treads)
+    monkeypatch.setattr(bm, "SELF_TEST_WORLDS", (wrong,))
+    assert bm.main(["--self-test"]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "exit code: registered" in out
+
+
+# --------------------------------------------------------------------------
+# V6's scope: the alpha in the report, and nothing else.
+# --------------------------------------------------------------------------
+
+class _Fit:
+    """The three fields `_gate_law` reads, so each branch can be planted."""
+
+    def __init__(self, alpha, outcome, undecided, memory_points=5, points=8):
+        self.alpha = alpha
+        self.outcome = outcome
+        self.undecided = undecided
+        self.memory_points = memory_points
+        self.points = tuple((n, 1.0) for n in range(1, points + 1))
+
+
+class _Margin:
+    def __init__(self, ratio):
+        self.ratio = ratio
+
+
+def test_v6_passes_vacuously_when_the_report_publishes_no_alpha(bm):
+    """A VALIDITY gate that voids the page over a number the page does not
+    contain withholds nothing and costs the whole arm."""
+    gate = bm._gate_law(_Fit(None, "undecided_parallel_branch", True,
+                             memory_points=0),
+                        _Margin(1.08), 1.4, 0.05, 0.02)
+    assert gate.kind == bm.VALIDITY
+    assert gate.passed is True
+    assert "VACUOUS" in gate.observed
+    assert "undecided_parallel_branch" in gate.observed
+    assert "NOT a statement that the ladder is two lines" in " ".join(gate.lines)
+
+
+def test_v6_still_withholds_an_alpha_it_could_not_certify(bm):
+    """`undecided_low_clock` leaves a fit over the treads that survived, and
+    `payload["alpha"]` carries it. Certifying that number would publish exactly
+    what the exclusion exists to withhold, so the gate returns UNKNOWN and the
+    page is INVALID."""
+    gate = bm._gate_law(_Fit(0.89, "undecided_low_clock", True,
+                             memory_points=2),
+                        _Margin(1.36), 1.4, 0.05, 0.02)
+    assert gate.passed is None
+    assert "0.8900" in gate.observed
+    assert "undecided_low_clock" in gate.observed
+
+
+def test_v6_is_unknown_when_there_is_an_alpha_but_no_compute_slope(bm):
+    gate = bm._gate_law(_Fit(0.33, "identified", False), _Margin(None), None,
+                        0.05, 0.02)
+    assert gate.passed is None
+    assert "no usable compute slope" in gate.observed
+
+
+def test_v6_still_fails_when_the_fit_and_the_count_disagree(bm):
+    """The FAIL branch, which is the only reason the PASS means anything."""
+    gate = bm._gate_law(_Fit(0.95, "identified", False, memory_points=2),
+                        _Margin(1.40), 1.4, 0.05, 0.02)
+    assert gate.passed is False
+    assert "fit found 2" in gate.observed
+
+
+# --------------------------------------------------------------------------
+# The clock exclusion reaches every gate that reads the subject ladder.
+# --------------------------------------------------------------------------
+
+def test_a_throttled_tread_cannot_trip_a_validity_gate_it_was_excluded_from(bm):
+    """THE EXCLUSION USED TO STOP AT THE FIT.
+
+    `ladder_treads` drops a tread whose loaded clock came in below the roof's,
+    but V2's inversions, V3's slope sequence and V5's replication were all still
+    computed over the UNEXCLUDED medians. A throttled ladder BENDS at the
+    throttle onset -- the planted world's slope runs 1.9 -> 3.0 -> 2.2 -- and
+    that bend is a slope that rises and then falls, which V3 scores FAIL:
+    INVALID, nothing quotable, for exactly the reason the exclusion exists to
+    discount.
+
+    The two verdicts point at different next steps. "The ladder is not
+    describable by any two-line model" says the instrument is broken; "six
+    treads were timed on a throttling card" says re-run on a quiet one. Only the
+    second is true here, and this pins that the second is what comes back.
+    """
+    world = _world(bm, "low-clock")
+    _, gates, payload = _run_world(bm, world)
+    by = {g.tag: g for g in gates}
+    # What the gate would have said over the unexcluded ladder.
+    all_points = payload["subject_points"]
+    all_spread = payload["subject_spread"]
+    would_have = bm.gate_convex(bm.slope_drops(all_points, all_spread),
+                                bm.slope_sequence(all_points), all_spread)
+    assert would_have.passed is False, (
+        "the planted world must actually bend, or this test proves nothing")
+    # What it says over the treads the fit admitted.
+    assert payload["excluded_low_clock"] == 6
+    assert len(payload["scored_points"]) == 2
+    assert by["V3"].passed is None
+    assert "fewer than three treads" in by["V3"].observed
+    assert payload["ladder_outcome"] == "undecided_low_clock"
+
+
+def test_the_spread_the_gates_weigh_comes_from_the_treads_they_scored(bm):
+    """A spread taken over excluded treads is a noise band measured partly on
+    another compute branch, and it is the denominator of every sigma."""
+    world = _world(bm, "low-clock")
+    _, _, payload = _run_world(bm, world)
+    assert payload["scored_spread"] != payload["subject_spread"]
+    assert payload["scored_spread"] is not None
+
+
+def test_every_tread_is_still_printed_with_the_dropped_ones_marked(bm):
+    """The gates score the survivors; the reader has to see what was dropped,
+    or the excluded count in the header points at nothing."""
+    world = _world(bm, "low-clock")
+    lines, _, _ = _run_world(bm, world)
+    text = "\n".join(lines)
+    assert text.count("NO: clock below the roof's") == 6
+    assert text.count("  yes") >= 2
+
+
+def test_a_ladder_whose_every_tread_was_excluded_is_vacuous_and_says_so(bm):
+    """V0's counts are the report's own INPUTS, and after the exclusion the
+    input is the scored ladder. A report that measured eight treads and scored
+    none examined nothing, whatever the measured count says."""
+    world = _world(bm, "low-clock")
+    _, gates, payload = _run_world(bm, world,
+                                   low_clock=tuple(range(1, 9)))
+    assert payload["scored_points"] == []
+    v0 = next(g for g in gates if g.tag == "V0")
+    assert v0.passed is False
+    assert "scored treads" in " ".join(v0.lines)
+
+
+# --------------------------------------------------------------------------
+# V1: the gate the 43.6x reference exists to catch, planted with a PASS branch.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4, 5])
+def test_the_reference_level_gate_is_not_a_coin_flip_on_the_seed(bm, seed):
+    """R5's purpose was that a regression in the path that produced the 43.6x
+    reference can no longer pass the self test, and for one commit V1 was the
+    one gate the fixture could not exercise.
+
+    `planted_samples` generated the reference ladder at exactly `rho x
+    bandwidth`, which is `reference_level`'s own UPPER wall, so at the default
+    spread seeds 0/3/5 gave FAIL and 1/2/4 gave PASS. It was unregistered in
+    three worlds and registered only as UNKNOWN in the fourth, so its PASS
+    branch was planted nowhere. `REFERENCE_KERNEL_EFFICIENCY` puts the reference
+    a few per cent under the ceiling, where a real grouped GEMM is.
+    """
+    assert bm.REFERENCE_KERNEL_EFFICIENCY < 1.0
+    for name in ("escape-up", "straddle", "low-clock"):
+        _, gates, payload = _run_world(bm, _world(bm, name), seed=seed)
+        frac = payload["reference"]["level_fraction"]
+        assert bm.REFERENCE_LEVEL_FLOOR <= frac <= 1.0, (name, seed, frac)
+        assert frac < 1.0, "the reference must not sit ON the gate's wall"
+        assert next(g for g in gates if g.tag == "V1").passed is True
+
+
+def test_the_level_gate_still_fails_a_reference_that_is_too_slow(bm):
+    """The FAIL branch, on the shape that produced it: the published A100
+    BLOCK_N=256 reference was 43.6x too slow while perfectly proportional."""
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
+    # 2.0 ms/tile implies ~451 TFLOP/s of a 500 ceiling; 43.6x that is 2%.
+    fast = bm.reference_level(cfg, 256, 2.0, 500.0, "test")
+    slow = bm.reference_level(cfg, 256, 2.0 * 43.6, 500.0, "test")
+    assert 0.85 < fast.fraction < 1.0 and slow.fraction < 0.05
+    assert bm.gate_reference_level(fast).passed is True
+    assert bm.gate_reference_level(slow).passed is False
+    assert bm.gate_reference_level(None).passed is None
+
+
+def test_a_throttled_tread_is_slower_and_not_merely_labelled(bm):
+    """THE FIXTURE PLANTED THE LABEL AND NOT THE PHYSICS.
+
+    `planted_samples` used to stamp the clock columns on the low rows and
+    compute their milliseconds identically to every other row, so no gate could
+    tell a throttled ladder from a clean one and `ladder_treads`' claim -- that
+    a ladder which lost treads to a hot box must not look like one that never
+    had them -- was demonstrated by nothing. A lower SM clock is a lower
+    compute roof and the same DRAM bandwidth, so the throttled treads are
+    slower and the ladder bends where they start.
+    """
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
+    kw = dict(alpha=0.95, rho=175.0, bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
+              noise=0.0)
+    quiet = {(s.block_m, s.tiles): s.ms_p50
+             for s in bm.planted_samples(cfg, **kw)}
+    hot = {(s.block_m, s.tiles): s.ms_p50
+           for s in bm.planted_samples(cfg, low_clock_treads=(3, 4, 5, 6, 7, 8),
+                                       **kw)}
+    for n in (1, 2):
+        assert hot[(128, n)] == quiet[(128, n)], "clean treads must not move"
+    for n in (3, 4, 5, 6, 7, 8):
+        assert hot[(128, n)] > quiet[(128, n)] * 1.05, (
+            f"tread {n} carries the clock label and none of its physics")
+    assert bm.SELF_TEST_LOW_CLOCK_MHZ < bm.SELF_TEST_REFERENCE_CLOCK_MHZ
 
 
 def test_the_audit_runs_end_to_end_and_examined_real_work(bm):
@@ -856,6 +1146,13 @@ def test_a_gate_tag_is_one_token_and_cannot_collide(bm):
     (["--self-test"], exit_codes.DONE),
     (["--self-test", "--plant-noise", "0"], exit_codes.REFUSED),
     (["--dry-run"], exit_codes.DONE),
+    # THE TWO PLANS WHOSE MDE IS NOT STATEABLE. Both returned 1 -- CLAIM_FAIL,
+    # "a pre-registered claim was refuted" -- from a `--dry-run` that measured
+    # nothing, because `mde_lines` refused by `raise SystemExit(<str>)` and the
+    # interpreter, not `exit_codes.classify`, chose the number. The driver reads
+    # anything but 0 here as RETRY.
+    (["--dry-run", "--plant-noise", "0"], exit_codes.DONE),
+    (["--dry-run", "--reps", "1"], exit_codes.DONE),
 ])
 def test_the_exit_codes_are_the_shared_tables(bm, argv, code, capsys):
     assert bm.main(argv) == code
@@ -876,7 +1173,8 @@ def test_a_broken_registration_makes_the_self_test_invalid_and_not_a_claim(
     registered has not produced a result about anything."""
     world = bm.SELF_TEST_WORLDS[0]
     broken = bm.PlantedWorld(world.name, world.alpha, world.rho, world.why,
-                             {"C1": False}, world.low_clock_treads)
+                             {"C1": False}, exit_code=world.exit_code,
+                             low_clock_treads=world.low_clock_treads)
     monkeypatch.setattr(bm, "SELF_TEST_WORLDS", (broken,))
     assert bm.main(["--self-test"]) == exit_codes.INVALID
     capsys.readouterr()
@@ -927,9 +1225,59 @@ def test_the_plan_states_an_mde_from_one_stated_assumption(bm, capsys):
 
 
 def test_the_mde_refuses_a_zero_spread_rather_than_reporting_omniscience(bm):
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(bm.MdeNotStateable) as exc:
         bm.mde_lines(spread=0.0, reps=7, treads=8)
     assert "every effect is detectable" in str(exc.value)
+
+
+def test_the_mde_refusal_is_not_a_systemexit_and_so_cannot_become_exit_1(bm):
+    """A `SystemExit(<str>)` exits the process with 1, which this project's
+    table spells CLAIM_FAIL: "a pre-registered claim was refuted". Nothing had
+    been refuted; nothing had even been measured. `MdeNotStateable` is a
+    `RuntimeError` so an escape is an unhandled exception the top-level handler
+    maps to ERROR, and a caller can name it instead of catching `SystemExit`."""
+    assert issubclass(bm.MdeNotStateable, RuntimeError)
+    assert not issubclass(bm.MdeNotStateable, SystemExit)
+
+
+@pytest.mark.parametrize("kw,fragment", [
+    ({"spread": 0.0, "reps": 7, "treads": 8}, "every effect is detectable"),
+    ({"spread": 0.0182, "reps": 1, "treads": 8}, "no MDE is stateable"),
+    ({"spread": 0.0182, "reps": 7, "treads": 1}, "no MDE is stateable"),
+])
+def test_a_plan_with_no_stateable_mde_says_so_and_carries_on(bm, kw, fragment):
+    """THE POD PATH'S DEGRADATION, EXERCISED OFF GPU. `main` builds
+    `payload["mde"]` AFTER both ladders are timed and BEFORE `report.json` is
+    written, so a refusal that propagated cost twelve metered minutes and left
+    no report on disk. `mde_block` is the one place both call sites degrade, and
+    it returns the reason as a field rather than only as prose."""
+    lines, reason = bm.mde_block(**kw)
+    assert reason and fragment in reason
+    assert any("not stateable" in ln for ln in lines)
+    assert "Minimum detectable effect" not in " ".join(lines)
+
+
+def test_a_stateable_mde_reports_no_reason(bm):
+    lines, reason = bm.mde_block(spread=bm.PUBLISHED_LADDER_SPREAD, reps=7,
+                                 treads=8)
+    assert reason == ""
+    assert any("Minimum detectable effect" in ln for ln in lines)
+
+
+@pytest.mark.parametrize("argv", [["--plant-noise", "0"], ["--reps", "1"]])
+def test_a_plan_whose_mde_is_not_stateable_still_prints_the_whole_plan(
+        bm, argv, capsys):
+    """The MDE is a section of a document, not a gate, and it gets no vote on
+    the arm's verdict. The plan above it is what the pod is being asked to buy
+    and it has to still be there."""
+    assert bm.main(["--dry-run", *argv]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "MINIMUM DETECTABLE EFFECT: not stateable" in out
+    assert "## The plan" in out
+    assert "WRITES TO" in out
+    # And nothing that looks like a gate result was printed by a run that
+    # scored no gates.
+    assert exit_codes.parse_result_lines(out) == []
 
 
 def test_the_mde_moves_the_right_way_with_repeats_and_with_the_spread(bm):

@@ -1131,12 +1131,22 @@ def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
     maximum over the same cells, so a control read against IT scores 1.00 by
     construction and the check would examine nothing.
 
-    WHAT A FAIL COSTS, precisely. C1 compares a throughput with a roof, so it
-    needs this run to have produced a throughput at a roof under the same
-    conditions. C2 needs no roof at all: it fits a re-read fraction from the cap
-    tile's own treads and compares the ceiling that implies with the ridge. So a
-    FAIL here voids C1 and leaves C2 standing, and that is the whole reason C2
-    is in the report.
+    WHAT A NON-PASS COSTS, precisely, AND WHAT IT DOES NOT SPARE. This is a
+    VALIDITY gate, `moe.bench.exit_codes` maps a VALIDITY non-PASS to INVALID,
+    and INVALID means nothing on the page may be quoted. That covers C2. The
+    consequence text used to end at "C2 SURVIVES this", which contradicted the
+    exit code the gate itself produces and would send a reader off to quote a
+    C2 from a voided page.
+
+    What is true of C2 is narrower and is about RECOVERY, not about reading.
+    C1 compares a throughput with a roof, so it needs this run to have produced
+    a throughput at a roof under the same conditions, and if the control did not
+    there is no such throughput anywhere. C2's number never divides by the roof:
+    it fits a re-read fraction from the cap tile's own treads and compares the
+    ceiling that implies with the ridge. So re-running the CONTROL alone
+    recovers C2, and the cap tile's cells do not have to be measured again --
+    which is the whole reason C2 is in the report, and is a statement about what
+    the next run must cost, not a licence to quote this one.
     """
     fused_roof = fused_layer_roof(roof_tflops)
     # The upper wall is widened by the measured spread for the same reason V2's
@@ -1150,10 +1160,18 @@ def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
                  f"{roof_tflops:.0f} widened by max("
                  f"{FUSED_ROOF_CEILING_TOLERANCE:.0%}, 3 x the {noise:.2%} "
                  "per-cell spread)")
-    consequence = ("nothing in this sweep reached a roof a fused layer can "
-                   "reach, so C1 is a statement about the instrument rather "
-                   "than about the tile and may not be quoted. C2 SURVIVES "
-                   "this: it needs no roof, only the cap tile's own treads")
+    consequence = (
+        "nothing in this sweep reached a roof a fused layer can reach, so C1 "
+        "is a statement about the instrument rather than about the tile. THE "
+        "WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED: this is a VALIDITY gate and a "
+        "VALIDITY gate that is not PASS exits INVALID under "
+        "moe.bench.exit_codes, which means nothing in the report may be "
+        "quoted. What is true of C2 is narrower and is not a licence: C2's "
+        "NUMBER is arithmetically independent of the roof -- it fits a re-read "
+        "fraction from the cap tile's own treads and never divides by ridge x "
+        "bandwidth -- so re-running the CONTROL is enough to recover it and the "
+        "cap tile's cells need not be re-measured. Until that control is "
+        "re-run, C2 is not a result")
     if not tp_control:
         return CapGate(
             "V3", VALIDITY,

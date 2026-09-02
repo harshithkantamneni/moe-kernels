@@ -115,7 +115,36 @@ def test_v3_still_fails_when_nothing_reached_any_roof(fraction):
     gate = CAP.gate_v3_control_roof(_tp(fraction), control_tile=256,
                                     roof_tflops=ROOF, plateau=fraction * ROOF)
     assert gate.verdict == CAP.FAIL
-    assert "C2 SURVIVES" in gate.consequence
+
+
+@pytest.mark.parametrize("verdict,fraction", [(CAP.FAIL, 0.10),
+                                              (CAP.UNDECIDED, 1.40)])
+def test_the_v3_consequence_does_not_invite_a_quote_off_an_invalid_page(
+        verdict, fraction):
+    """WHAT A NON-PASS ON THIS GATE COSTS, in the gate's own words.
+
+    The consequence text used to end at "C2 SURVIVES this: it needs no roof,
+    only the cap tile's own treads", which contradicted the exit code the same
+    gate produces. V3 is VALIDITY, `moe.bench.exit_codes` maps a VALIDITY
+    non-PASS to INVALID, and INVALID means nothing on the page may be quoted --
+    C2 included. A reader following the old sentence would quote a C2 off a page
+    the table had already voided.
+
+    Both halves have to be there, because dropping either one is a different
+    error: without the first the page looks readable, and without the second the
+    surviving claim gets thrown away with the dead one and a whole arm is
+    re-measured to recover a number that never needed the roof.
+
+    Checked on BOTH non-PASS branches, since one text serves the floor and the
+    ceiling.
+    """
+    gate = CAP.gate_v3_control_roof(_tp(fraction), control_tile=256,
+                                    roof_tflops=ROOF, plateau=fraction * ROOF)
+    assert gate.verdict == verdict
+    assert "THE WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED" in gate.consequence
+    assert "arithmetically independent of the roof" in gate.consequence
+    assert "re-running the CONTROL is enough to recover it" in gate.consequence
+    assert "C2 is not a result" in gate.consequence
 
 
 def test_v3_refuses_a_control_that_beat_the_dense_peak():
@@ -156,6 +185,92 @@ def test_the_gate_and_the_report_share_one_fused_roof():
 def test_a_roof_of_zero_refuses_instead_of_returning_zero():
     with pytest.raises(CAP.Unmeasurable):
         CAP.fused_layer_roof(0.0)
+
+
+def _slowed_report(factor: float):
+    """The whole planted sweep slowed by ONE factor, through `analyse`.
+
+    Slowing every cell equally leaves the ladder SHAPES untouched -- V2 stays
+    PASS, the control stays proportional and flat -- and moves only the LEVEL,
+    which is the one thing V3 reads. It is the only way to put the gate at a
+    chosen fraction of the dense peak without also breaking something else and
+    then not knowing which gate answered.
+    """
+    grid, cells = _cells(CAP.ALPHA)
+    slowed = [SWEEP.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
+                              c.ms_p50 * factor, sm_count=132, block_n=64,
+                              ms_min=c.ms_min * factor,
+                              ms_stdev=c.ms_stdev * factor)
+              for c in cells]
+    return CAP.analyse(
+        slowed, MIXTRAL, cap_tile=16, control_tile=256, alpha=CAP.ALPHA,
+        ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b",
+        dtype="bf16", compiles={16: 1, 256: 1}, executed={16: 1, 256: 1},
+        sm_count=132, sm_source="test",
+        depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[])
+
+
+def _verdict(report, tag: str) -> str:
+    return next(g for g in report.gates if g.tag == tag).verdict
+
+
+def test_the_published_fused_layer_level_is_a_pass_and_not_a_void_page():
+    """THE STATE OF ALL 26 PUBLISHED REPORTS, AND IT IS NOT AN INVALID RUN.
+
+    Their plateaus ran 46.5-75.6% of the card's `ridge x bandwidth`, which is
+    the DENSE cuBLAS peak. V3 used to demand 0.95 of that product from a FUSED
+    layer -- a gate, an alignment kernel, two GEMMs, a SiLU and a reduction,
+    with only the two GEMMs' FLOPs in the numerator -- so it failed on every
+    card that exists, and a VALIDITY FAIL makes the page unquotable. The arm was
+    INVALID by construction before it was scheduled: nine pod minutes whose
+    verdict was computable from the calibration alone.
+
+    At 2x slow the control lands around 0.50 of the dense peak, which is exactly
+    where every published fused-layer arm sits, and V3 must PASS there. This is
+    the assertion `tests/test_tile_cap.py` used to make the other way round;
+    that file now carries the 4x FAIL and this one carries the PASS.
+    """
+    report = _slowed_report(2.0)
+    assert _verdict(report, "V2") == CAP.PASS, "only the level changed"
+    assert _verdict(report, "V3") == CAP.PASS, (
+        "0.50 of the dense peak is where every published fused-layer arm sits; "
+        "a validity gate that voids the page there cannot pass on any card")
+    frac = report.payload["peak_roof_fraction"]["256"]
+    assert CAP.FUSED_ROOF_FLOOR <= frac < 0.6, frac
+    assert (report.payload["fused_layer_roof_tflops"]
+            == pytest.approx(CAP.FUSED_ROOF_FLOOR
+                             * report.payload["model_roof_tflops"]))
+
+
+def test_a_sweep_far_under_even_the_fused_roof_still_voids_the_page():
+    """The FAIL branch survives the repair, at a level no fused layer explains.
+
+    Under `FUSED_ROOF_FLOOR` nothing in the sweep reached ANY roof, fused or
+    dense, so C1 is a statement about the instrument. The page is INVALID and
+    C2 may not be quoted off it either; what is true is that C2's number needs
+    no roof, so re-running the CONTROL recovers it.
+    """
+    report = _slowed_report(4.0)
+    assert _verdict(report, "V2") == CAP.PASS, "only the level changed"
+    assert _verdict(report, "V3") == CAP.FAIL
+    assert report.payload["peak_roof_fraction"]["256"] < CAP.FUSED_ROOF_FLOOR
+
+
+def test_a_control_above_the_dense_peak_refuses_through_analyse_too():
+    """A fused layer counting only its GEMM FLOPs cannot beat the dense peak.
+
+    Above it the ridge, the bandwidth or the FLOP count belongs to another
+    machine, and a gate that reported PASS there would be reading a broken ruler
+    as a strong kernel. Checked here through `analyse` and not only on the gate
+    in isolation, because the payload the plan and the report share is what a
+    reader sees and it has to agree with the verdict.
+    """
+    report = _slowed_report(0.5)
+    assert _verdict(report, "V3") == CAP.UNDECIDED
+    v3 = next(g for g in report.gates if g.tag == "V3")
+    assert "ABOVE the dense peak" in " ".join(v3.lines)
+    assert report.payload["peak_roof_fraction"]["256"] > CAP.FUSED_ROOF_CEILING
 
 
 def test_the_dense_peak_fraction_is_still_reported_and_is_labelled_diagnostic():
