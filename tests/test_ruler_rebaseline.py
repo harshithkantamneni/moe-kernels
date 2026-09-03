@@ -18,12 +18,13 @@ after.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
-from moe.bench import exit_codes
+from moe.bench import exit_codes, timing
 from moe.bench.calibrate import (
     CLOCK_SPREAD_TOL_PCT,
     DISOWNED,
@@ -815,3 +816,72 @@ def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
         assert rc == exit_codes.REFUSED, (
             "a run that scored no gate printed no RESULT line, so its log "
             "implies REFUSED and nothing else")
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: ruler_rebaseline had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(RB, "_main", explode)
+    code = RB.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+def _load_calibrate_hardware():
+    """The other file that resolves an instrument name, loaded by path."""
+    path = REPO / "scripts" / "calibrate_hardware.py"
+    spec = importlib.util.spec_from_file_location("calibrate_hardware", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["calibrate_hardware"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_published_ruler_does_not_claim_the_ladder_instrument(tmp_path):
+    """The calibration is measured by `time_eager`, so it may not say TIMING_BASIS.
+
+    `--write-calibration` turns this run's numbers into the ceiling YAML that is
+    the denominator of every published efficiency column, and `instrument` is
+    the one field a downstream reader uses to decide whether a cell is
+    comparable with the roof. Until 2026-09-02 the block said
+    `timing.TIMING_BASIS` while `moe.bench.calibrate.calibrate` measured through
+    `timing.time_eager` (calibrate.py:718, :901, :952): the roof and the ladders
+    under one label, which is the confusion the audit measured at 12-16% in
+    alpha. A provenance field naming the wrong instrument is worse than an
+    absent one.
+    """
+    assert RB.main(["--corpus-only", "--out", str(tmp_path)]) == exit_codes.CLAIM_FAIL
+    payload = json.loads(next(tmp_path.rglob("report.json")).read_text())
+    assert payload["instrument"] == RB.instrument_name()
+    assert payload["instrument"] != timing.TIMING_BASIS
+    assert "time_eager" in payload["instrument"]
+
+
+def test_the_two_files_that_name_this_instrument_cannot_drift_apart():
+    """`scripts/` is not a package, so the discipline is stated twice.
+
+    `calibrate_hardware.instrument_name` is the original and this is the copy;
+    the equality is asserted here so a change to either is a failing test rather
+    than two files describing one calibration with two labels.
+    """
+    assert RB.instrument_name() == _load_calibrate_hardware().instrument_name()

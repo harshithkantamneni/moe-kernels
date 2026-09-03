@@ -239,6 +239,7 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -4234,7 +4235,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     models = [m for m in args.models.split(",") if m]
     tokens = sorted({int(t) for t in args.tokens.split(",") if t})
@@ -4630,6 +4631,38 @@ def run_measurement(cells: list[Cell], arms: list[str], args, out_dir: Path,
     tally = MeasurementTally(store.written_arms, store.restored_arms, csv_path)
     print("\n" + tally.note)
     return results, stopped, tally
+
+
+def main(argv: list[str] | None = None) -> int:
+    """AN UNPLANNED CRASH IS ERROR (4), which is the only retryable code.
+
+    Left to propagate, an unexpected exception exits the interpreter ONE, and
+    ONE is CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it
+    is in FINISHED_CODES, so the driver files the arm as finished, skips it on
+    every resume, leaves RETRY_ARMS at zero and exits the session 0 over an arm
+    that never measured. A torch OOM, a truncated report or a drifted import
+    would be published as one of this experiment's registered outcomes. ERROR
+    (4) is outside FINISHED_CODES precisely so the driver can tell "the
+    apparatus broke" from "the claim did not hold", and the traceback is
+    printed first rather than swallowed, because a code without one tells an
+    operator nothing about what to fix.
+
+    Wrapped around `_main` rather than installed at the `__main__` guard so the
+    contract holds for a caller of `main()` -- the tests, and anything that
+    imports this file -- as well as for the CLI. `SystemExit` is a
+    `BaseException` and passes through untouched: a refusal is not a crash.
+    """
+    try:
+        return _main(argv)
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: span_extent_separation crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim "
+              "failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":                                # pragma: no cover
