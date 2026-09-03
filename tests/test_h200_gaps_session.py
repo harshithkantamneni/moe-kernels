@@ -221,14 +221,14 @@ def test_the_estimated_total_is_printed_before_anything_is_spent(tmp_path):
 # --------------------------------------------------------------------------
 
 INVOKED = {
-    "scripts/calibrate_hardware.py": (),
+    "scripts/calibrate_hardware.py": ("--publish",),
     "scripts/ruler_rebaseline.py": ("--dry-run",),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
                                   "--dry-run"),
     "scripts/tile_cap_test.py": ("--dry-run", "--capability"),
     "scripts/dtype_tile_confound.py": ("--dry-run",),
     "scripts/span_extent_separation.py": ("--dry-run", "--densify",
-                                          "--max-minutes"),
+                                          "--no-densify", "--max-minutes"),
     "scripts/bm128_roofline.py": ("--block-n", "--group-m", "--control",
                                   "--dry-run"),
     "scripts/memory_branch_anchor.py": ("--rescore", "--out-dir", "--dry-run"),
@@ -374,7 +374,7 @@ def test_a_plan_gets_planning_words_and_a_refusal_is_not_a_breakage(rc, state):
     -- a claim verdict, an INVALID, a traceback, a missing interpreter -- is a
     plan that did not print."""
     got = lift(f'dry_state {rc}', REPO=str(ROOT))
-    assert got.stdout.strip() == state
+    assert got.stdout.strip() == state, "with no log to read, rc 2 printed nothing"
 
 
 def test_a_dry_run_writes_a_separate_ledger_and_marks_nothing_done(tmp_path):
@@ -969,15 +969,23 @@ def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(
         "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
         "counter_plan\tINVALID\t3\t61\t0\t/x.log\t\n"
         "anchor_measure\tREFUSED\t2\t480\t0\t/y.log\t\n"
+        "mma_switch\tDONE\t0\t400\t0\t/w.log\t\n"
         "ruler\tDONE\t0\t9\t0\t/z.log\t\n")
     repo = unadopting_repo(tmp_path, "scripts/memory_branch_anchor.py")
+    unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    adopting_repo(tmp_path, "scripts/ruler_rebaseline.py")
     (repo / "scripts" / "dram_counter_route.py").write_text(
         "def main():\n    raise SystemExit(3)\n")
     got = lift(f'contract_disclosure {ledger}', REPO=str(repo))
     assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
     assert "counter_plan        INVALID" in got.stdout
     assert "anchor_measure      REFUSED" in got.stdout
-    assert "ruler" not in got.stdout, "a DONE row has no state to disclose"
+    # A DONE row IS disclosed when its file speaks another table: 0 there can be
+    # a run that scored no gate. It was skipped until 2026-09-02, along with the
+    # 1 and the 4 that the two live non-adopters actually spend.
+    assert "mma_switch          DONE" in got.stdout
+    assert "ruler" not in got.stdout, "a row from a file that has adopted the " \
+        "table has nothing to disclose, in any state"
     # Against the real tree only the counter route is still unadopted, so the
     # anchor row drops out of the disclosure by itself.
     real = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
@@ -990,7 +998,7 @@ def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(
     ok = lift(f'contract_disclosure {clean}', REPO=str(ROOT))
     assert "THE EXIT-CODE CONTRACT" in ok.stdout
     assert "WRONG WORD" not in ok.stdout
-    assert "No REFUSED or INVALID row" in ok.stdout
+    assert "No row in this session, in ANY state" in ok.stdout
 
 
 def test_the_disclosure_restores_no_per_arm_state_map():
@@ -1006,6 +1014,490 @@ def test_the_disclosure_restores_no_per_arm_state_map():
         assert "ledger_state" not in body, fn
         assert not re.search(r'^\s*state=', body, re.M), fn
     assert "arm_done_codes" not in TEXT
+
+
+def test_a_ledger_of_one_claim_fail_row_does_not_print_the_all_clear(tmp_path):
+    """THE DEFECT, PLANTED, AND IT IS THE ALL-CLEAR ITSELF. The disclosure fired
+    on REFUSED and INVALID rows only, and the two arms whose files have not
+    adopted the table spend 1 and 4. So a ledger holding nothing but
+    `mma_switch CLAIM_FAIL 1` -- check_mma_path.sh, whose own header says "1 a
+    gate failed" and which spends 1 on a VALIDITY reading, on "no interpreter"
+    and on "no .ptx", three different things -- walked every row, matched none
+    and printed a POSITIVE assurance that every state word was correct, over the
+    one row where it was not."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      "mma_switch\tCLAIM_FAIL\t1\t400\t0\t/x.log\t\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    assert "THE EXIT-CODE CONTRACT" not in got.stdout, got.stdout
+    assert "No row in this session" not in got.stdout
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
+    assert "mma_switch          CLAIM_FAIL" in got.stdout
+    assert "check_mma_path.sh" in got.stdout
+
+
+@pytest.mark.parametrize("state,rc,tell", [
+    ("DONE", "0", "A check\n  that examined nothing reports no failures."),
+    ("CLAIM_FAIL", "1", "1 is three things"),
+    ("UNKNOWN", "1", "1 is three things"),
+    ("REFUSED", "2", "used to document 2"),
+    ("INVALID", "3", "returns 3 for"),
+    ("RETRY", "4", "may spend such a code on a REGISTERED ANSWER"),
+])
+def test_every_state_a_non_adopting_file_can_produce_is_disclosed(
+        tmp_path, state, rc, tell):
+    """COVER THE STATES, NOT THE TWO THAT WERE NOTICED FIRST. A file that speaks
+    another table can land in any of these, and each one means something
+    different when it does: 0 can be a run that scored no gate, 1 can be a
+    crash, 4 can be a registered answer. The caveat has a branch for each and
+    the ledger walk stops filtering to REFUSED and INVALID."""
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift(f'contract_caveat mma_switch {state}; echo "rc=$?"', REPO=str(repo))
+    assert "CAVEAT: this row came from scripts/check_mma_path.sh" in got.stdout
+    assert tell in got.stdout, got.stdout
+    assert got.stdout.strip().endswith("rc=0")
+    # THE SILENT BRANCH, for the same state: the day that file adopts the table
+    # the caveat stops printing without anyone editing this driver.
+    quiet = lift(f'contract_caveat mma_switch {state}; echo "rc=$?"',
+                 REPO=str(adopting_repo(tmp_path / "adopted",
+                                        "scripts/check_mma_path.sh")))
+    assert quiet.stdout.strip() == "rc=1"
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      f"mma_switch\t{state}\t{rc}\t9\t0\t/x.log\t\n")
+    walked = lift(f'contract_disclosure {ledger}', REPO=str(repo))
+    assert f"mma_switch          {state}" in walked.stdout, walked.stdout
+
+
+def test_the_disclosure_walks_no_header_row_and_no_unplanned_arm(tmp_path):
+    """The widened filter must not widen onto rows that are not exit codes. The
+    ledger's first line is its column names and `skip_arm` writes NOT_PLANNED
+    with an rc of `-`; neither is a state a command returned, and a caveat about
+    either would be a sentence about nothing."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      "mma_switch\tNOT_PLANNED\t-\t0\t0\t-\tno GPU\n")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(
+        unadopting_repo(tmp_path, "scripts/check_mma_path.sh")))
+    assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" not in got.stdout
+    assert "No row in this session, in ANY state" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 12. an exit 1 this file cannot read is not a result
+# --------------------------------------------------------------------------
+
+def test_an_exit_one_from_a_file_that_does_not_speak_the_table_is_not_latched(tmp_path):
+    """THE MOST EXPENSIVE MISLABEL AVAILABLE HERE. Python exits 1 for any
+    exception that escapes `main`, and only three of the eleven arm scripts
+    install the ERROR(4) handler that would say so. Under the table 1 is
+    CLAIM_FAIL -- "measured, the world disagreed, a RESULT" -- and CLAIM_FAIL is
+    one of the three words `arm()` LATCHES, so a crashed arm would be skipped on
+    every later run and its silence reported as a finding. The driver cannot fix
+    those scripts from here; what it can do is decline to read a word out of a
+    table the file never agreed to."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift('arm mma_switch bash -c "exit 1"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert got.returncode == 0, got.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == "UNKNOWN", row
+    assert row[2] == "1"
+    assert "NOT latched" in got.stdout
+    assert "1 is three things" in got.stdout
+    # ...and NOT latched means exactly that: the arm is attempted again.
+    again = lift('arm mma_switch bash -c "exit 1"',
+                 REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert "SKIP mma_switch" not in again.stdout
+    assert len(ledger.read_text().splitlines()) == 2
+
+
+def test_an_exit_one_from_a_file_that_does_speak_the_table_is_still_a_result(tmp_path):
+    """THE OTHER BRANCH, and the one that must not move. From a file that HAS
+    adopted the module, 1 means what the table says: the experiment worked and a
+    pre-registered claim did not hold. That is the most valuable outcome this
+    study has, it is finished, and re-running it until it passes is the failure
+    mode the module is named against."""
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    repo = adopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift('arm mma_switch bash -c "exit 1"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert got.returncode == 0, got.stderr
+    assert "CAVEAT" not in got.stdout
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == "CLAIM_FAIL", row
+    again = lift('arm mma_switch bash -c "exit 1"',
+                 REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert "SKIP mma_switch (already CLAIM_FAIL" in again.stdout
+
+
+def test_the_unknown_state_is_the_drivers_word_and_not_a_second_table():
+    """R1 deleted the per-arm done-code lists and this puts none back:
+    `ledger_state` still turns every exit code into a word by itself, and the
+    UNKNOWN branch is a REFUSAL TO READ one, taken after that function has
+    spoken and only for a file that has not adopted the module."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert 'state="$(ledger_state "$rc")"' in body
+    assert '[[ "$state" == "CLAIM_FAIL" ]] && ! adopts_exit_codes' in body
+    assert "UNKNOWN" not in exit_codes.LEDGER_STATES
+    for rc in (0, 1, 2, 3, 4):
+        assert lift(f'ledger_state {rc}', REPO=str(ROOT)).stdout.strip() == \
+            exit_codes.ledger_state(rc)
+
+
+# --------------------------------------------------------------------------
+# 13. a plan that printed is not a plan that refused
+# --------------------------------------------------------------------------
+
+PLANNED_LOG = """\
+=== plan: four models, twelve cells ===
+  mixtral-8x7b  T=1024  BLOCK_M 128
+  the cost of the whole arm is 35 minutes
+NOT A RESULT. Nothing was measured.
+  reason: --dry-run was given
+"""
+
+REFUSED_LOG = """\
+REFUSED before any GPU time, from the pinned constants alone:
+  BLOCK_M=256: the accumulator needs 256 registers per thread against 255.
+"""
+
+
+def test_a_plan_that_printed_and_then_refused_is_planned_and_one_that_did_not_is_not(tmp_path):
+    """THE DISTINCTION DRY MODE EXISTS TO DRAW, AND THE PHASE-3 CLOSE ERASED IT.
+    Once every script adopted the table its own --dry-run began exiting REFUSED,
+    which is right -- a plan measured nothing and scored no gate -- and eleven of
+    the sixteen planned arms landed on PLAN_REFUSED, so the ledger could no
+    longer say whether there was a plan on the page. The log still says it: one
+    of these two printed a plan and then said it measured nothing, the other
+    refused on line 1 and never planned."""
+    planned = tmp_path / "planned.log"
+    planned.write_text(PLANNED_LOG)
+    refused = tmp_path / "refused.log"
+    refused.write_text(REFUSED_LOG)
+    assert lift(f'dry_state 2 {planned}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
+    assert lift(f'dry_state 2 {refused}', REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # An empty log is a refusal that printed nothing, and a missing one is not a
+    # plan either: "could not read it" is not "it planned".
+    (tmp_path / "empty.log").write_text("\n   \n")
+    assert lift(f'dry_state 2 {tmp_path}/empty.log',
+                REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    assert lift(f'dry_state 2 {tmp_path}/gone.log',
+                REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # ...and rc 0 and a traceback are still decided by the code alone.
+    assert lift(f'dry_state 0 {refused}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
+    assert lift(f'dry_state 1 {planned}', REPO=str(ROOT)).stdout.strip() == "BROKEN"
+
+
+def test_the_dry_run_ledger_still_distinguishes_the_two(tmp_path):
+    """The same distinction end to end, against the real scripts rather than a
+    planted log: some arm has to reach each word, or the ledger has one word
+    for two things again."""
+    session = tmp_path / "s"
+    got = run(["--dry-run"], session=session)
+    assert got.returncode in (0, exit_codes.INVALID), got.stdout[-2000:]
+    states = {r.split("\t")[0]: r.split("\t")[1] for r in
+              (session / "ARMS-dryrun.tsv").read_text().splitlines()[1:]}
+    assert "PLANNED" in states.values(), states
+    assert "PLAN_REFUSED" in states.values(), states
+    assert 'dry_state "$rc" "$log"' in CODE
+
+
+# --------------------------------------------------------------------------
+# 14. the ruler the arms read is the one this session measured
+# --------------------------------------------------------------------------
+
+def calibration_yaml(path: Path, utc: str) -> Path:
+    """A calibration file with only the field the gate reads, plus a `detail:`
+    block carrying a `utc:` of its own. The real yaml nests a hundred keys under
+    `detail`, and a grep for `utc:` over the whole file would find whichever
+    came first."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("name: TESTCARD (measured)\n"
+                    "detail:\n  utc: '1999-01-01T00:00:00+00:00'\n"
+                    f"provenance:\n  utc: '{utc}'\n  git_dirty: false\n")
+    return path
+
+
+def test_the_session_publishes_the_calibration_it_measures():
+    """THE WORST ONE IN THE SET. Arm 0 ran `calibrate_hardware.py` bare. Phase
+    2's A6 fix had moved that script's output to an untracked session path and
+    made the copy into the tracked tree a separate `--publish` decision -- "the
+    copy is what makes the ruler visible to roofline.load_measured() and
+    therefore to the sweep", in its own header. So arm 0 spent three minutes
+    measuring THIS card's ridge where nothing reads it, and every later arm
+    resolved its ridge from whatever measured_<card>.yaml a PREVIOUS rental left
+    in the checkout, labelled "measured on this machine". The audit's own "a
+    constant from another machine presented as a measurement", recreated by the
+    fix for a different one."""
+    assert 'scripts/calibrate_hardware.py" --publish' in CODE
+    assert "--publish IS THE ARM" in TEXT
+    # And the gate that follows it, with a stop that is not advice. It asks BOTH
+    # questions: when the file was written, and whether the arm that wrote it
+    # passed its own gates. OK is the only word that proceeds.
+    gate = CODE.split('scripts/calibrate_hardware.py" --publish', 1)[1] \
+               .split("\nsay ", 1)[0]
+    assert 'CALIB_STATE="$(calibration_state "$CALIB_YAML" "$SESSION_SINCE")"' in gate
+    assert 'CALIB_ROW="$(ledger_arm_state calibrate)"' in gate
+    assert 'CALIB_VERDICT="$(calibration_verdict "$CALIB_ROW" "$CALIB_STATE")"' in gate
+    assert '[[ "$CALIB_VERDICT" == "OK" ]]' in gate
+    assert 'exit "$RC_REFUSED"' in gate
+    # and the four yaml states are still named, now by the refusal it calls.
+    refusal = CODE.split("calibration_refusal() {", 1)[1].split("\n}\n", 1)[0]
+    for word in ("MISSING", "UNDATED", "STALE", "NO_BASELINE"):
+        assert word in refusal, word
+
+
+def test_a_fresh_stamp_is_not_a_ruler_the_arm_stood_behind(tmp_path):
+    """THE DEFECT THE FIX INTRODUCED, planted through `arm()`. The first version
+    of this gate asked only WHEN the tracked yaml was measured, and
+    calibrate_hardware.py copies that yaml into the tree at :683 BEFORE it
+    scores a gate at :712 -- its own --help says so: "A calibration whose clock
+    could not be established is INVALID rather than DONE ... the yaml is still
+    written". So a calibrate that fails VALIDITY clock_established ("the samples
+    disagree with the settle plateau; nothing normalised by the clock may be
+    quoted") published a fresh-stamped ruler, calibration_state said PUBLISHED,
+    the gate printed "measured in THIS session", and 3.4 hours of arms scored
+    every roof fraction, LEVEL flag and alpha against a ruler arm 0 itself
+    refused to stand behind. Worse on a resume: INVALID is LATCHED, so the bad
+    calibrate is never re-run and the gate keeps saying PUBLISHED.
+
+    The stand-in publishes and then exits 3, exactly as the real script does."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
+    yaml.parent.mkdir(parents=True)
+    fake = repo / "scripts" / "calibrate_hardware.py"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -uo pipefail\n"
+        f'printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+        '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > '
+        f'"{yaml}"\n'
+        f'echo "[calibrate] PUBLISHED to {yaml}"\n'
+        "echo 'RESULT: VALIDITY clock_established FAIL samples disagree with the plateau'\n"
+        "exit 3\n")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+               f'arm calibrate bash {fake} --publish >/dev/null\n'
+               'ROW="$(ledger_arm_state calibrate)"\n'
+               f'STATE="$(calibration_state {yaml} "$SESSION_SINCE")"\n'
+               'echo "row=$ROW state=$STATE"\n'
+               'calibration_verdict "$ROW" "$STATE"; echo "rc=$?"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.strip().splitlines()
+    # The yaml IS this session's by date, and the arm is still not one to trust.
+    assert lines[-3] == "row=INVALID state=PUBLISHED", got.stdout
+    assert lines[-2] == "ARM INVALID", got.stdout
+    assert lines[-1] == "rc=1", got.stdout
+
+
+@pytest.mark.parametrize("row,state,verdict,rc", [
+    ("DONE", "PUBLISHED", "OK", 0),
+    ("DONE", "STALE", "YAML STALE", 1),
+    ("DONE", "UNDATED", "YAML UNDATED", 1),
+    ("DONE", "MISSING", "YAML MISSING", 1),
+    ("INVALID", "PUBLISHED", "ARM INVALID", 1),
+    ("CLAIM_FAIL", "PUBLISHED", "ARM CLAIM_FAIL", 1),
+    ("REFUSED", "PUBLISHED", "ARM REFUSED", 1),
+    ("UNKNOWN", "PUBLISHED", "ARM UNKNOWN", 1),
+    ("", "PUBLISHED", "ARM NO_ROW", 1),
+    ("", "UNDATED", "ARM NO_ROW", 1),
+])
+def test_one_pair_of_words_proceeds_and_every_other_pair_refuses(row, state, verdict, rc):
+    """BOTH HALVES, AND THE FAIL BRANCH OF EACH. DONE alone is a run that wrote
+    a ruler somewhere; PUBLISHED alone is a file of unknown standing. Only the
+    pair means "this card's ruler, from an instrument that passed its own
+    gates". The empty row prints NO_ROW rather than nothing, because an empty
+    word inside a refusal reads as a bug in the refusal."""
+    got = lift(f'calibration_verdict {row!r} {state!r}; echo "rc=$?"', REPO=str(ROOT))
+    assert got.stdout.split("\n")[0] == verdict, got.stdout
+    assert got.stdout.strip().splitlines()[-1] == f"rc={rc}", got.stdout
+
+
+def test_the_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(tmp_path):
+    """THE GATE IS UNCONDITIONAL AND ARM 0 IS NOT. `arm calibrate` returns early
+    through `wanted` when --only names other arms, while the gate runs anyway,
+    because every arm resolves its ridge through roofline.load_measured() no
+    matter which subset was asked for. The cost of keeping it unconditional is
+    that the file's own documented invocation must name calibrate, so it does,
+    and the refusal an operator will actually see says which flag left arm 0
+    out instead of reporting UNDATED on a file this session never touched."""
+    assert "--only calibrate,roofline-n256-g16,noise_floor" in TEXT
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('V="$(calibration_verdict "$(ledger_arm_state calibrate)" UNDATED)"\n'
+               'echo "$V"\n'
+               'calibration_refusal "$V" testcard /nowhere/measured_testcard.yaml UNDATED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="occupancy",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines()[0] == "ARM NO_ROW", got.stdout
+    assert "--only occupancy left arm 0 out" in got.stdout, got.stdout
+    assert "--only calibrate,occupancy" in got.stdout, got.stdout
+    # and a session with no --only is not told to blame one.
+    alone = lift('calibration_refusal "ARM NO_ROW" testcard /nowhere/y.yaml UNDATED',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert "left arm 0 out" not in alone.stdout, alone.stdout
+    assert "no --only to explain it" in alone.stdout, alone.stdout
+
+
+def test_a_refusal_this_gate_cannot_read_refuses_rather_than_proceeding():
+    """REFUSE RATHER THAN DEFAULT, over the one input neither half issues. A
+    verdict word this refusal does not know is a bug in the gate, and the two
+    states it decides between are "this card's ruler" and "another machine's",
+    so there is no side to guess."""
+    got = lift('calibration_refusal "SOMETHING_ELSE" testcard /nowhere/y.yaml UNDATED',
+               REPO=str(ROOT), LEDGER="/nowhere/ARMS.tsv", LOGS="/nowhere", ONLY="",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.stdout.startswith("REFUSED:"), got.stdout
+    assert "SOMETHING_ELSE" in got.stdout
+
+
+@pytest.mark.parametrize("state,utc", [
+    ("PUBLISHED", "2026-09-02T14:00:00+00:00"),
+    ("PUBLISHED", "2026-09-02T13:45:01+00:00"),
+    ("STALE", "2026-09-02T13:45:00+00:00"),
+    ("STALE", "2026-08-14T09:00:00+00:00"),
+])
+def test_a_calibration_measured_before_this_session_is_stale(tmp_path, state, utc):
+    """BOTH BRANCHES OF THE GATE, and the boundary is the session's own start:
+    one second earlier is the last rental's ruler. The H200's dense bf16 moved
+    7.1% between two sessions while its bandwidth held to 0.014%, so a carried
+    ridge is wrong by more than most effects this study reports."""
+    yaml = calibration_yaml(tmp_path / "measured_testcard.yaml", utc)
+    got = lift(f'calibration_state {yaml} 20260902134501', REPO=str(ROOT))
+    assert got.stdout.strip() == state, got.stderr
+
+
+def test_a_calibration_that_cannot_say_when_it_was_measured_is_not_this_ones(tmp_path):
+    """REFUSE RATHER THAN DEFAULT, over the three ways the answer can be absent.
+    The committed moe/bench/hardware/measured_nvidia_h200.yaml is the UNDATED
+    case in the tree today: it predates the provenance block, so it cannot name
+    the rental that measured it, and "cannot say" is not "this one"."""
+    got = lift(f'calibration_state {ROOT}/moe/bench/hardware/'
+               'measured_nvidia_h200.yaml 20260902134501', REPO=str(ROOT))
+    assert got.stdout.strip() == "UNDATED", got.stdout
+    gone = lift(f'calibration_state {tmp_path}/nothing.yaml 20260902134501',
+                REPO=str(ROOT))
+    assert gone.stdout.strip() == "MISSING"
+    # A date with no time cannot decide which of two same-day rentals wrote it.
+    coarse = tmp_path / "coarse.yaml"
+    coarse.write_text("provenance:\n  utc: '2026-09-02'\n")
+    assert lift(f'calibration_state {coarse} 20260902134501',
+                REPO=str(ROOT)).stdout.strip() == "UNDATED"
+    # And a driver that could not stamp its own start says so rather than
+    # comparing against an empty string, which every number is greater than.
+    fresh = calibration_yaml(tmp_path / "fresh.yaml", "2026-09-02T14:00:00+00:00")
+    assert lift(f'calibration_state {fresh} ""',
+                REPO=str(ROOT)).stdout.strip() == "NO_BASELINE"
+
+
+def test_a_calibrate_that_does_not_publish_leaves_the_gate_refusing(tmp_path):
+    """THE FIX, PROVED THROUGH `arm()` WITH A STAND-IN CALIBRATE, because the
+    consequence is not that the flag is absent from a line -- it is that the
+    file the arms read is not the file this session wrote. Two fakes, identical
+    but for whether they honour `--publish`. The one that ignores it is the
+    shipped behaviour before this fix: the arm lands DONE, the tree is clean,
+    and every arm after it would score against whatever was already there."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    for honours, expected in ((True, "PUBLISHED"), (False, "MISSING")):
+        repo = tmp_path / ("honours" if honours else "ignores")
+        (repo / "scripts").mkdir(parents=True)
+        fake = repo / "scripts" / "calibrate_hardware.py"
+        body = ('printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+                '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > "$out"\n'
+                if honours else 'echo "[calibrate] wrote a session path only"\n')
+        fake.write_text(
+            '#!/usr/bin/env bash\n'
+            'set -uo pipefail\n'
+            f'out="{repo}/moe/bench/hardware/measured_testcard.yaml"\n'
+            'mkdir -p "$(dirname "$out")"\n'
+            f'[[ "${{1:-}}" == "--publish" ]] && {body}'
+            'echo "[calibrate] done"\n')
+        ledger = tmp_path / f"ARMS-{expected}.tsv"
+        got = lift(f'SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+                   f'arm calibrate bash {fake} --publish\n'
+                   f'calibration_state {repo}/moe/bench/hardware/'
+                   'measured_testcard.yaml "$SESSION_SINCE"',
+                   REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+        assert got.returncode == 0, got.stderr
+        assert ledger.read_text().splitlines()[-1].split("\t")[1] == "DONE"
+        assert got.stdout.strip().splitlines()[-1] == expected, got.stdout
+
+
+def test_the_session_start_stamp_survives_a_resume_into_the_same_directory(tmp_path):
+    """A RESUME MUST NOT REFUSE AN HOUR OF FINISHED ARMS. The baseline is the
+    session directory's own UTC stamp, not this process's start, so a session
+    restarted into `gaps-<card>-<stamp>` still counts the calibration its first
+    pass published. A SESSION the operator named by hand carries no stamp and
+    falls back to now, which refuses until calibrate runs again: three minutes,
+    not the session."""
+    assert 'SESSION_SINCE="$(utc_stamp "${SESSION##*-}")" || SESSION_SINCE=' in CODE
+    got = lift('utc_stamp "${SESSION##*-}"',
+               REPO=str(ROOT), SESSION="/workspace/session/gaps-nvidia_h200-20260902T134501Z")
+    assert got.stdout.strip() == "20260902134501"
+    handmade = lift('utc_stamp "${SESSION##*-}"; echo "rc=$?"',
+                    REPO=str(ROOT), SESSION=str(tmp_path / "s"))
+    assert handmade.stdout.strip() == "rc=1"
+
+
+# --------------------------------------------------------------------------
+# 15. the two span arms are two arms
+# --------------------------------------------------------------------------
+
+def test_the_two_span_arms_do_not_derive_one_run_id():
+    """THE SECOND ARM MEASURED NOTHING AND LANDED DONE. `--densify` became the
+    default (BooleanOptionalAction) while the driver still booked `span_dense`
+    with it and `span` bare, so both densified, both hashed to the same plan,
+    and the second restored every row the first had written, timed nothing and
+    was recorded finished with 30 minutes booked against it. `--max-minutes`
+    could not have separated them either: it prices a run rather than defining
+    one and is deliberately out of the key. This runs both plans and compares
+    the ids the script itself prints."""
+    assert '--dry-run --no-densify' in CODE
+    assert '--no-densify --max-minutes 45' in CODE
+    ids = {}
+    for flag in ("--densify", "--no-densify"):
+        done = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "span_extent_separation.py"),
+             "--dry-run", flag], capture_output=True, text=True, timeout=600,
+            cwd=str(ROOT))
+        found = re.search(r"^run id (\S+)$", done.stdout, re.M)
+        assert found, done.stdout[-2000:]
+        ids[flag] = found.group(1)
+    assert ids["--densify"] != ids["--no-densify"], ids
+    assert "densifytrue" in ids["--densify"]
+    assert "densifyfalse" in ids["--no-densify"]
+
+
+def test_the_sparse_span_arm_says_it_expects_to_refuse():
+    """It is booked on the published powers-of-two grid, where every expert
+    holds a power-of-two number of rows and the padding factor is exactly 1.00
+    at every point, so `c2_grid_power` refuses before spending a minute. That is
+    the honest answer for that grid and it is free -- but an operator reading
+    `span REFUSED` in the ledger has to find it stated somewhere, or it reads as
+    a broken arm."""
+    block = run(["--list"]).stdout.split("  span ", 1)[1].split("\n\n", 1)[0]
+    assert "EXPECT IT TO REFUSE" in block
+    assert "--no-densify" in block
 
 
 def test_the_counter_arm_says_to_read_its_verdict_and_not_its_ledger_state():

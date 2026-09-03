@@ -6,7 +6,12 @@
 #                                                   # own plan, its cost, the MDE
 #   bash scripts/h200_gaps_session.sh               # the pod run, ~3.4 hours
 #   bash scripts/h200_gaps_session.sh --list        # the arms and what each closes
-#   bash scripts/h200_gaps_session.sh --only roofline-n256-g16,noise_floor
+#   bash scripts/h200_gaps_session.sh --only calibrate,roofline-n256-g16,noise_floor
+#                                                   # a subset. calibrate belongs
+#                                                   # in EVERY subset: the ruler
+#                                                   # gate below is not scoped to
+#                                                   # --only, because nothing that
+#                                                   # measures is either.
 #
 # WHAT THIS FILE IS. A schedule and a ledger. It measures nothing itself: every
 # number comes from the script an arm runs, and every verdict comes from that
@@ -70,6 +75,54 @@
 #     or INVALID row that came from a file which does not, what the state may
 #     actually mean and in which direction. When a sibling slice lands the fix,
 #     the caveat stops printing on its own; nothing here has to be remembered.
+#
+# WHAT CHANGED ON 2026-09-02, third pass, after the whole-repo verification.
+# Five more, and the first two were introduced by the rewrite above:
+#
+#   * THE SESSION NEVER PUBLISHED THE CALIBRATION IT MEASURED. Arm 0 ran
+#     calibrate_hardware.py bare. That script's default output had moved to an
+#     untracked session path and the copy into the tracked tree had become a
+#     separate --publish decision, so arm 0 spent three minutes measuring THIS
+#     card's ridge into a directory nothing reads while arms 1-9 resolved theirs
+#     from whatever measured_<card>.yaml the LAST rental left in the checkout --
+#     and labelled it "measured on this machine". That is the audit's own "a
+#     constant from another machine presented as a measurement", recreated by
+#     the fix for a different one, and the closing `git diff --stat
+#     moe/bench/hardware/` would have shown zero changes and read as agreement.
+#     The flag is passed now, and the gate that follows arm 0 REFUSES the rest
+#     of the session unless BOTH halves answer: the tracked yaml for this card
+#     carries a provenance.utc at or after this session's own start, AND the
+#     calibrate row in this session's ledger reads DONE. The second half is not
+#     redundant -- calibrate_hardware.py publishes the yaml BEFORE it scores a
+#     gate, so a run that lands INVALID on clock_established leaves a
+#     fresh-stamped ruler nothing verified behind it, and the first version of
+#     this gate read that as "measured in THIS session". The committed H200 yaml
+#     carries no provenance block at all, so it reads UNDATED and does not pass.
+#   * THE TWO SPAN ARMS DERIVED ONE RUN ID. --densify became the default while
+#     the driver still booked `span_dense` with it and `span` bare, so both
+#     densified, both hashed to the same plan, and the second restored the
+#     first's rows, measured nothing and landed DONE with 30 minutes booked.
+#     The sparse arm names --no-densify now, which is in the key.
+#   * THE DISCLOSURE COVERED TWO STATES AND THE NON-ADOPTERS SPEND NEITHER.
+#     contract_caveat and contract_disclosure fired only on REFUSED and INVALID
+#     while check_mma_path.sh spent 1 on a failed gate and moe/bench/cli.py
+#     spent 4 on one, so a ledger holding only `mma_switch CLAIM_FAIL 1`
+#     printed the ALL-CLEAR over the one row whose word was wrong. Which files
+#     have adopted is still ASKED of the files, so a sibling slice landing a
+#     fix turns the disclosure off by itself.
+#   * AN EXIT 1 THIS FILE CANNOT READ WAS LATCHED AS A RESULT. Python spends 1
+#     on any exception that escapes main, and at this pass three of the
+#     thirteen Python files this driver runs install the ERROR(4) top-level
+#     handler that would say so (calibrate_hardware, bm128_roofline,
+#     memory_branch_anchor), so a crash in any of the other ten was filed as
+#     CLAIM_FAIL, "a result, never re-run", and the arm was skipped forever. An
+#     exit 1 from a file that has not adopted the table is recorded UNKNOWN and
+#     not latched.
+#   * DRY MODE COULD NO LONGER TELL A PLAN FROM A REFUSAL. Once every script
+#     adopted the table its --dry-run began exiting REFUSED, correctly, and
+#     eleven of the sixteen planned arms collapsed onto PLAN_REFUSED. `dry_state` reads
+#     the log now: a plan that printed and then refused is PLANNED, a refusal
+#     with nothing printed before it is PLAN_REFUSED.
 #
 # THE THREE FINDINGS THAT SET THE ORDER, restated because two of them were
 # retracted since this file last said them:
@@ -312,11 +365,19 @@ adopts_exit_codes() {
   grep -q 'moe\.bench\.exit_codes\|moe\.bench import exit_codes' -- "${REPO:-}/$rel"
 }
 
-# WHAT A REFUSED OR INVALID ROW MAY ACTUALLY MEAN when the file that produced it
-# has not adopted the table this session reads it by. Prints nothing -- rc 1 --
-# for a file that has adopted, and nothing for any other state, so it is silent
-# on every row whose word is trustworthy. It changes no state and no exit code;
-# the whole content is disclosure, which is what the measuring path did not have.
+# WHAT A ROW MAY ACTUALLY MEAN when the file that produced it has not adopted
+# the table this session reads it by. Prints nothing -- rc 1 -- for a file that
+# has adopted, so it is silent on every row whose word is trustworthy. It
+# changes no state and no exit code; the whole content is disclosure, which is
+# what the measuring path did not have.
+#
+# IT USED TO COVER TWO STATES AND THE TWO NON-ADOPTERS SPENT NEITHER. REFUSED
+# and INVALID were the only branches, while scripts/check_mma_path.sh spent 1
+# on a failed gate and moe/bench/cli.py spent 4 on one, so a ledger holding
+# nothing but `mma_switch CLAIM_FAIL 1` walked every row, matched none, and
+# printed the ALL-CLEAR over the single row whose word was wrong. Every state a
+# non-adopting file can produce is covered here now, and the all-clear says
+# "in any state" rather than naming two.
 contract_caveat() {
   local name="$1" state="$2" rel why rc=0
   rel="$(arm_script "$name")"
@@ -350,6 +411,46 @@ contract_caveat() {
       printf '  that arm exists to find out, not a broken instrument. INVALID rows\n'
       printf '  are latched and skipped on every later run; delete this row from\n'
       printf '  the ledger to run the arm again.\n' ;;
+    CLAIM_FAIL|UNKNOWN)
+      printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
+      printf '  %b.\n' "$why"
+      printf '  The command exited 1. Under the table that is CLAIM_FAIL: measured,\n'
+      printf '  VALIDITY passed, a pre-registered CLAIM did not -- a RESULT, and the\n'
+      printf '  one state this ledger LATCHES as finished so the arm is never spent\n'
+      printf '  again. From a file that has not adopted the table, 1 is three things\n'
+      printf '  at once. scripts/check_mma_path.sh documents "1 a gate failed" and\n'
+      printf '  spends it on the instruction-follows-the-tile reading, which is a\n'
+      printf '  VALIDITY gate, AND on "no interpreter at $PY" and "no .ptx under the\n'
+      printf '  dump dir", which measured nothing and are refusals. And 1 is what\n'
+      printf '  Python returns for any exception that escapes main, which is ERROR.\n'
+      printf '  So this driver records UNKNOWN and does NOT latch the row: a state\n'
+      printf '  it cannot tell apart is not a result it may file. Read the log --\n'
+      printf '  the three cases do not resemble each other in it -- and delete or\n'
+      printf '  keep the row deliberately.\n' ;;
+    DONE)
+      printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
+      printf '  %b.\n' "$why"
+      printf '  It therefore reads DONE for one reason and one only: the command\n'
+      printf '  exited 0. Under the table 0 means every VALIDITY and every CLAIM\n'
+      printf '  gate PASSED. A file that has not adopted it may spend 0 on a run\n'
+      printf '  that scored no gate at all: scripts/check_mma_path.sh exits 0 from\n'
+      printf '  its own --dry-run, and again from the ladder path whose closing\n'
+      printf '  lines say the cell cannot attribute the instruction to a tile.\n'
+      printf '  DONE is latched and skipped on every later run, so read the RESULT\n'
+      printf '  lines above before taking this row for gates that passed. A check\n'
+      printf '  that examined nothing reports no failures.\n' ;;
+    RETRY)
+      printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
+      printf '  %b.\n' "$why"
+      printf '  It therefore reads RETRY only because the command exited a code the\n'
+      printf '  table does not name, and this session exits 4 over it and the next\n'
+      printf '  one attempts the arm again. A file that has not adopted the table\n'
+      printf '  may spend such a code on a REGISTERED ANSWER rather than a crash:\n'
+      printf '  moe/bench/cli.py returns 4 when the implementations ran under the\n'
+      printf '  pin and no row showed that tile, which is the VALIDITY failure that\n'
+      printf '  probe exists to detect, not an unplanned exception. Re-running it\n'
+      printf '  spends the minutes again to reach the same number. Read the log\n'
+      printf '  before the next session does.\n' ;;
     *) return 1 ;;
   esac
   return 0
@@ -365,7 +466,13 @@ contract_caveat() {
 contract_disclosure() {
   local ledger="$1" n state rest rel any=0
   while IFS=$'\t' read -r n state rest; do
-    case "$state" in REFUSED|INVALID) ;; *) continue ;; esac
+    # EVERY STATE A NON-ADOPTING FILE CAN PRODUCE, not the two this used to
+    # name. The header row and NOT_PLANNED fall out here because neither is a
+    # state a command exited with.
+    case "$state" in
+      DONE|CLAIM_FAIL|REFUSED|INVALID|RETRY|UNKNOWN) ;;
+      *) continue ;;
+    esac
     rel="$(arm_script "$n")"
     [[ -n "$rel" ]] && adopts_exit_codes "$rel" && continue
     if (( any == 0 )); then
@@ -383,9 +490,9 @@ contract_disclosure() {
   done < "$ledger"
   if (( any == 0 )); then
     say "THE EXIT-CODE CONTRACT"
-    printf '  No REFUSED or INVALID row in this session came from a file that has\n'
-    printf '  not adopted moe/bench/exit_codes, so every state word above is the\n'
-    printf '  one that table defines.\n'
+    printf '  No row in this session, in ANY state and not only REFUSED and\n'
+    printf '  INVALID, came from a file that has not adopted moe/bench/exit_codes,\n'
+    printf '  so every state word above is the one that table defines.\n'
   fi
   return 0
 }
@@ -393,11 +500,19 @@ contract_disclosure() {
 # A PLAN IS NOT A MEASUREMENT, so a plan does not get measuring words. Three
 # outcomes, and only one of them is silent-failure-shaped: a --dry-run that
 # tracebacks exits 1, which lands in BROKEN and stops the session, which is the
-# defect this mapping exists to catch. rc 2 is a refusal, and off a GPU box a
-# refusal is what several of these plans are SUPPOSED to do.
+# defect this mapping exists to catch.
+#
+# rc 2 IS NOT A WORD ON ITS OWN, and that is the 2026-09-02 regression. When
+# every script adopted the table, every one of their --dry-runs began exiting
+# REFUSED -- correctly: a plan measured nothing and scored no gate -- so eleven
+# of the sixteen planned arms landed on PLAN_REFUSED and DRY mode lost the
+# only distinction it exists to draw. The log still carries it, so rc 2 is
+# decided by `printed_a_plan` and not by the number: a plan that printed and
+# then refused is PLANNED, a refusal with nothing printed before it is
+# PLAN_REFUSED. Called with no log, rc 2 is PLAN_REFUSED: nothing printed.
 dry_state() { case "$1" in
   0) echo PLANNED ;;
-  2) echo PLAN_REFUSED ;;
+  2) if printed_a_plan "${2:-}"; then echo PLANNED; else echo PLAN_REFUSED; fi ;;
   *) echo BROKEN ;;
 esac; }
 
@@ -415,10 +530,205 @@ dirty_count() {
   if [[ -z "$out" ]]; then echo 0; else printf '%s\n' "$out" | wc -l | tr -d ' '; fi
 }
 
+# AN ISO-8601 UTC STAMP AS THE INTEGER YYYYMMDDhhmmss, or nothing at all when
+# the string does not carry one. Compared as an integer rather than through
+# `date -d`, which is GNU-only and absent on the laptop half of this project,
+# and rather than with `[[ a > b ]]`, which collates by locale: which machine
+# reads the clock must not decide whether a session runs. Returns 1 on a string
+# it cannot read, so no caller can mistake "no timestamp" for "an old one".
+utc_stamp() {
+  local raw="${1:-}" digits
+  raw="${raw%%+*}"
+  digits="$(printf '%s' "$raw" | tr -cd '0-9')"
+  (( ${#digits} >= 14 )) || return 1
+  printf '%s\n' "${digits:0:14}"
+}
+
+# WHEN THE TRACKED CALIBRATION SAYS IT WAS MEASURED, as that integer.
+# calibrate_hardware.py writes moe/bench/provenance.provenance_block under a
+# top-level `provenance:` key, and `utc` is the one field in it that answers
+# "was this THIS rental". Read with awk over that block alone: `detail:` carries
+# a hundred nested keys and a grep for `utc:` over the whole file would find
+# whichever of them came first. rc 2 no such file, rc 3 a file with no stamp.
+calibration_stamp() {
+  local yaml="$1" raw
+  [[ -f "$yaml" ]] || return 2
+  raw="$(awk '/^provenance:/ {p = 1; next}
+              p && /^[^[:space:]]/ {p = 0}
+              p && $1 == "utc:" {print $2; exit}' "$yaml" | tr -d "\"'")"
+  [[ -n "$raw" ]] || return 3
+  utc_stamp "$raw"
+}
+
+# WHOSE RULER THE ARMS BELOW WILL BE SCORED AGAINST. One word, so both branches
+# are plantable with a yaml and a stamp and neither is reachable only on a pod:
+#   PUBLISHED   the tracked file for this card exists and carries a stamp at or
+#               after this session's own start. Arm 0 measured THIS card and
+#               published it, which is the only state the rest may run in.
+#   MISSING     no tracked calibration for this card at all: every arm that
+#               needs a ridge would refuse, one at a time, for 3.4 hours.
+#   UNDATED     a tracked file with no provenance.utc. It cannot say which
+#               rental measured it, and "cannot say" is not "this one". The
+#               committed measured_nvidia_h200.yaml is exactly this shape.
+#   STALE       a tracked file measured BEFORE this session began -- the
+#               previous rental's, still in the checkout. This is the state the
+#               A6 fix created: arm 0 measures this card into an untracked
+#               session path and every later arm quotes the last pod's ridge
+#               while `ridge_source` names the attached device. The audit's own
+#               "a constant from another machine presented as a measurement".
+#   NO_BASELINE this driver could not stamp its own start, so it cannot say
+#               which side of it the file is on. Refuse rather than guess.
+calibration_state() {
+  local yaml="$1" since="${2:-}" stamp rc=0
+  [[ -n "$since" ]] || { echo NO_BASELINE; return 0; }
+  stamp="$(calibration_stamp "$yaml")" || rc=$?
+  case "$rc" in
+    0) ;;
+    2) echo MISSING;  return 0 ;;
+    *) echo UNDATED;  return 0 ;;
+  esac
+  if (( 10#$stamp >= 10#$since )); then echo PUBLISHED; else echo STALE; fi
+}
+
+# THE CALIBRATION GATE'S DECISION, from the two words that answer its two
+# questions, in ONE place so that the session and its test read the same rule.
+# Prints the half that failed and the word that failed it -- "ARM INVALID",
+# "YAML STALE" -- or OK, and returns non-zero on anything but OK. A missing
+# calibrate row prints ARM NO_ROW rather than ARM, because an empty word in a
+# refusal reads as a bug in the refusal.
+#
+# WHY THE ARM HALF COMES FIRST. When --only leaves arm 0 out, the yaml half
+# reports on a file this session never touched, and its answer (UNDATED, on the
+# committed H200 ruler) names the wrong problem. The arm half names --only.
+calibration_verdict() {
+  local row="$1" state="$2"
+  [[ "$row" == DONE ]]      || { echo "ARM ${row:-NO_ROW}"; return 1; }
+  [[ "$state" == PUBLISHED ]] || { echo "YAML $state";      return 1; }
+  echo OK
+}
+
+# THE REFUSAL ITSELF, for whichever half of the gate failed, as a function so
+# that the WORDS can be planted and read in a test. A refusal that names the
+# wrong cause costs the operator the same hour as no refusal at all: the first
+# version of this gate had only the yaml half, so a session run with --only
+# would have been told its committed ruler was UNDATED when what actually
+# happened is that arm 0 was never scheduled.
+calibration_refusal() {
+  local verdict="$1" card="$2" yaml="$3" state="$4" word="${1#* }"
+  case "${verdict%% *}" in
+   ARM)
+    echo "REFUSED: arm 0 did not stand behind a ruler for $card."
+    echo "  calibrate is '$word' in $LEDGER; $yaml is $state."
+    case "$word" in
+      NO_ROW)     if [[ -n "$ONLY" ]]; then
+                    echo "  No calibrate row at all: --only $ONLY left arm 0 out, and this"
+                    echo "  gate is deliberately NOT scoped to --only. Name calibrate in it,"
+                    echo "  first:"
+                    echo "      bash scripts/h200_gaps_session.sh --only calibrate,$ONLY"
+                  else
+                    echo "  No calibrate row at all, and no --only to explain it: arm 0 did"
+                    echo "  not run in this session directory. Read $LEDGER."
+                  fi ;;
+      INVALID)    echo "  It MEASURED and then failed a VALIDITY gate, and it published the"
+                  echo "  yaml before scoring one. A clock that could not be established"
+                  echo "  makes every number normalised by it unquotable, including the"
+                  echo "  ridge every arm below would divide by." ;;
+      CLAIM_FAIL) echo "  It measured and a CLAIM gate failed: no access pattern reached the"
+                  echo "  pin rate, which is this instrument saying its own byte accounting"
+                  echo "  is wrong. The yaml it published carries that accounting." ;;
+      REFUSED)    echo "  It refused before measuring, so the yaml on disk is some earlier"
+                  echo "  run's however fresh its stamp reads." ;;
+      UNKNOWN)    echo "  It exited 1 from a file this driver could not confirm speaks"
+                  echo "  moe/bench/exit_codes, so the driver will not read DONE, CLAIM_FAIL"
+                  echo "  or a crash out of it. Read the log and decide by hand." ;;
+      *)          echo "  That is not DONE, and DONE is the only state in which this"
+                  echo "  instrument stands behind what it wrote." ;;
+    esac
+    ruler_stakes
+    echo "  Read $LOGS/calibrate.log where there is one, fix what it names, and"
+    echo "  re-run arm 0:"
+    echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
+    echo "  A CLAIM_FAIL or INVALID row is LATCHED and will not be re-attempted:"
+    echo "  delete its row from $LEDGER to force one." ;;
+   YAML)
+    echo "REFUSED: this session has no calibration of its own for $card."
+    echo "  calibrate is DONE in $LEDGER but $yaml is $state."
+    case "$word" in
+      MISSING)     echo "  Nothing is there. A DONE arm 0 that wrote no tracked file was run"
+                   echo "  without --publish: its ruler is in the session path nothing reads." ;;
+      UNDATED)     echo "  It is there and carries no provenance.utc, so it cannot say which"
+                   echo "  rental measured it. 'Cannot say' is not 'this one'." ;;
+      STALE)       echo "  It was measured before this session began, so it is a PREVIOUS"
+                   echo "  rental's ridge sitting in this checkout." ;;
+      NO_BASELINE) echo "  This driver could not stamp its own start, so it cannot say which"
+                   echo "  side of it that file is on. Unset SESSION and take the default." ;;
+      *)           echo "  That is not PUBLISHED, and PUBLISHED is the only state in which"
+                   echo "  that file is this session's own." ;;
+    esac
+    ruler_stakes
+    echo "  Run arm 0 and let it publish:"
+    echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
+    echo "  then re-run this session; finished arms in $LEDGER are skipped." ;;
+   *)
+    # A word neither half issues. There is no safe default here: the two states
+    # this gate decides between are "this card's ruler" and "another machine's",
+    # and guessing either is the defect it exists to prevent.
+    echo "REFUSED: calibration_verdict said '$verdict', which this refusal does"
+    echo "  not know how to read. Row and yaml state are in $LEDGER and $yaml." ;;
+  esac
+}
+
+# WHAT A WRONG RULER COSTS, in the words both halves of the calibration gate
+# need. Factored so the two refusals cannot drift into saying different things
+# about the same consequence.
+ruler_stakes() {
+  echo "  Every arm below resolves its ridge through roofline.load_measured(),"
+  echo "  labels it 'measured on this machine', and would score this card's"
+  echo "  roof fractions, LEVEL flags and alphas against another machine's"
+  echo "  ceilings. The H200's dense bf16 moved 7.1% between two sessions."
+}
+
+# DID THIS --dry-run PRINT A PLAN BEFORE IT REFUSED. rc 0 it did, rc 1 it did
+# not, and there is no third answer because the question is about the log.
+#
+# WHY THE QUESTION EXISTS. Every script this driver runs now exits REFUSED from
+# its own --dry-run -- a plan measured nothing and scored no gate, which is what
+# the table calls 2 -- so `dry_state` mapping 2 to PLAN_REFUSED gave eleven of
+# the sixteen planned arms the same word and DRY mode stopped being able to
+# say "this plan is sound" at all. The two states are still different things and
+# the log still tells them apart: bm128_depth prints 90 lines of plan and THEN
+# says it measured nothing, while bm128_roofline at BLOCK_N=256 prints the
+# refusal on line 1 and never plans. So the driver counts the non-blank lines
+# printed before the first refusal marker. A script that printed a banner and
+# then refused would read as a plan; the fix for that is in the banner, and
+# nothing here is a threshold that can be tuned to hide it.
+printed_a_plan() {
+  local log="${1:-}"
+  [[ -n "$log" && -f "$log" ]] || return 1
+  awk '/REFUSED|NOT A RESULT/ {exit}
+       /[^[:space:]]/ {n++}
+       END {exit (n > 0 ? 0 : 1)}' "$log"
+}
+
 wanted() {
   [[ -z "$ONLY" ]] && return 0
   case ",$ONLY," in (*",$1,"*) return 0 ;; esac
   return 1
+}
+
+# WHAT THIS SESSION'S LEDGER HOLDS FOR ONE ARM, last row wins, empty when the
+# arm has no row at all. It exists because a FILE landing on disk is not the
+# same event as the ARM that wrote it standing behind what it wrote:
+# calibrate_hardware.py copies the yaml into the tracked tree BEFORE it scores
+# a single gate, and says so in its own --help ("A calibration whose clock
+# could not be established is INVALID rather than DONE ... the yaml is still
+# written"). So a calibrate that fails VALIDITY clock_established, or the pin
+# rate gate, still leaves a fresh-stamped ruler behind it, and a gate that asks
+# only WHEN the file was written reads that as this session's own. Asking the
+# ledger asks the second question: did the instrument that wrote it pass its
+# own gates. Nothing here decides an arm's state; `ledger_state` still does.
+ledger_arm_state() {
+  awk -F'\t' -v a="$1" '$1 == a { s = $2 } END { print s }' "$LEDGER" 2>/dev/null
 }
 
 # THE ONE LINE THE SUMMARY MAY GREP. Anchored at column zero on the prefix
@@ -446,6 +756,14 @@ summarize_arm() {
     grep -m2 'REFUSED' -- "$log" | sed 's/^/    /'
     [[ "$state" == "REFUSED" ]] && contract_caveat "$name" REFUSED
     return 1
+  fi
+  if [[ "$state" == "UNKNOWN" ]]; then
+    printf '  STATE UNKNOWN. This arm exited 1 and the file it ran has not adopted\n'
+    printf '  moe/bench/exit_codes, where 1 is CLAIM_FAIL and a CLAIM_FAIL is a\n'
+    printf '  finding that is never re-run. It may equally be a refusal or an\n'
+    printf '  exception Python exited 1 for. The row is NOT latched; the next\n'
+    printf '  session will attempt this arm again unless you decide otherwise:\n'
+    contract_caveat "$name" UNKNOWN
   fi
   if [[ "$state" == "INVALID" ]]; then
     printf '  MEASURED, THEN A VALIDITY GATE FAILED. Nothing from this arm may be\n'
@@ -487,7 +805,21 @@ arm() {
   rc=$?
   t1=$(date -u +%s)
   after="$(dirty_count)"
-  if (( DRY )); then state="$(dry_state "$rc")"; else state="$(ledger_state "$rc")"; fi
+  if (( DRY )); then state="$(dry_state "$rc" "$log")"; else state="$(ledger_state "$rc")"; fi
+  # AN EXIT 1 FROM A FILE THAT DOES NOT SPEAK THE TABLE IS NOT A RESULT, and
+  # CLAIM_FAIL is the one word this ledger LATCHES as one: the resume check
+  # above skips it forever. Python spends 1 on any exception that escapes main,
+  # and three of the thirteen Python files this driver runs install the ERROR(4)
+  # handler that would say so, so a crash in the other ten would be filed as
+  # "the world disagreed with the claim, do not re-run" -- the most expensive
+  # single mislabel available here, because the arm is never attempted again and
+  # the summary reports its silence as a finding. UNKNOWN is not latched, is not
+  # RETRY either (the session does not exit 4 over it), and is disclosed by name
+  # below. `ledger_state` is untouched: this is the driver declining to read a
+  # word out of a table the file never agreed to, not a second table.
+  if [[ "$state" == "CLAIM_FAIL" ]] && ! adopts_exit_codes "$(arm_script "$name")"; then
+    state=UNKNOWN
+  fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$name" "$state" "$rc" "$((t1 - t0))" "$after" "$log" "" >> "$LEDGER"
   note "   $state (exit $rc) in $((t1 - t0))s; work tree $after dirty file(s)"
@@ -497,6 +829,11 @@ arm() {
              note "   $(tail -1 "$log")" ;;
     RETRY)   RETRY_ARMS=$((RETRY_ARMS + 1))
              note "   exit $rc is not in the table. Read the log before re-running." ;;
+    UNKNOWN) note "   exit 1 from a file that has not adopted moe/bench/exit_codes."
+             note "   In that table 1 is CLAIM_FAIL, a RESULT that is never re-run."
+             note "   From this file it may equally be a crash Python exited 1 for,"
+             note "   or a VALIDITY gate. NOT latched: read the log and decide."
+             contract_caveat "$name" UNKNOWN ;;
     REFUSED|PLAN_REFUSED)
              note "   $(grep -m1 'REFUSED' -- "$log" || tail -1 "$log")"
              [[ "$state" == "REFUSED" ]] && contract_caveat "$name" REFUSED ;;
@@ -641,7 +978,7 @@ arm_closes() { case "$1" in
   cap_test)   echo "FINDINGS' fourth readout, DEMOTED: BLOCK_M=16 runs multi-tile in 1 of 24 cells on uniform routing, so this tests the formula, not the claim." ;;
   dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype." ;;
   span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry." ;;
-  span)       echo "The same on the sparse grid, for the extent comparison. CLAIM_FAIL here is the registered outcome of the kernel world and is recorded as finished." ;;
+  span)       echo "The same on the PUBLISHED grid, booked --no-densify, which is what puts it in a different run id from span_dense: with --densify the default, a bare arm derived the dense arm's id, restored its rows, measured nothing and still landed DONE. EXPECT IT TO REFUSE: on a powers-of-two grid the padding factor is exactly 1.00 everywhere, so c2_grid_power stops it before it spends a minute. The refusal is the extent comparison's honest answer on that grid, and it is free." ;;
   counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py returns 0 only for OPEN and 3 for everything else, and 3 is INVALID in the table this session adopted, so the BLOCKED answer this arm exists to obtain is filed as a validity failure. BLOCKED is the ANSWER, not a broken instrument; the fix belongs in that script, which audit A4 does not schedule." ;;
 esac; }
 
@@ -804,6 +1141,14 @@ mkdir -p "$LOGS" || { echo "REFUSED: cannot create $LOGS"; exit "$RC_REFUSED"; }
 [[ -f "$LEDGER" ]] || printf 'arm\tstate\trc\tseconds\tdirty\tlog\tnote\n' > "$LEDGER"
 
 CALIB_YAML="$REPO/moe/bench/hardware/measured_$CARD.yaml"
+# THE INSTANT THIS SESSION BEGAN, as the integer `calibration_state` compares a
+# calibration's own timestamp against. Taken from the session directory's name,
+# which already carries a UTC stamp, so a session RESUMED into that directory
+# still counts the calibration its first pass published instead of refusing an
+# hour of finished arms. An operator-supplied SESSION that carries no stamp
+# falls back to now, and a resume under such a name refuses until calibrate runs
+# again: that is the direction that costs three minutes rather than the session.
+SESSION_SINCE="$(utc_stamp "${SESSION##*-}")" || SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"
 DIRTY_AT_START="$(dirty_count)"
 note "session   $SESSION"
 note "          $(git_note "$SESSION")"
@@ -855,7 +1200,58 @@ say "0. calibrate THIS card"
 if (( DRY )); then
   skip_arm calibrate "calibrate_hardware.py is a measurement and has no --dry-run."
 else
-  arm calibrate "$PY_BASE" "$REPO/scripts/calibrate_hardware.py"
+  # --publish IS THE ARM. Without it this measures this card's ridge into an
+  # untracked session path that nothing reads, and every arm below resolves its
+  # ridge from whatever measured_*.yaml the LAST rental left in the checkout --
+  # 162.81 quoted from another pod while `ridge_source` says "measured on this
+  # machine". calibrate_hardware.py's own header says so: "the copy is what
+  # makes the ruler visible to roofline.load_measured() and therefore to the
+  # sweep". The flag dirties a TRACKED file, which is the cost the A6 fix was
+  # avoiding, and that cost is disclosed below rather than paid silently.
+  arm calibrate "$PY_BASE" "$REPO/scripts/calibrate_hardware.py" --publish
+  # AND THE GATE, in TWO questions, because passing the flag is not the same as
+  # the file landing and the file landing is not the same as the file being a
+  # ruler.
+  #
+  # WHEN was it written. `calibration_state` answers MISSING (calibrate refused
+  # before it wrote anything), UNDATED (the committed H200 yaml, which carries
+  # no provenance block at all) or STALE (the previous rental's). Each of the
+  # three means the same thing to every arm below: the ruler is not this card's,
+  # so nothing measured against it is this card's either.
+  #
+  # DID THE ARM THAT WROTE IT PASS ITS OWN GATES. `calibration_state` cannot
+  # answer that and a fresh stamp is not the answer: calibrate_hardware.py
+  # copies the yaml into the tracked tree BEFORE it scores anything, so a run
+  # that lands INVALID on VALIDITY clock_established -- "the samples disagree
+  # with the settle plateau; nothing normalised by the clock may be quoted" --
+  # or CLAIM_FAIL on the pin rate has still published a fresh-stamped ruler.
+  # Asking WHEN alone, this gate printed "measured in THIS session" over a file
+  # arm 0 itself refused to stand behind, and 3.4 hours of arms scored every
+  # roof fraction, LEVEL flag and alpha against it while `ridge_source` named
+  # the attached device. So the ledger row is the second question, and both
+  # must answer: DONE, and PUBLISHED.
+  #
+  # THE GATE IS NOT SCOPED TO --only. `arm calibrate` above returns early when
+  # --only names other arms, and this does not, because every arm resolves its
+  # ridge through roofline.load_measured() no matter which subset was asked for.
+  # A resume into the SAME session directory still passes without re-measuring:
+  # the ledger is that directory's, so the first pass's DONE row is still there.
+  # The session stops here, where three minutes were spent, instead of at the
+  # end, where 3.4 hours were.
+  CALIB_STATE="$(calibration_state "$CALIB_YAML" "$SESSION_SINCE")"
+  CALIB_ROW="$(ledger_arm_state calibrate)"
+  CALIB_VERDICT="$(calibration_verdict "$CALIB_ROW" "$CALIB_STATE")"
+  if [[ "$CALIB_VERDICT" == "OK" ]]; then
+    note "   ruler     $CALIB_YAML, measured in THIS session by an arm that"
+    note "             passed its own gates (calibrate DONE in $LEDGER)."
+    note "   It is TRACKED and now dirty, so every row measured below carries"
+    note "   git_dirty=True until it is committed. Commit it from another shell"
+    note "   before quoting any number that names a commit."
+  else
+    echo
+    calibration_refusal "$CALIB_VERDICT" "$CARD" "$CALIB_YAML" "$CALIB_STATE"
+    exit "$RC_REFUSED"
+  fi
 fi
 
 say "0. does MOE_FORCE_TILE reach the kernel AT THE CONFIGURATIONS THE ARMS RUN"
@@ -1058,12 +1454,24 @@ fi
 
 say "11. is the 0.563 separation the span EXTENT or the KERNEL"
 note "Dense grid first: it is the only grid on which C3's mechanism is observable."
+# THE SPARSE ARM IS BOOKED --no-densify, AND THAT IS THE WHOLE FIX. --densify
+# became the default on 2026-09-02 (argparse BooleanOptionalAction), so the bare
+# arm densified too: both arms derived the SAME run id, the second restored
+# every row the first had written, timed nothing, and landed DONE in the ledger
+# with 30 minutes booked against it. The id is a hash of the plan and `densify`
+# is one of its knobs, so naming the flag is what separates them -- verified off
+# GPU, `--densify` derives ...-densifytrue-...-e95805af and `--no-densify`
+# ...-densifyfalse-...-5f329a66. --max-minutes could not have separated them:
+# it prices a run rather than defining one and is deliberately not in the key.
+# The sparse arm now REFUSES before measuring, by that script's own c2_grid_power
+# gate ("grid too sparse for C2"), which is free and is the honest answer for
+# the grid V5's argument prefers.
 if (( DRY )); then
   arm span_dense "$PY_BASE" "$REPO/scripts/span_extent_separation.py" --dry-run --densify
-  arm span       "$PY_BASE" "$REPO/scripts/span_extent_separation.py" --dry-run
+  arm span       "$PY_BASE" "$REPO/scripts/span_extent_separation.py" --dry-run --no-densify
 else
   arm span_dense "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --densify --max-minutes 35
-  arm span       "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --max-minutes 45
+  arm span       "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --no-densify --max-minutes 45
 fi
 
 say "12. is a DRAM counter route open on this box"
