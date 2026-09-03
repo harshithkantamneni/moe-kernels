@@ -14,15 +14,46 @@ The test that this is faithful is an identity: recomputing with the SAME
 calibration a row was measured against must reproduce that row exactly. If it
 does not, the recompute does not model what the driver did and cannot be trusted
 with a different calibration either.
+
+AND THE SCRIPT AROUND IT, from 2026-09-02. The arithmetic was always tested and
+the CLI never was, which is how it came to write a new published arm that
+recorded no commit of its own and to restamp H200 rows against an A100 ruler
+without a word. The second half of this file runs `recompute_ceilings.main` and
+checks what it leaves on disk.
 """
 from __future__ import annotations
 
 import csv
+import importlib.util
+import json
+import shutil
+import sys
 from pathlib import Path
 
 import pytest
 
-from moe.bench.recompute import ceiling_columns, load_calibration_hardware
+from moe.bench import provenance as PV
+from moe.bench.published import DERIVED_MARKER
+from moe.bench.recompute import (
+    CEILING_COLUMNS,
+    ceiling_columns,
+    load_calibration_hardware,
+)
+
+
+def _load_script():
+    """The CLI, loaded by path. `scripts/` is not a package and never has been."""
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        "recompute_ceilings", root / "scripts" / "recompute_ceilings.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+RC = _load_script()
+HARDWARE = Path(__file__).resolve().parents[1] / "moe" / "bench" / "hardware"
 
 ARM = (Path(__file__).resolve().parents[1] / "results" / "published"
        / "2026-08-26-nvidia_h200-full-three-way")
@@ -106,3 +137,105 @@ def test_an_unreadable_calibration_is_refused(tmp_path):
     bad.write_text("name: something\n")
     with pytest.raises((KeyError, ValueError)):
         load_calibration_hardware(bad)
+
+
+# --------------------------------------------------------------------------
+# The rewrite has to be attributable, and it has to refuse the two ways it was
+# found to go wrong when it was run twice.
+# --------------------------------------------------------------------------
+
+def _tiny_arm(root: Path, card: str = "NVIDIA H200") -> Path:
+    """A one-row arm, so these tests do not depend on a published directory."""
+    arm = root / "tiny-arm"
+    arm.mkdir()
+    row = {"impl": "base", "model": "mixtral-8x7b", "dtype": "bf16",
+           "num_tokens": "512", "ms_p50": "1.0", "gpu_name": card,
+           "git_sha": "0" * 40, "compulsory_bytes": "1000000",
+           "flops": "2000000", "arith_intensity_compulsory": "2.0",
+           # Every ceiling column is a FIELD from the start: `rewrite_csv`
+           # writes into the header it was given, so an arm missing one of them
+           # would fail for a reason that has nothing to do with these tests.
+           **{column: "" for column in CEILING_COLUMNS}}
+    with (arm / "run_a.csv").open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    return arm
+
+
+def test_the_rewrite_records_the_commit_that_did_it(tmp_path):
+    """The rows keep the git_sha of the commit that MEASURED them, which is
+    right and is also why nothing named the commit that REWROTE them:
+    `check_published_shas` validated a commit that did not produce the numbers
+    now in the file."""
+    arm = _tiny_arm(tmp_path)
+    out = tmp_path / "derived"
+    cal = HARDWARE / "measured_nvidia_h200.yaml"
+    assert RC.main(["--arm", str(arm), "--calibration", str(cal),
+                    "--out", str(out)]) == 0
+
+    doc = json.loads((out / RC.RECOMPUTE_JSON).read_text())
+    for key in PV.TOP_LEVEL_KEYS:
+        assert key in doc, key
+    assert doc["provenance"]["git_sha"], "the commit that rewrote the rows"
+    assert doc["provenance"]["utc"]
+    assert doc["instrument"] == RC.INSTRUMENT
+    # The ceiling every re-derived column comes from, and where it came from.
+    assert doc["provenance"]["bandwidth"] > 0
+    assert "measured_nvidia_h200.yaml" in doc["bandwidth_source"]
+    assert doc["calibration_sha256"] == RC.calibration_sha(cal)
+    assert doc["derived_from"] == arm.name and doc["row_cards"] == ["NVIDIA H200"]
+    assert doc["csvs"]["run_a.csv"]["rows"] == 1
+    # ...and the marker still leads with the source arm, which is what
+    # `published.derived_from` reads.
+    assert (out / DERIVED_MARKER).read_text().splitlines()[0] == arm.name
+
+
+def test_another_cards_ruler_is_refused_rather_than_stamped(tmp_path):
+    """`rewrite_csv` restamps every row from whatever calibration it is handed.
+    Run against the H200 yaml then the A100 yaml, both derived
+    `<arm>-recalibrated`, and H200 rows came back with achieved_bw_gbps
+    4377.2 -> 1799.4 and implied_traffic_ratio 3.716 -> 1.527, with no refusal.
+    """
+    arm = _tiny_arm(tmp_path, card="NVIDIA H200")
+    with pytest.raises(SystemExit, match="REFUSING"):
+        RC.main(["--arm", str(arm), "--out", str(tmp_path / "x"),
+                 "--calibration",
+                 str(HARDWARE / "measured_nvidia_a100_sxm4_80gb.yaml")])
+    # ...and the matching card is not refused, or the gate would be a wall.
+    assert RC.main(["--arm", str(arm), "--out", str(tmp_path / "y"),
+                    "--calibration",
+                    str(HARDWARE / "measured_nvidia_h200.yaml")]) == 0
+
+
+def test_rows_with_no_card_at_all_are_refused(tmp_path):
+    """A check that examined nothing reports no failures."""
+    arm = _tiny_arm(tmp_path, card="")
+    with pytest.raises(SystemExit, match="no row"):
+        RC.main(["--arm", str(arm), "--out", str(tmp_path / "z"),
+                 "--calibration", str(HARDWARE / "measured_nvidia_h200.yaml")])
+
+
+def test_a_second_ruler_for_the_same_card_may_not_overwrite_the_first(tmp_path):
+    """The H200 was recalibrated six times to six distinct ceilings, and two
+    calibrations of ONE card derive ONE default destination. The second run
+    overwrote the first's CSVs, measured.yaml, README and marker in silence."""
+    arm = _tiny_arm(tmp_path)
+    out = tmp_path / "derived"
+    first = HARDWARE / "measured_nvidia_h200.yaml"
+    assert RC.main(["--arm", str(arm), "--calibration", str(first),
+                    "--out", str(out)]) == 0
+
+    # A DIFFERENT FILE FOR THE SAME CARD: same name, different contents, so a
+    # path comparison would call these one ruler and a content hash does not.
+    second = tmp_path / "measured_again.yaml"
+    shutil.copy2(first, second)
+    second.write_text(second.read_text() + "\n# recalibrated later that day\n")
+    assert RC.calibration_sha(second) != RC.calibration_sha(first)
+    with pytest.raises(SystemExit, match="REFUSING to overwrite"):
+        RC.main(["--arm", str(arm), "--calibration", str(second),
+                 "--out", str(out)])
+
+    # Re-running with the SAME ruler is idempotent and must NOT be refused.
+    assert RC.main(["--arm", str(arm), "--calibration", str(first),
+                    "--out", str(out)]) == 0
