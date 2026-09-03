@@ -2239,19 +2239,21 @@ def test_the_arm_that_tests_the_first_inferential_link_is_in_the_session():
 
 @pytest.mark.skipif(not _no_cuda(), reason="the booking command measures on a GPU")
 def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
-    """AND THE POD FIGURE IS NOT THE ONE THE DRY BRANCH PREVIEWS. That script
+    """THE PLAN THE DRY BRANCH PREVIEWS IS THE POD'S OWN FIGURE. That script
     does not take a --dry-run flag at all: a bare invocation is its plan and
-    `--run` is what makes it measure. `report_cost` charges the probe's six
-    Triton specialisations only under `probing=bool(args.probe and args.run)`,
-    so the plan the driver's dry branch prints says WALL 11.6 while the pod
-    spends WALL 13.0. Booking the 11.6 would under-book the arm by the probe,
-    which is the same direction as the noise floor booked at a tenth of its
-    plan.
+    `--run` is what makes it measure. Until 2026-09-03 `report_cost` charged
+    the probe's six Triton specialisations only under `--run`, so the bare plan
+    said WALL 11.6 while the pod spent WALL 13.0, and this test pinned that GAP
+    as a disclosed fact. The alias slice then closed it from the script's side:
+    the plan page charges the probe too, because an operator books a pod before
+    they have one and the plan is the only page they can read. This test broke
+    on the closing, which is the ninth time in this rebuild a fix at one site
+    left a description of the old behaviour standing at another. It now pins
+    the agreement: bare plan, pod figure and booking are one number.
 
     The dry branch is still bare, deliberately: a --dry-run carrying --run would
     MEASURE on a pod, and this file's rule is that a plan is free in every
-    sense. So the gap is DISCLOSED in `arm_basis` instead of being closed by a
-    flag that would cost a session."""
+    sense. Nothing needs disclosing because nothing differs."""
     pod = subprocess.run([sys.executable, *shlex.split(ALIAS_POD_PLAN)],
                          capture_output=True, text=True, timeout=900,
                          cwd=str(ROOT))
@@ -2262,14 +2264,17 @@ def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
     plan = subprocess.run([sys.executable, *plan_words], capture_output=True,
                           text=True, timeout=900, cwd=str(ROOT))
     plan_wall = _wall_minutes(plan.stdout)
-    assert plan_wall < pod_wall, (plan_wall, pod_wall)
+    assert plan_wall == pod_wall, (plan_wall, pod_wall)
     booked = int(lift("arm_minutes alias_ablation", REPO=str(ROOT)).stdout.strip())
     assert booked == math.ceil(pod_wall), (booked, pod_wall)
-    assert booked > math.ceil(plan_wall), (booked, plan_wall)
+    assert booked == math.ceil(plan_wall), (booked, plan_wall)
     # The row says where the figure came from, names the flag that separates the
     # two, and warns that on a GPU box the same command is the arm.
     basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
-    assert "--run" in basis and "11.6" in basis and "13.0" in basis
+    assert "--run" in basis and "13.0" in basis
+    assert "11.6 is what the dry branch" not in basis, (
+        "arm_basis still describes the gap the alias slice closed")
+    assert "the two agree" in basis
     assert "ON A BOX WITH NO GPU" in basis
     # WALL, not KERNEL: its plan charges the probe's compiles outright rather
     # than leaving them to the ratio, and says BOOK THIS ONE beside the figure.

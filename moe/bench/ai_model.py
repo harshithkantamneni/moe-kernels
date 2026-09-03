@@ -144,7 +144,11 @@ def _check_positive(**dims: int) -> None:
     """Every shape, tile and byte width named here is a count; zero or less is
     not a GEMM and is refused by name rather than divided by."""
     for name, v in dims.items():
-        if v <= 0:
+        # `not v > 0` rather than `v <= 0`: NaN fails every comparison, so
+        # `nan <= 0` is False and a NaN dimension used to pass this check and
+        # come out the far end as a NaN cap. The arguments are typed int, but a
+        # float NaN arrives easily from a division upstream.
+        if not v > 0:
             raise AIModelRefused(f"{name}={v} must be positive")
 
 
@@ -441,12 +445,18 @@ def alpha_b_from_fitted(alpha_fitted: float, *, phi: float, delta: float) -> flo
     # produces one easily: zero-variance treads give a 0/0 slope. Refuse here,
     # before any comparison, or the gate has a hole exactly where the numbers
     # are least trustworthy.
+    # AND NOT ONLY NaN. An infinite phi or delta multiplies through to
+    # inf - inf = NaN one line later, which then walks the same unbounded path
+    # the NaN check above it was written to close: the review that found it
+    # sent phi=inf through and got NaN back. isfinite closes both ends at once.
     for name, value in (("alpha_fitted", alpha_fitted), ("phi", phi), ("delta", delta)):
-        if math.isnan(value):
+        if not math.isfinite(value):
+            kind = "NaN" if math.isnan(value) else "infinite"
             raise AIModelRefused(
-                f"{name} is NaN, which no comparison can bound. A NaN here is a "
-                "degenerate ladder fit (a zero-variance or single-point branch), "
-                "not a miss fraction: fix the fit rather than reading a cap from it")
+                f"{name} is {kind}, which no comparison can bound. A NaN here is a "
+                "degenerate ladder fit (a zero-variance or single-point branch) and "
+                "an infinity is a shape or cost that no ladder produced: fix the "
+                "input rather than reading a cap from it")
     level = lin_overstatement(phi=phi, delta=delta)
     floor = phi / level
     ceiling = (1.0 + phi) / level

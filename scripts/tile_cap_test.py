@@ -2685,7 +2685,23 @@ def main(argv=None) -> int:
     """
     try:
         return _main(argv)
-    except Exception:                                   # noqa: BLE001
+    except Exception as exc:                            # noqa: BLE001
+        # A REFUSAL FROM THE INSTRUMENT IS NOT A CRASH. This script times through
+        # SWEEP.run_sweep, which since 2026-09-03 re-raises timing.TimingRefused
+        # rather than filing it per cell. Left to the handler below it would be
+        # printed as a traceback and exit ERROR (4), a retryable crash, when it
+        # is REFUSED (2), a precondition with the remedy in its message. timing
+        # is imported here rather than at the top because it imports torch, and
+        # --dry-run is a laptop path; if it cannot be imported, no TimingRefused
+        # could have been raised, so the answer is the crash branch.
+        try:
+            from moe.bench import timing
+            refused = isinstance(exc, timing.TimingRefused)
+        except ImportError:
+            refused = False
+        if refused:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return exit_codes.REFUSED
         traceback.print_exc()
         print("ERROR: tile_cap_test crashed before it could reach a "
               "verdict. This is the apparatus failing, not a claim "

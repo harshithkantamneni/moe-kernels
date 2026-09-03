@@ -267,14 +267,16 @@
 #     of the script rather than assumed: `alias_ablation.py --card "NVIDIA H200"
 #     ... --run`, on a box with no GPU, prints "WALL 13.0 min ... BOOK THIS ONE"
 #     and then refuses at the probe having measured nothing. It is also the one
-#     arm in this session whose DRY preview under-books its own pod run:
-#     `report_cost` charges the probe's six specialisations only when --run is
-#     named (`probing=bool(args.probe and args.run)`), so the bare plan the dry
-#     branch runs says 11.6 where the pod spends 13.0. The BOOKING is the 13;
-#     the dry branch stays bare, because a --dry-run carrying --run would
-#     MEASURE on a pod and a plan must be free in every sense; and `arm_basis`
-#     names both figures and the flag that separates them, so the row can still
-#     be re-derived in seconds.
+#     arm in this session whose DRY preview UNDER-BOOKED its own pod run
+#     until 2026-09-03: `report_cost` charged the probe's six specialisations
+#     only when --run was named, so the bare plan said 11.6 where the pod spent
+#     13.0. alias_ablation now charges the probe on the plan page as well,
+#     because an operator books a pod before they have one and the plan is the
+#     only page they can read; the bare plan and the pod run print the SAME
+#     figure. The dry branch stays bare (a --dry-run carrying --run would
+#     MEASURE on a pod, and a plan must be free in every sense), and `arm_basis`
+#     names the command and says the two agree, so the row can be re-derived
+#     in seconds. The gap is closed, not disclosed.
 #
 # WHAT CHANGED ON 2026-09-03, sixth pass, after a reviewer read the alias arm's
 # two OPERATOR surfaces against the sibling script rather than against the body
@@ -1187,7 +1189,7 @@ arm_basis() { case "$1" in
   roofline-n256-g16) echo "bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0 -> exit 2, 'REFUSED before any GPU time, from the pinned constants alone'. Zero minutes, and the refusal is the arm's finding." ;;
   roofline-n256-g32) echo "the same command at --group-m 32: REFUSED before any GPU time for the same missing BLOCK_M=256 control. Zero minutes." ;;
   bm128_depth) echo "bm128_depth.py --dry-run --model mixtral-8x7b --r-max 2048 -> 'estimate 252 s of GPU'. AT --r-max 2048, which is what the pod runs: the default plan is 126 s and a different run id." ;;
-  alias_ablation) echo "alias_ablation.py --card 'NVIDIA H200' --models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 --alias-extent block --compute sum --replicates 9 --probe --dot-fallback allow --run, ON A BOX WITH NO GPU, where it prints its table and then refuses at the probe having measured nothing -> 'WALL 13.0 min ... BOOK THIS ONE', of which 10% is the probe. THE --run IS WHAT MAKES THAT FIGURE THE POD'S: report_cost charges the probe's six specialisations only under probing=bool(args.probe and args.run), so the same command without it prints 11.6, and 11.6 is what the dry branch above previews. On a GPU box that command IS the arm, so re-derive the row off GPU." ;;
+  alias_ablation) echo "alias_ablation.py --card 'NVIDIA H200' --models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 --alias-extent block --compute sum --replicates 9 --probe --dot-fallback allow --run, ON A BOX WITH NO GPU, where it prints its table and then refuses at the probe having measured nothing -> 'WALL 13.0 min ... BOOK THIS ONE', of which 10% is the probe. THE SAME COMMAND WITHOUT --run PRINTS THE SAME 13.0: since 2026-09-03 report_cost charges the probe on the plan page as well, because an operator books before they have a GPU and the plan is the only page they can read, so the dry branch above previews the pod's own booking: the bare plan and the pod figure are one number, the two agree. Until that day the bare plan said 11.6 and this row disclosed the gap; the gap is closed, not disclosed. On a GPU box the command WITH --run is the arm itself, so re-derive the row off GPU and without it." ;;
   noise_floor) echo "replicate_noise_floor.py --dry-run --replicates 3 --arms mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16 -> 'TOTAL: ~120 min of GPU'. Already a WALL figure: that script scales its 3066 s model by the 2.35x wall-over-model factor it measured on the s4 arm." ;;
   bn_g16)     echo "bn_decomposition.py --dry-run --capability 9.0 --group-m 16 -> 'estimate 2142 s of GPU', 1428 timings (84 treads x 17 reps)." ;;
   anchor_measure) echo "memory_branch_anchor.py --dry-run --measure --model mixtral-8x7b -> 'cells 128 (2 BLOCK_M x 4 G x 16 treads), estimated wall time 4.8 min'. A WALL figure, and the only arm whose plan already charges its compiles." ;;
@@ -1942,14 +1944,14 @@ note "alpha, cap and roof fraction the study has published."
 #
 # THE DRY BRANCH IS BARE ON PURPOSE AND UNDER-BOOKS ITSELF BY 1.4 MINUTES. That
 # script does not take a --dry-run flag at all: a bare invocation IS its plan
-# and --run is what makes it measure. `report_cost` charges the probe's six
-# specialisations only under `probing=bool(args.probe and args.run)`, so the
-# plan the branch below prints
-# says WALL 11.6 where the pod spends WALL 13.0. Passing --run in a --dry-run to
-# close that gap is exactly the wrong fix: off this laptop it refuses at the
-# probe, but a --dry-run session on the pod would then MEASURE, and this file's
-# rule is that a plan is free in every sense. The booking is the 13, `arm_basis`
-# names the command that prints it and the flag that separates the two figures,
+# and --run is what makes it measure. Until 2026-09-03 `report_cost` charged
+# the probe's six specialisations only under --run, so the plan the branch
+# below prints said WALL 11.6 where the pod spent WALL 13.0. The script now
+# charges the probe on the plan page as well, so the bare plan IS the pod's
+# figure. Passing --run in a --dry-run was never the fix: off this laptop it
+# refuses at the probe, but a --dry-run session on the pod would then MEASURE,
+# and this file's rule is that a plan is free in every sense. The booking is
+# the 13, `arm_basis` names the command that prints it and says the two agree,
 # and the operator reads the difference rather than absorbing it.
 #
 # AND OFF A GPU BOX IT NEEDS A CARD TO NAME, exactly as dtype does: without one
