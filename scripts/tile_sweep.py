@@ -75,6 +75,7 @@ import math
 import os
 import statistics
 import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,6 +85,7 @@ import torch  # noqa: E402
 
 from moe.bench import exit_codes, timing  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
+from moe.bench.roofline import reference_clock  # noqa: E402
 from moe.reference.torch_ref import make_inputs  # noqa: E402
 from moe.routing.distributions import sample_topk_ids  # noqa: E402
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec  # noqa: E402
@@ -238,10 +240,14 @@ TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
                       "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
                       "l2_flush", "host_bound")
 
+#: NOT one of `TIMING_CSV_COLUMNS`, because `KernelTiming` does not carry it:
+#: it is the number LEVEL was scored AGAINST, written on the row it scored so a
+#: replay can tell a row that PASSED the flag from one that had nothing to be
+#: level against. The tri-state alone cannot: both read empty.
 CSV_COLUMNS = ("model", "num_tokens", "block_size_m", "active_experts",
                "max_rows_on_one_expert", "ms_p50", "ms_p90", "ms_min",
                "ms_stdev", "ratio_vs_first", "isa_note", "error",
-               *TIMING_CSV_COLUMNS,
+               *TIMING_CSV_COLUMNS, "reference_clock_mhz",
                *PV.Provenance().as_columns())
 
 
@@ -420,6 +426,71 @@ def resolve_card(args) -> str:
         "after it, and a wrong label is worse than no run.")
 
 
+def reference_clock_for(card: str):
+    """The clock THIS card's roof was measured at, which LEVEL is scored against.
+
+    THE FLAG HAD NO LEFT-HAND SIDE HERE. `timing.clock_flags` leaves
+    `clock_level_ok` None unless it is handed the clock the roof was measured
+    at, and this file called `time_kernel` without one while writing a
+    `clock_level_ok` column and branching on `t.clock_level_ok is False` below.
+    The column was null on every row it has ever written and the branch was
+    dead, so the sweep carried the apparatus for a verdict it could not reach.
+
+    Resolved through `roofline.reference_clock` rather than as another copy of
+    the three-field rule. Copies of that rule are how the driver came to believe
+    no calibration recorded a clock while a sweep read 1515 MHz out of the
+    committed yaml, and `roofline` is the copy `driver.RunConfig` and
+    `group_m_alpha_sweep` already use.
+
+    Returns the `ReferenceClock`. `mhz` None with `card` set is a pod holding a
+    card whose ruler was never measured; `main` refuses on it, and
+    `_no_reference_refusal` says why.
+    """
+    return reference_clock(card or None)
+
+
+def _no_reference_refusal(card: str, ref) -> str:
+    """The refusal text for an attached card with no clock to level against.
+
+    THIS ARM REFUSES WHERE `group_m_alpha_sweep` RESOLVES-AND-SAYS, and the
+    difference is not an inconsistency. That one runs as step 3 of
+    `pod_session.sh`, which runs `calibrate_hardware.py --publish` at step 1 and
+    treats a refusal there as fatal, so by the time it measures, the reference
+    exists or the session has already stopped. This file is in no session
+    script: it is launched by hand on a fresh pod, where a missing calibration
+    is the normal state and nothing upstream has checked for one.
+
+    And its claim is the one that needs the flag most. C1 reads a FLAT curve as
+    confirmation. A card that sagged at one tile setting can manufacture that
+    flatness or hide a real difference under it, and with `clock_level_ok` null
+    on every row nothing in the report can tell either story from the other. A
+    null result measured by an apparatus that cannot report a clock problem is
+    not a conservative result, it is an unexamined one, and it costs the same
+    rental as one that can.
+    """
+    return "\n".join([
+        "=" * 72,
+        "REFUSED. Nothing was measured.",
+        f"  reason: the attached card {card!r} has no clock to level against: "
+        f"{ref.source}.",
+        "  Without a reference, timing.clock_flags leaves clock_level_ok None "
+        "on every cell,",
+        "  the clock_level_ok column is null and the branch that prints the "
+        "clock note is dead,",
+        "  so a FLAT curve could not be told from a curve flattened by a card "
+        "that sagged.",
+        "  Two ways out, both cheap: run "
+        "`python scripts/calibrate_hardware.py --publish` on",
+        "  this box, which measures this card's roof and writes the clock its "
+        "dense GEMM ran",
+        "  at into moe/bench/hardware/; or pass --card naming the card whose "
+        "calibration this",
+        "  run is to be scored against, and say in the write-up where the "
+        "number came from.",
+        "=" * 72,
+    ])
+
+
 def default_run_id(args, card: str) -> str:
     """Derived from EVERY swept and device-dependent knob, card first.
 
@@ -495,7 +566,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     tiles = [int(v) for v in args.tiles.split(",")]
@@ -556,6 +627,21 @@ def main(argv: list[str] | None = None) -> int:
                          "=" * 72]))
         return exit_codes.REFUSED
 
+    # RESOLVED ONCE PER RUN and BEFORE the first compile, not per cell: the
+    # answer is a property of this box and the calibration on it, a per-cell
+    # lookup would read a yaml off disk for every cell, and a refusal is only
+    # worth anything while nothing has been spent. Past the CUDA check a card is
+    # attached by definition, which is the state `driver.unreferenced_clock`
+    # refuses in for the same reason.
+    ref = reference_clock_for(card)
+    print("clock   LEVEL reference: "
+          + (f"{ref.mhz:.0f} MHz, {ref.source}" if ref.mhz else
+             f"NOT RESOLVED ({ref.source})"))
+    if ref.mhz is None:
+        print(_no_reference_refusal(card, ref))
+        return exit_codes.REFUSED
+    print()
+
     # Before find_override(), which imports vLLM: Triton reads these at compile
     # time and the first compile happens on the first fused_experts call.
     if args.dump_ptx:
@@ -609,7 +695,24 @@ def main(argv: list[str] | None = None) -> int:
                     t = timing.time_kernel(
                         call, warmup_ms=args.warmup,
                         target_ms=args.cell_budget_ms, trials=args.trials,
-                        l2_flush=not args.no_l2_flush)
+                        l2_flush=not args.no_l2_flush,
+                        reference_clock_mhz=ref.mhz)
+                except timing.TimingRefused:
+                    # THE SECOND DOOR INTO THE SAME ROOM, and it was open.
+                    # `TimingRefused` subclasses RuntimeError, so the handler
+                    # below caught every refusal the INSTRUMENT ITSELF raises --
+                    # no CUDA and no injected fakes, trials=0, a warmup that
+                    # makes the measurement meaningless. Each of those is a fact
+                    # about the RUN, identical for every cell, so this sweep
+                    # wrote a zeroed FAILED row per cell, scored C1 UNKNOWN and
+                    # V1 FAIL over a page of nothing, and reported a verdict on
+                    # a run that measured not one setting. Re-raised to `main`,
+                    # which exits REFUSED: nothing was measured and nothing was
+                    # spent. `driver.run_cell` has the same clause for the same
+                    # reason, and names the BASE class as this does, so a
+                    # refusal added to the instrument later cannot reintroduce
+                    # the bug by forgetting to add itself here.
+                    raise
                 except Exception as exc:  # noqa: BLE001
                     row["error"] = f"{type(exc).__name__}: {exc}"[:300]
                     rows.append(row)
@@ -619,6 +722,7 @@ def main(argv: list[str] | None = None) -> int:
             row.update({"ms_p50": t.ms_p50, "ms_p90": t.ms_p90,
                         "ms_min": t.ms_min, "ms_stdev": t.ms_std,
                         "ratio_vs_first": t.ms_p50 / base, "error": "",
+                        "reference_clock_mhz": f"{ref.mhz:.0f}",
                         **timing_columns(t)})
             if args.dump_ptx:
                 # Each BLOCK_SIZE_M is a distinct Triton specialisation and so a
@@ -683,6 +787,8 @@ def main(argv: list[str] | None = None) -> int:
         "run_id": run_id, "card": card, "model": args.model,
         "tokens": tokens, "tiles": tiles, "fixed": FIXED,
         "improvement_band": band,
+        "reference_clock_mhz": ref.mhz,
+        "reference_clock_source": ref.source,
         "measured_spread_median": MEASURED_SPREAD_MEDIAN,
         "measured_spread_max": MEASURED_SPREAD_MAX,
         "cells": rows,
@@ -695,6 +801,59 @@ def main(argv: list[str] | None = None) -> int:
     rc = exit_codes.classify(g.scored() for g in gates)
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`_main` with the two escapes that were exiting ONE, which is CLAIM_FAIL.
+
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the session driver records it, and it is never retried. A
+    torch OOM three tiles into a sweep, or an import that drifted, would be
+    filed as this experiment's registered answer to "does a bigger tile buy
+    anything". ERROR (4) is outside FINISHED_CODES precisely so the driver can
+    tell "the apparatus broke" from "the claim did not hold". The traceback is
+    printed first and not swallowed, because a code without one tells an
+    operator nothing about what to fix.
+
+    A STRING `SystemExit` IS A REFUSAL, and that is the second half of the same
+    defect. `raise SystemExit(<str>)` sets `SystemExit.code` to the STRING and
+    leaves the interpreter to exit ONE as well; `find_override` is one of those,
+    and it fires on a version skew before a single cell has been timed. REFUSED
+    (2) is the table's word for "a precondition was not met and nothing was
+    measured".
+
+    A `TimingRefused` IS A REFUSAL TOO, and it is the one the per-cell handler
+    now lets past it. It is the same fact for every cell, so nothing was
+    measured and nothing was spent, which is REFUSED and not ERROR.
+    `cli._main` catches the same base class around `driver.run_sweep` and exits
+    the same code, so the two entry points agree.
+
+    Caught here rather than at the raise sites so the contract holds for a
+    caller of `main()` as well as for the CLI, and so a refusal added later
+    cannot reintroduce the bug by forgetting the code.
+    """
+    try:
+        return _main(argv)
+    except timing.TimingRefused as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return exit_codes.REFUSED
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = (exc.code if exc.code.startswith("REFUS")
+                   else f"REFUSED: {exc.code}")
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception:                                     # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: tile_sweep crashed before it could reach a verdict. This "
+              "is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":

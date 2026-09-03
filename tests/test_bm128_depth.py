@@ -51,16 +51,20 @@ The script is loaded by path, because `scripts/` is not a package.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import math
 import sys
+import types
 from pathlib import Path
 
 import pytest
+import torch as real_torch
 
-from moe.bench import ai_model, exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes, timing  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
+from moe.reference import torch_ref as TORCH_REF  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1682,3 +1686,188 @@ def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
         assert rc == exit_codes.REFUSED, (
             "a run that scored no gate printed no RESULT line, so its log "
             "implies REFUSED and nothing else")
+
+
+# --------------------------------------------------------------------------
+# The apparatus breaking, which is not a claim failing.
+#
+# Two defects found by a reviewer who did not own this file, both silent, both
+# exiting the interpreter's ONE. `moe.bench.exit_codes` calls ONE CLAIM_FAIL: a
+# RESULT, in FINISHED_CODES, recorded by the session driver and never retried.
+# This arm pays for two full ladders before it writes anything, so what ONE
+# costs here is the whole booking and the report that would have said why.
+# --------------------------------------------------------------------------
+
+class _Cuda:
+    @staticmethod
+    def is_available() -> bool:
+        return True
+
+    @staticmethod
+    def synchronize() -> None:
+        pass
+
+
+class _CudaLessTorch(types.ModuleType):
+    """Real torch with `cuda` answered and the `device=` keyword dropped.
+
+    A `ModuleType` subclass because `measure_setting` does `import torch`
+    inside the function, so `sys.modules` is the only seam a test has: a module
+    attribute cannot be patched onto a name the function re-imports every call.
+    A proxy and not a stub, so every other call the ladder makes on the way to
+    the instrument is the real one.
+    """
+
+    cuda = _Cuda
+
+    def __getattr__(self, name):
+        return getattr(real_torch, name)
+
+    def full(self, *args, **kwargs):
+        kwargs.pop("device", None)
+        return real_torch.full(*args, **kwargs)
+
+
+@pytest.fixture
+def pod(bm, monkeypatch, tmp_path):
+    """Everything `measure_setting` reaches for between its imports and the CSV.
+
+    Faked rather than described: a handler can only be shown to be at the call
+    site by executing the call site, and this ladder's call site is behind an
+    `import torch`, a vLLM entry point and a Triton cache.
+    """
+    state = types.SimpleNamespace(seen=[], out=tmp_path, timing_result=None,
+                                  samples=[])
+
+    monkeypatch.setitem(sys.modules, "torch", _CudaLessTorch("torch"))
+    fused = types.ModuleType("vllm.model_executor.layers.fused_moe")
+    fused.fused_experts = lambda **kw: real_torch.zeros(2, 2)
+    activation = types.ModuleType("vllm.model_executor.layers.fused_moe.activation")
+    activation.MoEActivation = lambda value: value
+    for name, module in (
+            ("vllm", types.ModuleType("vllm")),
+            ("vllm.model_executor", types.ModuleType("vllm.model_executor")),
+            ("vllm.model_executor.layers", types.ModuleType("vllm.model_executor.layers")),
+            ("vllm.model_executor.layers.fused_moe", fused),
+            ("vllm.model_executor.layers.fused_moe.activation", activation)):
+        monkeypatch.setitem(sys.modules, name, module)
+
+    monkeypatch.setattr(bm.SWEEP, "find_override",
+                        lambda: (lambda conf: contextlib.nullcontext(), "fake"))
+    monkeypatch.setattr(bm.SWEEP, "arm_triton_cache", lambda *a, **k: None)
+    monkeypatch.setattr(bm.SWEEP, "count_new", lambda *a, **k: 0)
+    monkeypatch.setattr(bm.SWEEP, "tokens_for_rows", lambda cfg, rows: rows)
+    monkeypatch.setattr(bm.SWEEP, "balanced_ids",
+                        lambda cfg, tokens, device:
+                        real_torch.zeros((tokens, cfg.top_k), dtype=real_torch.long))
+    monkeypatch.setattr(TORCH_REF, "make_inputs",
+                        lambda spec, device=None: (real_torch.zeros(2, 2),
+                                                   types.SimpleNamespace(w1=None, w2=None)))
+
+    def timer(fn, **kwargs):
+        state.seen.append(kwargs)
+        result = state.timing_result
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    monkeypatch.setattr(timing, "time_kernel", timer)
+    return state
+
+
+def _measure(bm, pod):
+    """One block size over two treads, which is the smallest thing that can
+    show a refusal repeating itself per cell."""
+    args = types.SimpleNamespace(reps=1, dtype="bf16", seed=0, warmup=300.0,
+                                 cell_budget_ms=200.0, trials=3,
+                                 no_l2_flush=False)
+    return bm.measure_setting(args, MODEL_CONFIGS["mixtral-8x7b"], 16,
+                              [16, 32], pod.out / "cells.csv", pod.out, {},
+                              set(), pod.samples, 1515.0)
+
+
+def test_an_unplanned_exception_is_error_and_not_a_claim_that_failed(
+        bm, monkeypatch, capsys):
+    """`sys.exit(main())` had nothing above it.
+
+    An OOM, a truncated write, an import that drifted: each exited ONE, which
+    the driver LATCHES as this experiment's registered answer to "can BLOCK_M
+    =128 show clean memory-bound treads". The file's header already records the
+    other way this arm lost a booking in the same gap -- a `SystemExit` between
+    the last timing and the first `write_text`. ERROR (4) is outside
+    FINISHED_CODES precisely so the apparatus breaking can be told from the
+    claim not holding, and it is the only retryable code in the table.
+    """
+    def boom(argv=None):
+        raise RuntimeError("torch OOM on the pod")
+
+    monkeypatch.setattr(bm, "_main", boom)
+    assert bm.main([]) == exit_codes.ERROR
+    err = capsys.readouterr().err
+    assert "torch OOM on the pod" in err, "the traceback was swallowed"
+    assert "RuntimeError" in err
+    assert exit_codes.ledger_state(exit_codes.ERROR) == "RETRY"
+    assert exit_codes.ledger_state(exit_codes.CLAIM_FAIL) != "RETRY"
+
+    # ...and the PASS branch: a run that reached a verdict keeps its own code.
+    monkeypatch.setattr(bm, "_main", lambda argv=None: exit_codes.CLAIM_FAIL)
+    assert bm.main([]) == exit_codes.CLAIM_FAIL
+    monkeypatch.setattr(bm, "_main", lambda argv=None: exit_codes.DONE)
+    assert bm.main([]) == exit_codes.DONE
+
+
+def test_a_refusal_sentence_is_refused_and_not_a_claim_that_failed(
+        bm, monkeypatch, capsys):
+    """The other half. `raise SystemExit(<str>)` sets `code` to the STRING and
+    exits ONE; this file replaced fourteen of those with
+    `RefusedBeforeMeasuring`, and the branch stays so that a fifteenth added
+    later, or one out of a library it imports, cannot land as a refuted claim.
+    """
+    def refuse(argv=None):
+        raise SystemExit("the calibration for this card records no clock")
+
+    monkeypatch.setattr(bm, "_main", refuse)
+    assert bm.main([]) == exit_codes.REFUSED
+    assert "records no clock" in capsys.readouterr().err
+
+
+def test_an_integer_systemexit_still_means_what_it_says(bm):
+    """The FAIL branch of the string test. `RefusedBeforeMeasuring` carries
+    `code = exit_codes.REFUSED` and argparse exits `SystemExit(2)`; a handler
+    that reclassified either would report a refusal twice or hide a usage
+    error behind one."""
+    with pytest.raises(SystemExit) as caught:
+        bm.main(["--model", "not-a-model"])
+    assert caught.value.code == 2
+
+
+def test_an_instrument_refusal_leaves_the_ladder_instead_of_being_recorded(
+        bm, pod):
+    """THE SECOND DOOR INTO THE SAME ROOM, executed at the call site.
+
+    `RefusedBeforeMeasuring` is a `SystemExit` precisely because
+    `measure_setting` times inside a per-cell `except Exception` -- the class
+    docstring says so -- and `timing.TimingRefused` subclasses RuntimeError, so
+    every refusal the INSTRUMENT raises walked through the door left open
+    beside it. Each is the same fact for every tread, so the ladder wrote a
+    `status="failed"` sample per tread, ground through both block sizes, and
+    scored its gates over a page of zeroes.
+    """
+    pod.timing_result = timing.TimingRefused(
+        "trials=0: a measurement needs at least one trial")
+    with pytest.raises(timing.TimingRefused, match="at least one trial"):
+        _measure(bm, pod)
+    assert pod.samples == [], "a sample was kept for a tread never measured"
+    assert not (pod.out / "cells.csv").exists()
+
+
+def test_a_kernels_own_runtime_error_is_still_one_treads_error(bm, pod):
+    """The PASS branch of the same door, and why it is a subclass check rather
+    than a blanket re-raise: a kernel that launched badly IS one tread's fact,
+    the sample records it with `status="failed"`, and the ladder carries on so
+    the treads that do run still form a fit."""
+    pod.timing_result = RuntimeError("CUDA error: an illegal memory access")
+    _measure(bm, pod)
+    assert [s.status for s in pod.samples] == ["failed", "failed"]
+    assert all("illegal memory access" in s.detail for s in pod.samples)
+    assert (pod.out / "cells.csv").exists()

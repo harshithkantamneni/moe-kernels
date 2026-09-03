@@ -318,6 +318,7 @@ import subprocess
 import sys
 import textwrap
 import time
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -2516,6 +2517,23 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                                 l2_flush=t.l2_flush)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+            except timing.TimingRefused:
+                # THE SECOND DOOR INTO THE SAME ROOM. `RefusedBeforeMeasuring`
+                # is a `SystemExit` precisely because this handler swallows a
+                # RuntimeError -- the class docstring says so -- and
+                # `timing.TimingRefused` subclasses RuntimeError, so every
+                # refusal the INSTRUMENT ITSELF raises walked through the door
+                # that was left open beside it: no CUDA and no injected fakes,
+                # trials=0, a warmup that makes the measurement meaningless.
+                # Each is a fact about the RUN and identical for every tread, so
+                # the ladder wrote a `status="failed"` sample per tread, ground
+                # through both block sizes, and scored its gates over a page of
+                # zeroes. Re-raised to `main`, which exits REFUSED: nothing was
+                # measured and nothing was spent. The BASE class and not a
+                # subclass, the way `driver.run_cell` names it, so a refusal
+                # added to the instrument later cannot reintroduce the bug by
+                # forgetting to add itself here.
+                raise
             except Exception as exc:                    # noqa: BLE001
                 sample = Sample(block_m, r // block_m, r, tokens, rep, 0.0, 0.0,
                                 0.0, 0, "failed", f"{type(exc).__name__}: {exc}")
@@ -3651,8 +3669,79 @@ def mde_block(*, spread: float, reps: int, treads: int) -> tuple[list[str], str]
         return ["", f"MINIMUM DETECTABLE EFFECT: not stateable. {exc}"], str(exc)
 
 
+def _instrument_refusal(exc: BaseException) -> bool:
+    """True when `exc` is `moe.bench.timing.TimingRefused`, asked lazily.
+
+    BY CLASS AND NOT BY NAME, because a name test would also catch a class some
+    other library happened to spell the same way. LAZILY, because
+    `moe.bench.timing` imports torch at module scope and this file is documented
+    to run `--audit`, `--self-test` and `--dry-run` on a laptop with no torch at
+    all: the import that answers the question must not be the thing that breaks
+    those three. On such a box the import fails and the answer is False, which
+    is the right answer anyway -- a run that never reached the instrument cannot
+    have been refused by it.
+    """
+    try:
+        from moe.bench.timing import TimingRefused
+    except Exception:                                   # noqa: BLE001
+        return False
+    return isinstance(exc, TimingRefused)
+
+
 def main(argv=None) -> int:
-    """The one entry point, and the one place an exit code is chosen.
+    """`_main` with the escapes that were exiting ONE, which is CLAIM_FAIL.
+
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the session driver records it, and it is never retried. This
+    arm pays for two full ladders before it writes anything, and the file's own
+    header already records one way it lost that booking -- a `SystemExit`
+    between the last timing and the first `write_text`. An OOM in the same gap
+    was the other way, and it was filed as this experiment's registered answer
+    to "can BLOCK_M=128 show clean memory-bound treads". ERROR (4) is outside
+    FINISHED_CODES precisely so the driver can tell "the apparatus broke" from
+    "the claim did not hold". The traceback is printed first and not swallowed,
+    because a code without one tells an operator nothing about what to fix.
+
+    A STRING `SystemExit` IS A REFUSAL, and this file already fought that half
+    of the defect: fourteen `raise SystemExit(<str>)` became
+    `RefusedBeforeMeasuring`, which carries `code = exit_codes.REFUSED`. The
+    branch is kept anyway, because a refusal added later, or one raised by a
+    library this imports, must not land as a refuted claim just for spelling
+    itself the old way. A `SystemExit` carrying an INT already says what it
+    means and is re-raised untouched, argparse's included.
+
+    A `TimingRefused` IS A REFUSAL TOO, and it is the one the per-cell handler
+    in `measure_setting` now lets past it. It is the same fact for every tread,
+    so nothing was measured and nothing was spent, which is REFUSED and not
+    ERROR.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = (exc.code if exc.code.startswith("REFUS")
+                   else f"REFUSED: {exc.code}")
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception as exc:                            # noqa: BLE001
+        if _instrument_refusal(exc):
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return exit_codes.REFUSED
+        traceback.print_exc()
+        print("ERROR: bm128_depth crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, the cells already timed are "
+              "in the run directory the header printed, and the arm may be "
+              "re-run.", file=sys.stderr)
+        return exit_codes.ERROR
+
+
+def _main(argv=None) -> int:
+    """The one place an exit code is chosen for a run that reached a verdict.
 
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
     before anything is measured, and otherwise `_exit_code` over the scored

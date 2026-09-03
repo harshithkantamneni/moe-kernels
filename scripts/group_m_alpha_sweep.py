@@ -130,6 +130,7 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -1141,6 +1142,23 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                             target_ms=args.cell_budget_ms,
                             trials=args.trials, l2_flush=args.l2_flush,
                             reference_clock_mhz=ref.mhz)
+                except timing.TimingRefused:
+                    # THE SECOND DOOR INTO THE SAME ROOM, and it was open.
+                    # `TimingRefused` subclasses RuntimeError, so the handler
+                    # below caught every refusal the INSTRUMENT ITSELF raises --
+                    # no CUDA and no injected fakes, trials=0, a warmup that
+                    # makes the measurement meaningless. Each of those is a fact
+                    # about the RUN and identical for every cell, so this sweep
+                    # wrote one `ms_p50=nan` record per cell, reached "nothing
+                    # was timed" with a page of them on disk, and reported a
+                    # refusal whose stated reason was the wrong one: the records
+                    # blamed the last cell's exception, not the instrument that
+                    # refused all of them. Re-raised to `main`, which exits
+                    # REFUSED. `driver.run_cell` has the same clause for the
+                    # same reason, and names the BASE class as this does, so a
+                    # refusal added to the instrument later cannot reintroduce
+                    # the bug by forgetting to add itself here.
+                    raise
                 except Exception as exc:  # noqa: BLE001 - one cell must not end the run
                     record = _record(cell, group_m, pass_index, plan, math.nan,
                                      error=f"{type(exc).__name__}: {exc}")
@@ -1964,9 +1982,59 @@ def parse_args(argv: list[str] | None = None):
 
 
 def main(argv: list[str] | None = None) -> int:
-    """The one entry point, and the one place an exit code is chosen.
+    """`_main` with the escapes that were exiting ONE, which is CLAIM_FAIL.
 
-    Every return is a member of `moe.bench.exit_codes`'s table. The wrapper
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the session driver records it, and it is never retried. This
+    arm fits one of the two alphas `pod_session.sh` reconciles as the last thing
+    on the screen, and it is the longest of them; a torch OOM in its last cell
+    would be filed as its registered answer and the session would never re-run
+    it. ERROR (4) is outside FINISHED_CODES precisely so the driver can tell
+    "the apparatus broke" from "the claim did not hold". The traceback is
+    printed first and not swallowed, because a code without one tells an
+    operator nothing about what to fix.
+
+    A STRING `SystemExit` IS A REFUSAL. `raise SystemExit(<str>)` sets
+    `SystemExit.code` to the STRING and leaves the interpreter to exit ONE as
+    well. This file raises none today, on purpose -- see `build_cell`, which
+    says so -- and the branch is here anyway so that one added later, or one
+    raised by a library this imports, cannot land as a refuted claim.
+
+    A `TimingRefused` IS A REFUSAL TOO, and it is the one the per-cell handler
+    in `measure` now lets past it. It is the same fact for every cell, so
+    nothing was measured and nothing was spent, which is REFUSED and not ERROR.
+    `cli._main` catches the same base class around `driver.run_sweep` and exits
+    the same code, so the two entry points agree.
+    """
+    try:
+        return _main(argv)
+    except timing.TimingRefused as exc:
+        print(f"[group_m] REFUSED: {exc}", file=sys.stderr)
+        return exit_codes.REFUSED
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = (exc.code if exc.code.startswith("REFUS")
+                   else f"REFUSED: {exc.code}")
+            print(f"[group_m] {msg}", file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception:                                     # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: group_m_alpha_sweep crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim failing, so "
+              f"it exits {exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: "
+              "the traceback above is the thing to fix, the cells already on "
+              "disk are under the run directory the plan printed, and the arm "
+              "may be re-run.", file=sys.stderr)
+        return exit_codes.ERROR
+
+
+def _main(argv: list[str] | None = None) -> int:
+    """The one place an exit code is chosen for a run that reached a verdict.
+
+    Every return is a member of `moe.bench.exit_codes`'s table. This wrapper
     catches `CannotRunHere` raised out of PLANNING -- `build_cell` needs torch
     on the CPU to draw a routing realisation -- so a missing dependency exits
     REFUSED (2) rather than escaping as a traceback. The measuring path catches
