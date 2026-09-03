@@ -1389,3 +1389,82 @@ def test_the_retired_flag_is_still_accepted_so_an_old_driver_line_parses():
     args = BM.build_parser().parse_args(["--fail-on-gate"])
     assert args.fail_on_gate is True
     assert "RETIRED" in BM.build_parser().format_help()
+
+
+# --------------------------------------------------------------------------
+# A FOURTH PASS on 2026-09-02. The review of the third pass found that the fix
+# for W1 had put its three planted knobs in the key of EVERY run, including the
+# metered ones, and that the header it wrote described a directory name the code
+# did not produce. Both are legibility, not separation: the ids were always
+# distinct. Legibility of an expensive run's directory is the whole reason the
+# visible part of an id exists.
+# --------------------------------------------------------------------------
+
+def test_a_metered_run_pays_nothing_for_the_self_tests():
+    """THE FIX'S OWN REGRESSION. `planted`/`plantnoise`/`plantworld` in the key
+    of a measurement rendered the constant `plantedmeasured-plantnoise0.0-...`,
+    `run_id` cuts the visible part at 96 characters in NAME order, and
+    `planted` sorts before `probes`, `r` and `routing`, so 19 characters of
+    constant evicted all three. Two pod runs at different `--r-max` became one
+    name apart only in the trailing hash, in `ls`, on the arm that costs money.
+    The plant belongs on the planted branch, which already says `synthetic`."""
+    parser = BM.build_parser()
+    ids = {argv[0] if argv else "default":
+           BM.default_run_id(parser.parse_args(argv), "NVIDIA H200")
+           for argv in ([], ["--r-max", "4096"], ["--step-probes", "12"])}
+    for name in ids.values():
+        assert "plant" not in name, name
+    # THE PROPERTY, and it is about the VISIBLE part, not the hash: strip the
+    # trailing 8-character digest and the three runs are still three names.
+    visible = {name.rsplit("-", 1)[0] for name in ids.values()}
+    assert len(visible) == 3, visible
+    assert "r4096" in ids["--r-max"] and "probes12" in ids["--step-probes"]
+
+
+def test_a_planted_directory_names_the_alpha_the_noise_and_the_world():
+    """THE HEADER'S CLAIM, ASSERTED RATHER THAN WRITTEN. The first fix's header
+    said the synthetic directory names all three; three separate knobs meant it
+    named the alpha and nothing else, because the 96-character cut fell inside
+    `plantnoise` and `plantworld` never appeared. That is the defect commit
+    5b65ac1 was written to close, so it does not get to come back through the
+    commit that cites it."""
+    parser = BM.build_parser()
+
+    def visible(argv):
+        return BM.default_run_id(parser.parse_args(argv),
+                                 "NVIDIA H200").rsplit("-", 1)[0]
+
+    plain = visible(["--self-test", "0.2"])
+    noisy = visible(["--self-test", "0.2", "--self-test-noise", "0.5"])
+    world = visible(["--self-test", "0.2", "--self-test-world",
+                     BM.LOW_CLOCK_WORLD])
+    assert "plant0.2" in plain
+    assert "plant0.2n0.5" in noisy
+    assert "plant0.2wlowclock" in world
+    assert len({plain, noisy, world}) == 3, (plain, noisy, world)
+
+
+def test_the_longest_plant_still_names_its_world_after_the_cut():
+    """The one combination that does not fit: alpha and noise and world spend
+    24 characters against the 21 the default grid leaves. The tag is ordered so
+    what the cut takes is the tail of the world's NAME, not the world's
+    presence, and `wparal` is still not `wlowclock`."""
+    parser = BM.build_parser()
+    longest = BM.default_run_id(parser.parse_args(
+        ["--self-test", "0.558", "--self-test-noise", "0.25",
+         "--self-test-world", BM.PARALLEL_WORLD]), "NVIDIA H200")
+    other = BM.default_run_id(parser.parse_args(
+        ["--self-test", "0.558", "--self-test-noise", "0.25",
+         "--self-test-world", BM.LOW_CLOCK_WORLD]), "NVIDIA H200")
+    assert "plant0.558n0.25wpar" in longest, longest
+    assert longest.rsplit("-", 1)[0] != other.rsplit("-", 1)[0]
+
+
+def test_every_planted_world_has_a_distinct_id_tag():
+    """The FAIL branch of the tag map, planted. A world added to
+    `SELF_TEST_WORLDS` and forgotten here would raise mid-run; two worlds given
+    one tag would put two worlds in one directory, which is W1 again."""
+    assert set(BM.WORLD_ID_TAGS) == set(BM.SELF_TEST_WORLDS)
+    assert len(set(BM.WORLD_ID_TAGS.values())) == len(BM.SELF_TEST_WORLDS)
+    with pytest.raises(ValueError, match="WORLD_ID_TAGS"):
+        BM.plant_tag(0.558, 0.0, "a-world-nobody-registered")

@@ -134,9 +134,11 @@ report are exercised on a laptop, and so the claim "these gates can tell 0.558
 from 0.10" is checkable rather than asserted. `--self-test-world` plants the two
 worlds that are not a single alpha: a low-clock tread, which must be excluded,
 and a memory branch parallel to the compute branch, which must come out
-UNDECIDED. Every planted run writes under a `synthetic-` directory that names
-the alpha, the noise and the world, so one self-test can never overwrite another
-and none of them can land in a metered run's directory. `--dry-run` prints the
+UNDECIDED. Every planted run writes under a `synthetic-` directory carrying one
+`plant` token that spells the alpha, the noise and the world, so one self-test
+can never overwrite another and none of them can land in a metered run's
+directory; a metered run carries no plant knob at all, so nothing about the
+self-tests changes the name a paid run writes under. `--dry-run` prints the
 grid, the predictions and the cost estimate without touching a GPU. Absent
 torch, CUDA or vLLM the script says which one is missing and what to run
 instead.
@@ -4016,6 +4018,19 @@ def default_run_id(args, card: str) -> str:
     documented this exact failure and keyed on `planted`/`plantnoise`; this file
     did not get the same treatment until now.
 
+    THE PLANTED WORLD IS ONE KNOB, `plant`, AND ONLY A PLANTED RUN CARRIES IT.
+    The first fix put three of them, `planted`/`plantnoise`/`plantworld`, in the
+    key of EVERY run, which cost the metered runs the thing the visible name
+    exists for. `run_id` renders knobs in name order and truncates the visible
+    part at 96 characters, so on a measurement the three contributed the
+    constant 19 characters `plantedmeasured-pla` and evicted `probes`, `r` and
+    `routing` off the end: two pod runs at different `--r-max` stopped being
+    distinguishable in `ls` and differed only in the hash. They buy nothing
+    there, because a planted run is already the one whose card slug is
+    `synthetic`. So the plant travels on the planted branch alone, as a single
+    token, and a measured run's id is byte-identical to what it was before any
+    of this. `plant_tag` writes that token and says what it costs.
+
     A PLANTED RUN'S CARD IS `SYNTHETIC_CARD_SLUG`, and that is also the
     `synthetic-` prefix: `run_id` renders the card slug FIRST, so the directory
     already begins `synthetic-` and emitting the word twice would be two names
@@ -4023,9 +4038,9 @@ def default_run_id(args, card: str) -> str:
     `resolve_ridge` and `resolve_bandwidth` read that card's calibration even
     under `--self-test`, so the same planted alpha is a different world on two
     pods and the two must not share a directory either. Its NAME is chosen to
-    sort after the planted knobs: `run_id` truncates the visible part at 96
-    characters in name order, and what a reader needs in `ls` is which world was
-    planted, not which machine generated it.
+    sort after `plant`: `run_id` truncates the visible part at 96 characters in
+    name order, and what a reader needs in `ls` is which world was planted, not
+    which machine generated it.
 
     `--self-test-world` IMPLIES `--self-test` HERE THE SAME WAY `main` IMPLIES
     IT, so the id does not depend on which of the two flags turned the run
@@ -4056,20 +4071,19 @@ def default_run_id(args, card: str) -> str:
         # else, so the day a sampled-routing arm appears its cells must not land
         # in a balanced arm's directory and be skipped as already measured.
         routing="balanced",
-        # NEVER None: `run_id` refuses an unresolved knob, and it is right to.
-        # "measured" is a RESOLVED value that says a real card was asked; a
-        # planted alpha is a different resolved value, and "none" is the world
-        # that is not one of the two named ones.
-        planted="measured" if planted is None else planted,
-        plantnoise=args.self_test_noise,
-        plantworld=args.self_test_world or "none",
     )
     if planted is None:
+        # No plant knob on this branch, deliberately: see the docstring. A
+        # measured run's id must not pay a character of its visible name for a
+        # fact that is already carried by the card slug of the runs it separates
+        # it from.
         return PV.run_id(card=card, **swept)
     # `card_slug` here and not below, so an empty card still raises `NoCard`
     # rather than `UnresolvedKnob`: the caller's mistake is the same one either
     # way and it should get the same sentence.
     return PV.run_id(card=SYNTHETIC_CARD_SLUG, synthhost=PV.card_slug(card),
+                     plant=plant_tag(planted, args.self_test_noise,
+                                     args.self_test_world),
                      **swept)
 
 
@@ -4085,6 +4099,55 @@ LOW_CLOCK_WORLD = "low-clock"
 #: `UNDECIDED_PARALLEL_BRANCH` with its reason, not a blank and not an import.
 PARALLEL_WORLD = "parallel-branch"
 SELF_TEST_WORLDS = (LOW_CLOCK_WORLD, PARALLEL_WORLD)
+
+#: How each planted world spells itself INSIDE A RUN ID and nowhere else. The
+#: flag values keep their hyphens, which `run_id` would render as underscores
+#: and which cost characters the visible name does not have. Distinct by
+#: construction and covered for every world in `SELF_TEST_WORLDS`; both
+#: properties are asserted by a test, because a world that fell out of this map
+#: would either collide with another world's directory or raise mid-run.
+WORLD_ID_TAGS = {LOW_CLOCK_WORLD: "lowclock", PARALLEL_WORLD: "parallel"}
+
+
+def plant_tag(alpha: float, noise: float, world: str) -> str:
+    """The whole planted world as ONE run-id knob value: `0.9n0.5wparallel`.
+
+    WHY ONE TOKEN AND NOT THREE KNOBS. `run_id` sorts knobs by name and cuts the
+    visible part of the id at 96 characters, and 75 of them are spent before
+    anything starting with `p` is reached. Three knobs spelled
+    `planted0.9-plantnoise0.5-plantworldparallel_branch` and the cut landed
+    inside the SECOND one, so `--self-test 0.2` and
+    `--self-test 0.2 --self-test-noise 0.5` wrote two directories whose names
+    differed only in the trailing hash and `--self-test-world` never appeared in
+    a name at all. One token spends the name on the three facts that separate
+    one planted world from another instead of on repeating the word `plant`.
+
+    WHAT IT OMITS AND WHAT THAT MEANS. A zero noise and an empty world are left
+    out rather than written as `n0` and `wnone`, so the common
+    `--self-test 0.558` reads `plant0.558`; the encoding is still injective,
+    because the alpha never contains `n` or `w`. The tail can still clip: the
+    longest combination, an alpha and a noise and a world, spends 24 characters
+    against the 21 left after the default grid's knobs and loses two off the end
+    of the world tag, which stays readable (`wparal`) and stays distinct from
+    the other world's. The HASH always carries all three whatever the visible
+    name shows, so two planted worlds are always two directories; the cap costs
+    legibility, never separation.
+
+    REFUSES an unknown world rather than naming it `w` and nothing: an id that
+    silently dropped the world would put two worlds in one directory, which is
+    the defect this whole key exists to prevent.
+    """
+    tag = f"{float(alpha):g}"
+    if noise:
+        tag += f"n{float(noise):g}"
+    if world:
+        if world not in WORLD_ID_TAGS:
+            raise ValueError(
+                f"planted world {world!r} has no entry in WORLD_ID_TAGS; add one "
+                "before planting it, or its runs share a directory with another "
+                "world's")
+        tag += f"w{WORLD_ID_TAGS[world]}"
+    return tag
 
 
 def build_parser() -> argparse.ArgumentParser:
