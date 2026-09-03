@@ -214,6 +214,35 @@
 #     this driver has is whether to arm the truncation at all, and arming it
 #     converts a complete-grid arm into a partial one wearing a complete one's
 #     exit code.
+#   * THE TOTAL ADDED TWO DIFFERENT CLOCKS, and the "starts at" column -- the
+#     one thing an operator sizes a rental with -- was computed from that sum.
+#     Fixing every figure to be the arm's own left them in mixed units:
+#     noise_floor's 120 and anchor_measure's 5 are WALL (replicate_noise_floor.py
+#     scales its 3066 s model by the 2.35x it measured; memory_branch_anchor.py
+#     prints "estimated wall time" and charges a compile per setting), while
+#     seven arms are booked at what their plans call "the model's own timings,
+#     excluding compiles and allocation": roofline-n64-g1 58 s, bm128_depth
+#     252 s, bn_g16 2142 s, occupancy 1342 s, cap_test 242 s, dtype 315 s and
+#     span_dense 1814 s. The paragraph under the table then said BOOK ABOVE THAT
+#     AND NEVER AT IT and gave no number to book above, leaving the mixed sum as
+#     the only figure on the page. Every row names its clock now, and the total
+#     is printed twice: what the plans price, and the same table with its KERNEL
+#     part multiplied by the ONE wall-over-model ratio this repo has measured
+#     (127 s logged against 54 s modelled for mixtral_g1, the factor
+#     replicate_noise_floor.py already applies to its own booking). That second
+#     number is an ILLUSTRATION OF THE SIZE OF THE GAP from one small arm and not
+#     an estimate of any arm; no per-arm figure is multiplied by anything, which
+#     is the same refusal as before, now with the bound stated instead of implied.
+#   * THE dtype OFF-GPU CHECK EXAMINED NOTHING, which is the span defect above
+#     repeated inside the commit that named it. The fix for a script that needs
+#     a card to name went into the dtype DRY-RUN branch and not into
+#     `arm_offgpu_gates`, so the command an operator runs before renting --
+#     `dtype_tile_confound.py --self-test 2.033 --self-test-alpha 0.2` -- exits 2
+#     with NoCardToLabel and ZERO RESULT lines in all three planted worlds, and
+#     so does the --dry-run half of the same line. With --card it is 10 RESULT
+#     lines per world and C3 separates them: 2.033 PASS 1.023, 2.400 FAIL 1.208,
+#     1.000 FAIL 0.503. A guard walks every advertised off-GPU command now and
+#     runs it, rather than reading it.
 #
 # THE THREE FINDINGS THAT SET THE ORDER, restated because two of them were
 # retracted since this file last said them:
@@ -1098,6 +1127,54 @@ arm_unpriced() { case "$1" in
   *)          echo "" ;;
 esac; }
 
+# WHICH CLOCK EACH BOOKED FIGURE IS ON. The total used to add two different
+# units and say so nowhere. noise_floor's 120 and anchor_measure's 5 are WALL
+# figures -- replicate_noise_floor.py scales its 3066 s model by the 2.35x
+# wall-over-model factor it measured, and memory_branch_anchor.py prints
+# "estimated wall time" and charges one compile per setting -- while seven arms
+# are booked at what their own plans call "the model's own timings, excluding
+# compiles and allocation". Adding those into one number and then computing the
+# "starts at" column from the sum is how an operator sizes a rental against a
+# figure that is not a rental length.
+#
+# THE UNIT IS READ OFF `arm_unpriced` AND IS NOT A SECOND LIST. A second list
+# is this repo's recurring defect: the same fix landing at one of two places
+# that name the same set. There is one set here, and it is the exclusions
+# already written above -- an empty exclusion means the plan charged everything,
+# the allowance sentence means there was no plan to charge, and anything else is
+# a kernel-time figure by the arm's own words.
+arm_clock() {
+  # An arm booked ZERO has no clock to name: its plan refuses before any GPU
+  # time, or it reads the committed corpus and times nothing. Calling that WALL
+  # would file a refusal as a measured wall figure.
+  if [[ "$(arm_minutes "$1")" == 0 ]]; then echo FREE; return; fi
+  local unpriced; unpriced="$(arm_unpriced "$1")"
+  case "$unpriced" in
+    "")            echo WALL ;;
+    everything:*)  echo ALLOW ;;
+    *)             echo KERNEL ;;
+  esac
+}
+
+# The ONE measured wall-over-model ratio in this repo, in hundredths because
+# this is shell: replicate_noise_floor.py:432 sets WALL_OVER_MODEL = 127/54 from
+# its own ARMS.tsv, where the mixtral_g1 arm logged 127 s wall against the cost
+# model's 54 s, and applies it to the figure this file books for that arm. It is
+# used HERE for one job only: to print, once, what the KERNEL rows would come to
+# if they behaved like that one small arm. No per-arm figure is multiplied by
+# it. A large sweep amortises its compiles over more timings than a small one
+# does, so this is an illustration of the size of the gap and not an estimate of
+# any arm. A function and not a bare assignment because this block is lifted
+# into a fresh shell by the tests and holds function definitions only.
+wall_over_model_pct() { echo 235; }
+
+# The priced total with its KERNEL part put on the wall clock. $1 priced
+# minutes, $2 the KERNEL minutes inside them; rounds the scaled part UP, since
+# the number exists to be booked above and never at.
+bounded_minutes() {
+  echo $(( $1 - $2 + ($2 * $(wall_over_model_pct) + 99) / 100 ))
+}
+
 arm_closes() { case "$1" in
   calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
@@ -1130,7 +1207,7 @@ arm_offgpu_gates() { case "$1" in
   occupancy)  echo "scripts/occupancy_vs_swizzle.py --self-test, and --audit --fail-on-gate  (A1 FAILs on the corpus by design, exit 1 CLAIM_FAIL). WITHOUT --fail-on-gate the audit prints that FAIL and exits 0, so the advertised check returned the same code whether A1 held or not." ;;
   cap_test)   echo "scripts/tile_cap_test.py --self-test 0.558 and --self-test 0.10" ;;
   span|span_dense) echo "scripts/span_extent_separation.py --self-test kernel|extent|neither --densify --fail-on-world  (15 RESULT lines and exit 0 per world). THE FLAG IS THE CHECK: without it all three worlds exit 2 with ZERO RESULT lines, and the script says so on its own last line -- a gate that examined nothing reporting no failures." ;;
-  dtype)      echo "C1 and C2 by --dry-run; C3 by --self-test 2.033|2.400|1.000 --self-test-alpha 0.2" ;;
+  dtype)      echo "scripts/dtype_tile_confound.py --self-test 2.033|2.400|1.000 --self-test-alpha 0.2 --card 'NVIDIA H200', and --dry-run --card 'NVIDIA H200' for C1 and C2. --card IS THE CHECK OFF A GPU BOX, exactly as --fail-on-world is on span: without it all four commands exit 2 with NoCardToLabel and ZERO RESULT lines, so the operator's pre-rental verification of this arm examined nothing and returned REFUSED, which reads as a broken arm. With it each world prints 10 RESULT lines and C3 SEPARATES them -- 2.033 PASS matched tilt 1.023, 2.400 FAIL 1.208, 1.000 FAIL 0.503. READ THAT SEPARATION, NOT THE EXIT CODE: all three worlds exit 3, because a self-test observes no config and every validity gate but V0 reads UNKNOWN, and classify_text over the log agrees with the 3." ;;
   ruler)      echo "scripts/ruler_rebaseline.py --corpus-only  (hermetic)" ;;
   mma_switch) echo "its four gates need two real compiles; --dry-run registers thresholds only" ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "F1 and F2 need a vLLM span, which registers only on the GPU box" ;;
@@ -1161,7 +1238,7 @@ if (( LIST )); then
   echo "    0 DONE   1 CLAIM_FAIL (a result, never re-run)   2 REFUSED (free)"
   echo "    3 INVALID (measured, unquotable, not auto-retried)   4+ RETRY"
   for n in "${ARM_NAMES[@]}"; do
-    printf '\n  %-19s ~%s min\n' "$n" "$(arm_minutes "$n")"
+    printf '\n  %-19s ~%s min %s\n' "$n" "$(arm_minutes "$n")" "$(arm_clock "$n")"
     printf '    %s\n' "$(arm_closes "$n")"
   done
   exit 0
@@ -1341,14 +1418,40 @@ fi
 # still unstarted when I release the pod". Every row also prints where its
 # figure came from and what that figure excludes, so no line of this table has
 # to be taken on trust.
+#
+# AND IT NAMES THE CLOCK ON EVERY ROW, because fixing the figures left the units
+# mixed. Seven arms are booked at their plans' "excluding compiles and
+# allocation" kernel time and two at a wall clock; the total added both and the
+# "starts at" column, the one thing a rental is sized with, was computed from
+# that sum. The paragraph under the table said BOOK ABOVE THAT AND NEVER AT IT
+# and then gave no number to book above, which left the reader with the mixed
+# sum as the only figure on the page. Both numbers are printed now: what the
+# plans price, and what the KERNEL part of it comes to at the one wall-over-model
+# ratio this repo has measured. Still no per-arm figure is multiplied by
+# anything.
 say "WHAT THIS COMMITS YOU TO"
+note "The min column mixes two clocks and now says which on every row. WALL is a"
+note "figure whose own plan charges compiles and allocation. KERNEL is one whose"
+note "plan says, in those words, that it does not. ALLOW is this file's own"
+note "allowance for an arm whose plan prints no time estimate at all. FREE is an"
+note "arm booked zero, whose plan refuses or times nothing, and which therefore"
+note "has no clock to be on."
+note ""
 total=0
+kernel_min=0
 unpriced_arms=0
 for n in "${ARM_NAMES[@]}"; do
   wanted "$n" || continue
   m="$(arm_minutes "$n")"
-  printf '  %-19s ~%3s min   starts at ~%3s min   %s\n' \
-    "$n" "$m" "$total" "$(arm_closes "$n" | cut -c1-60)"
+  clock="$(arm_clock "$n")"
+  # The start column is a RANGE, priced start to bounded start, because the two
+  # differ by more than two hours by the last arm and the operator sizing a
+  # rental needs the second one.
+  start_b="$(bounded_minutes "$total" "$kernel_min")"
+  if [[ "$start_b" == "$total" ]]; then starts="~$total min"
+  else starts="~$total-$start_b min"; fi
+  printf '  %-19s ~%3s min %-6s  starts at %-14s  %s\n' \
+    "$n" "$m" "$clock" "$starts" "$(arm_closes "$n" | cut -c1-44)"
   printf '  %-19s   from: %s\n' "" "$(arm_basis "$n")"
   excl="$(arm_unpriced "$n")"
   if [[ -n "$excl" ]]; then
@@ -1356,18 +1459,31 @@ for n in "${ARM_NAMES[@]}"; do
     unpriced_arms=$((unpriced_arms + 1))
   fi
   total=$((total + m))
+  if [[ "$clock" == "KERNEL" ]]; then kernel_min=$((kernel_min + m)); fi
 done
+bound="$(bounded_minutes "$total" "$kernel_min")"
 note ""
-note "TOTAL ~$total minutes (~$((total / 60))h $((total % 60))m) of what the arms' own plans PRICE."
+note "TOTAL ~$total minutes (~$((total / 60))h $((total % 60))m) of what the arms' own plans PRICE,"
+note "of which ~$kernel_min are KERNEL minutes: arms whose plans exclude compiles and"
+note "allocation in their own words, on rows marked NOT IN THAT FIGURE."
 note ""
-note "BOOK ABOVE THAT AND NEVER AT IT. $unpriced_arms of the arms above carry compile,"
-note "allocation or weight-build time their own figure excludes, and each says so"
-note "on its NOT IN THAT FIGURE line. The 'starts at' column is therefore an"
-note "EARLIEST start: a rental shorter than an arm's start minute does not buy"
-note "that arm, or anything under it. Nothing in this file has a deadline or a"
-note "timeout -- an arm that overruns is not cut short, it pushes everything below"
-note "it down the column -- which is why the column is printed at all instead of"
-note "one number for the whole session."
+note "BOOK ABOVE THAT AND NEVER AT IT, AND THIS IS THE NUMBER TO BOOK ABOVE:"
+note "~$bound minutes (~$((bound / 60))h $((bound % 60))m), the same table with those $kernel_min KERNEL minutes"
+note "multiplied by $(wall_over_model_pct)/100. That factor is the ONE wall-over-model ratio this"
+note "repo has measured -- 127 s logged against 54 s modelled for mixtral_g1 on"
+note "the s4 arm -- and it is the factor replicate_noise_floor.py already applies"
+note "to the $(arm_minutes noise_floor) minutes it books above. IT IS AN ILLUSTRATION OF THE SIZE OF"
+note "THE GAP AND NOT AN ESTIMATE OF ANY ARM: one datum, from a small sweep, and a"
+note "large sweep amortises its compiles over more timings than a small one does."
+note "No figure in the column above was multiplied by it, and $unpriced_arms of the rows above"
+note "print a NOT IN THAT FIGURE line naming what their own figure leaves out."
+note ""
+note "The 'starts at' range is priced start to bounded start, and both are an"
+note "EARLIEST start: a rental shorter than an arm's start does not buy that arm,"
+note "or anything under it. Nothing in this file has a deadline or a timeout -- an"
+note "arm that overruns is not cut short, it pushes everything below it down the"
+note "column -- which is why the column is printed at all instead of one number"
+note "for the whole session."
 note ""
 mde_line | sed 's/^/  /'
 note ""

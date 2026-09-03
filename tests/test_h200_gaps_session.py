@@ -158,10 +158,14 @@ def test_it_starts_no_background_job_and_reads_no_pid():
 # --------------------------------------------------------------------------
 
 def test_every_arm_declares_a_cost_and_what_it_closes():
+    """A cost, the clock that cost is on, and what the arm closes. The clock is
+    part of the declaration: a figure whose unit is not stated is what let the
+    session total add wall minutes to kernel minutes and print one number."""
     listing = run(["--list"])
     assert listing.returncode == 0, listing.stderr
     for name in ARMS:
-        assert re.search(rf"^  {re.escape(name)}\s+~\d+ min$", listing.stdout, re.M), name
+        assert re.search(rf"^  {re.escape(name)}\s+~\d+ min (WALL|KERNEL|ALLOW|FREE)$",
+                         listing.stdout, re.M), name
 
 
 def test_the_list_prints_the_one_exit_code_table_instead_of_per_arm_code_lists():
@@ -254,17 +258,22 @@ def test_the_estimated_total_is_printed_before_anything_is_spent(tmp_path):
     assert minutes == int(total.group(2)) * 60 + int(total.group(3))
     # The sum is the arms', not a constant: add the column back up.
     listing = run(["--list"]).stdout
-    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min$",
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min \w+$",
                                listing, re.M).group(1)) for n in ARMS}
     assert sum(booked.values()) == minutes
     # And every arm says the cumulative minute it starts at, which must be the
-    # running sum of the arms above it and nothing else.
+    # running sum of the arms above it and nothing else. The column is a RANGE
+    # once a KERNEL arm is above it, priced start to bounded start; the priced
+    # half is the one that has to be the running sum.
     running = 0
     for name in ARMS:
         found = re.search(
-            rf"  {re.escape(name)}\s+~\s*\d+ min\s+starts at ~\s*(\d+) min", body)
+            rf"  {re.escape(name)}\s+~\s*\d+ min \w+\s+starts at "
+            rf"~\s*(\d+)(?:-(\d+))? min", body)
         assert found, name
         assert int(found.group(1)) == running, (name, found.group(1), running)
+        if found.group(2):
+            assert int(found.group(2)) >= running, name
         running += booked[name]
 
 
@@ -296,6 +305,117 @@ def test_no_arm_books_a_figure_this_file_invented(tmp_path):
     for name in ("noise_floor", "anchor_measure", "ruler"):
         assert not lift(f'arm_unpriced {shlex.quote(name)}',
                         REPO=str(ROOT)).stdout.strip(), name
+
+
+#: The seven arms booked at their plans' own "excluding compiles and
+#: allocation" kernel time, and the two booked at a wall clock. Written out here
+#: so that a row moving between the two groups has to be a deliberate edit to
+#: this list; the test below does not trust it, it re-derives every membership
+#: from the arm's own printed plan and then checks this list against what it
+#: found.
+KERNEL_ARMS = ("roofline-n64-g1", "bm128_depth", "bn_g16", "occupancy",
+               "cap_test", "dtype", "span_dense")
+
+
+def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
+    """THE TOTAL ADDED TWO DIFFERENT UNITS. Fixing every figure to be the arm's
+    own left them in mixed clocks and said so nowhere: noise_floor's 120 and
+    anchor_measure's 5 are WALL, while seven arms are booked at what their plans
+    call "the model's own timings, excluding compiles and allocation". The
+    column names the clock on every row now.
+
+    THE MEMBERSHIP IS NOT A LIST KEPT HERE OR THERE. `arm_clock` reads
+    `arm_unpriced`, so there is one set in the driver rather than two that drift
+    -- the defect this whole slice keeps meeting -- and this test re-derives the
+    same answer a third way, from what each arm's own --dry-run PRINTS, which is
+    the only source neither of them can quietly disagree with."""
+    session = tmp_path / "s"
+    got = run(["--dry-run"], session=session)
+    assert got.returncode == 0, got.stdout[-3000:]
+    logs = session / "logs"
+    found = {"KERNEL": [], "WALL": [], "ALLOW": [], "FREE": []}
+    for name in ARMS:
+        clock = lift(f'arm_clock {shlex.quote(name)}', REPO=str(ROOT)).stdout.strip()
+        assert clock in found, (name, clock)
+        found[clock].append(name)
+        minutes = int(lift(f'arm_minutes {shlex.quote(name)}',
+                           REPO=str(ROOT)).stdout.strip())
+        unpriced = lift(f'arm_unpriced {shlex.quote(name)}', REPO=str(ROOT)).stdout
+        log = logs / f"{name}.log"
+        plan = log.read_text() if log.exists() else ""
+        if minutes == 0:
+            # A refusal, or a re-score that times nothing. There is no clock to
+            # name, and calling it WALL would file a refusal as a wall figure.
+            assert clock == "FREE", (name, clock)
+            continue
+        assert clock != "FREE", (name, minutes)
+        if unpriced.startswith("everything:"):
+            assert clock == "ALLOW", (name, clock)
+            # The whole meaning of ALLOW: there was no plan to read a figure off.
+            assert "estimat" not in plan.lower(), (name, plan[-1500:])
+            continue
+        # Everything else is decided by the arm's own words, in its own plan.
+        disclaims = ("excluding compiles and allocation" in plan
+                     or "not the wall clock" in plan.lower())
+        assert plan, f"{name} printed no plan to read the clock off"
+        assert (clock == "KERNEL") == disclaims, (name, clock, disclaims)
+    assert tuple(found["KERNEL"]) == KERNEL_ARMS, found["KERNEL"]
+    assert "noise_floor" in found["WALL"] and "anchor_measure" in found["WALL"]
+    assert found["ALLOW"] and found["FREE"]
+    # And the word reaches both places an operator reads the table.
+    body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    listing = run(["--list"]).stdout
+    for clock, names in found.items():
+        for name in names:
+            assert re.search(rf"  {re.escape(name)}\s+~\s*\d+ min {clock}\b",
+                             body), (name, clock)
+            assert re.search(rf"^  {re.escape(name)}\s+~\d+ min {clock}$",
+                             listing, re.M), (name, clock)
+
+
+def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(tmp_path):
+    """"BOOK ABOVE THAT AND NEVER AT IT" WITH NO NUMBER TO BOOK ABOVE. The old
+    banner printed one total over mixed units, computed the "starts at" column
+    -- the one thing a rental is sized with -- from that sum, and then declined
+    to bound it. Declining was defensible: this repo has ONE measured
+    wall-over-model datum, on one small arm, and multiplying every row by it
+    would be an invented number wearing a measurement's clothes. Printing no
+    bound at all was not: it left the mixed sum as the only figure on the page.
+
+    Both numbers are printed now, the second is arithmetic over the first, and
+    no per-arm figure is touched by it."""
+    got = run(["--dry-run"], session=tmp_path / "s")
+    body = got.stdout.split("WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    priced = int(re.search(r"TOTAL ~(\d+) minutes", body).group(1))
+    kernel = re.search(r"of which ~(\d+) are KERNEL minutes", body)
+    assert kernel, body
+    kernel_min = int(kernel.group(1))
+    listing = run(["--list"]).stdout
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min \w+$",
+                               listing, re.M).group(1)) for n in ARMS}
+    assert kernel_min == sum(booked[n] for n in KERNEL_ARMS)
+    assert 0 < kernel_min < priced, (kernel_min, priced)
+    bound = re.search(r"~(\d+) minutes \(~(\d+)h (\d+)m\), the same table", body)
+    assert bound, body
+    bounded = int(bound.group(1))
+    assert bounded == int(bound.group(2)) * 60 + int(bound.group(3))
+    pct = int(lift("wall_over_model_pct", REPO=str(ROOT)).stdout.strip())
+    assert bounded == priced - kernel_min + -(-kernel_min * pct // 100)
+    assert bounded > priced, (bounded, priced)
+    # The factor is the one this repo measured, and it is named where it is
+    # used rather than left as a bare 2.35.
+    assert "127 s logged against 54 s modelled" in body
+    assert abs(pct / 100 - 127 / 54) < 0.01, pct
+    assert "ILLUSTRATION" in body
+    # THE OTHER DIRECTION, which is what says the bound is arithmetic and not a
+    # constant: with no KERNEL minutes in it, a total is not inflated at all.
+    assert lift("bounded_minutes 249 0", REPO=str(ROOT)).stdout.strip() == "249"
+    assert lift("bounded_minutes 0 0", REPO=str(ROOT)).stdout.strip() == "0"
+    # It rounds UP, because the number exists to be booked above and never at.
+    assert lift("bounded_minutes 1 1", REPO=str(ROOT)).stdout.strip() == "3"
+    # And no row was multiplied by it: the printed column still sums to the
+    # priced total, not to the bound.
+    assert sum(booked.values()) == priced
 
 
 # --------------------------------------------------------------------------
@@ -424,7 +544,8 @@ def test_the_advertised_off_gpu_gates_can_actually_fail():
     shape for the same reason."""
     for arm_name, flag in (("span_dense", "--fail-on-world"),
                            ("span", "--fail-on-world"),
-                           ("occupancy", "--fail-on-gate")):
+                           ("occupancy", "--fail-on-gate"),
+                           ("dtype", "--card")):
         advertised = lift(f"arm_offgpu_gates {shlex.quote(arm_name)}",
                           REPO=str(ROOT)).stdout
         assert flag in advertised, (arm_name, advertised)
@@ -441,6 +562,116 @@ def test_the_advertised_off_gpu_gates_can_actually_fail():
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
         assert scored.stdout.count("RESULT: ") > 0, world
         assert exit_codes.classify_text(scored.stdout) == scored.returncode
+
+
+def test_the_dtype_gate_needs_the_card_the_dry_run_branch_was_already_given():
+    """THE SAME DEFECT ONE ARM OVER, INSIDE THE COMMIT THAT NAMED IT. The word
+    that makes dtype_tile_confound.py plan off a GPU box went into this file's
+    dtype DRY-RUN branch and not into `arm_offgpu_gates`, so the command an
+    operator runs before renting -- `--self-test 2.033 --self-test-alpha 0.2` --
+    exits 2 NoCardToLabel with ZERO RESULT lines in all three planted worlds, the
+    same shape --fail-on-world closed on span: a check that examined nothing
+    reporting no failures.
+
+    With --card the three worlds SEPARATE, which is the whole point of planting
+    them, and they separate on the C3 line rather than on the exit code: a
+    self-test observes no config, so every validity gate but V0 reads UNKNOWN and
+    all three exit 3 INVALID. classify_text agreeing with that 3 is what says the
+    3 is the table's word and not a crash."""
+    script = str(ROOT / "scripts" / "dtype_tile_confound.py")
+    seen = {}
+    for world, verdict, tilt in (("2.033", "PASS", "1.023"),
+                                 ("2.400", "FAIL", "1.208"),
+                                 ("1.000", "FAIL", "0.503")):
+        bare = subprocess.run(
+            [sys.executable, script, "--self-test", world,
+             "--self-test-alpha", "0.2"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert bare.returncode == exit_codes.REFUSED, world
+        assert "RESULT: " not in bare.stdout, world
+        assert "NoCardToLabel" in bare.stdout, world
+        carded = subprocess.run(
+            [sys.executable, script, "--self-test", world,
+             "--self-test-alpha", "0.2", "--card", "NVIDIA H200"],
+            capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+        assert carded.stdout.count("RESULT: ") >= 10, world
+        assert exit_codes.classify_text(carded.stdout) == carded.returncode
+        c3 = re.search(r"^RESULT: CLAIM C3 (PASS|FAIL) median matched tilt "
+                       r"([\d.]+)", carded.stdout, re.M)
+        assert c3, carded.stdout[-2000:]
+        seen[world] = (c3.group(1), c3.group(2))
+        assert c3.group(1) == verdict, (world, c3.group(0))
+        assert c3.group(2) == tilt, (world, c3.group(0))
+    # A gate that says the same thing in every world is not a gate.
+    assert len(set(seen.values())) == 3, seen
+
+
+def test_every_advertised_off_gpu_command_is_run_by_this_guard_and_scores():
+    """THE ANTIDOTE TO A FIX LANDING AT ONE OF TWO CALL SITES, which is how
+    dtype's off-GPU line kept refusing for nine lines' distance from its own
+    remedy. This walks EVERY arm's advertised off-GPU line, extracts the command
+    it prints, RUNS it, and asks the log what it scored. A line an operator is
+    told to run before paying for a pod is either a command that examines
+    something, or a sentence saying no off-GPU check exists; there is no third
+    kind, and the failure both defects had is the third kind wearing the first
+    one's clothes.
+
+    A SCORING mode (--self-test, --audit, --rescore, --corpus-only) must print
+    RESULT lines and exit through the shared table. A PLANNING mode (--dry-run)
+    is exempt from RESULT lines and must still print a plan rather than a
+    traceback."""
+    import tempfile
+    scored_arms, planning_arms, prose_arms = [], [], []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in ARMS:
+            line = lift(f"arm_offgpu_gates {shlex.quote(name)}",
+                        REPO=str(ROOT)).stdout.strip()
+            assert line, f"{name} advertises nothing at all"
+            if "scripts/" not in line:
+                prose_arms.append(name)
+                continue
+            cmd = line[line.index("scripts/"):]
+            for cut in (", ", " and ", "  (", "("):
+                if cut in cmd:
+                    cmd = cmd[:cmd.index(cut)]
+            # `kernel|extent|neither` is one command shown three ways; run the
+            # first, since the worlds are covered arm by arm above.
+            cmd = re.sub(r"([^\s|]+)(?:\|[^\s|]+)+", r"\1", cmd)
+            # `<a path outside the tree>` is a placeholder for a directory.
+            cmd = re.sub(r"<[^>]*>", tmp, cmd)
+            words = shlex.split(cmd)
+            assert (ROOT / words[0]).exists(), (name, cmd)
+            got = subprocess.run([sys.executable, *words], capture_output=True,
+                                 text=True, timeout=900, cwd=str(ROOT))
+            scoring = {"--self-test", "--audit", "--rescore", "--corpus-only"}
+            if scoring & set(words):
+                scored_arms.append(name)
+                assert got.stdout.count("RESULT: ") > 0, (name, cmd, got.stdout[-2000:])
+                assert exit_codes.classify_text(got.stdout) == got.returncode, (
+                    name, cmd, got.returncode)
+            else:
+                planning_arms.append(name)
+                assert "--dry-run" in words, (name, cmd)
+                assert got.stdout.strip(), (name, cmd)
+                assert "Traceback" not in got.stdout + got.stderr, (name, cmd)
+    # The three groups are all non-empty, so none of the branches above is dead,
+    # and every arm landed in exactly one of them.
+    assert scored_arms and planning_arms and prose_arms
+    assert len(scored_arms) + len(planning_arms) + len(prose_arms) == len(ARMS)
+    assert "dtype" in scored_arms, scored_arms
+    # An arm that advertises no command must say so in words rather than by
+    # printing an empty line -- and it must not name a SCORING flag while
+    # naming no program to run it with. That was the old dtype line's exact
+    # shape ("C3 by --self-test 2.033|2.400|1.000"): an instruction to score
+    # three planted worlds, with nothing for this guard to run and nothing for
+    # the operator to run either without reconstructing the command.
+    for name in prose_arms:
+        line = lift(f"arm_offgpu_gates {shlex.quote(name)}",
+                    REPO=str(ROOT)).stdout
+        assert len(line.split()) >= 4, (name, line)
+        for flag in ("--self-test", "--audit", "--rescore", "--corpus-only",
+                     "--fail-on"):
+            assert flag not in line, (name, flag, line)
 
 
 def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
