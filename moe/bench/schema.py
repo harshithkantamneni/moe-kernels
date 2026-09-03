@@ -376,19 +376,26 @@ class Row:
     oracle: str = "golden_fp32"
 
     # --- thermal / clock drift, THE RETIRED INSTRUMENT'S ------------------
-    # A v5 row leaves all six at their defaults instead of refilling them with
-    # numbers that would mean something else, and that is deliberate rather than
-    # an omission. These clocks were sampled at IDLE INSTANTS either side of the
-    # cell -- both after a synchronise, with the GPU no longer working -- so
-    # `clock_drift_pct` is the gap between two idle readings and `throttled`
-    # fires on a >5% DROP between them. That detects whether the FIRST sample
-    # caught the idle boost, not whether the card throttled while under load: on
-    # the published alpha-0558 arm it flagged 91% of vLLM rows above T=4096
-    # while flagged and unflagged replicates of the same cell timed at ratio
-    # 0.998 with identical end clocks. Putting the under-load samples into these
-    # same columns would give one column two meanings across the version
-    # boundary, which is the drift `_stamp_unrecorded` exists to stop. The
-    # under-load numbers are their own columns, below.
+    # A v5 row leaves the five QUANTITIES at their defaults instead of refilling
+    # them with numbers that would mean something else, and that is deliberate
+    # rather than an omission. These clocks were sampled at IDLE INSTANTS either
+    # side of the cell -- both after a synchronise, with the GPU no longer
+    # working -- so `clock_drift_pct` is the gap between two idle readings.
+    # Putting the under-load samples into these same columns would give one
+    # column two meanings across the version boundary, which is the drift
+    # `_stamp_unrecorded` exists to stop. The under-load numbers are their own
+    # columns, below.
+    #
+    # `throttled` IS THE EXCEPTION, because it is a VERDICT and not a reading.
+    # On a pre-v5 row it fires on a >5% DROP between the two idle samples, which
+    # detects whether the FIRST sample caught the idle boost rather than whether
+    # the card throttled under load: on the published alpha-0558 arm it flagged
+    # 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
+    # the same cell timed at ratio 0.998 with identical end clocks. On a v5 row
+    # `driver._apply_kernel_timing` writes the instrument's answer to the same
+    # question -- either under-load clock verdict FAILED -- because four
+    # consumers read this one column as "do not pool this row", and a column
+    # that is False by construction turns all five into checks that cannot fail.
     sm_clock_start_mhz: int = 0
     sm_clock_end_mhz: int = 0
     temp_start_c: int = 0
@@ -696,11 +703,15 @@ def has_kernel_timing(row: dict) -> bool:
     different apparatus in one pool is a fact to branch on, not a hole to fill.
 
     FALSE FOR TWO DIFFERENT ROWS, on purpose, because the question it asks has
-    one answer for both: a pre-v5 row has no verdict columns and an untimed v5
-    row has them at their defaults, and `timing_verdict` refuses either. The
-    two are told apart by `instrument_of`, which names them, and a caller that
-    needs the distinction must ask for it by name rather than read it out of a
-    bool that was never carrying it.
+    one answer for both: a pre-v5 row has no verdict columns at all and an
+    untimed v5 row has them at their defaults. `timing_verdict` refuses BOTH,
+    the first because the column is absent and the second because the row's
+    instrument is `NO_INSTRUMENT`, so this predicate and that reader agree on
+    exactly one set of rows. They did not until 2026-09-02: the untimed v5 row
+    read back "undetermined" and was admitted by every gate that branched on the
+    word. The two are told apart by `instrument_of`, which names them, and a
+    caller that needs the distinction must ask for it by name rather than read
+    it out of a bool that was never carrying it.
     """
     return instrument_of(row) not in NO_KERNEL_TIMING
 
@@ -717,6 +728,17 @@ def timing_verdict(row: dict, key: str) -> str:
     (no NVML, a trial too short for the poller), which is a real state of the
     measurement and one a caller may legitimately choose to keep or drop. What
     it must never be is silently folded into "ok".
+
+    AN UNTIMED ROW IS REFUSED, and until 2026-09-02 it was not. The driver writes
+    a row for every cell it declines or fails, stamps `NO_INSTRUMENT` on it and
+    leaves these three columns at their `Row` defaults, which are the WORD
+    "undetermined". So a row nothing measured read back as "the check ran and
+    could not decide", and `alpha_refit.clock_gate` read three of those and
+    returned ADMIT. Nothing broke only because both of its callers happen to drop
+    `ms_p50 <= 0` a few lines earlier -- an incidental filter standing in for the
+    intended one, which is the exact accident this module's own header complains
+    about. `has_kernel_timing` says the two apparatus have to be split before any
+    v5 column is read; this is that sentence enforced rather than asserted.
     """
     _schema_key(key)
     if key not in TIMING_VERDICT_COLUMNS:
@@ -724,6 +746,12 @@ def timing_verdict(row: dict, key: str) -> str:
             f"{key!r} is not one of the v5 timing verdicts; read it with "
             f"row_float, row_bool or row.get. timing_verdict covers "
             f"{', '.join(TIMING_VERDICT_COLUMNS)}.")
+    if instrument_of(row) == NO_INSTRUMENT:
+        raise TimingInstrumentUnrecorded(
+            f"{key!r} is {row.get(key)!r} on a row whose instrument is "
+            f"{NO_INSTRUMENT!r}: nothing timed this cell, so no under-load "
+            f"check was made and the default word is not a verdict. Split the "
+            f"pool with has_kernel_timing(row) first, which is False here.")
     value = row.get(key)
     _reject_sentinel(key, value)
     if value is None or value == "":

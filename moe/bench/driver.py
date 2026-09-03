@@ -149,15 +149,22 @@ def unhonourable_retired_knobs(cfg: RunConfig) -> list[tuple[str, object, str]]:
 
     THE DEFECT IT NAMES. `_instrument_kwargs` passes warmup_ms/target_ms/
     trials/l2_flush/reference_clock_mhz/flusher and nothing else, while
-    `moe/bench/cli.py` fills `warmup` and `iters` from the profile on EVERY
-    run. Two profiles set them deliberately: `smoke` (warmup=5, iters=10) to be
-    quick, and `profile-cell` (warmup=5, trials=1, iters=1), whose whole note
-    reads "one cell, one launch: the shape ncu can read a counter off" and
-    which four session scripts invoke. On the instrument path that one launch
-    silently became `iters_for(per_call_ms, 200)`, which is 10 to 2000, and the
-    five-call warmup became 300 ms of sustained load. Nothing warned, nothing
-    recorded it, and a counter read off the wrong shape is a number that looks
-    exactly like a right one.
+    `moe/bench/cli.py` filled `warmup` and `iters` from the profile on EVERY
+    run. Two profiles set them: `smoke` (warmup=5, iters=10) to be quick, and
+    `profile-cell` (warmup=5, trials=1, iters=1), whose note read "one cell, one
+    launch: the shape ncu can read a counter off" and which four session scripts
+    invoke. On the instrument path that one launch silently became
+    `iters_for(per_call_ms, 200)`, which is 10 to 2000, and the five-call warmup
+    became 300 ms of sustained load. Nothing warned, nothing recorded it, and a
+    counter read off the wrong shape is a number that looks exactly like a right
+    one.
+
+    NEITHER PROFILE SETS THEM NOW and `Profile` no longer has the fields, so
+    this returns empty for every shipped profile and the two say what they meant
+    in `warmup_ms`/`target_ms` instead. The check stays because the fields stay
+    on `RunConfig`, where a caller that injects a legacy timer still needs them,
+    and a caller that injects nothing must not be able to reach the instrument
+    with a count in hand.
     """
     fields = RunConfig.__dataclass_fields__
     asked = [(name, getattr(cfg, name)) for name in RETIRED_KNOBS
@@ -217,11 +224,16 @@ def refuse_dropped_retired_knobs(cfg: RunConfig) -> None:
     CHECKED HERE, per cell and just before the first thing that costs anything,
     rather than in `RunConfig.__init__`. A knob is only dropped when a cell is
     actually measured on the instrument, and a sweep can construct a config it
-    never measures with: `tests/test_force_tile.py` drives the CLI's `smoke`
-    profile (warmup=5, iters=10) purely to prove the force-tile plan is refused
-    before anything is spent, and every cell in it is declined by the pin. A
-    refusal at construction would have failed that run for a knob no cell would
-    ever have reached.
+    never measures with: `tests/test_force_tile.py` drives the CLI purely to
+    prove a force-tile plan is refused before anything is spent, and every cell
+    in that run is declined by the pin. A refusal at construction would fail
+    such a run for a knob no cell would ever have reached.
+
+    AND THE CALLER HAS TO SURVIVE IT. This raises out of `run_sweep` rather than
+    being recorded per cell, so the process that called it exits on it;
+    `cli.main` catches `TimingRefused` and exits REFUSED with the message, which
+    is what makes this a free refusal instead of an uncaught traceback that
+    `exit_codes` would read as a measured CLAIM_FAIL.
     """
     dropped = unhonourable_retired_knobs(cfg)
     if dropped:
@@ -611,15 +623,40 @@ def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
 def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
     """One `KernelTiming` onto one row, including what the instrument was.
 
-    THE COLUMNS IT DELIBERATELY DOES NOT TOUCH are the four retired clock ones
-    (`sm_clock_start_mhz`, `sm_clock_end_mhz`, `clock_drift_pct`, `throttled`)
-    and the two temperatures. `time_kernel` does read a first and a last sample,
-    but UNDER LOAD, and the retired columns hold IDLE-instant readings; writing
-    under-load numbers into them would give one column two meanings either side
-    of the version boundary and would quietly re-point every filter that reads
-    `throttled` at a different quantity. A v5 row leaves them at their defaults
-    and answers the same question through `clock_level_ok`/`clock_drift_ok`
-    instead, which a consumer has to ask for by name.
+    THE FIVE RETIRED QUANTITIES ARE LEFT AT THEIR DEFAULTS: `sm_clock_start_mhz`,
+    `sm_clock_end_mhz`, `clock_drift_pct` and the two temperatures. `time_kernel`
+    does read a first and a last sample, but UNDER LOAD, and those columns hold
+    IDLE-instant readings; writing under-load numbers into them would give one
+    column two meanings either side of the version boundary. The under-load
+    numbers have columns of their own and a consumer asks for them by name.
+
+    `throttled` IS WRITTEN, and that is the correction this docstring used to
+    argue against. It is not a quantity, it is the VERDICT "this row's clock
+    misbehaved, do not pool it", and four consumers read it as one:
+    `scripts/pod_session.sh` gate S6d, `scripts/run_all.sh`,
+    `scripts/publish_results.sh` and `scripts/efficiency_report.py`. Leaving it
+    False on every v5 row did not make those
+    checks conservative, it made them vacuous: S6d "thermal stability" compared
+    0.0% against "< 5%" and could no longer FAIL for any reason, on any card, at
+    any temperature. A check that examined nothing reporting zero failures is
+    this project's documented failure shape and the one the instrument exists to
+    remove, so the verdict column carries the instrument's answer to the
+    question it was always asking.
+
+    FROM THE TWO CLOCK VERDICTS AND NOT THE THIRD. `host_bound_ok` is a fact
+    about the CALLER (the host could not enqueue fast enough to keep the queue
+    deep), not about the card's clock, and a row that is host-bound is an upper
+    bound rather than a thermal event. Folding it in here would report a Python
+    launcher as a hot box.
+
+    "undetermined" IS NOT THROTTLED, which is the one place this departs from
+    "unknown counts against the gate". These consumers are inclusion filters
+    over a whole arm, not release gates over a claim: on a pod whose container
+    forbids NVML every row is undetermined, and calling all of them throttled
+    would empty `efficiency_report` and fail S6d for the whole session on the
+    strength of a missing library. `alpha_refit.clock_gate` keeps undetermined
+    rows for the same reason and states it. What the two verdicts DO give back
+    is a gate that can fail: one FAILED clock verdict marks the row.
     """
     row.instrument = kt.instrument
     row.warmup = kt.warmup_calls
@@ -634,6 +671,7 @@ def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
     row.sm_clock_load_mhz = kt.sm_clock_load_mhz or 0.0
     row.clock_level_ok = SC.verdict_word(kt.clock_level_ok)
     row.clock_drift_ok = SC.verdict_word(kt.clock_drift_ok)
+    row.throttled = SC.VERDICT_FAILED in (row.clock_level_ok, row.clock_drift_ok)
     row.host_bound_ok = SC.verdict_word(
         None if kt.host_bound is None else not kt.host_bound)
     row.clock_samples = kt.clock_samples

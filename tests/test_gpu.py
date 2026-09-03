@@ -201,11 +201,28 @@ def test_host_sync_is_reported_as_not_capturable():
 # --- driver end to end on the device ---------------------------------------
 
 def make_cfg(tmp_path, **kw):
-    base = dict(out_dir=tmp_path, device="cuda", warmup=3, trials=1, iters=5,
+    """A RunConfig for the driver's end-to-end GPU tests, in the instrument's units.
+
+    IT USED TO SAY `warmup=3, iters=5`, which is a call count and a fixed
+    iteration count, and `timing.time_kernel` has neither parameter. Once
+    `driver.refuse_dropped_retired_knobs` started refusing that rather than
+    dropping it silently, every driver test in this file raised
+    `RetiredKnobRefused` -- and none of them could show it, because all 39 skip
+    without CUDA and the laptop suite stayed green. The knobs are now said in
+    the units the instrument reads: a short warmup DURATION and a short trial
+    target, which is what "be quick, this is a plumbing test" means to
+    `time_kernel`.
+    """
+    base = dict(out_dir=tmp_path, device="cuda", trials=1,
+                warmup_ms=10.0, target_ms=10.0,
                 l2_modes=(True,), graph_modes=(False,), flush_mb=32,
                 graph_min_launch_share=0.0)
     base.update(kw)
-    return D.RunConfig(**base)
+    cfg = D.RunConfig(**base)
+    # The refusal this fixture exists on the right side of. It costs nothing off
+    # the GPU and it is the assertion the CUDA skip would otherwise hide.
+    assert D.unhonourable_retired_knobs(cfg) == []
+    return cfg
 
 
 @register

@@ -518,9 +518,11 @@ def test_an_intercept_can_never_span_two_instruments():
 
 def test_the_clock_gate_asks_the_instrument_that_wrote_the_row():
     """The two apparatus have NO flag in common, and reading one's answer out of
-    the other's column is how a filter becomes a no-op unnoticed. A v5 row
-    carries `throttled=False` by construction, so the retired gate applied to it
-    would drop nothing at all."""
+    the other's column is how a filter becomes a no-op unnoticed. The retired
+    flag is a comparison of two IDLE-instant samples and the instrument never
+    takes one, so it is not this instrument's evidence even now that
+    `driver._apply_kernel_timing` writes the column: the gate reads the verdicts,
+    which say WHICH check failed."""
     from moe.bench import schema as SC
 
     old = {"throttled": "True"}
@@ -541,6 +543,30 @@ def test_the_clock_gate_asks_the_instrument_that_wrote_the_row():
     # that forbids NVML.
     assert AR.clock_gate(dict(new, clock_level_ok="undetermined"),
                          "queue-deep/v2") == ""
+
+
+def test_an_untimed_row_is_named_by_the_gate_and_not_admitted_by_it():
+    """A ROW NOTHING MEASURED WAS BEING ADMITTED. The driver stamps
+    `NO_INSTRUMENT` on every cell it declines or fails and leaves the three
+    verdict columns at their `Row` defaults, which are the WORD "undetermined".
+    That fell into the v5 branch below, read three of them, and returned "" --
+    ADMIT. It reached no fit only because `collect` and
+    `count_excluded_memory_bound` both drop `ms_p50 <= 0` a few lines earlier,
+    an incidental filter doing a gate's job, which is the accident this
+    function's own first paragraph exists to prevent."""
+    from moe.bench import schema as SC
+
+    untimed = {"instrument": SC.NO_INSTRUMENT,
+               "clock_level_ok": SC.VERDICT_UNDETERMINED,
+               "clock_drift_ok": SC.VERDICT_UNDETERMINED,
+               "host_bound_ok": SC.VERDICT_UNDETERMINED,
+               "ms_p50": "0.0", "throttled": "False"}
+    reason = AR.clock_gate(untimed, SC.instrument_of(untimed))
+    assert reason.startswith("never timed"), reason
+    # And the reader underneath refuses too, so the two cannot drift apart: a
+    # future gate that forgets this branch gets an exception, not an admission.
+    with pytest.raises(SC.TimingInstrumentUnrecorded):
+        SC.timing_verdict(untimed, "clock_level_ok")
 
 
 def test_a_pool_that_mixes_two_instruments_is_refused_rather_than_fitted(

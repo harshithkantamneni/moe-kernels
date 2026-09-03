@@ -368,7 +368,20 @@ def clock_gate(row: dict, instrument: str) -> str:
     (no NVML, a trial too short for the poller), which is not evidence against
     the number, and folding it into a failure would silently discard every row
     measured in a container that forbids NVML.
+
+    AN UNTIMED ROW IS ITS OWN ANSWER, and it used to be nobody's. The driver
+    stamps `NO_INSTRUMENT` on every cell it declines or fails, and such a row
+    fell into the v5 branch, read three default "undetermined" words and was
+    ADMITTED. It reached no fit only because both callers drop `ms_p50 <= 0` a
+    few lines earlier, which is an incidental filter doing a gate's job -- the
+    accident this function's own first paragraph exists to prevent. So it is
+    named here, ahead of the branch, and `schema.timing_verdict` now refuses the
+    row underneath as well, so the two cannot drift apart again.
     """
+    if instrument == SC.NO_INSTRUMENT:
+        return ("never timed: the driver wrote this row for a cell it declined "
+                "or failed, so there is no clock evidence to gate on and no "
+                "measurement to admit")
     if instrument == SC.LEGACY_INSTRUMENT:
         if SC.row_bool(row, "throttled"):
             return ("throttled (the RETIRED idle-instant flag: it fires when "

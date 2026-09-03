@@ -5,6 +5,7 @@ span and not the layer, resume skips finished work, one bad cell does not kill
 a sweep) is verified here before any of it costs GPU minutes.
 """
 import itertools
+import pathlib
 from functools import partial
 
 import pytest
@@ -12,7 +13,10 @@ import torch
 
 from moe import pipeline as P
 from moe.bench import bytes_model as BM
+from moe.bench import cli
 from moe.bench import driver as D
+from moe.bench import exit_codes as EC
+from moe.bench import profiles as PR
 from moe.bench import schema as SC
 from moe.bench import timing as T
 from moe.reference import torch_ref as R
@@ -338,18 +342,62 @@ def test_the_three_verdicts_reach_the_row_as_words_and_not_as_silence(tmp_path):
         assert got == expected, (level, drift, host, got)
 
 
-def test_an_instrument_row_leaves_the_retired_clock_columns_alone(tmp_path):
+def test_an_instrument_row_leaves_the_retired_clock_QUANTITIES_alone(tmp_path):
     """One column, one meaning, across the version boundary.
 
     `time_kernel` does read a first and a last clock sample, but UNDER LOAD, and
-    `sm_clock_start_mhz`/`throttled` hold IDLE-instant readings on all 100,144
-    published rows. Refilling them here would silently re-point every filter
-    that reads `throttled` at a different quantity."""
+    `sm_clock_start_mhz`/`clock_drift_pct` hold IDLE-instant readings on all
+    100,144 published rows. Refilling them here would silently re-point every
+    reader at a different quantity. `throttled` is a verdict rather than a
+    reading and is tested below."""
     _, path = sweep(tmp_path, "t_counting_up_gemm")
     r = SC.read_csv(path)[0]
     assert int(r["sm_clock_start_mhz"]) == 0
     assert int(r["sm_clock_end_mhz"]) == 0
     assert float(r["clock_drift_pct"]) == 0.0
+    assert int(r["temp_start_c"]) == 0 and int(r["temp_end_c"]) == 0
+
+
+@pytest.mark.parametrize("level,drift,throttled", [
+    (True, True, "False"),      # both clock checks passed
+    (False, True, "True"),      # LEVEL failed: the card sat under the roof's clock
+    (True, False, "True"),      # DRIFT failed: it moved while the trials ran
+    (None, None, "False"),      # undetermined is not evidence, see below
+])
+def test_the_throttled_verdict_is_written_and_can_fail(tmp_path, level, drift,
+                                                       throttled):
+    """THE GATE THAT COULD NOT FAIL. Four consumers read `throttled` as the
+    one bool for "this row's clock misbehaved, do not pool it":
+    `scripts/pod_session.sh` gate S6d, `run_all.sh`, `publish_results.sh` and
+    `scripts/efficiency_report.py`. Leaving it at its default on every v5 row
+    made S6d compare 0.0% against "< 5%" on every card at every temperature,
+    which is "a check that examined nothing reports zero failures" -- the shape
+    the whole instrument exists to remove.
+
+    The last row is the deliberate asymmetry. An undetermined clock check (no
+    NVML in the container) is not evidence against the number, and marking it
+    throttled would empty `efficiency_report` and fail S6d for a whole session
+    over a missing library. `alpha_refit.clock_gate` keeps those rows too."""
+    cfg = cfg_for(tmp_path, timer=partial(fake_timer, level=level, drift=drift))
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                  "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert r["throttled"] == throttled
+    assert SC.row_bool(r, "throttled") is (throttled == "True")
+
+
+def test_host_bound_is_not_a_thermal_event(tmp_path):
+    """`host_bound_ok` says the CALLER could not keep the queue deep, which
+    makes `ms_*` an upper bound rather than a hot box. Folding it into
+    `throttled` would report a Python launcher as a thermal failure, and the
+    four consumers above would drop every T=1 eager row in the study."""
+    cfg = cfg_for(tmp_path, timer=partial(fake_timer, host_bound=True))
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                  "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert SC.timing_verdict(r, "host_bound_ok") == SC.VERDICT_FAILED
     assert r["throttled"] == "False"
 
 
@@ -819,7 +867,7 @@ def test_a_retired_knob_stops_the_sweep_instead_of_being_dropped(tmp_path):
     """`_instrument_kwargs` passes warmup_ms/target_ms/trials/l2_flush/
     reference_clock_mhz/flusher, so `warmup` (a CALL COUNT) and `iters` reach
     nothing -- while `moe/bench/cli.py` fills both from the profile on every
-    run. `profile-cell` sets warmup=5, trials=1, iters=1 and its note reads "one
+    run. `profile-cell` set warmup=5, trials=1, iters=1 and its note read "one
     cell, one launch: the shape ncu can read a counter off"; on the instrument
     the one launch became `iters_for(per_call_ms, 200)`, which is 10 to 2000,
     and nothing said so. A counter read off the wrong shape looks exactly like
@@ -862,10 +910,10 @@ def test_the_refusal_names_only_the_modes_that_would_drop_the_knob():
 def test_a_config_nothing_measures_with_is_never_refused(tmp_path):
     """WHY THE CHECK IS PER CELL AND NOT IN `RunConfig.__init__`. A knob is
     only dropped by a cell that is actually measured, and
-    `tests/test_force_tile.py` drives the CLI's `smoke` profile (warmup=5,
-    iters=10) purely to prove a force-tile plan is refused before anything is
-    spent -- every cell declined by the pin, none of them timed. Refusing at
-    construction would have failed that run over a knob no cell reached."""
+    `tests/test_force_tile.py` drives the CLI purely to prove a force-tile plan
+    is refused before anything is spent -- every cell declined by the pin, none
+    of them timed. Refusing at construction would fail such a run over a knob no
+    cell reached."""
     cfg = cfg_for(tmp_path, warmup=5, iters=10)
     assert D.unhonourable_retired_knobs(cfg)
     path = D.run_sweep([], cfg, routing=lambda s: None, info=FAKE_INFO)
@@ -879,6 +927,114 @@ def test_the_ordinary_sweep_is_not_refused():
     assert D.unhonourable_retired_knobs(D.RunConfig()) == []
     assert D.unhonourable_retired_knobs(D.RunConfig(warmup=25, iters=None)) == []
     assert D.unhonourable_retired_knobs(D.RunConfig(warmup_ms=5.0, trials=1)) == []
+
+
+# --- and the refusal has to reach a caller as a RESULT, not a traceback -----
+
+def cfg_the_cli_would_build(profile, **kw):
+    """The RunConfig `cli.main` builds for a profile, without a GPU or a sweep.
+
+    Mirrors `cli.main`'s `cfg_kw` exactly. Written out rather than imported
+    because the point of the check is that the CLI's construction and the
+    driver's refusal agree, and a helper shared with the code under test could
+    not tell you that.
+    """
+    kwargs = dict(trials=profile.trials, l2_modes=profile.l2_modes,
+                  graph_modes=profile.graph_modes)
+    kwargs.update({name: value for name, value in
+                   (("warmup_ms", profile.warmup_ms),
+                    ("target_ms", profile.target_ms)) if value is not None})
+    kwargs.update(kw)
+    return D.RunConfig(**kwargs)
+
+
+@pytest.mark.parametrize("name", sorted(PR.PROFILES))
+def test_no_shipped_profile_asks_the_instrument_for_a_knob_it_cannot_honour(name):
+    """EVERY documented session command went through one of these. `smoke` and
+    `profile-cell` set `warmup`/`iters`, `cli` copied both into every RunConfig,
+    and the refusal then fired on the first cell of `scripts/run_all.sh` line
+    349 -- which runs `--profile smoke` under `set -euo pipefail` BEFORE the
+    real sweep. `Profile` no longer carries the fields to copy."""
+    profile = PR.get(name)
+    assert not hasattr(profile, "warmup") and not hasattr(profile, "iters")
+    assert D.unhonourable_retired_knobs(cfg_the_cli_would_build(profile)) == []
+
+
+def test_the_two_quick_profiles_say_quick_in_the_instrument_s_units():
+    """The FAIL branch of the check above, planted with the exact values the two
+    profiles used to carry, so a revert cannot pass quietly."""
+    with pytest.raises(D.RetiredKnobRefused, match="RETIRED instrument knobs"):
+        D.refuse_dropped_retired_knobs(D.RunConfig(warmup=5, iters=10))
+    with pytest.raises(D.RetiredKnobRefused, match="RETIRED instrument knobs"):
+        D.refuse_dropped_retired_knobs(D.RunConfig(warmup=5, iters=1))
+
+    smoke, cell = PR.get("smoke"), PR.get("profile-cell")
+    assert (smoke.warmup_ms, smoke.target_ms, smoke.trials) == (25.0, 25.0, 1)
+    # "one launch" is not sayable: `iters_for`'s floor is 10, and a target below
+    # any real per-call time is the smallest honest ask there is.
+    assert (cell.warmup_ms, cell.target_ms, cell.trials) == (25.0, 1.0, 1)
+    assert T.iters_for(0.5, cell.target_ms) == 10
+
+
+def test_the_cli_turns_the_refusal_into_REFUSED_and_not_a_traceback(tmp_path,
+                                                                    monkeypatch,
+                                                                    capsys):
+    """THE WHOLE POINT OF THE REFUSAL BEING A REFUSAL. Uncaught, it leaves
+    `main` as a traceback at process status 1, which `exit_codes` reads as
+    CLAIM_FAIL: "measured; VALIDITY passed; a CLAIM gate did not... a RESULT,
+    not a retry". Nothing was measured, so that reading is false in every field,
+    and `scripts/run_all.sh` runs under `set -euo pipefail`, so the repository's
+    top-level sweep script aborted before it measured anything."""
+    def refuse(*a, **kw):
+        raise D.RetiredKnobRefused("warmup=5 is a RETIRED instrument knob")
+
+    monkeypatch.setattr(cli, "run_sweep", refuse)
+    code = cli.main(["--profile", "smoke", "--out-dir", str(tmp_path),
+                     "--groups", "reference"])
+    assert code == EC.REFUSED
+    assert code != EC.CLAIM_FAIL, "1 would say the world disagreed with a claim"
+    captured = capsys.readouterr()
+    assert "RETIRED instrument knob" in captured.err
+    assert EC.ledger_state(code) != "RETRY"
+
+
+def test_the_documented_smoke_invocation_reaches_the_sweep(tmp_path, monkeypatch):
+    """`scripts/run_all.sh` line 349, verbatim minus the venv path. It is the
+    first thing every session runs and the last thing that should be able to
+    fail on a configuration error."""
+    seen = {}
+
+    def record(cells, cfg, routing, info=None):
+        seen["cfg"] = cfg
+        D.refuse_dropped_retired_knobs(cfg)   # what the first cell would do
+        return cfg.csv_path
+
+    monkeypatch.setattr(cli, "run_sweep", record)
+    code = cli.main(["--profile", "smoke", "--out-dir", str(tmp_path),
+                     "--groups", "reference,kernels"])
+    assert code == EC.DONE
+    cfg = seen["cfg"]
+    assert (cfg.warmup_ms, cfg.target_ms, cfg.trials) == (25.0, 25.0, 1)
+    # The retired fields are still there, still at their defaults, and therefore
+    # still nothing the CLI asked for.
+    assert cfg.warmup == 25 and cfg.iters is None
+
+
+def test_the_gpu_driver_fixture_is_on_the_instrument_too():
+    """tests/test_gpu.py's `make_cfg` built `RunConfig(warmup=3, iters=5)`, so
+    every driver end-to-end test on the device refused before it timed anything
+    -- and all 39 of them skip without CUDA, so no laptop run could show it.
+    Read the file rather than import it: importing registers its spans into the
+    global registry, and this check has to be cheap enough to always run."""
+    import ast
+
+    tree = ast.parse(pathlib.Path("tests/test_gpu.py").read_text())
+    fixture = next(n for n in ast.walk(tree)
+                   if isinstance(n, ast.FunctionDef) and n.name == "make_cfg")
+    asked = {kw.arg for call in ast.walk(fixture)
+             if isinstance(call, ast.Call) for kw in call.keywords}
+    assert asked & {"warmup_ms", "target_ms"}, "it has to say something"
+    assert not asked & set(D.RETIRED_KNOBS), sorted(asked)
 
 
 # --- the graph timer, off the GPU ------------------------------------------

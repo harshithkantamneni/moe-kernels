@@ -277,6 +277,36 @@ def test_an_untimed_row_gets_a_name_rather_than_a_refusal(tmp_path):
     assert SC.has_kernel_timing(row) is False
 
 
+def test_an_untimed_row_has_no_verdicts_to_read_and_says_so(tmp_path):
+    """THE DEFECT THE SECOND CUT INTRODUCED, one function away from the first.
+
+    `has_kernel_timing` justified its False on such a row with "an untimed v5
+    row has them at their defaults, and `timing_verdict` refuses either". It did
+    not: `Row`'s defaults ARE the word "undetermined", so a row nothing measured
+    read back as "the check ran and could not decide" and every gate that
+    branches on the word admitted it. `scripts/alpha_refit.py`'s `clock_gate`
+    read three of them and returned ADMIT; the rows reached no fit only because
+    both callers drop `ms_p50 <= 0` a few lines earlier, which is an incidental
+    filter standing in for the intended one."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument=SC.NO_INSTRUMENT, ms_p50=0.0))
+    row = SC.read_csv(path)[0]
+
+    # The defaults are still on the row, and they are still the word.
+    assert row["clock_level_ok"] == SC.VERDICT_UNDETERMINED
+    for name in SC.TIMING_VERDICT_COLUMNS:
+        with pytest.raises(SC.TimingInstrumentUnrecorded, match="nothing timed"):
+            SC.timing_verdict(row, name)
+
+    # The PASS branch: a row the instrument DID time answers "undetermined" as a
+    # state of the measurement, which is a different thing and stays readable.
+    timed = dict(row, instrument="queue-deep/l2-flush/clock-under-load/v2",
+                 ms_p50="1.0")
+    assert SC.timing_verdict(timed, "clock_level_ok") == SC.VERDICT_UNDETERMINED
+    assert SC.has_kernel_timing(timed)
+
+
 def test_untimed_and_legacy_are_both_unreadable_but_are_not_the_same_row():
     """`has_kernel_timing` answers one question -- may a v5 column be read off
     this row -- and the answer is no for both. The distinction that does matter
