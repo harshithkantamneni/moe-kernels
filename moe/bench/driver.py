@@ -357,8 +357,11 @@ class RunConfig:
     #: fire on the path that wrote all 100,144 published rows and that
     #: `scripts/alpha_refit.py` reads for the headline alpha.
     #:
-    #: Set it explicitly to override the calibration; that is recorded in
-    #: `reference_clock_source` and skips the resolution entirely. None means
+    #: Set it explicitly to a POSITIVE number to override the calibration; that
+    #: is recorded in `reference_clock_source` and skips the resolution
+    #: entirely. A non-positive one is neither an override nor a reference, so
+    #: it is dropped and the resolution still runs, for the CARD, so the
+    #: refusal fires on it like any other missing reference. None means
     #: "resolve it", which is why there is no way to ask for no reference at
     #: all: a run that measures a real card with no reference REFUSES (see
     #: `refuse_unreferenced_clock`) rather than writing a sweep of rows whose
@@ -367,9 +370,12 @@ class RunConfig:
     #: Where that number came from, or, when it is None, why it is not known.
     #: One field either way, from `roofline.ReferenceClock.source`.
     reference_clock_source: str = ""
-    #: The attached card the resolution saw, "" for none. The refusal turns on
-    #: it: a card with no usable calibration is a pod misconfiguration, and no
-    #: card at all is a laptop, where no clock is being sampled anyway.
+    #: The attached card the resolution saw, "" for none, and SET ON EVERY PATH
+    #: that ends without a clock. The refusal turns on it together with the
+    #: clock: a card with no usable calibration is a pod misconfiguration, and
+    #: no card at all is a laptop, where no clock is being sampled anyway. A
+    #: path that dropped the clock and left this "" is a refusal that cannot
+    #: fire, which is how the non-positive branch shipped inert.
     reference_clock_card: str = ""
     #: Why a field this config could not determine is None, keyed by field name.
     #: The same contract `provenance.Provenance.missing` states, so a caller
@@ -473,6 +479,18 @@ class RunConfig:
         undetermined column this whole change exists to end. It is dropped to
         None here with the reason, and the refusal downstream then names it.
 
+        AND THAT DROP HAS TO ASK WHO IS ATTACHED, which is what the first cut
+        of this method did not do. `unreferenced_clock` turns on TWO fields, a
+        None clock AND a non-empty card, so a branch that set one and left the
+        other at "" built the wall at one of the two ways in: `RunConfig(
+        reference_clock_mhz=0)` on a pod dropped the number, recorded the
+        reason, refused NOTHING, and wrote a full sweep of
+        `clock_level_ok = undetermined` rows -- the exact state this method
+        exists to end, reached through the argument documented as the way out
+        of it. The resolver is therefore consulted on every path that ends with
+        no clock, for the card and not for a number to stand in, and
+        `reference_clock_card` is assigned in exactly ONE place below.
+
         THE CLOCK AND THE ROOF MUST COME FROM ONE FILE. `hardware` and this
         number are two readings of the same calibration. If `hardware` was
         supplied and is not the profile the clock came out of -- a datasheet
@@ -481,26 +499,32 @@ class RunConfig:
         against a number belonging to something else. That is dropped too, with
         both names in the reason.
         """
-        if self.reference_clock_mhz is not None:
-            if self.reference_clock_mhz > 0:
-                self.reference_clock_source = (
-                    f"{self.reference_clock_mhz:.0f} MHz, given by the caller "
-                    "rather than read from this card's calibration")
-                return
-            self.missing["reference_clock_mhz"] = (
-                f"the caller passed reference_clock_mhz="
-                f"{self.reference_clock_mhz!r}, which is not a clock; "
-                "`timing.clock_flags` reads any value <= 0 as no reference and "
-                "would have left LEVEL undetermined on every row without "
-                "saying so")
-            self.reference_clock_source = self.missing["reference_clock_mhz"]
-            self.reference_clock_mhz = None
+        supplied = self.reference_clock_mhz
+        if supplied is not None and supplied > 0:
+            self.reference_clock_source = (
+                f"{supplied:.0f} MHz, given by the caller rather than read "
+                "from this card's calibration")
             return
 
+        # The one assignment of the card, on the one path that can end with no
+        # clock. Anything that returns above this line has a clock, so the
+        # refusal never reads the field.
         ref = self.reference_clock_resolver()
+        self.reference_clock_card = ref.card
+        if supplied is not None:
+            self.reference_clock_mhz = None
+            self.reference_clock_source = (
+                f"the caller passed reference_clock_mhz={supplied!r}, which is "
+                "not a clock; `timing.clock_flags` reads any value <= 0 as no "
+                "reference and would have left LEVEL undetermined on every row "
+                "without saying so. The calibration was consulted for the "
+                "CARD, so this refuses like any other missing reference, and "
+                "not for a clock to quietly stand in for the one asked for")
+            self.missing["reference_clock_mhz"] = self.reference_clock_source
+            return
+
         self.reference_clock_mhz = ref.mhz
         self.reference_clock_source = ref.source
-        self.reference_clock_card = ref.card
         if (ref.mhz is not None and self.hardware is not None
                 and ref.profile and ref.profile != self.hardware.name):
             self.reference_clock_source = (

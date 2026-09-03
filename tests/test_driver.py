@@ -1292,14 +1292,43 @@ def test_a_non_positive_reference_is_not_a_reference(tmp_path):
     """`clock_flags` reads any value <= 0 as no reference at all, so a caller
     passing 0 would have bought the silent undetermined column this change
     exists to end. Dropped to None with the reason, and then refused on a card
-    like any other missing reference."""
+    like any other missing reference.
+
+    AND THE REFUSAL IS THE HALF THAT SHIPPED INERT. `unreferenced_clock` turns
+    on TWO fields, a None clock and a NON-EMPTY CARD, and the first cut of this
+    branch set the first and left the second at "": the wall built at one of
+    the two ways in, this rebuild's recurring defect, reached through the very
+    argument the refusal message offers as the way out. `RunConfig(
+    reference_clock_mhz=0)` on a pod then dropped the number, recorded the
+    reason, refused nothing, and wrote the whole sweep at
+    `clock_level_ok = undetermined`. The resolver is consulted for the CARD on
+    every path that ends without a clock, and not for a clock to stand in.
+    """
     cfg = cfg_for(tmp_path, reference_clock_mhz=0.0,
                   reference_clock_resolver=clock_from(1515.0))
     assert cfg.reference_clock_mhz is None
     assert "is not a clock" in cfg.missing["reference_clock_mhz"]
     assert T.clock_flags(1500.0, 1500.0, 1500.0, 0.0)[0] is None
-    # The resolver was never consulted: an explicit value is the caller's claim.
-    assert cfg.reference_clock_card == ""
+    # The card came from the resolver, so the refusal has both of its terms.
+    assert cfg.reference_clock_card == "NVIDIA H200"
+    assert D.unreferenced_clock(cfg) == ["eager"]
+    with pytest.raises(D.ReferenceClockRefused) as e:
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                    info=FAKE_INFO)
+    assert "NVIDIA H200" in str(e.value)
+    assert "is not a clock" in str(e.value)
+    assert not cfg.csv_path.exists() or SC.read_csv(cfg.csv_path) == []
+    # 1515 was there to be read and was NOT read: a bad explicit number is
+    # refused, never quietly replaced by the calibration it overrode.
+    assert "1515" not in cfg.reference_clock_source
+    # THE OTHER SIDE OF THE SAME BRANCH: off a card there is nothing to be
+    # level against, so the same bad value records its reason and measures on.
+    laptop = cfg_for(tmp_path / "laptop", reference_clock_mhz=0.0,
+                     reference_clock_resolver=clock_from(None, card=""))
+    assert laptop.reference_clock_card == ""
+    assert "is not a clock" in laptop.missing["reference_clock_mhz"]
+    assert D.unreferenced_clock(laptop) == []
 
 
 def test_an_explicit_reference_wins_and_says_so(tmp_path):
@@ -1412,6 +1441,70 @@ def test_the_two_resolvers_in_this_tree_read_one_clock_per_card():
     # And the missing case is None on both, not a guess on either.
     assert RF.reference_clock("NVIDIA B200").mhz is None
     assert sweep.reference_clock_mhz("NVIDIA B200")[0] is None
+
+
+def test_the_clock_cannot_come_out_of_a_file_the_roof_was_refused_from(tmp_path):
+    """ONE CALIBRATION, TWO READINGS, AND THEY HAVE TO BE THE SAME FILE.
+    `measured_doc` walked `load_measured`'s candidate NAMES in `load_measured`'s
+    order and then took the first file that merely EXISTED and parsed, while
+    `load_measured` reads each candidate through `load_hardware`, which SKIPS
+    one on `verified: false`, on a null bandwidth and on a missing block. The
+    two rules diverge on exactly the file that matters: an unverified
+    `measured_<card>.yaml` beside a valid `measured.yaml` levelled the run
+    against 1935 MHz while scoring it against the other file's roof, and the
+    config's own clock-and-roof cross-check could not see it because both files
+    carry the same `name:`. The candidate test is now `load_hardware` itself,
+    so it cannot be restated wrongly.
+
+    The remaining copy of this rule is `block_m_crossing_sweep._measured_yaml`,
+    another owner's file, which still accepts an unverified candidate. It is
+    named here so the next reader finds it; the pinning test above holds the two
+    together on the committed, verified yamls.
+    """
+    import yaml
+
+    card = "NVIDIA H200"
+    def write(stem, *, verified, bf16, clock):
+        (tmp_path / f"{stem}.yaml").write_text(yaml.safe_dump({
+            "name": "NVIDIA H200 (measured)", "verified": verified,
+            "memory": {"bandwidth_tb_s": 4.37},
+            "compute_dense_tflops": {"bf16": bf16},
+            "detail": {"gpu_name": card, "gemm_clock_mhz": clock}}))
+
+    write(RF.measured_slug(card), verified=False, bf16=900.0, clock=1935)
+    write("measured", verified=True, bf16=712.0, clock=1470)
+
+    hw = RF.load_measured(card, directory=tmp_path)
+    doc, reason = RF.measured_doc(card, directory=tmp_path)
+    ref = RF.reference_clock(card, directory=tmp_path)
+    assert reason == ""
+    # The roof and the clock are two readings of ONE document, asserted as one
+    # document and not as two numbers that happen to agree.
+    assert hw.peak_flops["bf16"] == doc["compute_dense_tflops"]["bf16"] * 1e12
+    assert ref.mhz == 1470.0
+    # And the number that was there to be taken, and was not taken.
+    unverified = yaml.safe_load(
+        (tmp_path / f"{RF.measured_slug(card)}.yaml").read_text())
+    assert unverified["detail"]["gemm_clock_mhz"] == 1935
+    assert "1935" not in ref.source
+
+    # THE FAIL BRANCH: the unverified file alone. `load_measured` has no roof,
+    # so `reference_clock` must have no clock either, and say which file it
+    # skipped rather than reading a number out of it.
+    (tmp_path / "measured.yaml").unlink()
+    assert RF.load_measured(card, directory=tmp_path) is None
+    empty, why = RF.measured_doc(card, directory=tmp_path)
+    assert empty == {}
+    assert "UnverifiedHardware" in why and RF.measured_slug(card) in why
+    bare = RF.reference_clock(card, directory=tmp_path)
+    assert bare.mhz is None and bare.card == card
+    # On a pod that is a refusal, not a sweep of undetermined rows.
+    cfg = cfg_for(tmp_path / "run", reference_clock_resolver=lambda: bare)
+    assert cfg.missing["reference_clock_mhz"] == why
+    with pytest.raises(D.ReferenceClockRefused):
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                    info=FAKE_INFO)
 
 
 def test_a_calibration_resolves_a_reference_its_own_plateau_can_clear(tmp_path):

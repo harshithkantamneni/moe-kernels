@@ -334,12 +334,22 @@ def measured_doc(gpu_name: str | None = None, directory: Path | None = None
 
     Read as a document rather than through `Hardware`, which carries only the
     headline peaks and drops everything under `detail` -- the clocks included.
-    The candidate order is `load_measured`'s, file for file and in the same
-    order, so a number taken from here cannot come out of a different file from
-    the one the roof came from. That is the whole point of the function: the
-    roof and the clock the roof was measured at are two readings of ONE
-    calibration, and resolving them separately is how a run ends up levelled
-    against one card while scored against another.
+    That is the whole point of the function: the roof and the clock the roof
+    was measured at are two readings of ONE calibration, and resolving them
+    separately is how a run ends up levelled against one card while scored
+    against another.
+
+    SO THE CANDIDATE TEST IS `load_hardware` ITSELF, not a restatement of it.
+    This function walked `load_measured`'s candidate NAMES in `load_measured`'s
+    order and then accepted the first file that merely existed and parsed,
+    while `load_measured` goes through `load_hardware`, which SKIPS a candidate
+    on `UnverifiedHardware`, on a null bandwidth and on a missing block. Those
+    two rules diverge on exactly the file that matters: a `verified: false`
+    `measured_<card>.yaml` beside a valid `measured.yaml` gave the roof from
+    one file and the clock from the other, and the caller-side cross-check
+    could not see it because both carry the same `name:`. Demonstrated at
+    1935 MHz against a 1470 MHz roof. Asking `load_hardware` costs a second
+    parse of one small file, once per run, and it cannot drift.
 
     The device check is the same rule, `device_name_matches`, over a stricter
     field: `detail.gpu_name`, which is what torch reported on the calibrating
@@ -361,6 +371,7 @@ def measured_doc(gpu_name: str | None = None, directory: Path | None = None
         return {}, ("no CUDA device is attached, so there is no card whose "
                     "calibration could say what clock the roof was measured at")
     looked: list[str] = []
+    skipped: list[str] = []
     for stem in (measured_slug(gpu_name), "measured"):
         path = (directory or HARDWARE_DIR) / f"{stem}.yaml"
         looked.append(path.name)
@@ -370,12 +381,26 @@ def measured_doc(gpu_name: str | None = None, directory: Path | None = None
             data = yaml.safe_load(path.read_text()) or {}
         except Exception as exc:                          # noqa: BLE001
             return {}, f"{path.name} did not parse: {type(exc).__name__}: {exc}"
+        try:
+            load_hardware(stem, directory=directory)
+        except (FileNotFoundError, ValueError, KeyError,
+                UnverifiedHardware) as exc:
+            skipped.append(f"{path.name} ({type(exc).__name__})")
+            continue
         named = str(_dig(data, ("detail", "gpu_name")) or data.get("name") or "")
         if named and not device_name_matches(named, gpu_name):
             return {}, (f"{path.name} was measured on {named!r} and this "
                         f"machine reports {gpu_name!r}; those are not the same "
                         "card's numbers")
         return data, ""
+    if skipped:
+        return {}, (f"no usable calibration for {gpu_name!r}: "
+                    f"{', '.join(skipped)} exists, but `load_measured` skips "
+                    "it for that reason and the roof did not come from it "
+                    "either, so a clock read out of it would be levelling "
+                    "against a file nothing else in this run used. Fix the "
+                    "file it names, or run `python "
+                    "scripts/calibrate_hardware.py --publish` on this box")
     return {}, (f"no calibration for {gpu_name!r}: none of "
                 f"{', '.join(looked)} exists under {directory or HARDWARE_DIR}. "
                 "Run `python scripts/calibrate_hardware.py --publish` on this "
