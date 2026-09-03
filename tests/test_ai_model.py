@@ -536,3 +536,28 @@ def test_an_infinity_is_still_refused_by_the_band():
     so it is caught by the band refusal rather than the NaN guard."""
     with pytest.raises(AIModelRefused):
         alpha_b_from_fitted(alpha_fitted=math.inf, phi=0.3, delta=0.0)
+
+
+def test_an_infinite_phi_or_delta_is_refused_rather_than_returning_nan():
+    """THE HOLE BESIDE THE ONE d601442 CLOSED. The NaN check tested each input
+    with isnan; an infinite phi or delta passed it, multiplied through to
+    inf - inf = NaN on the next line, and that NaN then walked the same
+    unbounded path. Found in review by sending phi=inf through. Every
+    non-finite input is refused before any arithmetic, and the message says
+    which kind it was."""
+    for kwargs, kind in (({"alpha_fitted": 0.5, "phi": math.inf, "delta": 0.0}, "infinite"),
+                         ({"alpha_fitted": 0.0, "phi": 0.3, "delta": math.inf}, "infinite"),
+                         ({"alpha_fitted": 0.5, "phi": math.nan, "delta": 0.0}, "NaN")):
+        with pytest.raises(AIModelRefused, match=kind):
+            alpha_b_from_fitted(**kwargs)
+    with pytest.raises(AIModelRefused, match="infinite"):
+        cap_from_fitted(0.5, block_m=128, b=2, phi=math.inf, delta=0.0)
+
+
+def test_a_nan_dimension_is_refused_by_the_positivity_check():
+    """`v <= 0` is False for NaN, so a NaN block_m, K or b used to pass the
+    positivity check and surface as a NaN cap. `not v > 0` catches it."""
+    with pytest.raises(AIModelRefused, match="positive"):
+        cap_from_fitted(0.5, block_m=math.nan, b=2, phi=0.3, delta=0.0)
+    with pytest.raises(AIModelRefused, match="positive"):
+        cap(N, math.nan, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
