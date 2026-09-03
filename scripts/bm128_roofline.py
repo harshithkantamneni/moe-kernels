@@ -158,12 +158,54 @@ result. `scripts/occupancy_vs_swizzle.py` measures the residency effect directly
 and its size is what has to be subtracted from any gap before the gap is read as
 tile-attributable.
 
-256 is not free: one CTA needs 4 x (256x64 + 64x64) x 2 B = 160 KiB of shared
-memory, which fits sm_90's 227 KiB and fits sm_80's 163 KiB by three, and its
-64x64 fp32 accumulator is 64 registers per thread against a ceiling of 255. Both
-bills are computed from `block_m_crossing_sweep.tile_resources` and REFUSED
-before a pod is rented, because a spilled kernel still returns a time and that
-time still plots.
+256 is not free: at BLOCK_SIZE_N=64 one CTA needs 4 x (256x64 + 64x64) x 2 B =
+160 KiB of shared memory, which fits sm_90's 227 KiB and fits sm_80's 163 KiB by
+three, and its 256x64 fp32 accumulator is 64 registers per thread against a
+ceiling of 255. Both bills are computed from
+`block_m_crossing_sweep.tile_resources` and REFUSED before a pod is rented,
+because a spilled kernel still returns a time and that time still plots.
+
+AND AT vLLM'S SHIPPED BLOCK_SIZE_N THERE IS NO CONTROL AT ALL. THE STUDY CANNOT
+CONFIRM ITS HEADLINE AT vLLM'S SHIPPED CONFIGURATION ON sm_90. This is the
+file's own finding, 2026-09-03, and it is not a defect in the arm: it is the
+design meeting the hardware. vLLM's tuned entry for mixtral and for qwen2 on the
+H200 is BLOCK_SIZE_M=128 with BLOCK_SIZE_N=256 at every batch from 512 tokens up
+(checked in `moe/bench/hardware/vllm_configs`, not assumed). At a FIXED
+BLOCK_SIZE_N the only way to buy a tile headroom is a larger BLOCK_SIZE_M; the
+only power of two above 128 Triton will pin is 256; and a 256x256 fp32
+accumulator is 65536 32-bit registers, which is the ENTIRE per-block register
+file of every architecture from sm_70 to sm_100. num_warps redistributes that
+total across more threads and does not shrink it, num_stages and BLOCK_SIZE_K do
+not touch it, and there is no card to move to. So four of the five escapes are
+arithmetic dead ends and the fifth concedes the question:
+
+  * a larger BM at FEWER STAGES -- stages are shared memory, they are not the
+    accumulator, and 256x256 is 256 registers per thread at 8 warps at 1 stage
+    exactly as at 4;
+  * a larger BM at MORE WARPS -- 16 warps reads 128 registers per thread and
+    passes the per-thread check, which is why `control_resource_hint` used to
+    print "DOES FIT, at --num-warps 16 --num-stages 3"; the block still asks for
+    all 65536 registers and has none left for a pointer;
+  * a control with a BLOCK_SIZE_N OF ITS OWN, 128, so that 256x128 fits -- this
+    one looks right and is the trap. `moe.bench.ai_model.cap` is
+    2 / (b (alpha_b/BM + alpha_a/BN + 1/K)), SYMMETRIC in the two tile
+    dimensions, so 256x128 has EXACTLY the subject 128x256's cap, 83.59 Op/B
+    against 83.59, along with the same accumulator, the same shared memory and
+    the same residency. It is the subject's own ceiling wearing a larger M, and
+    `block_m_crossing_sweep.ai_cap` would have called it twice the headroom
+    because that form is 2 BM / (alpha b) and BLOCK_SIZE_N is not in it;
+  * the SUBJECT at BLOCK_SIZE_N=128, where a BLOCK_M=256 control does fit at 8
+    warps and 4 stages -- buildable, and a different question: vLLM ships no
+    BLOCK_SIZE_M=128 entry at BLOCK_SIZE_N=128 for either model, on either
+    dtype, so that arm may not be quoted as the production claim;
+  * `--control none`, the subject alone. THE ONLY ONE A SESSION CAN BUY, and
+    what it buys is asymmetric: an uncontrolled run REACHING the roof kills the
+    study's central claim outright, because a refutation needs no positive
+    control -- the subject is one. An uncontrolled run stopping below the roof
+    is a fraction of the roof and is NOT a ceiling, and the verdict it reaches
+    says so in its own words (`UNCONTROLLED`), with C3 and C4 not scored,
+    omitted rather than left UNKNOWN, so nothing downstream can read a gate that
+    examined nothing as a gate that found no failure.
 
 A PLATEAU IS A DERIVATIVE, SO IT IS GATED AS ONE. "It flattened out" is not a
 measurement. The gate is: the throughput gain over the last `--plateau-doublings`
@@ -353,6 +395,43 @@ DEFAULT_CONTROL_BLOCK_M = 256
 #: than double and a control that only just clears it is one whose own ceiling
 #: is part of the argument.
 CONTROL_CAP_MARGIN = 1.30
+
+#: The spelling `--control none` takes, and the one the run id carries for it.
+#: A word and not an empty string, because `moe.bench.provenance.run_id` refuses
+#: an empty value and because an id reading `c-none` says which arm this was.
+CONTROL_NONE = "none"
+
+#: 32-bit registers ONE THREAD BLOCK may use. The CUDA technical specifications
+#: list 64 K per SM and 64 K per block alike for every compute capability in
+#: `block_m_crossing_sweep.SMEM_PER_BLOCK_BYTES`, 7.0 through 10.0, so this is
+#: not a per-card number and there is no opt-in past it.
+#:
+#: WHY IT LIVES HERE AND NOT IN THE SWEEP'S RESOURCE MODEL. The sweep bills the
+#: accumulator PER THREAD -- `BM BN / (32 num_warps)` against 255 -- which is the
+#: limit that binds at num_warps=8 and DISSOLVES as warps are added: sixteen
+#: warps halve the per-thread count and the same accumulator passes. The
+#: per-block total does not move with warps at all, because a `BM x BN` fp32
+#: accumulator is `BM x BN` registers however many threads hold them. Billing
+#: only per thread is what let `control_resource_hint` print "THE REQUESTED
+#: CONFIGURATION DOES FIT, at --num-warps 16 --num-stages 3" on this laptop for
+#: a 256x256 accumulator that is 65536 registers -- the whole block-level file,
+#: with nothing left for a pointer, an index or the K loop. That was the remedy
+#: the pod would have rejected, stated unqualified, in the one sentence an
+#: operator was meant to act on. Choosing the control is this file's job, so the
+#: arithmetic that decides it is this file's too.
+REGISTERS_PER_BLOCK = 65536
+
+#: Tile heights a control may be searched over. Triton pins block shapes to
+#: powers of two, so 128's successors are these three and there is no 192 to
+#: reach for when 256 does not fit.
+CONTROL_CANDIDATE_BLOCK_M = (256, 512, 1024)
+
+#: Warp and stage counts the search will try, widest first for the warps
+#: because more warps is the only knob that moves the PER-THREAD half of the
+#: register bill, and deepest first for the stages because fewer stages is the
+#: only knob that moves shared memory.
+CONTROL_WARP_COUNTS = (8, 16, 32)
+CONTROL_STAGE_COUNTS = (5, 4, 3, 2)
 
 #: Throughput at or above this fraction of the measured roof counts as REACHING
 #: the roof. Imported rather than restated so "compute bound" means one thing
@@ -877,7 +956,7 @@ def roof_card_slug(roof: Roof) -> str:
 
 
 def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
-                         control_block_m: int,
+                         control_block_m: int | None,
                          published_dir: Path | None = None) -> tuple[PriorArm | None, str]:
     """The outcome this configuration's own published arms already imply.
 
@@ -933,8 +1012,9 @@ def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
             path=_corpus_path(path), fixed=fixed,
             subject_peak=_frac(_ladder_peak(ladder, cfg, SUBJECT_BLOCK_M,
                                             str(SUBJECT_BLOCK_M)), roof),
-            control_peak=_frac(_ladder_peak(ladder, cfg, control_block_m,
-                                            str(control_block_m)), roof),
+            control_peak=None if control_block_m is None else
+            _frac(_ladder_peak(ladder, cfg, control_block_m,
+                               str(control_block_m)), roof),
             roof_tflops=roof.tflops, control_block_m=control_block_m))
     if not hits:
         return None, (f"no published arm matches {want} ({scanned} report(s) "
@@ -946,6 +1026,10 @@ def published_prediction(cfg, roof: Roof, *, block_n: int, group_m: int,
     # the smallest gap, i.e. the reading least favourable to a tile effect.
     arm = max(hits, key=lambda a: (a.gap is not None, a.subject_peak or 0.0))
     among = _selection_phrase(hits, want)
+    if control_block_m is None:
+        return arm, (f"{arm.path}, {among}. --control none was given, so there "
+                     "is no CONTROL half to predict and no outcome to predict "
+                     "either; only the subject's peak is comparable")
     if arm.control_peak is None:
         return arm, (f"{arm.path}, {among}, has no BLOCK_M={control_block_m} "
                      "ladder, so the CONTROL half of the prediction does not "
@@ -991,7 +1075,7 @@ def _selection_phrase(hits: list[PriorArm], want: str) -> str:
 
 
 def prior_arm_lines(cfg, roof: Roof, *, block_n: int, group_m: int,
-                    control_block_m: int,
+                    control_block_m: int | None,
                     published_dir: Path | None = None) -> list[str]:
     """The plan's PREDICTED OUTCOME section: what the corpus already says.
 
@@ -1018,8 +1102,9 @@ def prior_arm_lines(cfg, roof: Roof, *, block_n: int, group_m: int,
     ctl = ("NOT MEASURED -- the corpus has no ladder for this tile at this "
            "BLOCK_SIZE_N" if arm.control_peak is None
            else f"{arm.control_peak:.3f} of the roof")
-    out.append(f"             BLOCK_M={SUBJECT_BLOCK_M} peaked at {sub}; "
-               f"BLOCK_M={control_block_m} {ctl}")
+    out.append(f"             BLOCK_M={SUBJECT_BLOCK_M} peaked at {sub}"
+               + ("; this arm has no control" if control_block_m is None
+                  else f"; BLOCK_M={control_block_m} {ctl}"))
     if arm.gap is None:
         out.append("             so the gap, and with it the outcome, cannot "
                    "be predicted. Only the subject's half is known.")
@@ -1679,7 +1764,7 @@ def gate_v1_pin(compiles: dict[int, int], executed: dict[int, int],
         list(inner.lines))
 
 
-def gate_v2_non_vacuity(subject: list[Point], control: list[Point],
+def gate_v2_non_vacuity(subject: list[Point], control: list[Point] | None,
                         planned_multi_tile: int, *, onset_tokens_value: int
                         ) -> Gate:
     """Did this run measure the thing it is about.
@@ -1688,23 +1773,36 @@ def gate_v2_non_vacuity(subject: list[Point], control: list[Point],
     the third is the one that matters: crossing the multi-tile onset is the
     entire premise, so a run whose deepest subject point is still one tile per
     expert has measured the regime TEMPO already describes and nothing else.
+
+    `control=None` is `--control none`, and the SHARED-TOKEN count is then
+    dropped rather than scored as zero. An uncontrolled arm shares its batches
+    with nothing by design, so scoring it there would fail this gate for the
+    condition the operator asked for -- and a VALIDITY failure voids the two
+    claim gates such a run exists to produce. The first two counts still apply
+    and can still fail.
     """
     deep = multi_tile(subject)
     reached = max((p.tiles for p in deep), default=0)
-    shared = len({p.tokens for p in multi_tile(control)}
-                 & {p.tokens for p in deep})
-    ok = (len(deep) >= MIN_MULTI_TILE_POINTS and reached >= 4 and shared >= 2)
+    shared = (None if control is None
+              else len({p.tokens for p in multi_tile(control)}
+                       & {p.tokens for p in deep}))
+    ok = (len(deep) >= MIN_MULTI_TILE_POINTS and reached >= 4
+          and (shared is None or shared >= 2))
     return Gate(
         VALIDITY, "V2 non-vacuity",
-        "the sweep crossed the multi-tile onset and measured both tiles there",
+        "the sweep crossed the multi-tile onset and measured "
+        + ("the subject there" if control is None else "both tiles there"),
         f">= {MIN_MULTI_TILE_POINTS} retained full-stack multi-tile subject "
-        "points, >= 4 M-tiles per expert reached, >= 2 token counts shared with "
-        "the control",
+        "points, >= 4 M-tiles per expert reached"
+        + (", and no control to share them with"
+           if control is None else ", >= 2 token counts shared with the "
+                                   "control"),
         ok,
         f"{len(deep)} retained subject points of {planned_multi_tile} "
         f"multi-tile batches planned, deepest "
-        f"{reached} M-tiles per expert, {shared} token counts shared with the "
-        "control",
+        f"{reached} M-tiles per expert, "
+        + ("no control in this arm" if shared is None else
+           f"{shared} token counts shared with the control"),
         "every claim gate. Below the onset there is one tile per expert, the "
         "re-read term does not exist, and this script has measured the regime "
         "the prior work already agrees about",
@@ -2068,6 +2166,15 @@ NOT_TILE = "PLATEAU IS NOT TILE-ATTRIBUTABLE"
 #: positive. It is a RESULT and the study may quote the gap; it is not the
 #: headline and the study may not quote a ceiling.
 GAP_UNLOCATED = "TILE-DEPENDENT GAP, CEILING UNLOCATED"
+#: The fifth outcome, added 2026-09-03 with `--control none`. The subject
+#: stopped below the roof and NOTHING cancelled, because no control ran. It is a
+#: measurement of the subject's fraction of the roof and it is not a ceiling; a
+#: run reaching it may quote the fraction and may quote the derivative, and may
+#: not quote an attribution. It exists as its own word rather than as NOT SETTLED
+#: because "we measured the production configuration and it stopped at 0.5 of
+#: this card's dense rate, uncontrolled" is a result, and filing it under the
+#: same word as a broken instrument would lose it.
+UNCONTROLLED = "BELOW THE ROOF, UNCONTROLLED: NOT A CEILING"
 UNSETTLED = "NOT SETTLED"
 
 #: Printed under EVERY verdict this script can reach. The audit found it under
@@ -2088,16 +2195,44 @@ RESIDENCY_CONFOUND = [
 ]
 
 
+#: Printed under every verdict an UNCONTROLLED arm can reach, in place of
+#: `RESIDENCY_CONFOUND`. The residency paragraph is a statement about how the
+#: subject and the control differ, and printing it where no control ran would
+#: describe a comparison that did not happen. What replaces it is not a smaller
+#: caveat but a larger one.
+NO_CONTROL_CAVEAT = [
+    "NO CONTROL RAN IN THIS ARM, so nothing cancelled. The align, the permute, "
+    "the activation, the scatter and the clocks are all inside the timed call "
+    "and none of them is subtracted: the subject's fraction of the roof is a "
+    "fraction of the roof, and it is not a ceiling. The residency confound the "
+    "controlled arms carry does not apply here because there is no second tile "
+    "to differ from; what replaces it is the larger hole, which is that the "
+    "shortfall has no attribution at all. A control at this BLOCK_SIZE_N does "
+    "not exist -- the plan's CONTROL SEARCH prints the arithmetic, and what "
+    "would confirm the claim is listed beside it.",
+]
+
+
 def verdict(gates: list[Gate]) -> tuple[str, list[str]]:
     """One sentence, derived from the gates and from nothing else.
 
-    Every branch returns through one place at the bottom, which is how
-    `RESIDENCY_CONFOUND` reaches every one of them: a confound appended by hand
-    in each branch is a confound that goes missing from the branch nobody
-    revisits, and that is exactly what happened here.
+    Every branch returns through one place at the bottom, which is how the
+    caveat reaches every one of them: a confound appended by hand in each branch
+    is a confound that goes missing from the branch nobody revisits, and that is
+    exactly what happened here.
+
+    WHICH CAVEAT, decided from the gate list and not from a flag. A CLAIM gate
+    set with no C3 in it is what `analyse` produces under `--control none` and
+    is produced for no other reason, so its absence is the fact. A gate list
+    with NO claim gates at all -- a validity-only refusal -- keeps the residency
+    paragraph, because that arm did have a control and did not get far enough
+    to compare it.
     """
     call, why = _verdict_call(gates)
-    return call, why + RESIDENCY_CONFOUND
+    uncontrolled = (any(g.kind == CLAIM for g in gates)
+                    and not any(g.name.startswith("C3") for g in gates))
+    return call, why + (NO_CONTROL_CAVEAT if uncontrolled
+                        else RESIDENCY_CONFOUND)
 
 
 def _verdict_call(gates: list[Gate]) -> tuple[str, list[str]]:
@@ -2136,6 +2271,27 @@ def _verdict_call(gates: list[Gate]) -> tuple[str, list[str]]:
             "has cancelled and the gap did not survive.",
             "The shortfall is a property of the fused layer, not of the tile, "
             "and it is not the ceiling this study proposed."]
+    if c3 is None and c1 is not None and c2 is not None:
+        # `analyse` omits C3 and C4 only under `--control none`. Both remaining
+        # claim gates PASSED, which for C1 means the subject stayed BELOW the
+        # roof: the reading that needs a control and does not have one. The two
+        # branches above have already taken the two readings that do not need
+        # one -- C1 FAIL is a refutation and C2 FAIL is a sweep too shallow --
+        # so this arm is asymmetric by construction and says so.
+        return UNCONTROLLED, [
+            f"At BLOCK_M={SUBJECT_BLOCK_M} throughput rose and then stopped "
+            "below this card's own measured dense bf16 rate, at the "
+            "configuration vLLM ships. THAT IS WHERE THE READING STOPS.",
+            "No control ran, so the shortfall is not attributed: it may be an "
+            "arithmetic-intensity ceiling on the tile, and it may be whatever "
+            "share of the fused layer is spent outside its GEMMs. This run "
+            "does not distinguish them and may not be quoted as if it did.",
+            "THIS ARM CAN REFUTE THE HEADLINE AND CANNOT CONFIRM IT. Had the "
+            "subject reached the roof, C1 would have FAILED and the study's "
+            "central claim would be dead with no control needed. It did not, "
+            "so the claim survives unconfirmed, which is not the same as "
+            "supported.",
+        ]
     if c1 is not None and c1.passed and c2 is not None and c2.passed and \
             c3 is not None and c3.passed:
         if c4 is None:
@@ -2173,13 +2329,74 @@ def _verdict_call(gates: list[Gate]) -> tuple[str, list[str]]:
 # Predictions, registered and printed with numbers before anything is measured.
 # --------------------------------------------------------------------------
 
-def predictions_text(cfg, roof: Roof, b: int, control_block_m: int,
+def predictions_text(cfg, roof: Roof, b: int, control_block_m: int | None,
                      rows: list[int], doublings: float) -> str:
+    """The registered predictions, and the three that do not exist without a control.
+
+    P1, P4 and P5 are all statements about the control, so `--control none`
+    replaces them with the one sentence that is true instead of printing three
+    predictions nothing will score. A registered prediction with no measurement
+    behind it is how a report comes to look complete while its headline is
+    unreachable.
+    """
     lo, hi = predicted_plateau_band(roof.ridge, b)
     cap_s = SWEEP.ai_cap(SUBJECT_BLOCK_M, max(ALPHA_128_BAND), b)
-    cap_c = SWEEP.ai_cap(control_block_m, SWEEP.ALPHA, b)
     onset = onset_tokens(cfg, SUBJECT_BLOCK_M)
     deep = [r for r in rows if r > SUBJECT_BLOCK_M]
+    if control_block_m is None:
+        control_predictions = [
+            "  P1  THERE IS NO CONTROL IN THIS ARM, so P1, P4 and P5 -- the "
+            "separation, the control's",
+            "      derivative and whether it reaches the roof -- do not exist "
+            "and are not registered.",
+            "      Gates C3 and C4 are not scored, and the headline cannot be "
+            "issued by this run at all.",
+        ]
+        fork = [
+            "  THE FORK, in two ways, and only two. Throughput reaches the "
+            "roof -> the ceiling is not binding and",
+            "  the study's central claim is about a regime that does not "
+            "occur, which needs no control to say.",
+            "  It stops below the roof -> that is a fraction of the roof and "
+            "NOT a ceiling: nothing here separates",
+            "  the tile from the fused layer it runs inside. THIS ARM CAN "
+            "REFUTE THE CLAIM AND CANNOT CONFIRM IT.",
+        ]
+    else:
+        cap_c = SWEEP.ai_cap(control_block_m, SWEEP.ALPHA, b)
+        control_predictions = [
+            f"  P1  the control BLOCK_M={control_block_m} beats the subject by "
+            f"at least {CONTROL_SEPARATION:.2f} of the roof",
+            f"      ({CONTROL_SEPARATION * roof.tflops:.0f} TFLOP/s). Its cap "
+            f"is {cap_c:.0f} Op/B against a ridge of {roof.ridge:.1f}, "
+            f"{cap_c / roof.ridge:.1f}x, so it has no ceiling to hit.",
+        ]
+        fork = [
+            "  THE FORK, in three ways. Throughput reaches the roof -> the "
+            "ceiling is not binding and the study's",
+            "  central claim is about a regime that does not occur. It "
+            "plateaus below the roof and the control",
+            "  plateaus with it -> the shortfall is the fused layer's, not the "
+            "tile's. It plateaus below the roof,",
+            "  the control beats it by the separation, and the control reaches "
+            "the roof -> the ceiling is real and",
+            "  binds where production runs; the control beats it and does NOT "
+            "reach the roof -> a tile-dependent",
+            "  gap with the ceiling unlocated. All four are results; only one "
+            "is the study's.",
+        ]
+    tail = ([
+        "  P4  the control does NOT plateau below the roof over the same span.",
+        f"  P5  the control REACHES the roof ({ROOF_REACHED:.2f} of "
+        f"{roof.tflops:.1f} = {ROOF_REACHED * roof.tflops:.0f} TFLOP/s), which "
+        "is what makes the subject's",
+        "      shortfall a located ceiling rather than a gap of unknown "
+        "height. REGISTERED AS THE ONE THIS",
+        "      STUDY EXPECTS TO FAIL: no tile in the published corpus reaches "
+        "0.95 of ridge x bandwidth,",
+        "      the BLOCK_M=256 control peaking at 0.48-0.54 of the roof on the "
+        "H200 and 0.56-0.64 on the A100.",
+    ] if control_block_m is not None else [])
     return "\n".join([
         "## Registered predictions, with numbers, before anything is measured",
         "",
@@ -2192,11 +2409,7 @@ def predictions_text(cfg, roof: Roof, b: int, control_block_m: int,
         f"{max(rows) // SUBJECT_BLOCK_M} M-tiles per expert, "
         f"{len(deep)} multi-tile points",
         "",
-        f"  P1  the control BLOCK_M={control_block_m} beats the subject by at "
-        f"least {CONTROL_SEPARATION:.2f} of the roof",
-        f"      ({CONTROL_SEPARATION * roof.tflops:.0f} TFLOP/s). Its cap is "
-        f"{cap_c:.0f} Op/B against a ridge of {roof.ridge:.1f}, "
-        f"{cap_c / roof.ridge:.1f}x, so it has no ceiling to hit.",
+    ] + control_predictions + [
         f"  P2  the subject plateaus between {lo:.3f} and {hi:.3f} of the roof "
         f"({lo * roof.tflops:.0f} to {hi * roof.tflops:.0f} TFLOP/s), which is "
         "what the",
@@ -2209,30 +2422,7 @@ def predictions_text(cfg, roof: Roof, b: int, control_block_m: int,
         f"{PLATEAU_GAIN_PER_DOUBLING:.1%} per doubling over the last "
         f"{doublings:g} doublings, by "
         f"n={max(rows) // SUBJECT_BLOCK_M} M-tiles.",
-        "  P4  the control does NOT plateau below the roof over the same span.",
-        f"  P5  the control REACHES the roof ({ROOF_REACHED:.2f} of "
-        f"{roof.tflops:.1f} = {ROOF_REACHED * roof.tflops:.0f} TFLOP/s), which "
-        "is what makes the subject's",
-        "      shortfall a located ceiling rather than a gap of unknown height. "
-        "REGISTERED AS THE ONE THIS",
-        "      STUDY EXPECTS TO FAIL: no tile in the published corpus reaches "
-        "0.95 of ridge x bandwidth,",
-        "      the BLOCK_M=256 control peaking at 0.48-0.54 of the roof on the "
-        "H200 and 0.56-0.64 on the A100.",
-        "",
-        "  THE FORK, in three ways. Throughput reaches the roof -> the ceiling "
-        "is not binding and the study's",
-        "  central claim is about a regime that does not occur. It plateaus "
-        "below the roof and the control",
-        "  plateaus with it -> the shortfall is the fused layer's, not the "
-        "tile's. It plateaus below the roof,",
-        "  the control beats it by the separation, and the control reaches the "
-        "roof -> the ceiling is real and",
-        "  binds where production runs; the control beats it and does NOT reach "
-        "the roof -> a tile-dependent",
-        "  gap with the ceiling unlocated. All four are results; only one is "
-        "the study's.",
-    ])
+    ] + tail + [""] + fork)
 
 
 # --------------------------------------------------------------------------
@@ -2244,7 +2434,7 @@ class Plan:
     model: str
     dtype: str
     pinned: dict
-    control_block_m: int
+    control_block_m: int | None
     subject_rows: list[int]
     control_rows: list[int]
     reps: int
@@ -2266,8 +2456,12 @@ class Plan:
             f"subject      BLOCK_M={SUBJECT_BLOCK_M} at rows {self.subject_rows}",
             f"             tokens "
             f"{[SWEEP.tokens_for_rows(cfg, r) for r in self.subject_rows]}",
-            f"control      BLOCK_M={self.control_block_m} at rows "
-            f"{self.control_rows} -- the same batches, a tile with no ceiling",
+            (f"control      BLOCK_M={self.control_block_m} at rows "
+             f"{self.control_rows} -- the same batches, a tile with no ceiling"
+             if self.control_block_m is not None else
+             "control      NONE. --control none was given: this arm measures "
+             "the subject alone, so it can REFUTE the claim and can never "
+             "confirm it"),
             f"repeats      {self.reps} round-robin passes per tile, so a "
             "throttled cell can be told from a tile effect",
             f"timing       {self.instrument}",
@@ -2299,11 +2493,24 @@ def build_plan(args, cfg, b: int, roof: Roof, capability) -> Plan:
                   num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
                   BLOCK_SIZE_N=args.block_n, BLOCK_SIZE_K=args.block_k)
     subject_rows = doubling_rows(cfg, args.r_min, args.r_max, SUBJECT_BLOCK_M)
-    control_rows = [r for r in subject_rows if r % args.control == 0]
-    tiles = (SUBJECT_BLOCK_M, args.control)
+    control_rows = ([] if args.control is None
+                    else [r for r in subject_rows if r % args.control == 0])
+    tiles = ((SUBJECT_BLOCK_M,) if args.control is None
+             else (SUBJECT_BLOCK_M, args.control))
     resources, refusals = SWEEP.tile_resource_plan(pinned, tiles, b, capability)
+    # THE PER-BLOCK REGISTER FILE, merged in beside the sweep's per-thread bill
+    # rather than replacing it. The two catch different tiles: the sweep's
+    # catches 256x256 at 8 warps and lets it through at 16, and this one catches
+    # it at every warp count. A refusal from either is a refusal.
+    for tile in tiles:
+        why = register_file_refusal(tile, args.block_n)
+        if why:
+            refusals[tile] = "; ".join(filter(None, (refusals.get(tile), why)))
     total = 0.0
-    for bm, rows in ((SUBJECT_BLOCK_M, subject_rows), (args.control, control_rows)):
+    for bm, rows in ((SUBJECT_BLOCK_M, subject_rows),
+                     (args.control, control_rows)):
+        if bm is None:
+            continue
         total += args.reps * SWEEP.estimated_seconds(
             cfg, rows, [bm], alpha=args.alpha, ridge=roof.ridge,
             bandwidth_gbps=roof.bandwidth_gbps, b=b,
@@ -2316,92 +2523,213 @@ def build_plan(args, cfg, b: int, roof: Roof, capability) -> Plan:
                 resources, refusals, instrument_name())
 
 
-def control_resource_hint(args, b: int, capability) -> str:
-    """The pins under which the REQUESTED configuration would fit, or none exist.
+def accumulator_registers(block_m: int, block_n: int) -> int:
+    """One CTA's fp32 accumulator, in 32-bit registers: `BM x BN`.
 
-    R2 / audit A8. The driver is adding a second roofline arm at the production
-    tuning vLLM actually ships for mixtral on the H200 -- BLOCK_SIZE_N=256 with
-    GROUP_SIZE_M 16 or 32 -- and at the default pins that arm cannot run: a
-    256x256 fp32 accumulator needs 256 registers per thread at num_warps=8
-    against a hardware maximum of 255, and 4 stages of (256x64 + 64x256) is 256
-    KiB of shared memory against sm_90's 227 KiB. Both are hard facts about the
-    hardware, so the refusal is correct and stays.
-
-    What was missing is the next sentence. "Change --num-stages, --block-n or
-    --control" sends an operator to guess, on a rented pod, at a bill this file
-    can compute for free: the accumulator is the ceiling and only more warps
-    move it, then the stages have to come down for the shared memory. So this
-    searches the same `tile_resource_plan` the refusal came from, over the warp
-    and stage counts Triton will take, and names the first setting that fits --
-    or says plainly that none does, which is also an answer and a cheaper one
-    than finding out at the pod.
-
-    THE SETTING APPLIES TO BOTH TILES. That is not a caveat, it is the design:
-    C3 rests on the subject and the control differing in the tile and in nothing
-    else, so a hint that lowered the stages for the control alone would buy a
-    measurement that cannot be compared.
-
-    WITHOUT A CAPABILITY, ONLY HALF THE BILL EXISTS, AND ONLY HALF IS NAMED.
-    `SWEEP.resolve_capability` returns None off a device, `tile_resources` then
-    leaves `smem_limit_bytes` unset and NO shared-memory refusal can fire, so
-    the same search returns the first pair whose REGISTERS fit and would call it
-    a fit. That is how this function came to print "DOES FIT, at --num-warps 16
-    --num-stages 4" on a laptop for the very configuration the paragraph above
-    computes as 256 KiB against sm_90's 227 KiB: the remedy the pod rejects,
-    stated unqualified, found in review on 2026-09-02. The register ceiling is
-    255 on every architecture this can run on, so the WARP count is decidable
-    off a device and is still named; the stage count is not, and is refused with
-    the flag that makes it decidable rather than guessed at.
+    `tl.dot` accumulates in fp32 and the accumulator is register resident, so a
+    thread block holds one 32-bit register per output element it owns. WARP
+    COUNT DOES NOT APPEAR, and that is the whole reason this sits beside the
+    sweep's per-thread bill rather than inside it: warps redistribute this
+    total across more threads, they do not reduce it.
     """
-    tiles = (SUBJECT_BLOCK_M, args.control)
-    for warps in (8, 16, 32):
-        for stages in (args.num_stages, 4, 3, 2, 1):
-            pinned = dict(SWEEP.FIXED, num_stages=stages, num_warps=warps,
-                          GROUP_SIZE_M=args.group_m,
-                          BLOCK_SIZE_N=args.block_n,
-                          BLOCK_SIZE_K=args.block_k)
-            _, refusals = SWEEP.tile_resource_plan(pinned, tiles, b, capability)
-            if not refusals:
-                if (warps, stages) == (args.num_warps, args.num_stages):
+    return block_m * block_n
+
+
+def register_file_refusal(block_m: int, block_n: int) -> str:
+    """Empty when a CTA's accumulator leaves room for the rest of the kernel.
+
+    THE LIMIT THE PER-THREAD CHECK CANNOT SEE. `block_m_crossing_sweep`
+    refuses a tile whose accumulator needs more than 255 registers per thread,
+    and at num_warps=8 that catches 256x256 by one register. It stops catching
+    it at num_warps=16, where the same 65536 registers are spread over 512
+    threads and read 128 each -- comfortably inside 255, and still the entire
+    per-block register file. A block that spends 100% of the file on its
+    accumulator has none left for its pointers, its indices or its K loop, so
+    the compiler spills and the timing is the timing of a spilled kernel.
+
+    STRICTLY LESS THAN, and no tuned margin above it. The exact boundary is a
+    fact; where the real kernel starts spilling is somewhere below it and is
+    not knowable from here. So this is a NECESSARY condition and not a
+    sufficient one, and it is stated that way rather than padded to a number
+    that would look like a measurement.
+    """
+    acc = accumulator_registers(block_m, block_n)
+    if acc < REGISTERS_PER_BLOCK:
+        return ""
+    return (f"the {block_m}x{block_n} fp32 accumulator is {acc} 32-bit "
+            f"registers per thread block against a per-block file of "
+            f"{REGISTERS_PER_BLOCK}, so the accumulator ALONE is "
+            f"{acc / REGISTERS_PER_BLOCK:.0%} of the file and nothing is left "
+            "for the pointers, the indices or the K loop. No num_warps fixes "
+            "this: warps divide the total across more threads, they do not "
+            "shrink it, and num_stages and BLOCK_SIZE_K do not touch it at "
+            "all. The kernel spills to local memory and its time is not the "
+            "time of the tiling this sweep is about")
+
+
+def control_feasibility(*, block_n: int, block_k: int, dtype_bytes: int,
+                        capability, alpha: float, ridge: float
+                        ) -> tuple[list[tuple[int, int, int]], list[str]]:
+    """Every tile that could serve as a control at this BLOCK_SIZE_N, with its bill.
+
+    Returns `(fits, lines)`: the `(BLOCK_M, num_warps, num_stages)` triples under
+    which BOTH tiles can be pinned, and the arithmetic for a reader. An empty
+    `fits` is an answer and usually the interesting one.
+
+    BOTH TILES, NOT THE CONTROL ALONE. A pin that fits the control and not the
+    subject buys a measurement that cannot be compared, so each candidate is
+    billed through `SWEEP.tile_resource_plan` over the pair, which is the same
+    function the plan's own refusals come from.
+
+    WITHOUT A CAPABILITY ONLY HALF THE BILL EXISTS. `tile_resources` leaves
+    `smem_limit_bytes` unset off a device and `smem_fits` is then None, which
+    this treats as NOT a fit -- never as one. The register half is decidable
+    everywhere, so a tile refused on registers is refused from a laptop with no
+    flag, which is how the finding below is reachable without renting anything.
+    """
+    where = (f"sm_{capability[0]}{capability[1]}" if capability else
+             "NO --capability GIVEN, so the shared-memory half is undecidable "
+             "here and nothing will be called a fit on the register half alone")
+    smem_limit = SWEEP.SMEM_PER_BLOCK_BYTES.get(capability) if capability else None
+    lines = [
+        f"CONTROL SEARCH at BLOCK_SIZE_N={block_n}, BLOCK_SIZE_K={block_k}, "
+        f"{dtype_bytes} B per element, {where}",
+        "  the bills: accumulator BLOCK_M x BLOCK_SIZE_N fp32 registers per "
+        f"block against {REGISTERS_PER_BLOCK} and "
+        f"{SWEEP.MAX_REGISTERS_PER_THREAD} per thread; shared memory "
+        f"num_stages x (BLOCK_M x BLOCK_K + BLOCK_K x BLOCK_N) x {dtype_bytes} "
+        "B against "
+        + (f"{smem_limit / 1024:.0f} KiB" if smem_limit else "an unknown limit"),
+    ]
+    fits: list[tuple[int, int, int]] = []
+    for block_m in CONTROL_CANDIDATE_BLOCK_M:
+        acc = accumulator_registers(block_m, block_n)
+        cap = SWEEP.ai_cap(block_m, alpha, b=dtype_bytes)
+        lines.append(
+            f"  BLOCK_M={block_m}: cap {cap:.0f} Op/B = {cap / ridge:.2f}x the "
+            f"ridge; accumulator {block_m}x{block_n} = {acc} registers per "
+            f"block, {acc / REGISTERS_PER_BLOCK:.0%} of the file")
+        if cap < ridge * CONTROL_CAP_MARGIN:
+            lines.append(
+                f"      REFUSED: under the {CONTROL_CAP_MARGIN:.2f}x a control "
+                "needs, so its own ceiling would be part of the argument it is "
+                "here to settle")
+            continue
+        if register_file_refusal(block_m, block_n):
+            lines.append(
+                "      REFUSED AT EVERY WARP AND STAGE COUNT: "
+                + ", ".join(f"{w} warps = {acc / (32 * w):.0f} reg/thread"
+                            for w in CONTROL_WARP_COUNTS)
+                + f", and {acc} of {REGISTERS_PER_BLOCK} per block in all of "
+                "them. Warps divide this total, they do not shrink it; stages "
+                "and BLOCK_SIZE_K do not touch it.")
+            continue
+        for warps in CONTROL_WARP_COUNTS:
+            per_thread = acc / (32.0 * warps)
+            if per_thread > SWEEP.MAX_REGISTERS_PER_THREAD:
+                continue
+            for stages in CONTROL_STAGE_COUNTS:
+                pinned = dict(SWEEP.FIXED, num_stages=stages, num_warps=warps,
+                              BLOCK_SIZE_N=block_n, BLOCK_SIZE_K=block_k)
+                tiles = (SUBJECT_BLOCK_M, block_m)
+                bills, refusals = SWEEP.tile_resource_plan(
+                    pinned, tiles, dtype_bytes, capability)
+                if refusals or any(register_file_refusal(t, block_n)
+                                   for t in tiles):
                     continue
-                if capability is None:
-                    return (
-                        f"THE ACCUMULATOR FITS AT --num-warps {warps}, AND THE "
-                        "STAGE COUNT CANNOT BE NAMED FROM HERE. No device is "
-                        "attached and no --capability was given, so the "
-                        "shared-memory limit is unknown and the stage half of "
-                        "the bill was never checked: any --num-stages this "
-                        "search returned would be the register answer wearing "
-                        "the shared memory's name, and at --block-n "
-                        f"{args.block_n} four stages is 256 KiB against "
-                        "sm_90's 227 KiB. Re-run this plan with --capability "
-                        "9.0 for the H200 or 8.0 for the A100 and the stage "
-                        "count is computed against that card's real limit.")
-                return (
-                    f"THE REQUESTED CONFIGURATION DOES FIT, at --num-warps "
-                    f"{warps} --num-stages {stages}. Both tiles move together "
-                    "under those pins, which is what C3 needs; re-run with them "
-                    "and the run id changes with them.")
-    where = ("on any capability, the accumulator alone refusing it"
-             if capability is None
-             else f"on sm_{capability[0]}{capability[1]}")
-    return ("NO --num-warps/--num-stages combination this file will try fits "
-            f"BLOCK_M={args.control} at BLOCK_SIZE_N={args.block_n} {where}. "
-            "The accumulator, not the shared memory, is usually the "
-            "wall, and it does not move with stages. Choose a smaller "
-            "--control or a smaller --block-n; there is no pin that rescues "
-            "this one.")
+                if any(bills[t].smem_fits is not True for t in tiles):
+                    continue
+                fits.append((block_m, warps, stages))
+                lines.append(
+                    f"      FITS at --num-warps {warps} --num-stages {stages}: "
+                    f"{per_thread:.0f} reg/thread, "
+                    f"{bills[block_m].smem_bytes / 1024:.0f} KiB of shared "
+                    f"memory against {bills[block_m].smem_limit_bytes / 1024:.0f}"
+                    " KiB, and the subject fits the same pin")
+    if not fits:
+        lines.append(
+            f"  NO TILE ABOVE BLOCK_M={SUBJECT_BLOCK_M} CAN BE PINNED AT "
+            f"BLOCK_SIZE_N={block_n}" + ("." if capability else
+                                         " on the register bill alone."))
+    return fits, lines
 
 
-def check_control(control_block_m: int, alpha: float, ridge: float, b: int
-                  ) -> str:
+#: WHY THE CLAIM CANNOT BE CONFIRMED AT vLLM'S SHIPPED CONFIGURATION, and what
+#: would confirm it. Written on 2026-09-03, after the session driver scheduled
+#: three arms around a configuration that refuses.
+#:
+#: The arm is not broken and the refusal was not a bug: the design has no
+#: solution at this geometry. A control exists to cancel everything that is not
+#: the M-tile -- same kernel, same model, same tokens, larger BLOCK_M -- and at
+#: BLOCK_SIZE_N=256 there is no larger BLOCK_M that a thread block can hold.
+#: That is a fact about the register file and not about this repository, so it
+#: is stated here in the words a reader needs and repeated in every refusal.
+NO_CONTROL_FINDING = [
+    "THE STUDY CANNOT CONFIRM ITS HEADLINE AT vLLM'S SHIPPED CONFIGURATION ON "
+    "sm_90. At a fixed BLOCK_SIZE_N the only way to buy a tile more headroom is "
+    "a larger BLOCK_SIZE_M, the only power of two above 128 that Triton will "
+    "pin is 256, and a 256x256 fp32 accumulator is 65536 32-bit registers: the "
+    "entire per-block register file of every architecture from sm_70 to "
+    "sm_100. No num_warps, no num_stages and no BLOCK_SIZE_K changes that "
+    "total. So at BLOCK_SIZE_N=256 there is no positive control, and the "
+    "shortfall a subject-only run measures has nothing to be attributed "
+    "against.",
+    "WHAT WOULD CONFIRM IT, in the order of how much each concedes:",
+    "  1. A card whose per-block register file exceeds 256 KiB. No NVIDIA "
+    "architecture this study can reach has one; the file has been 64 K "
+    "registers per SM and per block since sm_70.",
+    "  2. A kernel whose accumulator is not resident at full BM x BN -- a "
+    "split-N or a two-pass formulation. vLLM's fused_moe kernel is not one, so "
+    "such a run would measure a different kernel and could not be quoted "
+    "about the one production runs.",
+    "  3. The subject at BLOCK_SIZE_N=128, where a BLOCK_M=256 control fits at "
+    "8 warps and 4 stages (128 registers per thread, 192 KiB of shared "
+    "memory). CHECKED IN THE SHIPPED FILES, NOT ASSUMED: "
+    "moe/bench/hardware/vllm_configs holds no BLOCK_SIZE_M=128 entry at "
+    "BLOCK_SIZE_N=128 for either model this study measures, on either dtype -- "
+    "every 128 entry on the H200 ships BLOCK_SIZE_N=256. So that arm answers a "
+    "real question and it is not the production one, and it may not be quoted "
+    "as the production claim.",
+    "  4. A control at BLOCK_M=256 with a BLOCK_SIZE_N of its OWN, 128. "
+    "REFUSED, and this is the trap worth naming out loud: "
+    "moe.bench.ai_model.cap is 2 / (b (alpha_b/BM + alpha_a/BN + 1/K)), "
+    "SYMMETRIC in the two tile dimensions, so 256x128 has EXACTLY the subject "
+    "128x256's cap -- 83.59 Op/B against 83.59 on mixtral at "
+    "alpha_b = alpha_a = 1 -- along with the same 32768 accumulator registers, "
+    "the same 192 KiB of shared memory and the same residency. It is the "
+    "subject's own ceiling wearing a larger M. block_m_crossing_sweep.ai_cap "
+    "would have called it 2x the headroom, because that form is 2 BM / "
+    "(alpha b) and BLOCK_SIZE_N does not appear in it.",
+    "  5. `--control none`: the subject alone, which can REFUTE this claim and "
+    "can never confirm it. That is the only one of the five this session can "
+    "buy, and what it buys is stated where it is offered.",
+]
+
+
+def check_control(control_block_m: int | None, alpha: float, ridge: float,
+                  b: int, *, block_n: int) -> str:
     """Empty when this tile may serve as a control, else why it may not.
 
-    The ONE place a fit enters the design. A control has to be a tile with no
-    ceiling of its own, and "no ceiling" is a statement about `cap / ridge`,
-    which needs an alpha. It is checked here, before any GPU time, and it
-    decides which tile is measured -- never what the measurement means.
+    The ONE place a fit enters the design, and the one place the hardware does.
+    A control has to be a tile with no ceiling of its own, and "no ceiling" is a
+    statement about `cap / ridge`, which needs an alpha. It also has to be a
+    tile that RUNS, and whether it runs is arithmetic on the pinned constants.
+    Both are checked here, before any GPU time, and they decide which tile is
+    measured -- never what the measurement means.
+
+    `None` is `--control none` and returns empty: an uncontrolled arm has no
+    control to check, and what it gives up is said in the plan and under the
+    verdict rather than smuggled through this function's silence.
+
+    BLOCK_SIZE_N IS A PARAMETER BECAUSE THE ACCUMULATOR IS TWO-DIMENSIONAL.
+    Until 2026-09-03 this function asked only whether the control's cap cleared
+    the ridge, the tile's runnability was left to the plan's resource bill one
+    call later, and the bill it consulted was per thread -- so the answer to
+    "may 256 be the control at BLOCK_SIZE_N=256" was yes at 16 warps, which is
+    false at every warp count.
     """
+    if control_block_m is None:
+        return ""
     if control_block_m == SUBJECT_BLOCK_M:
         return (f"--control {control_block_m} is the SUBJECT. A control has to "
                 "be a different tile, or the difference C3 measures is zero by "
@@ -2417,6 +2745,12 @@ def check_control(control_block_m: int, alpha: float, ridge: float, b: int
                 f"ridge of {ridge:.1f}, only {cap / ridge:.2f}x, under the "
                 f"{CONTROL_CAP_MARGIN:.2f}x a control needs. Its own ceiling "
                 "would be part of the argument it is supposed to settle.")
+    why = register_file_refusal(control_block_m, block_n)
+    if why:
+        return (f"--control {control_block_m} at BLOCK_SIZE_N={block_n} cannot "
+                f"be held by one thread block: {why}. THE ARM AS DESIGNED "
+                "CANNOT RUN AT THIS GEOMETRY, and no pin rescues it; the "
+                "search and the alternatives are printed below.")
     return ""
 
 
@@ -2592,45 +2926,83 @@ def write_figure_csv(path: Path, rows: list[dict]) -> None:
             writer.writerow(row)
 
 
-def analyse(timings: list[Timing], cfg, roof: Roof, *, control_block_m: int,
+def control_derivative_line(control_block_m: int | None,
+                            ctl_plateau) -> str:
+    """The control's row of the derivative section, or the sentence instead of it.
+
+    A line and not a blank: a report whose derivative section silently has one
+    row where every other report has two reads as a truncated file rather than
+    as an arm that ran without a control.
+    """
+    if control_block_m is None:
+        return ("  control      NONE. No control ran, so no derivative of one "
+                "exists and gates C3 and C4 are not in the table below.")
+    return f"  control BLOCK_M={control_block_m}: {ctl_plateau.line()}"
+
+
+def analyse(timings: list[Timing], cfg, roof: Roof, *,
+            control_block_m: int | None,
             b: int, sm_count: int, block_n: int, doublings: float,
             compiles: dict[int, int], executed: dict[int, int],
             planned_multi_tile: int) -> tuple[list[str], list[Gate], dict,
                                               list[Series]]:
-    """Everything that is read off the timings, and nothing that is not."""
+    """Everything that is read off the timings, and nothing that is not.
+
+    `control_block_m=None` is `--control none`, and the three control gates are
+    then OMITTED rather than scored UNKNOWN. A gate that can only ever say
+    UNKNOWN is a gate that examined nothing reporting no failures, which is the
+    shape `moe/bench/exit_codes.py` is named against; and V4 is a VALIDITY gate,
+    so an UNKNOWN there would void C1 and C2 -- the only two readings such a run
+    exists to produce. Their absence is what `verdict` reads to reach
+    UNCONTROLLED, and `analyse` omits them for no other reason.
+    """
     clock_ref = modal_clock(timings)
     subject = build_points(timings, cfg, SUBJECT_BLOCK_M, roof,
                            sm_count=sm_count, block_n=block_n,
                            clock_ref=clock_ref)
-    control = build_points(timings, cfg, control_block_m, roof,
-                           sm_count=sm_count, block_n=block_n,
-                           clock_ref=clock_ref)
-    series = [Series(f"BLOCK_M={control_block_m} (control)", "o", control),
-              Series(f"BLOCK_M={SUBJECT_BLOCK_M} (subject)", "#", subject)]
+    control = ([] if control_block_m is None else
+               build_points(timings, cfg, control_block_m, roof,
+                            sm_count=sm_count, block_n=block_n,
+                            clock_ref=clock_ref))
+    series = ([] if control_block_m is None else
+              [Series(f"BLOCK_M={control_block_m} (control)", "o", control)]) \
+        + [Series(f"BLOCK_M={SUBJECT_BLOCK_M} (subject)", "#", subject)]
     sub_plateau = plateau_of(multi_tile(subject), doublings=doublings)
-    ctl_plateau = plateau_of(multi_tile(control), doublings=doublings)
+    ctl_plateau = (None if control_block_m is None
+                   else plateau_of(multi_tile(control), doublings=doublings))
     predicted = predicted_plateau_band(roof.ridge, b)
+    tiles = ((SUBJECT_BLOCK_M,) if control_block_m is None
+             else (SUBJECT_BLOCK_M, control_block_m))
 
     gates = [
         gate_v0_roof(roof),
-        gate_v1_pin(compiles, executed, (SUBJECT_BLOCK_M, control_block_m)),
-        gate_v2_non_vacuity(subject, control, planned_multi_tile,
+        gate_v1_pin(compiles, executed, tiles),
+        gate_v2_non_vacuity(subject,
+                            None if control_block_m is None else control,
+                            planned_multi_tile,
                             onset_tokens_value=onset_tokens(cfg, SUBJECT_BLOCK_M)),
         gate_v3_clocks(timings, subject + control, roof, clock_ref),
-        gate_v4_control_ran(control, subject, control_block_m),
+    ]
+    if control_block_m is not None:
+        gates.append(gate_v4_control_ran(control, subject, control_block_m))
+    gates += [
         gate_c1_roof(subject, sub_plateau, roof, predicted),
         gate_c2_plateau(sub_plateau, subject),
-        gate_c3_attribution(subject, control, ctl_plateau, control_block_m, roof),
-        gate_c4_ceiling_located(control, control_block_m, roof),
     ]
+    if control_block_m is not None:
+        gates += [
+            gate_c3_attribution(subject, control, ctl_plateau, control_block_m,
+                                roof),
+            gate_c4_ceiling_located(control, control_block_m, roof),
+        ]
     call, why = verdict(gates)
 
     lines = ["", "## The curve", ""] + ascii_plot(series, roof) + ["", ""] \
         + point_table(series) + ["", "## The derivative", "",
                                  f"  subject BLOCK_M={SUBJECT_BLOCK_M}: "
                                  f"{sub_plateau.line()}",
-                                 f"  control BLOCK_M={control_block_m}: "
-                                 f"{ctl_plateau.line()}",
+                                 control_derivative_line(control_block_m,
+                                                         ctl_plateau),
                                  "", "## Verdict", "", f"  {call}", ""] \
         + [f"  {w}" for w in why]
 
@@ -2643,8 +3015,9 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *, control_block_m: int,
         "predicted_band_is_scored_against":
             "nothing. It is the study's own arithmetic, pre-registered so the "
             "fit is on the record. Every verdict here comes from the stopwatch.",
+        "control_block_m": control_block_m,
         "subject_plateau": asdict(sub_plateau),
-        "control_plateau": asdict(ctl_plateau),
+        "control_plateau": None if ctl_plateau is None else asdict(ctl_plateau),
         "points": figure_rows(series, roof, roof.device),
         "gates": [asdict(g) | {"verdict": g.verdict, "name_token": g.token,
                                "result_line": g.result_line()}
@@ -2754,11 +3127,12 @@ SELF_TEST_WORLDS = (
 #: greps for (NOT_TILE, GAP_UNLOCATED) and not only the prose it renders as.
 VERDICT_NAMES = {BINDING: "BINDING", NOT_BINDING: "NOT_BINDING",
                  STILL_RISING: "STILL_RISING", NOT_TILE: "NOT_TILE",
-                 GAP_UNLOCATED: "GAP_UNLOCATED", UNSETTLED: "UNSETTLED"}
+                 GAP_UNLOCATED: "GAP_UNLOCATED", UNCONTROLLED: "UNCONTROLLED",
+                 UNSETTLED: "UNSETTLED"}
 
 
 def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
-              control_block_m: int, doublings: float, reps: int = 3,
+              control_block_m: int | None, doublings: float, reps: int = 3,
               noise: float = 0.002, seed: int = 0
               ) -> tuple[list[str], list[Gate]]:
     """Planted worlds and the verdicts they must produce.
@@ -2769,7 +3143,16 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
     ALSO scored on the whole verdict it reaches, because a gate table that
     discriminates and a verdict function that collapses its outcomes onto one
     word are two different things and only the second is what gets published.
+
+    `--control none` DOES NOT SHRINK THIS TEST. The five worlds are about
+    whether the CONTROLLED gate set discriminates, and that question does not
+    stop existing because one arm was asked to run without a control, so an
+    uncontrolled invocation still plants them against the default control. The
+    uncontrolled gate set gets its own two worlds at the end, and they run in
+    every invocation for the same reason.
     """
+    control_block_m = (DEFAULT_CONTROL_BLOCK_M if control_block_m is None
+                       else control_block_m)
     subject_rows = doubling_rows(cfg, r_min, r_max, SUBJECT_BLOCK_M)
     control_rows = [r for r in subject_rows if r % control_block_m == 0]
     grid = {SUBJECT_BLOCK_M: subject_rows, control_block_m: control_rows}
@@ -2918,6 +3301,43 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         "the self test itself: a steady low clock is the failure a drift-only "
         "check reports as no failure at all, which is what the pre-2026-09-02 "
         "flag did"))
+
+    # THE UNCONTROLLED GATE SET, planted 2026-09-03 alongside `--control none`.
+    # TWO worlds and not one, because the whole claim being made about that mode
+    # is an ASYMMETRY -- it can REFUTE the headline and it can never confirm it
+    # -- and one world would demonstrate half of that while reading as the
+    # whole. The capped world is the half that must NOT become a ceiling; the
+    # uncapped world is the half that must still be able to kill the claim with
+    # no control anywhere in the run. Each also asserts that C3 and C4 are
+    # ABSENT rather than UNKNOWN: a gate that examined nothing and reported no
+    # failure is the shape this repository keeps relearning.
+    for label, planted_alpha, want in (
+            ("capped", 1.00, UNCONTROLLED),
+            ("uncapped", 0.10, NOT_BINDING)):
+        solo = planted_timings(cfg, roof, b, {SUBJECT_BLOCK_M: subject_rows},
+                               alpha=planted_alpha, overhead_ms=0.05,
+                               reps=reps, noise=noise, seed=seed)
+        _, solo_gates, _, _ = analyse(
+            solo, cfg, roof, control_block_m=None, b=b,
+            sm_count=SWEEP.DEFAULT_SM_COUNT,
+            block_n=SWEEP.FIXED["BLOCK_SIZE_N"], doublings=doublings,
+            compiles={SUBJECT_BLOCK_M: 1},
+            executed={SUBJECT_BLOCK_M: planned},
+            planned_multi_tile=planned_multi)
+        solo_call, _ = verdict([g for g in solo_gates if g.kind == CLAIM])
+        present = {g.name.split()[0] for g in solo_gates}
+        gates.append(Gate(
+            VALIDITY, f"S uncontrolled {label}",
+            f"with no control, the {label} world reaches "
+            f"{VERDICT_NAMES[want]} and scores no control gate",
+            f"the would-be verdict is {VERDICT_NAMES[want]} and neither C3 nor "
+            "C4 appears in the gate table",
+            solo_call == want and not ({"C3", "C4"} & present),
+            f"reached {VERDICT_NAMES[solo_call]} with gates "
+            f"{sorted(present)}",
+            "the self test itself: --control none is a mode that can refute "
+            "this study's headline and can never confirm it, and a mode whose "
+            "two directions are not both planted is a mode nobody has run"))
     return out, gates
 
 
@@ -3010,12 +3430,43 @@ def default_run_id(args, card: str) -> str:
         card=card, m=args.model, d=args.dtype, lo=args.r_min, hi=args.r_max,
         x=args.reps, u=args.warmup, t=args.trials, f=not args.no_l2_flush,
         b=args.cell_budget_ms, e=args.seed, g=args.group_m, n=args.block_n,
-        k=args.block_k, s=args.num_stages, w=args.num_warps, c=args.control)
+        k=args.block_k, s=args.num_stages, w=args.num_warps,
+        c=control_key(args.control))
 
 
 # --------------------------------------------------------------------------
 # CLI.
 # --------------------------------------------------------------------------
+
+def parse_control(text: str) -> int | None:
+    """`"256"` -> 256, `"none"` -> None, anything else refused by argparse.
+
+    A WORD AND NOT A FLAG. `--no-control` would be a second thing to keep in
+    step with `--control`, and the two could disagree; one option with one value
+    cannot. The word also survives into the run id (`c-none`), so an
+    uncontrolled arm can never resume into a controlled arm's directory.
+    """
+    if text.strip().lower() == CONTROL_NONE:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--control takes a BLOCK_M or the word {CONTROL_NONE!r}, not "
+            f"{text!r}. There is no default for a missing control: dropping it "
+            "drops three gates and the headline with them, so it is asked for "
+            "by name.") from None
+
+
+def control_key(control_block_m: int | None) -> str:
+    """How `--control` spells this control on a command line and in a run id.
+
+    `moe.bench.provenance.run_id` refuses a None value, and it is right to:
+    a knob that vanishes from an id is a knob two runs can silently share a
+    directory across. So the absence has a spelling.
+    """
+    return CONTROL_NONE if control_block_m is None else str(control_block_m)
+
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
@@ -3030,14 +3481,21 @@ def build_parser() -> argparse.ArgumentParser:
                          "and moves the question off the regime the study is "
                          "about, and the fp8 call path needs a quant config "
                          "this script does not build")
-    ap.add_argument("--control", type=int, default=DEFAULT_CONTROL_BLOCK_M,
+    ap.add_argument("--control", type=parse_control,
+                    default=DEFAULT_CONTROL_BLOCK_M,
                     help="the positive control tile. Must be larger than the "
-                         "subject and cap at least "
-                         f"{CONTROL_CAP_MARGIN:.2f}x the ridge, or it is "
-                         "refused. 256 needs 160 KiB of shared memory at 4 "
-                         "stages, which fits sm_90 and fits sm_80 by 3 KiB; "
-                         "--control 128 --num-stages 3 is refused because 128 "
-                         "IS the subject")
+                         "subject, cap at least "
+                         f"{CONTROL_CAP_MARGIN:.2f}x the ridge, and fit one "
+                         "thread block at this --block-n, or it is refused. "
+                         "256 needs 160 KiB of shared memory at 4 stages and "
+                         "BLOCK_SIZE_N=64, which fits sm_90 and fits sm_80 by "
+                         "3 KiB. AT --block-n 256 NO CONTROL EXISTS at all: a "
+                         "256x256 fp32 accumulator is the entire per-block "
+                         f"register file ({REGISTERS_PER_BLOCK} registers) at "
+                         "every warp count. `--control none` is the explicit "
+                         "opt-out: it measures the subject alone, which can "
+                         "REFUTE the claim and can never confirm it, and it "
+                         "drops gates V4, C3 and C4")
     ap.add_argument("--r-min", type=int, default=DEFAULT_R_MIN,
                     help="smallest rows per expert. A power of two, and below "
                          "BLOCK_M so the sweep starts in the single-partial-tile "
@@ -3148,12 +3606,21 @@ def _main(argv=None) -> int:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
 
-    refusal = check_control(args.control, args.alpha, roof.ridge, b)
+    # THE CAPABILITY FIRST, because every refusal below wants to print the
+    # control search and half that search is undecidable without one.
+    capability = SWEEP.resolve_capability(args, synthetic=synthetic)
+    search_lines = control_feasibility(
+        block_n=args.block_n, block_k=args.block_k, dtype_bytes=b,
+        capability=capability, alpha=args.alpha, ridge=roof.ridge)[1]
+
+    refusal = check_control(args.control, args.alpha, roof.ridge, b,
+                            block_n=args.block_n)
     if refusal:
         print(f"REFUSED: {refusal}")
+        print("\n".join(search_lines))
+        print("\n".join(NO_CONTROL_FINDING))
         return exit_codes.REFUSED
 
-    capability = SWEEP.resolve_capability(args, synthetic=synthetic)
     plan = build_plan(args, cfg, b, roof, capability)
     if plan.refusals:
         print("REFUSED before any GPU time, from the pinned constants alone:")
@@ -3161,7 +3628,7 @@ def _main(argv=None) -> int:
             print(f"  BLOCK_M={bm}: {why}")
         print("A spilled or oversized kernel still returns a time, and that "
               "time still plots. Change --num-stages, --block-n or --control.")
-        print(control_resource_hint(args, b, capability))
+        print("\n".join(search_lines))
         return exit_codes.REFUSED
 
     lines = [f"experiment  bm128_roofline: at BLOCK_M={SUBJECT_BLOCK_M}, does "
@@ -3189,7 +3656,14 @@ def _main(argv=None) -> int:
     noise_source = ("--plan-noise" if args.plan_noise != DEFAULT_PLAN_NOISE_REL
                     else "timing_spread_median of the published "
                          "alpha-surface-s4 mixtral g1/n64 arm")
-    lines += ["", "## The plan", ""] + plan.lines(cfg) + roof.lines() + [
+    # THE SEARCH IN EVERY PLAN, not only in the refusals. An operator reading a
+    # plan that HAS a control is entitled to see which other tiles could have
+    # served and at what bill, and an operator reading an uncontrolled plan is
+    # entitled to see the arithmetic that says none could. It is the same
+    # computation either way, so it is printed either way.
+    lines += ["", "## The plan", ""] + plan.lines(cfg) + [""] + search_lines \
+        + ([""] + NO_CONTROL_FINDING if args.control is None else []) \
+        + roof.lines() + [
         f"card         {card}" + ("" if detected else
                                   f"  (NO DEVICE ATTACHED: the id above is the "
                                   f"{UNKNOWN_CARD_SLUG!r} one and is not what a "
@@ -3222,9 +3696,12 @@ def _main(argv=None) -> int:
     if args.dry_run:
         lo, hi = predicted_plateau_band(roof.ridge, b)
         lines += ["", "## What is settled before the run, and what is not", "",
-                  f"  The control's cap is "
-                  f"{SWEEP.ai_cap(args.control, args.alpha, b) / roof.ridge:.2f}x"
-                  f" the ridge, so it has no ceiling of its own to hit.",
+                  (f"  The control's cap is "
+                   f"{SWEEP.ai_cap(args.control, args.alpha, b) / roof.ridge:.2f}"
+                   "x the ridge, so it has no ceiling of its own to hit."
+                   if args.control is not None else
+                   "  THERE IS NO CONTROL IN THIS ARM. It can refute the claim "
+                   "and cannot confirm it; see CONTROL SEARCH above."),
                   f"  The subject's predicted plateau spans {hi - lo:.3f} of "
                   "the roof, which is why this run measures instead of",
                   "  computing. Nothing below the onset is evidence about the "
@@ -3232,7 +3709,8 @@ def _main(argv=None) -> int:
                   "",
                   "  Invocation for a session script:",
                   f"    python scripts/bm128_roofline.py --model {args.model} "
-                  f"--dtype {args.dtype} --control {args.control} \\",
+                  f"--dtype {args.dtype} --control "
+                  f"{control_key(args.control)} \\",
                   f"        --r-min {args.r_min} --r-max {args.r_max} --reps "
                   f"{args.reps} --plateau-doublings "
                   f"{args.plateau_doublings:g} \\",
@@ -3321,11 +3799,17 @@ def _main(argv=None) -> int:
     # all: if the control cannot be pinned or cannot run, the subject's cells
     # buy nothing, and finding that out after paying for them is the expensive
     # order.
-    print(f"\n-- control tile, BLOCK_M={args.control} --")
-    c, e = measure_setting(args, cfg, args.control, plan.control_rows, csv_path,
-                           cache_root, plan.pinned, done, timings,
-                           reference_clock=reference_clock, prov=prov)
-    compiles[args.control], executed[args.control] = c, e
+    if args.control is None:
+        print("\n-- no control tile: --control none was given, so gates V4, C3 "
+              "and C4 will not be scored and the headline cannot be issued by "
+              "this run --")
+    else:
+        print(f"\n-- control tile, BLOCK_M={args.control} --")
+        c, e = measure_setting(args, cfg, args.control, plan.control_rows,
+                               csv_path, cache_root, plan.pinned, done,
+                               timings, reference_clock=reference_clock,
+                               prov=prov)
+        compiles[args.control], executed[args.control] = c, e
 
     print(f"\n-- subject tile, BLOCK_M={SUBJECT_BLOCK_M} --")
     c, e = measure_setting(args, cfg, SUBJECT_BLOCK_M, plan.subject_rows,
