@@ -124,42 +124,99 @@ def test_ols_refuses_a_single_point_and_a_degenerate_x():
         mba.ols([3.0, 3.0], [1.0, 2.0])
 
 
-def test_ai_cap_refuses_a_non_positive_alpha():
-    """A zero alpha would report an infinite arithmetic-intensity cap and turn
-    the surviving BLOCK_M <= 64 result into an unconditional PASS."""
+def test_both_caps_refuse_a_non_positive_alpha():
+    """Zero is the value `lo` takes when the RAW bracket end came out negative
+    and hit the clip, and a cap read off a wall is the model's edge reported as
+    a measurement. It is also an infinite ceiling in the retracted form, which
+    would turn the surviving BLOCK_M <= 64 result into an unconditional PASS."""
     w, act1 = mba.anchor_bytes(MIXTRAL, "bf16", 32)
     br = mba.bracket_alpha(0.88, 0.88, 1.95, 32, w, act1, A100_CEILING, A100_PIN)
-    with pytest.raises(ValueError):
-        br.ai_cap(2, 0.0)
+    for method in (br.ai_cap, br.lin_cap):
+        with pytest.raises(ValueError):
+            method(2, 0.0)
 
 
-def test_the_cap_agrees_with_the_corrected_ai_model():
-    """`moe/bench/ai_model.py` (2026-09-02) showed the study's AI denominator was
-    missing the activation re-read and the output write. `2 BM / (b alpha)` is
-    still the right ceiling PROVIDED the alpha is the fitted composite, because
-    `alpha_fitted / BM = alpha_b/BM + alpha_a/BN + 1/K` term by term. If that
-    identity ever stops holding, this gate is capping the wrong thing."""
+def test_the_estimator_returns_exa_and_the_retracted_cap_is_high_by_the_level():
+    """The identity this file used to pin, run against a FIT instead of against
+    itself.
+
+    The test it replaces computed `alpha_fitted = alpha_b + alpha_a (BM/BN) +
+    BM/K` and then asserted that `ai_cap` of that equals `ai_model.cap` at the
+    same alpha_b and alpha_a. Both sides were the same rearrangement of one
+    definition; no estimator was ever called, so the assertion could not fail
+    however wrong the reading was, and it certified as exact the (LIN) blend
+    that `moe/bench/ai_model.py` retracted on the same day at the same HEAD.
+
+    What is checked here instead: build a byte ladder with `ai_model.traffic()`,
+    run THIS FILE'S OWN least squares over it -- the same `ols` that fits every
+    bracket -- and read `B / (A + B)` off the result. That is the estimator every
+    published alpha came from, applied to bytes whose alpha_b is known. It
+    returns (EXA), `(alpha_b + phi) / (1 + phi + delta)`, and NOT the blend. The
+    consequence is the one the caps turn on: `2 BM / (b alpha_fitted)` is the
+    exact cap times `1 + phi + delta`, which is `ai_model.lin_overstatement`.
+    """
     ai_model = pytest.importorskip("moe.bench.ai_model")
+    block_m, block_n, b = 128, 64, 2
+    n, k = 2 * MIXTRAL.intermediate_size, MIXTRAL.hidden_size
+    alpha_b, alpha_a = 0.307, 0.143
+    fixed = 0.05 * k * n * b            # a non-zero delta, so the level is not 1
+    rungs = ai_model.ladder(n, k, block_m=block_m, block_n=block_n,
+                            alpha_b=alpha_b, alpha_a=alpha_a, b=b, n_max=8,
+                            fixed_bytes=fixed)
+    level, slope = mba.ols([float(i) for i, _ in rungs], [t for _, t in rungs])
+    fitted = slope / (level + slope)
+
+    phi = ai_model.phi(n, k, block_m=block_m, block_n=block_n, alpha_a=alpha_a, b=b)
+    delta = fixed / (k * n * b)
+    assert fitted == pytest.approx((alpha_b + phi) / (1.0 + phi + delta), rel=1e-9)
+    assert fitted != pytest.approx(
+        ai_model.lin_blend(k, block_m=block_m, block_n=block_n,
+                           alpha_b=alpha_b, alpha_a=alpha_a), rel=1e-3)
+
+    exact = ai_model.exact_cap(n, k, block_m=block_m, block_n=block_n,
+                               alpha_b=alpha_b, alpha_a=alpha_a, b=b)
+    retracted = 2.0 * block_m / (b * fitted)
+    assert retracted == pytest.approx(
+        exact * ai_model.lin_overstatement(phi=phi, delta=delta), rel=1e-9)
+    assert ai_model.cap_from_fitted(fitted, block_m=block_m, b=b, phi=phi,
+                                    delta=delta) == pytest.approx(exact, rel=1e-9)
+
+
+def test_the_bracket_cap_puts_the_activation_term_back_and_is_lower_than_the_retracted_one():
+    """`Bracket.ai_cap` is `ai_model.exact_cap`'s form on the fused layer.
+
+    The bracket's alpha is an alpha_b: (*) is solved on the slope with `Act1`
+    already subtracted. So the retracted `2 BM / (b alpha_b)` leaves `phi` out of
+    the denominator entirely and is high by `(alpha_b + phi) / alpha_b`, which is
+    the ratio this asserts. Both caps are exercised at a real bracket end rather
+    than at a literal, and the direction is the one the C3 verdict depends on:
+    correcting the cap can only LOWER it, so it can only make "the tile caps
+    below the ridge" easier to keep.
+    """
     w, act1 = mba.anchor_bytes(MIXTRAL, "bf16", 32)
     br = mba.bracket_alpha(0.88, 0.88, 1.95, 32, w, act1, A100_CEILING, A100_PIN)
-    block_m, block_n, k = 32, 64, MIXTRAL.hidden_size
-    alpha_b, alpha_a = 0.307, 0.143
-    alpha_fitted = alpha_b + alpha_a * (block_m / block_n) + block_m / k
-    assert br.ai_cap(2, alpha_fitted) == pytest.approx(
-        ai_model.cap(2 * MIXTRAL.intermediate_size, k, block_m=block_m,
-                     block_n=block_n, alpha_b=alpha_b, alpha_a=alpha_a, b=2),
-        rel=1e-9)
+    assert br.phi == pytest.approx(act1 / w)
+    assert br.ai_cap(2, br.lo) == pytest.approx(
+        2.0 * 32 / (2 * (br.lo + br.phi)), rel=1e-9)
+    assert br.lin_cap(2, br.lo) / br.ai_cap(2, br.lo) == pytest.approx(
+        (br.lo + br.phi) / br.lo, rel=1e-9)
+    assert br.ai_cap(2, br.lo) < br.lin_cap(2, br.lo)
 
 
-def test_subtracting_the_activation_term_only_ever_raises_the_cap():
-    """Which is why C3's PASS is conservative: the gate hands `ai_cap` an alpha
-    with a positive term removed, so the ceiling it checks is higher than the
-    real one and a tile has a better chance of clearing the ridge, not worse."""
+def test_the_corrected_cap_equals_the_retracted_form_at_the_uncorrected_alpha():
+    """Subtracting `Act1` from the slope and then adding `phi` back is the
+    identity, so the exact cap is what the study's own expression would have
+    given had it never applied the `alpha-corrected` column to a ceiling.
+
+    Worth pinning because it says exactly where the published caps went wrong:
+    not in the formula's shape, but in feeding it an alpha from which the very
+    term the formula needs had already been removed.
+    """
     w, act1 = mba.anchor_bytes(MIXTRAL, "bf16", 32)
     br = mba.bracket_alpha(0.88, 0.88, 1.95, 32, w, act1, A100_CEILING, A100_PIN)
     uncorrected = mba.alpha_at_bandwidth(0.88, br.bw_anchor_gbps, w, 0)
     assert br.lo < uncorrected
-    assert br.ai_cap(2, br.lo) > br.ai_cap(2, uncorrected)
+    assert br.ai_cap(2, br.lo) == pytest.approx(br.lin_cap(2, uncorrected), rel=1e-12)
 
 
 def test_load_calibration_refuses_an_unknown_card(tmp_path):
@@ -259,8 +316,8 @@ def _fit_stub(alpha_corrected: float, br) -> mba.ScoredFit:
         alpha_hi_pin=br.hi_pin, clipped=br.clipped, contains_published=False,
         contains_published_corrected=False, contains_pooled=False,
         physical_vs_ceiling=False, physical_vs_pin=False, ridge=145.81,
-        cap_over_ridge_at_lo=0.0, timing_spread=0.005,
-        elevation_in_spreads=0.0)
+        cap_over_ridge_at_lo=0.0, phi=br.phi, lin_over_ridge_at_lo=0.0,
+        timing_spread=0.005, elevation_in_spreads=0.0)
 
 
 def test_assumption_a_gate_passes_on_noise_and_fails_on_a_real_inversion():
@@ -1070,6 +1127,96 @@ def test_only_publish_routes_the_rescore_into_the_tree(monkeypatch):
     assert mba.git_ignored(seen["out"] / "ANCHOR_RESCORE.txt") is not False
     mba.main(["--rescore", "--publish"])
     assert seen["out"] == mba.PUBLISHED
+
+
+# --------------------------------------------------------------------------
+# The ridge census. A paragraph about the reports became false when the reports
+# changed, so the paragraph is now a count of them.
+# --------------------------------------------------------------------------
+
+def _cals() -> dict:
+    return {slug: mba.load_calibration(slug)
+            for slug in ("nvidia_a100_sxm4_80gb", "nvidia_h200")}
+
+
+def _plant_report(root, arm: str, ridge, rescored_from=None) -> None:
+    """One report.json carrying only what the census reads."""
+    d = root / arm
+    d.mkdir(parents=True, exist_ok=True)
+    doc = {"ridge": ridge}
+    if rescored_from is not None:
+        doc["rescored_from"] = rescored_from
+    (d / "planted.report.json").write_text(json.dumps(doc))
+
+
+def test_the_ridge_census_reads_the_committed_reports_rather_than_asserting_them():
+    """THE PARAGRAPH THIS REPLACES WAS A LITERAL AND THE LITERAL WENT FALSE.
+
+    `ANCHOR_RESCORE.txt` said, in `say(...)` text, "Every one of these reports
+    carries ridge=160.3 ... 160.3 is a stale H200 band and belongs to NEITHER
+    card", while `scripts/rescore_published_reports.py` had already rewritten
+    all 26 on the same branch. So the transcript regenerated false on every run
+    and disagreed with the data sitting beside it. This asserts the census
+    agrees with the files, which is a thing that cannot go stale.
+    """
+    cals = _cals()
+    census = mba.ridge_census(mba.PUBLISHED, cals)
+    assert census["total"] == census["own_card"] > 0
+    assert census["still_swept"] == []
+    assert census["strangers"] == []
+    assert census["unattributed"] == []
+    for slug, values in census["per_card"].items():
+        assert max(abs(v - cals[slug].ridge) for v in values) <= mba.RIDGE_MATCH_TOL
+    text = "\n".join(mba.render_ridge_census(census, cals))
+    assert "No report carries the swept ridge" in text
+    assert f"{mba.SWEPT_RIDGE} default" in text        # named as HISTORY only
+
+
+def test_the_ridge_census_names_a_report_that_still_carries_the_swept_ridge(tmp_path):
+    """The FAIL branch, which the retracted paragraph could not have: it said
+    every report carried 160.3 whether or not any did, so it was equally wrong
+    before and after the rescoring."""
+    cals = _cals()
+    _plant_report(tmp_path, "2026-01-01-nvidia_h200-planted", mba.SWEPT_RIDGE)
+    _plant_report(tmp_path, "2026-01-02-nvidia_h200-fine", 162.8,
+                  rescored_from={"ridge": mba.SWEPT_RIDGE})
+    _plant_report(tmp_path, "2026-01-03-nvidia_a100_sxm4_80gb-odd", 999.0)
+    _plant_report(tmp_path, "2026-01-04-no-card-in-this-name", 162.8)
+    census = mba.ridge_census(tmp_path, cals)
+    assert census["total"] == 4
+    assert census["own_card"] == 1
+    assert census["rescored_from"] == 1
+    assert len(census["still_swept"]) == 1
+    assert len(census["strangers"]) == 1
+    assert len(census["unattributed"]) == 1
+    text = "\n".join(mba.render_ridge_census(census, cals))
+    assert "STILL CARRYING THE SWEPT RIDGE" in text
+    assert "2026-01-01-nvidia_h200-planted/planted.report.json" in text
+    assert "999.0" in text
+    assert "No report carries the swept ridge" not in text
+
+
+def test_the_committed_transcript_is_what_the_script_writes_today(tmp_path):
+    """The committed `ANCHOR_RESCORE.txt` regenerates byte for byte, or it is
+    stale.
+
+    Nothing compared the two until 2026-09-02, and the house rule to
+    `git checkout --` the file after every suite run then FROZE whichever
+    version was committed: the tracked transcript had no `RESULT:` line at all,
+    so `exit_codes.classify_text` over it raised `NoGatesScored`, and it still
+    carried a paragraph the same branch had made false. A published artefact its
+    own producer no longer writes is not evidence of anything.
+
+    The .json is deliberately NOT compared: its provenance block carries a
+    timestamp and the working tree's dirty flag, so byte equality there would be
+    a test of the clock.
+    """
+    committed = mba.PUBLISHED / "ANCHOR_RESCORE.txt"
+    assert committed.exists()
+    mba.main(["--rescore", "--out-dir", str(tmp_path)])
+    fresh = (tmp_path / "ANCHOR_RESCORE.txt").read_text()
+    assert fresh == committed.read_text()
+    assert mba.exit_codes.classify_text(fresh) == mba.exit_codes.CLAIM_FAIL
 
 
 def test_the_rescore_report_embeds_a_repo_relative_root(tmp_path):

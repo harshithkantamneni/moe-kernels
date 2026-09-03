@@ -1,4 +1,5 @@
-"""BLOCK_M=128 is where the cap sits ON the ridge, so the fit cannot speak there.
+"""BLOCK_M=128 is where the two branches measure as one line, so the fit cannot
+speak there.
 
 `scripts/bm128_depth.py` was asked for FIVE clean memory-bound treads at
 BLOCK_SIZE_M=128 and answers that they are unreachable on either card in this
@@ -6,7 +7,15 @@ study. That answer is arithmetic, so most of this file checks the arithmetic
 rather than the plumbing, and the rest checks that the two gates the study did
 not have actually fire on the two published fits that should never have shipped.
 
-FOUR GROUPS.
+THE HEADING USED TO SAY "where the cap sits ON the ridge", and that was the
+arm's founding premise, retracted on 2026-09-02: the caps it rested on were
+`2 BM / (b alpha)`, which `moe/bench/ai_model.py` shows is high by
+`1 + phi + delta`, and corrected they sit below both cards' ridges. What
+survives is the MEASURED `B/C` near 1, a ratio of two fitted slopes with no cap
+and no ridge in it. `test_the_founding_premise_no_longer_straddles_the_ridge`
+is where that retraction is checked against the published files.
+
+FIVE GROUPS.
 
   - THE LAW. `B/C = alpha b rho / (2 BM)` with the model cancelling; the two
     escape thresholds; and `prefix_depth` checked against a brute-force count on
@@ -954,6 +963,80 @@ def test_the_audit_runs_end_to_end_and_examined_real_work(bm):
     assert payload["counts"]["BM=128 ladders"] == len(records)
     # The headline: no published BLOCK_M=128 fit is admissible.
     assert not any(r.admissible for r in rows)
+
+
+def test_the_founding_premise_no_longer_straddles_the_ridge(bm):
+    """THE RETRACTION, recomputed from the two published BM=128 report blocks.
+
+    The module docstring asserted "cap 150.4 against a calibrated ridge of 145.8
+    on the A100, 158.6 against 162.8 on the H200" at the same HEAD where
+    `moe/bench/ai_model.py` retracts the expression both came from. This runs
+    `premise_caps`, which divides each by the sweep's own `cap_overstatement`,
+    and asserts what the corrected numbers actually say: the retracted cap
+    cleared the A100's ridge, the corrected one clears NEITHER card's at ANY
+    alpha_a in [0, 1]. `delta` is zero throughout, so `exa_hi` is an upper
+    bound and the straddle is being given every benefit before it is refused.
+    """
+    if not PUBLISHED.exists():
+        pytest.skip("no results/published on this checkout")
+    caps = {c.arm[:24]: c for c in bm.premise_caps(PUBLISHED)}
+    assert len(caps) == 2, sorted(caps)
+    a100 = next(c for c in caps.values() if "a100" in c.arm)
+    h200 = next(c for c in caps.values() if "h200" in c.arm)
+
+    assert a100.lin_straddles and a100.lin_cap == pytest.approx(150.4, abs=0.1)
+    assert h200.lin_cap == pytest.approx(158.6, abs=0.1)
+    for c in (a100, h200):
+        assert c.factor_lo > 1.0 and c.factor_hi > c.factor_lo
+        assert c.exa_hi == pytest.approx(c.lin_cap / c.factor_lo, rel=1e-12)
+        assert c.exa_lo < c.exa_hi < c.lin_cap
+        assert not c.straddles, (c.arm, c.exa_hi, c.ridge)
+    assert a100.exa_hi == pytest.approx(141.8, abs=0.1)
+    assert h200.exa_hi == pytest.approx(143.1, abs=0.1)
+
+
+def test_the_premise_still_straddles_when_the_alpha_is_small_enough(bm, tmp_path):
+    """The PASS branch of the same predicate, planted.
+
+    A retraction asserted only by a test that always answers "no" is a constant.
+    Here the A100 report is copied with its BLOCK_M=128 alpha lowered to 0.80,
+    which lifts the CORRECTED cap back over 145.8, and `straddles` says so. So
+    the property is a property of the published alphas, not of the code.
+    """
+    doc = json.loads(A100_G64.read_text())
+    doc["ladder"]["128"]["alpha_corrected"] = 0.80
+    arm = tmp_path / "2026-09-02-nvidia_a100_sxm4_80gb-planted"
+    arm.mkdir(parents=True)
+    (arm / A100_G64.name).write_text(json.dumps(doc))
+    (cap,) = bm.premise_caps(tmp_path)
+    assert cap.straddles
+    assert cap.exa_hi > cap.ridge
+
+
+def test_the_audit_prints_the_premise_beside_its_retracted_form(bm, capsys):
+    """`--audit` is the evidence for the module docstring, so the premise has to
+    be ON that page and not only in the prose it went stale in.
+
+    Both numbers are required: a corrected cap printed alone is a number the
+    reader cannot compare with the published one, which is how a 32% correction
+    stayed invisible.
+    """
+    if not PUBLISHED.exists():
+        pytest.skip("no results/published on this checkout")
+    bm.main(["--audit"])
+    out = capsys.readouterr().out
+    assert "## The founding premise, recomputed" in out
+    assert "retracted  150.4 (1.032 of ridge, ABOVE)" in out
+    assert "141.8" in out
+    assert "NO corrected cap reaches its card's ridge" in out
+
+
+def test_the_premise_refuses_a_corpus_it_cannot_recompute_from(bm, tmp_path):
+    """"No BM=128 fit carries an alpha" and "the premise holds" must not print
+    the same way, so an empty corpus is a REFUSAL and never an empty list."""
+    with pytest.raises(bm.RefusedBeforeMeasuring) as exc:
+        bm.premise_caps(tmp_path)
+    assert "cannot be recomputed" in str(exc.value)
 
 
 def test_no_published_ladder_reaches_five_clean_memory_treads(bm):

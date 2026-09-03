@@ -96,18 +96,46 @@ should know them first.
   said `RESULT: CLAIM C1 FAIL` and the process said DONE. The flag is retired,
   accepted and ignored; `_exit_code` returns what `classify` returns.
 
-WHY THIS EXISTS. BLOCK_SIZE_M=128 is the one tile height where the study's
-arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
-calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the H200 -- and it
-is the tile vLLM's fallback ladder actually runs in every multi-tile decode cell
-(up to 32 M-tiles per expert among the arm's vLLM rows; the 34
-sometimes quoted counts cutlass and sglang rows, which run no Triton tile).
-Every other block size in
-this study either sits far below the ridge (32, 64: the cap binds, and that is
-the study's one surviving result) or far above it (256: compute bound at every
-tread, which is why it serves as the compute reference). So 128 is the only tile
-height where "does the cap matter in production" is a live question, and the
-entire 128 row of the published alpha surface rests on TWO fits, one per card.
+WHY THIS EXISTS, WITH ITS FOUNDING PREMISE RETRACTED ON 2026-09-02. This
+paragraph used to open "BLOCK_SIZE_M=128 is the one tile height where the
+study's arithmetic-intensity cap straddles the hardware ridge -- cap 150.4
+against a calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the
+H200". Both numbers were `2 BM / (b alpha)` at the two published BM=128 fits,
+128/0.85078 on the A100 (qwen2 G=64) and 128/0.80718 on the H200
+(deepseek-v2-lite G=16), and `moe/bench/ai_model.py` shows that expression is
+HIGH by `lin_overstatement = 1 + phi + delta` whatever alpha goes into it.
+`premise_caps` below re-derives both from the same two report.json ladder
+blocks through the sweep's own `cap_overstatement`, `--audit` prints the result
+on every run, and it reads:
+
+    A100 qwen2 G=64            lin 150.4 (1.032 of 145.8)
+                               EXA 141.8 down to  49.6  (0.973 .. 0.340)
+                               1 + phi + delta = 1.061 (alpha_a=0) .. 3.036 (=1)
+    H200 deepseek G=16         lin 158.6 (0.974 of 162.8)
+                               EXA 143.1 down to  51.8  (0.879 .. 0.318)
+                               1 + phi + delta = 1.108 (alpha_a=0) .. 3.062 (=1)
+
+THE STRADDLE DOES NOT EXIST. Corrected, both caps sit BELOW their own card's
+ridge at every alpha_a the model admits, the tightest by 2.7%, and `delta` is
+taken as zero throughout so those are UPPER bounds: a real fixed cost pushes
+them further down. Even uncorrected only ONE of the two was ever above its
+ridge. So this arm cannot be justified by "the cap lands on the ridge at 128",
+and that is a result rather than an inconvenience: it means no cap number
+decides whether renting an H200 for five clean treads at BM=128 is worth doing.
+
+WHAT SURVIVES, AND IT IS THE MEASUREMENT RATHER THAN THE ARITHMETIC.
+BLOCK_SIZE_M=128 is the tile vLLM's fallback ladder actually runs in every
+multi-tile decode cell (up to 32 M-tiles per expert among the arm's vLLM rows;
+the 34 sometimes quoted counts cutlass and sglang rows, which run no Triton
+tile), and the entire 128 row of the published alpha surface rests on TWO fits,
+one per card. And the thing the retracted cap was standing in for is MEASURED
+further down, with no ridge and no alpha in it: 19 of the 22 valid published
+BM=128 ladders have `B/C` between 0.877 and 1.101 with a median of 0.991, so at
+this tile the memory and compute branches ARE one line to about 1%. `B/C` is a
+ratio of two fitted slopes; no cap, no ridge and no estimator's alpha enters it,
+which is exactly why it survived the correction that took the premise. The
+question this arm answers is therefore "can a BM=128 ladder be swept deep enough
+to identify a memory branch at all", not "does the cap cross the ridge".
 
 Both of those two fits are broken, and the same arithmetic explains why no third
 one exists. This script is that arithmetic, the gates that would have caught the
@@ -339,7 +367,13 @@ def _load_sweep():
               # what `time_kernel` needs before it can say anything about
               # LEVEL, and this file must resolve it the same way the sweep
               # does or its rows are not comparable with the sweep's.
-              "reference_clock_mhz", "timing_basis", "ladder_treads")
+              "reference_clock_mhz", "timing_basis", "ladder_treads",
+              # Added 2026-09-02 with the cap retraction. This file's founding
+              # premise was a cap computed as 2 BM / (b alpha); that form is
+              # high by `ai_model.lin_overstatement` and the sweep owns the
+              # bracket on it. A private copy would let the two drift, and the
+              # premise is the one number in this file that must not.
+              "cap_overstatement")
     missing = [n for n in needed if not hasattr(module, n)]
     if missing:
         raise _refuse(
@@ -1253,6 +1287,13 @@ class LadderRecord:
     #: where alpha is identifiable -- not at 128, where it is not.
     min_alpha: float | None = None
     min_alpha_block_m: int | None = None
+    #: This ladder's own activation-corrected alpha at BLOCK_M=128, and the
+    #: ridge its report stamps. Both are here for `premise_caps` and nothing
+    #: else: the arm's founding premise was a cap built from the first against
+    #: the second, and a premise that cannot be recomputed from the files is a
+    #: sentence rather than a result.
+    alpha_corrected_128: float | None = None
+    ridge: float | None = None
 
     @property
     def c_ref(self) -> float | None:
@@ -1326,8 +1367,145 @@ def load_corpus(published: Path, dtype: str = "bf16",
             memory_points=int(fit.get("memory_points") or 0),
             published_alpha=fit.get("alpha"),
             ceiling_tflops=_ceiling(card, m["dtype"], hardware_dir),
-            path=str(path), min_alpha=best[0], min_alpha_block_m=best[1]))
+            path=str(path), min_alpha=best[0], min_alpha_block_m=best[1],
+            alpha_corrected_128=fit.get("alpha_corrected"),
+            ridge=payload.get("ridge")))
     return records, skipped
+
+
+# --------------------------------------------------------------------------
+# The founding premise, recomputed instead of quoted. Retracted 2026-09-02.
+# --------------------------------------------------------------------------
+
+#: The BLOCK_SIZE_N every published BLOCK_M=128 fit was swept at. The corrected
+#: cap depends on it through `phi`, and the retracted premise quoted a cap that
+#: named neither it nor the alpha it came from.
+PREMISE_BLOCK_N = 64
+
+
+@dataclass(frozen=True)
+class PremiseCap:
+    """One published BLOCK_M=128 fit's cap, retracted form beside corrected.
+
+    `lin_cap` is `2 BM / (b alpha)` at the ladder's own activation-corrected
+    alpha: the expression the two numbers in this module's docstring were, and
+    the one `moe/bench/ai_model.py` retracted. `exa_hi` and `exa_lo` are that
+    cap divided by `SWEEP.cap_overstatement`, which is `1 + phi + delta` at
+    alpha_a = 0 and at alpha_a = 1. It is a BRACKET and not a number because
+    alpha_a, the miss fraction on the activation re-read, has no measurement
+    anywhere in this repository; `delta` is taken as 0, so `exa_hi` is an UPPER
+    bound on the corrected cap and the straddle gets every benefit available.
+    """
+
+    arm: str
+    model: str
+    group_m: int
+    alpha_corrected: float
+    ridge: float
+    lin_cap: float
+    exa_hi: float
+    exa_lo: float
+    factor_lo: float
+    factor_hi: float
+
+    @property
+    def lin_straddles(self) -> bool:
+        """Did the RETRACTED cap sit above this card's ridge. The premise."""
+        return self.lin_cap >= self.ridge
+
+    @property
+    def straddles(self) -> bool:
+        """Does the CORRECTED cap reach the ridge at ANY admissible alpha_a.
+
+        Read at `exa_hi`, the alpha_a = 0 end, because that is the largest cap
+        the corrected model allows. False here is the retraction: no value of
+        the unmeasured parameter puts the cap on the ridge.
+        """
+        return self.exa_hi >= self.ridge
+
+
+def premise_caps(published: Path, hardware_dir: Path | None = None,
+                 block_n: int = PREMISE_BLOCK_N) -> list[PremiseCap]:
+    """Re-derive the arm's founding premise from the published reports.
+
+    WHY THIS IS CODE AND NOT A PARAGRAPH. Until 2026-09-02 this module opened by
+    asserting that BLOCK_M=128 "is the one tile height where the study's
+    arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
+    calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the H200".
+    Those two caps were `2 BM / (b alpha)` at the two published BM=128 fits, the
+    form `moe/bench/ai_model.py` shows is high by `1 + phi + delta`. Corrected,
+    both fall below their own card's ridge and the straddle is gone. A premise
+    that lived only in prose survived the retraction of the arithmetic under it
+    at the same HEAD, in the same checkout, with no complaint from anything; one
+    that is recomputed from the files on demand cannot.
+
+    REFUSES rather than returning an empty list, because "no BM=128 fit carries
+    an alpha" and "the premise holds" must not print the same way.
+    """
+    records, _ = load_corpus(published, hardware_dir=hardware_dir)
+    out: list[PremiseCap] = []
+    for rec in records:
+        if rec.alpha_corrected_128 is None or not rec.ridge:
+            continue
+        alpha = float(rec.alpha_corrected_128)
+        if alpha <= 0:
+            continue
+        cfg = MODEL_CONFIGS[rec.model]
+        b = dtype_bytes(rec.dtype)
+        lin = 2.0 * SUBJECT_BLOCK_M / (b * alpha)
+        lo, hi = SWEEP.cap_overstatement(cfg, SUBJECT_BLOCK_M, block_n, b)
+        out.append(PremiseCap(
+            arm=rec.arm, model=rec.model, group_m=rec.group_m,
+            alpha_corrected=alpha, ridge=float(rec.ridge), lin_cap=lin,
+            exa_hi=lin / lo, exa_lo=lin / hi, factor_lo=lo, factor_hi=hi))
+    if not out:
+        raise _refuse(
+            f"no published BLOCK_M={SUBJECT_BLOCK_M} ladder under {published} "
+            "carries both an activation-corrected alpha and a stamped ridge, so "
+            "this arm's founding premise cannot be recomputed. That is a "
+            "refusal and not a confirmation: the premise is unchecked, not "
+            "upheld.")
+    return out
+
+
+def render_premise(published: Path, hardware_dir: Path | None = None
+                   ) -> list[str]:
+    """The founding premise, printed as arithmetic every time `--audit` runs.
+
+    On the page rather than in the docstring because the docstring version
+    stayed wrong at a HEAD where the file it cites already said so, and nothing
+    noticed because nothing recomputed it. The retracted cap is
+    printed BESIDE the corrected one: a correction whose size is not shown is a
+    correction the next reader has to take on trust.
+    """
+    caps = premise_caps(published, hardware_dir=hardware_dir)
+    out = ["", "## The founding premise, recomputed", "",
+           "The retracted cap is `2 BM / (b alpha)`; the corrected one is that "
+           "divided by",
+           "`ai_model.lin_overstatement = 1 + phi + delta`, bracketed over the "
+           "UNMEASURED alpha_a in",
+           "[0, 1] with delta taken as 0, so the EXA-hi column is an UPPER "
+           "bound on the corrected cap.", ""]
+    for c in sorted(caps, key=lambda c: c.arm):
+        out.append(f"  {c.arm[:38]:38s} {c.model[:16]:16s} G={c.group_m:2d} "
+                   f"alpha {c.alpha_corrected:.5f}  ridge {c.ridge:6.1f}")
+        out.append(f"  {'':38s} retracted {c.lin_cap:6.1f} "
+                   f"({c.lin_cap / c.ridge:.3f} of ridge, "
+                   f"{'ABOVE' if c.lin_straddles else 'below'})")
+        out.append(f"  {'':38s} corrected {c.exa_lo:6.1f} .. {c.exa_hi:6.1f} "
+                   f"({c.exa_lo / c.ridge:.3f} .. {c.exa_hi / c.ridge:.3f}), "
+                   f"factor {c.factor_lo:.3f} .. {c.factor_hi:.3f}, "
+                   f"{'STILL STRADDLES' if c.straddles else 'no straddle'}")
+    if any(c.straddles for c in caps):
+        out += ["", "  At least one corrected cap still reaches its card's "
+                    "ridge, so the premise stands as written."]
+    else:
+        out += ["", "  NO corrected cap reaches its card's ridge at any "
+                    "alpha_a in [0, 1]. The straddle",
+                "  this arm was founded on does not exist; what justifies the "
+                "arm is the MEASURED",
+                "  B/C near 1, which carries no cap and no ridge."]
+    return out
 
 
 @dataclass
@@ -3260,6 +3438,12 @@ def _run(argv=None) -> int:
         if args.audit:
             records, skipped = load_corpus(args.published, args.dtype,
                                            args.hardware_dir)
+            if records:
+                # Only when the corpus HAS BM=128 ladders. With none, V0 already
+                # voids the page for vacuity and that is the gate that owns the
+                # verdict; a second refusal from here would answer a question
+                # nobody could have asked.
+                lines += render_premise(args.published, args.hardware_dir)
             rows = [audit_record(r, seed=args.seed, draws=args.draws)
                     for r in records]
             more, g, pay = audit_report(rows, skipped, b)
