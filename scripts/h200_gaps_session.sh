@@ -276,6 +276,30 @@
 #     names both figures and the flag that separates them, so the row can still
 #     be re-derived in seconds.
 #
+# WHAT CHANGED ON 2026-09-03, sixth pass, after a reviewer read the alias arm's
+# two OPERATOR surfaces against the sibling script rather than against the body
+# comment above the arm. ONE defect, and it is this repo's recurring shape: a
+# state disclosed where the arm is PLANNED and at neither place it is REPORTED.
+#
+#   * THE LIKELIEST READING OF THIS ARM'S EXIT 1 WAS IN NEITHER SURFACE.
+#     `arm_closes alias_ablation` and the READ-FIRST block both enumerated three
+#     states -- P1 PASS, P1 FAIL, headroom/attribution INVALID -- and glossed
+#     exit 1 as the FAIL ("the interval says which of 0.10 or 0.33 it landed on
+#     instead"). The arm is booked `--dot-fallback allow`, and
+#     `alias_ablation.choose_pinning` calls the fall to dot mode the LIKELY case
+#     rather than the corner: the 0.61-of-roof ceiling this arm exists to escape
+#     has the signature of the cross-lane `tl.sum` tree that `dot` removes. A
+#     dot ladder measures a LOWER BOUND, leaves P1 UNKNOWN, `classify` maps an
+#     UNKNOWN CLAIM to CLAIM_FAIL, and `arm` LATCHES a CLAIM_FAIL, so the arm
+#     spends its thirteen minutes, answers nothing, and wears the word a
+#     refutation wears. The gloss the two surfaces DID carry is exactly the
+#     write-up the sibling script exists to prevent: "alpha is not 0.558" when
+#     what happened is that alpha was not asked. Both surfaces now name the
+#     fourth state, send the operator to the P1 RESULT line's verdict WORD
+#     rather than to the exit code, and forbid the 0.10-or-0.33 sentence from an
+#     UNKNOWN. Nothing about the booking, the order or the arithmetic moved:
+#     this is a reporting defect and the fix is in what the operator reads.
+#
 # WHAT A 2-HOUR AND A 3-HOUR RENTAL ACTUALLY REACH, since adding an arm is also
 # a claim about what still fits. The whole session does not fit in either, and
 # it did not before this arm was added: the alias hour is 13 minutes and it runs
@@ -1299,7 +1323,7 @@ arm_closes() { case "$1" in
   roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
   roofline-n256-g16) echo "THE CLAIM, and the only arm that can confirm it. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. Contests TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. TODAY IT REFUSES: no BLOCK_M=256 control fits at BLOCK_N=256 (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory against 227 at 16), and this driver will not run the subject without the control that cancels the fused layer." ;;
   roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim rests on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same missing control as the G=16 arm, and one fix unblocks both." ;;
-  alias_ablation) echo "THE STUDY'S FIRST INFERENTIAL LINK, and the only instrument that tests it. Every alpha here is a slope per extra M-tile RELABELLED as a fraction of a fresh DRAM weight read; every cap, every roof fraction and 'a decode-configured kernel can never reach its compute roof' is that relabelling carried forward, and the relabelling rests on one regression against a byte model with no tile term. This measures the same quantity with no compulsory bytes, no calibrated bandwidth, no ridge and no fitted intercept: one access pattern run twice, one arm's weight loads pointed at an L2-resident column block, alpha = (D(n)/D(1) - 1)/(n-1) with D(1) MEASURED in the same units by the same clock rather than predicted. TWO OUTCOMES, AND BOTH ARE PUBLISHABLE. P1 PASS, the bracket overlapping the refit's 0.529-0.588: the per-tile slope IS DRAM traffic, the mechanism sentence keeps the word, and every cap below keeps its subject. P1 FAIL, the bracket disjoint from it: the slope is L2-to-shared bandwidth or issue rate or MMA efficiency wearing DRAM's name, alpha_refit is measuring the wrong resource, and the paper's mechanism sentence has to drop the word and say instead which of 0.10 or 0.33 the measured interval did contain. THE THIRD STATE IS NOT AN OUTCOME: headroom or attribution FAILing is INVALID and says the apparatus could not have seen DRAM whatever alpha is, which is exactly what the 2026-09-01 attempt returned and was nearly read as a null result about DRAM. IT NEEDS ARM 0's PUBLISHED CALIBRATION AND DOES NOT REFUSE WITHOUT IT: with no measured yaml for this card both of those gates read UNKNOWN, which is INVALID, so this arm SPENDS its minutes and then may not be quoted. That is a sharper reason for the calibration gate than the five arms that refuse for free." ;;
+  alias_ablation) echo "THE STUDY'S FIRST INFERENTIAL LINK, and the only instrument that tests it. Every alpha here is a slope per extra M-tile RELABELLED as a fraction of a fresh DRAM weight read; every cap, every roof fraction and 'a decode-configured kernel can never reach its compute roof' is that relabelling carried forward, and the relabelling rests on one regression against a byte model with no tile term. This measures the same quantity with no compulsory bytes, no calibrated bandwidth, no ridge and no fitted intercept: one access pattern run twice, one arm's weight loads pointed at an L2-resident column block, alpha = (D(n)/D(1) - 1)/(n-1) with D(1) MEASURED in the same units by the same clock rather than predicted. TWO OUTCOMES, AND BOTH ARE PUBLISHABLE. P1 PASS, the bracket overlapping the refit's 0.529-0.588: the per-tile slope IS DRAM traffic, the mechanism sentence keeps the word, and every cap below keeps its subject. P1 FAIL, the P1 RESULT line saying FAIL in that word and the bracket disjoint from it: the slope is L2-to-shared bandwidth or issue rate or MMA efficiency wearing DRAM's name, alpha_refit is measuring the wrong resource, and the paper's mechanism sentence has to drop the word and say instead which of 0.10 or 0.33 the measured interval did contain. THE THIRD STATE IS NOT AN OUTCOME: headroom or attribution FAILing is INVALID and says the apparatus could not have seen DRAM whatever alpha is, which is exactly what the 2026-09-01 attempt returned and was nearly read as a null result about DRAM. THE FOURTH STATE IS THE LIKELY ONE AND IT IS NOT AN OUTCOME EITHER, and it leaves the ledger with the SAME WORD as the FAIL above. This arm is booked --dot-fallback allow, and alias_ablation.py's own choose_pinning calls the fall to dot mode the LIKELY case rather than the corner: the 0.61-of-roof ceiling this arm exists to escape has the signature of the cross-lane tl.sum tree, which is exactly what dot removes. A dot ladder measures a LOWER BOUND on alpha, cannot ask P1 at all and leaves it UNKNOWN; exit_codes.classify maps an UNKNOWN CLAIM to CLAIM_FAIL; and arm() LATCHES a CLAIM_FAIL, so this arm spends its thirteen minutes, ends with no answer to P1, and is then SKIPPED by every resume of this session: the resume check re-runs no CLAIM_FAIL row, and deleting the row is the only thing that forces one. READ THE P1 RESULT LINE, NOT THE EXIT CODE: FAIL is the outcome above, and UNKNOWN with a detail opening 'NOT A REFUTATION' refutes no candidate at all, so the 0.10-or-0.33 sentence in the FAIL gloss must not be written from it. Re-booking takes a sum-mode pinning that clears the roof, by hand, in a later session. Filing a dot run as 'alpha is not 0.558' when alpha was not asked is the retraction this line exists to prevent. IT NEEDS ARM 0's PUBLISHED CALIBRATION AND DOES NOT REFUSE WITHOUT IT: with no measured yaml for this card both of those gates read UNKNOWN, which is INVALID, so this arm SPENDS its minutes and then may not be quoted. That is a sharper reason for the calibration gate than the five arms that refuse for free." ;;
   bm128_depth) echo "The evaluation's #2: five clean memory-bound treads at 128, monotone. The whole 128 row is currently n=2 across two cards, one on a ladder where time falls as rows rise." ;;
   noise_floor) echo "The evaluation's #3: a real between-replicate sd, WRITTEN INTO THE TRACKED TREE. The study has none; every effect so far is scored against an IMPORTED prior, including the MDE this session prints, and until --publish runs that line keeps saying ASSUMED however many replicates were paid for. Also publishes the num_stages control that would have caught the cross-card null. THE ARM SET IS ALL FOUR ARMS AND THAT IS THE DELIBERATE CHOICE, not the default falling through: two models x two swizzles is the SMALLEST set on which this script's own V7 can pass (>= 2 models, or a floor measured only where the swizzle effect is 0.3855 licensing a surface across models where it is 0.0226) and on which either C3 scores a real contrast (a swizzle delta needs G=1 AND G=16 of the SAME model; drop to two arms and C3 reads G=1 against G=1 and measures nothing). The bound is --replicates 3, not a smaller arm set, and it is bought at a stated price: at N=3 the floor ESTIMATE is known to 1.92x by its own table against 1.44x at N=6, so it is published as a floor with that scope attached and a later session extends it rather than re-deriving it." ;;
   bn_g16)     echo "alpha_a as a fitted slope rather than a two-point guess, and the residual that says whether the three-term model is COMPLETE. The only clean lever on the decomposition." ;;
@@ -2263,14 +2287,28 @@ cat <<EOF
   alias_ablation  the P1 line, and read it BEFORE the roofline verdict. It is
                the only arm that says whether alpha is a fraction of a DRAM
                weight read at all, which is the unit every roof fraction, every
-               cap and the whole mechanism sentence is written in. P1 PASS: the
-               relabelling stands and every number below keeps its subject. P1
-               FAIL: the per-tile slope is some other resource wearing DRAM's
-               name, and the interval says which of 0.10 or 0.33 it landed on
-               instead. A headroom or attribution FAIL is NEITHER: it is the
-               apparatus saying it could not have seen DRAM whatever alpha is,
-               which is what the 2026-09-01 attempt returned and what was
-               nearly written up as a null result about DRAM.
+               cap and the whole mechanism sentence is written in. READ THE P1
+               RESULT LINE'S VERDICT WORD, NOT THIS ARM'S EXIT CODE: two of the
+               four states below exit 1 and only one of them is a finding.
+               P1 PASS: the relabelling stands and every number below keeps its
+               subject. P1 FAIL, in that word: the per-tile slope is some other
+               resource wearing DRAM's name, and the interval says which of
+               0.10 or 0.33 it landed on instead. P1 UNKNOWN, whose detail
+               opens NOT A REFUTATION, IS THE LIKELY ONE and is not that: this
+               arm is booked --dot-fallback allow, and the fall to dot mode is
+               what alias_ablation.py calls the LIKELY case rather than the
+               corner, because the 0.61-of-roof ceiling this arm exists to
+               escape has the signature of the cross-lane sum tree that dot
+               removes. A dot ladder measures a LOWER BOUND on alpha and cannot
+               ask P1 at all, classify maps an UNKNOWN CLAIM to CLAIM_FAIL, and
+               this ledger LATCHES a CLAIM_FAIL, so the arm ends with no answer
+               to P1, wears the same word a refutation would have worn, and is
+               skipped by every resume of this session until someone deletes its
+               row and re-books it at a sum-mode pinning that clears the roof. Do not write the 0.10-or-0.33
+               sentence from it. A headroom or attribution FAIL is none of the
+               three: it is the apparatus saying it could not have seen DRAM
+               whatever alpha is, which is what the 2026-09-01 attempt returned
+               and what was nearly written up as a null result about DRAM.
   roofline-n256-g16  the ## Verdict line, and the only arm here that can CONFIRM
                the study's claim: BLOCK_M=128 at the configuration vLLM ships.
                CEILING BINDING AT THE PRODUCTION TILE is the claim confirmed;

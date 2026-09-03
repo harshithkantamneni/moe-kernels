@@ -2425,3 +2425,77 @@ def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
     commit = got.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
     assert "THE ALIAS ABLATION WRITES NOTHING TRACKED" in commit
     assert "alias_ablation/<run id>" in commit
+
+
+def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
+    """THE RECURRING DEFECT AGAIN, at the two surfaces read at the END of a
+    rental. The body comment above the arm always disclosed what
+    `--dot-fallback allow` buys: a dot ladder measures a LOWER BOUND, leaves P1
+    UNKNOWN, exits 1 CLAIM_FAIL and is LATCHED by `arm`. The two surfaces the
+    operator actually reads once the pod is nearly out of hours -- `arm_closes`
+    and the READ-FIRST block -- enumerated three states (P1 PASS, P1 FAIL,
+    headroom/attribution INVALID) and glossed exit 1 as the FAIL: "the interval
+    says which of 0.10 or 0.33 it landed on instead". `choose_pinning` calls the
+    fall to dot mode the LIKELY case rather than the corner, because the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree that `dot` removes. So the likeliest single reading
+    of this arm's exit code was the state neither surface named, and the gloss
+    they did carry is the retraction -- "alpha is not 0.558" for a run in which
+    alpha was not asked -- that the sibling script exists to prevent. The state
+    was documented where the arm is PLANNED and not where it is REPORTED.
+
+    THE TWO EXIT-1 STATES ARE SEPARATED BY EXECUTION, NOT BY PROSE. The same
+    gate builder renders FAIL in `sum` mode and UNKNOWN in `dot` mode, both
+    classify to CLAIM_FAIL, and the verdict WORD is the only thing between a
+    finding and an unasked question. That is why both surfaces have to send the
+    operator to the RESULT line rather than to the exit code."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import alias_ablation as aa
+
+    # The FAIL branch is planted beside the UNKNOWN one: a disjoint interval in
+    # sum mode is the outcome the surfaces describe, and it is a different word
+    # on the same line from the same builder.
+    fail = aa.prediction_gate((0.05, 0.14), (0.04, 0.15), "sum")
+    unknown = aa.prediction_gate((0.41, 0.62), (0.40, 0.63), "dot")
+    assert fail.scored()[2] == exit_codes.FAIL
+    assert unknown.scored()[2] == exit_codes.UNKNOWN
+    assert unknown.result_line().startswith(
+        f"RESULT: {exit_codes.CLAIM} P1-")
+    assert "NOT A REFUTATION" in unknown.result_line()
+    sound = exit_codes.result_line(exit_codes.VALIDITY, "headroom",
+                                   exit_codes.PASS, "the pinning cleared")
+    for gate in (fail, unknown):
+        text = f"{sound}\n{gate.result_line()}\n"
+        assert exit_codes.classify_text(text) == exit_codes.CLAIM_FAIL
+    # And the state is REACHABLE from this driver: all three branches of the arm
+    # name the flag that allows the fall, so it is not a corner of some other
+    # invocation.
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert lines and all("--dot-fallback allow" in ln for ln in lines), lines
+
+    closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
+    block = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+        "READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+    entry = block.split("roofline-n256-g16")[0]
+    for surface in (closes, entry):
+        # Flattened, because one surface is a heredoc wrapped at 76 columns and
+        # a phrase that straddles two of its lines is still the phrase.
+        flat = " ".join(surface.split())
+        low = flat.lower()
+        assert "--dot-fallback allow" in flat, surface
+        assert "likely" in low, surface
+        assert "unknown" in low and "not a refutation" in low, surface
+        assert "lower bound" in low, surface
+        assert "latch" in low, surface
+        # The one instruction that separates the two exit-1 states, and the
+        # guard on the gloss that was the misreading.
+        assert "read the p1 result line" in low, surface
+        assert "0.10-or-0.33" in flat, surface
+    # The other two states are still stated, so the fourth was ADDED and did not
+    # displace the ones that were right.
+    assert "THE THIRD STATE IS NOT AN OUTCOME" in closes
+    assert "P1 PASS" in closes and "P1 FAIL" in closes
+    for word in ("P1 PASS", "P1 FAIL", "headroom or attribution FAIL"):
+        assert word in entry, word
