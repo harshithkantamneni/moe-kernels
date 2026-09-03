@@ -9,11 +9,16 @@ not have actually fire on the two published fits that should never have shipped.
 
 THE HEADING USED TO SAY "where the cap sits ON the ridge", and that was the
 arm's founding premise, retracted on 2026-09-02: the caps it rested on were
-`2 BM / (b alpha)`, which `moe/bench/ai_model.py` shows is high by
-`1 + phi + delta`, and corrected they sit below both cards' ridges. What
+`2 BM / (b alpha)`, which leaves `phi` out of its denominator, and corrected
+through `moe/bench/ai_model.exact_cap` they sit below both cards' ridges. What
 survives is the MEASURED `B/C` near 1, a ratio of two fitted slopes with no cap
 and no ridge in it. `test_the_founding_premise_no_longer_straddles_the_ridge`
-is where that retraction is checked against the published files.
+is where that retraction is checked against the published files, and it pins
+the CORRECTION FACTOR as well as the caps: the first version of `premise_caps`
+divided by `1 + phi + delta`, which is the factor for a cap taken from a raw
+`B / (A + B)` fit, where the published `alpha-corrected` is an alpha_b and the
+factor for one of those is `(alpha_b + phi) / alpha_b`. Both are above 1 and
+the retraction survived the mix-up; the printed caps did not.
 
 FIVE GROUPS.
 
@@ -48,8 +53,9 @@ from pathlib import Path
 
 import pytest
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
+from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -971,11 +977,19 @@ def test_the_founding_premise_no_longer_straddles_the_ridge(bm):
     The module docstring asserted "cap 150.4 against a calibrated ridge of 145.8
     on the A100, 158.6 against 162.8 on the H200" at the same HEAD where
     `moe/bench/ai_model.py` retracts the expression both came from. This runs
-    `premise_caps`, which divides each by the sweep's own `cap_overstatement`,
-    and asserts what the corrected numbers actually say: the retracted cap
-    cleared the A100's ridge, the corrected one clears NEITHER card's at ANY
-    alpha_a in [0, 1]. `delta` is zero throughout, so `exa_hi` is an upper
-    bound and the straddle is being given every benefit before it is refused.
+    `premise_caps` and asserts what the corrected numbers actually say: the
+    retracted cap cleared the A100's ridge, the corrected one clears NEITHER
+    card's at ANY alpha_a in [0, 1]. `exa_hi` sits at alpha_a = 0, the smallest
+    phi and the largest cap the model allows, so the straddle is being given
+    every benefit before it is refused.
+
+    THE FACTOR IS PINNED SEPARATELY FROM THE CAPS, because the two can disagree
+    and did. `alpha_corrected` is an alpha_b, so the retracted form is high by
+    `(alpha_b + phi) / alpha_b`; the first version of this function divided by
+    `1 + phi + delta` instead, which is the factor for an alpha straight out of
+    a `B / (A + B)` fit, and printed 141.8 and 143.1 where the identity it named
+    gives 140.4 and 139.9. Recomputing the factor from the alpha and the phi
+    here means a cap corrected by the wrong one of the two cannot pass.
     """
     if not PUBLISHED.exists():
         pytest.skip("no results/published on this checkout")
@@ -987,12 +1001,22 @@ def test_the_founding_premise_no_longer_straddles_the_ridge(bm):
     assert a100.lin_straddles and a100.lin_cap == pytest.approx(150.4, abs=0.1)
     assert h200.lin_cap == pytest.approx(158.6, abs=0.1)
     for c in (a100, h200):
+        cfg = MODEL_CONFIGS[c.model]
+        n, k = 2 * cfg.intermediate_size, cfg.hidden_size
+        for alpha_a, factor in ((0.0, c.factor_lo), (1.0, c.factor_hi)):
+            phi = ai_model.phi(n, k, block_m=bm.SUBJECT_BLOCK_M,
+                               block_n=bm.PREMISE_BLOCK_N, alpha_a=alpha_a)
+            assert factor == pytest.approx(
+                (c.alpha_corrected + phi) / c.alpha_corrected, rel=1e-12)
+            # The factor that was used instead, and it is SMALLER, which is why
+            # the printed caps came out high.
+            assert factor > ai_model.lin_overstatement(phi=phi, delta=0.0)
         assert c.factor_lo > 1.0 and c.factor_hi > c.factor_lo
         assert c.exa_hi == pytest.approx(c.lin_cap / c.factor_lo, rel=1e-12)
         assert c.exa_lo < c.exa_hi < c.lin_cap
         assert not c.straddles, (c.arm, c.exa_hi, c.ridge)
-    assert a100.exa_hi == pytest.approx(141.8, abs=0.1)
-    assert h200.exa_hi == pytest.approx(143.1, abs=0.1)
+    assert a100.exa_hi == pytest.approx(140.4, abs=0.1)
+    assert h200.exa_hi == pytest.approx(139.9, abs=0.1)
 
 
 def test_the_premise_still_straddles_when_the_alpha_is_small_enough(bm, tmp_path):
@@ -1027,16 +1051,79 @@ def test_the_audit_prints_the_premise_beside_its_retracted_form(bm, capsys):
     out = capsys.readouterr().out
     assert "## The founding premise, recomputed" in out
     assert "retracted  150.4 (1.032 of ridge, ABOVE)" in out
-    assert "141.8" in out
+    assert "140.4" in out and "141.8" not in out
     assert "NO corrected cap reaches its card's ridge" in out
 
 
 def test_the_premise_refuses_a_corpus_it_cannot_recompute_from(bm, tmp_path):
     """"No BM=128 fit carries an alpha" and "the premise holds" must not print
-    the same way, so an empty corpus is a REFUSAL and never an empty list."""
-    with pytest.raises(bm.RefusedBeforeMeasuring) as exc:
+    the same way, so an empty corpus RAISES and never returns an empty list.
+
+    `PremiseNotRecomputable` and not `RefusedBeforeMeasuring`: the second
+    carries `exit_codes.REFUSED` and would take the run with it. Which class
+    this is IS the fix in `test_a_corpus_with_no_premise_alpha_is_still_scored`
+    below, so it is asserted rather than caught broadly.
+    """
+    with pytest.raises(bm.PremiseNotRecomputable) as exc:
         bm.premise_caps(tmp_path)
     assert "cannot be recomputed" in str(exc.value)
+    assert not isinstance(exc.value, bm.RefusedBeforeMeasuring)
+
+
+def test_the_premise_names_the_ladders_it_could_not_use(bm, tmp_path):
+    """A ladder dropped for an alpha the model cannot hold is NAMED, not
+    silently skipped.
+
+    An `alpha_corrected` above 1 is not a miss fraction, and `exact_cap` refuses
+    it by name. The refusal a reader gets then has to say that a ladder was
+    examined and rejected, because "no ladder carried an alpha" and "the one
+    ladder that did carried 1.4" are different states of the corpus.
+    """
+    doc = json.loads(A100_G64.read_text())
+    doc["ladder"]["128"]["alpha_corrected"] = 1.4
+    arm = tmp_path / "2026-09-02-nvidia_a100_sxm4_80gb-planted"
+    arm.mkdir(parents=True)
+    (arm / A100_G64.name).write_text(json.dumps(doc))
+    with pytest.raises(bm.PremiseNotRecomputable) as exc:
+        bm.premise_caps(tmp_path)
+    assert "nvidia_a100_sxm4_80gb-planted" in str(exc.value)
+    assert "alpha_b=1.4" in str(exc.value)
+
+
+def test_a_corpus_with_no_premise_alpha_is_still_scored(bm, tmp_path, capsys):
+    """THE COUPLING, removed: a premise the gates do not read cannot void them.
+
+    `premise_caps` needs a BM=128 ladder carrying BOTH an activation-corrected
+    alpha and a stamped ridge, and only 2 of the 22 valid published ladders do
+    -- the two this arm argues should be withdrawn. While that refusal was a
+    `RefusedBeforeMeasuring`, blanking those two values turned a fully
+    scoreable page into exit 2 with ZERO `RESULT:` lines: V0 and P4 through P9
+    never examined. Here the corpus is mirrored with both alphas blanked, and
+    the page must still be scored -- same gate count, same CLAIM_FAIL -- with
+    the premise printed as NOT RECOMPUTABLE rather than swallowed.
+    """
+    if not PUBLISHED.exists():
+        pytest.skip("no results/published on this checkout")
+    blanked = 0
+    for report in sorted(PUBLISHED.glob("*/*.report.json")):
+        doc = json.loads(report.read_text())
+        fit = (doc.get("ladder") or {}).get("128")
+        if fit and fit.get("alpha_corrected") is not None:
+            fit["alpha_corrected"] = None
+            blanked += 1
+        out = tmp_path / report.parent.name / report.name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(doc))
+    assert blanked == 2, blanked
+
+    code = bm.main(["--audit", "--published", str(tmp_path)])
+    text = capsys.readouterr().out
+    assert code == exit_codes.CLAIM_FAIL
+    assert "## The founding premise, NOT RECOMPUTABLE" in text
+    assert "voids the PREMISE and not the page" in text
+    scored = [ln for ln in text.splitlines() if ln.startswith("RESULT: ")]
+    assert len(scored) == 7, scored
+    assert exit_codes.classify_text(text) == code
 
 
 def test_no_published_ladder_reaches_five_clean_memory_treads(bm):
