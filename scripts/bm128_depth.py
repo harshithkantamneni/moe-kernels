@@ -318,6 +318,7 @@ import subprocess
 import sys
 import textwrap
 import time
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -2122,6 +2123,20 @@ class Sample:
     "fine". A container without NVML, a trial too short for the poller to land a
     sample, and a replay all produce None, and a reader that treats None as True
     re-admits exactly the rows the column exists to flag.
+
+    AND THE NUMBER LEVEL WAS SCORED AGAINST IS A COLUMN TOO, which is the half
+    of that fix this row did not get on 2026-09-02 while `tile_sweep` and
+    `group_m_alpha_sweep` did. `clock_level_ok` is tri-state, and its None
+    conflates two states a reader has to tell apart: the poller landed too few
+    samples on a run that HAD a reference, and the run had no reference at all,
+    in which case `clock_flags` could never have returned anything else. On disk
+    both are an empty cell. `clock_excluded` is False for either, so a ladder
+    measured with no reference reports ZERO treads excluded for clock level --
+    the "a check that examined nothing reports zero failures" shape
+    `moe/bench/exit_codes.py` is named against -- and reads exactly like a
+    ladder measured on a card that never sagged. `reference_clock_mhz` is what
+    separates them, on the row it scored, so a resume or a replay a week later
+    can still say which run this was.
     """
 
     block_m: int
@@ -2145,6 +2160,10 @@ class Sample:
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
     l2_flush: bool = False
+    #: The clock the roof was measured at, which `clock_level_ok` was scored
+    #: against. None means the run resolved none, so the verdict beside it could
+    #: only ever have been None; see the class docstring.
+    reference_clock_mhz: float | None = None
 
     @property
     def clock_excluded(self) -> bool:
@@ -2345,6 +2364,35 @@ def tread_clock(samples: list[Sample], block_m: int
     return out
 
 
+def tread_reference(samples: list[Sample], block_m: int
+                    ) -> dict[int, float | None]:
+    """Per tread: the clock its LEVEL verdict was scored against, or None.
+
+    THE EXCLUSION COUNT HAS TO BE ABLE TO SAY IT EXAMINED NOTHING. `ladder_treads`
+    drops a tread whose `clock_level_ok` is False, and `Sample.clock_excluded`
+    is False for None because an exclusion must be positively established --
+    both correct. Together they mean a ladder every one of whose rows was timed
+    with NO reference reports `0 excluded for clock level`, which is the same
+    sentence a ladder measured on a card that held its clock all the way
+    reports. `moe/bench/exit_codes.py` names that shape: a check that examined
+    nothing reports zero failures. This is the left-hand side those two rows
+    differ on, and it comes off the row rather than off the session so a resumed
+    `cells.csv` and a replayed one answer the same.
+
+    ANY, NOT MAJORITY, unlike `tread_clock`. The reference is a property of the
+    RUN and not of the repeat, so a tread has one as soon as one of its repeats
+    recorded one; a tread whose repeats disagree is a resume across the fix,
+    where the answer that matters is that a reference exists at all.
+    """
+    out: dict[int, float | None] = {}
+    for s in samples:
+        if s.block_m != block_m or s.status != "ok" or s.ms_p50 <= 0:
+            continue
+        if out.get(s.tiles) is None:
+            out[s.tiles] = s.reference_clock_mhz
+    return out
+
+
 def drift(samples: list[Sample], block_m: int) -> float | None:
     """Median relative change from the first repeat to the last, per tread.
 
@@ -2420,6 +2468,11 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
                 sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
                 clock_level_ok=_opt_bool(row.get("clock_level_ok")),
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
+                # Absent on every row written before 2026-09-03, and the honest
+                # reading of absent is None: those runs passed the instrument no
+                # reference, so their LEVEL column was empty for that reason and
+                # not for want of clock samples.
+                reference_clock_mhz=_opt_float(row.get("reference_clock_mhz")),
                 l2_flush=(row.get("l2_flush", "") or "").strip()
                          .lower() in ("1", "true", "yes")))
     # Only successful timings count as done, for the same reason the sweep does
@@ -2513,9 +2566,32 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                                 sm_clock_load_mhz=t.sm_clock_load_mhz,
                                 clock_level_ok=t.clock_level_ok,
                                 clock_drift_ok=t.clock_drift_ok,
-                                l2_flush=t.l2_flush)
+                                l2_flush=t.l2_flush,
+                                # The number the verdict beside it was scored
+                                # AGAINST. Without it an empty `clock_level_ok`
+                                # cannot be told from a passing one, and this
+                                # ladder's exclusion count then reports zero for
+                                # a run in which nothing could be examined.
+                                reference_clock_mhz=reference_clock)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+            except timing.TimingRefused:
+                # THE SECOND DOOR INTO THE SAME ROOM. `RefusedBeforeMeasuring`
+                # is a `SystemExit` precisely because this handler swallows a
+                # RuntimeError -- the class docstring says so -- and
+                # `timing.TimingRefused` subclasses RuntimeError, so every
+                # refusal the INSTRUMENT ITSELF raises walked through the door
+                # that was left open beside it: no CUDA and no injected fakes,
+                # trials=0, a warmup that makes the measurement meaningless.
+                # Each is a fact about the RUN and identical for every tread, so
+                # the ladder wrote a `status="failed"` sample per tread, ground
+                # through both block sizes, and scored its gates over a page of
+                # zeroes. Re-raised to `main`, which exits REFUSED: nothing was
+                # measured and nothing was spent. The BASE class and not a
+                # subclass, the way `driver.run_cell` names it, so a refusal
+                # added to the instrument later cannot reintroduce the bug by
+                # forgetting to add itself here.
+                raise
             except Exception as exc:                    # noqa: BLE001
                 sample = Sample(block_m, r // block_m, r, tokens, rep, 0.0, 0.0,
                                 0.0, 0, "failed", f"{type(exc).__name__}: {exc}")
@@ -2590,6 +2666,18 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     # scores. The full ladder is still PRINTED, marked, because a reader must be
     # able to see what was dropped.
     kept = {n for n, _ in fit_points}
+    # WHAT THE EXCLUSION ACTUALLY EXAMINED. `excluded` counts the treads
+    # `ladder_treads` dropped; on its own it cannot say whether the remainder
+    # were CHECKED and kept or were never checkable, because a tread timed with
+    # no reference has `clock_level_ok` None and None is not an exclusion. The
+    # two states print the same `0 excluded` line, and one of them means the
+    # ladder carries no clock evidence at all. Read off the rows, so a resumed
+    # `cells.csv` written before the reference was plumbed answers honestly
+    # rather than inheriting this session's.
+    refs = tread_reference(samples, SUBJECT_BLOCK_M)
+    unreferenced = sorted(n for n in kept if refs.get(n) is None)
+    scored_reference = next((refs[n] for n in sorted(kept)
+                             if refs.get(n) is not None), None)
     kept_reps = {n: v for n, v in sub_reps.items() if n in kept}
     kept_spread = _spread_of(kept_reps)
     margin_band = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (kept_spread or 0.0))
@@ -2607,7 +2695,14 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
             f"reference    {ref.note}",
             f"             {level.line() if level else 'no level: no reference'}",
             f"subject      {len(sub_points)} treads ({len(fit_points)} scored "
-            f"after {excluded} excluded for clock level), across-repeat spread "
+            f"after {excluded} excluded for clock level"
+            + (f"; NOT EXAMINED: {len(unreferenced)} of {len(kept)} scored "
+               "treads were timed against no reference clock, so no tread of "
+               "theirs could have been excluded"
+               if unreferenced else
+               (f"; scored against {scored_reference:.0f} MHz"
+                if scored_reference else ""))
+            + "), across-repeat spread "
             + (f"{kept_spread:.3%}" if kept_spread else "UNKNOWN (one repeat)")
             + " over the scored treads"
             + (f" (all {len(sub_points)}: "
@@ -2691,6 +2786,11 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
         "ladder_outcome": fit.outcome,
         "ladder_undecided": fit.undecided,
         "excluded_low_clock": fit.excluded_low_clock,
+        # The two columns that say whether that count examined anything. A
+        # consumer reading `excluded_low_clock: 0` alone cannot tell a quiet
+        # card from a ladder with no reference to be level against.
+        "reference_clock_mhz": scored_reference,
+        "scored_treads_without_reference": len(unreferenced),
         "alpha": fit.alpha, "alpha_upper": fit.alpha_upper,
         "slope_memory": fit.slope_memory, "slope_compute_ref": c_ref,
         "ratio": margin.ratio if not math.isnan(margin.ratio) else None,
@@ -3082,7 +3182,14 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                                   clock_drift_ok=True,
                                   sm_clock_load_mhz=(
                                       SELF_TEST_LOW_CLOCK_MHZ if low
-                                      else SELF_TEST_REFERENCE_CLOCK_MHZ)))
+                                      else SELF_TEST_REFERENCE_CLOCK_MHZ),
+                                  # The planted world HAS a reference: its
+                                  # `clock_level_ok` is a real verdict, and a
+                                  # fixture that left this None would plant the
+                                  # unexamined-ladder state on every self test
+                                  # instead of the throttled one it means to.
+                                  reference_clock_mhz=(
+                                      SELF_TEST_REFERENCE_CLOCK_MHZ)))
     return out
 
 
@@ -3651,8 +3758,79 @@ def mde_block(*, spread: float, reps: int, treads: int) -> tuple[list[str], str]
         return ["", f"MINIMUM DETECTABLE EFFECT: not stateable. {exc}"], str(exc)
 
 
+def _instrument_refusal(exc: BaseException) -> bool:
+    """True when `exc` is `moe.bench.timing.TimingRefused`, asked lazily.
+
+    BY CLASS AND NOT BY NAME, because a name test would also catch a class some
+    other library happened to spell the same way. LAZILY, because
+    `moe.bench.timing` imports torch at module scope and this file is documented
+    to run `--audit`, `--self-test` and `--dry-run` on a laptop with no torch at
+    all: the import that answers the question must not be the thing that breaks
+    those three. On such a box the import fails and the answer is False, which
+    is the right answer anyway -- a run that never reached the instrument cannot
+    have been refused by it.
+    """
+    try:
+        from moe.bench.timing import TimingRefused
+    except Exception:                                   # noqa: BLE001
+        return False
+    return isinstance(exc, TimingRefused)
+
+
 def main(argv=None) -> int:
-    """The one entry point, and the one place an exit code is chosen.
+    """`_main` with the escapes that were exiting ONE, which is CLAIM_FAIL.
+
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the session driver records it, and it is never retried. This
+    arm pays for two full ladders before it writes anything, and the file's own
+    header already records one way it lost that booking -- a `SystemExit`
+    between the last timing and the first `write_text`. An OOM in the same gap
+    was the other way, and it was filed as this experiment's registered answer
+    to "can BLOCK_M=128 show clean memory-bound treads". ERROR (4) is outside
+    FINISHED_CODES precisely so the driver can tell "the apparatus broke" from
+    "the claim did not hold". The traceback is printed first and not swallowed,
+    because a code without one tells an operator nothing about what to fix.
+
+    A STRING `SystemExit` IS A REFUSAL, and this file already fought that half
+    of the defect: fourteen `raise SystemExit(<str>)` became
+    `RefusedBeforeMeasuring`, which carries `code = exit_codes.REFUSED`. The
+    branch is kept anyway, because a refusal added later, or one raised by a
+    library this imports, must not land as a refuted claim just for spelling
+    itself the old way. A `SystemExit` carrying an INT already says what it
+    means and is re-raised untouched, argparse's included.
+
+    A `TimingRefused` IS A REFUSAL TOO, and it is the one the per-cell handler
+    in `measure_setting` now lets past it. It is the same fact for every tread,
+    so nothing was measured and nothing was spent, which is REFUSED and not
+    ERROR.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = (exc.code if exc.code.startswith("REFUS")
+                   else f"REFUSED: {exc.code}")
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception as exc:                            # noqa: BLE001
+        if _instrument_refusal(exc):
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return exit_codes.REFUSED
+        traceback.print_exc()
+        print("ERROR: bm128_depth crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, the cells already timed are "
+              "in the run directory the header printed, and the arm may be "
+              "re-run.", file=sys.stderr)
+        return exit_codes.ERROR
+
+
+def _main(argv=None) -> int:
+    """The one place an exit code is chosen for a run that reached a verdict.
 
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
     before anything is measured, and otherwise `_exit_code` over the scored
@@ -3881,10 +4059,33 @@ def _run(argv=None) -> int:
     # nothing. Resolved here rather than per tread so the whole ladder is scored
     # against one number and a mid-run yaml rewrite cannot move it.
     reference_clock, clock_source = SWEEP.reference_clock_mhz(hw.name)
-    print("reference clock: "
-          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
-             else f"NOT RESOLVED ({clock_source}); every row's clock LEVEL "
-                  "verdict will be None and no tread can be excluded for it"))
+    if reference_clock is None:
+        # REFUSE, RATHER THAN MEASURE TWO LADDERS THAT CANNOT REPORT A CLOCK.
+        # This printed the absence and carried on until 2026-09-03, which is
+        # the other half of the fix `tile_sweep` got: with no reference
+        # `clock_flags` returns None for every row, `clock_excluded` is False
+        # for None, and the report then says `0 excluded for clock level` over
+        # a ladder in which no tread could have been excluded. A card is
+        # attached by definition here -- `missing_gpu_stack` and `load_measured`
+        # are both above -- so this is `driver.refuse_unreferenced_clock`'s
+        # state exactly, and the refusal is FREE: not a tread has been timed.
+        # `group_m_alpha_sweep` resolves-and-says instead, and that is a
+        # different situation and not an inconsistency: `pod_session.sh` runs
+        # `calibrate_hardware.py --publish` at step 1 and treats a refusal
+        # there as FATAL, so by the time that arm measures the reference
+        # exists. This file is scheduled by nothing; it is launched by hand on
+        # a fresh pod, where a calibration carrying no clock is a normal state
+        # nothing upstream has looked for. What it costs to find out afterwards
+        # is both ladders.
+        raise _refuse(
+            f"no reference clock for {hw.name}: {clock_source}. Every row's "
+            "LEVEL verdict would be None, so `0 excluded for clock level` "
+            "would be printed over a ladder on which nothing could be "
+            "examined, and a fit taken across a throttling episode would be "
+            "indistinguishable from one that was not. Publish one with "
+            "`python scripts/calibrate_hardware.py --publish` and re-run. "
+            "Nothing measured.")
+    print(f"reference clock: {reference_clock:.0f} MHz, {clock_source}")
 
     # ONE PROVENANCE BLOCK PER RUN, built after the rulers resolve so it carries
     # their sources and before any measurement so every artefact of one run

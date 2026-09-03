@@ -51,16 +51,21 @@ The script is loaded by path, because `scripts/` is not a package.
 """
 from __future__ import annotations
 
+import contextlib
+import dataclasses
 import importlib.util
 import json
 import math
 import sys
+import types
 from pathlib import Path
 
 import pytest
+import torch as real_torch
 
-from moe.bench import ai_model, exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes, timing  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
+from moe.reference import torch_ref as TORCH_REF  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1682,3 +1687,382 @@ def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
         assert rc == exit_codes.REFUSED, (
             "a run that scored no gate printed no RESULT line, so its log "
             "implies REFUSED and nothing else")
+
+
+# --------------------------------------------------------------------------
+# The apparatus breaking, which is not a claim failing.
+#
+# Two defects found by a reviewer who did not own this file, both silent, both
+# exiting the interpreter's ONE. `moe.bench.exit_codes` calls ONE CLAIM_FAIL: a
+# RESULT, in FINISHED_CODES, recorded by the session driver and never retried.
+# This arm pays for two full ladders before it writes anything, so what ONE
+# costs here is the whole booking and the report that would have said why.
+# --------------------------------------------------------------------------
+
+class _Cuda:
+    @staticmethod
+    def is_available() -> bool:
+        return True
+
+    @staticmethod
+    def synchronize() -> None:
+        pass
+
+
+class _CudaLessTorch(types.ModuleType):
+    """Real torch with `cuda` answered and the `device=` keyword dropped.
+
+    A `ModuleType` subclass because `measure_setting` does `import torch`
+    inside the function, so `sys.modules` is the only seam a test has: a module
+    attribute cannot be patched onto a name the function re-imports every call.
+    A proxy and not a stub, so every other call the ladder makes on the way to
+    the instrument is the real one.
+    """
+
+    cuda = _Cuda
+
+    def __getattr__(self, name):
+        return getattr(real_torch, name)
+
+    def full(self, *args, **kwargs):
+        kwargs.pop("device", None)
+        return real_torch.full(*args, **kwargs)
+
+
+@pytest.fixture
+def pod(bm, monkeypatch, tmp_path):
+    """Everything `measure_setting` reaches for between its imports and the CSV.
+
+    Faked rather than described: a handler can only be shown to be at the call
+    site by executing the call site, and this ladder's call site is behind an
+    `import torch`, a vLLM entry point and a Triton cache.
+    """
+    state = types.SimpleNamespace(seen=[], out=tmp_path, timing_result=None,
+                                  samples=[])
+
+    monkeypatch.setitem(sys.modules, "torch", _CudaLessTorch("torch"))
+    fused = types.ModuleType("vllm.model_executor.layers.fused_moe")
+    fused.fused_experts = lambda **kw: real_torch.zeros(2, 2)
+    activation = types.ModuleType("vllm.model_executor.layers.fused_moe.activation")
+    activation.MoEActivation = lambda value: value
+    for name, module in (
+            ("vllm", types.ModuleType("vllm")),
+            ("vllm.model_executor", types.ModuleType("vllm.model_executor")),
+            ("vllm.model_executor.layers", types.ModuleType("vllm.model_executor.layers")),
+            ("vllm.model_executor.layers.fused_moe", fused),
+            ("vllm.model_executor.layers.fused_moe.activation", activation)):
+        monkeypatch.setitem(sys.modules, name, module)
+
+    monkeypatch.setattr(bm.SWEEP, "find_override",
+                        lambda: (lambda conf: contextlib.nullcontext(), "fake"))
+    monkeypatch.setattr(bm.SWEEP, "arm_triton_cache", lambda *a, **k: None)
+    monkeypatch.setattr(bm.SWEEP, "count_new", lambda *a, **k: 0)
+    monkeypatch.setattr(bm.SWEEP, "tokens_for_rows", lambda cfg, rows: rows)
+    monkeypatch.setattr(bm.SWEEP, "balanced_ids",
+                        lambda cfg, tokens, device:
+                        real_torch.zeros((tokens, cfg.top_k), dtype=real_torch.long))
+    monkeypatch.setattr(TORCH_REF, "make_inputs",
+                        lambda spec, device=None: (real_torch.zeros(2, 2),
+                                                   types.SimpleNamespace(w1=None, w2=None)))
+
+    def timer(fn, **kwargs):
+        state.seen.append(kwargs)
+        result = state.timing_result
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    monkeypatch.setattr(timing, "time_kernel", timer)
+    return state
+
+
+def _timing_at(load_mhz: float, reference_mhz: float | None) -> timing.KernelTiming:
+    """A `KernelTiming` whose clock verdicts come from the REAL `clock_flags`.
+
+    Not hand-set booleans: the question is whether the ladder hands the
+    instrument a reference and puts it on the row, and a hand-set flag would
+    answer it whatever the ladder passed.
+    """
+    level, drift = timing.clock_flags(load_mhz, load_mhz, load_mhz, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=load_mhz,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=64, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock")
+
+
+def _measure(bm, pod):
+    """One block size over two treads, which is the smallest thing that can
+    show a refusal repeating itself per cell."""
+    args = types.SimpleNamespace(reps=1, dtype="bf16", seed=0, warmup=300.0,
+                                 cell_budget_ms=200.0, trials=3,
+                                 no_l2_flush=False)
+    return bm.measure_setting(args, MODEL_CONFIGS["mixtral-8x7b"], 16,
+                              [16, 32], pod.out / "cells.csv", pod.out, {},
+                              set(), pod.samples, 1515.0)
+
+
+def test_an_unplanned_exception_is_error_and_not_a_claim_that_failed(
+        bm, monkeypatch, capsys):
+    """`sys.exit(main())` had nothing above it.
+
+    An OOM, a truncated write, an import that drifted: each exited ONE, which
+    the driver LATCHES as this experiment's registered answer to "can BLOCK_M
+    =128 show clean memory-bound treads". The file's header already records the
+    other way this arm lost a booking in the same gap -- a `SystemExit` between
+    the last timing and the first `write_text`. ERROR (4) is outside
+    FINISHED_CODES precisely so the apparatus breaking can be told from the
+    claim not holding, and it is the only retryable code in the table.
+    """
+    def boom(argv=None):
+        raise RuntimeError("torch OOM on the pod")
+
+    monkeypatch.setattr(bm, "_main", boom)
+    assert bm.main([]) == exit_codes.ERROR
+    err = capsys.readouterr().err
+    assert "torch OOM on the pod" in err, "the traceback was swallowed"
+    assert "RuntimeError" in err
+    assert exit_codes.ledger_state(exit_codes.ERROR) == "RETRY"
+    assert exit_codes.ledger_state(exit_codes.CLAIM_FAIL) != "RETRY"
+
+    # ...and the PASS branch: a run that reached a verdict keeps its own code.
+    monkeypatch.setattr(bm, "_main", lambda argv=None: exit_codes.CLAIM_FAIL)
+    assert bm.main([]) == exit_codes.CLAIM_FAIL
+    monkeypatch.setattr(bm, "_main", lambda argv=None: exit_codes.DONE)
+    assert bm.main([]) == exit_codes.DONE
+
+
+def test_a_refusal_sentence_is_refused_and_not_a_claim_that_failed(
+        bm, monkeypatch, capsys):
+    """The other half. `raise SystemExit(<str>)` sets `code` to the STRING and
+    exits ONE; this file replaced fourteen of those with
+    `RefusedBeforeMeasuring`, and the branch stays so that a fifteenth added
+    later, or one out of a library it imports, cannot land as a refuted claim.
+    """
+    def refuse(argv=None):
+        raise SystemExit("the calibration for this card records no clock")
+
+    monkeypatch.setattr(bm, "_main", refuse)
+    assert bm.main([]) == exit_codes.REFUSED
+    assert "records no clock" in capsys.readouterr().err
+
+
+def test_an_integer_systemexit_still_means_what_it_says(bm):
+    """The FAIL branch of the string test. `RefusedBeforeMeasuring` carries
+    `code = exit_codes.REFUSED` and argparse exits `SystemExit(2)`; a handler
+    that reclassified either would report a refusal twice or hide a usage
+    error behind one."""
+    with pytest.raises(SystemExit) as caught:
+        bm.main(["--model", "not-a-model"])
+    assert caught.value.code == 2
+
+
+def test_an_instrument_refusal_leaves_the_ladder_instead_of_being_recorded(
+        bm, pod):
+    """THE SECOND DOOR INTO THE SAME ROOM, executed at the call site.
+
+    `RefusedBeforeMeasuring` is a `SystemExit` precisely because
+    `measure_setting` times inside a per-cell `except Exception` -- the class
+    docstring says so -- and `timing.TimingRefused` subclasses RuntimeError, so
+    every refusal the INSTRUMENT raises walked through the door left open
+    beside it. Each is the same fact for every tread, so the ladder wrote a
+    `status="failed"` sample per tread, ground through both block sizes, and
+    scored its gates over a page of zeroes.
+    """
+    pod.timing_result = timing.TimingRefused(
+        "trials=0: a measurement needs at least one trial")
+    with pytest.raises(timing.TimingRefused, match="at least one trial"):
+        _measure(bm, pod)
+    assert pod.samples == [], "a sample was kept for a tread never measured"
+    assert not (pod.out / "cells.csv").exists()
+
+
+def test_a_kernels_own_runtime_error_is_still_one_treads_error(bm, pod):
+    """The PASS branch of the same door, and why it is a subclass check rather
+    than a blanket re-raise: a kernel that launched badly IS one tread's fact,
+    the sample records it with `status="failed"`, and the ladder carries on so
+    the treads that do run still form a fit."""
+    pod.timing_result = RuntimeError("CUDA error: an illegal memory access")
+    _measure(bm, pod)
+    assert [s.status for s in pod.samples] == ["failed", "failed"]
+    assert all("illegal memory access" in s.detail for s in pod.samples)
+    assert (pod.out / "cells.csv").exists()
+
+
+# --------------------------------------------------------------------------
+# The other half of last round's clock fix, which this file did not get.
+#
+# `tile_sweep` and `group_m_alpha_sweep` both learned two things on 2026-09-02:
+# hand `time_kernel` the clock the roof was measured at, AND put that number on
+# the row it scored, because `clock_level_ok` is tri-state and its None
+# conflates "the poller landed nothing" with "there was no reference at all".
+# This file got the first and not the second, which is the recurring defect of
+# this rebuild wearing its ninth hat: a fix applied at one of two call sites.
+# --------------------------------------------------------------------------
+
+def test_the_row_carries_the_clock_its_level_verdict_was_scored_against(bm, pod):
+    """FAIL branch first: with no reference the LEVEL column is empty, and
+    before this change nothing else on the row said why.
+
+    `clock_flags` returns None for LEVEL when it is handed no reference, and
+    None is also what a container without NVML produces on a run that HAD one.
+    Both are an empty cell, `Sample.clock_excluded` is False for both, and the
+    report then prints `0 excluded for clock level` over a ladder in which no
+    tread could have been excluded. The number LEVEL was scored AGAINST is the
+    only thing that separates them, and it has to be on the row rather than in
+    the session, because `read_samples` resumes a `cells.csv` a later pod wrote
+    nothing else into.
+    """
+    pod.timing_result = _timing_at(1515.0, None)
+    args = types.SimpleNamespace(reps=1, dtype="bf16", seed=0, warmup=300.0,
+                                 cell_budget_ms=200.0, trials=3,
+                                 no_l2_flush=False)
+    bm.measure_setting(args, MODEL_CONFIGS["mixtral-8x7b"], 16, [16, 32],
+                       pod.out / "none.csv", pod.out, {}, set(), pod.samples,
+                       None)
+    assert [s.clock_level_ok for s in pod.samples] == [None, None]
+    assert [s.reference_clock_mhz for s in pod.samples] == [None, None]
+
+    # ...and the PASS branch, at the same call site: the card sat at 1515 MHz
+    # against a roof measured at 1515, so LEVEL is a real True and the row says
+    # what it was true against.
+    pod.samples.clear()
+    pod.timing_result = _timing_at(1515.0, 1515.0)
+    bm.measure_setting(args, MODEL_CONFIGS["mixtral-8x7b"], 16, [16, 32],
+                       pod.out / "ref.csv", pod.out, {}, set(), pod.samples,
+                       1515.0)
+    assert [s.clock_level_ok for s in pod.samples] == [True, True]
+    assert [s.reference_clock_mhz for s in pod.samples] == [1515.0, 1515.0]
+
+    # The whole point is that the two are told apart AFTER a round trip, since
+    # a resume reads the file and not this session.
+    _, none_rows = bm.read_samples(pod.out / "none.csv")
+    _, ref_rows = bm.read_samples(pod.out / "ref.csv")
+    assert [s.reference_clock_mhz for s in none_rows] == [None, None]
+    assert [s.reference_clock_mhz for s in ref_rows] == [1515.0, 1515.0]
+    assert not any(s.clock_excluded for s in none_rows + ref_rows), (
+        "neither world excludes a tread, which is exactly why the column that "
+        "separates them has to be somewhere else")
+
+
+def test_a_row_written_before_the_reference_column_existed_still_reads(bm, tmp_path):
+    """A `cells.csv` from any run before 2026-09-03 has no such column, and the
+    honest reading of absent is None: those runs passed the instrument no
+    reference, so their LEVEL column was empty for that reason. A crash here
+    would refuse to resume every ladder this study has ever measured."""
+    path = tmp_path / "old.csv"
+    path.write_text(
+        "block_m,tiles,rows_per_expert,tokens,rep,ms_p50,ms_min,ms_stdev,"
+        "iters,status,detail,instrument,warmup_ms,trials,sm_clock_load_mhz,"
+        "clock_level_ok,clock_drift_ok,l2_flush\n"
+        "128,4,512,2048,1,1.5,1.4,0.01,100,ok,,,300.0,3,,,,True\n")
+    done, rows = bm.read_samples(path)
+    assert done == {(128, 4, 1)}
+    assert rows[0].reference_clock_mhz is None
+    assert rows[0].clock_level_ok is None
+
+
+def test_a_ladder_with_no_reference_says_its_exclusion_count_examined_nothing(bm):
+    """THE FAILURE SHAPE `moe/bench/exit_codes.py` IS NAMED AGAINST.
+
+    `ladder_treads` drops a tread whose LEVEL is False, and `clock_excluded` is
+    False for None because an exclusion has to be positively established. Both
+    are right, and together they make a ladder measured with NO reference print
+    `0 excluded for clock level` -- the same sentence a ladder measured on a
+    card that never sagged prints. A check that examined nothing reported zero
+    failures, and the report had no other field a reader could ask.
+    """
+    world = _world(bm, "escape-up")
+    quiet_lines, _, quiet = _run_world(bm, world)
+    assert quiet["excluded_low_clock"] == 0
+    assert quiet["scored_treads_without_reference"] == 0
+    assert quiet["reference_clock_mhz"] == bm.SELF_TEST_REFERENCE_CLOCK_MHZ
+    assert any("scored against 1980 MHz" in ln for ln in quiet_lines)
+
+    # The same ladder, timed by an apparatus that could not report a clock:
+    # every row's reference stripped, nothing else touched.
+    from moe.spec import MODEL_CONFIGS as CFGS
+    cfg = CFGS["qwen2-57b-a14b"]
+    planted = bm.planted_samples(cfg, alpha=world.alpha, rho=world.rho,
+                                 bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
+                                 noise=bm.PUBLISHED_LADDER_SPREAD)
+    blind = [dataclasses.replace(s, reference_clock_mhz=None,
+                                 clock_level_ok=None) for s in planted]
+    lines, _, payload = bm.analyse_run(
+        blind, cfg, 2,
+        ceiling_tflops=world.rho * bm.SELF_TEST_BANDWIDTH * 1e9 / 1e12,
+        ceiling_source="test", compiles={128: 1, 256: 1},
+        executed={128: 40, 256: 20}, ridge=world.rho,
+        bandwidth_gbps=bm.SELF_TEST_BANDWIDTH, draws=200)
+    assert payload["excluded_low_clock"] == 0, (
+        "the count is 0 in both worlds, which is the whole problem"
+    )
+    assert payload["reference_clock_mhz"] is None
+    assert payload["scored_treads_without_reference"] == len(
+        payload["scored_points"])
+    assert any("NOT EXAMINED" in ln for ln in lines)
+    assert not any("NOT EXAMINED" in ln for ln in quiet_lines)
+
+
+def test_a_tread_has_a_reference_as_soon_as_one_repeat_recorded_one(bm):
+    """ANY, not majority, unlike `tread_clock`. The reference is a property of
+    the RUN, so a tread whose repeats disagree is a resume across the fix, and
+    the answer that matters there is that a reference exists at all."""
+    def sample(rep, mhz):
+        return bm.Sample(128, 4, 512, 2048, rep, 1.0, 1.0, 0.0, 10,
+                         reference_clock_mhz=mhz)
+    mixed = [sample(1, None), sample(2, None), sample(3, 1515.0)]
+    assert bm.tread_reference(mixed, 128)[4] == 1515.0
+    assert bm.tread_reference([sample(1, None)], 128)[4] is None
+    failed = bm.Sample(128, 4, 512, 2048, 1, 0.0, 0.0, 0.0, 0, "failed",
+                       reference_clock_mhz=1515.0)
+    assert bm.tread_reference([failed], 128) == {}, (
+        "a tread that was never timed is not a tread with a reference")
+
+
+def test_a_card_whose_calibration_records_no_clock_is_refused_before_the_ladders(
+        bm, monkeypatch, tmp_path, capsys):
+    """REFUSE rather than pass None, the way `driver.refuse_unreferenced_clock`
+    and `tile_sweep` do. A card is attached by definition at this point --
+    `missing_gpu_stack` and `load_measured` are both above it -- so this is a
+    pod holding a card whose ruler was never measured, and the refusal is FREE:
+    not one tread has been timed. It printed the absence and measured both
+    ladders anyway until 2026-09-03, which cost the whole booking to learn that
+    the arm carried no clock evidence.
+    """
+    import moe.bench.roofline as RF
+    hw = RF.load_measured("NVIDIA H200")
+    assert hw is not None, "the H200 calibration is not on this checkout"
+    monkeypatch.setattr(bm.SWEEP, "missing_gpu_stack", lambda: "")
+    monkeypatch.setattr(RF, "load_measured", lambda *a, **k: hw)
+    monkeypatch.setattr(bm.SWEEP, "reference_clock_mhz", lambda name: (
+        None, f"{name}: the calibration carries no clock at all"))
+
+    def never(*a, **k):
+        raise AssertionError("a tread was timed after the refusal")
+
+    monkeypatch.setattr(bm, "measure_setting", never)
+    rc = bm.main(["--out", str(tmp_path), "--card", "NVIDIA H200"])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert "REFUSED" in out and "calibrate_hardware.py --publish" in out
+    assert list(tmp_path.rglob("cells.csv")) == [], (
+        "a ladder was written for a run that measured nothing")
+    assert exit_codes.parse_result_lines(out) == [], (
+        "a REFUSED log carrying RESULT lines lets the driver recompute DONE "
+        "from them")
+
+    # ...and the PASS branch: with a reference resolved the same run gets past
+    # this gate and reaches the ladders, which is where the sentinel fires. It
+    # comes back ERROR (4) and not REFUSED (2), so the two branches are
+    # distinguishable in the one integer a session driver can see.
+    monkeypatch.setattr(bm.SWEEP, "reference_clock_mhz",
+                        lambda name: (1515.0, f"{name}: gemm_clock_mhz"))
+    assert bm.main(["--out", str(tmp_path),
+                    "--card", "NVIDIA H200"]) == exit_codes.ERROR
+    passed = capsys.readouterr()
+    assert "reference clock: 1515 MHz" in passed.out
+    assert "timed after the refusal" in passed.err
