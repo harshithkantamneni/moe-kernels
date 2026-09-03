@@ -4,7 +4,9 @@
 #
 #   bash scripts/h200_gaps_session.sh --dry-run     # laptop, free: every arm's
 #                                                   # own plan, its cost, the MDE
-#   bash scripts/h200_gaps_session.sh               # the pod run, ~3.4 hours
+#   bash scripts/h200_gaps_session.sh               # the pod run. --dry-run
+#                                                   # prints the total and the
+#                                                   # minute each arm starts at
 #   bash scripts/h200_gaps_session.sh --list        # the arms and what each closes
 #   bash scripts/h200_gaps_session.sh --only calibrate,roofline-n256-g16,noise_floor
 #                                                   # a subset. calibrate belongs
@@ -124,6 +126,124 @@
 #     the log now: a plan that printed and then refused is PLANNED, a refusal
 #     with nothing printed before it is PLAN_REFUSED.
 #
+# WHAT CHANGED ON 2026-09-03, fourth pass, after the pod-readiness check ran
+# every arm exactly as the lines below invoke it. Its verdict was NOT WORTH
+# RENTING AS SCHEDULED, and six defects carried it. Every one of them was a
+# number or a flag in THIS file disagreeing with what the arm's own script does:
+#
+#   * THE NOISE FLOOR WAS BOOKED AT A TENTH OF ITS OWN PLAN, AND PUBLISHED
+#     NOTHING. `replicate_noise_floor.py --dry-run` prints "4 arm(s) x 6
+#     replicates ... TOTAL: ~240 min", and this file booked 25 and ran the
+#     script bare. Arm 7 of 19, arms are sequential, and nothing here has a
+#     deadline: a session sized off the old table reached minute 12, entered the
+#     floor, and was killed inside it when the pod was released -- which fails
+#     that script's own V2 ("the planned replicates ran"), so even the partial
+#     floor was unquotable, and arms 8-19 never started. Bare also meant no
+#     --publish, and NOISE_FLOOR.json is written under that flag alone, so the
+#     most expensive arm in the session left the sigma every MDE line prints
+#     still reading ASSUMED. The arm now names --replicates 3, its four arms and
+#     --publish, and its booking is what its own --dry-run prints for those
+#     flags. --publish is NOT on the dry-run line: with it, a --dry-run writes
+#     results/published/NOISE_FLOOR.json, a TRACKED file, which is the anchor
+#     rescore's defect in a second place.
+#   * THREE ARMS COULD NOT REACH THE ONE STATE THEY WERE SCHEDULED FOR.
+#     occupancy and both bn arms ran without --fail-on-gate, and
+#     occupancy_vs_swizzle.exit_for and bn_decomposition.exit_for BOTH downgrade
+#     a CLAIM_FAIL to exit 0 DONE when it is absent. Live, off GPU:
+#     `occupancy_vs_swizzle.py --audit` prints "RESULT: CLAIM
+#     A1_reuse_distance_on_the_corpus FAIL" and exits 0, while
+#     exit_codes.classify_text over that same log returns 1. So a failing claim
+#     was filed DONE, contract_disclosure printed the ALL-CLEAR over it because
+#     the import is real, and the CLAIM_FAIL branch this header spends four
+#     paragraphs on was dead for the arms whose registered outcome is a failing
+#     claim. Every arm whose script defines a gate flag is now given it, and a
+#     test walks the invocations rather than a list kept here.
+#   * ONE ARM WAS SCHEDULED AT A PINNING ITS OWN DESIGN GATE CALLS INVALID.
+#     bn_g1 ran GROUP_SIZE_M=1, where `bn_decomposition.py --self-test
+#     --capability 9.0 --group-m 1 --reps 17 --plant-noise 0.008` exits 3
+#     INVALID: S4 sees sd(alpha_a) 0.1759 against a gate of 0.025, and S5 sees
+#     the planted MISSING world pass C2 at chi2 1.78 against a ceiling of 4.0,
+#     so neither alpha_a nor C2 can be resolved there however the data fall. The
+#     arm is DROPPED, and the reason is that no re-pinning exists: the same
+#     self-test fails at every GROUP_SIZE_M this instrument was checked at
+#     except 16 (1, 2, 4, 8, 32 and 64 all exit 3; sd(alpha_a) 0.1759, 0.1759,
+#     0.1759, 0.4864, 0.1759, 0.0635), and 16 is the arm already scheduled. Its
+#     36 priced minutes go back to the session. What it was reframed to carry --
+#     alpha_b, C3 and C5 at the swizzle every published arm swept -- had no
+#     registered detection limit at that pinning either: S1 checks alpha_b's
+#     LEVEL on one planted draw and nothing bounds its SPREAD there.
+#   * THE COST TABLE WAS WRONG BY 2.1x OVERALL AND 10x ON ONE ARM. Every
+#     arm_minutes entry is now what THAT arm's own plan prints when invoked the
+#     way the lines below invoke it, `arm_basis` names the command and the
+#     figure so an operator can re-derive any row in seconds, and `arm_unpriced`
+#     carries, in the plan's own words, what the figure leaves out. The two
+#     BLOCK_N=256 rooflines and the sparse span arm are booked ZERO because
+#     their plans refuse before any GPU time, which is a result and not a cost.
+#     And TOTAL is printed in BOTH modes: it used to sit inside the `else` of
+#     `if (( DRY ))`, so the one number that decides whether to rent was printed
+#     only after the decision. Each arm now also prints the cumulative minute it
+#     starts at, so a rental length can be read off the table.
+#   * THE DRY RUN PREVIEWED A DIFFERENT RUN THAN THE POD EXECUTES, in four
+#     arms. calibrate was skipped with a reason that is false -- "has no
+#     --dry-run"; it has one, prints a nine-line plan and exits REFUSED -- and
+#     it is the arm whose gate can end the session at minute 3, so its plan is
+#     the one an operator most needs before renting. anchor_measure dry-ran
+#     without --measure and so previewed rescore mode and 26 committed reports
+#     rather than "cells 128 ... estimated wall time 4.8 min". bm128_depth
+#     dry-ran at the default --r-max and previewed 126 s and a -r1024- run id
+#     while the pod runs --r-max 2048, 252 s and -r2048-. dtype dry-ran without
+#     --card, refused with NoCardToLabel and landed PLAN_REFUSED, which reads as
+#     a broken arm rather than as this laptop having no GPU; it is given a
+#     NAMED HYPOTHETICAL card off GPU, labelled as one, the way pin_probe
+#     already distinguishes the two.
+#   * span's ADVERTISED OFF-GPU CHECK SCORED NOTHING, and its pod run was
+#     truncated mid-sweep. `span_extent_separation.py --self-test kernel
+#     --densify` exits 2 with ZERO RESULT lines in all three worlds and closes
+#     with "Pass --fail-on-world to score the S gates"; with the flag it is 15
+#     RESULT lines and exit 0 in each. The advertised command carries it now.
+#     Separately, span_dense ran with --max-minutes 35 against a plan that
+#     prices 1814 s of KERNEL alone and says the wall clock is not that number.
+#     --max-minutes does not refuse: it breaks out of the cell loop, records
+#     "stopped after N minutes with K of M cells done" as PROSE, and the gates
+#     then score the truncated grid to the same exit code a complete one gets.
+#     The flag is gone from both span arms and the honest time is booked. THE
+#     REAL FIX IS NOT HERE: a truncation that is scored as if complete has to
+#     become a REFUSED where the loop breaks and where the gates are built, in
+#     span_extent_separation.py, because only that file knows which cells are
+#     missing and whether the reduction can stand without them. The only lever
+#     this driver has is whether to arm the truncation at all, and arming it
+#     converts a complete-grid arm into a partial one wearing a complete one's
+#     exit code.
+#   * THE TOTAL ADDED TWO DIFFERENT CLOCKS, and the "starts at" column -- the
+#     one thing an operator sizes a rental with -- was computed from that sum.
+#     Fixing every figure to be the arm's own left them in mixed units:
+#     noise_floor's 120 and anchor_measure's 5 are WALL (replicate_noise_floor.py
+#     scales its 3066 s model by the 2.35x it measured; memory_branch_anchor.py
+#     prints "estimated wall time" and charges a compile per setting), while
+#     seven arms are booked at what their plans call "the model's own timings,
+#     excluding compiles and allocation": roofline-n64-g1 58 s, bm128_depth
+#     252 s, bn_g16 2142 s, occupancy 1342 s, cap_test 242 s, dtype 315 s and
+#     span_dense 1814 s. The paragraph under the table then said BOOK ABOVE THAT
+#     AND NEVER AT IT and gave no number to book above, leaving the mixed sum as
+#     the only figure on the page. Every row names its clock now, and the total
+#     is printed twice: what the plans price, and the same table with its KERNEL
+#     part multiplied by the ONE wall-over-model ratio this repo has measured
+#     (127 s logged against 54 s modelled for mixtral_g1, the factor
+#     replicate_noise_floor.py already applies to its own booking). That second
+#     number is an ILLUSTRATION OF THE SIZE OF THE GAP from one small arm and not
+#     an estimate of any arm; no per-arm figure is multiplied by anything, which
+#     is the same refusal as before, now with the bound stated instead of implied.
+#   * THE dtype OFF-GPU CHECK EXAMINED NOTHING, which is the span defect above
+#     repeated inside the commit that named it. The fix for a script that needs
+#     a card to name went into the dtype DRY-RUN branch and not into
+#     `arm_offgpu_gates`, so the command an operator runs before renting --
+#     `dtype_tile_confound.py --self-test 2.033 --self-test-alpha 0.2` -- exits 2
+#     with NoCardToLabel and ZERO RESULT lines in all three planted worlds, and
+#     so does the --dry-run half of the same line. With --card it is 10 RESULT
+#     lines per world and C3 separates them: 2.033 PASS 1.023, 2.400 FAIL 1.208,
+#     1.000 FAIL 0.503. A guard walks every advertised off-GPU command now and
+#     runs it, rather than reading it.
+#
 # THE THREE FINDINGS THAT SET THE ORDER, restated because two of them were
 # retracted since this file last said them:
 #
@@ -190,16 +310,27 @@
 #   3 noise_floor    Nothing above it can be scored without it. The study has
 #                    NO true replicates; its closest proxy confounds num_stages
 #                    and is the sigma the MDE line below is forced to assume.
+#                    THE LARGEST ARM IN THE SESSION AND DELIBERATELY SO, bounded
+#                    at --replicates 3 rather than the default 6 and published
+#                    with --publish, which is the whole point of spending it.
+#                    Its four arms are two models x two swizzles, which is the
+#                    SMALLEST set that scores its own V7 (a floor measured only
+#                    where the swizzle effect is 0.3855 does not license a
+#                    surface spanning models where it is 0.02) and both C3s (a
+#                    swizzle contrast needs G=1 AND G=16 of the same model).
 #
-#   4 bn_g16, bn_g1  The only clean separation of alpha_a from alpha_b -- BN
+#   4 bn_g16         The only clean separation of alpha_a from alpha_b -- BN
 #                    appears in one term of the blend and BM in two -- and the
 #                    test of whether the model is COMPLETE: three terms means a
 #                    straight line in BM/BN, and structure in the residual names
-#                    the missing one. G=16 is the primary arm. G=1 is NOT a
-#                    second reading of C2: at GROUP_SIZE_M=1 the planted MISSING
-#                    world passes C2 by construction, so C2 there is UNKNOWN
-#                    however the data fall, and the arm is scheduled for
-#                    alpha_b and C3 at the swizzle every published arm swept.
+#                    the missing one. THE G=1 PARTNER IS GONE, not demoted: at
+#                    GROUP_SIZE_M=1 that script's own design self-test exits 3
+#                    INVALID, alpha_a's spread is 0.1759 against a gate of
+#                    0.025, and the planted MISSING world passes C2 at chi2
+#                    1.78 against a ceiling of 4.0, so neither of the arm's two
+#                    readouts can be resolved there however the data fall. The
+#                    same self-test fails at every other pinning it was checked
+#                    at except 16, so there is nowhere to re-pin it TO.
 #   5 anchor         alpha_fitted's LEVEL, which the cap divides by. In 12 of 12
 #                    fits the measured n=1 tread sits above the fitted branch;
 #                    three defensible anchors give 0.45/0.65/0.71 for one cell.
@@ -342,7 +473,7 @@ arm_script() { case "$1" in
   roofline-*)                    echo scripts/bm128_roofline.py ;;
   bm128_depth)                   echo scripts/bm128_depth.py ;;
   noise_floor)                   echo scripts/replicate_noise_floor.py ;;
-  bn_g16|bn_g1)                  echo scripts/bn_decomposition.py ;;
+  bn_g16)                        echo scripts/bn_decomposition.py ;;
   anchor_measure|anchor_rescore) echo scripts/memory_branch_anchor.py ;;
   occupancy)                     echo scripts/occupancy_vs_swizzle.py ;;
   mma_switch)                    echo scripts/check_mma_path.sh ;;
@@ -928,6 +1059,161 @@ git_note() {
     *) echo "UNVERIFIED: git check-ignore exited $rc. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'." ;;
   esac
 }
+# WHAT EACH ARM COSTS, AND WHERE THE NUMBER CAME FROM. Every figure below is
+# what THAT arm's own plan prints when it is invoked the way the lines further
+# down invoke it -- not an estimate made here. The old table was wrong by 2.1x
+# overall and by 10x on the noise floor, so an operator sizing a rental off it
+# under-booked by half a day; the fix is not a better guess, it is asking the
+# arm. `arm_basis` names the command and the figure for every row so any of them
+# can be re-derived in seconds, and `arm_unpriced` says, in the plan's own
+# words, what the figure LEAVES OUT. Three arms are booked ZERO because their
+# own plans refuse before any GPU time: a refusal is a result and costs nothing,
+# and booking minutes for one hides that the answer is already in.
+arm_minutes()  { case "$1" in
+  calibrate) echo 3 ;;
+  pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
+  roofline-n64-g1) echo 1 ;;    roofline-n256-g16) echo 0 ;;
+  roofline-n256-g32) echo 0 ;;
+  bm128_depth) echo 5 ;;        noise_floor) echo 120 ;;
+  bn_g16) echo 36 ;;            anchor_measure) echo 5 ;;
+  anchor_rescore) echo 0 ;;     occupancy) echo 23 ;;
+  mma_switch) echo 7 ;;         ruler) echo 2 ;;         cap_test) echo 5 ;;
+  dtype) echo 6 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
+  counter_plan) echo 1 ;;
+esac; }
+
+# WHERE THAT NUMBER CAME FROM, one line per arm, so no row in the cost table is
+# a figure this file invented. Read it as an instruction: run the command and
+# the figure is on the page.
+arm_basis() { case "$1" in
+  calibrate)  echo "calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan." ;;
+  pin_probe-n64-g1|pin_probe-n256-g16) echo "moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin." ;;
+  roofline-n64-g1) echo "bm128_roofline.py --dry-run --block-n 64 --group-m 1 --control 256 -> 'estimate 58 s of GPU', 39 cells." ;;
+  roofline-n256-g16) echo "bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0 -> exit 2, 'REFUSED before any GPU time, from the pinned constants alone'. Zero minutes, and the refusal is the arm's finding." ;;
+  roofline-n256-g32) echo "the same command at --group-m 32: REFUSED before any GPU time for the same missing BLOCK_M=256 control. Zero minutes." ;;
+  bm128_depth) echo "bm128_depth.py --dry-run --model mixtral-8x7b --r-max 2048 -> 'estimate 252 s of GPU'. AT --r-max 2048, which is what the pod runs: the default plan is 126 s and a different run id." ;;
+  noise_floor) echo "replicate_noise_floor.py --dry-run --replicates 3 --arms mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16 -> 'TOTAL: ~120 min of GPU'. Already a WALL figure: that script scales its 3066 s model by the 2.35x wall-over-model factor it measured on the s4 arm." ;;
+  bn_g16)     echo "bn_decomposition.py --dry-run --capability 9.0 --group-m 16 -> 'estimate 2142 s of GPU', 1428 timings (84 treads x 17 reps)." ;;
+  anchor_measure) echo "memory_branch_anchor.py --dry-run --measure --model mixtral-8x7b -> 'cells 128 (2 BLOCK_M x 4 G x 16 treads), estimated wall time 4.8 min'. A WALL figure, and the only arm whose plan already charges its compiles." ;;
+  anchor_rescore) echo "reads the committed corpus and times nothing. No GPU, seconds." ;;
+  occupancy)  echo "occupancy_vs_swizzle.py --dry-run -> 'estimate 1342 s of GPU', 900 timings." ;;
+  mma_switch) echo "check_mma_path.sh --dry-run prints its four gates and NO time estimate. 7 min is this file's allowance for two real fused_moe compiles and two PTX dumps." ;;
+  ruler)      echo "ruler_rebaseline.py --dry-run -> 'estimated GPU time 105 s (two settles, two GEMMs, two clock samples, two bandwidth passes, one Triton compile)'. That figure NAMES its compile, so nothing is unpriced here." ;;
+  cap_test)   echo "tile_cap_test.py --dry-run --capability 9.0 -> 'estimated GPU time 242 s'." ;;
+  dtype)      echo "dtype_tile_confound.py --dry-run --card 'NVIDIA H200' -> 'COST 28 cells x 3 arms x 2 dtypes; 36 distinct Triton specialisations; 315 s of timed kernel'. Without --card it refuses and prints no cost at all." ;;
+  span_dense) echo "span_extent_separation.py --dry-run --densify -> '84 cells x 9 arms = 756 timed arms. Estimated KERNEL time 1814 s'." ;;
+  span)       echo "span_extent_separation.py --dry-run --no-densify -> 'AND THIS GRID WOULD REFUSE: grid too sparse for C2'. Zero minutes: it stops before it spends one, and that refusal is the extent comparison's honest answer on the published grid." ;;
+  counter_plan) echo "dram_counter_route.py --dry-run -> 'Budget 15 minutes of GPU time'. That 15 min is the ncu MEASUREMENT, which this arm does not run: the arm is --probe, which asks whether the counter route is open and returns in seconds." ;;
+esac; }
+
+# WHAT THE BOOKED FIGURE DOES NOT INCLUDE, in the arm's own words. Empty for an
+# arm whose plan already prints a wall clock. This exists because the two
+# largest sweeps in the session say so themselves and the old table read past
+# it: span_dense's plan closes with "WALL CLOCK IS NOT THAT NUMBER ... up to 21
+# distinct Triton specialisations ... and one weight build per model, the
+# largest being deepseek-v3 at 22.5 GB. Budget for those, not for the timings."
+# No factor is applied to any figure here, because this repo has exactly ONE
+# measured wall-over-model datum (127 s logged against 54 s modelled, on one
+# small sweep) and multiplying every arm by a small arm's ratio would be an
+# invented number wearing a measurement's clothes. The exclusions are printed
+# instead, and the total says to book above it rather than at it.
+arm_unpriced() { case "$1" in
+  roofline-n64-g1|bm128_depth|bn_g16|occupancy|cap_test)
+              echo "compiles and allocation, in the plan's own words" ;;
+  dtype)      echo "compiles and allocation for 36 distinct Triton specialisations across 2 models" ;;
+  span_dense) echo "up to 21 distinct Triton specialisations across 4 models and one weight build per model, the largest deepseek-v3 at 22.5 GB" ;;
+  calibrate|mma_switch|pin_probe-n64-g1|pin_probe-n256-g16)
+              echo "everything: this row is an allowance, not a figure off a plan" ;;
+  *)          echo "" ;;
+esac; }
+
+# WHICH CLOCK EACH BOOKED FIGURE IS ON. The total used to add two different
+# units and say so nowhere. noise_floor's 120 and anchor_measure's 5 are WALL
+# figures -- replicate_noise_floor.py scales its 3066 s model by the 2.35x
+# wall-over-model factor it measured, and memory_branch_anchor.py prints
+# "estimated wall time" and charges one compile per setting -- while seven arms
+# are booked at what their own plans call "the model's own timings, excluding
+# compiles and allocation". Adding those into one number and then computing the
+# "starts at" column from the sum is how an operator sizes a rental against a
+# figure that is not a rental length.
+#
+# THE UNIT IS READ OFF `arm_unpriced` AND IS NOT A SECOND LIST. A second list
+# is this repo's recurring defect: the same fix landing at one of two places
+# that name the same set. There is one set here, and it is the exclusions
+# already written above -- an empty exclusion means the plan charged everything,
+# the allowance sentence means there was no plan to charge, and anything else is
+# a kernel-time figure by the arm's own words.
+arm_clock() {
+  # An arm booked ZERO has no clock to name: its plan refuses before any GPU
+  # time, or it reads the committed corpus and times nothing. Calling that WALL
+  # would file a refusal as a measured wall figure.
+  if [[ "$(arm_minutes "$1")" == 0 ]]; then echo FREE; return; fi
+  local unpriced; unpriced="$(arm_unpriced "$1")"
+  case "$unpriced" in
+    "")            echo WALL ;;
+    everything:*)  echo ALLOW ;;
+    *)             echo KERNEL ;;
+  esac
+}
+
+# The ONE measured wall-over-model ratio in this repo, in hundredths because
+# this is shell: replicate_noise_floor.py:432 sets WALL_OVER_MODEL = 127/54 from
+# its own ARMS.tsv, where the mixtral_g1 arm logged 127 s wall against the cost
+# model's 54 s, and applies it to the figure this file books for that arm. It is
+# used HERE for one job only: to print, once, what the KERNEL rows would come to
+# if they behaved like that one small arm. No per-arm figure is multiplied by
+# it. A large sweep amortises its compiles over more timings than a small one
+# does, so this is an illustration of the size of the gap and not an estimate of
+# any arm. A function and not a bare assignment because this block is lifted
+# into a fresh shell by the tests and holds function definitions only.
+wall_over_model_pct() { echo 235; }
+
+# The priced total with its KERNEL part put on the wall clock. $1 priced
+# minutes, $2 the KERNEL minutes inside them; rounds the scaled part UP, since
+# the number exists to be booked above and never at.
+bounded_minutes() {
+  echo $(( $1 - $2 + ($2 * $(wall_over_model_pct) + 99) / 100 ))
+}
+
+arm_closes() { case "$1" in
+  calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
+  pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
+  pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
+  roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
+  roofline-n256-g16) echo "THE CLAIM, and the only arm that can confirm it. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. Contests TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. TODAY IT REFUSES: no BLOCK_M=256 control fits at BLOCK_N=256 (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory against 227 at 16), and this driver will not run the subject without the control that cancels the fused layer." ;;
+  roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim rests on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same missing control as the G=16 arm, and one fix unblocks both." ;;
+  bm128_depth) echo "The evaluation's #2: five clean memory-bound treads at 128, monotone. The whole 128 row is currently n=2 across two cards, one on a ladder where time falls as rows rise." ;;
+  noise_floor) echo "The evaluation's #3: a real between-replicate sd, WRITTEN INTO THE TRACKED TREE. The study has none; every effect so far is scored against an IMPORTED prior, including the MDE this session prints, and until --publish runs that line keeps saying ASSUMED however many replicates were paid for. Also publishes the num_stages control that would have caught the cross-card null. THE ARM SET IS ALL FOUR ARMS AND THAT IS THE DELIBERATE CHOICE, not the default falling through: two models x two swizzles is the SMALLEST set on which this script's own V7 can pass (>= 2 models, or a floor measured only where the swizzle effect is 0.3855 licensing a surface across models where it is 0.0226) and on which either C3 scores a real contrast (a swizzle delta needs G=1 AND G=16 of the SAME model; drop to two arms and C3 reads G=1 against G=1 and measures nothing). The bound is --replicates 3, not a smaller arm set, and it is bought at a stated price: at N=3 the floor ESTIMATE is known to 1.92x by its own table against 1.44x at N=6, so it is published as a floor with that scope attached and a later session extends it rather than re-deriving it." ;;
+  bn_g16)     echo "alpha_a as a fitted slope rather than a two-point guess, and the residual that says whether the three-term model is COMPLETE. The only clean lever on the decomposition." ;;
+  anchor_measure) echo "The evaluation's weakest link: the memory-branch level, measured at matched reuse rather than extrapolated. Decides whether any numeric alpha is publishable." ;;
+  anchor_rescore) echo "Free: every committed report re-scored under the anchor arm 0 just calibrated, so the size of the correction to every published alpha is known. Written under the session directory, never into results/published." ;;
+  occupancy)  echo "Whether alpha tracks residency or program order. If residency, the swizzle is a dead lever, the cross-card null is explained, and reuse-distance prediction does not transfer to this regime." ;;
+  mma_switch) echo "STUDY item 3's loose end. CLOSES whether the tile alone selects the instruction at fixed tokens." ;;
+  ruler)      echo "STUDY item 2's follow-up. Prices the read-vs-triad and clocks-first changes on the committed corpus without adopting them." ;;
+  cap_test)   echo "FINDINGS' fourth readout, DEMOTED: BLOCK_M=16 runs multi-tile in 1 of 24 cells on uniform routing, so this tests the formula, not the claim." ;;
+  dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype." ;;
+  span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry. IT RUNS WHOLE OR NOT AT ALL: --max-minutes 35 used to cap it, which does not refuse -- it breaks out of the cell loop, records the truncation as prose, and lets the gates score a partial grid to a complete grid's exit code. The 31 priced minutes exclude 21 Triton specialisations and four weight builds, so this is the arm most likely to overrun; overrunning honestly is better than a scored fraction of a grid." ;;
+  span)       echo "The same on the PUBLISHED grid, booked --no-densify, which is what puts it in a different run id from span_dense: with --densify the default, a bare arm derived the dense arm's id, restored its rows, measured nothing and still landed DONE. IT REFUSES, and its own --dry-run says so in advance: on a powers-of-two grid the padding factor is exactly 1.00 everywhere, so c2_grid_power stops it before it spends a minute. The refusal is the extent comparison's honest answer on that grid, it is free, and it is booked at ZERO rather than at 30 minutes it cannot spend." ;;
+  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py returns 0 only for OPEN and 3 for everything else, and 3 is INVALID in the table this session adopted, so the BLOCKED answer this arm exists to obtain is filed as a validity failure. BLOCKED is the ANSWER, not a broken instrument; the fix belongs in that script, which audit A4 does not schedule." ;;
+esac; }
+
+arm_offgpu_gates() { case "$1" in
+  roofline-n64-g1|roofline-n256-g16|roofline-n256-g32)
+              echo "scripts/bm128_roofline.py --self-test --fail-on-gate  (three planted worlds, exit 0 required)" ;;
+  bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
+  noise_floor) echo "its plan prints the power table; the floor itself needs replicates" ;;
+  bn_g16)     echo "scripts/bn_decomposition.py --self-test --capability 9.0 --group-m 16 --reps 17 --plant-noise 0.008  (four worlds, four distinct verdicts; exit 0). AT THE PINNING THIS ARM RUNS AND NO OTHER: the same command at --group-m 1 exits 3 INVALID, which is why there is no longer a G=1 arm for this line to vouch for with a G=16 command." ;;
+  anchor_measure|anchor_rescore) echo "scripts/memory_branch_anchor.py --rescore --out-dir <a path outside the tree>  (free, scores every committed report)" ;;
+  occupancy)  echo "scripts/occupancy_vs_swizzle.py --self-test, and --audit --fail-on-gate  (A1 FAILs on the corpus by design, exit 1 CLAIM_FAIL). WITHOUT --fail-on-gate the audit prints that FAIL and exits 0, so the advertised check returned the same code whether A1 held or not." ;;
+  cap_test)   echo "scripts/tile_cap_test.py --self-test 0.558 and --self-test 0.10" ;;
+  span|span_dense) echo "scripts/span_extent_separation.py --self-test kernel|extent|neither --densify --fail-on-world  (15 RESULT lines and exit 0 per world). THE FLAG IS THE CHECK: without it all three worlds exit 2 with ZERO RESULT lines, and the script says so on its own last line -- a gate that examined nothing reporting no failures." ;;
+  dtype)      echo "scripts/dtype_tile_confound.py --self-test 2.033|2.400|1.000 --self-test-alpha 0.2 --card 'NVIDIA H200', and --dry-run --card 'NVIDIA H200' for C1 and C2. --card IS THE CHECK OFF A GPU BOX, exactly as --fail-on-world is on span: without it all four commands exit 2 with NoCardToLabel and ZERO RESULT lines, so the operator's pre-rental verification of this arm examined nothing and returned REFUSED, which reads as a broken arm. With it each world prints 10 RESULT lines and C3 SEPARATES them -- 2.033 PASS matched tilt 1.023, 2.400 FAIL 1.208, 1.000 FAIL 0.503. READ THAT SEPARATION, NOT THE EXIT CODE: all three worlds exit 3, because a self-test observes no config and every validity gate but V0 reads UNKNOWN, and classify_text over the log agrees with the 3." ;;
+  ruler)      echo "scripts/ruler_rebaseline.py --corpus-only  (hermetic)" ;;
+  mma_switch) echo "its four gates need two real compiles; --dry-run registers thresholds only" ;;
+  pin_probe-n64-g1|pin_probe-n256-g16) echo "F1 and F2 need a vLLM span, which registers only on the GPU box" ;;
+  counter_plan) echo "scripts/dram_counter_route.py --dry-run and --bracket  (the plan and the counter-free bound)" ;;
+  calibrate)  echo "none: it is a measurement and nothing else" ;;
+esac; }
 # <<< LIFTABLE
 
 BROKEN_ARMS=0
@@ -943,62 +1229,8 @@ RETRY_ARMS=0
 ARM_NAMES=(calibrate pin_probe-n64-g1 pin_probe-n256-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth noise_floor
-           bn_g16 bn_g1 anchor_measure anchor_rescore occupancy
+           bn_g16 anchor_measure anchor_rescore occupancy
            mma_switch ruler cap_test dtype span_dense span counter_plan)
-
-arm_minutes()  { case "$1" in
-  calibrate) echo 3 ;;
-  pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
-  roofline-n64-g1) echo 4 ;;    roofline-n256-g16) echo 4 ;;
-  roofline-n256-g32) echo 4 ;;
-  bm128_depth) echo 12 ;;       noise_floor) echo 25 ;;
-  bn_g16) echo 11 ;;            bn_g1) echo 11 ;;        anchor_measure) echo 8 ;;
-  anchor_rescore) echo 0 ;;     occupancy) echo 20 ;;
-  mma_switch) echo 7 ;;         ruler) echo 4 ;;         cap_test) echo 9 ;;
-  dtype) echo 25 ;;             span_dense) echo 20 ;;   span) echo 30 ;;
-  counter_plan) echo 1 ;;
-esac; }
-
-arm_closes() { case "$1" in
-  calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
-  pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
-  pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
-  roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
-  roofline-n256-g16) echo "THE CLAIM, and the only arm that can confirm it. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. Contests TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. TODAY IT REFUSES: no BLOCK_M=256 control fits at BLOCK_N=256 (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory against 227 at 16), and this driver will not run the subject without the control that cancels the fused layer." ;;
-  roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim rests on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same missing control as the G=16 arm, and one fix unblocks both." ;;
-  bm128_depth) echo "The evaluation's #2: five clean memory-bound treads at 128, monotone. The whole 128 row is currently n=2 across two cards, one on a ladder where time falls as rows rise." ;;
-  noise_floor) echo "The evaluation's #3: a real between-replicate sd. The study has none; every effect so far is scored against an IMPORTED prior, including the MDE this session prints. Also publishes the num_stages control that would have caught the cross-card null." ;;
-  bn_g16)     echo "alpha_a as a fitted slope rather than a two-point guess, and the residual that says whether the three-term model is COMPLETE. The only clean lever on the decomposition." ;;
-  bn_g1)      echo "alpha_b and C3 at the production swizzle of every published arm, for comparability. NOT a second reading of C2: at GROUP_SIZE_M=1 the planted MISSING world passes C2 by construction, so C2 is UNKNOWN there however the data fall." ;;
-  anchor_measure) echo "The evaluation's weakest link: the memory-branch level, measured at matched reuse rather than extrapolated. Decides whether any numeric alpha is publishable." ;;
-  anchor_rescore) echo "Free: every committed report re-scored under the anchor arm 0 just calibrated, so the size of the correction to every published alpha is known. Written under the session directory, never into results/published." ;;
-  occupancy)  echo "Whether alpha tracks residency or program order. If residency, the swizzle is a dead lever, the cross-card null is explained, and reuse-distance prediction does not transfer to this regime." ;;
-  mma_switch) echo "STUDY item 3's loose end. CLOSES whether the tile alone selects the instruction at fixed tokens." ;;
-  ruler)      echo "STUDY item 2's follow-up. Prices the read-vs-triad and clocks-first changes on the committed corpus without adopting them." ;;
-  cap_test)   echo "FINDINGS' fourth readout, DEMOTED: BLOCK_M=16 runs multi-tile in 1 of 24 cells on uniform routing, so this tests the formula, not the claim." ;;
-  dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype." ;;
-  span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry." ;;
-  span)       echo "The same on the PUBLISHED grid, booked --no-densify, which is what puts it in a different run id from span_dense: with --densify the default, a bare arm derived the dense arm's id, restored its rows, measured nothing and still landed DONE. EXPECT IT TO REFUSE: on a powers-of-two grid the padding factor is exactly 1.00 everywhere, so c2_grid_power stops it before it spends a minute. The refusal is the extent comparison's honest answer on that grid, and it is free." ;;
-  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py returns 0 only for OPEN and 3 for everything else, and 3 is INVALID in the table this session adopted, so the BLOCKED answer this arm exists to obtain is filed as a validity failure. BLOCKED is the ANSWER, not a broken instrument; the fix belongs in that script, which audit A4 does not schedule." ;;
-esac; }
-
-arm_offgpu_gates() { case "$1" in
-  roofline-n64-g1|roofline-n256-g16|roofline-n256-g32)
-              echo "scripts/bm128_roofline.py --self-test --fail-on-gate  (three planted worlds, exit 0 required)" ;;
-  bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
-  noise_floor) echo "its plan prints the power table; the floor itself needs replicates" ;;
-  bn_g16|bn_g1) echo "scripts/bn_decomposition.py --self-test --capability 9.0 --group-m 16 --reps 17 --plant-noise 0.008  (four worlds, four distinct verdicts)" ;;
-  anchor_measure|anchor_rescore) echo "scripts/memory_branch_anchor.py --rescore --out-dir <a path outside the tree>  (free, scores every committed report)" ;;
-  occupancy)  echo "scripts/occupancy_vs_swizzle.py --self-test and --audit  (A1 FAILs on the corpus by design)" ;;
-  cap_test)   echo "scripts/tile_cap_test.py --self-test 0.558 and --self-test 0.10" ;;
-  span|span_dense) echo "scripts/span_extent_separation.py --self-test kernel|extent|neither --densify" ;;
-  dtype)      echo "C1 and C2 by --dry-run; C3 by --self-test 2.033|2.400|1.000 --self-test-alpha 0.2" ;;
-  ruler)      echo "scripts/ruler_rebaseline.py --corpus-only  (hermetic)" ;;
-  mma_switch) echo "its four gates need two real compiles; --dry-run registers thresholds only" ;;
-  pin_probe-n64-g1|pin_probe-n256-g16) echo "F1 and F2 need a vLLM span, which registers only on the GPU box" ;;
-  counter_plan) echo "scripts/dram_counter_route.py --dry-run and --bracket  (the plan and the counter-free bound)" ;;
-  calibrate)  echo "none: it is a measurement and nothing else" ;;
-esac; }
 
 if (( LIST )); then
   say "ARMS, in the order their results are read"
@@ -1006,7 +1238,7 @@ if (( LIST )); then
   echo "    0 DONE   1 CLAIM_FAIL (a result, never re-run)   2 REFUSED (free)"
   echo "    3 INVALID (measured, unquotable, not auto-retried)   4+ RETRY"
   for n in "${ARM_NAMES[@]}"; do
-    printf '\n  %-19s ~%s min\n' "$n" "$(arm_minutes "$n")"
+    printf '\n  %-19s ~%s min %s\n' "$n" "$(arm_minutes "$n")" "$(arm_clock "$n")"
     printf '    %s\n' "$(arm_closes "$n")"
   done
   exit 0
@@ -1035,8 +1267,22 @@ for s in calibrate_hardware bm128_roofline bm128_depth replicate_noise_floor \
   fi
 done
 [[ -f "$REPO/scripts/check_mma_path.sh" ]] || { note "MISSING scripts/check_mma_path.sh"; missing=1; }
+# THE TWO FILES THE LOOP ABOVE NEVER NAMED, and both are load-bearing. Both
+# pin_probe arms run `-m moe.bench.cli` (arm_script says so), and the noise_floor
+# arm SPAWNS scripts/block_m_crossing_sweep.py twelve times -- once per replicate
+# per arm -- so a broken sweep module surfaces as twelve failed replicates two
+# hours into the session's largest arm, which is precisely the "arm RETRY forty
+# minutes in, with the reason buried" the check above exists to prevent.
+for extra in moe/bench/cli.py scripts/block_m_crossing_sweep.py; do
+  if [[ ! -f "$REPO/$extra" ]]; then note "MISSING $extra"; missing=1
+  elif ! "$PY_BASE" -m py_compile "$REPO/$extra" 2>/dev/null; then
+    note "DOES NOT PARSE $extra"; missing=1
+  fi
+done
 if (( missing )); then echo "REFUSED: a script this driver schedules is missing or broken."; exit "$RC_REFUSED"; fi
-note "scripts   all 13 present and parse"
+note "scripts   all 15 present and parse, the twelve sweep scripts plus"
+note "          check_mma_path.sh, moe/bench/cli.py (both pin probes) and"
+note "          scripts/block_m_crossing_sweep.py (twelve noise-floor replicates)"
 
 # THE CARD, through moe/bench/provenance so that this file and every report
 # agree on the slug character for character. A card this cannot name is the
@@ -1163,13 +1409,81 @@ if (( CARD_OK )); then
   note "          $(git_note "$CALIB_YAML")   <- THIS ONE is meant to be committed"
 fi
 
+# THE COST TABLE, IN BOTH MODES. The TOTAL used to be printed only in the
+# `else` of `if (( DRY ))`, which is to say only once the operator had already
+# decided to rent: --dry-run listed twenty per-arm minutes and no sum, and the
+# sum they would have reached by hand was wrong by nearly four hours. It is
+# printed here, in both modes, together with the CUMULATIVE minute each arm
+# starts at, because "3.4 hours" answers a different question than "what is
+# still unstarted when I release the pod". Every row also prints where its
+# figure came from and what that figure excludes, so no line of this table has
+# to be taken on trust.
+#
+# AND IT NAMES THE CLOCK ON EVERY ROW, because fixing the figures left the units
+# mixed. Seven arms are booked at their plans' "excluding compiles and
+# allocation" kernel time and two at a wall clock; the total added both and the
+# "starts at" column, the one thing a rental is sized with, was computed from
+# that sum. The paragraph under the table said BOOK ABOVE THAT AND NEVER AT IT
+# and then gave no number to book above, which left the reader with the mixed
+# sum as the only figure on the page. Both numbers are printed now: what the
+# plans price, and what the KERNEL part of it comes to at the one wall-over-model
+# ratio this repo has measured. Still no per-arm figure is multiplied by
+# anything.
 say "WHAT THIS COMMITS YOU TO"
+note "The min column mixes two clocks and now says which on every row. WALL is a"
+note "figure whose own plan charges compiles and allocation. KERNEL is one whose"
+note "plan says, in those words, that it does not. ALLOW is this file's own"
+note "allowance for an arm whose plan prints no time estimate at all. FREE is an"
+note "arm booked zero, whose plan refuses or times nothing, and which therefore"
+note "has no clock to be on."
+note ""
 total=0
+kernel_min=0
+unpriced_arms=0
 for n in "${ARM_NAMES[@]}"; do
   wanted "$n" || continue
-  m="$(arm_minutes "$n")"; total=$((total + m))
-  printf '  %-19s ~%3s min   %s\n' "$n" "$m" "$(arm_closes "$n" | cut -c1-92)"
+  m="$(arm_minutes "$n")"
+  clock="$(arm_clock "$n")"
+  # The start column is a RANGE, priced start to bounded start, because the two
+  # differ by more than two hours by the last arm and the operator sizing a
+  # rental needs the second one.
+  start_b="$(bounded_minutes "$total" "$kernel_min")"
+  if [[ "$start_b" == "$total" ]]; then starts="~$total min"
+  else starts="~$total-$start_b min"; fi
+  printf '  %-19s ~%3s min %-6s  starts at %-14s  %s\n' \
+    "$n" "$m" "$clock" "$starts" "$(arm_closes "$n" | cut -c1-44)"
+  printf '  %-19s   from: %s\n' "" "$(arm_basis "$n")"
+  excl="$(arm_unpriced "$n")"
+  if [[ -n "$excl" ]]; then
+    printf '  %-19s   NOT IN THAT FIGURE: %s\n' "" "$excl"
+    unpriced_arms=$((unpriced_arms + 1))
+  fi
+  total=$((total + m))
+  if [[ "$clock" == "KERNEL" ]]; then kernel_min=$((kernel_min + m)); fi
 done
+bound="$(bounded_minutes "$total" "$kernel_min")"
+note ""
+note "TOTAL ~$total minutes (~$((total / 60))h $((total % 60))m) of what the arms' own plans PRICE,"
+note "of which ~$kernel_min are KERNEL minutes: arms whose plans exclude compiles and"
+note "allocation in their own words, on rows marked NOT IN THAT FIGURE."
+note ""
+note "BOOK ABOVE THAT AND NEVER AT IT, AND THIS IS THE NUMBER TO BOOK ABOVE:"
+note "~$bound minutes (~$((bound / 60))h $((bound % 60))m), the same table with those $kernel_min KERNEL minutes"
+note "multiplied by $(wall_over_model_pct)/100. That factor is the ONE wall-over-model ratio this"
+note "repo has measured -- 127 s logged against 54 s modelled for mixtral_g1 on"
+note "the s4 arm -- and it is the factor replicate_noise_floor.py already applies"
+note "to the $(arm_minutes noise_floor) minutes it books above. IT IS AN ILLUSTRATION OF THE SIZE OF"
+note "THE GAP AND NOT AN ESTIMATE OF ANY ARM: one datum, from a small sweep, and a"
+note "large sweep amortises its compiles over more timings than a small one does."
+note "No figure in the column above was multiplied by it, and $unpriced_arms of the rows above"
+note "print a NOT IN THAT FIGURE line naming what their own figure leaves out."
+note ""
+note "The 'starts at' range is priced start to bounded start, and both are an"
+note "EARLIEST start: a rental shorter than an arm's start does not buy that arm,"
+note "or anything under it. Nothing in this file has a deadline or a timeout -- an"
+note "arm that overruns is not cut short, it pushes everything below it down the"
+note "column -- which is why the column is printed at all instead of one number"
+note "for the whole session."
 note ""
 mde_line | sed 's/^/  /'
 note ""
@@ -1177,16 +1491,17 @@ note "  Read every effect this session reports against that limit. The three"
 note "  effects already registered in NOISE_FLOOR.json are the swizzle swing"
 note "  0.3855 and the footprint spread 0.411, both far above it, and the"
 note "  cross-card 0.0117, which is BELOW it and therefore unresolved."
+note ""
 if (( DRY )); then
-  note ""
   note "--dry-run: each arm runs its OWN --dry-run. Free, off GPU, seconds."
-  note "The minutes above are what the POD run would cost, not this one."
+  note "The minutes above are what the POD run would cost, not this one, and"
+  note "every one of them is re-derivable from the 'from:' line beside it."
 else
-  note ""
-  note "TOTAL ~$total minutes. The four arms after the pin probes -- three"
-  note "rooflines and bm128_depth -- are ~24 min and contain the claim. Arms"
-  note "already finished in $LEDGER are skipped, so a re-run costs only what is"
-  note "left; a REFUSED arm is re-attempted, because refusing costs nothing."
+  note "The three arms after the pin probes -- roofline-n64-g1 and the two"
+  note "BLOCK_N=256 arms that refuse before spending anything -- plus bm128_depth"
+  note "are ~$(( $(arm_minutes roofline-n64-g1) + $(arm_minutes roofline-n256-g16) + $(arm_minutes roofline-n256-g32) + $(arm_minutes bm128_depth) )) min and contain the claim. Arms already finished in $LEDGER"
+  note "are skipped, so a re-run costs only what is left; a REFUSED arm is"
+  note "re-attempted, because refusing costs nothing."
 fi
 
 started=$(date -u +%s)
@@ -1198,7 +1513,15 @@ say "SESSION  card=$CARD  $( ((DRY)) && echo '(DRY RUN: plans only)' || echo '(M
 # --------------------------------------------------------------------------
 say "0. calibrate THIS card"
 if (( DRY )); then
-  skip_arm calibrate "calibrate_hardware.py is a measurement and has no --dry-run."
+  # IT HAS A --dry-run, AND THIS ARM IS THE ONE THAT MOST NEEDS PREVIEWING. The
+  # skip that stood here said "calibrate_hardware.py is a measurement and has no
+  # --dry-run", which is false: it prints a nine-line plan -- patterns, buffers,
+  # gemm, settle, instrument, card, publish, MDE -- and exits REFUSED, and its
+  # own header says so ("`--dry-run` exits REFUSED, because a plan..."). The
+  # consequence of the skip was that the ONE arm whose gate can end the whole
+  # session at minute 3 was the one arm whose plan an operator never saw before
+  # paying for the card.
+  arm calibrate "$PY_BASE" "$REPO/scripts/calibrate_hardware.py" --dry-run
 else
   # --publish IS THE ARM. Without it this measures this card's ridge into an
   # untracked session path that nothing reads, and every arm below resolves its
@@ -1296,9 +1619,16 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# 1. THE CLAIM, in three configurations. All three run WITHOUT --fail-on-gate:
-#    a C1 FAIL means BLOCK_M=128 reached the roof, which is one of the two
-#    registered outcomes and a result.
+# 1. THE CLAIM, in three configurations. All three run WITH --fail-on-gate, and
+#    the sentence that stood here -- "all three run WITHOUT --fail-on-gate: a C1
+#    FAIL means BLOCK_M=128 reached the roof, which is one of the two registered
+#    outcomes and a result" -- had the conclusion backwards. A failing claim
+#    being a RESULT is the argument FOR the flag, not against it: CLAIM_FAIL is
+#    the state this ledger latches as finished, and folding it into 0 files it
+#    as DONE, "every VALIDITY and CLAIM gate PASSED", over a claim that did not.
+#    bm128_roofline no longer has a mode in which a failed gate exits 0 and says
+#    the flag is redundant; it is passed anyway, so that a script that grows the
+#    downgrade back cannot silently take this arm's CLAIM_FAIL away.
 # --------------------------------------------------------------------------
 say "1a. CONTROL: BLOCK_M=128 at the SWEPT configuration (BN=64, G=1)"
 note "This arm can refute a ceiling and cannot confirm one for production."
@@ -1308,7 +1638,7 @@ if (( DRY )); then
 else
   arm roofline-n64-g1 "$PY_VLLM" "$REPO/scripts/bm128_roofline.py" \
       --model mixtral-8x7b --dtype bf16 --control 256 \
-      --block-n 64 --group-m 1 \
+      --block-n 64 --group-m 1 --fail-on-gate \
       --r-min 32 --r-max 4096 --reps 3 --plateau-doublings 2
 fi
 
@@ -1339,7 +1669,7 @@ elif (( DRY )); then
 else
   arm roofline-n256-g16 "$PY_VLLM" "$REPO/scripts/bm128_roofline.py" \
       --model mixtral-8x7b --dtype bf16 --control 256 \
-      --block-n 256 --group-m 16 \
+      --block-n 256 --group-m 16 --fail-on-gate \
       --r-min 32 --r-max 4096 --reps 3 --plateau-doublings 2
 fi
 
@@ -1353,42 +1683,128 @@ elif (( DRY )); then
 else
   arm roofline-n256-g32 "$PY_VLLM" "$REPO/scripts/bm128_roofline.py" \
       --model mixtral-8x7b --dtype bf16 --control 256 \
-      --block-n 256 --group-m 32 \
+      --block-n 256 --group-m 32 --fail-on-gate \
       --r-min 32 --r-max 4096 --reps 3 --plateau-doublings 2
 fi
 
 say "2. depth at BLOCK_M=128: five clean memory-bound treads, monotone"
+# --r-max IS IN THE PLAN AND IN THE RUN ID, so the dry run has to carry it. It
+# did not: the preview ran at the default and printed "cells 84 timings / estimate
+# 126 s / ...-r1024-...-3a766aa0" while the pod runs "168 timings / 252 s /
+# ...-r2048-...-97bf7d2c". A different sweep, a different cost and a different
+# run id from the one the operator was shown.
 if (( DRY )); then
-  arm bm128_depth "$PY_BASE" "$REPO/scripts/bm128_depth.py" --dry-run --model mixtral-8x7b
+  arm bm128_depth "$PY_BASE" "$REPO/scripts/bm128_depth.py" --dry-run \
+      --model mixtral-8x7b --r-max 2048
 else
-  arm bm128_depth "$PY_VLLM" "$REPO/scripts/bm128_depth.py" --model mixtral-8x7b --r-max 2048
+  arm bm128_depth "$PY_VLLM" "$REPO/scripts/bm128_depth.py" --model mixtral-8x7b \
+      --r-max 2048 --fail-on-gate
 fi
 
 say "3. the noise floor, without which nothing above can be scored"
+# THE THREE FLAGS ARE THE ARM. Run bare, this was booked 25 minutes against its
+# own plan's 240, ran to no deadline in a session with no timeout anywhere, and
+# published nothing.
+#
+#   --replicates 3   is the BOUND, and the owner's decision is that the floor
+#                    stays in the main run rather than moving to a session of
+#                    its own. 3 not 6: the plan's own table prices 6 at 240 min
+#                    and 3 at 120, and the price of the bound is stated rather
+#                    than hidden -- the floor ESTIMATE is known to 1.92x at N=3
+#                    against 1.44x at N=6 (8 df against 20). Power is not what
+#                    is being bought here and never was: the plan says N=6 "is
+#                    NOT set by power -- power alone is satisfied at N = 2 for
+#                    both big effects", it is set by how well the floor itself
+#                    is known. A floor known to 1.92x is a floor; the 240-minute
+#                    version is a better one that this session cannot afford
+#                    without spending everything below it.
+#   --arms           all four, NAMED rather than defaulted. Naming them is what
+#                    stops a later change to that script's default from silently
+#                    changing what this session buys and what it was booked at.
+#                    Four is the SMALLEST set that scores: V7 needs >= 2 models
+#                    (a floor measured only where the swizzle effect is 0.3855
+#                    does not license a surface across models where it is
+#                    0.0226, and V7 is a VALIDITY gate, so a single-model set
+#                    lands the whole 120 minutes on 3 INVALID unless
+#                    --single-model-floor is also given), and each C3 needs G=1
+#                    AND G=16 of the SAME model -- pick two arms one per model
+#                    and the plan still prints two C3 rows, now reading G=1
+#                    against G=1, a contrast across nothing.
+#   --publish        IS THE ARM, exactly as it is for calibrate. NOISE_FLOOR.json
+#                    is written under that flag and no other path reaches
+#                    write_published, so without it the most expensive
+#                    measurement in the session leaves the sigma in every future
+#                    MDE line still reading "0.0228, ASSUMED" -- the number this
+#                    arm exists to replace.
+#
+# --publish IS NOT ON THE DRY-RUN LINE, and that is not an oversight. Verified
+# on this laptop: `replicate_noise_floor.py --dry-run --replicates 3 --arms ...
+# --publish` WRITES results/published/NOISE_FLOOR.json, which git tracks. A plan
+# that dirties the tracked tree is the anchor-rescore defect this file already
+# carries a paragraph about, and a dry run must be free in every sense.
+NOISE_ARMS=mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16
 if (( DRY )); then
-  arm noise_floor "$PY_BASE" "$REPO/scripts/replicate_noise_floor.py" --dry-run
+  arm noise_floor "$PY_BASE" "$REPO/scripts/replicate_noise_floor.py" --dry-run \
+      --replicates 3 --arms "$NOISE_ARMS"
 else
-  arm noise_floor "$PY_VLLM" "$REPO/scripts/replicate_noise_floor.py"
+  arm noise_floor "$PY_VLLM" "$REPO/scripts/replicate_noise_floor.py" \
+      --replicates 3 --arms "$NOISE_ARMS" --publish
 fi
 
 # --------------------------------------------------------------------------
 # 4-6. WHAT alpha IS MADE OF.
 # --------------------------------------------------------------------------
 say "4. alpha_a and alpha_b separated, and whether the three-term model is complete"
+# ONE ARM, AT GROUP_SIZE_M=16, BECAUSE THAT IS THE ONLY PINNING AT WHICH THIS
+# INSTRUMENT IS VALID. There used to be a G=1 partner, booked 11 minutes against
+# its own plan's 36 and advertised off GPU with the G=16 self-test command --
+# which is the exact substitution that script's own S5 note records the audit
+# as having caught, put back one line later. Run the pinning the arm actually
+# ran through the arm's own gate and it does not pass:
+#
+#   bn_decomposition.py --self-test --capability 9.0 --group-m 1 --reps 17 \
+#       --plant-noise 0.008        -> exit 3 INVALID
+#     S4 FAIL  sd(alpha_a) = 0.1759 at GROUP_SIZE_M=1 against a gate of 0.025
+#     S5 FAIL  the planted MISSING world PASSES C2 at chi2 1.78 against 4.0,
+#              so C2 cannot fail there however the card behaves
+#     S2 FAIL  which is the same fact read from the other side
+#
+# and the arm's own plan says the rest in words: "AT THIS PINNING C1 WILL READ
+# UNKNOWN however the run goes". The arm had been reframed as an alpha_b + C3
+# arm rather than an alpha_a arm, which would be a fair answer if anything
+# bounded alpha_b's spread there -- S1 checks alpha_b's LEVEL on one planted
+# draw and nothing checks its SPREAD, so the reframed arm has no registered
+# detection limit for the one number it is for.
+#
+# RE-PINNING WAS THE OTHER OPTION AND THERE IS NOWHERE TO RE-PIN IT TO. The same
+# self-test at --group-m 2, 4, 8, 32 and 64 also exits 3, with sd(alpha_a)
+# 0.1759, 0.1759, 0.4864, 0.1759 and 0.0635 against the same 0.025, and --reps
+# does not buy it either: 65 reps reaches 0.1021 and 129 reaches 0.0902, four
+# times the gate for eight times the minutes. GROUP_SIZE_M=16 is the one setting
+# that passes, and it is the arm below. So the minutes go back to the session
+# rather than to a second arm at a pinning its own design gate refuses.
 if (( DRY )); then
-  arm bn_g16 "$PY_BASE" "$REPO/scripts/bn_decomposition.py" --dry-run --capability "${CAPABILITY:-9.0}" --group-m 16
-  arm bn_g1  "$PY_BASE" "$REPO/scripts/bn_decomposition.py" --dry-run --capability "${CAPABILITY:-9.0}" --group-m 1
+  arm bn_g16 "$PY_BASE" "$REPO/scripts/bn_decomposition.py" --dry-run \
+      --capability "${CAPABILITY:-9.0}" --group-m 16 --reps 17
 else
-  # On sm_80 both need --num-stages 3: BM=256 x BN=128 at 4 stages asks 192 KiB
+  # On sm_80 it needs --num-stages 3: BM=256 x BN=128 at 4 stages asks 192 KiB
   # against 164. The script refuses and names the fix; we pass it up front.
   STAGES=(); [[ "$SM_MAJOR" == "8" ]] && STAGES=(--num-stages 3)
-  arm bn_g16 "$PY_VLLM" "$REPO/scripts/bn_decomposition.py" --group-m 16 --reps 17 "${STAGES[@]}"
-  arm bn_g1  "$PY_VLLM" "$REPO/scripts/bn_decomposition.py" --group-m 1  --reps 17 "${STAGES[@]}"
+  arm bn_g16 "$PY_VLLM" "$REPO/scripts/bn_decomposition.py" --group-m 16 --reps 17 \
+      --fail-on-gate "${STAGES[@]}"
 fi
 
 say "5. the memory-branch anchor, measured rather than extrapolated"
+# THE DRY RUN HAS TO CARRY --measure, or it previews the wrong mode of the arm.
+# Without it the script defaults to rescore -- "mode : --rescore (no GPU, no
+# measurement, seconds)" followed by 26 committed reports -- so the arm this
+# file calls the evaluation's weakest link had its plan verified by nothing, and
+# its dry-run row duplicated the anchor_rescore arm skipped two lines below.
+# With it the plan is a different page: "cells 128 (2 BLOCK_M x 4 G x 16
+# treads), estimated wall time 4.8 min".
 if (( DRY )); then
-  arm anchor_measure "$PY_BASE" "$REPO/scripts/memory_branch_anchor.py" --dry-run
+  arm anchor_measure "$PY_BASE" "$REPO/scripts/memory_branch_anchor.py" --dry-run \
+      --measure --model mixtral-8x7b
 else
   arm anchor_measure "$PY_VLLM" "$REPO/scripts/memory_branch_anchor.py" --measure --model mixtral-8x7b
 fi
@@ -1411,7 +1827,16 @@ if (( DRY )); then
 else
   # No stage override: --stages is the residency LADDER, and the script prunes
   # rungs the attached card cannot hold (s=5 on sm_80) from its own capability.
-  arm occupancy "$PY_VLLM" "$REPO/scripts/occupancy_vs_swizzle.py" --run
+  #
+  # --fail-on-gate IS LOAD-BEARING HERE and was missing. occupancy_vs_swizzle's
+  # own exit_for returns DONE for a CLAIM_FAIL without it, and P2 is EXPECTED to
+  # fail -- that FAIL is this arm's finding. Proven off GPU, live:
+  # `occupancy_vs_swizzle.py --audit` prints "RESULT: CLAIM
+  # A1_reuse_distance_on_the_corpus FAIL", then "reported as exit 0 without
+  # --fail-on-gate", and returns 0, while exit_codes.classify_text over that log
+  # returns 1. With the flag both are 1. So this arm's registered outcome was
+  # unreachable: it could land DONE, REFUSED or INVALID and nothing else.
+  arm occupancy "$PY_VLLM" "$REPO/scripts/occupancy_vs_swizzle.py" --run --fail-on-gate
 fi
 
 # --------------------------------------------------------------------------
@@ -1435,21 +1860,43 @@ say "8. the ruler: price a ridge change without making one"
 if (( DRY )); then
   arm ruler "$PY_BASE" "$REPO/scripts/ruler_rebaseline.py" --dry-run
 else
-  arm ruler "$PY_BASE" "$REPO/scripts/ruler_rebaseline.py"
+  arm ruler "$PY_BASE" "$REPO/scripts/ruler_rebaseline.py" --fail-on-gate
 fi
 
 say "9. BLOCK_M=16 cap test -- the FORMULA, not the production claim"
 if (( DRY )); then
   arm cap_test "$PY_BASE" "$REPO/scripts/tile_cap_test.py" --dry-run --capability "${CAPABILITY:-9.0}"
 else
-  arm cap_test "$PY_VLLM" "$REPO/scripts/tile_cap_test.py"
+  arm cap_test "$PY_VLLM" "$REPO/scripts/tile_cap_test.py" --fail-on-gate
 fi
 
 say "10. is the 1.15 fp8/bf16 crossing the FORMAT or the CONFIG"
-if (( DRY )); then
+# THIS ARM'S PLAN NEEDS A CARD TO NAME, AND OFF A GPU BOX IT HAS TO BE GIVEN
+# ONE. Run bare, `dtype_tile_confound.py --dry-run` refuses with "NoCardToLabel:
+# no CUDA device, no --card and no --gpu-name, so there is no card to derive
+# vLLM's config lookup for", the ledger records PLAN_REFUSED, and that reads as
+# "this arm is broken" rather than "this laptop has no GPU" -- the distinction
+# this file draws explicitly for pin_probe eight arms up and did not draw here.
+# The refusal names its own fix, and supplying it plans the arm and prints the
+# cost the operator was never shown: "COST 28 cells x 3 arms x 2 dtypes; 36
+# distinct Triton specialisations; 315 s of timed kernel".
+#
+# The hypothetical is LABELLED, not smuggled: the run id, the config lookup and
+# every row of a plan made this way say NVIDIA H200, and if the card that gets
+# rented is not one, the plan was for a different machine. On a GPU box no
+# --card is passed at all, because the device names itself and a flag would
+# override it.
+DTYPE_PLAN_CARD="${DTYPE_PLAN_CARD:-NVIDIA H200}"
+if (( DRY )) && (( CARD_OK )); then
   arm dtype "$PY_BASE" "$REPO/scripts/dtype_tile_confound.py" --dry-run
+elif (( DRY )); then
+  note "   no CUDA device: planning dtype for the HYPOTHETICAL card"
+  note "   '$DTYPE_PLAN_CARD'. Its config lookup, run id and cost are that"
+  note "   card's, not this laptop's and not necessarily the one you rent."
+  arm dtype "$PY_BASE" "$REPO/scripts/dtype_tile_confound.py" --dry-run \
+      --card "$DTYPE_PLAN_CARD"
 else
-  arm dtype "$PY_VLLM" "$REPO/scripts/dtype_tile_confound.py"
+  arm dtype "$PY_VLLM" "$REPO/scripts/dtype_tile_confound.py" --fail-on-claim
 fi
 
 say "11. is the 0.563 separation the span EXTENT or the KERNEL"
@@ -1466,12 +1913,36 @@ note "Dense grid first: it is the only grid on which C3's mechanism is observabl
 # The sparse arm now REFUSES before measuring, by that script's own c2_grid_power
 # gate ("grid too sparse for C2"), which is free and is the honest answer for
 # the grid V5's argument prefers.
+# --max-minutes IS GONE FROM BOTH ARMS, and that is a refusal to buy a partial
+# grid at a complete grid's price. The flag does not refuse and it does not
+# refuse LATER either: at span_extent_separation.py:4602 it breaks out of the
+# cell loop, sets `stopped = "stopped after N minutes with K of M cells done"`,
+# and that string is printed as prose and stored under a "partial" key. No gate
+# reads it. V4 asks only that "real work happened -- cells/samples/compiles > 0",
+# which a third of a grid satisfies, so a truncated run and a whole one exit
+# with the same code and the reduction scores whichever cells happened to
+# finish. span_dense was booked 20 min, capped at 35, against a plan that prices
+# 1814 s of KERNEL and then says the wall clock is not that number; the likely
+# outcome of the 0.563 extent-versus-kernel arm was therefore a partial dense
+# grid scored as if complete.
+#
+# WHERE THE REAL FIX LIVES, and it is not here. Making a truncation REFUSE
+# belongs in span_extent_separation.py, at the break and in the gate list,
+# because only that file knows WHICH cells are missing and whether its
+# crossing estimator can stand without them -- a grid truncated after the small
+# token counts is a different loss from one truncated after the large. A driver
+# cannot tell those apart from an exit code. What a driver CAN decide is
+# whether to arm the truncation at all, and arming it is what converted a
+# complete-grid arm into a partial one wearing a complete one's exit code. So
+# the arms run whole, the honest time is booked, and if the pod is released
+# mid-arm the ledger shows an arm that never finished rather than one that
+# finished on a third of the evidence.
 if (( DRY )); then
   arm span_dense "$PY_BASE" "$REPO/scripts/span_extent_separation.py" --dry-run --densify
   arm span       "$PY_BASE" "$REPO/scripts/span_extent_separation.py" --dry-run --no-densify
 else
-  arm span_dense "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --densify --max-minutes 35
-  arm span       "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --no-densify --max-minutes 45
+  arm span_dense "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --densify
+  arm span       "$PY_VLLM" "$REPO/scripts/span_extent_separation.py" --no-densify
 fi
 
 say "12. is a DRAM counter route open on this box"
@@ -1549,8 +2020,10 @@ cat <<EOF
                same-session, same-hour, mixtral-only proxy that confounds
                num_stages.
   bn_g16       the residual line. Noise-sized residual = the three-term model is
-               complete. Structure in it names what is missing. bn_g1 is not a
-               second reading of this: C2 is UNKNOWN at GROUP_SIZE_M=1.
+               complete. Structure in it names what is missing. It is the ONLY
+               bn arm now: at GROUP_SIZE_M=1 that script's own design self-test
+               exits 3 INVALID and its plan says C1 reads UNKNOWN however the
+               data fall, and no other pinning it was checked at passes either.
 EOF
 
 say "WHAT TO COMMIT, AND WHAT NOT TO"
@@ -1558,10 +2031,19 @@ cat <<EOF
   NOTHING HERE IS COMMITTED AND NOTHING IS PUSHED. This script runs no git write
   command and terminates nothing. Read the gates above first.
 
-  THE ONE FILE THAT BELONGS IN THE REPO is this card's calibration:
-      git -C $REPO diff --stat moe/bench/hardware/
-  Do not commit it if arm 8 (ruler) P1 FAILED: the compute peak was then sampled
-  in the wrong clock state and the ridge derived from it is not this card's.
+  THE TWO FILES THAT BELONG IN THE REPO are this card's calibration and this
+  session's noise floor. Both are written by an arm that was given --publish,
+  and both are tracked:
+      git -C $REPO diff --stat moe/bench/hardware/ results/published/NOISE_FLOOR.json
+  Do not commit the calibration if arm 8 (ruler) P1 FAILED: the compute peak was
+  then sampled in the wrong clock state and the ridge derived from it is not
+  this card's.
+  Do not commit NOISE_FLOOR.json if the noise_floor arm is not DONE. Its V2 asks
+  that the PLANNED replicates ran, so a floor from an arm cut short is not a
+  floor, and this run bought N=3, at which the estimate is known to 1.92x -- the
+  scope block in the file says so and must not be quoted away from it. Committing
+  it is what finally replaces the assumed sigma of 0.0228 in every later
+  session's detection-limit line with a number this study measured.
 
   EVERYTHING ELSE LANDS UNDER $RESULTS, which git ignores by design. To publish
   an arm, copy its run directory under results/published/<date>-<gpu>-<arm>/ --
