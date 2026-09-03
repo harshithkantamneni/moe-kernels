@@ -298,7 +298,12 @@ WHAT THAT CHANGES HERE, and all three are checkable before the box is rented:
      KERNEL and 11.8 WALL for the shipped design: the fix landed at the print
      and not in the prose, which is the same one-of-two-sites shape as the rest
      of this rebuild, and a driver owner who books from a header reserves an
-     hour for a quarter of one. The header may QUOTE a retired figure, as the
+     hour for a quarter of one. AND THE PRINT DENIED THE PROBE UNTIL THE SAME
+     DAY: `probing` was `args.probe and args.run`, and an operator books a pod
+     before they have one, so the only page they could read priced the ladder
+     WITHOUT the probe the default invocation runs, under-booking the arm by
+     the tenth this paragraph is named for. Both halves are now scored against
+     the table. The header may QUOTE a retired figure, as the
      sentence you are reading does, and may not assert one;
      `test_the_header_quotes_no_duration_of_its_own` enforces exactly that and
      scores the ratio above against the table `report_cost` prints.
@@ -824,6 +829,61 @@ def build_design(args) -> Design:
     return Design(models=models, tiles=tuple(args.tiles), block_m=args.block_m,
                   tile=tile, compute=args.compute, replicates=args.replicates,
                   rungs=rungs, alias_extent=args.alias_extent)
+
+
+#: The design knobs EVERY CELL carries, and the one place that decides which
+#: they are.
+#:
+#: THERE ARE TWO WAYS INTO A REPORT AND ONLY ONE OF THEM IS A FILE. `--replay`
+#: adopts a knob out of plan.json, which is wall one; `_analyse` asks the CELLS,
+#: which is wall two and the one that still stands when the plan is old,
+#: hand-edited, absent, or the directory was named with `--out` and replayed
+#: from somewhere else. `compute` got both walls on 2026-09-03. `alias_extent`
+#: got only the first, because NEITHER cell writer recorded it, so the second
+#: wall had nothing to read: two extents pooled into one directory would have
+#: been scored as one ladder with no line printed anywhere saying so. That is
+#: this rebuild's recurring defect for the eighth time, and it is why the list
+#: is a constant read by both writers and by the wall rather than three literals
+#: that a third writer could disagree with.
+CELL_KNOBS = ("compute", "alias_extent")
+
+#: Per knob: the heading a scored-from-the-cells page prints, the noun a
+#: refusal names, why one page cannot hold two values, and what the knob
+#: decides. The prose lives BESIDE the knob and not at the wall, so a knob added
+#: to `CELL_KNOBS` cannot reach the wall without a stated reason to refuse.
+CELL_KNOB_STAKES = {
+    "compute": {
+        "heading": "MODE",
+        "noun": "compute mode",
+        "mixed": "one page cannot score an unbiased estimator and a lower "
+                 "bound as one ladder",
+        "decides": "prediction_gate answers P1 from sum and refuses to answer "
+                   "it from dot",
+    },
+    "alias_extent": {
+        "heading": "ALIAS EXTENT",
+        "noun": "alias extent",
+        "mixed": "one page cannot pool a ladder whose aliased arm streamed a "
+                 "whole BLOCK_N x K column block with one that hammered a "
+                 "single BLOCK_K x BLOCK_N tile",
+        "decides": "the extent sets how much of the shared path the aliased "
+                   "arm actually exercises, and the pinned 16 KiB variant is "
+                   "what cost the 2026-09-01 run its experiment",
+    },
+}
+
+
+def cell_knobs(design: Design) -> dict[str, str]:
+    """`CELL_KNOBS` as a record fragment, for every writer of a cell.
+
+    Both cell writers -- `measure_rung` on the card and `synthesise` off it --
+    splat this rather than listing keys, so a knob added to `CELL_KNOBS` reaches
+    the measured path, the planted path and the wall in `_analyse` together or
+    not at all. A writer that listed its own keys is exactly how the synthetic
+    path came to omit `compute` while the measured one carried it, and every
+    planted world replayed as sum mode however it was planted.
+    """
+    return {knob: getattr(design, knob) for knob in CELL_KNOBS}
 
 
 # --------------------------------------------------------------------------
@@ -1733,8 +1793,81 @@ def fold_timings(timings: list) -> dict:
     }
 
 
+def reference_clock_for(gpu_name: str):
+    """The clock this card's roof was measured at, which LEVEL is scored against.
+
+    Resolved through `roofline.reference_clock` rather than as another copy of
+    the three-field rule. `block_m_crossing_sweep`, `dtype_tile_confound` and
+    `memory_branch_anchor` each read those fields their own way, and copies of
+    one rule are how the driver came to believe no committed calibration
+    recorded a clock while the sweep read 1515 MHz out of the same yaml.
+
+    Returns the `ReferenceClock`, whose one `source` string says where the
+    number came from when there is one and why there is none when there is not,
+    so a provenance and a reason cannot drift apart.
+
+    A CLOCK IS NOT A BANDWIDTH, which is the only reason this arm is allowed to
+    touch `roofline` at all. `test_this_script_never_reaches_the_byte_model_or_a
+    _calibrated_bandwidth` pins the surface: this file reads `HARDWARE_DIR`,
+    `measured_slug` and `reference_clock` out of that module, all three of which
+    are readers of a hardware FILE, and none of the roof, ridge, attainable or
+    efficiency arithmetic that would make this alpha a function of the refit's
+    ruler. Same import shape as `measured_card`, deliberately, so there is one
+    door.
+    """
+    from moe.bench import roofline as RF
+    return RF.reference_clock(gpu_name or None)
+
+
+def require_reference_clock(torch):
+    """Resolve the LEVEL reference once for this run, or REFUSE the run.
+
+    THE FLAG HAD NO LEFT-HAND SIDE HERE, AT BOTH CALL SITES.
+    `timing.clock_flags` will not invent one: handed no reference it leaves
+    `clock_level_ok` None on every pass, `_fold_flag` folds three Nones to None
+    because NOT DETERMINED is not OK, and a card pegged at 1400 MHz for a whole
+    ladder produces a page with no level failure anywhere on it. Both this
+    arm's `time_kernel` calls -- the probe's and the ladder's -- passed no
+    reference until 2026-09-03, so every rung it has ever published carries the
+    column and no verdict in it.
+
+    THIS IS THE ARM THAT CANNOT ABSORB A SAG. Everywhere else in this tree a
+    clock excursion inflates one cell and the cell is excluded. Here the answer
+    is a ratio of two DIFFERENCES between two ladders, D(n)/D(1), and a sag part
+    way up a ladder moves the numerator and the denominator by different
+    amounts: the slope-over-intercept that cancels the time unit does not cancel
+    that. The difference between two ladders IS the result.
+
+    REFUSED RATHER THAN RESOLVE-AND-SAY, which is the opposite of the choice
+    `scripts/group_m_alpha_sweep.py:reference_clock_for` documents, and the
+    difference is what the column is load-bearing for. That arm's correctness
+    gates and paired ratios stand without it, so an absent yaml there is worth
+    printing and running past rather than turning into a lost hour of card.
+    Here the column is the only evidence for the only number the arm produces,
+    and the remedy is one minute of `calibrate_hardware.py --publish` on a box
+    that is already rented and already running. A minute against an hour.
+
+    A card is attached by the time either caller reaches this: both check
+    `torch.cuda.is_available()` first, so `ReferenceClock.card` is never the
+    empty laptop case here and a None `mhz` always means a pod whose ruler was
+    never measured.
+    """
+    ref = reference_clock_for(torch.cuda.get_device_properties(0).name)
+    if ref.mhz is None:
+        raise CannotRunHere(
+            f"no LEVEL reference for this card: {ref.source}. Every cell this "
+            "arm would write records clock_level_ok undetermined, and alpha "
+            "here is a ratio of two ladders' DIFFERENCE, which a clock sag "
+            "moves and which no gate on the page could then see. Run `python "
+            "scripts/calibrate_hardware.py --publish` on this box first: it is "
+            "a minute against this arm's hour.")
+    print(f"[alias] LEVEL reference: {ref.mhz:.0f} MHz, {ref.source}")
+    return ref
+
+
 def measure_rung(kernel, rung: Rung, design: Design, args,
-                 flusher, order_seed: int, torch, seen_kernels: set) -> dict:
+                 flusher, order_seed: int, torch, seen_kernels: set,
+                 reference_clock_mhz: float) -> dict:
     """Time both variants of one rung, interleaved, on the same tensors.
 
     THE INTERLEAVING IS THE POINT. Normal, aliased and a SECOND normal are timed
@@ -1767,6 +1900,13 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
     unchanged and each pass carries its own instrument, warmup, iteration count
     and three verdicts. `fold_timings` reduces the rung's calls to one set of
     columns with the BAD value dominating.
+
+    `reference_clock_mhz` is REQUIRED and has no default, because a default is
+    how the third verdict came to be undetermined on every published rung: the
+    call below carried the `clock_level_ok` column and passed nothing for
+    `clock_flags` to score it against. `require_reference_clock` resolves it
+    once per run and refuses the run when this card has none, so by here it is a
+    number.
     """
     from moe.bench import timing as T
     from moe.bench.timing import ClockState, clock_drift
@@ -1853,6 +1993,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
                 lambda v=variant: launch(v), warmup_ms=args.warmup,
                 target_ms=args.cell_budget_ms, trials=args.trials,
                 l2_flush=bool(args.l2_flush),
+                reference_clock_mhz=reference_clock_mhz,
                 flusher=flusher if args.l2_flush else None)
             samples[name].append(measured.ms_p50)
             timings.append(measured)
@@ -1871,7 +2012,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
         "weight_bytes": rung.weight_bytes,
         "activation_fraction": rung.activation_fraction,
         "programs": rung.programs, "control": rung.control,
-        "compute": design.compute,
+        **cell_knobs(design),
         "ms": {name: values for name, values in samples.items()},
         "correctness": correctness,
         "isa": [{"variant": r.variant, "source": r.source, "digest": r.digest,
@@ -1882,6 +2023,11 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
         "sm_clock_start": clock_start.sm_clock_mhz,
         "sm_clock_end": clock_end.sm_clock_mhz,
         "clock_drift": drift, "throttled": bool(throttled),
+        # WHAT LEVEL WAS SCORED AGAINST, on the row LEVEL was scored on. A
+        # `clock_level_ok` False with no reference beside it is an exclusion a
+        # reader cannot trace back to a field in a file, and this arm's rows
+        # outlive the pod they were measured on.
+        "reference_clock_mhz": reference_clock_mhz,
         **fold_timings(timings),
         "provenance": "measured",
     }
@@ -2034,10 +2180,20 @@ def measure_probe(design: Design, args, roof_bytes_s: float | None,
     quotes no alpha; the ladder that follows checks both closed forms on every
     rung and `correctness` is a VALIDITY gate, so an alias that did nothing
     cannot reach a published number through this door.
+
+    THE PROBE IS THE SECOND `time_kernel` CALL SITE AND IT NEEDS THE REFERENCE
+    AS MUCH AS THE FIRST. It does not publish a number, but it CHOOSES the
+    pinning the ladder is then measured at, off achieved request bandwidths a
+    sagging clock deflates. A pinning rejected for running at 0.61 of the read
+    roof, when the card was at 0.7 of its clock while it was tried, is the arm
+    stopping itself for the wrong reason and the operator re-renting to find
+    out. Fixing the ladder alone would have been this defect's ninth instance
+    inside its own repair.
     """
     from moe.bench import timing as T
     from moe.bench.timing import L2Flusher, flush_mb_for_device
 
+    reference_clock_mhz = require_reference_clock(torch).mhz
     model = probe_model(design)
     if model is None:
         return []
@@ -2089,6 +2245,7 @@ def measure_probe(design: Design, args, roof_bytes_s: float | None,
                         warmup_ms=PROBE_WARMUP_MS,
                         target_ms=PROBE_CELL_BUDGET_MS, trials=PROBE_TRIALS,
                         l2_flush=bool(args.l2_flush),
+                        reference_clock_mhz=reference_clock_mhz,
                         flusher=flusher if args.l2_flush else None)
                     if variant == "aliased":
                         points.append((rung.tiles, measured.ms_p50))
@@ -2240,7 +2397,7 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
 
     THE ONLY DURATION THIS FILE NAMES IS THE ONE THIS FUNCTION PRINTS. The
     header carried its own copy until 2026-09-03, "three minutes before it
-    spends sixty", against 5.0 KERNEL and 11.8 WALL here, and a header is what a
+    spends sixty", against the figures printed below, and a header is what a
     driver owner books from. The header now states a ratio and no minutes, and
     `test_the_header_quotes_no_duration_of_its_own` scores that ratio against
     this table rather than against the prose.
@@ -2252,6 +2409,16 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
     `PROBE_FIXED_S_PER_PINNING` is added to the WALL figure outright and the
     line says so, so the WALL figure is bookable as printed and the driver's
     `arm_unpriced` entry for this arm can be empty.
+
+    AND THE FIGURE IS THE ARM'S, NOT THIS INVOCATION'S, WHICH IS WHY `probing`
+    IS NOT `args.probe and args.run`. It was, until 2026-09-03, and the page a
+    rental is sized from is the BARE invocation: there is no card yet when an
+    operator books one, so `--run` is false there, the probe's cost was denied,
+    and the only page anybody could read under-booked the arm by the tenth of
+    it the probe spends. Every other error in this table is an over-estimate.
+    `--no-probe` still prints the smaller figure, because that is an operator
+    saying the probe will not be spent, and the BOOKING line below names the
+    command each figure belongs to so the two cannot be confused.
     """
     kernel_ms = estimated_kernel_ms(design, args, roof_bytes_s)
     say()
@@ -2265,6 +2432,12 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
         say("  --publish first; this arm needs that file for its gates as well "
             "as for this line.")
         return
+    say(f"  BOOKING   `alias_ablation.py --run"
+        f"{'' if probing else ' --no-probe'}` on one card. These are that "
+        "RUN's figures,")
+    say("            whether or not this invocation is one: a plan is read "
+        "before there is a card.")
+    say()
     probe_ms = (len(PROBE_PINNINGS) * len(PROBE_TILES) * 2
                 * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_CELL_BUDGET_MS)
                 if probing else 0.0)
@@ -2351,6 +2524,13 @@ def measure(design: Design, args, out_dir: Path, done: set[str]) -> tuple[list[d
 
     from moe.bench.timing import L2Flusher, flush_mb_for_device, runtime_info
 
+    # RESOLVED ONCE PER RUN, not per rung: the answer is a property of this box
+    # and the calibration on it, and a per-rung lookup would read a yaml off
+    # disk for every cell of a metered ladder. It refuses here, before the
+    # kernel is built and before a byte is allocated, so a pod with no
+    # calibration costs a compile rather than an hour.
+    reference_clock_mhz = require_reference_clock(torch).mhz
+
     kernel = build_kernel()
     seen_kernels: set = set()
     meta = runtime_info()
@@ -2374,7 +2554,8 @@ def measure(design: Design, args, out_dir: Path, done: set[str]) -> tuple[list[d
             records.append(record)
             continue
         record = measure_rung(kernel, rung, design, args, flusher,
-                              args.seed + index, torch, seen_kernels)
+                              args.seed + index, torch, seen_kernels,
+                              reference_clock_mhz)
         # deepseek-v3's rung holds 16 GiB; the next model cannot be allocated
         # until the caching allocator gives it back.
         torch.cuda.empty_cache()
@@ -2589,7 +2770,7 @@ def synthesise(design: Design, law: str, seed: int,
             "weight_bytes": rung.weight_bytes,
             "activation_fraction": rung.activation_fraction,
             "programs": rung.programs, "control": rung.control,
-            "compute": design.compute,
+            **cell_knobs(design),
             "ms": {"normal": draw(base_normal), "aliased": draw(base_alias),
                    "placebo": draw(base_normal + drift)},
             "correctness": {"normal": 1e-7, "aliased": 1e-7},
@@ -4005,7 +4186,10 @@ def main(argv: list[str] | None = None) -> int:
     # recovering it is machine-independent.
     pre = preflight(design, l2)
     report_design(say, design, pre, l2, synthetic=bool(args.synthetic))
-    report_cost(say, design, args, roof, probing=bool(args.probe and args.run))
+    # `args.probe` ALONE. `and args.run` denied the probe's cost on the only
+    # page an operator can read before they have a card, which is the page a
+    # rental is sized from. See `report_cost`.
+    report_cost(say, design, args, roof, probing=bool(args.probe))
     report_mde(say, design)
     if any(g.ok is False for g in pre):
         say()
@@ -4229,40 +4413,42 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     records = [r for r in records if r.get("id") in known]
 
     # THE SECOND WAY IN, AND THE ONE THAT DOES NOT DEPEND ON A FILE BEING
-    # RIGHT. Above, `--replay` adopts the mode out of plan.json; here the CELLS
+    # RIGHT. Above, `--replay` adopts the knob out of plan.json; here the CELLS
     # are asked, and they are asked on every path. A plan.json written before
     # 2026-09-03, a hand-edited one, a directory named with `--out` and replayed
     # from somewhere else: all of them reach this line, and every record on both
-    # the measured and the synthetic paths carries its own `compute`. Two walls
+    # the measured and the synthetic paths carries `CELL_KNOBS`. Two walls
     # because there are two ways in, which is the defect this rebuild has hit
-    # eight times.
-    modes = {r.get("compute") for r in records if r.get("compute")}
-    if len(modes) > 1:
-        say()
-        say("REFUSED: these cells were measured in more than one compute mode "
-            f"({', '.join(sorted(modes))}), and one")
-        say("  page cannot score an unbiased estimator and a lower bound as one "
-            "ladder. Split the")
-        say("  directory or re-run with --fresh.")
-        _save(out_dir, say, prov)
-        return exit_codes.REFUSED
-    if modes and modes != {design.compute}:
-        found = modes.pop()
-        design = replace(design, compute=found)
-        say()
-        say(f"## SCORED AS {found.upper()} MODE: the cells say so and this "
-            f"invocation said {args.compute}")
-        say()
-        say(f"  Every record in cells.jsonl carries compute={found}. The design "
-            "this process built")
-        say(f"  said {args.compute}, and the two decide different things: "
-            "prediction_gate answers P1 from")
-        say("  sum and refuses to answer it from dot. The CELLS win, because "
-            "they are the measurement")
-        say("  and the flags are only how it was asked for. The verdict below "
-            "is scored on the mode")
-        say("  named on this line.")
-        args.compute = found
+    # eight times -- and this loop is the eighth: it read `compute` alone while
+    # `--replay` restored BOTH knobs, so a directory holding two alias extents
+    # was pooled into one alpha with nothing on the page saying so.
+    for knob in CELL_KNOBS:
+        stakes = CELL_KNOB_STAKES[knob]
+        seen = {r.get(knob) for r in records if r.get(knob)}
+        if len(seen) > 1:
+            say()
+            say(f"REFUSED: these cells were measured in more than one "
+                f"{stakes['noun']} ({', '.join(sorted(seen))}), and")
+            say(f"  {stakes['mixed']}. Split the")
+            say("  directory or re-run with --fresh.")
+            _save(out_dir, say, prov)
+            return exit_codes.REFUSED
+        if seen and seen != {getattr(design, knob)}:
+            found = seen.pop()
+            design = replace(design, **{knob: found})
+            say()
+            say(f"## SCORED AS {found.upper()} {stakes['heading']}: the cells "
+                f"say so and this invocation said {getattr(args, knob)}")
+            say()
+            say(f"  Every record in cells.jsonl carries {knob}={found}. The "
+                "design this process built")
+            say(f"  said {getattr(args, knob)}, and the two decide different "
+                f"things: {stakes['decides']}.")
+            say("  The CELLS win, because they are the measurement and the "
+                "flags are only how it was")
+            say("  asked for. The verdict below is scored on the value named "
+                "on this line.")
+            setattr(args, knob, found)
 
     timed = [r for r in records if r.get("ms")]
     if not timed:
@@ -4287,6 +4473,36 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
             "interleaved order is what")
         say("  protects a paired difference from that, and the placebo gate is "
             "what measures it.")
+
+    # A COLUMN NOTHING READS IS A COLUMN NOTHING PROTECTS. `clock_level_ok`
+    # reached `cells.jsonl` on every rung and was consulted by no line of this
+    # report, so a card held below the roof's clock for a whole ladder produced
+    # a published alpha with nothing on the page saying so. Planted rows carry
+    # no clock and are not scored against one.
+    if not synthetic:
+        sagged = [r["id"] for r in timed if r.get("clock_level_ok") is False]
+        blind = [r["id"] for r in timed if r.get("clock_level_ok") is None]
+        say()
+        if sagged:
+            say(f"  LEVEL: {len(sagged)} of {len(timed)} rungs ran below "
+                f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
+                f"was measured at: {sagged[:3]}.")
+            say("  D(n) and D(1) are differences between two ladders, and a sag "
+                "part way up one moves")
+            say("  them by different amounts, so the slope over intercept does "
+                "not cancel it. Those")
+            say("  rungs have to be re-measured before their alpha means "
+                "anything.")
+        elif blind:
+            say(f"  LEVEL: UNDETERMINED on {len(blind)} of {len(timed)} rungs. "
+                "They were written with no")
+            say("  reference clock, which is every row this arm wrote before "
+                "2026-09-03, so none of")
+            say("  them can be excluded on the clock it ran at.")
+        else:
+            say(f"  LEVEL: all {len(timed)} rungs ran within "
+                f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
+                "was measured at.")
 
     report_measurements(say, timed, design)
     report_isa(say, timed)
