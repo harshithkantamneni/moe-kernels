@@ -365,12 +365,19 @@ def test_the_surface_states_an_mde_or_says_it_has_none():
 
 def test_the_surface_refuses_an_mde_when_the_noise_floor_is_missing(monkeypatch,
                                                                     tmp_path):
-    """The FAIL branch of the MDE line: no measured floor, no number."""
+    """The FAIL branch of the MDE line: no measured floor, no number.
+
+    `prior_sd` returns `(sd, basis, source)` since 2026-09-03, when it stopped
+    reading `prior_sd` out of the JSON and started going through
+    `replicate_noise_floor.sizing_sigma`. NONE is the third basis: neither a
+    measurement nor a declared prior, and no number.
+    """
     surface = _load("alpha_surface")
     monkeypatch.setattr(surface, "NOISE_FLOOR", tmp_path / "absent.json")
-    sd, why = surface.prior_sd()
+    sd, basis, why = surface.prior_sd()
     assert sd is None
-    assert "unreadable" in why
+    assert basis == "NONE"
+    assert "does not exist" in why
 
 
 def test_the_surface_refuses_an_mde_when_the_floor_records_no_prior_sd(
@@ -379,9 +386,10 @@ def test_the_surface_refuses_an_mde_when_the_floor_records_no_prior_sd(
     path.write_text(json.dumps({"schema": "x", "prior_sd": None}))
     surface = _load("alpha_surface")
     monkeypatch.setattr(surface, "NOISE_FLOOR", path)
-    sd, why = surface.prior_sd()
+    sd, basis, why = surface.prior_sd()
     assert sd is None
-    assert "no prior_sd" in why
+    assert basis == "NONE"
+    assert "prior_sd" in why
 
 
 # --------------------------------------------------------------------------

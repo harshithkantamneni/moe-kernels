@@ -20,12 +20,40 @@ And the lever levels were sorted as TEXT, so the paired-change line named
 summaries were regenerated from the reports at the same time, and the pooled
 versions they replace are kept beside them as SURFACE.pooled.txt.
 
-Every paired comparison now prints an MDE first, from the measured floor in
-`results/published/NOISE_FLOOR.json`, because a lever effect quoted without one
-cannot be told from a lever effect this design could not have found (B14).
+Every paired comparison prints an MDE first, because a lever effect quoted
+without one cannot be told from a lever effect this design could not have found
+(B14). The sigma behind it comes from `replicate_noise_floor.sizing_sigma`,
+which prefers a MEASURED between-replicate floor and falls back to the declared
+s3/s4 proxy with the word ASSUMED. Both words are printed. Until 2026-09-03
+this file read the proxy field out of the JSON itself, so a measured floor
+published by the noise-floor arm would have changed nothing here and every MDE
+below would have stayed sized against the assumption.
+
+REGENERATE THE THREE COMMITTED SUMMARIES WHENEVER THE FLOOR CHANGES. That fix
+made this script's output a function of `results/published/NOISE_FLOOR.json`,
+and the three `SURFACE.txt` beside it are this script's output, committed. The
+day part (a) publishes a measured floor they stop matching, and worse, they go
+on carrying the sentence "part (a) has not run on a card yet" as PUBLISHED
+EVIDENCE about a repository that by then holds the measurement, under a
+detection limit 2.5x too loose wearing the word ASSUMED. Nothing regenerates
+them automatically, so publishing the floor is a two-step act:
+
+    .venv/bin/python scripts/replicate_noise_floor.py ... --publish
+    for a in 2026-09-01-nvidia_h200-alpha-surface-s4 \
+             2026-09-01-nvidia_h200-cross-card-s3 \
+             2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3; do
+      .venv/bin/python scripts/alpha_surface.py "results/published/$a" \
+        > "results/published/$a/SURFACE.txt"
+    done
+
+`test_analysis_tools.test_the_committed_surface_files_regenerate_byte_for_byte`
+is what fails if the second step is skipped. It is the right alarm and it is
+not a false one: a published summary a stranger cannot rebuild from this
+repository is not published evidence, which is the property that test holds.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -34,17 +62,46 @@ from pathlib import Path
 # cannot import `moe` unless the repo happens to be installed or PYTHONPATH
 # happens to be set, and no document says to do either (audit R19/B11). It is
 # the first thing here because the imports below depend on it.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from moe.bench.published import Z_SUM_90_80, paired_mde  # noqa: E402
 
+
+def _load_noise_floor():
+    """Load the study's ONE noise-floor accessor BY PATH. `scripts/` is not a
+    package, and `scripts/bn_decomposition.py` loads the same module the same
+    way for the same reason.
+
+    THE EXPORT CHECK IS THE POINT. This file used to read `prior_sd` straight
+    out of the JSON, which is the s3/s4 proxy and stays the proxy after a pod
+    run publishes a MEASURED replicate floor into the same file. If
+    `sizing_sigma` is ever renamed away, a re-inlined read is what comes back,
+    so the rename fails loudly here instead.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "replicate_noise_floor", ROOT / "scripts" / "replicate_noise_floor.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    missing = [n for n in ("sizing_sigma", "NoiseFloorUnmeasured",
+                           "NOISE_FLOOR_JSON")
+               if not hasattr(module, n)]
+    if missing:
+        raise SystemExit(
+            "scripts/replicate_noise_floor.py no longer exports "
+            f"{', '.join(missing)}. Every MDE this file prints is sized against "
+            "that module's sigma; re-point the accessor rather than reading "
+            "prior_sd out of the JSON again.")
+    return module
+
+
+NOISE = _load_noise_floor()
+
 #: The noise this surface's paired comparisons are read against, and the file
-#: that measured it. `prior_sd` is the s3-vs-s4 paired sd over 11 matched cells
-#: divided by sqrt(2); the file itself calls it an upper bound, because those
-#: two arms differ in `num_stages` as well as in nothing, so it prices a real
-#: replicate floor plus one uncontrolled knob.
-NOISE_FLOOR = Path(__file__).resolve().parent.parent / "results" / "published" \
-    / "NOISE_FLOOR.json"
+#: that carries it. ONE definition, taken from the module that writes the file,
+#: so this script and the floor's own publisher can never point at two paths.
+NOISE_FLOOR = NOISE.NOISE_FLOOR_JSON
 
 #: Below this many memory-bound treads the fit is not a measurement. The sweep
 #: itself refuses a verdict under 3 and says so; this refuses to TABLE it, so a
@@ -106,23 +163,59 @@ def reports(root: Path):
             print(f"  UNREADABLE {p}: {type(exc).__name__}", file=sys.stderr)
 
 
-def prior_sd() -> tuple[float | None, str]:
-    """`(sd of one alpha, where it came from)`, or `(None, why not)`.
+def _checkout_independent(text: str) -> str:
+    """This repo's own path, never the path this checkout happens to live at.
 
-    Read from `results/published/NOISE_FLOOR.json` rather than written here, so
-    the MDE moves when the measured floor does and cannot become a constant
-    somebody chose. None when the file is absent or carries no `prior_sd`: the
-    MDE line then says the surface has no noise model, which is a statement
-    about the study and not a reason to invent one.
+    `sizing_sigma` names the floor file by ABSOLUTE path, and these MDE lines
+    are written into the committed `SURFACE.txt` summaries that
+    `test_analysis_tools` regenerates byte for byte. A published summary
+    carrying /home/whoever/ in it is one a stranger cannot rebuild, which is
+    the exact property that test exists to hold.
+    """
+    return text.replace(str(ROOT) + "/", "")
+
+
+def prior_sd(path: Path | None = None) -> tuple[float | None, str, str]:
+    """`(sd of one alpha, MEASURED / ASSUMED / NONE, where it came from)`.
+
+    THE BUG THIS FIXES, and it is the second call site of a fix that already
+    landed. This function read `payload["prior_sd"]` out of the JSON directly.
+    That field is the s3-vs-s4 proxy: the paired sd over 11 matched cells
+    divided by sqrt(2), an UPPER bound because those two arms differ in
+    `num_stages` as well as in nothing. A measured between-replicate floor is
+    published into `replicate_floor` of the SAME file and leaves `prior_sd`
+    untouched, so after the 120-minute part (a) arm this file would have gone on
+    sizing every MDE it prints against the assumption, and every "below the
+    detection limit" verdict below would have been scored against the wrong
+    denominator. `replicate_noise_floor.sizing_sigma` is the one accessor that
+    prefers the measurement and falls back to the proxy, and it is now the only
+    way this file gets a sigma.
+
+    THE BASIS WORD TRAVELS WITH THE NUMBER because a sigma printed without it
+    reads as a measurement, and for most of this study's life it will not be
+    one. `NONE` is the third state: the file is absent, unreadable or carries
+    neither a floor nor a usable prior, and the MDE line then says the surface
+    has no noise model, which is a statement about the study and not a reason
+    to invent one.
+
+    The field is `sizing_sigma`'s own default, `alpha_corrected`, which is the
+    column the floor is pooled over. It is not the raw `alpha` this table's
+    paired medians are taken in; the two differ by the reference's fixed cost
+    and by 0.001-0.015 on the published arms, and the MDE is the looser of the
+    two readings.
     """
     try:
-        doc = json.loads(NOISE_FLOOR.read_text())
-    except (OSError, ValueError) as exc:                  # noqa: BLE001
-        return None, f"{NOISE_FLOOR.name} unreadable ({type(exc).__name__})"
-    sd = doc.get("prior_sd")
-    if not sd:
-        return None, f"{NOISE_FLOOR.name} records no prior_sd"
-    return float(sd), f"{NOISE_FLOOR.name}: {doc.get('prior_sd_source', 'unsourced')}"
+        sd, basis, source = NOISE.sizing_sigma(path or NOISE_FLOOR)
+    except NOISE.NoiseFloorUnmeasured as exc:
+        return None, "NONE", _checkout_independent(" ".join(str(exc).split()))
+    except (OSError, ValueError) as exc:
+        # `sizing_sigma` promises `NoiseFloorUnmeasured` but `noise_floor`
+        # parses the JSON before its own guards, so a TRUNCATED file arrives
+        # here as a decode error. A surface that dies on a corrupt floor prints
+        # no table at all; one that says NONE prints the table with no MDE.
+        return None, "NONE", (f"{NOISE_FLOOR.name} unreadable "
+                              f"({type(exc).__name__})")
+    return sd, basis, _checkout_independent(source)
 
 
 def print_mde(n_pairs: int) -> None:
@@ -134,7 +227,7 @@ def print_mde(n_pairs: int) -> None:
     not move" below has been read without the one number that says which of them
     the design could have detected.
     """
-    sd, source = prior_sd()
+    sd, basis, source = prior_sd()
     if sd is None:
         print(f"  MDE: NOT STATED -- {source}. Every paired change below is "
               "therefore")
@@ -150,9 +243,15 @@ def print_mde(n_pairs: int) -> None:
     mde = paired_mde(sd_diff, n_pairs)
     print(f"  MDE {mde:.3f} alpha over {n_pairs} matched cells (paired, 90% "
           f"two-sided, 80% power,")
-    print(f"  z-sum {Z_SUM_90_80:.4f}, sd of one alpha {sd:.4f} so sd of a "
-          f"paired difference {sd_diff:.4f}).")
-    print(f"  ASSUMPTION, and it is an upper bound: {source}.")
+    print(f"  z-sum {Z_SUM_90_80:.4f}, {basis} sd of one alpha {sd:.4f} so sd "
+          f"of a paired difference {sd_diff:.4f}).")
+    # The word is on the sigma AND on its own line: an operator reading only
+    # the numeric line must still be able to tell a measured floor from the
+    # assumed proxy without opening the JSON.
+    if basis == "MEASURED":
+        print(f"  MEASURED, a between-replicate floor: {source}.")
+    else:
+        print(f"  {basis}, and it is an upper bound: {source}.")
     print("  A paired median below this is an unmeasured change, not a small "
           "one.")
 
