@@ -67,6 +67,22 @@ and it is what C4 asks about. The instrument term compares two loops and is
 scored separately, only when the clock LEVEL says this run is comparable with
 the roof at all. A run that cannot tell them apart says so instead of
 attributing the difference to whichever of the two the author had in mind.
+
+THE REGISTERED RULE IN docs/ IS THE OLD ONE, AND THIS FILE NO LONGER SCORES IT
+-----------------------------------------------------------------------------
+`docs/INSTRUMENTATION.md` (the C4 section) pre-registers the decision as "if
+some formulation beats 4483.4, C4 is confirmed"; `docs/STUDY.md`'s order of work
+records C4 as resolved under that rule. That ABSOLUTE test is not a gate
+anywhere in this file any more, and deliberately so: it compares a number from
+this loop against a constant from a different one, at 2.14%, on an apparatus
+whose cross-instrument bias was bounded at 8-16%. What is scored instead is
+`C4_formulation`, the WITHIN-RUN ratio best/baseline against the same 2.14%
+margin, plus `C4_instrument` for the loop-to-loop half, so the two halves are
+attributed rather than summed. Changing a pre-registered rule is a change to the
+study, not to a script: docs are out of this slice, so this paragraph is the
+hand-off, and the divergence stands in the tree until someone edits those two
+files. A reader who trusts docs/ today gets a registered rule and a scored rule
+that differ.
 """
 from __future__ import annotations
 
@@ -415,6 +431,15 @@ def report(readings: list[Reading], gates, registered_gbps: float,
     The two terms are printed as a product because that is the only form in
     which the total is attributable: the old report printed the total alone and
     the reader had to assume the whole of it was formulation.
+
+    EVERY RATIO HERE NAMES ITS OWN DENOMINATOR. The formulation term is scored
+    against ANOMALY_MARGIN because both are within-run ratios of one loop's
+    rows. The total is not: it telescopes to `best / registered_gbps`, so its
+    threshold is ANOMALY_GBPS over that same `registered_gbps` and is computed,
+    not quoted from a constant built on a figure this run may not be using.
+    Mixing the two put an 11x misstatement of the residual in the transcript,
+    which is this file's only artefact -- it writes no report.json -- and no
+    gate scores the total, so nothing else would have caught it.
     """
     lines = [f"{'variant':34} {'GB/s':>9} {'vs baseline':>12} {'clock':>8}  flags",
              "-" * 86]
@@ -443,8 +468,23 @@ def report(readings: list[Reading], gates, registered_gbps: float,
             f"  instrument   {instrument:.4f}x   {BASELINE} here over the "
             f"registered {registered_gbps:.1f} GB/s",
             f"               {registered_source}",
-            f"  total        {formulation * instrument:.4f}x   against the "
-            f"{ANOMALY_MARGIN:.4f} the anomaly needs",
+            # THE TOTAL CARRIES THE REGISTERED FIGURE'S DENOMINATOR, SO ITS
+            # THRESHOLD MUST TOO. `formulation * instrument` telescopes to
+            # `best / registered_gbps`, and `registered_gbps` is whatever
+            # `registered_read` found -- 4469.6 on the H200 today, not the
+            # 4389.4 the anomaly was computed against. Printed against
+            # ANOMALY_MARGIN (4483.4 / 4389.4) it compared a ratio to a
+            # threshold with a different denominator: on the real committed
+            # yaml a run 0.18 points short of the anomaly read as 2.0 points
+            # short, an 11x misstatement of the residual on a 2.14% margin.
+            # Off GPU it is invisible, because --self-test pins `registered` to
+            # 4389.4, the one value that makes the two denominators coincide.
+            # So the threshold is recomputed here against the SAME denominator
+            # and both ends of it are printed rather than named by a constant.
+            f"  total        {formulation * instrument:.4f}x   {best.name} at "
+            f"{best.gbps:.1f} GB/s over that registered {registered_gbps:.1f}; "
+            f"the anomaly needs {ANOMALY_GBPS:.1f} / {registered_gbps:.1f} = "
+            f"{ANOMALY_GBPS / registered_gbps:.4f}x",
             "",
             "  The anomaly is explained by whichever term carries it. Only the",
             "  first is a statement about formulations; the second is two loops",

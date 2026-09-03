@@ -261,6 +261,72 @@ def test_the_registered_read_figure_comes_from_the_committed_calibration():
     assert "no committed calibration" in why
 
 
+def _terms(readings, registered):
+    """The THE TWO TERMS block, rendered against a registered figure of choice.
+
+    `--self-test` pins `registered` to REGISTERED_READ_GBPS, which is the ONE
+    value that makes the total's two denominators coincide, so every gate test
+    above exercises only the degenerate case. These go through `report` directly
+    for that reason.
+    """
+    gates = CRV.score(readings, H200, registered)
+    lines = CRV.report(readings, gates, registered, "planted for this test")
+    return {ln.split()[0]: ln for ln in lines
+            if ln.startswith(("  formulation", "  instrument", "  total"))}
+
+
+def test_the_total_is_scored_against_the_denominator_it_actually_carries():
+    """THE MIXED-DENOMINATOR TRAP, and it only shows off the degenerate case.
+
+    `formulation * instrument` telescopes to `best / registered_gbps`, and
+    `registered_gbps` is the committed calibration's 4469.6 on the H200, not the
+    4389.4 ANOMALY_MARGIN was built on. Printed against ANOMALY_MARGIN, the
+    2026-08-27 pod world read as 1.0013x "against the 1.0214 the anomaly needs"
+    -- 2.0 points short when it is 0.18 points short, an 11x misstatement of the
+    residual on a 2.14% margin, in a transcript that is this file's only
+    artefact. The threshold has to be recomputed against the same denominator.
+    """
+    registered, _src = CRV.registered_read(H200)
+    assert registered == pytest.approx(4469.6, abs=0.1), "the premise moved"
+    terms = _terms(CRV.plant(4475.6 / 4463.0, "none"), registered)
+    needed = CRV.ANOMALY_GBPS / registered
+    assert needed == pytest.approx(1.0031, abs=0.0001)
+    assert f"{needed:.4f}" in terms["total"]
+    assert f"{CRV.ANOMALY_MARGIN:.4f}" not in terms["total"]
+    assert "4483.4" in terms["total"] and f"{registered:.1f}" in terms["total"]
+
+
+def test_the_total_line_names_the_absolute_rate_it_is_a_ratio_of():
+    """A ratio whose numerator is not printed cannot be re-derived by a reader
+    holding a different registered figure, which is exactly the reader this
+    file's transcript has."""
+    registered, _src = CRV.registered_read(H200)
+    terms = _terms(CRV.plant(4475.6 / 4463.0, "none"), registered)
+    assert "4475.6" in terms["total"]
+    assert "torch.sum(dim=1)" in terms["total"]
+
+
+def test_the_within_run_gate_still_scores_against_the_within_run_margin():
+    """The other half: ANOMALY_MARGIN is right for `C4_formulation`, because
+    both ends of THAT ratio are rows from this run. Only the total telescoped
+    onto a foreign denominator."""
+    registered, _src = CRV.registered_read(H200)
+    gates = _gates(CRV.plant(CRV.ANOMALY_MARGIN + 0.001, "none"),
+                   registered=registered)
+    assert gates["C4_formulation"][0] == EX.PASS
+    assert f"{CRV.ANOMALY_MARGIN:.4f}" in gates["C4_formulation"][1]
+
+
+def test_the_self_test_denominator_is_the_one_that_hides_the_trap():
+    """Named so nobody re-derives the coverage hole. Off GPU `registered` is
+    pinned to REGISTERED_READ_GBPS, and there ANOMALY_GBPS / registered IS
+    ANOMALY_MARGIN, so the CLI transcript can never distinguish the two."""
+    degenerate = CRV.ANOMALY_GBPS / CRV.REGISTERED_READ_GBPS
+    assert degenerate == pytest.approx(CRV.ANOMALY_MARGIN)
+    committed, _src = CRV.registered_read(H200)
+    assert CRV.ANOMALY_GBPS / committed != pytest.approx(CRV.ANOMALY_MARGIN)
+
+
 def test_the_retired_call_count_flags_are_gone():
     """`--iters 50` and `--warmup 5` were CALL COUNTS. `time_kernel` warms for a
     DURATION of delivered GPU load and derives its own iteration count, and

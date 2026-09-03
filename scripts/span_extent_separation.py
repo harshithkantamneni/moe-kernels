@@ -4246,7 +4246,7 @@ def _main(argv: list[str] | None = None) -> int:
             raise SystemExit(
                 f"--arms must include {required}: the three corners of the 2x2 "
                 "are the whole experiment, and dropping one leaves a comparison "
-                "with nothing to separate.")
+                "with nothing to separate. Nothing measured.")
 
     cells, notes = plan_cells(models, tokens, args.dtype, args.densify)
     card = detect_card()
@@ -4650,10 +4650,30 @@ def main(argv: list[str] | None = None) -> int:
     Wrapped around `_main` rather than installed at the `__main__` guard so the
     contract holds for a caller of `main()` -- the tests, and anything that
     imports this file -- as well as for the CLI. `SystemExit` is a
-    `BaseException` and passes through untouched: a refusal is not a crash.
+    `BaseException`, so the `except Exception` arm cannot catch it: a refusal is
+    not a crash.
+
+    A STRING REFUSAL IS REFUSED (2) AND NOT CLAIM_FAIL. `raise SystemExit("some
+    sentence")` sets `SystemExit.code` to the STRING, and the interpreter turns
+    a non-integer code into exit ONE. One is CLAIM_FAIL, which the paragraph
+    above spends itself explaining is a RESULT: `--arms fused,cutlass_up`
+    dropped a corner of the 2x2 and measured NOTHING, and the driver filed that
+    as a refutation of the claim and never re-ran the arm. The sibling arms
+    `occupancy_vs_swizzle` and `bn_decomposition` already convert here; this
+    file had only the crash half of the handler, so its one string refusal at
+    `_main` still exited one. Caught at the handler rather than at the raise
+    site so a refusal added later cannot reintroduce it by forgetting the code,
+    and an INTEGER code is re-raised untouched, because argparse's own
+    `SystemExit(2)` is already the right number and is not ours to relabel.
     """
     try:
         return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
     except Exception:                                   # noqa: BLE001
         traceback.print_exc()
         print("ERROR: span_extent_separation crashed before it could reach a "
