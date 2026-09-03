@@ -222,7 +222,10 @@ def test_the_worlds_the_measured_alphas_describe_write_a_report_instead_of_crash
     G=1 alphas on both cards are 0.92-1.02, so the analysis crashed in exactly
     the world the data points at."""
     rc, payload = run(["--self-test", str(alpha)], tmp_path)
-    assert rc == exit_codes.DONE
+    # A REPORT, and a code from the gates rather than from the crash. These
+    # worlds falsify claims, so CLAIM_FAIL is the RESULT; what this test denies
+    # is ERROR, which is what a TypeError before the write looked like.
+    assert rc == exit_codes.CLAIM_FAIL
     assert payload, "report.json was not written"
     assert payload["alpha"] == pytest.approx(alpha)
 
@@ -459,7 +462,9 @@ def test_the_parallel_world_reaches_the_json_as_undecided(tmp_path):
     `test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to`; asserting
     the row alone is what let the gate go on contradicting it."""
     rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
-    assert rc == exit_codes.DONE
+    # UNDECIDED is UNKNOWN in the shared table and UNKNOWN is not PASS, so this
+    # world's code is CLAIM_FAIL and always was; it used to be folded into 0.
+    assert rc == exit_codes.CLAIM_FAIL
     row = payload["ladder"]["128"]
     assert row["undecided"] is True
     assert row["outcome"] == BM.UNDECIDED_PARALLEL_BRANCH
@@ -525,6 +530,8 @@ def test_the_low_clock_world_reports_the_exclusion_in_the_report(tmp_path):
     the only part a ladder fit could have seen. Reporting one of them as the
     other is how "one cell was dropped" came to stand for nine."""
     rc, payload = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path)
+    # DONE, and it is a real one: this world plants an excluded tread and every
+    # gate still passes over what is left. Nothing is folded to get here.
     assert rc == exit_codes.DONE
     assert payload["cells_excluded_for_clock_level"] == 9
     assert payload["cells_excluded_for_clock_level_from_ladders"] == 1
@@ -640,15 +647,20 @@ def test_the_log_recomputes_the_exit_code_the_process_returned(tmp_path, capsys)
     assert exit_codes.classify_text(printed) == rc
 
 
-def test_a_falsified_claim_is_a_successful_run_unless_the_caller_says_otherwise(
+def test_a_falsified_claim_is_claim_fail_with_or_without_the_retired_flag(
         tmp_path):
-    """Both halves of `--fail-on-gate`'s contract, and the code comes from the
-    table either way."""
+    """NOTHING IS FOLDED INTO DONE. `--fail-on-gate` used to decide the code:
+    without it a CLAIM_FAIL was RETURNED AS 0 while the log carried
+    `RESULT: CLAIM ... FAIL`, so `classify_text` read 1 out of the log and the
+    process said 0. The flag is retired, accepted and ignored, because
+    CLAIM_FAIL (1) is already in `FINISHED_CODES` and `ledger_state(1)` is
+    "CLAIM_FAIL": 1 tells the driver "a result, do not retry" and 0 protected
+    nothing."""
     with_flag = BM.main(["--self-test", "0.85", "--fail-on-gate",
                          "--out", str(tmp_path / "a")])
     without = BM.main(["--self-test", "0.85", "--out", str(tmp_path / "b")])
     assert with_flag == exit_codes.CLAIM_FAIL
-    assert without == exit_codes.DONE
+    assert without == exit_codes.CLAIM_FAIL
 
 
 def test_an_undecided_gate_counts_against_the_gate_not_for_it():
@@ -765,7 +777,7 @@ def test_an_undecided_gate_is_never_counted_as_a_pass_by_the_pod_session_grep(
     compares counts of PASS and of FAIL instead."""
     rc = BM.main(["--self-test-world", BM.PARALLEL_WORLD, "--out", str(tmp_path)])
     printed = capsys.readouterr().out
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     results = exit_codes.parse_result_lines(printed)
     assert exit_codes.UNKNOWN in [r.verdict for r in results], (
         "this world exists to put an unscored gate in the log")
@@ -1001,7 +1013,7 @@ def test_the_dry_run_prints_the_instruments_own_cost_and_says_what_it_charged(
     error is invisible again."""
     rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run"])
     printed = capsys.readouterr().out
-    assert rc == 0
+    assert rc == exit_codes.DONE
     secs = float(re.search(r"estimated GPU time (\d+) s", printed).group(1))
     grid = BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
     assert secs == pytest.approx(len(grid) * len(TILES) * 1.5, rel=0.15)
@@ -1171,7 +1183,7 @@ def test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to(tmp_path):
     returned PASS, two lines below printing that sentence. It is UNDECIDED now,
     which `classify` scores as a claim gate that did not pass."""
     rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     g3 = next(g for g in payload["gates"] if g["number"] == 3)
     assert g3["verdict"] == "UNDECIDED"
     assert g3["provenance"]["blocked_by_target_tile"] is True
@@ -1217,9 +1229,163 @@ def test_the_exit_line_never_says_both_that_gates_passed_and_that_one_did_not(
     happen, that is the same defect in miniature."""
     rc = BM.main(["--self-test", "0.85", "--out", str(tmp_path)])
     printed = capsys.readouterr().out
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     exit_lines = [ln for ln in printed.splitlines() if ln.startswith("exit ")]
     assert len(exit_lines) == 1
     assert exit_codes.describe(exit_codes.CLAIM_FAIL) in exit_lines[0]
     assert "every VALIDITY and CLAIM gate PASSED" not in printed
-    assert "reported as exit 0 without --fail-on-gate" in printed
+    # AND THE LINE THAT USED TO SAY THE OPPOSITE IS GONE, not reworded: there is
+    # no longer a code to fold into, so nothing may say there is.
+    assert "reported as exit 0" not in printed
+    assert "a claim that did not pass is a RESULT" in printed
+
+
+# --------------------------------------------------------------------------
+# A THIRD PASS on 2026-09-02. The whole-repo verification found that the
+# apparatus rebuild had left this file's contract in three states no other arm
+# was in: a planted world could overwrite a metered one, a crash was ledgered as
+# a refutation, and `--dry-run` and `--fail-on-gate` still folded two different
+# things into DONE.
+# --------------------------------------------------------------------------
+
+def test_three_planted_worlds_write_three_directories(tmp_path):
+    """W1. `--self-test 0.2`, `--self-test 0.9` and
+    `--self-test 0.2 --self-test-noise 0.5` all derived
+    `nocard-budget400.0-...-e77c8230`, so each planted world overwrote the last
+    and no two self-tests could be compared. The alpha, the noise and the world
+    are knobs like any other: they decide every number in the report."""
+    for argv in (["--self-test", "0.2"], ["--self-test", "0.9"],
+                 ["--self-test", "0.2", "--self-test-noise", "0.5"],
+                 ["--self-test", "0.2", "--self-test-world", BM.LOW_CLOCK_WORLD]):
+        BM.main([*argv, "--out", str(tmp_path)])
+    dirs = sorted(p.name for p in (tmp_path / "block_m_crossing").iterdir())
+    assert len(dirs) == 4, dirs
+    assert all(d.startswith("synthetic-") for d in dirs), dirs
+    assert all((tmp_path / "block_m_crossing" / d / "report.json").exists()
+               for d in dirs)
+
+
+def test_a_planted_run_is_never_named_for_the_card_it_did_not_measure():
+    """W1, THE POD HALF AND THE EXPENSIVE ONE. `detect_card_slug` returns the
+    ATTACHED device whether or not anything was measured, so one free
+    `--self-test 0.10` on the metered machine landed in the metered run's own
+    directory and its unconditional `report.json` write replaced the paid arm's
+    only machine-readable artefact with a synthetic one carrying the retracted
+    alpha. The card component says `synthetic` and that is also the directory's
+    prefix; the attached card survives in the key so two pods' self-tests are
+    still two directories."""
+    parser = BM.build_parser()
+    measured = BM.default_run_id(parser.parse_args([]), "NVIDIA H200")
+    planted = BM.default_run_id(parser.parse_args(["--self-test", "0.10"]),
+                                "NVIDIA H200")
+    assert measured.startswith("nvidia_h200-")
+    assert planted.startswith(f"{BM.SYNTHETIC_CARD_SLUG}-")
+    assert "nvidia_h200" not in planted
+    on_a100 = BM.default_run_id(parser.parse_args(["--self-test", "0.10"]),
+                                "NVIDIA A100-SXM4-80GB")
+    # The planted world's ridge and bandwidth come from the attached card's own
+    # calibration even under --self-test, so these are two different worlds.
+    assert planted != on_a100
+
+
+def test_a_world_planted_without_an_alpha_is_still_a_planted_run():
+    """`--self-test-world` implies `--self-test` in `main`, and the id has to
+    apply the same rule or a caller that derives the id first gets a MEASURED
+    run's directory for a planted run."""
+    parser = BM.build_parser()
+    world = BM.default_run_id(
+        parser.parse_args(["--self-test-world", BM.PARALLEL_WORLD]), "nocard")
+    assert world.startswith(f"{BM.SYNTHETIC_CARD_SLUG}-")
+    assert world != BM.default_run_id(parser.parse_args([]), "nocard")
+
+
+def test_the_run_id_still_refuses_a_planted_run_with_no_card():
+    """The synthetic card names the RUN, not the machine, and it may not become
+    a way of not saying which machine generated the world."""
+    from moe.bench import provenance as PV
+    args = BM.build_parser().parse_args(["--self-test", "0.558"])
+    with pytest.raises(PV.NoCard):
+        BM.default_run_id(args, "")
+
+
+def test_a_crash_is_error_and_not_a_refuted_claim(tmp_path, capsys):
+    """W2. An unhandled exception exits the interpreter ONE, and 1 is
+    CLAIM_FAIL: in `FINISHED_CODES`, recorded by the driver, never retried. A
+    torch OOM three cells into a rented pod would have been filed as one of this
+    experiment's registered outcomes. ERROR (4) is outside `FINISHED_CODES`
+    precisely so the driver can tell "the apparatus broke" from "the claim did
+    not hold"."""
+    def boom(*a, **kw):
+        raise RuntimeError("planted: torch OOM in the middle of the grid")
+
+    original = BM.build_grid
+    BM.build_grid = boom
+    try:
+        rc = BM.main(["--self-test", "0.558", "--out", str(tmp_path)])
+    finally:
+        BM.build_grid = original
+    err = capsys.readouterr().err
+    assert rc == exit_codes.ERROR
+    assert rc not in exit_codes.FINISHED_CODES
+    # The traceback is not swallowed: a code with no reason in it tells an
+    # operator nothing about what to fix.
+    assert "planted: torch OOM" in err
+
+
+def test_a_string_system_exit_is_a_refusal_and_not_a_refuted_claim(capsys):
+    """The other half of W2, and the live instance. `require_override_config`
+    does `raise SystemExit(<str>)` when vLLM has renamed the export; the
+    interpreter turns a string code into exit 1, so a refusal about the
+    INSTALLED PACKAGE, which measured nothing, exited with the code reserved for
+    a measured refutation."""
+    def gone():
+        raise SystemExit("could not find vLLM's override_config in any of: ...")
+
+    original = BM._main
+    BM._main = lambda argv=None: gone()
+    try:
+        rc = BM.main([])
+    finally:
+        BM._main = original
+    assert rc == exit_codes.REFUSED
+    assert "REFUSED: could not find vLLM's override_config" in capsys.readouterr().err
+
+
+def test_a_dry_run_scores_no_gate_and_its_code_is_the_one_open_dissent(
+        tmp_path, capsys):
+    """W3, THE HALF THAT DID NOT MOVE, PINNED SO IT CANNOT MOVE BY ACCIDENT.
+
+    The census in `scripts/bm128_depth.py`'s dry-run branch picked REFUSED: a
+    plan scores no gate and prints no RESULT line, so `classify_text` over its
+    log raises `NoGatesScored`, which is the REFUSED shape, while DONE means
+    "measured; every gate PASSED". This file still returns DONE, and the
+    dry-run branch says why: `scripts/replicate_noise_floor.py:sweep_cost` runs
+    this exact branch as a subprocess and drops the whole pod budget line on any
+    non-zero code, and three assertions in files this slice does not own read
+    the 0 directly. The disagreement is asserted here so it is a known state
+    with a named blocker rather than an unexamined one, and so the day the four
+    files move together this test is what says the fifth has to."""
+    rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run",
+                  "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.DONE
+    assert not [ln for ln in printed.splitlines()
+                if ln.startswith(exit_codes.RESULT_PREFIX)]
+    # THE DISSENT, IN ONE LINE: the log's own shape classifies as REFUSED and
+    # the process returns DONE.
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(printed)
+    # A plan writes nothing at all, which is the half that IS consistent.
+    assert not (tmp_path / "block_m_crossing").exists()
+    # And the one consumer that reads the code rather than the log still gets
+    # its cost line, which is the whole reason the code has not moved.
+    assert re.search(r"estimated GPU time\s+[0-9.]+\s*s", printed)
+
+
+def test_the_retired_flag_is_still_accepted_so_an_old_driver_line_parses():
+    """`scripts/pod_session.sh` passes `--fail-on-gate`. Retiring a flag by
+    deleting it turns every driver line that names it into an argparse exit 2,
+    which is REFUSED, on the pod, in the arm the session was rented for."""
+    args = BM.build_parser().parse_args(["--fail-on-gate"])
+    assert args.fail_on_gate is True
+    assert "RETIRED" in BM.build_parser().format_help()

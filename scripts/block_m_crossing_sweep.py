@@ -122,7 +122,11 @@ EXIT CODES AND THE ONE GREPPABLE LINE. `moe.bench.exit_codes` owns both. Every
 scored gate prints exactly one `RESULT: KIND NAME VERDICT detail` line, the
 process exit code comes from `exit_codes.classify` over the same gates, and a
 refusal exits REFUSED before anything is measured. Nothing else in the output is
-a gate result.
+a gate result. NOTHING IS FOLDED: `--fail-on-gate` is retired, accepted and
+ignored, because a CLAIM_FAIL reported as DONE is a log and a process saying two
+different things about one run, and 1 is already the code that tells the ledger
+a claim was refuted rather than that the apparatus broke. An unplanned
+exception exits ERROR (4), not the interpreter's 1, for the same reason.
 
 OFF-GPU. `--self-test ALPHA` generates the cells from the physical model at that
 alpha and runs the entire analysis on them, so the gates, the fits and the
@@ -130,9 +134,12 @@ report are exercised on a laptop, and so the claim "these gates can tell 0.558
 from 0.10" is checkable rather than asserted. `--self-test-world` plants the two
 worlds that are not a single alpha: a low-clock tread, which must be excluded,
 and a memory branch parallel to the compute branch, which must come out
-UNDECIDED. `--dry-run` prints the grid, the predictions and the cost estimate
-without touching a GPU. Absent torch, CUDA or vLLM the script says which one is
-missing and what to run instead.
+UNDECIDED. Every planted run writes under a `synthetic-` directory that names
+the alpha, the noise and the world, so one self-test can never overwrite another
+and none of them can land in a metered run's directory. `--dry-run` prints the
+grid, the predictions and the cost estimate without touching a GPU. Absent
+torch, CUDA or vLLM the script says which one is missing and what to run
+instead.
 """
 from __future__ import annotations
 
@@ -146,6 +153,7 @@ import re
 import statistics
 import sys
 import time
+import traceback
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
@@ -893,6 +901,19 @@ def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
 #: generated one, and a self-test that stamped the real basis on its own
 #: fabrications would make that impossible.
 SYNTHETIC_INSTRUMENT = "synthetic/model-generated/not-measured"
+
+#: What a planted run calls its CARD, in the run id and nowhere else.
+#: `detect_card_slug` returns the ATTACHED device, and on a pod that is a real
+#: card that measured nothing here: a free `--self-test 0.10` landed in the
+#: metered run's own directory and its `report.json` write replaced the paid
+#: arm's only machine-readable artefact with a synthetic one carrying the
+#: retracted alpha. `run_id` puts the card slug at the FRONT, so naming the card
+#: `synthetic` is also what prefixes the directory, and `ls` sorts every planted
+#: world away from every measurement. The attached card is not lost: it travels
+#: as the `synthhost` knob, because the planted world's ridge and bandwidth are
+#: resolved from that card's own calibration and two pods' self-tests are
+#: therefore two different worlds.
+SYNTHETIC_CARD_SLUG = "synthetic"
 
 #: Clock the synthetic cells claim to have run at, and the reference they are
 #: scored against. Two numbers rather than one so the low-clock world below can
@@ -3980,9 +4001,41 @@ def default_run_id(args, card: str) -> str:
     both set the measured milliseconds: `warmup` (now a duration of sustained
     load) and `l2_flush`, which changes whether every timed iteration starts
     with a cold L2.
+
+    THE PLANTED WORLD IS PART OF THE KEY, AND IT WAS THE LAST OMISSION. Until
+    2026-09-02 `--self-test`, `--self-test-noise` and `--self-test-world` named
+    nothing: `--self-test 0.2`, `--self-test 0.9` and
+    `--self-test 0.2 --self-test-noise 0.5` all derived one id, so each planted
+    world overwrote the last and a self-test could not be compared with the
+    self-test before it. On a pod it was worse than that. The card came from
+    `detect_card_slug`, which returns the ATTACHED device whether or not
+    anything was measured, so one free `--self-test 0.10` on the metered machine
+    landed in the metered run's directory and the unconditional
+    `report.json` write replaced the paid arm's only machine-readable artefact
+    with a synthetic one carrying the retracted alpha. `scripts/tile_cap_test.py`
+    documented this exact failure and keyed on `planted`/`plantnoise`; this file
+    did not get the same treatment until now.
+
+    A PLANTED RUN'S CARD IS `SYNTHETIC_CARD_SLUG`, and that is also the
+    `synthetic-` prefix: `run_id` renders the card slug FIRST, so the directory
+    already begins `synthetic-` and emitting the word twice would be two names
+    for one fact. The attached card stays in the key as `synthhost`, because
+    `resolve_ridge` and `resolve_bandwidth` read that card's calibration even
+    under `--self-test`, so the same planted alpha is a different world on two
+    pods and the two must not share a directory either. Its NAME is chosen to
+    sort after the planted knobs: `run_id` truncates the visible part at 96
+    characters in name order, and what a reader needs in `ls` is which world was
+    planted, not which machine generated it.
+
+    `--self-test-world` IMPLIES `--self-test` HERE THE SAME WAY `main` IMPLIES
+    IT, so the id does not depend on which of the two flags turned the run
+    synthetic. A caller that reaches this function before `main` has applied
+    that rule would otherwise get a measured run's id for a planted run.
     """
-    return PV.run_id(
-        card=card,
+    planted = args.self_test
+    if planted is None and args.self_test_world:
+        planted = ALPHA
+    swept = dict(
         model=args.model,
         dtype=args.dtype,
         tiles=tuple(int(v) for v in args.tiles.split(",")),
@@ -4003,7 +4056,21 @@ def default_run_id(args, card: str) -> str:
         # else, so the day a sampled-routing arm appears its cells must not land
         # in a balanced arm's directory and be skipped as already measured.
         routing="balanced",
+        # NEVER None: `run_id` refuses an unresolved knob, and it is right to.
+        # "measured" is a RESOLVED value that says a real card was asked; a
+        # planted alpha is a different resolved value, and "none" is the world
+        # that is not one of the two named ones.
+        planted="measured" if planted is None else planted,
+        plantnoise=args.self_test_noise,
+        plantworld=args.self_test_world or "none",
     )
+    if planted is None:
+        return PV.run_id(card=card, **swept)
+    # `card_slug` here and not below, so an empty card still raises `NoCard`
+    # rather than `UnresolvedKnob`: the caller's mistake is the same one either
+    # way and it should get the same sentence.
+    return PV.run_id(card=SYNTHETIC_CARD_SLUG, synthhost=PV.card_slug(card),
+                     **swept)
 
 
 # --------------------------------------------------------------------------
@@ -4157,10 +4224,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "than blank. Implies --self-test at the refit alpha "
                          "unless one is given")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit with the moe.bench.exit_codes code for the gate "
-                         "verdicts (CLAIM_FAIL 1, INVALID 3) instead of DONE. "
-                         "Off by default because a falsified prediction is a "
-                         "successful run, not a failed one")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         f"still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "reads as a finished result rather than a retry; "
+                         "folding it into 0 made the log disagree with the "
+                         "process")
     return ap
 
 
@@ -4694,16 +4763,20 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
         gpu_name)
 
 
-def main(argv=None) -> int:
-    """The one entry point, and the one place an exit code is chosen.
+def _main(argv=None) -> int:
+    """The run itself. `main` wraps it; every return here is an exit code.
 
-    Every return here is a member of `moe.bench.exit_codes`'s table:
-    REFUSED (2) before anything is measured, ERROR (4) for an exception nobody
-    planned for, and otherwise `classify` over the scored gates. Without
-    `--fail-on-gate` a CLAIM_FAIL is reported as DONE, because a falsified
-    pre-registered claim is a successful run and the flag's whole purpose is to
-    say when the caller wants otherwise; a VALIDITY failure is INVALID either
-    way, since nothing on the page may be quoted after one.
+    Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
+    before anything is measured, and otherwise `classify` over the scored gates
+    with nothing folded. `--dry-run` still returns DONE and is the one place
+    this file dissents from the repository's census; the dry-run branch carries
+    the reason and names the four files that have to move with it.
+
+    `--fail-on-gate` is retired: a CLAIM_FAIL is returned as 1 whether or not it
+    is passed, because a falsified pre-registered claim is a successful
+    experiment and 1 is already the code that says so to the ledger.
+    A VALIDITY failure is INVALID either way, since nothing on the page may be
+    quoted after one. ERROR (4) is `main`'s to return and not this function's.
     """
     args = build_parser().parse_args(argv)
     cfg = MODEL_CONFIGS[args.model]
@@ -4752,6 +4825,13 @@ def main(argv=None) -> int:
     print(f"card        {card}"
           + ("   (no CUDA device: a plan or a replay, not a measurement)"
              if card == NO_CARD_SLUG else ""))
+    if args.self_test is not None:
+        # THE HOST, NOT THE SUBJECT. On a pod this line names a real card that
+        # measured nothing here, which is how a planted report came to look like
+        # that card's. The id says so where it cannot be missed.
+        print(f"            the line above is the HOST of a planted run. The "
+              f"run id's card component is {SYNTHETIC_CARD_SLUG!r} and the "
+              f"attached card travels as `synthhost`.")
     print(f"model       {args.model} E={cfg.num_experts} k={cfg.top_k}  "
           f"{args.dtype} ({b} bytes)")
     print(f"pinned      {pinned}")
@@ -4838,7 +4918,33 @@ def main(argv=None) -> int:
                      f"(T={p.crossing_tokens(cfg.num_experts, cfg.top_k):.0f}), "
                      f"in the grid: {p.crossing_rows <= args.r_max}")
             print(f"  BLOCK_M={bm:3d} cap {p.ai_cap:7.1f}  {where}")
-        return 0
+        # STILL DONE (0), AND THIS FILE IS THE LAST ONE ON THAT SIDE OF THE
+        # CENSUS. The census is at `scripts/bm128_depth.py`'s own dry-run
+        # branch: on 2026-09-02 six scripts returned DONE from `--dry-run` --
+        # this file and `ruler_rebaseline` as the bare literal 0 -- and seven
+        # returned REFUSED, and REFUSED won the argument. A dry run scores no
+        # gate and prints no RESULT line, so `exit_codes.classify_text` over
+        # this log raises `NoGatesScored`, which that module documents as what a
+        # REFUSED log looks like from there, while DONE means "measured; every
+        # VALIDITY and CLAIM gate PASSED" and nothing here was measured. That
+        # disagreement is REAL and it is live in this file today.
+        #
+        # WHY IT HAS NOT MOVED, AND WHAT MOVES WITH IT. Unlike the other twelve
+        # arms, this one's plan is READ BY A PROGRAM.
+        # `scripts/replicate_noise_floor.py:sweep_cost` runs exactly this branch
+        # as a subprocess and returns None on any non-zero code, so flipping the
+        # code alone deletes the "TOTAL ... min of GPU" line from that script's
+        # pod plan entirely -- not "cost unknown", the whole budget line -- and
+        # its `test_dry_run_prints_the_plan_the_cost_and_the_registered_predictions`
+        # fails on it. Three more assertions read the 0 directly:
+        # `tests/test_block_m_sweep.py:763`, `tests/test_gate_units_and_ridge.py:466`
+        # and `tests/test_reference_level.py:459,473`. The change is one line
+        # here and five in four files this slice does not own, and shipping the
+        # one line alone would have traded a stated inconsistency for a silently
+        # missing cost on a rented pod. The reason is recorded rather than the
+        # code changed, because a plan whose banner says REFUSED and whose
+        # process says DONE would be the same defect twice.
+        return exit_codes.DONE
 
     if args.self_test is None:
         missing = missing_gpu_stack()
@@ -4940,24 +5046,69 @@ def main(argv=None) -> int:
     # printed the RESULT lines, so `exit_codes.classify_text` on this log
     # recomputes the code the process returned. Two integers meaning two
     # different things in two files is the defect that module is named against.
+    #
+    # NOTHING IS FOLDED INTO DONE ANY MORE, and `--fail-on-gate` is why this is
+    # a paragraph and not a branch. Until 2026-09-02 a CLAIM_FAIL was described
+    # in words and RETURNED AS 0 unless the flag was passed, so
+    # `--self-test 0.85` printed a `RESULT: CLAIM ... FAIL` line that
+    # `classify_text` reads as CLAIM_FAIL while the process said DONE -- the
+    # exact log-versus-exit-code split the comment above claims cannot happen,
+    # in the file that prints it. The masking was obsolete once the shared table
+    # landed: CLAIM_FAIL (1) is in `FINISHED_CODES` and `ledger_state(1)` is
+    # "CLAIM_FAIL", so 1 already tells the driver "this is a result, do not
+    # retry it" and 0 protects nothing. The flag is accepted and ignored so an
+    # old driver line still parses; `scripts/pod_session.sh` passes it and its
+    # comment that the flag is REQUIRED is now belt and braces rather than the
+    # thing that makes the code right.
     rc = exit_codes.classify(g.scored() for g in report.gates)
-    if rc == exit_codes.CLAIM_FAIL and not args.fail_on_gate:
-        # DESCRIBED AS WHAT HAPPENED, not as the code returned. This line used
-        # to print `describe(DONE)`, whose text is a claim ABOUT THE GATES --
-        # "every VALIDITY and CLAIM gate PASSED" -- and then appended "a claim
-        # gate did not pass" to it, so one line said both. In a study whose A4
-        # finding is logs asserting things that did not happen, that is the same
-        # defect in miniature. The DIVERGENCE between the classification and the
-        # returned code is deliberate and stays; only the sentence is now the
-        # classification's.
-        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
-        print(f"         reported as exit {exit_codes.DONE} without "
-              f"--fail-on-gate: a claim that did not pass is a RESULT, not a "
-              f"broken run. Pass --fail-on-gate to return "
-              f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL instead.")
-        return exit_codes.DONE
     print(f"exit     {exit_codes.describe(rc)}")
+    if rc == exit_codes.CLAIM_FAIL:
+        print("         a claim that did not pass is a RESULT and the arm is "
+              "FINISHED, not broken.")
     return rc
+
+
+def main(argv=None) -> int:
+    """`_main`, with the two exits the interpreter would otherwise get wrong.
+
+    A `SystemExit` CARRYING A STRING IS A REFUSAL. `raise SystemExit(<str>)`
+    sets `SystemExit.code` to the string and the interpreter turns that into
+    exit 1 -- CLAIM_FAIL, "measured; a pre-registered claim was refuted" -- so
+    the missing `override_config` export, a refusal about the installed vLLM
+    that measured nothing, exited with the same code a run that MEASURED and
+    then failed a claim gate would have. The session driver cannot tell them
+    apart, and this script's own contract says 2 means refused.
+
+    Caught here rather than at every raise site so the contract holds for a
+    caller of `main()` as well as for the CLI, and so a refusal added later
+    cannot reintroduce the bug by forgetting the code.
+
+    AN UNPLANNED CRASH IS ERROR, WHICH IS THE ONLY RETRYABLE CODE. Left to
+    propagate, an unexpected exception exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it is in
+    FINISHED_CODES, the driver records it, and it is never retried. A torch OOM
+    or a truncated report would then be filed as one of this experiment's
+    registered outcomes. ERROR (4) is outside FINISHED_CODES precisely so the
+    driver can tell "the apparatus broke" from "the claim did not hold". The
+    traceback is printed first and not swallowed, because a code without one
+    tells an operator nothing about what to fix.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: block_m_crossing_sweep crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim failing, so "
+              f"it exits {exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: "
+              "the traceback above is the thing to fix, and the arm may be "
+              "re-run.", file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":
