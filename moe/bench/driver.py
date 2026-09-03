@@ -87,13 +87,75 @@ def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
                    f"{cfg.graph_min_launch_share * 100:.1f}% threshold")
 
 
+def time_kernel_graph(fn: Callable[[], None], *, on_captured=None,
+                      **kw) -> T.KernelTiming:
+    """Capture `fn` into a CUDA graph and time the REPLAY on the instrument.
+
+    `timing.time_kernel` times a callable; a graph is a different callable made
+    out of one, so the capture belongs to the caller and this is the caller. It
+    is the graph half of what `timing.time_graph` used to do, minus the timing,
+    which `time_kernel` now does for both modes -- the point being that eager and
+    graph rows come off ONE apparatus and are therefore comparable with each
+    other and with the roof.
+
+    `on_captured` runs after the warmup replays and before the timed trials,
+    while the graph is still the thing that produced the output. A replay writes
+    into graph-private buffers every replay reuses, so a kernel leaving part of
+    its output unwritten would show the PREVIOUS replay's correct values; the
+    driver re-earns the correctness verdict there.
+
+    Raises `timing.NotCapturable`, which is a finding rather than a failure: an
+    implementation that syncs with the host cannot be used in real MoE
+    inference, and the row records that.
+    """
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        for _ in range(3):
+            fn()
+    torch.cuda.current_stream().wait_stream(side)
+    torch.cuda.synchronize()
+
+    graph = torch.cuda.CUDAGraph()
+    try:
+        with torch.cuda.graph(graph):
+            fn()
+    except RuntimeError as e:
+        raise T.NotCapturable(str(e)) from None
+
+    for _ in range(3):
+        graph.replay()
+    torch.cuda.synchronize()
+    if on_captured is not None:
+        on_captured()
+    return T.time_kernel(graph.replay, **kw)
+
+
 @dataclass
 class RunConfig:
     out_dir: Path = Path("results")
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     env_name: str = "base"
-    warmup: int = 25
+    #: Sustained-load warmup, in MILLISECONDS of delivered GPU time. The unit
+    #: the instrument takes, and the unit a warmup has to be in: a count settles
+    #: a 30 ms GEMM in one call and leaves a 1 ms kernel below the clock
+    #: governor's response for hundreds. 300 ms is what every ladder script in
+    #: this repository already defaults to, so one number means one thing.
+    warmup_ms: float = 300.0
+    #: Kernel time one trial should hold, which is what `iters` is sized from.
+    target_ms: float = 200.0
     trials: int = 3
+    #: The clock the ROOF was measured at, for the LEVEL verdict. None leaves
+    #: `clock_level_ok` at "undetermined" and the row says so, because a level is
+    #: relative to something and the driver will not invent the something. No
+    #: committed calibration records it yet (`roofline.Hardware` carries
+    #: bandwidth and peaks, not a clock), so it stays None until one does.
+    reference_clock_mhz: float | None = None
+    #: THE RETIRED INSTRUMENT'S KNOBS, read only when a legacy timer is injected
+    #: below. `warmup` is a CALL COUNT and `iters` a fixed iteration count; both
+    #: are ignored on the instrument path, which warms for a duration and sizes
+    #: iterations from the warmup's own queue-deep per-call time.
+    warmup: int = 25
     iters: int | None = None          # None: derive from FLOPs
     flush_mb: int = T.DEFAULT_FLUSH_MB
     flush_mode: str = "read"
@@ -135,10 +197,29 @@ class RunConfig:
     force_tile_ledger: FT.ForceTileLedger = field(
         default_factory=FT.ForceTileLedger)
 
-    # Injectable backends. Overridden in tests so the driver's control flow can
-    # be verified without CUDA.
-    timer_eager: Callable = T.time_eager
-    timer_graph: Callable = T.time_graph
+    # THE INSTRUMENT. `timing.time_kernel` for an eager cell and
+    # `time_kernel_graph` for a captured one, and both write `TIMING_BASIS` into
+    # the row. Injectable so the driver's control flow can be verified without
+    # CUDA; a fake must return a `timing.KernelTiming`.
+    timer: Callable = T.time_kernel
+    graph_timer: Callable = time_kernel_graph
+
+    # THE RETIRED INSTRUMENT, AND WHY IT IS STILL REACHABLE. Setting either of
+    # these puts that mode back on `time_eager`/`time_graph`: a COUNT of warmup
+    # calls, an iteration count sized from one isolated call on an idle GPU, and
+    # two idle-instant clock samples around the cell. It is None by default, so a
+    # sweep measures on the instrument and nothing has to remember to ask.
+    #
+    # It is kept, rather than deleted, for the control-flow tests that were
+    # written against `TimingResult` and for a session that has to reproduce an
+    # old row bit for bit. That is only safe because a row is STAMPED with what
+    # measured it: a legacy-seam row carries `schema.LEGACY_INSTRUMENT` in its
+    # `instrument` column, so nothing it writes can be pooled with an instrument
+    # row by accident, and `scripts/alpha_refit.py` refuses to fit the two
+    # together without being told to.
+    timer_eager: Callable | None = None
+    timer_graph: Callable | None = None
+    #: Idle-instant clock sampler. The retired path's, and used only there.
     clock_sampler: Callable = T.ClockState.sample
 
     @property
@@ -405,6 +486,80 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
             cost.bytes_total, ms, hw.bandwidth_bytes_s)
 
 
+def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
+    """What `time_kernel` is called with for one mode of one cell.
+
+    The flusher is BUILT HERE rather than left to `time_kernel`'s own default,
+    so `flush_mb` and `flush_mode` stay the run's knobs and stay recorded: the
+    read-versus-write choice is load-bearing (a write flush leaves an L2 of
+    dirty lines whose writebacks land inside the NEXT timed interval, 10-30% on
+    a sub-100-microsecond span) and a column that says "read" while the default
+    sized itself elsewhere would be a lie in the cheapest possible place.
+    """
+    kw = dict(warmup_ms=cfg.warmup_ms, target_ms=cfg.target_ms,
+              trials=cfg.trials, l2_flush=l2_flush,
+              reference_clock_mhz=cfg.reference_clock_mhz)
+    if l2_flush:
+        kw["flusher"] = T.L2Flusher(cfg.flush_mb, device=cfg.device,
+                                    mode=cfg.flush_mode)
+    return kw
+
+
+def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
+    """One `KernelTiming` onto one row, including what the instrument was.
+
+    THE COLUMNS IT DELIBERATELY DOES NOT TOUCH are the four retired clock ones
+    (`sm_clock_start_mhz`, `sm_clock_end_mhz`, `clock_drift_pct`, `throttled`)
+    and the two temperatures. `time_kernel` does read a first and a last sample,
+    but UNDER LOAD, and the retired columns hold IDLE-instant readings; writing
+    under-load numbers into them would give one column two meanings either side
+    of the version boundary and would quietly re-point every filter that reads
+    `throttled` at a different quantity. A v5 row leaves them at their defaults
+    and answers the same question through `clock_level_ok`/`clock_drift_ok`
+    instead, which a consumer has to ask for by name.
+    """
+    row.instrument = kt.instrument
+    row.warmup = kt.warmup_calls
+    row.warmup_ms = kt.warmup_ms
+    row.iters, row.trials = kt.iters, kt.trials
+    row.l2_flush = kt.l2_flush
+    row.flush_mb = kt.flush_mb
+    row.flush_mode = flush_mode if kt.l2_flush else ""
+    row.ms_p50, row.ms_p90 = kt.ms_p50, kt.ms_p90
+    row.ms_min, row.ms_std = kt.ms_min, kt.ms_std
+    row.jitter_p90_over_p50 = (kt.ms_p90 / kt.ms_p50) if kt.ms_p50 > 0 else 0.0
+    row.sm_clock_load_mhz = kt.sm_clock_load_mhz or 0.0
+    row.clock_level_ok = SC.verdict_word(kt.clock_level_ok)
+    row.clock_drift_ok = SC.verdict_word(kt.clock_drift_ok)
+    row.host_bound_ok = SC.verdict_word(
+        None if kt.host_bound is None else not kt.host_bound)
+    row.clock_samples = kt.clock_samples
+    row.clock_source = kt.clock_source
+    row.clock_note = kt.clock_note
+    row.host_enqueue_ms = kt.host_enqueue_ms or 0.0
+    row.host_note = kt.host_note
+
+
+def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:
+    """One `TimingResult` plus its two idle-instant clock samples onto one row.
+
+    Only reached when a legacy timer is injected. The row is stamped
+    `schema.LEGACY_INSTRUMENT` so it can never be mistaken for, or pooled with,
+    a row off the instrument -- which is the entire reason the seam is allowed to
+    survive at all.
+    """
+    row.instrument = SC.LEGACY_INSTRUMENT
+    row.warmup, row.iters, row.trials = res.warmup, res.iters, res.trials
+    row.flush_mb, row.flush_mode = res.flush_mb, res.flush_mode
+    row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
+    row.ms_min, row.ms_std = res.ms_min, res.ms_std
+    row.jitter_p90_over_p50 = res.jitter_p90_over_p50
+    row.sm_clock_start_mhz = start.sm_clock_mhz
+    row.sm_clock_end_mhz = end.sm_clock_mhz
+    row.temp_start_c, row.temp_end_c = start.temp_c, end.temp_c
+    row.clock_drift_pct, row.throttled = T.clock_drift(start, end)
+
+
 #: Timing and derived columns, zeroed whenever a row did not earn them.
 _TIMED_FIELDS = ("ms_p50", "ms_p90", "ms_min", "ms_std", "jitter_p90_over_p50",
                  "tflops", "compulsory_gbps", "pct_of_achieved_tflops",
@@ -668,19 +823,20 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
                              "graph skipped by policy")
             continue
 
-        clocks_start = cfg.clock_sampler()
+        legacy = cfg.timer_graph if use_graph else cfg.timer_eager
+        clocks_start = cfg.clock_sampler() if legacy is not None else None
         try:
-            if use_graph:
-                res = cfg.timer_graph(call, warmup=cfg.warmup, iters=cfg.iters,
-                                      trials=cfg.trials, l2_flush=l2,
-                                      flush_mb=cfg.flush_mb,
-                                      flush_mode=cfg.flush_mode,
-                                      on_captured=verify_replay)
+            if legacy is not None:
+                extra = {"on_captured": verify_replay} if use_graph else {}
+                res = legacy(call, warmup=cfg.warmup, iters=cfg.iters,
+                             trials=cfg.trials, l2_flush=l2,
+                             flush_mb=cfg.flush_mb,
+                             flush_mode=cfg.flush_mode, **extra)
+            elif use_graph:
+                res = cfg.graph_timer(call, on_captured=verify_replay,
+                                      **_instrument_kwargs(cfg, l2))
             else:
-                res = cfg.timer_eager(call, warmup=cfg.warmup, iters=cfg.iters,
-                                      trials=cfg.trials, l2_flush=l2,
-                                      flush_mb=cfg.flush_mb,
-                                      flush_mode=cfg.flush_mode)
+                res = cfg.timer(call, **_instrument_kwargs(cfg, l2))
         except T.NotCapturable as e:
             # A finding, not a failure: an implementation that cannot be
             # graph-captured cannot be used in real MoE inference. It belongs in
@@ -696,22 +852,15 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
             written += _emit(writer, manifest, row, key, SC.STATUS_ERROR,
                              str(e)[:200])
             continue
-        clocks_end = cfg.clock_sampler()
-        drift, throttled = T.clock_drift(clocks_start, clocks_end)
 
         verdict = replay_verdict if (use_graph and replay_verdict) else correctness
         _apply_correctness(row, verdict)
         row.capture_status = "captured" if use_graph else "n/a"
-        row.warmup, row.iters, row.trials = res.warmup, res.iters, res.trials
-        row.flush_mb, row.flush_mode = res.flush_mb, res.flush_mode
-        row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
-        row.ms_min, row.ms_std = res.ms_min, res.ms_std
-        row.jitter_p90_over_p50 = res.jitter_p90_over_p50
+        if legacy is not None:
+            _apply_legacy_timing(row, res, clocks_start, cfg.clock_sampler())
+        else:
+            _apply_kernel_timing(row, res, cfg.flush_mode)
         _apply_cost(row, cost, res.ms_p50, cfg)
-        row.sm_clock_start_mhz = clocks_start.sm_clock_mhz
-        row.sm_clock_end_mhz = clocks_end.sm_clock_mhz
-        row.temp_start_c, row.temp_end_c = clocks_start.temp_c, clocks_end.temp_c
-        row.clock_drift_pct, row.throttled = drift, throttled
 
         if not verdict.passed:
             # _emit zeroes the timing columns, so the file never carries a

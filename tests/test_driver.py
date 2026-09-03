@@ -5,6 +5,7 @@ span and not the layer, resume skips finished work, one bad cell does not kill
 a sweep) is verified here before any of it costs GPU minutes.
 """
 import itertools
+from functools import partial
 
 import pytest
 import torch
@@ -65,9 +66,45 @@ class CrashingUpGemm(StageSpan):
         raise ZeroDivisionError("kernel launch went sideways")
 
 
-def fake_timer(fn, warmup=1, iters=2, trials=1, l2_flush=True, flush_mb=8,
-               flush_mode="read", target_ms=200.0, on_captured=None,
-               graph=False):
+def fake_timer(fn, *, warmup_ms=300.0, target_ms=200.0, trials=1,
+               l2_flush=True, reference_clock_mhz=None, flusher=None,
+               on_captured=None, level=True, drift=True, host_bound=False):
+    """A `time_kernel` stand-in: same call shape, same record, no CUDA.
+
+    Returns a `KernelTiming` because that is what the driver's default timers
+    return, so the control-flow tests exercise the column mapping the sweeps
+    actually use. The three verdicts are parameters rather than constants:
+    every one of them has a FAIL branch in the row, and a fake that could only
+    say "ok" would leave all three untested.
+    """
+    for _ in range(3):
+        fn()
+    if on_captured is not None:
+        on_captured()
+    return T.KernelTiming(
+        ms_p50=1.0, ms_p90=1.2, ms_min=0.9, ms_std=0.05,
+        iters=2, trials=trials, warmup_ms=warmup_ms, l2_flush=l2_flush,
+        sm_clock_load_mhz=1980.0, sm_clock_start_mhz=1980.0,
+        sm_clock_end_mhz=1975.0, clock_level_ok=level, clock_drift_ok=drift,
+        samples=6, warmup_calls=17,
+        flush_mb=(flusher.megabytes if flusher is not None else 0),
+        clock_samples=6, clock_source="injected", clock_poll_ms=0.01,
+        host_bound=host_bound, host_enqueue_ms=0.2,
+        host_note=("host-bound: the queue drained" if host_bound else ""))
+
+
+def fake_graph_timer(fn, **kw):
+    return fake_timer(fn, **kw)
+
+
+def not_capturable(fn, **kw):
+    raise T.NotCapturable("host sync during capture")
+
+
+def legacy_timer(fn, warmup=1, iters=2, trials=1, l2_flush=True, flush_mb=8,
+                 flush_mode="read", target_ms=200.0, on_captured=None,
+                 graph=False):
+    """The RETIRED instrument's shape, for the seam that still accepts it."""
     for _ in range(3):
         fn()
     if on_captured is not None:
@@ -78,29 +115,28 @@ def fake_timer(fn, warmup=1, iters=2, trials=1, l2_flush=True, flush_mb=8,
                           samples=3, flush_mb=flush_mb, flush_mode=flush_mode)
 
 
-def fake_graph_timer(fn, **kw):
-    kw.pop("graph", None)
-    return fake_timer(fn, graph=True, **kw)
-
-
-def not_capturable(fn, **kw):
-    raise T.NotCapturable("host sync during capture")
-
-
 FAKE_INFO = {"gpu_name": "FakeH200", "gpu_count": 1, "torch_version": "x",
              "driver_version": "y", "cuda_version": "z", "triton_version": "w"}
 
 
 def cfg_for(tmp_path, **kw):
     base = dict(
-        out_dir=tmp_path, device="cpu", warmup=1, trials=1, iters=2,
+        out_dir=tmp_path, device="cpu", warmup_ms=5.0, trials=1, flush_mb=8,
         l2_modes=(True,), graph_modes=(False,),
-        timer_eager=fake_timer,
-        timer_graph=fake_graph_timer,
+        timer=fake_timer,
+        graph_timer=fake_graph_timer,
         clock_sampler=lambda: T.ClockState(1980, 45),
     )
     base.update(kw)
     return D.RunConfig(**base)
+
+
+def legacy_cfg_for(tmp_path, **kw):
+    """A config on the RETIRED seam, which is opt-in and stamps its rows."""
+    base = dict(timer_eager=legacy_timer, timer_graph=legacy_timer,
+                warmup=1, iters=2)
+    base.update(kw)
+    return cfg_for(tmp_path, **base)
 
 
 def spec():
@@ -216,7 +252,7 @@ def test_uncapturable_impl_still_gets_a_row(tmp_path):
     """Non-capturability is a finding about the implementation, so it must reach
     the CSV. Recording it only in a sidecar manifest would silently condition
     every published aggregate on capture-friendliness."""
-    cfg = cfg_for(tmp_path, graph_modes=(True,), timer_graph=not_capturable)
+    cfg = cfg_for(tmp_path, graph_modes=(True,), graph_timer=not_capturable)
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
     rows = SC.read_csv(cfg.csv_path)
@@ -259,14 +295,84 @@ def test_forced_routing_is_reflected_in_the_load_columns(tmp_path):
     assert float(r["load_entropy_norm"]) < 1.0
 
 
-def test_clock_drift_is_recorded(tmp_path):
+# --- which instrument wrote the row ----------------------------------------
+
+def test_the_default_config_measures_on_the_instrument(tmp_path):
+    """THE FINDING THIS FILE EXISTS FOR SINCE 2026-09-02. The driver is the
+    largest cell-writing path in the repository -- every one of the 100,144
+    published rows came through it -- and until v5 it timed through
+    `time_eager`/`time_graph` while the roof and every ladder script had moved
+    on. A default that has to be opted INTO is a default nobody sets."""
+    cfg = D.RunConfig()
+    assert cfg.timer is T.time_kernel
+    assert cfg.graph_timer is D.time_kernel_graph
+    assert cfg.timer_eager is None and cfg.timer_graph is None
+
+
+def test_every_timed_row_names_the_instrument_that_produced_it(tmp_path):
+    _, path = sweep(tmp_path, "t_counting_up_gemm")
+    r = SC.read_csv(path)[0]
+    assert r["instrument"] == T.TIMING_BASIS
+    assert SC.has_kernel_timing(r)
+    # The warmup is a DURATION now, and the count is what it delivered.
+    assert float(r["warmup_ms"]) == 5.0
+    assert int(r["warmup"]) == 17
+    assert float(r["sm_clock_load_mhz"]) == 1980.0
+    assert r["clock_source"] == "injected"
+
+
+def test_the_three_verdicts_reach_the_row_as_words_and_not_as_silence(tmp_path):
+    for level, drift, host, expected in (
+            (True, True, False, ("ok", "ok", "ok")),
+            (False, True, False, ("failed", "ok", "ok")),
+            (True, False, True, ("ok", "failed", "failed")),
+            (None, None, None, ("undetermined",) * 3)):
+        out = tmp_path / f"{level}-{drift}-{host}"
+        cfg = cfg_for(out, timer=partial(fake_timer, level=level, drift=drift,
+                                         host_bound=host))
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")], cfg,
+                    routing=lambda s: None, info=FAKE_INFO)
+        r = SC.read_csv(cfg.csv_path)[0]
+        got = tuple(SC.timing_verdict(r, c) for c in SC.TIMING_VERDICT_COLUMNS)
+        assert got == expected, (level, drift, host, got)
+
+
+def test_an_instrument_row_leaves_the_retired_clock_columns_alone(tmp_path):
+    """One column, one meaning, across the version boundary.
+
+    `time_kernel` does read a first and a last clock sample, but UNDER LOAD, and
+    `sm_clock_start_mhz`/`throttled` hold IDLE-instant readings on all 100,144
+    published rows. Refilling them here would silently re-point every filter
+    that reads `throttled` at a different quantity."""
+    _, path = sweep(tmp_path, "t_counting_up_gemm")
+    r = SC.read_csv(path)[0]
+    assert int(r["sm_clock_start_mhz"]) == 0
+    assert int(r["sm_clock_end_mhz"]) == 0
+    assert float(r["clock_drift_pct"]) == 0.0
+    assert r["throttled"] == "False"
+
+
+def test_the_retired_seam_stamps_its_rows_as_the_retired_instrument(tmp_path):
+    """The seam survives for the tests and for reproducing an old row, and it is
+    only safe because a row it writes says so. Nothing off it can be pooled with
+    an instrument row by accident."""
     states = itertools.cycle([T.ClockState(1980, 40), T.ClockState(1600, 84)])
-    cfg = cfg_for(tmp_path, clock_sampler=lambda: next(states))
+    cfg = legacy_cfg_for(tmp_path, clock_sampler=lambda: next(states))
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
     r = SC.read_csv(cfg.csv_path)[0]
+    assert r["instrument"] == SC.LEGACY_INSTRUMENT
+    assert not SC.has_kernel_timing(r)
+    # The retired clock pair is exactly what that path does record.
     assert r["throttled"] == "True"
     assert float(r["clock_drift_pct"]) > 5.0
+    # And it made none of the checks the instrument makes. The columns exist
+    # -- the file is v5 -- and every one of them says so in words rather than
+    # sitting at a value a filter would read as a pass.
+    assert float(r["warmup_ms"]) == 0.0
+    assert all(SC.timing_verdict(r, c) == SC.VERDICT_UNDETERMINED
+               for c in SC.TIMING_VERDICT_COLUMNS)
 
 
 # --- a span covering the whole layer: the vLLM/SGLang fused_moe shape --------
@@ -378,7 +484,7 @@ def test_graph_row_revalidates_the_replayed_output(tmp_path):
             seen["verified"] += 1
         return fake_graph_timer(fn, on_captured=on_captured, **kw)
 
-    cfg = cfg_for(tmp_path, graph_modes=(True,), timer_graph=counting_graph_timer)
+    cfg = cfg_for(tmp_path, graph_modes=(True,), graph_timer=counting_graph_timer)
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
                 cfg, routing=lambda s: None, info=FAKE_INFO)
     assert seen["verified"] == 1
@@ -395,7 +501,7 @@ def test_transient_errors_stay_retryable(tmp_path):
             raise RuntimeError("CUDA out of memory")
         return fake_timer(fn, **kw)
 
-    cfg = cfg_for(tmp_path, timer_eager=flaky)
+    cfg = cfg_for(tmp_path, timer=flaky)
     cells = [(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")]
     D.run_sweep(cells, cfg, routing=lambda s: None, info=FAKE_INFO)
     assert "error" in cfg.manifest_path.read_text()

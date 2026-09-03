@@ -443,6 +443,133 @@ def test_the_report_runs_end_to_end_over_the_published_corpus(capsys):
     assert "NEVER crosses" in out
 
 
+# --------------------------------------------------------------------------
+# which instrument measured the rows
+# --------------------------------------------------------------------------
+
+#: A source arm small enough to copy and discriminating end to end, so a
+#: two-instrument fixture is a real pool rather than a hand-built dict.
+FIXTURE_ARM = "2026-08-28-nvidia_h200-ridge-resolution/run_ridgedeepseek_vllm.csv"
+
+
+def two_instrument_corpus(tmp_path):
+    """One published arm, twice: once as it stands, once restamped at v5.
+
+    The v5 copy is the SAME rows with the instrument column filled in, so the
+    only thing that differs between the two halves is the apparatus each claims.
+    That is exactly the pool the refusal exists for, and building it out of real
+    rows means the gate is exercised through `collect`, `read_csv` and the tile
+    resolver rather than around them.
+    """
+    import csv
+
+    from moe.bench import schema as SC
+
+    raw = list(csv.DictReader((ROOT / "results" / "published" / FIXTURE_ARM)
+                              .open(newline="")))
+    for arm, version in (("armA", None), ("armB", 5)):
+        directory = tmp_path / arm
+        directory.mkdir()
+        with (directory / "run_x.csv").open("w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=SC.COLUMNS, restval="")
+            writer.writeheader()
+            for r in raw:
+                row = {k: v for k, v in r.items() if k in SC.COLUMNS}
+                if version:
+                    row["schema_version"] = version
+                    row["instrument"] = "queue-deep/l2-flush/clock-under-load/v2"
+                    for name in SC.TIMING_VERDICT_COLUMNS:
+                        row[name] = SC.VERDICT_OK
+                writer.writerow(row)
+    return sorted(tmp_path.glob("*/run_*.csv"))
+
+
+def test_every_published_row_reads_as_the_retired_instrument(triton_pool):
+    """THE FACT THE WHOLE VERSION WAS CUT FOR, pinned. All 100,144 published rows
+    came through `driver.py`, which timed on `time_eager`/`time_graph` until
+    2026-09-02, so the headline alpha is a retired instrument's number and the
+    report has to say so rather than leave a reader to assume otherwise."""
+    from moe.bench import schema as SC
+    assert set(AR.instrument_mix(triton_pool)) == {SC.LEGACY_INSTRUMENT}
+
+
+def test_an_intercept_can_never_span_two_instruments():
+    """alpha is identified WITHIN a group intercept, so an instrument left out of
+    the key would be paid for by alpha the way the batch trend was before token
+    count entered it."""
+    a = make_obs(ratio=1.5, extra_tiles=2)
+    b = AR.dataclasses.replace(a, instrument="queue-deep/v2")
+    assert AR.cell_key(a) != AR.cell_key(b)
+    assert a.context != b.context
+
+
+def test_the_clock_gate_asks_the_instrument_that_wrote_the_row():
+    """The two apparatus have NO flag in common, and reading one's answer out of
+    the other's column is how a filter becomes a no-op unnoticed. A v5 row
+    carries `throttled=False` by construction, so the retired gate applied to it
+    would drop nothing at all."""
+    from moe.bench import schema as SC
+
+    old = {"throttled": "True"}
+    assert AR.clock_gate(old, SC.LEGACY_INSTRUMENT).startswith("throttled")
+    assert AR.clock_gate({"throttled": "False"}, SC.LEGACY_INSTRUMENT) == ""
+
+    new = {"instrument": "queue-deep/v2", "clock_level_ok": "ok",
+           "clock_drift_ok": "ok", "host_bound_ok": "ok", "throttled": "True"}
+    assert AR.clock_gate(new, "queue-deep/v2") == "", (
+        "the retired flag is not this instrument's evidence and must not gate it")
+    assert "clock_drift_ok" in AR.clock_gate(dict(new, clock_drift_ok="failed"),
+                                             "queue-deep/v2")
+    assert "host_bound_ok" in AR.clock_gate(dict(new, host_bound_ok="failed"),
+                                            "queue-deep/v2")
+    # UNDETERMINED IS KEPT. The check could not be run -- no NVML, a trial too
+    # short for the poller -- which is not evidence against the number, and
+    # folding it into a failure would discard every row measured in a container
+    # that forbids NVML.
+    assert AR.clock_gate(dict(new, clock_level_ok="undetermined"),
+                         "queue-deep/v2") == ""
+
+
+def test_a_pool_that_mixes_two_instruments_is_refused_rather_than_fitted(
+        tmp_path, capsys):
+    """REFUSED (exit 2), not averaged and not silently preferred. The counts are
+    printed either way, so the reader is told what the pool held even though no
+    alpha is."""
+    csvs = two_instrument_corpus(tmp_path)
+    assert AR.main([str(p) for p in csvs] + ["--bootstrap", "3"]) == AR.REFUSED
+    out = capsys.readouterr().out
+    assert "TWO OR MORE INSTRUMENTS IN ONE POOL" in out
+    assert "REFUSED" in out
+    assert "queue-deep/l2-flush/clock-under-load/v2" in out
+    assert "alpha = " not in out, "a refused pool must not also print a number"
+
+
+def test_the_refusal_is_overridable_and_the_override_says_so(tmp_path, capsys):
+    """The honest second-best. It fits, and every headline number carries the mix
+    it was fitted over."""
+    csvs = two_instrument_corpus(tmp_path)
+    code = AR.main([str(p) for p in csvs]
+                   + ["--bootstrap", "3", "--pool-instruments"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert "POOLED ON PURPOSE" in out
+    assert "alpha = " in out
+    assert "measured on: " in out
+    assert "between instrument" in out
+
+
+def test_the_pinned_set_states_the_instrument_of_the_set_it_fitted(capsys):
+    """M2, checked on the real manifest: `--pinned-set` is the run whose numbers
+    `docs/FINDINGS.md` quotes, and a number whose instrument is not printed
+    beside it is not comparable with anything else in this study."""
+    assert AR.main(["--pinned-set", "--bootstrap", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "## the instrument that measured the fitted set" in out
+    assert "ONE INSTRUMENT, AND IT IS THE RETIRED ONE" in out
+    assert ("measured on: 10813 rows on time_eager+time_graph/"
+            "idle-instant-clock/pre-v5") in out
+
+
 def test_the_report_says_so_rather_than_dividing_by_zero_on_an_empty_input(tmp_path,
                                                                           capsys):
     """A CSV with a header and no rows is what a killed pod leaves behind, and a

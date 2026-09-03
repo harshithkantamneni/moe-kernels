@@ -56,6 +56,32 @@ the direction that matters against TEMPO's `b2/b`, a pure byte ratio.
 `--adversarial` prints a consequence of that bound which this study's own
 measured crossings contradict.
 
+ONE FIT, ONE INSTRUMENT, AND THE POOL IS REFUSED RATHER THAN MIXED. Schema v5
+put the timer's name in every row (`schema.instrument_of`), and it had to,
+because until 2026-09-02 `moe/bench/driver.py` -- the path every published row
+came through -- timed on `time_eager`/`time_graph` while the roof and every
+ladder script had moved to `time_kernel`. Those two apparatus differ in level by
+construction: one warms for a COUNT of calls and sizes its iteration count from a
+single isolated call on an idle GPU, the other warms for a DURATION of sustained
+load and sizes it from a queue-deep per-call time, so they do not agree on what
+clock the card was at while the cell ran.
+
+That matters HERE more than it would in most analyses, and the reason is the
+estimator. `alpha` is identified WITHIN a group intercept keyed on
+(model, dtype, card, impl, timing mode, token count). Two rows of one cell
+measured on two apparatus would share that key, so any level difference between
+the instruments would be charged to `alpha` exactly the way the batch trend was
+before token count entered the key -- which is most of the distance between 0.10
+and the answer below. The instrument is therefore IN `cell_key`, so an intercept
+can never span both. That is necessary and it is not sufficient: an instrument
+that shifts a many-tile row differently from a one-tile row moves the SLOPE, and
+no arm in this corpus ran one cell both ways, so nothing here can measure
+whether it does. So a mixed pool is REFUSED (exit 2), with the count per
+instrument printed, and the reader is told to fit each separately.
+`--pool-instruments` overrides that and prints the mix beside every headline
+number. It is the honest second-best rather than the default, because the
+default is what gets quoted.
+
 Everything here is arithmetic over published CSVs: no GPU, no torch. That was
 a promise this file could not keep until 2026-09-02: `moe.bench.tile_resolve`
 imported `moe.quant`, which imported torch at module scope, and torch is not one
@@ -82,6 +108,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from moe.bench import schema as SC  # noqa: E402
 from moe.bench.bytes_model import weight_bytes_for_stage  # noqa: E402
 from moe.bench.crossing import m_tiles_for_row  # noqa: E402
+from moe.bench.exit_codes import REFUSED  # noqa: E402
 from moe.bench.published import (  # noqa: E402
     dirty_share,
     dirty_share_line,
@@ -217,6 +244,16 @@ class Observation:
     #: and cannot answer, which is not the same as clean, and a bool would
     #: silently fold the two together.
     dirty_raw: str = ""
+    #: WHICH TIMER produced the `ms_p50` this row's traffic ratio came from,
+    #: through `schema.instrument_of`. A CLUSTER OF THE FIT and not a label: it
+    #: is in `cell_key`, so an intercept never spans two apparatus, and the
+    #: report refuses to pool two of them without being told to.
+    #:
+    #: DEFAULTED to the retired instrument because every published row is one,
+    #: so a synthetic Observation a test builds lands in a single-instrument
+    #: pool and is fitted rather than refused. `collect` always sets it from the
+    #: row itself.
+    instrument: str = SC.LEGACY_INSTRUMENT
 
     @property
     def extra_tile_bytes(self) -> float:
@@ -256,7 +293,8 @@ class Observation:
         what turns "alpha differs between modes" into a statement about the
         instrument rather than about which models each mode was pointed at.
         """
-        return (self.model, self.dtype, self.gpu, self.impl, self.tokens)
+        return (self.model, self.dtype, self.gpu, self.impl, self.tokens,
+                self.instrument)
 
     def at_block_m(self, block_m: int) -> Observation | None:
         """The same row scheduled at another tile height, or None if uncountable.
@@ -285,6 +323,49 @@ def expert_weight_bytes(spec: BenchSpec, covers: str) -> float:
     stages = CANONICAL_STAGES if covers == "all" else tuple(covers.split("+"))
     return float(sum(weight_bytes_for_stage(spec, s, 1) for s in stages
                      if s in ("up_gemm", "down_gemm")))
+
+
+def clock_gate(row: dict, instrument: str) -> str:
+    """Why this row's CLOCK STATE disqualifies it, or "" to keep it.
+
+    ASKED OF THE INSTRUMENT THAT WROTE THE ROW, because the two apparatus have
+    no flag in common and reading one row's answer out of the other's column is
+    how a filter becomes a no-op without anybody noticing.
+
+    A pre-v5 row carries `throttled`: two clock samples taken at IDLE INSTANTS
+    either side of the cell, flagged on a >5% DROP. `moe/bench/timing.py`
+    documents what that actually detects -- whether the START sample caught the
+    idle boost -- and it fired on 91% of vLLM rows above T=4096 while flagged
+    and unflagged replicates of the same cell timed at ratio 0.998. It is kept
+    as this pool's gate anyway, because it is the only clock evidence those rows
+    carry and dropping the gate entirely would admit rows nothing checked. What
+    changed is that the drop is now NAMED for what it is, and its skew is stated
+    beside the answer: over the pinned set it removes 0.0% of rows at T=1 and
+    100% at T=16384, along the very axis alpha is identified on.
+
+    A v5 row carries the three under-load verdicts instead, and a row is dropped
+    when any of them FAILED. "undetermined" is kept: the check could not be run
+    (no NVML, a trial too short for the poller), which is not evidence against
+    the number, and folding it into a failure would silently discard every row
+    measured in a container that forbids NVML.
+    """
+    if instrument == SC.LEGACY_INSTRUMENT:
+        if SC.row_bool(row, "throttled"):
+            return ("throttled (the RETIRED idle-instant flag: it fires when "
+                    "the START sample caught the idle boost, and its drop rate "
+                    "runs 0% at T=1 to 100% at T=16384)")
+        return ""
+    failed = [c for c in SC.TIMING_VERDICT_COLUMNS
+              if SC.timing_verdict(row, c) == SC.VERDICT_FAILED]
+    if failed:
+        return ("under-load check failed on the instrument: "
+                + ", ".join(failed))
+    return ""
+
+
+def instrument_mix(observations) -> collections.Counter:
+    """How many admitted rows each timing apparatus produced."""
+    return collections.Counter(o.instrument for o in observations)
 
 
 def collect(paths, census: collections.Counter, *, cutlass: bool = False,
@@ -322,8 +403,10 @@ def collect(paths, census: collections.Counter, *, cutlass: bool = False,
             if not SC.passed(row):
                 census["failed the correctness gate"] += 1
                 continue
-            if SC.row_bool(row, "throttled") and not include_throttled:
-                census["throttled"] += 1
+            instrument = SC.instrument_of(row)
+            gate = clock_gate(row, instrument)
+            if gate and not include_throttled:
+                census[gate] += 1
                 continue
             ratio = SC.row_float(row, "implied_traffic_ratio")
             if ratio <= 0.0:
@@ -370,7 +453,8 @@ def collect(paths, census: collections.Counter, *, cutlass: bool = False,
                 cuda_graph=SC.row_bool(row, "cuda_graph"),
                 tile_columns=tuple((c, str(row.get(c, ""))) for c in TILE_COLUMNS),
                 arm=path.parent.name,
-                dirty_raw=str(row.get("git_dirty", ""))))
+                dirty_raw=str(row.get("git_dirty", "")),
+                instrument=instrument))
             census["ADMITTED"] += 1
     return out
 
@@ -389,7 +473,7 @@ def cell_key(obs: Observation) -> tuple:
     between 0.10 and the answer this script prints.
     """
     return (obs.model, obs.dtype, obs.gpu, obs.impl, obs.l2_flush,
-            obs.cuda_graph, obs.tokens)
+            obs.cuda_graph, obs.tokens, obs.instrument)
 
 
 def _design(observations, keyfn, group_ids=None):
@@ -693,7 +777,7 @@ def count_excluded_memory_bound(paths, alpha: float,
                 continue
             if float(row.get("ms_p50") or 0.0) <= 0.0 or not SC.passed(row):
                 continue
-            if SC.row_bool(row, "throttled") and not include_throttled:
+            if clock_gate(row, SC.instrument_of(row)) and not include_throttled:
                 continue
             peak = SC.row_float(row, "achieved_peak_tflops")
             bandwidth = SC.row_float(row, "achieved_bw_gbps")
@@ -908,6 +992,77 @@ def _report_pool(triton: list[Observation], census: collections.Counter) -> None
         print("  is printed for that reason rather than omitted as an absence.")
 
 
+def _report_instruments(triton: list[Observation], pool: bool) -> bool:
+    """WHICH APPARATUS MEASURED THE ROWS, AND WHETHER THEY MAY BE FITTED TOGETHER.
+
+    Printed for every run, pinned or not, because a number whose instrument is
+    not stated beside it is not comparable with any other number in this study:
+    the roof, the ladder scripts and (since schema v5) the driver all name the
+    timer that produced them, and a report that quoted an alpha without one
+    would be the only artefact left that does not.
+
+    Returns True when the fit may proceed. A single instrument always may. Two
+    or more may only under `--pool-instruments`, and the module docstring argues
+    why: `alpha` is identified inside a group intercept, the instruments differ
+    in level by construction, and no arm in this corpus ran one cell both ways,
+    so nothing here can measure whether they also differ in slope.
+    """
+    mix = instrument_mix(triton)
+    print("## the instrument that measured the fitted set")
+    print()
+    for name, count in mix.most_common():
+        disc = sum(1 for o in triton
+                   if o.instrument == name and o.discriminating)
+        print(f"  {count:>7}  {name}")
+        print(f"           of which {disc} discriminating")
+    print()
+    if len(mix) == 1:
+        only = next(iter(mix))
+        if only == SC.LEGACY_INSTRUMENT:
+            print("  ONE INSTRUMENT, AND IT IS THE RETIRED ONE. Every row here was "
+                  "timed with a")
+            print("  COUNT of warmup calls, an iteration count sized from one "
+                  "isolated call on an")
+            print("  idle GPU, and two idle-instant clock samples either side of "
+                  "the cell. The")
+            print("  fit below is therefore internally consistent and is NOT "
+                  "comparable, cell for")
+            print("  cell, with an alpha measured by "
+                  "`moe.bench.timing.time_kernel`; a ladder")
+            print("  script's answer and this one are two instruments' answers "
+                  "until an arm")
+            print("  re-measures these cells on the instrument.")
+        else:
+            print("  ONE INSTRUMENT, and it is the one `moe/bench/timing.py` "
+                  "names. The fit is")
+            print("  comparable with the roof and with every ladder script "
+                  "measured under it.")
+        return True
+
+    print("  TWO OR MORE INSTRUMENTS IN ONE POOL.")
+    if not pool:
+        print()
+        print("  REFUSED. alpha is identified INSIDE a group intercept, the "
+              "instrument is in")
+        print("  that key so no intercept spans both -- but an instrument that "
+              "shifts a")
+        print("  many-tile row differently from a one-tile row moves the SLOPE, "
+              "and no arm in")
+        print("  this corpus ran one cell both ways, so nothing here can measure "
+              "whether it")
+        print("  does. Fit each instrument separately, or pass "
+              "--pool-instruments to fit them")
+        print("  together with the counts above printed beside every number.")
+        return False
+    print()
+    print("  POOLED ON PURPOSE (--pool-instruments). Every number below is a "
+          "number over")
+    print("  the mix printed above, and the between-instrument split in the fit "
+          "section is")
+    print("  the only evidence here about how much of it that mix is worth.")
+    return True
+
+
 def split_range(triton: list[Observation], keyfn
                 ) -> tuple[float, float, int] | None:
     """`(lowest alpha, highest alpha, splits fitted)` over one lever's levels.
@@ -941,6 +1096,12 @@ def _report_fit(triton: list[Observation], alpha: float, args) -> None:
     n_disc = sum(1 for o in triton if o.discriminating)
     print(f"  alpha = {alpha:.3f}")
     print(f"  n = {len(triton)} rows, {n_disc} discriminating, {n_groups} intercepts")
+    # THE MIX, ON THE SAME LINES AS THE HEADLINE. A reader who quotes the number
+    # above quotes these three lines or none of them: the instrument is what
+    # makes this alpha comparable with the roof, or not.
+    print("  measured on: "
+          + "; ".join(f"{count} rows on {name}"
+                      for name, count in instrument_mix(triton).most_common()))
     print()
 
     # THREE BANDS, NOT ONE, AND THE WIDEST IS THE ANSWER. Cells are nested in
@@ -989,6 +1150,7 @@ def _report_fit(triton: list[Observation], alpha: float, args) -> None:
     for label, keyfn in (("between model", lambda o: o.model),
                          ("between card", lambda o: o.gpu),
                          ("between basis", lambda o: o.mode),
+                         ("between instrument", lambda o: o.instrument),
                          ("between routing", lambda o: o.routing),
                          ("between arm", lambda o: o.arm)):
         rng = split_range(triton, keyfn)
@@ -1350,6 +1512,9 @@ def report(args, arms: list[str] | None = None) -> int:
         print()
         print("nothing admitted; there is no fit to report")
         return 1
+    print()
+    if not _report_instruments(triton, args.pool_instruments):
+        return REFUSED
     alpha = fit_alpha(triton)
     print()
     _report_fit(triton, alpha, args)
@@ -1392,8 +1557,21 @@ def main(argv: list[str] | None = None) -> int:
                         help="cluster-bootstrap draws for the band (default 200)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--include-throttled", action="store_true",
-                        help="keep rows whose clock drifted; off by default, because "
-                             "a throttled row's time is not the kernel's")
+                        help="keep rows the clock gate would drop; off by "
+                             "default, because such a row's time is not the "
+                             "kernel's. The gate is whichever one the row's own "
+                             "instrument recorded: `throttled` on a pre-v5 row, "
+                             "the three under-load verdicts on a v5 one. The "
+                             "name is the pre-v5 flag's and is kept so the "
+                             "option means one thing across the boundary")
+    parser.add_argument("--pool-instruments", action="store_true",
+                        help="fit rows from two or more timing instruments in "
+                             "one pool. Off by default, and the run REFUSES "
+                             "(exit 2) rather than pooling silently: alpha is "
+                             "identified inside a group intercept and the "
+                             "apparatus differ in level by construction. With "
+                             "it, the count per instrument is printed beside "
+                             "every headline number")
     parser.add_argument("--original-estimator", action="store_true",
                         help="also run the pooled-CV estimator that produced 0.10, on "
                              "the rows it was originally run on")
