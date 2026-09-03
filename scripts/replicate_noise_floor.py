@@ -1119,7 +1119,7 @@ def order_lines(arms: list[Arm], n: int, mode: str) -> list[str]:
 
 
 def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str,
-               sweep_args: Sequence[str], order: str) -> str:
+               sweep_args: Sequence[str], order: str, python: str) -> str:
     """A run id carrying EVERY swept parameter, the card, and the replicate index.
 
     `block_m_crossing_sweep.default_run_id` OMITTED THE GPU until 2026-09-02,
@@ -1163,6 +1163,26 @@ def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str,
     function has no business knowing the sweep's grammar, and two spellings of
     one setting landing in two directories is the safe direction of that
     ignorance.
+
+    `python` IS REQUIRED TOO, ADDED 2026-09-02 AND FOR THE SAME REASON. It is
+    the interpreter every child sweep is launched with, so it selects the venv
+    and therefore the torch, triton and vLLM that measure every cell, and the
+    session driver deliberately varies it between `PY_BASE` and `PY_VLLM` from
+    one arm to the next. Two interpreters resumed one directory:
+
+        --dry-run --gpu-name 'NVIDIA H200' --python /usr/bin/python3
+        --dry-run --gpu-name 'NVIDIA H200' --python /other/venv/bin/python
+
+    printed the identical `...-settingscell_budget-fbf9bcea`. It travels under
+    `settings` rather than in the visible part because the path is long and the
+    six knobs an operator reads in `ls` are worth more room than it is; the hash
+    does not care where a knob sits.
+
+    THIS WAS FOUND BY A COMPLETENESS GUARD, NOT BY A READER.
+    `tests/test_replicate_noise_floor.py` now reads the knobs off `build_parser`
+    and demands each one be exercised or refused by name, which is the same
+    guard `tests/test_run_ids.py` grew after a hand-written list of ten knobs
+    against a parser of sixteen let `--cell-budget-ms` through.
     """
     return PV.run_id(
         card=gpu_name,
@@ -1181,6 +1201,7 @@ def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str,
         s=arm.num_stages,
         settings={
             "sweep_args": list(sweep_args),
+            "python": python,
             "dtype": arm.dtype,
             "tiles": arm.tiles,
             "r_max": arm.r_max,
@@ -2146,13 +2167,13 @@ def render_mde_line(n: int, arms: list[Arm]) -> list[str]:
 
 def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
                 gpu_name: str, costs: dict[str, float | None],
-                order: str, sweep_args: Sequence[str]) -> str:
+                order: str, sweep_args: Sequence[str], python: str) -> str:
     """The plan, including the id every replicate will resume into.
 
-    `sweep_args` is here so the PRINTED ids are the ids the run will use. The
-    plan is what an operator reads before spending a pod hour, and a plan that
-    names a directory the run then does not use is worse than no plan: it is
-    the one artefact that would have shown the collision.
+    `sweep_args`, `order` and `python` are here so the PRINTED ids are the ids
+    the run will use. The plan is what an operator reads before spending a pod
+    hour, and a plan that names a directory the run then does not use is worse
+    than no plan: it is the one artefact that would have shown the collision.
     """
     out = ["## The plan", "",
            f"{len(arms)} arm(s) x {n} replicates = {len(arms) * n} sweep processes, "
@@ -2189,7 +2210,7 @@ def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
                    f"BN={arm.block_n} s={arm.num_stages} r_max={arm.r_max}  {cost}")
         for i in range(1, n + 1):
             run_id = run_id_for(arm, i, gpu_name=gpu_name, cache_mode=cache_mode,
-                                sweep_args=sweep_args, order=order)
+                                sweep_args=sweep_args, order=order, python=python)
             out.append(f"      rep {i}: {run_id}")
     out.append("")
     if unknown:
@@ -2330,7 +2351,7 @@ def run_replicate(arm: Arm, index: int, base: Path, *, gpu_name: str,
     two settings we did not separate for it.
     """
     run_id = run_id_for(arm, index, gpu_name=gpu_name, cache_mode=cache_mode,
-                        sweep_args=sweep_args, order=order)
+                        sweep_args=sweep_args, order=order, python=python)
     out_dir = base / f"{arm.name}-rep{index}"
     rep = Replicate(arm=arm.name, index=index, run_id=run_id, out_dir=out_dir,
                     report=out_dir / "block_m_crossing" / run_id / "report.json")
@@ -2519,7 +2540,8 @@ def main(argv: list[str] | None = None) -> int:
                   "--self-test-noise", str(args.rehearse_noise)]
 
     print()
-    print(render_plan(arms, n, cache_mode, base, gpu_name, costs, args.order, extra))
+    print(render_plan(arms, n, cache_mode, base, gpu_name, costs, args.order, extra,
+                      args.python))
     print()
     print(render_predictions(n, arms))
 

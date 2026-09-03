@@ -417,6 +417,33 @@ def gpu_name() -> str:
         else "unknown"
 
 
+def probe_card() -> str:
+    """The card that names the run id, asked of `nvidia-smi` and never of torch.
+
+    THE DRIVER PROCESS MUST NOT TOUCH CUDA, and until 2026-09-02 it never did:
+    the only `import torch` in this file is inside `workload_stream` and
+    `workload_grouped_mm`, which run solely in the `--workload` child. Naming the
+    card from `provenance_block().gpu_name` broke that, because
+    `provenance._gpu` reads
+    `torch.cuda.get_device_name(torch.cuda.current_device())` and
+    `current_device` calls `_lazy_init()`, which creates a CUDA primary context
+    in whatever process asks.
+
+    A context here lands THIS process in `compute_apps()`, the one field that
+    records whether a neighbour was on the device while a device-wide sampler
+    ran. "none" would stop being reachable and the probe would report itself as
+    the contamination it exists to detect. It also takes a few hundred MB off
+    the free memory the child's own headroom guard measures.
+
+    `nvidia-smi` answers the same question from outside the driver API. An
+    unavailable one gives `NO_CARD` rather than `gpu_name`'s "unknown", because
+    `provenance.run_id` refuses an empty card and a label no card can have is
+    honest where a guess is not.
+    """
+    name = gpu_name()
+    return NO_CARD if name == "unknown" else name
+
+
 def compute_apps() -> str:
     """Who else is on this device. The uncontrolled variable, recorded not fixed.
 
@@ -654,6 +681,27 @@ def probe_provenance(args) -> PV.Provenance:
         bandwidth=(float(args.peak_gbps) * 1e9 if args.peak_gbps else None))
 
 
+def write_report(out_dir: Path, rep: Report, args) -> Path:
+    """Stamp `probe.json` and build the provenance block at the LAST moment.
+
+    THE ORDER IS THE POINT, not the tidiness. `probe_provenance` imports torch
+    and asks CUDA for the device name, which creates a primary context in this
+    process (see `probe_card`). Everything the report describes happens before
+    this call: `discover` takes the before-snapshot of `compute_apps`, the
+    ladder runs, `compute_apps_after` takes the after-snapshot, and the
+    calibrate and measure children each get the free memory their own headroom
+    guard checks. Building the block anywhere earlier puts our own pid into the
+    neighbour field and shrinks the child's headroom, so the fix for an
+    unattributed report would have corrupted the record it was attributing.
+
+    Exactly one of `main`'s three exits reaches this, so the block is probed
+    once per run whichever way the probe ends.
+    """
+    path = out_dir / "probe.json"
+    path.write_text(json.dumps(probe_provenance(args).stamp(asdict(rep)), indent=2))
+    return path
+
+
 def explain() -> str:
     """The arithmetic that decides this before any GPU is rented."""
     lines = ["THE SAMPLING ARITHMETIC, which needs no GPU and settles the shape of",
@@ -889,11 +937,11 @@ def main(argv: list[str] | None = None) -> int:
         print(explain())
         return 0
 
-    # ONE PROVENANCE BLOCK, PROBED ONCE, and it is what names the card in the
-    # directory as well as what stamps the report. It costs one torch import in
-    # the parent, against a probe that spends ninety seconds in nsys and a child.
-    prov = probe_provenance(args)
-    card = prov.gpu_name or NO_CARD
+    # THE CARD COMES FROM `nvidia-smi` AND THE PROVENANCE BLOCK IS BUILT LAST,
+    # inside `write_report`, both for the reason `probe_card` gives: building it
+    # creates a CUDA context in this process, and this process is the one whose
+    # absence from `compute_apps` the report is claiming.
+    card = probe_card()
     run_id = run_id_for(args, card)
     # The timestamp STAYS, after the id rather than instead of it: two probes of
     # one machine at one setting are two different sessions and the question
@@ -976,9 +1024,7 @@ def main(argv: list[str] | None = None) -> int:
             "which separates 'no sampler' from 'no nsys'.")
         print(f"\nVERDICT: {rep.verdict}")
         rep.elapsed_s = time.perf_counter() - t0
-        (out_dir / "probe.json").write_text(
-            json.dumps(prov.stamp(asdict(rep)), indent=2))
-        print(f"\nelapsed {rep.elapsed_s:.0f}s, report {out_dir / 'probe.json'}")
+        print(f"\nelapsed {rep.elapsed_s:.0f}s, report {write_report(out_dir, rep, args)}")
         return 3
 
     print(f"\nVERDICT SO FAR: nsys DOES sample DRAM here, via {winner.label}")
@@ -1017,8 +1063,7 @@ def main(argv: list[str] | None = None) -> int:
                                "should be quoted.")
                 print(f"\nVERDICT: {rep.verdict}")
                 rep.elapsed_s = time.perf_counter() - t0
-                (out_dir / "probe.json").write_text(
-                    json.dumps(prov.stamp(asdict(rep)), indent=2))
+                write_report(out_dir, rep, args)
                 return 3
         else:
             rep.calibration = {"error": res.head()}
@@ -1060,9 +1105,7 @@ def main(argv: list[str] | None = None) -> int:
                    "device wide and edge quantised, so quote it with the "
                    "resolution line beside it.")
     rep.elapsed_s = time.perf_counter() - t0
-    (out_dir / "probe.json").write_text(
-        json.dumps(prov.stamp(asdict(rep)), indent=2))
-    print(f"\nelapsed {rep.elapsed_s:.0f}s, report {out_dir / 'probe.json'}")
+    print(f"\nelapsed {rep.elapsed_s:.0f}s, report {write_report(out_dir, rep, args)}")
     print("Traces and their sqlite exports are beside it. `*.nsys-rep` is "
           "gitignored at any depth, so they leave as a tarball.")
     return 0

@@ -182,13 +182,21 @@ def test_the_output_directory_names_the_card_and_not_only_the_clock(
     """Two pods, one network volume, one tree. The directory was a bare
     `%Y-%m-%d-%H%M%S`, so which card wrote a probe was legible only by opening
     it, and the results root is a network volume the runbook uses BECAUSE it
-    outlives the pod."""
+    outlives the pod.
+
+    THE CARD COMES FROM `nvidia-smi`. The provenance block is planted with the
+    OTHER card here on purpose: if the directory were named from
+    `prov.gpu_name`, as it was between the provenance commit and this one, this
+    test would read `nvidia_a100_...` and fail. See `probe_card` for why torch
+    may not be asked.
+    """
     monkeypatch.setattr(NP, "results_root", lambda: tmp_path)
+    monkeypatch.setattr(NP, "gpu_name", lambda: H200)
     # The real function, captured BEFORE the patch: `NP.PV` is this module's
     # `PV`, so a lambda that called `PV.provenance_block` would call itself.
     real = PV.provenance_block
     monkeypatch.setattr(NP.PV, "provenance_block",
-                        lambda **k: dataclasses.replace(real(**k), gpu_name=H200))
+                        lambda **k: dataclasses.replace(real(**k), gpu_name=A100))
     monkeypatch.setattr(NP, "nsys_binary", lambda explicit: "/usr/local/bin/nsys")
     monkeypatch.setattr(NP, "discover", lambda binary: _fake_discovery())
     monkeypatch.setattr(NP, "run_ladder", lambda *a, **k: [])
@@ -199,3 +207,53 @@ def test_the_output_directory_names_the_card_and_not_only_the_clock(
     # ...and the timestamp is still there, after the id: two probes of one
     # machine at one setting are two different sessions.
     assert made[0].name.endswith(tuple("0123456789"))
+
+
+# --------------------------------------------------------------------------
+# The driver process may not touch CUDA.
+# --------------------------------------------------------------------------
+
+def test_the_card_for_the_run_id_is_asked_of_nvidia_smi_and_not_of_torch(
+        monkeypatch):
+    """`probe_card` is `nvidia-smi`, and an unavailable one is `NO_CARD`.
+
+    `gpu_name` answers "unknown" when the query fails, which is a fine metric
+    set selector and a terrible card: `provenance.run_id` would put
+    `unknown-...` at the front of a directory that names no machine, which is
+    the collision this whole slice closes wearing a friendlier word.
+    """
+    monkeypatch.setattr(NP, "gpu_name", lambda: H200)
+    assert NP.probe_card() == H200
+    monkeypatch.setattr(NP, "gpu_name", lambda: "unknown")
+    assert NP.probe_card() == NP.NO_CARD
+
+
+def test_no_cuda_context_is_created_before_either_neighbour_snapshot(
+        tmp_path, monkeypatch):
+    """THE FAIL BRANCH IS THE PREVIOUS COMMIT. Naming the card from
+    `provenance_block().gpu_name` called `torch.cuda.current_device()`, whose
+    `_lazy_init()` creates a primary context in the DRIVER process, before
+    `discover()` ran `nvidia-smi --query-compute-apps`. The probe would then
+    have listed itself as the neighbour in the one field that records whether
+    it had one, and `compute_apps`' own docstring says that snapshot is the
+    only honest thing a device-wide sampler can offer.
+
+    Order, not absence, is what is asserted: the block is still built, and it
+    is built last, from `write_report`.
+    """
+    log: list[str] = []
+    monkeypatch.setattr(NP, "gpu_name", lambda: H200)
+    monkeypatch.setattr(NP, "nsys_binary", lambda explicit: "/usr/local/bin/nsys")
+    monkeypatch.setattr(NP, "discover",
+                        lambda binary: (log.append("before-snapshot"),
+                                        _fake_discovery())[1])
+    monkeypatch.setattr(NP, "run_ladder", lambda *a, **k: (log.append("ladder"), [])[1])
+    monkeypatch.setattr(NP, "compute_apps",
+                        lambda: (log.append("after-snapshot"), "none")[1])
+    real = PV.provenance_block
+    monkeypatch.setattr(NP.PV, "provenance_block",
+                        lambda **k: (log.append("provenance"), real(**k))[1])
+    NP.main(["--out", str(tmp_path / "probe")])
+    assert log == ["before-snapshot", "ladder", "after-snapshot", "provenance"]
+    # ...and it really was built, so this is not passing by doing less.
+    assert json.loads((tmp_path / "probe" / "probe.json").read_text())["git_sha"]

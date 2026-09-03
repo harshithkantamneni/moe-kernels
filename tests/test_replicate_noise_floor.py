@@ -186,47 +186,169 @@ def test_cells_needed_for_the_cross_card_effect_reproduces_the_3_5x():
 
 # --- 1. the floor is zero because nothing varied ----------------------------
 
+#: The arguments `run_id_for` is called with when nothing has moved. Every test
+#: below states its change as a delta on this, so a new keyword reaches all of
+#: them at once instead of being added to a list that a reader has to notice.
+BASE_ID_KWARGS = dict(gpu_name="NVIDIA H200", cache_mode="fresh", sweep_args=(),
+                      order=NF.ORDER_COUNTERBALANCED, python="/venv/bin/python")
+
+
+def _id(arm=None, replicate=1, **over):
+    return NF.run_id_for(arm or NF.DEFAULT_ARMS[0], replicate,
+                         **{**BASE_ID_KWARGS, **over})
+
+
 def test_six_replicates_get_six_distinct_run_ids():
-    arm = NF.DEFAULT_ARMS[0]
-    ids = {NF.run_id_for(arm, i, gpu_name="NVIDIA H200", cache_mode="fresh",
-                         sweep_args=(), order=NF.ORDER_COUNTERBALANCED)
-           for i in range(1, 7)}
-    assert len(ids) == 6
+    assert len({_id(replicate=i) for i in range(1, 7)}) == 6
 
 
-def test_run_id_separates_every_swept_parameter():
-    """Each knob, moved alone, must move the id. A knob that does not is a knob
-    whose second setting silently reports the first's numbers."""
-    base = NF.DEFAULT_ARMS[0]
-    ref = NF.run_id_for(base, 1, gpu_name="NVIDIA H200", cache_mode="fresh",
-                        sweep_args=(), order=NF.ORDER_COUNTERBALANCED)
+#: Every `Arm` FIELD that must move the run id, with a value different from the
+#: default. Checked for completeness against `dataclasses.fields(Arm)` by
+#: `test_no_arm_field_is_silently_outside_the_run_id`.
+ARM_FIELDS_MOVED = {
+    "model": "qwen2-57b-a14b", "dtype": "fp16", "group_m": 16, "block_n": 256,
+    "num_stages": 3, "tiles": "32,64", "r_max": 512, "row_step": 64,
+    "step_probes": 3, "warmup_ms": 150.0, "trials": 5, "l2_flush": False,
+    "cell_budget_ms": 200.0, "seed": 7,
+}
+
+#: The `Arm` fields that may NOT move it, with the reason.
+ARM_FIELDS_NOT_IN_THE_ID = {
+    "name": "labels the arm in the `{arm}-rep{i}` directory and in the log. "
+            "Every field that decides what a cell CONTAINS is above, and two "
+            "arms that agree on all of them are the same measurement under two "
+            "labels",
+}
+
+
+@pytest.mark.parametrize("field_name,value", sorted(ARM_FIELDS_MOVED.items()))
+def test_every_arm_field_that_moves_a_cell_moves_the_run_id(field_name, value):
+    """Each field, moved alone, must move the id. One that does not is one whose
+    second setting silently reports the first's numbers."""
     import dataclasses
-    for knob, value in [("group_m", 16), ("block_n", 256), ("num_stages", 3),
-                        ("r_max", 512), ("row_step", 64), ("trials", 5),
-                        ("warmup_ms", 150.0), ("l2_flush", False),
-                        ("seed", 7), ("tiles", "32,64"),
-                        ("dtype", "fp16"), ("step_probes", 3),
-                        ("cell_budget_ms", 200.0)]:
-        moved = dataclasses.replace(base, **{knob: value})
-        got = NF.run_id_for(moved, 1, gpu_name="NVIDIA H200", cache_mode="fresh",
-                            sweep_args=(), order=NF.ORDER_COUNTERBALANCED)
-        assert got != ref, f"moving {knob} did not change the run id"
-    assert NF.run_id_for(base, 1, gpu_name="NVIDIA A100-SXM4-80GB",
-                         cache_mode="fresh", sweep_args=(),
-                         order=NF.ORDER_COUNTERBALANCED) != ref
-    assert NF.run_id_for(base, 1, gpu_name="NVIDIA H200", cache_mode="warm",
-                         sweep_args=(),
-                         order=NF.ORDER_COUNTERBALANCED) != ref
-    # THE PASSTHROUGH AND THE DESIGN. `--sweep-arg` reaches the child sweep as
-    # an argument we do not parse, and `--order` decides the counterbalancing.
-    # Neither was in the key until 2026-09-02, so a G=16 arm requested through
-    # the passthrough resumed the G=1 arm's cells and a switch of design resumed
-    # the other design's.
-    assert NF.run_id_for(base, 1, gpu_name="NVIDIA H200", cache_mode="fresh",
-                         sweep_args=("--group-m", "16"),
-                         order=NF.ORDER_COUNTERBALANCED) != ref
-    assert NF.run_id_for(base, 1, gpu_name="NVIDIA H200", cache_mode="fresh",
-                         sweep_args=(), order=NF.ORDER_PAIRED) != ref
+    moved = dataclasses.replace(NF.DEFAULT_ARMS[0], **{field_name: value})
+    assert _id(moved) != _id(), field_name
+
+
+def test_no_arm_field_is_silently_outside_the_run_id():
+    """THE LIST ABOVE CANNOT GO STALE. A field added to `Arm` joins no
+    hand-written list on its own, and the suite stays green while the id stops
+    separating two experiments."""
+    import dataclasses
+    fields = {f.name for f in dataclasses.fields(NF.Arm)}
+    unclassified = fields - set(ARM_FIELDS_MOVED) - set(ARM_FIELDS_NOT_IN_THE_ID)
+    assert not unclassified, (
+        f"{sorted(unclassified)} are Arm fields that nothing says belong in or "
+        "out of the run id. Add each to ARM_FIELDS_MOVED with a value that must "
+        "move the id, or to ARM_FIELDS_NOT_IN_THE_ID with the reason it may not.")
+    assert not (set(ARM_FIELDS_MOVED) & set(ARM_FIELDS_NOT_IN_THE_ID))
+    assert not (set(ARM_FIELDS_MOVED) | set(ARM_FIELDS_NOT_IN_THE_ID)) - fields
+
+
+#: Every `build_parser` knob that reaches the run id, with the route it takes and
+#: the delta on `run_id_for`'s arguments that `main` actually produces from it.
+#: The reason this exists rather than a prose list: the hand-written version of
+#: it is what hid `--sweep-arg` and `--order`, and then hid `--python`.
+PARSER_KNOBS_IN_THE_ID = {
+    "gpu_name": ("the card, and it leads the id", dict(gpu_name="NVIDIA A100-SXM4-80GB")),
+    "warm_cache": ("becomes `cache_mode`", dict(cache_mode="warm")),
+    "order": ("the counterbalancing DESIGN, not an analysis knob",
+              dict(order=NF.ORDER_PAIRED)),
+    "python": ("the interpreter every child sweep runs under, so it selects the "
+               "torch/triton/vLLM that measure every cell; the session driver "
+               "varies it between PY_BASE and PY_VLLM",
+               dict(python="/other/venv/bin/python")),
+    "sweep_arg": ("the passthrough, entered verbatim",
+                  dict(sweep_args=("--group-m", "16"))),
+    "rehearse": ("main appends `--self-test <alpha>` to `extra`, and `extra` IS "
+                 "what is passed as `sweep_args`",
+                 dict(sweep_args=("--self-test", "0.5"))),
+    "rehearse_noise": ("same route: `--self-test-noise` rides in `extra`",
+                       dict(sweep_args=("--self-test-noise", "0.05"))),
+    "arms": ("selects the `Arm`, whose every field is covered above",
+             dict(arm=NF.DEFAULT_ARMS[1])),
+    "replicates": ("bounds the replicate INDEX, which is in the id as `rep`",
+                   dict(replicate=2)),
+}
+
+#: The knobs that may NOT move it, each with the reason. A knob here and a knob
+#: in the map above are the same claim in opposite directions, and both are
+#: claims: a wrong entry here is how a swept knob becomes an analysis knob by
+#: assertion.
+PARSER_KNOBS_NOT_IN_THE_ID = {
+    "single_model_floor": "a refusal switch over the arms already in the id. It "
+                          "changes what may be PUBLISHED, not what is measured",
+    "floor_from": "chooses which cache mode may be published as THE floor; both "
+                  "modes were measured under their own `cache` key",
+    "out_dir": "names the base directory instead of deriving it",
+    "replicate_timeout": "kills a hung sweep process. A replicate the timeout "
+                         "cut short leaves a partial directory, and a longer "
+                         "timeout resuming and FINISHING it is the intended "
+                         "behaviour; putting it in the key would forbid that",
+    "dry_run": "prints the plan and measures nothing",
+    "control_only": "part (b) only, arithmetic over committed reports, no cell",
+    "publish": "writes the document from cells that already exist",
+}
+
+
+@pytest.mark.parametrize("knob", sorted(PARSER_KNOBS_IN_THE_ID))
+def test_every_parser_knob_that_selects_a_cell_moves_the_run_id(knob):
+    """THE PASSTHROUGH, THE DESIGN AND THE INTERPRETER. `--sweep-arg` reaches the
+    child sweep as an argument we do not parse, `--order` decides the
+    counterbalancing, `--python` decides which venv measures. None of the three
+    was in the key: a G=16 arm requested through the passthrough resumed the G=1
+    arm's cells, a switch of design resumed the other design's, and two
+    interpreters resumed one directory.
+    """
+    _reason, delta = PARSER_KNOBS_IN_THE_ID[knob]
+    delta = dict(delta)
+    arm = delta.pop("arm", None)
+    replicate = delta.pop("replicate", 1)
+    assert _id(arm, replicate, **delta) != _id(), knob
+
+
+def test_no_parser_knob_is_silently_outside_the_run_id():
+    """THE GUARD R2 SHOULD HAVE HAD. `--sweep-arg` and `--order` were found by an
+    audit reading the file, and `--python` was still missing afterwards, because
+    the test beside them was a hand-written list over `Arm` fields that a parser
+    knob never had to join. The knobs are read off `build_parser` now and each
+    must be either exercised above or refused BY NAME with a reason.
+    """
+    knobs = set(vars(NF.build_parser().parse_args([])))
+    unclassified = knobs - set(PARSER_KNOBS_IN_THE_ID) - set(PARSER_KNOBS_NOT_IN_THE_ID)
+    assert not unclassified, (
+        f"{sorted(unclassified)} are knobs of replicate_noise_floor that nothing "
+        "says belong in or out of the run id. Add each to PARSER_KNOBS_IN_THE_ID "
+        "with the delta it produces, or to PARSER_KNOBS_NOT_IN_THE_ID with the "
+        "reason it may not move the id.")
+    assert not (set(PARSER_KNOBS_IN_THE_ID) & set(PARSER_KNOBS_NOT_IN_THE_ID))
+    assert not (set(PARSER_KNOBS_IN_THE_ID) | set(PARSER_KNOBS_NOT_IN_THE_ID)) - knobs
+
+
+def test_the_printed_plan_separates_two_interpreters_and_not_two_timeouts(
+        capsys, monkeypatch):
+    """END TO END, through `main`, because the maps above are a model of `main`
+    and a model can be wrong. The plan is the artefact an operator reads before
+    spending a pod hour, and the ids it prints are the ids the run resumes into.
+
+    BOTH DIRECTIONS ARE ASSERTED. `--python` must separate, `--replicate-timeout`
+    must not: a timeout that entered the key would give a re-run with a longer
+    limit a fresh directory and forbid it from finishing the replicate the short
+    one cut off.
+    """
+    # The real one launches the sweep's own --dry-run per arm, four seconds of
+    # subprocess for a number this test does not read.
+    monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
+
+    def plan_ids(extra):
+        NF.main(["--dry-run", "--gpu-name", "NVIDIA H200"] + extra)
+        return re.findall(r"rep \d+: (\S+)", capsys.readouterr().out)
+
+    base = plan_ids(["--python", "/usr/bin/python3"])
+    assert base, "the plan printed no run ids at all"
+    assert plan_ids(["--python", "/other/venv/bin/python"]) != base
+    assert plan_ids(["--python", "/usr/bin/python3",
+                     "--replicate-timeout", "60"]) == base
 
 
 def test_the_sweeps_own_run_id_now_carries_the_card_and_ours_still_adds_the_replicate():
@@ -254,9 +376,7 @@ def test_the_sweeps_own_run_id_now_carries_the_card_and_ours_still_adds_the_repl
     assert (sweep.default_run_id(args, "nvidia_h200")
             != sweep.default_run_id(args, "nvidia_a100_sxm4_80gb"))
     # ...and our id for the same arm carries the card and the replicate.
-    ours = NF.run_id_for(NF.DEFAULT_ARMS[0], 1, gpu_name="NVIDIA H200",
-                         cache_mode="fresh", sweep_args=(),
-                         order=NF.ORDER_COUNTERBALANCED)
+    ours = _id()
     assert "rep1" in ours and ours.startswith("nvidia_h200-")
 
 
@@ -775,6 +895,49 @@ def test_the_published_floor_file_refuses_until_a_card_has_run():
     else:
         floor = NF.noise_floor()
         assert floor.sd > 0 and floor.df >= 1
+
+
+@pytest.mark.skipif(not NF.NOISE_FLOOR_JSON.exists(),
+                    reason="the noise floor has not been published here yet")
+def test_the_committed_floor_carries_the_provenance_its_writer_now_requires():
+    """R3 IS CLOSED IN CODE AND STILL OPEN ON DISK, and this is what makes the
+    difference visible instead of remembered.
+
+    `build_document` takes `prov` as a required positional argument now, so no
+    path can publish an unstamped floor AGAIN. The file that is already
+    committed was written before that, and it has none:
+    `sorted(json.load(...))` is `[cross_card, effects_registered, git,
+    primary_field, prior_sd, prior_sd_source, replicate_floor, schema, sign,
+    stages_control, written_utc]`, with no provenance block, no git_sha, no
+    gpu_name, no instrument, no ridge_source and no bandwidth_source. The test
+    beside this one monkeypatches `write_published`, so it proves the WRITER and
+    says nothing about the artefact, and the suite would stay green forever over
+    an unattributed published number.
+
+    IT XFAILS RATHER THAN FAILS BECAUSE THE FIX IS NOT A CODE CHANGE. Rerunning
+    `--control-only --publish` on this laptop would stamp a null card and this
+    working tree onto a file the study quotes; the regeneration belongs on the
+    machine and at the commit the floor is republished from. XFAIL is the debt
+    recorded in the one place that cannot be forgotten. When the file is
+    regenerated this test starts running for real, XPASSes, and the marker
+    should be deleted with the same commit.
+    """
+    doc = json.loads(NF.NOISE_FLOOR_JSON.read_text())
+    if "provenance" not in doc:
+        pytest.xfail(
+            "results/published/NOISE_FLOOR.json predates the provenance "
+            "requirement and carries no block. It is OWED a regeneration at the "
+            "commit it is republished from: `python scripts/"
+            "replicate_noise_floor.py --control-only --publish`, run where the "
+            "tree is clean.")
+    for key in NF.PV.TOP_LEVEL_KEYS:
+        assert key in doc, key
+    assert doc["provenance"]["git_sha"], "a published floor names its commit"
+    assert doc["provenance"]["utc"]
+    assert doc["instrument"], "and the ruler that produced it"
+    # A page that measured nothing says so; it does not borrow the live name.
+    if doc["replicate_floor"] is None:
+        assert doc["instrument"] == NF.UNMEASURED_INSTRUMENT
 
 
 @needs_arms
