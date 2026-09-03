@@ -111,12 +111,14 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import calibrate as calibrate_mod  # noqa: E402
+from moe.bench import exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.calibrate import (  # noqa: E402
     DEFAULT_CEILING,
@@ -131,6 +133,41 @@ from moe.bench.published import (  # noqa: E402
     filter_superseded,
     superseded_impls,
 )
+
+
+def instrument_name() -> str:
+    """What actually timed the ceilings this run publishes, named not assumed.
+
+    THE SAME DISCIPLINE `scripts/calibrate_hardware.py` ALREADY HAS, and it is
+    stated twice because `scripts/` is not a package and there is nothing to
+    import it from. The two must return the same string;
+    `tests/test_ruler_rebaseline.py` loads that file and asserts the equality,
+    so a change to one is a failing test rather than a silent divergence.
+
+    Until 2026-09-02 this file stamped `instrument=timing.TIMING_BASIS` onto a
+    calibration measured by `moe.bench.calibrate.calibrate`, which times through
+    `timing.time_eager` at `calibrate.py:718, :901, :952` and has never called
+    `time_kernel`. The label named the ladder instrument on a number the ladder
+    instrument never touched, and this is the script whose whole purpose is to
+    re-baseline the ruler: with `--write-calibration` it writes the ceiling YAML
+    that becomes the denominator of every published efficiency column, and the
+    instrument label is the one field a downstream reader uses to decide whether
+    a cell is comparable with the roof. Putting the roof and the ladders under
+    one label is the confusion the audit measured at 12-16% in alpha. A
+    provenance field that names the wrong instrument is worse than an absent
+    one, because an absent one is read as a question and a wrong one is not
+    read at all.
+
+    Reads a `TIMING_BASIS` from `moe.bench.calibrate` when that module grows one
+    (its migration onto `timing.time_kernel` is a separate phase), and otherwise
+    says plainly which loop ran.
+    """
+    basis = getattr(calibrate_mod, "TIMING_BASIS", None)
+    if basis:
+        return str(basis)
+    return ("moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed "
+            "events, L2 flush between iterations); NOT timing.TIMING_BASIS")
+
 
 # --------------------------------------------------------------------------
 # The numbers this script is arguing about, stated before anything runs.
@@ -1483,7 +1520,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     card = resolve_card(args)
     run_id = args.run_id or default_run_id(args)
@@ -1610,7 +1647,7 @@ def main(argv=None) -> int:
     # artefact two corpus-only runs are compared byte for byte to prove the
     # replay reads no hardware. A timestamp in there would make that comparison
     # fail for a reason that has nothing to do with reproducibility.
-    prov = PV.provenance_block(instrument=timing.TIMING_BASIS)
+    prov = PV.provenance_block(instrument=instrument_name())
     payload = prov.stamp({
         "run_id": run_id, "card": card,
         "predictions": [asdict(p) for p in PREDICTIONS],
@@ -1671,6 +1708,38 @@ def main(argv=None) -> int:
     rc = exit_codes.classify(scored)
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
+
+
+def main(argv=None) -> int:
+    """AN UNPLANNED CRASH IS ERROR (4), which is the only retryable code.
+
+    Left to propagate, an unexpected exception exits the interpreter ONE, and
+    ONE is CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it
+    is in FINISHED_CODES, so the driver files the arm as finished, skips it on
+    every resume, leaves RETRY_ARMS at zero and exits the session 0 over an arm
+    that never measured. A torch OOM, a truncated report or a drifted import
+    would be published as one of this experiment's registered outcomes. ERROR
+    (4) is outside FINISHED_CODES precisely so the driver can tell "the
+    apparatus broke" from "the claim did not hold", and the traceback is
+    printed first rather than swallowed, because a code without one tells an
+    operator nothing about what to fix.
+
+    Wrapped around `_main` rather than installed at the `__main__` guard so the
+    contract holds for a caller of `main()` -- the tests, and anything that
+    imports this file -- as well as for the CLI. `SystemExit` is a
+    `BaseException` and passes through untouched: a refusal is not a crash.
+    """
+    try:
+        return _main(argv)
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: ruler_rebaseline crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim "
+              "failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":

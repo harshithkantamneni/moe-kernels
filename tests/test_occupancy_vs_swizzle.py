@@ -1189,3 +1189,51 @@ def test_a_claim_fail_arm_exits_zero_unless_argv_asks_for_the_code(capsys):
     assert OVS.exit_codes.classify_text(out) == OVS.exit_codes.CLAIM_FAIL, \
         "the log says CLAIM_FAIL where the exit code says DONE"
     assert OVS.main(["--audit", "--fail-on-gate"]) == OVS.exit_codes.CLAIM_FAIL
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: occupancy_vs_swizzle had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(OVS, "_main", explode)
+    code = OVS.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
+
+
+def test_a_string_refusal_still_exits_REFUSED_and_is_not_relabelled_ERROR(
+        monkeypatch, capsys):
+    """The other branch of the same handler. `raise SystemExit("sentence")` is a
+    precondition not met, which is free and distinct from a crash, so the new
+    `except Exception` must not catch it: `SystemExit` is a `BaseException`.
+    """
+    from moe.bench import exit_codes as EX
+
+    def refuse(argv=None):
+        raise SystemExit("no calibration for the attached device")
+
+    monkeypatch.setattr(OVS, "_main", refuse)
+    code = OVS.main([])
+    err = capsys.readouterr().err
+    assert code == EX.REFUSED
+    assert err.startswith("REFUSED: no calibration")
+    assert "Traceback" not in err

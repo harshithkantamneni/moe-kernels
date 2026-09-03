@@ -330,6 +330,7 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -2356,14 +2357,17 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv=None) -> int:
-    """The one entry point, and the one place an exit code is chosen.
+def _main(argv=None) -> int:
+    """The body, and the one place an exit code is chosen. `main` wraps it.
 
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
     before anything is measured -- `--dry-run` included, because a plan scores
-    no gate -- ERROR (4) for an exception nobody planned for or a planted world
-    that came out other than registered, and otherwise `classify` over the
-    scored gates with nothing folded. `--fail-on-gate` is retired: a CLAIM_FAIL
+    no gate -- ERROR (4) for a planted world that came out other than
+    registered, and otherwise `classify` over the scored gates with nothing
+    folded. ERROR for an exception nobody planned for is the OTHER half, and it
+    is in `main`: until 2026-09-02 this file had no top-level handler and such
+    an exception exited the interpreter's 1, which the driver reads as
+    CLAIM_FAIL. `--fail-on-gate` is retired: a CLAIM_FAIL
     is returned as 1 whether or not it is passed, because a falsified
     pre-registered claim is a successful experiment and 1 is already the code
     that says so to the ledger. A VALIDITY failure is INVALID either way, since
@@ -2658,6 +2662,38 @@ def main(argv=None) -> int:
         print("         a claim that did not pass is a RESULT and the arm is "
               "FINISHED, not broken.")
     return rc
+
+
+def main(argv=None) -> int:
+    """AN UNPLANNED CRASH IS ERROR (4), which is the only retryable code.
+
+    Left to propagate, an unexpected exception exits the interpreter ONE, and
+    ONE is CLAIM_FAIL, which `moe/bench/exit_codes.py` defines as a RESULT: it
+    is in FINISHED_CODES, so the driver files the arm as finished, skips it on
+    every resume, leaves RETRY_ARMS at zero and exits the session 0 over an arm
+    that never measured. A torch OOM, a truncated report or a drifted import
+    would be published as one of this experiment's registered outcomes. ERROR
+    (4) is outside FINISHED_CODES precisely so the driver can tell "the
+    apparatus broke" from "the claim did not hold", and the traceback is
+    printed first rather than swallowed, because a code without one tells an
+    operator nothing about what to fix.
+
+    Wrapped around `_main` rather than installed at the `__main__` guard so the
+    contract holds for a caller of `main()` -- the tests, and anything that
+    imports this file -- as well as for the CLI. `SystemExit` is a
+    `BaseException` and passes through untouched: a refusal is not a crash.
+    """
+    try:
+        return _main(argv)
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: tile_cap_test crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim "
+              "failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":

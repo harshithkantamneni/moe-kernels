@@ -384,7 +384,18 @@ def test_the_ruler_keeps_its_provenance_out_of_the_reproducible_report(
     # non-reproducible fields.
     assert "git_sha" not in text
     assert "utc" not in text.split("GATES")[0]
-    assert payload["provenance"]["instrument"] == timing.TIMING_BASIS
+    # NOT `timing.TIMING_BASIS`, and this assertion is how the wrong label
+    # survived review. Nothing in this file is timed by `time_kernel`: the
+    # measuring path calls `moe.bench.calibrate.calibrate`, which times through
+    # `timing.time_eager` at `calibrate.py:718, :901, :952`, and `--corpus-only`
+    # times nothing at all. Stamping the ladder instrument on the roof's number
+    # puts the two under one label, which is the confusion the audit measured at
+    # 12-16% in alpha, in the one script that writes the ceiling YAML the
+    # published efficiency columns are divided by. `instrument_name()` names the
+    # loop that ran, the discipline `calibrate_hardware.py:91` already had.
+    assert payload["provenance"]["instrument"] == ruler.instrument_name()
+    assert payload["provenance"]["instrument"] != timing.TIMING_BASIS
+    assert "time_eager" in payload["provenance"]["instrument"]
     assert payload["git_sha"]
 
 

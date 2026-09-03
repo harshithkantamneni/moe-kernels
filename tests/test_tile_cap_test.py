@@ -643,3 +643,32 @@ def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
         assert rc == exit_codes.REFUSED, (
             "a run that scored no gate printed no RESULT line, so its log "
             "implies REFUSED and nothing else")
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: tile_cap_test had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(CAP, "_main", explode)
+    code = CAP.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err

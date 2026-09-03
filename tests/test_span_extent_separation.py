@@ -911,10 +911,44 @@ def test_the_dry_run_prints_whether_C3_can_speak_on_this_grid(capsys):
     assert "C3's POWER ON THIS GRID" in text
 
 
-def test_dropping_a_corner_of_the_2x2_is_refused():
-    """The three corners are the whole experiment; two of them separate nothing."""
-    with pytest.raises(SystemExit):
-        SE.main(["--dry-run", "--arms", "fused,cutlass_up"])
+def test_dropping_a_corner_of_the_2x2_is_refused_with_REFUSED_and_not_one(capsys):
+    """The three corners are the whole experiment; two of them separate nothing.
+
+    AND THE CODE IS THE POINT. This refusal is raised as `SystemExit(str)`, which
+    the interpreter turns into exit ONE, and one is CLAIM_FAIL: the driver would
+    file a run that measured nothing as a refutation of the claim and never
+    re-run the arm. Pinning `pytest.raises(SystemExit)` was pinning exactly that.
+    """
+    code = SE.main(["--dry-run", "--arms", "fused,cutlass_up"])
+    assert code == SE.exit_codes.REFUSED
+    assert code != SE.exit_codes.CLAIM_FAIL
+    assert "REFUSED: --arms must include" in capsys.readouterr().err
+
+
+def test_an_integer_SystemExit_is_re_raised_and_not_relabelled_REFUSED(monkeypatch):
+    """The other half of the same arm. argparse exits `SystemExit(2)` itself, and
+    an int code is already the right number: relabelling it would make this file
+    an opinion about codes it does not own."""
+    def bail(argv=None):
+        raise SystemExit(7)
+
+    monkeypatch.setattr(SE, "_main", bail)
+    with pytest.raises(SystemExit) as caught:
+        SE.main([])
+    assert caught.value.code == 7
+
+
+def test_a_crash_is_still_ERROR_and_the_traceback_is_not_swallowed(monkeypatch, capsys):
+    """The SystemExit arm must not have shadowed the crash arm: a planted
+    exception is the apparatus failing, so it is ERROR (4) with its traceback."""
+    def boom(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(SE, "_main", boom)
+    assert SE.main([]) == SE.exit_codes.ERROR
+    err = capsys.readouterr().err
+    assert "planted: the allocator gave up halfway" in err
+    assert "RuntimeError" in err
 
 
 def test_the_missing_stack_message_names_which_half_is_absent():
@@ -1694,3 +1728,32 @@ def test_the_missing_stack_refusal_exits_REFUSED_and_names_which_half(tmp_path,
     text = capsys.readouterr().out
     assert code == exit_codes.REFUSED
     assert "REFUSED:" in text and "--self-test kernel" in text
+
+
+def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
+    """The apparatus breaking must not be filed as one of the arm's outcomes.
+
+    An exception left to propagate exits the interpreter ONE, and ONE is
+    CLAIM_FAIL, which `moe/bench/exit_codes.py` puts in FINISHED_CODES: the
+    driver records the arm as finished, skips it on every resume, leaves
+    RETRY_ARMS at zero and exits the session 0 over an arm that never measured.
+    ERROR (4) is outside FINISHED_CODES so the two can be told apart, and the
+    traceback is printed rather than swallowed because a bare code names
+    nothing to fix. Planted rather than argued: span_extent_separation had no top-level handler
+    until 2026-09-02.
+    """
+    from moe.bench import exit_codes as EX
+
+    def explode(argv=None):
+        raise RuntimeError("planted: the allocator gave up halfway")
+
+    monkeypatch.setattr(SE, "_main", explode)
+    code = SE.main([])
+    err = capsys.readouterr().err
+    assert code == EX.ERROR
+    assert code != EX.CLAIM_FAIL
+    assert code not in EX.FINISHED_CODES, "an apparatus failure must stay retryable"
+    assert EX.ledger_state(code) == "RETRY"
+    assert "planted: the allocator gave up halfway" in err, \
+        "the traceback was swallowed"
+    assert "RuntimeError" in err
