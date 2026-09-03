@@ -53,6 +53,7 @@ import importlib.util
 import json
 import math
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -438,6 +439,65 @@ def test_no_ablation_scalar_is_ever_one_so_triton_cannot_split_the_kernel(design
                 "takes a different specialisation path from the aliased 0")
 
 
+#: The rung the CPU emulation runs on. Small enough that a float64 emulation of
+#: every program is milliseconds on a laptop, and shaped like a real one: more
+#: than one expert, more than one tile per expert, more than one N-block and
+#: more than one K iteration, because an extent bug that zeroes a stride is
+#: invisible whenever that stride only ever multiplies zero.
+EMULATED_RUNG = dict(model="emulated", tiles=2, block_m=16, experts=4,
+                     k=128, n=128, block_n=64, block_k=32, group_m=1)
+
+
+def _emulate_ablation_kernel(rung, extent: str, aliased: bool):
+    """Run `_ablation_kernel`'s sum-mode arithmetic on the CPU, in float64.
+
+    A TRANSCRIPTION OF THE ADDRESS ARITHMETIC AND NOT OF THE RESULT. The loop
+    below reads the same three runtime scalars the pod passes, out of
+    `ablation_scalars` itself, and walks flat indices exactly as the kernel
+    walks pointers: `b_base` from the effective expert and N-block strides, then
+    `b_k_advance` added once per K iteration. That is what makes it able to
+    disagree with `check_output`: nothing here is derived from the closed form
+    the check compares against, so the two meet only if the kernel and the
+    reference really describe the same alias.
+
+    float64 accumulation into a float32 output, which is the kernel's own
+    dtype pair, so the residual a correct pair produces is the float32 store's
+    rounding (order 1e-8 relative) and not a tolerance chosen to fit.
+    """
+    import torch
+
+    torch.manual_seed(0)
+    a = torch.empty((rung.total_rows, rung.k),
+                    dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+    b = torch.empty((rung.experts, rung.n, rung.k),
+                    dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+    c = torch.zeros((rung.total_rows, rung.n), dtype=torch.float32)
+    scalars = AB.ablation_scalars(rung, extent)["aliased" if aliased else "normal"]
+    stride_am, stride_ak = rung.k, 1
+    stride_bn, stride_bk = rung.k, 1          # B is contiguous [E, N, K]
+    a_flat = a.reshape(-1).to(torch.float64)
+    b_flat = b.reshape(-1).to(torch.float64)
+    offs_k = torch.arange(rung.block_k)
+    offs_bn = torch.arange(rung.block_n)
+    for pid_m in range(rung.num_pid_m):
+        off_e = pid_m // rung.tiles           # what expert_of_tile holds
+        offs_m = pid_m * rung.block_m + torch.arange(rung.block_m)
+        for pid_n in range(rung.num_pid_n):
+            b_base = (off_e * scalars["stride_be_eff"]
+                      + pid_n * scalars["stride_bn_blk_eff"])
+            a_idx = offs_m[:, None] * stride_am + offs_k[None, :] * stride_ak
+            b_idx = (b_base + offs_k[:, None] * stride_bk
+                     + offs_bn[None, :] * stride_bn)
+            acc = torch.zeros((), dtype=torch.float64)
+            for _ in range(rung.k_iters):
+                acc = acc + a_flat[a_idx].sum() + b_flat[b_idx].sum()
+                a_idx = a_idx + rung.block_k * stride_ak
+                b_idx = b_idx + scalars["b_k_advance"]
+            offs_cn = pid_n * rung.block_n + torch.arange(rung.block_n)
+            c[offs_m[:, None], offs_cn[None, :]] = acc.to(torch.float32)
+    return a, b, c
+
+
 def test_the_alias_extent_reaches_both_call_sites(design):
     """The extent has TWO call sites and this is the file's own recurring defect.
 
@@ -449,12 +509,21 @@ def test_the_alias_extent_reaches_both_call_sites(design):
     updated without the kernel AGREES with an alias that never happened, and the
     correctness gate passes on a run whose D is noise.
 
-    The two are compared through the closed form's own arithmetic rather than by
-    reading the source: at `block` the aliased arm walks a whole BLOCK_N x K
-    column block and the reference sums `b[0, :BLOCK_N, :]`; at `tile` it
-    re-reads one BLOCK_K x BLOCK_N tile K/BLOCK_K times and the reference sums
-    that tile and multiplies. The bytes each extent touches are what the L2
-    residency preflight is scored on, so all three agree or none do.
+    THE SECOND HALF OF THIS TEST IS THE HALF THAT WAS MISSING. Until 2026-09-03
+    the body below called `ablation_scalars` and `alias_bytes` and never called
+    `check_output` at all, so the test named for the recurring defect was itself
+    an instance of it: reverting `check_output`'s `block` branch to the tile
+    closed form left this file at 96 passed. It is closed by EMULATION rather
+    than by reading the source. `_emulate_ablation_kernel` runs the kernel's
+    address arithmetic on the CPU from the same three scalars the pod passes,
+    and the emulated output is scored through `check_output` at BOTH extents:
+    matching extent within float32 rounding, mismatched extent off by a factor
+    the tolerance cannot absorb. Either call site drifting alone breaks the
+    matching-extent assertion.
+
+    The runtime consequence of that drift is a loud `correctness` VALIDITY FAIL
+    on the card, not a silent wrong alpha, so what this test protects is a pod
+    hour rather than a retraction. It is worth a laptop second either way.
     """
     for rung in design.rungs:
         block = AB.ablation_scalars(rung, "block")["aliased"]
@@ -473,6 +542,32 @@ def test_the_alias_extent_reaches_both_call_sites(design):
         AB.ablation_scalars(design.rungs[0], "no-such-extent")
     with pytest.raises(ValueError):
         design.rungs[0].alias_bytes("no-such-extent")
+
+    torch = pytest.importorskip("torch")
+    rung = AB.Rung(**EMULATED_RUNG)
+    # NORMAL first. It is extent-independent by construction, and a normal arm
+    # that did not read every expert would make every aliased comparison below
+    # meaningless, because both arms would be reading the same thing.
+    a, b, c = _emulate_ablation_kernel(rung, AB.DEFAULT_ALIAS_EXTENT, False)
+    for extent in AB.ALIAS_EXTENTS:
+        err = AB.check_output(rung, a, b, c, "sum", False, torch, extent)
+        assert err < 1e-5, f"normal arm scored {err} at extent {extent}"
+
+    for built in AB.ALIAS_EXTENTS:
+        a, b, c = _emulate_ablation_kernel(rung, built, True)
+        for scored in AB.ALIAS_EXTENTS:
+            err = AB.check_output(rung, a, b, c, "sum", True, torch, scored)
+            if scored == built:
+                assert err < 1e-5, (
+                    f"the kernel aliased at {built} does NOT reproduce "
+                    f"check_output's {built} closed form (rel RMS {err}). One "
+                    "of the two call sites moved without the other")
+            else:
+                assert err > 1e-2, (
+                    f"an arm aliased at {built} scored {err} against the "
+                    f"{scored} closed form, so the two extents' references are "
+                    "not telling each other apart and this test would not "
+                    "notice either one drifting")
 
 
 def test_the_kernel_keeps_both_loads_live_on_the_compute_side():
@@ -639,15 +734,144 @@ def test_dot_mode_reports_a_lower_bound_and_refuses_to_answer_p1(
     """With a real matmul the aliased variant becomes compute bound while the
     normal one stays memory bound, so D(n) loses one copy of the per-tile
     compute cost and the fitted alpha is biased DOWN. A biased number must not
-    be allowed to answer the prediction."""
+    be allowed to answer the prediction.
+
+    AND EXIT 1 MUST NOT READ AS A REFUTATION HERE. `exit_codes` has five states
+    and none of them is "measured, sound, and the claim was not askable", so
+    dot mode borrows CLAIM_FAIL, which the driver latches and a reader reads as
+    "the world disagreed with 0.558". The two readings are opposite and the
+    difference between them is a retraction, so the run has to say which one it
+    is. The assertions below check it in the two places it has to survive: the
+    RESULT line, which `Gate.result_line` cuts at 160 characters and which is
+    the only line the driver may grep, and the verdict block a human reads.
+    """
     code, out = run_report(["--compute", "dot", "--synthetic", "refit"],
                            tmp_path, monkeypatch, capsys)
     # CLAIM_FAIL (1): P1 is the one CLAIM here and an UNKNOWN CLAIM means the
     # claim was NOT ESTABLISHED, which is the same side of the gate as a
     # failure. Not 4 = ERROR, which the ledger reads as a crash to retry.
     assert code == 1
+    assert exit_codes.classify_text(out) == code
     assert "[NOT TESTABLE] P1" in out
     assert "biased LOW" in out
+
+    # The RESULT line, WITHIN THE CUT. The detail used to open with the
+    # interval and reach "a lower bound, not P1's answer" at character 190, so
+    # the one sentence separating "refuted" from "not asked" was exactly the
+    # part the truncation removed.
+    p1 = [r for r in exit_codes.parse_result_lines(out) if r.name.startswith("P1")]
+    assert len(p1) == 1 and p1[0].verdict == "UNKNOWN"
+    assert p1[0].detail.startswith("NOT A REFUTATION")
+
+    # The verdict block, for the human.
+    assert "READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION." in out
+    assert "FINISHED WITHOUT AN ANSWER TO P1" in out
+    assert out.index("READ THIS RUN AS A LOWER BOUND") < out.index("EXIT: 1")
+
+
+def test_replaying_a_dot_run_does_not_rescore_it_as_an_unbiased_one(
+        tmp_path, monkeypatch, capsys):
+    """The second way into the dot-mode conflation, and it exits DONE.
+
+    `--replay` carries no `--compute`, so before 2026-09-03 a dot-mode ladder
+    replayed with a bare `--replay` was rebuilt as a sum-mode design and scored
+    by `prediction_gate`'s UNBIASED branch. The run that exited 1 with P1
+    UNKNOWN and "this is a LOWER BOUND" came back **0 DONE, alpha measured**,
+    off the same cells, and `scripts/pod_session.sh:2467` copies report.md into
+    the published arm directory: the replay is what would have been published.
+    `replay_plan` had restored the card, the roof and the L2 for exactly this
+    reason and had left out the knob that decides what the numbers mean.
+
+    TWO WAYS IN, SO TWO WALLS, and this test walks both. The plan carries
+    `compute` (both writers, since the synthetic one did not), and `_analyse`
+    asks the CELLS independently, which is the wall that still stands when the
+    plan is old, hand-edited or absent.
+    """
+    out_dir = tmp_path / "dotrun"
+    code, first = run_report(["--synthetic", "refit", "--compute", "dot",
+                              "--out", str(out_dir)],
+                             tmp_path, monkeypatch, capsys)
+    assert code == 1
+    assert "READ THIS RUN AS A LOWER BOUND" in first
+
+    # WALL 1: the plan. It fires early enough that the WHOLE PAGE is on the
+    # right mode -- the design header, the preflight and the cost -- and not
+    # only the verdict, so wall 2 has nothing left to correct and stays silent.
+    # That silence is what pins wall 1: delete it and wall 2 fires instead.
+    code, out = run_report(["--replay", str(out_dir)],
+                           tmp_path, monkeypatch, capsys)
+    assert code == 1, "a replayed lower bound came back as a measured alpha"
+    assert exit_codes.classify_text(out) == 1
+    assert "READ THIS RUN AS A LOWER BOUND" in out
+    assert "compute mode dot" in out
+    assert "SCORED AS DOT MODE" not in out
+
+    # WALL 2: the cells, with the plan's key removed the way every plan written
+    # before this fix has it removed.
+    plan = json.loads((out_dir / "plan.json").read_text())
+    assert plan["compute"] == "dot"
+    plan.pop("compute")
+    (out_dir / "plan.json").write_text(json.dumps(plan))
+    code, out = run_report(["--replay", str(out_dir)],
+                           tmp_path, monkeypatch, capsys)
+    assert code == 1
+    assert "SCORED AS DOT MODE" in out
+    assert "READ THIS RUN AS A LOWER BOUND" in out
+
+
+def test_cells_from_two_compute_modes_are_refused_and_not_pooled(
+        tmp_path, monkeypatch, capsys):
+    """One page cannot score an unbiased estimator and a lower bound as one
+    ladder. The pooled alpha would be neither, and no gate on the page reads
+    per-record `compute`, so nothing else would notice."""
+    out_dir = tmp_path / "mixed"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)],
+               tmp_path, monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    rows[0]["compute"] = "dot"
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)],
+                           tmp_path, monkeypatch, capsys)
+    # REFUSED (2): nothing on the page may be quoted and nothing was spent to
+    # find that out, which is not the same as INVALID.
+    assert code == 2, out
+    assert "more than one compute mode" in out
+
+
+def test_replaying_a_sum_run_is_untouched_by_either_wall(
+        tmp_path, monkeypatch, capsys):
+    """The walls must not cost the ordinary case anything.
+
+    A sum-mode run replays as itself, exits with the code it exited with, and
+    prints neither the adoption line nor the dot-mode reading. A caveat under
+    every verdict is read under none.
+    """
+    out_dir = tmp_path / "sumrun"
+    code, _ = run_report(["--synthetic", "refit", "--out", str(out_dir)],
+                         tmp_path, monkeypatch, capsys)
+    assert code == 0
+    code, out = run_report(["--replay", str(out_dir)],
+                           tmp_path, monkeypatch, capsys)
+    assert code == 0, out
+    assert "SCORED AS" not in out
+    assert "NOT A REFUTATION" not in out
+
+
+def test_sum_mode_prints_no_dot_mode_caveat(tmp_path, monkeypatch, capsys):
+    """A caveat printed under every verdict is read under none.
+
+    `dot_mode_reading` is empty in sum mode, where exit 1 means exactly what
+    `exit_codes` says it means: the world disagreed with a pre-registered
+    prediction. Planted with `--synthetic retracted`, which is a real refutation
+    and the run this file most needs NOT to be softened.
+    """
+    code, out = run_report(["--synthetic", "retracted"],
+                           tmp_path, monkeypatch, capsys)
+    assert code == 1
+    assert AB.dot_mode_reading("sum") == []
+    assert "NOT A REFUTATION" not in out
+    assert "READ THIS RUN AS A LOWER BOUND" not in out
 
 
 # --------------------------------------------------------------------------
@@ -1261,6 +1485,38 @@ def test_the_probe_falls_to_dot_only_when_no_sum_pinning_clears():
     assert "LOWER BOUND" in why
 
 
+def test_the_probe_may_not_fall_into_dot_mode_without_the_operator(design):
+    """The fall to `dot` spends the whole arm and files it as CLAIM_FAIL.
+
+    Half of `PROBE_PINNINGS` is `dot`, and the fall is the LIKELY case: the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree, which is what `dot` removes. So a grid where only
+    dot pinnings clear must resolve differently under the two settings, and
+    both branches must be reachable: `allow` adopts the dot pinning and says in
+    the reason that it did, `refuse` adopts nothing and says why.
+    """
+    roof = 3.0e12
+    only_dot = [_reading(8, 3, 64, "sum", 1000), _reading(8, 4, 128, "dot", 9000)]
+
+    chosen, why = AB.choose_pinning(only_dot, roof, dot_fallback=True)
+    assert chosen is not None and chosen["compute"] == "dot"
+    assert "--dot-fallback allow" in why and "LOWER BOUND" in why
+
+    chosen, why = AB.choose_pinning(only_dot, roof, dot_fallback=False)
+    assert chosen is None
+    assert "--dot-fallback refuse" in why
+    # The refusal must NOT claim nothing cleared, which would be false and
+    # would send the reader to widen a grid that already had a winner.
+    assert "did clear" in why
+
+    # A sum pinning that clears is unaffected by either setting: the fallback
+    # is a fallback and not a preference.
+    both = [_reading(8, 3, 64, "sum", 9000), _reading(8, 4, 128, "dot", 12000)]
+    for fallback in (True, False):
+        chosen, why = AB.choose_pinning(both, roof, dot_fallback=fallback)
+        assert chosen is not None and chosen["compute"] == "sum"
+
+
 def test_the_probe_refuses_when_nothing_clears_and_names_the_best_it_saw():
     """A refusal that does not name the best reading is unactionable.
 
@@ -1421,6 +1677,97 @@ def test_the_cost_is_priced_with_the_iteration_floor_and_named_wall_or_kernel():
     unpriced = []
     AB.report_cost(_collect(unpriced), design, args, None, probing=False)
     assert "NOT PRICED" in "\n".join(unpriced)
+
+
+def _cost_minutes(text: str) -> dict[str, float]:
+    """The two figures out of the printed table, by their own labels."""
+    out = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) > 2 and parts[0] in ("KERNEL", "WALL") and parts[2] == "min":
+            out[parts[0]] = float(parts[1])
+    return out
+
+
+def test_the_probe_is_charged_the_compiles_the_wall_ratio_never_saw():
+    """The one figure in this table that was UNDER the truth, and the shape.
+
+    `WALL_OVER_KERNEL` is 2.35, measured on `replicate_noise_floor`'s mixtral_g1
+    arm, which compiled ONE pinning. The probe compiles six: BLOCK_K, num_warps
+    and num_stages all move across `PROBE_PINNINGS`, so no two entries share a
+    specialisation, and each also allocates and fills two rung tensor sets.
+    Scaling the probe's 0.1 kernel minutes by 2.35 charges 0.24 wall minutes for
+    all of that. Everywhere else in this table an error is an over-estimate,
+    which is the safe direction for a booking; this was the one place it ran the
+    other way, and a booking that is under is the one that runs out of pod.
+    """
+    args = AB.parse_args([])
+    design = AB.build_design(args)
+    priced, unprobed = [], []
+    AB.report_cost(_collect(priced), design, args, H200_READ_ROOF, probing=True)
+    AB.report_cost(_collect(unprobed), design, args, H200_READ_ROOF,
+                   probing=False)
+    with_probe = _cost_minutes("\n".join(priced))
+    without = _cost_minutes("\n".join(unprobed))
+    assert set(with_probe) == {"KERNEL", "WALL"} == set(without)
+
+    # The charge is REAL and it is the size the constant says.
+    charge = AB.PROBE_FIXED_S_PER_PINNING * len(AB.PROBE_PINNINGS) / 60.0
+    assert with_probe["WALL"] > with_probe["KERNEL"] * AB.WALL_OVER_KERNEL
+    assert with_probe["WALL"] - without["WALL"] == pytest.approx(
+        charge + (with_probe["KERNEL"] - without["KERNEL"])
+        * AB.WALL_OVER_KERNEL, abs=0.2)
+    # And it is not charged when there is no probe to charge it for.
+    # 0.2, because both figures are PRINTED to one decimal: the KERNEL rounding
+    # reaches the WALL figure multiplied by 2.35 and the WALL figure is rounded
+    # again on top of that.
+    assert without["WALL"] == pytest.approx(
+        without["KERNEL"] * AB.WALL_OVER_KERNEL, abs=0.2)
+    assert "charged" in "\n".join(priced)
+
+
+def test_the_header_quotes_no_duration_of_its_own():
+    """The cost was made honest at the print and not in the prose.
+
+    Four passages of this file's header said the probe "spends three minutes
+    before it spends sixty" while `report_cost` printed 5.0 KERNEL and 11.8
+    WALL, and a driver owner books from the header. That is the recurring defect
+    in its cheapest form: one fix, two places that say the number, and the one
+    that got fixed was not the one anybody reads first.
+
+    The wall built here is that the header may state a RATIO and no minutes, and
+    the ratio is scored against the table `report_cost` actually prints rather
+    than against the prose. A future retune of `PROBE_PINNINGS` or of the
+    ladder moves both together or fails here.
+    """
+    # THE RULE IS "MAY QUOTE, MAY NOT ASSERT". Deleting the history would lose
+    # what was learned, which this repository writes docstrings to keep, so the
+    # retired figures are allowed inside quotation marks and nowhere else.
+    header = AB.__doc__
+    asserted = re.sub(r'"[^"]*"', "", header).lower()
+    for phrase in ("three minutes", "three minute", "spends sixty",
+                   "sixty are not"):
+        assert phrase not in asserted, phrase
+    assert "THE PROBE IS A TENTH OF THE ARM" in header
+    assert '"three\n     minutes before it spends sixty"' in header
+
+    args = AB.parse_args([])
+    lines = []
+    AB.report_cost(_collect(lines), AB.build_design(args), args,
+                   H200_READ_ROOF, probing=True)
+    text = "\n".join(lines)
+    figures = _cost_minutes(text)
+    probe_kernel_min = (len(AB.PROBE_PINNINGS) * len(AB.PROBE_TILES) * 2
+                        * (AB.PROBE_WARMUP_MS
+                           + AB.PROBE_TRIALS * AB.PROBE_CELL_BUDGET_MS)
+                        / 60000.0)
+    probe_wall_min = (probe_kernel_min * AB.WALL_OVER_KERNEL
+                      + len(AB.PROBE_PINNINGS)
+                      * AB.PROBE_FIXED_S_PER_PINNING / 60.0)
+    share = probe_wall_min / figures["WALL"]
+    assert 0.05 <= share <= 0.15, (share, probe_wall_min, figures)
+    # The table prints that share itself, so a reader never has to compute it.
+    assert f"{share * 100:.0f}% is the probe" in text
 
 
 def test_a_crash_exits_error_and_not_the_claim_fail_the_ledger_latches(

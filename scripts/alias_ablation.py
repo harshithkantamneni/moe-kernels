@@ -285,13 +285,23 @@ WHAT THAT CHANGES HERE, and all three are checkable before the box is rented:
      see it at all. `attribution` asks whether D(1) reached the card's floor for
      the bytes the alias removed. Either failing means the page is VOID, and it
      is void for a stated arithmetic reason rather than for a threshold.
-  3. THE PROBE SPENDS THREE MINUTES BEFORE IT SPENDS SIXTY. `--probe` times the
-     two cheapest rungs of the smallest model across a short pinning grid,
-     prints each pinning's achieved bandwidth against the card's roofs, and
-     runs the ladder at the pinning that clears the roof by the widest margin.
-     If none clears it, the arm stops there: nothing measured afterwards could
-     have answered, and a three minute INVALID is the whole of what the hour
-     would otherwise have bought.
+  3. THE PROBE IS A TENTH OF THE ARM AND CAN STOP THE OTHER NINE. `--probe`
+     times the two cheapest rungs of the smallest model across a short pinning
+     grid, prints each pinning's achieved bandwidth against the card's roofs,
+     and runs the ladder at the pinning that clears the roof by the widest
+     margin. If none clears it, the arm stops there: nothing measured afterwards
+     could have answered, and the INVALID costs the probe's own wall minutes
+     rather than the whole booking. NO ABSOLUTE MINUTES ARE QUOTED HERE ON
+     PURPOSE. `report_cost` is the only place in this file that names a
+     duration. Until 2026-09-03 this paragraph asserted one of its own, "three
+     minutes before it spends sixty", while that function was printing 5.0
+     KERNEL and 11.8 WALL for the shipped design: the fix landed at the print
+     and not in the prose, which is the same one-of-two-sites shape as the rest
+     of this rebuild, and a driver owner who books from a header reserves an
+     hour for a quarter of one. The header may QUOTE a retired figure, as the
+     sentence you are reading does, and may not assert one;
+     `test_the_header_quotes_no_duration_of_its_own` enforces exactly that and
+     scores the ratio above against the table `report_cost` prints.
   4. THE MDE IS STATED TWICE, AND THE SECOND ONE IS THE RUN'S. `report_mde` in
      the plan sizes the booking against the corpus's spread, which
      `rescore_published_reports` defines as a WITHIN-cell pstdev and therefore a
@@ -335,7 +345,7 @@ import re
 import statistics
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1551,7 +1561,13 @@ def ablation_scalars(rung: Rung, extent: str = DEFAULT_ALIAS_EXTENT
     correctness gate comparing the new kernel against the old closed form,
     which is a FAIL that reads as a broken alias; a change made THERE alone is
     worse, because it is a reference that agrees with an alias that did not
-    happen. `test_the_alias_extent_reaches_both_call_sites` pins the pair.
+    happen. `test_the_alias_extent_reaches_both_call_sites` pins the pair, and
+    until 2026-09-03 it did not: it called this function and never called
+    `check_output` at all, so the test named for the recurring defect was an
+    instance of it and the dangerous direction was the untested one. It now
+    emulates this kernel's address arithmetic on the CPU in float64 from these
+    very scalars and scores the result through `check_output` at BOTH extents,
+    so neither call site can move alone.
 
     Pure arithmetic over the rung's shape, so the values the pod will pass can
     be checked on a laptop. `B` is a contiguous [E, N, K] tensor, matching
@@ -1598,6 +1614,15 @@ def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
     spread alias "has no closed form to check the output against" and used that
     to justify the 16 KiB pinning that cost it the experiment. It has one, and
     it is the branch below: the normal reference read at expert 0, N-block 0.
+
+    THE EXTENT ARGUMENT IS THE SECOND OF TWO CALL SITES, `ablation_scalars`
+    being the first, and the two are held together by a CPU emulation rather
+    than by a comment: `test_the_alias_extent_reaches_both_call_sites` walks
+    this kernel's pointer arithmetic in float64 from the scalars that function
+    returns and scores the result here at both extents, matching extent within
+    float32 rounding and mismatched extent off by a factor no tolerance
+    absorbs. Reverting the `block` branch below to the tile closed form used to
+    leave the suite green.
 
     NOTHING IS MATERIALISED AT FULL SIZE. deepseek-v3's weight tensor is 15 GiB
     in bf16, so a float64 copy of it is 60 GiB and an obvious `b.to(float64)`
@@ -1863,7 +1888,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
 
 
 # --------------------------------------------------------------------------
-# the probe: three minutes spent so sixty are not
+# the probe: a tenth of the arm's wall, spent to protect the other nine
 # --------------------------------------------------------------------------
 
 #: The pinnings the probe walks, and every entry earns its compile.
@@ -1921,8 +1946,8 @@ def probe_model(design: Design) -> str | None:
     return min(real, key=lambda r: r.weight_bytes).model
 
 
-def choose_pinning(readings: list[dict], roof_bytes_s: float | None
-                   ) -> tuple[dict | None, str]:
+def choose_pinning(readings: list[dict], roof_bytes_s: float | None,
+                   dot_fallback: bool = True) -> tuple[dict | None, str]:
     """The pinning to run the ladder at, or None and the reason there is none.
 
     A pinning CLEARS when its aliased ladder delivers requests faster than the
@@ -1936,6 +1961,19 @@ def choose_pinning(readings: list[dict], roof_bytes_s: float | None
     pinning that is 30% faster and cannot answer the question loses to a `sum`
     pinning that can. Only when no `sum` pinning clears does `dot` get the
     ladder, and then the report says the answer is a bound.
+
+    THE FALL TO `dot` IS THE OPERATOR'S AND NOT THIS FUNCTION'S. Half the probe
+    grid is `dot`, and the fall is the LIKELY case rather than the corner: the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree, which is exactly what `dot` removes. A ladder run
+    in `dot` mode leaves P1 UNKNOWN, `exit_codes.classify` maps an UNKNOWN CLAIM
+    to CLAIM_FAIL, and the driver latches a CLAIM_FAIL and never retries, so a
+    silent fall spends the whole arm and files "alpha is not 0.558" when what
+    happened was "alpha was not asked". `--dot-fallback` makes the choice
+    explicit at the command line, the report prints which was in force, and
+    `dot_mode_reading` prints the disambiguation beside the verdict. Default
+    `allow`, because refusing turns a lower bound on alpha into the 2026-09-01
+    void for the sake of a code the log already explains.
     """
     if not roof_bytes_s:
         return None, ("no committed calibration for this card, so no pinning "
@@ -1957,11 +1995,21 @@ def choose_pinning(readings: list[dict], roof_bytes_s: float | None
             "slack and removing it cannot move the clock. No ladder run at any "
             "of these pinnings could have measured alpha, so none was run")
     sums = [pair for pair in clearing if pair[1]["pinning"]["compute"] == "sum"]
+    if not sums and not dot_fallback:
+        best_ratio, best = max(clearing, key=lambda pair: pair[0])
+        return None, (
+            f"no SUM-mode pinning cleared the roof, and --dot-fallback refuse "
+            f"was in force. {len(clearing)} dot-mode pinning(s) did clear, the "
+            f"best {best['pinning']} at {best_ratio:.3f} of the roof, and a "
+            "ladder run at one of them would have measured a LOWER BOUND on "
+            "alpha rather than alpha. Re-run with --dot-fallback allow to buy "
+            "that bound, or widen the sum half of PROBE_PINNINGS")
     pool = sums or clearing
     ratio, best = max(pool, key=lambda pair: pair[0])
     why = ("the fastest sum-mode pinning that clears" if sums else
-           "no sum-mode pinning cleared, so this is the fastest dot-mode one "
-           "and the answer it produces is a LOWER BOUND, not P1's answer")
+           "no sum-mode pinning cleared, so --dot-fallback allow took the "
+           "fastest dot-mode one and the answer it produces is a LOWER BOUND, "
+           "not P1's answer")
     return best["pinning"], (
         f"{best['pinning']} at {best['aliased_bytes_s'] / 1e9:.0f} GB/s, "
         f"{ratio:.3f} of the roof: {why}")
@@ -2070,9 +2118,22 @@ def measure_probe(design: Design, args, roof_bytes_s: float | None,
 
 
 def report_probe(say, readings: list[dict], roof_bytes_s: float | None,
-                 chosen: dict | None, why: str) -> None:
+                 chosen: dict | None, why: str,
+                 dot_fallback: bool = True) -> None:
     say()
     say("## the probe: can any pinning see DRAM at all")
+    say()
+    if dot_fallback:
+        say("  --dot-fallback allow: if no sum-mode pinning clears, the "
+            "fastest dot-mode one runs")
+        say("  the ladder, P1 comes back UNKNOWN and the process exits 1. That "
+            "1 is 'not asked',")
+        say("  not 'refuted', and the verdict block below says so in words.")
+    else:
+        say("  --dot-fallback refuse: if no sum-mode pinning clears, the arm "
+            "STOPS at the probe")
+        say("  rather than measure a lower bound. That is INVALID and it costs "
+            "only the probe.")
     say()
     say("  Every pinning below is timed on the SMALLEST model at "
         f"{PROBE_TILES} tiles. The number that")
@@ -2125,6 +2186,22 @@ KERNEL_EFFICIENCY_PRIOR = 0.61
 #: `scripts/h200_gaps_session.sh:wall_over_model_pct` reads the same 235.
 WALL_OVER_KERNEL = 127.0 / 54.0
 
+#: Seconds allowed per PROBE PINNING for the work `WALL_OVER_KERNEL` cannot
+#: cover: one Triton specialisation (BLOCK_K, num_warps and num_stages all move
+#: across `PROBE_PINNINGS`, so no two entries share a compile) and the two rung
+#: tensor sets that pinning allocates, fills and frees.
+#:
+#: AN ALLOWANCE AND NOT A MEASUREMENT, and it is charged separately because the
+#: 2.35x was measured on `replicate_noise_floor`'s mixtral_g1, an arm that
+#: compiled ONE pinning. Scaling the probe's 0.1 kernel minutes by it yields
+#: 0.24 wall minutes for a grid that compiles six kernels, which is the one
+#: place in this table where the estimate was under the truth rather than over
+#: it, and a booking that is under is the booking that runs out of pod. 12.0 is
+#: `scripts/memory_branch_anchor.py:estimated_seconds`'s own per-setting compile
+#: allowance, which is the largest figure this repository states for a Triton
+#: compile; `scripts/ruler_rebaseline.py` uses 10.0 for the same job.
+PROBE_FIXED_S_PER_PINNING = 12.0
+
 
 def estimated_kernel_ms(design: Design, args, roof_bytes_s: float | None
                         ) -> float | None:
@@ -2160,6 +2237,21 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
     does not) and prints a second total with the KERNEL rows put on the wall
     clock. An arm that prints one number and does not say which it is gets
     booked as whichever the driver guesses.
+
+    THE ONLY DURATION THIS FILE NAMES IS THE ONE THIS FUNCTION PRINTS. The
+    header carried its own copy until 2026-09-03, "three minutes before it
+    spends sixty", against 5.0 KERNEL and 11.8 WALL here, and a header is what a
+    driver owner books from. The header now states a ratio and no minutes, and
+    `test_the_header_quotes_no_duration_of_its_own` scores that ratio against
+    this table rather than against the prose.
+
+    THE PROBE'S COMPILES ARE CHARGED HERE AND NOT LEFT TO THE RATIO. Everywhere
+    else in this table an error is an over-estimate, which is the safe
+    direction; the probe was the one place it ran the other way, because 2.35x
+    was measured on an arm that compiled one pinning and the probe compiles six.
+    `PROBE_FIXED_S_PER_PINNING` is added to the WALL figure outright and the
+    line says so, so the WALL figure is bookable as printed and the driver's
+    `arm_unpriced` entry for this arm can be empty.
     """
     kernel_ms = estimated_kernel_ms(design, args, roof_bytes_s)
     say()
@@ -2176,7 +2268,10 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
     probe_ms = (len(PROBE_PINNINGS) * len(PROBE_TILES) * 2
                 * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_CELL_BUDGET_MS)
                 if probing else 0.0)
+    probe_fixed_min = (len(PROBE_PINNINGS) * PROBE_FIXED_S_PER_PINNING / 60.0
+                       if probing else 0.0)
     kernel_min = (kernel_ms + probe_ms) / 60000.0
+    wall_min = kernel_min * WALL_OVER_KERNEL + probe_fixed_min
     say(f"  KERNEL  {kernel_min:5.1f} min   {len(design.rungs)} rungs x 3 "
         f"passes x {design.replicates} replicates, priced from the byte model "
         f"at {KERNEL_EFFICIENCY_PRIOR:.2f}")
@@ -2190,11 +2285,28 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
         "fill, and the")
     say("                        closed-form correctness reductions. THIS IS "
         "NOT A WALL FIGURE.")
-    say(f"  WALL    {kernel_min * WALL_OVER_KERNEL:5.1f} min   the same table "
-        f"at the one measured wall-over-kernel ratio in this")
-    say(f"                        repository, {WALL_OVER_KERNEL:.2f}x "
-        "(replicate_noise_floor.py, mixtral_g1: 127 s")
-    say("                        of wall against a 54 s model). BOOK THIS ONE.")
+    say(f"  WALL    {wall_min:5.1f} min   the KERNEL figure at the one measured "
+        f"wall-over-kernel ratio in")
+    say(f"                        this repository, {WALL_OVER_KERNEL:.2f}x "
+        "(replicate_noise_floor.py, mixtral_g1:")
+    say(f"                        127 s of wall against a 54 s model), PLUS "
+        f"{probe_fixed_min:.1f} min charged")
+    say(f"                        outright for the probe: "
+        f"{len(PROBE_PINNINGS)} distinct specialisations at "
+        f"{PROBE_FIXED_S_PER_PINNING:.0f} s each,")
+    say("                        with their tensor sets, which that ratio was "
+        "not measured over")
+    say("                        (mixtral_g1 compiled one pinning). BOOK THIS "
+        "ONE.")
+    if probe_fixed_min:
+        probe_share = ((probe_ms / 60000.0 * WALL_OVER_KERNEL + probe_fixed_min)
+                       / wall_min)
+        say(f"  OF WHICH               {probe_share * 100:.0f}% is the probe, "
+            "and a probe that clears no pinning")
+        say("                        stops the arm having spent only that. It "
+            "is the cheapest")
+        say("                        thing here that can refuse the expensive "
+            "one.")
     say()
     say("  The 0.61 is MEASURED, on 2026-09-01, on five geometries; a probe "
         "that finds a")
@@ -3177,9 +3289,10 @@ def probe_gate(readings: list[dict], chosen: dict | None, why: str) -> Gate:
     """The probe's verdict, as the one RESULT line a stopped run prints.
 
     A probe that finds no pinning STOPS the arm, and it stops it after
-    measuring, which is INVALID and not REFUSED: two or three minutes of the
-    card were spent and there is a directory of probe cells on disk that must
-    not be scored as an answer. `exit_codes.classify_text` has to be able to
+    measuring, which is INVALID and not REFUSED: the probe's own wall minutes
+    were spent (`report_cost` prices them and is the only place that names a
+    duration) and there is a directory of probe cells on disk that must not be
+    scored as an answer. `exit_codes.classify_text` has to be able to
     recompute that 3 from the log, so the probe prints this gate's RESULT line
     through `verdict` exactly as the ladder's gates do. Without it the log would
     carry no RESULT line at all, which is the REFUSED shape, and the driver
@@ -3385,12 +3498,20 @@ def prediction_gate(pooled: tuple[float, float] | None,
     if pooled is None or pooled_bracket is None:
         return Gate(name, None, "no pooled interval; nothing to score")
     if compute == "dot":
+        # THE FIRST WORDS ARE THE ONES THAT SURVIVE. `Gate.result_line` cuts the
+        # detail at 160 characters, and the RESULT line is the ONE line the
+        # driver may grep. This detail used to open with the interval and reach
+        # "it is a lower bound, not P1's answer" at character 190, so the only
+        # sentence that separates "the world disagreed" from "the question was
+        # not asked" was the one the cut removed, on the gate whose UNKNOWN is
+        # what makes the process exit 1.
         return Gate(name, None,
-                    f"dot mode puts alpha in {pooled[0]:.3f} to "
-                    f"{pooled[1]:.3f}, and dot mode is biased LOW by one copy "
-                    "of the per-tile compute cost on top of everything the "
-                    "bracket already carries. It is a lower bound, not P1's "
-                    "answer. Re-run in sum mode")
+                    "NOT A REFUTATION: dot mode cannot answer P1 at all, so "
+                    f"this exit 1 means the question was not asked. It puts "
+                    f"alpha at {pooled[0]:.3f} or above, a LOWER BOUND biased "
+                    "LOW by one copy of the per-tile compute cost on top of "
+                    "everything the bracket already carries "
+                    f"(upper end {pooled[1]:.3f}). Re-run in sum mode")
     overlap = pooled[0] <= REFIT_BAND[1] and REFIT_BAND[0] <= pooled[1]
     _, sentence = supported_candidate(pooled)
     return Gate(name, overlap,
@@ -3400,6 +3521,46 @@ def prediction_gate(pooled: tuple[float, float] | None,
                 f"{REFIT_BAND[0]:.3f}-{REFIT_BAND[1]:.3f}: "
                 f"{'they overlap' if overlap else 'they are DISJOINT'}. "
                 f"{sentence}")
+
+
+# The sentence that keeps exit 1 from being read as a refutation, in the two
+# places a reader meets it: beside the probe's re-pin and beside the verdict.
+# ONE list and not two copies, because two copies of a disambiguation is the
+# shape that leaves the second one saying the old thing.
+def dot_mode_reading(compute: str) -> list[str]:
+    """How to read this run's exit code when the ladder ran in `dot` mode.
+
+    `exit_codes` has five states and none of them is "measured, sound, and the
+    claim was not askable". `dot` mode is that state: every VALIDITY gate can
+    pass, the numbers are real, and P1 is UNKNOWN because the estimator is
+    biased low by construction. `classify` maps an UNKNOWN CLAIM to CLAIM_FAIL,
+    which is right by the table -- the claim was not established -- and the
+    ledger will latch it and never retry. What it is NOT is evidence that alpha
+    differs from the refit, and the difference between those two readings is a
+    retraction. So the run says which one it is, in words, next to the number.
+
+    Returns an empty list in `sum` mode, where exit 1 means exactly what the
+    table says it means and an extra paragraph would only dilute it.
+    """
+    if compute != "dot":
+        return []
+    return [
+        "READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION.",
+        "",
+        "P1 is UNKNOWN, not FAIL. dot mode moves the reduction onto the tensor",
+        "cores, which is what buys the headroom the sum kernel could not reach,",
+        "and it costs the estimator one copy of the per-tile compute cost. The",
+        "interval it produces is a bound BELOW alpha and it is not alpha, so no",
+        "candidate can be refuted from this page and none is.",
+        "",
+        "The process exits 1 CLAIM_FAIL because exit_codes.classify counts an",
+        "UNKNOWN CLAIM against the gate, which is the right rule: DONE requires",
+        "every gate to say PASS in so many words. But the ledger will latch that",
+        "1 and not retry, so the arm is FINISHED WITHOUT AN ANSWER TO P1 and the",
+        "next attempt has to be booked by a human. What it takes is a sum-mode",
+        "pinning that clears the roof: widen the sum half of PROBE_PINNINGS, or",
+        "run with --compute sum --no-probe at a pinning found by hand.",
+    ]
 
 
 def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
@@ -3431,7 +3592,7 @@ def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
             f"{side:9s}  alpha {span[0]:.3f} to {span[1]:.3f}")
 
 
-def verdict(say, gates: list[Gate]) -> int:
+def verdict(say, gates: list[Gate], reading: list[str] | None = None) -> int:
     """Print every gate's RESULT line and the human table, and return the code.
 
     THE CODE COMES FROM `exit_codes.classify` OVER THE SAME GATE OBJECTS THAT
@@ -3457,6 +3618,14 @@ def verdict(say, gates: list[Gate]) -> int:
     same way, and `classify` answers separately over the gates. One `EXIT:` line
     beside them names the code in words, so the transcript says which of the
     five states this run ended in without anyone counting brackets.
+
+    `reading` is prose printed between the VERDICT lines and the EXIT line, for
+    the one case where the code is right and its plain reading is wrong:
+    `dot_mode_reading` supplies it when the ladder ran on the tensor cores,
+    where P1 is UNKNOWN, `classify` correctly returns CLAIM_FAIL, and CLAIM_FAIL
+    read plainly says the world disagreed with the refit when what happened is
+    that the estimator could not ask. Empty on every other path, because a
+    caveat printed under every verdict is read under none.
 
     AN EMPTY GATE LIST RAISES `NoGatesScored` rather than returning DONE, which
     is `classify`'s own rule and the right one here: `_analyse` only reaches
@@ -3488,6 +3657,10 @@ def verdict(say, gates: list[Gate]) -> int:
             "the refit's band,")
         say("so the number the tile-corrected roofline rests on has "
             "independent support.")
+    for line in (reading or []):
+        say(line)
+    if reading:
+        say()
     say(f"EXIT: {exit_codes.describe(code)}")
     return code
 
@@ -3672,6 +3845,20 @@ def parse_args(argv: list[str] | None = None):
                         help="how the loads are kept live. sum is STUDY.md's "
                              "prescription and is unbiased; dot is the real "
                              "GEMM reduction and is biased low")
+    # A STRING AND NOT A BOOL, because argparse applies `type` BEFORE it checks
+    # `choices`, so a converting type here would score True against
+    # ("allow", "refuse") and reject every value including the default.
+    parser.add_argument("--dot-fallback", choices=("allow", "refuse"),
+                        default="allow", dest="dot_fallback",
+                        help="what the probe may do when no sum-mode pinning "
+                             "clears the DRAM roof. allow (default) takes the "
+                             "fastest dot-mode one, which measures a LOWER "
+                             "BOUND on alpha, leaves P1 UNKNOWN and therefore "
+                             "exits 1 CLAIM_FAIL: a code the ledger latches, "
+                             "so the run prints in words that the claim was "
+                             "not asked rather than refuted. refuse stops the "
+                             "arm at the probe instead, which is INVALID and "
+                             "costs only the probe")
     parser.add_argument("--replicates", type=int, default=DEFAULT_REPLICATES)
     parser.add_argument("--warmup", type=float, default=DEFAULT_WARMUP_MS,
                         help="milliseconds of GPU time delivered under "
@@ -3741,6 +3928,22 @@ def main(argv: list[str] | None = None) -> int:
     # attribution and the probe's own verdict. A reader must see which file they
     # came from at the top, beside the card, and not thirty lines later.
     planned = replay_plan(out_dir) if args.replay else {}
+    # THE ESTIMATOR IS PART OF THE RULER. `replay_plan` restored the card, the
+    # roof and the L2 so that a finished run is not retracted by being
+    # re-reported on a laptop, and it left out the two knobs that decide what
+    # the numbers MEAN. `--replay` carries no `--compute`, so a dot-mode ladder
+    # replayed with a bare `--replay` was rebuilt as a sum-mode design and
+    # scored by `prediction_gate`'s UNBIASED branch: the run that exited 1 with
+    # P1 UNKNOWN and "this is a LOWER BOUND" came back 0 DONE, "alpha measured",
+    # off the same cells. `scripts/pod_session.sh:2467` copies report.md into
+    # the published arm directory, so that replay is what would have been
+    # published. `--alias-extent` is restored with it, for the same reason and
+    # one line earlier than it would have been needed.
+    for knob in ("compute", "alias_extent"):
+        want = planned.get(knob)
+        if want and want != getattr(args, knob, None):
+            setattr(args, knob, want)
+            design = build_design(args)
     card = planned.get("card") or card
     facts = {} if args.synthetic else measured_card(card)
     if planned.get("roof_bytes_s") and not facts.get("roof_bytes_s"):
@@ -3836,6 +4039,12 @@ def main(argv: list[str] | None = None) -> int:
             (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
                 {"fingerprint": design.fingerprint, "argv": sys.argv[1:],
                  "synthetic": args.synthetic, "card": card,
+                 # BOTH WRITERS OR NEITHER. The measured writer below has
+                 # carried `compute` since it was written; this one did not, so
+                 # every planted world replayed as sum mode however it was
+                 # planted, and the rehearsal of the dot path could not
+                 # rehearse its own replay.
+                 "compute": design.compute,
                  "alias_extent": design.alias_extent,
                  "roof_bytes_s": SYNTHETIC_ROOF_BYTES_S,
                  "roof_pattern": ROOF_PATTERN,
@@ -3861,8 +4070,10 @@ def main(argv: list[str] | None = None) -> int:
                 # box with no card this branch is the one that answers, and it
                 # must not answer differently from the branch below it.
                 return exit_codes.REFUSED
-            chosen, why = choose_pinning(readings, roof)
-            report_probe(say, readings, roof, chosen, why)
+            chosen, why = choose_pinning(readings, roof,
+                                         args.dot_fallback == "allow")
+            report_probe(say, readings, roof, chosen, why,
+                         args.dot_fallback == "allow")
             if chosen is None:
                 # INVALID (3), NOT REFUSED (2). The probe SPENT card time and
                 # left cells on disk; REFUSED means free. The one RESULT line
@@ -3885,6 +4096,13 @@ def main(argv: list[str] | None = None) -> int:
                                     "why": why, "card": card,
                                     "roof_bytes_s": roof}), indent=2))
                 return code
+            if chosen["compute"] != args.compute:
+                say()
+                say(f"## the probe changed the COMPUTE MODE: "
+                    f"{args.compute} -> {chosen['compute']}")
+                say()
+                for line in dot_mode_reading(chosen["compute"]):
+                    say(f"  {line}")
             args.num_warps = chosen["num_warps"]
             args.num_stages = chosen["num_stages"]
             args.block_k = chosen["block_k"]
@@ -4009,6 +4227,43 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
             "flags differ from the ones that")
         say("  produced the file; re-run --replay with the argv in plan.json.")
     records = [r for r in records if r.get("id") in known]
+
+    # THE SECOND WAY IN, AND THE ONE THAT DOES NOT DEPEND ON A FILE BEING
+    # RIGHT. Above, `--replay` adopts the mode out of plan.json; here the CELLS
+    # are asked, and they are asked on every path. A plan.json written before
+    # 2026-09-03, a hand-edited one, a directory named with `--out` and replayed
+    # from somewhere else: all of them reach this line, and every record on both
+    # the measured and the synthetic paths carries its own `compute`. Two walls
+    # because there are two ways in, which is the defect this rebuild has hit
+    # eight times.
+    modes = {r.get("compute") for r in records if r.get("compute")}
+    if len(modes) > 1:
+        say()
+        say("REFUSED: these cells were measured in more than one compute mode "
+            f"({', '.join(sorted(modes))}), and one")
+        say("  page cannot score an unbiased estimator and a lower bound as one "
+            "ladder. Split the")
+        say("  directory or re-run with --fresh.")
+        _save(out_dir, say, prov)
+        return exit_codes.REFUSED
+    if modes and modes != {design.compute}:
+        found = modes.pop()
+        design = replace(design, compute=found)
+        say()
+        say(f"## SCORED AS {found.upper()} MODE: the cells say so and this "
+            f"invocation said {args.compute}")
+        say()
+        say(f"  Every record in cells.jsonl carries compute={found}. The design "
+            "this process built")
+        say(f"  said {args.compute}, and the two decide different things: "
+            "prediction_gate answers P1 from")
+        say("  sum and refuses to answer it from dot. The CELLS win, because "
+            "they are the measurement")
+        say("  and the flags are only how it was asked for. The verdict below "
+            "is scored on the mode")
+        say("  named on this line.")
+        args.compute = found
+
     timed = [r for r in records if r.get("ms")]
     if not timed:
         say()
@@ -4083,7 +4338,8 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # before a rung is timed, but their RESULT lines belong to a page that HAS
     # timings on it: printed at plan time they let a run that measured nothing
     # classify as DONE. `main` only reaches this call after `records` exist.
-    code = verdict(say, list(pre or []) + gates)
+    code = verdict(say, list(pre or []) + gates,
+                   dot_mode_reading(design.compute))
     _save(out_dir, say, prov)
     return code
 
