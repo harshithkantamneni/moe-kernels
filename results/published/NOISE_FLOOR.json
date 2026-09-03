@@ -1,9 +1,17 @@
 {
-  "schema": "moe-kernels/noise-floor/1",
-  "written_utc": "2026-09-02T05:55:53Z",
+  "schema": "moe-kernels/noise-floor/2",
+  "written_utc": "2026-09-03T16:31:42Z",
   "git": {
-    "commit": "8342cc877704e841d0c66f19a1dbb43532a8a55c",
-    "dirty": true
+    "commit": "bf1cbcd584ee681a3cafa00fbbeb39f888210b57",
+    "dirty": true,
+    "dirty_paths": [
+      "results/published/2026-09-01-nvidia_h200-alpha-surface-s4/SURFACE.txt",
+      "results/published/2026-09-01-nvidia_h200-cross-card-s3/SURFACE.txt",
+      "results/published/2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3/SURFACE.txt",
+      "results/published/NOISE_FLOOR.json",
+      "scripts/replicate_noise_floor.py",
+      "tests/test_replicate_noise_floor.py"
+    ]
   },
   "sign": "every delta is alpha(second arm) - alpha(first arm)",
   "primary_field": "alpha_corrected",
@@ -11,21 +19,49 @@
     {
       "name": "swizzle swing",
       "size": 0.3855,
-      "source": "s4 arm, mixtral BLOCK_M=32: alpha-corrected 1.0073 at GROUP_SIZE_M=1 vs 0.6218 at 16"
+      "source": "s4 arm, mixtral BLOCK_M=32: alpha-corrected 1.0073 at GROUP_SIZE_M=1 vs 0.6218 at 16",
+      "model": "mixtral-8x7b"
+    },
+    {
+      "name": "swizzle swing",
+      "size": 0.0226,
+      "source": "H200 s4 and s3, qwen2 G=1 -> G=16 in alpha-corrected: -0.0217 and -0.0226 (s4, BLOCK_M 32 and 64), -0.0061 and -0.0175 (s3). The A100 s3 arm gives +0.0813 at BLOCK_M=32 and -0.0914 at 64, i.e. OPPOSITE SIGNS at matched cells of one arm",
+      "model": "qwen2-57b-a14b"
     },
     {
       "name": "footprint spread at G=1",
       "size": 0.411,
-      "source": "s4 arm, all seven GROUP_SIZE_M=1 fits: 1.0073 (mixtral BN=64 BM=32) down to 0.5963 (deepseek-v2-lite BM=32)"
+      "source": "s4 arm, all seven GROUP_SIZE_M=1 fits: 1.0073 (mixtral BN=64 BM=32) down to 0.5963 (deepseek-v2-lite BM=32)",
+      "model": ""
     },
     {
       "name": "cross-card L2",
       "size": 0.0117,
-      "source": "A100 s3 minus H200 s3, 11 matched cells, paired mean of alpha-corrected"
+      "source": "A100 s3 minus H200 s3, 11 matched cells, paired mean of alpha-corrected",
+      "model": ""
     }
   ],
-  "prior_sd": 0.022839549032325487,
-  "prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2); CONFOUNDS num_stages, so an upper bound only",
+  "prior_sd": 0.022862534415054224,
+  "prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8",
+  "prior_sd_by_model": {
+    "per_model": {
+      "mixtral-8x7b": {
+        "n": 4,
+        "mean": 0.02433480395083018,
+        "sd": 0.04864685743499899,
+        "max_abs": 0.08883574005537831
+      },
+      "qwen2-57b-a14b": {
+        "n": 7,
+        "mean": 0.001966342619245268,
+        "sd": 0.01862232590686091,
+        "max_abs": 0.03875523613379295
+      }
+    },
+    "ratio": 2.612286868906978,
+    "homogeneity_ratio": 3.0
+  },
+  "scope": null,
   "stages_control": {
     "alpha": {
       "first": "2026-09-01-nvidia_h200-alpha-surface-s4",
@@ -70,6 +106,7 @@
       "same_machine": true
     }
   },
+  "stages_control_instrument": "the two committed arms were timed by the RETIRED per-iteration loop (block_m_crossing_sweep.time_call), not by moe.bench.timing.time_kernel: they carry no instrument field at all. Part (b) is arithmetic over those numbers and inherits their instrument",
   "cross_card": {
     "alpha": {
       "first": "2026-09-01-nvidia_h200-cross-card-s3",
@@ -114,5 +151,49 @@
       "same_machine": false
     }
   },
-  "replicate_floor": null
+  "replicate_floor": null,
+  "git_sha": "bf1cbcd584ee681a3cafa00fbbeb39f888210b57",
+  "gpu_name": null,
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "not-measured/arithmetic-over-committed-reports",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "bf1cbcd584ee681a3cafa00fbbeb39f888210b57",
+    "git_dirty": true,
+    "git_dirty_files": 6,
+    "utc": "2026-09-03T16:31:41+00:00",
+    "hostname": "Harshiths-MacBook-Pro.local",
+    "gpu_name": null,
+    "driver_version": null,
+    "cuda_version": null,
+    "python": "3.12.13",
+    "torch": "2.13.0",
+    "triton": null,
+    "vllm": null,
+    "sglang": null,
+    "instrument": "not-measured/arithmetic-over-committed-reports",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "cuda_version": "no CUDA",
+      "driver_version": "no CUDA",
+      "gpu_name": "no CUDA",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "triton": "package not installed",
+      "vllm": "package not installed",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
 }
