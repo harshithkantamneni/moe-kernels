@@ -196,6 +196,29 @@ opposite things about the same run, with the driver invoking this arm WITH
 `--publish`. `gates_permit_publishing` is the wall; a failed CLAIM still
 publishes, because that is a result about the floor rather than a doubt about it.
 
+AND THAT WALL WAS BUILT AT ONE DOOR OF THREE. `gates_permit_publishing` stands
+in the MEASURED publish path. `--control-only --publish` and the `blocked` path
+(`--dry-run --publish`, or a real `--publish` run on which `detect_gpu()` comes
+back empty) reach `write_published` with a null-floor document and consult no
+gate, because neither has a gate to consult. Seeded with a measured floor and
+run on 2026-09-03, `--dry-run --publish` printed "NOT A RESULT", returned
+REFUSED and left `replicate_floor: null` in git; the driver's real branch passes
+`--publish` bare, so one empty CUDA probe on the pod both refused the arm and
+deleted a floor an earlier pod had paid 120 minutes for. The rule is a property
+of the write now and lives in `write_published`: a document with no floor may
+not replace a file that has one.
+
+AND AN UNPLANNED CRASH IS `ERROR`, WHICH IT WAS NOT. `raise SystemExit(main())`
+with no handler exits ONE on any exception, and ONE is `CLAIM_FAIL`: a finished
+code, latched by the driver, skipped on every resume, RETRY_ARMS 0, session
+exits 0. This arm books 120 minutes and pools its children at the very end, so
+an OOM in the last minute of it was filed as one of this experiment's registered
+findings and never rerun. Measured at 1, on this laptop, by injecting an
+exception at the top of `_main`. A string `SystemExit` exits ONE too, and the
+two in `write_published` fire AFTER the card is paid for. `main` wraps `_main`
+and maps both: unplanned exception to `ERROR`, refusal sentence to `REFUSED`,
+sentence to stderr in either case.
+
 THE READING HALF IS NOT FIXED, AND IS NOT THIS FILE'S TO FIX. `arm_gate_regex`
 in `scripts/h200_gaps_session.sh` still selects this arm's summary with
 `^[[:space:]]*V[0-9][[:space:]]|floor|sigma`, and no wording available to this
@@ -219,6 +242,7 @@ import statistics
 import subprocess
 import sys
 import time
+import traceback
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -865,6 +889,59 @@ def noise_floor(path: Path | None = None, field_name: str = PRIMARY_FIELD,
                  cells=entry["cells"], cache_mode=block["cache_mode"],
                  gpu_name=block["gpu_name"], pooled=entry["pooled"],
                  provenance=block["provenance"])
+
+
+def sizing_sigma(path: Path | None = None,
+                 field_name: str = PRIMARY_FIELD) -> tuple[float, str, str]:
+    """`(sigma, "MEASURED" or "ASSUMED", where it came from)`, for a caller that
+    must print a detection limit whether or not the card has run yet.
+
+    `noise_floor()` RAISES while part (a) has not run, and that is the right
+    answer for a caller that must not proceed without a measurement. It is the
+    wrong answer for the three that must print SOMETHING every session: they
+    need the measured floor when one exists and the declared prior, LABELLED,
+    when it does not. `scripts/h200_gaps_session.sh:mde_line` writes exactly
+    that fallback out longhand and gets it right. The other two consumers,
+    `scripts/alpha_surface.py:prior_sd` and
+    `scripts/bn_decomposition.py:published_prior_sd`, do not have it at all:
+    they read `payload["prior_sd"]` directly, which is the s3/s4 proxy, and
+    they will still be reading the proxy after a perfect pod run publishes a
+    measured floor into the same file. That is the arm buying a tracked number
+    two of its three consumers cannot see.
+
+    ONE FALLBACK, HERE, rather than three copies of it in three files, because
+    three copies of one rule is the shape this rebuild has now found seven
+    times. The basis word is returned rather than left to the caller to
+    compose: a sigma printed without it reads as a measurement, and for most of
+    this study's life it will not be one.
+
+    It never invents a number. When the file is unreadable, carries no usable
+    prior and holds no floor, it raises `NoiseFloorUnmeasured` like every other
+    reader here.
+    """
+    target = path or NOISE_FLOOR_JSON
+    try:
+        floor = noise_floor(target, field_name)
+    except NoiseFloorUnmeasured as exc:
+        # The first SENTENCE, split on ". " and not on ".", because every one of
+        # these messages opens with the path and the path has a `.json` in it.
+        unmeasured = " ".join(str(exc).split()).split(". ")[0]
+    else:
+        return floor.sd, "MEASURED", floor.provenance
+    try:
+        doc = json.loads(target.read_text())
+        prior = float(doc["prior_sd"])
+        source = doc.get("prior_sd_source", "unsourced")
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise NoiseFloorUnmeasured(
+            f"{target} carries no measured floor ({unmeasured}) and no readable "
+            f"prior_sd either ({type(exc).__name__}), so there is no sigma to "
+            f"size against. Publishing part (b) is one command and needs no "
+            f"GPU: replicate_noise_floor.py --control-only --publish") from exc
+    if not prior > 0:
+        raise NoiseFloorUnmeasured(
+            f"{target} carries prior_sd {prior!r}, which is not a spread.")
+    return prior, "ASSUMED", f"{source} [no measured floor: {unmeasured}]"
 
 
 def assert_resolvable(effect: float, label: str, *, n_per_condition: int = 1,
@@ -2290,8 +2367,75 @@ def build_document(control: dict[str, PairedDifference],
     return doc
 
 
-def write_published(doc: dict, path: Path = NOISE_FLOOR_JSON) -> str:
-    """Write the floor where git will take it, or refuse and say why."""
+def published_floor_is_measured(path: Path) -> bool | None:
+    """Does the tracked file ALREADY hold a floor that a card produced?
+
+    Three answers and not two. `False` is "there is nothing there to lose":
+    no file, or a file whose `replicate_floor` is null, or one holding a
+    REHEARSAL floor, which is generated and may be replaced by anything.
+    `True` is "a card measured this". `None` is CANNOT TELL: the file is there
+    and does not parse, or carries a schema this module does not read, and the
+    caller must refuse on it rather than treat unreadable as empty. Deciding
+    "no floor" from a file we failed to open is how a measurement gets deleted
+    by a script that thought it was writing into a blank.
+    """
+    if not path.exists():
+        return False
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict) or doc.get("schema") not in SCHEMA_READABLE:
+        return None
+    block = doc.get("replicate_floor")
+    if not block:
+        return False
+    return not block.get("synthetic")
+
+
+def write_published(doc: dict, path: Path | None = None) -> str:
+    """Write the floor where git will take it, or refuse and say why.
+
+    TWO WALLS, AND THE SECOND ONE IS HERE BECAUSE THERE ARE THREE DOORS. The
+    first is git: `results/*` is ignored with only `!results/published/`
+    excepted, so a floor written anywhere else is a floor that disappears on
+    commit.
+
+    The second is the one `gates_permit_publishing` names in its own docstring,
+    "it OVERWRITES a measured floor from an earlier run with a null", and that
+    wall was built in the caller, at the MEASURED publish path, in the commit
+    that found it. It therefore covered one door of three. The other two:
+    `--control-only --publish`, and the `blocked` path, which is `--dry-run
+    --publish` OR a real `--publish` run on which `detect_gpu()` reports
+    anything missing. Both build their document with `floors=None`, both then
+    called this function, and neither consulted a gate, because neither has any
+    gates to consult. Proved off GPU on 2026-09-03 by seeding a measured
+    `replicate_floor` into the tracked file and running `--dry-run --publish`:
+    the page printed "NOT A RESULT. The replicate floor was not measured",
+    returned REFUSED, and left `replicate_floor: null` in git. The session
+    driver's real branch (`h200_gaps_session.sh:1750`) passes `--publish` bare,
+    so one CUDA probe coming back empty on the pod both refused the arm and
+    deleted the floor a previous pod had paid 120 minutes for.
+
+    So the rule lives at the ONE place every door opens onto, and it is stated
+    as a property of the write rather than of the caller: a document with no
+    `replicate_floor` may not replace a file that has one. It costs the
+    legitimate cases nothing, because a null-floor document is field for field
+    what `--control-only --publish` regenerates and the file it would replace
+    would be identical but for `written_utc`, `git` and `provenance`.
+
+    IT REFUSES ON "CANNOT TELL" TOO. `published_floor_is_measured` returns None
+    for a file that does not parse, and the refusal fires on anything that is
+    not a definite False, so an unreadable tracked floor is a thing an operator
+    is told about rather than a thing this function silently flattens.
+
+    A `SystemExit` CARRYING A SENTENCE, like the git wall above it, and not a
+    returned string: every caller of this prints what it returns, and a
+    returned refusal at the measured path would leave the run exiting DONE over
+    a floor that never landed. `main` maps a string exit to REFUSED, so the
+    code says nothing was published and the log says why.
+    """
+    path = path or NOISE_FLOOR_JSON
     accepted = git_accepts(path)
     if accepted is not True:
         why = ("git ignores it" if accepted is False
@@ -2300,6 +2444,16 @@ def write_published(doc: dict, path: Path = NOISE_FLOOR_JSON) -> str:
             f"REFUSING to write {path}: {why}. The rule is `results/*` ignored "
             f"with only `!results/published/` excepted; a floor written anywhere "
             f"else is a floor that disappears on commit.")
+    standing = published_floor_is_measured(path)
+    if doc.get("replicate_floor") is None and standing is not False:
+        held = ("holds a floor measured on a card" if standing
+                else "cannot be read as a floor document of this schema")
+        raise SystemExit(
+            f"REFUSING to write {path}: this document carries "
+            f"replicate_floor: null and the file already there {held}. "
+            f"Publishing it would replace a measurement with nothing. Part (b) "
+            f"is unchanged in both files; if the standing floor really is to go, "
+            f"delete it in a commit that says so, then rerun this.")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, indent=2) + "\n")
     return f"wrote {path} (git check-ignore says this path is tracked)"
@@ -2329,6 +2483,15 @@ IMPORT_BANNER = f"""\
 cannot see and `NoiseFloorUnmeasured` while part (a) has not run. Neither ever
 returns a number nobody measured, so a caller that forgets to handle them stops
 rather than silently deciding its effect is real.
+
+AND FOR A CALLER THAT MUST PRINT A LIMIT EVERY SESSION, MEASURED OR NOT:
+
+    sigma, basis, source = NF.sizing_sigma()   # basis is MEASURED or ASSUMED
+
+The two consumers that still read `prior_sd` straight out of the JSON
+(`scripts/alpha_surface.py:prior_sd`, `scripts/bn_decomposition.py:
+published_prior_sd`) are reading the s3/s4 PROXY, and will still be reading it
+after this arm publishes a measured floor into the same file. One line each.
 
 The file is {NOISE_FLOOR_JSON.relative_to(ROOT)}."""
 
@@ -2872,7 +3035,7 @@ def resolve_arms(names: str) -> list[Arm]:
     return [known[n] for n in wanted]
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     arms = resolve_arms(args.arms)
     cache_mode = "warm" if args.warm_cache else "fresh"
@@ -3139,6 +3302,59 @@ def main(argv: list[str] | None = None) -> int:
         print(why)
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
+
+
+def main(argv: list[str] | None = None) -> int:
+    """The exit-code table held for the CLI AND for a caller of `main`.
+
+    AN UNPLANNED CRASH IS ERROR (4). Left to propagate, an exception exits the
+    interpreter ONE, and ONE is `CLAIM_FAIL`, which `moe/bench/exit_codes.py`
+    defines as a RESULT: it is a finished code, the session driver latches the
+    arm, `arm()` skips the row on every resume, RETRY_ARMS stays 0 and the
+    session exits 0. This arm books 120 minutes and pools its children at the
+    very end, so a torch OOM or a truncated report in the last minute of it
+    would have been filed as one of this experiment's registered findings and
+    never rerun. Measured on 2026-09-03 by injecting `raise RuntimeError` at
+    the top of `_main` in a shadow tree: the exit code was 1. Every other arm
+    in the session (`bm128_roofline`, `occupancy_vs_swizzle`,
+    `calibrate_hardware`) already installed this handler; this file and
+    `bm128_depth` did not, and this is the half of the pair that owns the
+    session's most expensive arm.
+
+    A STRING `SystemExit` IS A REFUSAL, and that is the second half of the same
+    defect. `raise SystemExit("...")` exits ONE as well, and this file has five
+    of them: `--replicates` below 2, two in `resolve_arms`, and both walls in
+    `write_published`. The last of those can fire AFTER the card has been paid
+    for, so it is the one that mattered: a tracked path git would drop, or a
+    null document over a measured floor, exited CLAIM_FAIL and the driver
+    latched a 120-minute arm as finished. REFUSED (2) is the table's word for
+    "a precondition was not met and nothing was published"; the sentence goes
+    to stderr first, because a code with no sentence tells an operator nothing
+    to fix, and the run's full summary is under its own base directory either
+    way.
+
+    Caught here rather than at the raise sites so that a refusal added later
+    cannot reintroduce the bug by forgetting the code, and so the contract is
+    the same one whether this file is run or imported.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = (exc.code if exc.code.startswith("REFUS")
+                   else f"REFUSED: {exc.code}")
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception:                                     # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: replicate_noise_floor crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim failing, so "
+              f"it exits {exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: "
+              "the traceback above is the thing to fix, the replicates already "
+              "on disk are under the base directory the plan printed, and the "
+              "arm may be re-run.", file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":                                # pragma: no cover

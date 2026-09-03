@@ -842,6 +842,13 @@ def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch):
     no instrument and no ruler. `prov` is a required positional argument now, so
     the FAIL branch is a TypeError at the call site rather than a silent hole in
     a published artefact, and that branch is planted here too.
+
+    THE WRITE ITSELF IS FAKED HERE, and that is the limit of what this proves:
+    it proves what the two call sites BUILD, not what lands on disk. Whether
+    either of them may land at all is the separate question
+    `test_no_unmeasured_publish_path_can_delete_a_measured_floor` asks, and the
+    answer changed on 2026-09-03: onto a file that already holds a measured
+    floor, neither may.
     """
     with pytest.raises(TypeError, match="prov"):
         NF.build_document({}, {}, None)
@@ -1971,3 +1978,216 @@ def test_the_rehearsal_the_audit_ran_now_pools_its_children_and_still_refuses(
                              if r.name.startswith("C1")]
     assert code == NF.exit_codes.INVALID
     assert "REHEARSAL: INVALID by construction" in out
+
+
+# --------------------------------------------------------------------------
+# 10. THE TWO WAYS 120 MINUTES ARE LOST WITHOUT A SINGLE NUMBER BEING WRONG.
+#
+# Both are about the code the ledger reads and the file git keeps, not about
+# the floor. An arm can measure perfectly and still be worthless if the row it
+# writes says the wrong thing, or if the artefact it was rented for is deleted
+# by the same run that refused to produce one. Every test here plants its FAIL
+# branch: a passing wall that has never been shown to stop anything is the
+# "check that examined nothing" shape this repository is named against.
+# --------------------------------------------------------------------------
+
+def _measured_floor_doc(sd=0.0123, *, synthetic=False):
+    """The smallest document that counts as a floor a card produced."""
+    return {
+        "schema": NF.SCHEMA,
+        "prior_sd": 0.022862534415054224,
+        "prior_sd_source": "the s3/s4 proxy",
+        "replicate_floor": {
+            "n_replicates": 6, "cache_mode": "fresh", "gpu_name": "NVIDIA H200",
+            "provenance": "6 replicates on NVIDIA H200", "synthetic": synthetic,
+            "instrument": "queue-deep/l2-flush/clock-under-load/v2",
+            "scope": None,
+            "per_field": {NF.PRIMARY_FIELD: {
+                "sd": sd, "df": 10, "upper95": sd * 1.5, "pooled": True,
+                "reason": "pooled over 2 cells", "cells": 2, "per_cell": []}},
+        },
+    }
+
+
+def test_an_unplanned_exception_is_error_and_not_a_claim_that_failed(
+        monkeypatch, capsys):
+    """THE ONE PATH THAT STILL WASTED THE BOOKING, and it wasted it silently.
+
+    Unhandled, an exception exits the interpreter ONE, and ONE is CLAIM_FAIL: a
+    RESULT, latched by the session driver, skipped on every resume, RETRY_ARMS
+    0, session exits 0. A torch OOM in the last minute of a 120-minute arm was
+    filed as one of this experiment's registered findings. ERROR (4) is outside
+    the finished codes precisely so "the apparatus broke" can be told from "the
+    claim did not hold".
+    """
+    def boom(argv=None):
+        raise RuntimeError("torch OOM on the pod")
+
+    monkeypatch.setattr(NF, "_main", boom)
+    assert NF.main([]) == NF.exit_codes.ERROR
+    err = capsys.readouterr().err
+    assert "torch OOM on the pod" in err, "the traceback was swallowed"
+    assert "RuntimeError" in err
+    assert NF.exit_codes.ledger_state(NF.exit_codes.ERROR) == "RETRY"
+    assert NF.exit_codes.ledger_state(NF.exit_codes.CLAIM_FAIL) != "RETRY"
+
+    # ...and the PASS branch: a run that reaches a verdict keeps its own code.
+    monkeypatch.setattr(NF, "_main", lambda argv=None: NF.exit_codes.CLAIM_FAIL)
+    assert NF.main([]) == NF.exit_codes.CLAIM_FAIL
+
+
+def test_a_refusal_sentence_is_refused_and_not_a_claim_that_failed(
+        monkeypatch, capsys):
+    """`raise SystemExit("...")` exits ONE too, and this file has five of them.
+
+    Two are in `write_published` and can fire AFTER the card has been paid for,
+    which is why the mapping is here and not at the raise sites. An argparse
+    failure already exits 2 and must pass through as itself.
+    """
+    assert NF.main(["--replicates", "1"]) == NF.exit_codes.REFUSED
+    assert "REFUSED: --replicates below 2" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit) as exc:
+        NF.main(["--not-an-argument"])
+    assert exc.value.code == 2, "argparse's own code must pass through"
+    capsys.readouterr()
+
+    monkeypatch.setattr(NF, "_main", lambda argv=None: (_ for _ in ()).throw(
+        SystemExit("REFUSING to write /x: git ignores it")))
+    assert NF.main([]) == NF.exit_codes.REFUSED
+    err = capsys.readouterr().err
+    assert err.startswith("REFUSING to write"), "the sentence was re-prefixed"
+
+
+def test_published_floor_is_measured_says_cannot_tell_rather_than_no(tmp_path):
+    """Three answers, because "unreadable" and "empty" are not the same file."""
+    absent = tmp_path / "gone.json"
+    assert NF.published_floor_is_measured(absent) is False
+
+    null = tmp_path / "null.json"
+    null.write_text(json.dumps({"schema": NF.SCHEMA, "replicate_floor": None}))
+    assert NF.published_floor_is_measured(null) is False
+
+    fake = tmp_path / "rehearsed.json"
+    fake.write_text(json.dumps(_measured_floor_doc(synthetic=True)))
+    assert NF.published_floor_is_measured(fake) is False
+
+    real = tmp_path / "real.json"
+    real.write_text(json.dumps(_measured_floor_doc()))
+    assert NF.published_floor_is_measured(real) is True
+
+    torn = tmp_path / "torn.json"
+    torn.write_text('{"schema": "moe-kernels/noise-flo')
+    assert NF.published_floor_is_measured(torn) is None
+
+    alien = tmp_path / "alien.json"
+    alien.write_text(json.dumps({"schema": "somebody/else/1"}))
+    assert NF.published_floor_is_measured(alien) is None
+
+
+def test_a_null_floor_may_not_replace_a_measured_one(tmp_path, monkeypatch):
+    """THE DOOR THE GATE WALL DOES NOT COVER, at the one place all three open.
+
+    `gates_permit_publishing` stands in the MEASURED publish path only. This is
+    the write itself refusing, so `--control-only --publish`, the `blocked`
+    path and any caller added later are all covered by one rule.
+    """
+    monkeypatch.setattr(NF, "git_accepts", lambda p: True)
+    target = tmp_path / "NOISE_FLOOR.json"
+
+    # PASS branch first: onto a file with nothing to lose, a null floor lands.
+    assert "wrote" in NF.write_published({"replicate_floor": None}, target)
+    assert json.loads(target.read_text())["replicate_floor"] is None
+
+    # FAIL branch: onto a measured floor it refuses, and leaves it untouched.
+    target.write_text(json.dumps(_measured_floor_doc(0.0177)))
+    before = target.read_text()
+    with pytest.raises(SystemExit, match="REFUSING to write"):
+        NF.write_published({"replicate_floor": None}, target)
+    assert target.read_text() == before
+    assert NF.noise_floor(target).sd == 0.0177
+
+    # A measured document may replace a measured document: this is the arm.
+    assert "wrote" in NF.write_published(_measured_floor_doc(0.0201), target)
+    assert NF.noise_floor(target).sd == 0.0201
+
+    # And "cannot tell" refuses as well, because deciding "empty" from a file
+    # we failed to open is how a measurement gets deleted by a blank.
+    target.write_text("{not json")
+    with pytest.raises(SystemExit, match="cannot be read as a floor document"):
+        NF.write_published({"replicate_floor": None}, target)
+    assert target.read_text() == "{not json"
+
+
+@needs_arms
+def test_no_unmeasured_publish_path_can_delete_a_measured_floor(
+        tmp_path, monkeypatch, capsys):
+    """THE VERIFIER'S REPRO, through `main`, at both doors that reach it.
+
+    `--dry-run --publish` and `--control-only --publish` both print "NOT A
+    RESULT. The replicate floor was not measured", both return REFUSED, and
+    both wrote `replicate_floor: null` over the tracked file on the way. The
+    session driver's real branch passes `--publish` bare, so a GPU probe coming
+    back empty on the pod did both at once: refused the arm and deleted the
+    floor an earlier pod had paid for.
+    """
+    target = tmp_path / "NOISE_FLOOR.json"
+    target.write_text(json.dumps(_measured_floor_doc(0.0155)))
+    before = target.read_text()
+    monkeypatch.setattr(NF, "NOISE_FLOOR_JSON", target)
+    monkeypatch.setattr(NF, "git_accepts", lambda p: True)
+    monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
+
+    for argv in (["--control-only", "--publish"],
+                 ["--dry-run", "--publish", "--replicates", "3",
+                  "--arms", "mixtral_g1,mixtral_g16",
+                  "--out-dir", str(tmp_path / "out")]):
+        assert NF.main(argv) == NF.exit_codes.REFUSED, argv
+        assert target.read_text() == before, argv
+        assert "REFUSING to write" in capsys.readouterr().err, argv
+    assert NF.noise_floor(target).sd == 0.0155
+
+
+def test_sizing_sigma_labels_the_number_it_returns(tmp_path):
+    """The fallback every consumer of this file needs, written once.
+
+    `noise_floor()` raises, which is right for a caller that must stop and
+    wrong for the three that must print a limit every session. Two of them
+    (`alpha_surface`, `bn_decomposition`) read `prior_sd` straight out of the
+    JSON and would go on reading the s3/s4 PROXY after this arm publishes a
+    measurement into the same file, which is what makes this an accessor and
+    not a note in a docstring.
+    """
+    measured = tmp_path / "measured.json"
+    measured.write_text(json.dumps(_measured_floor_doc(0.0133)))
+    sd, basis, source = NF.sizing_sigma(measured)
+    assert (sd, basis) == (0.0133, "MEASURED")
+    assert "NVIDIA H200" in source
+
+    null = tmp_path / "null.json"
+    doc = _measured_floor_doc()
+    doc["replicate_floor"] = None
+    null.write_text(json.dumps(doc))
+    sd, basis, source = NF.sizing_sigma(null)
+    assert (sd, basis) == (0.022862534415054224, "ASSUMED")
+    assert "s3/s4 proxy" in source and "no measured floor" in source
+
+    # A rehearsal floor is not a measurement, and must not be quoted as one.
+    synthetic = tmp_path / "synthetic.json"
+    synthetic.write_text(json.dumps(_measured_floor_doc(0.9, synthetic=True)))
+    assert NF.sizing_sigma(synthetic)[1] == "ASSUMED"
+
+    # And it invents nothing when there is nothing.
+    with pytest.raises(NF.NoiseFloorUnmeasured, match="no readable prior_sd"):
+        NF.sizing_sigma(tmp_path / "absent.json")
+
+
+@needs_arms
+def test_every_mode_names_the_accessor_and_who_still_reads_the_proxy(capsys):
+    """The decision an operator must make BEFORE the rental is printed by every
+    mode, because after it the 120 minutes are spent either way."""
+    NF.main(["--control-only"])
+    out = capsys.readouterr().out
+    assert "sizing_sigma()" in out
+    assert "alpha_surface.py:prior_sd" in out
+    assert "bn_decomposition.py:" in out and "published_prior_sd" in out
