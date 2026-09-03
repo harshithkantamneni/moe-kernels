@@ -359,6 +359,20 @@ def test_this_script_never_reaches_the_byte_model_or_a_calibrated_bandwidth():
     ruler was wrong. If this script ever imported `bytes_model`, `efficiency`,
     `roofline` or `alpha_refit`'s estimator, the two numbers would stop being
     independent and the second one would stop being worth measuring.
+
+    THE MODULE BAN HAD A DOOR IN IT AND THE FILE WAS ALREADY THROUGH.
+    `banned_modules` catches `import moe.bench.roofline` and `from
+    moe.bench.roofline import x`, and misses `from moe.bench import roofline as
+    RF`, which is the form `measured_card` has used since it was written and
+    the form `reference_clock_for` uses now. Both are legitimate: the L2 size,
+    the read roof and the LEVEL reference are readers of a hardware FILE, and
+    none of them is the byte model. What must never come through that door is
+    the roofline ARITHMETIC -- a roof turned into an attainable rate, a ridge, an
+    efficiency -- because an alpha computed against those is an alpha computed
+    against the refit's own ruler, which is the entire thing this arm exists to
+    avoid. So the door is now watched rather than pretended shut: the surface
+    reached through `RF` is pinned to the three file readers by name, and a
+    fourth one fails here.
     """
     import ast
     tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
@@ -382,8 +396,23 @@ def test_this_script_never_reaches_the_byte_model_or_a_calibrated_bandwidth():
     assert not (modules & banned_modules), modules & banned_modules
     banned_names = {"implied_traffic_ratio", "compulsory_bytes",
                     "compulsory_gbps", "load_measured", "span_cost",
-                    "fit_alpha_refit", "cell_key", "Observation"}
+                    "fit_alpha_refit", "cell_key", "Observation",
+                    # The roofline ARITHMETIC, which the module ban's door does
+                    # not stop and which is what would tie this alpha to the
+                    # refit's ruler.
+                    "load_hardware", "hardware_for_rows", "attainable",
+                    "ridge_point", "Hardware"}
     assert not (names & banned_names), names & banned_names
+
+    # THE DOOR, WATCHED. Everything read through the `roofline as RF` alias, and
+    # it is exactly the three hardware-FILE readers: where the yaml lives, what
+    # this card's yaml is called, and the clock its GEMM ran at. A clock is not
+    # a bandwidth.
+    through_the_door = {n.attr for n in ast.walk(tree)
+                        if isinstance(n, ast.Attribute)
+                        and getattr(n.value, "id", "") == "RF"}
+    assert through_the_door == {"HARDWARE_DIR", "measured_slug",
+                                "reference_clock"}, through_the_door
 
 
 def test_the_only_thing_borrowed_from_the_refit_is_the_rival_constants():
@@ -568,6 +597,64 @@ def test_the_alias_extent_reaches_both_call_sites(design):
                     f"{scored} closed form, so the two extents' references are "
                     "not telling each other apart and this test would not "
                     "notice either one drifting")
+
+
+def test_the_dot_mode_correctness_check_examines_something():
+    """A CHECK THAT EXAMINES NOTHING AND REPORTS ZERO FAILURES.
+
+    `check_output`'s `dot` branch was entirely untested: replacing the whole
+    branch with `return 0.0` left this file reading 103 passed. That is this
+    project's first named failure mode, and it is worse here than in most
+    places because `correctness` is a VALIDITY gate -- a rel-RMS of 0.0 does not
+    merely fail to notice a bad run, it actively certifies it, and dot mode is
+    the mode the PROBE can fall into without the operator asking for it.
+
+    THE FAILURE THE BRANCH EXISTS TO CATCH IS "NORMAL DID NOT READ EVERY
+    EXPERT", which is why it checks three experts rather than one: if the normal
+    arm quietly read one expert's weights for everybody, W stops being the cost
+    of a full weight pass, D(n) collapses, and alpha comes out near zero looking
+    like a triumph. The middle expert is the one a one-expert check would miss,
+    so that is where the fault is planted below.
+
+    THE MUTATION IS THE FAIL BRANCH. `return 0.0` in place of the branch, or
+    dropping `rung.experts // 2` from `picks`, crosses the `err > 0.5`
+    assertion. Sum mode has its own emulation test above; this one is the other
+    compute mode, whose closed form is a real matmul because it has no cheap
+    one.
+    """
+    torch = pytest.importorskip("torch")
+    rung = AB.Rung(**EMULATED_RUNG)
+    torch.manual_seed(0)
+    a = torch.empty((rung.total_rows, rung.k),
+                    dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+    b = torch.empty((rung.experts, rung.n, rung.k),
+                    dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+    right = torch.zeros((rung.total_rows, rung.n), dtype=torch.float32)
+    for expert in range(rung.experts):
+        lo = expert * rung.rows_per_expert
+        hi = lo + rung.rows_per_expert
+        right[lo:hi] = a[lo:hi].to(torch.float32) @ b[expert].to(torch.float32).T
+    assert AB.check_output(rung, a, b, right, "dot", False, torch) < 1e-6
+
+    # The planted fault: the middle expert's tiles read EXPERT 0's weights, the
+    # shape of "normal did not read every expert".
+    wrong = right.clone()
+    middle = rung.experts // 2
+    lo = middle * rung.rows_per_expert
+    hi = lo + rung.rows_per_expert
+    wrong[lo:hi] = a[lo:hi].to(torch.float32) @ b[0].to(torch.float32).T
+    err = AB.check_output(rung, a, b, wrong, "dot", False, torch)
+    assert err > 0.5, (
+        f"one expert of {rung.experts} read the wrong weights and the dot-mode "
+        f"check scored {err}; a VALIDITY gate reading that as clean is the "
+        "whole failure mode")
+
+    # THE ALIASED ARM RETURNS None, WHICH IS NOT ZERO. There is no cheap closed
+    # form for an aliased matmul, and `None` is how the gate is told NOT
+    # DETERMINED rather than PASSED. A branch returning 0.0 here would report a
+    # perfect aliased arm on every dot-mode run ever made.
+    assert AB.check_output(rung, a, b, right, "dot", True, torch) is None
+    assert AB.check_output(rung, a, b, wrong, "dot", True, torch) is None
 
 
 def test_the_kernel_keeps_both_loads_live_on_the_compute_side():
@@ -837,6 +924,107 @@ def test_cells_from_two_compute_modes_are_refused_and_not_pooled(
     # find that out, which is not the same as INVALID.
     assert code == 2, out
     assert "more than one compute mode" in out
+
+
+def test_every_cell_writer_carries_every_cell_knob():
+    """THE EIGHTH INSTANCE, closed at the source rather than at one writer.
+
+    `_analyse` asks the CELLS what they were measured under, which is the wall
+    that stands when plan.json is old, hand-edited, absent, or the directory was
+    named with `--out` and replayed from elsewhere. It asked for `compute`
+    alone, and neither cell writer recorded `alias_extent`, so the knob that
+    decides how much of the shared path the aliased arm actually exercised had
+    only the file wall: a directory holding both extents pooled into one alpha
+    with nothing on the page saying so.
+
+    A LIST AND A HELPER RATHER THAN THREE LITERALS. Both writers splat
+    `cell_knobs`, so a knob added to `CELL_KNOBS` reaches the measured path, the
+    planted path and the wall together. A writer that listed its own keys is
+    exactly how the synthetic plan came to omit `compute` while the measured one
+    carried it, and every planted world replayed as sum mode however it was
+    planted. The measured writer needs a card, so it is pinned in the SOURCE:
+    the literal key is gone and the splat is there.
+    """
+    import ast
+    assert set(AB.CELL_KNOB_STAKES) == set(AB.CELL_KNOBS), (
+        "a knob with no stated stakes would reach the wall with no reason to "
+        "refuse printable beside it")
+
+    design = AB.build_design(AB.parse_args(
+        ["--compute", "dot", "--alias-extent", "tile"]))
+    assert AB.cell_knobs(design) == {"compute": "dot", "alias_extent": "tile"}
+    for row in AB.synthesise(design, "refit", 0):
+        assert {k: row.get(k) for k in AB.CELL_KNOBS} == AB.cell_knobs(design)
+
+    fn = next(n for n in ast.walk(ast.parse(
+        (ROOT / "scripts" / "alias_ablation.py").read_text()))
+        if isinstance(n, ast.FunctionDef) and n.name == "measure_rung")
+    splats = {getattr(v.func, "id", "") for d in ast.walk(fn)
+              if isinstance(d, ast.Dict)
+              for k, v in zip(d.keys, d.values, strict=True)
+              if k is None and isinstance(v, ast.Call)}
+    assert "cell_knobs" in splats, (
+        "measure_rung no longer splats cell_knobs, so the measured writer can "
+        "disagree with the planted one and with the wall")
+    literals = {k.value for d in ast.walk(fn) if isinstance(d, ast.Dict)
+                for k in d.keys if isinstance(k, ast.Constant)}
+    assert not (literals & set(AB.CELL_KNOBS)), (
+        f"measure_rung writes {literals & set(AB.CELL_KNOBS)} as its own "
+        "literal, which is the third writer this helper exists to prevent")
+
+
+def test_cells_from_two_alias_extents_are_refused_and_not_pooled(
+        tmp_path, monkeypatch, capsys):
+    """The `compute` wall's twin, on the knob that had only the file wall.
+
+    `block` streams a whole BLOCK_N x K column block and `tile` hammers one
+    BLOCK_K x BLOCK_N tile; they remove different bytes, produce different `r`,
+    and the pinned variant is what cost the 2026-09-01 run its experiment. A
+    page holding both is not a ladder. The fingerprint keeps the two apart on
+    the default path, so the way they meet is `--out` plus a hand-edited or
+    absent plan, which is exactly what this walks.
+    """
+    out_dir = tmp_path / "extents"
+    code, _ = run_report(["--synthetic", "refit", "--alias-extent", "tile",
+                          "--out", str(out_dir)], tmp_path, monkeypatch, capsys)
+    assert code == 0
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    assert {r["alias_extent"] for r in rows} == {"tile"}
+
+    # WALL 1, the plan: `--replay` carries no `--alias-extent`, and the
+    # restored knob puts the WHOLE page on the right extent, so wall 2 has
+    # nothing to correct and stays silent.
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert code == 0, out
+    assert "--alias-extent 'tile'" in out
+    assert "SCORED AS" not in out
+
+    # WALL 2, the cells, with the plan's key removed the way every plan written
+    # before this fix has it removed. Without it `report_design` states the
+    # DEFAULT extent as what the aliased arm touched, which is a false sentence
+    # about the measurement on a page that otherwise reads clean.
+    plan = json.loads((out_dir / "plan.json").read_text())
+    assert plan["alias_extent"] == "tile"
+    plan.pop("alias_extent")
+    (out_dir / "plan.json").write_text(json.dumps(plan))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert code == 0, out
+    assert "SCORED AS TILE ALIAS EXTENT" in out
+    assert "this invocation said block" in out
+
+    # AND THE MIXED DIRECTORY, which neither wall above can adopt its way out
+    # of. REFUSED (2): nothing on the page may be quoted, and nothing was spent
+    # to find that out.
+    rows[0]["alias_extent"] = "block"
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert code == 2, out
+    assert "more than one alias extent" in out
+    assert "block, tile" in out
 
 
 def test_replaying_a_sum_run_is_untouched_by_either_wall(
@@ -1616,6 +1804,306 @@ def test_the_aliased_arm_must_be_resident_and_the_preflight_can_say_no():
 
 
 # --------------------------------------------------------------------------
+# LEVEL: the flag that had no left-hand side, at both of this arm's call sites
+# --------------------------------------------------------------------------
+
+def _fake_torch(card: str):
+    """Just enough torch for `require_reference_clock`, which asks the device
+    for its name and nothing else. A card is attached by the time either caller
+    reaches it, so the laptop case is not this function's to model."""
+    import types
+    return types.SimpleNamespace(cuda=types.SimpleNamespace(
+        get_device_properties=lambda index: types.SimpleNamespace(name=card)))
+
+
+def _pass_timing(load_mhz: float, reference: float | None):
+    """One `time_kernel` result for a card sitting at `load_mhz`, scored the way
+    `time_kernel` scores it: through `clock_flags`, against `reference`."""
+    level, drift = AB.timing.clock_flags(load_mhz, load_mhz, load_mhz, reference)
+    return AB.timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.0, ms_min=1.0, ms_std=0.0, iters=10, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=load_mhz,
+        clock_level_ok=level, clock_drift_ok=drift, samples=30, warmup_calls=5,
+        flush_mb=256, clock_samples=8, clock_source="injected",
+        clock_poll_ms=0.1, host_bound=False, host_enqueue_ms=0.1)
+
+
+def test_the_level_reference_reaches_both_of_this_arms_time_kernel_calls():
+    """TWO CALL SITES, AND FIXING ONE WOULD HAVE BEEN THE NINTH INSTANCE.
+
+    `moe/bench/driver.py` resolves the reference and hands it to `time_kernel`,
+    which is what turned the LEVEL column on for the sweep path. This arm calls
+    `time_kernel` directly and does it TWICE: once in `measure_rung`, for the
+    ladder that produces alpha, and once in `measure_probe`, which produces no
+    number at all but CHOOSES the pinning the ladder is measured at. The probe
+    is the easy one to forget, and forgetting it means a pinning rejected for
+    running at 0.61 of the read roof while the card was at 0.7 of its clock,
+    which stops the arm for the wrong reason and costs the whole rental.
+
+    Checked in the SOURCE, because the failure guarded against is a future edit
+    dropping the keyword, and every behavioural test in this file would still
+    pass on a laptop with no card.
+    """
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", getattr(n.func, "attr", "")) == "time_kernel"]
+    assert len(calls) == 2, (
+        f"{len(calls)} time_kernel calls; the ladder's and the probe's were "
+        "two, so the wall has moved and this test has to move with it")
+    for call in calls:
+        assert "reference_clock_mhz" in {k.arg for k in call.keywords}, (
+            f"time_kernel at line {call.lineno} passes no reference clock, so "
+            "every row it writes records clock_level_ok undetermined")
+
+    # And the ladder's own writer cannot be handed one by accident: the
+    # parameter has NO DEFAULT, so a third caller has to supply it or fail to
+    # call. A default of None is exactly how the column came to be dead.
+    import inspect
+    sig = inspect.signature(AB.measure_rung)
+    assert sig.parameters["reference_clock_mhz"].default is inspect.Parameter.empty
+
+
+def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_against():
+    """THE CONSEQUENCE, replayed end to end through this file's own fold.
+
+    A card pegged at 1400 MHz while an H200 roof was measured at 1515 is 92% of
+    the ruler, under `LEVEL_FRACTION`. Scored against the reference every pass
+    reads False and `_fold_flag` keeps the False; scored against nothing every
+    pass reads None, the fold keeps None, and the rung reaches `cells.jsonl`
+    carrying the column with no verdict in it. Both ladders would sag together
+    and D(n)/D(1) would move, because a sag part way up one ladder moves the
+    numerator and the denominator by different amounts.
+
+    DRIFT does not save it, which is the whole reason LEVEL exists: the clock
+    below never moves, so `clock_drift_ok` is True in both worlds and the
+    retired throttle check passes a card running at 92% of its roof's clock.
+    """
+    reference = AB.reference_clock_for(AB.PLANT_CARD).mhz
+    assert reference == 1515.0
+    sagging = 1400.0
+    assert sagging < AB.timing.LEVEL_FRACTION * reference
+
+    blind = AB.fold_timings([_pass_timing(sagging, None) for _ in range(3)])
+    assert blind["clock_level_ok"] is None, (
+        "this is what every rung this arm published carries: the column, and "
+        "no verdict in it")
+    seeing = AB.fold_timings([_pass_timing(sagging, reference) for _ in range(3)])
+    assert seeing["clock_level_ok"] is False
+    # The PASS branch, so the flag is not simply always False.
+    level = AB.fold_timings([_pass_timing(reference, reference) for _ in range(3)])
+    assert level["clock_level_ok"] is True
+    # DRIFT is True in all three. It is not a substitute and never was.
+    assert {blind["clock_drift_ok"], seeing["clock_drift_ok"],
+            level["clock_drift_ok"]} == {True}
+
+
+def test_a_card_with_no_level_reference_refuses_before_the_ladder_is_paid_for():
+    """BOTH BRANCHES OF THE REFUSAL, and why this arm refuses where its sibling
+    prints and runs on.
+
+    `group_m_alpha_sweep.reference_clock_for` documents the opposite decision:
+    its correctness gates and paired ratios stand without the column, so an
+    absent yaml there is worth printing rather than turning into a lost hour.
+    Here the column is the only evidence for the only number the arm produces,
+    and the remedy is a minute of `calibrate_hardware.py --publish` on a box
+    that is already rented. `CannotRunHere` is what both callers already
+    translate into REFUSED (2), which is "nothing spent, nothing measured".
+    """
+    ok = AB.require_reference_clock(_fake_torch(AB.PLANT_CARD))
+    assert ok.mhz == 1515.0 and ok.card == AB.PLANT_CARD
+    # THE SAME READER THE DRIVER USES, an identity rather than two equal
+    # numbers: a private copy of the three-field rule here is the defect the
+    # driver's own pinning test exists to catch.
+    from moe.bench import roofline
+    assert ok == roofline.reference_clock(AB.PLANT_CARD)
+
+    with pytest.raises(AB.CannotRunHere) as excinfo:
+        AB.require_reference_clock(_fake_torch("NVIDIA B200"))
+    said = str(excinfo.value)
+    assert "no LEVEL reference" in said and "NVIDIA B200" in said
+    assert "calibrate_hardware.py --publish" in said
+    assert "a minute against this arm's hour" in said
+
+
+def test_the_page_reads_the_level_column_it_writes(tmp_path, monkeypatch,
+                                                   capsys):
+    """A COLUMN NOTHING READS IS A COLUMN NOTHING PROTECTS.
+
+    `clock_level_ok` reached every row and was consulted by no line of the
+    report, so turning it on would have changed a file and not a verdict. The
+    block in `_analyse` has three branches and all three are here: rows that
+    sagged, rows written before there was a reference to sag against, and rows
+    that were level. Planted rows carry no clock and are not scored against one,
+    which is why this walks a MEASURED directory.
+    """
+    out_dir = tmp_path / "levels"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+
+    def replay(mutate) -> str:
+        for row in rows:
+            row["provenance"] = "measured"
+            mutate(row)
+        cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        return run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                          capsys)[1]
+
+    out = replay(lambda row: row.pop("clock_level_ok", None))
+    assert "LEVEL: UNDETERMINED on" in out
+    assert "before 2026-09-03" in out
+
+    out = replay(lambda row: row.update(clock_level_ok=True))
+    assert f"LEVEL: all {len(rows)} rungs ran within" in out
+
+    out = replay(lambda row: row.update(
+        clock_level_ok=row["id"] != rows[0]["id"]))
+    assert f"LEVEL: 1 of {len(rows)} rungs ran below" in out
+    assert rows[0]["id"] in out
+
+
+def test_a_sagged_rung_and_a_blind_one_are_two_findings_not_one(
+        tmp_path, monkeypatch, capsys):
+    """`if sagged: ... elif blind: ...` reported the first and buried the rest.
+
+    THE DIRECTORY THAT HOLDS BOTH IS THE ORDINARY ONE. A resume onto a re-rented
+    pod skips the rungs already on disk, so they keep whatever they were written
+    with: rows that sagged and rows written before there was a reference to sag
+    against sit in the same `cells.jsonl`. Twenty rungs with three sagged and
+    seventeen carrying no key printed `LEVEL: 3 of 20 rungs ran below ...` and
+    nothing at all about the other seventeen, so a reader took them for level
+    when none of them carried a verdict. The two counts are independent and are
+    now printed independently, blind first, which is the order the sibling arm
+    argues for at `group_m_alpha_sweep.py`: whether the column could have said
+    anything comes before what it said.
+    """
+    out_dir = tmp_path / "mixed"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for i, row in enumerate(rows):
+        row["provenance"] = "measured"
+        if i < 3:
+            row["clock_level_ok"] = False
+        else:
+            row.pop("clock_level_ok", None)
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+
+    assert f"LEVEL: UNDETERMINED on {len(rows) - 3} of {len(rows)} rungs" in out
+    assert f"LEVEL: 3 of {len(rows)} rungs ran below" in out
+    # The order is load bearing, not cosmetic: the apparatus statement first.
+    assert out.index("LEVEL: UNDETERMINED") < out.index(f"LEVEL: 3 of {len(rows)}")
+    # THE PLANTED FAIL BRANCH. Narrating a sag moved neither of the two things
+    # `pod_session.sh` grades, so this directory used to exit 0 DONE with every
+    # gate PASS and a warning nobody's grader read.
+    assert f"[FAIL] {AB.LEVEL_GATE}" in out
+    assert code == exit_codes.INVALID
+    assert exit_codes.classify_text(out) == code
+
+
+def _levelled(*oks) -> list[dict]:
+    """Rung rows carrying just the one column `level_gate` reads. `None` means
+    the key is ABSENT, which is how a row written before the reference existed
+    reaches the reader, not `clock_level_ok: null`."""
+    return [{"id": f"r{i}", **({} if ok is None else {"clock_level_ok": ok})}
+            for i, ok in enumerate(oks)]
+
+
+def test_the_level_gate_passes_fails_and_refuses_to_guess():
+    """A sag FAILS, a full ladder PASSES, and a rung with no reference is NOT
+    TESTABLE rather than PASS.
+
+    THE LAST BRANCH IS THE ONE WORTH HAVING. `classify` turns an unknown
+    VALIDITY gate into INVALID, so a ladder that carries no reference clock
+    cannot be quoted; scoring the rungs that happen to carry the key and calling
+    that PASS is "a check that examined nothing reports zero failures", which is
+    this project's first named failure mode. A partly blind ladder therefore
+    cannot pass either.
+    """
+    assert AB.level_gate(_levelled(True, True, True)).ok is True
+    assert AB.level_gate(_levelled(True, False, True)).ok is False
+    assert AB.level_gate(_levelled(None, None)).ok is None
+    assert AB.level_gate(_levelled(True, None, True)).ok is None
+    # A sag outranks a blind rung: FAIL is the more informative of the two, and
+    # the detail still names how many could not be examined at all.
+    mixed = AB.level_gate(_levelled(False, None, None))
+    assert mixed.ok is False
+    assert "a further 2 carry no reference" in mixed.detail
+    # VALIDITY, not CLAIM: a card held below its roof's clock is a broken
+    # apparatus, not the world disagreeing with a pre-registered prediction.
+    assert AB.level_gate(_levelled(False)).kind == exit_codes.VALIDITY
+
+
+def test_only_one_function_decides_which_rungs_sagged():
+    """The paragraph and the gate read ONE partition, so a third reader cannot
+    disagree with them.
+
+    This is the shape the rebuild keeps finding: a fix applied at one of two
+    call sites. `_analyse` narrates the two counts and `level_gate` scores them,
+    and computed twice they drift -- a page naming three sagged rungs while the
+    gate scores a different three is worse than either alone. So
+    `clock_level_ok` is COMPARED in exactly one function in this script, the
+    same discipline `one_tile_signal_shares` is under. The writers name the
+    column as a keyword and are not readers of it.
+    """
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        body = "\n".join(ast.unparse(stmt) for stmt in node.body
+                          if not (isinstance(stmt, ast.Expr)
+                                  and isinstance(stmt.value, ast.Constant)))
+        # A READER pulls the column back OUT of a cells.jsonl row. `_fold_flag`
+        # and `fold_timings` put it in, off `KernelTiming` attributes, and are
+        # not readers of it.
+        if "get('clock_level_ok')" in body or "['clock_level_ok']" in body:
+            readers.add(node.name)
+    assert readers == {"level_split"}, (
+        f"{sorted(readers - {'level_split'})} decide for themselves which "
+        "rungs sagged; route them through level_split")
+
+
+def test_the_level_gate_is_scored_on_measured_runs_and_not_on_planted_ones(
+        tmp_path, monkeypatch, capsys):
+    """Planted rows carry no clock, so scoring them would make every off-GPU
+    rehearsal INVALID for want of hardware it never touched."""
+    code, out = run_report(["--synthetic", "refit"], tmp_path, monkeypatch,
+                           capsys)
+    assert code == exit_codes.DONE
+    assert AB.LEVEL_GATE not in out
+
+    out_dir = tmp_path / "level"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for row in rows:
+        row["provenance"] = "measured"
+        row["clock_level_ok"] = True
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert code == exit_codes.DONE
+    # LEVEL is the first of the RESULT gates, ahead of ISA and of everything
+    # fitted: it is upstream of every number below it, so a reader meets the
+    # apparatus before the alpha. (The six preflights precede it; they are
+    # scored before a rung was timed.)
+    tokens = [ln.split()[2] for ln in out.splitlines()
+              if ln.startswith("RESULT: ")]
+    assert tokens.index("level-every-rung-ran-at-the-roof-s-measured-clock") \
+        < tokens.index("ISA-the-aliased-kernel-issued-the-same-global-loads")
+
+
+# --------------------------------------------------------------------------
 # paired in time, priced in the driver's units, and crash-safe
 # --------------------------------------------------------------------------
 
@@ -1724,6 +2212,51 @@ def test_the_probe_is_charged_the_compiles_the_wall_ratio_never_saw():
     assert without["WALL"] == pytest.approx(
         without["KERNEL"] * AB.WALL_OVER_KERNEL, abs=0.2)
     assert "charged" in "\n".join(priced)
+
+
+def test_the_plan_only_page_books_the_probe_it_will_spend(
+        tmp_path, monkeypatch, capsys):
+    """THE PAGE A RENTAL IS SIZED FROM IS THE ONE WITH NO CARD ATTACHED.
+
+    `probing` was `args.probe and args.run`, and an operator books a pod BEFORE
+    they have one. So the only page anybody could read while deciding how long
+    to rent was a bare invocation, where `--run` is absent, `probing` came out
+    False, and the probe's cost was denied: the table printed the unprobed WALL
+    figure for an arm whose DEFAULT invocation runs the probe. Every other error
+    in that table is an over-estimate, which is the safe direction for a
+    booking. This was the second place that ran the other way, after the
+    probe's compiles, and a booking that is under is the one that runs out of
+    pod with the ladder half walked.
+
+    The fix is at the call site and the wall is here: the bare page's own
+    figures have to BE the probing figures, and the `--no-probe` page's have to
+    be the other ones. Restoring `and args.run` crosses the two assertions.
+
+    `--card` rather than a live device, because the whole point is that this
+    page is read on a laptop. The card names the calibration the byte model is
+    priced from; without one the table says NOT PRICED and books nothing.
+    """
+    _, page = run_report(["--card", AB.PLANT_CARD], tmp_path, monkeypatch,
+                         capsys)
+    args = AB.parse_args(["--card", AB.PLANT_CARD])
+    design = AB.build_design(args)
+    roof = AB.measured_card(AB.PLANT_CARD)["roof_bytes_s"]
+    probed, unprobed = [], []
+    AB.report_cost(_collect(probed), design, args, roof, probing=True)
+    AB.report_cost(_collect(unprobed), design, args, roof, probing=False)
+    booked = _cost_minutes(page)
+    assert booked == _cost_minutes("\n".join(probed)), (
+        "the plan-only page is not printing the probing figures, so the arm is "
+        "booked short by the probe it will spend")
+    assert booked["WALL"] > _cost_minutes("\n".join(unprobed))["WALL"]
+
+    # And the page SAYS which command it booked, so the two figures cannot be
+    # confused for each other by a reader who did not run either.
+    assert "BOOKING   `alias_ablation.py --run`" in page
+    _, no_probe = run_report(["--card", AB.PLANT_CARD, "--no-probe"], tmp_path,
+                             monkeypatch, capsys)
+    assert "BOOKING   `alias_ablation.py --run --no-probe`" in no_probe
+    assert _cost_minutes(no_probe) == _cost_minutes("\n".join(unprobed))
 
 
 def test_the_header_quotes_no_duration_of_its_own():
