@@ -477,6 +477,12 @@ class ForceTileLedger:
         tile-pinned. They are printed with their thresholds BEFORE the sweep and
         re-printed with their measurements after, so the prediction cannot be
         adjusted to fit what came back.
+
+        WHICH CODE EITHER FAILURE IS. `cli.force_tile_verdict` prints one
+        `RESULT: VALIDITY <id> ...` line per gate and takes the exit code from
+        `exit_codes.classify` over these verdicts, so a FAIL here is INVALID (3)
+        and never ERROR (4, retried) or REFUSED (2, free): the gates are scored
+        AFTER the sweep, with the minutes spent and the cells on disk.
         """
         return [
             ("F1", "every row produced under the pin shows the forced tile",

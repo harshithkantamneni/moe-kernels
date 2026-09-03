@@ -26,10 +26,44 @@ it as one, and because it must reach every venv `moe.runner.subproc` spawns:
         python -m moe.bench.cli --profile crossing-uniform --env vllm \\
                --groups baselines --impl vllm_fused_experts
 
-Exit codes, so a shell can tell a falsified prediction from a broken instrument:
-0 ran, 1 the plan is invalid, 2 nothing to benchmark, 3 a tile was forced and no
-cell in the run stands under it, 4 a cell ran pinned and its row did not show
-the pin. See moe/bench/force_tile.py.
+EXIT CODES ARE `moe.bench.exit_codes`'s, not this file's. The session driver
+runs this module as an arm of its own -- `pin_probe-n64-g1` and
+`pin_probe-n256-g16`, the two arms that decide whether five later arms may be
+quoted as tile-pinned -- and the only thing it reads without parsing prose is
+the integer. Until 2026-09-02 the integers here were the table's, INVERTED: a
+plan no span could pin printed the word REFUSED and exited 3, which the driver
+reads as INVALID and LATCHES, so the free refusal whose own message names the
+fix could never be re-run without hand-editing the ledger; a row that ran pinned
+and did not show the pin -- gate F1, the S6a defect this probe exists to detect
+-- exited 4, which is RETRY, so the driver would spend the minutes again next
+session; and a mistyped `--models` exited 1, CLAIM_FAIL, a refuted claim from a
+run that measured nothing. None of it needed a GPU to go wrong.
+
+So: DONE 0, CLAIM_FAIL 1, REFUSED 2 (nothing measured: a malformed variable, an
+unknown model, a plan holding no span able to pin), INVALID 3 (the sweep ran and
+a VALIDITY gate failed after it; nothing quotable), ERROR 4 (an exception this
+module did not plan for, caught in `main` so that a crash is never handed to the
+ledger as a refuted claim). The two force-tile gates print one
+`RESULT: VALIDITY F1 ...` line each and the code is `exit_codes.classify` over
+the same verdicts, so `classify_text` on the log recomputes what the process
+returned.
+
+`--dry-run` IS THE ONE PLACE THIS FILE SPEAKS A SECOND VOCABULARY, and it does
+so deliberately. It exits DONE (0) for a plan that validates and REFUSED (2) for
+one that does not, and the first integer does NOT mean the table's "measured;
+every VALIDITY and CLAIM gate PASSED", because a plan scores no gate at all --
+`classify_text` over a dry-run log raises NoGatesScored. The driver reads a plan
+arm through `dry_state` rather than through the gate table (0 PLANNED, 2
+PLAN_REFUSED, anything else BROKEN: "this is a PLAN, and it did not survive its
+own --dry-run") and it re-queues neither state. The sibling scripts converted in
+461d0e6 refuse unconditionally on their dry path because their rows are not plan
+rows; `scripts/run_all.sh` execs this one and reads 0 as "the plan validated,
+proceed". So the divergence from `scripts/check_mma_path.sh`, which refuses, is
+real and intended, and this paragraph is the thing that has to say so. The
+dotted spelling above is load-bearing
+as well as accurate: the driver's `adopts_exit_codes` greps each arm's own file
+for it, and prints a caveat beside every REFUSED or INVALID row that came out of
+a file which does not name it. See moe/bench/force_tile.py.
 """
 from __future__ import annotations
 
@@ -37,12 +71,14 @@ import argparse
 import json
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import moe
 
 from ..spec import MODEL_CONFIGS, RoutingSpec
 from ..stages import registry
+from . import exit_codes as EC
 from . import force_tile as FT
 from . import profiles as PR
 from . import timing as T
@@ -321,10 +357,16 @@ def dry_run(profile: PR.Profile, args, traces, forced=None) -> int:
         print(line)
 
     print("\nNo GPU was used. Nothing was spent.")
-    return 0 if (p.ok and honourable) else 1
+    # REFUSED, not 1. A plan that does not validate measured nothing, so the
+    # only two codes it can honestly carry are DONE (this plan would run) and
+    # REFUSED (it would not, and here is why). 1 is CLAIM_FAIL, which asserts a
+    # pre-registered expectation was tested and did not hold, and no expectation
+    # is tested here. The driver reads a plan arm's 2 as PLAN_REFUSED and its 0
+    # as PLANNED (`dry_state`), which is the distinction this line feeds.
+    return EC.DONE if (p.ok and honourable) else EC.REFUSED
 
 
-def main(argv=None) -> int:
+def _main(argv=None) -> int:
     args = parse_args(argv)
 
     # BEFORE bootstrap, which imports vLLM and costs ~20 s on the pod: a
@@ -383,7 +425,13 @@ def main(argv=None) -> int:
         for line in lines:
             print(line)
         if not honourable:
-            return 3
+            # REFUSED, and the distinction is the whole point of having two
+            # codes for "nothing quotable": this branch is BEFORE run_sweep, so
+            # no cell was timed, no pod minute was spent, and the arm can be
+            # re-run the moment the vLLM span registers. INVALID (3), which
+            # this returned until 2026-09-02, told the driver the opposite --
+            # measured then broken -- and it latches such a row.
+            return EC.REFUSED
         print("[cli] gates registered before the run, with their thresholds:")
         for gid, claim, _, threshold, _ in cfg.force_tile_ledger.gates():
             print(f"[cli]   {gid}  {claim}: {threshold}")
@@ -417,26 +465,102 @@ def force_tile_verdict(forced, ledger) -> int:
     reports zero failures -- which is exactly how MOE_FORCE_TILE stayed set for
     a whole session with nothing reading it. So that state exits non-zero and
     says which of the two shapes it is.
+
+    BOTH SHAPES ARE INVALID, NOT ERROR AND NOT REFUSED. F1 and F2 are VALIDITY
+    gates (`ForceTileLedger.gates`) scored AFTER the sweep has run, so
+    `exit_codes.classify` maps either failure to 3: the pod minutes are spent,
+    the cells are on disk, and not one of them may be scored. The codes this
+    returned until 2026-09-02 said the other two things. 4 for F1 is ERROR,
+    which the driver retries, so the one gate that detects the S6a defect --
+    "the variable was set and the kernel did not run that tile" -- bought
+    another rental of the same failure. 3 for F2 was accidentally right and
+    printed the word REFUSED beside it, which is the code for a run that spent
+    nothing.
+
+    ONE `RESULT: ` LINE PER GATE, rendered by `exit_codes.result_line` and by
+    nothing else in this module, so the driver's summary reports these two gates
+    as scored instead of "This arm was NOT scored", and so `classify_text` over
+    the log recomputes the integer the process returned.
     """
     if forced is None:
-        return 0
+        # Not a scored arm at all: an unpinned sweep registers no gate, makes no
+        # claim about pinning and prints no RESULT line. DONE is the honest code
+        # for it, and `classify` is deliberately not consulted -- it raises on an
+        # empty gate list rather than calling nothing-examined a pass.
+        return EC.DONE
+    scored = []
     for gid, claim, measured, threshold, ok in ledger.gates():
+        verdict = EC.PASS if ok else EC.FAIL
+        detail = f"[{EC.VALIDITY}] {claim} | measured {measured} | gate {threshold}"
+        print(EC.result_line(EC.VALIDITY, gid, verdict, " ".join(detail.split())))
         print(f"[force-tile] GATE {gid}  {claim}: {measured} against "
-              f"{threshold}  {'PASS' if ok else 'FAIL'}")
+              f"{threshold}  {verdict}")
+        scored.append((EC.VALIDITY, gid, verdict))
     if ledger.unobserved:
-        print(f"REFUSED (4): {len(ledger.unobserved)} implementation(s) ran "
-              f"under {FT.ENV_VAR} and produced no row showing that tile. No "
-              f"number from this run may be quoted as tile-pinned. See the NOT "
-              f"HONOURED lines above.")
-        return 4
+        print(f"[force-tile] F1 FAILED: {len(ledger.unobserved)} "
+              f"implementation(s) ran under {FT.ENV_VAR} and produced no row "
+              f"showing that tile. No number from this run may be quoted as "
+              f"tile-pinned. See the NOT HONOURED lines above.")
     if ledger.vacuous():
-        print(f"REFUSED (3): {FT.ENV_VAR} was set and not one cell of this run "
-              f"stands under it ({ledger.skipped_cells} cells were skipped as "
-              f"unpinnable). Point the sweep at the vLLM span -- --env vllm "
-              f"--groups baselines --impl vllm_fused_experts, inside the vllm "
-              f"venv -- or unset the variable to sweep vLLM's own ladder.")
-        return 3
-    return 0
+        print(f"[force-tile] F2 FAILED: {FT.ENV_VAR} was set and not one cell "
+              f"of this run stands under it ({ledger.skipped_cells} cells were "
+              f"skipped as unpinnable). Point the sweep at the vLLM span -- "
+              f"--env vllm --groups baselines --impl vllm_fused_experts, inside "
+              f"the vllm venv -- or unset the variable to sweep vLLM's own "
+              f"ladder.")
+    rc = EC.classify(scored)
+    print(f"[force-tile] exit {EC.describe(rc)}")
+    if rc == EC.INVALID:
+        print("[force-tile] the cells this run wrote must NOT be scored, and "
+              "the arm is not auto-retried: re-run it only once the log says "
+              "in words what changed.")
+    return rc
+
+
+def main(argv=None) -> int:
+    """The two integers this module would otherwise return by accident.
+
+    A STRING SystemExit IS REFUSED (2). `raise SystemExit("some sentence")`
+    exits ONE, and 1 is CLAIM_FAIL: a pre-registered expectation that was tested
+    and did not hold, which the ledger records as a finished result and never
+    retries. Every refusal this module raises -- an unknown `--models`, a
+    routing that is not a number, an override whose matrix has no cells, a
+    malformed MOE_FORCE_TILE -- happens during argument handling, before
+    `moe.bootstrap` and long before a cell is timed, so all of them are REFUSED.
+    `python -m moe.bench.cli --models nope` returned 1 until 2026-09-02.
+
+    AN UNPLANNED EXCEPTION IS ERROR (4). An escaping traceback exits 1 as well,
+    for the same reason and with worse consequences: `--out-dir` under a path
+    that is not a directory, an OOM, a vLLM import that dies inside
+    `moe.bootstrap`. The driver reads 1 as CLAIM_FAIL, ledgers a dead process as
+    a refuted claim, and LATCHES the arm, so a transient crash costs a second
+    rental to discover. This is the same defect the ERR trap in
+    `scripts/check_mma_path.sh` exists to prevent, in the arm the same commit
+    left without one, and the header at the top of this file advertised an ERROR
+    row the file could not emit until 2026-09-02. The traceback is still printed
+    in full, because 4 is the code that says "read the log".
+
+    Caught here rather than at each raise site so the contract holds for a
+    caller of `main()` as well as for the CLI, and so a refusal added later
+    cannot reintroduce the defect by forgetting to name the code.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
+            print(msg, file=sys.stderr)
+            return EC.REFUSED
+        raise
+    except Exception:
+        # NOT `except BaseException`: a Ctrl-C or a SIGTERM on the pod is the
+        # operator ending the run, not the instrument breaking, and turning it
+        # into a scored code would tell the ledger something false about it.
+        traceback.print_exc()
+        print(f"[cli] exit {EC.describe(EC.ERROR)}. Nothing above was scored "
+              "and no RESULT line was printed; whatever cells reached disk "
+              "before this must not be quoted.", file=sys.stderr)
+        return EC.ERROR
 
 
 if __name__ == "__main__":

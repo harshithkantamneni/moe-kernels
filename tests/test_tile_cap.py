@@ -693,7 +693,9 @@ def run_mma(*argv):
 
 def test_the_forced_plan_registers_a_prediction_per_tile():
     out = run_mma("--block-m", "16,64", "--tokens", "256", "--dry-run")
-    assert out.returncode == 0
+    # 2 REFUSED: a plan scores no gate, so DONE ("every gate PASSED") would be
+    # false of it. tests/test_check_mma_path.py owns the exit-code contract.
+    assert out.returncode == 2
     assert "BLOCK_SIZE_M=16   wgmma == 0" in out.stdout
     assert "BLOCK_SIZE_M=64   wgmma  > 0" in out.stdout
     # The prediction has to name why, or it is an assertion: num_warps is the
@@ -727,7 +729,7 @@ def test_the_forced_mode_refuses_a_tile_that_is_not_a_number():
 
 def test_the_unforced_plan_says_the_ladder_cannot_attribute_the_instruction():
     out = run_mma("--dry-run")
-    assert out.returncode == 0
+    assert out.returncode == 2
     assert "vLLM's own config ladder" in out.stdout
     assert "--block-m 16,64" in out.stdout
 
