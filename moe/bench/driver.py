@@ -34,6 +34,7 @@ from ..stages import BASE_ENV
 from ..state import MoEState
 from . import bytes_model as BM
 from . import force_tile as FT
+from . import roofline as RF
 from . import schema as SC
 from . import timing as T
 from .roofline import Hardware
@@ -138,6 +139,23 @@ def time_kernel_graph(fn: Callable[[], None], *, on_captured=None,
 RETIRED_KNOBS: tuple[str, ...] = ("warmup", "iters")
 
 
+def instrument_modes(cfg: RunConfig) -> list[str]:
+    """Which of this run's timing modes measure on `timing.time_kernel`.
+
+    A mode is on the instrument when the sweep runs it at all (it is in
+    `graph_modes`) and no legacy timer is injected for it. Written once and read
+    by both config guards, because they are asking the same question -- what
+    will this run actually put through the instrument -- and two copies of that
+    answer is exactly how a wall ends up built at one of two ways in.
+    """
+    modes = []
+    if False in tuple(cfg.graph_modes) and cfg.timer_eager is None:
+        modes.append("eager")
+    if True in tuple(cfg.graph_modes) and cfg.timer_graph is None:
+        modes.append("graph")
+    return modes
+
+
 def unhonourable_retired_knobs(cfg: RunConfig) -> list[tuple[str, object, str]]:
     """`(knob, value, mode)` for every retired knob this run would DROP.
 
@@ -171,11 +189,7 @@ def unhonourable_retired_knobs(cfg: RunConfig) -> list[tuple[str, object, str]]:
              if getattr(cfg, name) != fields[name].default]
     if not asked:
         return []
-    on_instrument = []
-    if False in tuple(cfg.graph_modes) and cfg.timer_eager is None:
-        on_instrument.append("eager")
-    if True in tuple(cfg.graph_modes) and cfg.timer_graph is None:
-        on_instrument.append("graph")
+    on_instrument = instrument_modes(cfg)
     return [(name, value, mode)
             for name, value in asked for mode in on_instrument]
 
@@ -240,6 +254,80 @@ def refuse_dropped_retired_knobs(cfg: RunConfig) -> None:
         raise RetiredKnobRefused(_retired_knob_refusal(cfg, dropped))
 
 
+class ReferenceClockRefused(T.TimingRefused):
+    """This run would measure a real card with no clock to level it against.
+
+    A SEPARATE TYPE for the same reason `RetiredKnobRefused` is one, and it
+    escapes `run_sweep` for the same reason: the config is the same for every
+    cell, so recording it per cell would print one warning per cell, write a
+    sweep of rows whose LEVEL column is undetermined, and exit 0.
+
+    A `TimingRefused` because that is the code path that already means "nothing
+    was measured and nothing was spent": `cli._main` catches it around
+    `run_sweep` and exits REFUSED(2). A plain exception here would arrive at
+    `cli.main`'s catch-all as ERROR(4).
+    """
+
+
+def unreferenced_clock(cfg: RunConfig) -> list[str]:
+    """The instrument modes this run would measure with no reference clock.
+
+    Empty unless ALL THREE hold: a mode goes through `time_kernel`, no
+    reference was resolved or supplied, and A CARD IS ATTACHED. The third is
+    the one that decides what this check is for. With a card and no reference,
+    the run is about to spend metered minutes writing rows whose LEVEL column
+    can never say anything, which is the state that wrote all 100,144 published
+    rows. With no card, `time_kernel` already refuses unless the caller injected
+    the fakes that stand in for CUDA, and a fake clock sampler has no clock to
+    be level against in the first place -- so the reason is recorded in
+    `cfg.missing` and the laptop run proceeds.
+    """
+    if cfg.reference_clock_mhz is not None or not cfg.reference_clock_card:
+        return []
+    return instrument_modes(cfg)
+
+
+def _reference_clock_refusal(cfg: RunConfig, modes: list[str]) -> str:
+    """The message. Names the card, the reason from the missing map, what is
+    lost, and both ways out.
+
+    The reason is `cfg.missing["reference_clock_mhz"]`, quoted rather than
+    re-derived, so the sentence the operator reads on the pod is the same
+    sentence a report stamping that map would carry.
+    """
+    which = (f"the {' and '.join(modes)} modes of this run measure"
+             if len(modes) > 1 else f"the {modes[0]} mode of this run measures")
+    return (
+        f"{which} on `timing.time_kernel` against the card "
+        f"{cfg.reference_clock_card!r}, and no clock was resolved for it: "
+        f"{cfg.missing.get('reference_clock_mhz', 'reason not recorded')}.\n"
+        "    Without a reference, `timing.clock_flags` leaves clock_level_ok "
+        "None on every cell and the LEVEL verdict -- the flag that exists "
+        "because the retired throttle check detected an idle boost rather than "
+        "throttling -- cannot fire. A sweep of rows that CANNOT report a "
+        "clock problem is not a conservative sweep, it is an unexamined one, "
+        "and it costs the same rental as a sweep that can.\n"
+        "    Two ways out, both cheap: run `python "
+        "scripts/calibrate_hardware.py --publish` on this box, which measures "
+        "this card's roof and writes the clock its dense GEMM ran at into "
+        "moe/bench/hardware/, or pass RunConfig(reference_clock_mhz=...) with "
+        "the clock you are levelling against and say in the write-up where the "
+        "number came from.")
+
+
+def refuse_unreferenced_clock(cfg: RunConfig) -> None:
+    """Raise if this run would measure an attached card with no LEVEL reference.
+
+    CHECKED BESIDE `refuse_dropped_retired_knobs`, per cell and just before the
+    first thing that costs anything, for the reason that function gives: a
+    sweep can construct a config it never measures with, and a refusal at
+    construction would fail a run whose every cell is declined by the pin.
+    """
+    modes = unreferenced_clock(cfg)
+    if modes:
+        raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes))
+
+
 @dataclass
 class RunConfig:
     out_dir: Path = Path("results")
@@ -254,12 +342,40 @@ class RunConfig:
     #: Kernel time one trial should hold, which is what `iters` is sized from.
     target_ms: float = 200.0
     trials: int = 3
-    #: The clock the ROOF was measured at, for the LEVEL verdict. None leaves
-    #: `clock_level_ok` at "undetermined" and the row says so, because a level is
-    #: relative to something and the driver will not invent the something. No
-    #: committed calibration records it yet (`roofline.Hardware` carries
-    #: bandwidth and peaks, not a clock), so it stays None until one does.
+    #: The clock the ROOF was measured at, for the LEVEL verdict. RESOLVED from
+    #: this card's own calibration in `__post_init__`, not left at None: the
+    #: comment that stood here until 2026-09-03 said "no committed calibration
+    #: records it yet", and `moe/bench/hardware/measured_nvidia_h200.yaml` has
+    #: carried `detail.gemm_clock_mhz: 1515` since 2026-09-02. What is true is
+    #: only the parenthetical: `roofline.Hardware` carries bandwidth and peaks
+    #: and DROPS everything under `detail`, so the driver read the roof through
+    #: a type that had already thrown the clock away and concluded the number
+    #: did not exist. The cost of that was total, not partial: `clock_level_ok`
+    #: is None without a reference, so the LEVEL verdict -- the flag installed
+    #: because the retired throttle check detected an idle boost rather than
+    #: throttling, and the whole reason `TIMING_BASIS` is at v2 -- could never
+    #: fire on the path that wrote all 100,144 published rows and that
+    #: `scripts/alpha_refit.py` reads for the headline alpha.
+    #:
+    #: Set it explicitly to override the calibration; that is recorded in
+    #: `reference_clock_source` and skips the resolution entirely. None means
+    #: "resolve it", which is why there is no way to ask for no reference at
+    #: all: a run that measures a real card with no reference REFUSES (see
+    #: `refuse_unreferenced_clock`) rather than writing a sweep of rows whose
+    #: LEVEL column is permanently undetermined.
     reference_clock_mhz: float | None = None
+    #: Where that number came from, or, when it is None, why it is not known.
+    #: One field either way, from `roofline.ReferenceClock.source`.
+    reference_clock_source: str = ""
+    #: The attached card the resolution saw, "" for none. The refusal turns on
+    #: it: a card with no usable calibration is a pod misconfiguration, and no
+    #: card at all is a laptop, where no clock is being sampled anyway.
+    reference_clock_card: str = ""
+    #: Why a field this config could not determine is None, keyed by field name.
+    #: The same contract `provenance.Provenance.missing` states, so a caller
+    #: that stamps a report can lift these entries into that block unchanged: a
+    #: None here is complete when this map says why, and a guess would not be.
+    missing: dict[str, str] = field(default_factory=dict)
     #: THE RETIRED INSTRUMENT'S KNOBS, read only when a legacy timer is injected
     #: below. `warmup` is a CALL COUNT and `iters` a fixed iteration count; both
     #: are ignored on the instrument path, which warms for a duration and sizes
@@ -330,6 +446,72 @@ class RunConfig:
     timer_graph: Callable | None = None
     #: Idle-instant clock sampler. The retired path's, and used only there.
     clock_sampler: Callable = T.ClockState.sample
+
+    #: How `reference_clock_mhz` is resolved when the caller did not set it.
+    #: Injectable for the same reason the timers are: the resolution reads the
+    #: attached device and a file beside the code, and both of the branches
+    #: that matter -- a card with a calibration, and a card without one -- have
+    #: to be plantable on a laptop or neither is ever tested before the rental.
+    reference_clock_resolver: Callable[[], RF.ReferenceClock] = RF.reference_clock
+
+    def __post_init__(self) -> None:
+        """Resolve the reference clock, or record in `missing` why there is none.
+
+        RESOLVED HERE, once per run, rather than per cell: the answer is a
+        property of the box and the calibration on it, neither of which changes
+        between cells, and a per-cell lookup would read a yaml off disk for
+        every cell of a metered sweep. Recorded rather than raised, because
+        `RunConfig` is constructed in `cli._main` OUTSIDE the `except
+        TimingRefused` that makes a refusal exit REFUSED(2); raising here would
+        reach `cli.main`'s catch-all and exit ERROR(4), which is the same defect
+        as commit 366b4de, one file over. `refuse_unreferenced_clock` does the
+        raising, from inside `run_sweep`, where the handler is.
+
+        AN EXPLICIT NUMBER WINS AND IS SAID TO HAVE WON. A non-positive one is
+        not a number: `timing.clock_flags` treats `reference_mhz <= 0` as no
+        reference at all, so passing 0 would have bought exactly the silent
+        undetermined column this whole change exists to end. It is dropped to
+        None here with the reason, and the refusal downstream then names it.
+
+        THE CLOCK AND THE ROOF MUST COME FROM ONE FILE. `hardware` and this
+        number are two readings of the same calibration. If `hardware` was
+        supplied and is not the profile the clock came out of -- a datasheet
+        roof, or another box's file -- then "the clock the roof was measured at"
+        is not what was resolved, and LEVEL would compare this card's clock
+        against a number belonging to something else. That is dropped too, with
+        both names in the reason.
+        """
+        if self.reference_clock_mhz is not None:
+            if self.reference_clock_mhz > 0:
+                self.reference_clock_source = (
+                    f"{self.reference_clock_mhz:.0f} MHz, given by the caller "
+                    "rather than read from this card's calibration")
+                return
+            self.missing["reference_clock_mhz"] = (
+                f"the caller passed reference_clock_mhz="
+                f"{self.reference_clock_mhz!r}, which is not a clock; "
+                "`timing.clock_flags` reads any value <= 0 as no reference and "
+                "would have left LEVEL undetermined on every row without "
+                "saying so")
+            self.reference_clock_source = self.missing["reference_clock_mhz"]
+            self.reference_clock_mhz = None
+            return
+
+        ref = self.reference_clock_resolver()
+        self.reference_clock_mhz = ref.mhz
+        self.reference_clock_source = ref.source
+        self.reference_clock_card = ref.card
+        if (ref.mhz is not None and self.hardware is not None
+                and ref.profile and ref.profile != self.hardware.name):
+            self.reference_clock_source = (
+                f"{ref.profile} records {ref.mhz:.0f} MHz, but the roof this "
+                f"run is scored against is {self.hardware.name!r}, which is a "
+                "different profile. LEVEL asks whether the card sat at the "
+                "clock THE ROOF was measured at, and a datasheet roof was "
+                "never measured at any clock")
+            self.reference_clock_mhz = None
+        if self.reference_clock_mhz is None:
+            self.missing["reference_clock_mhz"] = self.reference_clock_source
 
     @property
     def csv_path(self) -> Path:
@@ -840,6 +1022,7 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     (`CellPin()` with status "off") on every unpinned sweep.
     """
     refuse_dropped_retired_knobs(cfg)
+    refuse_unreferenced_clock(cfg)
     written = 0
     x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
                              reuse_weights=cfg.reuse_weights)
@@ -1004,6 +1187,19 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
             written += _emit(writer, manifest, row, key,
                              SC.STATUS_NOT_CAPTURABLE, str(e)[:200])
             continue
+        except T.TimingRefused:
+            # THE SECOND WAY IN, and it was open. `TimingRefused` subclasses
+            # RuntimeError, so the handler below caught every refusal the
+            # INSTRUMENT ITSELF raises -- no CUDA and no injected fakes,
+            # trials=0, a warmup that makes the measurement meaningless -- and
+            # filed it as this one cell's timing error. Each of those is a fact
+            # about the run, identical for every cell, so the sweep wrote a
+            # zeroed STATUS_ERROR row per cell and exited 0 (DONE), while
+            # `cli._main`'s `except TimingRefused` around `run_sweep` sat one
+            # frame up and could never see one. The config guards above got
+            # their escape hatch when they were written; the instrument's own
+            # refusal, the other door into the same room, did not.
+            raise
         except RuntimeError as e:
             row.notes = f"timing error: {str(e)[:160]}"
             written += _emit(writer, manifest, row, key, SC.STATUS_ERROR,
@@ -1071,11 +1267,20 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
                 try:
                     total += run_cell(spec, names, impl, cfg, routing, writer,
                                       manifest, info, sha, dirty)
-                except RetiredKnobRefused:
-                    # NOT a per-cell crash. The config that cannot be honoured
-                    # is the same config for every cell, so recording it as one
-                    # cell's failure would repeat it for all of them and still
-                    # exit 0.
+                except T.TimingRefused:
+                    # NOT a per-cell crash. A refusal is a fact about the RUN --
+                    # a config that cannot be honoured, a card with no ruler, an
+                    # instrument with no CUDA and no fakes -- and it is the same
+                    # fact for every cell, so recording it as one cell's failure
+                    # would repeat it for all of them and still exit 0.
+                    #
+                    # THE BASE CLASS AND NOT A LIST OF SUBCLASSES. This named
+                    # `RetiredKnobRefused` alone, so the refusal added next
+                    # would have had to remember to add itself here; a guard
+                    # that names its members is the defect it is checking for.
+                    # `cli._main` catches the same base around `run_sweep` and
+                    # exits REFUSED(2), so everything that reaches here exits
+                    # the way it says it does.
                     raise
                 except PipelineError as e:
                     manifest.record(f"invalid|{spec.label}|{'+'.join(names)}|{impl}",

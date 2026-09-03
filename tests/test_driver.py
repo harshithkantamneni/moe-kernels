@@ -4,8 +4,10 @@ Everything the driver promises (correctness gates timing, the timer wraps the
 span and not the layer, resume skips finished work, one bad cell does not kill
 a sweep) is verified here before any of it costs GPU minutes.
 """
+import importlib.util
 import itertools
 import pathlib
+import sys
 from functools import partial
 
 import pytest
@@ -17,6 +19,7 @@ from moe.bench import cli
 from moe.bench import driver as D
 from moe.bench import exit_codes as EC
 from moe.bench import profiles as PR
+from moe.bench import roofline as RF
 from moe.bench import schema as SC
 from moe.bench import timing as T
 from moe.reference import torch_ref as R
@@ -1137,3 +1140,361 @@ def test_an_uncapturable_span_becomes_a_finding_not_a_crash(monkeypatch):
                             warmup_ms=5.0)
     assert "verify" not in log
     assert log.count("replay") == 0
+
+
+# --- the LEVEL reference: resolved from the card, or refused ----------------
+
+def clock_from(mhz, *, card="NVIDIA H200", profile="NVIDIA H200 (measured)",
+               source=""):
+    """A resolver returning one planted `ReferenceClock`, the way `cfg_for`
+    plants a timer. Both branches that matter -- a card with a calibration and a
+    card without one -- need a card ATTACHED, and no test box has one."""
+    return lambda: RF.ReferenceClock(
+        mhz, source or (f"{profile}: planted" if mhz else "planted refusal"),
+        card=card, profile=profile if mhz else "")
+
+
+def levelling_timer(fn, *, load_mhz, reference_clock_mhz=None, warmup_ms=300.0,
+                    target_ms=200.0, trials=1, l2_flush=True, flusher=None,
+                    on_captured=None):
+    """`fake_timer`, except the two clock verdicts come from the real
+    `timing.clock_flags` over a planted under-load clock.
+
+    The point of this test section is the WIRE: that the number the driver
+    resolved reaches `time_kernel`'s `reference_clock_mhz` and turns into a
+    column. A fake that took `level=` as a parameter, as `fake_timer` does,
+    would pass whether or not the wire existed.
+    """
+    fn()
+    if on_captured is not None:
+        on_captured()
+    level, drift = T.clock_flags(load_mhz, load_mhz, load_mhz,
+                                 reference_clock_mhz)
+    return T.KernelTiming(
+        ms_p50=1.0, ms_p90=1.2, ms_min=0.9, ms_std=0.05, iters=2, trials=trials,
+        warmup_ms=warmup_ms, l2_flush=l2_flush, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=load_mhz,
+        clock_level_ok=level, clock_drift_ok=drift, samples=6, warmup_calls=17,
+        flush_mb=(flusher.megabytes if flusher is not None else 0),
+        clock_samples=6, clock_source="injected", clock_poll_ms=0.01,
+        host_bound=False, host_enqueue_ms=0.2)
+
+
+def test_the_reference_clock_comes_from_the_attached_card_s_own_calibration():
+    """THE FLAG THAT WAS PERMANENTLY UNDETERMINED. `RunConfig` left
+    `reference_clock_mhz` at None under a comment reading "No committed
+    calibration records it yet", while `measured_nvidia_h200.yaml` has carried
+    `detail.gemm_clock_mhz: 1515` and `scripts/block_m_crossing_sweep.py`'s own
+    `reference_clock_mhz()` has read it. Without a reference `clock_flags`
+    leaves `clock_level_ok` None, so the LEVEL verdict could never fire on the
+    path that wrote all 100,144 published rows -- and LEVEL is the entire reason
+    `TIMING_BASIS` is at v2."""
+    cfg = D.RunConfig(reference_clock_resolver=lambda: RF.reference_clock("NVIDIA H200"))
+    assert cfg.reference_clock_mhz == 1515.0
+    assert "gemm_clock_mhz" in cfg.reference_clock_source
+    assert cfg.missing == {}
+    # And it is the same number, from the same field, as the sweep resolves.
+    assert cfg.reference_clock_mhz == RF.reference_clock("NVIDIA H200").mhz
+
+
+def test_a_low_clock_row_off_that_config_reports_LEVEL_failed(tmp_path):
+    """The wire, end to end and into the CSV: resolved 1515 -> the instrument's
+    `reference_clock_mhz` -> `clock_flags` -> the `clock_level_ok` column. A
+    card at 1400 MHz against a roof measured at 1515 is 92.4%, under
+    `LEVEL_FRACTION`, and its rows are not comparable with that roof. The
+    retired flag passes the same card: both its samples are 1400, so the drop
+    is zero.
+
+    AND OUT THE OTHER SIDE INTO `throttled`, which is the half that decides
+    whether anything downstream changes. `test_the_throttled_verdict_is_written_
+    and_can_fail` plants that verdict directly, so it passes whether or not a
+    reference ever reaches the instrument; here the FAILED verdict is EARNED
+    from a resolved 1515, which is the only way the four consumers that read
+    `throttled` -- pod_session.sh S6d, run_all.sh, publish_results.sh,
+    efficiency_report.py -- can see a True on a real sweep."""
+    seen = {}
+    for load, expected, flagged in ((1400.0, SC.VERDICT_FAILED, "True"),
+                                    (1500.0, SC.VERDICT_OK, "False")):
+        cfg = cfg_for(tmp_path / str(load),
+                      timer=partial(levelling_timer, load_mhz=load),
+                      reference_clock_resolver=clock_from(1515.0))
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                    info=FAKE_INFO)
+        r = seen[load] = SC.read_csv(cfg.csv_path)[0]
+        assert SC.timing_verdict(r, "clock_level_ok") == expected, load
+        assert float(r["sm_clock_load_mhz"]) == load
+        assert r["throttled"] == flagged, load
+        assert SC.row_bool(r, "throttled") is (flagged == "True"), load
+    # The retired flag cannot tell the two rows apart: it compares two
+    # idle-instant samples, and this card sat at one clock for the whole cell.
+    assert T.clock_drift(T.ClockState(1400, 50), T.ClockState(1400, 50))[1] is False
+    assert seen[1400.0]["clock_drift_ok"] == seen[1500.0]["clock_drift_ok"]
+
+
+def test_a_card_with_no_calibration_refuses_rather_than_measuring_undetermined(
+        tmp_path):
+    """REFUSE RATHER THAN DEFAULT. A pod holding a card whose ruler was never
+    measured is about to spend metered minutes on rows whose LEVEL column can
+    never say anything, which is not a conservative sweep but an unexamined one.
+    The reason is the one in the missing map, quoted rather than re-derived."""
+    resolver = clock_from(None, card="NVIDIA B200",
+                          source="no calibration for 'NVIDIA B200'")
+    cfg = cfg_for(tmp_path, reference_clock_resolver=resolver)
+    assert cfg.reference_clock_mhz is None
+    assert cfg.missing["reference_clock_mhz"] == "no calibration for 'NVIDIA B200'"
+    assert D.unreferenced_clock(cfg) == ["eager"]
+    with pytest.raises(D.ReferenceClockRefused) as e:
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")] * 3, cfg,
+                    routing=lambda s: None, info=FAKE_INFO)
+    assert "NVIDIA B200" in str(e.value)
+    assert "no calibration for 'NVIDIA B200'" in str(e.value)
+    assert "calibrate_hardware.py --publish" in str(e.value)
+    assert "reference_clock_mhz=" in str(e.value)
+    # Nothing was spent: the refusal is raised before the first cell writes.
+    assert not cfg.csv_path.exists() or SC.read_csv(cfg.csv_path) == []
+
+
+def test_the_refusal_exits_REFUSED_and_not_ERROR():
+    """`RunConfig` is built in `cli._main` OUTSIDE the `except TimingRefused`
+    that makes a refusal REFUSED(2), so resolving CANNOT raise: it records the
+    reason and `run_sweep` raises. A `TimingRefused` subclass because that is
+    the type the handler names; anything else reaches `cli.main`'s catch-all and
+    exits ERROR(4), which is commit 366b4de's defect one file over."""
+    assert issubclass(D.ReferenceClockRefused, T.TimingRefused)
+    cfg = D.RunConfig(reference_clock_resolver=clock_from(None, card="NVIDIA B200"))
+    assert cfg.reference_clock_mhz is None          # constructed, not raised
+    assert EC.ledger_state(EC.REFUSED) != "RESULT"
+
+
+def test_no_card_attached_records_the_reason_and_measures_anyway(tmp_path):
+    """The other world, and why the refusal turns on the CARD rather than on
+    the clock alone. Off a GPU there is nothing to be level against: the
+    instrument itself refuses unless the caller injected the fakes that stand in
+    for CUDA, and an injected clock sampler has no card behind it. Refusing here
+    would fail every laptop test in this file over a machine fact."""
+    cfg = cfg_for(tmp_path, reference_clock_resolver=RF.reference_clock,
+                  timer=partial(levelling_timer, load_mhz=1500.0))
+    assert cfg.reference_clock_card == ""
+    assert cfg.reference_clock_mhz is None
+    assert "no CUDA device" in cfg.missing["reference_clock_mhz"]
+    assert D.unreferenced_clock(cfg) == []
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                  "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert SC.timing_verdict(r, "clock_level_ok") == SC.VERDICT_UNDETERMINED
+    assert SC.timing_verdict(r, "clock_drift_ok") == SC.VERDICT_OK
+
+
+def test_a_non_positive_reference_is_not_a_reference(tmp_path):
+    """`clock_flags` reads any value <= 0 as no reference at all, so a caller
+    passing 0 would have bought the silent undetermined column this change
+    exists to end. Dropped to None with the reason, and then refused on a card
+    like any other missing reference."""
+    cfg = cfg_for(tmp_path, reference_clock_mhz=0.0,
+                  reference_clock_resolver=clock_from(1515.0))
+    assert cfg.reference_clock_mhz is None
+    assert "is not a clock" in cfg.missing["reference_clock_mhz"]
+    assert T.clock_flags(1500.0, 1500.0, 1500.0, 0.0)[0] is None
+    # The resolver was never consulted: an explicit value is the caller's claim.
+    assert cfg.reference_clock_card == ""
+
+
+def test_an_explicit_reference_wins_and_says_so(tmp_path):
+    """The documented way out of the refusal. It is recorded as the caller's
+    number rather than as the card's, so a write-up cannot cite a calibration
+    that was never read."""
+    cfg = cfg_for(tmp_path, reference_clock_mhz=1980.0,
+                  reference_clock_resolver=clock_from(1515.0))
+    assert cfg.reference_clock_mhz == 1980.0
+    assert "given by the caller" in cfg.reference_clock_source
+    assert D.unreferenced_clock(cfg) == []
+
+
+def test_the_clock_and_the_roof_must_come_from_one_file(tmp_path):
+    """TWO READINGS OF ONE CALIBRATION. `hardware` and the reference clock are
+    both read out of `measured_<card>.yaml`, and resolving them separately is
+    how a run ends up levelled against one card while scored against another. A
+    datasheet roof was never measured at any clock, so pairing it with the
+    calibration's GEMM clock would give LEVEL a left-hand side that belongs to
+    something else."""
+    datasheet = RF.load_hardware("h200_nvl", allow_unverified=True)
+    cfg = D.RunConfig(hardware=datasheet,
+                      reference_clock_resolver=clock_from(1515.0))
+    assert cfg.reference_clock_mhz is None
+    assert "NVIDIA H200 NVL" in cfg.missing["reference_clock_mhz"]
+    assert D.unreferenced_clock(cfg) == ["eager", "graph"]
+    # The measured profile the clock came from is accepted.
+    measured = RF.load_hardware("measured_nvidia_h200")
+    ok = D.RunConfig(hardware=measured, reference_clock_resolver=clock_from(1515.0))
+    assert ok.reference_clock_mhz == 1515.0
+
+
+def test_the_cli_s_own_config_resolves_the_clock_it_will_measure_against(
+        tmp_path, monkeypatch):
+    """The construction the CLI actually performs, with the resolution left at
+    its default. On a laptop that is the no-card branch; the assertion that
+    matters is that `cli` reaches `RunConfig` at all with the field unset, so
+    the resolution is the CLI's behaviour and not something a script has to
+    remember to pass."""
+    seen = {}
+    monkeypatch.setattr(cli, "run_sweep",
+                        lambda cells, cfg, routing, info=None: seen.setdefault(
+                            "cfg", cfg) or cfg.csv_path)
+    assert cli.main(["--profile", "smoke", "--out-dir", str(tmp_path),
+                     "--groups", "reference"]) == EC.DONE
+    cfg = seen["cfg"]
+    assert cfg.reference_clock_source == RF.reference_clock().source
+    assert cfg.reference_clock_mhz == RF.reference_clock().mhz
+
+
+def committed_calibrations():
+    """`(card, doc)` for every calibration committed under `moe/bench/hardware`.
+
+    The tests below are about the FILES, not about a planted document: a rule
+    that holds on a fixture and not on the two yamls the pod will actually read
+    is the shape of defect this section exists to close.
+    """
+    import yaml
+
+    out = []
+    for path in sorted(RF.HARDWARE_DIR.glob("measured_*.yaml")):
+        doc = yaml.safe_load(path.read_text()) or {}
+        card = str((doc.get("detail") or {}).get("gpu_name") or "")
+        if card:
+            out.append((card, doc))
+    return out
+
+
+def load_sweep_module():
+    """`scripts/block_m_crossing_sweep.py`, loaded by path the way the rest of
+    the suite loads a script. Registered in `sys.modules` before exec because
+    `@dataclass` resolves annotations through `sys.modules[cls.__module__]`."""
+    name = "block_m_crossing_sweep"
+    if name in sys.modules:
+        return sys.modules[name]
+    root = pathlib.Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location(
+        name, root / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_two_resolvers_in_this_tree_read_one_clock_per_card():
+    """THE SECOND CALL SITE, and it is in another file. This tree resolves the
+    LEVEL reference twice: `roofline.reference_clock`, which the driver's config
+    now uses, and `scripts/block_m_crossing_sweep.reference_clock_mhz`, which
+    the sweep has used all along. Two copies of one rule is exactly how the
+    driver came to believe no calibration recorded a clock while the sweep read
+    1515 out of the committed yaml, and a divergence here would be worse than
+    that was: the two paths would level rows against two different references
+    and the exclusions would look like a property of the card.
+
+    Numbers AND the field, because agreeing by accident is not agreeing: both
+    name the field they read in their reason, and the reason is what a LEVEL
+    exclusion is traced back to. Unifying the two is not this file's to make --
+    the sweep is another owner's -- so the wall goes here, where a future edit
+    to either one fails the suite instead of the rental.
+    """
+    sweep = load_sweep_module()
+    cards = [card for card, _ in committed_calibrations()]
+    assert cards, "no committed calibration to compare the two resolvers over"
+    for card in cards:
+        ours, theirs = RF.reference_clock(card), sweep.reference_clock_mhz(card)
+        assert ours.mhz == theirs[0], card
+        assert ours.mhz and ours.mhz > 0, card
+        field = "gemm_clock_mhz"          # what both resolve to on this tree
+        assert field in ours.source and field in theirs[1], card
+    # And the missing case is None on both, not a guess on either.
+    assert RF.reference_clock("NVIDIA B200").mhz is None
+    assert sweep.reference_clock_mhz("NVIDIA B200")[0] is None
+
+
+def test_a_calibration_resolves_a_reference_its_own_plateau_can_clear(tmp_path):
+    """WHAT TURNING THE FLAG ON COSTS IF THE REFERENCE IS A BOOST CLOCK. LEVEL
+    excludes a cell whose loaded clock is under `LEVEL_FRACTION` of the
+    reference, and until 2026-09-03 no row could be excluded because no
+    reference existed. Now one does, so a calibration that publishes an IDLE
+    BOOST as its GEMM clock would fail every cell of the arm it was measured
+    for -- the S6d gate, `alpha_refit`'s clock gate and `efficiency_report` all
+    at once -- and the exclusions would read as a hot card rather than as a
+    bad ruler.
+
+    The check is the calibration's own settle PLATEAU against the reference
+    resolved out of the same file. The plateau and not the settle history: the
+    history holds the transient (the A100's opens at 1245, 93.3% of its own
+    reference) and `time_kernel` warms for a duration of sustained load before
+    it samples, so the transient is not what any cell is timed at. Committed
+    margins today are H200 1470/1515 = 97.0% and A100 1275/1335 = 95.5%, the
+    A100 half a point inside the flag, which is the number to watch when either
+    card is recalibrated.
+    """
+    for card, doc in committed_calibrations():
+        ref = RF.reference_clock(card)
+        plateau = ((doc.get("detail") or {}).get("settle") or {}).get("final_mhz")
+        assert plateau, card
+        assert plateau >= T.LEVEL_FRACTION * ref.mhz, (
+            f"{card}: the reference {ref.mhz} MHz resolved from this file is "
+            f"one its own plateau of {plateau} MHz cannot clear, so every cell "
+            "of the next arm on this card would be flagged")
+        assert T.clock_flags(float(plateau), float(plateau), float(plateau),
+                             ref.mhz)[0] is True, card
+    # THE FAIL BRANCH, planted: the same file with the idle boost published as
+    # its GEMM clock. 1980 is this H200's own idle reading, recorded four times
+    # over in its bandwidth patterns, and it is what `gemm_clock_mhz` held on
+    # the calibrations whose scalars ran to 1935.
+    import yaml
+
+    card, doc = committed_calibrations()[-1]
+    doc["detail"]["gemm_clock_mhz"] = 1980
+    (tmp_path / f"{RF.measured_slug(card)}.yaml").write_text(yaml.safe_dump(doc))
+    boosted = RF.reference_clock(card, directory=tmp_path)
+    assert boosted.mhz == 1980.0
+    plateau = doc["detail"]["settle"]["final_mhz"]
+    assert plateau < T.LEVEL_FRACTION * boosted.mhz
+    assert T.clock_flags(float(plateau), float(plateau), float(plateau),
+                         boosted.mhz)[0] is False
+
+
+# --- and a refusal out of the instrument itself is not one cell's error -----
+
+def test_an_instrument_refusal_leaves_the_sweep_instead_of_being_recorded(
+        tmp_path, capsys):
+    """THE SECOND WAY IN. `timing.TimingRefused` subclasses `RuntimeError`, and
+    `_run_modes` filed every RuntimeError out of the timer as this one cell's
+    STATUS_ERROR row. So a refusal from the INSTRUMENT -- no CUDA and no
+    injected fakes, `trials=0`, a warmup that makes the measurement meaningless
+    -- became a zeroed row per cell and an exit of 0 (DONE), while
+    `cli._main`'s `except TimingRefused` sat one frame up and could never see
+    one. The config guards were given an escape hatch when they were written;
+    the other door into the same room was not."""
+    def refusing_timer(fn, **kw):
+        raise T.TimingRefused("trials=0: a measurement needs at least one trial")
+
+    cfg = cfg_for(tmp_path, timer=refusing_timer)
+    with pytest.raises(T.TimingRefused, match="at least one trial"):
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")] * 3, cfg,
+                    routing=lambda s: None, info=FAKE_INFO)
+    assert "[warn]" not in capsys.readouterr().out
+    assert not cfg.csv_path.exists() or SC.read_csv(cfg.csv_path) == []
+
+
+def test_a_kernel_s_own_RuntimeError_is_still_one_cell_s_error(tmp_path):
+    """The PASS branch of the same door, and the reason it is a subclass check
+    and not a blanket re-raise: a kernel that launched badly IS a per-cell fact,
+    the row records it, and the sweep carries on to the next cell."""
+    def broken_timer(fn, **kw):
+        raise RuntimeError("CUDA error: an illegal memory access")
+
+    cfg = cfg_for(tmp_path, timer=broken_timer)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                  "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                info=FAKE_INFO)
+    r = SC.read_csv(cfg.csv_path)[0]
+    assert "timing error" in r["notes"] and "illegal memory access" in r["notes"]
+    assert float(r["ms_p50"]) == 0.0

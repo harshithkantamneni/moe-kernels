@@ -98,22 +98,37 @@ def peak_bandwidth(name: str = "h200_nvl") -> float | None:
         return None
 
 
+def device_name_matches(a: str, b: str) -> bool:
+    """Do two card names name the same part? Loose on purpose, and one rule.
+
+    Datasheet names ("NVIDIA H200 NVL"), torch's device names ("NVIDIA H200")
+    and a calibration's own `name` ("NVIDIA H200 (measured)") agree on the part
+    and not on spacing or suffixes, so the comparison is substring-after-
+    normalising in either direction. Written once and called by everything in
+    this module that compares two card names, because the rule has already been
+    written twice in this repository and the two copies differed on non-ASCII
+    alphanumerics.
+
+    An empty name on either side is not a match. `device_matches` keeps its own
+    "nothing to check against" allowance, which is a different question.
+    """
+    def norm(text: str) -> str:
+        return "".join(c for c in str(text).lower() if c.isalnum())
+
+    x, y = norm(a), norm(b)
+    return bool(x) and bool(y) and (x in y or y in x)
+
+
 def device_matches(hw: Hardware, gpu_name: str) -> bool:
     """Does this hardware profile describe the GPU the rows were measured on?
 
     Plotting an H100 run against an H200 roof would understate efficiency by
     the ratio of their peaks and is exactly the kind of error this repo exists
-    not to make. Comparison is loose on purpose: datasheet names ("NVIDIA H200
-    NVL") and torch's device names ("NVIDIA H200 NVL") agree on the part but
-    not always on spacing or suffixes.
+    not to make. An empty `gpu_name` is nothing to check against and passes.
     """
     if not gpu_name:
         return True                      # nothing to check against
-    def norm(text: str) -> str:
-        return "".join(c for c in text.lower() if c.isalnum())
-
-    a, b = norm(hw.name), norm(gpu_name)
-    return a in b or b in a
+    return device_name_matches(hw.name, gpu_name)
 
 
 def available_profiles() -> list[str]:
@@ -251,6 +266,162 @@ def load_measured(gpu_name: str | None = None,
             f"    python scripts/calibrate_hardware.py\n"
             f"which writes {measured_slug(gpu_name)}.yaml for this device.")
     return None
+
+
+#: Where a calibration records the clock its dense GEMM ran at, in falling
+#: order of directness, with what each field is. `calibrate.clock_established`
+#: exists because the three have disagreed: eleven committed calibrations of one
+#: H200 recorded 1485-1935 MHz for the scalar while their own settle histories
+#: sat at 1455-1515. The order prefers the number measured UNDER THE LOAD THAT
+#: SET THE ROOF, and the record says which field was read, so a LEVEL exclusion
+#: can always be traced back to a field in a file.
+CLOCK_FIELDS = (
+    (("detail", "gemm_clock", "median_mhz"),
+     "the median of the samples taken while the calibration's dense GEMM ran"),
+    (("detail", "gemm_clock_mhz"),
+     "gemm_clock_mhz, the scalar the calibration published for its dense GEMM"),
+    (("detail", "settle", "final_mhz"),
+     "the compute settle's final plateau; this calibration recorded no clock "
+     "sampled during the GEMM itself"),
+)
+
+
+@dataclass(frozen=True)
+class ReferenceClock:
+    """The SM clock this card's roof was measured at, and where it came from.
+
+    `timing.clock_flags` cannot say anything about LEVEL without one: a level is
+    relative to something, and `time_kernel` will not invent the something. The
+    something is the clock the CALIBRATION ran its GEMM at, because the roof
+    every cell is scored against is that GEMM's number.
+
+    `source` is ONE string doing two jobs: where the number came from when
+    `mhz` is set, and why it is not known when `mhz` is None. One field rather
+    than two so a provenance and a reason cannot drift apart, and so a caller
+    that prints `source` prints something true either way.
+
+    `card` is the attached device, and its emptiness is the load-bearing
+    distinction for a caller deciding what to do about a None `mhz`: a card
+    with no usable calibration is a POD MISCONFIGURATION, and no card at all is
+    a laptop, where nothing is being measured against a clock in the first
+    place. `profile` is the `name:` of the calibration the number was read out
+    of, so a caller can check that the clock and the roof came from ONE file.
+    """
+
+    mhz: float | None
+    source: str
+    card: str = ""
+    profile: str = ""
+
+
+def _dig(doc: dict, path: tuple[str, ...]):
+    """`doc["a"]["b"]` for a path, or None if any level is missing or not a
+    dict. A calibration written by an older `calibrate_hardware.py` is missing
+    whole blocks, and a KeyError here would be a crash where the answer is
+    "that file does not record it"."""
+    node = doc
+    for key in path:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+def measured_doc(gpu_name: str | None = None, directory: Path | None = None
+                 ) -> tuple[dict, str]:
+    """The calibration yaml `load_measured` would use, parsed, plus the reason
+    when there is none.
+
+    Read as a document rather than through `Hardware`, which carries only the
+    headline peaks and drops everything under `detail` -- the clocks included.
+    The candidate order is `load_measured`'s, file for file and in the same
+    order, so a number taken from here cannot come out of a different file from
+    the one the roof came from. That is the whole point of the function: the
+    roof and the clock the roof was measured at are two readings of ONE
+    calibration, and resolving them separately is how a run ends up levelled
+    against one card while scored against another.
+
+    The device check is the same rule, `device_name_matches`, over a stricter
+    field: `detail.gpu_name`, which is what torch reported on the calibrating
+    box, falling back to the `name:` that `load_measured` compares. They agree
+    on both committed calibrations ("NVIDIA H200" against "NVIDIA H200
+    (measured)"), and where they could not, the raw device string is the one
+    that answers "was this file written on this card".
+
+    Does not raise where `load_measured` does. A file that describes another
+    machine is reported as a reason, because this is a "record what you can and
+    name what you cannot" reader; `load_measured` raising `HardwareMismatch`
+    first is what actually stops such a run.
+    """
+    import yaml
+
+    if gpu_name is None:
+        gpu_name = current_gpu_name()
+    if not gpu_name:
+        return {}, ("no CUDA device is attached, so there is no card whose "
+                    "calibration could say what clock the roof was measured at")
+    looked: list[str] = []
+    for stem in (measured_slug(gpu_name), "measured"):
+        path = (directory or HARDWARE_DIR) / f"{stem}.yaml"
+        looked.append(path.name)
+        if not path.exists():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except Exception as exc:                          # noqa: BLE001
+            return {}, f"{path.name} did not parse: {type(exc).__name__}: {exc}"
+        named = str(_dig(data, ("detail", "gpu_name")) or data.get("name") or "")
+        if named and not device_name_matches(named, gpu_name):
+            return {}, (f"{path.name} was measured on {named!r} and this "
+                        f"machine reports {gpu_name!r}; those are not the same "
+                        "card's numbers")
+        return data, ""
+    return {}, (f"no calibration for {gpu_name!r}: none of "
+                f"{', '.join(looked)} exists under {directory or HARDWARE_DIR}. "
+                "Run `python scripts/calibrate_hardware.py --publish` on this "
+                "box, which writes it")
+
+
+def reference_clock(gpu_name: str | None = None,
+                    directory: Path | None = None) -> ReferenceClock:
+    """The clock THIS card's roof was measured at, from THIS card's calibration.
+
+    The LEVEL verdict is why `TIMING_BASIS` is at v2. The retired throttle check
+    compared two IDLE-INSTANT samples either side of a cell, so it detected
+    whether the first sample caught the idle boost rather than whether the card
+    throttled under load, and on the published alpha-0558 arm it flagged 91% of
+    vLLM rows above T=4096 while flagged and unflagged replicates of the same
+    cell timed at ratio 0.998. LEVEL replaced it by asking the only question
+    that means anything against a roof: was the card at the clock the ROOF was
+    measured at while this cell ran. Without a reference that question has no
+    left-hand side and `clock_level_ok` is None on every row.
+
+    Returns `mhz=None` WITH A REASON rather than raising, because there are two
+    genuinely different worlds here and the caller has to tell them apart:
+    `card` empty is a laptop, where no clock is being sampled anyway, and `card`
+    set with `mhz` None is a pod holding a card whose ruler was never measured,
+    which is a refusal the caller should make before spending a minute on it.
+    """
+    if gpu_name is None:
+        gpu_name = current_gpu_name()
+    doc, reason = measured_doc(gpu_name, directory)
+    if not doc:
+        return ReferenceClock(None, reason, card=gpu_name or "")
+    profile = str(doc.get("name") or "")
+    for path, what in CLOCK_FIELDS:
+        value = _dig(doc, path)
+        if value:
+            return ReferenceClock(
+                float(value),
+                f"{profile}: {'.'.join(path)} = {float(value):.0f} MHz, {what}",
+                card=gpu_name, profile=profile)
+    return ReferenceClock(
+        None,
+        f"{profile} carries no clock at all: none of "
+        f"{', '.join('.'.join(p) for p, _ in CLOCK_FIELDS)} is set, so LEVEL "
+        "cannot be scored against it. Recalibrate with "
+        "`python scripts/calibrate_hardware.py --publish`",
+        card=gpu_name, profile=profile)
 
 
 def hardware_for_rows(name: str, rows, allow_unverified: bool = False,
