@@ -62,8 +62,8 @@ classified at all. Those rows are WITHDRAWN, not uninformative.
 
 alpha against GROUP_SIZE_M, the swizzle width:
   MDE 0.046 alpha over 3 matched cells (paired, 90% two-sided, 80% power,
-  z-sum 2.4865, sd of one alpha 0.0229 so sd of a paired difference 0.0323).
-  ASSUMPTION, and it is an upper bound: NOISE_FLOOR.json: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8.
+  z-sum 2.4865, ASSUMED sd of one alpha 0.0229 so sd of a paired difference 0.0323).
+  ASSUMED, and it is an upper bound: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet].
   A paired median below this is an unmeasured change, not a small one.
   3 cell(s) of (model, bn, bm) hold every level
   1                    n=3   median alpha 0.947   corrected 0.933
@@ -83,8 +83,8 @@ alpha against model, i.e. per-expert footprint:
 
 alpha against BLOCK_SIZE_N, the activation-confound control:
   MDE 0.057 alpha over 2 matched cells (paired, 90% two-sided, 80% power,
-  z-sum 2.4865, sd of one alpha 0.0229 so sd of a paired difference 0.0323).
-  ASSUMPTION, and it is an upper bound: NOISE_FLOOR.json: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8.
+  z-sum 2.4865, ASSUMED sd of one alpha 0.0229 so sd of a paired difference 0.0323).
+  ASSUMED, and it is an upper bound: s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet].
   A paired median below this is an unmeasured change, not a small one.
   2 cell(s) of (model, g, bm) hold every level
   64                   n=2   median alpha 0.982   corrected 0.970

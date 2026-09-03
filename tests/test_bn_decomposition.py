@@ -1257,9 +1257,152 @@ def test_the_report_states_the_bootstrap_scope_and_carries_the_floor():
 
 def test_the_published_floor_is_read_from_the_file_not_quoted():
     """A literal here would silently stop describing a regenerated file."""
-    value, source = BND.published_prior_sd()
-    assert value == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
-    assert "s3-vs-s4" in source
+    floor = BND.published_prior_sd()
+    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert floor.basis == "ASSUMED"
+    assert "s3-vs-s4" in floor.source
+
+
+# --------------------------------------------------------------------------
+# WHICH SIGMA, AND THE WORD THAT SAYS WHICH (2026-09-03).
+#
+# `published_prior_sd` read `payload["prior_sd"]` out of NOISE_FLOOR.json. That
+# field is the s3/s4 PROXY and stays the proxy after part (a) spends 120
+# minutes of card measuring a real between-replicate spread into
+# `replicate_floor` of the SAME file, so every MDE and every detection-limit
+# verdict this script printed would have gone on being scored against the
+# assumption. Both branches are planted below: a measured floor must arrive
+# MEASURED and move the MDE, an absent one must arrive ASSUMED at the declared
+# number, and the pre-registered band must NOT move under either.
+# --------------------------------------------------------------------------
+
+MEASURED_SD = 0.0091
+
+
+def _measured_floor_file(tmp_path, *, sd=MEASURED_SD, synthetic=False):
+    """The tracked document with a replicate floor grafted into it.
+
+    Built FROM the tracked file so the schema, the declared prior and its
+    source are the real ones, and the only thing under test is which of the two
+    a caller reads.
+    """
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["replicate_floor"] = {
+        "n_replicates": 5, "cache_mode": "flush", "gpu_name": "NVIDIA H200",
+        "provenance": "simulated part (a), planted by the test suite",
+        "instrument": "queue-deep/l2-flush/clock-under-load/v2",
+        "scope": None, "synthetic": synthetic,
+        "per_field": {"alpha_corrected": {
+            "sd": sd, "df": 8, "upper95": sd * 1.6, "pooled": True,
+            "reason": "planted", "cells": 3, "per_cell": []}},
+    }
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def test_a_measured_floor_reaches_this_script(tmp_path):
+    """The arm the owner is about to pay 120 minutes for buys this number."""
+    floor = BND.published_prior_sd(_measured_floor_file(tmp_path))
+    assert floor.basis == "MEASURED"
+    assert floor.sd == pytest.approx(MEASURED_SD)
+    assert "simulated part (a)" in floor.source
+
+
+def test_a_rehearsal_floor_is_not_read_as_a_measurement(tmp_path):
+    floor = BND.published_prior_sd(_measured_floor_file(tmp_path,
+                                                        synthetic=True))
+    assert floor.basis == "ASSUMED"
+    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+
+
+def test_a_truncated_floor_file_refuses_rather_than_raising_a_decode_error(
+        tmp_path):
+    """`sizing_sigma` parses before its own guards run, so a half written file
+    arrives as a ValueError. On the pod path that is a traceback where a
+    REFUSED belongs."""
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text('{"schema": "moe-kernels/noise-floor/2", "prior_')
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_prior_sd(path)
+
+
+def test_the_report_prints_the_basis_beside_the_floor(tmp_path, monkeypatch):
+    """An operator reads the report, not the JSON, and both states have to be
+    distinguishable there."""
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor 0.0091 MEASURED" in text
+    assert "a MEASURED upper one" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "MEASURED"
+    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
+        MEASURED_SD)
+
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", PUBLISHED / "NOISE_FLOOR.json")
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor 0.0229 ASSUMED" in text
+    assert "the DECLARED upper one and not a measurement" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "ASSUMED"
+
+
+def test_a_floor_that_cannot_be_read_is_named_and_not_defaulted(tmp_path,
+                                                                monkeypatch):
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", tmp_path / "absent.json")
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "cross-arm floor UNAVAILABLE" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd"] is None
+    assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "UNAVAILABLE"
+
+
+def test_the_plan_carries_the_basis_to_the_page(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--power-draws", "20"]) == exit_codes.DONE
+    assert "cross-arm floor 0.0091 MEASURED" in capsys.readouterr().out
+
+
+def test_the_pre_registered_band_does_not_move_when_the_floor_is_measured(
+        tmp_path, monkeypatch):
+    """THE REASON THERE ARE TWO ACCESSORS.
+
+    The band is the two committed two-point slopes widened by a sigma, and
+    `check_alpha_a_band` REFUSES when the literal and the re-derivation
+    disagree. Widen them by a MEASURED floor of 0.0091 and the band re-derives
+    as (0.12, 0.33): the first pod command after part (a) publishes would refuse
+    with "the pre-registered alpha_a band is not what the committed BN pair now
+    says", having been handed no new BN pair at all. A pre-registration that
+    moves when new information arrives is not one, so the band stays on the
+    DECLARED prior and only what this run can RESOLVE moves.
+    """
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _measured_floor_file(tmp_path))
+    assert BND.preregistration_sigma()[0] == pytest.approx(
+        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert BND.alpha_a_band_from_published() == BND.ALPHA_A_BAND
+    # And the sharpness ceiling, which is set INSIDE the sharpest two-point sd,
+    # is still a bar the three-point fit has to beat rather than one a measured
+    # floor moved under it.
+    assert BND.ALPHA_A_SD_CEILING < min(
+        p.sd for p in BND.published_two_point_alpha_a())
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--power-draws", "20"]) == exit_codes.DONE
+
+
+def test_the_band_still_refuses_when_the_declared_prior_moves(tmp_path,
+                                                              monkeypatch):
+    """The FAIL branch of the pinning above: pinned is not frozen. Edit the
+    declared prior and the band must stop reading back."""
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["prior_sd"] = 0.2
+    path = tmp_path / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", path)
+    with pytest.raises(BND.CorpusMissing):
+        BND.check_alpha_a_band()
+    assert BND.main(["--dry-run", "--capability", "9.0",
+                     "--group-m", "16"]) == exit_codes.REFUSED
 
 
 def test_help_renders(capsys):
