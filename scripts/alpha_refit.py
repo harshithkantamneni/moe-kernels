@@ -80,7 +80,9 @@ whether it does. So a mixed pool is REFUSED (exit 2), with the count per
 instrument printed, and the reader is told to fit each separately.
 `--pool-instruments` overrides that and prints the mix beside every headline
 number. It is the honest second-best rather than the default, because the
-default is what gets quoted.
+default is what gets quoted. An observation that names NO instrument is refused
+by either route (`UNSTATED_INSTRUMENT`): pooling weighs two apparatus a reader
+can name, and an absent fact is not one of them.
 
 Everything here is arithmetic over published CSVs: no GPU, no torch. That was
 a promise this file could not keep until 2026-09-02: `moe.bench.tile_resolve`
@@ -195,6 +197,25 @@ TILE_COLUMNS = ("load_total_rows", "load_active_experts", "load_max_rows",
 #: unidentified split has to report that it is unidentified, not a boundary.
 TILE_EPSILON = 1e-6
 
+#: The `instrument` of an Observation whose builder did not say what timed it.
+#:
+#: A DEFAULT THAT REFUSES, and it replaced a default that lied. The field used
+#: to default to `schema.LEGACY_INSTRUMENT`, justified as convenience for "a
+#: synthetic Observation a test builds" -- but the one non-test caller that
+#: builds an Observation by hand, `scripts/group_m_alpha_sweep.py:718`, passes
+#: seventeen keywords and not that one, so every cell it measured with
+#: `timing.time_kernel` claimed the retired apparatus, inside a script whose own
+#: provenance block writes `instrument=timing.TIMING_BASIS`. No number moved,
+#: because the mislabel was uniform and `cell_key` only needs the component to
+#: be constant; the point is that this module exists to end exactly that
+#: confusion and a default reintroduced it silently.
+#:
+#: So the default now names its own absence, and `_report_instruments` refuses
+#: a pool containing it -- with or without `--pool-instruments`, because
+#: pooling is a decision about two known apparatus and this is not one. `collect`
+#: always sets the real name off the row, so no CLI path can meet it.
+UNSTATED_INSTRUMENT = "<not stated by the caller>"
+
 
 @dataclass(frozen=True)
 class Observation:
@@ -249,11 +270,10 @@ class Observation:
     #: is in `cell_key`, so an intercept never spans two apparatus, and the
     #: report refuses to pool two of them without being told to.
     #:
-    #: DEFAULTED to the retired instrument because every published row is one,
-    #: so a synthetic Observation a test builds lands in a single-instrument
-    #: pool and is fitted rather than refused. `collect` always sets it from the
-    #: row itself.
-    instrument: str = SC.LEGACY_INSTRUMENT
+    #: DEFAULTED TO A REFUSAL and never to an apparatus; see
+    #: `UNSTATED_INSTRUMENT` for the caller that a convenient default
+    #: mislabelled. `collect` always sets it from the row itself.
+    instrument: str = UNSTATED_INSTRUMENT
 
     @property
     def extra_tile_bytes(self) -> float:
@@ -1006,6 +1026,11 @@ def _report_instruments(triton: list[Observation], pool: bool) -> bool:
     why: `alpha` is identified inside a group intercept, the instruments differ
     in level by construction, and no arm in this corpus ran one cell both ways,
     so nothing here can measure whether they also differ in slope.
+
+    `UNSTATED_INSTRUMENT` is refused before either branch and `--pool-instruments`
+    does NOT lift it: that flag is a decision to pool two apparatus a reader can
+    name, and an unstated one cannot be weighed against anything. It reaches
+    here only from an Observation built by hand, so the fix is at that call site.
     """
     mix = instrument_mix(triton)
     print("## the instrument that measured the fitted set")
@@ -1016,6 +1041,20 @@ def _report_instruments(triton: list[Observation], pool: bool) -> bool:
         print(f"  {count:>7}  {name}")
         print(f"           of which {disc} discriminating")
     print()
+    if UNSTATED_INSTRUMENT in mix:
+        print(f"  REFUSED. {mix[UNSTATED_INSTRUMENT]} of these observations "
+              "were built by a caller that")
+        print("  did not say what timed them. That is not a third apparatus to "
+              "pool, it is an")
+        print("  absent fact: alpha is identified inside a group intercept "
+              "keyed on the")
+        print("  instrument, so an unstated one either invents a cluster or "
+              "collapses two")
+        print("  real ones, and nothing here can tell which. Pass "
+              "`instrument=` at the site")
+        print("  that built them -- `collect` reads it off the row and never "
+              "reaches this.")
+        return False
     if len(mix) == 1:
         only = next(iter(mix))
         if only == SC.LEGACY_INSTRUMENT:

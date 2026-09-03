@@ -131,6 +131,103 @@ def time_kernel_graph(fn: Callable[[], None], *, on_captured=None,
     return T.time_kernel(graph.replay, **kw)
 
 
+#: The knobs on `RunConfig` that only the RETIRED instrument reads. `warmup` is
+#: a COUNT of calls and `iters` a fixed iteration count; `timing.time_kernel`
+#: takes neither, warming for a duration (`warmup_ms`) and sizing iterations
+#: from the warmup's own queue-deep per-call time.
+RETIRED_KNOBS: tuple[str, ...] = ("warmup", "iters")
+
+
+def unhonourable_retired_knobs(cfg: RunConfig) -> list[tuple[str, object, str]]:
+    """`(knob, value, mode)` for every retired knob this run would DROP.
+
+    A knob is unhonourable when it was set to something other than its own
+    field default AND the mode it would apply to measures on the instrument,
+    which reads no such argument. Empty for the ordinary sweep, empty when the
+    retired timer is injected for that mode, and empty when the value equals
+    the default, because a caller that passes the default asked for nothing.
+
+    THE DEFECT IT NAMES. `_instrument_kwargs` passes warmup_ms/target_ms/
+    trials/l2_flush/reference_clock_mhz/flusher and nothing else, while
+    `moe/bench/cli.py` fills `warmup` and `iters` from the profile on EVERY
+    run. Two profiles set them deliberately: `smoke` (warmup=5, iters=10) to be
+    quick, and `profile-cell` (warmup=5, trials=1, iters=1), whose whole note
+    reads "one cell, one launch: the shape ncu can read a counter off" and
+    which four session scripts invoke. On the instrument path that one launch
+    silently became `iters_for(per_call_ms, 200)`, which is 10 to 2000, and the
+    five-call warmup became 300 ms of sustained load. Nothing warned, nothing
+    recorded it, and a counter read off the wrong shape is a number that looks
+    exactly like a right one.
+    """
+    fields = RunConfig.__dataclass_fields__
+    asked = [(name, getattr(cfg, name)) for name in RETIRED_KNOBS
+             if getattr(cfg, name) != fields[name].default]
+    if not asked:
+        return []
+    on_instrument = []
+    if False in tuple(cfg.graph_modes) and cfg.timer_eager is None:
+        on_instrument.append("eager")
+    if True in tuple(cfg.graph_modes) and cfg.timer_graph is None:
+        on_instrument.append("graph")
+    return [(name, value, mode)
+            for name, value in asked for mode in on_instrument]
+
+
+def _retired_knob_refusal(cfg: RunConfig, dropped) -> str:
+    """The message. Names each dropped knob, its value, and both ways out.
+
+    REFUSES RATHER THAN WARNS because a warning on a metered pod scrolls past
+    and the rows it qualifies outlive it. There are exactly two honest
+    resolutions and the message states both: express the intent in the units
+    the instrument takes, or put that mode back on the retired timer, which
+    stamps `schema.LEGACY_INSTRUMENT` into every row it writes so the choice is
+    legible in the data afterwards.
+    """
+    shown = sorted({f"{name}={value!r}" for name, value, _ in dropped})
+    names = sorted({mode for _, _, mode in dropped})
+    knobs = (f"{', '.join(shown)} are RETIRED instrument knobs"
+             if len(shown) > 1 else f"{shown[0]} is a RETIRED instrument knob")
+    modes = (f"the {' and '.join(names)} modes of this run measure"
+             if len(names) > 1 else f"the {names[0]} mode of this run measures")
+    return (
+        f"{knobs}, and {modes} on `timing.time_kernel`, which has no such "
+        f"parameter: it warms for a DURATION (warmup_ms={cfg.warmup_ms}) and "
+        f"sizes iters from the warmup's own per-call time toward target_ms="
+        f"{cfg.target_ms}. Passing them here would change nothing and record "
+        f"nothing, which is how `profile-cell` asked for one launch and got up "
+        f"to 2000 of them. Say it in the instrument's units (warmup_ms, "
+        f"target_ms, trials), or set timer_eager/timer_graph to put that mode "
+        f"back on the retired timer that does read them.")
+
+
+class RetiredKnobRefused(T.TimingRefused):
+    """This run asked for a knob the instrument it measures on cannot honour.
+
+    A SEPARATE TYPE so `run_sweep` can let it out. That loop catches
+    `Exception` per cell and records a crash, which is right for a kernel that
+    launched badly and wrong for a configuration error: the config is the same
+    for every cell, so swallowing it would print one warning per cell, write no
+    rows, and exit 0 -- the loudest possible way to say nothing.
+    """
+
+
+def refuse_dropped_retired_knobs(cfg: RunConfig) -> None:
+    """Raise if measuring this cell would silently drop a retired knob.
+
+    CHECKED HERE, per cell and just before the first thing that costs anything,
+    rather than in `RunConfig.__init__`. A knob is only dropped when a cell is
+    actually measured on the instrument, and a sweep can construct a config it
+    never measures with: `tests/test_force_tile.py` drives the CLI's `smoke`
+    profile (warmup=5, iters=10) purely to prove the force-tile plan is refused
+    before anything is spent, and every cell in it is declined by the pin. A
+    refusal at construction would have failed that run for a knob no cell would
+    ever have reached.
+    """
+    dropped = unhonourable_retired_knobs(cfg)
+    if dropped:
+        raise RetiredKnobRefused(_retired_knob_refusal(cfg, dropped))
+
+
 @dataclass
 class RunConfig:
     out_dir: Path = Path("results")
@@ -495,6 +592,12 @@ def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
     dirty lines whose writebacks land inside the NEXT timed interval, 10-30% on
     a sub-100-microsecond span) and a column that says "read" while the default
     sized itself elsewhere would be a lie in the cheapest possible place.
+
+    WHAT IT DELIBERATELY DOES NOT PASS is `cfg.warmup` and `cfg.iters`, which
+    `time_kernel` has no parameters for. They are not dropped quietly:
+    `refuse_dropped_retired_knobs` stops the cell before it is measured if
+    either was set while this path is in force, so no sweep reaches here
+    believing a call count was honoured.
     """
     kw = dict(warmup_ms=cfg.warmup_ms, target_ms=cfg.target_ms,
               trials=cfg.trials, l2_flush=l2_flush,
@@ -698,6 +801,7 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     control flow is unchanged from before pinning existed, and `pin` is inert
     (`CellPin()` with status "off") on every unpinned sweep.
     """
+    refuse_dropped_retired_knobs(cfg)
     written = 0
     x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
                              reuse_weights=cfg.reuse_weights)
@@ -742,7 +846,22 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     cost = BM.pipeline_cost(costed_spans, spec, load.active_experts, materialised)
 
     def prepare(row: SC.Row, verdict=None) -> SC.Row:
-        """Everything every row carries, regardless of which path emitted it."""
+        """Everything every row carries, regardless of which path emitted it.
+
+        INCLUDING THE INSTRUMENT, and that is not bookkeeping. Four of this
+        function's callers emit a row that no timer ever saw -- a cell that
+        failed the fp32 oracle, a graph mode skipped by cost policy, a span
+        that could not be captured, and a timer that raised -- and a `Row`
+        starts life with `instrument = ""`, which `schema.instrument_of`
+        refuses and `schema.has_kernel_timing` therefore raises on. That
+        predicate is the one an analysis is told to split a pool with before it
+        reads any v5 column, so leaving those four paths blank made the
+        documented usage throw on rows a normal sweep writes by the thousand.
+        Stamped HERE, above the branch, so no later path can be added that
+        forgets: `schema.NO_INSTRUMENT` is what an untimed row says, and the
+        two `_apply_*_timing` functions overwrite it when a timer did run.
+        """
+        row.instrument = SC.NO_INSTRUMENT
         _apply_correctness(row, verdict or correctness)
         _apply_load(row, load)
         _apply_meta(row, routing_meta)
@@ -914,6 +1033,12 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
                 try:
                     total += run_cell(spec, names, impl, cfg, routing, writer,
                                       manifest, info, sha, dirty)
+                except RetiredKnobRefused:
+                    # NOT a per-cell crash. The config that cannot be honoured
+                    # is the same config for every cell, so recording it as one
+                    # cell's failure would repeat it for all of them and still
+                    # exit 0.
+                    raise
                 except PipelineError as e:
                     manifest.record(f"invalid|{spec.label}|{'+'.join(names)}|{impl}",
                                     SC.STATUS_INVALID_PIPELINE,

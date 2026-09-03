@@ -106,6 +106,32 @@ COLUMNS_ADDED_IN: dict[int, tuple[str, ...]] = {
 #: Never write it into a new row: `instrument_of` derives it from the version.
 LEGACY_INSTRUMENT = "time_eager+time_graph/idle-instant-clock/pre-v5"
 
+#: What a row the driver WROTE BUT NEVER TIMED says about its apparatus.
+#:
+#: THE THIRD ANSWER, and it exists because the first cut of this boundary had
+#: only two and was wrong about the world. `instrument_of` refused an empty
+#: `instrument` as "a row the driver wrote without going through either timer,
+#: which cannot happen", and the same commit's driver wrote exactly that row on
+#: four paths: a cell that failed the fp32 oracle, a graph mode skipped by cost
+#: policy, a span that could not be graph-captured, and a timer that raised.
+#: None of those is a bug, all of them belong in the CSV, and so
+#: `has_kernel_timing` -- the predicate an analysis is told to split a pool on
+#: BEFORE it reads a v5 column -- was the thing that threw, on rows an ordinary
+#: sweep emits by the thousand.
+#:
+#: A NAME AND NOT A BLANK, for the reason `LEGACY_INSTRUMENT` is one. "Nothing
+#: timed this row" is a fact about it, not an absence to guess at: its ms_*
+#: columns are zero because no measurement was taken, not because a measurement
+#: came out zero, and `capture_status` says which of the four paths it was.
+NO_INSTRUMENT = "none/not-timed"
+
+#: The instrument names whose rows carry NO readable v5 timing column. Legacy:
+#: the columns did not exist when the row was written. Untimed: nothing ran, so
+#: the columns hold dataclass defaults. `has_kernel_timing` is False for both
+#: and `instrument_of` still tells them apart, which is the split that matters:
+#: a legacy row has numbers measured the retired way, an untimed row has none.
+NO_KERNEL_TIMING: frozenset[str] = frozenset({LEGACY_INSTRUMENT, NO_INSTRUMENT})
+
 #: The three v5 verdict columns, and the closed vocabulary all three speak.
 #:
 #: STRINGS AND NOT BOOLS, because each verdict has three states and a bool has
@@ -274,11 +300,17 @@ class Row:
     trials: int = 0
     #: WHICH TIMER produced the ms_* columns below (v5).
     #:
-    #: `timing.TIMING_BASIS` on a row measured by the one instrument, and
+    #: `timing.TIMING_BASIS` on a row measured by the one instrument,
+    #: `NO_INSTRUMENT` on a row the driver wrote without timing it at all, and
     #: `LEGACY_INSTRUMENT` on anything older -- but read it through
     #: `instrument_of` and never off the column, because a pre-v5 row has no
     #: column at all and the reader is what turns that absence into the name
     #: rather than into an empty string that reads like a missing field.
+    #:
+    #: The default is the empty string and NOTHING MAY SHIP IT. It is the state
+    #: of a freshly constructed `Row` before any writer has touched it, and
+    #: `instrument_of` refuses it precisely so that state cannot reach a CSV
+    #: unnoticed; the driver's `prepare()` overwrites it on every row.
     instrument: str = ""
     #: Milliseconds of DELIVERED GPU time the warmup ran for (v5), 0.0 under the
     #: retired instrument, which warmed for a count and measured nothing.
@@ -628,14 +660,19 @@ def instrument_of(row: dict) -> str:
         bad provenance;
       - a non-empty string: that string, whatever it is. A future
         `TIMING_BASIS` bump has to read back as itself here, or the reader would
-        quietly relabel an instrument it has not heard of;
-      - a v5 row carrying an EMPTY instrument: refused. That is a row the driver
-        wrote without going through either timer, which cannot happen and must
-        not be papered over if it starts happening.
+        quietly relabel an instrument it has not heard of. `NO_INSTRUMENT` is
+        one such string and reads back as itself: the driver stamps it on every
+        row it emits without timing, so "nothing measured this" is an answer
+        this function gives rather than an exception it raises;
+      - a v5 row carrying an EMPTY instrument: refused. Not a driver row --
+        `prepare()` stamps `NO_INSTRUMENT` before any path can emit -- so an
+        empty one means something else wrote the file, and what that something
+        did to the ms_* columns is exactly what must not be guessed at.
 
     Callers that only want the ms_* numbers should filter on `ms_p50 > 0`
-    first: a cell that failed the oracle is written with its timing zeroed and
-    is not a measurement by anyone's instrument.
+    first: a cell that failed the oracle is written with its timing zeroed,
+    keeps the name of the instrument that took the discarded measurement, and
+    is not a number anyone may quote.
     """
     value = row.get("instrument")
     if value is None or value == UNRECORDED:
@@ -657,8 +694,15 @@ def has_kernel_timing(row: dict) -> bool:
     an analysis never has to catch `TimingInstrumentUnrecorded` row by row. The
     mirror of `has_tile_config`, and it exists for the same reason: two
     different apparatus in one pool is a fact to branch on, not a hole to fill.
+
+    FALSE FOR TWO DIFFERENT ROWS, on purpose, because the question it asks has
+    one answer for both: a pre-v5 row has no verdict columns and an untimed v5
+    row has them at their defaults, and `timing_verdict` refuses either. The
+    two are told apart by `instrument_of`, which names them, and a caller that
+    needs the distinction must ask for it by name rather than read it out of a
+    bool that was never carrying it.
     """
-    return instrument_of(row) != LEGACY_INSTRUMENT
+    return instrument_of(row) not in NO_KERNEL_TIMING
 
 
 def timing_verdict(row: dict, key: str) -> str:

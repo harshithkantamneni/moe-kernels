@@ -739,3 +739,245 @@ def test_measured_ceilings_are_empty_when_no_calibration_exists(tmp_path,
     monkeypatch.setattr(RL, "HARDWARE_DIR", tmp_path)
     monkeypatch.setattr(RL, "current_gpu_name", lambda: "NVIDIA A100-SXM4-80GB")
     assert cli.measured_ceilings() == {}
+
+
+# --- what an UNTIMED row says about its instrument --------------------------
+#
+# Four of the driver's paths emit a row no timer ever saw. Each of them left
+# `instrument` at the `Row` default, an empty string, which `instrument_of`
+# refuses and `has_kernel_timing` -- the predicate an analysis is told to split
+# a pool with BEFORE it reads any v5 column -- therefore raised on. Nothing
+# broke only because no v5 data exists yet and `alpha_refit.collect` happens to
+# drop `ms_p50 <= 0` a few lines before it asks. These four pin the answer at
+# the writing end instead.
+
+def test_a_correctness_failed_row_names_no_instrument_without_refusing(tmp_path):
+    """No timing mode ran, so no apparatus may be claimed -- and the row must
+    still answer the question rather than raise at whoever asks it."""
+    _, path = sweep(tmp_path, "t_wrong_up_gemm")
+    row = SC.read_csv(path)[0]
+    assert row["capture_status"] == "not_timed"
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+    assert float(row["ms_p50"]) == 0.0
+
+
+def test_an_uncapturable_row_names_no_instrument(tmp_path):
+    cfg = cfg_for(tmp_path, graph_modes=(True,), graph_timer=not_capturable)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    row = SC.read_csv(cfg.csv_path)[0]
+    assert row["capture_status"] == "not_capturable"
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_a_policy_skipped_graph_row_names_no_instrument(tmp_path):
+    cfg = cfg_for(tmp_path, graph_modes=(True,), l2_modes=(True,),
+                  hardware=fake_hw(bw_bytes_s=1.0), graph_min_launch_share=0.5)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    row = SC.read_csv(cfg.csv_path)[0]
+    assert row["capture_status"] == "skipped"
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_a_row_whose_timer_raised_names_no_instrument(tmp_path):
+    """The timer got as far as raising, which is not as far as measuring."""
+
+    def exploding_timer(fn, **kw):
+        raise RuntimeError("CUDA error: an illegal memory access was encountered")
+
+    cfg = cfg_for(tmp_path, timer=exploding_timer)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    row = SC.read_csv(cfg.csv_path)[0]
+    assert "timing error" in row["notes"]
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_a_pool_of_driver_rows_splits_without_a_single_try_block(tmp_path):
+    """The documented usage, end to end: read a sweep that produced both kinds
+    of row and partition it with `has_kernel_timing`, catching nothing."""
+    cfg = cfg_for(tmp_path)
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"), "t_counting_up_gemm"),
+                 (spec(), names_with("t_wrong_up_gemm"), "t_wrong_up_gemm")],
+                cfg, routing=lambda s: None, info=FAKE_INFO)
+    rows = SC.read_csv(cfg.csv_path)
+    measured = [r for r in rows if SC.has_kernel_timing(r)]
+    untimed = [r for r in rows if not SC.has_kernel_timing(r)]
+    assert len(measured) == 1 and len(untimed) == 1
+    assert SC.instrument_of(measured[0]) == T.TIMING_BASIS
+    assert SC.timing_verdict(measured[0], "clock_level_ok") == "ok"
+
+
+# --- the retired instrument's knobs cannot be silently dropped --------------
+
+def test_a_retired_knob_stops_the_sweep_instead_of_being_dropped(tmp_path):
+    """`_instrument_kwargs` passes warmup_ms/target_ms/trials/l2_flush/
+    reference_clock_mhz/flusher, so `warmup` (a CALL COUNT) and `iters` reach
+    nothing -- while `moe/bench/cli.py` fills both from the profile on every
+    run. `profile-cell` sets warmup=5, trials=1, iters=1 and its note reads "one
+    cell, one launch: the shape ncu can read a counter off"; on the instrument
+    the one launch became `iters_for(per_call_ms, 200)`, which is 10 to 2000,
+    and nothing said so. A counter read off the wrong shape looks exactly like
+    a counter read off the right one."""
+    with pytest.raises(D.RetiredKnobRefused, match="RETIRED instrument knobs"):
+        sweep(tmp_path, "t_counting_up_gemm", warmup=5, iters=1)
+
+
+def test_the_refusal_leaves_the_sweep_rather_than_becoming_one_cell_s_crash(
+        tmp_path, capsys):
+    """`run_sweep` records any per-cell exception as a crash and carries on,
+    which is right for a kernel and wrong for a config: the same config would
+    fail every cell, so the sweep would print a warning per cell, write no rows
+    and exit 0."""
+    cfg = cfg_for(tmp_path, iters=1)
+    with pytest.raises(D.RetiredKnobRefused):
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")] * 3, cfg,
+                    routing=lambda s: None, info=FAKE_INFO)
+    assert "[warn]" not in capsys.readouterr().out
+    assert not cfg.csv_path.exists() or SC.read_csv(cfg.csv_path) == []
+
+
+def test_the_refusal_names_only_the_modes_that_would_drop_the_knob():
+    """A run that measures only eager is not told about the graph timer, and a
+    mode explicitly put back on the retired seam is honoured rather than
+    refused: that timer does read a call count."""
+    with pytest.raises(D.RetiredKnobRefused, match="the eager mode of this run"):
+        D.refuse_dropped_retired_knobs(D.RunConfig(warmup=5, graph_modes=(False,)))
+    with pytest.raises(D.RetiredKnobRefused, match="the graph mode of this run"):
+        D.refuse_dropped_retired_knobs(D.RunConfig(warmup=5, graph_modes=(True,)))
+    with pytest.raises(D.RetiredKnobRefused, match="iters=1"):
+        D.refuse_dropped_retired_knobs(D.RunConfig(iters=1))
+    cfg = D.RunConfig(warmup=5, iters=1, graph_modes=(False,),
+                      timer_eager=legacy_timer)
+    assert D.unhonourable_retired_knobs(cfg) == []
+    D.refuse_dropped_retired_knobs(cfg)
+
+
+def test_a_config_nothing_measures_with_is_never_refused(tmp_path):
+    """WHY THE CHECK IS PER CELL AND NOT IN `RunConfig.__init__`. A knob is
+    only dropped by a cell that is actually measured, and
+    `tests/test_force_tile.py` drives the CLI's `smoke` profile (warmup=5,
+    iters=10) purely to prove a force-tile plan is refused before anything is
+    spent -- every cell declined by the pin, none of them timed. Refusing at
+    construction would have failed that run over a knob no cell reached."""
+    cfg = cfg_for(tmp_path, warmup=5, iters=10)
+    assert D.unhonourable_retired_knobs(cfg)
+    path = D.run_sweep([], cfg, routing=lambda s: None, info=FAKE_INFO)
+    assert SC.read_csv(path) == []
+
+
+def test_the_ordinary_sweep_is_not_refused():
+    """The FAIL branch above is only worth planting because the PASS branch is
+    the common one: a config that never asked for a call count asked for
+    nothing, and passing the field default is not asking."""
+    assert D.unhonourable_retired_knobs(D.RunConfig()) == []
+    assert D.unhonourable_retired_knobs(D.RunConfig(warmup=25, iters=None)) == []
+    assert D.unhonourable_retired_knobs(D.RunConfig(warmup_ms=5.0, trials=1)) == []
+
+
+# --- the graph timer, off the GPU ------------------------------------------
+#
+# `time_kernel_graph` is the default for every graph row the driver will ever
+# publish and it is entirely new code, yet every driver test above replaces the
+# whole function with `fake_graph_timer`. What follows drives the real function
+# with `torch.cuda` faked out, so the capture, the priming order, the
+# re-verification point and the refusal conversion are exercised on a laptop.
+# It is NOT a substitute for a hardware test; tests/test_gpu.py still tests the
+# retired `T.time_graph` it supersedes and nothing there touches this.
+
+class _FakeStream:
+    def __init__(self, log, name):
+        self.log, self.name = log, name
+
+    def wait_stream(self, other):
+        self.log.append(f"{self.name} waits {other.name}")
+
+
+def fake_cuda(monkeypatch, log, capture_error: str | None = None):
+    """Enough of `torch.cuda` for `time_kernel_graph`, recording the order."""
+    import contextlib
+
+    current = _FakeStream(log, "current")
+    side = _FakeStream(log, "side")
+
+    class FakeGraph:
+        def replay(self):
+            log.append("replay")
+
+    @contextlib.contextmanager
+    def stream(s):
+        log.append(f"on {s.name}")
+        yield
+        log.append(f"off {s.name}")
+
+    @contextlib.contextmanager
+    def graph(g):
+        log.append("capture begin")
+        if capture_error:
+            raise RuntimeError(capture_error)
+        yield
+        log.append("capture end")
+
+    monkeypatch.setattr(torch.cuda, "Stream", lambda: side)
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda: current)
+    monkeypatch.setattr(torch.cuda, "synchronize",
+                        lambda *a, **k: log.append("sync"))
+    monkeypatch.setattr(torch.cuda, "CUDAGraph", FakeGraph)
+    monkeypatch.setattr(torch.cuda, "stream", stream)
+    monkeypatch.setattr(torch.cuda, "graph", graph)
+    return log
+
+
+def test_the_graph_timer_primes_captures_replays_then_verifies(monkeypatch):
+    """The order is the point. The prime runs on a SIDE stream, the capture
+    records one call, the warmup replays run BEFORE `on_captured`, and what is
+    handed to the instrument is `graph.replay` and not the original callable --
+    a graph row that timed `fn` directly would be an eager row wearing the
+    label."""
+    log: list[str] = []
+    fake_cuda(monkeypatch, log)
+    seen = {}
+
+    def timed(fn, **kw):
+        log.append("time_kernel")
+        seen["fn"], seen["kw"] = fn, kw
+        return "the timing"
+
+    monkeypatch.setattr(T, "time_kernel", timed)
+    out = D.time_kernel_graph(lambda: log.append("fn"),
+                              on_captured=lambda: log.append("verify"),
+                              warmup_ms=5.0, trials=1, l2_flush=False)
+
+    assert out == "the timing"
+    assert log == ["side waits current", "on side", "fn", "fn", "fn",
+                   "off side", "current waits side", "sync",
+                   "capture begin", "fn", "capture end",
+                   "replay", "replay", "replay", "sync", "verify",
+                   "time_kernel"]
+    assert seen["fn"].__self__.__class__.__name__ == "FakeGraph"
+    assert seen["kw"] == {"warmup_ms": 5.0, "trials": 1, "l2_flush": False}
+
+
+def test_an_uncapturable_span_becomes_a_finding_not_a_crash(monkeypatch):
+    """A RuntimeError out of the capture is converted, because an
+    implementation that syncs with the host cannot be used in real MoE
+    inference and the row has to record that rather than end the sweep. The
+    verification never runs: there is no graph to have produced an output."""
+    log: list[str] = []
+    fake_cuda(monkeypatch, log, capture_error="operation not permitted during "
+                                              "stream capture")
+    monkeypatch.setattr(T, "time_kernel",
+                        lambda *a, **k: pytest.fail("timed an uncaptured graph"))
+
+    with pytest.raises(T.NotCapturable, match="not permitted"):
+        D.time_kernel_graph(lambda: log.append("fn"),
+                            on_captured=lambda: log.append("verify"),
+                            warmup_ms=5.0)
+    assert "verify" not in log
+    assert log.count("replay") == 0

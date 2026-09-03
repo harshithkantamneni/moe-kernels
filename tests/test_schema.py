@@ -251,11 +251,45 @@ def test_a_verdict_outside_the_closed_set_is_refused_not_matched(tmp_path):
 
 
 def test_a_v5_row_that_names_no_instrument_is_refused():
-    """Cannot happen through the driver, which stamps every timed row. If it
-    starts happening it is a bug in whatever wrote the file, not a row to guess
-    about."""
+    """Not reachable through the driver, whose `prepare()` stamps EVERY row it
+    emits, timed or not. An empty column therefore means something other than
+    the driver wrote the file, and what that something did to the ms_* columns
+    is exactly what must not be guessed at."""
     with pytest.raises(SC.TimingInstrumentUnrecorded, match="empty"):
         SC.instrument_of({"instrument": "  ", "ms_p50": "1.0"})
+    with pytest.raises(SC.TimingInstrumentUnrecorded, match="empty"):
+        SC.has_kernel_timing({"instrument": "", "ms_p50": "0.0"})
+
+
+def test_an_untimed_row_gets_a_name_rather_than_a_refusal(tmp_path):
+    """THE DEFECT THE FIRST CUT OF THIS BOUNDARY INTRODUCED. `has_kernel_timing`
+    is documented as the predicate to split a pool on BEFORE any gate reads a v5
+    column, and it raised on four kinds of row the driver writes routinely: a
+    cell that failed the oracle, a graph mode skipped by cost policy, a span
+    that could not be captured, and a timer that raised. Nothing broke only
+    because no v5 data existed yet."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument=SC.NO_INSTRUMENT,
+                         capture_status="not_capturable", ms_p50=0.0))
+    row = SC.read_csv(path)[0]
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_untimed_and_legacy_are_both_unreadable_but_are_not_the_same_row():
+    """`has_kernel_timing` answers one question -- may a v5 column be read off
+    this row -- and the answer is no for both. The distinction that does matter
+    is kept by `instrument_of`: a legacy row HAS numbers, measured the retired
+    way; an untimed row has none at all."""
+    legacy = {"instrument": SC.UNRECORDED}
+    untimed = {"instrument": SC.NO_INSTRUMENT}
+    assert SC.has_kernel_timing(legacy) is False
+    assert SC.has_kernel_timing(untimed) is False
+    assert SC.instrument_of(legacy) == SC.LEGACY_INSTRUMENT
+    assert SC.instrument_of(untimed) == SC.NO_INSTRUMENT
+    assert SC.instrument_of(legacy) != SC.instrument_of(untimed)
+    assert SC.NO_KERNEL_TIMING == {SC.LEGACY_INSTRUMENT, SC.NO_INSTRUMENT}
 
 
 def test_verdict_word_never_turns_an_unknown_into_a_failure():

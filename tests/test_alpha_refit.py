@@ -49,6 +49,8 @@ def _load_script():
 
 AR = _load_script()
 
+from moe.bench import schema as SC  # noqa: E402
+
 
 def make_obs(*, ratio: float, extra_tiles: float, active: float = 8.0,
              per_expert: float = 1.0e8, compulsory: float = 1.0e9,
@@ -56,15 +58,26 @@ def make_obs(*, ratio: float, extra_tiles: float, active: float = 8.0,
              group_m: int = 1, gpu: str = "NVIDIA H200",
              impl: str = "vllm_fused_experts", l2_flush: bool = True,
              cuda_graph: bool = False, routing: str = "uniform",
-             tile_columns: tuple = ()) -> AR.Observation:
-    """One synthetic observation with `extra_tiles` M-tiles beyond the actives."""
+             tile_columns: tuple = (),
+             instrument: str = SC.LEGACY_INSTRUMENT) -> AR.Observation:
+    """One synthetic observation with `extra_tiles` M-tiles beyond the actives.
+
+    `instrument` IS PASSED, and by this helper rather than by the dataclass.
+    The field used to default to the retired apparatus for the convenience of
+    exactly this call site, and that default then labelled the one non-test
+    caller that builds an Observation by hand -- `group_m_alpha_sweep.observation`
+    -- as retired-instrument data while its own provenance block wrote
+    `TIMING_BASIS`. A helper stating what it means costs one keyword; a default
+    stating it on everyone's behalf cost a mislabel nobody could see.
+    """
     return AR.Observation(
         traffic_ratio=ratio, compulsory_bytes=compulsory,
         per_expert_bytes=per_expert, active_experts=active,
         m_tiles=active + extra_tiles, block_m=block_m, group_m=group_m,
         tile_provenance="vllm_tuned_derived", model=model, dtype="bf16",
         gpu=gpu, impl=impl, tokens=tokens, routing=routing,
-        l2_flush=l2_flush, cuda_graph=cuda_graph, tile_columns=tile_columns)
+        l2_flush=l2_flush, cuda_graph=cuda_graph, tile_columns=tile_columns,
+        instrument=instrument)
 
 
 def planted(alpha: float, *, levels=(1.0, 2.0, 4.0), spread=(0, 1, 2, 4),
@@ -580,3 +593,48 @@ def test_the_report_says_so_rather_than_dividing_by_zero_on_an_empty_input(tmp_p
     empty.write_text(",".join(SC.COLUMNS) + "\n")
     assert AR.main([str(empty)]) == 1
     assert "no fit to report" in capsys.readouterr().out
+
+
+# --- an Observation that does not say what timed it -------------------------
+
+def test_the_instrument_field_defaults_to_a_refusal_not_to_an_apparatus():
+    """THE DEFAULT THAT MISLABELLED THE ONE NON-TEST CALLER. It used to be
+    `schema.LEGACY_INSTRUMENT`, justified as convenience for synthetic
+    observations -- and `scripts/group_m_alpha_sweep.py:718` builds an
+    Observation from cells measured by `time_kernel`, passes seventeen keywords
+    and not that one, in a script whose own provenance block writes
+    `instrument=timing.TIMING_BASIS`. No number moved, because the mislabel was
+    uniform; the confusion this module exists to end came back through a
+    default."""
+    field = AR.Observation.__dataclass_fields__["instrument"]
+    assert field.default == AR.UNSTATED_INSTRUMENT
+    assert field.default != SC.LEGACY_INSTRUMENT
+    bare = AR.dataclasses.replace(make_obs(ratio=1.5, extra_tiles=2),
+                                  instrument=field.default)
+    assert AR.instrument_mix([bare]) == {AR.UNSTATED_INSTRUMENT: 1}
+
+
+def test_an_unstated_instrument_is_refused_and_pooling_does_not_lift_it(capsys):
+    """`--pool-instruments` is a decision to weigh two apparatus a reader can
+    name. An absent fact is not one of them: alpha is identified inside a group
+    intercept keyed on the instrument, so an unstated one either invents a
+    cluster or collapses two real ones, and nothing here can say which."""
+    pool = [AR.dataclasses.replace(make_obs(ratio=1.5, extra_tiles=n),
+                                   instrument=AR.UNSTATED_INSTRUMENT)
+            for n in (0, 1, 2, 4)]
+    for pooling in (False, True):
+        assert AR._report_instruments(pool, pooling) is False
+        assert "did not say what timed them" in capsys.readouterr().out
+
+
+def test_a_stated_instrument_still_passes_the_same_gate(capsys):
+    """The PASS branch, so the refusal above is a gate and not a wall."""
+    stated = [make_obs(ratio=1.5, extra_tiles=n, instrument=SC.LEGACY_INSTRUMENT)
+              for n in (0, 1, 2, 4)]
+    assert AR._report_instruments(stated, False) is True
+    assert "ONE INSTRUMENT, AND IT IS THE RETIRED ONE" in capsys.readouterr().out
+    on_bench = [AR.dataclasses.replace(o, instrument="queue-deep/v2")
+                for o in stated]
+    assert AR._report_instruments(on_bench, False) is True
+    assert AR._report_instruments(stated + on_bench, False) is False
+    assert AR._report_instruments(stated + on_bench, True) is True
