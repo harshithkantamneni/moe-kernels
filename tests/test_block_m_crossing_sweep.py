@@ -56,6 +56,7 @@ ones that plant the failing world.
 """
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import re
@@ -81,6 +82,22 @@ def _load_script():
 
 
 BM = _load_script()
+
+
+def _load_sibling(name):
+    """Another script in `scripts/`, loaded by path the way `BM` is.
+
+    The sweep is not importable as a package member and neither are its
+    siblings, so a test that has to assert on the CONTRACT BETWEEN TWO of them
+    loads the second one the same way. Used by the pod cost probe test, which
+    is about `replicate_noise_floor` reading this file's exit code.
+    """
+    spec = importlib.util.spec_from_file_location(
+        name, ROOT / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
@@ -168,7 +185,11 @@ def test_a_stated_ridge_and_a_stated_bandwidth_proceed_and_are_both_named_cli(
     is forbidden, and the two halves have to come from the same place."""
     rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run",
                   "--out", str(tmp_path)])
-    assert rc == exit_codes.DONE
+    # REFUSED because it is a `--dry-run` and measured nothing, NOT because the
+    # rulers were withheld: the two `source=cli` lines below are the assertion,
+    # and the test above this one is the same command without --bandwidth,
+    # which refuses for the ruler reason and prints neither.
+    assert rc == exit_codes.REFUSED
     printed = capsys.readouterr().out
     assert "source=cli" in printed
     assert printed.count("source=cli") == 2, "ridge AND bandwidth, both named"
@@ -222,7 +243,10 @@ def test_the_worlds_the_measured_alphas_describe_write_a_report_instead_of_crash
     G=1 alphas on both cards are 0.92-1.02, so the analysis crashed in exactly
     the world the data points at."""
     rc, payload = run(["--self-test", str(alpha)], tmp_path)
-    assert rc == exit_codes.DONE
+    # A REPORT, and a code from the gates rather than from the crash. These
+    # worlds falsify claims, so CLAIM_FAIL is the RESULT; what this test denies
+    # is ERROR, which is what a TypeError before the write looked like.
+    assert rc == exit_codes.CLAIM_FAIL
     assert payload, "report.json was not written"
     assert payload["alpha"] == pytest.approx(alpha)
 
@@ -459,7 +483,9 @@ def test_the_parallel_world_reaches_the_json_as_undecided(tmp_path):
     `test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to`; asserting
     the row alone is what let the gate go on contradicting it."""
     rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
-    assert rc == exit_codes.DONE
+    # UNDECIDED is UNKNOWN in the shared table and UNKNOWN is not PASS, so this
+    # world's code is CLAIM_FAIL and always was; it used to be folded into 0.
+    assert rc == exit_codes.CLAIM_FAIL
     row = payload["ladder"]["128"]
     assert row["undecided"] is True
     assert row["outcome"] == BM.UNDECIDED_PARALLEL_BRANCH
@@ -525,6 +551,8 @@ def test_the_low_clock_world_reports_the_exclusion_in_the_report(tmp_path):
     the only part a ladder fit could have seen. Reporting one of them as the
     other is how "one cell was dropped" came to stand for nine."""
     rc, payload = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path)
+    # DONE, and it is a real one: this world plants an excluded tread and every
+    # gate still passes over what is left. Nothing is folded to get here.
     assert rc == exit_codes.DONE
     assert payload["cells_excluded_for_clock_level"] == 9
     assert payload["cells_excluded_for_clock_level_from_ladders"] == 1
@@ -640,15 +668,20 @@ def test_the_log_recomputes_the_exit_code_the_process_returned(tmp_path, capsys)
     assert exit_codes.classify_text(printed) == rc
 
 
-def test_a_falsified_claim_is_a_successful_run_unless_the_caller_says_otherwise(
+def test_a_falsified_claim_is_claim_fail_with_or_without_the_retired_flag(
         tmp_path):
-    """Both halves of `--fail-on-gate`'s contract, and the code comes from the
-    table either way."""
+    """NOTHING IS FOLDED INTO DONE. `--fail-on-gate` used to decide the code:
+    without it a CLAIM_FAIL was RETURNED AS 0 while the log carried
+    `RESULT: CLAIM ... FAIL`, so `classify_text` read 1 out of the log and the
+    process said 0. The flag is retired, accepted and ignored, because
+    CLAIM_FAIL (1) is already in `FINISHED_CODES` and `ledger_state(1)` is
+    "CLAIM_FAIL": 1 tells the driver "a result, do not retry" and 0 protected
+    nothing."""
     with_flag = BM.main(["--self-test", "0.85", "--fail-on-gate",
                          "--out", str(tmp_path / "a")])
     without = BM.main(["--self-test", "0.85", "--out", str(tmp_path / "b")])
     assert with_flag == exit_codes.CLAIM_FAIL
-    assert without == exit_codes.DONE
+    assert without == exit_codes.CLAIM_FAIL
 
 
 def test_an_undecided_gate_counts_against_the_gate_not_for_it():
@@ -765,7 +798,7 @@ def test_an_undecided_gate_is_never_counted_as_a_pass_by_the_pod_session_grep(
     compares counts of PASS and of FAIL instead."""
     rc = BM.main(["--self-test-world", BM.PARALLEL_WORLD, "--out", str(tmp_path)])
     printed = capsys.readouterr().out
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     results = exit_codes.parse_result_lines(printed)
     assert exit_codes.UNKNOWN in [r.verdict for r in results], (
         "this world exists to put an unscored gate in the log")
@@ -1001,7 +1034,7 @@ def test_the_dry_run_prints_the_instruments_own_cost_and_says_what_it_charged(
     error is invisible again."""
     rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run"])
     printed = capsys.readouterr().out
-    assert rc == 0
+    assert rc == exit_codes.REFUSED
     secs = float(re.search(r"estimated GPU time (\d+) s", printed).group(1))
     grid = BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
     assert secs == pytest.approx(len(grid) * len(TILES) * 1.5, rel=0.15)
@@ -1171,7 +1204,7 @@ def test_gate_3_will_not_answer_for_a_tile_whose_own_fit_refused_to(tmp_path):
     returned PASS, two lines below printing that sentence. It is UNDECIDED now,
     which `classify` scores as a claim gate that did not pass."""
     rc, payload = run(["--self-test-world", BM.PARALLEL_WORLD], tmp_path)
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     g3 = next(g for g in payload["gates"] if g["number"] == 3)
     assert g3["verdict"] == "UNDECIDED"
     assert g3["provenance"]["blocked_by_target_tile"] is True
@@ -1217,9 +1250,542 @@ def test_the_exit_line_never_says_both_that_gates_passed_and_that_one_did_not(
     happen, that is the same defect in miniature."""
     rc = BM.main(["--self-test", "0.85", "--out", str(tmp_path)])
     printed = capsys.readouterr().out
-    assert rc == exit_codes.DONE
+    assert rc == exit_codes.CLAIM_FAIL
     exit_lines = [ln for ln in printed.splitlines() if ln.startswith("exit ")]
     assert len(exit_lines) == 1
     assert exit_codes.describe(exit_codes.CLAIM_FAIL) in exit_lines[0]
     assert "every VALIDITY and CLAIM gate PASSED" not in printed
-    assert "reported as exit 0 without --fail-on-gate" in printed
+    # AND THE LINE THAT USED TO SAY THE OPPOSITE IS GONE, not reworded: there is
+    # no longer a code to fold into, so nothing may say there is.
+    assert "reported as exit 0" not in printed
+    assert "a claim that did not pass is a RESULT" in printed
+
+
+# --------------------------------------------------------------------------
+# A THIRD PASS on 2026-09-02. The whole-repo verification found that the
+# apparatus rebuild had left this file's contract in three states no other arm
+# was in: a planted world could overwrite a metered one, a crash was ledgered as
+# a refutation, and `--dry-run` and `--fail-on-gate` still folded two different
+# things into DONE.
+# --------------------------------------------------------------------------
+
+def test_three_planted_worlds_write_three_directories(tmp_path):
+    """W1. `--self-test 0.2`, `--self-test 0.9` and
+    `--self-test 0.2 --self-test-noise 0.5` all derived
+    `nocard-budget400.0-...-e77c8230`, so each planted world overwrote the last
+    and no two self-tests could be compared. The alpha, the noise and the world
+    are knobs like any other: they decide every number in the report."""
+    for argv in (["--self-test", "0.2"], ["--self-test", "0.9"],
+                 ["--self-test", "0.2", "--self-test-noise", "0.5"],
+                 ["--self-test", "0.2", "--self-test-world", BM.LOW_CLOCK_WORLD]):
+        BM.main([*argv, "--out", str(tmp_path)])
+    dirs = sorted(p.name for p in (tmp_path / "block_m_crossing").iterdir())
+    assert len(dirs) == 4, dirs
+    assert all(d.startswith("synthetic-") for d in dirs), dirs
+    assert all((tmp_path / "block_m_crossing" / d / "report.json").exists()
+               for d in dirs)
+
+
+def test_a_planted_run_is_never_named_for_the_card_it_did_not_measure():
+    """W1, THE POD HALF AND THE EXPENSIVE ONE. `detect_card_slug` returns the
+    ATTACHED device whether or not anything was measured, so one free
+    `--self-test 0.10` on the metered machine landed in the metered run's own
+    directory and its unconditional `report.json` write replaced the paid arm's
+    only machine-readable artefact with a synthetic one carrying the retracted
+    alpha. The card component says `synthetic` and that is also the directory's
+    prefix; the attached card survives in the key so two pods' self-tests are
+    still two directories."""
+    parser = BM.build_parser()
+    measured = BM.default_run_id(parser.parse_args([]), "NVIDIA H200")
+    planted = BM.default_run_id(parser.parse_args(["--self-test", "0.10"]),
+                                "NVIDIA H200")
+    assert measured.startswith("nvidia_h200-")
+    assert planted.startswith(f"{BM.SYNTHETIC_CARD_SLUG}-")
+    assert "nvidia_h200" not in planted
+    on_a100 = BM.default_run_id(parser.parse_args(["--self-test", "0.10"]),
+                                "NVIDIA A100-SXM4-80GB")
+    # The planted world's ridge and bandwidth come from the attached card's own
+    # calibration even under --self-test, so these are two different worlds.
+    assert planted != on_a100
+
+
+def test_a_world_planted_without_an_alpha_is_still_a_planted_run():
+    """`--self-test-world` implies `--self-test` in `main`, and the id has to
+    apply the same rule or a caller that derives the id first gets a MEASURED
+    run's directory for a planted run."""
+    parser = BM.build_parser()
+    world = BM.default_run_id(
+        parser.parse_args(["--self-test-world", BM.PARALLEL_WORLD]), "nocard")
+    assert world.startswith(f"{BM.SYNTHETIC_CARD_SLUG}-")
+    assert world != BM.default_run_id(parser.parse_args([]), "nocard")
+
+
+def test_the_run_id_still_refuses_a_planted_run_with_no_card():
+    """The synthetic card names the RUN, not the machine, and it may not become
+    a way of not saying which machine generated the world."""
+    from moe.bench import provenance as PV
+    args = BM.build_parser().parse_args(["--self-test", "0.558"])
+    with pytest.raises(PV.NoCard):
+        BM.default_run_id(args, "")
+
+
+def test_a_crash_is_error_and_not_a_refuted_claim(tmp_path, capsys):
+    """W2. An unhandled exception exits the interpreter ONE, and 1 is
+    CLAIM_FAIL: in `FINISHED_CODES`, recorded by the driver, never retried. A
+    torch OOM three cells into a rented pod would have been filed as one of this
+    experiment's registered outcomes. ERROR (4) is outside `FINISHED_CODES`
+    precisely so the driver can tell "the apparatus broke" from "the claim did
+    not hold"."""
+    def boom(*a, **kw):
+        raise RuntimeError("planted: torch OOM in the middle of the grid")
+
+    original = BM.build_grid
+    BM.build_grid = boom
+    try:
+        rc = BM.main(["--self-test", "0.558", "--out", str(tmp_path)])
+    finally:
+        BM.build_grid = original
+    err = capsys.readouterr().err
+    assert rc == exit_codes.ERROR
+    assert rc not in exit_codes.FINISHED_CODES
+    # The traceback is not swallowed: a code with no reason in it tells an
+    # operator nothing about what to fix.
+    assert "planted: torch OOM" in err
+
+
+def test_a_string_system_exit_is_a_refusal_and_not_a_refuted_claim(capsys):
+    """The other half of W2, and the live instance. `require_override_config`
+    does `raise SystemExit(<str>)` when vLLM has renamed the export; the
+    interpreter turns a string code into exit 1, so a refusal about the
+    INSTALLED PACKAGE, which measured nothing, exited with the code reserved for
+    a measured refutation."""
+    def gone():
+        raise SystemExit("could not find vLLM's override_config in any of: ...")
+
+    original = BM._main
+    BM._main = lambda argv=None: gone()
+    try:
+        rc = BM.main([])
+    finally:
+        BM._main = original
+    assert rc == exit_codes.REFUSED
+    assert "REFUSED: could not find vLLM's override_config" in capsys.readouterr().err
+
+
+def test_a_dry_run_scores_no_gate_and_returns_the_code_the_census_settled_on(
+        tmp_path, capsys):
+    """W3, CLOSED. The census in `scripts/bm128_depth.py`'s dry-run branch
+    picked REFUSED: a plan scores no gate and prints no RESULT line, so
+    `classify_text` over its log raises `NoGatesScored`, which is the REFUSED
+    shape, while DONE means "measured; every gate PASSED". This file was the
+    last one still returning DONE, and the log and the process therefore said
+    two different things about one run."""
+    rc = BM.main(["--ridge", "145.8", "--bandwidth", "1799.4", "--dry-run",
+                  "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert not [ln for ln in printed.splitlines()
+                if ln.startswith(exit_codes.RESULT_PREFIX)]
+    # THE AGREEMENT, IN ONE LINE: the log's own shape classifies as REFUSED and
+    # so does the process. Before this commit the left half raised and the right
+    # half returned 0.
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(printed)
+    assert "REFUSED. Nothing was measured and nothing was written." in printed
+    # A plan writes nothing at all, which is the half that was always consistent.
+    assert not (tmp_path / "block_m_crossing").exists()
+    # And the cost line is still on stdout, which is what the one consumer that
+    # reads this branch as a subprocess actually parses.
+    assert re.search(r"estimated GPU time\s+[0-9.]+\s*s", printed)
+
+
+def test_the_pod_cost_probe_still_prices_the_arm_after_the_code_moved():
+    """THE REGRESSION THE FLIP WOULD HAVE CAUSED, ASSERTED FROM THIS SIDE.
+    `scripts/replicate_noise_floor.py:sweep_cost` runs this file's `--dry-run`
+    as a subprocess and used to drop the cost on ANY non-zero code, so moving
+    DONE to REFUSED alone would have deleted the whole "TOTAL ... min of GPU"
+    budget line from a rented pod's plan -- not "cost unknown", the line. That
+    is this rebuild's recurring error: a fix that opens a second hole. The
+    caller moved in the same commit.
+
+    THIS TEST GUARDS ONE OF THE TWO HALVES, NOT BOTH, and said otherwise until
+    a reviewer reverted each half and ran it. Reverting the CALLER (`sweep_cost`
+    back to dropping the cost on any non-zero code) fails here. Reverting the
+    SWEEP's dry-run code back to DONE does NOT, because DONE is inside
+    `PLAN_CODES` by design, so the probe still prices the arm. That direction is
+    caught by `test_a_dry_run_scores_no_gate_and_returns_the_code_the_census_settled_on`,
+    which asserts the code itself. Two tests, one per half, named here so the
+    next reader does not have to rediscover which covers which. Claiming a
+    guarantee the code does not give is the same defect this file spent a commit
+    removing from a module docstring."""
+    nf = _load_sibling("replicate_noise_floor")
+    assert exit_codes.REFUSED in nf.PLAN_CODES and exit_codes.DONE in nf.PLAN_CODES
+    assert exit_codes.CLAIM_FAIL not in nf.PLAN_CODES, \
+        "a refuted claim is not a priced plan"
+    assert exit_codes.ERROR not in nf.PLAN_CODES
+    secs = nf.sweep_cost(nf.DEFAULT_ARMS[0], sys.executable)
+    assert secs is not None and secs > 0, \
+        "the sweep's own dry run would not price the arm"
+
+
+def test_the_retired_flag_is_still_accepted_so_an_old_driver_line_parses():
+    """`scripts/pod_session.sh` passes `--fail-on-gate`. Retiring a flag by
+    deleting it turns every driver line that names it into an argparse exit 2,
+    which is REFUSED, on the pod, in the arm the session was rented for."""
+    args = BM.build_parser().parse_args(["--fail-on-gate"])
+    assert args.fail_on_gate is True
+    assert "RETIRED" in BM.build_parser().format_help()
+
+
+# --------------------------------------------------------------------------
+# A FOURTH PASS on 2026-09-02. The review of the third pass found that the fix
+# for W1 had put its three planted knobs in the key of EVERY run, including the
+# metered ones, and that the header it wrote described a directory name the code
+# did not produce. Both are legibility, not separation: the ids were always
+# distinct. Legibility of an expensive run's directory is the whole reason the
+# visible part of an id exists.
+# --------------------------------------------------------------------------
+
+def test_a_metered_run_pays_nothing_for_the_self_tests():
+    """THE FIX'S OWN REGRESSION. `planted`/`plantnoise`/`plantworld` in the key
+    of a measurement rendered the constant `plantedmeasured-plantnoise0.0-...`,
+    `run_id` cuts the visible part at 96 characters in NAME order, and
+    `planted` sorts before `probes`, `r` and `routing`, so 19 characters of
+    constant evicted all three. Two pod runs at different `--r-max` became one
+    name apart only in the trailing hash, in `ls`, on the arm that costs money.
+    The plant belongs on the planted branch, which already says `synthetic`."""
+    parser = BM.build_parser()
+    ids = {argv[0] if argv else "default":
+           BM.default_run_id(parser.parse_args(argv), "NVIDIA H200")
+           for argv in ([], ["--r-max", "4096"], ["--step-probes", "12"])}
+    for name in ids.values():
+        assert "plant" not in name, name
+    # THE PROPERTY, and it is about the VISIBLE part, not the hash: strip the
+    # trailing 8-character digest and the three runs are still three names.
+    visible = {name.rsplit("-", 1)[0] for name in ids.values()}
+    assert len(visible) == 3, visible
+    assert "r4096" in ids["--r-max"] and "probes12" in ids["--step-probes"]
+
+
+def test_a_planted_directory_names_the_alpha_the_noise_and_the_world():
+    """THE HEADER'S CLAIM, ASSERTED RATHER THAN WRITTEN. The first fix's header
+    said the synthetic directory names all three; three separate knobs meant it
+    named the alpha and nothing else, because the 96-character cut fell inside
+    `plantnoise` and `plantworld` never appeared. That is the defect commit
+    5b65ac1 was written to close, so it does not get to come back through the
+    commit that cites it."""
+    parser = BM.build_parser()
+
+    def visible(argv):
+        return BM.default_run_id(parser.parse_args(argv),
+                                 "NVIDIA H200").rsplit("-", 1)[0]
+
+    plain = visible(["--self-test", "0.2"])
+    noisy = visible(["--self-test", "0.2", "--self-test-noise", "0.5"])
+    world = visible(["--self-test", "0.2", "--self-test-world",
+                     BM.LOW_CLOCK_WORLD])
+    assert "plant0.2" in plain
+    assert "plant0.2n0.5" in noisy
+    assert "plant0.2wlowclock" in world
+    assert len({plain, noisy, world}) == 3, (plain, noisy, world)
+
+
+def test_the_longest_plant_still_names_its_world_after_the_cut():
+    """The one combination that does not fit: alpha and noise and world spend
+    24 characters against the 21 the default grid leaves. The tag is ordered so
+    what the cut takes is the tail of the world's NAME, not the world's
+    presence, and `wparal` is still not `wlowclock`."""
+    parser = BM.build_parser()
+    longest = BM.default_run_id(parser.parse_args(
+        ["--self-test", "0.558", "--self-test-noise", "0.25",
+         "--self-test-world", BM.PARALLEL_WORLD]), "NVIDIA H200")
+    other = BM.default_run_id(parser.parse_args(
+        ["--self-test", "0.558", "--self-test-noise", "0.25",
+         "--self-test-world", BM.LOW_CLOCK_WORLD]), "NVIDIA H200")
+    assert "plant0.558n0.25wpar" in longest, longest
+    assert longest.rsplit("-", 1)[0] != other.rsplit("-", 1)[0]
+
+
+def test_every_planted_world_has_a_distinct_id_tag():
+    """The FAIL branch of the tag map, planted. A world added to
+    `SELF_TEST_WORLDS` and forgotten here would raise mid-run; two worlds given
+    one tag would put two worlds in one directory, which is W1 again."""
+    assert set(BM.WORLD_ID_TAGS) == set(BM.SELF_TEST_WORLDS)
+    assert len(set(BM.WORLD_ID_TAGS.values())) == len(BM.SELF_TEST_WORLDS)
+    with pytest.raises(ValueError, match="WORLD_ID_TAGS"):
+        BM.plant_tag(0.558, 0.0, "a-world-nobody-registered")
+
+
+# --------------------------------------------------------------------------
+# A FIFTH PASS on 2026-09-02. The review of the fourth pass found that the fix
+# for W1 was closed only on the DEFAULT path while the header said it was closed
+# everywhere, that the dry run still returned DONE against the repository's own
+# census, and that the docstring announcing the key's last omission had two
+# knobs still outside the key.
+# --------------------------------------------------------------------------
+
+def test_a_supplied_run_id_cannot_carry_a_plant_into_a_metered_directory(
+        tmp_path, capsys):
+    """W1a. `--run-id` bypasses `default_run_id` entirely, so the header's
+    "every planted run writes under a `synthetic-` directory" was true of the
+    derived name and false of the supplied one. It is not a hypothetical
+    operator: `scripts/replicate_noise_floor.py:Arm.sweep_argv` ALWAYS emits
+    `--run-id`, and `--rehearse` appends `--self-test`, so a rehearsal wrote its
+    synthetic report.json at the paid replicate's byte-identical path."""
+    rc = BM.main(["--self-test", "0.558", "--run-id", "mixtral_g1-rep1",
+                  "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    # NOTHING WAS WRITTEN, which is the property the metered arm cares about:
+    # the refusal lands before `out_dir` is computed, not after the mkdir.
+    assert not (tmp_path / "block_m_crossing").exists()
+    assert "mixtral_g1-rep1" in printed
+    assert "replicate_noise_floor" in printed, \
+        "the refusal must name the caller that actually does this"
+    assert "synthetic-mixtral_g1-rep1" in printed, \
+        "a refusal that does not say what to run instead is a wall"
+
+
+def test_the_named_way_out_of_that_refusal_actually_runs(tmp_path):
+    """THE FAIL BRANCH'S PARTNER, AND THE REASON IT IS A REFUSAL RATHER THAN A
+    REWRITE. Prefixing the operator's name silently would have made the sweep
+    write somewhere its caller does not look, turning an overwrite into a
+    `no report.json at <path>` on every rehearsal replicate. The refusal names
+    a second way out that keeps both sides computing one directory, and this
+    test is what says that way out is real."""
+    rc = BM.main(["--self-test", "0.558", "--run-id",
+                  f"{BM.SYNTHETIC_DIR_PREFIX}mixtral_g1-rep1",
+                  "--out", str(tmp_path)])
+    assert rc in exit_codes.FINISHED_CODES
+    report = (tmp_path / "block_m_crossing" /
+              f"{BM.SYNTHETIC_DIR_PREFIX}mixtral_g1-rep1" / "report.json")
+    assert report.exists()
+    assert json.loads(report.read_text())["instrument"] == BM.SYNTHETIC_INSTRUMENT
+
+
+def test_the_caller_that_supplies_the_name_takes_that_way_out_when_it_rehearses():
+    """The other half of W1a, in the file that caused it.
+    `replicate_noise_floor.run_replicate` derives ONE run id and uses it for
+    both the sweep's `--run-id` and the `report.json` path it later reads, so
+    prefixing it there keeps the two in agreement. A rehearsal's directory now
+    says `synthetic-` and a metered replicate's is byte-identical to what it
+    always was, which is the half that must not move."""
+    nf = _load_sibling("replicate_noise_floor")
+    arm = nf.DEFAULT_ARMS[0]
+    # sweep_args, order and python became required when the sibling slice put
+    # the two omitted swept parameters into this key; both fixes ship together.
+    metered = nf.run_id_for(arm, 1, gpu_name="NVIDIA H200", cache_mode="fresh",
+                            sweep_args=[], order="counterbalanced",
+                            python="/usr/bin/python3")
+    assert not metered.startswith(nf.SYNTHETIC_DIR_PREFIX)
+    # And the prefix decision itself lives in one place both callers reach.
+    assert nf.synthetic_run_id(metered, []) == metered
+    assert nf.synthetic_run_id(metered, ["--self-test", "0.558"]) == \
+        nf.SYNTHETIC_DIR_PREFIX + metered
+    assert nf.SYNTHETIC_DIR_PREFIX == BM.SYNTHETIC_DIR_PREFIX
+    # The prefix is applied on the `--self-test` in `extra`, which is exactly
+    # what `--rehearse` appends, and the sweep would REFUSE the unprefixed name.
+    args = BM.build_parser().parse_args(
+        ["--self-test", "0.558", "--run-id", metered])
+    with pytest.raises(BM.SuppliedRunIdIsNotPlanted):
+        BM.resolve_run_id(args, "NVIDIA H200")
+    args.run_id = nf.SYNTHETIC_DIR_PREFIX + metered
+    assert BM.resolve_run_id(args, "NVIDIA H200") == args.run_id
+
+
+def test_a_measured_run_may_still_name_its_own_directory():
+    """NON-VACUITY, and the thing the wall must not break. `--run-id` exists so
+    an operator and a driver can name an experiment; only a PLANTED run is
+    walled, because only a planted run can write a synthetic report into a paid
+    run's path."""
+    args = BM.build_parser().parse_args(["--run-id", "mixtral_g1-rep1"])
+    assert BM.resolve_run_id(args, "NVIDIA H200") == "mixtral_g1-rep1"
+    args = BM.build_parser().parse_args([])
+    assert BM.resolve_run_id(args, "NVIDIA H200") == \
+        BM.default_run_id(args, "NVIDIA H200")
+
+
+def test_a_world_planted_without_an_alpha_is_walled_too():
+    """`--self-test-world` implies `--self-test` in `main`, but a caller that
+    reaches `resolve_run_id` first must get the same wall, or the implication
+    becomes the hole."""
+    args = BM.build_parser().parse_args(
+        ["--self-test-world", BM.PARALLEL_WORLD, "--run-id", "mixtral_g1-rep1"])
+    assert args.self_test is None
+    with pytest.raises(BM.SuppliedRunIdIsNotPlanted):
+        BM.resolve_run_id(args, "NVIDIA H200")
+
+
+# --------------------------------------------------------------------------
+# W2. The key, enumerated from the parser rather than listed by hand.
+# --------------------------------------------------------------------------
+
+#: Values for the two flags argparse does not describe well enough to perturb
+#: from the action alone: `--tiles` is a comma list `default_run_id` parses as
+#: ints, and `--capability` is a MAJOR.MINOR string. Everything else is derived
+#: from `action.choices`, `action.const` or `action.type`, and a flag that lands
+#: in neither fails `_perturbed` BY NAME rather than being skipped. That is the
+#: property the whole section exists for: a knob added tomorrow cannot fall out
+#: of the key quietly, which is what `--sm-count` and `--capability` did.
+AWKWARD_ID_VALUES = {"tiles": "32,64,128", "capability": "8.0"}
+
+#: The two argv the enumeration runs from. A knob has to move the id of the runs
+#: it can change, and `--self-test-noise` and `--self-test-world` change nothing
+#: at all on a measured run: they are read only when a plant exists. One
+#: baseline would therefore have forced them to be exempted, which would have
+#: said the opposite of the truth about them.
+ID_BASELINES = ([], ["--self-test", "0.558"])
+
+
+def _perturbed(action, current):
+    """A value for this flag that differs from `current`, derived from the
+    action argparse built rather than from a table of flag names."""
+    if action.choices:
+        for choice in action.choices:
+            if choice != current:
+                return choice
+        raise AssertionError(f"--{action.dest} has no second choice to move to")
+    if action.const is not None and isinstance(action.const, bool):
+        return not current
+    if action.type is int:
+        return int(current or 0) + 1
+    if action.type is float:
+        return float(current or 0.0) + 1.0
+    if action.dest in AWKWARD_ID_VALUES:
+        return AWKWARD_ID_VALUES[action.dest]
+    raise AssertionError(
+        f"--{action.dest} is neither exempt in block_m_crossing_sweep."
+        "ID_EXEMPT_DESTS nor perturbable from its argparse action; classify it "
+        "before adding it, or the run id may silently stop naming it")
+
+
+def _unkeyed(derive):
+    """Every non-exempt destination `derive` does not react to.
+
+    Empty is the passing answer. Returned rather than asserted so the FAIL
+    branch can be planted: an id function deliberately blind to one knob has to
+    come back naming exactly that knob, or this checker proves nothing.
+    """
+    parser = BM.build_parser()
+    actions = [a for a in parser._actions if a.dest not in BM.ID_EXEMPT_DESTS]
+    assert actions, "the parser defines no keyed destination at all"
+    missing = set()
+    for action in actions:
+        moved = False
+        for argv in ID_BASELINES:
+            base_args = parser.parse_args(argv)
+            args = argparse.Namespace(**vars(base_args))
+            setattr(args, action.dest,
+                    _perturbed(action, getattr(args, action.dest)))
+            if derive(args, "NVIDIA H200") != derive(base_args, "NVIDIA H200"):
+                moved = True
+                break
+        if not moved:
+            missing.add(action.dest)
+    return missing
+
+
+def test_every_argparse_knob_that_changes_a_measured_value_is_in_the_run_id():
+    """W2, AND THE MECHANISM RATHER THAN THE CLAIM. `default_run_id`'s docstring
+    twice announced that the key's last omission was closed while a knob was
+    still outside it: first the planted world, then `--sm-count` and
+    `--capability`, the second time in the paragraph that cited the commit about
+    headers describing a state the code is not in. Prose cannot be executed.
+    This enumerates the PARSER, so a flag added tomorrow either moves the id or
+    is classified in `ID_EXEMPT_DESTS` on purpose."""
+    assert _unkeyed(BM.default_run_id) == set()
+
+
+def test_that_enumeration_catches_a_knob_that_falls_out_of_the_key():
+    """THE FAIL BRANCH, PLANTED, AND IT IS THE DEFECT VERBATIM. An id function
+    blind to `--capability` or to `--sm-count` is precisely what this file
+    shipped until now, and the checker has to name it. A checker that only ever
+    returns the empty set would pass the test above while proving nothing."""
+    def blind(dest):
+        def derive(args, card):
+            stripped = argparse.Namespace(**vars(args))
+            setattr(stripped, dest,
+                    getattr(BM.build_parser().parse_args([]), dest))
+            return BM.default_run_id(stripped, card)
+        return derive
+
+    assert _unkeyed(blind("capability")) == {"capability"}
+    assert _unkeyed(blind("sm_count")) == {"sm_count"}
+
+
+def test_the_two_knobs_the_docstring_had_forgotten_now_move_the_id():
+    """The finding in one command. `['--sm-count','108']` and
+    `['--capability','8.0']` each derived an id BYTE-IDENTICAL to `[]`, while
+    `--sm-count` is baked into every persisted row through `waves` and
+    `--capability` PRUNES the tile set that gets measured at all."""
+    parser = BM.build_parser()
+    base = BM.default_run_id(parser.parse_args([]), "NVIDIA H200")
+    for argv in (["--sm-count", "108"], ["--capability", "8.0"]):
+        assert BM.default_run_id(parser.parse_args(argv), "NVIDIA H200") != base
+
+
+def test_an_unset_sm_count_or_capability_costs_a_metered_name_nothing():
+    """THE FIX'S OWN REGRESSION, WHICH IS THE ONE THIS FILE KEEPS MAKING.
+    Keying both unconditionally would have written the constant
+    `capdriver`/`smdriver` into every metered run's visible name, spending 19 of
+    its 96 characters on a fact the card slug already carries -- which is
+    exactly what the three `plant` knobs did to the arm that costs money. Both
+    default to "ask the driver", so only an override pays."""
+    parser = BM.build_parser()
+    metered = BM.default_run_id(parser.parse_args([]), "NVIDIA H200")
+    assert "cap" not in metered and "sm" not in metered.replace("nvidia", "")
+    # The three names two pod runs are told apart by in `ls` are still there.
+    for argv, token in ((["--r-max", "4096"], "r4096"),
+                        (["--step-probes", "12"], "probes12")):
+        assert token in BM.default_run_id(parser.parse_args(argv), "NVIDIA H200")
+
+
+def test_the_exemption_table_only_names_flags_this_parser_defines():
+    """An exemption for a flag that no longer exists is an exemption nobody can
+    read, and a typo in one silently exempts nothing while looking like it
+    exempts something."""
+    dests = {a.dest for a in BM.build_parser()._actions}
+    assert set(BM.ID_EXEMPT_DESTS) <= dests, set(BM.ID_EXEMPT_DESTS) - dests
+    assert all(why.strip() for why in BM.ID_EXEMPT_DESTS.values()), \
+        "an exemption with no reason is a knob nobody decided about"
+
+
+def test_a_new_flag_this_section_cannot_classify_fails_by_name():
+    """THE OTHER FAIL BRANCH, PLANTED. The enumeration is only worth having if a
+    knob it cannot handle STOPS it: a `_perturbed` that quietly skipped an
+    unrecognised action would let the next `--sm-count` through exactly the way
+    the last one got through, and the test above would still be green."""
+    parser = BM.build_parser()
+    parser.add_argument("--a-flag-nobody-classified", default="whatever")
+    action = [a for a in parser._actions
+              if a.dest == "a_flag_nobody_classified"][0]
+    with pytest.raises(AssertionError, match="ID_EXEMPT_DESTS"):
+        _perturbed(action, "whatever")
+
+
+def test_the_keyed_and_the_exempt_together_are_the_whole_parser():
+    """NON-VACUITY for the enumeration: if `_unkeyed` were reading an empty list
+    of actions it would return the empty set forever. Every destination this
+    parser defines is in exactly one of the two piles."""
+    dests = {a.dest for a in BM.build_parser()._actions}
+    keyed = dests - set(BM.ID_EXEMPT_DESTS)
+    assert keyed and set(BM.ID_EXEMPT_DESTS)
+    assert keyed | set(BM.ID_EXEMPT_DESTS) == dests
+    assert not (keyed & set(BM.ID_EXEMPT_DESTS))
+
+
+def test_a_measured_run_cannot_hide_under_the_synthetic_prefix_either():
+    """THE HOLE THE REFUSAL ITSELF OPENS. `resolve_run_id` refuses an unprefixed
+    name for a plant and tells the operator to use `synthetic-<name>`; the next
+    command that name is pasted into may be the metered one, and then a PAID arm
+    writes into a directory every reader of this corpus takes to mean
+    "generated, not measured" -- and one a later self-test may resume into. The
+    rule is the prefix means planted, and it is refused in both directions."""
+    args = BM.build_parser().parse_args(
+        ["--run-id", f"{BM.SYNTHETIC_DIR_PREFIX}mixtral_g1-rep1"])
+    with pytest.raises(BM.SuppliedRunIdIsNotPlanted, match="plants nothing"):
+        BM.resolve_run_id(args, "NVIDIA H200")
+    # And the same name IS accepted the moment the run really is planted, which
+    # is what stops this second wall from closing the first one's way out.
+    args.self_test = 0.558
+    assert BM.resolve_run_id(args, "NVIDIA H200") == args.run_id

@@ -456,7 +456,10 @@ def test_the_dry_run_prints_the_resource_plan_and_refuses_off_gpu(capsys):
     rc = BM.main(["--dry-run", "--model", "qwen2-57b-a14b", "--block-n", "256",
                   "--num-stages", "3", "--capability", "8.0"])
     out = capsys.readouterr().out
-    assert rc == 0
+    # A `--dry-run` REFUSES since 2026-09-02, whether or not a tile was refused
+    # with it: it measured nothing. The two refusals are different things and
+    # the assertions below are about the tile one.
+    assert rc == BM.exit_codes.REFUSED
     assert "TILE RESOURCE PLAN" in out
     assert "REFUSED BLOCK_M=256" in out
     assert "registers per thread" in out
@@ -470,9 +473,13 @@ def test_the_dry_run_of_the_experiment_as_pinned_refuses_nothing(capsys):
     pinned constants must print a clean plan."""
     rc = BM.main(["--dry-run", "--model", "qwen2-57b-a14b", "--capability", "8.0"])
     out = capsys.readouterr().out
-    assert rc == 0
+    assert rc == BM.exit_codes.REFUSED
     assert "TILE RESOURCE PLAN" in out
-    assert "REFUSED" not in out
+    # `REFUSED BLOCK_M`, not `REFUSED`: the dry run's own refusal banner is on
+    # this page too now, and it is not a statement about any tile. Testing for
+    # the bare word would have made this non-vacuity test pass by accident on
+    # the day the exit code moved.
+    assert "REFUSED BLOCK_M" not in out
 
 
 # --------------------------------------------------------------------------

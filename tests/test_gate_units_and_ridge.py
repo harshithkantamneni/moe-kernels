@@ -463,7 +463,9 @@ def test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time(capsys)
     """A plan that does not say which card's ceiling it is planning against is
     the plan that produced seven hybrid reports. `--dry-run` has to run off GPU
     and has to print the ridge, its band and where both came from."""
-    assert BM.main(["--dry-run"]) == 0
+    # REFUSED, not DONE: nothing was measured. The ridge lines below are the
+    # assertion and they are printed either way.
+    assert BM.main(["--dry-run"]) == BM.exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "\nridge  " in out and "ridge band " in out
     assert "HYPOTHESIS" in out, "a planning ridge that does not say it is one"

@@ -1349,3 +1349,44 @@ def test_a_refused_plan_leaks_its_registered_expectations_to_a_prose_reader(caps
     leaked = [ln.strip().split()[0] for ln in _hits(DRIVER_FREE_TEXT_GREP, out)
               if re.match(r"^[ \t]*V[0-9][ \t]", ln)]
     assert leaked == [f"V{i}" for i in range(1, 8)], leaked
+
+
+def test_the_plan_names_the_directory_the_run_writes(tmp_path):
+    """THE DEFECT THE PREFIX FIX INTRODUCED, PLANTED FROM BOTH SIDES.
+
+    A rehearsal writes under `synthetic-`; the first version of that fix took
+    the prefix in `run_replicate` and not in `render_plan`, so every rehearsal
+    id in the printed plan was wrong by exactly the prefix the same commit had
+    just added, and the plan named directories that were never written. The
+    plan is the artefact an operator reads before spending a pod hour, so a log
+    and a process disagreeing about one run is the whole failure.
+
+    Both callers go through `synthetic_run_id`, and this asserts they agree in
+    both directions: prefixed under `--self-test`, untouched without it.
+    """
+    nf = _load_script()
+    arm = nf.DEFAULT_ARMS[0]
+    kw = dict(gpu_name="NVIDIA H200", cache_mode="fresh", order="counterbalanced",
+              python="/usr/bin/python3")
+    bare = nf.run_id_for(arm, 1, sweep_args=[], **kw)
+
+    planted = ["--self-test", "0.558", "--self-test-noise", "0.02"]
+    assert nf.synthetic_run_id(bare, planted) == f"synthetic-{bare}"
+    assert nf.synthetic_run_id(bare, []) == bare, \
+        "a metered run must keep its own name"
+
+    # And the two callers, through the code rather than through the helper.
+    # n=2: render_plan prices a two-sample MDE and refuses fewer.
+    plan = nf.render_plan([arm], 2, "fresh", tmp_path, "NVIDIA H200",
+                          {arm.name: 1.0}, "counterbalanced", planted,
+                          "/usr/bin/python3")
+    ids = [ln.split("rep 1: ")[1].strip() for ln in plan.splitlines()
+           if "rep 1: " in ln]
+    assert ids and all(i.startswith("synthetic-") for i in ids), ids
+
+    metered = nf.render_plan([arm], 2, "fresh", tmp_path, "NVIDIA H200",
+                             {arm.name: 1.0}, "counterbalanced", [],
+                             "/usr/bin/python3")
+    mids = [ln.split("rep 1: ")[1].strip() for ln in metered.splitlines()
+            if "rep 1: " in ln]
+    assert mids and not any(i.startswith("synthetic-") for i in mids), mids
