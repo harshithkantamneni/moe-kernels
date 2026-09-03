@@ -1052,8 +1052,19 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
     from moe.routing.distributions import sample_topk_ids
 
     gpu = torch.cuda.get_device_properties(0).name
-    meta = {"gpu": gpu, "override_hook": f"{where}.override_config"}
+    # RESOLVED ONCE PER RUN, not per cell: the answer is a property of this box
+    # and the calibration on it, and a per-cell lookup would read a yaml off
+    # disk for every cell of a metered sweep.
+    ref = reference_clock_for(gpu)
+    meta = {"gpu": gpu, "override_hook": f"{where}.override_config",
+            "reference_clock_mhz": ref.mhz,
+            "reference_clock_source": ref.source}
     print(f"[group_m] override hook {meta['override_hook']}  device {gpu}")
+    print("[group_m] LEVEL reference: "
+          + (f"{ref.mhz:.0f} MHz, {ref.source}" if ref.mhz else
+             f"NOT RESOLVED ({ref.source}). clock_level_ok is None on every "
+             "cell this run writes, so no row can be excluded on the clock it "
+             "ran at and the alpha below carries no clock evidence"))
 
     cfg = MODEL_CONFIGS[plan.model]
     rng = random.Random(args.seed)
@@ -1128,7 +1139,8 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                         measured = time_kernel(
                             call, warmup_ms=args.warmup,
                             target_ms=args.cell_budget_ms,
-                            trials=args.trials, l2_flush=args.l2_flush)
+                            trials=args.trials, l2_flush=args.l2_flush,
+                            reference_clock_mhz=ref.mhz)
                 except Exception as exc:  # noqa: BLE001 - one cell must not end the run
                     record = _record(cell, group_m, pass_index, plan, math.nan,
                                      error=f"{type(exc).__name__}: {exc}")
@@ -1155,6 +1167,11 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                     trials=measured.trials,
                     sm_clock_load_mhz=measured.sm_clock_load_mhz,
                     clock_level_ok=measured.clock_level_ok,
+                    # The number LEVEL was scored against, on the row it scored,
+                    # so a replay a week later can tell a row that PASSED the
+                    # flag from one that had nothing to be level against. The
+                    # tri-state alone cannot: both read None.
+                    reference_clock_mhz=ref.mhz,
                     clock_drift_ok=measured.clock_drift_ok,
                     host_bound=measured.host_bound,
                     clock_drift_pct=drift, throttled=throttled,
@@ -1848,6 +1865,49 @@ def bandwidth_for(gpu_name: str) -> tuple[float, str]:
     return NOMINAL_BANDWIDTH_BYTES_S, "nominal, no calibration on disk"
 
 
+def reference_clock_for(gpu_name: str):
+    """The clock this card's roof was measured at, which LEVEL is scored against.
+
+    THE FLAG HAD NO LEFT-HAND SIDE HERE. `timing.clock_flags` leaves
+    `clock_level_ok` None unless it is handed the clock the roof was measured
+    at, and this arm called `time_kernel` without one, so every row it wrote
+    recorded the LEVEL column undetermined while carrying the column. The only
+    clock evidence left in its records was the pair of IDLE-INSTANT samples
+    `clock_drift` takes either side of a cell, which is the measurement
+    `TIMING_BASIS` moved to v2 to RETIRE: it detects whether the first sample
+    caught the idle boost, not whether the card throttled under the load. This
+    arm and `alias_ablation` produce the two alphas `pod_session.sh` reconciles
+    as the last thing on the screen, so a card that sagged during either one
+    could not be seen from the numbers it is reconciled by.
+
+    Resolved through `roofline.reference_clock` rather than as a fourth copy of
+    the three-field rule. This tree already reads those fields in
+    `block_m_crossing_sweep`, `dtype_tile_confound` and `memory_branch_anchor`,
+    and copies of one rule are how the driver came to believe no calibration
+    recorded a clock while the sweep read 1515 MHz out of the committed yaml;
+    `roofline` is the copy the driver's `RunConfig` now uses, and the one that
+    asks `load_hardware` whether the roof came from the file the clock is being
+    read out of.
+
+    NOT A REFUSAL, unlike the driver's, and that is a decision. The driver is
+    the general path and refuses a card with no reference because a sweep of
+    undetermined rows costs the same rental as one that can report a clock.
+    Here, `pod_session.sh` runs `calibrate_hardware.py --publish` at step 1 and
+    treats a refusal there as FATAL, so by step 3 either the reference exists or
+    the session has already stopped; and every sibling arm resolves-and-says. An
+    arm that refused alone would turn a missing yaml into a lost hour of card
+    for a run whose correctness gates and paired ratios are unaffected by it. So
+    the absence is printed in the words the operator can act on, carried into
+    `meta`, and counted in the report.
+
+    Returns the `ReferenceClock`: one `source` string that says where the number
+    came from when there is one and why there is none when there is not, so a
+    reason and a provenance cannot drift apart.
+    """
+    from moe.bench.roofline import reference_clock
+    return reference_clock(gpu_name or None)
+
+
 def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
@@ -2095,13 +2155,43 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
         # so the log carries no RESULT line and `exit_codes.classify_text`
         # raises `NoGatesScored`, which is the REFUSED shape.
         return exit_codes.REFUSED
+    # THE TWO CLOCK VERDICTS, AND THEY ARE NOT THE SAME MEASUREMENT. LEVEL asks
+    # whether the card sat at the clock the ROOF was measured at while the cell
+    # ran, sampled under load; `throttled` below is the retired idle-instant
+    # pair, kept so a resumed jsonl still parses and so the two can be compared
+    # on the next pod. LEVEL is printed FIRST because it is the one the
+    # instrument is at v2 for, and because "undetermined on every row" is a
+    # fact about the apparatus that a reader has to have before the alpha.
+    level_failed = [r for r in timed if r.get("clock_level_ok") is False]
+    level_blind = [r for r in timed if r.get("clock_level_ok") is None]
+    if not synthetic and timed:
+        # THE APPARATUS BEFORE THE FINDING: whether the column could have said
+        # anything is a different question from what it said, and a reader who
+        # sees "0 flagged" without the first is reading silence as evidence.
+        if level_blind:
+            say(f"  {len(level_blind)} of {len(timed)} cells could not be "
+                "examined on the clock at all")
+            why = meta.get("reference_clock_source") or (
+                "the rows carry no reference; they predate the LEVEL flag")
+            say(f"  (clock_level_ok undetermined): {why}.")
+        else:
+            against = timed[0].get("reference_clock_mhz") or meta.get(
+                "reference_clock_mhz")
+            say("  every timed cell was scored against "
+                + (f"{float(against):.0f} MHz" if against else "a reference")
+                + ", so a clock problem could have been seen.")
+        if level_failed:
+            say(f"  {len(level_failed)} of them ran below the clock this card's "
+                "roof was measured at and")
+            say("  are flagged LEVEL failed; their time is the governor's, not "
+                "the kernel's.")
     throttled = [r for r in timed if r.get("throttled")]
     if throttled:
-        say(f"  {len(throttled)} cells drifted more than 5% in SM clock and are "
-            "flagged; their")
-        say("  time is not the kernel's and a paired comparison across settings "
-            "is what")
-        say("  protects the result from them.")
+        say(f"  {len(throttled)} cells drifted more than 5% in SM clock by the "
+            "RETIRED idle-instant")
+        say("  check and are flagged; their time is not the kernel's and a "
+            "paired comparison")
+        say("  across settings is what protects the result from them.")
     forced = [r for r in timed if r.get("observed_config")]
     if forced:
         wrong = [r for r in forced
