@@ -134,12 +134,19 @@ report are exercised on a laptop, and so the claim "these gates can tell 0.558
 from 0.10" is checkable rather than asserted. `--self-test-world` plants the two
 worlds that are not a single alpha: a low-clock tread, which must be excluded,
 and a memory branch parallel to the compute branch, which must come out
-UNDECIDED. Every planted run writes under a `synthetic-` directory carrying one
-`plant` token that spells the alpha, the noise and the world, so one self-test
-can never overwrite another and none of them can land in a metered run's
-directory; a metered run carries no plant knob at all, so nothing about the
-self-tests changes the name a paid run writes under. `--dry-run` prints the
-grid, the predictions and the cost estimate without touching a GPU. Absent
+UNDECIDED. A planted run whose directory this script NAMES writes under a
+`synthetic-` directory carrying one `plant` token that spells the alpha, the
+noise and the world, so one self-test can never overwrite another; a metered run
+carries no plant knob at all, so nothing about the self-tests changes the name a
+paid run writes under. A planted run whose directory is NAMED FOR IT, by
+`--run-id`, is REFUSED unless that name already begins `synthetic-`, because the
+one automated caller that runs this script's self-test on a pod is exactly the
+caller that always supplies a name and a rehearsal was landing on the paid
+replicate's own `report.json`. Those two rules together are what makes "no plant
+can land in a metered run's directory" true rather than true of the default
+path; `resolve_run_id` holds the second one and says what it costs.
+`--dry-run` prints the grid, the predictions and the cost estimate without
+touching a GPU, and REFUSES, because it measured nothing. Absent
 torch, CUDA or vLLM the script says which one is missing and what to run
 instead.
 """
@@ -3949,6 +3956,39 @@ def results_root() -> Path:
     return Path(__file__).resolve().parents[1] / "results"
 
 
+#: THE ARGPARSE DESTINATIONS THAT MAY BE ABSENT FROM `default_run_id`, each
+#: with the reason it cannot change a measured value. Every other destination
+#: this parser defines MUST move the derived id, and
+#: `tests/test_block_m_crossing_sweep.py` checks that by enumerating the parser
+#: rather than by reading a list somebody wrote out by hand.
+#:
+#: WHY A TABLE AND NOT A SENTENCE. `default_run_id`'s docstring twice announced
+#: that the last omission had been closed while a knob was still outside the
+#: key: first the planted world, then `--sm-count` and `--capability`, the
+#: second time in the same paragraph that cited the commit about headers
+#: describing a state the code is not in. Prose cannot be executed. This table
+#: can, and a flag added tomorrow either lands in the key or is classified here
+#: on purpose, with no third state where it is silently forgotten.
+ID_EXEMPT_DESTS = {
+    "help": "argparse's own flag; it names nothing about a run",
+    "ridge": "re-analyses a set of cells rather than changing one, so two "
+             "analyses of one sweep belong in one directory and must share "
+             "cells.csv or the resume path re-measures identical cells",
+    "ridge_band": "an interval around --ridge, analysis for the same reason",
+    "alpha": "the PREDICTION the measured cells are scored against; it decides "
+             "no cell",
+    "bandwidth_gbps": "the roof's other half, analysis for the same reason",
+    "run_id": "IS the id; a key on itself is not a key. `resolve_run_id` is "
+              "what stops a supplied one from naming a planted run after a "
+              "metered directory",
+    "out": "where the directory is rooted, not what is inside it",
+    "dry_run": "measures nothing, writes nothing and REFUSES, so it has no "
+               "directory to collide with",
+    "fail_on_gate": "RETIRED, accepted and ignored; it never reached a cell "
+                    "and no longer reaches the exit code either",
+}
+
+
 def default_run_id(args, card: str) -> str:
     """Derived from the arguments, so "the same experiment" resumes itself.
 
@@ -4004,7 +4044,9 @@ def default_run_id(args, card: str) -> str:
     load) and `l2_flush`, which changes whether every timed iteration starts
     with a cold L2.
 
-    THE PLANTED WORLD IS PART OF THE KEY, AND IT WAS THE LAST OMISSION. Until
+    THE PLANTED WORLD IS PART OF THE KEY, AND IT WAS THE LAST OF THE SELF-TEST
+    OMISSIONS. It was not the last omission, and the sentence that said so is
+    the reason the paragraph below this one exists. Until
     2026-09-02 `--self-test`, `--self-test-noise` and `--self-test-world` named
     nothing: `--self-test 0.2`, `--self-test 0.9` and
     `--self-test 0.2 --self-test-noise 0.5` all derived one id, so each planted
@@ -4046,6 +4088,37 @@ def default_run_id(args, card: str) -> str:
     IT, so the id does not depend on which of the two flags turned the run
     synthetic. A caller that reaches this function before `main` has applied
     that rule would otherwise get a measured run's id for a planted run.
+        `--sm-count` AND `--capability` WERE THE TWO STILL MISSING WHEN THE
+    PARAGRAPH ABOVE CLAIMED THE KEY WAS CLOSED, and both decide a measured
+    value. `--sm-count` is baked into every persisted row through `waves`, so a
+    run that asserts 108 on a 132-SM card writes different `waves` and different
+    `tail_fraction` for identical timings. `--capability` PRUNES the tile set:
+    `tile_resource_plan` refuses a block size whose pipeline will not fit the
+    stated shared memory, so `--capability 8.0` measures three tiles where the
+    unpruned run measures four, and `cells.csv` is resumed by run id. Both
+    derived an id byte-identical to no flag at all until 2026-09-02.
+
+    THEY ARE KEYED ONLY WHEN GIVEN, which is the bargain `plant` makes and for
+    the same reason. Both default to "ask the driver", the driver's answer is a
+    function of the card, and the card is already the first component of the id.
+    Writing `capdriver-smdriver` into every metered run's name would spend 19
+    characters of a 96-character visible budget on a constant, which is exactly
+    the regression the three `plant` knobs caused two paragraphs up. An override
+    is a fact only the overriding run has, so only that run pays for it. The
+    cost of the choice is a FALSE SPLIT and never a collision: `--sm-count 132`
+    on a 132-SM card is a second directory for the same measurement, and that is
+    a re-measure rather than a report written over another report.
+
+    HOW THE KEY IS KEPT COMPLETE, WHICH IS NOT THE SAME AS CLAIMING IT IS.
+    This docstring has now twice said the last omission was closed while a knob
+    was still outside, so the completeness is no longer asserted in prose.
+    `ID_EXEMPT_DESTS` names every argparse destination that may be absent and
+    why, and `tests/test_block_m_crossing_sweep.py` ENUMERATES THIS PARSER,
+    perturbs each remaining destination away from its default, and requires the
+    derived id to move. A flag added tomorrow is therefore either in the key or
+    classified as exempt on purpose; there is no third state in which it is
+    quietly forgotten, which is the state `--sm-count` and `--capability` were
+    in for as long as anyone had been reading this docstring.
     """
     planted = args.self_test
     if planted is None and args.self_test_world:
@@ -4072,6 +4145,20 @@ def default_run_id(args, card: str) -> str:
         # in a balanced arm's directory and be skipped as already measured.
         routing="balanced",
     )
+    # CONDITIONAL, AND THE DOCSTRING SAYS WHY AT LENGTH. Both flags default to
+    # "ask the driver", whose answer is a function of the card the id already
+    # leads with, so an unset knob names nothing a metered run needs and an
+    # override is a fact only the overriding run has. `--capability ""` and
+    # `--sm-count 0` are also exactly the values `provenance.run_id` REFUSES as
+    # unresolved, so passing them through would raise rather than name anything.
+    # `sm` sorts after `routing` and so falls off the far side of the
+    # 96-character visible cut on the default grid, where `cap` does not. That
+    # costs legibility and never separation: the HASH is over the full key, so
+    # two --sm-count values are always two directories whatever `ls` shows.
+    if args.sm_count:
+        swept["sm"] = int(args.sm_count)
+    if args.capability:
+        swept["cap"] = str(args.capability)
     if planted is None:
         # No plant knob on this branch, deliberately: see the docstring. A
         # measured run's id must not pay a character of its visible name for a
@@ -4085,6 +4172,96 @@ def default_run_id(args, card: str) -> str:
                      plant=plant_tag(planted, args.self_test_noise,
                                      args.self_test_world),
                      **swept)
+
+
+#: What every planted directory begins with. `provenance.run_id` renders the
+#: card slug FIRST and a planted run's card slug is `SYNTHETIC_CARD_SLUG`, so
+#: this prefix is not a second naming rule, it is that one read back.
+SYNTHETIC_DIR_PREFIX = SYNTHETIC_CARD_SLUG + "-"
+
+
+class SuppliedRunIdIsNotPlanted(RuntimeError):
+    """A planted run was handed a name that does not say it was planted.
+
+    Raised rather than rewritten. Silently prefixing an operator's own name
+    would make the directory the sweep prints differ from the one its caller
+    computed, which is how `replicate_noise_floor` would then fail to find a
+    report it did generate; refusing says so before anything runs.
+    """
+
+
+def resolve_run_id(args, card: str) -> str:
+    """The directory this run writes under, `--run-id` included.
+
+    THE DEFECT THIS CLOSES, AND WHY `default_run_id` COULD NOT CLOSE IT. The
+    fix for W1 put a planted run under `SYNTHETIC_CARD_SLUG`, so a DERIVED name
+    always begins `synthetic-` and can never be a metered run's. A SUPPLIED
+    `--run-id` bypasses that function entirely, and the module header went on
+    claiming that every planted run writes under a `synthetic-` directory as if
+    it did not.
+
+    IT IS NOT A HYPOTHETICAL OPERATOR. The one in-repo automated caller that
+    runs this script's self-test on a pod is exactly the caller that supplies a
+    name: `scripts/replicate_noise_floor.py`'s `Arm.sweep_argv` ALWAYS emits
+    `--run-id <run_id>`, and `--rehearse` appends `--self-test`. A rehearsal
+    replicate's `report.json` path was therefore byte-identical to the paid
+    replicate's for the same arm, index and `--out`, so a free plumbing test
+    on the metered machine replaced the paid arm's only machine-readable
+    artefact with a synthetic one, detectable afterwards only by reading
+    `provenance.instrument` out of it.
+
+    REFUSED, AND NOT PREFIXED. The refusal names the second way out, which is
+    to supply a name that already begins `synthetic-`: the caller then still
+    chooses the directory, and the caller's own idea of where the report landed
+    still matches the sweep's. Rewriting the name here instead would have
+    closed the overwrite by opening a `no report.json at <path>` on every
+    rehearsal replicate, which is this rebuild's recurring error rather than a
+    fix for it. `scripts/replicate_noise_floor.py:run_replicate` takes the
+    second way out and prefixes its own id when it rehearses.
+
+    A MEASURED RUN IS UNTOUCHED, EXCEPT FOR THE HOLE THE REFUSAL ITSELF OPENS.
+    `--run-id` beside no plant is an operator naming an experiment, which is
+    what the flag is for. But the refusal above hands out a name beginning
+    `synthetic-` and tells someone to use it, and the next command that name
+    gets pasted into may be the metered one, at which point a PAID run writes
+    into a directory whose name says nothing was measured. Every reader of this
+    corpus, `ls` included, treats that prefix as "generated, not measured", so
+    the mirror is refused too. Both directions are the same rule: the prefix
+    means planted, and a run whose directory disagrees with what it did is the
+    defect W1 is about, whichever way round it points.
+    """
+    if not args.run_id:
+        return default_run_id(args, card)
+    planted = args.self_test is not None or bool(args.self_test_world)
+    if not planted and args.run_id.startswith(SYNTHETIC_DIR_PREFIX):
+        raise SuppliedRunIdIsNotPlanted(
+            f"--run-id {args.run_id!r} begins {SYNTHETIC_DIR_PREFIX!r} and this "
+            "run plants nothing, so it is about to MEASURE into a directory "
+            "whose name says it did not.\n"
+            f"    {SYNTHETIC_DIR_PREFIX!r} is what `default_run_id` gives a "
+            "planted run and what every reader of this corpus takes to mean "
+            "generated rather than measured, so a paid arm under that name is "
+            "a report nobody will quote and a directory a self-test may later "
+            "resume into.\n"
+            "    Drop the prefix, or add --self-test if this run was meant to "
+            "plant one.")
+    if planted and not args.run_id.startswith(SYNTHETIC_DIR_PREFIX):
+        raise SuppliedRunIdIsNotPlanted(
+            f"--run-id {args.run_id!r} was supplied beside a planted run and it "
+            f"does not begin {SYNTHETIC_DIR_PREFIX!r}.\n"
+            "    A DERIVED id cannot reach this state: `default_run_id` gives a "
+            f"planted run the card slug {SYNTHETIC_CARD_SLUG!r} and `run_id` "
+            "renders the card first. A supplied one bypasses that function, and "
+            "the one automated caller that runs this script's --self-test is the "
+            "caller that always supplies one "
+            "(`scripts/replicate_noise_floor.py`: `Arm.sweep_argv` emits "
+            "--run-id for every replicate and --rehearse appends --self-test), "
+            "so a rehearsal writes its synthetic report.json at the paid "
+            "replicate's exact path.\n"
+            "    Either drop --run-id and let the plant name itself, or supply "
+            f"{SYNTHETIC_DIR_PREFIX + args.run_id!r} and keep the plant out of "
+            "the metered run's directory.")
+    return args.run_id
 
 
 # --------------------------------------------------------------------------
@@ -4831,9 +5008,11 @@ def _main(argv=None) -> int:
 
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
     before anything is measured, and otherwise `classify` over the scored gates
-    with nothing folded. `--dry-run` still returns DONE and is the one place
-    this file dissents from the repository's census; the dry-run branch carries
-    the reason and names the four files that have to move with it.
+    with nothing folded. `--dry-run` returns REFUSED, which is what the
+    repository's census settled on: it measured nothing, so it scores no gate
+    and its own log classifies as a refusal. The dry-run branch records what had
+    to move with the integer, because this arm's plan is priced by a program
+    rather than only read by a person.
 
     `--fail-on-gate` is retired: a CLAIM_FAIL is returned as 1 whether or not it
     is passed, because a falsified pre-registered claim is a successful
@@ -4879,7 +5058,14 @@ def _main(argv=None) -> int:
                   GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
 
     card = detect_card_slug()
-    run_id = args.run_id or default_run_id(args, card)
+    try:
+        run_id = resolve_run_id(args, card)
+    except SuppliedRunIdIsNotPlanted as exc:
+        # BEFORE `out_dir` EXISTS, which is the whole point: the refusal has to
+        # land before the path is computed, or the mkdir has already put a
+        # planted run's directory next to the metered one it was named after.
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
     out_dir = (args.out or results_root()) / "block_m_crossing" / run_id
     csv_path = out_dir / "cells.csv"
     cache_root = out_dir / "triton-cache"
@@ -4981,33 +5167,44 @@ def _main(argv=None) -> int:
                      f"(T={p.crossing_tokens(cfg.num_experts, cfg.top_k):.0f}), "
                      f"in the grid: {p.crossing_rows <= args.r_max}")
             print(f"  BLOCK_M={bm:3d} cap {p.ai_cap:7.1f}  {where}")
-        # STILL DONE (0), AND THIS FILE IS THE LAST ONE ON THAT SIDE OF THE
-        # CENSUS. The census is at `scripts/bm128_depth.py`'s own dry-run
-        # branch: on 2026-09-02 six scripts returned DONE from `--dry-run` --
-        # this file and `ruler_rebaseline` as the bare literal 0 -- and seven
-        # returned REFUSED, and REFUSED won the argument. A dry run scores no
-        # gate and prints no RESULT line, so `exit_codes.classify_text` over
-        # this log raises `NoGatesScored`, which that module documents as what a
-        # REFUSED log looks like from there, while DONE means "measured; every
-        # VALIDITY and CLAIM gate PASSED" and nothing here was measured. That
-        # disagreement is REAL and it is live in this file today.
+        # REFUSED (2), AS OF 2026-09-02, AND THE CENSUS IS NOW UNANIMOUS.
+        # The census is at `scripts/bm128_depth.py`'s own dry-run branch: six
+        # scripts returned DONE from `--dry-run` -- this file and
+        # `ruler_rebaseline` as the bare literal 0 -- and seven returned
+        # REFUSED, and REFUSED won the argument. A dry run scores no gate and
+        # prints no RESULT line, so `exit_codes.classify_text` over this log
+        # raises `NoGatesScored`, which that module documents as what a REFUSED
+        # log looks like from there, while DONE means "measured; every VALIDITY
+        # and CLAIM gate PASSED" and nothing here was measured. A plan whose
+        # banner says REFUSED and whose process says DONE is the same defect
+        # twice, and this file was the last one still saying both.
         #
-        # WHY IT HAS NOT MOVED, AND WHAT MOVES WITH IT. Unlike the other twelve
-        # arms, this one's plan is READ BY A PROGRAM.
-        # `scripts/replicate_noise_floor.py:sweep_cost` runs exactly this branch
-        # as a subprocess and returns None on any non-zero code, so flipping the
-        # code alone deletes the "TOTAL ... min of GPU" line from that script's
-        # pod plan entirely -- not "cost unknown", the whole budget line -- and
-        # its `test_dry_run_prints_the_plan_the_cost_and_the_registered_predictions`
-        # fails on it. Three more assertions read the 0 directly:
-        # `tests/test_block_m_sweep.py:763`, `tests/test_gate_units_and_ridge.py:466`
-        # and `tests/test_reference_level.py:459,473`. The change is one line
-        # here and five in four files this slice does not own, and shipping the
-        # one line alone would have traded a stated inconsistency for a silently
-        # missing cost on a rented pod. The reason is recorded rather than the
-        # code changed, because a plan whose banner says REFUSED and whose
-        # process says DONE would be the same defect twice.
-        return exit_codes.DONE
+        # WHAT MOVED WITH IT, BECAUSE THIS ARM'S PLAN IS READ BY A PROGRAM.
+        # `scripts/replicate_noise_floor.py:sweep_cost` runs exactly this
+        # branch as a subprocess to price a pod session, and it dropped the
+        # whole "TOTAL ... min of GPU" budget line -- not "cost unknown", the
+        # line -- on any non-zero code. Flipping this integer alone would have
+        # traded a stated inconsistency for a silently missing cost on a rented
+        # pod, which is the shape of defect this rebuild keeps producing while
+        # closing another. So `sweep_cost` moved in the same commit: it now
+        # accepts DONE and REFUSED from the probe, because REFUSED is what a
+        # question about a plan is answered with, and keeps returning None for
+        # every other code. The shell driver needed nothing: `dry_state` in
+        # `scripts/h200_gaps_session.sh` has always mapped 0 to PLANNED and 2
+        # to PLAN_REFUSED and re-queues neither.
+        print()
+        print("=" * 72)
+        print("REFUSED. Nothing was measured and nothing was written.")
+        print("  reason: --dry-run was given")
+        print("  Everything above is a PLAN: the grid, the tile resource bill, "
+              "the registered")
+        print("  predictions and the cost this run would charge. No gate was "
+              "scored, so no")
+        print("  RESULT line was printed and none of it is a result. Run "
+              "--self-test 0.558")
+        print("  for the planted worlds, or the bare command on the pod.")
+        print("=" * 72)
+        return exit_codes.REFUSED
 
     if args.self_test is None:
         missing = missing_gpu_stack()

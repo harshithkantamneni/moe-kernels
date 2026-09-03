@@ -760,7 +760,11 @@ def test_the_dry_run_needs_no_gpu_and_writes_nothing(tmp_path, capsys):
     without creating the results directory, so a laptop invocation does not
     litter the volume."""
     out = tmp_path / "nothing"
-    assert BM.main(["--dry-run", "--out", str(out)]) == 0
+    # REFUSED (2) since 2026-09-02: a plan measured nothing, so it scores no
+    # gate and DONE would mean "measured; every gate PASSED". The repository's
+    # dry-run census is in `scripts/bm128_depth.py`'s own dry-run branch and
+    # this file's sweep was the last arm on the other side of it.
+    assert BM.main(["--dry-run", "--out", str(out)]) == BM.exit_codes.REFUSED
     assert not out.exists()
     printed = capsys.readouterr().out
     assert "NO CROSSING EVER" in printed

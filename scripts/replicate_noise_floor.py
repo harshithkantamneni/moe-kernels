@@ -210,6 +210,11 @@ from moe.bench import exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 
 SWEEP = ROOT / "scripts" / "block_m_crossing_sweep.py"
+#: What `block_m_crossing_sweep` names a planted run's directory with, and
+#: what it REFUSES a supplied `--run-id` for not beginning with under
+#: `--self-test`. Spelled here rather than imported because that module
+#: imports at a cost this file pays lazily everywhere else.
+SYNTHETIC_DIR_PREFIX = "synthetic-"
 
 
 def timing_basis() -> str | None:
@@ -2207,18 +2212,41 @@ Registering all three now means none can be reported later as a discovery."""
 DRY_COST_RE = re.compile(r"estimated GPU time\s+([0-9.]+)\s*s")
 
 
+#: The exit codes a `--dry-run` cost probe is allowed to come back with. REFUSED
+#: is the one the repository's dry-run census settled on and the one the sweep
+#: has returned since 2026-09-02: a plan measured nothing, so it scores no gate
+#: and its own log classifies as a refusal. DONE stays accepted because it is
+#: what the sweep returned before that date and this probe is also run against
+#: checkouts and logs from before it. Anything else -- CLAIM_FAIL, INVALID,
+#: ERROR -- is a probe that broke rather than a plan that priced itself, and the
+#: caller must not read a cost out of it. An argparse failure also exits 2 and is
+#: therefore inside this tuple; it is caught one line later instead, because
+#: argparse writes its usage to STDERR and leaves stdout empty, so `DRY_COST_RE`
+#: finds no cost and the function still returns None.
+PLAN_CODES = (exit_codes.DONE, exit_codes.REFUSED)
+
+
 def sweep_cost(arm: Arm, python: str) -> float | None:
     """Ask the sweep itself what one arm costs. None when it will not say.
 
     None rather than a guess: a fabricated cost on a metered pod is how a
     session runs out of budget three arms from the end.
+
+    IT USED TO KEY ON `returncode != 0` AND THAT WAS A LATENT COUPLING. The
+    sweep's `--dry-run` returned DONE only because nobody had moved it yet, and
+    the day it moved to REFUSED this function would have started returning None
+    for every arm, `render_plan` would have printed "TOTAL COST: UNKNOWN", and
+    the whole "TOTAL ... min of GPU" line the pod budget is set from would have
+    vanished from the plan. Not a wrong number, a missing line, on a rented pod,
+    silently. The probe asks a question about a PLAN, so the codes a plan is
+    allowed to exit with are the ones it accepts, and `PLAN_CODES` names them.
     """
     argv = [python, str(SWEEP), "--dry-run"] + arm.sweep_argv("cost-probe", Path("/tmp"))
     try:
         done = subprocess.run(argv, capture_output=True, text=True, timeout=300)
     except (OSError, subprocess.SubprocessError):
         return None
-    if done.returncode != 0:
+    if done.returncode not in PLAN_CODES:
         return None
     found = DRY_COST_RE.search(done.stdout)
     return float(found.group(1)) if found else None
@@ -2249,6 +2277,18 @@ def run_replicate(arm: Arm, index: int, base: Path, *, gpu_name: str,
                   shared_cache: Path | None, timeout_s: float) -> Replicate:
     """One sweep process. Its log survives even when it fails."""
     run_id = run_id_for(arm, index, gpu_name=gpu_name, cache_mode=cache_mode)
+    if "--self-test" in extra:
+        # A REHEARSAL IS A PLANT AND ITS DIRECTORY HAS TO SAY SO. `sweep_argv`
+        # always emits `--run-id`, and a supplied id bypasses the sweep's
+        # `default_run_id` entirely, so until 2026-09-02 a `--rehearse` on the
+        # metered machine wrote its synthetic `report.json` at the paid
+        # replicate's byte-identical path and replaced the arm's only
+        # machine-readable artefact. The sweep now REFUSES that combination
+        # rather than silently rewriting the name, because a name it rewrote
+        # would no longer be the path `rep.report` below looks in; taking the
+        # prefix here is the caller's half of that bargain, and it keeps both
+        # sides computing one directory.
+        run_id = f"{SYNTHETIC_DIR_PREFIX}{run_id}"
     out_dir = base / f"{arm.name}-rep{index}"
     rep = Replicate(arm=arm.name, index=index, run_id=run_id, out_dir=out_dir,
                     report=out_dir / "block_m_crossing" / run_id / "report.json")
