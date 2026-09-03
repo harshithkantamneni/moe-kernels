@@ -96,18 +96,87 @@ should know them first.
   said `RESULT: CLAIM C1 FAIL` and the process said DONE. The flag is retired,
   accepted and ignored; `_exit_code` returns what `classify` returns.
 
-WHY THIS EXISTS. BLOCK_SIZE_M=128 is the one tile height where the study's
-arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
-calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the H200 -- and it
-is the tile vLLM's fallback ladder actually runs in every multi-tile decode cell
-(up to 32 M-tiles per expert among the arm's vLLM rows; the 34
-sometimes quoted counts cutlass and sglang rows, which run no Triton tile).
-Every other block size in
-this study either sits far below the ridge (32, 64: the cap binds, and that is
-the study's one surviving result) or far above it (256: compute bound at every
-tread, which is why it serves as the compute reference). So 128 is the only tile
-height where "does the cap matter in production" is a live question, and the
-entire 128 row of the published alpha surface rests on TWO fits, one per card.
+WHY THIS EXISTS, WITH ITS FOUNDING PREMISE RETRACTED ON 2026-09-02. This
+paragraph used to open "BLOCK_SIZE_M=128 is the one tile height where the
+study's arithmetic-intensity cap straddles the hardware ridge -- cap 150.4
+against a calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the
+H200". Both numbers were `2 BM / (b alpha)` at the two published BM=128 fits,
+128/0.85078 on the A100 (qwen2 G=64) and 128/0.80718 on the H200
+(deepseek-v2-lite G=16), and that expression omits `phi` -- one M-tile's
+activation and output traffic, in units of one full weight read -- from its
+denominator. WHICH ALPHA GOES INTO THE CORRECTION IS THE WHOLE OF IT,
+and `premise_caps` got it wrong twice before this. The first version divided
+the retracted cap by `ai_model.lin_overstatement = 1 + phi + delta`. The second
+called `ai_model.exact_cap` with the report's `alpha-corrected` in the
+`alpha_b` slot, on the strength of a sentence asserting that `alpha-corrected`
+IS an alpha_b. It is not. `scripts/block_m_crossing_sweep.py` computes it as
+`(slope_memory - activation_slope_ms) / load_ms`, and `load_ms = A + B` is the
+fitted LEVEL. Dividing a slope by a level is precisely what makes a quantity
+(EXA) rather than a weight miss fraction, which is the thesis of
+`moe/bench/ai_model.py` and of the commit that made the mistake one function
+over from where it fixed it.
+
+SO THE INPUT IS THE RAW `alpha`, `B / (A + B)`, which the same ladder block
+publishes, and which is by definition the estimator (EXA) describes.
+`alpha-corrected` cannot be inverted here, and not only because it kept
+alpha's denominator: its numerator subtracts `Act1` valued at the
+CALIBRATION's streaming bandwidth, while (EXA)'s `phi` is `Act1` valued at the
+rate the fit itself achieved, and the two are not the same rate. On the A100
+ladder the subtraction actually made, `alpha - alpha-corrected` = 0.03334, is
+about half the `phi / (1 + phi)` = 0.06459 the byte model charges. Inverting it
+therefore means adding its own correction back, which returns `alpha`.
+`alpha-corrected` stays on the page as the number the RETRACTED cap was built
+from, and is used for nothing else.
+
+AND `phi` IS THE FUSED LAYER'S, `Act1 / W`, not `ai_model.phi` on one GEMM. The
+ladder times `E` experts through `x_perm`, `h_up`, `h_act` and `y_perm`, up and
+down; the single-GEMM up-projection phi the second version evaluated is a
+different byte model, and bracketing it over the unmeasured `alpha_a` was a
+bracket about a parameter the fused model does not contain. The two disagree by
+12-14% at the alpha_a = 0 end and by a factor of 17 to 30 at the other.
+`scripts/memory_branch_anchor.py` uses `Act1 / W` for the same reason and says
+so in `Bracket.phi`. `--audit` prints the result on every run, and it reads:
+
+    A100 qwen2 G=64     alpha 0.88412  phi 0.06905  delta 0  alpha_b 0.87611
+                        retracted 150.4 (1.032 of ridge 145.8)
+                        corrected 135.4 (0.929 of ridge), factor 1.111
+    H200 deepseek G=16  alpha 0.87218  phi 0.12311  delta 0  alpha_b 0.85644
+                        retracted 158.6 (0.974 of ridge 162.8)
+                        corrected 130.7 (0.803 of ridge), factor 1.214
+
+THE STRADDLE DOES NOT EXIST, AND THE CORRECTED NUMBERS SAY SO BY MORE THAN THE
+WITHDRAWN ONES DID: 7.1% and 19.7% below their own cards' ridges, where the
+bracket this replaces printed 3.7% and 14.1%. BOTH INPUTS ARE FLOORS, and a
+floor on either is a ceiling on the cap, so 135.4 and 130.7 are upper bounds
+and the retraction holds a fortiori. `delta = 0` is a floor: the A100 ladder's
+own `alpha_upper` pins `D / L = 0.13475`, so its delta is 0.16648, not zero.
+`phi = Act1 / W` is a floor: it charges each activation tensor once per M-tile
+and counts no N-tile re-read, and a re-read only adds to it. AT THAT LADDER'S
+OWN DELTA THERE IS NO CAP AT ALL. The recovered `alpha_b` is 1.023, above 1,
+and `ai_model.alpha_b_from_fitted` refuses it by name: the fitted per-tile
+slope exceeds one full weight read plus one tile of activations and output, so
+it carries traffic the three-term model does not name. `--audit` prints that
+refusal beside the cap rather than quietly picking the delta that survives.
+Even uncorrected only ONE of the two was ever above its ridge. A corpus
+carrying no such alpha prints NOT RECOMPUTABLE and does not void the page; see
+`PremiseNotRecomputable`. So this arm cannot be justified by "the cap lands on
+the ridge at 128",
+and that is a result rather than an inconvenience: it means no cap number
+decides whether renting an H200 for five clean treads at BM=128 is worth doing.
+
+WHAT SURVIVES, AND IT IS THE MEASUREMENT RATHER THAN THE ARITHMETIC.
+BLOCK_SIZE_M=128 is the tile vLLM's fallback ladder actually runs in every
+multi-tile decode cell (up to 32 M-tiles per expert among the arm's vLLM rows;
+the 34 sometimes quoted counts cutlass and sglang rows, which run no Triton
+tile), and the entire 128 row of the published alpha surface rests on TWO fits,
+one per card. And the thing the retracted cap was standing in for is MEASURED
+further down, with no ridge and no alpha in it: 19 of the 22 valid published
+BM=128 ladders have `B/C` between 0.877 and 1.101 with a median of 0.991, so at
+this tile the memory and compute branches ARE one line to about 1%. `B/C` is a
+ratio of two fitted slopes; no cap, no ridge and no estimator's alpha enters it,
+which is exactly why it survived the correction that took the premise. The
+question this arm answers is therefore "can a BM=128 ladder be swept deep enough
+to identify a memory branch at all", not "does the cap cross the ridge".
 
 Both of those two fits are broken, and the same arithmetic explains why no third
 one exists. This script is that arithmetic, the gates that would have caught the
@@ -247,6 +316,7 @@ import re
 import statistics
 import subprocess
 import sys
+import textwrap
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -254,7 +324,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.roofline import HARDWARE_DIR, load_hardware  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
@@ -1253,6 +1323,19 @@ class LadderRecord:
     #: where alpha is identifiable -- not at 128, where it is not.
     min_alpha: float | None = None
     min_alpha_block_m: int | None = None
+    #: This ladder's own activation-corrected alpha at BLOCK_M=128, and the
+    #: ridge its report stamps. Both are here for `premise_caps` and nothing
+    #: else: the arm's founding premise was a cap built from the first against
+    #: the second, and a premise that cannot be recomputed from the files is a
+    #: sentence rather than a result.
+    alpha_corrected_128: float | None = None
+    ridge: float | None = None
+    #: `B / (L - D)` at BLOCK_M=128: alpha with the fused layer's fixed cost
+    #: taken out of the level. `premise_caps` reads `delta` off it -- the fixed
+    #: cost in weight-read units is recoverable from the PAIR as
+    #: `(D/L)(1 + phi)/(1 - D/L)` with `D/L = 1 - alpha/alpha_upper` -- and
+    #: prints what it implies rather than using it; see that function.
+    alpha_upper_128: float | None = None
 
     @property
     def c_ref(self) -> float | None:
@@ -1326,8 +1409,365 @@ def load_corpus(published: Path, dtype: str = "bf16",
             memory_points=int(fit.get("memory_points") or 0),
             published_alpha=fit.get("alpha"),
             ceiling_tflops=_ceiling(card, m["dtype"], hardware_dir),
-            path=str(path), min_alpha=best[0], min_alpha_block_m=best[1]))
+            path=str(path), min_alpha=best[0], min_alpha_block_m=best[1],
+            alpha_corrected_128=fit.get("alpha_corrected"),
+            ridge=payload.get("ridge"),
+            alpha_upper_128=fit.get("alpha_upper")))
     return records, skipped
+
+
+# --------------------------------------------------------------------------
+# The founding premise, recomputed instead of quoted. Retracted 2026-09-02.
+# --------------------------------------------------------------------------
+
+#: `delta`, the fused layer's fixed cost in units of one full weight read, as
+#: `premise_caps` charges it. ZERO IS A FLOOR AND NOT A MEASUREMENT: two of the
+#: two published BM=128 ladders pin a positive delta through their own
+#: `alpha_upper`, and one of them pins a delta at which the corrected cap does
+#: not exist. Zero is used because delta enters (EXA) only through the LEVEL, so
+#: a larger delta recovers a LARGER alpha_b and a SMALLER cap: the floor is the
+#: choice that gives the retracted straddle every benefit before refusing it.
+#: `PremiseCap.delta_implied` carries what each ladder actually pins, and
+#: `render_premise` prints it beside the cap.
+PREMISE_DELTA_FLOOR = 0.0
+
+
+def fused_phi(cfg, dtype: str, block_m: int = SUBJECT_BLOCK_M) -> float:
+    """`Act1 / W`: one M-tile's activation and output traffic in units of one
+    full weight read, on the FUSED layer the ladder actually timed.
+
+    `W` is the layer's whole weight set, `E` experts of `3 F H` elements at the
+    weight dtype. `Act1` is `E * BM` rows of `x_perm`, `h_up`, `h_act` and
+    `y_perm`, which is `2 H + 3 F` elements per row at the ACTIVATION dtype --
+    2 bytes in every arm this study has published, including the fp8-weight
+    ones, because charging activations at the weight dtype reports traffic that
+    was never moved.
+
+    WHY NOT `ai_model.phi`. That evaluates phi on ONE GEMM, the up-projection
+    `N = 2F`, `K = H`, and needs `alpha_a`, the miss fraction on the activation
+    re-read, which has no measurement anywhere in this repository. The alpha it
+    would be correcting is not a single-GEMM quantity. The first corrected
+    version of this section paired the single-GEMM phi with a fused-layer alpha
+    and bracketed the mismatch over alpha_a, which is a bracket about a
+    parameter the fused byte model does not contain; the two phis differ by
+    12-14% at alpha_a = 0 and by a factor of 17 to 30 at alpha_a = 1.
+    `scripts/memory_branch_anchor.py` uses `Act1 / W` for exactly this reason
+    and says so in `Bracket.phi`.
+
+    IT IS A FLOOR, in the direction that makes the retraction harder to keep
+    rather than easier: `Act1` charges each of the four activation tensors once
+    per M-tile and counts no N-tile re-read, so a real re-read only adds to it,
+    and a larger phi is a smaller cap.
+
+    TRANSCRIBED, NOT IMPORTED, from `block_m_crossing_sweep.activation_bytes_per_row`
+    and `memory_branch_anchor.activation_bytes_per_row`, both of which say the
+    same thing: a premise that changes because a sibling script refactored a
+    helper is not a premise. `tests/test_bm128_depth.py` cross-checks all three
+    whenever the sweep is importable, so a divergence is caught rather than
+    assumed away.
+    """
+    act1 = cfg.num_experts * block_m * (2 * cfg.hidden_size
+                                        + 3 * cfg.intermediate_size) * 2
+    return act1 / cfg.weight_bytes(dtype)
+
+
+def implied_delta(alpha: float, alpha_upper: float | None, phi: float
+                  ) -> float | None:
+    """The fixed cost this ladder's OWN two alphas pin, in weight-read units.
+
+    The report publishes `alpha = B / L` and `alpha_upper = B / (L - D)`, so
+
+        D / L = 1 - alpha / alpha_upper
+
+    with no bandwidth and no byte count in it. In (EXA) units the level is
+    `1 + phi + delta`, and `delta / (1 + phi + delta) = D / L`, so
+
+        delta = (D / L) (1 + phi) / (1 - D / L)
+
+    Returns None when the pair pins nothing: no `alpha_upper` in the block, a
+    non-positive one, or a ratio outside `[0, 1)`. None is a different answer
+    from zero and is printed as one, because `D = 0` is a measurement (the H200
+    ladder's `overhead_ms` really is 0.0) and a missing `alpha_upper` is not.
+    """
+    if alpha_upper is None or alpha_upper <= 0.0 or alpha <= 0.0:
+        return None
+    d_over_l = 1.0 - alpha / alpha_upper
+    if not 0.0 <= d_over_l < 1.0:
+        return None
+    return d_over_l * (1.0 + phi) / (1.0 - d_over_l)
+
+
+@dataclass(frozen=True)
+class PremiseCap:
+    """One published BLOCK_M=128 fit's cap, retracted form beside corrected.
+
+    `lin_cap` is `2 BM / (b alpha_corrected)`: the expression the two numbers in
+    this module's docstring were, at the alpha they were taken at. It is kept
+    for exactly that, so the size of the correction is printed rather than
+    described.
+
+    `exa_cap` is `ai_model.cap_from_fitted` at `alpha_fitted`, the ladder's raw
+    `B / (A + B)`, with `phi = Act1 / W` on the fused layer and
+    `delta = PREMISE_DELTA_FLOOR`. THE INPUT IS THE RAW ALPHA AND THAT IS THE
+    WHOLE OF THIS DATACLASS'S HISTORY. The first version divided `lin_cap` by
+    `1 + phi + delta`; the second passed `alpha_corrected` into
+    `ai_model.exact_cap`'s `alpha_b` slot, having asserted in this docstring
+    that `alpha_corrected` is an alpha_b. It is `(B - Act1) / L`, a slope over
+    the fitted LEVEL, which is (EXA)-shaped and not a miss fraction -- the same
+    error the commit that wrote it existed to fix. `cap_from_fitted` takes the
+    (EXA) quantity by name, inverts it through `ai_model.alpha_b_from_fitted`,
+    and refuses whatever the three-term model cannot hold.
+
+    `delta_implied` is what this ladder's own `alpha_upper` pins, and
+    `exa_cap_at_delta_implied` / `delta_implied_refusal` are what the cap does
+    there: one of the two published ladders has no cap at all at its own delta,
+    because the recovered `alpha_b` lands above 1. That is reported, not
+    hidden, and it is the reason the floor is used for the headline rather than
+    the pinned value: the floor is the number the straddle would need, and it
+    still does not reach the ridge.
+    """
+
+    arm: str
+    model: str
+    group_m: int
+    alpha_fitted: float
+    alpha_corrected: float
+    ridge: float
+    phi: float
+    delta: float
+    alpha_b: float
+    lin_cap: float
+    exa_cap: float
+    delta_implied: float | None
+    exa_cap_at_delta_implied: float | None
+    delta_implied_refusal: str
+
+    @property
+    def factor(self) -> float:
+        """`lin_cap / exa_cap`, which is `(alpha / alpha_corrected)(1 + phi + delta)`.
+
+        NOT `ai_model.lin_overstatement` and not `(alpha_b + phi) / alpha_b`:
+        the retracted cap and the corrected one were taken at DIFFERENT alphas,
+        so the factor between them carries the ratio of those two as well as the
+        level. Computed as the ratio of the two printed numbers so that it
+        cannot disagree with them.
+        """
+        return self.lin_cap / self.exa_cap
+
+    @property
+    def lin_straddles(self) -> bool:
+        """Did the RETRACTED cap sit above this card's ridge. The premise."""
+        return self.lin_cap >= self.ridge
+
+    @property
+    def straddles(self) -> bool:
+        """Does the CORRECTED cap reach the ridge.
+
+        Read at the delta floor and at `Act1 / W`, both of which are floors, so
+        `exa_cap` is the largest cap the corrected model allows for this ladder.
+        False here is the retraction: the straddle does not exist even where it
+        is given every benefit.
+        """
+        return self.exa_cap >= self.ridge
+
+
+class PremiseNotRecomputable(Exception):
+    """No published BLOCK_M=128 ladder can produce the founding premise.
+
+    DELIBERATELY NOT A `RefusedBeforeMeasuring`, and the difference is the
+    reason this class exists. `premise_caps` first refused through `_refuse`,
+    which carries `exit_codes.REFUSED` and takes the process with it. Only 2 of
+    the 22 valid published BM=128 ladders carry both an alpha and a stamped
+    ridge, and those two are the fits this module's own docstring argues should
+    be WITHDRAWN, so blanking them turned a fully scoreable `--audit` page into
+    a total refusal: zero `RESULT:` lines, V0 and P4 through P9 never examined,
+    a corpus voided by a paragraph none of those gates read. The premise is
+    provenance for why the arm was proposed; the gates measure `B/C` and tread
+    counts off the ladders themselves and take no cap, no ridge and no alpha
+    from here.
+
+    WHAT IS KEPT is the thing the refusal was for: "no BM=128 fit carries an
+    alpha" and "the premise holds" still do not print the same way. This is
+    raised rather than an empty list returned, `render_premise` catches it and
+    prints a NOT RECOMPUTABLE section naming the reason, and the gates below it
+    still score the page.
+    """
+
+
+def premise_caps(published: Path, hardware_dir: Path | None = None
+                 ) -> list[PremiseCap]:
+    """Re-derive the arm's founding premise from the published reports.
+
+    WHY THIS IS CODE AND NOT A PARAGRAPH. Until 2026-09-02 this module opened by
+    asserting that BLOCK_M=128 "is the one tile height where the study's
+    arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
+    calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the H200".
+    Those two caps were `2 BM / (b alpha)` at the two published BM=128 fits, a
+    form that leaves `phi` out of its denominator. Corrected, both fall below
+    their own card's ridge and the straddle is gone. A premise that lived only
+    in prose survived the retraction of the arithmetic under it at the same
+    HEAD, in the same checkout, with no complaint from anything; one that is
+    recomputed from the files on demand cannot.
+
+    THE INPUT IS THE LADDER'S RAW `alpha`, AND THE TWO EARLIER VERSIONS OF THIS
+    FUNCTION EACH PUT SOMETHING ELSE THERE. The first divided the retracted cap
+    by `ai_model.lin_overstatement`. The second passed `alpha_corrected` into
+    `ai_model.exact_cap`'s `alpha_b` slot. `alpha_corrected` is
+    `(slope_memory - activation_slope_ms) / load_ms` and `load_ms = A + B` is
+    the fitted LEVEL, so it is a slope over a level -- (EXA)-shaped, not a miss
+    fraction -- and putting it in an `alpha_b` slot is the error the module it
+    was calling exists to name.
+
+    AND `alpha_corrected` CANNOT BE INVERTED BACK, which is why the raw alpha is
+    used rather than a corrected form of the corrected one. Its numerator takes
+    `Act1` out at the CALIBRATION's streaming bandwidth; (EXA)'s `phi` is `Act1`
+    against the rate the fit itself achieved. On the A100 ladder the subtraction
+    made is 0.03334 of the level where `phi / (1 + phi)` is 0.06459, so undoing
+    it needs a bandwidth ratio the report does not carry -- and undoing it lands
+    exactly on `alpha`, which the block publishes. So `alpha` goes in,
+    `alpha_corrected` stays on the page as the number the retracted cap came
+    from, and the arithmetic is `ai_model.cap_from_fitted`: one module owns the
+    inverse and enforces the `[0, 1]` wall on the recovered miss fraction.
+
+    RAISES `PremiseNotRecomputable` rather than returning an empty list,
+    because "no BM=128 fit carries an alpha" and "the premise holds" must not
+    print the same way. It is not a refusal of the RUN: see that class.
+    """
+    records, _ = load_corpus(published, hardware_dir=hardware_dir)
+    out: list[PremiseCap] = []
+    unusable: list[str] = []
+    for rec in records:
+        if (rec.published_alpha is None or rec.alpha_corrected_128 is None
+                or not rec.ridge):
+            continue
+        alpha = float(rec.published_alpha)
+        corrected = float(rec.alpha_corrected_128)
+        if alpha <= 0 or corrected <= 0:
+            unusable.append(
+                f"{rec.arm}: alpha {alpha:.5f} / alpha-corrected "
+                f"{corrected:.5f} is not positive, and neither "
+                "2 BM / (b alpha) nor its correction has a value there")
+            continue
+        cfg = MODEL_CONFIGS[rec.model]
+        b = dtype_bytes(rec.dtype)
+        phi = fused_phi(cfg, rec.dtype)
+        try:
+            alpha_b = ai_model.alpha_b_from_fitted(
+                alpha, phi=phi, delta=PREMISE_DELTA_FLOOR)
+            exa = ai_model.cap_from_fitted(
+                alpha, block_m=SUBJECT_BLOCK_M, b=b, phi=phi,
+                delta=PREMISE_DELTA_FLOOR)
+        except ai_model.AIModelRefused as exc:
+            # A recovered alpha_b outside [0, 1] is not a miss fraction, and
+            # `ai_model` says so by name. Named and dropped rather than
+            # clamped: a cap computed from a number the model cannot hold is
+            # not a cap.
+            unusable.append(f"{rec.arm}: {exc}")
+            continue
+        implied = implied_delta(alpha, rec.alpha_upper_128, phi)
+        at_implied: float | None = None
+        refusal = ""
+        if implied is not None:
+            try:
+                at_implied = ai_model.cap_from_fitted(
+                    alpha, block_m=SUBJECT_BLOCK_M, b=b, phi=phi, delta=implied)
+            except ai_model.AIModelRefused as exc:
+                # NOT a reason to drop the ladder. The headline cap is read at
+                # the delta FLOOR, which exists and is an upper bound; that the
+                # ladder's own delta admits no cap at all is a stronger form of
+                # the same retraction and is printed as one.
+                refusal = str(exc)
+        out.append(PremiseCap(
+            arm=rec.arm, model=rec.model, group_m=rec.group_m,
+            alpha_fitted=alpha, alpha_corrected=corrected,
+            ridge=float(rec.ridge), phi=phi, delta=PREMISE_DELTA_FLOOR,
+            alpha_b=alpha_b,
+            lin_cap=2.0 * SUBJECT_BLOCK_M / (b * corrected), exa_cap=exa,
+            delta_implied=implied, exa_cap_at_delta_implied=at_implied,
+            delta_implied_refusal=refusal))
+    if not out:
+        raise PremiseNotRecomputable(
+            f"no published BLOCK_M={SUBJECT_BLOCK_M} ladder under {published} "
+            "carries both a fitted alpha this model can hold and a stamped "
+            "ridge, so this arm's founding premise cannot be recomputed. The "
+            "premise is unchecked, not upheld"
+            + ("; ".join([""] + unusable) if unusable else "."))
+    return out
+
+
+def render_premise(published: Path, hardware_dir: Path | None = None
+                   ) -> list[str]:
+    """The founding premise, printed as arithmetic every time `--audit` runs.
+
+    On the page rather than in the docstring because the docstring version
+    stayed wrong at a HEAD where the file it cites already said so, and nothing
+    noticed because nothing recomputed it. The retracted cap is printed BESIDE
+    the corrected one, and both `phi` and `delta` are printed beside those: a
+    cap whose two model parameters are not on the page is a cap whose next
+    reader cannot tell which alpha went into it, which is how this section was
+    wrong twice.
+    """
+    try:
+        caps = premise_caps(published, hardware_dir=hardware_dir)
+    except PremiseNotRecomputable as exc:
+        return ["", "## The founding premise, NOT RECOMPUTABLE", "",
+                # Wrapped because this sentence names the corpus path and every
+                # ladder it could not use, and an audit page is read as text.
+                textwrap.fill(str(exc), width=88, initial_indent="  ",
+                              subsequent_indent="  "),
+                "  This voids the PREMISE and not the page. Every gate below "
+                "is scored off the",
+                "  ladders themselves and takes no cap, no ridge and no alpha "
+                "from this section,",
+                "  so the audit continues; what is missing is the arithmetic "
+                "for why the arm was",
+                "  proposed, which the measured B/C near 1 replaced anyway."]
+    out = ["", "## The founding premise, recomputed", "",
+           "The retracted cap is `2 BM / (b alpha-corrected)`; the corrected "
+           "one is",
+           "`ai_model.cap_from_fitted` at the ladder's RAW alpha = B/(A+B), "
+           "which is the estimator",
+           "(EXA) describes, with phi = Act1/W on the fused layer and delta at "
+           "its floor. Both of",
+           "those are floors, so the corrected cap is an UPPER bound on what "
+           "this ladder allows.", ""]
+    for c in sorted(caps, key=lambda c: c.arm):
+        out.append(f"  {c.arm[:38]:38s} {c.model[:16]:16s} G={c.group_m:2d} "
+                   f"alpha {c.alpha_fitted:.5f}  ridge {c.ridge:6.1f}")
+        out.append(f"  {'':38s} phi {c.phi:.5f} (Act1/W, fused)  "
+                   f"delta {c.delta:.5f} (floor)  alpha_b {c.alpha_b:.5f}")
+        out.append(f"  {'':38s} retracted {c.lin_cap:6.1f} "
+                   f"({c.lin_cap / c.ridge:.3f} of ridge, "
+                   f"{'ABOVE' if c.lin_straddles else 'below'}) "
+                   f"at alpha-corrected {c.alpha_corrected:.5f}")
+        out.append(f"  {'':38s} corrected {c.exa_cap:6.1f} "
+                   f"({c.exa_cap / c.ridge:.3f} of ridge), "
+                   f"factor {c.factor:.3f}, "
+                   f"{'STILL STRADDLES' if c.straddles else 'no straddle'}")
+        if c.delta_implied is None:
+            out.append(f"  {'':38s} this ladder pins no delta: it publishes no "
+                       "alpha-upper to read D/L from")
+        elif c.delta_implied_refusal:
+            out.append(f"  {'':38s} at its OWN delta {c.delta_implied:.5f} "
+                       "there is NO cap:")
+            out.append(textwrap.fill(c.delta_implied_refusal, width=88,
+                                     initial_indent=" " * 43,
+                                     subsequent_indent=" " * 43))
+        else:
+            out.append(f"  {'':38s} at its OWN delta {c.delta_implied:.5f} the "
+                       f"cap is {c.exa_cap_at_delta_implied:6.1f} "
+                       f"({c.exa_cap_at_delta_implied / c.ridge:.3f} of ridge)")
+    if any(c.straddles for c in caps):
+        out += ["", "  At least one corrected cap still reaches its card's "
+                    "ridge, so the premise stands as written."]
+    else:
+        out += ["", "  NO corrected cap reaches its card's ridge, and both "
+                    "inputs to the correction",
+                "  are floors, so that is an upper bound refusing the "
+                "straddle. What justifies the",
+                "  arm is the MEASURED B/C near 1, which carries no cap and no "
+                "ridge."]
+    return out
 
 
 @dataclass
@@ -3260,6 +3700,15 @@ def _run(argv=None) -> int:
         if args.audit:
             records, skipped = load_corpus(args.published, args.dtype,
                                            args.hardware_dir)
+            if records:
+                # Only when the corpus HAS BM=128 ladders. With none, V0 already
+                # voids the page for vacuity and that is the gate that owns the
+                # verdict; a second refusal from here would answer a question
+                # nobody could have asked. When it has them but none carries a
+                # usable alpha and a ridge, `render_premise` prints NOT
+                # RECOMPUTABLE and returns, and the gates below still score:
+                # see `PremiseNotRecomputable` for why that is not a default.
+                lines += render_premise(args.published, args.hardware_dir)
             rows = [audit_record(r, seed=args.seed, draws=args.draws)
                     for r in records]
             more, g, pay = audit_report(rows, skipped, b)

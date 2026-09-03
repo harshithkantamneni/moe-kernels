@@ -94,19 +94,39 @@ both measured quantities, which is a defensible object where the point estimate
 was not.
 
 WHICH ALPHA THIS BRACKETS, since `moe/bench/ai_model.py` (2026-09-02) showed
-there are two. A ladder divides the WHOLE per-extra-M-tile cost by the weight
-bytes, so what it returns is
+there are two and the first version of this paragraph named the wrong one. Write
+`phi = Act1 / W` for one M-tile's activation and output traffic in units of one
+full weight read, and `delta = D BW / W` for the fixed cost in the same units.
+The estimator every published alpha comes from is `B / (A + B)`, the slope over
+the fitted LEVEL, and on the ladder above that is
 
-    alpha_fitted = alpha_b + alpha_a (BM/BN) + BM/K
+    alpha_published = (alpha_b + phi) / (1 + phi + delta)                 (EXA)
 
-where alpha_b is the weight re-read the study means by "alpha" and alpha_a is
-its unmeasured counterpart on the activations. This file brackets `B`, so it
-brackets alpha_fitted, MINUS the first-order activation traffic it subtracts as
-`Act1` -- the same quantity the reports print as `alpha-corrected`. Splitting
-alpha_fitted into alpha_b and alpha_a needs three BLOCK_N values and belongs to
-that module's lane; nothing here assumes a value for alpha_a. The bracket is
-still the right correction to every published number, because every published
-number is a value of this same composite.
+NOT the blend `alpha_b + alpha_a (BM/BN) + BM/K` this file used to assert as
+what a ladder returns. That blend is (EXA)'s numerator with its level taken as
+1, and no estimator in this repository divides a slope by the weight bytes
+alone. This file does not fit `B / (A + B)` at all. It solves (*) for the
+slope's own weight term, so `alpha_lo` and `alpha_hi` bracket `alpha_b`
+DIRECTLY, with `Act1` already subtracted -- the same quantity the reports print
+as `alpha-corrected`. Splitting `phi` into an activation re-read and an output
+write needs three BLOCK_N values and belongs to that module's lane; nothing here
+assumes a value for alpha_a. The bracket is still the right correction to every
+published number, because a published alpha is (EXA) over the same `B` and the
+same `Act1`.
+
+WHAT THAT COSTS THE CAP, which is the number this file prints beside the ridge.
+The ceiling one tile height reaches is `2 BM / (b (alpha_b + phi))`, the form
+`ai_model.exact_cap` carries, so the sweep's published `ai_cap = 2 BM / (b
+alpha)` omits `phi` from the denominator and is HIGH: by exactly
+`ai_model.lin_overstatement = 1 + phi + delta` when the alpha put into it came
+from a `B / (A + B)` fit, and by `(alpha_b + phi) / alpha_b`, which is larger
+still, when it came from a bracket end like this file's. `Bracket.ai_cap` is
+therefore computed through `ai_model.cap_from_fitted`, `Bracket.lin_cap` keeps
+the retracted form so the size of the correction can be printed rather than
+described, and the fit table carries both as `cap/ridge` and `lin/ridge`.
+`delta` is passed as zero and that is exact rather than optimistic here: the
+bracket is built from the SLOPE, which no fixed cost enters, and a fixed cost
+does not survive the limit that defines a cap either.
 
 THE MECHANISM, and the part of the evaluation's story that the committed data
 REFUTES. The elevation separates on the swizzle with no overlap on 11 of the 12
@@ -230,7 +250,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 
@@ -238,8 +258,8 @@ from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 #: reason: it imports torch at module scope, while `--rescore`, `--dry-run` and
 #: `--self-test` are documented to run on a laptop with no torch at all, and an
 #: import here would turn those three into an ImportError before argparse ran.
-#: `exit_codes` and `provenance` import nothing heavier than the standard
-#: library, so they are imported normally. The same rule covers
+#: `ai_model`, `exit_codes` and `provenance` import nothing heavier than the
+#: standard library, so they are imported normally. The same rule covers
 #: `moe.baselines._framework_config`, which reaches torch through `moe.quant`.
 
 REPO = Path(__file__).resolve().parents[1]
@@ -473,30 +493,67 @@ class Bracket:
     def contains(self, value: float, tol: float = 1e-9) -> bool:
         return self.lo - tol <= value <= self.hi + tol
 
-    def ai_cap(self, dtype_b: int, alpha: float) -> float:
-        """`2 BM / (b alpha)`: the arithmetic intensity this tile height caps at.
+    @property
+    def phi(self) -> float:
+        """`Act1 / W`: one M-tile's activation and output traffic, in units of
+        one full weight read.
 
-        The same expression the sweep publishes as `ai_cap`, and it is the
-        CORRECT one as long as the alpha put into it is the fitted composite.
-        `moe/bench/ai_model.py` gives the full cap as
+        The same quantity `moe/bench/ai_model.py` calls `phi`, evaluated on the
+        FUSED layer this file measures rather than on a single GEMM, and the
+        term the sweep's `alpha-corrected` column subtracts. It is exact
+        arithmetic over the model config, so it carries no fitted parameter and
+        no assumption about alpha_a.
+        """
+        return self.act1_bytes / self.w_bytes
 
-            2 / (b (alpha_b/BM + alpha_a/BN + 1/K))
+    def lin_cap(self, dtype_b: int, alpha: float) -> float:
+        """`2 BM / (b alpha)`: the RETRACTED cap, kept only to be divided by.
 
-        and dividing `alpha_fitted = alpha_b + alpha_a (BM/BN) + BM/K` by BM
-        turns that denominator into `alpha_fitted / BM` exactly. So the two
-        agree; what the study got wrong was the SPLIT, not the ceiling.
-
-        TWO WAYS THIS IS CONSERVATIVE, both in the direction that makes the
-        BLOCK_M <= 64 claim harder rather than easier to keep. Taken at the
-        bracket's LOW alpha it is the LARGEST cap the anchor ambiguity allows.
-        And the alpha handed to it has the first-order activation traffic
-        subtracted, which removes a positive term from the denominator and so
-        OVERSTATES the cap again. A tile that still cannot reach the ridge under
-        both of those has not been helped over the line by either.
+        This is the expression the sweep publishes as `ai_cap` and the one every
+        cap number in this study was computed with. It omits `phi` from the
+        denominator, so it is HIGH -- by `1 + phi + delta` when the alpha came
+        from a `B / (A + B)` fit, and by `(alpha_b + phi) / alpha_b` when it
+        came from a bracket end like `lo`. It stays on the page beside
+        `ai_cap` because a correction whose size is not printed is a correction
+        the next reader has to take on trust, which is how the identity this
+        method used to assert as exact survived unexamined until 2026-09-02.
         """
         if alpha <= 0:
             raise ValueError("alpha must be positive to cap arithmetic intensity")
         return 2.0 * self.block_m / (dtype_b * alpha)
+
+    def ai_cap(self, dtype_b: int, alpha: float) -> float:
+        """`2 BM / (b (alpha_b + phi))`: the ceiling this tile height really has.
+
+        `alpha` is an alpha_b -- a bracket end, with `Act1` already subtracted
+        -- and the cap is `moe/bench/ai_model.exact_cap`'s form evaluated on the
+        fused layer. It is reached THROUGH `ai_model.cap_from_fitted` rather
+        than written out here, so that one module owns the arithmetic and the
+        recovered miss fraction passes that module's [0, 1] wall; the round trip
+        maps alpha_b to the (EXA) reading `(alpha_b + phi) / (1 + phi)` and back,
+        and `cap_from_fitted` refuses anything the three-term model cannot hold.
+
+        `delta` IS ZERO AND THAT IS EXACT, not a convenient default. `delta` is
+        the fused layer's fixed cost divided by the weight read, and it enters
+        (EXA) only through the LEVEL. This file never divides by a level: (*) is
+        solved on the SLOPE, so alpha_b comes out fixed-cost-free, and a fixed
+        cost does not survive the M -> infinity limit that defines a cap either.
+
+        WHAT THIS IS STILL CONSERVATIVE ABOUT, in the direction that makes the
+        BLOCK_M <= 64 claim harder rather than easier to keep: taken at the
+        bracket's LOW alpha it is the LARGEST cap the anchor ambiguity allows. A
+        tile that still cannot reach the ridge there has not been helped over
+        the line by the anchor. The SECOND conservatism this docstring used to
+        claim -- that subtracting the activation term overstates the cap again
+        -- was the retracted reading itself, and is gone: the term is now back
+        in the denominator where it belongs.
+        """
+        if alpha <= 0:
+            raise ValueError("alpha must be positive to cap arithmetic intensity")
+        level = ai_model.lin_overstatement(phi=self.phi, delta=0.0)
+        return ai_model.cap_from_fitted((alpha + self.phi) / level,
+                                        block_m=self.block_m, b=dtype_b,
+                                        phi=self.phi, delta=0.0)
 
 
 def bracket_alpha(slope_ms: float, slope_ms_published: float, anchor_ms: float,
@@ -690,6 +747,122 @@ def calibration_slug_for(arm_name: str, slugs) -> str | None:
 
 
 # --------------------------------------------------------------------------
+# What ridge the committed reports carry. Counted, never asserted.
+# --------------------------------------------------------------------------
+
+#: The ridge every published sweep was RUN with: an H200 figure, 701.6 TFLOP/s
+#: over 4377.2 GB/s, that `--ridge` defaulted to and that the cross-card driver
+#: passed to arms on two different cards. It is here so the census can say how
+#: many reports still carry it; it is not a fallback and nothing is scored
+#: against it.
+SWEPT_RIDGE = 160.3
+
+#: How far a report's stamped ridge may sit from its card's calibrated one and
+#: still count as that card's. The reports round to one decimal (162.8) and the
+#: calibrations do not (162.81), so anything tighter than half of the last
+#: printed place would classify a correctly rescored report as a stranger.
+RIDGE_MATCH_TOL = 0.05
+
+
+def ridge_census(root: Path, cals: dict[str, Calibration]) -> dict:
+    """Which ridge each committed report stamps, read off the files.
+
+    THIS EXISTS BECAUSE THE PARAGRAPH IT REPLACES WAS A LITERAL. Until
+    2026-09-02 the rescore transcript said, as hardcoded text, "Every one of
+    these reports carries ridge=160.3 and ridge_band=[160.3, 176.2] ... 160.3 is
+    a stale H200 band and belongs to NEITHER card". On this same branch
+    `scripts/rescore_published_reports.py` rewrote all 26 reports to their own
+    card's calibration, so that sentence regenerated FALSE on every run and a
+    reader who opened one of the reports it describes found a different number
+    in it. A census cannot go stale that way: it counts what is on disk now, and
+    it NAMES every report that still carries the swept ridge or a ridge its own
+    card's calibration does not give, instead of asserting that none do.
+
+    `rescored_from` is counted too, because the substitution is real history and
+    the fix must not erase it: a report that was rescored says what it was
+    rescored FROM, and that is where 160.3 now lives.
+    """
+    own, swept, stranger, unattributed, rescored = 0, [], [], [], 0
+    per_card: dict[str, list[float]] = {}
+    total = 0
+    for report in sorted(root.glob("*/*.report.json")):
+        if (report.parent / "SUPERSEDED").exists():
+            continue
+        total += 1
+        try:
+            doc = json.loads(report.read_text())
+        except (OSError, ValueError):
+            stranger.append(f"{report.parent.name}/{report.name} is unreadable")
+            continue
+        name = f"{report.parent.name}/{report.name}"
+        if doc.get("rescored_from"):
+            rescored += 1
+        ridge = doc.get("ridge")
+        if ridge is None:
+            stranger.append(f"{name} stamps no ridge at all")
+            continue
+        slug = calibration_slug_for(report.parent.name, list(cals))
+        if slug is None:
+            unattributed.append(f"{name} names no card this run calibrated")
+            continue
+        per_card.setdefault(slug, []).append(float(ridge))
+        if abs(float(ridge) - cals[slug].ridge) <= RIDGE_MATCH_TOL:
+            own += 1
+        elif abs(float(ridge) - SWEPT_RIDGE) <= RIDGE_MATCH_TOL:
+            swept.append(f"{name} still carries the swept {SWEPT_RIDGE}")
+        else:
+            stranger.append(f"{name} carries ridge {ridge}, which is neither "
+                            f"{slug}'s {cals[slug].ridge:.2f} nor the swept "
+                            f"{SWEPT_RIDGE}")
+    return {"total": total, "own_card": own, "rescored_from": rescored,
+            "still_swept": swept, "strangers": stranger,
+            "unattributed": unattributed, "per_card": per_card}
+
+
+def render_ridge_census(census: dict, cals: dict[str, Calibration]) -> list[str]:
+    """The census as the transcript prints it, with both verdicts spelled out.
+
+    The clean case is a sentence AND a count, never a count alone: "26 of 26"
+    with no statement of what was checked is the shape the retracted paragraph
+    had. The dirty case lists the files, because a reader who is told some
+    report disagrees with its own card has to be able to open that report.
+    """
+    out = ["  RIDGE PROVENANCE, because C3 is scored against it. Counted from "
+           "the report files",
+           "  themselves on this run, not asserted: a sentence about them went "
+           "stale once already.",
+           f"    {census['total']} report(s) examined; {census['own_card']} "
+           f"stamp their own card's calibrated ridge,",
+           f"    and {census['rescored_from']} carry a `rescored_from` block "
+           f"naming what they were swept with",
+           f"    (the {SWEPT_RIDGE} default, an H200 band that belongs to "
+           "NEITHER card, which",
+           "    `scripts/rescore_published_reports.py` replaced on this branch)."]
+    for slug in sorted(census["per_card"]):
+        vals = census["per_card"][slug]
+        seen = ", ".join(f"{v:.2f}" for v in sorted(set(vals)))
+        peak = cals[slug].dense_tflops.get("bf16", max(cals[slug].dense_tflops.values()))
+        out.append(f"    {slug:24s} calibration {cals[slug].ridge:6.2f} "
+                   f"FLOP/byte (dense {peak:.2f} TFLOP/s over its own triad "
+                   f"bandwidth,")
+        out.append(f"    {'':24s} measured {cals[slug].checked_on}); "
+                   f"{len(vals)} report(s) stamp {seen}")
+    for label, rows in (("STILL CARRYING THE SWEPT RIDGE", census["still_swept"]),
+                        ("STAMPING A RIDGE THEIR OWN CARD DOES NOT GIVE",
+                         census["strangers"]),
+                        ("NAMING NO CALIBRATED CARD", census["unattributed"])):
+        if rows:
+            out.append(f"    {label}, {len(rows)}:")
+            out += [f"      {r}" for r in rows]
+    if not (census["still_swept"] or census["strangers"] or census["unattributed"]):
+        out.append("    No report carries the swept ridge, a stranger ridge, or "
+                   "an unattributable card.")
+    out.append("  C3 uses each card's OWN contemporaneous calibration and never "
+               "a report's stamp.")
+    return out
+
+
+# --------------------------------------------------------------------------
 # Reading the committed reports.
 # --------------------------------------------------------------------------
 
@@ -734,6 +907,16 @@ class ScoredFit:
     physical_vs_pin: bool
     ridge: float
     cap_over_ridge_at_lo: float
+    #: `Act1 / W` for this cell: what one M-tile costs in activations and output,
+    #: in units of one full weight read. Carried per fit because it is the whole
+    #: difference between the two cap columns and it depends on the model and the
+    #: tile, so a single number could not stand for it.
+    phi: float
+    #: The RETRACTED `2 BM / (b alpha_lo)` over the same ridge. Kept beside the
+    #: corrected column so the size of the correction is on the page. Where this
+    #: is above 1.0 and `cap_over_ridge_at_lo` is below it, a published cap
+    #: cleared a ridge that the corrected one does not.
+    lin_over_ridge_at_lo: float
     residuals: list[tuple[int, float]] = field(default_factory=list)
 
 
@@ -861,6 +1044,8 @@ def score_report(path: Path, cal: Calibration) -> tuple[list[ScoredFit], list[Re
             physical_vs_pin=bw_pub <= cal.pin_gbps,
             ridge=cal.ridge,
             cap_over_ridge_at_lo=br.ai_cap(dtype_bytes(dtype), br.lo) / cal.ridge,
+            phi=br.phi,
+            lin_over_ridge_at_lo=br.lin_cap(dtype_bytes(dtype), br.lo) / cal.ridge,
             residuals=residual_profile(prefix, a_full, b_full),
         ))
     return fits, refusals
@@ -1196,11 +1381,26 @@ def gate_c3_tile_cap(fits) -> Gate:
     kernel has of reaching its compute roof. If it still cannot at alpha_lo, the
     anchor ambiguity does not touch the claim.
 
-    Scored against each card's OWN ridge, not the 160.3 stamped on every report,
-    and with the cap formula `moe/bench/ai_model.py` corrected -- which agrees
-    with `2 BM / (b alpha)` once the alpha is the fitted composite, and which
-    this gate over-states anyway because the activation term is subtracted from
-    that alpha. Both errors run toward a PASS being harder to earn.
+    Scored against each card's OWN ridge -- the reports' own stamp is reported
+    by the census above, never used here -- and through the CORRECTED cap.
+
+    THE CAP THIS GATE USED TO SCORE WAS THE RETRACTED ONE. Until 2026-09-02 this
+    docstring said the study's `2 BM / (b alpha)` "agrees with" the corrected
+    formula "once the alpha is the fitted composite". It does not.
+    `moe/bench/ai_model.py` shows a `B / (A + B)` fit returns
+    `(alpha_b + phi) / (1 + phi + delta)`, so a cap read off one is high by
+    `ai_model.lin_overstatement`, and a cap read off a bracket end -- which is
+    an alpha_b, with `Act1` already subtracted -- is high by
+    `(alpha_b + phi) / alpha_b`, which is larger. `Bracket.ai_cap` now goes
+    through `ai_model.cap_from_fitted`; `lin_over_ridge_at_lo` keeps the
+    retracted number beside it, and the detail lines print both so a reader can
+    see how much of this verdict is the correction and how much is the data.
+
+    ONE CONSERVATISM SURVIVES and it is the one that matters: the cap is taken
+    at the bracket's LOW alpha, the LARGEST ceiling the anchor ambiguity allows,
+    so a tile that still cannot reach the ridge there was not pushed under the
+    line by the anchor. The second conservatism this docstring claimed was the
+    retracted reading itself.
     """
     small = [f for f in fits if f.block_m <= 64]
     if not small:
@@ -1209,9 +1409,11 @@ def gate_c3_tile_cap(fits) -> Gate:
                     "the study's one surviving result, which cannot be checked here")
     worst = max(small, key=lambda f: f.cap_over_ridge_at_lo)
     ok = worst.cap_over_ridge_at_lo < 1.0
-    by_bm = {}
+    by_bm: dict[int, list[float]] = {}
+    lin_by_bm: dict[int, list[float]] = {}
     for f in small:
         by_bm.setdefault(f.block_m, []).append(f.cap_over_ridge_at_lo)
+        lin_by_bm.setdefault(f.block_m, []).append(f.lin_over_ridge_at_lo)
     return Gate(
         "C3", CLAIM, "at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge",
         PASS if ok else FAIL,
@@ -1220,7 +1422,9 @@ def gate_c3_tile_cap(fits) -> Gate:
         "< 1.000 for every BLOCK_M <= 64 fit",
         "the one finding that survived the adversarial evaluation. A FAIL here "
         "means the cap was an artefact of the anchor and not a property of the tile.",
-        [f"  BM={bm:3d}  cap/ridge in [{min(v):.3f}, {max(v):.3f}] over {len(v)} fits"
+        [f"  BM={bm:3d}  cap/ridge in [{min(v):.3f}, {max(v):.3f}] over {len(v)} "
+         f"fits; the RETRACTED 2BM/(b alpha) reads "
+         f"[{min(lin_by_bm[bm]):.3f}, {max(lin_by_bm[bm]):.3f}]"
          for bm, v in sorted(by_bm.items())])
 
 
@@ -1398,6 +1602,31 @@ def report_output_paths(out_dir: Path, lines: list[str], payload: dict) -> list[
     function guarantees is that the operator is TOLD which of the two they got,
     because the failure it is named against is a tracked file rewritten by a
     command nobody thought was a write.
+
+    HOW THE COMMITTED PAIR IS MEANT TO BE REGENERATED, because the JSON stamps
+    the tree it was written from and a stamp naming no committed state is worth
+    nothing:
+
+        git status --porcelain            # must be EMPTY before the run
+        .venv/bin/python scripts/memory_branch_anchor.py --rescore --publish
+        git add results/published/ANCHOR_RESCORE.txt results/published/ANCHOR_RESCORE.json
+
+    RUN IT ON A CLEAN TREE, ALWAYS. The published JSON carried
+    `git_dirty: true, git_dirty_files: 2` for one commit, at a `git_sha` two
+    commits behind the branch tip, so it named neither the tree it came from
+    nor any tree in the history. Regenerating from a clean checkout fixes the
+    dirty flag; nothing fixes the SHA lag, because a file cannot contain the
+    hash of the commit that carries it. The lag is one commit and the stamped
+    SHA is the PARENT of the commit that carries the pair, which is a real
+    ancestor a reader can check out.
+
+    WHAT MAKES THE LAG HARMLESS is that the content does not depend on it.
+    `--rescore` reads only the committed reports and the committed
+    calibrations, so a re-run at any later HEAD whose analysis code is
+    unchanged reproduces this pair byte for byte apart from `git_sha`,
+    `git_dirty*` and `utc`. That is the check to run when the stamp looks stale:
+    re-run into a scratch `--out-dir` and diff, rather than trusting or
+    distrusting the SHA alone.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     txt = out_dir / f"{RESCORE_STEM}.txt"
@@ -1427,11 +1656,16 @@ def render_fit_table(fits: list[ScoredFit]) -> list[str]:
         "anchor tread.",
         "elev is how far the measured n=1 tread stands above the fitted branch, "
         "as a fraction of itself.",
+        "cap/ridge is 2BM/(b (alpha_lo + phi)) over the card's own ridge; "
+        "lin/ridge is the RETRACTED",
+        "2BM/(b alpha_lo) over the same ridge, printed so the correction's size "
+        "is on the page.",
         "",
         f"  {'card':6s} {'model':10s} {'G':>3s} {'BN':>4s} {'st':>3s} {'BM':>4s} "
         f"{'a_pub':>6s} {'lo':>6s} {'hi':>6s} {'hi@pin':>7s} {'elev':>7s} "
-        f"{'BW_pub':>7s} {'BW_1':>6s} {'in?':>4s} {'cap/ridge':>9s}",
-        "  " + "-" * 108,
+        f"{'BW_pub':>7s} {'BW_1':>6s} {'in?':>4s} {'cap/ridge':>9s} "
+        f"{'lin/ridge':>9s}",
+        "  " + "-" * 118,
     ]
     for f in sorted(fits, key=lambda f: (f.card, f.arm, f.model, f.group_m, f.block_m)):
         flag = "in" if f.contains_published_corrected else "OUT"
@@ -1447,7 +1681,8 @@ def render_fit_table(fits: list[ScoredFit]) -> list[str]:
             f"{f.num_stages:3d} {f.block_m:4d} {f.alpha_published_corrected:6.3f} "
             f"{f.alpha_lo:6.3f} {f.alpha_hi:6.3f} {f.alpha_hi_pin:7.3f} "
             f"{f.anchor_elevation:+7.1%} {f.bw_published_gbps:7.0f} "
-            f"{f.bw_anchor_gbps:6.0f} {flag:>4s} {f.cap_over_ridge_at_lo:9.3f}"
+            f"{f.bw_anchor_gbps:6.0f} {flag:>4s} {f.cap_over_ridge_at_lo:9.3f} "
+            f"{f.lin_over_ridge_at_lo:9.3f}"
             + ("  " + " ".join(marks) if marks else ""))
     return out
 
@@ -1562,8 +1797,12 @@ def render_withdrawals(fits: list[ScoredFit], gates: list[Gate]) -> list[str]:
         out += ["",
                 "NOT WITHDRAWN. The BLOCK_M <= 64 arithmetic-intensity cap survives. "
                 "It is scored at the bracket's most generous alpha, which is the "
-                "best case for a small tile reaching its roof, and it still caps "
-                "below the ridge on every fit."]
+                "best case for a small tile reaching its roof, and through the "
+                "CORRECTED cap 2BM/(b (alpha_b + phi)) rather than the retracted "
+                "2BM/(b alpha), and it still caps below the ridge on every fit. "
+                "The correction moves this verdict the SAFE way: it lowers every "
+                "cap, so the claim is easier to keep than it was, and the "
+                "lin/ridge column says by how much."]
     if n == 0:
         out += ["", "None. Every claim gate passed."]
     return out
@@ -1629,19 +1868,8 @@ def run_rescore(args) -> int:
     for slug in sorted(cals):
         say(f"  {cals[slug].describe()}")
     say("")
-    say("  RIDGE PROVENANCE, because C3 is scored against it. Every one of these")
-    say("  reports carries ridge=160.3 and ridge_band=[160.3, 176.2], because the")
-    say("  sweep's --ridge defaults to RIDGE_BAND[0] and the cross-card driver")
-    say("  never passes it. 160.3 is a stale H200 band and belongs to NEITHER")
-    say("  card. C3 uses each card's OWN contemporaneous calibration instead:")
-    for slug in sorted(cals):
-        c = cals[slug]
-        peak = c.dense_tflops.get("bf16", max(c.dense_tflops.values()))
-        say(f"    {slug:24s} ridge {c.ridge:6.2f} FLOP/byte  "
-            f"(dense {peak:.2f} TFLOP/s over its own triad bandwidth, "
-            f"measured {c.checked_on})")
-    say("  The default itself belongs to another workflow's lane and is reported,")
-    say("  not edited, here.")
+    for line in render_ridge_census(ridge_census(args.published, cals), cals):
+        say(line)
     say("")
     if refusals:
         say(f"REFUSED, {len(refusals)} fit(s) -- listed, never defaulted to a number")
@@ -2023,6 +2251,11 @@ class MeasuredFit:
     alpha_hi: float
     alpha_hi_pin: float
     cap_over_ridge_at_lo: float
+    #: The same two extra columns `ScoredFit` carries, and for the same reason:
+    #: a measured cap printed without the factor it used to be high by is a
+    #: number a reader cannot compare with the published one.
+    phi: float
+    lin_over_ridge_at_lo: float
     residuals: list[tuple[int, float]] = field(default_factory=list)
 
 
@@ -2071,6 +2304,8 @@ def fits_from_cells(cells, cfg, model_dtype: str, block_n: int,
             anchor_rate_of_pin=br.bw_anchor_gbps / cal.pin_gbps,
             alpha_lo=br.lo, alpha_hi=br.hi, alpha_hi_pin=br.hi_pin,
             cap_over_ridge_at_lo=br.ai_cap(dtype_bytes(model_dtype), br.lo) / cal.ridge,
+            phi=br.phi,
+            lin_over_ridge_at_lo=br.lin_cap(dtype_bytes(model_dtype), br.lo) / cal.ridge,
             residuals=residual_profile(allpts, a_free, b_free)))
     return fits, refusals
 
@@ -2317,14 +2552,15 @@ def render_measured_table(fits: list[MeasuredFit]) -> list[str]:
            "",
            f"  {'BM':>4s} {'G':>4s} {'t(1) ms':>9s} {'B ms':>8s} {'dB':>6s} "
            f"{'BW_1':>7s} {'%pin':>6s} {'alpha_lo':>8s} {'alpha_hi':>8s} "
-           f"{'cap/ridge':>9s}",
-           "  " + "-" * 82]
+           f"{'cap/ridge':>9s} {'lin/ridge':>9s}",
+           "  " + "-" * 92]
     for f in sorted(fits, key=lambda f: (f.block_m, f.group_m)):
         out.append(f"  {f.block_m:4d} {f.group_m:4d} {f.anchor_ms:9.4f} "
                    f"{f.slope_no_anchor:8.4f} {f.slope_shift:6.2%} "
                    f"{f.bw_anchor_gbps:7.0f} {f.anchor_rate_of_pin:6.1%} "
                    f"{f.alpha_lo:8.3f} {f.alpha_hi:8.3f} "
-                   f"{f.cap_over_ridge_at_lo:9.3f}")
+                   f"{f.cap_over_ridge_at_lo:9.3f} "
+                   f"{f.lin_over_ridge_at_lo:9.3f}")
     return out
 
 
