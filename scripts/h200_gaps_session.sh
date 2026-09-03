@@ -6,7 +6,12 @@
 #                                                   # own plan, its cost, the MDE
 #   bash scripts/h200_gaps_session.sh               # the pod run, ~3.4 hours
 #   bash scripts/h200_gaps_session.sh --list        # the arms and what each closes
-#   bash scripts/h200_gaps_session.sh --only roofline-n256-g16,noise_floor
+#   bash scripts/h200_gaps_session.sh --only calibrate,roofline-n256-g16,noise_floor
+#                                                   # a subset. calibrate belongs
+#                                                   # in EVERY subset: the ruler
+#                                                   # gate below is not scoped to
+#                                                   # --only, because nothing that
+#                                                   # measures is either.
 #
 # WHAT THIS FILE IS. A schedule and a ledger. It measures nothing itself: every
 # number comes from the script an arm runs, and every verdict comes from that
@@ -84,10 +89,15 @@
 #     constant from another machine presented as a measurement", recreated by
 #     the fix for a different one, and the closing `git diff --stat
 #     moe/bench/hardware/` would have shown zero changes and read as agreement.
-#     The flag is passed now, and `calibration_state` REFUSES the rest of the
-#     session unless the tracked yaml for this card carries a provenance.utc at
-#     or after this session's own start. The committed H200 yaml carries no
-#     provenance block at all, so it reads UNDATED and does not pass.
+#     The flag is passed now, and the gate that follows arm 0 REFUSES the rest
+#     of the session unless BOTH halves answer: the tracked yaml for this card
+#     carries a provenance.utc at or after this session's own start, AND the
+#     calibrate row in this session's ledger reads DONE. The second half is not
+#     redundant -- calibrate_hardware.py publishes the yaml BEFORE it scores a
+#     gate, so a run that lands INVALID on clock_established leaves a
+#     fresh-stamped ruler nothing verified behind it, and the first version of
+#     this gate read that as "measured in THIS session". The committed H200 yaml
+#     carries no provenance block at all, so it reads UNDATED and does not pass.
 #   * THE TWO SPAN ARMS DERIVED ONE RUN ID. --densify became the default while
 #     the driver still booked `span_dense` with it and `span` bare, so both
 #     densified, both hashed to the same plan, and the second restored the
@@ -580,6 +590,104 @@ calibration_state() {
   if (( 10#$stamp >= 10#$since )); then echo PUBLISHED; else echo STALE; fi
 }
 
+# THE CALIBRATION GATE'S DECISION, from the two words that answer its two
+# questions, in ONE place so that the session and its test read the same rule.
+# Prints the half that failed and the word that failed it -- "ARM INVALID",
+# "YAML STALE" -- or OK, and returns non-zero on anything but OK. A missing
+# calibrate row prints ARM NO_ROW rather than ARM, because an empty word in a
+# refusal reads as a bug in the refusal.
+#
+# WHY THE ARM HALF COMES FIRST. When --only leaves arm 0 out, the yaml half
+# reports on a file this session never touched, and its answer (UNDATED, on the
+# committed H200 ruler) names the wrong problem. The arm half names --only.
+calibration_verdict() {
+  local row="$1" state="$2"
+  [[ "$row" == DONE ]]      || { echo "ARM ${row:-NO_ROW}"; return 1; }
+  [[ "$state" == PUBLISHED ]] || { echo "YAML $state";      return 1; }
+  echo OK
+}
+
+# THE REFUSAL ITSELF, for whichever half of the gate failed, as a function so
+# that the WORDS can be planted and read in a test. A refusal that names the
+# wrong cause costs the operator the same hour as no refusal at all: the first
+# version of this gate had only the yaml half, so a session run with --only
+# would have been told its committed ruler was UNDATED when what actually
+# happened is that arm 0 was never scheduled.
+calibration_refusal() {
+  local verdict="$1" card="$2" yaml="$3" state="$4" word="${1#* }"
+  case "${verdict%% *}" in
+   ARM)
+    echo "REFUSED: arm 0 did not stand behind a ruler for $card."
+    echo "  calibrate is '$word' in $LEDGER; $yaml is $state."
+    case "$word" in
+      NO_ROW)     if [[ -n "$ONLY" ]]; then
+                    echo "  No calibrate row at all: --only $ONLY left arm 0 out, and this"
+                    echo "  gate is deliberately NOT scoped to --only. Name calibrate in it,"
+                    echo "  first:"
+                    echo "      bash scripts/h200_gaps_session.sh --only calibrate,$ONLY"
+                  else
+                    echo "  No calibrate row at all, and no --only to explain it: arm 0 did"
+                    echo "  not run in this session directory. Read $LEDGER."
+                  fi ;;
+      INVALID)    echo "  It MEASURED and then failed a VALIDITY gate, and it published the"
+                  echo "  yaml before scoring one. A clock that could not be established"
+                  echo "  makes every number normalised by it unquotable, including the"
+                  echo "  ridge every arm below would divide by." ;;
+      CLAIM_FAIL) echo "  It measured and a CLAIM gate failed: no access pattern reached the"
+                  echo "  pin rate, which is this instrument saying its own byte accounting"
+                  echo "  is wrong. The yaml it published carries that accounting." ;;
+      REFUSED)    echo "  It refused before measuring, so the yaml on disk is some earlier"
+                  echo "  run's however fresh its stamp reads." ;;
+      UNKNOWN)    echo "  It exited 1 from a file this driver could not confirm speaks"
+                  echo "  moe/bench/exit_codes, so the driver will not read DONE, CLAIM_FAIL"
+                  echo "  or a crash out of it. Read the log and decide by hand." ;;
+      *)          echo "  That is not DONE, and DONE is the only state in which this"
+                  echo "  instrument stands behind what it wrote." ;;
+    esac
+    ruler_stakes
+    echo "  Read $LOGS/calibrate.log where there is one, fix what it names, and"
+    echo "  re-run arm 0:"
+    echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
+    echo "  A CLAIM_FAIL or INVALID row is LATCHED and will not be re-attempted:"
+    echo "  delete its row from $LEDGER to force one." ;;
+   YAML)
+    echo "REFUSED: this session has no calibration of its own for $card."
+    echo "  calibrate is DONE in $LEDGER but $yaml is $state."
+    case "$word" in
+      MISSING)     echo "  Nothing is there. A DONE arm 0 that wrote no tracked file was run"
+                   echo "  without --publish: its ruler is in the session path nothing reads." ;;
+      UNDATED)     echo "  It is there and carries no provenance.utc, so it cannot say which"
+                   echo "  rental measured it. 'Cannot say' is not 'this one'." ;;
+      STALE)       echo "  It was measured before this session began, so it is a PREVIOUS"
+                   echo "  rental's ridge sitting in this checkout." ;;
+      NO_BASELINE) echo "  This driver could not stamp its own start, so it cannot say which"
+                   echo "  side of it that file is on. Unset SESSION and take the default." ;;
+      *)           echo "  That is not PUBLISHED, and PUBLISHED is the only state in which"
+                   echo "  that file is this session's own." ;;
+    esac
+    ruler_stakes
+    echo "  Run arm 0 and let it publish:"
+    echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
+    echo "  then re-run this session; finished arms in $LEDGER are skipped." ;;
+   *)
+    # A word neither half issues. There is no safe default here: the two states
+    # this gate decides between are "this card's ruler" and "another machine's",
+    # and guessing either is the defect it exists to prevent.
+    echo "REFUSED: calibration_verdict said '$verdict', which this refusal does"
+    echo "  not know how to read. Row and yaml state are in $LEDGER and $yaml." ;;
+  esac
+}
+
+# WHAT A WRONG RULER COSTS, in the words both halves of the calibration gate
+# need. Factored so the two refusals cannot drift into saying different things
+# about the same consequence.
+ruler_stakes() {
+  echo "  Every arm below resolves its ridge through roofline.load_measured(),"
+  echo "  labels it 'measured on this machine', and would score this card's"
+  echo "  roof fractions, LEVEL flags and alphas against another machine's"
+  echo "  ceilings. The H200's dense bf16 moved 7.1% between two sessions."
+}
+
 # DID THIS --dry-run PRINT A PLAN BEFORE IT REFUSED. rc 0 it did, rc 1 it did
 # not, and there is no third answer because the question is about the log.
 #
@@ -606,6 +714,21 @@ wanted() {
   [[ -z "$ONLY" ]] && return 0
   case ",$ONLY," in (*",$1,"*) return 0 ;; esac
   return 1
+}
+
+# WHAT THIS SESSION'S LEDGER HOLDS FOR ONE ARM, last row wins, empty when the
+# arm has no row at all. It exists because a FILE landing on disk is not the
+# same event as the ARM that wrote it standing behind what it wrote:
+# calibrate_hardware.py copies the yaml into the tracked tree BEFORE it scores
+# a single gate, and says so in its own --help ("A calibration whose clock
+# could not be established is INVALID rather than DONE ... the yaml is still
+# written"). So a calibrate that fails VALIDITY clock_established, or the pin
+# rate gate, still leaves a fresh-stamped ruler behind it, and a gate that asks
+# only WHEN the file was written reads that as this session's own. Asking the
+# ledger asks the second question: did the instrument that wrote it pass its
+# own gates. Nothing here decides an arm's state; `ledger_state` still does.
+ledger_arm_state() {
+  awk -F'\t' -v a="$1" '$1 == a { s = $2 } END { print s }' "$LEDGER" 2>/dev/null
 }
 
 # THE ONE LINE THE SUMMARY MAY GREP. Anchored at column zero on the prefix
@@ -1086,40 +1209,47 @@ else
   # sweep". The flag dirties a TRACKED file, which is the cost the A6 fix was
   # avoiding, and that cost is disclosed below rather than paid silently.
   arm calibrate "$PY_BASE" "$REPO/scripts/calibrate_hardware.py" --publish
-  # AND THE GATE, because passing the flag is not the same as the file landing.
-  # It can be MISSING (calibrate refused, or --only left it out), UNDATED (the
-  # committed H200 yaml, which carries no provenance block at all) or STALE (the
-  # previous rental's). Each of the three means the same thing to every arm
-  # below: the ruler is not this card's, so nothing measured against it is this
-  # card's either. The session stops here, where three minutes were spent,
-  # instead of at the end, where 3.4 hours were.
+  # AND THE GATE, in TWO questions, because passing the flag is not the same as
+  # the file landing and the file landing is not the same as the file being a
+  # ruler.
+  #
+  # WHEN was it written. `calibration_state` answers MISSING (calibrate refused
+  # before it wrote anything), UNDATED (the committed H200 yaml, which carries
+  # no provenance block at all) or STALE (the previous rental's). Each of the
+  # three means the same thing to every arm below: the ruler is not this card's,
+  # so nothing measured against it is this card's either.
+  #
+  # DID THE ARM THAT WROTE IT PASS ITS OWN GATES. `calibration_state` cannot
+  # answer that and a fresh stamp is not the answer: calibrate_hardware.py
+  # copies the yaml into the tracked tree BEFORE it scores anything, so a run
+  # that lands INVALID on VALIDITY clock_established -- "the samples disagree
+  # with the settle plateau; nothing normalised by the clock may be quoted" --
+  # or CLAIM_FAIL on the pin rate has still published a fresh-stamped ruler.
+  # Asking WHEN alone, this gate printed "measured in THIS session" over a file
+  # arm 0 itself refused to stand behind, and 3.4 hours of arms scored every
+  # roof fraction, LEVEL flag and alpha against it while `ridge_source` named
+  # the attached device. So the ledger row is the second question, and both
+  # must answer: DONE, and PUBLISHED.
+  #
+  # THE GATE IS NOT SCOPED TO --only. `arm calibrate` above returns early when
+  # --only names other arms, and this does not, because every arm resolves its
+  # ridge through roofline.load_measured() no matter which subset was asked for.
+  # A resume into the SAME session directory still passes without re-measuring:
+  # the ledger is that directory's, so the first pass's DONE row is still there.
+  # The session stops here, where three minutes were spent, instead of at the
+  # end, where 3.4 hours were.
   CALIB_STATE="$(calibration_state "$CALIB_YAML" "$SESSION_SINCE")"
-  if [[ "$CALIB_STATE" == "PUBLISHED" ]]; then
-    note "   ruler     $CALIB_YAML, measured in THIS session"
+  CALIB_ROW="$(ledger_arm_state calibrate)"
+  CALIB_VERDICT="$(calibration_verdict "$CALIB_ROW" "$CALIB_STATE")"
+  if [[ "$CALIB_VERDICT" == "OK" ]]; then
+    note "   ruler     $CALIB_YAML, measured in THIS session by an arm that"
+    note "             passed its own gates (calibrate DONE in $LEDGER)."
     note "   It is TRACKED and now dirty, so every row measured below carries"
     note "   git_dirty=True until it is committed. Commit it from another shell"
     note "   before quoting any number that names a commit."
   else
     echo
-    echo "REFUSED: this session has no calibration of its own for $CARD."
-    echo "  $CALIB_YAML is $CALIB_STATE."
-    case "$CALIB_STATE" in
-      MISSING)     echo "  Nothing is there. Read $LOGS/calibrate.log: arm 0 either refused"
-                   echo "  or was left out by --only." ;;
-      UNDATED)     echo "  It is there and carries no provenance.utc, so it cannot say which"
-                   echo "  rental measured it. 'Cannot say' is not 'this one'." ;;
-      STALE)       echo "  It was measured before this session began, so it is a PREVIOUS"
-                   echo "  rental's ridge sitting in this checkout." ;;
-      NO_BASELINE) echo "  This driver could not stamp its own start, so it cannot say which"
-                   echo "  side of it that file is on. Unset SESSION and take the default." ;;
-    esac
-    echo "  Every arm below resolves its ridge through roofline.load_measured(),"
-    echo "  labels it 'measured on this machine', and would score this card's"
-    echo "  roof fractions, LEVEL flags and alphas against another machine's"
-    echo "  ceilings. The H200's dense bf16 moved 7.1% between two sessions."
-    echo "  Run arm 0 and let it publish:"
-    echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
-    echo "  then re-run this session; finished arms in $LEDGER are skipped."
+    calibration_refusal "$CALIB_VERDICT" "$CARD" "$CALIB_YAML" "$CALIB_STATE"
     exit "$RC_REFUSED"
   fi
 fi

@@ -1241,13 +1241,132 @@ def test_the_session_publishes_the_calibration_it_measures():
     fix for a different one."""
     assert 'scripts/calibrate_hardware.py" --publish' in CODE
     assert "--publish IS THE ARM" in TEXT
-    # And the gate that follows it, with a stop that is not advice.
+    # And the gate that follows it, with a stop that is not advice. It asks BOTH
+    # questions: when the file was written, and whether the arm that wrote it
+    # passed its own gates. OK is the only word that proceeds.
     gate = CODE.split('scripts/calibrate_hardware.py" --publish', 1)[1] \
                .split("\nsay ", 1)[0]
     assert 'CALIB_STATE="$(calibration_state "$CALIB_YAML" "$SESSION_SINCE")"' in gate
+    assert 'CALIB_ROW="$(ledger_arm_state calibrate)"' in gate
+    assert 'CALIB_VERDICT="$(calibration_verdict "$CALIB_ROW" "$CALIB_STATE")"' in gate
+    assert '[[ "$CALIB_VERDICT" == "OK" ]]' in gate
     assert 'exit "$RC_REFUSED"' in gate
+    # and the four yaml states are still named, now by the refusal it calls.
+    refusal = CODE.split("calibration_refusal() {", 1)[1].split("\n}\n", 1)[0]
     for word in ("MISSING", "UNDATED", "STALE", "NO_BASELINE"):
-        assert word in gate, word
+        assert word in refusal, word
+
+
+def test_a_fresh_stamp_is_not_a_ruler_the_arm_stood_behind(tmp_path):
+    """THE DEFECT THE FIX INTRODUCED, planted through `arm()`. The first version
+    of this gate asked only WHEN the tracked yaml was measured, and
+    calibrate_hardware.py copies that yaml into the tree at :683 BEFORE it
+    scores a gate at :712 -- its own --help says so: "A calibration whose clock
+    could not be established is INVALID rather than DONE ... the yaml is still
+    written". So a calibrate that fails VALIDITY clock_established ("the samples
+    disagree with the settle plateau; nothing normalised by the clock may be
+    quoted") published a fresh-stamped ruler, calibration_state said PUBLISHED,
+    the gate printed "measured in THIS session", and 3.4 hours of arms scored
+    every roof fraction, LEVEL flag and alpha against a ruler arm 0 itself
+    refused to stand behind. Worse on a resume: INVALID is LATCHED, so the bad
+    calibrate is never re-run and the gate keeps saying PUBLISHED.
+
+    The stand-in publishes and then exits 3, exactly as the real script does."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
+    yaml.parent.mkdir(parents=True)
+    fake = repo / "scripts" / "calibrate_hardware.py"
+    fake.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -uo pipefail\n"
+        f'printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
+        '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > '
+        f'"{yaml}"\n'
+        f'echo "[calibrate] PUBLISHED to {yaml}"\n'
+        "echo 'RESULT: VALIDITY clock_established FAIL samples disagree with the plateau'\n"
+        "exit 3\n")
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
+               f'arm calibrate bash {fake} --publish >/dev/null\n'
+               'ROW="$(ledger_arm_state calibrate)"\n'
+               f'STATE="$(calibration_state {yaml} "$SESSION_SINCE")"\n'
+               'echo "row=$ROW state=$STATE"\n'
+               'calibration_verdict "$ROW" "$STATE"; echo "rc=$?"',
+               REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.strip().splitlines()
+    # The yaml IS this session's by date, and the arm is still not one to trust.
+    assert lines[-3] == "row=INVALID state=PUBLISHED", got.stdout
+    assert lines[-2] == "ARM INVALID", got.stdout
+    assert lines[-1] == "rc=1", got.stdout
+
+
+@pytest.mark.parametrize("row,state,verdict,rc", [
+    ("DONE", "PUBLISHED", "OK", 0),
+    ("DONE", "STALE", "YAML STALE", 1),
+    ("DONE", "UNDATED", "YAML UNDATED", 1),
+    ("DONE", "MISSING", "YAML MISSING", 1),
+    ("INVALID", "PUBLISHED", "ARM INVALID", 1),
+    ("CLAIM_FAIL", "PUBLISHED", "ARM CLAIM_FAIL", 1),
+    ("REFUSED", "PUBLISHED", "ARM REFUSED", 1),
+    ("UNKNOWN", "PUBLISHED", "ARM UNKNOWN", 1),
+    ("", "PUBLISHED", "ARM NO_ROW", 1),
+    ("", "UNDATED", "ARM NO_ROW", 1),
+])
+def test_one_pair_of_words_proceeds_and_every_other_pair_refuses(row, state, verdict, rc):
+    """BOTH HALVES, AND THE FAIL BRANCH OF EACH. DONE alone is a run that wrote
+    a ruler somewhere; PUBLISHED alone is a file of unknown standing. Only the
+    pair means "this card's ruler, from an instrument that passed its own
+    gates". The empty row prints NO_ROW rather than nothing, because an empty
+    word inside a refusal reads as a bug in the refusal."""
+    got = lift(f'calibration_verdict {row!r} {state!r}; echo "rc=$?"', REPO=str(ROOT))
+    assert got.stdout.split("\n")[0] == verdict, got.stdout
+    assert got.stdout.strip().splitlines()[-1] == f"rc={rc}", got.stdout
+
+
+def test_the_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(tmp_path):
+    """THE GATE IS UNCONDITIONAL AND ARM 0 IS NOT. `arm calibrate` returns early
+    through `wanted` when --only names other arms, while the gate runs anyway,
+    because every arm resolves its ridge through roofline.load_measured() no
+    matter which subset was asked for. The cost of keeping it unconditional is
+    that the file's own documented invocation must name calibrate, so it does,
+    and the refusal an operator will actually see says which flag left arm 0
+    out instead of reporting UNDATED on a file this session never touched."""
+    assert "--only calibrate,roofline-n256-g16,noise_floor" in TEXT
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('V="$(calibration_verdict "$(ledger_arm_state calibrate)" UNDATED)"\n'
+               'echo "$V"\n'
+               'calibration_refusal "$V" testcard /nowhere/measured_testcard.yaml UNDATED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="occupancy",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines()[0] == "ARM NO_ROW", got.stdout
+    assert "--only occupancy left arm 0 out" in got.stdout, got.stdout
+    assert "--only calibrate,occupancy" in got.stdout, got.stdout
+    # and a session with no --only is not told to blame one.
+    alone = lift('calibration_refusal "ARM NO_ROW" testcard /nowhere/y.yaml UNDATED',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert "left arm 0 out" not in alone.stdout, alone.stdout
+    assert "no --only to explain it" in alone.stdout, alone.stdout
+
+
+def test_a_refusal_this_gate_cannot_read_refuses_rather_than_proceeding():
+    """REFUSE RATHER THAN DEFAULT, over the one input neither half issues. A
+    verdict word this refusal does not know is a bug in the gate, and the two
+    states it decides between are "this card's ruler" and "another machine's",
+    so there is no side to guess."""
+    got = lift('calibration_refusal "SOMETHING_ELSE" testcard /nowhere/y.yaml UNDATED',
+               REPO=str(ROOT), LEDGER="/nowhere/ARMS.tsv", LOGS="/nowhere", ONLY="",
+               PY_BASE="/usr/bin/python3", SESSION_SINCE="20260902134501")
+    assert got.stdout.startswith("REFUSED:"), got.stdout
+    assert "SOMETHING_ELSE" in got.stdout
 
 
 @pytest.mark.parametrize("state,utc", [
