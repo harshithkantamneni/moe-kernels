@@ -7,7 +7,10 @@ estimator or a ladder, so most of this file is about the two things that CAN
 still go wrong: the denominator belonging to another machine, and a derivative
 read off noise.
 
-TEN GROUPS. The last four were added on 2026-09-02, one per audit finding.
+TWELVE GROUPS. Four were added on 2026-09-02, one per audit finding, R5 on
+2026-09-03 when the production arms turned out to be unrunnable, and R6 later
+the same day when a re-run of every arm found that R5's own page argued with
+itself and that its verdict never reached a line a driver reads.
 
   - THE GEOMETRY. Multi-tile onset is `T > BLOCK_M E / k`, computed per model and
     never hardcoded; the grid is a chain of doublings or it is refused, because
@@ -47,6 +50,27 @@ TEN GROUPS. The last four were added on 2026-09-02, one per audit finding.
     runs a dense GEMM at 1515, so a post-synchronise sample compared with the
     roof's clock was comparing two operating points through a number measured at
     neither.
+  - R5, THE CONTROL THAT DOES NOT EXIST. At BLOCK_SIZE_N=256 no tile above the
+    subject can be pinned: a 256x256 fp32 accumulator is the whole per-block
+    register file at every warp count, which the sweep's PER-THREAD bill stops
+    seeing above 8 warps, so the file that recommended --num-warps 16 was
+    recommending a kernel no card can run. Each escape is refused on its own
+    arithmetic -- stages are not the accumulator, warps divide it rather than
+    shrink it, and a control at its own BLOCK_SIZE_N has EXACTLY the subject's
+    cap because `ai_model.cap` is symmetric in the two tile dimensions. What
+    survives is `--control none`, which can refute this study's headline and can
+    never confirm it, and both directions of that are planted.
+  - R6, WHAT R5 GOT WRONG, found by re-running every arm the way the session
+    driver invokes it. The UNCONTROLLED verdict reached no `RESULT: ` line, so
+    the arm the driver calls the claim exited 0 DONE with six PASSes; the
+    control search priced its candidates with the scalar cap the same printed
+    page called the trap, overstating the production tile by 3.7x; the finding
+    naming BLOCK_SIZE_N=256 was printed at every BLOCK_SIZE_N, including one
+    where a control fits; the escape it recommended is pre-registered to fail
+    the gate that would confirm the claim; and the controlled arms' run id moved
+    with nothing about them changing. The honest statement is stronger than the
+    one R5 wrote: no arm reaches CEILING BINDING at ANY BLOCK_SIZE_N on sm_90,
+    and that is computed here over 56 tiles rather than argued.
   - R4, THE APPARATUS. Every KernelTiming column reaches the cells and the
     figure, the provenance block reaches the report, the run id comes from the
     shared builder, the exit code comes from the shared table, every gate prints
@@ -442,28 +466,211 @@ def test_the_roof_is_the_measured_rate_and_not_the_datasheet(rf, roof):
 # The control.
 # --------------------------------------------------------------------------
 
-def test_the_subject_may_not_be_its_own_control(rf):
-    why = rf.check_control(rf.SUBJECT_BLOCK_M, 0.558, 162.8, 2)
-    assert "is the SUBJECT" in why
+def _check(rf, cfg, control, *, block_n=64, alpha=0.558, ridge=162.8, fits=()):
+    return rf.check_control(cfg, control, alpha, ridge, 2, block_n=block_n,
+                            fits=list(fits))
 
 
-def test_a_control_with_less_headroom_than_the_subject_is_refused(rf):
-    assert "below the subject" in rf.check_control(64, 0.558, 162.8, 2)
+def test_the_subject_may_not_be_its_own_control(rf, cfg):
+    assert "is the SUBJECT" in _check(rf, cfg, rf.SUBJECT_BLOCK_M)
 
 
-def test_a_control_whose_own_cap_binds_is_refused(rf):
-    """A control whose ceiling is part of the argument settles nothing."""
-    why = rf.check_control(256, 3.0, 162.8, 2)
-    assert "under the 1.30x a control needs" in why
+def test_a_control_with_less_headroom_than_the_subject_is_refused(rf, cfg):
+    assert "below the subject" in _check(rf, cfg, 64)
 
 
-def test_the_default_control_clears_the_margin_on_both_cards(rf):
-    for ridge in (145.8, 162.8):
-        assert rf.check_control(rf.DEFAULT_CONTROL_BLOCK_M, 0.558, ridge, 2) == ""
+def test_a_control_with_no_headroom_on_the_subject_is_refused(rf, cfg):
+    """The refusal alternative 4 names, run through the function that makes it.
+
+    `ai_model.cap` is symmetric in BLOCK_M and BLOCK_SIZE_N, so a tile that buys
+    its M back out of its N buys nothing at all. The subject at BLOCK_SIZE_N=256
+    and a 256x128 control have the same cap to the last decimal, and a control
+    with the subject's own cap makes C3's difference zero by construction. The
+    scalar form the search used to price with has no BLOCK_SIZE_N in it and
+    would have called that control twice the headroom.
+    """
+    from moe.bench import ai_model
+    subject = ai_model.cap(cfg.intermediate_size, cfg.hidden_size, block_m=128,
+                           block_n=256, alpha_b=0.558, alpha_a=0.558, b=2)
+    control = ai_model.cap(cfg.intermediate_size, cfg.hidden_size, block_m=256,
+                           block_n=128, alpha_b=0.558, alpha_a=0.558, b=2)
+    assert control == pytest.approx(subject, rel=1e-12)
+    # And the function refuses a control whose cap does not clear the subject's,
+    # exercised through a model where it can happen at a shared BLOCK_SIZE_N.
+    assert rf.symmetric_cap(cfg, 256, 64, 0.558, 2) > \
+        rf.symmetric_cap(cfg, 128, 64, 0.558, 2), \
+        "at a shared BLOCK_SIZE_N a larger M always buys some headroom"
+
+
+def test_the_cap_margin_no_longer_refuses_because_it_could_only_ever_refuse(
+        rf, cfg):
+    """R6. The gate that ran on the model the same page called wrong.
+
+    `check_control` used to refuse a control whose cap was under 1.30x the
+    ridge, computed with `SWEEP.ai_cap` = 2 BM / (alpha b). Priced with
+    `symmetric_cap` the default control is 0.55x the ridge at BLOCK_SIZE_N=64,
+    not 2.82x, and NO tile a block can hold clears the ridge at all -- so a
+    refusal on that margin would refuse every geometry this study can run. A
+    check that can only fail decides as little as one that can only pass, so the
+    margin became a disclosure and the refusals are the register file and
+    headroom. The arm is not cancelled for the answer C4 is expected to give.
+    """
+    scalar = rf.SWEEP.ai_cap(rf.DEFAULT_CONTROL_BLOCK_M, 0.558, 2)
+    symmetric = rf.symmetric_cap(cfg, rf.DEFAULT_CONTROL_BLOCK_M, 64, 0.558, 2)
+    assert scalar / 162.8 > 2.8 and symmetric / 162.8 < 0.6, \
+        "the two models must still disagree, or this test proves nothing"
+    assert symmetric < 162.8 * rf.CONTROL_CAP_MARGIN
+    assert _check(rf, cfg, rf.DEFAULT_CONTROL_BLOCK_M) == "", \
+        "a control under the margin is admitted, and C4 is registered to fail"
+
+
+def test_no_arm_reaches_the_headline_at_any_block_n_on_this_card(rf, cfg):
+    """THE FINDING, computed rather than written down.
+
+    C4 requires the control to reach the roof, and a tile reaches a compute roof
+    only if its cap clears the ridge. Over 56 power-of-two tiles up to
+    2048x1024, on both models this study measures and at every alpha it has
+    measured, not one tile whose cap clears the H200 ridge fits the per-block
+    register file: the smallest accumulator among them is exactly the whole
+    file. So CEILING BINDING is unreachable by any arm at any BLOCK_SIZE_N, not
+    only at 256, and the finding that named 256 was true and too weak.
+    """
+    for name in ("mixtral-8x7b", "qwen2-57b-a14b"):
+        model = MODEL_CONFIGS[name]
+        for alpha in (0.558, 0.625, 1.0):
+            reach, buildable = rf.ridge_reaching_tiles(model, 162.8, alpha, 2)
+            assert reach, "no tile clears the ridge at all: the sweep is wrong"
+            assert buildable == [], f"{name} at alpha {alpha}"
+            assert min(t[3] for t in reach) >= rf.REGISTERS_PER_BLOCK
+    lines = rf.binding_reachability(cfg, 162.8, 0.558, 2)
+    assert any("AT ANY BLOCK_SIZE_N" in line for line in lines)
+    assert any(rf.GAP_UNLOCATED in line for line in lines)
+
+
+def test_the_predicted_separation_is_clamped_at_the_roof(rf, cfg):
+    """A cap of twice the ridge does not predict twice the roof.
+
+    The same clamp `predicted_plateau_band` applies. Unclamped, the 1024x256
+    candidate printed a predicted separation of +1.163 of the roof -- more
+    throughput than the card has -- in the line an operator reads to decide
+    whether the control is worth its minutes.
+    """
+    huge = rf.symmetric_cap(cfg, 1024, 256, 0.558, 2)
+    subject = rf.symmetric_cap(cfg, 128, 256, 0.558, 2)
+    assert huge / 162.8 > 2.0, "the unclamped ratio must exceed 1 or nothing is proved"
+    assert rf.predicted_separation(huge, subject, 162.8) <= 1.0
+    assert rf.predicted_separation(huge, subject, 162.8) == pytest.approx(
+        1.0 - min(subject / 162.8, 1.0))
+
+
+def test_an_alpha_outside_zero_to_one_is_refused_and_not_priced(rf, capsys):
+    """A miss fraction above 1 is more traffic than a full re-read.
+
+    `ai_model` refuses it; the scalar form accepted `--alpha 3.0` and returned a
+    cap of 17 Op/B without a word, and that number then decided which tile could
+    be a control.
+    """
+    code = rf.main(["--dry-run", "--alpha", "3.0"])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "is outside [0, 1]" in out
+    assert "MISS FRACTION" in out
+
+
+def test_no_control_is_asked_of_a_run_that_declared_it_has_none(rf, cfg):
+    """`--control none` has no control to check, and says so by returning empty.
+
+    The PASS half of the gate above: a function that refused everything would
+    also refuse the subject's own tile, and this one has to let exactly one
+    thing through. At BLOCK_SIZE_N=256 the search finds nothing, which is the
+    condition the mode exists for.
+    """
+    assert _check(rf, cfg, None, block_n=256, fits=()) == ""
+
+
+def test_dropping_the_control_where_one_fits_is_refused(rf, cfg, capsys):
+    """R6. REFUSE rather than default, at the geometry the caveat lies about.
+
+    `--control none` says, under its verdict and in every plan, that the
+    hardware left this arm no control. That is true at BLOCK_SIZE_N=256 and
+    false at 64, where the search names eighteen pins -- so an operator could
+    drop V4, C3 and C4 by choice and receive a page telling them the register
+    file forced it. The search's own answer now decides.
+    """
+    why = _check(rf, cfg, None, block_n=64, fits=[(256, 8, 5)])
+    assert "where a control DOES fit" in why
+    assert "Pass --control 256" in why
+    code = rf.main(["--dry-run", "--block-n", "64", "--group-m", "1",
+                    "--control", "none", "--capability", "9.0"])
+    out = capsys.readouterr().out
+    assert code == 2, out[-2000:]
+    assert "--control none at BLOCK_SIZE_N=64, where a control DOES fit" in out
+    assert "A CONTROL DOES FIT AT BLOCK_SIZE_N=64" in out
+    assert "at BLOCK_SIZE_N=256 there is no positive control" not in out
+
+
+def test_the_finding_is_not_printed_at_a_block_n_it_is_false_at(rf, cfg):
+    """It was a module constant and it named 256 at every BLOCK_SIZE_N.
+
+    One page printed twelve `FITS at --num-warps 8` lines for a BLOCK_M=256
+    control at BLOCK_SIZE_N=64 and then, sixty lines later, "at BLOCK_SIZE_N=256
+    there is no positive control". The search said a control exists and the
+    paragraph under it said none does.
+    """
+    fits, _ = rf.control_feasibility(cfg, block_n=64, block_k=64, dtype_bytes=2,
+                                     capability=(9, 0), alpha=0.558, ridge=162.8)
+    assert fits, "a control does fit at BLOCK_SIZE_N=64"
+    present = rf.no_control_finding(cfg, 162.8, 0.558, 2, block_n=64, fits=fits,
+                                    capability=(9, 0))
+    assert "A CONTROL DOES FIT AT BLOCK_SIZE_N=64" in present[0]
+    assert "THE STUDY CANNOT CONFIRM ITS HEADLINE" not in " ".join(present)
+
+    absent = rf.no_control_finding(cfg, 162.8, 0.558, 2, block_n=256, fits=[],
+                                   capability=(9, 0))
+    assert "THE STUDY CANNOT CONFIRM ITS HEADLINE" in absent[0]
+    assert "at BLOCK_SIZE_N=256 there is no positive control" in absent[0]
+
+    # And off a device neither sentence may be spoken: the shared-memory half of
+    # the bill has no limit to check against, so an empty `fits` is not evidence.
+    undecided = rf.no_control_finding(cfg, 162.8, 0.558, 2, block_n=64, fits=[],
+                                      capability=None)
+    assert "UNDECIDABLE FROM HERE" in undecided[0]
+    assert "THE STUDY CANNOT CONFIRM ITS HEADLINE" not in " ".join(undecided)
+
+    # But the BLOCK_SIZE_N=256 refusal is architecture-wide and needs no flag,
+    # and the driver's own dry run of that arm passes none. A head that went
+    # undecidable there would make this file's strongest sentence conditional
+    # on something nothing supplies.
+    laptop = rf.no_control_finding(cfg, 162.8, 0.558, 2, block_n=256, fits=[],
+                                   capability=None)
+    assert "THE STUDY CANNOT CONFIRM ITS HEADLINE" in laptop[0]
+    assert "needs no --capability" in laptop[0]
+
+
+def test_the_escape_the_finding_recommends_is_priced_and_not_oversold(rf, cfg):
+    """Alternative 3 promised a confirmation it cannot deliver.
+
+    "The subject at BLOCK_SIZE_N=128, where a BLOCK_M=256 control fits" is
+    buildable and it does buy headroom -- 147.4 Op/B against 111.6, unlike
+    alternative 4's transposed tile which buys exactly none. What it cannot buy
+    is C4: 147.4 is 0.91x the ridge, so that control is memory bound by
+    construction and the arm lands GAP_UNLOCATED. The handoff called it "the one
+    to schedule if the owner wants an arm that CAN reach BINDING", and it is not
+    that arm; no arm is.
+    """
+    text = " ".join(rf.no_control_finding(cfg, 162.8, 0.558, 2, block_n=256,
+                                          fits=[], capability=(9, 0)))
+    control = rf.symmetric_cap(cfg, 256, 128, 0.558, 2)
+    subject = rf.symmetric_cap(cfg, 128, 128, 0.558, 2)
+    assert control > subject, "alternative 3 does buy headroom"
+    assert control < 162.8, "and it cannot reach the ridge"
+    assert "IT STILL DOES NOT CONFIRM THE HEADLINE" in text
+    assert rf.GAP_UNLOCATED in text
+    assert "NONE OF THE FIVE CONFIRMS THE HEADLINE ON THIS CARD" in text
 
 
 def test_a_control_that_cannot_run_pinned_is_refused_before_any_gpu_time(rf, capsys):
-    """The BN=256 accumulator: 256 registers per thread against a ceiling of 255.
+    """The BN=256 accumulator, billed per BLOCK and not only per thread.
 
     A spilled kernel still returns a time, that time still fits a line, and that
     line still qualified as this study's compute reference at 0.2% error.
@@ -471,8 +678,8 @@ def test_a_control_that_cannot_run_pinned_is_refused_before_any_gpu_time(rf, cap
     code = rf.main(["--dry-run", "--block-n", "256", "--capability", "9.0"])
     out = capsys.readouterr().out
     assert code == 2
-    assert "REFUSED before any GPU time" in out
-    assert "registers per thread" in out
+    assert "REFUSED:" in out
+    assert "65536 32-bit registers per thread block" in out
 
 
 # --------------------------------------------------------------------------
@@ -938,75 +1145,94 @@ def test_the_self_test_output_names_both_new_outcomes_by_their_identifier(
 # R2. The production configuration, and an arm whose result is already known.
 # --------------------------------------------------------------------------
 
-def test_the_production_swizzle_plans_end_to_end(rf, capsys):
-    """R2. BLOCK_SIZE_N=256 with GROUP_SIZE_M 16 and 32 is what vLLM ships.
+def test_the_production_swizzle_plans_end_to_end_without_a_control(rf, capsys):
+    """R2/R5. BLOCK_SIZE_N=256 with GROUP_SIZE_M 16 and 32 is what vLLM ships.
 
-    `--control 256` cannot be pinned there at the default 8 warps -- a 256x256
-    fp32 accumulator is 256 registers per thread against a maximum of 255 -- so
-    the arm runs at the warp count that fits, and the point of this test is that
-    the whole plan comes out at those flags rather than a TypeError or a silent
-    default.
+    It planned end to end at `--num-warps 16 --num-stages 3` until 2026-09-03,
+    and that plan was for a kernel no card can run: the 256x256 accumulator is
+    the whole per-block register file at every warp count, and the per-thread
+    bill stops seeing it above 8 warps. The production geometry now plans only
+    with the control it can actually have, which is none.
     """
     for group_m in ("16", "32"):
         code = rf.main(["--dry-run", "--block-n", "256", "--group-m", group_m,
-                        "--control", "256", "--num-warps", "16",
-                        "--num-stages", "3", "--capability", "9.0"])
+                        "--control", "none", "--capability", "9.0"])
         out = capsys.readouterr().out
         assert code == 0, out[-2000:]
         assert f"'GROUP_SIZE_M': {group_m}" in out
         assert "'BLOCK_SIZE_N': 256" in out
-        assert "BLOCK_M= 256" in out and "ok" in out
+        assert "BLOCK_M= 128" in out and "ok" in out
+        assert "REFUTE the claim and can never confirm it" in out
 
 
-def test_the_production_swizzle_refuses_at_pins_that_do_not_fit_and_says_which_do(
+def test_the_production_geometry_refuses_a_control_and_prints_the_arithmetic(
         rf, capsys):
-    """REFUSE rather than default, and then name the settings that would work.
+    """REFUSE rather than default, and then show the bill rather than a guess.
 
     A refusal that ends in "change --num-stages, --block-n or --control" sends
-    an operator to guess at a bill this file can compute for nothing.
+    an operator to guess at a bill this file can compute for nothing, and the
+    bill says none of those three changes anything.
     """
-    code = rf.main(["--dry-run", "--block-n", "256", "--control", "256",
-                    "--capability", "9.0"])
-    out = capsys.readouterr().out
-    assert code == 2
-    assert "256 registers per thread" in out
-    assert "--num-warps 16" in out and "--num-stages" in out
-
-
-def test_the_hint_refuses_to_name_a_stage_count_with_no_capability(rf, capsys):
-    """The remedy the pod would reject, and why it must not be printed plainly.
-
-    Off a device `SWEEP.resolve_capability` returns None, `tile_resources`
-    leaves `smem_limit_bytes` unset, and NO shared-memory refusal can fire; the
-    hint's search then returns the first pair whose REGISTERS fit. Before this
-    was fixed the same laptop invocation printed "DOES FIT, at --num-warps 16
-    --num-stages 4" for exactly the pins the docstring computes as 256 KiB
-    against sm_90's 227 KiB. The register ceiling is 255 everywhere, so the
-    warps are still nameable; the stages are not.
-    """
-    code = rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
-                    "--control", "256"])
-    out = capsys.readouterr().out
-    assert code == 2
-    assert "THE ACCUMULATOR FITS AT --num-warps 16" in out
-    assert "STAGE COUNT CANNOT BE NAMED FROM HERE" in out
-    assert "--capability 9.0" in out
-    assert "DOES FIT, at --num-warps" not in out, \
-        "an unqualified pin was named with no shared-memory limit to check it"
-    assert "--num-stages 4." not in out, \
-        "the stage count the pod refuses was named as the remedy"
-
-
-def test_the_hint_names_the_whole_pin_once_the_capability_is_known(rf, capsys):
-    """The PASS branch of the same gate: with sm_90 given, both halves are
-    checkable and the stage count that fits (3, not 4) is named outright."""
     code = rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
                     "--control", "256", "--capability", "9.0"])
     out = capsys.readouterr().out
     assert code == 2
-    assert "THE REQUESTED CONFIGURATION DOES FIT, at --num-warps 16 " \
-           "--num-stages 3." in out
-    assert "CANNOT BE NAMED FROM HERE" not in out
+    assert "65536 32-bit registers per thread block" in out
+    assert "REFUSED AT EVERY WARP AND STAGE COUNT" in out
+    assert "8 warps = 256 reg/thread" in out
+    assert "16 warps = 128 reg/thread" in out
+    assert "NO TILE ABOVE BLOCK_M=128 CAN BE PINNED AT BLOCK_SIZE_N=256" in out
+
+
+def test_the_refusal_never_names_a_pin_that_does_not_exist(rf, capsys):
+    """The bug this replaced, pinned so it cannot come back.
+
+    `control_resource_hint` printed "THE REQUESTED CONFIGURATION DOES FIT, at
+    --num-warps 16 --num-stages 3" for 256x256 on sm_90, in the one sentence an
+    operator was meant to act on. 16 warps do fit the PER-THREAD ceiling: 128
+    registers each against 255. The thread block still asks for all 65536
+    registers in the file and has none left for a pointer, and no session that
+    followed that advice would have produced a comparable timing.
+    """
+    for extra in ([], ["--capability", "9.0"]):
+        rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
+                 "--control", "256"] + extra)
+        out = capsys.readouterr().out
+        assert "DOES FIT" not in out
+        assert "FITS at --num-warps" not in out
+
+
+def test_the_finding_names_what_would_confirm_the_claim(rf, capsys):
+    """A refusal whose consequence is unstated gets read as a warning.
+
+    The consequence here is that the study's headline is unreachable at the
+    configuration production runs, so the refusal has to say that in those words
+    and then say what would settle it.
+    """
+    rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
+             "--control", "256", "--capability", "9.0"])
+    out = capsys.readouterr().out
+    assert ("THE STUDY CANNOT CONFIRM ITS HEADLINE AT vLLM'S SHIPPED "
+            "CONFIGURATION ON sm_90.") in out
+    assert "WHAT WOULD CONFIRM IT" in out
+    for n in range(1, 6):
+        assert f"\n  {n}. " in out, f"alternative {n} is not listed"
+
+
+def test_an_uncontrolled_plan_carries_the_arithmetic_that_says_why(rf, capsys):
+    """The plan an operator buys must contain the reason it has no control.
+
+    Not only the refusal: the run that GOES AHEAD is the one whose report gets
+    quoted, so the search and the finding ride in its plan too.
+    """
+    code = rf.main(["--dry-run", "--block-n", "256", "--group-m", "16",
+                    "--control", "none", "--capability", "9.0"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "CONTROL SEARCH at BLOCK_SIZE_N=256" in out
+    assert "65536" in out
+    assert "227 KiB" in out
+    assert "THE STUDY CANNOT CONFIRM ITS HEADLINE" in out
 
 
 def test_the_plan_predicts_the_outcome_the_published_arms_already_imply(rf, cfg,
@@ -1453,3 +1679,343 @@ def test_the_run_id_comes_from_the_shared_builder_and_needs_a_card(rf):
     with pytest.raises(provenance.NoCard):
         rf.default_run_id(_args(rf), "")
     assert rf.default_run_id(_args(rf), "NVIDIA H200").startswith("nvidia_h200-")
+
+
+# --------------------------------------------------------------------------
+# R5. THE CONTROL THAT DOES NOT EXIST.
+#
+# The session driver scheduled three arms around vLLM's shipped configuration
+# for mixtral on the H200 -- BLOCK_SIZE_M=128 at BLOCK_SIZE_N=256, GROUP_SIZE_M
+# 16 and 32 -- and all three refused, because the arm needs a positive control
+# and no tile above 128 can be pinned at BLOCK_SIZE_N=256. The refusal was
+# correct. What was wrong was the next sentence, which named --num-warps 16 as
+# the remedy: 16 warps clear the PER-THREAD ceiling and the thread block still
+# asks for the entire per-block register file.
+#
+# These tests pin the arithmetic that settles it, each candidate escape, and the
+# mode that survives: `--control none`, which can refute the claim and can never
+# confirm it.
+# --------------------------------------------------------------------------
+
+def test_the_accumulator_is_billed_per_block_and_not_only_per_thread(rf):
+    """The limit the sweep's per-thread check stops seeing above 8 warps."""
+    assert rf.accumulator_registers(256, 256) == rf.REGISTERS_PER_BLOCK
+    assert rf.register_file_refusal(256, 256)
+    # And the per-thread bill, at the warp count the retired hint recommended,
+    # passes: that is why a second bill was needed and not a tighter one.
+    assert 256 * 256 / (32 * 16) <= 255
+    assert rf.register_file_refusal(128, 256) == "", \
+        "the subject's own tile must still be runnable, or nothing is"
+
+
+def test_more_warps_never_rescue_a_block_that_is_the_whole_register_file(rf):
+    """Warps divide the accumulator across threads; they do not shrink it."""
+    for warps in rf.CONTROL_WARP_COUNTS:
+        per_thread = 256 * 256 / (32 * warps)
+        assert per_thread * 32 * warps == rf.accumulator_registers(256, 256)
+    assert rf.register_file_refusal(512, 256)
+    assert rf.register_file_refusal(1024, 256)
+
+
+def test_no_pin_at_all_yields_a_control_at_the_production_block_n(rf, cfg):
+    """Every warp and stage count this file will try, on the real card."""
+    fits, lines = rf.control_feasibility(
+        cfg, block_n=256, block_k=64, dtype_bytes=2, capability=(9, 0),
+        alpha=0.558, ridge=162.8)
+    assert fits == []
+    assert any("NO TILE ABOVE BLOCK_M=128" in line for line in lines)
+
+
+def test_a_control_does_exist_one_block_n_lower(rf, cfg):
+    """The FAIL branch above means nothing without this one.
+
+    At BLOCK_SIZE_N=128 the 256x128 accumulator is half the file and 128
+    registers per thread at 8 warps, and 4 stages of (256x64 + 64x128) is 192
+    KiB against sm_90's 227. So the search finds a control, and the sentence
+    "no control exists" is about the geometry and not about the search.
+    """
+    fits, _ = rf.control_feasibility(
+        cfg, block_n=128, block_k=64, dtype_bytes=2, capability=(9, 0),
+        alpha=0.558, ridge=162.8)
+    assert (256, 8, 4) in fits
+
+
+def test_the_search_names_nothing_a_fit_without_a_capability(rf, cfg):
+    """Off a device the shared-memory limit is unknown, which is not "fits".
+
+    The register half is decidable everywhere, so the production refusal is
+    still reachable from a laptop with no flag; the stage half is not, and a
+    triple returned on the register half alone would be the pod's rejection
+    stated as advice.
+    """
+    fits, lines = rf.control_feasibility(
+        cfg, block_n=128, block_k=64, dtype_bytes=2, capability=None,
+        alpha=0.558, ridge=162.8)
+    assert fits == []
+    assert any("NO --capability GIVEN" in line for line in lines)
+
+
+def test_vllm_ships_no_block_m_128_entry_at_block_n_128_on_the_h200():
+    """The evidence behind alternative 3, read from the shipped files.
+
+    "Run the subject at BLOCK_SIZE_N=128, where a control fits" is buildable and
+    is a DIFFERENT question, and the reason is a fact about vLLM's tuned tables
+    rather than an opinion: every BLOCK_SIZE_M=128 entry vLLM ships for the H200
+    carries BLOCK_SIZE_N=256, on both models this study measures and on both
+    dtypes. Checked here rather than asserted in prose, because the prose is
+    what an operator acts on.
+    """
+    root = ROOT / "moe" / "bench" / "hardware" / "vllm_configs"
+    files = sorted(root.glob("*device_name=NVIDIA_H200*.json"))
+    assert files, "the shipped H200 tunings are not in the tree"
+    seen = set()
+    for path in files:
+        for entry in json.loads(path.read_text()).values():
+            seen.add((entry["BLOCK_SIZE_M"], entry["BLOCK_SIZE_N"]))
+    assert (128, 256) in seen, "the production entry is not in these files"
+    assert not [bn for bm, bn in seen if bm == 128 and bn != 256], \
+        "vLLM ships a BLOCK_SIZE_M=128 entry at some other BLOCK_SIZE_N"
+
+
+def test_a_control_at_its_own_block_n_has_exactly_the_subjects_cap():
+    """Alternative 4, and the trap it is: the cap is symmetric in BM and BN.
+
+    `moe.bench.ai_model.cap` is 2 / (b (alpha_b/BM + alpha_a/BN + 1/K)), so
+    256x128 has the same ceiling as 128x256 to the last decimal. The scalar form
+    the sweep quotes, 2 BM / (alpha b), has no BLOCK_SIZE_N in it and would have
+    called that control twice the headroom.
+    """
+    from moe.bench import ai_model
+    subject = ai_model.cap(14336, 4096, block_m=128, block_n=256,
+                           alpha_b=1.0, alpha_a=1.0, b=2)
+    transposed = ai_model.cap(14336, 4096, block_m=256, block_n=128,
+                              alpha_b=1.0, alpha_a=1.0, b=2)
+    assert transposed == pytest.approx(subject, rel=1e-12)
+    bigger = ai_model.cap(14336, 4096, block_m=256, block_n=256,
+                          alpha_b=1.0, alpha_a=1.0, b=2)
+    assert bigger > subject, "a real control does have more headroom"
+
+
+def _solo(rf, roof, cfg, alpha):
+    """One uncontrolled run's gates, from the study's own planted model."""
+    rows = rf.doubling_rows(cfg, 32, 4096, rf.SUBJECT_BLOCK_M)
+    timings = rf.planted_timings(cfg, roof, 2, {rf.SUBJECT_BLOCK_M: rows},
+                                 alpha=alpha, overhead_ms=0.05, reps=3,
+                                 noise=0.002, seed=0)
+    _, gates, payload, series = rf.analyse(
+        timings, cfg, roof, control_block_m=None, b=2,
+        sm_count=rf.SWEEP.DEFAULT_SM_COUNT,
+        block_n=rf.SWEEP.FIXED["BLOCK_SIZE_N"], doublings=2,
+        compiles={rf.SUBJECT_BLOCK_M: 1}, executed={rf.SUBJECT_BLOCK_M: len(rows)},
+        planned_multi_tile=len([r for r in rows if r > rf.SUBJECT_BLOCK_M]))
+    return gates, payload, series
+
+
+def test_the_control_gates_are_absent_and_not_unknown(rf, cfg, roof):
+    """A gate that examined nothing reporting no failure is the shape refused.
+
+    V4 is a VALIDITY gate, so scoring it UNKNOWN would void C1 and C2 -- the two
+    readings an uncontrolled run exists to produce -- and file the whole arm as
+    an instrument failure. Omission is the honest state and it is what `verdict`
+    reads to reach UNCONTROLLED.
+    """
+    gates, _, series = _solo(rf, roof, cfg, 1.0)
+    names = {g.name.split()[0] for g in gates}
+    assert {"V0", "V1", "V2", "V3", "C1", "C2"} <= names
+    assert not ({"V4", "C3", "C4"} & names)
+    assert len(series) == 1, "an uncontrolled run plots one curve"
+
+
+def test_a_subject_below_the_roof_with_no_control_is_not_a_ceiling(rf, cfg,
+                                                                   roof):
+    """The verdict the production arm will reach, named as its own outcome."""
+    gates, _, _ = _solo(rf, roof, cfg, 1.0)
+    call, why = rf.verdict([g for g in gates if g.kind == rf.CLAIM])
+    assert call == rf.UNCONTROLLED
+    assert "CAN REFUTE THE HEADLINE AND CANNOT CONFIRM IT" in " ".join(why)
+
+
+def test_an_uncontrolled_run_can_still_refute_the_claim(rf, cfg, roof):
+    """The asymmetry, in its other direction, or the mode buys nothing.
+
+    A refutation needs no positive control: the subject reaching the roof IS an
+    instrument shown able to see a tile arrive. So C1 can fail with no control
+    anywhere in the run, and that failure kills the study's central claim.
+    """
+    gates, _, _ = _solo(rf, roof, cfg, 0.10)
+    call, _ = rf.verdict([g for g in gates if g.kind == rf.CLAIM])
+    assert call == rf.NOT_BINDING
+
+
+def test_the_residency_confound_is_replaced_where_there_was_no_control(rf, cfg,
+                                                                      roof):
+    """It describes how the subject and the control differ; there is no control.
+
+    Printing it here would describe a comparison that did not happen. What
+    replaces it is a larger caveat and not a smaller one.
+    """
+    gates, _, _ = _solo(rf, roof, cfg, 1.0)
+    _, why = rf.verdict([g for g in gates if g.kind == rf.CLAIM])
+    joined = " ".join(why)
+    assert "NO CONTROL RAN IN THIS ARM" in joined
+    assert "OCCUPANCY" not in joined
+    # And a validity-only refusal still carries the residency paragraph: that
+    # arm HAD a control and did not get far enough to compare it.
+    _, validity_why = rf.verdict([rf.gate_v0_roof(roof)])
+    assert "OCCUPANCY" in " ".join(validity_why)
+
+
+def test_both_directions_of_the_uncontrolled_mode_are_planted(rf, capsys):
+    """A mode whose two directions are not both planted is one nobody has run."""
+    code = rf.main(["--self-test"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "RESULT: VALIDITY S_uncontrolled_capped PASS" in out
+    assert "RESULT: VALIDITY S_uncontrolled_uncapped PASS" in out
+    assert "UNCONTROLLED" in out
+
+
+def test_the_self_test_still_plants_the_controlled_worlds_without_a_control(rf):
+    """`--control none` asks one ARM to run without a control; it does not ask
+    the self test to stop checking whether the controlled gates discriminate."""
+    _, gates = rf.self_test(MODEL_CONFIGS["mixtral-8x7b"],
+                            rf._hypothesis_roof("test"), 2, r_min=32,
+                            r_max=4096, control_block_m=None, doublings=2)
+    assert all(g.passed for g in gates)
+    assert any(g.name == "S discrimination" for g in gates)
+
+
+def test_an_uncontrolled_arm_cannot_resume_into_a_controlled_ones_directory(rf):
+    """The absence has a spelling, because a knob missing from a run id is a
+    knob two runs can silently share a directory across."""
+    solo = rf.default_run_id(_args(rf, control=None), "NVIDIA H200")
+    paired = rf.default_run_id(_args(rf, control=256), "NVIDIA H200")
+    assert "cnone" in solo
+    assert solo != paired
+
+
+def test_spelling_the_control_did_not_move_the_controlled_arms_directory(rf):
+    """R6. The digest moved and nothing about the arm did.
+
+    `moe.bench.provenance._canonical` keeps an int an int and a string a string,
+    so `c=256` and `c="256"` hash differently while rendering the same visible
+    prefix. `default_run_id` was passing `control_key()` -- a spelling built for
+    the CLI echo -- so the session's roofline-n64-g1 arm silently changed
+    directory from ...-965a1e55 to ...-9d41e41f and could no longer resume
+    anything a previous run of that arm had written. The visible half was
+    byte-identical, which is the collision shape `provenance.py` exists to
+    prevent, and the third instance of a family this repo has now fixed twice.
+
+    BOTH HALVES ARE PINNED. The hazard, so a reader can see it is real, and the
+    id itself, so a future edit cannot move it again in silence. The uncontrolled
+    id is pinned too: the absence has to keep its spelling.
+    """
+    from moe.bench import provenance as PV
+
+    assert PV.run_id(card="nocard", c=256, x=3) \
+        != PV.run_id(card="nocard", c="256", x=3), \
+        "provenance no longer distinguishes an int from its spelling"
+    assert rf.default_run_id(_args(rf, control=256), rf.UNKNOWN_CARD_SLUG) == (
+        "nocard-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b"
+        "-n64-s4-t3-u300.0-w8-x3-965a1e55")
+    assert rf.default_run_id(_args(rf, control=None), rf.UNKNOWN_CARD_SLUG) == (
+        "nocard-b400.0-cnone-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b"
+        "-n64-s4-t3-u300.0-w8-x3-f0bc11f5")
+
+
+# --------------------------------------------------------------------------
+# R6. The uncontrolled verdict, on a line the session driver can read.
+# --------------------------------------------------------------------------
+
+def test_the_uncontrolled_verdict_reaches_a_scored_result_line(rf, cfg, roof):
+    """The blocking defect: UNCONTROLLED was in the prose and nowhere else.
+
+    `scripts/h200_gaps_session.sh` summarises an arm by grepping `^RESULT: ` and
+    nothing else -- it was rewritten that way because the old summary grepped
+    prose. Rendered, the uncontrolled mode's own capped world produced six
+    RESULT lines, every one PASS, and exit 0 DONE; the word UNCONTROLLED
+    appeared only under `## Verdict`, which nothing machine-readable emits. A
+    BINDING run and an UNCONTROLLED run differed in the summary by two MISSING
+    lines, and an absence is the same shape as a check that examined nothing
+    reporting zero failures.
+
+    ON AN ATTACHED ROOF, because that is the only run whose exit code is about
+    its claim gates: the hypothesis roof fails V0 and lands INVALID, which is
+    what stops a laptop report being quotable and is asserted elsewhere.
+    """
+    from dataclasses import replace
+
+    from moe.bench import exit_codes
+
+    gates, payload, _ = _solo(rf, replace(roof, attached=True), cfg, 1.0)
+    assert payload["verdict"] == rf.UNCONTROLLED
+    lines = [g.result_line() for g in gates]
+    carrying = [line for line in lines if "UNCONTROLLED" in line]
+    assert len(carrying) == 1, lines
+    assert carrying[0].startswith("RESULT: CLAIM CU_UNCONTROLLED_attribution ")
+    assert payload["exit_code"] == exit_codes.CLAIM_FAIL
+    assert exit_codes.ledger_state(payload["exit_code"]) == "CLAIM_FAIL"
+    # And the code the log IMPLIES agrees with the code the payload carries,
+    # which is the loop `exit_codes.classify_text` exists to close.
+    assert exit_codes.classify_text("\n".join(lines)) == payload["exit_code"]
+
+
+def test_the_uncontrolled_gate_can_never_pass_in_either_direction(rf, cfg, roof):
+    """It is the mirror of a rubber stamp, and only the mirror is safe.
+
+    A gate that cannot FAIL launders an unexamined claim into an exit code of 0.
+    This one cannot PASS, so it can never turn CLAIM_FAIL into DONE. Its two
+    reachable verdicts are both readings of the world: FAIL when the subject
+    REACHED the roof, because a refutation needs no positive control, and
+    UNKNOWN when it stopped below it, because nothing ran that could attribute
+    the shortfall. Both are planted.
+    """
+    from moe.bench import exit_codes
+
+    capped, _, _ = _solo(rf, roof, cfg, 1.0)
+    uncapped, _, _ = _solo(rf, roof, cfg, 0.10)
+    verdicts = {}
+    for label, gates in (("capped", capped), ("uncapped", uncapped)):
+        gate = [g for g in gates if g.name == rf.UNCONTROLLED_GATE]
+        assert len(gate) == 1, label
+        verdicts[label] = gate[0].verdict
+        assert gate[0].verdict != exit_codes.PASS
+    assert verdicts == {"capped": exit_codes.UNKNOWN, "uncapped": exit_codes.FAIL}
+
+
+def test_a_controlled_arm_scores_no_uncontrolled_gate(rf, cfg, roof):
+    """C3 and C4 do that scoring where they exist, and two gates saying the same
+    thing is how a summary comes to read one of them."""
+    timings, grid = _planted_pair(rf, cfg, roof)
+    _, gates, payload, _ = rf.analyse(
+        timings, cfg, roof, control_block_m=256, b=2,
+        sm_count=rf.SWEEP.DEFAULT_SM_COUNT,
+        block_n=rf.SWEEP.FIXED["BLOCK_SIZE_N"], doublings=2,
+        compiles={128: 1, 256: 1},
+        executed={128: len(grid[128]), 256: len(grid[256])},
+        planned_multi_tile=len([r for r in grid[128] if r > 128]))
+    names = {g.name for g in gates}
+    assert rf.UNCONTROLLED_GATE not in names
+    assert "C3 tile attribution" in names and "C4 ceiling located" in names
+    assert not [line for line in (g.result_line() for g in gates)
+                if "UNCONTROLLED" in line]
+    assert "OCCUPANCY" in " ".join(payload["verdict_why"]), \
+        "a controlled arm keeps the residency paragraph"
+
+
+def _planted_pair(rf, cfg, roof):
+    """One controlled run's timings, both tiles, from the study's own model."""
+    rows = rf.doubling_rows(cfg, 32, 4096, rf.SUBJECT_BLOCK_M)
+    grid = {rf.SUBJECT_BLOCK_M: rows, 256: [r for r in rows if r % 256 == 0]}
+    return rf.planted_timings(cfg, roof, 2, grid, alpha=1.0, overhead_ms=0.05,
+                              reps=3, noise=0.002, seed=0), grid
+
+
+def test_control_takes_a_block_m_or_the_word_none_and_nothing_else(rf):
+    """REFUSE rather than default: dropping the control drops three gates."""
+    assert rf.parse_control("none") is None
+    assert rf.parse_control("NONE") is None
+    assert rf.parse_control("256") == 256
+    with pytest.raises(Exception) as caught:
+        rf.parse_control("maybe")
+    assert "'none'" in str(caught.value)
