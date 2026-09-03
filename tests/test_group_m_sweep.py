@@ -600,3 +600,151 @@ def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
         assert rc == exit_codes.REFUSED, (
             "a run that scored no gate printed no RESULT line, so its log "
             "implies REFUSED and nothing else")
+
+
+# --------------------------------------------------------------------------
+# the LEVEL flag has a left-hand side, and this arm is the one that gives it
+# --------------------------------------------------------------------------
+
+def timing_module():
+    """`moe.bench.timing`, which owns `clock_flags` and `LEVEL_FRACTION`."""
+    from moe.bench import timing
+
+    return timing
+
+
+def test_the_level_reference_reaches_the_instrument_at_this_arms_call_site():
+    """THE SECOND CALL SITE, and it was in a script rather than in the driver.
+
+    `moe/bench/driver.py` resolves the reference and hands it to `time_kernel`,
+    which is what turned the LEVEL column on for the sweep path. This arm calls
+    `time_kernel` DIRECTLY and passed no reference, so it kept writing
+    `clock_level_ok = None` on every row while running on the same v2
+    instrument: eleven of the tree's thirteen callers passed one and this was
+    not among them. Checked in the SOURCE, because the failure being guarded
+    against is a future edit dropping the keyword, which every behavioural test
+    in this file would still pass on a laptop with no card.
+    """
+    tree = ast.parse((ROOT / "scripts" / "group_m_alpha_sweep.py").read_text())
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and getattr(node.func, "id", getattr(node.func, "attr", ""))
+             == "time_kernel"]
+    assert calls, "this arm no longer calls time_kernel; the wall moved"
+    for call in calls:
+        assert "reference_clock_mhz" in {k.arg for k in call.keywords}, (
+            f"time_kernel at line {call.lineno} passes no reference clock, so "
+            "every row it writes records clock_level_ok undetermined")
+
+
+def test_the_reference_is_this_cards_own_calibration_and_names_its_field():
+    """The number, and the field it came out of, on the committed yaml.
+
+    Naming the field matters as much as the number: a LEVEL exclusion is traced
+    back to a field in a file, and `calibrate.clock_established` exists because
+    the three candidate fields have disagreed by 450 MHz on one H200.
+    """
+    from moe.bench import roofline
+
+    ref = GM.reference_clock_for("NVIDIA H200")
+    assert ref.mhz == 1515.0
+    assert "gemm_clock_mhz" in ref.source
+    assert ref.card == "NVIDIA H200"
+    # THE SAME READER THE DRIVER USES, not a fourth copy of the three-field
+    # rule. This is an identity rather than an equality of two numbers: a copy
+    # here would be the defect the driver's own pinning test exists to catch.
+    assert ref == roofline.reference_clock("NVIDIA H200")
+
+
+def test_a_card_with_no_calibration_says_so_in_words_the_operator_can_act_on():
+    """THE FAIL BRANCH. No calibration, no reference, and the arm has to say
+    that the column is dead rather than print an alpha as if it were not."""
+    ref = GM.reference_clock_for("NVIDIA B200")
+    assert ref.mhz is None
+    assert ref.card == "NVIDIA B200"
+    assert "calibrate_hardware.py --publish" in ref.source
+
+
+def test_with_the_reference_a_sagging_clock_is_visible_and_without_it_is_not():
+    """What the keyword actually buys, at the flag itself.
+
+    The PASS and the FAIL branch of the LEVEL verdict on one card's real
+    reference, beside the state this arm was in until now: the same three
+    samples with no reference return None, which is not "the clock was fine".
+    """
+    timing = timing_module()
+    reference = GM.reference_clock_for("NVIDIA H200").mhz
+    sagging = reference * (timing.LEVEL_FRACTION - 0.02)
+    steady = reference
+    assert timing.clock_flags(sagging, sagging, sagging, reference)[0] is False
+    assert timing.clock_flags(steady, steady, steady, reference)[0] is True
+    # The arm before this commit: the same sagging card, and nothing to say so.
+    assert timing.clock_flags(sagging, sagging, sagging, None)[0] is None
+
+
+def replay_with(records, tmp_path, monkeypatch, capsys, argv=("--synthetic",
+                                                              "monotone")):
+    """Measure-shaped rows through the report: synthesise a run, rewrite its
+    `cells.jsonl` through `records`, then `--replay` the directory.
+
+    The report's own reader is used rather than a hand-built file, so the rows
+    that reach `_analyse` are the rows a pod would write.
+    """
+    run_report(list(argv), tmp_path, monkeypatch, capsys)
+    directory = next(p for p in tmp_path.rglob("cells.jsonl")).parent
+    rows = [json.loads(line) for line
+            in (directory / "cells.jsonl").read_text().splitlines()]
+    for row in rows:
+        records(row)
+    (directory / "cells.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    return run_report(["--replay", str(directory)], tmp_path, monkeypatch,
+                      capsys)
+
+
+def measured_row(row, *, level, mhz=1515.0):
+    """One synthetic row re-labelled as a measurement that carries a clock."""
+    row["provenance"] = "measured"
+    row.pop("law", None)
+    row.pop("planted_alpha", None)
+    row["clock_level_ok"] = level
+    row["reference_clock_mhz"] = mhz
+
+
+def test_the_report_says_how_many_cells_the_clock_could_not_examine(
+        tmp_path, monkeypatch, capsys):
+    """The state every row of this arm was written in, said out loud.
+
+    A run whose LEVEL column is undetermined everywhere is not a run whose card
+    was fine; it is a run that could not have noticed. This arm and
+    `alias_ablation` produce the two alphas `pod_session.sh` reconciles as the
+    last thing on the screen, so the reader has to be told which of them carries
+    clock evidence.
+    """
+    _, out = replay_with(lambda r: measured_row(r, level=None, mhz=None),
+                         tmp_path, monkeypatch, capsys)
+    assert "could not be examined on the clock at all" in out
+    assert "clock_level_ok undetermined" in out
+
+
+def test_the_report_names_the_cells_that_ran_under_the_roofs_clock(
+        tmp_path, monkeypatch, capsys):
+    """THE OTHER TWO BRANCHES OF THE SAME LINE, because a line that only ever
+    prints one of its three is not evidence about the run."""
+    _, failed = replay_with(lambda r: measured_row(r, level=False),
+                            tmp_path, monkeypatch, capsys)
+    assert "ran below the clock this card's roof was measured at" in failed
+    _, clean = replay_with(lambda r: measured_row(r, level=True),
+                           tmp_path, monkeypatch, capsys)
+    assert "every timed cell was scored against 1515 MHz" in clean
+    assert "could not be examined" not in clean
+
+
+def test_a_synthetic_report_claims_no_clock_evidence_either_way(
+        tmp_path, monkeypatch, capsys):
+    """Synthetic rows were never timed on a card, so the clock lines must not
+    appear at all: a generated table saying "a clock problem could have been
+    seen" would be the report claiming evidence it does not have."""
+    _, out = run_report(["--synthetic", "monotone"], tmp_path, monkeypatch,
+                        capsys)
+    assert "could not be examined on the clock" not in out
+    assert "a clock problem could have been seen" not in out
