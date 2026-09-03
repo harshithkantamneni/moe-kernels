@@ -75,11 +75,18 @@ import shutil
 import statistics
 import subprocess
 import sys
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
+
+# The shared exit-code table and the shared provenance block, both imported
+# rather than approximated here: this file spent its life returning integers it
+# chose for itself and writing JSON that named no commit and no machine.
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 
 # Imported, never re-derived. Two byte models for one study is how the padding
 # tax survived three months: `weight_bytes_per_expert` and
@@ -95,6 +102,23 @@ from scripts.block_m_crossing_sweep import (  # noqa: E402
 )
 
 PASS, FAIL, REFUSE = "PASS", "FAIL", "REFUSE"
+
+#: The card label a mode that touches no GPU carries. `--bracket` reads
+#: published CSVs and `--analyse` scores a JSON someone else measured, so
+#: neither has a live card, and `provenance.run_id` refuses an id without one.
+#: A name no `nvidia-smi` can produce, so it can never be read as a real card.
+NO_CARD = "no-card-nothing-measured"
+
+#: This file's instrument, and it is deliberately NOT
+#: `moe.bench.timing.TIMING_BASIS`: nothing here times a kernel. `--bracket`
+#: and `--analyse` are ARITHMETIC over numbers other runs measured, and
+#: `--probe` reads the machine's configuration. Stamping the timing basis on
+#: any of them would describe an apparatus that never ran, which is the exact
+#: defect the audit found in two sibling `--synthetic` paths.
+INSTRUMENT = "arithmetic-over-published-rows/no-kernel-timed"
+
+#: `--probe` measures nothing at all: it asks the box what it is.
+PROBE_INSTRUMENT = "machine-configuration-probe/nothing-timed"
 
 # --------------------------------------------------------------------------
 # Constants that are quoted rather than measured, each with its source.
@@ -351,6 +375,20 @@ class Gate:
     threshold: str
     invalidates: str = ""
     lines: list[str] = field(default_factory=list)
+
+    def scored(self) -> tuple[str, str, str]:
+        """`(kind, name, verdict)` in `moe.bench.exit_codes`'s vocabulary.
+
+        This file has said REFUSE since it was written, for "the payload did not
+        carry what this gate needs", and the shared table spells that state
+        UNKNOWN. They are the same state and the table's spelling wins at the
+        boundary, because `classify` refuses a verdict it does not recognise
+        rather than letting it fall through every branch and be scored as
+        whatever the fallthrough happens to be. UNKNOWN counts AGAINST the gate:
+        a check that examined nothing reports no failures.
+        """
+        return (self.kind, self.number,
+                exit_codes.UNKNOWN if self.verdict == REFUSE else self.verdict)
 
     def render(self) -> list[str]:
         out = [f"GATE {self.number:<3} {self.kind:<8} {self.verdict:<6} {self.claim}",
@@ -673,14 +711,24 @@ def do_probe(args) -> int:
     print(f"\n  VERDICT   {verdict}")
     for n in notes:
         print(f"            - {n}")
-    payload = {"verdict": verdict, "notes": notes, "capabilities": caps,
-               "module_flag": flag, "ncu": ncu, "nsys": nsys}
+    payload = stamped({"verdict": verdict, "notes": notes, "capabilities": caps,
+                       "module_flag": flag, "ncu": ncu, "nsys": nsys},
+                      mode="probe", args=args, card=live_card(),
+                      instrument=PROBE_INSTRUMENT)
     if args.out:
         out = Path(args.out)
         out.write_text(json.dumps(payload, indent=2))
         print(f"\n  wrote {out}")
         print(f"  git   {git_visibility(out)}")
-    return 0 if verdict == "OPEN" else 3
+    # BLOCKED IS THE ANSWER. This arm exists to record WHICH counter route is
+    # open on this box, and "ncu is blocked by the host module flag" is the
+    # finding it was written to obtain, not a broken instrument. It returned 3
+    # for everything except OPEN until 2026-09-02, and 3 is INVALID in the
+    # shared table -- "measured, then a VALIDITY gate failed, nothing quotable"
+    # -- so the driver filed the answer as a validity failure and latched the
+    # row. OPEN and BLOCKED are both results; REFUSE is the one case where the
+    # machine did not say enough to name a route, and that is REFUSED (2).
+    return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE
 
 
 # --------------------------------------------------------------------------
@@ -715,6 +763,81 @@ def git_visibility(path: Path) -> str:
         return "git WILL KEEP this path."
     return (f"git check-ignore exited {proc.returncode}; path UNVERIFIED "
             f"({proc.stderr.decode(errors='replace').strip()})")
+
+
+# --------------------------------------------------------------------------
+# Provenance: which commit, which machine, which knobs produced this JSON.
+# --------------------------------------------------------------------------
+
+def live_card() -> str:
+    """The card this box has, or `NO_CARD`.
+
+    Never raises and never guesses: a torch that is installed and broken raises
+    OSError on a missing libcudart rather than ImportError, and a probe report
+    is not worth taking down over the name of a device it did not use.
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(torch.cuda.current_device())
+            if name:
+                return str(name)
+    except Exception:                                     # noqa: BLE001
+        return NO_CARD
+    return NO_CARD
+
+
+def run_id_for(mode: str, args, card: str) -> str:
+    """A run id naming the card and the knobs THIS mode consumes.
+
+    IT IS A FIELD IN THE JSON, NOT THE PATH. `--out` is an operator-chosen file
+    path and the session driver passes one (`--out $SESSION/counter_route.json`),
+    so deriving a directory here would break the caller; what the audit found
+    missing is not a directory, it is the record of WHICH knobs produced the
+    file, since two `--bracket` runs over different `--published` sets and two
+    `--analyse` runs with different `--anchor` overrides overwrite each other in
+    silence. With the id inside, a reader of the overwritten file can at least
+    tell that it is not the one they wrote.
+
+    Each mode hashes only what it reads. `--bracket` never looks at `--model` or
+    `--tiles`, and putting them in would make two ids differ where the rows
+    cannot, which teaches a reader that a difference means nothing.
+    """
+    if mode == "probe":
+        knobs: dict = {"mode": mode}
+    elif mode == "bracket":
+        knobs = {"mode": mode,
+                 "published": sorted(str(p) for p in (args.published or []))}
+    elif mode == "analyse":
+        knobs = {"mode": mode, "payload": str(args.analyse),
+                 "anchor": dict(args.anchor or {})}
+    elif mode == "self-test":
+        knobs = {"mode": mode}
+    else:
+        knobs = {"mode": mode, "model": args.model, "dtype": args.dtype,
+                 "group_m": args.group_m, "block_n": args.block_n,
+                 "block_m": args.block_m, "tiles": list(args.tiles),
+                 "cache": args.cache_control, "report": str(args.report),
+                 "anchor": dict(args.anchor or {})}
+    return PV.run_id(card=card, **knobs)
+
+
+def stamped(payload: dict, *, mode: str, args, card: str,
+            instrument: str, **known) -> dict:
+    """`payload` with a provenance block, the audit's five top-level keys and
+    the run id.
+
+    EVERY JSON THIS SCRIPT WRITES GOES THROUGH HERE. Before 2026-09-02 the
+    `--probe` payload had keys
+    `['capabilities','module_flag','ncu','notes','nsys','verdict']` and the
+    `--bracket` payload had `['gates','rows']`: no commit, no card, no
+    timestamp, nothing. `--bracket` is the mode this file's own header calls
+    "the part that produces a result rather than a plan", and it was
+    unattributable; `--probe` describes a MACHINE and never named the machine,
+    so two pods' probes were indistinguishable.
+    """
+    prov = PV.provenance_block(instrument=instrument, **known)
+    return prov.stamp({**payload, "run_id": run_id_for(mode, args, card)})
 
 
 # --------------------------------------------------------------------------
@@ -787,14 +910,14 @@ def do_bracket(args) -> int:
         sorted((REPO / "results" / "published").glob("*alpha-surface*"))
     if not roots:
         print("REFUSE: no published alpha-surface directories found and none given")
-        return 2
+        return exit_codes.REFUSED
     rows: list[dict] = []
     for r in roots:
         rows.extend(bracket_directory(r))
     if not rows:
         print("REFUSE: examined the directories and found no identifiable fit. "
               "A check that examined nothing also reports no failures.")
-        return 2
+        return exit_codes.REFUSED
 
     print("THE COUNTER-FREE BRACKET")
     print()
@@ -869,10 +992,17 @@ def do_bracket(args) -> int:
     if args.out:
         out = Path(args.out)
         out.write_text(json.dumps(
-            {"rows": rows, "gates": [asdict(g) for g in gates]}, indent=2))
+            stamped({"rows": rows, "gates": [asdict(g) for g in gates]},
+                    mode="bracket", args=args, card=NO_CARD,
+                    instrument=INSTRUMENT), indent=2))
         print(f"\nwrote {out}")
         print(f"git   {git_visibility(out)}")
-    return 0 if all(g.verdict == PASS for g in gates if g.kind == "VALIDITY") else 0
+    # `return 0 if <condition> else 0` is what stood here: both branches were
+    # DONE, so B0's non-vacuity check and the three CLAIM gates could not reach
+    # the exit code at all. The shared table decides it now, and B1/B2 are
+    # REGISTERED to fail, so the honest code for this mode today is CLAIM_FAIL
+    # (1) -- a result, never a retry.
+    return exit_codes.classify(g.scored() for g in gates)
 
 
 # --------------------------------------------------------------------------
@@ -957,7 +1087,7 @@ def do_dry_run(args) -> int:
 
     if peak is None:
         print(f"REFUSE: no datasheet pin rate for {card}; the bracket cannot be stated.")
-        return 2
+        return exit_codes.REFUSED
 
     # The anchors come from the PUBLISHED report the run will be compared
     # against, never from constants typed here, so the plan and the run cannot
@@ -975,7 +1105,7 @@ def do_dry_run(args) -> int:
     else:
         print("REFUSE: --dry-run needs --report <published report json> so the plan is "
               "registered against the numbers the run will be scored against.")
-        return 2
+        return exit_codes.REFUSED
     if args.anchor:
         anchors.update(dict(args.anchor))
     order = [k for k, _ in sorted(anchors.items(), key=lambda kv: kv[1])]
@@ -1056,7 +1186,12 @@ def do_dry_run(args) -> int:
         ridge=f"{ridge:.2f}" if ridge else "null",
         anchors=json.dumps({k: round(v, 4) for k, v in anchors.items()}),
         bracket=f"[{bracket[0]:.4f}, {bracket[1]:.4f}]"))
-    return 0
+    # A REGISTERED PLAN IS THIS ARM'S PRODUCT. The session driver runs this mode
+    # as `counter_plan`, and the plan -- the cell, the metric, the predictions
+    # under each anchor, the gates that would score them -- is what it is asked
+    # for. Nothing is measured and nothing is claimed, so there are no gates to
+    # classify; DONE is named rather than spelled 0.
+    return exit_codes.DONE
 
 
 # --------------------------------------------------------------------------
@@ -1105,7 +1240,13 @@ def do_self_test(args) -> int:
               f"{achieved:.0f} GB/s -> bracket [{lo:.4f}, {hi:.4f}]  "
               f"{'PASS' if good else 'FAIL'}")
     print(f"\n  SELF TEST {'PASS' if ok else 'FAIL'}")
-    return 0 if ok else 1
+    # A SELF TEST IS A VALIDITY GATE ON THE ANALYSIS HALF, so its failure is
+    # INVALID (3) and not CLAIM_FAIL (1): an estimator that cannot recover a
+    # planted alpha has not refuted anything about the world, it has said that
+    # nothing this file computes may be quoted. It returned 1, which the driver
+    # files as a finished result and never retries.
+    return exit_codes.classify([(exit_codes.VALIDITY, "S1",
+                                 exit_codes.PASS if ok else exit_codes.FAIL)])
 
 
 def do_analyse(args) -> int:
@@ -1120,9 +1261,12 @@ def do_analyse(args) -> int:
     print()
     if summary.get("alpha") is not None:
         print(f"  alpha measured directly from DRAM traffic: {summary['alpha']:.4f}")
-    validity_failed = any(g.kind == "VALIDITY" and g.verdict != PASS for g in gates)
-    claim_failed = any(g.kind == "CLAIM" and g.verdict != PASS for g in gates)
-    return 1 if validity_failed else (3 if claim_failed else 0)
+    # THE TWO CODES WERE THE WRONG WAY ROUND: this returned 1 for a VALIDITY
+    # failure and 3 for a CLAIM failure, which is the shared table inverted. 1
+    # is CLAIM_FAIL, a result the driver files as finished, so an unsound
+    # counter run was recorded as a refuted claim; 3 is INVALID, which would
+    # have latched a perfectly good refutation.
+    return exit_codes.classify(g.scored() for g in gates)
 
 
 # --------------------------------------------------------------------------
@@ -1187,7 +1331,7 @@ def main(argv=None) -> int:
         print("REFUSE: pick exactly one of --dry-run / --bracket / --probe / "
               "--self-test / --analyse. Running two would interleave a plan with a "
               "result and this study has been burned by exactly that.")
-        return 2
+        return exit_codes.REFUSED
     if args.analyse:
         return do_analyse(args)
     if args.probe:
@@ -1200,4 +1344,16 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except BaseException:                                   # noqa: BLE001
+        # ERROR (4), not the interpreter's 1. An unhandled exception exiting 1
+        # would be read as CLAIM_FAIL -- "measured, and a pre-registered claim
+        # was refuted" -- by the one table the driver reads, and a traceback is
+        # the opposite of a result. 4 is RETRY in the ledger, which is what a
+        # crash and an interrupt both deserve. `memory_branch_anchor.py` has
+        # had this since 2026-09-02 and this arm is the last one without it.
+        traceback.print_exc()
+        sys.exit(exit_codes.ERROR)

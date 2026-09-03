@@ -21,18 +21,24 @@ from pathlib import Path
 
 import pytest
 
+from moe.bench import exit_codes
+from moe.bench import provenance as PV
 from moe.spec import MODEL_CONFIGS
 from scripts.dram_counter_route import (
     DATASHEET_PEAK_GBPS,
     DEFAULT_REPORT,
     FAIL,
+    INSTRUMENT,
+    NO_CARD,
     PASS,
+    PROBE_INSTRUMENT,
     REFUSE,
     Anchors,
     activation_bytes_per_tile,
     alpha_from_counters,
     anchors_from_points,
     bracket_directory,
+    build_parser,
     card_key,
     discrimination,
     git_visibility,
@@ -42,7 +48,9 @@ from scripts.dram_counter_route import (
     predicted_read_bytes,
     probe_capabilities,
     route_verdict,
+    run_id_for,
     score_counter_run,
+    stamped,
     weight_bytes_total,
 )
 
@@ -386,17 +394,17 @@ def test_bn256_arm_is_excluded_from_the_bracket():
 # --------------------------------------------------------------------------
 
 def test_main_refuses_two_modes_at_once(capsys):
-    assert main(["--dry-run", "--bracket"]) == 2
+    assert main(["--dry-run", "--bracket"]) == exit_codes.REFUSED
     assert "REFUSE" in capsys.readouterr().out
 
 
 def test_main_refuses_no_mode_at_all(capsys):
-    assert main([]) == 2
+    assert main([]) == exit_codes.REFUSED
     assert "REFUSE" in capsys.readouterr().out
 
 
 def test_dry_run_prints_predictions_and_a_cost(capsys):
-    assert main(["--dry-run"]) == 0
+    assert main(["--dry-run"]) == exit_codes.DONE
     out = capsys.readouterr().out
     assert "PREDICTIONS, registered here" in out
     assert "COST." in out
@@ -407,15 +415,149 @@ def test_dry_run_prints_predictions_and_a_cost(capsys):
 
 
 def test_self_test_mode_passes(capsys):
-    assert main(["--self-test"]) == 0
+    assert main(["--self-test"]) == exit_codes.DONE
     assert "SELF TEST PASS" in capsys.readouterr().out
 
 
 def test_bracket_mode_runs_and_reports_both_violation_kinds(capsys):
-    assert main(["--bracket"]) == 0
+    """CLAIM_FAIL, and that is the ANSWER.
+
+    B1 and B2 are registered to fail -- published alphas above their own pin-rate
+    bound is the finding this mode exists to report -- and B3 is registered to
+    fail because the bracket is not tight enough to replace a counter. The exit
+    code stood at `0 if <condition> else 0` until 2026-09-02, both branches
+    DONE, so no gate here could reach it. CLAIM_FAIL (1) is a result the driver
+    files as finished and never retries, which is exactly right for a refutation.
+    """
+    assert main(["--bracket"]) == exit_codes.CLAIM_FAIL
     out = capsys.readouterr().out
     assert "ABOVE" in out and "GATE B1" in out
     assert "28 identifiable fits" in out or "identifiable fits" in out
+
+
+# --------------------------------------------------------------------------
+# Provenance. Failure mode 4: a JSON nobody can attribute to a commit, a
+# machine or a set of knobs is an anecdote, and --bracket is this file's one
+# advertised RESULT.
+# --------------------------------------------------------------------------
+
+def test_every_json_this_script_writes_carries_provenance_and_a_run_id(tmp_path):
+    """Both `--out` payloads, checked by running the modes rather than by
+    reading the source.
+
+    Before 2026-09-02 `--probe` wrote
+    `['capabilities','module_flag','ncu','notes','nsys','verdict']` and
+    `--bracket` wrote `['gates','rows']`: no commit, no card, no timestamp, no
+    knobs. `--probe` describes a MACHINE and named none, so two pods' probes
+    were indistinguishable.
+    """
+    for argv, out, instrument in (
+            (["--probe"], tmp_path / "probe.json", PROBE_INSTRUMENT),
+            (["--bracket"], tmp_path / "bracket.json", INSTRUMENT)):
+        main([*argv, "--out", str(out)])
+        doc = json.loads(out.read_text())
+        for key in ("git_sha", "gpu_name", "instrument", "ridge_source",
+                    "bandwidth_source", "provenance", "run_id"):
+            assert key in doc, (argv, key)
+        assert doc["instrument"] == instrument
+        assert doc["provenance"]["git_sha"], "the commit that produced it"
+        assert doc["provenance"]["utc"]
+        # The block NAMES what it could not determine rather than guessing it.
+        assert isinstance(doc["provenance"]["missing"], dict)
+
+
+def test_the_instrument_is_never_the_timing_basis(tmp_path):
+    """Nothing in this file times a kernel. `--bracket` and `--analyse` are
+    arithmetic over rows other runs measured and `--probe` reads a machine's
+    configuration, so stamping `moe.bench.timing.TIMING_BASIS` on any of them
+    would describe an apparatus that never ran -- the defect the audit found in
+    two sibling `--synthetic` paths."""
+    from moe.bench import timing
+    assert INSTRUMENT != timing.TIMING_BASIS
+    assert PROBE_INSTRUMENT != timing.TIMING_BASIS
+    assert "no-kernel-timed" in INSTRUMENT and "nothing-timed" in PROBE_INSTRUMENT
+
+
+def test_the_run_id_separates_the_knobs_each_mode_actually_reads():
+    """Two `--bracket` runs over different `--published` sets, and two
+    `--analyse` runs with different `--anchor` overrides, overwrote each other
+    in silence: `--out` is a bare operator-chosen path and nothing in the file
+    said which knobs produced it."""
+    args = build_parser().parse_args(["--bracket"])
+    other = build_parser().parse_args(["--bracket", "--published", "a", "b"])
+    assert run_id_for("bracket", args, NO_CARD) != run_id_for("bracket", other, NO_CARD)
+    assert run_id_for("bracket", args, NO_CARD) == run_id_for("bracket", args, NO_CARD)
+
+    one = build_parser().parse_args(["--analyse", "run.json"])
+    two = build_parser().parse_args(["--analyse", "run.json",
+                                     "--anchor", "t1", "0.4522"])
+    one.anchor = [(k, float(v)) for k, v in (one.anchor or [])]
+    two.anchor = [(k, float(v)) for k, v in two.anchor]
+    assert run_id_for("analyse", one, NO_CARD) != run_id_for("analyse", two, NO_CARD)
+    # ...and the card is the id's first component, so two pods cannot share one.
+    assert run_id_for("probe", args, "NVIDIA H200").startswith("nvidia_h200-")
+    assert (run_id_for("probe", args, "NVIDIA H200")
+            != run_id_for("probe", args, "NVIDIA A100-SXM4-80GB"))
+
+
+def test_stamping_refuses_to_layer_a_second_provenance_block():
+    """The FAIL branch of `stamped`: a payload that already carries one of the
+    audit's five keys with a different value is a collision, not a merge."""
+    args = build_parser().parse_args(["--bracket"])
+    with pytest.raises(PV.ProvenanceCollision):
+        stamped({"git_sha": "0" * 40}, mode="bracket", args=args, card=NO_CARD,
+                instrument=INSTRUMENT)
+
+
+# --------------------------------------------------------------------------
+# The exit-code table. Failure mode 5: an ANSWER filed as a broken instrument.
+# --------------------------------------------------------------------------
+
+def test_a_blocked_counter_route_is_an_answer_and_not_a_validity_failure(monkeypatch):
+    """`return 0 if verdict == "OPEN" else 3` is what stood here.
+
+    3 is INVALID in the shared table -- "measured, then a VALIDITY gate failed,
+    nothing quotable" -- so the finding this arm exists to obtain, that ncu is
+    blocked by a host module flag a tenant cannot change, was filed as a broken
+    instrument and latched the row for every resume. OPEN and BLOCKED are both
+    results; REFUSE, where the machine did not say enough to name a route, is
+    the one that costs nothing and is REFUSED (2).
+    """
+    import scripts.dram_counter_route as DCR
+    for verdict, expected in (("OPEN", exit_codes.DONE),
+                              ("BLOCKED", exit_codes.DONE),
+                              (REFUSE, exit_codes.REFUSED)):
+        monkeypatch.setattr(DCR, "route_verdict",
+                            lambda *a, _v=verdict: (_v, ["planted"]))
+        assert DCR.main(["--probe"]) == expected, verdict
+
+
+def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path):
+    """The two codes were INVERTED: 1 for a VALIDITY failure and 3 for a CLAIM
+    failure. 1 is CLAIM_FAIL, which the driver files as finished, so an unsound
+    counter run was recorded as a refuted claim; 3 is INVALID, which would have
+    latched a perfectly good refutation."""
+    def payload(rows):
+        return {"device": "NVIDIA A100-SXM4-80GB", "model": "mixtral-8x7b",
+                "block_m": 32, "cache_control": "all", "rows": rows}
+
+    # Fewer than four tile counts fails V1, the non-vacuity gate: INVALID.
+    thin = tmp_path / "thin.json"
+    thin.write_text(json.dumps(payload(
+        [{"n": 1, "launches": 5, "dram_bytes_read": 2.8e9}])))
+    assert main(["--analyse", str(thin)]) == exit_codes.INVALID
+
+    # A clean run at a planted alpha passes everything: DONE.
+    good = tmp_path / "good.json"
+    good.write_text(json.dumps(payload(
+        [{"n": n, "launches": 5,
+          "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.558)}
+         for n in (1, 2, 3, 4)])))
+    # ...and every VALIDITY gate passes. C2 and C3 come back UNKNOWN (this file
+    # spells it REFUSE) because the payload carries no bracket and no ridge, and
+    # UNKNOWN counts AGAINST a gate: the claim was not established, so
+    # CLAIM_FAIL, never DONE. A check that examined nothing reports no failures.
+    assert main(["--analyse", str(good)]) == exit_codes.CLAIM_FAIL
 
 
 def test_anchors_dataclass_is_pure_arithmetic():

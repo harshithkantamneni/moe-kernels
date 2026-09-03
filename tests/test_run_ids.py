@@ -151,20 +151,70 @@ def test_the_group_m_run_id_carries_the_card_slug():
     assert GROUP_M.default_run_id(args, H200, plan).startswith("nvidia_h200-")
 
 
-@pytest.mark.parametrize("knob,value", [
-    ("warmup", 900.0), ("trials", 7), ("l2_flush", False),
-    ("model", "qwen2-57b-a14b"), ("block_m", 32), ("passes", 2),
-    ("seeds", 2), ("tokens", (16, 32)), ("group_m", (1, 16)),
-    ("routings", ("uniform",)),
-])
+#: Every `parse_args` knob of the group_m sweep that must NOT move the run id,
+#: with the reason, because a knob left out of both this map and the moved list
+#: below fails `test_no_group_m_knob_is_silently_outside_the_run_id`. The
+#: hand-written moved list is what let `--cell-budget-ms` through: it named ten
+#: knobs, the parser had sixteen, and nothing compared the two.
+GROUP_M_NOT_IN_THE_ID = {
+    "bootstrap": "re-analyses a set of measurements rather than changing one",
+    "seed": "the analysis seed; the routing seeds are `seeds` and they ARE in",
+    "card": "IS the id's first component, passed separately as `card`",
+    "out": "names the directory instead of deriving it",
+    "replay": "reads a directory that already exists",
+    "fresh": "deletes the cells rather than describing them",
+    "run": "decides whether to measure at all, not what a measurement is",
+    "synthetic": "gets its own `-synthetic-<law>` directory suffix",
+    "max_minutes": "stops the sweep early; the cells it did write are the same "
+                   "cells, and resuming into them is the intended behaviour",
+}
+
+#: One value per swept knob, different from the parser default. The id must move
+#: for every one of them.
+GROUP_M_MOVED = {
+    "warmup": 900.0, "trials": 7, "l2_flush": False, "cell_budget_ms": 800.0,
+    "model": "qwen2-57b-a14b", "block_m": 32, "passes": 2, "seeds": 2,
+    "tokens": (16, 32), "group_m": (1, 16), "routings": ("uniform",),
+    "dtype": "fp16",
+}
+
+
+@pytest.mark.parametrize("knob,value", sorted(GROUP_M_MOVED.items()))
 def test_every_group_m_knob_changes_the_run_id(knob, value):
-    """The last four reach the id through `plan.fingerprint`, the first three
-    only through this function; both routes are exercised so neither can be
-    dropped without a failure here."""
+    """Both routes into the id are exercised: `model`, `block_m`, `passes`,
+    `seeds`, `tokens`, `group_m`, `routings`, `dtype` and `cell_budget_ms` reach
+    it through `plan.fingerprint`, and `warmup`, `trials`, `l2_flush` and
+    `cell_budget_ms` through `default_run_id` itself, so neither can be dropped
+    without a failure here.
+
+    `cell_budget_ms` JOINED 2026-09-02. It was in neither route, which is
+    collision 3 of `moe.bench.provenance` verbatim: it is the target duration of
+    one trial, so it sets the measured milliseconds of every cell, and an 800 ms
+    re-run resumed a 400 ms directory and reprinted the 400 ms timings.
+    """
     base_args, base_plan = _gm()
     moved_args, moved_plan = _gm(**{knob: value})
     assert (GROUP_M.default_run_id(base_args, H200, base_plan)
             != GROUP_M.default_run_id(moved_args, H200, moved_plan)), knob
+
+
+def test_no_group_m_knob_is_silently_outside_the_run_id():
+    """THE LIST ABOVE CANNOT GO STALE. A hand-written parametrize list is a list
+    that a new `--flag` does not join, and the suite stays green while the id
+    stops separating two experiments. So the knobs are read off the parser and
+    every one must be either exercised above or refused by name, with a reason,
+    in `GROUP_M_NOT_IN_THE_ID`.
+    """
+    knobs = set(vars(GROUP_M.parse_args([])))
+    unclassified = knobs - set(GROUP_M_MOVED) - set(GROUP_M_NOT_IN_THE_ID)
+    assert not unclassified, (
+        f"{sorted(unclassified)} are knobs of group_m_alpha_sweep that nothing "
+        "says belong in or out of the run id. Add each to GROUP_M_MOVED with a "
+        "value that must move the id, or to GROUP_M_NOT_IN_THE_ID with the "
+        "reason it may not.")
+    assert not (set(GROUP_M_MOVED) & set(GROUP_M_NOT_IN_THE_ID))
+    # ...and the two lists describe THIS parser, not one it used to have.
+    assert not (set(GROUP_M_MOVED) | set(GROUP_M_NOT_IN_THE_ID)) - knobs
 
 
 def test_two_cards_no_longer_share_the_group_m_directory():
@@ -183,7 +233,7 @@ def test_the_group_m_analysis_knobs_stay_out_of_the_run_id():
     """`--bootstrap` and `--seed` re-analyse a set of measurements rather than
     change one, so two analyses of one sweep belong in one directory."""
     base_args, base_plan = _gm()
-    for knob, value in (("bootstrap", 999), ("seed", 7)):
+    for knob, value in (("bootstrap", 999), ("seed", 7)):  # both in GROUP_M_NOT_IN_THE_ID
         moved_args, moved_plan = _gm(**{knob: value})
         assert (GROUP_M.default_run_id(base_args, H200, base_plan)
                 == GROUP_M.default_run_id(moved_args, H200, moved_plan)), knob

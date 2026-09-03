@@ -898,16 +898,24 @@ def unadopting_repo(tmp_path, rel):
 
 
 def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path):
-    """THE DEFECT, PLANTED. `dram_counter_route.py` ends `return 0 if verdict ==
+    """THE DEFECT, PLANTED. `dram_counter_route.py` ended `return 0 if verdict ==
     "OPEN" else 3`, so BLOCKED -- the answer that arm exists to obtain, and the
-    expected one on a rented pod -- exits 3, which the adopted table reads as
+    expected one on a rented pod -- exited 3, which the adopted table reads as
     INVALID. The base driver carried `counter_plan) echo 0,3` for exactly this;
-    R1 deleted the per-arm lists and that script is not on audit A4's fix list,
-    so the row is wrong at merge and the only honest thing this file can do is
-    say so beside it."""
+    R1 deleted the per-arm lists, so the row was wrong and the only honest thing
+    this file could do was say so beside it.
+
+    AGAINST A PLANTED FILE SINCE 2026-09-02, for the reason `unadopting_repo`
+    gives: that script has since adopted the table and its BLOCKED verdict now
+    exits DONE, so the real tree no longer reaches this branch. The MECHANISM is
+    what is under test and it must not depend on which script is unadopted this
+    week. `test_an_unadopted_refusal_says_two_may_mean_the_opposite` was moved
+    the same way when the anchor adopted, one function below.
+    """
+    repo = unadopting_repo(tmp_path, "scripts/dram_counter_route.py")
     log = tmp_path / "counter_plan.log"
     log.write_text(RESULT_LOG)
-    got = lift(f'summarize_arm counter_plan {log} INVALID', REPO=str(ROOT))
+    got = lift(f'summarize_arm counter_plan {log} INVALID', REPO=str(repo))
     assert "dram_counter_route.py returns 3 for" in got.stdout
     assert "not OPEN" in got.stdout
     assert "not a broken instrument" in got.stdout
@@ -986,11 +994,32 @@ def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(
     assert "mma_switch          DONE" in got.stdout
     assert "ruler" not in got.stdout, "a row from a file that has adopted the " \
         "table has nothing to disclose, in any state"
-    # Against the real tree only the counter route is still unadopted, so the
-    # anchor row drops out of the disclosure by itself.
+    # AGAINST THE REAL TREE, NOTHING IN THIS LEDGER IS DISCLOSED ANY MORE, and
+    # that is the all-clear rather than a gap. Two slices landed together here:
+    # one widened the disclosure to every state a non-adopter can spend (the
+    # planted branch above), the other made `dram_counter_route.py` adopt the
+    # table, which is what empties this branch. The planted repo keeps the loud
+    # path covered no matter which real file adopts next; this branch asserts
+    # the driver says the all-clear in a sentence instead of going silent.
+    # AGAINST THE REAL TREE the answer is whatever has actually adopted today,
+    # so it is ASKED rather than asserted. Hardcoding it is what broke this test
+    # twice: once when the anchor adopted, once when the counter route did.
     real = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
-    assert "counter_plan        INVALID" in real.stdout
-    assert "anchor_measure" not in real.stdout
+    for arm, script in (("counter_plan", "scripts/dram_counter_route.py"),
+                        ("anchor_measure", "scripts/memory_branch_anchor.py"),
+                        ("mma_switch", "scripts/check_mma_path.sh")):
+        adopted = lift(f'adopts_exit_codes {script}; echo "rc=$?"',
+                       REPO=str(ROOT)).stdout.strip().endswith("rc=0")
+        if adopted:
+            assert arm not in real.stdout, (
+                f"{script} adopts the table, so {arm} has nothing to disclose")
+        else:
+            assert arm in real.stdout, (
+                f"{script} does not adopt the table, so {arm} must be disclosed "
+                "in whatever state it lands, including DONE")
+    # And the all-clear sentence appears exactly when nothing was disclosed.
+    if "WRONG WORD" not in real.stdout:
+        assert "No REFUSED or INVALID row" in real.stdout
 
     clean = tmp_path / "CLEAN.tsv"
     clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"

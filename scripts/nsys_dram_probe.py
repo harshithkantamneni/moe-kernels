@@ -86,8 +86,26 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from moe.bench import nsys_metrics as nm  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.bytes_model import field_bytes, weight_bytes_for_stage  # noqa: E402
 from moe.spec import MODEL_CONFIGS, BenchSpec, RoutingSpec  # noqa: E402
+
+#: The instrument that produces the per-launch milliseconds and the
+#: `achieved_gbps` in every workload dict below, named because it is NOT
+#: `moe.bench.timing.TIMING_BASIS`. These loops are a wall clock around a queue
+#: of launches, sized to fill an nsys window: no L2 flush, no clock read under
+#: load, no trial spread, no host-bound detector. That is defensible for
+#: choosing a window and it is NOT comparable with a number the one instrument
+#: produced, so the two are never allowed to wear the same name.
+#: `workload_stream`'s own docstring calls its bandwidth "the calibration case
+#: and the load-bearing one", which is exactly why it has to say what measured it.
+WALL_CLOCK_INSTRUMENT = "wall-clock/queued-launches/nsys-window/not-time_kernel"
+
+#: The card label a run that touches no GPU carries. `--explain` returns before
+#: any of this and `--report` parses a trace someone else captured, so
+#: `provenance.run_id`, which refuses an id without a card, needs a name no
+#: `nvidia-smi` can produce.
+NO_CARD = "no-card-nothing-measured"
 
 #: Long enough that a merged window holds thousands of samples even at the 10 kHz
 #: default, short enough that the discovery ladder fits in the two-minute budget.
@@ -191,6 +209,7 @@ def workload_stream(buffer_mb: float, seconds: float) -> dict:
         "known_write_bytes_per_launch": out_bytes,
         "buffer_gb": read_bytes / 1e9,
         "achieved_gbps": (read_bytes + out_bytes) * iters / elapsed / 1e9,
+        "instrument": WALL_CLOCK_INSTRUMENT,
     }
 
 
@@ -268,6 +287,7 @@ def workload_grouped_mm(model: str, tokens: int, seconds: float) -> dict:
         "iters": iters,
         "seconds": elapsed,
         "per_launch_ms": elapsed / iters * 1e3,
+        "instrument": WALL_CLOCK_INSTRUMENT,
     }
 
 
@@ -395,6 +415,33 @@ def gpu_name() -> str:
     out = shell(["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], timeout=20)
     return out.stdout.strip().splitlines()[0].strip() if out.ok and out.stdout.strip() \
         else "unknown"
+
+
+def probe_card() -> str:
+    """The card that names the run id, asked of `nvidia-smi` and never of torch.
+
+    THE DRIVER PROCESS MUST NOT TOUCH CUDA, and until 2026-09-02 it never did:
+    the only `import torch` in this file is inside `workload_stream` and
+    `workload_grouped_mm`, which run solely in the `--workload` child. Naming the
+    card from `provenance_block().gpu_name` broke that, because
+    `provenance._gpu` reads
+    `torch.cuda.get_device_name(torch.cuda.current_device())` and
+    `current_device` calls `_lazy_init()`, which creates a CUDA primary context
+    in whatever process asks.
+
+    A context here lands THIS process in `compute_apps()`, the one field that
+    records whether a neighbour was on the device while a device-wide sampler
+    ran. "none" would stop being reachable and the probe would report itself as
+    the contamination it exists to detect. It also takes a few hundred MB off
+    the free memory the child's own headroom guard measures.
+
+    `nvidia-smi` answers the same question from outside the driver API. An
+    unavailable one gives `NO_CARD` rather than `gpu_name`'s "unknown", because
+    `provenance.run_id` refuses an empty card and a label no card can have is
+    honest where a guess is not.
+    """
+    name = gpu_name()
+    return NO_CARD if name == "unknown" else name
 
 
 def compute_apps() -> str:
@@ -586,6 +633,73 @@ class Report:
     cell: dict = field(default_factory=dict)
     verdict: str = ""
     compute_apps_after: str = ""
+    #: The knobs this session ran with, `--peak-gbps` above all: it converts a
+    #: percent-of-peak sample into bytes, so it SETS the reported traffic and any
+    #: alpha derived from it, and it appeared nowhere in probe.json.
+    settings: dict = field(default_factory=dict)
+    run_id: str = ""
+
+
+def run_id_for(args, card: str) -> str:
+    """The probe's run id: card first, then every knob that moves a number.
+
+    THE DIRECTORY WAS A BARE TIMESTAMP, `%Y-%m-%d-%H%M%S`, under a results root
+    that prefers `$MOE_RESULTS_DIR` then `/workspace/results` -- a network volume
+    the runbook uses BECAUSE it outlives the pod. Two pods' probes therefore
+    interleaved in one tree and only opening a file said which card wrote it.
+    That is collision 2 of `moe.bench.provenance`'s docstring wearing a new hat.
+
+    `peak_gbps` is in the key even though it is not swept: it is the conversion
+    constant from percent-of-peak to bytes, so two sessions that differ only in
+    it report different traffic from the same trace.
+    """
+    return PV.run_id(
+        card=card,
+        mode=("measure" if args.measure else "calibrate" if args.calibrate
+              else "probe"),
+        hz=float(args.sample_hz),
+        sec=float(args.seconds),
+        mb=float(args.buffer_mb),
+        model=str(args.model),
+        tok=int(args.tokens),
+        peak=(float(args.peak_gbps) if args.peak_gbps else "unset"),
+    )
+
+
+def probe_provenance(args) -> PV.Provenance:
+    """The block every probe.json carries.
+
+    `--peak-gbps` goes in as `bandwidth` with NO `bandwidth_source`, on purpose:
+    the operator is told to take it from `measured_<device>.yaml` and this script
+    cannot check that they did, so `provenance_block` records the number and
+    lists `bandwidth_source` in `missing` as "supplied without a source". That is
+    the state the module was written to make visible rather than to hide, and the
+    audit's ridge/bandwidth gate is meant to fail on it.
+    """
+    return PV.provenance_block(
+        instrument=WALL_CLOCK_INSTRUMENT,
+        bandwidth=(float(args.peak_gbps) * 1e9 if args.peak_gbps else None))
+
+
+def write_report(out_dir: Path, rep: Report, args) -> Path:
+    """Stamp `probe.json` and build the provenance block at the LAST moment.
+
+    THE ORDER IS THE POINT, not the tidiness. `probe_provenance` imports torch
+    and asks CUDA for the device name, which creates a primary context in this
+    process (see `probe_card`). Everything the report describes happens before
+    this call: `discover` takes the before-snapshot of `compute_apps`, the
+    ladder runs, `compute_apps_after` takes the after-snapshot, and the
+    calibrate and measure children each get the free memory their own headroom
+    guard checks. Building the block anywhere earlier puts our own pid into the
+    neighbour field and shrinks the child's headroom, so the fix for an
+    unattributed report would have corrupted the record it was attributing.
+
+    Exactly one of `main`'s three exits reaches this, so the block is probed
+    once per run whichever way the probe ends.
+    """
+    path = out_dir / "probe.json"
+    path.write_text(json.dumps(probe_provenance(args).stamp(asdict(rep)), indent=2))
+    return path
 
 
 def explain() -> str:
@@ -764,7 +878,13 @@ def measure_from_report(sqlite_path: Path, sample_hz: float, peak_gbps: float | 
         conn.close()
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The parser, separate from `main`, so a test can ask what the knobs ARE.
+
+    Split out 2026-09-02 with the run id: an id is a claim about which knobs
+    move a number, and a test that cannot build an argv cannot check that claim
+    against the parser it is supposed to describe.
+    """
     ap = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -799,7 +919,11 @@ def main() -> int:
     ap.add_argument("--out", type=Path, help="where the report and traces land")
     ap.add_argument("--workload", choices=("stream", "grouped-mm"),
                     help="INTERNAL: run as the profiled child, not as the driver")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     if args.workload:
         if args.workload == "stream":
@@ -813,10 +937,23 @@ def main() -> int:
         print(explain())
         return 0
 
+    # THE CARD COMES FROM `nvidia-smi` AND THE PROVENANCE BLOCK IS BUILT LAST,
+    # inside `write_report`, both for the reason `probe_card` gives: building it
+    # creates a CUDA context in this process, and this process is the one whose
+    # absence from `compute_apps` the report is claiming.
+    card = probe_card()
+    run_id = run_id_for(args, card)
+    # The timestamp STAYS, after the id rather than instead of it: two probes of
+    # one machine at one setting are two different sessions and the question
+    # this file asks is about a machine that changes.
     out_dir = args.out or (results_root() / "nsys_dram_probe" /
-                           time.strftime("%Y-%m-%d-%H%M%S"))
+                           f"{run_id}-{time.strftime('%Y-%m-%d-%H%M%S')}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    rep = Report(started=time.strftime("%Y-%m-%d %H:%M:%S"))
+    rep = Report(started=time.strftime("%Y-%m-%d %H:%M:%S"), run_id=run_id,
+                 settings={"sample_hz": args.sample_hz, "seconds": args.seconds,
+                           "buffer_mb": args.buffer_mb, "model": args.model,
+                           "tokens": args.tokens, "peak_gbps": args.peak_gbps,
+                           "timeout": args.timeout, "card": card})
     t0 = time.perf_counter()
     print(f"WRITES TO   {out_dir}")
     print(explain())
@@ -887,8 +1024,7 @@ def main() -> int:
             "which separates 'no sampler' from 'no nsys'.")
         print(f"\nVERDICT: {rep.verdict}")
         rep.elapsed_s = time.perf_counter() - t0
-        (out_dir / "probe.json").write_text(json.dumps(asdict(rep), indent=2))
-        print(f"\nelapsed {rep.elapsed_s:.0f}s, report {out_dir / 'probe.json'}")
+        print(f"\nelapsed {rep.elapsed_s:.0f}s, report {write_report(out_dir, rep, args)}")
         return 3
 
     print(f"\nVERDICT SO FAR: nsys DOES sample DRAM here, via {winner.label}")
@@ -927,7 +1063,7 @@ def main() -> int:
                                "should be quoted.")
                 print(f"\nVERDICT: {rep.verdict}")
                 rep.elapsed_s = time.perf_counter() - t0
-                (out_dir / "probe.json").write_text(json.dumps(asdict(rep), indent=2))
+                write_report(out_dir, rep, args)
                 return 3
         else:
             rep.calibration = {"error": res.head()}
@@ -969,8 +1105,7 @@ def main() -> int:
                    "device wide and edge quantised, so quote it with the "
                    "resolution line beside it.")
     rep.elapsed_s = time.perf_counter() - t0
-    (out_dir / "probe.json").write_text(json.dumps(asdict(rep), indent=2))
-    print(f"\nelapsed {rep.elapsed_s:.0f}s, report {out_dir / 'probe.json'}")
+    print(f"\nelapsed {rep.elapsed_s:.0f}s, report {write_report(out_dir, rep, args)}")
     print("Traces and their sqlite exports are beside it. `*.nsys-rep` is "
           "gitignored at any depth, so they leave as a tarball.")
     return 0

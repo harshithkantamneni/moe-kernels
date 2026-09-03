@@ -200,6 +200,7 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -229,6 +230,28 @@ def timing_basis() -> str | None:
     except Exception:                                     # noqa: BLE001
         return None
     return TIMING_BASIS
+
+
+#: The instrument of a document with NO replicate floor in it. Part (b) is
+#: arithmetic over committed reports and part (a) did not run, so no apparatus
+#: of this repository produced a number on that page and naming the live one
+#: would describe a run that never happened. It is a STRING and not None because
+#: None reads as "could not be determined", and this is determined: nothing was
+#: measured.
+UNMEASURED_INSTRUMENT = "not-measured/arithmetic-over-committed-reports"
+
+
+def unmeasured_provenance() -> PV.Provenance:
+    """The block for a page that measured nothing.
+
+    Exists so the two no-GPU `--publish` paths cannot reach `build_document`
+    with nothing to stamp. It still records the commit, the dirtiness, the host
+    and the packages, which is what makes "this floor was published from an
+    unmeasured page at commit X" a checkable statement rather than an absence.
+    """
+    return PV.provenance_block(instrument=UNMEASURED_INSTRUMENT)
+
+
 PUBLISHED = ROOT / "results" / "published"
 
 #: Where the importable number lives. `results/*` is ignored with only
@@ -1095,7 +1118,8 @@ def order_lines(arms: list[Arm], n: int, mode: str) -> list[str]:
             for model, labels in seq.items()]
 
 
-def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str) -> str:
+def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str,
+               sweep_args: Sequence[str], order: str, python: str) -> str:
     """A run id carrying EVERY swept parameter, the card, and the replicate index.
 
     `block_m_crossing_sweep.default_run_id` OMITTED THE GPU until 2026-09-02,
@@ -1116,6 +1140,49 @@ def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str) -> s
     a private hash here, so the card is a REQUIRED keyword that raises `NoCard`
     when absent and every knob is refused when it is None. Three scripts had
     each re-implemented a subset of this and each had left a different knob out.
+
+    `sweep_args` AND `order` ARE REQUIRED KEYWORDS, ADDED 2026-09-02, and they
+    are required rather than defaulted because a default is what a new call site
+    forgets. Both were absent and both were the lost-arm collision again:
+
+      * `--sweep-arg` is a PASSTHROUGH: whatever it carries is appended to every
+        child `block_m_crossing_sweep` command line, so
+        `--sweep-arg=--group-m --sweep-arg=16` re-swept the G=16 arm under the
+        G=1 id. The child cannot rescue itself, because this parent hands it
+        `--run-id` (see `Arm.sweep_argv`) and the child then names its directory
+        after ours. On a pod the G=16 arm would have resumed the G=1 directory,
+        found every cell present, spent no GPU time, and produced a noise floor
+        computed from G=1 timings labelled G=16.
+      * `--order` decides the counterbalancing DESIGN. `counterbalanced` and
+        `paired` produced byte-identical id sets, so switching the design
+        resumed the other design's cells and the drift cancellation this
+        module's docstring argues for at length would never have happened. It
+        is a design knob, not an analysis knob.
+
+    The passthrough enters the key as the operator SPELLED it, not parsed: this
+    function has no business knowing the sweep's grammar, and two spellings of
+    one setting landing in two directories is the safe direction of that
+    ignorance.
+
+    `python` IS REQUIRED TOO, ADDED 2026-09-02 AND FOR THE SAME REASON. It is
+    the interpreter every child sweep is launched with, so it selects the venv
+    and therefore the torch, triton and vLLM that measure every cell, and the
+    session driver deliberately varies it between `PY_BASE` and `PY_VLLM` from
+    one arm to the next. Two interpreters resumed one directory:
+
+        --dry-run --gpu-name 'NVIDIA H200' --python /usr/bin/python3
+        --dry-run --gpu-name 'NVIDIA H200' --python /other/venv/bin/python
+
+    printed the identical `...-settingscell_budget-fbf9bcea`. It travels under
+    `settings` rather than in the visible part because the path is long and the
+    six knobs an operator reads in `ls` are worth more room than it is; the hash
+    does not care where a knob sits.
+
+    THIS WAS FOUND BY A COMPLETENESS GUARD, NOT BY A READER.
+    `tests/test_replicate_noise_floor.py` now reads the knobs off `build_parser`
+    and demands each one be exercised or refused by name, which is the same
+    guard `tests/test_run_ids.py` grew after a hand-written list of ten knobs
+    against a parser of sixteen let `--cell-budget-ms` through.
     """
     return PV.run_id(
         card=gpu_name,
@@ -1129,9 +1196,12 @@ def run_id_for(arm: Arm, replicate: int, *, gpu_name: str, cache_mode: str) -> s
         g=arm.group_m,
         model=arm.model,
         n=arm.block_n,
+        order=order,
         rep=replicate,
         s=arm.num_stages,
         settings={
+            "sweep_args": list(sweep_args),
+            "python": python,
             "dtype": arm.dtype,
             "tiles": arm.tiles,
             "r_max": arm.r_max,
@@ -1839,11 +1909,24 @@ def scope_block(arms: list[Arm], *, n_replicates: int, cache_mode: str,
 def build_document(control: dict[str, PairedDifference],
                    cards: dict[str, PairedDifference],
                    floors: dict[str, PooledFloor] | None,
+                   prov: PV.Provenance,
                    *, n_replicates: int = 0, cache_mode: str = "",
                    gpu_name: str = "", provenance: str = "",
-                   synthetic: bool = False, scope: dict | None = None,
-                   prov: PV.Provenance | None = None) -> dict:
-    """The published JSON. `replicate_floor` is null until a card produces one."""
+                   synthetic: bool = False, scope: dict | None = None) -> dict:
+    """The published JSON. `replicate_floor` is null until a card produces one.
+
+    `prov` IS POSITIONAL AND REQUIRED AS OF 2026-09-02. It was a keyword
+    defaulting to None, and two of the three call sites did not pass it: the
+    `--control-only --publish` path and the no-GPU/`--dry-run --publish` path
+    each wrote the TRACKED file `results/published/NOISE_FLOOR.json` with no
+    provenance block at all, so the committed floor named no machine, no
+    instrument, no ridge source and no bandwidth source. The only attribution
+    left was the home-grown `git_state()`, which is precisely the "re-invented a
+    subset" shape `moe.bench.provenance` exists to end. A default is what three
+    call sites forget; a required argument is what none of them can. There is a
+    block for a page that measured nothing, `unmeasured_provenance()`, so the
+    requirement is never a reason to invent one.
+    """
     doc = {
         "schema": SCHEMA,
         "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1867,8 +1950,7 @@ def build_document(control: dict[str, PairedDifference],
         "cross_card": {name: paired_payload(d) for name, d in cards.items()},
         "replicate_floor": None,
     }
-    if prov is not None:
-        doc = prov.stamp(doc)
+    doc = prov.stamp(doc)
     if floors:
         per_field = {}
         for name, floor in floors.items():
@@ -2085,7 +2167,14 @@ def render_mde_line(n: int, arms: list[Arm]) -> list[str]:
 
 def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
                 gpu_name: str, costs: dict[str, float | None],
-                order: str = ORDER_COUNTERBALANCED) -> str:
+                order: str, sweep_args: Sequence[str], python: str) -> str:
+    """The plan, including the id every replicate will resume into.
+
+    `sweep_args`, `order` and `python` are here so the PRINTED ids are the ids
+    the run will use. The plan is what an operator reads before spending a pod
+    hour, and a plan that names a directory the run then does not use is worse
+    than no plan: it is the one artefact that would have shown the collision.
+    """
     out = ["## The plan", "",
            f"{len(arms)} arm(s) x {n} replicates = {len(arms) * n} sweep processes, "
            f"cache mode {cache_mode}, config device {gpu_name}",
@@ -2120,7 +2209,8 @@ def render_plan(arms: list[Arm], n: int, cache_mode: str, base: Path,
         out.append(f"  {arm.name:<14s} {arm.model} {arm.dtype} G={arm.group_m} "
                    f"BN={arm.block_n} s={arm.num_stages} r_max={arm.r_max}  {cost}")
         for i in range(1, n + 1):
-            run_id = run_id_for(arm, i, gpu_name=gpu_name, cache_mode=cache_mode)
+            run_id = run_id_for(arm, i, gpu_name=gpu_name, cache_mode=cache_mode,
+                                sweep_args=sweep_args, order=order, python=python)
             out.append(f"      rep {i}: {run_id}")
     out.append("")
     if unknown:
@@ -2246,9 +2336,22 @@ def link_shared_cache(out_dir: Path, run_id: str, shared: Path) -> None:
 
 def run_replicate(arm: Arm, index: int, base: Path, *, gpu_name: str,
                   cache_mode: str, python: str, extra: list[str],
+                  sweep_args: Sequence[str], order: str,
                   shared_cache: Path | None, timeout_s: float) -> Replicate:
-    """One sweep process. Its log survives even when it fails."""
-    run_id = run_id_for(arm, index, gpu_name=gpu_name, cache_mode=cache_mode)
+    """One sweep process. Its log survives even when it fails.
+
+    TWO ARGUMENT LISTS, ON PURPOSE. `extra` is what goes on the child's command
+    line; `sweep_args` is the part of it that NAMES the run. They differ only
+    under `--rehearse`, which appends a per-replicate `--seed` so the synthetic
+    cells move: that seed is a function of `index`, which is already in the key,
+    so putting it in as well would make the ids the plan printed disagree with
+    the ids the run used, and the plan is the artefact an operator reads before
+    spending a pod hour. Everything an operator can vary IS in `sweep_args`,
+    because we hand the child our `--run-id` and it therefore cannot separate
+    two settings we did not separate for it.
+    """
+    run_id = run_id_for(arm, index, gpu_name=gpu_name, cache_mode=cache_mode,
+                        sweep_args=sweep_args, order=order, python=python)
     out_dir = base / f"{arm.name}-rep{index}"
     rep = Replicate(arm=arm.name, index=index, run_id=run_id, out_dir=out_dir,
                     report=out_dir / "block_m_crossing" / run_id / "report.json")
@@ -2409,22 +2512,39 @@ def main(argv: list[str] | None = None) -> int:
               "which is what REFUSED means.")
         print("=" * 72)
         if args.publish:
-            print(write_published(build_document(control, cards, None)))
+            print(write_published(build_document(control, cards, None,
+                                                unmeasured_provenance())))
         print()
         print(IMPORT_BANNER)
         return exit_codes.REFUSED
 
     device, missing = detect_gpu()
     gpu_name = args.gpu_name or device or "NVIDIA H200"
-    base = (args.out_dir or default_out_base()) / f"{cache_mode}-n{n}"
+    # THE CARD IS IN THE BASE DIRECTORY (2026-09-02). It was `{cache_mode}-n{n}`,
+    # which names no machine, and the per-replicate directory below it is
+    # `{arm}-rep{i}`, which names none either -- so two pods writing to the same
+    # network volume, which is what `$MOE_RESULTS_DIR` and `/workspace/results`
+    # ARE FOR, interleaved their logs/ trees and only opening a file said which
+    # card wrote it. Collision 2 of `moe.bench.provenance`'s docstring.
+    base = ((args.out_dir or default_out_base())
+            / f"{PV.card_slug(gpu_name)}-{cache_mode}-n{n}")
     costs = {arm.name: sweep_cost(arm, args.python) for arm in arms}
 
+    rehearsing = args.rehearse is not None
+    # THE PASSTHROUGH IS ASSEMBLED BEFORE THE PLAN IS PRINTED, because it is part
+    # of every replicate's run id now and a plan that printed ids the run would
+    # not use is exactly the artefact that should have caught this.
+    extra: list[str] = list(args.sweep_arg)
+    if rehearsing:
+        extra += ["--self-test", str(args.rehearse),
+                  "--self-test-noise", str(args.rehearse_noise)]
+
     print()
-    print(render_plan(arms, n, cache_mode, base, gpu_name, costs, args.order))
+    print(render_plan(arms, n, cache_mode, base, gpu_name, costs, args.order, extra,
+                      args.python))
     print()
     print(render_predictions(n, arms))
 
-    rehearsing = args.rehearse is not None
     blocked = args.dry_run or (bool(missing) and not rehearsing)
     if blocked:
         why = "--dry-run was given" if args.dry_run else "; ".join(missing)
@@ -2438,16 +2558,14 @@ def main(argv: list[str] | None = None) -> int:
         print("  No RESULT line was printed, because nothing was scored.")
         print("=" * 72)
         if args.publish:
-            print(write_published(build_document(control, cards, None)))
+            print(write_published(build_document(control, cards, None,
+                                                unmeasured_provenance())))
         print()
         print(IMPORT_BANNER)
         return exit_codes.REFUSED
 
-    extra: list[str] = list(args.sweep_arg)
     shared_cache = (base / "shared-triton-cache") if args.warm_cache else None
     if rehearsing:
-        extra += ["--self-test", str(args.rehearse),
-                  "--self-test-noise", str(args.rehearse_noise)]
         print()
         print("REHEARSAL: every replicate below runs the sweep's --self-test, so "
               "its cells are GENERATED from the model and nothing is measured. "
@@ -2486,7 +2604,8 @@ def main(argv: list[str] | None = None) -> int:
               f"launching", flush=True)
         rep = run_replicate(arm, index, base, gpu_name=gpu_name,
                             cache_mode=cache_mode, python=args.python,
-                            extra=per_rep, shared_cache=shared_cache,
+                            extra=per_rep, sweep_args=extra, order=args.order,
+                            shared_cache=shared_cache,
                             timeout_s=args.replicate_timeout)
         replicates.append(rep)
         status = "ok" if rep.ok else f"FAILED: {rep.error}"
@@ -2559,9 +2678,9 @@ def main(argv: list[str] | None = None) -> int:
         target_ms=statistics.fmean([a.cell_budget_ms for a in arms]))
     publishable = cache_mode == args.floor_from
     doc = build_document(
-        control, cards, floors if publishable else None,
+        control, cards, floors if publishable else None, prov,
         n_replicates=n, cache_mode=cache_mode, gpu_name=gpu_name,
-        provenance=provenance, synthetic=rehearsing, scope=scope, prov=prov)
+        provenance=provenance, synthetic=rehearsing, scope=scope)
     (base / "noise_floor.json").write_text(json.dumps(doc, indent=2) + "\n")
     print()
     print(f"EVERYTHING IS SAVED TO {base}")

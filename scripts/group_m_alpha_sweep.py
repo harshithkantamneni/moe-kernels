@@ -517,6 +517,14 @@ class Plan:
     passes: int
     cells: tuple[Cell, ...]
     fixed_tile: dict
+    #: `--cell-budget-ms`: the target duration of ONE trial, from which
+    #: `time_kernel` derives the iteration count. It is part of the DESIGN and
+    #: not of the analysis, because it sets the measured milliseconds of every
+    #: cell, so it belongs in the fingerprint beside the tokens and the ladder.
+    #: NO DEFAULT: a default here is a Plan that can be built without saying how
+    #: long a trial ran, and the whole point of this field is that the answer
+    #: reaches the fingerprint and the directory name.
+    cell_budget_ms: float
 
     @property
     def fingerprint(self) -> str:
@@ -526,12 +534,20 @@ class Plan:
         resumes into the same file and a plan that differs anywhere gets a fresh
         one. Mixing two designs in one cells.jsonl would be undetectable
         afterwards, which is why this is not just a timestamp.
+
+        `cell_budget_ms` JOINED IT 2026-09-02. It had been in neither the
+        fingerprint nor the run id, which is collision 3 of
+        `moe.bench.provenance`'s docstring verbatim: a `--cell-budget-ms 800`
+        re-run after a 400 run derived the same directory, `measure` skipped
+        every cell by `r["id"]`, and the report printed the 400 ms timings under
+        the 800 ms heading. Every sibling sweep already had it.
         """
         payload = json.dumps({
             "model": self.model, "dtype": self.dtype, "block_m": self.block_m,
             "tokens": list(self.tokens), "group_m": list(self.group_m),
             "routings": list(self.routings), "seeds": self.seeds,
             "passes": self.passes, "fixed": self.fixed_tile,
+            "cell_budget_ms": self.cell_budget_ms,
         }, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
@@ -557,7 +573,8 @@ def build_plan(args) -> Plan:
     return Plan(model=args.model, dtype=args.dtype, block_m=args.block_m,
                 tokens=tuple(args.tokens), group_m=tuple(args.group_m),
                 routings=tuple(args.routings), seeds=args.seeds,
-                passes=args.passes, cells=cells, fixed_tile=dict(FIXED_TILE))
+                passes=args.passes, cells=cells, fixed_tile=dict(FIXED_TILE),
+                cell_budget_ms=float(args.cell_budget_ms))
 
 
 @dataclass
@@ -1792,17 +1809,28 @@ def default_run_id(args, card: str, plan: Plan) -> str:
         experiment is ABOUT a cache claim, so a warm-L2 run and a flushed run
         are different experiments, and they shared a directory.
 
+    AND THE FIFTH, FOUND 2026-09-02: `--cell-budget-ms`. Its own help says it is
+    the target duration of ONE trial and that `time_kernel` derives the
+    iteration count from it, so it sets the measured milliseconds of every cell
+    exactly the way `--iters` did in collision 3, and it was in neither this key
+    nor `plan.fingerprint`. `tile_sweep`, `alias_ablation`, `block_m_crossing_sweep`
+    and `tuned_vs_fallback` all carried it; this sweep, converted last, did not.
+    It is in the fingerprint now AND named here as `7budget`, because a knob
+    that reaches the id only through a hash cannot be read off `ls` and the
+    operator comparing two directories is the reader who needs it most.
+
     `plan.fingerprint` still carries the design (model, dtype, block_m, tokens,
-    group_m ladder, routings, seeds, passes, fixed tile), so a change to any of
-    those still lands elsewhere; it is passed through rather than re-listed, so
-    the two cannot drift. `--bootstrap` and `--seed` stay OUT: they re-analyse a
-    set of measurements rather than change one, and two analyses of one sweep
-    belong in one directory.
+    group_m ladder, routings, seeds, passes, fixed tile, cell budget), so a
+    change to any of those still lands elsewhere; it is passed through rather
+    than re-listed, so the two cannot drift. `--bootstrap` and `--seed` stay
+    OUT: they re-analyse a set of measurements rather than change one, and two
+    analyses of one sweep belong in one directory.
     """
     return PV.run_id(card=card, **{
         "1model": plan.model, "2bm": plan.block_m,
         "3plan": plan.fingerprint, "4wm": args.warmup,
-        "5tr": args.trials, "6flush": bool(args.l2_flush)})
+        "5tr": args.trials, "6flush": bool(args.l2_flush),
+        "7budget": plan.cell_budget_ms})
 
 
 def bandwidth_for(gpu_name: str) -> tuple[float, str]:
