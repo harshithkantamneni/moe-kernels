@@ -1602,6 +1602,31 @@ def report_output_paths(out_dir: Path, lines: list[str], payload: dict) -> list[
     function guarantees is that the operator is TOLD which of the two they got,
     because the failure it is named against is a tracked file rewritten by a
     command nobody thought was a write.
+
+    HOW THE COMMITTED PAIR IS MEANT TO BE REGENERATED, because the JSON stamps
+    the tree it was written from and a stamp naming no committed state is worth
+    nothing:
+
+        git status --porcelain            # must be EMPTY before the run
+        .venv/bin/python scripts/memory_branch_anchor.py --rescore --publish
+        git add results/published/ANCHOR_RESCORE.txt results/published/ANCHOR_RESCORE.json
+
+    RUN IT ON A CLEAN TREE, ALWAYS. The published JSON carried
+    `git_dirty: true, git_dirty_files: 2` for one commit, at a `git_sha` two
+    commits behind the branch tip, so it named neither the tree it came from
+    nor any tree in the history. Regenerating from a clean checkout fixes the
+    dirty flag; nothing fixes the SHA lag, because a file cannot contain the
+    hash of the commit that carries it. The lag is one commit and the stamped
+    SHA is the PARENT of the commit that carries the pair, which is a real
+    ancestor a reader can check out.
+
+    WHAT MAKES THE LAG HARMLESS is that the content does not depend on it.
+    `--rescore` reads only the committed reports and the committed
+    calibrations, so a re-run at any later HEAD whose analysis code is
+    unchanged reproduces this pair byte for byte apart from `git_sha`,
+    `git_dirty*` and `utc`. That is the check to run when the stamp looks stale:
+    re-run into a scratch `--out-dir` and diff, rather than trusting or
+    distrusting the SHA alone.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     txt = out_dir / f"{RESCORE_STEM}.txt"

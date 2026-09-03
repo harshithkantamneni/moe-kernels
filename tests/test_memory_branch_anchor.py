@@ -1219,6 +1219,76 @@ def test_the_committed_transcript_is_what_the_script_writes_today(tmp_path):
     assert mba.exit_codes.classify_text(fresh) == mba.exit_codes.CLAIM_FAIL
 
 
+#: The three keys in the published JSON that a re-run is ALLOWED to move: the
+#: clock, and the two halves of the git stamp. Everything else is a function of
+#: the committed reports and calibrations, so a re-run that moves anything else
+#: has changed the analysis without changing the transcript.
+_STAMP_KEYS = ("utc", "git_sha", "git_dirty", "git_dirty_files")
+
+
+def _strip_stamp(payload: dict) -> dict:
+    """The published payload with the run stamp removed, top level and
+    provenance block, so two runs can be compared on their CONTENT."""
+    out = {k: v for k, v in payload.items() if k not in _STAMP_KEYS}
+    prov = dict(out.get("provenance") or {})
+    for key in _STAMP_KEYS:
+        prov.pop(key, None)
+    out["provenance"] = prov
+    return out
+
+
+def test_the_committed_rescore_json_names_a_clean_tree(tmp_path):
+    """A published artefact whose provenance says `git_dirty: true` names no
+    committed state, and this one did.
+
+    IT STAMPED `461d0e66` WITH `git_dirty: true, git_dirty_files: 2`: a SHA two
+    commits behind the branch tip, and a tree that did not match it either, so
+    the pair described neither the code that wrote it nor anything a reader
+    could check out. `report_output_paths` now carries the regeneration
+    procedure, whose first line is `git status --porcelain` returning empty.
+
+    THE ONE-COMMIT SHA LAG IS NOT WHAT THIS TESTS, because a file cannot carry
+    the hash of the commit that carries it. What is tested is the part that was
+    avoidable: the tree was clean when the pair was written, and the CONTENT of
+    a fresh run is identical to the committed content once the run stamp is
+    taken out. That second half is what makes the lag harmless -- the payload
+    is a function of the committed reports, not of the HEAD it ran at -- and it
+    would fail if a later edit changed the analysis without the pair being
+    regenerated.
+    """
+    committed = json.loads((mba.PUBLISHED / "ANCHOR_RESCORE.json").read_text())
+    prov = committed["provenance"]
+    assert prov["git_dirty"] is False, prov["git_sha"]
+    assert prov["git_dirty_files"] == 0
+    assert prov["git_sha"] == committed["git_sha"]
+
+    mba.main(["--rescore", "--out-dir", str(tmp_path)])
+    fresh = json.loads((tmp_path / "ANCHOR_RESCORE.json").read_text())
+    assert _strip_stamp(fresh) == _strip_stamp(committed)
+
+    # THE FAIL BRANCH, planted: the predicate above has to be able to say no,
+    # and the state it has to say no to is the one that shipped.
+    dirty = json.loads(json.dumps(committed))
+    dirty["provenance"]["git_dirty"] = True
+    dirty["provenance"]["git_dirty_files"] = 2
+    assert dirty["provenance"]["git_dirty"] is not False
+    assert _strip_stamp(dirty) == _strip_stamp(committed)
+
+
+def test_the_regeneration_procedure_is_written_where_the_pair_is_written():
+    """`--rescore --publish` rewrites two tracked files, and the discipline that
+    keeps their stamp meaningful lives on the function that writes them.
+
+    In a docstring rather than in the emitted pair on purpose: a note added to
+    the OUTPUT can only be regenerated from a tree that is dirty with the edit
+    that adds it, which is the exact state the note exists to prevent.
+    """
+    doc = mba.report_output_paths.__doc__
+    assert "git status --porcelain" in doc
+    assert "--rescore --publish" in doc
+    assert "CLEAN TREE" in doc
+
+
 def test_the_rescore_report_embeds_a_repo_relative_root(tmp_path):
     """An absolute path is a fact about one laptop, and this one was being
     written into a tracked file."""
