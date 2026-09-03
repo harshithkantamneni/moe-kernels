@@ -9,10 +9,11 @@ which NAMES only the weight re-read. This module writes out all three terms of
 the traffic (weights, activations, output), and then does the thing the first
 version of this file did not do: it runs the study's own ladder estimator over
 those bytes and reports what comes back. The two halves are separate on purpose.
-`traffic`, `arithmetic_intensity`, `ideal_intensity` and `cap` describe BYTES
-and are right. `ladder`, `decompose`, `fitted_alpha`, `alpha_b_from_fitted`,
-`cap_from_fitted` and `lin_overstatement` describe an ESTIMATOR, and the
-estimator is not the bytes.
+`traffic`, `arithmetic_intensity`, `ideal_intensity`, `exact_cap` and `cap`
+describe BYTES and are right. `ladder`, `decompose`, `fitted_alpha`,
+`alpha_b_from_fitted`, `cap_from_fitted`, `lin_overstatement` and
+`overstatement_bracket` describe an ESTIMATOR, and the estimator is not the
+bytes.
 
 THE THREE TERMS, derived from the standard GEMM basis, which is right and kept.
 For C[M,N] = A[M,K] @ B[K,N] the compulsory traffic is MK + KN + MN elements and
@@ -32,10 +33,18 @@ SYMMETRIC re-read on the A side that its fitted alpha carries without naming:
                                                 accumulator round-trip
 
 alpha_b is the study's `alpha`. alpha_a is its counterpart on the activations.
-The ratio of the two re-read costs is exactly BM/BN, which the study already
-knows as the "activation confound" bound on the alpha FIT. At the sweep's own
-pinned BLOCK_N=64 with BLOCK_M=64 that ratio is 1.0: the activation term is as
-large as the weight term.
+Per extra M-tile, the activation re-read costs alpha_a*BM*K*b*(m-1) against the
+weight re-read's alpha_b*K*N*b, so the MARGINAL ratio of the two is
+
+    (alpha_a/alpha_b) * (BM/BN) * (1 - BN/N)        at BN | N
+
+and the ratio of the two re-read TOTALS carries a further n/(n-1). Only with
+alpha_a = alpha_b and BN << N does that collapse to the BM/BN the study knows
+as the "activation confound" bound on the alpha FIT. At the sweep's own pinned
+BLOCK_N=64 with BLOCK_M=64 and equal miss fractions the marginal ratio is
+0.998: the activation term is as large as the weight term. With alpha_a
+unmeasured, the ratio itself is unmeasured; the first version of this
+paragraph wrote "exactly BM/BN" with both conditions unstated.
 
 WHAT A LADDER FIT RETURNS, which is the part this file got wrong on 2026-09-02
 and the audit corrected the same day. A timing ladder at BLOCK_M is t(n) for
@@ -63,10 +72,14 @@ which is what a fit would return if it divided the slope by the WEIGHT BYTES
 alone. No estimator in this repository does that. (LIN) is (EXA)'s NUMERATOR,
 the slope alpha_b + phi with the level taken as 1 and the once-read slab
 (1-alpha_a)*BM/N dropped. It is not even (EXA)'s first-order expansion, which
-is alpha_b + (1-alpha_b)*phi; the two agree only as phi -> 0, and at the tiles
-this study argues about phi is not small: 0.16, 0.32 and 0.64 at BM = 64, 128,
-256 with BN = 64 on mixtral. scripts/bn_decomposition.py derived (EXA) at the
-same HEAD and said the two are not interchangeable here. It was right.
+is alpha_b + (1-alpha_b)*phi; the two agree only as phi -> 0, and phi is a
+function of alpha_a, which is unmeasured. At BM = 128 with BN = 64 on mixtral
+it runs from 0.036 (alpha_a = 0, no activation re-read) to 2.03 (alpha_a = 1,
+a full one); 0.32 is the point at alpha_a = 0.143, the withdrawn (LIN)-solved
+pair below, and is quoted only as a point inside that bracket. Even its floor
+is not a rounding error at the tiles this study argues about.
+scripts/bn_decomposition.py derived (EXA) at the same HEAD and said the two
+are not interchangeable here. It was right.
 
 WHAT THAT CHANGES. Under (LIN), 2*BM/(alpha_fitted*b) is the three-term cap
 exactly, and commit f732035 and the first version of this docstring said so and
@@ -75,10 +88,24 @@ concluded that the published caps stand. Under (EXA) it is not:
     2*BM/(alpha_fitted*b) = (1 + phi + delta) * 2*BM/(b*(alpha_b + phi))
 
 so every cap computed as 2*BM/(alpha*b) from a `LadderFit` alpha is HIGH by the
-factor (1 + phi + delta): 16% at BM=64, 32% at BM=128 and 64% at BM=256 with
-BN=64 on mixtral (15.6 / 31.3 / 62.9% against `cap()`, which drops a 0.4-0.8%
-term, see its docstring). At BM=128, the one tile the study says matters, the
-overstatement is larger than the cap-to-ridge gap it was being used to decide.
+factor (1 + phi + delta). THAT FACTOR IS A BRACKET, NOT A NUMBER, because phi
+depends on alpha_a and alpha_a is unmeasured. Over alpha_a in [0, 1] with
+BN=64 on mixtral and delta = 0 it is
+
+    BM=64    1.8%  to 102%
+    BM=128   3.6%  to 203%
+    BM=256   7.1%  to 406%
+
+(`overstatement_bracket()`; the sweep prints the same two ends beside every
+cap). The 16 / 32 / 64% this docstring once quoted as points are the values
+at alpha_a = 0.143, the withdrawn pair below, and the 15.6 / 31.3 / 62.9%
+beside them were the same points measured against `cap()`, which itself sits
+above `exact_cap` by a second alpha_a-dependent term (its docstring). At
+BM=128, the one tile the study says matters, the bracket runs from below the
+cap-to-ridge gap the cap was being used to decide to many times it, so which
+side of that gap the corrected cap lands on is decided by alpha_a, and nothing
+in this repository has measured alpha_a. Any single overstatement figure
+quoted from here must name the alpha_a it assumes.
 The (0.307, 0.143) pair this module used to quote was solved from
 ALPHA_BY_BLOCK_M through (LIN); the same two points solved through (EXA) give
 alpha_b = 0.07 and alpha_a = 0.72, and ALPHA_BY_BLOCK_M comes from a third
@@ -202,14 +229,19 @@ def ideal_intensity(M: int, N: int, K: int, b: int = 2) -> float:
 
 def cap(N: int, K: int, *, block_m: int, block_n: int,
         alpha_b: float, alpha_a: float, b: int = 2) -> float:
-    """The three-term ceiling on AI as M grows without bound.
+    """The three-term ceiling on AI as M grows without bound. AN UPPER BOUND,
+    not the limit; `exact_cap` is the limit.
 
         cap = 2 / (b * (alpha_b/BM + alpha_a/BN + 1/K))
 
-    M cancels because every term in the denominator grows linearly in it: more
-    rows bring more arithmetic AND more weight re-reads AND more activation and
-    output traffic, in fixed proportion. So batching stops helping, and where it
-    stops is set by the two tile dimensions and the output width, not by M.
+    M drops out in the limit, not because every term grows linearly in it. The
+    arithmetic 2MNK, the activation traffic and the output write are linear in
+    M; the weight term K*N*b*(1 + alpha_b*(ceil(M/BM) - 1)) is a STAIRCASE in
+    M, flat along each tile and stepping at each new one, on top of a constant
+    K*N*b*(1 - alpha_b) that one read of the weights costs however many rows
+    there are. Divided by M, the constant vanishes and the staircase's mean
+    slope is alpha_b/BM, so the ratio settles where the tile dimensions and
+    the output width put it, and batching stops helping there.
 
     THE THREE TERMS ARE THREE SEPARATE CEILINGS and the largest term wins:
       alpha_b/BM   weight re-reads, the part the study NAMES
@@ -218,16 +250,37 @@ def cap(N: int, K: int, *, block_m: int, block_n: int,
                    caching. A reader who mistakes alpha_fitted for alpha_b and
                    sets it to zero would conclude infinity.
 
-    WHAT THIS FORM DROPS, stated because a test elsewhere pins it. The exact
-    limit of `arithmetic_intensity` carries a fourth term, (1-alpha_a)/N: the
-    once-read BM x K activation slab of each new M-tile, which is per-tile
-    traffic that is neither a re-read nor an output write. On mixtral shapes it
-    is 0.4-0.8% of the denominator (audit X66). `exact_cap()` keeps it; this
-    function keeps the three-term form the study quotes, because
-    tests/test_memory_branch_anchor.py pins `memory_branch_anchor.ai_cap` to it
-    and the quoted form should stay where the study quotes it. Wherever
-    "exactly" is claimed below, it is claimed against `exact_cap`, never
-    against this.
+    WHAT THIS FORM DROPS. The exact limit of `arithmetic_intensity` carries a
+    fourth term, (1-alpha_a)/N: the once-read BM x K activation slab of each
+    new M-tile, which is per-tile traffic that is neither a re-read nor an
+    output write. So this sits above `exact_cap` by
+
+        cap/exact_cap - 1 = ((1-alpha_a)/N) / (alpha_b/BM + alpha_a/BN + 1/K)
+
+    which is zero at alpha_a = 1, largest at alpha_a = 0, and grows as alpha_b
+    shrinks; over the whole legal square its ceiling is K/N (14.3% on mixtral,
+    at alpha_b = alpha_a = 0, where nothing is re-read and the slab is the only
+    per-tile activation traffic left). At the withdrawn (LIN)-solved
+    alpha_b = 0.307 it runs 0.00% to 2.42% over alpha_a at BM <= 256 with
+    BN=64 on mixtral; the "0.4-0.8%" this docstring once quoted was the point
+    at alpha_a = 0.143 (audit X66). tests/test_ai_model.py pins both ends and
+    the K/N corner.
+
+    WHY AN ADMITTEDLY INEXACT FUNCTION STAYS. Not because anything published
+    goes through it: `memory_branch_anchor.ai_cap` was moved to
+    `cap_from_fitted` in c0efa7d, and the first version of this docstring
+    kept citing that pin after it was gone. It stays for three reasons that
+    still hold. It is what the (LIN) reading's cap IS, 2*BM/(lin_blend*b) to
+    rounding, so the retraction of commit f732035 can be stated as an
+    executable identity rather than a sentence
+    (`test_lin_cap_of_the_lin_blend_is_the_three_term_cap_and_that_is_all_it_is`).
+    Its three terms are symmetric under (BM, alpha_b) <-> (BN, alpha_a), which
+    `exact_cap` is not (the slab term breaks it), and
+    tests/test_bm128_roofline.py's transposed-control argument is an argument
+    about this symmetric form. And it is a true upper bound on `exact_cap`
+    that errs high by the stated term, so a number quoted from it is wrong in
+    a known direction by a known amount. Wherever "exactly" is claimed below,
+    it is claimed against `exact_cap`, never against this.
 
     WHAT TO PUT IN THE alpha_b SLOT. A `LadderFit` alpha is NOT alpha_b, and
     2*BM/(alpha_fitted*b) is NOT this cap; see `cap_from_fitted`.
@@ -250,9 +303,12 @@ def phi(N: int, K: int, *, block_m: int, block_n: int, alpha_a: float,
 
     This is the quantity that separates (EXA) from (LIN): (LIN) is the slope
     alpha_b + phi with the level 1 + phi + delta replaced by 1, so the two agree
-    only as phi -> 0. On mixtral at BN=64 phi is 0.16 / 0.32 / 0.64 at
-    BM = 64 / 128 / 256, which is why that replacement is not an approximation
-    this study may use.
+    only as phi -> 0. phi is linear and increasing in alpha_a, so its range
+    over the unmeasured alpha_a has exact ends: on mixtral at BN=64 it is
+    0.018 to 1.02 at BM=64, 0.036 to 2.03 at BM=128 and 0.071 to 4.06 at
+    BM=256, and the 0.16 / 0.32 / 0.64 once quoted here as points are the
+    values at alpha_a = 0.143, the withdrawn (LIN)-solved pair. Even the
+    alpha_a = 0 floor is not a replacement this study may make silently.
     """
     one_tile = traffic(block_m, N, K, block_m=block_m, block_n=block_n,
                        alpha_b=0.0, alpha_a=alpha_a, b=b)
@@ -332,40 +388,77 @@ class FittedAlpha:
         return self.level
 
 
-#: Relative tolerance on the byte ladder being affine in n. It is affine by
-#: construction of `traffic()`; this exists so that a future change to
-#: `traffic()` that breaks the identity is REFUSED rather than silently read
-#: through a two-point fit that no longer means (EXA).
+#: Relative tolerance on EVERY tread of the byte ladder lying on the (EXA)
+#: line. The ladder is affine by construction of `traffic()`; this exists so
+#: that a future change to `traffic()` that breaks the identity on any tread
+#: is REFUSED rather than silently read through a fit that no longer means
+#: (EXA). Until 2026-09-03 the check looked at treads 1 and 2 only and the
+#: docstrings said a broken `traffic()` "is refused": a review bent the
+#: weights at n_tiles > 2 and got the unbent (EXA) back from here while the
+#: real 8-tread fit returned 0.543 for 0.374. A guard that sees two treads
+#: cannot see a bend at the third.
 _AFFINE_TOL = 1e-9
+
+#: Treads `decompose` fits over. Eight, like the sweep's ladders, so that the
+#: number it returns is what an eight-tread OLS returns and the affine check
+#: has eight treads to look at rather than two.
+_DECOMPOSE_TREADS = 8
+
+
+def _ols(xs: list[float], ys: list[float]) -> tuple[float, float]:
+    """Ordinary least squares y = a + b*x, the same line the sweep's `_line`
+    fits, so that `decompose` is the sweep's estimator on the bytes and not a
+    two-point shortcut that agrees with it only on an unbent ladder."""
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
+    slope = sxy / sxx
+    return my - slope * mx, slope
 
 
 def decompose(N: int, K: int, *, block_m: int, block_n: int, alpha_b: float,
-              alpha_a: float, b: int = 2, fixed_bytes: float = 0.0) -> FittedAlpha:
-    """Run the two-point B/(A+B) fit on the byte ladder and return its pieces.
+              alpha_a: float, b: int = 2, fixed_bytes: float = 0.0,
+              n_max: int = _DECOMPOSE_TREADS) -> FittedAlpha:
+    """Run the B/(A+B) OLS fit over an `n_max`-tread byte ladder and return
+    its pieces.
 
-    The slope and level are READ OFF `ladder()`, not written down from the
-    closed form, so that `alpha_fitted` here is what the estimator does to the
-    bytes and the (EXA) closed form is something a test can check it against.
-    `phi` and `delta` are computed independently; if the ladder is not the
-    affine line they predict, the byte model and the estimator have parted
-    company and this refuses rather than returning a number that is neither.
+    The slope and level are FIT to `ladder()` by the same ordinary least
+    squares the sweep uses (`_line`, with level = intercept + slope, the
+    sweep's `load_ms`), not written down from the closed form, so that
+    `alpha_fitted` here is what the estimator does to the bytes and the (EXA)
+    closed form is something a test can check it against. `phi` and `delta`
+    are computed independently and EVERY tread is checked against the line
+    they predict; a tread off that line means the byte model and the
+    estimator have parted company, and this refuses rather than returning a
+    number that is neither. The check is exactly as wide as the ladder: a
+    bend at tread n_max + 1 is invisible here, which is why the default is
+    the sweep's own eight and why `n_max = 2` reproduces the two-tread guard
+    this function had until 2026-09-03 and its blind spot.
     """
     pts = ladder(N, K, block_m=block_m, block_n=block_n, alpha_b=alpha_b,
-                 alpha_a=alpha_a, b=b, n_max=2, fixed_bytes=fixed_bytes)
-    (_, t1), (_, t2) = pts
-    slope = t2 - t1
-    level = t1
+                 alpha_a=alpha_a, b=b, n_max=n_max, fixed_bytes=fixed_bytes)
     p = phi(N, K, block_m=block_m, block_n=block_n, alpha_a=alpha_a, b=b)
     d = _delta(fixed_bytes, N, K, b)
     expect_slope = alpha_b + p
     expect_level = 1.0 + p + d
+    for n, t in pts:
+        want = expect_level + (n - 1) * expect_slope
+        if not math.isclose(t, want, rel_tol=_AFFINE_TOL):
+            raise AIModelRefused(
+                f"the byte ladder is not affine in n: tread {n} of {n_max} is "
+                f"{t:.9g} where the (EXA) line 1 + phi + delta + (n-1)*(alpha_b + phi) "
+                f"puts {want:.9g}. `traffic()` no longer grows one M-tile at a "
+                "time, so B/(A+B) on it is not (EXA)")
+    intercept, slope = _ols([float(n) for n, _ in pts], [t for _, t in pts])
+    level = intercept + slope
     if (not math.isclose(slope, expect_slope, rel_tol=_AFFINE_TOL)
             or not math.isclose(level, expect_level, rel_tol=_AFFINE_TOL)):
         raise AIModelRefused(
-            f"the byte ladder is not affine in n: slope {slope:.9g} vs "
-            f"alpha_b + phi = {expect_slope:.9g}, level {level:.9g} vs "
-            f"1 + phi + delta = {expect_level:.9g}. `traffic()` no longer "
-            "grows one M-tile at a time, so B/(A+B) on it is not (EXA)")
+            f"the OLS line through an affine ladder missed it: slope {slope:.9g} "
+            f"vs alpha_b + phi = {expect_slope:.9g}, level {level:.9g} vs "
+            f"1 + phi + delta = {expect_level:.9g}; the fit, not the bytes, is "
+            "broken")
     return FittedAlpha(alpha_fitted=slope / level, phi=p, delta=d,
                        slope=slope, level=level)
 
@@ -407,14 +500,53 @@ def lin_overstatement(*, phi: float, delta: float) -> float:
     from a B/(A+B) ladder alpha overstates the exact cap 2*BM/(b*(alpha_b + phi)).
 
     Reports that print a cap from a `LadderFit` alpha should divide by this,
-    and print it. On mixtral at BN=64 with no fixed cost it is 1.16 / 1.32 /
-    1.64 at BM = 64 / 128 / 256.
+    and print it AS A BRACKET: phi is a function of alpha_a, alpha_a is
+    unmeasured, and `overstatement_bracket()` gives the two ends. On mixtral
+    at BN=64 with no fixed cost the ends are 1.02 to 2.02 at BM=64, 1.04 to
+    3.03 at BM=128 and 1.07 to 5.06 at BM=256; the 1.16 / 1.32 / 1.64 this
+    docstring once quoted as points are the values at alpha_a = 0.143, the
+    withdrawn (LIN)-solved pair.
     """
     if phi < 0.0:
         raise AIModelRefused(f"phi={phi} cannot be negative: it is a byte count")
     if delta < 0.0:
         raise AIModelRefused(f"delta={delta} cannot be negative: it is a byte count")
     return 1.0 + phi + delta
+
+
+def overstatement_bracket(N: int, K: int, *, block_m: int, block_n: int,
+                          b: int = 2, delta: float = 0.0) -> tuple[float, float]:
+    """`(lo, hi)` on `lin_overstatement` over the unmeasured alpha_a: the
+    factor a cap read as 2*BM/(alpha_fitted*b) is high by, at alpha_a = 0 (no
+    activation re-read) and alpha_a = 1 (a full one).
+
+    WHY A BRACKET. Every overstatement figure this module used to print was a
+    point at alpha_a = 0.143, a value solved through the withdrawn (LIN) form
+    from two points that cannot choose a reading, and alpha_a has no
+    measurement anywhere in this repository. At BM=128 / BN=64 on mixtral the
+    point read 32%; the bracket is 3.6% to 203%. A caller who prints a point
+    from this module is asserting an alpha_a, and this function exists so that
+    the sweep's `cap_overstatement` and every future caller take the two ends
+    from one place instead of retyping the alpha_a in {0, 1} loop.
+
+    THE ENDS ARE EXACT. `phi` is linear and increasing in alpha_a (the
+    activation re-read count is (ceil(N/BN) - 1) >= 0 times it), so the
+    minimum over [0, 1] is at 0 and the maximum at 1; nothing inside the
+    interval lies outside the ends.
+
+    `delta` is the fused layer's fixed cost in weight-read units and shifts
+    both ends up together. Its default of 0 makes both ends LOWER bounds on
+    the overstatement, which is the honest direction: a caller without a
+    measured delta gets a bracket that is, if anything, too kind to the cap.
+    Refuses through `phi` and `lin_overstatement` on a shape that is not a
+    GEMM or a negative delta.
+    """
+    ends = tuple(
+        lin_overstatement(
+            phi=phi(N, K, block_m=block_m, block_n=block_n, alpha_a=alpha_a, b=b),
+            delta=delta)
+        for alpha_a in (0.0, 1.0))
+    return min(ends), max(ends)
 
 
 #: How far past 0 or 1 a recovered alpha_b may land by rounding before it is a
