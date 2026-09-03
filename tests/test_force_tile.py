@@ -33,6 +33,7 @@ import pytest
 from moe.baselines import _framework_config as FC
 from moe.bench import cli
 from moe.bench import driver as D
+from moe.bench import exit_codes as EC
 from moe.bench import force_tile as FT
 from moe.bench import schema as SC
 from moe.bench import timing as T
@@ -461,26 +462,33 @@ def test_a_row_from_vllms_own_ladder_is_a_disagreement_under_a_pin():
 # --------------------------------------------------------------------------
 
 def test_a_sweep_that_pinned_nothing_exits_non_zero(tmp_path):
+    """INVALID: F2 is a VALIDITY gate and the sweep had already run when it was
+    scored. The exact codes live in tests/test_cli_pin_probe.py."""
     cfg, _ = sweep(tmp_path, "t_force_unpinnable_up_gemm", forced_tile())
     ledger = cfg.force_tile_ledger
     assert ledger.vacuous() and ledger.skipped_cells == 1
-    assert cli.force_tile_verdict(forced_tile(), ledger) == 3
+    assert cli.force_tile_verdict(forced_tile(), ledger) == EC.INVALID
 
 
 def test_a_sweep_whose_rows_did_not_show_the_pin_exits_non_zero(tmp_path):
+    """INVALID, not ERROR. This returned 4 until 2026-09-02, which the driver
+    reads as RETRY, so the one gate that detects the S6a defect bought another
+    rental of the same failure."""
     cfg, _ = sweep(tmp_path, "t_force_lying_up_gemm", forced_tile())
-    assert cli.force_tile_verdict(forced_tile(), cfg.force_tile_ledger) == 4
+    assert cli.force_tile_verdict(forced_tile(),
+                                  cfg.force_tile_ledger) == EC.INVALID
 
 
 def test_a_sweep_that_pinned_something_exits_zero(tmp_path):
     cfg, rows = sweep(tmp_path, "t_force_pinnable_up_gemm", forced_tile())
     assert len(rows) == 1
-    assert cli.force_tile_verdict(forced_tile(), cfg.force_tile_ledger) == 0
+    assert cli.force_tile_verdict(forced_tile(),
+                                  cfg.force_tile_ledger) == EC.DONE
 
 
 def test_an_unpinned_sweep_is_never_judged_on_the_pin(tmp_path):
     cfg, _ = sweep(tmp_path, "t_force_unpinnable_up_gemm")
-    assert cli.force_tile_verdict(None, cfg.force_tile_ledger) == 0
+    assert cli.force_tile_verdict(None, cfg.force_tile_ledger) == EC.DONE
 
 
 def test_the_gates_are_numbers_against_thresholds(tmp_path, capsys):
@@ -508,7 +516,10 @@ def test_the_cli_refuses_an_unpinnable_plan_before_it_spends_anything(tmp_path,
     code = cli.main(["--profile", "smoke", "--out-dir", str(tmp_path),
                      "--groups", "reference,baselines",
                      "--impl", "torch_grouped_mm_up"])
-    assert code == 3
+    # REFUSED, because nothing was measured. It returned INVALID until
+    # 2026-09-02, which the driver latches, so this free refusal could not be
+    # re-run without hand-editing the ledger.
+    assert code == EC.REFUSED
     assert "REFUSED" in capsys.readouterr().out
     assert list(tmp_path.glob("*.csv")) == [], "a refused run must write nothing"
 
@@ -524,11 +535,13 @@ def test_the_summary_says_what_the_pin_did(tmp_path):
 # the CLI: refusal before anything is spent
 # --------------------------------------------------------------------------
 
-def test_the_cli_refuses_a_malformed_variable_before_it_imports_anything(monkeypatch):
+def test_the_cli_refuses_a_malformed_variable_before_it_imports_anything(monkeypatch,
+                                                                        capsys):
     monkeypatch.setenv(FT.ENV_VAR, "{oops")
-    with pytest.raises(SystemExit) as e:
-        cli.main(["--profile", "smoke", "--dry-run"])
-    assert "not JSON" in str(e.value)
+    # A string SystemExit exits 1 = CLAIM_FAIL, so cli.main converts it to
+    # REFUSED and prints the message that names the fix.
+    assert cli.main(["--profile", "smoke", "--dry-run"]) == EC.REFUSED
+    assert "not JSON" in capsys.readouterr().err
 
 
 def test_the_dry_run_refuses_a_plan_where_nothing_can_be_pinned(monkeypatch, capsys):
@@ -540,7 +553,7 @@ def test_the_dry_run_refuses_a_plan_where_nothing_can_be_pinned(monkeypatch, cap
     # env="vllm" and profiles.candidate_impls filters on it.
     assert cli.main(["--profile", "smoke", "--dry-run",
                      "--groups", "reference,baselines",
-                     "--impl", "torch_grouped_mm_up"]) == 1
+                     "--impl", "torch_grouped_mm_up"]) == EC.REFUSED
     out = capsys.readouterr().out
     assert "forced tile" in out and "REFUSED" in out
     assert "--env vllm" in out

@@ -84,11 +84,150 @@
 # whose observed tile is not exactly the tile it asked for. A census attributed
 # to a tile that did not run is worse than no census.
 #
-# EXIT CODES. 0 every gate passed. 1 a gate failed. 2 refused before measuring.
-set -euo pipefail
+# EXIT CODES ARE moe.bench.exit_codes's, MIRRORED. This is bash and cannot
+# import the module, so the five integers are written out below and
+# tests/test_check_mma_path.py compares them with the module's own constants and
+# fails the build on a drift. The dotted spelling is load-bearing as well as
+# accurate: the driver's `adopts_exit_codes` greps this file for it and prints a
+# caveat beside every REFUSED or INVALID row from an arm that does not name it.
+#
+# The table this file declared until 2026-09-02 was its own -- "0 every gate
+# passed. 1 a gate failed. 2 refused before measuring" -- and it inverted two of
+# the three states it names. A VALIDITY gate that
+# fails AFTER the arms have compiled is INVALID (3): the pod minutes are spent
+# and the census must not be quoted, which is a different instruction to the
+# driver than CLAIM_FAIL (1), "measured, valid, and the world disagreed with the
+# prediction". Exiting 1 for a validity failure told the session this arm had
+# produced a RESULT, and the session LATCHES a result: `arm()` skips a name
+# whose ledger row already says DONE, CLAIM_FAIL or INVALID. Two more paths
+# exited 1 with no gate in sight, and they are not the same state as each other:
+# no interpreter at $PY fires before anything compiles and is REFUSED (2), free
+# and re-runnable; the ladder cell that dumped no PTX fires after the cell has
+# run, so it is now gate L1 and INVALID (3). Folding those two together is what
+# costs a second rental to tell apart.
+#
+# And the driver reads gates through one greppable line, `RESULT: <KIND> <NAME>
+# <VERDICT> <detail>` at column zero. This script scored four gates and printed
+# none of them, so the session summary reported four scored gates as "This arm
+# was NOT scored". Every gate here now prints exactly one, in the format
+# `exit_codes.result_line` renders, and the test pins the two against each other
+# character for character rather than trusting this comment.
+set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+#: The table, mirrored from moe/bench/exit_codes.py.
+#:   DONE       0  measured; every VALIDITY and CLAIM gate PASSED
+#:   CLAIM_FAIL 1  measured; VALIDITY passed; a CLAIM gate did not (a RESULT)
+#:   REFUSED    2  nothing measured; a precondition was not met (free)
+#:   INVALID    3  measured; a VALIDITY gate failed after measuring; unquotable
+#:   ERROR      4  crashed; an unplanned failure
+EXIT_DONE=0
+EXIT_CLAIM_FAIL=1
+EXIT_REFUSED=2
+EXIT_INVALID=3
+EXIT_ERROR=4
+
+# An unplanned failure is ERROR, and it has to SAY it was unplanned. Without
+# this trap `set -e` exits with whatever status the failing command happened to
+# return -- a `grep` that matched nothing exits 1, which is CLAIM_FAIL, and the
+# session would ledger a dead script as a refuted claim and never re-run it.
+# `set -E` above is what makes the trap fire inside functions and command
+# substitutions; the run of the sweep is exempt because it is captured and
+# translated explicitly (see `sweep_failed`).
+on_unhandled_error() {
+  local rc=$?
+  printf '[mma] UNHANDLED FAILURE (status %s) at line %s: %s\n' \
+    "$rc" "${BASH_LINENO[0]}" "$BASH_COMMAND" >&2
+  printf '[mma] Nothing above was scored and nothing may be read as a verdict.\n' >&2
+  exit "$EXIT_ERROR"
+}
+trap on_unhandled_error ERR
+
+# >>> LIFTABLE: function definitions only, no top-level statements. Lifted by
+# tests/test_check_mma_path.py, which evaluates this block in a fresh bash and
+# asks the SHIPPED functions rather than a python copy of their case statements.
+
+#: `RESULT: <KIND> <NAME> <VERDICT> <detail>`, the ONE line the driver greps.
+#: Mirrors `moe/bench/exit_codes.py:result_line`, including its refusals: a name
+#: with whitespace in it, or a kind or verdict outside the table, renders a line
+#: `parse_result_lines` cannot read back, and a gate the driver cannot parse is a
+#: gate that silently disappears from the summary. The detail is squeezed onto
+#: one line for the same reason.
+result_line() {   # <kind> <name> <verdict> [detail ...]
+  local kind="$1" name="$2" verdict="$3"; shift 3
+  local detail
+  case "$kind" in
+    VALIDITY|CLAIM) : ;;
+    *) echo "[mma] result_line: kind '$kind' is not VALIDITY or CLAIM" >&2
+       exit "$EXIT_ERROR" ;;
+  esac
+  case "$verdict" in
+    PASS|FAIL|UNKNOWN) : ;;
+    *) echo "[mma] result_line: verdict '$verdict' is not PASS, FAIL or UNKNOWN" >&2
+       exit "$EXIT_ERROR" ;;
+  esac
+  case "$name" in
+    ""|*[[:space:]]*)
+       echo "[mma] result_line: name '$name' must be one non-empty token" >&2
+       exit "$EXIT_ERROR" ;;
+  esac
+  detail="$(printf '%s' "$*" | tr '\n\t' '  ' | tr -s ' ' | sed 's/^ *//;s/ *$//')"
+  if [[ -n "$detail" ]]; then
+    printf 'RESULT: %s %s %s %s\n' "$kind" "$name" "$verdict" "$detail"
+  else
+    printf 'RESULT: %s %s %s\n' "$kind" "$name" "$verdict"
+  fi
+}
+
+#: PASS or FAIL from an arithmetic truth value, so a caller writes the condition
+#: once and the word is derived from it rather than typed beside it.
+pass_fail() {   # <0|1>
+  if (( $1 )); then echo PASS; else echo FAIL; fi
+}
+
+#: One scored gate: its RESULT line, then the three human lines this script has
+#: always printed. Both are kept because they have different readers, and only
+#: the first is the machine contract. Recorded as well as printed, so `classify`
+#: scores exactly the gates that reached the page.
+GATE_ROWS=""
+GATE_N=0
+gate() {   # <tag> <kind> <verdict> <claim> <measured> <threshold> <consequence>
+  local tag="$1" kind="$2" verdict="$3" claim="$4" measured="$5" \
+        threshold="$6" cons="$7"
+  result_line "$kind" "$tag" "$verdict" \
+    "[$kind] $claim | measured $measured | gate $threshold"
+  printf '%-3s %-8s %-4s %s\n' "$tag" "$kind" "$verdict" "$claim"
+  printf '             measured %s   gate %s\n' "$measured" "$threshold"
+  printf '             if this FAILS: %s\n' "$cons"
+  GATE_ROWS="${GATE_ROWS}${kind}"$'\t'"${verdict}"$'\n'
+  GATE_N=$((GATE_N + 1))
+}
+
+#: The code the recorded gates imply, by `exit_codes.classify`'s rule: any
+#: VALIDITY gate not PASS is INVALID, else any CLAIM gate not PASS is
+#: CLAIM_FAIL, else DONE. UNKNOWN counts against a gate exactly as FAIL does --
+#: "a check that examined nothing reports zero failures" is this project's
+#: documented failure shape. No gate at all returns non-zero rather than DONE,
+#: for the same reason `classify([])` raises.
+classify() {
+  local kind verdict invalid=0 claim_failed=0
+  if (( GATE_N == 0 )); then
+    echo "[mma] classify: no gate was scored, so there is no verdict to exit with" >&2
+    return 1
+  fi
+  while IFS=$'\t' read -r kind verdict; do
+    if [[ -z "$kind" ]]; then continue; fi
+    if [[ "$verdict" != PASS ]]; then
+      if [[ "$kind" == VALIDITY ]]; then invalid=1; else claim_failed=1; fi
+    fi
+  done <<< "$GATE_ROWS"
+  if (( invalid )); then echo "$EXIT_INVALID"
+  elif (( claim_failed )); then echo "$EXIT_CLAIM_FAIL"
+  else echo "$EXIT_DONE"; fi
+}
+# <<< LIFTABLE
 
 WORKSPACE="${WORKSPACE:-/workspace}"
 DUMP_DIR="${MOE_PTX_DIR:-$WORKSPACE/ptx}"
@@ -97,6 +236,7 @@ TOKENS="16"
 ENV_NAME="vllm"
 BLOCK_M_LIST=""
 DRY_RUN=0
+SELF_TEST=""
 
 # The five knobs held IDENTICAL across every forced arm, so BLOCK_SIZE_M is the
 # only thing that can move. Same values scripts/tile_sweep.py and
@@ -123,12 +263,183 @@ while [[ $# -gt 0 ]]; do
     --warps)    NUM_WARPS="$2"; shift 2 ;;
     --stages)   NUM_STAGES="$2"; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
-    *) echo "unknown argument: $1" >&2; exit 2 ;;
+    --self-test) SELF_TEST="$2"; shift 2 ;;
+    # REFUSED: an argument this script does not know is a session asking for
+    # something it will not do, before anything is measured.
+    *) echo "[mma] REFUSED: unknown argument: $1" >&2; exit "$EXIT_REFUSED" ;;
   esac
 done
 
 log() { printf '[mma] %s\n' "$*"; }
-refuse() { echo "[mma] REFUSED: $*" >&2; exit 2; }
+#: REFUSED (2): nothing was measured, no pod minute was spent, and the arm is
+#: re-runnable the moment the precondition holds. Never used after an arm has
+#: compiled -- that is INVALID, and the difference is a whole rental.
+refuse() { echo "[mma] REFUSED: $*" >&2; exit "$EXIT_REFUSED"; }
+
+# --------------------------------------------------------------------------
+# THE GATES, and the one exit. Both scoring paths live here rather than beside
+# their call sites so `--self-test` can drive the SHIPPED scorer over a planted
+# world: a gate that has only ever been seen passing is the shape of check this
+# apparatus is being repaired for.
+# --------------------------------------------------------------------------
+
+#: The unforced cell, on vLLM's own ladder. One VALIDITY gate and one CLAIM
+#: gate: the census is only evidence if a kernel with a tensor-core instruction
+#: was actually dumped, and C3 is the claim that cell was run to test.
+score_ladder_gates() {   # reads ARM_PTX ARM_WGMMA ARM_MMA
+  local c3
+  if   (( ARM_WGMMA > 0 ));                     then c3=FAIL
+  elif (( ARM_MMA > 0 ));                       then c3=PASS
+  else                                               c3=UNKNOWN
+  fi
+  gate L1 VALIDITY "$(pass_fail $(( ARM_PTX > 0 && ARM_WGMMA + ARM_MMA > 0 )))" \
+    "the cell dumped a PTX carrying a tensor-core instruction" \
+    "$ARM_PTX PTX file(s); $ARM_WGMMA with wgmma, $ARM_MMA with mma.sync" \
+    ">= 1 of each" \
+    "an absent instruction and an absent kernel look identical in the census
+             above, so nothing here may be read as a statement about the ISA.
+             Check the run log: the span may never have run, vLLM may be absent
+             from this env, or the cell may have fallen back off Triton."
+  gate L2 CLAIM "$c3" \
+    "C3: the decode path's kernel carries no warpgroup MMA" \
+    "wgmma in $ARM_WGMMA kernel(s), mma.sync in $ARM_MMA" \
+    "wgmma == 0 with mma.sync > 0" \
+    "warpgroup MMA IS present, so Triton reached M=64 some other way and the
+             inference from BLOCK_SIZE_M=16 was wrong. UNKNOWN when neither
+             instruction was found, which decides nothing and counts against the
+             gate for exactly that reason."
+}
+
+#: The forced arms. G1-G3 are VALIDITY -- they say whether the census belongs to
+#: the tile it is attributed to -- and G4 is the CLAIM the arms were run to
+#: test. A G4 FAIL is a finding, and the table gives it its own code (1) so the
+#: session records it as finished rather than retrying until it passes.
+score_forced_gates() {   # reads narms g1_fail g2_fail distinct g4_fail
+  gate G1 VALIDITY "$(pass_fail $(( g1_fail == 0 )))" \
+    "every arm ran the tile it was given" \
+    "$(( narms - g1_fail ))/$narms arms observed exactly what they forced" \
+    "all $narms" \
+    "MOE_FORCE_TILE did not reach the kernel in some arm, so its census belongs to
+             a tile nobody chose. Nothing on this page may be attributed to a tile.
+             Check that moe/bench/force_tile.py is present in this checkout and that
+             the impl under test exposes the force_tile_config hook."
+  gate G2 VALIDITY "$(pass_fail $(( g2_fail == 0 )))" \
+    "every arm dumped a PTX carrying a tensor-core instruction" \
+    "$(( narms - g2_fail ))/$narms arms" "all $narms" \
+    "an arm compiled nothing, or nothing with a tensor core in it. An absent
+             instruction and an absent kernel look identical in the table above."
+  gate G3 VALIDITY "$(pass_fail $(( distinct == narms )))" \
+    "the arms compiled DIFFERENT kernels" \
+    "$distinct distinct PTX checksum(s)" "== $narms" \
+    "two arms produced byte-identical PTX, so the tile did not reach the compile
+             and the census is one kernel compared with itself."
+  gate G4 CLAIM "$(pass_fail $(( g4_fail == 0 )))" \
+    "wgmma appears in exactly the arms BLOCK_M % 64 == 0 names" \
+    "$(( narms - g4_fail ))/$narms arms match the prediction" "all $narms" \
+    "the instruction is NOT selected by the tile height alone at fixed num_warps,
+             which is a result: Triton's predicate as read from supportMMA does not
+             describe what this build emits."
+}
+
+#: Score, then leave. The code is `classify` over the gates just printed, so
+#: `exit_codes.classify_text` over this log recomputes the integer the process
+#: returned and a disagreement between the two is itself a defect.
+finish() {
+  local rc
+  rc="$(classify)" || exit "$EXIT_ERROR"
+  echo
+  case "$rc" in
+    "$EXIT_DONE")
+      echo "[mma] exit $rc DONE: measured, and every VALIDITY and CLAIM gate PASSED." ;;
+    "$EXIT_CLAIM_FAIL")
+      echo "[mma] exit $rc CLAIM_FAIL: measured, every validity gate passed, and a"
+      echo "[mma] pre-registered claim did not hold. That is a RESULT and the arm is"
+      echo "[mma] FINISHED: quote the table, not the prediction, and do not re-run it"
+      echo "[mma] hoping for the other answer." ;;
+    "$EXIT_INVALID")
+      echo "[mma] exit $rc INVALID: a VALIDITY gate failed AFTER the arms compiled."
+      echo "[mma] Nothing on this page may be quoted, the census must not be scored,"
+      echo "[mma] and this arm is NOT auto-retried: re-run it only once the log says"
+      echo "[mma] in words what changed." ;;
+  esac
+  exit "$rc"
+}
+
+#: The sweep under one arm did not finish. Its code is `moe/bench/exit_codes.py`'s
+#: already, so it is adopted rather than re-invented: a sweep that refused before
+#: measuring makes this arm a refusal too, and a sweep whose own validity gate
+#: failed after measuring makes it INVALID. Anything outside the table is ERROR,
+#: because a code nobody chose carries no information about what happened.
+sweep_failed() {   # <label> <rc> <log-file>
+  local label="$1" rc="$2" log_file="$3"
+  echo >&2
+  case "$rc" in
+    "$EXIT_REFUSED")
+      refuse "the [$label] sweep refused before measuring (exit $rc). Its first
+  REFUSED line above says what to fix; nothing was compiled, so no census exists
+  and none was scored." ;;
+    "$EXIT_INVALID"|"$EXIT_CLAIM_FAIL")
+      echo "[mma] the [$label] sweep exited $rc: it ran and then failed a gate of" >&2
+      echo "[mma] its own -- see its RESULT lines above. The pin is the thing this" >&2
+      echo "[mma] script attributes its census to, so a run that cannot show the" >&2
+      echo "[mma] tile leaves nothing here quotable." >&2
+      exit "$EXIT_INVALID" ;;
+    *)
+      echo "[mma] the [$label] sweep exited $rc, which is not in the table. Read" >&2
+      echo "[mma] $log_file before re-running." >&2
+      exit "$EXIT_ERROR" ;;
+  esac
+}
+
+#: The gates, off GPU, over a planted world. Every case names the verdicts it
+#: expects the scorer to produce, and three of the six plant a FAILING branch,
+#: because a scorer only ever exercised on its passing path is how G4 could have
+#: been printing the wrong verdict for four arms without anyone noticing. The
+#: proof that this can itself fail is `unhandled`, which plants a command that
+#: does not exist and asserts the ERR trap turns it into ERROR rather than into
+#: whatever integer the shell happened to return.
+self_test() {   # <case>
+  echo "=== --self-test $1: a PLANTED world. Nothing was compiled and no GPU"
+  echo "    was touched, so no number below is a measurement. The gates, the"
+  echo "    RESULT lines and the exit code are the shipped ones."
+  echo
+  case "$1" in
+    forced-pass)     narms=2 g1_fail=0 g2_fail=0 distinct=2 g4_fail=0
+                     echo "planted: two arms, both honoured the pin, both compiled"
+                     echo "         their own kernel, both matched the prediction"
+                     echo "         -> DONE ($EXIT_DONE)"; echo
+                     score_forced_gates ;;
+    forced-invalid)  narms=2 g1_fail=1 g2_fail=0 distinct=2 g4_fail=0
+                     echo "planted: one arm observed a tile it did not force"
+                     echo "         -> INVALID ($EXIT_INVALID), G1 FAIL"; echo
+                     score_forced_gates ;;
+    forced-claim)    narms=2 g1_fail=0 g2_fail=0 distinct=2 g4_fail=1
+                     echo "planted: every validity gate passed and one arm's wgmma"
+                     echo "         census contradicted the predicate"
+                     echo "         -> CLAIM_FAIL ($EXIT_CLAIM_FAIL), G4 FAIL"; echo
+                     score_forced_gates ;;
+    ladder-pass)     ARM_PTX=3 ARM_WGMMA=0 ARM_MMA=2
+                     echo "planted: a ladder cell on mma.sync alone -> DONE ($EXIT_DONE)"; echo
+                     score_ladder_gates ;;
+    ladder-refuted)  ARM_PTX=3 ARM_WGMMA=1 ARM_MMA=1
+                     echo "planted: warpgroup MMA present on the ladder cell"
+                     echo "         -> CLAIM_FAIL ($EXIT_CLAIM_FAIL), L2 FAIL"; echo
+                     score_ladder_gates ;;
+    ladder-invalid)  ARM_PTX=0 ARM_WGMMA=0 ARM_MMA=0
+                     echo "planted: nothing compiled -> INVALID ($EXIT_INVALID), L1 FAIL"
+                     echo "         and L2 UNKNOWN, which counts against it"; echo
+                     score_ladder_gates ;;
+    unhandled)       echo "planted: a command that does not exist -> ERROR ($EXIT_ERROR)"; echo
+                     a_command_this_script_never_planned_for ;;
+    *) refuse "--self-test '$1' is not one of forced-pass, forced-invalid,
+  forced-claim, ladder-pass, ladder-refuted, ladder-invalid, unhandled." ;;
+  esac
+  finish
+}
+
+if [[ -n "$SELF_TEST" ]]; then
+  self_test "$SELF_TEST"
+fi
 
 # --------------------------------------------------------------------------
 # The plan and the prediction, printed before anything runs and before the
@@ -189,8 +500,11 @@ if [[ -n "$BLOCK_M_LIST" ]]; then
   echo "    G2 VALIDITY  every arm dumped at least one PTX carrying a tensor-core instruction"
   echo "    G3 VALIDITY  the arms compiled DIFFERENT kernels (distinct PTX checksums)"
   echo "    G4 CLAIM     wgmma is present in exactly the arms the predicate names"
-  echo "  A G1-G3 FAIL means no census on the page may be attributed to a tile."
-  echo "  A G4 FAIL is a result: the instruction is not selected by the tile alone."
+  echo "  A G1-G3 FAIL means no census on the page may be attributed to a tile,"
+  echo "  and the run exits 3 INVALID: measured, unquotable, and NOT re-run."
+  echo "  A G4 FAIL is a result: the instruction is not selected by the tile alone,"
+  echo "  and the run exits 1 CLAIM_FAIL, which the session records as finished."
+  echo "  Each of the four prints one RESULT: line, which is all the driver reads."
   echo "  dumps to $DUMP_DIR/bm<N>/"
 else
   echo "=== plan: one cell on vLLM's own config ladder ==="
@@ -202,12 +516,25 @@ fi
 echo
 
 if (( DRY_RUN )); then
-  echo "[mma] --dry-run: nothing was executed and nothing was written."
-  exit 0
+  # REFUSED (2), which is what a plan is: it scores no gate, so it prints no
+  # RESULT line, and `classify_text` over a log with none raises NoGatesScored
+  # -- the module documents that as exactly what a REFUSED log looks like from
+  # there. DONE would read "measured; every VALIDITY and CLAIM gate PASSED",
+  # which is false of every plan, one line under "nothing was executed". The
+  # driver re-queues neither state: `dry_state` maps 0 to PLANNED and 2 to
+  # PLAN_REFUSED, and `arm` retries neither.
+  echo "[mma] REFUSED: --dry-run scored no gate, because nothing was executed"
+  echo "[mma] and nothing was written. The thresholds above are REGISTERED,"
+  echo "[mma] which is not the same statement as met."
+  exit "$EXIT_REFUSED"
 fi
 
 PY="${MOE_PYTHON:-$WORKSPACE/venvs/$ENV_NAME/bin/python}"
-[[ -x "$PY" ]] || { echo "no interpreter at $PY; run setup_runpod.sh" >&2; exit 1; }
+# REFUSED (2), not 1. Nothing has been compiled at this point, so this costs
+# nothing and the arm runs the moment the venv exists. Exiting 1 said CLAIM_FAIL
+# -- a pre-registered claim tested and refuted -- and the session ledgers a
+# result as finished and never asks for it again.
+[[ -x "$PY" ]] || refuse "no interpreter at $PY; run setup_runpod.sh"
 
 #: Dropped inside a dump directory so a later run can recognise its own output.
 DUMP_MARKER=".moe-ptx-dump"
@@ -277,6 +604,21 @@ run_arm() {   # <dump-subdir> <label> [force-json]
   # statement in FINDINGS C3 and C5 from DERIVED into OBSERVED. `|| true` also
   # meant a sweep that died -- OOM, missing vLLM, a bad --model -- still reached
   # the PTX scan and reported on whatever stale files were lying around.
+  #
+  # THE SWEEP'S OWN EXIT CODE IS READ, AND IT IS THE SAME TABLE. `moe.bench.cli`
+  # is itself a gated arm under MOE_FORCE_TILE (gates F1 and F2), so its integer
+  # already says which of REFUSED / INVALID / ERROR happened, and translating it
+  # here is the difference between "the pin never reached the kernel" and "this
+  # script crashed". `set -e` AND the ERR trap are lifted around the pipeline
+  # for exactly as long as it takes to read PIPESTATUS[0]. Both are needed: the
+  # ERR trap fires on a failing command whether or not errexit is on, so without
+  # `trap - ERR` every one of those states is reported as ERROR (4) -- which is
+  # what this script did on the first run of the repaired path, turning the
+  # sweep's own REFUSED into a crash. `tee`'s status is not the sweep's, which
+  # is why the code comes from PIPESTATUS[0] and not from `$?`.
+  local rc=0
+  set +e
+  trap - ERR
   if [[ -n "$force" ]]; then
     MOE_FORCE_TILE="$force" TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$dir" \
       TRITON_CACHE_DIR="$cache" \
@@ -288,6 +630,12 @@ run_arm() {   # <dump-subdir> <label> [force-json]
       "$PY" -m moe.bench.cli --env "$ENV_NAME" --profile smoke \
             --groups baselines --models "$MODEL" --tokens "$TOKENS" \
             --out-dir "$results" 2>&1 | tee "$log_file"
+  fi
+  rc=${PIPESTATUS[0]}
+  trap on_unhandled_error ERR
+  set -e
+  if (( rc != 0 )); then
+    sweep_failed "$label" "$rc" "$log_file"
   fi
 
   echo
@@ -395,9 +743,9 @@ if [[ -z "$BLOCK_M_LIST" ]]; then
     echo "[mma] per-run and was empty a moment ago, so every kernel recompiled." >&2
     echo "[mma] What is left: the span never ran (check the log), vLLM is absent" >&2
     echo "[mma] from this env, or the cell fell back to a non-Triton path." >&2
-    exit 1
+  else
+    log "found $ARM_PTX PTX file(s)"
   fi
-  log "found $ARM_PTX PTX file(s)"
   echo
   echo "=== verdict ==="
   echo "  kernels containing wgmma   : $ARM_WGMMA"
@@ -421,7 +769,16 @@ if [[ -z "$BLOCK_M_LIST" ]]; then
   echo "  PTX kept at $DUMP_DIR, run log at $DUMP_DIR/run.log."
   echo "  Both are transient pod output until they are committed; FINDINGS lists"
   echo "  that as the reason C1 and C3 cannot be checked without a GPU."
-  exit 0
+  echo
+  echo "=== gates ==="
+  # THE LADDER CELL IS SCORED TOO. It used to exit 0 having scored nothing,
+  # which is DONE -- "measured; every gate PASSED" -- out of a run where no gate
+  # existed to pass, and 1 when no PTX was dumped, which is CLAIM_FAIL. Both are
+  # states the table already names: an absent kernel is a VALIDITY failure after
+  # the cell has run (INVALID), and warpgroup MMA turning up on the ladder is
+  # C3 refuted (CLAIM_FAIL), which is a result rather than a fault.
+  score_ladder_gates
+  finish
 fi
 
 # --------------------------------------------------------------------------
@@ -483,43 +840,12 @@ done < "$SUMMARY"
 
 echo
 echo "=== gates ==="
-verdict_line() {   # <tag> <kind> <ok> <claim> <measured> <gate> <consequence>
-  local tag="$1" kind="$2" ok="$3" claim="$4" measured="$5" gate="$6" cons="$7"
-  printf '%-3s %-8s %-4s %s\n' "$tag" "$kind" \
-    "$( (( ok )) && echo PASS || echo FAIL )" "$claim"
-  printf '             measured %s   gate %s\n' "$measured" "$gate"
-  printf '             if this FAILS: %s\n' "$cons"
-}
-verdict_line G1 VALIDITY "$(( g1_fail == 0 ))" \
-  "every arm ran the tile it was given" \
-  "$(( narms - g1_fail ))/$narms arms observed exactly what they forced" \
-  "all $narms" \
-  "MOE_FORCE_TILE did not reach the kernel in some arm, so its census belongs to
-             a tile nobody chose. Nothing on this page may be attributed to a tile.
-             Check that moe/bench/force_tile.py is present in this checkout and that
-             the impl under test exposes the force_tile_config hook."
-verdict_line G2 VALIDITY "$(( g2_fail == 0 ))" \
-  "every arm dumped a PTX carrying a tensor-core instruction" \
-  "$(( narms - g2_fail ))/$narms arms" "all $narms" \
-  "an arm compiled nothing, or nothing with a tensor core in it. An absent
-             instruction and an absent kernel look identical in the table above."
-verdict_line G3 VALIDITY "$(( distinct == narms ))" \
-  "the arms compiled DIFFERENT kernels" \
-  "$distinct distinct PTX checksum(s)" "== $narms" \
-  "two arms produced byte-identical PTX, so the tile did not reach the compile
-             and the census is one kernel compared with itself."
-verdict_line G4 CLAIM "$(( g4_fail == 0 ))" \
-  "wgmma appears in exactly the arms BLOCK_M % 64 == 0 names" \
-  "$(( narms - g4_fail ))/$narms arms match the prediction" "all $narms" \
-  "the instruction is NOT selected by the tile height alone at fixed num_warps,
-             which is a result: Triton's predicate as read from supportMMA does not
-             describe what this build emits."
+score_forced_gates
 
 echo
 if (( g1_fail || g2_fail || distinct != narms )); then
   echo "READING IT. A validity gate failed. The census above may not be quoted,"
   echo "and STUDY.md item 3's loose end stays open."
-  status=1
 elif (( g4_fail == 0 )); then
   echo "READING IT. At a FIXED token count of $TOKENS, with num_warps pinned at"
   echo "$NUM_WARPS and every other tile knob equal, the warpgroup instruction"
@@ -528,17 +854,20 @@ elif (( g4_fail == 0 )); then
   echo "That closes the loose end on STUDY.md item 3: the 2026-08-27 census saw"
   echo "the same switch through the config ladder, where the batch, the tile and"
   echo "num_warps all moved together."
-  status=0
 else
   echo "READING IT. The instruction did not follow the tile in $g4_fail arm(s)"
   echo "while every validity gate passed, so this is a measurement and not a"
   echo "broken run. Triton's warpgroup predicate as this study reads it does not"
   echo "describe this build; quote the table, not the predicate."
-  status=1
 fi
 
 echo
 echo "  PTX kept under $DUMP_DIR/bm<N>/, run logs beside it, summary at $SUMMARY."
 echo "  *.ptx is gitignored at any depth on purpose, so the raw dumps leave a pod"
 echo "  as a tarball and the table above leaves as text."
-exit "$status"
+
+# The `status` variable this used to set by hand is gone. It read 1 on a
+# VALIDITY failure -- CLAIM_FAIL, "measured, valid, and the world disagreed" --
+# beside its own text saying the census may not be quoted, and the session
+# latched the row on it. `finish` derives the code from the gates that printed.
+finish
