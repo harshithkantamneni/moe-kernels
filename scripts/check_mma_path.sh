@@ -370,6 +370,22 @@ finish() {
 #: measuring makes this arm a refusal too, and a sweep whose own validity gate
 #: failed after measuring makes it INVALID. Anything outside the table is ERROR,
 #: because a code nobody chose carries no information about what happened.
+#:
+#: 1 IS DECIDED BY THE CHILD'S LOG, NOT BY THE INTEGER ALONE, and that is the
+#: one translation here that cannot be read straight off the table. `moe.bench.
+#: cli` scores two gates, F1 and F2, and both are VALIDITY, so `classify` over
+#: them returns DONE or INVALID and NEVER CLAIM_FAIL: every other return in that
+#: module is 0 or 2. The only way the child hands back 1 is an exception that
+#: escaped it -- an OOM, a vLLM import that died in `bootstrap`, an --out-dir
+#: that is not a directory. Reading that as "it ran and then failed a gate of
+#: its own" printed a sentence about RESULT lines over a log that has none and
+#: exited 3, and INVALID is in the driver's latch set (`arm()` skips DONE,
+#: CLAIM_FAIL and INVALID), so one transient crash marked mma_switch measured
+#: and unquotable for good and cost a second rental to find out. So a 1 whose
+#: log carries no `RESULT: ` line is ERROR (4), which the ledger reads as RETRY.
+#: A 1 whose log DOES carry them came out of a scorer rather than a traceback,
+#: and is adopted as INVALID, because this script attributes its census to a pin
+#: the child was the only thing able to check.
 sweep_failed() {   # <label> <rc> <log-file>
   local label="$1" rc="$2" log_file="$3"
   echo >&2
@@ -378,7 +394,22 @@ sweep_failed() {   # <label> <rc> <log-file>
       refuse "the [$label] sweep refused before measuring (exit $rc). Its first
   REFUSED line above says what to fix; nothing was compiled, so no census exists
   and none was scored." ;;
-    "$EXIT_INVALID"|"$EXIT_CLAIM_FAIL")
+    "$EXIT_CLAIM_FAIL")
+      if ! grep -q '^RESULT: ' "$log_file"; then
+        echo "[mma] the [$label] sweep exited $rc having scored no gate: not one" >&2
+        echo "[mma] RESULT: line reached $log_file, and moe.bench.cli registers" >&2
+        echo "[mma] only VALIDITY gates, so it cannot return CLAIM_FAIL on" >&2
+        echo "[mma] purpose. That is an escaped traceback -- read the end of the" >&2
+        echo "[mma] log. ERROR, so the session may run this arm again; it is not" >&2
+        echo "[mma] a refuted claim and it is not a census." >&2
+        exit "$EXIT_ERROR"
+      fi
+      echo "[mma] the [$label] sweep exited $rc from its own scorer -- see its" >&2
+      echo "[mma] RESULT lines above. The pin is the thing this script attributes" >&2
+      echo "[mma] its census to, so a run whose own gates did not all pass leaves" >&2
+      echo "[mma] nothing here quotable." >&2
+      exit "$EXIT_INVALID" ;;
+    "$EXIT_INVALID")
       echo "[mma] the [$label] sweep exited $rc: it ran and then failed a gate of" >&2
       echo "[mma] its own -- see its RESULT lines above. The pin is the thing this" >&2
       echo "[mma] script attributes its census to, so a run that cannot show the" >&2

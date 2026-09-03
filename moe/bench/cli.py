@@ -40,11 +40,27 @@ session; and a mistyped `--models` exited 1, CLAIM_FAIL, a refuted claim from a
 run that measured nothing. None of it needed a GPU to go wrong.
 
 So: DONE 0, CLAIM_FAIL 1, REFUSED 2 (nothing measured: a malformed variable, an
-unknown model, a plan holding no span able to pin, a dry run), INVALID 3 (the
-sweep ran and a VALIDITY gate failed after it; nothing quotable), ERROR 4. The
-two force-tile gates print one `RESULT: VALIDITY F1 ...` line each and the code
-is `exit_codes.classify` over the same verdicts, so `classify_text` on the log
-recomputes what the process returned. The dotted spelling above is load-bearing
+unknown model, a plan holding no span able to pin), INVALID 3 (the sweep ran and
+a VALIDITY gate failed after it; nothing quotable), ERROR 4 (an exception this
+module did not plan for, caught in `main` so that a crash is never handed to the
+ledger as a refuted claim). The two force-tile gates print one
+`RESULT: VALIDITY F1 ...` line each and the code is `exit_codes.classify` over
+the same verdicts, so `classify_text` on the log recomputes what the process
+returned.
+
+`--dry-run` IS THE ONE PLACE THIS FILE SPEAKS A SECOND VOCABULARY, and it does
+so deliberately. It exits DONE (0) for a plan that validates and REFUSED (2) for
+one that does not, and the first integer does NOT mean the table's "measured;
+every VALIDITY and CLAIM gate PASSED", because a plan scores no gate at all --
+`classify_text` over a dry-run log raises NoGatesScored. The driver reads a plan
+arm through `dry_state` rather than through the gate table (0 PLANNED, 2
+PLAN_REFUSED, anything else BROKEN: "this is a PLAN, and it did not survive its
+own --dry-run") and it re-queues neither state. The sibling scripts converted in
+461d0e6 refuse unconditionally on their dry path because their rows are not plan
+rows; `scripts/run_all.sh` execs this one and reads 0 as "the plan validated,
+proceed". So the divergence from `scripts/check_mma_path.sh`, which refuses, is
+real and intended, and this paragraph is the thing that has to say so. The
+dotted spelling above is load-bearing
 as well as accurate: the driver's `adopts_exit_codes` greps each arm's own file
 for it, and prints a caveat beside every REFUSED or INVALID row that came out of
 a file which does not name it. See moe/bench/force_tile.py.
@@ -55,6 +71,7 @@ import argparse
 import json
 import sys
 import time
+import traceback
 from pathlib import Path
 
 import moe
@@ -501,16 +518,27 @@ def force_tile_verdict(forced, ledger) -> int:
 
 
 def main(argv=None) -> int:
-    """Convert a string SystemExit into REFUSED (2), which is what it means.
+    """The two integers this module would otherwise return by accident.
 
-    `raise SystemExit("some sentence")` exits ONE, and 1 is CLAIM_FAIL: a
-    pre-registered expectation that was tested and did not hold, which the
-    ledger records as a finished result and never retries. Every refusal this
-    module raises -- an unknown `--models`, a routing that is not a number, an
-    override whose matrix has no cells, a malformed MOE_FORCE_TILE -- happens
-    during argument handling, before `moe.bootstrap` and long before a cell is
-    timed, so all of them are REFUSED. `python -m moe.bench.cli --models nope`
-    returned 1 until 2026-09-02.
+    A STRING SystemExit IS REFUSED (2). `raise SystemExit("some sentence")`
+    exits ONE, and 1 is CLAIM_FAIL: a pre-registered expectation that was tested
+    and did not hold, which the ledger records as a finished result and never
+    retries. Every refusal this module raises -- an unknown `--models`, a
+    routing that is not a number, an override whose matrix has no cells, a
+    malformed MOE_FORCE_TILE -- happens during argument handling, before
+    `moe.bootstrap` and long before a cell is timed, so all of them are REFUSED.
+    `python -m moe.bench.cli --models nope` returned 1 until 2026-09-02.
+
+    AN UNPLANNED EXCEPTION IS ERROR (4). An escaping traceback exits 1 as well,
+    for the same reason and with worse consequences: `--out-dir` under a path
+    that is not a directory, an OOM, a vLLM import that dies inside
+    `moe.bootstrap`. The driver reads 1 as CLAIM_FAIL, ledgers a dead process as
+    a refuted claim, and LATCHES the arm, so a transient crash costs a second
+    rental to discover. This is the same defect the ERR trap in
+    `scripts/check_mma_path.sh` exists to prevent, in the arm the same commit
+    left without one, and the header at the top of this file advertised an ERROR
+    row the file could not emit until 2026-09-02. The traceback is still printed
+    in full, because 4 is the code that says "read the log".
 
     Caught here rather than at each raise site so the contract holds for a
     caller of `main()` as well as for the CLI, and so a refusal added later
@@ -524,6 +552,15 @@ def main(argv=None) -> int:
             print(msg, file=sys.stderr)
             return EC.REFUSED
         raise
+    except Exception:
+        # NOT `except BaseException`: a Ctrl-C or a SIGTERM on the pod is the
+        # operator ending the run, not the instrument breaking, and turning it
+        # into a scored code would tell the ledger something false about it.
+        traceback.print_exc()
+        print(f"[cli] exit {EC.describe(EC.ERROR)}. Nothing above was scored "
+              "and no RESULT line was printed; whatever cells reached disk "
+              "before this must not be quoted.", file=sys.stderr)
+        return EC.ERROR
 
 
 if __name__ == "__main__":

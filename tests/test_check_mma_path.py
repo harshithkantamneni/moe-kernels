@@ -341,3 +341,56 @@ def test_the_driver_sees_this_arm_as_having_adopted_the_table():
     got = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
                          timeout=120)
     assert got.stdout.strip() == "rc=0", got.stdout + got.stderr
+
+
+def stub_interpreter(tmp_path, name, body):
+    """An `$PY` that fails the way the pod's does, without a pod.
+
+    The sweep's own exit code is the only thing this script reads out of the
+    child, and the two states that matter here -- a traceback that escaped
+    `moe.bench.cli`, and a scorer that returned 1 -- cannot be planted from the
+    laptop's real interpreter. So the interpreter is the plant.
+    """
+    path = tmp_path / name
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(0o755)
+    return path
+
+
+def test_a_child_that_crashed_is_error_and_not_a_latched_invalid(tmp_path):
+    """1 out of `moe.bench.cli` means a traceback, not a verdict.
+
+    That module registers only VALIDITY gates, so `classify` over them returns
+    DONE or INVALID and never CLAIM_FAIL, and every other return in it is 0 or
+    2. Reading 1 as "it ran and then failed a gate of its own" printed that
+    sentence over a log with no RESULT line in it and exited 3 -- INVALID, which
+    `arm()` latches -- so one OOM marked this arm measured-and-unquotable for
+    good. ERROR is the code that lets the session try again.
+    """
+    py = stub_interpreter(tmp_path, "crashpy",
+                          'echo "Traceback (most recent call last):" >&2\n'
+                          'echo "MemoryError" >&2\nexit 1\n')
+    got = sh("--model", "toy", "--tokens", "8", "--block-m", "16,64",
+             "--out", str(tmp_path / "ptx"), env_extra={"MOE_PYTHON": str(py)})
+    out = got.stdout + got.stderr
+    assert got.returncode == EC.ERROR, out
+    assert EC.ledger_state(got.returncode) == "RETRY"
+    assert "having scored no gate" in got.stderr
+    assert "failed a gate of" not in out, "no RESULT line exists to point at"
+    assert EC.parse_result_lines(got.stdout) == [], "a crash scores no gate"
+
+
+def test_a_child_that_scored_its_own_gates_is_adopted_rather_than_retried(tmp_path):
+    """The other half of the same branch, so the discriminator is exercised in
+    both directions. A 1 whose log carries `RESULT: ` lines came out of a scorer
+    and is a verdict about the pin, which is what this script attributes its
+    census to, so it is adopted as INVALID and not queued for another rental."""
+    py = stub_interpreter(tmp_path, "scoredpy",
+                          "echo 'RESULT: VALIDITY F1 FAIL [VALIDITY] planted "
+                          "| measured 1 | gate 0'\nexit 1\n")
+    got = sh("--model", "toy", "--tokens", "8", "--block-m", "16,64",
+             "--out", str(tmp_path / "ptx"), env_extra={"MOE_PYTHON": str(py)})
+    out = got.stdout + got.stderr
+    assert got.returncode == EC.INVALID, out
+    assert "from its own scorer" in got.stderr
+    assert "having scored no gate" not in got.stderr

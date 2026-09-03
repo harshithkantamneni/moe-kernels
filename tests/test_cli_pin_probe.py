@@ -249,3 +249,48 @@ def test_a_plan_that_would_pin_nothing_is_a_plan_refused_not_a_broken_plan():
     assert done.returncode == EC.REFUSED, done.stdout + done.stderr
     assert "REFUSED" in done.stdout
     assert "No GPU was used" in done.stdout
+
+
+def test_an_unplanned_exception_is_error_rather_than_a_refuted_claim(tmp_path):
+    """The code the header advertised and the file could not emit.
+
+    A traceback that escapes `main` exits 1, and 1 is CLAIM_FAIL: the driver
+    ledgers a dead process as a pre-registered claim tested and found false, and
+    LATCHES the arm, so an OOM or a vLLM import that died in `bootstrap` costs a
+    second rental to discover. `--out-dir` under a regular file reproduces it
+    with no GPU and no vLLM: the crash lands in `Path.mkdir`, past argument
+    handling, which is exactly where the pod's crashes land.
+    """
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_text("")
+    done = run_cli("--profile", "smoke", "--out-dir", str(blocker / "sub"))
+    assert done.returncode == EC.ERROR, done.stdout + done.stderr
+    assert EC.ledger_state(done.returncode) == "RETRY"
+    assert "Traceback" in done.stderr, "the traceback is still printed in full"
+    assert "must not be quoted" in done.stderr
+    assert EC.parse_result_lines(done.stdout + done.stderr) == [], \
+        "a crash scores no gate"
+
+
+def test_the_contract_paragraph_describes_the_dry_run_this_file_ships():
+    """Prose against behaviour, because the prose was the thing that was wrong.
+
+    The header listed "a dry run" among the states that exit REFUSED, and
+    `dry_run` returns DONE for a plan that validates. Both cannot be true, and
+    the behaviour is the one to keep: `scripts/run_all.sh` execs this module and
+    reads 0 as "the plan validated, proceed", and the driver reads a plan arm
+    through `dry_state` (0 PLANNED, 2 PLAN_REFUSED) rather than through the gate
+    table. So the paragraph has to say that a dry run is a plan row, and this
+    test fails if either half drifts from the other.
+    """
+    doc = cli.__doc__
+    refused_clause = doc.split("REFUSED 2 (", 1)[1].split(")", 1)[0]
+    assert "dry run" not in refused_clause, refused_clause
+    assert "dry_state" in doc and "PLAN_REFUSED" in doc
+    assert "ERROR 4 (" in doc, "the header still names the code main now emits"
+
+    done = run_cli("--profile", "smoke", "--dry-run")
+    assert done.returncode == EC.DONE, done.stdout + done.stderr
+    assert EC.parse_result_lines(done.stdout) == [], "a plan scores no gate"
+    with pytest.raises(EC.NoGatesScored):
+        EC.classify_text(done.stdout)
