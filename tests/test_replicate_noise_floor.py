@@ -42,6 +42,7 @@ import importlib.util
 import json
 import math
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -153,12 +154,29 @@ def test_the_known_sigma_limit_is_the_stricter_of_the_two_for_gate_c2():
         assert NF.mde_external_sigma(sd, 1) > NF.mde_external_sigma(sd, 2)
 
 
+@needs_arms
 def test_the_registered_prior_reproduces_the_docstrings_mde_table():
     """The numbers the docstring registered N=6 against, recomputed."""
-    assert NF.PRIOR_SD == pytest.approx(0.02284, abs=5e-6)
-    assert NF.mde_two_sample(NF.PRIOR_SD, 3) == pytest.approx(0.0693, abs=5e-4)
-    assert NF.mde_two_sample(NF.PRIOR_SD, 6) == pytest.approx(0.0410, abs=5e-4)
-    assert NF.replicates_for(NF.EFFECTS[-1].size, NF.PRIOR_SD) == 61
+    assert NF.prior_sd() == pytest.approx(0.022863, abs=5e-6)
+    assert NF.mde_two_sample(NF.prior_sd(), 3) == pytest.approx(0.0693, abs=5e-4)
+    assert NF.mde_two_sample(NF.prior_sd(), 6) == pytest.approx(0.0410, abs=5e-4)
+    assert NF.replicates_for(NF.EFFECTS[-1].size, NF.prior_sd()) == 61
+
+
+@needs_arms
+def test_the_prior_is_derived_from_the_control_and_is_not_a_retyped_rounding():
+    """WHAT WAS PUBLISHED: `prior_sd` 0.022839549032325487 in the tracked
+    `results/published/NOISE_FLOOR.json`, which is `0.0323 / sqrt(2)` -- the
+    file's OWN paired sd, 0.03233250623999132, re-typed to three significant
+    figures and then divided. 0.1% wrong, nothing in the file saying it was a
+    rounding, and imported by `scripts/bn_decomposition.py` and by the session
+    driver's MDE line. This asserts the identity, not the number, so the day
+    the two committed arms change the constant cannot stay behind."""
+    exact = NF.stages_control(NF.PRIMARY_FIELD).sd / math.sqrt(2.0)
+    assert NF.prior_sd() == exact
+    retyped = 0.0323 / math.sqrt(2.0)
+    assert NF.prior_sd() != retyped, "the rounding is back"
+    assert abs(NF.prior_sd() - retyped) > 2e-5
 
 
 def test_replicates_for_returns_none_rather_than_the_cap():
@@ -803,7 +821,11 @@ def test_dry_run_prints_the_plan_the_cost_and_the_registered_predictions(capsys)
                      "C1 floor size                       expect PASS",
                      "C3 swizzle mixtral-8x7b            expect PASS",
                      "C3 swizzle qwen2-57b-a14b          expect FAIL",
-                     "sd <= 0.0228", "|0.0117| < MDE"):
+                     # 0.0229 and not 0.0228: the prior is DERIVED from the
+                     # control's own paired sd now, and the 0.0228 that was
+                     # published was that sd re-typed to three significant
+                     # figures and then divided. See `prior_sd`.
+                     "sd <= 0.0229", "|0.0117| < MDE"):
         assert expected in out, f"missing from the registered predictions: {expected}"
     assert "RESULT:" not in out
     # ...and the cost, which is what a metered pod is budgeted against.
@@ -900,36 +922,27 @@ def test_the_published_floor_file_refuses_until_a_card_has_run():
 @pytest.mark.skipif(not NF.NOISE_FLOOR_JSON.exists(),
                     reason="the noise floor has not been published here yet")
 def test_the_committed_floor_carries_the_provenance_its_writer_now_requires():
-    """R3 IS CLOSED IN CODE AND STILL OPEN ON DISK, and this is what makes the
-    difference visible instead of remembered.
+    """R3, CLOSED IN CODE AND NOW ON DISK TOO. It XFAILED until 2026-09-03.
 
-    `build_document` takes `prov` as a required positional argument now, so no
-    path can publish an unstamped floor AGAIN. The file that is already
-    committed was written before that, and it has none:
-    `sorted(json.load(...))` is `[cross_card, effects_registered, git,
-    primary_field, prior_sd, prior_sd_source, replicate_floor, schema, sign,
-    stages_control, written_utc]`, with no provenance block, no git_sha, no
-    gpu_name, no instrument, no ridge_source and no bandwidth_source. The test
-    beside this one monkeypatches `write_published`, so it proves the WRITER and
-    says nothing about the artefact, and the suite would stay green forever over
-    an unattributed published number.
+    `build_document` takes `prov` as a required positional argument, so no path
+    can publish an unstamped floor. The file that was committed predated that
+    and had none: `sorted(json.load(...))` was `[cross_card,
+    effects_registered, git, primary_field, prior_sd, prior_sd_source,
+    replicate_floor, schema, sign, stages_control, written_utc]`, with no
+    provenance block, no git_sha, no gpu_name, no instrument, no ridge_source
+    and no bandwidth_source. The test beside this one monkeypatches
+    `write_published`, so it proves the WRITER and says nothing about the
+    artefact, and the suite stayed green over an unattributed published number.
 
-    IT XFAILS RATHER THAN FAILS BECAUSE THE FIX IS NOT A CODE CHANGE. Rerunning
-    `--control-only --publish` on this laptop would stamp a null card and this
-    working tree onto a file the study quotes; the regeneration belongs on the
-    machine and at the commit the floor is republished from. XFAIL is the debt
-    recorded in the one place that cannot be forgotten. When the file is
-    regenerated this test starts running for real, XPASSes, and the marker
-    should be deleted with the same commit.
+    THE XFAIL WAS THE DEBT AND THE DEBT IS PAID: the file was regenerated by
+    `python scripts/replicate_noise_floor.py --control-only --publish`, which is
+    arithmetic over the committed arms and needs no GPU. The assertions below
+    now run for real.
     """
     doc = json.loads(NF.NOISE_FLOOR_JSON.read_text())
-    if "provenance" not in doc:
-        pytest.xfail(
-            "results/published/NOISE_FLOOR.json predates the provenance "
-            "requirement and carries no block. It is OWED a regeneration at the "
-            "commit it is republished from: `python scripts/"
-            "replicate_noise_floor.py --control-only --publish`, run where the "
-            "tree is clean.")
+    assert "provenance" in doc, (
+        "the committed floor lost its provenance block. Regenerate it: "
+        "`python scripts/replicate_noise_floor.py --control-only --publish`")
     for key in NF.PV.TOP_LEVEL_KEYS:
         assert key in doc, key
     assert doc["provenance"]["git_sha"], "a published floor names its commit"
@@ -938,6 +951,45 @@ def test_the_committed_floor_carries_the_provenance_its_writer_now_requires():
     # A page that measured nothing says so; it does not borrow the live name.
     if doc["replicate_floor"] is None:
         assert doc["instrument"] == NF.UNMEASURED_INSTRUMENT
+    # And the dirt is NAMED, not a bare boolean. `dirty` cannot be false on the
+    # commit that publishes -- the file is written before it can be committed --
+    # so what a reader needs is which paths were outstanding, and the test below
+    # is what makes the flag unnecessary.
+    assert doc["git"]["dirty"] is False or doc["git"]["dirty_paths"], \
+        "a dirty published floor must say WHICH paths were dirty"
+
+
+@needs_arms
+@pytest.mark.skipif(not NF.NOISE_FLOOR_JSON.exists(),
+                    reason="the noise floor has not been published here yet")
+def test_the_committed_floor_reproduces_from_the_committed_code():
+    """THE GUARANTEE THAT REPLACES A CLEAN-TREE FLAG, and it is a stronger one.
+
+    Every number in `results/published/NOISE_FLOOR.json` is arithmetic over two
+    committed arms. This recomputes the whole document from those arms with the
+    tracked code and compares it field by field, so a reader does not have to
+    trust that whoever published it had a clean tree: they can rerun this. It
+    catches a hand-edit of the file, a drift in the arms it is derived from, and
+    the specific defect that was found in it -- `prior_sd` published as
+    0.022839549032325487, which is the file's OWN paired sd re-typed to three
+    significant figures and then divided by root two.
+
+    `written_utc`, `git` and `provenance` are excluded because they describe the
+    publishing act rather than the measurement, and no rerun can reproduce them.
+    """
+    committed = json.loads(NF.NOISE_FLOOR_JSON.read_text())
+    control = {f: NF.stages_control(f) for f in NF.ALPHA_FIELDS}
+    cards = {f: NF.cross_card(f) for f in NF.ALPHA_FIELDS}
+    fresh = NF.build_document(control, cards, None, NF.unmeasured_provenance())
+    describes_the_act = {"written_utc", "git", "provenance", "git_sha",
+                         "gpu_name", "ridge_source", "bandwidth_source",
+                         "instrument"}
+    assert set(committed) == set(fresh)
+    for key in sorted(set(fresh) - describes_the_act):
+        assert committed[key] == fresh[key], key
+    assert committed["prior_sd"] == pytest.approx(
+        NF.stages_control(NF.PRIMARY_FIELD).sd / math.sqrt(2.0), rel=0, abs=0)
+    assert committed["prior_sd"] != 0.022839549032325487, "the rounding is back"
 
 
 @needs_arms
@@ -1023,6 +1075,7 @@ def test_run_order_refuses_an_order_it_does_not_know():
         NF.run_order(list(NF.DEFAULT_ARMS), 6, "blocked")
 
 
+@needs_arms
 def test_the_qwen2_swizzle_effect_is_registered_with_its_source():
     """A15/S35: the surface is published as a general mechanism on the strength
     of the mixtral number. The qwen2 one was never written down, and it is a
@@ -1033,8 +1086,8 @@ def test_the_qwen2_swizzle_effect_is_registered_with_its_source():
     assert "OPPOSITE SIGNS" in swings["qwen2-57b-a14b"].source
     # It is BELOW what N=6 replicates can resolve, which is why its gate is
     # registered as an expected FAIL rather than discovered afterwards.
-    assert swings["qwen2-57b-a14b"].size < NF.mde_two_sample(NF.PRIOR_SD, 6)
-    assert swings["mixtral-8x7b"].size > NF.mde_two_sample(NF.PRIOR_SD, 6)
+    assert swings["qwen2-57b-a14b"].size < NF.mde_two_sample(NF.prior_sd(), 6)
+    assert swings["mixtral-8x7b"].size > NF.mde_two_sample(NF.prior_sd(), 6)
 
 
 @needs_arms
@@ -1165,12 +1218,13 @@ def test_the_arms_pass_the_instruments_knobs_and_not_a_retired_call_count():
     assert arm.tiles == "32,64,256"
 
 
+@needs_arms
 def test_the_plan_states_its_scope_and_its_mde_from_a_stated_assumption():
     """B14 and A15: an MDE nobody stated, and a floor whose scope lived only in
     a docstring and was then cited for cross-pod comparisons."""
     arms = list(NF.DEFAULT_ARMS)
     text = "\n".join(NF.render_mde_line(6, arms))
-    assert f"{NF.mde_two_sample(NF.PRIOR_SD, 6):.4f}" in text
+    assert f"{NF.mde_two_sample(NF.prior_sd(), 6):.4f}" in text
     assert "sigma is ASSUMED" in text
     assert "same-session" in text.lower()
     assert "heteroscedastic" in text
@@ -1390,3 +1444,530 @@ def test_the_plan_names_the_directory_the_run_writes(tmp_path):
     mids = [ln.split("rep 1: ")[1].strip() for ln in metered.splitlines()
             if "rep 1: " in ln]
     assert mids and not any(i.startswith("synthetic-") for i in mids), mids
+
+
+# --------------------------------------------------------------------------
+# 7. THE MOST EXPENSIVE ARM RETURNED INVALID EVEN GIVEN INFINITE TIME.
+#
+# `run_replicate` discarded any child that exited non-zero WITHOUT opening its
+# report.json, and `Replicate.ok` demanded a literal 0 a SECOND time. While
+# `block_m_crossing_sweep` masked a failed CLAIM gate into exit 0 neither
+# mattered; commit 346b7a5 stopped the masking, and from that commit a sweep
+# that measured every cell and merely refuted its own pre-registered claim
+# exited 1 and had every cell thrown away. On the pod: two hours of a rented
+# card, a guaranteed INVALID, and an INVALID arm is latched by the session
+# driver's ledger and skipped on every resume.
+# --------------------------------------------------------------------------
+
+def _fake_child(rc, *, report=None):
+    """A `subprocess.run` that exits `rc` and, if asked, leaves a report behind.
+
+    The report is written to the path `run_replicate` computed, which is the
+    only way to prove the parent OPENED it rather than believing a returncode.
+
+    `report` IS A DICT OR A CALLABLE OVER THE CHILD'S OWN ARGV, and the callable
+    is not a convenience. A dict is the same page from every child, so every
+    replicate of a cell comes back with bit-identical alpha, which is precisely
+    the state V3 `not_a_collision` exists to refuse. A fake that cannot produce
+    a spread cannot exercise a file whose entire subject is a spread: see
+    `_measured_reports`.
+    """
+    def run(argv, **kwargs):
+        doc = report(list(argv)) if callable(report) else report
+        if doc is not None:
+            out = Path(argv[argv.index("--out") + 1])
+            run_id = argv[argv.index("--run-id") + 1]
+            target = out / "block_m_crossing" / run_id / "report.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(doc))
+        return subprocess.CompletedProcess(argv, rc, stdout="stdout", stderr="")
+    return run
+
+
+def _synthetic_report(alpha, *, instrument=None):
+    """The shape `load_replicate` reads: one ladder fit and an instrument stamp.
+
+    ONE PAGE, FIXED, for the single-`run_replicate` tests below, which are about
+    what the parent does with an exit code and never pool anything.
+    """
+    return {
+        "model": "mixtral-8x7b", "dtype": "bf16",
+        "fixed": {"GROUP_SIZE_M": 1, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64,
+                  "num_warps": 8, "num_stages": 4},
+        "instrument": NF.timing_basis() if instrument is None else instrument,
+        "gates": [{"number": 0, "measured": "BM=64:3"}],
+        "ladder": {"64": {"alpha": alpha, "alpha_corrected": alpha,
+                          "alpha_upper": alpha}},
+    }
+
+
+#: How far apart two replicates of one cell are in the session-level fakes.
+#: Inside `prior_sd()` (0.0229) so the floor C1 scores is a PASS rather than a
+#: refutation of a proxy these tests never set out to test, and far enough from
+#: zero that no rounding in the pooling can close it.
+REPLICATE_STEP = 0.004
+
+
+def _measured_reports(base_alpha, *, instrument=None):
+    """A per-child report READ OFF THE CHILD'S OWN ARGV, for whole-`main` runs.
+
+    TWO THINGS THE FIXED DICT GOT WRONG, and both of them decided a gate.
+
+    The alpha was a constant, so both replicates of every cell returned the same
+    bits, V3 `not_a_collision` FAILED, and the run reached INVALID for a reason
+    that has nothing to do with the exit-code table these tests are about. The
+    replicate index moves it by `REPLICATE_STEP` here, which is what a rerun of
+    the same cell on the same card actually looks like.
+
+    And `GROUP_SIZE_M` was hardcoded to 1 in every page, including the pages
+    written for the G=16 arm, so the swizzle factor the C3 claim is scored over
+    had one level wearing two labels. The swizzle width and the activation width
+    are taken from the flags the parent really passed, so a cell lands where the
+    parent thinks it launched it. `--out` carries `{arm}-rep{index}`, which is
+    this parent's own naming and the only place the replicate index appears on a
+    child command line: the sweep has no notion of a replicate.
+    """
+    def report(argv):
+        arm_dir = Path(argv[argv.index("--out") + 1]).name
+        index = int(arm_dir.rsplit("-rep", 1)[1])
+        alpha = base_alpha + (index - 1) * REPLICATE_STEP
+        doc = _synthetic_report(alpha, instrument=instrument)
+        doc["model"] = argv[argv.index("--model") + 1]
+        doc["dtype"] = argv[argv.index("--dtype") + 1]
+        doc["fixed"]["GROUP_SIZE_M"] = int(argv[argv.index("--group-m") + 1])
+        doc["fixed"]["BLOCK_SIZE_N"] = int(argv[argv.index("--block-n") + 1])
+        doc["fixed"]["num_stages"] = int(argv[argv.index("--num-stages") + 1])
+        return doc
+    return report
+
+
+def _one_replicate(rc, tmp_path, monkeypatch, *, report=None):
+    monkeypatch.setattr(NF.subprocess, "run", _fake_child(rc, report=report))
+    return NF.run_replicate(
+        NF.DEFAULT_ARMS[0], 1, tmp_path, gpu_name="NVIDIA H200",
+        cache_mode="fresh", python="/usr/bin/python3", extra=[],
+        sweep_args=[], order=NF.ORDER_COUNTERBALANCED,
+        shared_cache=None, timeout_s=60.0)
+
+
+def test_a_child_that_measured_and_refuted_its_own_claim_is_pooled(tmp_path,
+                                                                   monkeypatch):
+    """CLAIM_FAIL is DONE-shaped: the experiment worked and the world
+    disagreed. Its report is on disk and its alpha is the only thing this
+    parent wants from it, so it is read and pooled."""
+    rep = _one_replicate(NF.exit_codes.CLAIM_FAIL, tmp_path, monkeypatch,
+                         report=_synthetic_report(0.55))
+    assert rep.returncode == NF.exit_codes.CLAIM_FAIL
+    assert rep.error == "", rep.error
+    assert rep.ok, "a measured child was discarded for refuting its own claim"
+    assert [c.values["alpha_corrected"] for c in rep.cells] == [0.55]
+    assert rep.instrument == NF.timing_basis()
+
+
+def test_a_child_that_refused_is_discarded_and_the_arm_says_which_code(
+        tmp_path, monkeypatch):
+    """THE PLANTED FAIL BRANCH. REFUSED measured nothing, so there is nothing
+    to pool and nothing to read; the wall must still be there, and the error
+    must name the code rather than a bare integer."""
+    rep = _one_replicate(NF.exit_codes.REFUSED, tmp_path, monkeypatch)
+    assert not rep.ok
+    assert "REFUSED" in rep.error and "no cell of it is pooled" in rep.error
+    assert rep.cells == []
+
+
+def test_an_invalid_child_is_discarded_although_its_report_is_on_disk(
+        tmp_path, monkeypatch):
+    """INVALID measured and then failed its OWN validity gate, so its page is
+    unquotable even though `exit_codes.MEASURED_CODES` counts it as measured.
+    That set answers "keep the directory"; `REPORT_CODES` answers "pool the
+    cells", and they are not the same question."""
+    rep = _one_replicate(NF.exit_codes.INVALID, tmp_path, monkeypatch,
+                         report=_synthetic_report(0.55))
+    assert not rep.ok
+    assert "INVALID" in rep.error
+    assert NF.exit_codes.INVALID in NF.exit_codes.MEASURED_CODES
+    assert NF.exit_codes.INVALID not in NF.REPORT_CODES
+
+
+def test_an_off_table_exit_code_is_discarded_too(tmp_path, monkeypatch):
+    """A signal or a shell 127 is a code nobody chose, so it carries no
+    information and the cells behind it are not pooled."""
+    rep = _one_replicate(137, tmp_path, monkeypatch,
+                         report=_synthetic_report(0.55))
+    assert not rep.ok
+    assert "137" in rep.error
+
+
+def test_both_places_that_judge_a_child_exit_code_read_the_same_tuple():
+    """THE SECOND CALL SITE. The fix landed at `run_replicate` in the audit and
+    `Replicate.ok` re-decided the identical question one screen away, so either
+    one alone still threw the arm away. This fails if a bare `== 0` comes
+    back to either."""
+    source = (ROOT / "scripts" / "replicate_noise_floor.py").read_text()
+    assert "self.returncode == 0" not in source
+    assert "done.returncode != 0" not in source
+    assert source.count("in REPORT_CODES") == 2, \
+        "exactly two places judge a measured child, and both read REPORT_CODES"
+    assert NF.REPORT_CODES == (NF.exit_codes.DONE, NF.exit_codes.CLAIM_FAIL)
+
+
+def test_the_whole_arm_reaches_a_quotable_verdict_when_every_child_claim_failed(
+        tmp_path, monkeypatch):
+    """END TO END, which is where the two hours were lost. Four children, each
+    exiting CLAIM_FAIL with a full report: V2 must PASS with `4 of 4
+    replicates ok`, and the arm's own exit code must not be INVALID."""
+    if not HAVE_ARMS:
+        pytest.skip("the committed arms are not checked out")
+    arms = [a for a in NF.DEFAULT_ARMS if a.model == "mixtral-8x7b"]
+    reps = []
+    for position, (arm, index) in enumerate(NF.run_order(arms, 2,
+                                                         NF.ORDER_COUNTERBALANCED)):
+        monkeypatch.setattr(
+            NF.subprocess, "run",
+            _fake_child(NF.exit_codes.CLAIM_FAIL,
+                        report=_synthetic_report(0.55 + 0.01 * position)))
+        reps.append(NF.run_replicate(
+            arm, index, tmp_path, gpu_name="NVIDIA H200", cache_mode="fresh",
+            python="/usr/bin/python3", extra=[], sweep_args=[],
+            order=NF.ORDER_COUNTERBALANCED, shared_cache=None, timeout_s=60.0))
+    floors = {f: NF.pool(NF.spreads_for(reps, f), f) for f in NF.ALPHA_FIELDS}
+    gates = NF.validity_gates(reps, 2, arms, "fresh", floors,
+                              single_model_ok=True)
+    v2 = next(g for g in gates if g.name == "V2 non-vacuity")
+    assert v2.passed is True, v2.observed
+    assert "4 of 4 replicates ok (4 CLAIM_FAIL)" in v2.observed
+    assert NF.exit_codes.classify(g.scored() for g in gates) != \
+        NF.exit_codes.INVALID
+    # And the planted opposite: the same four children REFUSING must FAIL V2.
+    refused = [NF.Replicate(r.arm, r.index, r.run_id, r.out_dir, r.report,
+                            returncode=NF.exit_codes.REFUSED,
+                            error="sweep exited 2 REFUSED") for r in reps]
+    empty = {f: NF.pool(NF.spreads_for(refused, f), f) for f in NF.ALPHA_FIELDS}
+    bad = NF.validity_gates(refused, 2, arms, "fresh", empty,
+                            single_model_ok=True)
+    bad_v2 = next(g for g in bad if g.name == "V2 non-vacuity")
+    assert bad_v2.passed is False
+    assert "0 of 4 replicates ok (4 REFUSED)" in bad_v2.observed
+    assert NF.exit_codes.classify(g.scored() for g in bad) == \
+        NF.exit_codes.INVALID
+
+
+def test_the_code_census_names_every_state_in_table_order():
+    """The V2 line has to say WHICH codes came back. A floor pooled over four
+    children that each refuted their own claim is a different artefact from one
+    pooled over four clean children, and on a metered pod nobody opens four
+    child logs to find out."""
+    def rep(rc):
+        return NF.Replicate("a", 1, "id", Path("/tmp"), Path("/tmp/r.json"),
+                            returncode=rc)
+    census = NF.code_census([rep(NF.exit_codes.CLAIM_FAIL),
+                             rep(NF.exit_codes.DONE),
+                             rep(NF.exit_codes.REFUSED),
+                             rep(NF.exit_codes.DONE)])
+    assert census == "2 DONE, 1 CLAIM_FAIL, 1 REFUSED"
+    assert NF.code_census([]) == "nothing launched"
+    assert "off-table 137" in NF.code_census([rep(137)])
+    assert "no exit code" in NF.code_census([rep(None)])
+
+
+# --------------------------------------------------------------------------
+# 8. THE CARD IS NEVER INVENTED.
+# --------------------------------------------------------------------------
+
+def test_a_run_that_names_no_card_is_labelled_nocard_and_never_an_h200():
+    """IT USED TO BE `args.gpu_name or device or "NVIDIA H200"`, so a laptop
+    that named no card wrote `nvidia_h200-fresh-n6/` and stamped `NVIDIA H200`
+    into every run id and into the published JSON, indistinguishable in `ls`,
+    in the id and in the file from a run on the rented card. The session
+    driver's own rule is that every path carries the card or `nocard`."""
+    named, why = NF.resolve_card("NVIDIA H200", "", [])
+    assert (named, why) == ("NVIDIA H200", "named by --gpu-name")
+    live, why = NF.resolve_card("", "NVIDIA A100-SXM4-80GB", [])
+    assert live == "NVIDIA A100-SXM4-80GB" and "attached device" in why
+    # --gpu-name wins over the live device: pricing a plan for a card you are
+    # about to rent is the supported case.
+    assert NF.resolve_card("NVIDIA H200", "NVIDIA A100", [])[0] == "NVIDIA H200"
+    none, why = NF.resolve_card("", "", ["no CUDA device"])
+    assert none == NF.NO_CARD == "nocard"
+    assert "no CUDA device" in why
+    assert NF.PV.card_slug(none) == "nocard"
+
+
+def test_the_base_directory_of_a_cardless_run_carries_nocard(capsys, monkeypatch,
+                                                             tmp_path):
+    """END TO END through `main`, because the resolver is a model of main and a
+    model can be wrong. This is the artefact the defect was visible in: a
+    directory name."""
+    if not HAVE_ARMS:
+        pytest.skip("the committed arms are not checked out")
+    monkeypatch.setattr(NF, "detect_gpu", lambda: ("", ["no CUDA device"]))
+    monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
+    NF.main(["--dry-run", "--replicates", "2", "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert str(tmp_path / "nocard-fresh-n2") in out
+    assert "card     nocard -- no card could be named: no CUDA device" in out
+    assert "config device nocard" in out
+    # Part (b) legitimately names the two COMMITTED H200 arms it is arithmetic
+    # over, so the assertion is on the lines that describe THIS run: none of
+    # them may name a card nobody attached.
+    mine = [ln for ln in out.splitlines()
+            if ln.startswith(("card ", "EVERYTHING IS SAVED TO", "  rep "))
+            or "arm(s) x" in ln or "rep 1: " in ln or "rep 2: " in ln]
+    assert mine
+    assert not [ln for ln in mine if "nvidia_h200" in ln.lower()], mine
+
+
+# --------------------------------------------------------------------------
+# 9. THE WHOLE ARM, THROUGH `main`, TO AN EXIT CODE.
+#
+# Section 7 proves the gates. This proves the number the session driver's
+# ledger actually reads, because that is what the two hours were spent on: a
+# ledger row. It cannot be proved by `--rehearse`, and the reason is worth
+# writing down. A rehearsal's cells carry the SYNTHETIC instrument stamp, V6
+# refuses them, and `rehearsal_exit` forces INVALID whatever the gates said, so
+# the exact off-GPU command in the audit still exits 3 -- correctly, and now
+# with `4 of 4 replicates ok (4 CLAIM_FAIL)` on its V2 line where it used to
+# read `0 of 4`. The only way to see the code the pod will see is to hand the
+# parent children that are stamped with the instrument this repo publishes
+# under, which is what these two do.
+# --------------------------------------------------------------------------
+
+def _fake_session(rc, *, report=None):
+    """`subprocess.run` for a whole `main`: plants sweep children, passes git.
+
+    `main` shells out for more than the replicates (`git_state` names the
+    commit the floor came from), so a fake that answered everything would be
+    faking the provenance too. Anything without `--run-id` in its argv is not a
+    sweep and goes to the real `subprocess.run`.
+    """
+    real = subprocess.run
+    child = _fake_child(rc, report=report)
+
+    def run(argv, **kwargs):
+        if "--run-id" not in list(argv):
+            return real(argv, **kwargs)
+        return child(argv, **kwargs)
+    return run
+
+
+def _metered_main(rc, tmp_path, monkeypatch, capsys, *, alpha_report, extra=()):
+    monkeypatch.setattr(NF, "detect_gpu", lambda: ("NVIDIA H200", []))
+    monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
+    monkeypatch.setattr(NF.subprocess, "run",
+                        _fake_session(rc, report=alpha_report))
+    code = NF.main(["--replicates", "2", "--arms", "mixtral_g1,mixtral_g16",
+                    "--single-model-floor", "--gpu-name", "NVIDIA H200",
+                    "--out-dir", str(tmp_path)] + list(extra))
+    return code, capsys.readouterr().out
+
+
+def test_the_session_fake_gives_each_replicate_of_a_cell_its_own_alpha(tmp_path):
+    """THE FAKE IS AN INSTRUMENT TOO, so its one load-bearing property is
+    asserted rather than assumed. A fake that hands every replicate the same
+    number sends V3 to FAIL and every run built on it to INVALID, which is the
+    exact verdict the tests below exist to distinguish from the bug."""
+    report = _measured_reports(0.55)
+    seen = {}
+    for arm in ("mixtral_g1", "mixtral_g16"):
+        for index in (1, 2):
+            group_m = 1 if arm.endswith("g1") else 16
+            doc = report(["--model", "mixtral-8x7b", "--dtype", "bf16",
+                          "--group-m", str(group_m), "--block-n", "64",
+                          "--num-stages", "4",
+                          "--out", str(tmp_path / f"{arm}-rep{index}")])
+            seen[(arm, index)] = doc
+    for arm in ("mixtral_g1", "mixtral_g16"):
+        first = seen[(arm, 1)]["ladder"]["64"]["alpha_corrected"]
+        second = seen[(arm, 2)]["ladder"]["64"]["alpha_corrected"]
+        assert second - first == pytest.approx(REPLICATE_STEP)
+    assert seen[("mixtral_g1", 1)]["fixed"]["GROUP_SIZE_M"] == 1
+    assert seen[("mixtral_g16", 1)]["fixed"]["GROUP_SIZE_M"] == 16
+
+
+@needs_arms
+def test_main_reaches_a_quotable_code_when_every_child_refuted_its_claim(
+        tmp_path, monkeypatch, capsys):
+    """THE ROW THE POD WOULD HAVE WRITTEN. Four children that measured every
+    cell and failed their own CLAIM gate: the arm is CLAIM_FAIL or DONE, which
+    is what `exit_codes.ledger_state` records as finished-with-a-result. It
+    used to be INVALID, which the driver latches and skips on every resume."""
+    code, out = _metered_main(NF.exit_codes.CLAIM_FAIL, tmp_path, monkeypatch,
+                              capsys, alpha_report=_measured_reports(0.55))
+    assert "4 of 4 replicates ok (4 CLAIM_FAIL)" in out
+    assert code in (NF.exit_codes.DONE, NF.exit_codes.CLAIM_FAIL), out[-3000:]
+    assert NF.exit_codes.ledger_state(code) in ("DONE", "CLAIM_FAIL")
+    assert "RESULT: VALIDITY V2_non-vacuity PASS" in out
+    # EVERY validity gate, not only V2: the arm is quotable or it is not, and
+    # one VALIDITY FAIL anywhere puts it back at INVALID.
+    assert not [r for r in NF.exit_codes.parse_result_lines(out)
+                if r.kind == NF.exit_codes.VALIDITY and r.verdict == "FAIL"], out
+    # The pooled floor is a number, not a null: that is the artefact the arm
+    # is rented for, and an INVALID arm never produces one.
+    assert "between-replicate sd" in out
+    assert "part (a) did not run" not in out
+    assert "REHEARSAL:" not in out
+
+
+@needs_arms
+def test_main_stays_invalid_when_every_child_refused(tmp_path, monkeypatch,
+                                                     capsys):
+    """THE PLANTED FAIL BRANCH OF THE SAME PATH. REFUSED children measured
+    nothing, so there is nothing to pool, and the wall the fix walked through
+    for CLAIM_FAIL must still be standing here. INVALID, and the V2 line says
+    which code came back so the operator does not have to open four logs."""
+    code, out = _metered_main(NF.exit_codes.REFUSED, tmp_path, monkeypatch,
+                              capsys, alpha_report=None)
+    assert code == NF.exit_codes.INVALID, out[-3000:]
+    assert "0 of 4 replicates ok (4 REFUSED)" in out
+    assert "RESULT: VALIDITY V2_non-vacuity FAIL" in out
+
+
+def _permits(gates, *, withheld=False, cache_mode="fresh", floor_from="fresh"):
+    return NF.gates_permit_publishing(gates, floor_withheld=withheld,
+                                      cache_mode=cache_mode,
+                                      floor_from=floor_from)
+
+
+def test_a_validity_failure_blocks_the_tracked_floor_and_a_claim_failure_does_not():
+    """`gates_permit_publishing`, all three verdicts on both kinds of gate.
+
+    The distinction is the whole point: a CLAIM that failed is a result ABOUT
+    the floor and must still publish it, a VALIDITY that failed says the floor
+    is not a floor. UNKNOWN is refused with FAIL, the same way
+    `exit_codes.classify` scores it.
+    """
+    def gate(kind, name, passed):
+        return NF.Gate(kind, name, "p", "r", "PASS", passed, "o")
+
+    clean = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", True),
+             gate(NF.exit_codes.CLAIM, "C1 floor size", True)]
+    assert _permits(clean) == (True, "")
+
+    # A refuted claim publishes: the spread was measured soundly.
+    refuted = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", True),
+               gate(NF.exit_codes.CLAIM, "C1 floor size", False),
+               gate(NF.exit_codes.CLAIM, "C3 swizzle", None)]
+    assert _permits(refuted) == (True, "")
+
+    for verdict, word in ((False, "FAIL"), (None, "UNKNOWN")):
+        broken = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", verdict),
+                  gate(NF.exit_codes.CLAIM, "C1 floor size", True)]
+        allowed, why = _permits(broken)
+        assert allowed is False
+        assert "V6 one instrument" in why and word in why
+
+
+def test_a_run_whose_floor_is_withheld_may_not_overwrite_one_that_is_not():
+    """THE OTHER WAY IN, AND IT WRITES A NULL OVER A MEASUREMENT.
+
+    `--warm-cache` with `--floor-from fresh` measures cells and is then handed
+    `floors=None`, so its document carries `replicate_floor: null`. Every gate
+    passes, so a gates-only wall lets it through and it replaces the fresh run's
+    measured floor with nothing. The page even printed "NOT publishable as THE
+    floor" one line above the write.
+    """
+    def gate(kind, name, passed):
+        return NF.Gate(kind, name, "p", "r", "PASS", passed, "o")
+
+    clean = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", True)]
+    allowed, why = _permits(clean, withheld=True, cache_mode="warm",
+                            floor_from="fresh")
+    assert allowed is False
+    assert "replicate_floor: null" in why and "--floor-from warm" in why
+    # And the mode that IS the floor mode is not caught by it.
+    assert _permits(clean, withheld=False, cache_mode="warm",
+                    floor_from="warm") == (True, "")
+
+
+@needs_arms
+def test_publish_writes_the_tracked_floor_when_only_a_claim_failed(
+        tmp_path, monkeypatch, capsys):
+    """The pod's intended path: the session driver runs this arm with
+    `--publish`, its children refute their own claim, and the floor -- the one
+    artefact the card was rented for -- reaches `results/published`."""
+    written = []
+    monkeypatch.setattr(NF, "write_published",
+                        lambda doc, path=None: written.append(doc) or "wrote it")
+    code, out = _metered_main(NF.exit_codes.CLAIM_FAIL, tmp_path, monkeypatch,
+                              capsys, alpha_report=_measured_reports(0.55),
+                              extra=["--publish"])
+    assert code == NF.exit_codes.CLAIM_FAIL, out[-2000:]
+    assert len(written) == 1, "a CLAIM failure must not withhold the floor"
+    assert written[0]["replicate_floor"]["per_field"]["alpha_corrected"]["sd"] > 0
+    assert "REFUSING --publish" not in out
+
+
+@needs_arms
+def test_publish_is_refused_when_a_validity_gate_failed(tmp_path, monkeypatch,
+                                                        capsys):
+    """THE PLANTED FAIL BRANCH OF THE PUBLISH WALL, and the defect it closes.
+
+    Children stamped with a DIFFERENT instrument fail V6, so the run's spread
+    pools two timing loops and means nothing; the run exits INVALID and used to
+    write `results/published/NOISE_FLOOR.json` on its way there, because the
+    only question that branch asked was whether it was a rehearsal. The log said
+    "nothing quotable" and git got a floor.
+    """
+    written = []
+    monkeypatch.setattr(NF, "write_published",
+                        lambda doc, path=None: written.append(doc) or "wrote it")
+    code, out = _metered_main(
+        NF.exit_codes.CLAIM_FAIL, tmp_path, monkeypatch, capsys,
+        alpha_report=_measured_reports(0.55, instrument="some/other/loop/v9"),
+        extra=["--publish"])
+    assert code == NF.exit_codes.INVALID, out[-2000:]
+    assert "RESULT: VALIDITY V6_one_instrument FAIL" in out
+    assert written == [], "an INVALID run wrote the tracked floor anyway"
+    assert "REFUSING --publish" in out and "V6 one instrument (FAIL)" in out
+
+
+def test_a_rehearsal_may_not_exit_with_a_quotable_code():
+    """`rehearsal_exit`, both branches. The INVALID a rehearsal reaches on its
+    own is passed through WITH the gates that carried it named; a rehearsal
+    that somehow classified DONE is forced to INVALID and the line says the
+    wall broke rather than that a floor was measured."""
+    def gate(kind, name, passed):
+        return NF.Gate(kind, name, "p", "r", "PASS", passed, "o")
+
+    carried = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", False),
+               gate(NF.exit_codes.CLAIM, "C1 floor size", True)]
+    rc, why = NF.rehearsal_exit(NF.exit_codes.INVALID, carried)
+    assert rc == NF.exit_codes.INVALID
+    assert "by construction" in why and "V6 one instrument" in why
+
+    clean = [gate(NF.exit_codes.VALIDITY, "V6 one instrument", True),
+             gate(NF.exit_codes.CLAIM, "C1 floor size", True)]
+    for got in (NF.exit_codes.DONE, NF.exit_codes.CLAIM_FAIL):
+        rc, why = NF.rehearsal_exit(got, clean)
+        assert rc == NF.exit_codes.INVALID
+        assert "may not exit with" in why and "GENERATED" in why
+
+
+@needs_arms
+def test_the_rehearsal_the_audit_ran_now_pools_its_children_and_still_refuses(
+        tmp_path, monkeypatch, capsys):
+    """THE AUDIT'S EXACT SHAPE, and both halves of what changed.
+
+    `--rehearse 0.4 --replicates 2 --arms mixtral_g1,mixtral_g16
+    --single-model-floor` returned `0 of 4 replicates ok`, V2 FAIL and every
+    claim UNKNOWN, because the sweep's self-test refutes its own C-gates and
+    exits CLAIM_FAIL and the parent threw all four reports away unread. Now the
+    four are pooled, V2 PASSES and C1 scores; the run still exits INVALID, and
+    that is `rehearsal_exit` and V6 doing their job, not the bug.
+    """
+    monkeypatch.setattr(NF, "detect_gpu", lambda: ("", ["no CUDA device"]))
+    monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
+    monkeypatch.setattr(NF.subprocess, "run", _fake_session(
+        NF.exit_codes.CLAIM_FAIL,
+        report=_measured_reports(0.4, instrument="synthetic/model-generated")))
+    code = NF.main(["--rehearse", "0.4", "--replicates", "2", "--arms",
+                    "mixtral_g1,mixtral_g16", "--single-model-floor",
+                    "--gpu-name", "NVIDIA H200", "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "4 of 4 replicates ok (4 CLAIM_FAIL)" in out
+    assert "RESULT: VALIDITY V2_non-vacuity PASS" in out
+    assert "UNKNOWN" not in [r.verdict for r
+                             in NF.exit_codes.parse_result_lines(out)
+                             if r.name.startswith("C1")]
+    assert code == NF.exit_codes.INVALID
+    assert "REHEARSAL: INVALID by construction" in out
