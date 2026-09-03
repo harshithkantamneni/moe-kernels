@@ -19,6 +19,16 @@ nothing: a measured floor must come back MEASURED and move the MDE, a file with
 no floor must come back ASSUMED at the declared number, and a REHEARSAL floor
 must not be mistaken for either.
 
+BOTH BRANCHES ARE PLANTED, INCLUDING THE ASSUMED ONE. The first version of this
+file asserted the ASSUMED state off the TRACKED
+`results/published/NOISE_FLOOR.json`, which reads ASSUMED only because part (a)
+has not run yet. That is a fact about the calendar, not about this script:
+three of these tests would have gone red the instant the arm they exist to
+serve published its result, and the owner would have met them on return from
+the pod. The tracked file is now read for the DECLARED PRIOR it carries, which
+is pinned and does not move, and the floor state under test is grafted in both
+directions by `_measured_floor_file` and `_unmeasured_floor_file`.
+
 The script is loaded by path, because `scripts/` is not a package.
 """
 from __future__ import annotations
@@ -56,8 +66,22 @@ def _load(name: str, filename: str):
 AS = _load("alpha_surface", "alpha_surface.py")
 
 
-def _floor_file(tmp_path: Path, *, sd: float = MEASURED_SD,
-                synthetic: bool = False) -> Path:
+def _write(where: Path, doc: dict) -> Path:
+    """Each graft in its OWN directory under the same basename.
+
+    Two grafts writing one `tmp_path / "NOISE_FLOOR.json"` means the second
+    silently overwrites the first, and a test holding both then passes only
+    because Python evaluates arguments left to right. The basename stays real
+    because the error paths print it.
+    """
+    where.mkdir(parents=True, exist_ok=True)
+    path = where / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def _measured_floor_file(tmp_path: Path, *, sd: float = MEASURED_SD,
+                         synthetic: bool = False) -> Path:
     """The tracked file with a replicate floor grafted into it.
 
     Built FROM the tracked document rather than from a hand-written stub, so
@@ -74,9 +98,27 @@ def _floor_file(tmp_path: Path, *, sd: float = MEASURED_SD,
             "sd": sd, "df": 8, "upper95": sd * 1.6, "pooled": True,
             "reason": "planted", "cells": 3, "per_cell": []}},
     }
-    path = tmp_path / "NOISE_FLOOR.json"
-    path.write_text(json.dumps(doc))
-    return path
+    return _write(tmp_path / "measured", doc)
+
+
+def _unmeasured_floor_file(tmp_path: Path) -> Path:
+    """The tracked file with its replicate floor NULLED. The other graft.
+
+    THE STATE, NOT THE CALENDAR. Reading the tracked file directly for the
+    ASSUMED branch tests "part (a) has not run yet", which stops being true the
+    day the arm publishes and takes three assertions with it. The declared
+    prior is what these tests are actually about and it is carried through
+    unchanged, so `prior_sd` and `prior_sd_source` are still the repo's real
+    ones and the number asserted below is still read from the tracked file.
+    """
+    doc = json.loads(TRACKED_FLOOR.read_text())
+    doc["replicate_floor"] = None
+    return _write(tmp_path / "unmeasured", doc)
+
+
+#: The declared prior the ASSUMED branch must fall back to, read from the
+#: tracked file rather than typed here: it is pinned, so it is safe to read.
+DECLARED_SD = json.loads(TRACKED_FLOOR.read_text())["prior_sd"]
 
 
 # --------------------------------------------------------------------------
@@ -86,18 +128,21 @@ def _floor_file(tmp_path: Path, *, sd: float = MEASURED_SD,
 def test_a_measured_floor_is_read_and_labelled_measured(tmp_path):
     """The 120 minutes of card have to reach this script, or they bought it
     nothing."""
-    sd, basis, source = AS.prior_sd(_floor_file(tmp_path))
+    sd, basis, source = AS.prior_sd(_measured_floor_file(tmp_path))
     assert basis == "MEASURED"
     assert sd == pytest.approx(MEASURED_SD)
     assert "simulated part (a)" in source
 
 
-def test_no_floor_falls_back_to_the_declared_proxy_and_says_assumed():
-    """The tracked file holds no floor today, and the fallback is what the
-    surface has printed for its whole life. It must SAY so."""
-    sd, basis, source = AS.prior_sd()
+def test_no_floor_falls_back_to_the_declared_proxy_and_says_assumed(tmp_path):
+    """A document with no measured floor falls back, and must SAY so.
+
+    Planted rather than read off the tracked file: this asserts the state, and
+    the tracked file's state changes the day part (a) publishes.
+    """
+    sd, basis, source = AS.prior_sd(_unmeasured_floor_file(tmp_path))
     assert basis == "ASSUMED"
-    assert sd == pytest.approx(json.loads(TRACKED_FLOOR.read_text())["prior_sd"])
+    assert sd == pytest.approx(DECLARED_SD)
     assert "s3-vs-s4" in source
 
 
@@ -105,7 +150,7 @@ def test_a_rehearsal_floor_is_not_a_measurement(tmp_path):
     """`--publish` can write a synthetic floor to test the plumbing. Reading it
     as MEASURED would be the worst of the three outcomes: a number nobody
     measured, wearing the word that says somebody did."""
-    sd, basis, _ = AS.prior_sd(_floor_file(tmp_path, synthetic=True))
+    sd, basis, _ = AS.prior_sd(_measured_floor_file(tmp_path, synthetic=True))
     assert basis == "ASSUMED"
     assert sd != pytest.approx(MEASURED_SD)
 
@@ -133,16 +178,16 @@ def test_a_truncated_floor_file_leaves_the_table_readable(tmp_path):
 
 def test_the_printed_mde_carries_the_word_in_both_states(tmp_path, monkeypatch,
                                                          capsys):
-    monkeypatch.setattr(AS, "NOISE_FLOOR", _floor_file(tmp_path))
+    monkeypatch.setattr(AS, "NOISE_FLOOR", _measured_floor_file(tmp_path))
     AS.print_mde(3)
     measured = capsys.readouterr().out
     assert "MEASURED sd of one alpha 0.0091" in measured
     assert "ASSUMED" not in measured
 
-    monkeypatch.setattr(AS, "NOISE_FLOOR", TRACKED_FLOOR)
+    monkeypatch.setattr(AS, "NOISE_FLOOR", _unmeasured_floor_file(tmp_path))
     AS.print_mde(3)
     assumed = capsys.readouterr().out
-    assert "ASSUMED sd of one alpha 0.0229" in assumed
+    assert f"ASSUMED sd of one alpha {DECLARED_SD:.4f}" in assumed
     assert "and it is an upper bound" in assumed
     assert "MEASURED" not in assumed
 
@@ -157,7 +202,8 @@ def test_a_measured_floor_moves_the_detection_limit(tmp_path, monkeypatch,
         line = capsys.readouterr().out.splitlines()[0]
         return float(line.split("MDE")[1].split()[0])
 
-    assert mde_from(_floor_file(tmp_path)) < mde_from(TRACKED_FLOOR)
+    assert (mde_from(_measured_floor_file(tmp_path))
+            < mde_from(_unmeasured_floor_file(tmp_path)))
 
 
 def test_no_noise_model_is_stated_as_such_and_no_number_is_printed(
@@ -172,7 +218,7 @@ def test_no_noise_model_is_stated_as_such_and_no_number_is_printed(
 def test_the_whole_table_says_which_floor_it_was_read_against(monkeypatch,
                                                               capsys, tmp_path):
     """End to end over a committed arm: the surface an operator actually reads."""
-    monkeypatch.setattr(AS, "NOISE_FLOOR", _floor_file(tmp_path))
+    monkeypatch.setattr(AS, "NOISE_FLOOR", _measured_floor_file(tmp_path))
     monkeypatch.setattr(sys, "argv", ["alpha_surface.py", str(H200_S4)])
     assert AS.main() == 0
     out = capsys.readouterr().out

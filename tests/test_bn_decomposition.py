@@ -1235,48 +1235,20 @@ def test_a_claim_that_did_not_pass_is_a_result_without_fail_on_gate():
 # WHAT KIND OF NOISE THE INTERVALS ARE (B14, R5).
 # --------------------------------------------------------------------------
 
-def test_the_report_states_the_bootstrap_scope_and_carries_the_floor():
-    """Two different kinds of noise, and only one of them is in the bootstrap.
-
-    These resamples are of within-process warm repeats: one process, one
-    allocation, one clock state. Every cross-arm difference this study publishes
-    is a between-process comparison, so an interval from here is a LOWER bound
-    on the uncertainty of one, and NOISE_FLOOR.json's prior_sd is the only
-    measured upper bound the repo has.
-    """
-    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
-    text = "\n".join(lines)
-    assert "WITHIN-PROCESS WARM REPEATS" in text
-    assert "cross-arm floor" in text
-    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
-        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
-    assert "within-process" in payload["bootstrap"]["scope"]
-    assert payload["bootstrap"]["mde_alpha_a"] == pytest.approx(
-        BND.mde_one_sample(payload["bootstrap"]["alpha_a_sd"]))
-
-
-def test_the_published_floor_is_read_from_the_file_not_quoted():
-    """A literal here would silently stop describing a regenerated file."""
-    floor = BND.published_prior_sd()
-    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
-    assert floor.basis == "ASSUMED"
-    assert "s3-vs-s4" in floor.source
-
-
-# --------------------------------------------------------------------------
-# WHICH SIGMA, AND THE WORD THAT SAYS WHICH (2026-09-03).
-#
-# `published_prior_sd` read `payload["prior_sd"]` out of NOISE_FLOOR.json. That
-# field is the s3/s4 PROXY and stays the proxy after part (a) spends 120
-# minutes of card measuring a real between-replicate spread into
-# `replicate_floor` of the SAME file, so every MDE and every detection-limit
-# verdict this script printed would have gone on being scored against the
-# assumption. Both branches are planted below: a measured floor must arrive
-# MEASURED and move the MDE, an absent one must arrive ASSUMED at the declared
-# number, and the pre-registered band must NOT move under either.
-# --------------------------------------------------------------------------
-
 MEASURED_SD = 0.0091
+
+
+def _floor_doc(where, doc):
+    """Each graft in its OWN directory under the real basename.
+
+    Two grafts writing one `tmp_path / "NOISE_FLOOR.json"` means the second
+    silently overwrites the first, which passes only for as long as nobody
+    holds both at once.
+    """
+    where.mkdir(parents=True, exist_ok=True)
+    path = where / "NOISE_FLOOR.json"
+    path.write_text(json.dumps(doc))
+    return path
 
 
 def _measured_floor_file(tmp_path, *, sd=MEASURED_SD, synthetic=False):
@@ -1296,10 +1268,72 @@ def _measured_floor_file(tmp_path, *, sd=MEASURED_SD, synthetic=False):
             "sd": sd, "df": 8, "upper95": sd * 1.6, "pooled": True,
             "reason": "planted", "cells": 3, "per_cell": []}},
     }
-    path = tmp_path / "NOISE_FLOOR.json"
-    path.write_text(json.dumps(doc))
-    return path
+    return _floor_doc(tmp_path / "measured", doc)
 
+
+def _unmeasured_floor_file(tmp_path):
+    """The tracked document with its replicate floor NULLED. The other graft.
+
+    THE STATE, NOT THE CALENDAR, and this is the whole reason it exists. The
+    ASSUMED assertions below used to be taken off the TRACKED file, which reads
+    ASSUMED only because part (a) has not run on a card yet. Those assertions
+    were therefore scheduled to go red at the exact moment the 120-minute arm
+    this slice was written to serve published its result, and the owner would
+    have met them on return from the pod. The declared prior is carried through
+    unchanged, so what is asserted is still the repo's real number.
+    """
+    doc = json.loads((PUBLISHED / "NOISE_FLOOR.json").read_text())
+    doc["replicate_floor"] = None
+    return _floor_doc(tmp_path / "unmeasured", doc)
+
+
+def test_the_report_states_the_bootstrap_scope_and_carries_the_floor(
+        tmp_path, monkeypatch):
+    """Two different kinds of noise, and only one of them is in the bootstrap.
+
+    These resamples are of within-process warm repeats: one process, one
+    allocation, one clock state. Every cross-arm difference this study publishes
+    is a between-process comparison, so an interval from here is a LOWER bound
+    on the uncertainty of one, and the floor carried beside it is the only
+    reading of the other kind the repo has.
+
+    The floor is PLANTED unmeasured rather than read off the tracked file: the
+    declared number this asserts is pinned, but the tracked file's BASIS is not,
+    and asserting the basis off it schedules this test to fail on the day part
+    (a) publishes.
+    """
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", _unmeasured_floor_file(tmp_path))
+    lines, _, payload = _planted_run(16, noise=0.004, probe=False)
+    text = "\n".join(lines)
+    assert "WITHIN-PROCESS WARM REPEATS" in text
+    assert "cross-arm floor" in text
+    assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
+        BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert "within-process" in payload["bootstrap"]["scope"]
+    assert payload["bootstrap"]["mde_alpha_a"] == pytest.approx(
+        BND.mde_one_sample(payload["bootstrap"]["alpha_a_sd"]))
+
+
+def test_the_published_floor_is_read_from_the_file_not_quoted(tmp_path):
+    """A literal here would silently stop describing a regenerated file."""
+    floor = BND.published_prior_sd(_unmeasured_floor_file(tmp_path))
+    assert floor.sd == pytest.approx(BND.PUBLISHED_ALPHA_SD, abs=1e-4)
+    assert floor.basis == "ASSUMED"
+    assert "s3-vs-s4" in floor.source
+
+
+# --------------------------------------------------------------------------
+# WHICH SIGMA, AND THE WORD THAT SAYS WHICH (2026-09-03).
+#
+# `published_prior_sd` read `payload["prior_sd"]` out of NOISE_FLOOR.json. That
+# field is the s3/s4 PROXY and stays the proxy after part (a) spends 120
+# minutes of card measuring a real between-replicate spread into
+# `replicate_floor` of the SAME file, so every MDE and every detection-limit
+# verdict this script printed would have gone on being scored against the
+# assumption. Both branches are planted below: a measured floor must arrive
+# MEASURED and move the MDE, an absent one must arrive ASSUMED at the declared
+# number, and the pre-registered band must NOT move under either.
+# --------------------------------------------------------------------------
 
 def test_a_measured_floor_reaches_this_script(tmp_path):
     """The arm the owner is about to pay 120 minutes for buys this number."""
@@ -1334,17 +1368,73 @@ def test_the_report_prints_the_basis_beside_the_floor(tmp_path, monkeypatch):
     lines, _, payload = _planted_run(16, noise=0.004, probe=False)
     text = "\n".join(lines)
     assert "cross-arm floor 0.0091 MEASURED" in text
-    assert "a MEASURED upper one" in text
+    assert "a between-replicate POINT ESTIMATE" in text
     assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "MEASURED"
     assert payload["bootstrap"]["cross_arm_prior_sd"] == pytest.approx(
         MEASURED_SD)
 
-    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", PUBLISHED / "NOISE_FLOOR.json")
+    monkeypatch.setattr(BND, "NOISE_FLOOR_PATH",
+                        _unmeasured_floor_file(tmp_path))
     lines, _, payload = _planted_run(16, noise=0.004, probe=False)
     text = "\n".join(lines)
     assert "cross-arm floor 0.0229 ASSUMED" in text
     assert "the DECLARED upper one and not a measurement" in text
     assert payload["bootstrap"]["cross_arm_prior_sd_basis"] == "ASSUMED"
+
+
+def test_a_measured_floor_is_not_called_an_upper_bound():
+    """The word "upper" was only ever true of the s3/s4 proxy.
+
+    That proxy confounds `num_stages` with rerun noise and so can only
+    overstate; a between-replicate floor measures the quantity wanted and is a
+    point estimate of it. Printing "a MEASURED upper one" produced a
+    self-contradicting sentence on the page: under a planted 0.0091 floor,
+    `--self-test --plant-noise 0.008` said "from sd 0.0098 ... it is a lower
+    bound and the floor is a MEASURED upper one", the named upper number
+    smaller than the named lower one in one clause.
+    `alpha_surface.print_mde` is the sibling printer and never said it, so this
+    was one of the two places that had to agree, fixed at one of them.
+    """
+    measured = BND.CrossArmFloor(0.0091, "MEASURED", "planted part (a)")
+    clause = measured.clause()
+    assert "upper" not in clause
+    assert "POINT ESTIMATE" in clause
+    assert "not a bound on it" in clause
+
+    assumed = BND.CrossArmFloor(0.0229, "ASSUMED", "the s3-vs-s4 proxy")
+    assert "the DECLARED upper one and not a measurement" in assumed.clause()
+
+
+def test_the_band_lines_say_the_sds_are_the_pinned_declared_prior(tmp_path,
+                                                                   monkeypatch):
+    """The band was the ONE sigma-derived quantity on the report with no basis.
+
+    `check_alpha_a_band` prints "alpha_a 0.286 +/- 0.086" and "the band is 0.28
+    wide against input sds of 0.043-0.086", and every one of those sds is the
+    DECLARED prior over `delta_s`. Under a measured floor the same report also
+    prints "cross-arm floor 0.0091 MEASURED" fourteen lines below, and until
+    this clause existed nothing on the page connected the two: an operator sees
+    a 0.0091 measurement beside a 0.043 reading built from a sigma 2.5x larger
+    and reads the C6 bar as stale.
+    """
+    for floor in (_unmeasured_floor_file(tmp_path),
+                  _measured_floor_file(tmp_path)):
+        monkeypatch.setattr(BND, "NOISE_FLOOR_PATH", floor)
+        lines = "\n".join(BND.check_alpha_a_band()[1])
+        assert "+/- 0.086" in lines and "input sds of 0.043-0.086" in lines
+        declared, _ = BND.preregistration_sigma()
+        assert f"the DECLARED prior {declared:.4f}" in lines
+        assert "PINNED to the declared number" in lines
+        # The sentence's arithmetic is the one the +/- was actually built by.
+        for ds, sd in ((0.375, 0.086), (0.750, 0.043)):
+            assert round(declared * math.sqrt(2) / ds, 3) == sd
+    # And C6's own rule text, the second printer of the same pinned sd.
+    boot = BND.Bootstrap(draws=100, per_cell_sd={}, survival=1.0,
+                         alpha_a_sd=0.02, alpha_b_sd=0.01, delta_sd=0.01,
+                         alpha_b_by_bm_sd={}, note="planted")
+    rule = BND.gate_sharpness(boot).rule
+    assert "0.043 sd of the sharpest two-point slope" in rule
+    assert "DECLARED prior over the pair's ds and is PINNED there" in rule
 
 
 def test_a_floor_that_cannot_be_read_is_named_and_not_defaulted(tmp_path,

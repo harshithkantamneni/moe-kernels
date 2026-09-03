@@ -28,6 +28,28 @@ s3/s4 proxy with the word ASSUMED. Both words are printed. Until 2026-09-03
 this file read the proxy field out of the JSON itself, so a measured floor
 published by the noise-floor arm would have changed nothing here and every MDE
 below would have stayed sized against the assumption.
+
+REGENERATE THE THREE COMMITTED SUMMARIES WHENEVER THE FLOOR CHANGES. That fix
+made this script's output a function of `results/published/NOISE_FLOOR.json`,
+and the three `SURFACE.txt` beside it are this script's output, committed. The
+day part (a) publishes a measured floor they stop matching, and worse, they go
+on carrying the sentence "part (a) has not run on a card yet" as PUBLISHED
+EVIDENCE about a repository that by then holds the measurement, under a
+detection limit 2.5x too loose wearing the word ASSUMED. Nothing regenerates
+them automatically, so publishing the floor is a two-step act:
+
+    .venv/bin/python scripts/replicate_noise_floor.py ... --publish
+    for a in 2026-09-01-nvidia_h200-alpha-surface-s4 \
+             2026-09-01-nvidia_h200-cross-card-s3 \
+             2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3; do
+      .venv/bin/python scripts/alpha_surface.py "results/published/$a" \
+        > "results/published/$a/SURFACE.txt"
+    done
+
+`test_analysis_tools.test_the_committed_surface_files_regenerate_byte_for_byte`
+is what fails if the second step is skipped. It is the right alarm and it is
+not a false one: a published summary a stranger cannot rebuild from this
+repository is not published evidence, which is the property that test holds.
 """
 from __future__ import annotations
 

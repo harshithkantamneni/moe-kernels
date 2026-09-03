@@ -706,17 +706,36 @@ class CrossArmFloor:
     def clause(self) -> str:
         """The tail `mde_line` hangs off an MDE.
 
-        The closing half turns on the basis. "the repo's only MEASURED upper
-        bound" was printed unconditionally while the floor was the declared
-        proxy, which is the sentence this whole slice exists to stop.
+        THE CLOSING HALF TURNS ON THE BASIS, AND SO DOES THE WORD "BOUND".
+        "the repo's only MEASURED upper bound" was printed unconditionally
+        while the floor was the declared proxy, which is the sentence this
+        slice began by stopping; the first fix kept "a MEASURED upper one",
+        which is the same mistake one word smaller. UPPER BOUND was only ever
+        true of the s3/s4 proxy, and only because that proxy confounds
+        `num_stages` with rerun noise and so can only overstate the spread. A
+        between-replicate floor measures exactly the quantity wanted and is a
+        POINT ESTIMATE of it, not a bound on it.
+
+        WHAT THE SURVIVING WORD PRINTED. Under a measured floor of 0.0091,
+        `--self-test --plant-noise 0.008` produced "from sd 0.0098 ... it is a
+        lower bound and the floor is a MEASURED upper one": the named upper
+        number smaller than the named lower one inside one clause, which reads
+        as an instrument that cannot be trusted rather than as two spreads that
+        happen to be close. `alpha_surface.print_mde` is the sibling printer
+        this slice wrote and it drops the words on its MEASURED branch, so this
+        was one of the two places that had to agree, fixed at one of them.
         """
-        upper = ("a MEASURED upper one" if self.basis == "MEASURED"
-                 else "the DECLARED upper one and not a measurement")
+        if self.basis == "MEASURED":
+            tail = ("a between-replicate POINT ESTIMATE of the same quantity "
+                    "and not a bound on it, so the two are comparable in "
+                    "either direction")
+        else:
+            tail = "the DECLARED upper one and not a measurement"
         return (f". Beside it, the cross-arm floor {self.sd:.4f} "
                 f"{self.basis} ({self.source}): this run's own bootstrap "
                 "resamples WITHIN-PROCESS warm repeats and cannot see anything "
                 "that changes between processes, so it is a lower bound and "
-                f"the floor is {upper}")
+                f"the floor is {tail}")
 
 
 def published_prior_sd(path: Path | None = None) -> CrossArmFloor:
@@ -915,6 +934,17 @@ def check_alpha_a_band(band=ALPHA_A_BAND) -> tuple[list[TwoPoint], list[str]]:
     band stays a literal -- a hypothesis nobody can see is not pre-registered --
     and this is what stops the literal outliving the files it came from, which
     is the exact failure it is replacing.
+
+    THE LINES NAME THEIR SIGMA AND SAY IT IS PINNED, added 2026-09-03. Every
+    `+/-` printed below, and the `input sds of ...` that follows them, is the
+    DECLARED prior over that pair's `delta_s` and nothing else. The report
+    prints a `cross-arm floor ... MEASURED 0.0091` fourteen lines under a
+    `+/- 0.086` built from 0.0229, and until this clause existed no sentence on
+    the page connected the two: the natural misreading is that the two-point
+    reading has become sharper than the C6 ceiling and that the ceiling is
+    stale. It has not, and it is not. `preregistration_sigma` argues why the
+    pinning is right, but that argument lived only in the source and an
+    operator reads the page.
     """
     points = published_two_point_alpha_a()
     derived = alpha_a_band_from_published(points)
@@ -927,12 +957,24 @@ def check_alpha_a_band(band=ALPHA_A_BAND) -> tuple[list[TwoPoint], list[str]]:
     widest = max(p.sd for p in points)
     narrowest = min(p.sd for p in points)
     width = band[1] - band[0]
+    # `preregistration_sigma` and NOT `published_prior_sd`: naming the wrong
+    # one here would print the very substitution the sentence warns against.
+    # It cannot raise, because the call above went through the same reader.
+    prior, _ = preregistration_sigma()
     lines = [
         f"alpha_a band [{band[0]:.2f}, {band[1]:.2f}], derived from the ONLY "
         "pair of committed arms that differ in BLOCK_SIZE_N and nothing else:"]
     lines += ["  " + p.line() for p in points]
     lines += [
         f"  source: {points[0].source}",
+        f"  every +/- above is the DECLARED prior {prior:.4f}, times sqrt(2) "
+        "for the difference of two arms, divided by that pair's ds. It is "
+        "PINNED to the declared number and deliberately NOT re-read from a "
+        "measured floor: a pre-registration that moves when new information "
+        "arrives is not one, so this band and the C6 bar built on it stay "
+        "where they were registered even after part (a) publishes. What a "
+        "measured floor moves is what the run can RESOLVE, which is the MDE "
+        "and the cross-arm floor printed beside every interval below.",
         f"  the band is {width:.2f} wide against input sds of "
         f"{narrowest:.3f}-{widest:.3f}, i.e. {width / widest:.1f}-"
         f"{width / narrowest:.1f}x the spread of the numbers that built it. A "
@@ -2356,10 +2398,13 @@ def gate_sharpness(boot: Bootstrap) -> Gate:
                  f"cannot be read here: {sharpest_source}")
     else:
         rule += (f", inside the {sharpest:.3f} sd of the sharpest two-point "
-                 "slope this three-point fit replaces. NOT half the band "
-                 f"width: the band is {ALPHA_A_BAND[1] - ALPHA_A_BAND[0]:.2f} "
-                 "wide and half of it would be a looser bar than the reading "
-                 "being replaced")
+                 "slope this three-point fit replaces. That sd is the DECLARED "
+                 "prior over the pair's ds and is PINNED there, so a measured "
+                 "cross-arm floor does not lower this bar and does not make "
+                 "the two-point reading sharper than it was registered at. "
+                 "NOT half the band width either: the band is "
+                 f"{ALPHA_A_BAND[1] - ALPHA_A_BAND[0]:.2f} wide and half of it "
+                 "would be a looser bar than the reading being replaced")
     return Gate(CLAIM, "C6 estimator sharpness",
                 "alpha_a's interval is tighter than the two-point reading it "
                 "replaces",
