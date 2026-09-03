@@ -3511,6 +3511,88 @@ def correctness_gate(records: list[dict], compute: str) -> Gate:
                 not bad, detail)
 
 
+#: The LEVEL gate's name, in one place because the tests, the RESULT token and
+#: the paragraph above the table all have to name the same gate. Short on
+#: purpose: `Gate.token` slugs the WHOLE name and then truncates at 56
+#: characters, so a longer sentence here ships a RESULT token that stops mid
+#: word with a trailing hyphen, and a driver keying on the token would be
+#: keying on where the sentence happened to fall.
+LEVEL_GATE = "level: every rung ran at the roof's measured clock"
+
+
+def level_split(records: list[dict]) -> tuple[list[str], list[str]]:
+    """The rungs that sagged and the rungs that carry no reference, in that
+    order, from ONE place.
+
+    TWO READERS NEED THE SAME TWO COUNTS, which is the shape
+    `one_tile_signal_shares` exists in for the same reason: `_analyse` prints
+    them as prose and `level_gate` scores them, and a page that narrates three
+    sagged rungs while the gate scores a different three is the defect this
+    rebuild keeps finding one call site at a time. `None` here means the column
+    is ABSENT or null: a row written before there was a reference to sag
+    against is unknown, never bad, and an exclusion has to be positively
+    established (`bm128_roofline.Timing.throttled` says the same thing).
+    """
+    sagged = [r["id"] for r in records if r.get("clock_level_ok") is False]
+    blind = [r["id"] for r in records if r.get("clock_level_ok") is None]
+    return sagged, blind
+
+
+def level_gate(records: list[dict]) -> Gate:
+    """Did this card sit at the clock its roof was measured at, on every rung.
+
+    THIS ARM SCORES LEVEL WHERE ITS SIBLINGS NARRATE OR EXCLUDE IT, and the
+    estimator is the reason. `group_m_alpha_sweep` prints the same two counts as
+    prose; `bm128_roofline` drops the row (`Timing.cold` feeds `excluded`, and
+    the fit skips it). Neither answer is available here. The whole result is
+    D(n) = T_normal(n) - T_aliased(n), a difference of two ladders, and alpha is
+    the slope of that difference over its intercept: a sag part way up one
+    ladder moves D(n) and D(1) by different amounts, so it does not cancel, and
+    dropping the sagged rungs silently re-shapes the very ladder alpha is fitted
+    from. The only honest move left is to refuse the run and name the rungs to
+    re-measure.
+
+    IT WAS A PARAGRAPH UNTIL 2026-09-03, AND A PARAGRAPH MOVES NOTHING THE
+    SESSION GRADES. `pod_session.sh` scores this arm on exactly two things: the
+    exit code (SBa) and the count of `[PASS]`/`[FAIL]` lines in the log (SBb,
+    via `gate_from_log`). The LEVEL block moved neither, so a directory with
+    three sagged rungs printed its warning, fed all twenty rungs to the fit, and
+    exited `0 DONE: every VALIDITY and CLAIM gate PASSED`. The session graded a
+    sagged hour green and only a human reading the prose could have caught it.
+
+    NOT TESTABLE, NOT PASS, WHEN A RUNG CARRIES NO REFERENCE. `classify` turns
+    an unknown VALIDITY gate into INVALID, which is the right reading: a run
+    that could not be scored against a clock has not shown the card was level,
+    and "a check that examined nothing reports zero failures" is this project's
+    first named failure mode. That is also why a partly-blind ladder cannot
+    PASS on the rungs that happen to carry the key.
+
+    Planted rows carry no clock, so `_analyse` scores this gate only on a
+    measured run; a synthetic pass would otherwise be INVALID for want of
+    hardware it never touched.
+    """
+    sagged, blind = level_split(records)
+    limit = f"{timing.LEVEL_FRACTION:.0%}"
+    if sagged:
+        detail = (f"{len(sagged)} of {len(records)} rungs ran below {limit} of "
+                  f"the clock this card's roof was measured at, first "
+                  f"{sagged[0]}. alpha is a slope over an intercept of the same "
+                  "difference, so a sag part way up one ladder does not cancel")
+        if blind:
+            detail += (f", and a further {len(blind)} carry no reference at all")
+        return Gate(LEVEL_GATE, False, detail)
+    if blind:
+        return Gate(LEVEL_GATE, None,
+                    f"{len(blind)} of {len(records)} rungs carry no reference "
+                    "clock, so they could not be scored against the one this "
+                    "card's roof was measured at. Publish a calibration for "
+                    "this card and re-measure them; nothing here says they were "
+                    "level")
+    return Gate(LEVEL_GATE, True,
+                f"all {len(records)} rungs ran within {limit} of the clock this "
+                "card's roof was measured at")
+
+
 def placebo_gate(records: list[dict]) -> Gate:
     """Two launches of an identical configuration, against the signal.
 
@@ -4479,10 +4561,29 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # report, so a card held below the roof's clock for a whole ladder produced
     # a published alpha with nothing on the page saying so. Planted rows carry
     # no clock and are not scored against one.
+    #
+    # THE TWO FAULTS ARE INDEPENDENT, AND THIS WAS `if sagged / elif blind`, so
+    # a directory holding both reported only the first. That directory is not
+    # hypothetical: it is a resume onto a re-rented pod, where the rungs already
+    # on disk are skipped and keep whatever they were written with, so rows that
+    # sagged and rows written before there was a reference to sag against travel
+    # together. Twenty rungs with three sagged and seventeen carrying no key at
+    # all printed the three and said nothing about the seventeen, and a reader
+    # took those seventeen for level when none of them carried a verdict.
+    #
+    # BLIND IS PRINTED FIRST, for the reason `group_m_alpha_sweep` states at its
+    # own copy of this block: whether the column could have said anything is a
+    # different question from what it said, and a count of flagged rungs read
+    # without it is silence read as evidence.
     if not synthetic:
-        sagged = [r["id"] for r in timed if r.get("clock_level_ok") is False]
-        blind = [r["id"] for r in timed if r.get("clock_level_ok") is None]
+        sagged, blind = level_split(timed)
         say()
+        if blind:
+            say(f"  LEVEL: UNDETERMINED on {len(blind)} of {len(timed)} rungs. "
+                "They were written with no")
+            say("  reference clock, which is every row this arm wrote before "
+                "2026-09-03, so none of")
+            say("  them can be excluded on the clock it ran at.")
         if sagged:
             say(f"  LEVEL: {len(sagged)} of {len(timed)} rungs ran below "
                 f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
@@ -4493,13 +4594,7 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
                 "not cancel it. Those")
             say("  rungs have to be re-measured before their alpha means "
                 "anything.")
-        elif blind:
-            say(f"  LEVEL: UNDETERMINED on {len(blind)} of {len(timed)} rungs. "
-                "They were written with no")
-            say("  reference clock, which is every row this arm wrote before "
-                "2026-09-03, so none of")
-            say("  them can be excluded on the clock it ran at.")
-        else:
+        if not blind and not sagged:
             say(f"  LEVEL: all {len(timed)} rungs ran within "
                 f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
                 "was measured at.")
@@ -4537,7 +4632,16 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # and a reader who stopped there concluded the per-tile cost is not DRAM.
     # These two say, in the card's own units, that DRAM was never on the
     # critical path, which is a statement about the apparatus.
+    #
+    # LEVEL IS THE FIRST GATE AND IT IS SCORED, NOT NARRATED. It was a
+    # paragraph, and `pod_session.sh` grades this arm on the exit code and on
+    # the count of `[PASS]`/`[FAIL]` lines, so a paragraph let a sagged hour
+    # exit 0 DONE. It runs first for the same reason headroom precedes signal:
+    # whether the card was at the clock its roof was measured at is a statement
+    # about the apparatus, and it is upstream of every number below it. Scored
+    # only on a measured run, because planted rows carry no clock.
     gates = [
+        *([level_gate(timed)] if not synthetic else []),
         isa_gate(timed),
         correctness_gate(timed, design.compute),
         headroom_gate(timed, roof),

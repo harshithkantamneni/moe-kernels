@@ -1965,6 +1965,144 @@ def test_the_page_reads_the_level_column_it_writes(tmp_path, monkeypatch,
     assert rows[0]["id"] in out
 
 
+def test_a_sagged_rung_and_a_blind_one_are_two_findings_not_one(
+        tmp_path, monkeypatch, capsys):
+    """`if sagged: ... elif blind: ...` reported the first and buried the rest.
+
+    THE DIRECTORY THAT HOLDS BOTH IS THE ORDINARY ONE. A resume onto a re-rented
+    pod skips the rungs already on disk, so they keep whatever they were written
+    with: rows that sagged and rows written before there was a reference to sag
+    against sit in the same `cells.jsonl`. Twenty rungs with three sagged and
+    seventeen carrying no key printed `LEVEL: 3 of 20 rungs ran below ...` and
+    nothing at all about the other seventeen, so a reader took them for level
+    when none of them carried a verdict. The two counts are independent and are
+    now printed independently, blind first, which is the order the sibling arm
+    argues for at `group_m_alpha_sweep.py`: whether the column could have said
+    anything comes before what it said.
+    """
+    out_dir = tmp_path / "mixed"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for i, row in enumerate(rows):
+        row["provenance"] = "measured"
+        if i < 3:
+            row["clock_level_ok"] = False
+        else:
+            row.pop("clock_level_ok", None)
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+
+    assert f"LEVEL: UNDETERMINED on {len(rows) - 3} of {len(rows)} rungs" in out
+    assert f"LEVEL: 3 of {len(rows)} rungs ran below" in out
+    # The order is load bearing, not cosmetic: the apparatus statement first.
+    assert out.index("LEVEL: UNDETERMINED") < out.index(f"LEVEL: 3 of {len(rows)}")
+    # THE PLANTED FAIL BRANCH. Narrating a sag moved neither of the two things
+    # `pod_session.sh` grades, so this directory used to exit 0 DONE with every
+    # gate PASS and a warning nobody's grader read.
+    assert f"[FAIL] {AB.LEVEL_GATE}" in out
+    assert code == exit_codes.INVALID
+    assert exit_codes.classify_text(out) == code
+
+
+def _levelled(*oks) -> list[dict]:
+    """Rung rows carrying just the one column `level_gate` reads. `None` means
+    the key is ABSENT, which is how a row written before the reference existed
+    reaches the reader, not `clock_level_ok: null`."""
+    return [{"id": f"r{i}", **({} if ok is None else {"clock_level_ok": ok})}
+            for i, ok in enumerate(oks)]
+
+
+def test_the_level_gate_passes_fails_and_refuses_to_guess():
+    """A sag FAILS, a full ladder PASSES, and a rung with no reference is NOT
+    TESTABLE rather than PASS.
+
+    THE LAST BRANCH IS THE ONE WORTH HAVING. `classify` turns an unknown
+    VALIDITY gate into INVALID, so a ladder that carries no reference clock
+    cannot be quoted; scoring the rungs that happen to carry the key and calling
+    that PASS is "a check that examined nothing reports zero failures", which is
+    this project's first named failure mode. A partly blind ladder therefore
+    cannot pass either.
+    """
+    assert AB.level_gate(_levelled(True, True, True)).ok is True
+    assert AB.level_gate(_levelled(True, False, True)).ok is False
+    assert AB.level_gate(_levelled(None, None)).ok is None
+    assert AB.level_gate(_levelled(True, None, True)).ok is None
+    # A sag outranks a blind rung: FAIL is the more informative of the two, and
+    # the detail still names how many could not be examined at all.
+    mixed = AB.level_gate(_levelled(False, None, None))
+    assert mixed.ok is False
+    assert "a further 2 carry no reference" in mixed.detail
+    # VALIDITY, not CLAIM: a card held below its roof's clock is a broken
+    # apparatus, not the world disagreeing with a pre-registered prediction.
+    assert AB.level_gate(_levelled(False)).kind == exit_codes.VALIDITY
+
+
+def test_only_one_function_decides_which_rungs_sagged():
+    """The paragraph and the gate read ONE partition, so a third reader cannot
+    disagree with them.
+
+    This is the shape the rebuild keeps finding: a fix applied at one of two
+    call sites. `_analyse` narrates the two counts and `level_gate` scores them,
+    and computed twice they drift -- a page naming three sagged rungs while the
+    gate scores a different three is worse than either alone. So
+    `clock_level_ok` is COMPARED in exactly one function in this script, the
+    same discipline `one_tile_signal_shares` is under. The writers name the
+    column as a keyword and are not readers of it.
+    """
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        body = "\n".join(ast.unparse(stmt) for stmt in node.body
+                          if not (isinstance(stmt, ast.Expr)
+                                  and isinstance(stmt.value, ast.Constant)))
+        # A READER pulls the column back OUT of a cells.jsonl row. `_fold_flag`
+        # and `fold_timings` put it in, off `KernelTiming` attributes, and are
+        # not readers of it.
+        if "get('clock_level_ok')" in body or "['clock_level_ok']" in body:
+            readers.add(node.name)
+    assert readers == {"level_split"}, (
+        f"{sorted(readers - {'level_split'})} decide for themselves which "
+        "rungs sagged; route them through level_split")
+
+
+def test_the_level_gate_is_scored_on_measured_runs_and_not_on_planted_ones(
+        tmp_path, monkeypatch, capsys):
+    """Planted rows carry no clock, so scoring them would make every off-GPU
+    rehearsal INVALID for want of hardware it never touched."""
+    code, out = run_report(["--synthetic", "refit"], tmp_path, monkeypatch,
+                           capsys)
+    assert code == exit_codes.DONE
+    assert AB.LEVEL_GATE not in out
+
+    out_dir = tmp_path / "level"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for row in rows:
+        row["provenance"] = "measured"
+        row["clock_level_ok"] = True
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert code == exit_codes.DONE
+    # LEVEL is the first of the RESULT gates, ahead of ISA and of everything
+    # fitted: it is upstream of every number below it, so a reader meets the
+    # apparatus before the alpha. (The six preflights precede it; they are
+    # scored before a rung was timed.)
+    tokens = [ln.split()[2] for ln in out.splitlines()
+              if ln.startswith("RESULT: ")]
+    assert tokens.index("level-every-rung-ran-at-the-roof-s-measured-clock") \
+        < tokens.index("ISA-the-aliased-kernel-issued-the-same-global-loads")
+
+
 # --------------------------------------------------------------------------
 # paired in time, priced in the driver's units, and crash-safe
 # --------------------------------------------------------------------------
