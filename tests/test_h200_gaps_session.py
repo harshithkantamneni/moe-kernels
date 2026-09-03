@@ -1,8 +1,9 @@
 """The unattended driver has to be checkable without a pod.
 
-`scripts/h200_gaps_session.sh` spends about 3.4 hours of rented GPU across
-twenty arms. Almost everything that can go wrong with it goes wrong SILENTLY and
-is only visible an hour later: an arm marked finished having measured nothing, a
+`scripts/h200_gaps_session.sh` spends about four and a half hours of rented GPU
+across twenty arms, and near seven once its KERNEL rows are put on a wall clock.
+Almost everything that can go wrong with it goes wrong SILENTLY and is only
+visible an hour later: an arm marked finished having measured nothing, a
 pipeline that recorded `tee`'s exit status, a flag the sibling script renamed, a
 summary that prints an imported constant out of a refused log as if this session
 had measured it. None of those raise.
@@ -48,6 +49,15 @@ So this file checks what can be checked off GPU:
      rescore-mode anchor, a depth sweep at the wrong --r-max, a dtype arm with
      no card to name -- so the tests below plant the distinguishing flag and
      then run the whole dry session and check every arm reached a plan.
+  9. AN ARM THAT IS IN NO SESSION CLOSES NOTHING. `grep -c alias_ablation
+     scripts/h200_gaps_session.sh` returned 0, and so did the same grep over
+     all 28 branches, while `scripts/alias_ablation.py` is the only instrument
+     in the tree that tests whether the per-tile slope every alpha is built
+     from IS DRAM traffic. The tests below pin that it is scheduled, that it is
+     booked at what its own plan prints FOR THE POD rather than for the plan
+     mode that under-charges the probe, that its dry branch cannot measure, and
+     that the two rental subsets the banner prints are priced by the same two
+     functions as the table rather than by a second copy of it.
 
 HOW THE SHELL FUNCTIONS ARE TESTED. Sourcing the driver would run the session,
 so the file marks a block of pure function definitions between
@@ -57,6 +67,7 @@ its case statement, which would agree with it until it did not.
 """
 from __future__ import annotations
 
+import math
 import re
 import shlex
 import subprocess
@@ -83,13 +94,16 @@ from moe.bench import exit_codes  # noqa: E402
 # GROUP_SIZE_M=1, a configuration vLLM never ships for a multi-tile BLOCK_M=128,
 # so it could refute the ceiling and never confirm it. The configuration is now
 # IN THE ARM NAME wherever two arms differ only by configuration.
+# alias_ablation was added on 2026-09-03: it was in no session on any branch,
+# and it is the only arm that tests the relabelling of the per-tile slope as
+# DRAM traffic that every alpha, cap and roof fraction in the study rests on.
 # bn_g1 was dropped on 2026-09-03: at GROUP_SIZE_M=1 `bn_decomposition.py
 # --self-test` exits 3 INVALID and the arm's own plan says C1 reads UNKNOWN
 # however the data fall, and no other pinning that self-test was checked at
 # passes either, so there was nowhere to re-pin it to.
 ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
-        "bm128_depth", "noise_floor",
+        "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
         "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
         "counter_plan")
@@ -207,6 +221,17 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     assert order.index("roofline-n256-g16") < order.index("roofline-n256-g32")
     assert order.index("roofline-n256-g32") < order.index("bm128_depth")
     assert order.index("bm128_depth") < order.index("noise_floor")
+    # The ablation runs BEFORE the floor and before every alpha arm. Its result
+    # changes what bn_g16, the anchor, occupancy, cap_test and both span arms
+    # are decomposing; the floor changes only how each of them is scored. The
+    # two are independent in both directions, so the order between them is a
+    # budget decision, and a 13-minute arm that can retire the mechanism
+    # sentence does not sit behind a 120-minute one.
+    assert order.index("bm128_depth") < order.index("alias_ablation")
+    assert order.index("alias_ablation") < order.index("noise_floor")
+    assert order.index("alias_ablation") < order.index("bn_g16")
+    assert order.index("alias_ablation") < order.index("anchor_measure")
+    assert order.index("alias_ablation") < order.index("span_dense")
     assert order.index("noise_floor") < order.index("bn_g16")
     assert "bn_g1" not in order
     # A measurement precedes the free re-scoring that reads it.
@@ -441,6 +466,13 @@ INVOKED = {
                                          "--publish"),
     "scripts/memory_branch_anchor.py": ("--rescore", "--out-dir", "--dry-run",
                                         "--measure"),
+    # No --dry-run and no --fail-on-gate in this one, and both absences are the
+    # design: a BARE invocation is its plan, `--run` is what makes it measure,
+    # and its exit code comes straight from `exit_codes.classify` over the gates
+    # it scored, so there is no downgrade for a flag to close.
+    "scripts/alias_ablation.py": ("--run", "--models", "--alias-extent",
+                                  "--compute", "--replicates", "--probe",
+                                  "--dot-fallback", "--card", "--synthetic"),
 }
 
 
@@ -545,7 +577,8 @@ def test_the_advertised_off_gpu_gates_can_actually_fail():
     for arm_name, flag in (("span_dense", "--fail-on-world"),
                            ("span", "--fail-on-world"),
                            ("occupancy", "--fail-on-gate"),
-                           ("dtype", "--card")):
+                           ("dtype", "--card"),
+                           ("alias_ablation", "--synthetic")):
         advertised = lift(f"arm_offgpu_gates {shlex.quote(arm_name)}",
                           REPO=str(ROOT)).stdout
         assert flag in advertised, (arm_name, advertised)
@@ -643,7 +676,15 @@ def test_every_advertised_off_gpu_command_is_run_by_this_guard_and_scores():
             assert (ROOT / words[0]).exists(), (name, cmd)
             got = subprocess.run([sys.executable, *words], capture_output=True,
                                  text=True, timeout=900, cwd=str(ROOT))
-            scoring = {"--self-test", "--audit", "--rescore", "--corpus-only"}
+            # --synthetic is alias_ablation.py's planted-world mode and is a
+            # SCORING one: it generates timings from a stated law, runs every
+            # gate on them and exits through the shared table. Leaving it out
+            # would have sent that arm's advertised line down the PLANNING
+            # branch, where the guard demands a --dry-run the script does not
+            # have, and the one arm added to close a missing-check defect would
+            # have been checked by the wrong half of the guard.
+            scoring = {"--self-test", "--audit", "--rescore", "--corpus-only",
+                       "--synthetic"}
             if scoring & set(words):
                 scored_arms.append(name)
                 assert got.stdout.count("RESULT: ") > 0, (name, cmd, got.stdout[-2000:])
@@ -665,6 +706,7 @@ def test_every_advertised_off_gpu_command_is_run_by_this_guard_and_scores():
     # shape ("C3 by --self-test 2.033|2.400|1.000"): an instruction to score
     # three planted worlds, with nothing for this guard to run and nothing for
     # the operator to run either without reconstructing the command.
+    assert "alias_ablation" in scored_arms, scored_arms
     for name in prose_arms:
         line = lift(f"arm_offgpu_gates {shlex.quote(name)}",
                     REPO=str(ROOT)).stdout
@@ -1287,8 +1329,13 @@ def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
     command = re.match(r"[^(]*", advertised).group(0)
     assert "--group-m 16" in command, command
     assert "--group-m 1 " not in command, command
-    # And the invocation and the gate agree on the pinning.
-    body = CODE.split("say \"4. alpha_a", 1)[1].split("say \"5.", 1)[0]
+    # And the invocation and the gate agree on the pinning. ANCHORED ON THE
+    # HEADING'S WORDS AND NOT ON ITS NUMBER: this read `say "4. alpha_a` until
+    # 2026-09-03, when inserting alias_ablation at 3 renumbered every heading
+    # below it and the split raised IndexError. A section number is a position
+    # in the read order, which is the one thing about this file that is meant
+    # to change; the sentence is what identifies the arm.
+    body = CODE.split("alpha_a and alpha_b separated", 1)[1].split("\nsay ", 1)[0]
     assert "--group-m 16" in body
     assert "--group-m 1 " not in body
     for pinning, want in ((["--group-m", "1"], 3), (["--group-m", "16"], 0)):
@@ -2122,3 +2169,333 @@ def test_the_counter_arm_says_to_read_its_verdict_and_not_its_ledger_state():
     block = listing.split("  counter_plan ", 1)[1].split("\n\n", 1)[0]
     assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" in block
     assert "BLOCKED is the ANSWER" in block
+
+
+# --------------------------------------------------------------------------
+# 12. the alias ablation, and what a rental of a given length reaches
+# --------------------------------------------------------------------------
+
+#: The command whose plan the alias row is booked from. It carries --run, which
+#: is what makes `report_cost` charge the probe's six specialisations
+#: (`probing=bool(args.probe and args.run)`); off a GPU box it prints the table
+#: and then refuses at the probe having measured nothing. Every test below that
+#: runs it is skipped on a machine with a CUDA device, because there the same
+#: command IS the arm and would spend thirteen minutes of somebody's card.
+ALIAS_POD_PLAN = (
+    "scripts/alias_ablation.py --card 'NVIDIA H200' "
+    "--models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 "
+    "--alias-extent block --compute sum --replicates 9 --probe "
+    "--dot-fallback allow --run")
+
+
+def _no_cuda():
+    try:
+        import torch
+    except Exception:                                             # noqa: BLE001
+        return True
+    try:
+        return not torch.cuda.is_available()
+    except Exception:                                             # noqa: BLE001
+        return True
+
+
+def _wall_minutes(stdout):
+    found = re.search(r"^  WALL\s+([\d.]+) min", stdout, re.M)
+    assert found, stdout[-2500:]
+    return float(found.group(1))
+
+
+def test_the_arm_that_tests_the_first_inferential_link_is_in_the_session():
+    """THE DEFECT THIS SECTION EXISTS FOR, and it was an absence rather than a
+    wrong number: `grep -c alias_ablation scripts/h200_gaps_session.sh` returned
+    0, and the same grep over all 28 branches of this repository returned 0 on
+    every one of them.
+
+    Every alpha in this study is a slope per extra M-tile RELABELLED as a
+    fraction of a fresh DRAM weight read. Every cap, every roof fraction and the
+    sentence about a decode-configured kernel never reaching its compute roof is
+    that relabelling carried forward, and `scripts/alias_ablation.py` is the only
+    instrument in the tree that measures the same quantity without the byte
+    model that does the relabelling. An arm in no session closes nothing."""
+    assert "alias_ablation" in ARMS
+    assert "scripts/alias_ablation.py" in TEXT
+    rel = lift("arm_script alias_ablation", REPO=str(ROOT)).stdout.strip()
+    assert rel == "scripts/alias_ablation.py"
+    # It speaks the one exit-code table, so no row of its own can reach the
+    # disclosure that says the state word may be a translation nobody agreed to.
+    adopts = lift("adopts_exit_codes scripts/alias_ablation.py", REPO=str(ROOT))
+    assert adopts.returncode == 0
+    caveat = lift("contract_caveat alias_ablation INVALID", REPO=str(ROOT))
+    assert caveat.returncode == 1 and not caveat.stdout.strip()
+    # And what it closes states BOTH outcomes against the mechanism sentence,
+    # plus the third state that is not an outcome at all.
+    closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
+    assert "P1 PASS" in closes and "P1 FAIL" in closes
+    assert "THE THIRD STATE IS NOT AN OUTCOME" in closes
+    assert "0.529-0.588" in closes
+    # The dependency on arm 0, and the direction that makes it expensive.
+    assert "ARM 0" in closes and "DOES NOT REFUSE WITHOUT IT" in closes
+
+
+@pytest.mark.skipif(not _no_cuda(), reason="the booking command measures on a GPU")
+def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
+    """AND THE POD FIGURE IS NOT THE ONE THE DRY BRANCH PREVIEWS. That script
+    does not take a --dry-run flag at all: a bare invocation is its plan and
+    `--run` is what makes it measure. `report_cost` charges the probe's six
+    Triton specialisations only under `probing=bool(args.probe and args.run)`,
+    so the plan the driver's dry branch prints says WALL 11.6 while the pod
+    spends WALL 13.0. Booking the 11.6 would under-book the arm by the probe,
+    which is the same direction as the noise floor booked at a tenth of its
+    plan.
+
+    The dry branch is still bare, deliberately: a --dry-run carrying --run would
+    MEASURE on a pod, and this file's rule is that a plan is free in every
+    sense. So the gap is DISCLOSED in `arm_basis` instead of being closed by a
+    flag that would cost a session."""
+    pod = subprocess.run([sys.executable, *shlex.split(ALIAS_POD_PLAN)],
+                         capture_output=True, text=True, timeout=900,
+                         cwd=str(ROOT))
+    assert pod.returncode == exit_codes.REFUSED, pod.stdout[-2000:]
+    assert "BOOK THIS ONE" in pod.stdout
+    pod_wall = _wall_minutes(pod.stdout)
+    plan_words = [w for w in shlex.split(ALIAS_POD_PLAN) if w != "--run"]
+    plan = subprocess.run([sys.executable, *plan_words], capture_output=True,
+                          text=True, timeout=900, cwd=str(ROOT))
+    plan_wall = _wall_minutes(plan.stdout)
+    assert plan_wall < pod_wall, (plan_wall, pod_wall)
+    booked = int(lift("arm_minutes alias_ablation", REPO=str(ROOT)).stdout.strip())
+    assert booked == math.ceil(pod_wall), (booked, pod_wall)
+    assert booked > math.ceil(plan_wall), (booked, plan_wall)
+    # The row says where the figure came from, names the flag that separates the
+    # two, and warns that on a GPU box the same command is the arm.
+    basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
+    assert "--run" in basis and "11.6" in basis and "13.0" in basis
+    assert "ON A BOX WITH NO GPU" in basis
+    # WALL, not KERNEL: its plan charges the probe's compiles outright rather
+    # than leaving them to the ratio, and says BOOK THIS ONE beside the figure.
+    assert lift("arm_clock alias_ablation", REPO=str(ROOT)).stdout.strip() == "WALL"
+    assert not lift("arm_unpriced alias_ablation", REPO=str(ROOT)).stdout.strip()
+
+
+def test_no_dry_branch_of_the_alias_arm_can_measure():
+    """A --dry-run must be free in every sense, and this is the one arm where
+    the flag that would make its preview exact is also the flag that makes it
+    spend a card. Both plan branches are therefore bare, and the pod branch is
+    the only line in the file that gives that script --run."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert len(lines) == 3, lines
+    with_run = [ln for ln in lines if "--run" in ln]
+    assert len(with_run) == 1, lines
+    assert "PY_VLLM" in with_run[0], with_run[0]
+    # Off a GPU box the plan is given a NAMED HYPOTHETICAL card, exactly as
+    # dtype's is: without one the script labels the run
+    # 'no-card-nothing-measured', prints NOT PRICED and cannot say what the arm
+    # costs, which is the shape that made dtype's preview examine nothing.
+    assert sum("--card" in ln for ln in lines if "--run" not in ln) == 1, lines
+    assert 'ALIAS_PLAN_CARD="${ALIAS_PLAN_CARD:-NVIDIA H200}"' in CODE
+
+
+def test_the_alias_planted_worlds_separate_and_the_fail_branch_is_planted():
+    """A GATE THAT CANNOT FAIL IS NOT A GATE, checked on the arm's own advertised
+    off-GPU command rather than asserted from its header. The four worlds land
+    on three different exit codes, `classify_text` recomputes each one from the
+    log, and the world that plants the FAILURE is `alias-blind`: the 2026-09-01
+    apparatus, whose aliased arm never cleared the card's read roof, replayed as
+    a law. That run's VOID was very nearly written up as a null result about
+    DRAM, so a planted world in which the gates MUST refuse is the one this arm
+    most needs."""
+    script = str(ROOT / "scripts" / "alias_ablation.py")
+    seen = {}
+    for world, code in (("refit", exit_codes.DONE),
+                        ("retracted", exit_codes.CLAIM_FAIL),
+                        ("tempo", exit_codes.CLAIM_FAIL),
+                        ("alias-blind", exit_codes.INVALID)):
+        got = subprocess.run([sys.executable, script, "--synthetic", world],
+                             capture_output=True, text=True, timeout=900,
+                             cwd=str(ROOT))
+        assert got.stdout.count("RESULT: ") > 0, world
+        assert got.returncode == code, (world, got.returncode, got.stdout[-2000:])
+        assert exit_codes.classify_text(got.stdout) == got.returncode, world
+        p1 = re.search(r"^RESULT: CLAIM P1-\S+ (PASS|FAIL)", got.stdout, re.M)
+        assert p1, (world, got.stdout[-2000:])
+        seen[world] = (p1.group(1), got.returncode)
+    # P1 alone does not separate the worlds and was never meant to: alias-blind
+    # PASSES it on an interval so wide it contains everything, and what refuses
+    # the page there is the VALIDITY half. Both halves are checked, because a
+    # claim gate reading PASS out of an apparatus that could not see DRAM is the
+    # exact failure this arm was rebuilt to make impossible.
+    assert seen["refit"] == ("PASS", exit_codes.DONE)
+    assert seen["retracted"] == ("FAIL", exit_codes.CLAIM_FAIL)
+    assert seen["tempo"] == ("FAIL", exit_codes.CLAIM_FAIL)
+    assert seen["alias-blind"][1] == exit_codes.INVALID
+    blind = subprocess.run([sys.executable, script, "--synthetic", "alias-blind"],
+                           capture_output=True, text=True, timeout=900,
+                           cwd=str(ROOT))
+    for gate in ("headroom", "attribution", "signal", "bracket"):
+        assert re.search(rf"^RESULT: VALIDITY {gate}\S* FAIL", blind.stdout, re.M), gate
+
+
+def test_the_rental_subsets_are_priced_by_the_table_and_not_by_a_second_copy():
+    """WHAT THE SESSION COSTS AND WHAT FITS ARE DIFFERENT QUESTIONS, and the
+    banner answered only the first. An operator with a two-hour budget could
+    read that bn_g16 starts at minute 146 and then had to work out by hand which
+    subset to name in --only.
+
+    The two subsets are priced by `session_bound`, which walks the SAME
+    `arm_minutes` and `arm_clock` the cost table walks, so a re-booked arm moves
+    them by itself. A second copy of the cost model is this repo's recurring
+    defect and there is not one here: this test re-derives both totals from the
+    printed per-arm column."""
+    listing = run(["--list"]).stdout
+    booked = {n: int(re.search(rf"^  {re.escape(n)}\s+~(\d+) min (\w+)$",
+                               listing, re.M).group(1)) for n in ARMS}
+    clocks = {n: re.search(rf"^  {re.escape(n)}\s+~\d+ min (\w+)$",
+                           listing, re.M).group(1) for n in ARMS}
+    pct = int(lift("wall_over_model_pct", REPO=str(ROOT)).stdout.strip())
+    for fn in ("rental_2h_arms", "rental_3h_arms"):
+        names = lift(fn, REPO=str(ROOT)).stdout.split()
+        assert names, fn
+        assert len(names) == len(set(names)), (fn, names)
+        for n in names:
+            assert n in ARMS, (fn, n)
+        priced, bound = lift(f"session_bound {' '.join(names)}",
+                             REPO=str(ROOT)).stdout.split()
+        want = sum(booked[n] for n in names)
+        kern = sum(booked[n] for n in names if clocks[n] == "KERNEL")
+        assert int(priced) == want, (fn, priced, want)
+        assert int(bound) == want - kern + -(-kern * pct // 100), (fn, bound)
+    # A name that is not an arm is a subset nobody can run, so it prices to
+    # nothing and says so in its exit status rather than quietly summing to 0.
+    bogus = lift("session_bound calibrate not_an_arm", REPO=str(ROOT))
+    assert bogus.returncode != 0 and bogus.stdout.strip() == "0 0"
+
+
+def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(tmp_path):
+    """THE DECISION THIS BLOCK RECORDS. The owner's payload is bn_g16 and the
+    alias ablation; the noise floor is 120 WALL minutes and sits above both of
+    them in the read order. A rental that ENTERS the floor without finishing it
+    is killed inside it, which fails that script's own V2 and makes even the
+    partial floor unquotable, so a short booking has to leave it out rather than
+    start it. Both subsets therefore carry both payload arms and neither carries
+    the floor.
+
+    And the alias arm is not what put them out of reach: it is thirteen minutes
+    above the floor, so it moved every arm below the floor down by exactly that
+    and moved nothing above it. bn_g16 was already past a two-hour booking."""
+    two = lift("rental_2h_arms", REPO=str(ROOT)).stdout.split()
+    three = lift("rental_3h_arms", REPO=str(ROOT)).stdout.split()
+    for names in (two, three):
+        assert "alias_ablation" in names and "bn_g16" in names
+        assert "noise_floor" not in names
+        # The calibration gate is deliberately NOT scoped to --only and refuses
+        # the session without arm 0, and an unhonoured pin makes every
+        # forced-tile arm below worthless, so both are in every set.
+        assert "calibrate" in names
+        assert {"pin_probe-n64-g1", "pin_probe-n256-g16"} <= set(names)
+    assert set(two) < set(three)
+    body = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+        "WHAT THIS COMMITS YOU TO")[1].split("SESSION  card=")[0]
+    assert "WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES" in body
+    assert "NEITHER SET CONTAINS THE NOISE FLOOR" in body
+    # The --only lines are printed ready to paste, not described.
+    for names in (two, three):
+        assert f"--only {','.join(names)}" in body, names
+    # And both totals are in the banner, so the operator never has to add the
+    # column back up to find out whether a booking reaches the payload.
+    for fn in ("rental_2h_arms", "rental_3h_arms"):
+        priced, bound = lift(f"session_bound $({fn})",
+                             REPO=str(ROOT)).stdout.split()
+        assert f"~{priced} priced / ~{bound} bounded min" in body, fn
+
+
+def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
+    """The roofline verdict is a fraction of a roof, and the alias ablation is
+    what says the fraction is a fraction of the right thing. So it is read
+    first, and the block says why rather than just listing it."""
+    got = run(["--dry-run"], session=tmp_path / "s").stdout
+    block = got.split("READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+    assert block.index("alias_ablation") < block.index("roofline-n256-g16")
+    assert "BEFORE the roofline verdict" in block
+    for name in ("alias_ablation", "roofline-n256-g16", "noise_floor", "bn_g16"):
+        assert name in block, name
+    # And the commit block says the arm writes nothing tracked, because an arm
+    # with no --publish flag is one an operator can release a pod on top of.
+    commit = got.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
+    assert "THE ALIAS ABLATION WRITES NOTHING TRACKED" in commit
+    assert "alias_ablation/<run id>" in commit
+
+
+def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
+    """THE RECURRING DEFECT AGAIN, at the two surfaces read at the END of a
+    rental. The body comment above the arm always disclosed what
+    `--dot-fallback allow` buys: a dot ladder measures a LOWER BOUND, leaves P1
+    UNKNOWN, exits 1 CLAIM_FAIL and is LATCHED by `arm`. The two surfaces the
+    operator actually reads once the pod is nearly out of hours -- `arm_closes`
+    and the READ-FIRST block -- enumerated three states (P1 PASS, P1 FAIL,
+    headroom/attribution INVALID) and glossed exit 1 as the FAIL: "the interval
+    says which of 0.10 or 0.33 it landed on instead". `choose_pinning` calls the
+    fall to dot mode the LIKELY case rather than the corner, because the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree that `dot` removes. So the likeliest single reading
+    of this arm's exit code was the state neither surface named, and the gloss
+    they did carry is the retraction -- "alpha is not 0.558" for a run in which
+    alpha was not asked -- that the sibling script exists to prevent. The state
+    was documented where the arm is PLANNED and not where it is REPORTED.
+
+    THE TWO EXIT-1 STATES ARE SEPARATED BY EXECUTION, NOT BY PROSE. The same
+    gate builder renders FAIL in `sum` mode and UNKNOWN in `dot` mode, both
+    classify to CLAIM_FAIL, and the verdict WORD is the only thing between a
+    finding and an unasked question. That is why both surfaces have to send the
+    operator to the RESULT line rather than to the exit code."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import alias_ablation as aa
+
+    # The FAIL branch is planted beside the UNKNOWN one: a disjoint interval in
+    # sum mode is the outcome the surfaces describe, and it is a different word
+    # on the same line from the same builder.
+    fail = aa.prediction_gate((0.05, 0.14), (0.04, 0.15), "sum")
+    unknown = aa.prediction_gate((0.41, 0.62), (0.40, 0.63), "dot")
+    assert fail.scored()[2] == exit_codes.FAIL
+    assert unknown.scored()[2] == exit_codes.UNKNOWN
+    assert unknown.result_line().startswith(
+        f"RESULT: {exit_codes.CLAIM} P1-")
+    assert "NOT A REFUTATION" in unknown.result_line()
+    sound = exit_codes.result_line(exit_codes.VALIDITY, "headroom",
+                                   exit_codes.PASS, "the pinning cleared")
+    for gate in (fail, unknown):
+        text = f"{sound}\n{gate.result_line()}\n"
+        assert exit_codes.classify_text(text) == exit_codes.CLAIM_FAIL
+    # And the state is REACHABLE from this driver: all three branches of the arm
+    # name the flag that allows the fall, so it is not a corner of some other
+    # invocation.
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert lines and all("--dot-fallback allow" in ln for ln in lines), lines
+
+    closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
+    block = run(["--dry-run"], session=tmp_path / "s").stdout.split(
+        "READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+    entry = block.split("roofline-n256-g16")[0]
+    for surface in (closes, entry):
+        # Flattened, because one surface is a heredoc wrapped at 76 columns and
+        # a phrase that straddles two of its lines is still the phrase.
+        flat = " ".join(surface.split())
+        low = flat.lower()
+        assert "--dot-fallback allow" in flat, surface
+        assert "likely" in low, surface
+        assert "unknown" in low and "not a refutation" in low, surface
+        assert "lower bound" in low, surface
+        assert "latch" in low, surface
+        # The one instruction that separates the two exit-1 states, and the
+        # guard on the gloss that was the misreading.
+        assert "read the p1 result line" in low, surface
+        assert "0.10-or-0.33" in flat, surface
+    # The other two states are still stated, so the fourth was ADDED and did not
+    # displace the ones that were right.
+    assert "THE THIRD STATE IS NOT AN OUTCOME" in closes
+    assert "P1 PASS" in closes and "P1 FAIL" in closes
+    for word in ("P1 PASS", "P1 FAIL", "headroom or attribution FAIL"):
+        assert word in entry, word
