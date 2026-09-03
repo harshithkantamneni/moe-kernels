@@ -394,3 +394,136 @@ def test_a_child_that_scored_its_own_gates_is_adopted_rather_than_retried(tmp_pa
     assert got.returncode == EC.INVALID, out
     assert "from its own scorer" in got.stderr
     assert "having scored no gate" not in got.stderr
+
+
+# --------------------------------------------------------------------------
+# whose RESULT line is it
+# --------------------------------------------------------------------------
+
+DRIVER = ROOT / "scripts" / "h200_gaps_session.sh"
+
+
+def driver_summarize(name, log, state):
+    """Ask the SHIPPED `summarize_arm`, in the shipped driver, what this log says.
+
+    Lifted the way `tests/test_h200_gaps_session.py` lifts it, and for the same
+    reason: a python copy of the grep would agree with the driver until it did
+    not, and the whole question here is what the DRIVER reads out of a log this
+    script wrote.
+    """
+    body = (f"set -uo pipefail\nREPO={str(ROOT)!r}\n"
+            f"eval \"$(sed -n '/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p' \"{DRIVER}\")\"\n"
+            f"summarize_arm {shlex.quote(name)} {shlex.quote(str(log))} "
+            f"{shlex.quote(state)}; echo \"rc=$?\"\n")
+    return subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=120)
+
+
+def two_call_interpreter(tmp_path, first, second):
+    """A `$PY` that behaves one way on its first call and another on its second.
+
+    The two-arm shapes only exist across arms: one arm scoring and the next one
+    crashing cannot be planted with a stub that does the same thing every time,
+    and it is exactly the shape that leaked.
+    """
+    counter = tmp_path / "calls"
+    return stub_interpreter(
+        tmp_path, "twoarmpy",
+        f'n=$(cat {counter} 2>/dev/null || echo 0)\n'
+        f'n=$((n+1)); echo "$n" > {counter}\n'
+        f'if [ "$n" = 1 ]; then\n{first}\nfi\n{second}\n')
+
+
+def test_a_childs_result_lines_are_not_this_arms_gates(tmp_path):
+    """The defect the RESULT line itself introduced, in the shape that proved it.
+
+    `moe.bench.cli` scores F1 and F2 and prints a `RESULT: ` line for each; this
+    script tees the child's stream to its own stdout, and the driver captures
+    that stdout whole into the mma_switch arm log. So arm BM=16 succeeding and
+    arm BM=64's child crashing left a log that said `RESULT: VALIDITY F1 PASS`
+    and `F2 PASS` and carried no G-gate at all. The script exited 4 correctly,
+    and the summary still printed two passing gates under the mma_switch
+    heading and skipped both the "NOT scored" sentence and the `tail -5` that
+    would have shown the traceback.
+
+    Asserted at the driver, not at a regex here: `summarize_arm` has to say this
+    arm was not scored, and `classify_text` has to find nothing to classify
+    rather than recomputing DONE for a process that returned ERROR.
+    """
+    py = two_call_interpreter(
+        tmp_path,
+        first=("  echo 'RESULT: VALIDITY F1 PASS [VALIDITY] planted "
+               "| measured 2 | gate 2'\n"
+               "  echo 'RESULT: VALIDITY F2 PASS [VALIDITY] planted "
+               "| measured 4 | gate >0'\n  exit 0"),
+        second=('echo "Traceback (most recent call last):" >&2\n'
+                'echo "MemoryError" >&2\nexit 1'))
+    got = sh("--model", "toy", "--tokens", "8", "--block-m", "16,64",
+             "--out", str(tmp_path / "ptx"), env_extra={"MOE_PYTHON": str(py)})
+    out = got.stdout + got.stderr
+    assert got.returncode == EC.ERROR, out
+    assert EC.ledger_state(got.returncode) == "RETRY"
+
+    assert EC.parse_result_lines(got.stdout) == [], \
+        "the child's gates are showing as this arm's"
+    with pytest.raises(EC.NoGatesScored):
+        EC.classify_text(got.stdout)
+
+    log = tmp_path / "arm.log"
+    log.write_text(got.stdout)
+    seen = driver_summarize("mma_switch", log, "RETRY")
+    assert "rc=1" in seen.stdout, seen.stdout + seen.stderr
+    assert "PASS" not in seen.stdout.replace("rc=1", ""), seen.stdout
+
+
+def test_the_relabelled_child_lines_stay_visible_and_name_their_arm(tmp_path):
+    """Relabelled, not dropped, and the label says which arm printed them.
+
+    Two arms both score gates called F1 and F2, so an unlabelled prefix would
+    put four indistinguishable lines under one heading. The evidence a human
+    reads is still in place and still in order; only the machine contract moved.
+    """
+    py = two_call_interpreter(
+        tmp_path,
+        first=("  echo 'RESULT: VALIDITY F1 PASS [VALIDITY] planted "
+               "| measured 2 | gate 2'\n  exit 0"),
+        second=("echo 'RESULT: VALIDITY F1 FAIL [VALIDITY] planted "
+                "| measured 0 | gate 2'\nexit 3"))
+    got = sh("--model", "toy", "--tokens", "8", "--block-m", "16,64",
+             "--out", str(tmp_path / "ptx"), env_extra={"MOE_PYTHON": str(py)})
+    assert "[BM=16 sweep] RESULT: VALIDITY F1 PASS" in got.stdout, got.stdout
+    assert "[BM=64 sweep] RESULT: VALIDITY F1 FAIL" in got.stdout, got.stdout
+    assert EC.parse_result_lines(got.stdout) == []
+
+
+def test_the_raw_line_still_reaches_the_file_sweep_failed_reads(tmp_path):
+    """The failure mode the relabel could have created, planted on purpose.
+
+    `sweep_failed` tells a scorer's verdict from an escaped traceback by
+    `grep -q '^RESULT: ' "$log_file"`. Stripping the child's lines instead of
+    relabelling them would have made every child VALIDITY failure look like a
+    crash: reported as ERROR and re-queued for another rental of the same
+    result. `tee` therefore still writes the RAW stream to the arm's own
+    run.log, and only what continues on to stdout is prefixed.
+    """
+    py = stub_interpreter(tmp_path, "scoredpy",
+                          "echo 'RESULT: VALIDITY F1 FAIL [VALIDITY] planted "
+                          "| measured 1 | gate 0'\nexit 3\n")
+    got = sh("--model", "toy", "--tokens", "8", "--block-m", "16,64",
+             "--out", str(tmp_path / "ptx"), env_extra={"MOE_PYTHON": str(py)})
+    out = got.stdout + got.stderr
+    assert got.returncode == EC.INVALID, out
+    assert "it ran and then failed a gate of" in got.stderr
+    raw = (tmp_path / "ptx" / "bm16" / "run.log").read_text()
+    assert raw.startswith("RESULT: VALIDITY F1 FAIL"), raw
+    assert EC.parse_result_lines(raw), "the discriminator's own evidence is gone"
+
+
+def test_the_relabel_is_built_once_for_both_branches():
+    """The forced and unforced pipelines are the same two lines twice, and a
+    prefix applied to one of them only would leak the ladder arm's child while
+    the tile-forced arms were clean. Read out of the shipped text because the
+    ladder path needs a working vLLM to reach."""
+    assert TEXT.count('| tee "$log_file" | sed "$relabel"') == 2
+    assert TEXT.count('| tee "$log_file"\n') == 0, \
+        "a pipeline still ends at tee, so its child's RESULT lines reach stdout"

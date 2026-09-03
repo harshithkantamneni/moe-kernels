@@ -647,7 +647,39 @@ run_arm() {   # <dump-subdir> <label> [force-json]
   # what this script did on the first run of the repaired path, turning the
   # sweep's own REFUSED into a crash. `tee`'s status is not the sweep's, which
   # is why the code comes from PIPESTATUS[0] and not from `$?`.
-  local rc=0
+  # A RESULT LINE IS A CLAIM ABOUT THE ARM THAT OWNS THE LOG, and the child's
+  # lines are not this arm's results. That is why `sed` is in the pipeline.
+  # `moe.bench.cli` scores its own pin gates F1 and F2 and prints one `RESULT: `
+  # line each. `tee` writes the child's stream to $log_file AND to this script's
+  # stdout, and the driver captures this script's stdout whole into the
+  # mma_switch arm log (`"$@" > "$log" 2>&1`, h200_gaps_session.sh). So an
+  # unprefixed child line arrives at the session summary as a gate scored BY
+  # THIS ARM. The failure that proved it: arm BM=16 succeeds, arm BM=64's child
+  # crashes, this script correctly exits ERROR, and the arm log still carries
+  # `RESULT: VALIDITY F1 PASS` and `F2 PASS` and no G-gate at all -- so
+  # `summarize_arm` returns 0, prints two passing gates under the mma_switch
+  # heading, and the caller skips both the "This arm was NOT scored" branch and
+  # the `tail -5` that would have shown the traceback. `classify_text` over that
+  # log recomputes DONE against a process that returned 4, which is the
+  # "printed one thing, exited another" disagreement exit_codes.py is named
+  # against. F1 and F2 are not even in this script's vocabulary; it scores
+  # G1-G4 and L1-L2.
+  #
+  # RELABELLED RATHER THAN DROPPED, because two readers need different things.
+  # $log_file keeps the RAW line: `sweep_failed` tells an escaped traceback from
+  # a real scorer by `grep -q '^RESULT: ' "$log_file"`, and dropping the line
+  # would turn every child VALIDITY failure into a reported crash. Stdout keeps
+  # the line in place, prefixed, so a human tailing the session still sees what
+  # the child scored and which arm it came from -- two arms otherwise print F1
+  # and F2 twice under one heading with nothing to tell them apart. What the
+  # prefix costs is nothing the driver reads: only the gates this script scores
+  # itself, printed by `gate` and `result_line` straight to stdout, reach the
+  # summary as `^RESULT: `.
+  #
+  # $label is `ladder` or `BM=<digits>`, and the digits are checked against
+  # ^[0-9]+$ at parse time, so it carries nothing sed reads as syntax. Built
+  # once and used in both branches so the two cannot drift apart.
+  local rc=0 relabel="s/^RESULT: /[$label sweep] RESULT: /"
   set +e
   trap - ERR
   if [[ -n "$force" ]]; then
@@ -655,13 +687,16 @@ run_arm() {   # <dump-subdir> <label> [force-json]
       TRITON_CACHE_DIR="$cache" \
       "$PY" -m moe.bench.cli --env "$ENV_NAME" --profile smoke \
             --groups baselines --models "$MODEL" --tokens "$TOKENS" \
-            --out-dir "$results" 2>&1 | tee "$log_file"
+            --out-dir "$results" 2>&1 | tee "$log_file" | sed "$relabel"
   else
     TRITON_KERNEL_DUMP=1 TRITON_DUMP_DIR="$dir" TRITON_CACHE_DIR="$cache" \
       "$PY" -m moe.bench.cli --env "$ENV_NAME" --profile smoke \
             --groups baselines --models "$MODEL" --tokens "$TOKENS" \
-            --out-dir "$results" 2>&1 | tee "$log_file"
+            --out-dir "$results" 2>&1 | tee "$log_file" | sed "$relabel"
   fi
+  # STILL PIPESTATUS[0], and now over a three-stage pipeline. Neither `tee`'s
+  # status nor `sed`'s is the sweep's, and `sed` succeeds on a stream from a
+  # child that crashed.
   rc=${PIPESTATUS[0]}
   trap on_unhandled_error ERR
   set -e
