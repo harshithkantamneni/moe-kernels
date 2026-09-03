@@ -290,10 +290,16 @@ Every scored gate prints exactly one `RESULT: KIND NAME VERDICT detail` line and
 nothing else in this file's output starts with `RESULT: `; the process code is
 `exit_codes.classify` over the same gate objects, so `classify_text` on the log
 recomputes it. DONE 0, CLAIM_FAIL 1, REFUSED 2 (nothing measured), INVALID 3 (a
-validity gate failed AFTER measuring, nothing quotable), ERROR 4. Without
-`--fail-on-gate` a CLAIM_FAIL is REPORTED as DONE, because a falsified
-pre-registered claim is a successful experiment; a VALIDITY failure is INVALID
-either way.
+validity gate failed AFTER measuring, nothing quotable), ERROR 4. NOTHING IS
+FOLDED: `--fail-on-gate` is retired, accepted and ignored. It used to report a
+CLAIM_FAIL as DONE, and `--self-test 0.10` is the live instance -- that world's
+log carries `RESULT: CLAIM ... FAIL`, `classify_text` reads 1 out of it, and the
+process returned 0. A falsified pre-registered claim IS a successful experiment,
+and CLAIM_FAIL is already the code that says so: 1 is in `FINISHED_CODES` and
+`ledger_state(1)` is "CLAIM_FAIL", so the ledger never retries it. `--dry-run`
+exits REFUSED (2), not DONE, for the reason spelled out at that branch: it
+scores no gate, prints no RESULT line, and `classify_text` on a log with none
+raises `NoGatesScored`, which is the REFUSED shape.
 
 THE PLAN STATES A MINIMUM DETECTABLE EFFECT, derived from a stated noise
 assumption rather than from a hope. `--plant-noise` is that assumption and its
@@ -2341,11 +2347,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "produces and exercises the noise-floored thresholds "
                          "at the one value they cannot fail at")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="return exit_codes.CLAIM_FAIL (1) when a CLAIM gate "
-                         "did not pass. Off by default because a falsified "
-                         "pre-registered claim is a successful run and is "
-                         "REPORTED as DONE; a VALIDITY failure is INVALID (3) "
-                         "either way, with or without this flag")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         f"still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "reads as a finished result rather than a retry; "
+                         "folding it into 0 made the log disagree with the "
+                         "process, and --self-test 0.10 was the live instance")
     return ap
 
 
@@ -2353,13 +2360,14 @@ def main(argv=None) -> int:
     """The one entry point, and the one place an exit code is chosen.
 
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
-    before anything is measured, ERROR (4) for an exception nobody planned for
-    or a planted world that came out other than registered, and otherwise
-    `classify` over the scored gates. Without `--fail-on-gate` a CLAIM_FAIL is
-    REPORTED as DONE, because a falsified pre-registered claim is a successful
-    experiment and the flag exists to say when the caller wants otherwise; a
-    VALIDITY failure is INVALID either way, since nothing on the page may be
-    quoted after one.
+    before anything is measured -- `--dry-run` included, because a plan scores
+    no gate -- ERROR (4) for an exception nobody planned for or a planted world
+    that came out other than registered, and otherwise `classify` over the
+    scored gates with nothing folded. `--fail-on-gate` is retired: a CLAIM_FAIL
+    is returned as 1 whether or not it is passed, because a falsified
+    pre-registered claim is a successful experiment and 1 is already the code
+    that says so to the ledger. A VALIDITY failure is INVALID either way, since
+    nothing on the page may be quoted after one.
     """
     # BEFORE `build_parser`, which reads `SWEEP.FIXED` for its defaults. A probe
     # after `parse_args` fires after the AttributeError it exists to replace.
@@ -2478,8 +2486,36 @@ def main(argv=None) -> int:
             trials=args.trials, cell_budget_ms=args.cell_budget_ms)
         print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
               "excluding compiles and allocation")
-        print("nothing was measured and nothing was written")
-        return exit_codes.DONE
+        # REFUSED (2) AND NOT DONE (0). A dry run scores no gate, so it prints
+        # no RESULT line, and `exit_codes.classify_text` over this log raises
+        # `NoGatesScored` -- which that module documents as what a REFUSED log
+        # looks like from there. DONE says "measured; every VALIDITY and CLAIM
+        # gate PASSED", and this run measured nothing, so the log and the code
+        # disagreed in the one direction the shared table exists to stop.
+        #
+        # THE REPOSITORY DISAGREED WITH ITSELF AND THIS IS THE SIDE THAT WON.
+        # On 2026-09-02 six scripts returned DONE from `--dry-run` -- this file,
+        # `bm128_depth`, `bm128_roofline`, `bn_decomposition`, and
+        # `block_m_crossing_sweep` and `ruler_rebaseline` as the bare literal 0
+        # -- and seven returned REFUSED (`calibrate_hardware`,
+        # `dtype_tile_confound`, `memory_branch_anchor`, `occupancy_vs_swizzle`,
+        # `rescore_published_reports`, `span_extent_separation`, `tile_sweep`).
+        # REFUSED is the only one of the two a log can be checked against. The
+        # driver reads both as finished and re-queues neither: `dry_state` maps
+        # 0 to PLANNED and 2 to PLAN_REFUSED, and `arm` retries neither state.
+        print("\n".join(["", "=" * 72,
+                         "REFUSED. Nothing was measured and nothing was "
+                         "written.",
+                         "  reason: --dry-run was given",
+                         "  Everything above is arithmetic over this repo's "
+                         "calibration and vLLM's",
+                         "  resource model. No gate was scored, so no RESULT "
+                         "line was printed and",
+                         "  none of it is a result. Run --self-test <alpha> for "
+                         "the planted worlds,",
+                         "  or the bare command on the pod.",
+                         "=" * 72]))
+        return exit_codes.REFUSED
 
     if args.self_test is None:
         missing = SWEEP.missing_gpu_stack()
@@ -2605,15 +2641,22 @@ def main(argv=None) -> int:
     # THE EXIT CODE COMES FROM THE SHARED TABLE, over the SAME gate objects that
     # printed the RESULT lines, so `exit_codes.classify_text` on this log
     # recomputes the code the process returned.
+    #
+    # NOTHING IS FOLDED INTO DONE, and `--fail-on-gate` is why this is a
+    # paragraph and not a branch. Until 2026-09-02 a CLAIM_FAIL was described in
+    # words and RETURNED AS 0 unless the flag was passed, so `--self-test 0.10`
+    # printed nine RESULT lines that `classify_text` reads as CLAIM_FAIL and the
+    # process said DONE -- the exact split the comment above claims cannot
+    # happen, in the file that prints it. The masking was obsolete once the
+    # shared table landed: CLAIM_FAIL (1) is in `FINISHED_CODES` and
+    # `ledger_state(1)` is "CLAIM_FAIL", so 1 already tells the driver "this is
+    # a result, do not retry it" and 0 protects nothing. The flag is accepted
+    # and ignored so an old driver line still parses.
     rc = exit_codes.classify(g.scored() for g in report.gates)
-    if rc == exit_codes.CLAIM_FAIL and not args.fail_on_gate:
-        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
-        print(f"         reported as exit {exit_codes.DONE} without "
-              "--fail-on-gate: a claim that did not pass is a RESULT, not a "
-              f"broken run. Pass --fail-on-gate to return "
-              f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL instead.")
-        return exit_codes.DONE
     print(f"exit     {exit_codes.describe(rc)}")
+    if rc == exit_codes.CLAIM_FAIL:
+        print("         a claim that did not pass is a RESULT and the arm is "
+              "FINISHED, not broken.")
     return rc
 
 

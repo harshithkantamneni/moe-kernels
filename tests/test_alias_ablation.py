@@ -47,6 +47,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+
 
 def _load(name: str, filename: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / filename)
@@ -125,7 +127,13 @@ def test_a_folded_aliased_kernel_fails_however_clean_the_alpha_looks(
     the cache and the agreement is a coincidence of the generator.
     """
     code, out = run_report(["--synthetic", "folded"], tmp_path, monkeypatch, capsys)
-    assert code == 1
+    # INVALID (3), not CLAIM_FAIL (1). `ISA` is a VALIDITY gate: a folded kernel
+    # means the apparatus measured the optimiser rather than the cache, so
+    # nothing on the page may be quoted. 1 would say the world disagreed with a
+    # prediction, which is a finding, and no finding was made here. `verdict`
+    # chose its own codes until 2026-09-02 and returned 1 for any failed gate
+    # whatever its kind; it is `exit_codes.classify` over the same gates now.
+    assert code == 3
     assert "[FAIL] ISA" in out
     assert "[PASS] P1" in out
     assert "every number below is void" in out
@@ -134,7 +142,9 @@ def test_a_folded_aliased_kernel_fails_however_clean_the_alpha_looks(
 def test_a_placebo_as_large_as_the_signal_fails_before_any_alpha_is_believed(
         tmp_path, monkeypatch, capsys):
     code, out = run_report(["--synthetic", "noise"], tmp_path, monkeypatch, capsys)
-    assert code == 1
+    # INVALID (3), not CLAIM_FAIL (1): `placebo` is VALIDITY, and a placebo as
+    # large as the signal voids the page rather than refuting a prediction.
+    assert code == 3
     assert "[FAIL] placebo" in out
 
 
@@ -195,12 +205,26 @@ def test_a_numpy_false_is_a_failed_gate_and_not_a_passing_one():
     gate = AB.Gate("planted", np.bool_(False), "")
     assert gate.ok is False
     assert gate.label == "FAIL"
-    assert AB.verdict(_collect([]), [gate]) == 1
+    # INVALID (3): `planted` is not `P<digit>`, so `_kind_from_name` reads
+    # VALIDITY, and a failed apparatus gate voids the page. The numpy bool is
+    # still what this test is about: without `__post_init__`'s coercion the
+    # `g.ok is False` scan inside `verdict` still misses the gate, and the
+    # printed sentence would agree with the refit over a table with a FAIL in
+    # it.
+    assert AB.verdict(_collect([]), [gate]) == 3
 
 
 def test_a_gate_with_no_evidence_is_not_a_refutation():
+    """UNKNOWN counts against the gate and is still not CLAIM_FAIL.
+
+    A VALIDITY gate that could not decide leaves the apparatus's soundness
+    unshown, which is exactly as unquotable as a failure: INVALID (3). What it
+    is NOT is 1, "a pre-registered claim was refuted". `verdict` used to answer
+    4 here, and 4 is ERROR: "crashed; an exception nobody planned for", which
+    the ledger reads as RETRY with a traceback to go and find.
+    """
     lines: list[str] = []
-    assert AB.verdict(_collect(lines), [AB.Gate("planted", None, "")]) == 4
+    assert AB.verdict(_collect(lines), [AB.Gate("planted", None, "")]) == 3
     assert "NOT TESTABLE" in "\n".join(lines)
 
 
@@ -556,7 +580,10 @@ def test_dot_mode_reports_a_lower_bound_and_refuses_to_answer_p1(
     be allowed to answer the prediction."""
     code, out = run_report(["--compute", "dot", "--synthetic", "refit"],
                            tmp_path, monkeypatch, capsys)
-    assert code == 4
+    # CLAIM_FAIL (1): P1 is the one CLAIM here and an UNKNOWN CLAIM means the
+    # claim was NOT ESTABLISHED, which is the same side of the gate as a
+    # failure. Not 4 = ERROR, which the ledger reads as a crash to retry.
+    assert code == 1
     assert "[NOT TESTABLE] P1" in out
     assert "biased LOW" in out
 
@@ -599,7 +626,10 @@ def test_an_aliased_ladder_too_expensive_to_resolve_says_so_and_picks_nothing(
     number as a finding."""
     code, out = run_report(["--synthetic", "l2-heavy"], tmp_path, monkeypatch,
                            capsys)
-    assert code == 4
+    # INVALID (3): `resolution` is VALIDITY, and an interval too wide to resolve
+    # leaves the instrument's soundness unshown, which is as unquotable as a
+    # failure. Not 4 = ERROR: nothing crashed.
+    assert code == 3
     assert "[NOT TESTABLE] resolution" in out
     assert "cheaper aliased ladder" in out
 
@@ -663,7 +693,9 @@ def test_a_run_without_a_control_says_the_confound_is_unbounded(
         tmp_path, monkeypatch, capsys):
     code, out = run_report(["--synthetic", "refit", "--no-control"], tmp_path,
                            monkeypatch, capsys)
-    assert code == 4
+    # INVALID (3): `control` is VALIDITY and without one the confound is
+    # unbounded, so the page cannot be quoted. Not 4 = ERROR.
+    assert code == 3
     assert "[NOT TESTABLE] control" in out
     assert "NOT BOUNDED. TLB, page behaviour and code path" in out
 
@@ -703,8 +735,8 @@ def test_the_kernel_is_built_lazily_and_a_missing_triton_names_the_venv():
         assert "vllm venv" in str(excinfo.value)
 
 
-def test_a_run_without_a_gpu_says_so_and_exits_three(tmp_path, monkeypatch,
-                                                     capsys):
+def test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid(
+        tmp_path, monkeypatch, capsys):
     # The no-GPU condition is FORCED rather than inherited from the host. This
     # asserted only that `--run` exits 3, which is true on a laptop because
     # triton is absent and false on the pod because it is not: the base venv
@@ -719,7 +751,13 @@ def test_a_run_without_a_gpu_says_so_and_exits_three(tmp_path, monkeypatch,
             "scripts/alias_ablation.py --run")
     monkeypatch.setattr(AB, "build_kernel", _no_triton)
     code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
-    assert code == 3
+    # REFUSED (2), not INVALID (3). It returned 3 until 2026-09-02, and 3 tells
+    # the driver "measured, then a VALIDITY gate failed: there is a directory of
+    # cells that must not be scored, and do NOT retry this arm". Nothing was
+    # measured, there is no directory, and the arm is free to retry on a box
+    # that has a GPU.
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
     assert "CANNOT RUN HERE" in out
     assert "The plan, the prediction and the preflight above are still valid" in out
 
@@ -819,3 +857,74 @@ def test_a_synthetic_replay_ignores_the_attached_card(tmp_path, monkeypatch,
         in on_card
     assert len([x for x in sides(on_card) if "above L2" in x]) == 2
     assert len([x for x in sides(on_card) if "below L2" in x]) == 2
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. `no_gpu` marks
+#: the row that forces `build_kernel` to refuse, because on a pod triton IS
+#: importable and a test whose premise is "this machine has no GPU" stops
+#: testing anything on the only machine the code runs on.
+OFF_GPU_MODES = [
+    # The bare invocation: a plan, a prediction, a preflight, an MDE, and no
+    # timings. It returned 0 until a previous slice made it REFUSED.
+    ([], exit_codes.REFUSED, False),
+    (["--synthetic", "refit"], exit_codes.DONE, False),
+    # P1 is the one CLAIM. TEMPO's alpha lands outside the refit band, which is
+    # a statement about the world and therefore a RESULT.
+    (["--synthetic", "tempo"], exit_codes.CLAIM_FAIL, False),
+    # ISA and placebo are VALIDITY: the apparatus was unsound, so the page is
+    # void. Both returned 1 -- "a claim was refuted" -- until 2026-09-02.
+    (["--synthetic", "folded"], exit_codes.INVALID, False),
+    (["--synthetic", "noise"], exit_codes.INVALID, False),
+    # `resolution` and `control` read UNKNOWN. UNKNOWN counts against the gate,
+    # and on a VALIDITY gate that is INVALID, not the 4 = ERROR this used to
+    # answer.
+    (["--synthetic", "l2-heavy"], exit_codes.INVALID, False),
+    (["--synthetic", "refit", "--no-control"], exit_codes.INVALID, False),
+    # An UNKNOWN CLAIM: the biased estimator may not answer P1, so the claim was
+    # not established, which is CLAIM_FAIL and not ERROR.
+    (["--compute", "dot", "--synthetic", "refit"], exit_codes.CLAIM_FAIL, False),
+    (["--run"], exit_codes.REFUSED, True),
+]
+
+
+@pytest.mark.parametrize("argv,code,no_gpu", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, no_gpu, tmp_path, monkeypatch, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Four of these rows used to break it, all through `verdict`, which printed
+    one `exit_codes.result_line` per gate and then returned codes of its own
+    devising: 1 for any failed gate whatever its kind, 4 for any undecided one.
+    `folded` and `noise` fail a VALIDITY gate and were reported as refuted
+    claims; `l2-heavy` and `--no-control` leave one UNKNOWN and were reported as
+    crashes. `--run` returned 3 = INVALID, which tells the driver a directory of
+    unquotable cells exists, from a run that never opened one.
+    """
+    if no_gpu:
+        def _no_triton(*a, **kw):
+            raise AB.CannotRunHere(
+                "triton is not importable in this interpreter. Run inside the "
+                "vllm venv on the pod.")
+        monkeypatch.setattr(AB, "build_kernel", _no_triton)
+    rc, out = run_report(argv, tmp_path, monkeypatch, capsys)
+    assert rc == code, out
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")

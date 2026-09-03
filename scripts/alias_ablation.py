@@ -2375,28 +2375,35 @@ def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
 def verdict(say, gates: list[Gate]) -> int:
     """Print every gate's RESULT line and the human table, and return the code.
 
-    THIS FUNCTION'S CODE AND `exit_codes.classify_text` OVER ITS OUTPUT DO NOT
-    AGREE, and the divergence is stated here rather than left to be found. The
-    rule below is "any failed gate -> 1, any undecided gate -> 4"; the table's
-    rule, applied to the same RESULT lines, is "any failed or undecided VALIDITY
-    gate -> 3 INVALID, else any failed or undecided CLAIM gate -> 1 CLAIM_FAIL".
-    They part on every VALIDITY failure, which is most of this script's gates:
-    `ISA`, `correctness`, `placebo`, `signal`, `form`, `control`, `resolution`
-    and all six preflights are VALIDITY, and only `P1` is a CLAIM. The table is
-    right. A failed apparatus gate means nothing on the page may be quoted,
-    which is INVALID;
-    reporting it as 1 says the world disagreed with a prediction, which is a
-    finding, and it is not what happened.
+    THE CODE COMES FROM `exit_codes.classify` OVER THE SAME GATE OBJECTS THAT
+    PRINTED THE LINES, so `classify_text` over this function's output recomputes
+    the integer the process returns and a disagreement between the two is
+    itself a defect. Until 2026-09-02 it did not: the rule here was "any failed
+    gate -> 1, any undecided gate -> 4", and the table's rule over the very same
+    RESULT lines is "any failed or undecided VALIDITY gate -> 3 INVALID, else
+    any failed or undecided CLAIM gate -> 1 CLAIM_FAIL". They parted on every
+    VALIDITY failure, which is nearly every gate this script has: `ISA`,
+    `correctness`, `placebo`, `signal`, `form`, `control`, `resolution` and all
+    six preflights are VALIDITY, and only `P1` is a CLAIM. So
+    `--synthetic folded` (a planted fold that fails ISA) and
+    `--synthetic noise` (a placebo as large as the signal) both printed
+    `RESULT: VALIDITY ... FAIL` and exited 1, and 1 is the code for "the world
+    disagreed with a pre-registered prediction". A failed apparatus gate is not
+    a finding about the world. It means nothing on the page may be quoted, which
+    is INVALID, and the ledger must not file it as a result.
 
-    IT IS NOT FIXED HERE BECAUSE THE FIX IS NOT IN THIS SLICE.
-    `tests/test_alias_ablation.py` pins 1 for a failed ISA gate (:128), 1 for a
-    failed placebo gate (:137), 1 for a planted VALIDITY FAIL (:198) and 4 for a
-    planted UNKNOWN (:203), and that file is not owned by this slice; changing
-    `verdict` to `exit_codes.classify` without it turns a green suite red at
-    merge. The one-line remedy for whoever owns that file: replace those
-    assertions with the codes the shared table gives, then this body becomes
-    `return exit_codes.classify(g.scored() for g in gates)` and the three
-    VERDICT lines stay as prose.
+    THE THREE `VERDICT:` LINES STAY, and they are prose. They are what a human
+    reads, they are not what the driver greps, and the exit code no longer comes
+    from the branch that prints them: the same three sentences are chosen the
+    same way, and `classify` answers separately over the gates. One `EXIT:` line
+    beside them names the code in words, so the transcript says which of the
+    five states this run ended in without anyone counting brackets.
+
+    AN EMPTY GATE LIST RAISES `NoGatesScored` rather than returning DONE, which
+    is `classify`'s own rule and the right one here: `_analyse` only reaches
+    this call once records exist, so no gates at all means the gate builders
+    silently produced nothing, and "a check that examined nothing reports zero
+    failures" is this project's documented failure shape.
     """
     say()
     say("## gates")
@@ -2408,21 +2415,22 @@ def verdict(say, gates: list[Gate]) -> int:
     say()
     failed = [g for g in gates if g.ok is False]
     untested = [g for g in gates if g.ok is None]
+    code = exit_codes.classify(g.scored() for g in gates)
     if failed:
         say(f"VERDICT: REFUTED or VOID. {len(failed)} gate(s) failed: "
             + "; ".join(g.name for g in failed))
-        return 1
-    if untested:
+    elif untested:
         say(f"VERDICT: NOT TESTABLE. {len(untested)} gate(s) had no evidence: "
             + "; ".join(g.name for g in untested))
-        return 4
-    say("VERDICT: the ablation agrees with the refit. alpha measured without "
-        "the byte model,")
-    say("without a calibrated bandwidth and without the ridge lands inside the "
-        "refit's band,")
-    say("so the number the tile-corrected roofline rests on has independent "
-        "support.")
-    return 0
+    else:
+        say("VERDICT: the ablation agrees with the refit. alpha measured "
+            "without the byte model,")
+        say("without a calibrated bandwidth and without the ridge lands inside "
+            "the refit's band,")
+        say("so the number the tile-corrected roofline rests on has "
+            "independent support.")
+    say(f"EXIT: {exit_codes.describe(code)}")
+    return code
 
 
 # --------------------------------------------------------------------------
@@ -2667,10 +2675,17 @@ def main(argv: list[str] | None = None) -> int:
     report_mde(say, design)
     if any(g.ok is False for g in pre):
         say()
-        say("VERDICT: the design is refused before spending anything. Fix the "
+        say("REFUSED: the design is refused before spending anything. Fix the "
             "failed preflight gate above.")
         _save(out_dir, say, prov)
-        return 1
+        # REFUSED (2), NOT CLAIM_FAIL (1). It returned 1 until 2026-09-02, and 1
+        # means "measured; VALIDITY passed; a pre-registered claim did not" --
+        # a statement about the world, made by a run that had not started. The
+        # preflight gates print no RESULT line here on purpose (they are scored
+        # in `_analyse`, on a page that HAS timings), so the log carries none at
+        # all and `exit_codes.classify_text` raises `NoGatesScored`, which is
+        # the REFUSED shape. Nothing was spent and nothing was measured.
+        return exit_codes.REFUSED
 
     records: list[dict] = []
     if args.replay:
@@ -2706,13 +2721,20 @@ def main(argv: list[str] | None = None) -> int:
             fresh, _ = measure(design, args, out_dir, done)
         except CannotRunHere as exc:
             say()
-            say(f"CANNOT RUN HERE: {exc}")
+            say(f"REFUSED. CANNOT RUN HERE: {exc}")
             say("The plan, the prediction and the preflight above are still "
                 "valid and cost nothing;")
             say("re-run with --run on the pod, or --synthetic to exercise the "
                 "gates.")
             _save(out_dir, say, prov)
-            return 3
+            # REFUSED (2), NOT INVALID (3). It returned 3 until 2026-09-02, and
+            # 3 means "measured, then a VALIDITY gate failed: nothing quotable,
+            # and do NOT retry it". Nothing was measured here and there is no
+            # gate in the log to have failed; the missing thing is a GPU, which
+            # is a precondition, and the arm is free to retry on a box that has
+            # one. The driver treats the two oppositely, which is why they are
+            # two codes.
+            return exit_codes.REFUSED
         except KeyboardInterrupt:
             say()
             say("## aborted; reporting on what reached disk")
@@ -2756,9 +2778,17 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     timed = [r for r in records if r.get("ms")]
     if not timed:
         say()
-        say("VERDICT: NOT TESTABLE. Nothing was timed.")
+        say("REFUSED. NOT TESTABLE: nothing was timed, so no gate below could "
+            "have examined anything.")
         _save(out_dir, say, prov)
-        return 4
+        # REFUSED (2), NOT ERROR (4). It returned 4 until 2026-09-02, and 4 is
+        # "crashed; an exception the script did not plan for", which the ledger
+        # reads as RETRY with a traceback to go and find. This path is planned
+        # and there is no traceback: every record that reached disk carried no
+        # `ms`, so nothing was measured. No gate is scored below it either, so
+        # the log carries no RESULT line and `exit_codes.classify_text` raises
+        # `NoGatesScored`, which is the REFUSED shape.
+        return exit_codes.REFUSED
 
     throttled = [r["id"] for r in timed if r.get("throttled")]
     if throttled:

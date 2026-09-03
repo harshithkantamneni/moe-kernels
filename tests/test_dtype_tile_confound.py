@@ -960,13 +960,22 @@ def test_self_test_writes_a_report_and_a_summary_that_carry_the_refusals(
     assert "Decomposition" in text
 
 
-def test_e5m2_is_refused_rather_than_mapped_onto_e4m3(tmp_path):
-    with pytest.raises(SystemExit):
-        DTC.main(["--dtypes", "bf16,fp8_e5m2", "--dry-run", "--card", H200,
-                  "--out-dir", str(tmp_path)])
-    with pytest.raises(SystemExit):
-        DTC.main(["--dtypes", "fp8_e4m3", "--dry-run", "--card", H200,
-                  "--out-dir", str(tmp_path)])
+def test_e5m2_is_refused_rather_than_mapped_onto_e4m3(tmp_path, capsys):
+    """REFUSED (2), and it RETURNS rather than raising.
+
+    Both of these were `raise SystemExit(<str>)`, which sets `SystemExit.code`
+    to the STRING and leaves the interpreter to exit 1 -- CLAIM_FAIL, "measured;
+    a pre-registered claim was refuted" -- from a process that had done nothing
+    but parse its arguments. `pytest.raises(SystemExit)` passed on that happily
+    and said nothing about the integer, which is the only thing the driver sees.
+    """
+    for argv in (["--dtypes", "bf16,fp8_e5m2"], ["--dtypes", "fp8_e4m3"]):
+        code = DTC.main([*argv, "--dry-run", "--card", H200,
+                         "--out-dir", str(tmp_path)])
+        out = capsys.readouterr().out
+        assert code == exit_codes.REFUSED
+        assert "REFUSED" in out
+        assert exit_codes.parse_result_lines(out) == []
 
 
 # --------------------------------------------------------------------------
@@ -1556,3 +1565,77 @@ def test_the_mde_line_says_when_the_design_cannot_see_the_effect():
     assert "CANNOT resolve the effect" in planted
     assert "resolves the effect" in planted
     assert "CANNOT resolve" not in DTC.render_mde(args)
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. Only
+#: `--self-test` scores gates; everything else here measured nothing.
+OFF_GPU_MODES = [
+    (["--dry-run"], exit_codes.REFUSED),
+    # Every box VALIDITY gate is demoted to UNKNOWN by construction on a
+    # generated world, and UNKNOWN is not a pass, so a synthetic page is INVALID
+    # whatever its claims say. The `claims` line beside the exit is what makes
+    # the self test discriminating.
+    (["--self-test", "2.033"], exit_codes.INVALID),
+    # Two refusals that used to be `raise SystemExit(<str>)` and so exited 1 =
+    # CLAIM_FAIL, a measured refutation, from a process that had only parsed its
+    # arguments.
+    (["--dtypes", "bf16,fp8_e5m2", "--dry-run"], exit_codes.REFUSED),
+    (["--dtypes", "fp8_e4m3", "--dry-run"], exit_codes.REFUSED),
+    # No cell survives planning, so there is nothing to buy the box for.
+    (["--tokens", "1", "--dry-run"], exit_codes.REFUSED),
+    # The measuring path on a machine with no CUDA and no vLLM.
+    ([], exit_codes.REFUSED),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+    """
+    rc = DTC.main([*argv, "--card", H200, "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code, out
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")
+
+
+def test_a_page_whose_arms_all_failed_prints_no_result_line_and_refuses(
+        tmp_path, monkeypatch, capsys):
+    """THE VACUOUS PAGE, PLANTED, because no laptop reaches it on its own.
+
+    Zero arms produced a timing, so every gate was built over nothing. The run
+    used to print the whole gate table WITH its RESULT lines and then return
+    REFUSED: `classify_text` read INVALID out of gates that had examined
+    nothing, and the process said "nothing was measured". That is the
+    log-versus-exit-code split `moe.bench.exit_codes` exists to close, in the
+    file whose header says it cannot happen. The gate table still prints -- a
+    reader wants to see which gates were built -- with `with_result=False`.
+    """
+    monkeypatch.setattr(DTC, "synthetic_results", lambda *a, **kw: {})
+    rc = DTC.main(["--self-test", "2.033", "--card", H200,
+                   "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
+    assert "zero arms produced a timing" in out
+    # The human table is still there; only the greppable line is withheld.
+    assert "## Gates" in out and "VALIDITY" in out

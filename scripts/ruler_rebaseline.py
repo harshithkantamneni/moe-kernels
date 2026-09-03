@@ -91,6 +91,14 @@ CSVs and committed yaml and nothing else, so it is byte-identical on any machine
 and never touches the device. Both need `torch` IMPORTABLE, because
 `moe.bench.calibrate` imports it for the measurement half of the module, and
 neither needs a CUDA device. Both are the reviewable half.
+
+THE TWO OFF-GPU MODES END IN DIFFERENT CODES ON PURPOSE. `--corpus-only` SCORES
+gates 4 and 5 over the committed rows, prints their RESULT lines and exits
+whatever `exit_codes.classify` makes of them, which on the shipped corpus is
+CLAIM_FAIL. `--dry-run` scores nothing, prints no RESULT line and exits REFUSED
+(2); it returned the bare literal 0 until 2026-09-02, one paragraph after
+printing "Nothing was measured", and DONE in the shared table means "measured;
+every VALIDITY and CLAIM gate PASSED".
 """
 from __future__ import annotations
 
@@ -1439,7 +1447,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="price the published rows and stop. Needs no GPU and "
                          "is byte-identical on every machine")
     ap.add_argument("--dry-run", action="store_true",
-                    help="print the plan, the predictions and the cost, then stop")
+                    help="print the plan, the predictions and the cost, then "
+                         f"stop. Scores no gate, so it exits "
+                         f"{exit_codes.REFUSED} REFUSED; --corpus-only is the "
+                         "off-GPU mode that does score")
     ap.add_argument("--buffer-gb", type=float, default=8.0)
     ap.add_argument("--gemm-n", type=int, default=8192)
     ap.add_argument("--ceiling", default=DEFAULT_CEILING,
@@ -1509,9 +1520,37 @@ def main(argv=None) -> int:
         for label, path in paths.items():
             print(f"  {label:<14}{path}  "
                   f"{'IGNORED by git' if git_check_ignore(path) else 'tracked'}")
-        print("\nNothing was measured. --corpus-only prices the published rows "
-              "off GPU; the bare command runs the pod measurement.")
-        return 0
+        # REFUSED (2) AND NOT THE BARE LITERAL 0. This branch printed "Nothing
+        # was measured." and then returned DONE, whose entry in the shared table
+        # reads "measured; every VALIDITY and CLAIM gate PASSED" -- two
+        # sentences apart, in the same eleven lines. It also scored no gate, so
+        # it prints no RESULT line, and `exit_codes.classify_text` over this log
+        # raises `NoGatesScored`, which that module documents as what a REFUSED
+        # log looks like from there. The log and the code now say the same
+        # thing, which is the whole point of there being one table.
+        #
+        # THE REPOSITORY DISAGREED WITH ITSELF AND THIS IS THE SIDE THAT WON.
+        # On 2026-09-02 six scripts returned DONE from `--dry-run` --
+        # `bm128_depth`, `bm128_roofline`, `bn_decomposition`, `tile_cap_test`,
+        # and `block_m_crossing_sweep` and this file as the bare literal 0 --
+        # and seven returned REFUSED (`calibrate_hardware`,
+        # `dtype_tile_confound`, `memory_branch_anchor`, `occupancy_vs_swizzle`,
+        # `rescore_published_reports`, `span_extent_separation`, `tile_sweep`).
+        # REFUSED is the only one of the two that a log can be checked against.
+        # The driver re-queues neither: in `--dry` mode `dry_state` maps 0 to
+        # PLANNED and 2 to PLAN_REFUSED and `arm` retries neither state.
+        print("\n".join(["", "=" * 78,
+                         "REFUSED. Nothing was measured and nothing was "
+                         "written.",
+                         "  reason: --dry-run was given",
+                         "  No gate was scored, so no RESULT line was printed "
+                         "and none of the above",
+                         "  is a result. --corpus-only prices the published "
+                         "rows off GPU and DOES",
+                         "  score gates 4 and 5; the bare command runs the pod "
+                         "measurement.",
+                         "=" * 78]))
+        return exit_codes.REFUSED
 
     cal = None
     if not args.corpus_only:

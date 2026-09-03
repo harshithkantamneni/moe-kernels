@@ -41,6 +41,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+
 
 def _load_script():
     """Load the script by path. `scripts/` is not a package and never has been.
@@ -596,9 +598,20 @@ def test_rerunning_the_same_command_lands_in_the_same_directory(tmp_path):
     assert len(list(tmp_path.iterdir())) == 1
 
 
-def test_dropping_either_side_of_the_comparison_is_refused(tmp_path):
-    with pytest.raises(SystemExit):
-        TVF.main(["--arms", "native,tuned", "--out-dir", str(tmp_path)])
+def test_dropping_either_side_of_the_comparison_is_refused(tmp_path, capsys):
+    """REFUSED (2), and it RETURNS rather than raising.
+
+    This was `raise SystemExit(<str>)`, which sets `SystemExit.code` to the
+    STRING and leaves the interpreter to exit 1 -- CLAIM_FAIL, "measured; a
+    pre-registered claim was refuted" -- from a process that had done nothing
+    but parse its arguments. `pytest.raises(SystemExit)` passed on that happily
+    and said nothing about the integer, which is the only thing the driver sees.
+    """
+    code = TVF.main(["--arms", "native,tuned", "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == exit_codes.REFUSED
+    assert "REFUSED" in out
+    assert exit_codes.parse_result_lines(out) == []
 
 
 def test_an_unexpected_vllm_version_is_called_out_rather_than_assumed_away():
@@ -709,3 +722,89 @@ def test_a_report_with_nothing_measured_refuses_to_invent_a_headline():
     text = TVF.render_report("", got, TVF.build_gates(got))
     assert got.headline is None
     assert "That is not a null result." in text
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. This file has
+#: no synthetic world, so every one of them measured nothing and every one of
+#: them is REFUSED; the scored half is checked below, on a planted page.
+OFF_GPU_MODES = [
+    (["--plan-only"], exit_codes.REFUSED),
+    # The measuring path on a machine with no CUDA and no vLLM.
+    ([], exit_codes.REFUSED),
+    # A refusal that was `raise SystemExit(<str>)` until 2026-09-02 and so
+    # exited 1 = CLAIM_FAIL, a measured refutation, from a process that had only
+    # parsed its arguments.
+    (["--arms", "native,tuned"], exit_codes.REFUSED),
+    # No shape in --models has a tuned config on this card, so there is no tuned
+    # side to price the ladder against.
+    (["--card", "NVIDIA GeForce RTX 4090"], exit_codes.REFUSED),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+    """
+    rc = TVF.main([*argv, "--out-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code, out
+    # No RESULT line, so `classify_text` raises `NoGatesScored`, which
+    # `moe.bench.exit_codes` documents as what a REFUSED log looks like from
+    # there. The two agree, and the check is the pair rather than the call.
+    assert exit_codes.parse_result_lines(out) == []
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(out)
+    assert rc == exit_codes.REFUSED
+
+
+def _planted(*verdicts) -> list:
+    """One gate per `(token, passed)` pair, rendered by the shipped `Gate`.
+
+    Built from the shipped class rather than a stand-in so `kind`, `verdict`,
+    `result_line` and `scored` are the SAME code the pod run uses. `G0` to `G3`
+    are VALIDITY by the class's own rule and `G4` upwards are CLAIM.
+    """
+    return [TVF.Gate(f"G{n} planted", "prediction", "rule", passed, "observed")
+            for n, passed in verdicts]
+
+
+@pytest.mark.parametrize("gates,code", [
+    (_planted((0, True), (4, True)), exit_codes.DONE),
+    # A CLAIM that did not pass is a RESULT: the world disagreed with a
+    # pre-registered prediction, and the arm is finished.
+    (_planted((0, True), (4, False)), exit_codes.CLAIM_FAIL),
+    # UNKNOWN counts against the gate, so a claim that could not be evaluated
+    # was not established either.
+    (_planted((0, True), (4, None)), exit_codes.CLAIM_FAIL),
+    # A VALIDITY failure voids the page whatever the claims said.
+    (_planted((0, False), (4, True)), exit_codes.INVALID),
+    (_planted((0, None), (4, False)), exit_codes.INVALID),
+])
+def test_a_scored_page_returns_what_its_own_result_lines_imply(gates, code):
+    """The other half of the same property, on a planted page.
+
+    `main` cannot reach its gates without a box, so the seam is the pair
+    `render_gates` / `classify` over one gate list: what the log says and what
+    the process returns are computed from the SAME objects, and this asserts
+    they land on the same verdict for every branch of the table. The five rows
+    also pin the split this file had no field for until 2026-09-02, when it
+    exited 1 for a failed gate of either kind.
+    """
+    printed = TVF.render_gates(gates)
+    rc = exit_codes.classify(g.scored() for g in gates)
+    assert rc == code, printed
+    assert exit_codes.classify_text(printed) == rc

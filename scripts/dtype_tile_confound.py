@@ -206,6 +206,16 @@ invalid", so a run that had spent nothing was logged as a run whose cells must
 not be quoted. Every scored gate also prints one `RESULT:` line, and
 `exit_codes.classify` derives the code from those same gates, so the log and
 the exit code cannot disagree.
+
+TWO WAYS THEY STILL COULD, BOTH CLOSED ON 2026-09-02. Four refusals were
+`raise SystemExit(<str>)`, which sets `SystemExit.code` to the STRING and
+leaves the interpreter to exit 1 -- an unreadable calibration, an `--dtypes`
+this file will not map, a missing `bf16` denominator and an absent
+`override_config` all announced themselves as MEASURED REFUTATIONS from runs
+that had timed nothing. And the vacuous page -- zero arms produced a timing --
+printed the whole gate table WITH its RESULT lines and then returned REFUSED,
+so `classify_text` read a verdict out of gates that had examined nothing. The
+gates still print there; the greppable line does not.
 """
 from __future__ import annotations
 
@@ -1467,6 +1477,20 @@ class Store:
 # The GPU half.
 # --------------------------------------------------------------------------
 
+class OverrideHookMissing(RuntimeError):
+    """vLLM is importable and exposes no `override_config`. Nothing can be forced.
+
+    A NAMED REFUSAL AND NOT A `SystemExit`, and the difference is an exit code
+    that used to be a lie. `find_vllm_hooks` raised `SystemExit(<str>)`, which
+    sets `SystemExit.code` to the STRING and leaves the interpreter to exit 1 --
+    CLAIM_FAIL in this repository's one table, "measured; VALIDITY passed; a
+    pre-registered claim did not" -- from a run that had not timed a single
+    cell. The session driver would have ledgered the arm FINISHED with a finding
+    in it. Nothing was measured, so it is REFUSED, and `main` is where that is
+    returned.
+    """
+
+
 def find_vllm_hooks():
     """vLLM's `override_config`, and `get_config` beside it if it is there.
 
@@ -1488,7 +1512,7 @@ def find_vllm_hooks():
         fn = getattr(module, "override_config", None)
         if fn is not None:
             return fn, getattr(module, "get_config", None), name
-    raise SystemExit(
+    raise OverrideHookMissing(
         "vLLM is importable but exposes no override_config in any of "
         f"{VLLM_CONFIG_MODULES}. Without it every arm would run the native "
         "config and the whole comparison would be vacuous.")
@@ -2406,13 +2430,15 @@ class Gate:
     def render(self, with_result: bool = True) -> str:
         """The human block, with the `RESULT:` line on top unless told otherwise.
 
-        `with_result=False` is for `--dry-run`, which DECIDES C1 and C2 off GPU
-        but measures nothing and therefore exits REFUSED. A REFUSED log that
-        carried RESULT lines would let `exit_codes.classify_text` recompute DONE
-        from two passing claims and disagree with the code the process returned,
-        which is precisely the log-versus-exit-code split `exit_codes` exists to
-        close. The verdicts are still printed; they are prose there, and the
-        banner says so.
+        `with_result=False` has two callers and one reason. `--dry-run` DECIDES
+        C1 and C2 off GPU but measures nothing, and the vacuous page -- zero
+        arms produced a timing -- built every gate over nothing at all. Both
+        exit REFUSED, and a REFUSED log carrying RESULT lines would let
+        `exit_codes.classify_text` recompute a verdict out of gates that read
+        nothing and disagree with the code the process returned, which is
+        precisely the log-versus-exit-code split `exit_codes` exists to close.
+        The verdicts are still printed; they are prose there, and the banner
+        says so.
         """
         out = ([self.result_line()] if with_result else [])
         out += [f"[{self.verdict:7s}] {self.kind:8s} {self.name}  {self.prediction}",
@@ -2939,8 +2965,17 @@ def final_exit(gates: list[Gate]) -> int:
     return exit_codes.classify(g.scored() for g in gates)
 
 
-def render_gate_summary(gates: list[Gate]) -> str:
-    lines = [g.render() for g in gates]
+def render_gate_summary(gates: list[Gate], with_result: bool = True) -> str:
+    """The gate table, with or without the one line the driver greps.
+
+    `with_result=False` is for the vacuous page: zero arms produced a timing, so
+    every gate below examined nothing and the run exits REFUSED. A REFUSED log
+    carrying RESULT lines would let `exit_codes.classify_text` recompute DONE or
+    INVALID out of gates that read nothing and disagree with the code the
+    process returned, which is the split this module was adopted to end. The
+    human table stays: a reader still wants to see which gates were built.
+    """
+    lines = [g.render(with_result=with_result) for g in gates]
     counts = {v: sum(1 for g in gates if g.verdict == v)
               for v in (PASS, FAIL, UNKNOWN)}
     validity_failed = [g.name for g in gates
@@ -3458,13 +3493,18 @@ def main(argv: list[str] | None = None) -> int:
     tokens = sorted({int(t) for t in args.tokens.split(",") if t})
     dtypes = [d for d in args.dtypes.split(",") if d]
     unknown = [d for d in dtypes if d not in DTYPES]
+    # BOTH OF THESE RETURN REFUSED RATHER THAN RAISING `SystemExit(<str>)`,
+    # which sets `SystemExit.code` to the string and exits 1 -- CLAIM_FAIL, a
+    # measured refutation -- from a run that had not parsed its grid yet.
     if unknown:
-        raise SystemExit(f"--dtypes accepts only {DTYPES}; got {unknown}. e5m2 "
-                         "under an e4m3 flag would run and compute a different "
-                         "layer, so it is refused rather than mapped.")
+        print(f"REFUSED: --dtypes accepts only {DTYPES}; got {unknown}. e5m2 "
+              "under an e4m3 flag would run and compute a different layer, so "
+              "it is refused rather than mapped.")
+        return EXIT_NOT_MEASURED
     if BF16 not in dtypes:
-        raise SystemExit("--dtypes must include bf16: it is the denominator of "
-                         "every ratio on the page.")
+        print("REFUSED: --dtypes must include bf16: it is the denominator of "
+              "every ratio on the page.")
+        return EXIT_NOT_MEASURED
 
     env = detect_environment()
     try:
@@ -3478,11 +3518,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         ceilings = load_ceilings(args.calibration)
     except (FileNotFoundError, ValueError, KeyError, UnverifiedHardware) as exc:
-        raise SystemExit(
-            f"could not read ceilings from moe/bench/hardware/"
-            f"{args.calibration}.yaml: {exc}\nEvery prediction on this page is "
-            f"computed from a measured bandwidth and TWO measured peaks, and "
-            f"there is no default to fall back to.") from exc
+        # REFUSED, not `SystemExit(<str>)`. A missing calibration is a
+        # precondition and nothing has been measured; exiting 1 said a claim had
+        # been refuted.
+        print(f"REFUSED: could not read ceilings from moe/bench/hardware/"
+              f"{args.calibration}.yaml: {exc}")
+        print("Every prediction on this page is computed from a measured "
+              "bandwidth and TWO measured")
+        print("peaks, and there is no default to fall back to.")
+        return EXIT_NOT_MEASURED
 
     # BEFORE anything reads a peak. Every prediction, the cost estimate and the
     # activation band all call `ceilings.peak(dtype)`, which refuses rather than
@@ -3742,7 +3786,14 @@ def main(argv: list[str] | None = None) -> int:
                 "=" * 72]))
             return EXIT_NOT_MEASURED
         print(f"\n{fp8_note}")
-        hooks = find_vllm_hooks()
+        try:
+            hooks = find_vllm_hooks()
+        except OverrideHookMissing as exc:
+            print("\n".join(["", "=" * 72,
+                             "REFUSED. Nothing was measured.",
+                             f"  OverrideHookMissing: {exc}",
+                             "=" * 72]))
+            return EXIT_NOT_MEASURED
         print(f"override hook: {hooks[2]}.override_config"
               + ("" if hooks[1] else "   (no get_config in that module)"))
 
@@ -3859,15 +3910,25 @@ def main(argv: list[str] | None = None) -> int:
     print("\n" + render_crossings(analysis, dtypes))
     print("\n" + render_headline(analysis, gates))
     print("\n## Gates\n")
-    print(render_gate_summary(gates))
+    # THE VACUITY CHECK DECIDES WHETHER THE RESULT LINES ARE PRINTED AT ALL, and
+    # it is asked BEFORE the table rather than after it. Until 2026-09-02 the
+    # table was printed with its RESULT lines and the return below was REFUSED,
+    # so a log whose gates classified to INVALID came back from a process that
+    # said "nothing was measured": `exit_codes.classify_text` and the exit code
+    # disagreed, in the file whose header says they cannot. Zero timed arms
+    # means every gate examined nothing, which is a refusal and not a page.
+    vacuous = analysis.timed_arms == 0
+    print(render_gate_summary(gates, with_result=not vacuous))
     if stopped:
         print(f"\nPARTIAL RUN: {stopped}.")
     print(f"\nEVERYTHING IS SAVED TO {out_dir}")
     print(f"  rows    {csv_path}\n  report  {report_path}\n"
           f"  summary {out_dir / 'summary.json'}")
-    if analysis.timed_arms == 0:
-        print("\nNON-VACUITY: zero arms produced a timing, so every gate above "
-              "examined nothing.")
+    if vacuous:
+        print("\nREFUSED. NON-VACUITY: zero arms produced a timing, so every "
+              "gate above examined nothing")
+        print("and none of them printed a RESULT line. Nothing here is a "
+              "result.")
         return EXIT_NOT_MEASURED
     if args.self_test is not None:
         print(f"\nNON-VACUITY: {analysis.timed_arms} SYNTHETIC timings were "

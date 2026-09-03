@@ -583,7 +583,11 @@ def test_the_self_test_is_hermetic_and_does_not_read_this_machine(tmp_path, monk
 
 
 def test_the_run_writes_where_it_said_and_the_dry_run_writes_nothing(tmp_path, capsys):
-    assert CAP.main(["--dry-run", "--out", str(tmp_path)]) == 0
+    # REFUSED (2): a plan measured nothing, and DONE reads "measured; every
+    # VALIDITY and CLAIM gate PASSED". It scores no gate, so it prints no RESULT
+    # line either, and `classify_text` over a log with none raises
+    # `NoGatesScored` -- which is what a REFUSED log looks like from there.
+    assert CAP.main(["--dry-run", "--out", str(tmp_path)]) == 2
     assert list(tmp_path.iterdir()) == []
     plan = capsys.readouterr().out
     assert "estimated GPU time" in plan
@@ -594,14 +598,15 @@ def test_the_run_writes_where_it_said_and_the_dry_run_writes_nothing(tmp_path, c
 
 
 def test_exit_codes_separate_a_void_run_from_a_falsified_claim(tmp_path):
-    # `moe.bench.exit_codes` owns the table now. DONE (0): the page is readable
-    # whatever the claims said, because a falsified pre-registered claim is a
-    # result and not a retry. INVALID (3), not 1: a validity gate did not pass
-    # AFTER measuring, so nothing may be quoted. REFUSED (2): nothing was
-    # measured. Confusing the first two is how a broken run gets published as a
-    # negative result; confusing the last two is how a free refusal gets queued
-    # for a second pod.
-    assert CAP.main(["--self-test", "0.10", "--out", str(tmp_path / "b")]) == 0
+    # `moe.bench.exit_codes` owns the table now. CLAIM_FAIL (1): the page is
+    # readable and the claim did not hold, which is a RESULT and not a retry --
+    # 1 was folded into 0 until 2026-09-02, so the log carried a failed CLAIM
+    # and the process said every gate passed. INVALID (3), not 1: a validity
+    # gate did not pass AFTER measuring, so nothing may be quoted. REFUSED (2):
+    # nothing was measured. Confusing the first two is how a broken run gets
+    # published as a negative result; confusing the last two is how a free
+    # refusal gets queued for a second pod.
+    assert CAP.main(["--self-test", "0.10", "--out", str(tmp_path / "b")]) == 1
     assert CAP.main(["--self-test", "0.10", "--r-max", "512",
                      "--out", str(tmp_path / "c")]) == 3
     assert CAP.main(["--cap-tile", "8", "--dry-run",
@@ -876,7 +881,7 @@ def test_a_synthetic_report_says_so_in_the_only_machine_readable_artefact(tmp_pa
     that separates it from a pod run that measured the retracted world.
     """
     out = tmp_path / "r"
-    assert CAP.main(["--self-test", "0.10", "--out", str(out)]) == 0
+    assert CAP.main(["--self-test", "0.10", "--out", str(out)]) == 1
     payload = json.loads(next(out.rglob("report.json")).read_text())
     assert payload["synthetic"] is True
     assert payload["card"] == CAP.NO_CARD_SLUG
@@ -896,7 +901,7 @@ def test_the_self_test_ridge_is_pinned_and_does_not_read_this_machine(monkeypatc
     def absurd(_args, *, synthetic):
         raise AssertionError("a self-test must not resolve a ridge")
     monkeypatch.setattr(SWEEP, "resolve_ridge", absurd)
-    assert CAP.main(["--self-test", "0.558", "--dry-run"]) == 0
+    assert CAP.main(["--self-test", "0.558", "--dry-run"]) == 2
 
 
 # --------------------------------------------------------------------------

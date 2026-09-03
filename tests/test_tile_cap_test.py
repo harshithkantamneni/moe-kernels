@@ -466,26 +466,34 @@ def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does(
 
 @pytest.mark.parametrize("alpha,code", [
     (0.558, exit_codes.DONE),
-    (0.10, exit_codes.DONE),          # CLAIM_FAIL, reported as DONE
+    (0.10, exit_codes.CLAIM_FAIL),
 ])
 def test_the_log_recomputes_the_code_the_process_returned(alpha, code,
                                                           tmp_path, capsys):
     """`classify_text` over the RESULT lines against the returned integer.
 
-    They may differ in exactly one direction and for one reason: without
-    `--fail-on-gate` a CLAIM_FAIL is REPORTED as DONE. Anything else is the
-    defect `moe.bench.exit_codes` is named against -- a script printing one
-    thing and exiting another.
+    THEY MAY NOT DIFFER AT ALL ANY MORE. This test used to accept one
+    disagreement -- without `--fail-on-gate` a CLAIM_FAIL was REPORTED as DONE
+    -- and the alpha=0.10 world is where it fired: nine RESULT lines carrying a
+    failed CLAIM, and a process saying "measured; every gate PASSED". That is
+    the defect `moe.bench.exit_codes` is named against, and an accepted
+    exception to a rule is not the rule. The fold is retired.
     """
     rc = CAP.main(["--self-test", str(alpha), "--out", str(tmp_path)])
     assert rc == code
-    implied = exit_codes.classify_text(capsys.readouterr().out)
-    assert implied in (rc, exit_codes.CLAIM_FAIL)
+    assert exit_codes.classify_text(capsys.readouterr().out) == rc
 
 
-def test_fail_on_gate_returns_claim_fail_where_the_default_returns_done(tmp_path):
+def test_fail_on_gate_is_retired_and_changes_no_code(tmp_path):
+    """The flag is accepted so an old driver line still parses, and ignored.
+
+    A falsified pre-registered claim is a RESULT and CLAIM_FAIL is already the
+    code that says so: 1 is in `FINISHED_CODES` and `ledger_state(1)` is
+    "CLAIM_FAIL", so the ledger never retries it. Folding it into 0 protected
+    nothing and made the log disagree with the process.
+    """
     assert CAP.main(["--self-test", "0.10",
-                     "--out", str(tmp_path / "a")]) == exit_codes.DONE
+                     "--out", str(tmp_path / "a")]) == exit_codes.CLAIM_FAIL
     assert CAP.main(["--self-test", "0.10", "--fail-on-gate",
                      "--out", str(tmp_path / "b")]) == exit_codes.CLAIM_FAIL
 
@@ -576,3 +584,62 @@ def test_the_mde_shrinks_with_depth_and_grows_with_the_spread():
 def test_a_single_tread_has_no_slope_and_says_so():
     with pytest.raises(CAP.Unmeasurable):
         CAP.slope_relative_se([1.0], 0.015)
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the whole exit-code repair: the log and the process
+# say the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. A plan and a
+#: refusal score no gate and are REFUSED; every `--self-test` world scores the
+#: real gates and takes whatever `classify` makes of them.
+OFF_GPU_MODES = [
+    (["--dry-run", "--capability", "9.0"], exit_codes.REFUSED),
+    (["--dry-run", "--plant-noise", "0", "--capability", "9.0"],
+     exit_codes.REFUSED),
+    # A PLAN WHOSE PINNED TILE CANNOT PHYSICALLY RUN. Refused before the cost is
+    # even printed, and free.
+    (["--cap-tile", "8", "--dry-run", "--capability", "9.0"],
+     exit_codes.REFUSED),
+    # THE TWO TILES ORDERED BACKWARDS: every comparison below would read the
+    # wrong way round, so the run never starts.
+    (["--cap-tile", "256", "--control", "16", "--dry-run",
+      "--capability", "9.0"], exit_codes.REFUSED),
+    (["--self-test", "0.558"], exit_codes.DONE),
+    (["--self-test", "0.10"], exit_codes.CLAIM_FAIL),
+    # A world swept too shallow to decide: a VALIDITY gate does not pass AFTER
+    # the cells exist, so the page is void rather than the claim refuted.
+    (["--self-test", "0.10", "--r-max", "512"], exit_codes.INVALID),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Two of these rows used to break it. `--dry-run` returned DONE, which reads
+    "measured; every VALIDITY and CLAIM gate PASSED", from a run that measured
+    nothing and wrote nothing. `--self-test 0.10` printed nine RESULT lines
+    carrying a failed CLAIM and returned DONE, because `--fail-on-gate` folded a
+    claim failure into 0.
+    """
+    rc = CAP.main([*argv, "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")

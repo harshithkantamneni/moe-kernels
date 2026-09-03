@@ -674,24 +674,40 @@ def test_the_ruler_dry_run_prices_what_it_could_see_and_not_only_what_it_costs()
 
 def test_the_ruler_dry_run_prints_the_mde_beside_the_cost(tmp_path, capsys):
     ruler = _load("ruler_rebaseline")
-    assert ruler.main(["--dry-run", "--out", str(tmp_path)]) == 0
+    # REFUSED (2), not the bare literal 0 this returned until 2026-09-02, one
+    # paragraph after printing "Nothing was measured". A plan scores no gate, so
+    # it prints no RESULT line, and `classify_text` over a log with none raises
+    # `NoGatesScored`, which is the REFUSED shape.
+    assert ruler.main(["--dry-run", "--out", str(tmp_path)]) == exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "estimated GPU time" in out
     assert "MDE." in out
     assert f"{ruler.MEASURED_SPREAD_MEDIAN:.2%}" in out
 
 
-@pytest.mark.parametrize("module", ("ruler_rebaseline", "dtype_tile_confound"))
+@pytest.mark.parametrize("module", ("ruler_rebaseline", "dtype_tile_confound",
+                                   "bm128_depth", "tile_cap_test",
+                                   "alias_ablation", "group_m_alpha_sweep",
+                                   "tuned_vs_fallback"))
 def test_no_script_folds_a_claim_failure_into_done(module):
-    """The one defect `exit_codes` exists to detect, in the two files that had
-    it, checked on the source because the alternative is a pod.
+    """The one defect `exit_codes` exists to detect, in the files that had it,
+    checked on the source because the alternative is a pod.
 
-    Both computed `rc = classify(...)` and then `return DONE` when rc was
-    CLAIM_FAIL and a flag was absent, under a comment asserting that
-    `classify_text` on the log recomputes the code the process returned. The
-    masking was obsolete anyway: 1 is in `FINISHED_CODES` and `ledger_state(1)`
-    is "CLAIM_FAIL", so the ledger already reads it as a result rather than a
-    retry.
+    `ruler_rebaseline` and `dtype_tile_confound` both computed
+    `rc = classify(...)` and then `return DONE` when rc was CLAIM_FAIL and a
+    flag was absent, under a comment asserting that `classify_text` on the log
+    recomputes the code the process returned. The masking was obsolete anyway: 1
+    is in `FINISHED_CODES` and `ledger_state(1)` is "CLAIM_FAIL", so the ledger
+    already reads it as a result rather than a retry.
+
+    `bm128_depth` and `tile_cap_test` joined the list on 2026-09-02, when their
+    `--fail-on-gate` folds were retired for the same reason and with LIVE
+    off-GPU instances to show for it: `bm128_depth --audit` over the published
+    corpus prints `RESULT: CLAIM C1 FAIL` and returned DONE, and
+    `tile_cap_test --self-test 0.10` prints nine lines that `classify_text`
+    reads as CLAIM_FAIL and returned DONE. `alias_ablation`,
+    `group_m_alpha_sweep` and `tuned_vs_fallback` never had the fold and are
+    here so that a future edit cannot add one.
     """
     source = (ROOT / "scripts" / f"{module}.py").read_text()
     assert "return exit_codes.DONE" not in source, (

@@ -567,8 +567,14 @@ def test_the_cost_estimate_is_zero_only_when_nothing_will_be_measured():
 
 def test_dry_run_prints_every_prediction_and_writes_nothing(tmp_path, capsys):
     out = tmp_path / "nowhere"
-    assert RB.main(["--dry-run", "--out", str(out)]) == 0
+    # REFUSED (2), and it was the bare literal 0 until 2026-09-02 -- eleven
+    # lines after this branch printed "Nothing was measured", and DONE in the
+    # shared table reads "measured; every VALIDITY and CLAIM gate PASSED". No
+    # gate is scored here, so no RESULT line is printed, and `classify_text`
+    # over a log with none raises `NoGatesScored`: the REFUSED shape.
+    assert RB.main(["--dry-run", "--out", str(out)]) == exit_codes.REFUSED
     printed = capsys.readouterr().out
+    assert exit_codes.parse_result_lines(printed) == []
     for pred in RB.PREDICTIONS:
         assert pred.claim in printed
     assert "estimated GPU time" in printed
@@ -761,3 +767,51 @@ def test_a_ramped_run_fails_gate_two_even_when_the_numbers_match():
         [bw("read_reduce", 4469.6), bw("copy", 4300.7),
          bw("triad", 4374.8, start=1980, end=1400), bw("write", 4682.4)])
     assert RB.gate_2_bandwidth(cal).verdict == RB.FAIL
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. `--corpus-only`
+#: is the one that SCORES: it reads committed CSVs and committed yaml, prints
+#: gates 4 and 5, and C5 is refuted by the shipped corpus. The other two score
+#: nothing.
+OFF_GPU_MODES = [
+    (["--dry-run"], exit_codes.REFUSED),
+    (["--corpus-only"], exit_codes.CLAIM_FAIL),
+    # THE MEASURING PATH WITH NO CARD NAMED. Gates 1 to 3 are scored against
+    # THIS card's registered constants and both reports are written with
+    # `write_text`, so an unnamed card would truncate another card's directory.
+    ([], exit_codes.REFUSED),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    `--dry-run` used to break it by returning the bare literal 0 eleven lines
+    after printing "Nothing was measured", and DONE reads "measured; every
+    VALIDITY and CLAIM gate PASSED".
+    """
+    rc = RB.main([*argv, "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")

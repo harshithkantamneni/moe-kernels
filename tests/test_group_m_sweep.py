@@ -36,6 +36,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import exit_codes  # noqa: E402
+
 
 def _load(name: str, filename: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / filename)
@@ -149,11 +151,28 @@ def test_a_numpy_false_is_a_failed_gate_and_not_a_passing_one():
     gate = GM.Gate("planted", np.bool_(False), "detail")
     assert gate.ok is False
     assert gate.label == "FAIL"
-    assert GM.verdict(lambda *a: None, [gate]) == 1
+    # INVALID (3): `planted` is not a preflight name, so `kind` reads VALIDITY,
+    # and a failed apparatus gate voids the page rather than refuting a
+    # prediction. `verdict` chose its own codes until 2026-09-02 and answered 1
+    # for any failed gate whatever its kind; it is `exit_codes.classify` over
+    # the same gate objects that printed the RESULT lines now. The numpy bool is
+    # still what this test is about: without `__post_init__`'s coercion the
+    # `g.ok is False` scan below still misses the gate, and the printed sentence
+    # would say PREDICTION HELD over a table with a FAIL in it.
+    assert GM.verdict(lambda *a: None, [gate]) == exit_codes.INVALID
 
 
 def test_a_gate_with_no_evidence_is_not_a_refutation():
-    assert GM.verdict(lambda *a: None, [GM.Gate("x", None, "no data")]) == 4
+    """UNKNOWN counts against the gate and is still not CLAIM_FAIL.
+
+    A VALIDITY gate that could not decide leaves the apparatus's soundness
+    unshown, which is exactly as unquotable as a failure: INVALID (3). What it
+    is not is 1, "a pre-registered claim was refuted" -- nor the 4 this used to
+    answer, which is ERROR, "crashed; an exception nobody planned for", and
+    which the ledger reads as RETRY with a traceback to go and find.
+    """
+    assert GM.verdict(lambda *a: None,
+                      [GM.Gate("x", None, "no data")]) == exit_codes.INVALID
 
 
 # --------------------------------------------------------------------------
@@ -365,7 +384,13 @@ def test_a_compute_bound_design_is_refused_before_anything_is_spent(
                             "--routings", "uniform"], tmp_path, monkeypatch, capsys)
     assert "[FAIL] regime: every cell is memory bound" in out
     assert "refused before spending anything" in out
-    assert code == 1
+    # REFUSED (2), not CLAIM_FAIL (1). Nothing was spent, which is what the
+    # printed sentence says; 1 means "measured; VALIDITY passed; a
+    # pre-registered claim did not". The preflight gates print no RESULT line on
+    # this path -- they are scored in `_analyse`, on a page that HAS timings --
+    # so the log carries none at all, and that is the REFUSED shape.
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
 
 
 def test_one_token_count_cannot_identify_alpha_and_the_ladder_can(default_plan):
@@ -390,10 +415,20 @@ def test_one_token_count_cannot_identify_alpha_and_the_ladder_can(default_plan):
 # surviving a pod: resume, abort, and a message when there is no GPU
 # --------------------------------------------------------------------------
 
-def test_a_run_without_a_gpu_says_so_and_exits_three(tmp_path, monkeypatch, capsys):
+def test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid(
+        tmp_path, monkeypatch, capsys):
+    """REFUSED (2), not INVALID (3).
+
+    3 tells the driver "measured, then a VALIDITY gate failed: there is a
+    directory of cells that must not be scored, and do NOT retry this arm".
+    Nothing was measured, there is no directory, and the arm is free to retry on
+    a box that has a GPU. The two codes are treated oppositely, which is why
+    they are two codes.
+    """
     code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
     assert "CANNOT RUN HERE" in out
-    assert code == 3
+    assert code == exit_codes.REFUSED
+    assert exit_codes.parse_result_lines(out) == []
 
 
 def test_the_override_probe_blames_an_absent_vllm_rather_than_the_hook():
@@ -503,3 +538,65 @@ def test_rows_that_predate_the_correctness_check_answer_not_measured(default_pla
     for record in records:
         record.pop("matches_reference")
     assert GM.swizzle_integrity_gate(records).ok is None
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the exit-code repair: the log and the process say
+# the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. `no_gpu` marks
+#: the row that forces `measure` to refuse: on a pod there IS a CUDA device, so
+#: a test whose premise is "this machine has no GPU" stops testing anything on
+#: the only machine the code runs on.
+OFF_GPU_MODES = [
+    # The bare invocation: a plan, a preflight, a power analysis, an MDE and no
+    # timings. It returned 0 until a previous slice made it REFUSED.
+    ([], exit_codes.REFUSED, False),
+    (["--synthetic", "monotone"], exit_codes.DONE, False),
+    # P1 to P5 are the CLAIMs, and both of these laws refute one: a result.
+    (["--synthetic", "flat"], exit_codes.CLAIM_FAIL, False),
+    (["--synthetic", "order"], exit_codes.CLAIM_FAIL, False),
+    # A DESIGN REFUSED BY ITS OWN PREFLIGHT. Every cell is compute bound, so the
+    # sweep cannot ask the question. It returned 1 -- "a pre-registered claim
+    # was refuted" -- from a run that had spent nothing.
+    (["--tokens", "4096", "--seeds", "1", "--routings", "uniform"],
+     exit_codes.REFUSED, False),
+    (["--run"], exit_codes.REFUSED, True),
+]
+
+
+@pytest.mark.parametrize("argv,code,no_gpu", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        argv, code, no_gpu, tmp_path, monkeypatch, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Three of these rows used to break it. `verdict` printed one
+    `exit_codes.result_line` per gate and then returned codes of its own
+    devising -- 1 for any failed gate whatever its kind, 4 for any undecided one
+    -- so a failed `regime`, `control`, `design`, `identification` or
+    `correctness` gate, all VALIDITY, was reported as a refuted claim. The
+    compute-bound design and `--run` returned 1 and 3 from runs that measured
+    nothing at all.
+    """
+    if no_gpu:
+        def _no_gpu(*a, **kw):
+            raise GM.CannotRunHere("no CUDA device; --run needs the pod")
+        monkeypatch.setattr(GM, "measure", _no_gpu)
+    rc, out = run_report(argv, tmp_path, monkeypatch, capsys)
+    assert rc == code, out
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")

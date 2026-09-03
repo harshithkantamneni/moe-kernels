@@ -222,6 +222,13 @@ BOOTSTRAP_BAND = 0.90
 #:   RESULT (1). `exit_codes.classify` over the same gate objects that printed
 #:   the RESULT lines decides which, so the name survives only as the
 #:   claim-failure code and nothing reads it to build the exit any more.
+#:
+#: TWO REFUSALS WERE NOT ROUTED THROUGH EITHER NAME AND EXITED 1 UNTIL
+#: 2026-09-02, because `raise SystemExit(<str>)` sets `SystemExit.code` to the
+#: STRING and the interpreter turns that into 1: an `--arms` list missing a side
+#: of the comparison, and a vLLM with no `override_config`. Both announced
+#: themselves to the driver as MEASURED REFUTATIONS from a process that had, in
+#: the first case, done nothing but parse its arguments.
 EXIT_OK = exit_codes.DONE
 EXIT_GATE_FAILED = exit_codes.CLAIM_FAIL
 EXIT_NOT_MEASURED = exit_codes.REFUSED
@@ -925,6 +932,20 @@ class Store:
 # the measurement, which is the only part that needs the box
 # --------------------------------------------------------------------------
 
+class OverrideHookMissing(RuntimeError):
+    """vLLM is importable and exposes no `override_config`. Nothing can be forced.
+
+    A NAMED REFUSAL AND NOT A `SystemExit`, and the difference is an exit code
+    that used to be a lie. `find_vllm_hooks` raised `SystemExit(<str>)`, which
+    sets `SystemExit.code` to the STRING and leaves the interpreter to exit 1 --
+    CLAIM_FAIL in this repository's one table, "measured; VALIDITY passed; a
+    pre-registered claim did not" -- from a run that had not timed a single
+    cell. The driver would have ledgered the arm FINISHED with a finding in it,
+    and the finding would have been a missing import. Nothing was measured, so
+    it is REFUSED, and `main` is where that is returned.
+    """
+
+
 def find_vllm_hooks():
     """vLLM's `override_config` and, if it is there, `get_config`.
 
@@ -945,7 +966,7 @@ def find_vllm_hooks():
         fn = getattr(mod, "override_config", None)
         if fn is not None:
             return fn, getattr(mod, "get_config", None), name
-    raise SystemExit(
+    raise OverrideHookMissing(
         "vLLM is importable but exposes no override_config in any of "
         f"{VLLM_CONFIG_MODULES}. Without it every arm would run the native "
         "config and the comparison would be vacuous.")
@@ -1850,8 +1871,13 @@ def main(argv: list[str] | None = None) -> int:
     arms = list(ARM_ORDER) if args.arms == "all" else [
         a for a in ARM_ORDER if a in set(args.arms.split(","))]
     if "native" not in arms or "fallback" not in arms:
-        raise SystemExit("--arms must include at least native and fallback; "
-                         "they are the two sides of the comparison")
+        # REFUSED, not `raise SystemExit(<str>)`. That form sets
+        # `SystemExit.code` to the string and leaves the interpreter to exit 1 --
+        # CLAIM_FAIL, "measured; a pre-registered claim was refuted" -- from a
+        # process that had done nothing but parse its arguments.
+        print("REFUSED: --arms must include at least native and fallback; they "
+              "are the two sides of the comparison.")
+        return EXIT_NOT_MEASURED
 
     env = detect_environment()
     gpu_name, card, card_note = resolve_lookup_gpu(args, env)
@@ -1961,7 +1987,14 @@ def main(argv: list[str] | None = None) -> int:
               "one. See the dropped list above.")
         return EXIT_NOT_MEASURED
 
-    hooks = find_vllm_hooks()
+    try:
+        hooks = find_vllm_hooks()
+    except OverrideHookMissing as exc:
+        print("\n".join(["", "=" * 72,
+                         "REFUSED. Nothing was measured.",
+                         f"  OverrideHookMissing: {exc}",
+                         "=" * 72]))
+        return EXIT_NOT_MEASURED
     print(f"\noverride hook: {hooks[2]}.override_config"
           + ("" if hooks[1] else "   (no get_config in that module)"))
     meta = {"run_id": run_id, "gpu_name": env["gpu_name"] or gpu_name,

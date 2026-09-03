@@ -413,7 +413,7 @@ def test_the_card_is_a_swept_knob_and_is_visible_in_the_run_id(bm):
 def test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods(bm, capsys):
     """A laptop dry run must not print a path a pod will never write to: the
     next thing the operator does with that path is `git check-ignore` it."""
-    assert bm.main(["--dry-run"]) == 0
+    assert bm.main(["--dry-run"]) == exit_codes.REFUSED
     out = capsys.readouterr().out
     assert bm.UNKNOWN_CARD_SLUG in out
     assert "NO DEVICE ATTACHED" in out
@@ -706,7 +706,9 @@ def test_the_arms_own_expected_outcome_is_a_result_and_not_a_void_page(bm):
     declined on `fit.undecided`, this condition -- the arm's own registered
     expectation -- produced INVALID, and the twelve metered minutes were RETRY
     by construction on both cards. C1's UNKNOWN is the verdict, CLAIM_FAIL is
-    the code, and `_exit_code` reports it as DONE without `--fail-on-gate`.
+    the code, and `_exit_code` returns it: CLAIM_FAIL is in `FINISHED_CODES`
+    and `ledger_state(1)` is "CLAIM_FAIL", so the ledger already reads it as a
+    result rather than a retry.
     """
     world = _world(bm, "straddle")
     assert world.exit_code == exit_codes.CLAIM_FAIL
@@ -1145,14 +1147,26 @@ def test_a_gate_tag_is_one_token_and_cannot_collide(bm):
 @pytest.mark.parametrize("argv,code", [
     (["--self-test"], exit_codes.DONE),
     (["--self-test", "--plant-noise", "0"], exit_codes.REFUSED),
-    (["--dry-run"], exit_codes.DONE),
+    # A DRY RUN MEASURED NOTHING, SO IT IS REFUSED AND NOT DONE. DONE in the
+    # shared table reads "measured; every VALIDITY and CLAIM gate PASSED", and a
+    # plan scores no gate at all: it prints no RESULT line, and `classify_text`
+    # over a log with none raises `NoGatesScored`, which is the REFUSED shape.
+    (["--dry-run"], exit_codes.REFUSED),
     # THE TWO PLANS WHOSE MDE IS NOT STATEABLE. Both returned 1 -- CLAIM_FAIL,
     # "a pre-registered claim was refuted" -- from a `--dry-run` that measured
     # nothing, because `mde_lines` refused by `raise SystemExit(<str>)` and the
-    # interpreter, not `exit_codes.classify`, chose the number. The driver reads
-    # anything but 0 here as RETRY.
-    (["--dry-run", "--plant-noise", "0"], exit_codes.DONE),
-    (["--dry-run", "--reps", "1"], exit_codes.DONE),
+    # interpreter, not `exit_codes.classify`, chose the number. A missing power
+    # calculation still gets no vote: both land on the same REFUSED a stateable
+    # plan does.
+    (["--dry-run", "--plant-noise", "0"], exit_codes.REFUSED),
+    (["--dry-run", "--reps", "1"], exit_codes.REFUSED),
+    # --audit SCORES the published corpus and C1 FAILS on it, so it is a
+    # RESULT. It returned DONE until 2026-09-02 because `--fail-on-gate` folded
+    # CLAIM_FAIL into 0: the log said `RESULT: CLAIM C1 FAIL` and the process
+    # said "every gate PASSED". The flag is retired and passing it changes
+    # nothing.
+    (["--audit"], exit_codes.CLAIM_FAIL),
+    (["--audit", "--fail-on-gate"], exit_codes.CLAIM_FAIL),
 ])
 def test_the_exit_codes_are_the_shared_tables(bm, argv, code, capsys):
     assert bm.main(argv) == code
@@ -1270,7 +1284,7 @@ def test_a_plan_whose_mde_is_not_stateable_still_prints_the_whole_plan(
     """The MDE is a section of a document, not a gate, and it gets no vote on
     the arm's verdict. The plan above it is what the pod is being asked to buy
     and it has to still be there."""
-    assert bm.main(["--dry-run", *argv]) == exit_codes.DONE
+    assert bm.main(["--dry-run", *argv]) == exit_codes.REFUSED
     out = capsys.readouterr().out
     assert "MINIMUM DETECTABLE EFFECT: not stateable" in out
     assert "## The plan" in out
@@ -1297,3 +1311,57 @@ def test_the_published_spread_default_is_inside_the_published_range(bm):
         "the default must be an assumption traceable to measured ladders, not "
         "a number someone liked")
     assert bm.build_parser().parse_args([]).plant_noise == bm.PUBLISHED_LADDER_SPREAD
+
+
+# --------------------------------------------------------------------------
+# The acceptance check for the whole exit-code repair: the log and the process
+# say the same thing in every mode this file can reach without a GPU.
+# --------------------------------------------------------------------------
+
+#: Every off-GPU mode of this script and the code it must return. A plan and a
+#: refusal are REFUSED because they score no gate; `--self-test` and `--audit`
+#: score gates and take whatever `classify` makes of them.
+OFF_GPU_MODES = [
+    (["--dry-run"], exit_codes.REFUSED),
+    (["--dry-run", "--plant-noise", "0"], exit_codes.REFUSED),
+    (["--dry-run", "--reps", "1"], exit_codes.REFUSED),
+    # A REFUSAL FROM DEEP IN THE PLANNER. `ladder_rows` cannot form a single
+    # full tile stack here, so it raises `RefusedBeforeMeasuring` out of
+    # `build_plan`. It was `raise SystemExit(<str>)`, which exits 1.
+    (["--dry-run", "--r-max", "8"], exit_codes.REFUSED),
+    (["--self-test"], exit_codes.DONE),
+    (["--self-test", "--plant-noise", "0"], exit_codes.REFUSED),
+    (["--audit"], exit_codes.CLAIM_FAIL),
+]
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
+                         ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
+def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
+        bm, argv, code, tmp_path, capsys):
+    """The whole repair, stated as one property instead of as prose.
+
+    For every mode this file can reach on a laptop, the RESULT lines it printed
+    and the integer it returned have to be the same verdict. `classify_text`
+    recomputes the code from the log; a log with NO RESULT lines raises
+    `NoGatesScored`, and `moe.bench.exit_codes` documents that as exactly what a
+    REFUSED log looks like from there, so the two cases are one rule: score
+    gates and match `classify`, or score none and return REFUSED.
+
+    Three of these rows used to break it. `--dry-run` returned DONE, which reads
+    "measured; every VALIDITY and CLAIM gate PASSED", from a run that measured
+    nothing. `--dry-run --r-max 8` returned 1 = CLAIM_FAIL, a measured
+    refutation, because the refusal was a `SystemExit` carrying a string.
+    `--audit` returned DONE while its log carried `RESULT: CLAIM C1 FAIL`,
+    because `--fail-on-gate` folded a claim failure into 0.
+    """
+    rc = bm.main([*argv, "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == code
+    lines = exit_codes.parse_result_lines(out)
+    if lines:
+        assert exit_codes.classify_text(out) == rc
+    else:
+        assert rc == exit_codes.REFUSED, (
+            "a run that scored no gate printed no RESULT line, so its log "
+            "implies REFUSED and nothing else")

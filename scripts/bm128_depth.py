@@ -73,6 +73,29 @@ should know them first.
   provenance block naming the git sha, the device, the instrument and both
   halves of the roof with their sources.
 
+  EVERY REFUSAL NOW EXITS 2, and until 2026-09-02 seven of them exited 1.
+  `raise SystemExit(<str>)` sets `SystemExit.code` to the string, and the
+  interpreter turns that into exit 1 -- CLAIM_FAIL, "measured; a pre-registered
+  claim was refuted" -- so a renamed export in `block_m_crossing_sweep`, a model
+  whose routing cannot form a full tile stack, an `--r-max` below one tile, an
+  unreadable calibration, a missing one, and a resume across two cards were all
+  ledgered as measured refutations of the depth claim by runs that measured
+  nothing. They raise `RefusedBeforeMeasuring` now, which carries
+  `code = exit_codes.REFUSED`, and `_refuse` prints the sentence at the raise
+  site because an unhandled `SystemExit` carrying an int prints nothing.
+
+  `--dry-run` EXITS 2 REFUSED, NOT 0 DONE, and the repository disagreed with
+  itself about this until it was picked. A dry run scores no gate and prints no
+  RESULT line, so `classify_text` over its log raises `NoGatesScored`, which is
+  what a REFUSED log looks like from there; DONE means "measured; every gate
+  PASSED". The `--dry-run` branch carries the full census of which scripts were
+  on which side.
+
+  NOTHING IS FOLDED INTO DONE. `--fail-on-gate` used to report a CLAIM_FAIL as
+  0, and `--audit` is where it bit: over the published corpus C1 FAILS, the log
+  said `RESULT: CLAIM C1 FAIL` and the process said DONE. The flag is retired,
+  accepted and ignored; `_exit_code` returns what `classify` returns.
+
 WHY THIS EXISTS. BLOCK_SIZE_M=128 is the one tile height where the study's
 arithmetic-intensity cap straddles the hardware ridge -- cap 150.4 against a
 calibrated ridge of 145.8 on the A100, 158.6 against 162.8 on the H200 -- and it
@@ -244,6 +267,53 @@ from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 #: heavier than the standard library.
 
 
+class RefusedBeforeMeasuring(SystemExit):
+    """A precondition this run needs was not met, and nothing was measured.
+
+    A `SystemExit` CARRYING `code = exit_codes.REFUSED`, and the code is the
+    whole point of the class. Seven refusals in this file used to be
+    `raise SystemExit(<str>)`, which sets `SystemExit.code` to the STRING; the
+    interpreter prints it and exits 1, and 1 is `CLAIM_FAIL` in the table this
+    study adopted -- "measured; a pre-registered claim was refuted". So a
+    renamed export in `block_m_crossing_sweep`, a model whose routing cannot
+    form a full tile stack, a missing calibration and a resume across two cards
+    all reached the session driver as MEASURED REFUTATIONS of the depth claim,
+    from runs that had measured nothing at all and spent no pod minutes. The
+    ledger then marked the arm finished with a finding in it.
+
+    `code` IS A CLASS ATTRIBUTE ON PURPOSE. `SystemExit.__init__` would set the
+    instance's `code` to the message; a subclass attribute of the same name
+    shadows that descriptor, so `str(exc)` still returns the sentence and the
+    process still exits 2.
+
+    THE MESSAGE IS PRINTED AT THE RAISE SITE by `_refuse`, once, because an
+    unhandled `SystemExit` whose code is an int prints NOTHING. A refusal
+    nobody can read is not a refusal. `main` therefore returns REFUSED without
+    re-printing.
+
+    IT IS A `SystemExit` AND NOT A `RuntimeError` FOR THE DELIVERY, the same
+    reason `block_m_crossing_sweep.RetiredInstrument` is. `measure_setting`
+    times inside a per-cell `except Exception`, so a `RuntimeError` raised
+    anywhere it can reach would be swallowed into a `status="failed"` row and
+    the arm would grind through its whole grid before reporting. `SystemExit`
+    derives from `BaseException` and is outside that handler.
+    """
+
+    code = exit_codes.REFUSED
+
+
+def _refuse(message: str) -> RefusedBeforeMeasuring:
+    """Print the refusal once, then hand back the exception to raise.
+
+    Returning rather than raising keeps `raise _refuse(...)` a `raise` at the
+    call site, so the control flow reads normally and a linter still sees the
+    function end there. The `REFUSED:` prefix is what the session driver greps
+    out of the log when it ledgers the arm.
+    """
+    print(f"REFUSED: {message}")
+    return RefusedBeforeMeasuring(message)
+
+
 def _load_sweep():
     """Load `block_m_crossing_sweep` BY PATH, and name what is missing.
 
@@ -272,7 +342,7 @@ def _load_sweep():
               "reference_clock_mhz", "timing_basis", "ladder_treads")
     missing = [n for n in needed if not hasattr(module, n)]
     if missing:
-        raise SystemExit(
+        raise _refuse(
             "scripts/block_m_crossing_sweep.py no longer exports "
             f"{', '.join(missing)}. This script is deliberately scored by that "
             "file's fit rather than a private copy, so the two move together. "
@@ -290,7 +360,7 @@ def _load_sweep():
         params = inspect.signature(getattr(module, name)).parameters
         gone = [p for p in required if p not in params]
         if gone:
-            raise SystemExit(
+            raise _refuse(
                 f"block_m_crossing_sweep.{name} no longer takes "
                 f"{', '.join(gone)}. That file is under active edit and this "
                 "one calls into it on the pod path; re-check the call sites in "
@@ -1660,21 +1730,26 @@ def ladder_rows(cfg, block_m: int, r_max: int) -> list[int]:
     `n BM` an impossible token count rather than nudging it: a nudged row is not
     a full tile stack, and a fit over partly-filled treads is a fit over
     padding.
+
+    BOTH REFUSALS ARE `RefusedBeforeMeasuring`, so the process exits 2. They
+    were `raise SystemExit(<str>)` until 2026-09-02, which exits 1 = CLAIM_FAIL,
+    and a plan that could not be built announced itself to the driver as a
+    measured refutation of the depth claim.
     """
     q = SWEEP.rows_quantum(cfg)
     rows = []
     for n in range(1, r_max // block_m + 1):
         r = n * block_m
         if r % q:
-            raise SystemExit(
+            raise _refuse(
                 f"{cfg.num_experts} experts at top-k {cfg.top_k} need rows per "
                 f"expert to be a multiple of {q}, and {r} (tread {n} at "
                 f"BLOCK_M={block_m}) is not. This model cannot form an exactly "
                 f"full tile stack at this block size; choose another --model.")
         rows.append(r)
     if not rows:
-        raise SystemExit(f"--r-max {r_max} is below one tile at BLOCK_M="
-                         f"{block_m}; nothing to measure.")
+        raise _refuse(f"--r-max {r_max} is below one tile at BLOCK_M="
+                      f"{block_m}; nothing to measure.")
     return rows
 
 
@@ -2951,9 +3026,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--require-git-visible", action="store_true",
                     help="refuse to run when the output path is git-ignored")
     ap.add_argument("--fail-on-gate", action="store_true",
-                    help="exit non-zero unless every gate passes. Off by "
-                         "default: the registered expectation here is that the "
-                         "CLAIM gates FAIL, and a failed prediction is a result")
+                    help="RETIRED 2026-09-02 and accepted so old driver lines "
+                         f"still parse. A failed CLAIM gate now always exits "
+                         f"{exit_codes.CLAIM_FAIL} CLAIM_FAIL, which the ledger "
+                         "reads as a finished result rather than a retry; "
+                         "folding it into 0 made the log disagree with the "
+                         "process, and --audit was the live instance")
     return ap
 
 
@@ -2991,27 +3069,35 @@ def _cost_inputs(args):
     return ridge, ridge_src, bandwidth, bw_src
 
 
-def _exit_code(gates: list[Gate], fail_on_gate: bool) -> int:
-    """The shared table's verdict over the scored gates.
+def _exit_code(gates: list[Gate]) -> int:
+    """The shared table's verdict over the scored gates, and nothing folded.
 
     `moe.bench.exit_codes.classify` decides it, over the SAME gate objects that
     printed the RESULT lines, so `classify_text` on the log recomputes the code
-    the process returned and a disagreement is itself a defect. Without
-    `--fail-on-gate` a CLAIM_FAIL is REPORTED as DONE, because the registered
-    expectation of this arm is that its CLAIM gates FAIL -- no published ladder
-    reaches five clean memory treads -- and a falsified pre-registered claim is
-    the most valuable outcome an experiment has, not a retry. A VALIDITY failure
-    is INVALID either way: nothing on the page may be quoted after one.
+    the process returned and a disagreement is itself a defect.
+
+    NOTHING IS FOLDED INTO DONE ANY MORE, and `--fail-on-gate` is why this is a
+    paragraph rather than a branch. Until 2026-09-02 a CLAIM_FAIL was described
+    in words and RETURNED AS 0 unless the flag was passed, and `--audit` is a
+    live instance: over the published corpus C1 FAILS, the log carried
+    `RESULT: CLAIM C1 FAIL` and the process said DONE. That is exactly the
+    log-versus-exit-code split this module was adopted to end, printed by the
+    docstring that claimed it could not happen here. The masking was obsolete
+    the moment the shared table landed: CLAIM_FAIL (1) is in `FINISHED_CODES`
+    and `ledger_state(1)` is "CLAIM_FAIL", so 1 already tells the driver "this
+    is a result, do not retry it", which is the whole thing 0 was protecting.
+    The flag is accepted by the parser, ignored, and NOT PASSED IN HERE any
+    more, so no future edit can reach for it; its help text says it is retired.
+    A VALIDITY failure is INVALID either way: nothing on the page may be quoted
+    after one.
     """
     rc = exit_codes.classify(g.scored() for g in gates)
-    if rc == exit_codes.CLAIM_FAIL and not fail_on_gate:
-        print(f"exit     {exit_codes.describe(exit_codes.CLAIM_FAIL)}")
-        print(f"         reported as exit {exit_codes.DONE} without "
-              "--fail-on-gate: this arm's registered expectation is that C1 "
-              "FAILS, and a falsified prediction is a result. Pass "
-              f"--fail-on-gate to return {exit_codes.CLAIM_FAIL} instead.")
-        return exit_codes.DONE
     print(f"exit     {exit_codes.describe(rc)}")
+    if rc == exit_codes.CLAIM_FAIL:
+        print("         a CLAIM gate that did not pass is a RESULT and the "
+              "arm is FINISHED. This arm's")
+        print("         registered expectation is that C1 fails; "
+              "`--fail-on-gate` is retired and ignored.")
     return rc
 
 
@@ -3131,7 +3217,26 @@ def main(argv=None) -> int:
     Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
     before anything is measured, and otherwise `_exit_code` over the scored
     gates.
+
+    THE ONE HANDLER FOR `RefusedBeforeMeasuring` LIVES HERE, so that the deep
+    refusals -- `ladder_rows` on a model whose routing cannot form a full tile
+    stack, `--r-max` below one tile -- become a RETURNED 2 rather than an
+    exception escaping through a caller. The message is not re-printed: `_refuse`
+    printed it at the raise site, before the exception existed. An escape past
+    this handler would still exit 2 and would still have printed its reason,
+    because the class carries the code and `_refuse` did the printing; the
+    handler is here because a caller that invokes `main` as a function -- every
+    test in `tests/test_bm128_depth.py` -- wants the integer back rather than an
+    exception.
     """
+    try:
+        return _run(argv)
+    except RefusedBeforeMeasuring:
+        return exit_codes.REFUSED
+
+
+def _run(argv=None) -> int:
+    """`main` without the refusal handler. Every path here returns a table code."""
     args = build_parser().parse_args(argv)
     cfg = MODEL_CONFIGS[args.model]
     b = dtype_bytes(args.dtype)
@@ -3163,7 +3268,7 @@ def main(argv=None) -> int:
             payload["audit"] = pay
         lines += ["", "## Gates", ""] + render_gates(gates)
         print("\n".join(lines))
-        return _exit_code(gates, args.fail_on_gate)
+        return _exit_code(gates)
 
     ridge, ridge_src, bandwidth, bw_src = _cost_inputs(args)
     plan = build_plan(args, cfg)
@@ -3230,8 +3335,40 @@ def main(argv=None) -> int:
         # a missing power calculation cannot make it CLAIM_FAIL.
         lines += mde_block(spread=args.plant_noise, reps=args.reps,
                            treads=len(plan.subject_rows))[0]
+        # REFUSED (2) AND NOT DONE (0). A dry run prints a plan and times
+        # nothing, so it scores no gate and prints no RESULT line, and
+        # `exit_codes.classify_text` over this log raises `NoGatesScored` --
+        # which that module documents as what a REFUSED log looks like from
+        # there. Returning DONE made the two disagree in the one direction that
+        # matters: DONE is "measured; every gate PASSED", and nothing was
+        # measured.
+        #
+        # THE REPOSITORY DISAGREED WITH ITSELF AND THIS IS THE SIDE THAT WON.
+        # On 2026-09-02 six scripts returned DONE from `--dry-run` -- this file,
+        # `bm128_roofline`, `bn_decomposition`, `tile_cap_test`, and
+        # `block_m_crossing_sweep` and `ruler_rebaseline` as the bare literal 0
+        # -- and seven returned REFUSED (`calibrate_hardware`,
+        # `dtype_tile_confound`, `memory_branch_anchor`, `occupancy_vs_swizzle`,
+        # `rescore_published_reports`, `span_extent_separation`, `tile_sweep`).
+        # REFUSED is the only one of the two that a log can be checked against,
+        # and `dtype_tile_confound` had already written the argument out at its
+        # own dry-run branch. The driver reads both as finished, so nothing is
+        # re-queued either way: `dry_state` maps 0 to PLANNED and 2 to
+        # PLAN_REFUSED and `arm` retries neither.
+        lines += ["", "=" * 72,
+                  "REFUSED. Nothing was measured and nothing was written.",
+                  "  reason: --dry-run was given",
+                  "  Everything above is arithmetic over the published corpus "
+                  "and this repo's",
+                  "  calibration. No gate was scored, so no RESULT line was "
+                  "printed and none",
+                  "  of it is a result. Run --audit for the gates over the "
+                  "published ladders,",
+                  "  --self-test for the planted worlds, or the bare command "
+                  "on the pod.",
+                  "=" * 72]
         print("\n".join(lines))
-        return exit_codes.DONE
+        return exit_codes.REFUSED
 
     visibility = git_visibility(out_dir)
     if args.require_git_visible and visibility.startswith("IGNORED"):
@@ -3266,13 +3403,13 @@ def main(argv=None) -> int:
         from moe.bench.roofline import load_measured
         hw = load_measured()
     except Exception as exc:                            # noqa: BLE001
-        raise SystemExit(
+        raise _refuse(
             f"no usable calibration for the attached device ({exc}). V1 scores "
             "the compute reference against THIS card's measured bf16 ceiling "
             "and there is nothing to refuse or accept it with. Run "
             "scripts/calibrate_hardware.py first.") from exc
     if hw is None:
-        raise SystemExit(
+        raise _refuse(
             "no calibration for the attached device. V1 needs this card's own "
             "bf16 ceiling; the seven published A100 reports were scored against "
             "an H200 number precisely because a missing calibration was allowed "
@@ -3322,8 +3459,8 @@ def main(argv=None) -> int:
     if csv_path.exists():
         written_by = card_path.read_text().strip() if card_path.exists() else ""
         if written_by != card:
-            raise SystemExit(
-                f"REFUSED to resume {csv_path}: written by card "
+            raise _refuse(
+                f"refusing to resume {csv_path}: written by card "
                 f"{written_by or '<unrecorded, pre-card-in-id>'!r} and this run "
                 f"is {card!r}. Resuming would report one card's treads against "
                 "the other's ridge -- 145.8 against 162.8 Op/B -- which is a "
@@ -3415,7 +3552,7 @@ def main(argv=None) -> int:
         # repo has already lost every published figure to a pattern that
         # matched at a depth nobody checked.
         print(f"{label:8s} {path}\n         {git_visibility(path)}")
-    return _exit_code(gates, args.fail_on_gate)
+    return _exit_code(gates)
 
 
 if __name__ == "__main__":
