@@ -24,7 +24,24 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
+# v5: added the instrument block, i.e. WHICH TIMER produced the ms_* columns and
+#     what the card was doing while it did. Until v5 the driver timed through
+#     `timing.time_eager`/`time_graph` -- a COUNT of warmup calls, an iteration
+#     count sized from one isolated call, and two idle-instant clock samples --
+#     and no column said so, so every one of the 100,144 published rows is
+#     indistinguishable, on its face, from a row measured on the instrument that
+#     replaced it. The damage was not hypothetical: `throttled` (v1) compares two
+#     samples taken AFTER a synchronise and fires when the START sample caught
+#     the idle boost, which is not throttling, and it fired on 91% of vLLM rows
+#     above T=4096 while flagged and unflagged replicates of one cell timed at
+#     ratio 0.998. An analysis that drops those rows drops 0% at T=1 and 100% at
+#     T=16384, i.e. along the very axis alpha is identified on.
+#     `moe.bench.timing.time_kernel` warms for a DURATION of sustained load,
+#     polls the SM clock from a background thread WHILE the trials run, and
+#     reports three verdicts (LEVEL, DRIFT, host-bound). v5 is those columns plus
+#     the instrument's own name, so a reader can tell the two apparatus apart
+#     without knowing which commit wrote the file.
 # v4: added the tile_* block and sm_capability, i.e. the tile configuration that
 #     ACTUALLY ran. Until v4 the only tile columns were load_tile_eff_bm64 and
 #     load_tile_eff_bm128, which are HYPOTHETICAL efficiencies computed from the
@@ -53,7 +70,7 @@ SCHEMA_VERSION = 4
 #: WRITING is still single-version. CsvWriter refuses to append under a header
 #: from another schema, so a v3 run cannot be resumed by v4 code, and
 #: merge_csvs refuses to mix versions in one output file.
-READABLE_VERSIONS = frozenset({3, 4})
+READABLE_VERSIONS = frozenset({3, 4, 5})
 
 #: What a v4-only column reads as on a row that predates it.
 #:
@@ -71,7 +88,82 @@ COLUMNS_ADDED_IN: dict[int, tuple[str, ...]] = {
     4: ("tile_block_m", "tile_block_n", "tile_block_k", "tile_group_m",
         "tile_num_warps", "tile_num_stages", "tile_config_source",
         "tile_config_key", "sm_capability"),
+    5: ("instrument", "warmup_ms", "sm_clock_load_mhz", "clock_level_ok",
+        "clock_drift_ok", "host_bound_ok", "clock_samples", "clock_source",
+        "clock_note", "host_enqueue_ms", "host_note"),
 }
+
+#: What the ms_* columns of a row written before v5 were measured with.
+#:
+#: A NAME RATHER THAN A BLANK, and the difference is the whole point of the
+#: version. `timing.TIMING_BASIS` names the instrument that replaced it; a row
+#: that carries neither string carries no answer at all, and "no answer" is what
+#: 100,144 published rows would otherwise say about the apparatus that produced
+#: the study's headline number. So a pre-v5 row reads back as THIS, which is a
+#: claim about it: warmed for a COUNT of calls, iteration count sized from one
+#: isolated call on an idle GPU, no clock read during the trials, and the two
+#: clock columns it does carry sampled at idle instants either side of the cell.
+#: Never write it into a new row: `instrument_of` derives it from the version.
+LEGACY_INSTRUMENT = "time_eager+time_graph/idle-instant-clock/pre-v5"
+
+#: What a row the driver WROTE BUT NEVER TIMED says about its apparatus.
+#:
+#: THE THIRD ANSWER, and it exists because the first cut of this boundary had
+#: only two and was wrong about the world. `instrument_of` refused an empty
+#: `instrument` as "a row the driver wrote without going through either timer,
+#: which cannot happen", and the same commit's driver wrote exactly that row on
+#: four paths: a cell that failed the fp32 oracle, a graph mode skipped by cost
+#: policy, a span that could not be graph-captured, and a timer that raised.
+#: None of those is a bug, all of them belong in the CSV, and so
+#: `has_kernel_timing` -- the predicate an analysis is told to split a pool on
+#: BEFORE it reads a v5 column -- was the thing that threw, on rows an ordinary
+#: sweep emits by the thousand.
+#:
+#: A NAME AND NOT A BLANK, for the reason `LEGACY_INSTRUMENT` is one. "Nothing
+#: timed this row" is a fact about it, not an absence to guess at: its ms_*
+#: columns are zero because no measurement was taken, not because a measurement
+#: came out zero, and `capture_status` says which of the four paths it was.
+NO_INSTRUMENT = "none/not-timed"
+
+#: The instrument names whose rows carry NO readable v5 timing column. Legacy:
+#: the columns did not exist when the row was written. Untimed: nothing ran, so
+#: the columns hold dataclass defaults. `has_kernel_timing` is False for both
+#: and `instrument_of` still tells them apart, which is the split that matters:
+#: a legacy row has numbers measured the retired way, an untimed row has none.
+NO_KERNEL_TIMING: frozenset[str] = frozenset({LEGACY_INSTRUMENT, NO_INSTRUMENT})
+
+#: The three v5 verdict columns, and the closed vocabulary all three speak.
+#:
+#: STRINGS AND NOT BOOLS, because each verdict has three states and a bool has
+#: two. `time_kernel` returns None for "not determined" -- NVML absent, a
+#: container that forbids it, a trial too short for the poller to land a sample
+#: -- and a None flattened into False reads as "this check FAILED", which is a
+#: measurement of the card that nobody took. Closed for the reason TILE_SOURCES
+#: is closed: a typo'd verdict is not a loud failure, it is a value no filter
+#: matches, so those rows quietly leave every group-by that keys on it.
+VERDICT_OK = "ok"
+VERDICT_FAILED = "failed"
+VERDICT_UNDETERMINED = "undetermined"
+TIMING_VERDICTS: frozenset[str] = frozenset({
+    VERDICT_OK, VERDICT_FAILED, VERDICT_UNDETERMINED})
+
+#: The columns that speak it. LEVEL and DRIFT are `timing.clock_flags`; the
+#: third is `timing.host_bound_verdict` INVERTED, so all three read the same way
+#: round: "ok" is the state a row may be quoted in.
+TIMING_VERDICT_COLUMNS: tuple[str, ...] = (
+    "clock_level_ok", "clock_drift_ok", "host_bound_ok")
+
+
+def verdict_word(ok: bool | None) -> str:
+    """A `time_kernel` tri-state verdict as the word a CSV cell holds.
+
+    None is `VERDICT_UNDETERMINED` and never `VERDICT_FAILED`: "the check could
+    not be run" and "the check failed" are different facts about the run, and
+    only one of them is a reason to distrust the number beside it.
+    """
+    if ok is None:
+        return VERDICT_UNDETERMINED
+    return VERDICT_OK if ok else VERDICT_FAILED
 
 #: Legal values of tile_config_source. Closed, and validated where a row is
 #: populated, for the reason TERMINAL_STATUSES is closed: a typo'd source is not
@@ -199,9 +291,35 @@ class Row:
     # and cache behaviour are best-case relative to production, where routing
     # changes every step. Recorded rather than left for a reader to discover.
     routing_fixed_across_iters: bool = True
+    #: A CALL COUNT, and it stays one. Under the retired instrument it is the
+    #: count that was REQUESTED; under `timing.time_kernel` it is the count the
+    #: sustained-load warmup actually delivered. Either way it is calls, and
+    #: `warmup_ms` below is the duration.
     warmup: int = 0
     iters: int = 0
     trials: int = 0
+    #: WHICH TIMER produced the ms_* columns below (v5).
+    #:
+    #: `timing.TIMING_BASIS` on a row measured by the one instrument,
+    #: `NO_INSTRUMENT` on a row the driver wrote without timing it at all, and
+    #: `LEGACY_INSTRUMENT` on anything older -- but read it through
+    #: `instrument_of` and never off the column, because a pre-v5 row has no
+    #: column at all and the reader is what turns that absence into the name
+    #: rather than into an empty string that reads like a missing field.
+    #:
+    #: The default is the empty string and NOTHING MAY SHIP IT. It is the state
+    #: of a freshly constructed `Row` before any writer has touched it, and
+    #: `instrument_of` refuses it precisely so that state cannot reach a CSV
+    #: unnoticed; the driver's `prepare()` overwrites it on every row.
+    instrument: str = ""
+    #: Milliseconds of DELIVERED GPU time the warmup ran for (v5), 0.0 under the
+    #: retired instrument, which warmed for a count and measured nothing.
+    #:
+    #: A COUNT IS THE WRONG UNIT and this column is the fix. A 1 ms kernel needs
+    #: hundreds of calls before the clock governor responds; a 30 ms GEMM needs
+    #: one. So a corpus warmed at a fixed `warmup=25` compared cells at
+    #: different clock states, and nothing in a row said which.
+    warmup_ms: float = 0.0
 
     # --- timing result ----------------------------------------------------
     ms_p50: float = 0.0
@@ -257,13 +375,67 @@ class Row:
     tol_calibrated: bool = False
     oracle: str = "golden_fp32"
 
-    # --- thermal / clock drift -------------------------------------------
+    # --- thermal / clock drift, THE RETIRED INSTRUMENT'S ------------------
+    # A v5 row leaves the five QUANTITIES at their defaults instead of refilling
+    # them with numbers that would mean something else, and that is deliberate
+    # rather than an omission. These clocks were sampled at IDLE INSTANTS either
+    # side of the cell -- both after a synchronise, with the GPU no longer
+    # working -- so `clock_drift_pct` is the gap between two idle readings.
+    # Putting the under-load samples into these same columns would give one
+    # column two meanings across the version boundary, which is the drift
+    # `_stamp_unrecorded` exists to stop. The under-load numbers are their own
+    # columns, below.
+    #
+    # `throttled` IS THE EXCEPTION, because it is a VERDICT and not a reading.
+    # On a pre-v5 row it fires on a >5% DROP between the two idle samples, which
+    # detects whether the FIRST sample caught the idle boost rather than whether
+    # the card throttled under load: on the published alpha-0558 arm it flagged
+    # 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
+    # the same cell timed at ratio 0.998 with identical end clocks. On a v5 row
+    # `driver._apply_kernel_timing` writes the instrument's answer to the same
+    # question -- either under-load clock verdict FAILED -- because four
+    # consumers read this one column as "do not pool this row", and a column
+    # that is False by construction turns all five into checks that cannot fail.
     sm_clock_start_mhz: int = 0
     sm_clock_end_mhz: int = 0
     temp_start_c: int = 0
     temp_end_c: int = 0
     clock_drift_pct: float = 0.0
     throttled: bool = False
+
+    # --- the instrument's own verdicts (v5) -------------------------------
+    # What `timing.time_kernel` observed WHILE the trials ran. The clock is
+    # polled from a background thread during the measurement, not sampled at an
+    # idle instant beside it, and the three verdicts are the three ways a cell
+    # can be untrustworthy without the timer noticing anything wrong:
+    #   LEVEL   the card sat below `timing.LEVEL_FRACTION` of the clock the roof
+    #           was measured at, so the cell is not comparable with the roof.
+    #   DRIFT   first and last under-load samples disagree by more than
+    #           `timing.DRIFT_FRACTION` in EITHER direction. A rise is a defect
+    #           too: the warmup never reached the operating point.
+    #   HOST    the GPU's queue had drained before the host finished enqueueing,
+    #           so the intervals carry host time and ms_* bound the kernel from
+    #           ABOVE. Stored INVERTED (`host_bound_ok`) so all three columns
+    #           read the same way round and one filter covers them.
+    # All three take a word from TIMING_VERDICTS; read them with
+    # `timing_verdict`, which refuses a pre-v5 row rather than calling its
+    # silence a pass.
+    sm_clock_load_mhz: float = 0.0
+    clock_level_ok: str = VERDICT_UNDETERMINED
+    clock_drift_ok: str = VERDICT_UNDETERMINED
+    host_bound_ok: str = VERDICT_UNDETERMINED
+    #: Usable under-load clock samples the median above was taken from. Below
+    #: `timing.CLOCK_SAMPLE_FLOOR` there is no median and LEVEL is undetermined.
+    clock_samples: int = 0
+    #: Which reader polled: nvml | injected | none.
+    clock_source: str = ""
+    #: Why a clock column is missing or a flag undetermined, in words.
+    clock_note: str = ""
+    #: Median per-trial host wall of the enqueue loop. Divided by `iters` it is
+    #: the host's per-call cost, the number to hold beside ms_p50 when
+    #: `host_bound_ok` is "failed".
+    host_enqueue_ms: float = 0.0
+    host_note: str = ""
 
     notes: str = ""
 
@@ -304,7 +476,19 @@ def _schema_key(key: str) -> str:
     return key
 
 
-class TileConfigUnrecorded(LookupError):
+class ColumnUnrecorded(LookupError):
+    """This row predates the column being asked for, and nothing stands in.
+
+    The base of the two named refusals below, so a reader that does not care
+    WHICH version's hole it hit can catch one thing. Both subclasses exist
+    because the two holes are answered differently: a missing tile is filtered
+    with `has_tile_config`, a missing instrument with `has_kernel_timing`, and
+    an exception that could not say which would send a caller to the wrong
+    predicate.
+    """
+
+
+class TileConfigUnrecorded(ColumnUnrecorded):
     """This row does not say which tile ran, and nothing may stand in for it.
 
     Raised rather than returning 0 because the whole reason the tile_* columns
@@ -314,14 +498,54 @@ class TileConfigUnrecorded(LookupError):
     """
 
 
+class TimingInstrumentUnrecorded(ColumnUnrecorded):
+    """This row does not say how it was timed, and nothing may stand in for it.
+
+    Raised on a pre-v5 row asked for one of the three under-load checks, which
+    did not exist when it was written. The alternative -- returning "ok", or an
+    empty string a filter reads as not-failed -- would let a corpus that never
+    looked at its clocks under load pass the gate that exists to catch exactly
+    that, which is the shape of every defect v5 was cut for.
+    """
+
+
+#: Which refusal a stamped column raises, and which predicate the message sends
+#: the caller to, by the version that added the column. A v5 column asked of a
+#: v4 row is not a tile problem and must not arrive as one: the two holes have
+#: different predicates and different fixes.
+#:
+#: THE DEFAULT IS THE TILE ONE, and that is compatibility rather than taxonomy.
+#: `TileConfigUnrecorded` was the only sentinel refusal for two versions, every
+#: `except` clause in the tree names it, and a column outside the map is one
+#: that predates the map. It is now a subclass of `ColumnUnrecorded`, so a
+#: caller that wants "any version hole" can catch the base instead.
+_UNRECORDED_ERRORS: dict[int, type[ColumnUnrecorded]] = {
+    4: TileConfigUnrecorded,
+    5: TimingInstrumentUnrecorded,
+}
+_PREDICATE_FOR: dict[int, str] = {4: "has_tile_config", 5: "has_kernel_timing"}
+
+
+def _added_in(key: str) -> int:
+    """The schema version that introduced `key`, or 0 for one older than the map."""
+    for version, names in COLUMNS_ADDED_IN.items():
+        if key in names:
+            return version
+    return 0
+
+
 def _reject_sentinel(key: str, value) -> None:
     """A column stamped UNRECORDED is never a number, never a bool, never a
     default. Checked in every reader, so no path can quietly coerce it."""
-    if value == UNRECORDED:
-        raise TileConfigUnrecorded(
-            f"{key!r} is not recorded on this row: it comes from a CSV written "
-            f"under an older schema, which had no such column. Filter these "
-            f"rows out with has_tile_config(row) instead of reading them.")
+    if value != UNRECORDED:
+        return
+    version = _added_in(key)
+    arrived = f" (it arrived in v{version})" if version else ""
+    predicate = _PREDICATE_FOR.get(version, "has_tile_config")
+    raise _UNRECORDED_ERRORS.get(version, TileConfigUnrecorded)(
+        f"{key!r} is not recorded on this row: it comes from a CSV written "
+        f"under an older schema, which had no such column{arrived}. Filter "
+        f"these rows out with {predicate}(row) instead of reading them.")
 
 
 def row_bool(row: dict, key: str, default: bool = False) -> bool:
@@ -429,6 +653,121 @@ def tile_field(row: dict, key: str) -> int | str:
             f"(tile_config_source={row.get('tile_config_source')!r}). "
             f"A block size of zero does not exist.")
     return parsed
+
+
+def instrument_of(row: dict) -> str:
+    """Which timing apparatus produced this row's ms_* columns. Never a default.
+
+    THE ONE READER FOR THE VERSION BOUNDARY. Three inputs, three answers:
+
+      - no `instrument` key at all (a raw `csv.DictReader` over a pre-v5 file)
+        or the UNRECORDED sentinel (`read_csv` stamped it): `LEGACY_INSTRUMENT`.
+        The absence IS the answer, and naming it is the point -- a row from
+        before the fix is not a row of unknown provenance, it is a row of known
+        bad provenance;
+      - a non-empty string: that string, whatever it is. A future
+        `TIMING_BASIS` bump has to read back as itself here, or the reader would
+        quietly relabel an instrument it has not heard of. `NO_INSTRUMENT` is
+        one such string and reads back as itself: the driver stamps it on every
+        row it emits without timing, so "nothing measured this" is an answer
+        this function gives rather than an exception it raises;
+      - a v5 row carrying an EMPTY instrument: refused. Not a driver row --
+        `prepare()` stamps `NO_INSTRUMENT` before any path can emit -- so an
+        empty one means something else wrote the file, and what that something
+        did to the ms_* columns is exactly what must not be guessed at.
+
+    Callers that only want the ms_* numbers should filter on `ms_p50 > 0`
+    first: a cell that failed the oracle is written with its timing zeroed,
+    keeps the name of the instrument that took the discarded measurement, and
+    is not a number anyone may quote.
+    """
+    value = row.get("instrument")
+    if value is None or value == UNRECORDED:
+        return LEGACY_INSTRUMENT
+    text = str(value).strip()
+    if not text:
+        raise TimingInstrumentUnrecorded(
+            "this row carries the v5 `instrument` column and it is empty, so "
+            "nothing timed it and nothing may assume what did. A row written "
+            "by the driver always names its timer; an empty one is a bug in "
+            "whatever produced the file, not a row to guess about.")
+    return text
+
+
+def has_kernel_timing(row: dict) -> bool:
+    """Was this row measured on the instrument, rather than on what preceded it?
+
+    The predicate to split a pool on BEFORE any gate that reads a v5 column, so
+    an analysis never has to catch `TimingInstrumentUnrecorded` row by row. The
+    mirror of `has_tile_config`, and it exists for the same reason: two
+    different apparatus in one pool is a fact to branch on, not a hole to fill.
+
+    FALSE FOR TWO DIFFERENT ROWS, on purpose, because the question it asks has
+    one answer for both: a pre-v5 row has no verdict columns at all and an
+    untimed v5 row has them at their defaults. `timing_verdict` refuses BOTH,
+    the first because the column is absent and the second because the row's
+    instrument is `NO_INSTRUMENT`, so this predicate and that reader agree on
+    exactly one set of rows. They did not until 2026-09-02: the untimed v5 row
+    read back "undetermined" and was admitted by every gate that branched on the
+    word. The two are told apart by `instrument_of`, which names them, and a
+    caller that needs the distinction must ask for it by name rather than read
+    it out of a bool that was never carrying it.
+    """
+    return instrument_of(row) not in NO_KERNEL_TIMING
+
+
+def timing_verdict(row: dict, key: str) -> str:
+    """One of the three v5 under-load verdicts, or raise. Never a usable default.
+
+    Raises `TimingInstrumentUnrecorded` on a pre-v5 row, where the check did not
+    exist, and on a v5 row whose column is empty. Raises `ValueError` on a word
+    outside `TIMING_VERDICTS`, because a verdict no filter matches removes the
+    row from every group-by that keys on it while looking like a pass.
+
+    "undetermined" is RETURNED, not raised: the check ran and could not decide
+    (no NVML, a trial too short for the poller), which is a real state of the
+    measurement and one a caller may legitimately choose to keep or drop. What
+    it must never be is silently folded into "ok".
+
+    AN UNTIMED ROW IS REFUSED, and until 2026-09-02 it was not. The driver writes
+    a row for every cell it declines or fails, stamps `NO_INSTRUMENT` on it and
+    leaves these three columns at their `Row` defaults, which are the WORD
+    "undetermined". So a row nothing measured read back as "the check ran and
+    could not decide", and `alpha_refit.clock_gate` read three of those and
+    returned ADMIT. Nothing broke only because both of its callers happen to drop
+    `ms_p50 <= 0` a few lines earlier -- an incidental filter standing in for the
+    intended one, which is the exact accident this module's own header complains
+    about. `has_kernel_timing` says the two apparatus have to be split before any
+    v5 column is read; this is that sentence enforced rather than asserted.
+    """
+    _schema_key(key)
+    if key not in TIMING_VERDICT_COLUMNS:
+        raise ValueError(
+            f"{key!r} is not one of the v5 timing verdicts; read it with "
+            f"row_float, row_bool or row.get. timing_verdict covers "
+            f"{', '.join(TIMING_VERDICT_COLUMNS)}.")
+    if instrument_of(row) == NO_INSTRUMENT:
+        raise TimingInstrumentUnrecorded(
+            f"{key!r} is {row.get(key)!r} on a row whose instrument is "
+            f"{NO_INSTRUMENT!r}: nothing timed this cell, so no under-load "
+            f"check was made and the default word is not a verdict. Split the "
+            f"pool with has_kernel_timing(row) first, which is False here.")
+    value = row.get(key)
+    _reject_sentinel(key, value)
+    if value is None or value == "":
+        raise TimingInstrumentUnrecorded(
+            f"{key!r} is absent on this row: it predates schema v5, whose "
+            f"instrument is the first one to read the clock while the trials "
+            f"run. Split the pool with has_kernel_timing(row) instead of "
+            f"reading a check that was never made.")
+    _reject_sentinel(key, value)
+    word = str(value)
+    if word not in TIMING_VERDICTS:
+        raise ValueError(
+            f"{key!r} is {word!r}, which is not one of "
+            f"{sorted(TIMING_VERDICTS)}. A verdict outside the set matches no "
+            f"filter and silently leaves every group-by that keys on it.")
+    return word
 
 
 def passed(row: dict) -> bool:

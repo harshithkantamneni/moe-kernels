@@ -64,6 +64,15 @@ dotted spelling above is load-bearing
 as well as accurate: the driver's `adopts_exit_codes` greps each arm's own file
 for it, and prints a caveat beside every REFUSED or INVALID row that came out of
 a file which does not name it. See moe/bench/force_tile.py.
+
+2 IS A HANDLED OUTCOME AND NOT A TRACEBACK. `driver.refuse_dropped_retired_knobs`
+raises out of `run_sweep` on purpose -- a configuration the instrument cannot
+honour is the same for every cell, so swallowing it per cell would print one
+warning per cell and exit 0. Letting it out of `main` instead is no better: the
+process then exits 1, which `exit_codes` reads as CLAIM_FAIL, "measured; a CLAIM
+gate did not pass; a RESULT, not a retry", and `scripts/run_all.sh` runs under
+`set -euo pipefail` with the smoke profile ahead of the real sweep. So the
+refusal is caught here, printed as the reason it carries, and exits REFUSED.
 """
 from __future__ import annotations
 
@@ -325,6 +334,22 @@ def dry_run(profile: PR.Profile, args, traces, forced=None) -> int:
           "uncapturable graph mode still writes one row)")
     print(f"skipped         {p.unsupported} (implementation does not support the cell)")
 
+    # PRICED ON THE INSTRUMENT THIS RUN WOULD USE, not on the one the published
+    # rates were measured on. `MEASURED_CELL_COST` was fitted against arms timed
+    # by the retired `time_eager`/`time_graph`, which warmed for a CALL COUNT;
+    # `time_kernel` warms for `warmup_ms` of delivered GPU time per timed row,
+    # which is more on every environment and dtype in the table. A pre-rental
+    # figure that quoted the old number would be low, and low is the one
+    # direction a budget must not be wrong in.
+    warmup_ms = profile.warmup_ms if profile.warmup_ms is not None \
+        else RunConfig.__dataclass_fields__["warmup_ms"].default
+    hours = PR.estimated_hours(profile, warmup_ms=warmup_ms)
+    priced = ", ".join(f"{env} {h:.3g}" for env, h in sorted(hours.items())
+                       if env != "total" and h > 0)
+    print(f"\nestimated hours {hours['total']:.3g} total ({priced})")
+    print(f"                on {T.TIMING_BASIS}, warmup_ms={warmup_ms:g} per "
+          f"timed row")
+
     from .footprint import worst_cell
     spec, fp = worst_cell(profile.specs())
     if fp is not None:
@@ -396,10 +421,16 @@ def _main(argv=None) -> int:
         return dry_run(profile, args, traces, forced)
 
     cfg_kw = dict(out_dir=args.out_dir, env_name=args.env, device=args.device,
-                  warmup=profile.warmup, trials=profile.trials,
-                  iters=profile.iters, l2_modes=profile.l2_modes,
+                  trials=profile.trials, l2_modes=profile.l2_modes,
                   graph_modes=profile.graph_modes, routing_info=routing_info,
                   force_tile=forced, **measured_ceilings())
+    # ONLY WHAT THE PROFILE ACTUALLY ASKED FOR. A profile that names neither
+    # takes `RunConfig`'s defaults, and there is no branch here that can hand
+    # the instrument a knob it has no parameter for: `Profile` no longer has
+    # the retired `warmup` count or `iters` to copy across.
+    cfg_kw.update({name: value for name, value in
+                   (("warmup_ms", profile.warmup_ms),
+                    ("target_ms", profile.target_ms)) if value is not None})
     if args.run_id:
         cfg_kw["run_id"] = args.run_id
     cfg = RunConfig(**cfg_kw)
@@ -437,7 +468,16 @@ def _main(argv=None) -> int:
             print(f"[cli]   {gid}  {claim}: {threshold}")
 
     started = time.time()
-    path = run_sweep(cells, cfg, routing, info=info)
+    try:
+        path = run_sweep(cells, cfg, routing, info=info)
+    except T.TimingRefused as e:
+        # NOTHING WAS MEASURED, which is what REFUSED means and what makes this
+        # free rather than a wasted arm. The message is the useful part and it
+        # already names both ways out, so it is printed rather than wrapped, and
+        # stderr rather than stdout: `moe.runner.subproc` parses stdout for the
+        # JSON line below, and a refusal has no paths to hand back.
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return EC.REFUSED
     print(f"[cli] run_id={cfg.run_id} elapsed={time.time() - started:.1f}s")
     # The JSON line first: moe.runner.subproc parses it out of stdout and a
     # non-zero exit below must not cost the caller the paths it needs to resume.

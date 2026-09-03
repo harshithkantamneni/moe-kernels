@@ -137,7 +137,7 @@ def test_appending_under_a_matching_header_is_fine(tmp_path):
 
 def test_schema_version_tracks_the_column_set():
     """A reminder in code: the version must move whenever COLUMNS does."""
-    assert SC.SCHEMA_VERSION == 4
+    assert SC.SCHEMA_VERSION == 5
     assert "pct_of_achieved_bw" not in SC.COLUMNS
     assert "pct_of_achieved_tflops" in SC.COLUMNS
     assert "achieved_peak_tflops" in SC.COLUMNS
@@ -152,6 +152,184 @@ def test_schema_version_tracks_the_column_set():
     assert "tile_block_m" in SC.COLUMNS
     assert "tile_config_source" in SC.COLUMNS
     assert "sm_capability" in SC.COLUMNS
+    # v5: which timer produced ms_*, and what the card was doing while it did.
+    # Before these, a row measured on `time_eager` with a COUNT of warmup calls
+    # and two idle-instant clock samples was indistinguishable from a row
+    # measured on `time_kernel`, and the study's headline alpha came from the
+    # first while a ladder script's alpha came from the second.
+    for name in SC.COLUMNS_ADDED_IN[5]:
+        assert name in SC.COLUMNS, name
+    assert "instrument" in SC.COLUMNS
+    assert "warmup_ms" in SC.COLUMNS
+    assert set(SC.TIMING_VERDICT_COLUMNS) <= set(SC.COLUMNS)
+    # And `warmup` survives beside `warmup_ms` rather than changing meaning:
+    # every published row records a call count under that name.
+    assert "warmup" in SC.COLUMNS
+
+
+# --- the instrument boundary ------------------------------------------------
+
+def v4_row_dict(tmp_path, **kw):
+    """A row on disk at v4, i.e. one of the 100,144 published ones in shape.
+
+    Written through a header that omits every v5 column, because that is what a
+    published arm's file really looks like; `read_csv` then stamps the hole.
+    """
+    import csv
+    path = tmp_path / "v4.csv"
+    columns = [c for c in SC.COLUMNS if c not in SC.COLUMNS_ADDED_IN[5]]
+    values = dict(schema_version=4, model="mixtral-8x7b", ms_p50=1.25,
+                  correctness_passed=True, throttled=False)
+    values.update(kw)
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=columns)
+        w.writeheader()
+        w.writerow({c: values.get(c, "") for c in columns})
+    return SC.read_csv(path)[0]
+
+
+def test_a_published_row_still_loads_and_says_which_instrument_made_it(tmp_path):
+    """THE CONSTRAINT THE VERSION HAD TO SATISFY. Ten published arms and 100,144
+    rows were measured under v3/v4 and cannot be re-taken; a gate that refused
+    them would retire the DATA rather than the code. They load, and they answer
+    the new question honestly: the absence of the column IS the answer, and the
+    answer has a name."""
+    row = v4_row_dict(tmp_path)
+    assert row["instrument"] == SC.UNRECORDED
+    assert SC.instrument_of(row) == SC.LEGACY_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_a_row_from_before_v5_cannot_answer_a_check_it_never_made(tmp_path):
+    """The FAIL branch of the verdict reader. Returning "ok", or an empty string
+    a filter reads as not-failed, would let a corpus that never looked at its
+    clocks under load pass the very gate v5 was cut for."""
+    row = v4_row_dict(tmp_path)
+    for name in SC.TIMING_VERDICT_COLUMNS:
+        with pytest.raises(SC.TimingInstrumentUnrecorded, match="has_kernel_timing"):
+            SC.timing_verdict(row, name)
+    # The numeric v5 columns refuse through the sentinel on the same row, and
+    # they refuse as a TIMING hole rather than as a tile one: the two send a
+    # caller to different predicates, so the exception has to say which.
+    with pytest.raises(SC.TimingInstrumentUnrecorded, match="has_kernel_timing"):
+        SC.row_float(row, "sm_clock_load_mhz")
+    # A v3 row, whose hole is the TILE one, still refuses under its own name and
+    # sends the caller to its own predicate.
+    v3 = dict(row, schema_version="3")
+    SC._stamp_unrecorded(v3, 3)
+    with pytest.raises(SC.TileConfigUnrecorded, match="has_tile_config"):
+        SC.tile_field(v3, "tile_block_m")
+    assert issubclass(SC.TimingInstrumentUnrecorded, SC.ColumnUnrecorded)
+    assert issubclass(SC.TileConfigUnrecorded, SC.ColumnUnrecorded)
+
+
+def test_a_v5_row_reads_its_verdicts_back_as_the_words_it_wrote(tmp_path):
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument="queue-deep/l2-flush/clock-under-load/v2",
+                         clock_level_ok=SC.VERDICT_OK,
+                         clock_drift_ok=SC.VERDICT_FAILED,
+                         host_bound_ok=SC.VERDICT_UNDETERMINED))
+    row = SC.read_csv(path)[0]
+    assert SC.has_kernel_timing(row)
+    assert SC.timing_verdict(row, "clock_level_ok") == "ok"
+    assert SC.timing_verdict(row, "clock_drift_ok") == "failed"
+    assert SC.timing_verdict(row, "host_bound_ok") == "undetermined"
+
+
+def test_a_verdict_outside_the_closed_set_is_refused_not_matched(tmp_path):
+    """A typo'd verdict is not a loud failure; it is a value no filter matches,
+    so the row leaves every group-by that keys on it while looking like a pass.
+    Same reason TILE_SOURCES is closed."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument="x", clock_level_ok="OK"))
+    with pytest.raises(ValueError, match="not one of"):
+        SC.timing_verdict(SC.read_csv(path)[0], "clock_level_ok")
+    with pytest.raises(ValueError, match="not one of the v5 timing verdicts"):
+        SC.timing_verdict({"throttled": "False"}, "throttled")
+
+
+def test_a_v5_row_that_names_no_instrument_is_refused():
+    """Not reachable through the driver, whose `prepare()` stamps EVERY row it
+    emits, timed or not. An empty column therefore means something other than
+    the driver wrote the file, and what that something did to the ms_* columns
+    is exactly what must not be guessed at."""
+    with pytest.raises(SC.TimingInstrumentUnrecorded, match="empty"):
+        SC.instrument_of({"instrument": "  ", "ms_p50": "1.0"})
+    with pytest.raises(SC.TimingInstrumentUnrecorded, match="empty"):
+        SC.has_kernel_timing({"instrument": "", "ms_p50": "0.0"})
+
+
+def test_an_untimed_row_gets_a_name_rather_than_a_refusal(tmp_path):
+    """THE DEFECT THE FIRST CUT OF THIS BOUNDARY INTRODUCED. `has_kernel_timing`
+    is documented as the predicate to split a pool on BEFORE any gate reads a v5
+    column, and it raised on four kinds of row the driver writes routinely: a
+    cell that failed the oracle, a graph mode skipped by cost policy, a span
+    that could not be captured, and a timer that raised. Nothing broke only
+    because no v5 data existed yet."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument=SC.NO_INSTRUMENT,
+                         capture_status="not_capturable", ms_p50=0.0))
+    row = SC.read_csv(path)[0]
+    assert SC.instrument_of(row) == SC.NO_INSTRUMENT
+    assert SC.has_kernel_timing(row) is False
+
+
+def test_an_untimed_row_has_no_verdicts_to_read_and_says_so(tmp_path):
+    """THE DEFECT THE SECOND CUT INTRODUCED, one function away from the first.
+
+    `has_kernel_timing` justified its False on such a row with "an untimed v5
+    row has them at their defaults, and `timing_verdict` refuses either". It did
+    not: `Row`'s defaults ARE the word "undetermined", so a row nothing measured
+    read back as "the check ran and could not decide" and every gate that
+    branches on the word admitted it. `scripts/alpha_refit.py`'s `clock_gate`
+    read three of them and returned ADMIT; the rows reached no fit only because
+    both callers drop `ms_p50 <= 0` a few lines earlier, which is an incidental
+    filter standing in for the intended one."""
+    path = tmp_path / "r.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(instrument=SC.NO_INSTRUMENT, ms_p50=0.0))
+    row = SC.read_csv(path)[0]
+
+    # The defaults are still on the row, and they are still the word.
+    assert row["clock_level_ok"] == SC.VERDICT_UNDETERMINED
+    for name in SC.TIMING_VERDICT_COLUMNS:
+        with pytest.raises(SC.TimingInstrumentUnrecorded, match="nothing timed"):
+            SC.timing_verdict(row, name)
+
+    # The PASS branch: a row the instrument DID time answers "undetermined" as a
+    # state of the measurement, which is a different thing and stays readable.
+    timed = dict(row, instrument="queue-deep/l2-flush/clock-under-load/v2",
+                 ms_p50="1.0")
+    assert SC.timing_verdict(timed, "clock_level_ok") == SC.VERDICT_UNDETERMINED
+    assert SC.has_kernel_timing(timed)
+
+
+def test_untimed_and_legacy_are_both_unreadable_but_are_not_the_same_row():
+    """`has_kernel_timing` answers one question -- may a v5 column be read off
+    this row -- and the answer is no for both. The distinction that does matter
+    is kept by `instrument_of`: a legacy row HAS numbers, measured the retired
+    way; an untimed row has none at all."""
+    legacy = {"instrument": SC.UNRECORDED}
+    untimed = {"instrument": SC.NO_INSTRUMENT}
+    assert SC.has_kernel_timing(legacy) is False
+    assert SC.has_kernel_timing(untimed) is False
+    assert SC.instrument_of(legacy) == SC.LEGACY_INSTRUMENT
+    assert SC.instrument_of(untimed) == SC.NO_INSTRUMENT
+    assert SC.instrument_of(legacy) != SC.instrument_of(untimed)
+    assert SC.NO_KERNEL_TIMING == {SC.LEGACY_INSTRUMENT, SC.NO_INSTRUMENT}
+
+
+def test_verdict_word_never_turns_an_unknown_into_a_failure():
+    """None is "the check could not be run" and False is "the check failed".
+    A None flattened to False reads as a measurement of the card that nobody
+    took."""
+    assert SC.verdict_word(True) == SC.VERDICT_OK
+    assert SC.verdict_word(False) == SC.VERDICT_FAILED
+    assert SC.verdict_word(None) == SC.VERDICT_UNDETERMINED
+    assert SC.TIMING_VERDICTS == {"ok", "failed", "undetermined"}
 
 
 def test_a_retired_column_name_raises_instead_of_reading_as_zero():

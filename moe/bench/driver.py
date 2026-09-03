@@ -87,13 +87,184 @@ def should_time_graph(cost, cfg: RunConfig) -> tuple[bool, str]:
                    f"{cfg.graph_min_launch_share * 100:.1f}% threshold")
 
 
+def time_kernel_graph(fn: Callable[[], None], *, on_captured=None,
+                      **kw) -> T.KernelTiming:
+    """Capture `fn` into a CUDA graph and time the REPLAY on the instrument.
+
+    `timing.time_kernel` times a callable; a graph is a different callable made
+    out of one, so the capture belongs to the caller and this is the caller. It
+    is the graph half of what `timing.time_graph` used to do, minus the timing,
+    which `time_kernel` now does for both modes -- the point being that eager and
+    graph rows come off ONE apparatus and are therefore comparable with each
+    other and with the roof.
+
+    `on_captured` runs after the warmup replays and before the timed trials,
+    while the graph is still the thing that produced the output. A replay writes
+    into graph-private buffers every replay reuses, so a kernel leaving part of
+    its output unwritten would show the PREVIOUS replay's correct values; the
+    driver re-earns the correctness verdict there.
+
+    Raises `timing.NotCapturable`, which is a finding rather than a failure: an
+    implementation that syncs with the host cannot be used in real MoE
+    inference, and the row records that.
+    """
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        for _ in range(3):
+            fn()
+    torch.cuda.current_stream().wait_stream(side)
+    torch.cuda.synchronize()
+
+    graph = torch.cuda.CUDAGraph()
+    try:
+        with torch.cuda.graph(graph):
+            fn()
+    except RuntimeError as e:
+        raise T.NotCapturable(str(e)) from None
+
+    for _ in range(3):
+        graph.replay()
+    torch.cuda.synchronize()
+    if on_captured is not None:
+        on_captured()
+    return T.time_kernel(graph.replay, **kw)
+
+
+#: The knobs on `RunConfig` that only the RETIRED instrument reads. `warmup` is
+#: a COUNT of calls and `iters` a fixed iteration count; `timing.time_kernel`
+#: takes neither, warming for a duration (`warmup_ms`) and sizing iterations
+#: from the warmup's own queue-deep per-call time.
+RETIRED_KNOBS: tuple[str, ...] = ("warmup", "iters")
+
+
+def unhonourable_retired_knobs(cfg: RunConfig) -> list[tuple[str, object, str]]:
+    """`(knob, value, mode)` for every retired knob this run would DROP.
+
+    A knob is unhonourable when it was set to something other than its own
+    field default AND the mode it would apply to measures on the instrument,
+    which reads no such argument. Empty for the ordinary sweep, empty when the
+    retired timer is injected for that mode, and empty when the value equals
+    the default, because a caller that passes the default asked for nothing.
+
+    THE DEFECT IT NAMES. `_instrument_kwargs` passes warmup_ms/target_ms/
+    trials/l2_flush/reference_clock_mhz/flusher and nothing else, while
+    `moe/bench/cli.py` filled `warmup` and `iters` from the profile on EVERY
+    run. Two profiles set them: `smoke` (warmup=5, iters=10) to be quick, and
+    `profile-cell` (warmup=5, trials=1, iters=1), whose note read "one cell, one
+    launch: the shape ncu can read a counter off" and which four session scripts
+    invoke. On the instrument path that one launch silently became
+    `iters_for(per_call_ms, 200)`, which is 10 to 2000, and the five-call warmup
+    became 300 ms of sustained load. Nothing warned, nothing recorded it, and a
+    counter read off the wrong shape is a number that looks exactly like a right
+    one.
+
+    NEITHER PROFILE SETS THEM NOW and `Profile` no longer has the fields, so
+    this returns empty for every shipped profile and the two say what they meant
+    in `warmup_ms`/`target_ms` instead. The check stays because the fields stay
+    on `RunConfig`, where a caller that injects a legacy timer still needs them,
+    and a caller that injects nothing must not be able to reach the instrument
+    with a count in hand.
+    """
+    fields = RunConfig.__dataclass_fields__
+    asked = [(name, getattr(cfg, name)) for name in RETIRED_KNOBS
+             if getattr(cfg, name) != fields[name].default]
+    if not asked:
+        return []
+    on_instrument = []
+    if False in tuple(cfg.graph_modes) and cfg.timer_eager is None:
+        on_instrument.append("eager")
+    if True in tuple(cfg.graph_modes) and cfg.timer_graph is None:
+        on_instrument.append("graph")
+    return [(name, value, mode)
+            for name, value in asked for mode in on_instrument]
+
+
+def _retired_knob_refusal(cfg: RunConfig, dropped) -> str:
+    """The message. Names each dropped knob, its value, and both ways out.
+
+    REFUSES RATHER THAN WARNS because a warning on a metered pod scrolls past
+    and the rows it qualifies outlive it. There are exactly two honest
+    resolutions and the message states both: express the intent in the units
+    the instrument takes, or put that mode back on the retired timer, which
+    stamps `schema.LEGACY_INSTRUMENT` into every row it writes so the choice is
+    legible in the data afterwards.
+    """
+    shown = sorted({f"{name}={value!r}" for name, value, _ in dropped})
+    names = sorted({mode for _, _, mode in dropped})
+    knobs = (f"{', '.join(shown)} are RETIRED instrument knobs"
+             if len(shown) > 1 else f"{shown[0]} is a RETIRED instrument knob")
+    modes = (f"the {' and '.join(names)} modes of this run measure"
+             if len(names) > 1 else f"the {names[0]} mode of this run measures")
+    return (
+        f"{knobs}, and {modes} on `timing.time_kernel`, which has no such "
+        f"parameter: it warms for a DURATION (warmup_ms={cfg.warmup_ms}) and "
+        f"sizes iters from the warmup's own per-call time toward target_ms="
+        f"{cfg.target_ms}. Passing them here would change nothing and record "
+        f"nothing, which is how `profile-cell` asked for one launch and got up "
+        f"to 2000 of them. Say it in the instrument's units (warmup_ms, "
+        f"target_ms, trials), or set timer_eager/timer_graph to put that mode "
+        f"back on the retired timer that does read them.")
+
+
+class RetiredKnobRefused(T.TimingRefused):
+    """This run asked for a knob the instrument it measures on cannot honour.
+
+    A SEPARATE TYPE so `run_sweep` can let it out. That loop catches
+    `Exception` per cell and records a crash, which is right for a kernel that
+    launched badly and wrong for a configuration error: the config is the same
+    for every cell, so swallowing it would print one warning per cell, write no
+    rows, and exit 0 -- the loudest possible way to say nothing.
+    """
+
+
+def refuse_dropped_retired_knobs(cfg: RunConfig) -> None:
+    """Raise if measuring this cell would silently drop a retired knob.
+
+    CHECKED HERE, per cell and just before the first thing that costs anything,
+    rather than in `RunConfig.__init__`. A knob is only dropped when a cell is
+    actually measured on the instrument, and a sweep can construct a config it
+    never measures with: `tests/test_force_tile.py` drives the CLI purely to
+    prove a force-tile plan is refused before anything is spent, and every cell
+    in that run is declined by the pin. A refusal at construction would fail
+    such a run for a knob no cell would ever have reached.
+
+    AND THE CALLER HAS TO SURVIVE IT. This raises out of `run_sweep` rather than
+    being recorded per cell, so the process that called it exits on it;
+    `cli.main` catches `TimingRefused` and exits REFUSED with the message, which
+    is what makes this a free refusal instead of an uncaught traceback that
+    `exit_codes` would read as a measured CLAIM_FAIL.
+    """
+    dropped = unhonourable_retired_knobs(cfg)
+    if dropped:
+        raise RetiredKnobRefused(_retired_knob_refusal(cfg, dropped))
+
+
 @dataclass
 class RunConfig:
     out_dir: Path = Path("results")
     run_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     env_name: str = "base"
-    warmup: int = 25
+    #: Sustained-load warmup, in MILLISECONDS of delivered GPU time. The unit
+    #: the instrument takes, and the unit a warmup has to be in: a count settles
+    #: a 30 ms GEMM in one call and leaves a 1 ms kernel below the clock
+    #: governor's response for hundreds. 300 ms is what every ladder script in
+    #: this repository already defaults to, so one number means one thing.
+    warmup_ms: float = 300.0
+    #: Kernel time one trial should hold, which is what `iters` is sized from.
+    target_ms: float = 200.0
     trials: int = 3
+    #: The clock the ROOF was measured at, for the LEVEL verdict. None leaves
+    #: `clock_level_ok` at "undetermined" and the row says so, because a level is
+    #: relative to something and the driver will not invent the something. No
+    #: committed calibration records it yet (`roofline.Hardware` carries
+    #: bandwidth and peaks, not a clock), so it stays None until one does.
+    reference_clock_mhz: float | None = None
+    #: THE RETIRED INSTRUMENT'S KNOBS, read only when a legacy timer is injected
+    #: below. `warmup` is a CALL COUNT and `iters` a fixed iteration count; both
+    #: are ignored on the instrument path, which warms for a duration and sizes
+    #: iterations from the warmup's own queue-deep per-call time.
+    warmup: int = 25
     iters: int | None = None          # None: derive from FLOPs
     flush_mb: int = T.DEFAULT_FLUSH_MB
     flush_mode: str = "read"
@@ -135,10 +306,29 @@ class RunConfig:
     force_tile_ledger: FT.ForceTileLedger = field(
         default_factory=FT.ForceTileLedger)
 
-    # Injectable backends. Overridden in tests so the driver's control flow can
-    # be verified without CUDA.
-    timer_eager: Callable = T.time_eager
-    timer_graph: Callable = T.time_graph
+    # THE INSTRUMENT. `timing.time_kernel` for an eager cell and
+    # `time_kernel_graph` for a captured one, and both write `TIMING_BASIS` into
+    # the row. Injectable so the driver's control flow can be verified without
+    # CUDA; a fake must return a `timing.KernelTiming`.
+    timer: Callable = T.time_kernel
+    graph_timer: Callable = time_kernel_graph
+
+    # THE RETIRED INSTRUMENT, AND WHY IT IS STILL REACHABLE. Setting either of
+    # these puts that mode back on `time_eager`/`time_graph`: a COUNT of warmup
+    # calls, an iteration count sized from one isolated call on an idle GPU, and
+    # two idle-instant clock samples around the cell. It is None by default, so a
+    # sweep measures on the instrument and nothing has to remember to ask.
+    #
+    # It is kept, rather than deleted, for the control-flow tests that were
+    # written against `TimingResult` and for a session that has to reproduce an
+    # old row bit for bit. That is only safe because a row is STAMPED with what
+    # measured it: a legacy-seam row carries `schema.LEGACY_INSTRUMENT` in its
+    # `instrument` column, so nothing it writes can be pooled with an instrument
+    # row by accident, and `scripts/alpha_refit.py` refuses to fit the two
+    # together without being told to.
+    timer_eager: Callable | None = None
+    timer_graph: Callable | None = None
+    #: Idle-instant clock sampler. The retired path's, and used only there.
     clock_sampler: Callable = T.ClockState.sample
 
     @property
@@ -405,6 +595,112 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
             cost.bytes_total, ms, hw.bandwidth_bytes_s)
 
 
+def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
+    """What `time_kernel` is called with for one mode of one cell.
+
+    The flusher is BUILT HERE rather than left to `time_kernel`'s own default,
+    so `flush_mb` and `flush_mode` stay the run's knobs and stay recorded: the
+    read-versus-write choice is load-bearing (a write flush leaves an L2 of
+    dirty lines whose writebacks land inside the NEXT timed interval, 10-30% on
+    a sub-100-microsecond span) and a column that says "read" while the default
+    sized itself elsewhere would be a lie in the cheapest possible place.
+
+    WHAT IT DELIBERATELY DOES NOT PASS is `cfg.warmup` and `cfg.iters`, which
+    `time_kernel` has no parameters for. They are not dropped quietly:
+    `refuse_dropped_retired_knobs` stops the cell before it is measured if
+    either was set while this path is in force, so no sweep reaches here
+    believing a call count was honoured.
+    """
+    kw = dict(warmup_ms=cfg.warmup_ms, target_ms=cfg.target_ms,
+              trials=cfg.trials, l2_flush=l2_flush,
+              reference_clock_mhz=cfg.reference_clock_mhz)
+    if l2_flush:
+        kw["flusher"] = T.L2Flusher(cfg.flush_mb, device=cfg.device,
+                                    mode=cfg.flush_mode)
+    return kw
+
+
+def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
+    """One `KernelTiming` onto one row, including what the instrument was.
+
+    THE FIVE RETIRED QUANTITIES ARE LEFT AT THEIR DEFAULTS: `sm_clock_start_mhz`,
+    `sm_clock_end_mhz`, `clock_drift_pct` and the two temperatures. `time_kernel`
+    does read a first and a last sample, but UNDER LOAD, and those columns hold
+    IDLE-instant readings; writing under-load numbers into them would give one
+    column two meanings either side of the version boundary. The under-load
+    numbers have columns of their own and a consumer asks for them by name.
+
+    `throttled` IS WRITTEN, and that is the correction this docstring used to
+    argue against. It is not a quantity, it is the VERDICT "this row's clock
+    misbehaved, do not pool it", and four consumers read it as one:
+    `scripts/pod_session.sh` gate S6d, `scripts/run_all.sh`,
+    `scripts/publish_results.sh` and `scripts/efficiency_report.py`. Leaving it
+    False on every v5 row did not make those
+    checks conservative, it made them vacuous: S6d "thermal stability" compared
+    0.0% against "< 5%" and could no longer FAIL for any reason, on any card, at
+    any temperature. A check that examined nothing reporting zero failures is
+    this project's documented failure shape and the one the instrument exists to
+    remove, so the verdict column carries the instrument's answer to the
+    question it was always asking.
+
+    FROM THE TWO CLOCK VERDICTS AND NOT THE THIRD. `host_bound_ok` is a fact
+    about the CALLER (the host could not enqueue fast enough to keep the queue
+    deep), not about the card's clock, and a row that is host-bound is an upper
+    bound rather than a thermal event. Folding it in here would report a Python
+    launcher as a hot box.
+
+    "undetermined" IS NOT THROTTLED, which is the one place this departs from
+    "unknown counts against the gate". These consumers are inclusion filters
+    over a whole arm, not release gates over a claim: on a pod whose container
+    forbids NVML every row is undetermined, and calling all of them throttled
+    would empty `efficiency_report` and fail S6d for the whole session on the
+    strength of a missing library. `alpha_refit.clock_gate` keeps undetermined
+    rows for the same reason and states it. What the two verdicts DO give back
+    is a gate that can fail: one FAILED clock verdict marks the row.
+    """
+    row.instrument = kt.instrument
+    row.warmup = kt.warmup_calls
+    row.warmup_ms = kt.warmup_ms
+    row.iters, row.trials = kt.iters, kt.trials
+    row.l2_flush = kt.l2_flush
+    row.flush_mb = kt.flush_mb
+    row.flush_mode = flush_mode if kt.l2_flush else ""
+    row.ms_p50, row.ms_p90 = kt.ms_p50, kt.ms_p90
+    row.ms_min, row.ms_std = kt.ms_min, kt.ms_std
+    row.jitter_p90_over_p50 = (kt.ms_p90 / kt.ms_p50) if kt.ms_p50 > 0 else 0.0
+    row.sm_clock_load_mhz = kt.sm_clock_load_mhz or 0.0
+    row.clock_level_ok = SC.verdict_word(kt.clock_level_ok)
+    row.clock_drift_ok = SC.verdict_word(kt.clock_drift_ok)
+    row.throttled = SC.VERDICT_FAILED in (row.clock_level_ok, row.clock_drift_ok)
+    row.host_bound_ok = SC.verdict_word(
+        None if kt.host_bound is None else not kt.host_bound)
+    row.clock_samples = kt.clock_samples
+    row.clock_source = kt.clock_source
+    row.clock_note = kt.clock_note
+    row.host_enqueue_ms = kt.host_enqueue_ms or 0.0
+    row.host_note = kt.host_note
+
+
+def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:
+    """One `TimingResult` plus its two idle-instant clock samples onto one row.
+
+    Only reached when a legacy timer is injected. The row is stamped
+    `schema.LEGACY_INSTRUMENT` so it can never be mistaken for, or pooled with,
+    a row off the instrument -- which is the entire reason the seam is allowed to
+    survive at all.
+    """
+    row.instrument = SC.LEGACY_INSTRUMENT
+    row.warmup, row.iters, row.trials = res.warmup, res.iters, res.trials
+    row.flush_mb, row.flush_mode = res.flush_mb, res.flush_mode
+    row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
+    row.ms_min, row.ms_std = res.ms_min, res.ms_std
+    row.jitter_p90_over_p50 = res.jitter_p90_over_p50
+    row.sm_clock_start_mhz = start.sm_clock_mhz
+    row.sm_clock_end_mhz = end.sm_clock_mhz
+    row.temp_start_c, row.temp_end_c = start.temp_c, end.temp_c
+    row.clock_drift_pct, row.throttled = T.clock_drift(start, end)
+
+
 #: Timing and derived columns, zeroed whenever a row did not earn them.
 _TIMED_FIELDS = ("ms_p50", "ms_p90", "ms_min", "ms_std", "jitter_p90_over_p50",
                  "tflops", "compulsory_gbps", "pct_of_achieved_tflops",
@@ -543,6 +839,7 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     control flow is unchanged from before pinning existed, and `pin` is inert
     (`CellPin()` with status "off") on every unpinned sweep.
     """
+    refuse_dropped_retired_knobs(cfg)
     written = 0
     x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
                              reuse_weights=cfg.reuse_weights)
@@ -587,7 +884,22 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     cost = BM.pipeline_cost(costed_spans, spec, load.active_experts, materialised)
 
     def prepare(row: SC.Row, verdict=None) -> SC.Row:
-        """Everything every row carries, regardless of which path emitted it."""
+        """Everything every row carries, regardless of which path emitted it.
+
+        INCLUDING THE INSTRUMENT, and that is not bookkeeping. Four of this
+        function's callers emit a row that no timer ever saw -- a cell that
+        failed the fp32 oracle, a graph mode skipped by cost policy, a span
+        that could not be captured, and a timer that raised -- and a `Row`
+        starts life with `instrument = ""`, which `schema.instrument_of`
+        refuses and `schema.has_kernel_timing` therefore raises on. That
+        predicate is the one an analysis is told to split a pool with before it
+        reads any v5 column, so leaving those four paths blank made the
+        documented usage throw on rows a normal sweep writes by the thousand.
+        Stamped HERE, above the branch, so no later path can be added that
+        forgets: `schema.NO_INSTRUMENT` is what an untimed row says, and the
+        two `_apply_*_timing` functions overwrite it when a timer did run.
+        """
+        row.instrument = SC.NO_INSTRUMENT
         _apply_correctness(row, verdict or correctness)
         _apply_load(row, load)
         _apply_meta(row, routing_meta)
@@ -668,19 +980,20 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
                              "graph skipped by policy")
             continue
 
-        clocks_start = cfg.clock_sampler()
+        legacy = cfg.timer_graph if use_graph else cfg.timer_eager
+        clocks_start = cfg.clock_sampler() if legacy is not None else None
         try:
-            if use_graph:
-                res = cfg.timer_graph(call, warmup=cfg.warmup, iters=cfg.iters,
-                                      trials=cfg.trials, l2_flush=l2,
-                                      flush_mb=cfg.flush_mb,
-                                      flush_mode=cfg.flush_mode,
-                                      on_captured=verify_replay)
+            if legacy is not None:
+                extra = {"on_captured": verify_replay} if use_graph else {}
+                res = legacy(call, warmup=cfg.warmup, iters=cfg.iters,
+                             trials=cfg.trials, l2_flush=l2,
+                             flush_mb=cfg.flush_mb,
+                             flush_mode=cfg.flush_mode, **extra)
+            elif use_graph:
+                res = cfg.graph_timer(call, on_captured=verify_replay,
+                                      **_instrument_kwargs(cfg, l2))
             else:
-                res = cfg.timer_eager(call, warmup=cfg.warmup, iters=cfg.iters,
-                                      trials=cfg.trials, l2_flush=l2,
-                                      flush_mb=cfg.flush_mb,
-                                      flush_mode=cfg.flush_mode)
+                res = cfg.timer(call, **_instrument_kwargs(cfg, l2))
         except T.NotCapturable as e:
             # A finding, not a failure: an implementation that cannot be
             # graph-captured cannot be used in real MoE inference. It belongs in
@@ -696,22 +1009,15 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
             written += _emit(writer, manifest, row, key, SC.STATUS_ERROR,
                              str(e)[:200])
             continue
-        clocks_end = cfg.clock_sampler()
-        drift, throttled = T.clock_drift(clocks_start, clocks_end)
 
         verdict = replay_verdict if (use_graph and replay_verdict) else correctness
         _apply_correctness(row, verdict)
         row.capture_status = "captured" if use_graph else "n/a"
-        row.warmup, row.iters, row.trials = res.warmup, res.iters, res.trials
-        row.flush_mb, row.flush_mode = res.flush_mb, res.flush_mode
-        row.ms_p50, row.ms_p90 = res.ms_p50, res.ms_p90
-        row.ms_min, row.ms_std = res.ms_min, res.ms_std
-        row.jitter_p90_over_p50 = res.jitter_p90_over_p50
+        if legacy is not None:
+            _apply_legacy_timing(row, res, clocks_start, cfg.clock_sampler())
+        else:
+            _apply_kernel_timing(row, res, cfg.flush_mode)
         _apply_cost(row, cost, res.ms_p50, cfg)
-        row.sm_clock_start_mhz = clocks_start.sm_clock_mhz
-        row.sm_clock_end_mhz = clocks_end.sm_clock_mhz
-        row.temp_start_c, row.temp_end_c = clocks_start.temp_c, clocks_end.temp_c
-        row.clock_drift_pct, row.throttled = drift, throttled
 
         if not verdict.passed:
             # _emit zeroes the timing columns, so the file never carries a
@@ -765,6 +1071,12 @@ def run_sweep(cells: Iterable[tuple[BenchSpec, Sequence[str], str]],
                 try:
                     total += run_cell(spec, names, impl, cfg, routing, writer,
                                       manifest, info, sha, dirty)
+                except RetiredKnobRefused:
+                    # NOT a per-cell crash. The config that cannot be honoured
+                    # is the same config for every cell, so recording it as one
+                    # cell's failure would repeat it for all of them and still
+                    # exit 0.
+                    raise
                 except PipelineError as e:
                     manifest.record(f"invalid|{spec.label}|{'+'.join(names)}|{impl}",
                                     SC.STATUS_INVALID_PIPELINE,

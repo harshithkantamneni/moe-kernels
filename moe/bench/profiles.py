@@ -46,9 +46,23 @@ class Profile:
     seeds: tuple[int, ...] = (0,)
     l2_modes: tuple[bool, ...] = (True, False)
     graph_modes: tuple[bool, ...] = (False, True)
-    warmup: int = 25
     trials: int = 3
-    iters: int | None = None
+    #: Timing knobs IN THE INSTRUMENT'S OWN UNITS, or None to take
+    #: `driver.RunConfig`'s defaults. `warmup_ms` is a DURATION of delivered GPU
+    #: time and `target_ms` is the kernel time one trial should hold, from which
+    #: `timing.iters_for` sizes the iteration count.
+    #:
+    #: THERE IS NO `warmup` COUNT AND NO `iters` HERE, and their absence is the
+    #: point. Until 2026-09-02 a profile could set both, `cli` copied them into
+    #: every `RunConfig`, and `timing.time_kernel` has no such parameters: on the
+    #: instrument path `smoke`'s "warmup=5, iters=10" and `profile-cell`'s "one
+    #: launch" were silently neither. `driver.refuse_dropped_retired_knobs` now
+    #: REFUSES that config rather than dropping it quietly, which turned the two
+    #: profiles that set them into a refusal every documented session command hit
+    #: before it measured anything. A knob the instrument cannot honour is not a
+    #: profile axis, so it is not a field.
+    warmup_ms: float | None = None
+    target_ms: float | None = None
     #: Add an ALL-REFERENCE whole-layer cell per spec: a python loop over every
     #: expert. Measured 7.337 ms against vLLM's 0.588 at mixtral/T=512, so it is
     #: a 12.5x ceiling rather than a target. Real, but slow and about no kernel.
@@ -329,9 +343,13 @@ PROFILES: dict[str, Profile] = {
         routings=(RoutingSpec("uniform"), RoutingSpec("zipf", 1.2)),
         l2_modes=(True,),
         graph_modes=(False,),
-        warmup=5,
         trials=1,
-        iters=10,
+        # Quick, said in the units the instrument reads. 25 ms of sustained
+        # warmup and a 25 ms trial target is the "about two minutes" this
+        # profile is for; the retired `warmup=5, iters=10` asked for a call
+        # count `time_kernel` has no parameter for.
+        warmup_ms=25.0,
+        target_ms=25.0,
         notes="shakedown: proves correctness and the plumbing, not performance",
     ),
     "standard": Profile(
@@ -372,10 +390,19 @@ PROFILES: dict[str, Profile] = {
         routings=(RoutingSpec("uniform"),),
         l2_modes=(True,),
         graph_modes=(False,),
-        warmup=5,
         trials=1,
-        iters=1,
-        notes="one cell, one launch: the shape ncu can read a counter off",
+        # ONE LAUNCH IS NOT EXPRESSIBLE ON THE INSTRUMENT, and asking for it
+        # anyway is what this profile used to do. `time_kernel` sizes its
+        # iteration count with `timing.iters_for`, whose floor is 10, so the
+        # smallest honest ask is one trial of that floor: `target_ms=1.0` is
+        # below any real cell's per-call time and therefore always floors.
+        # What `ncu --launch-count 1` actually needs is unchanged and is what
+        # the axes below give it -- ONE cell, ONE routing, ONE timing mode, so
+        # the first launch in the process is the kernel the question is about.
+        warmup_ms=25.0,
+        target_ms=1.0,
+        notes=("one cell, one timing mode, and the instrument's floor of ten "
+               "iterations: the shape ncu can read a counter off"),
     ),
     "full": Profile(
         name="full",
@@ -673,7 +700,57 @@ def _mode_rows(profile: Profile) -> tuple[int, int]:
     return l2 * eager, l2 * graph
 
 
-def estimated_hours(profile: Profile) -> dict[str, float]:
+#: WHICH INSTRUMENT THE RATES ABOVE DESCRIBE. Every published arm was timed by
+#: `time_eager`/`time_graph`, so `MEASURED_CELL_COST` is a model of the RETIRED
+#: timer and of nothing else. Naming it here is not bookkeeping: the instrument
+#: that replaced it changed the per-row cost, and a rate that does not say what
+#: it was measured on is how the change goes unnoticed.
+MEASURED_COST_INSTRUMENT = "time_eager+time_graph/idle-instant-clock/pre-v5"
+
+#: The warmup the retired timer spent, per PLANNED timing row, so it can be
+#: taken back out. `(warmup + 2) * ms_p50` is the model `MEASURED_CELL_COST`
+#: documents; this is that quantity summed over each arm's rows and divided by
+#: the PLANNED rows of that kind, zeros included, because `should_time_graph`
+#: skips graph rows and a skipped row still lands in the CSV and still paid no
+#: warmup. `timed_fraction` is the other half of the same count.
+#:
+#: THE UNITS ARE WHY THIS EXISTS. The retired timer warmed for a CALL COUNT and
+#: `time_kernel` warms for a DURATION, so the swap is not a tuning: on the base
+#: bf16 eager rows the old warmup averaged 0.283 s and the new one is a flat
+#: 0.300 s, while on every fp8 arm the old one averaged 0.02-0.03 s against the
+#: same 0.300 s. An estimate that keeps the old term is low by the difference,
+#: and it is low by the MOST on the arms whose kernels are fastest.
+RETIRED_WARMUP_S: dict[tuple[str, str, str], tuple[float, float]] = {
+    # (env, dtype family, mode): (retired warmup seconds per planned row,
+    #                             fraction of planned rows that were timed)
+    ("base", "bf16", "eager"): (0.2829, 1.000),     # 16,522 rows
+    ("base", "bf16", "graph"): (0.0062, 0.455),     # 14,658 rows
+    ("base", "fp8", "eager"): (0.0231, 1.000),      #  9,576 rows
+    ("base", "fp8", "graph"): (0.0112, 0.845),      #  9,576 rows
+    ("vllm", "bf16", "eager"): (0.0964, 1.000),     # 15,078 rows
+    ("vllm", "bf16", "graph"): (0.0034, 0.317),     # 14,154 rows
+    ("vllm", "fp8", "eager"): (0.0309, 1.000),      #  2,646 rows
+    ("vllm", "fp8", "graph"): (0.0164, 0.839),      #  2,646 rows
+    ("sglang", "bf16", "eager"): (0.1038, 1.000),   #  5,670 rows
+    ("sglang", "bf16", "graph"): (0.0038, 0.319),   #  4,746 rows
+    ("sglang", "fp8", "eager"): (0.0313, 1.000),    #  2,436 rows
+    ("sglang", "fp8", "graph"): (0.0154, 0.825),    #  2,436 rows
+}
+
+
+def _warmup_swap_s(env: str, family: str, mode: str, warmup_ms: float) -> float:
+    """Seconds to add to one PLANNED row of `mode` when it runs on the instrument.
+
+    The retired term out, the instrument's in, and the instrument only warms a
+    row it actually times, so the new term carries the same `timed_fraction`
+    the old one was averaged over.
+    """
+    retired, timed_fraction = RETIRED_WARMUP_S[(env, family, mode)]
+    return timed_fraction * warmup_ms / 1000.0 - retired
+
+
+def estimated_hours(profile: Profile, *,
+                    warmup_ms: float | None = None) -> dict[str, float]:
     """Wall-clock hours this profile would cost, per environment plus `total`.
 
     A profile nobody can afford to run is not a contribution, and until this
@@ -702,13 +779,34 @@ def estimated_hours(profile: Profile) -> dict[str, float]:
     10% on nine of fifteen (env, arm) pairs and inside 30% on all of them, the
     misses being the two arms whose token grid is furthest from the average. A
     figure to plan a rental against, not a budget with margin built in.
+
+    WHICH INSTRUMENT IS BEING PRICED IS AN ARGUMENT, because the rates were
+    measured on one apparatus and every run since 2026-09-02 uses another.
+    `warmup_ms=None` prices the run the published arms actually made, on
+    `MEASURED_COST_INSTRUMENT`, and is what the arm-reproduction checks compare
+    against. A float prices the run `driver.RunConfig(warmup_ms=...)` would make
+    now: `RETIRED_WARMUP_S` takes the call-count warmup back out of every planned
+    timing row and puts that duration in instead. The second number is the larger
+    one on every environment and dtype in the table, so the caller that prints a
+    figure for a human to rent a box against is the caller that must pass it --
+    `cli.dry_run` does.
     """
+    if warmup_ms is not None and warmup_ms <= 0:
+        raise ValueError(
+            f"warmup_ms={warmup_ms}: the instrument warms for a duration of "
+            "sustained load and refuses a zero (see timing.warm_until), so "
+            "there is no run for this to be an estimate of. Pass None to price "
+            "the retired timer the published rates were measured on.")
     specs = len(profile.specs())
     eager_rows, graph_rows = _mode_rows(profile)
     families = [_dtype_family(d) for d in profile.dtypes] or ["bf16"]
 
-    def cell_seconds(cost: CellCost) -> float:
-        return cost.prologue + eager_rows * cost.eager + graph_rows * cost.graph
+    def cell_seconds(cost: CellCost, env: str, family: str) -> float:
+        seconds = cost.prologue + eager_rows * cost.eager + graph_rows * cost.graph
+        if warmup_ms is None:
+            return seconds
+        return seconds + (eager_rows * _warmup_swap_s(env, family, "eager", warmup_ms)
+                          + graph_rows * _warmup_swap_s(env, family, "graph", warmup_ms))
 
     out: dict[str, float] = {}
     for env, impls in MEASURED_IMPLS_PER_ENV.items():
@@ -716,11 +814,18 @@ def estimated_hours(profile: Profile) -> dict[str, float]:
         if profile.include_framework_pipeline and env != BASE_ENV:
             per_spec += impls          # one whole-layer cell per framework span
         cells_per_family = specs * per_spec / len(families)
-        seconds = sum(cells_per_family * cell_seconds(MEASURED_CELL_COST[(env, f)])
+        seconds = sum(cells_per_family * cell_seconds(MEASURED_CELL_COST[(env, f)],
+                                                      env, f)
                       for f in families)
         if profile.include_pipeline_scope and env == BASE_ENV:
             # Emitted once per spec regardless of env, and it is the slow one.
-            seconds += specs * cell_seconds(REFERENCE_PIPELINE_COST)
+            # It has no warmup entry of its own, so the swap uses the base
+            # env's: it is a base-env cell timed by the same timer, and its
+            # graph column is 0.000 s because the skip policy took 100% of its
+            # graph rows, so only the eager term of the swap can reach it.
+            seconds += sum(specs / len(families)
+                           * cell_seconds(REFERENCE_PIPELINE_COST, BASE_ENV, f)
+                           for f in families)
         out[env] = seconds / 3600.0
     out["total"] = sum(out.values())
     return out

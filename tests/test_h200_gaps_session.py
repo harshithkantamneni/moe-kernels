@@ -1017,9 +1017,13 @@ def test_the_measuring_run_prints_the_disclosure_the_dry_run_used_to_have_alone(
             assert arm in real.stdout, (
                 f"{script} does not adopt the table, so {arm} must be disclosed "
                 "in whatever state it lands, including DONE")
-    # And the all-clear sentence appears exactly when nothing was disclosed.
+    # And the all-clear appears exactly when nothing was disclosed. Asserted on
+    # the SECTION HEADING plus "No row", not on the sentence: the sentence was
+    # rewritten when the disclosure widened past REFUSED and INVALID, and this
+    # assertion pinned the old one and failed on the widening.
     if "WRONG WORD" not in real.stdout:
-        assert "No REFUSED or INVALID row" in real.stdout
+        assert "THE EXIT-CODE CONTRACT" in real.stdout
+        assert "No row" in real.stdout
 
     clean = tmp_path / "CLEAN.tsv"
     clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
@@ -1057,7 +1061,12 @@ def test_a_ledger_of_one_claim_fail_row_does_not_print_the_all_clear(tmp_path):
     ledger = tmp_path / "ARMS.tsv"
     ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
                       "mma_switch\tCLAIM_FAIL\t1\t400\t0\t/x.log\t\n")
-    got = lift(f'contract_disclosure {ledger}', REPO=str(ROOT))
+    # THE UNADOPTING FILE IS PLANTED, NOT NAMED. check_mma_path.sh adopted the
+    # table on 2026-09-02 and this assertion broke on the driver being right,
+    # which is the third time a test here pinned which real script had adopted.
+    # What is under test is the all-clear's reachability, not the census.
+    repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
+    got = lift(f'contract_disclosure {ledger}', REPO=str(repo))
     assert "THE EXIT-CODE CONTRACT" not in got.stdout, got.stdout
     assert "No row in this session" not in got.stdout
     assert "THE ROWS WHOSE STATE MAY BE THE WRONG WORD" in got.stdout
