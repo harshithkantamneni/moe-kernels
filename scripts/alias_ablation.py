@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Measure `alpha` by ABLATION, without the byte model. STUDY.md item 4.
 
-    python scripts/alias_ablation.py                    # plan + prediction, no GPU
+    python scripts/alias_ablation.py                    # plan + cost + MDE, no GPU
     python scripts/alias_ablation.py --run              # the pod run
     python scripts/alias_ablation.py --replay <dir>     # re-report, no GPU
     python scripts/alias_ablation.py --synthetic refit  # exercise the gates, no GPU
-    python scripts/alias_ablation.py --run --compute dot --replicates 15
+    python scripts/alias_ablation.py --run --no-probe --num-warps 8
+    python scripts/alias_ablation.py --synthetic alias-blind   # the 2026-09-01 world
 
 WHY THIS EXISTS. `alpha` is the cost of an extra M-tile as a fraction of a fresh
 weight read. One expert holding `r` rows is scheduled as `ceil(r/BM)` M-tiles;
@@ -86,10 +87,17 @@ launched with three different runtime integers, each of which is a STRIDE:
 
     stride_be_eff      N*K  ->  0    every M-tile reads expert 0's block
     stride_bn_blk_eff  BLOCK_N*K -> 0   every N-tile reads column block 0
-    b_k_advance        BLOCK_K -> 0    the K loop never advances the B pointer
+    b_k_advance        BLOCK_K -> 0    ONLY at --alias-extent tile
 
-In NORMAL those three are the real strides; in ALIASED every weight load lands
-on the same BLOCK_K x BLOCK_N tile. The kernel emits one add per loop iteration
+In NORMAL those three are the real strides. At `--alias-extent block`, the
+default, ALIASED zeroes the first two and keeps the K advance, so every weight
+load lands in the SAME `BLOCK_N x K` column block: `BLOCK_N * K * 2` bytes,
+resident in any L2 this study has met, spread over thousands of lines, walked
+with the normal arm's own sequential stride. At `--alias-extent tile`, which
+reproduces the 2026-09-01 run, the third is zeroed too and every load lands on
+one 16 KiB tile; that is the pinning whose L2 slice contention drove `r` to 12
+and is kept only so the two can be compared in one session. The kernel emits
+one add per loop iteration
 either way, so the two variants are byte-identical machine code and differ only
 in the VALUES of three scalars the compiler cannot see. Dead-code elimination
 cannot apply to one and not the other, because there is only one code path. A
@@ -164,14 +172,15 @@ WHAT ELSE DIFFERS BETWEEN ALIASED AND NORMAL, being adversarial about it, since
 D(n) charges the whole difference to weight traffic:
 
   * L2 SERVICE, and the cache-set distribution that makes it worse. Both
-    variants push `n W` bytes through L2 and the aliased variant pins every one
-    of them to a single BLOCK_K x BLOCK_N tile, so its loads land on a handful
-    of L2 slices and are served more slowly than the aggregate L2 bandwidth
-    would suggest. BOUNDED BY THE BRACKET above: whatever it costs appears in
-    the aliased ladder's own slope, which is `r`, and the two estimators bracket
-    the truth for any composition between a sum and a max. Narrowing it means
-    spreading the aliased tile across more slices, which this design does not do
-    because a spread alias has no closed form to check the output against.
+    variants push `n W` bytes through L2. MEASURED AND GATED, not argued: `r`
+    is the aliased ladder's per-tile cost over one weight read, the bracket
+    derivation is only a bracket while `r < 1`, and `bracket_gate` refuses to
+    quote an interval built on an `r` above that. The 2026-09-01 run measured
+    `r` between 6.4 and 19.1 because its alias pinned every load in the K loop
+    to one 16 KiB tile and a handful of L2 slices; `--alias-extent block`
+    spreads it over a whole `BLOCK_N x K` column block, which is the same
+    sequential walk the normal arm makes and has the closed form that pinning
+    was said to lack.
   * L2 CAPACITY. The aliased variant leaves L2 almost entirely to activations
     and outputs. Bounded by design rather than hoped away: at BLOCK_M=16 the
     activation re-stream is `n BLOCK_M / N` of the weight stream, which the plan
@@ -192,20 +201,136 @@ WHAT THIS IS NOT. It is not vLLM's `fused_moe_kernel`. It is a kernel with
 vLLM's B-pointer arithmetic, vLLM's GROUP_SIZE_M swizzle, vLLM's [E, N, K]
 weight layout and vLLM's tile constants, whose reduction is replaced by
 `acc += tl.sum(a) + tl.sum(b)` on the study's own instruction. That replacement
-is deliberate and it is what makes the estimator unbiased: with a real `tl.dot`
-the aliased variant becomes compute-bound while the normal one stays
-memory-bound, so D(n) loses one copy of the per-tile compute cost and the fitted
-alpha is biased DOWN. `--compute dot` runs it that way anyway, prints the bound
-and refuses to quote the result as P1's answer. The accumulator keeps its full
-BLOCK_M x BLOCK_N float32 shape in both modes, so register pressure, occupancy
-and therefore the L2 working set are unchanged between them.
+is deliberate and it is what makes the estimator unbiased under ADDITION: with
+a real `tl.dot` the aliased variant can become compute-bound while the normal
+one stays memory-bound, so D(n) loses one copy of the per-tile compute cost and
+the fitted alpha is biased DOWN. `--compute dot` runs it that way anyway,
+prints the bound and refuses to quote the result as P1's answer. The
+accumulator keeps its full BLOCK_M x BLOCK_N float32 shape in both modes, so
+register pressure, occupancy and therefore the L2 working set are unchanged
+between them.
 
-EXIT CODES, because a refutation is a result and not an error:
-    0  the run completed and every runnable gate passed
-    1  the run completed and a gate FAILED: the prediction is refuted
-    2  usage error
-    3  cannot run here (no GPU, no triton, not enough memory); nothing measured
-    4  the run completed but the design did not identify alpha: not testable
+AND THE BIAS IS BOUNDED WHILE THE 2026-09-01 CEILING IS NOT. That reduction is
+a full 64x128 tree per K iteration on the CUDA cores, and the run it produced
+sat at 0.61 of the card's read roof on every geometry. `dot` moves the same
+work onto the tensor cores at an arithmetic intensity of `BLOCK_M` FLOP/byte,
+16 against a ridge of 162.8, so its compute cost is at most a tenth of its
+memory cost and is IDENTICAL in both arms. That is why `--probe` is allowed to
+consider `dot`: a bounded tenth-of-memory bias in a design that can see DRAM
+beats an unbiased design that cannot. The probe prints which mode it chose and
+`prediction_gate` still refuses to answer P1 from `dot`.
+
+WHY THE FIRST ATTEMPT WAS VOID, AND WHY THAT WAS THE APPARATUS AND NOT THE
+WORLD. This arm ran once, on 2026-09-01, and returned VOID: gates `signal` and
+`form` FAILED and the report recorded that the HBM read was 5 to 8% of one
+tile's time. Read as a null result that would say the per-tile cost is NOT
+DRAM, and the study's whole mechanism sentence would have to drop the word.
+It is not a null result. It is a design that could not have seen DRAM whatever
+alpha was, and the card's own calibration proves it in one line per model.
+
+D(1) is claimed to be the cost of reading one full pass over every expert's
+weight block. `moe/bench/hardware/measured_nvidia_h200.yaml` records this card
+moving 4469.6 GB/s on the READ pattern, which its own note calls "the closest
+analogue to streaming expert weights". Divide the bytes by that ceiling and
+compare with the D(1) the run reported:
+
+    model                  weight bytes   DRAM floor   measured D(1)   ratio
+    mixtral-8x7b            1879048192     0.4204 ms      0.0586 ms     7.2x
+    qwen2-57b-a14b          2348810240     0.5255 ms      0.0600 ms     8.8x
+    deepseek-v2-lite         738197504     0.1652 ms      0.0528 ms     3.1x
+    deepseek-v3            15032385536     3.3632 ms      0.3129 ms    10.7x
+    control-l2-resident      536870912     0.1201 ms      0.0258 ms     4.7x
+
+Every rung's "one weight read" came out three to eleven times FASTER than the
+fastest this card can move those bytes. A weight read cannot beat the card's
+own read ceiling, so D(1) was never a weight read, and `alpha = slope/D(1)`
+was never a fraction of one. The `signal` gate was right to void the page; its
+detail named the symptom and not the cause.
+
+THE CAUSE IS A SHARED CEILING AT 61% OF THE DRAM ROOF. Divide each ladder's
+per-tile slope into the weight bytes one extra tile requests:
+
+    model                  normal GB/s   aliased GB/s   aliased / read roof
+    mixtral-8x7b               2619.7        2755.4            0.616
+    qwen2-57b-a14b             2660.0        2739.7            0.613
+    deepseek-v2-lite           2703.4        2735.3            0.612
+    deepseek-v3                2666.0        2753.7            0.616
+    control-l2-resident        2682.2        2711.1            0.607
+
+The aliased arm, whose loads all hit cache, ran at 0.607 to 0.616 of the DRAM
+roof on five geometries spanning 20x in footprint. That is a hard, shape
+independent, NON-DRAM ceiling in the request path, and it sits BELOW the DRAM
+roof. So in the normal arm DRAM was never the binding resource: it had 39%
+slack, ablating it could save only the un-overlapped residue, and the residue
+is the 5 to 8% the run reported. The same fact reads off `r`, the aliased
+ladder's per-tile cost over one weight read, which came out 6.4 to 19.1 where
+the bracket derivation below needs r < 1; at r > 1 the difference estimator's
+denominator changes sign and the reported "bracket" is not one.
+
+WHAT THAT CHANGES HERE, and all three are checkable before the box is rented:
+
+  1. THE ALIAS IS SPREAD, NOT PINNED (`--alias-extent`, default `block`). The
+     2026-09-01 alias zeroed the K advance too, so every load in the K loop
+     landed on ONE BLOCK_K x BLOCK_N tile: 16 KiB, a hundred and twenty eight
+     cache lines, a handful of L2 slices. The report named that as the confound
+     setting `r` and said a spread alias "has no closed form to check the output
+     against". It has one. Keep the K advance REAL and zero only the expert and
+     N-block strides, and the aliased arm streams `BLOCK_N * K * 2` bytes, half
+     a MiB to under two, L2 resident on any card this study runs on, over
+     thousands of lines, with the same sequential K stride the normal arm walks.
+     Its closed form is the normal reference evaluated at expert 0, N-block 0.
+  2. THE HEADROOM IS MEASURED AND GATED. `headroom` asks whether the aliased
+     arm's achieved request bandwidth EXCEEDS the card's own read roof, which is
+     the condition under which DRAM binds in the normal arm and the ablation can
+     see it at all. `attribution` asks whether D(1) reached the card's floor for
+     the bytes the alias removed. Either failing means the page is VOID, and it
+     is void for a stated arithmetic reason rather than for a threshold.
+  3. THE PROBE IS A TENTH OF THE ARM AND CAN STOP THE OTHER NINE. `--probe`
+     times the two cheapest rungs of the smallest model across a short pinning
+     grid, prints each pinning's achieved bandwidth against the card's roofs,
+     and runs the ladder at the pinning that clears the roof by the widest
+     margin. If none clears it, the arm stops there: nothing measured afterwards
+     could have answered, and the INVALID costs the probe's own wall minutes
+     rather than the whole booking. NO ABSOLUTE MINUTES ARE QUOTED HERE ON
+     PURPOSE. `report_cost` is the only place in this file that names a
+     duration. Until 2026-09-03 this paragraph asserted one of its own, "three
+     minutes before it spends sixty", while that function was printing 5.0
+     KERNEL and 11.8 WALL for the shipped design: the fix landed at the print
+     and not in the prose, which is the same one-of-two-sites shape as the rest
+     of this rebuild, and a driver owner who books from a header reserves an
+     hour for a quarter of one. The header may QUOTE a retired figure, as the
+     sentence you are reading does, and may not assert one;
+     `test_the_header_quotes_no_duration_of_its_own` enforces exactly that and
+     scores the ratio above against the table `report_cost` prints.
+  4. THE MDE IS STATED TWICE, AND THE SECOND ONE IS THE RUN'S. `report_mde` in
+     the plan sizes the booking against the corpus's spread, which
+     `rescore_published_reports` defines as a WITHIN-cell pstdev and therefore a
+     floor, and against `MIN_SIGNAL_FRACTION`, the share `signal_gate` will
+     admit. Both are the best available before the rental and neither is what
+     the run delivered. `_analyse` prints a second block on this run's own
+     pass-to-pass scatter and its own worst signal share -- the number
+     `signal_gate` scores, read from the one function `one_tile_signal_shares`
+     so the two cannot drift. It is the line that reads 2026-09-01: at D(1) =
+     5.3% of a pass that design could resolve alpha only to 0.19, against a 0.11
+     limit and a 0.46 gap between the candidates. Its "REFUTED or VOID" was
+     therefore not a null result about DRAM, and nothing on the page said so,
+     because the MDE was stated once and before the fact.
+
+EXIT CODES ARE `moe/bench/exit_codes`'s TABLE AND NOT A SECOND ONE. This
+paragraph carried a different table until 2026-09-03 -- 2 for a usage error,
+3 for "cannot run here", 4 for "not testable" -- while the code below already
+returned REFUSED(2) on every path that measures nothing and let
+`exit_codes.classify` decide the rest. Two tables in one file is the defect
+that module exists to prevent, so there is now one:
+
+    0  DONE        measured; every VALIDITY and CLAIM gate PASSED
+    1  CLAIM_FAIL  measured; VALIDITY passed; P1 did not. A RESULT, never a retry
+    2  REFUSED     nothing measured: no GPU, no triton, a refused preflight, or
+                   a bare invocation that printed the plan. Free
+    3  INVALID     measured, then a VALIDITY gate failed. Nothing may be quoted
+    4  ERROR       crashed. The handler at the foot of this file is what keeps a
+                   traceback from leaving 1 behind, which the session ledger
+                   LATCHES as a refuted claim and never attempts again
 """
 from __future__ import annotations
 
@@ -220,7 +345,7 @@ import re
 import statistics
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -288,7 +413,10 @@ DEFAULT_TRIALS = 3
 #: The L2-resident control geometry, and every number in it is chosen.
 #:
 #: 16.0 MiB PER EXPERT, comfortably inside any L2 this study has run on (H200
-#: 50 MiB, A100 40 MiB), so at GROUP_SIZE_M=1 the re-read between one expert's
+#: 60 MiB, A100 40 MiB, both read off `observed.l2_bytes` in
+#: `moe/bench/hardware/measured_*.yaml` and checked by a test, not remembered:
+#: this comment said "H200 50 MiB" until 2026-09-03 and the H200 has 60), so at
+#: GROUP_SIZE_M=1 the re-read between one expert's
 #: consecutive M-tiles HITS and NORMAL has no HBM re-read to save. Its alpha
 #: must therefore come out near zero, and whatever it does come out at is the
 #: size of everything that scales with the tile count and is not weight traffic:
@@ -306,6 +434,86 @@ CONTROL_MODEL = "control-l2-resident"
 CONTROL_EXPERTS = 32
 CONTROL_K = 2048
 CONTROL_N = 4096
+
+
+# --------------------------------------------------------------------------
+# the card's own ceilings, read from its calibration and never remembered
+# --------------------------------------------------------------------------
+
+#: Which STREAM pattern is the roof a weight read is held to. `read`, because
+#: `measured_nvidia_h200.yaml` says of it in its own file: "closest analogue to
+#: streaming expert weights; reduced along the contiguous axis so the tree does
+#: not bound it". It is also the LARGEST of the four patterns on both cards, so
+#: every headroom and attribution verdict below is scored against the ceiling
+#: most generous to this design. A design that fails against the most generous
+#: roof has not failed on a threshold choice.
+ROOF_PATTERN = "read"
+
+#: The card this file's PLANTED laws and its off-GPU arithmetic are stated for.
+#: `--synthetic` must not read the attached hardware (see `main`), so the plant
+#: needs a number, and a number this repository can check.
+PLANT_CARD = "NVIDIA H200"
+
+
+def measured_card(card: str) -> dict:
+    """`observed.l2_bytes` and the `read` roof for one card, from its yaml.
+
+    THE FILE, NEVER A LITERAL, and the defect is in this file's own history:
+    `SYNTHETIC_L2_BYTES` was `50 * 2**20` and the control's docstring said the
+    H200 has 50 MiB of L2. It has 60 (`observed.l2_bytes: 62914560`), the A100
+    has 40 (`41943040`), and 50 is neither. A rehearsal planted at 50 MiB
+    straddles a cache no card in this study owns: deepseek-v3 holds 56 MiB per
+    expert, which is ABOVE a 50 MiB line and BELOW the real one, so the planted
+    world classified one of the four models onto the wrong side of the
+    threshold the plant exists to test.
+
+    Returns `{}` rather than raising when there is no calibration for the card:
+    a missing ruler makes the headroom gates NOT TESTABLE, which is a VALIDITY
+    UNKNOWN and therefore INVALID, and that is the right answer. It is not a
+    reason to invent a roof.
+    """
+    import yaml
+
+    from moe.bench import roofline as RF
+    path = RF.HARDWARE_DIR / f"{RF.measured_slug(card)}.yaml"
+    if not path.exists():
+        return {}
+    data = yaml.safe_load(path.read_text()) or {}
+    detail = data.get("detail") or {}
+    roof = None
+    for entry in detail.get("bandwidth_patterns") or []:
+        if entry.get("pattern") == ROOF_PATTERN and entry.get("gbps"):
+            roof = float(entry["gbps"]) * 1e9
+    return {"card": data.get("name", card),
+            "l2_bytes": int((data.get("observed") or {}).get("l2_bytes") or 0),
+            "roof_bytes_s": roof,
+            "roof_pattern": ROOF_PATTERN,
+            "source": path.name}
+
+
+# --------------------------------------------------------------------------
+# what the alias actually removes
+# --------------------------------------------------------------------------
+
+#: How far the alias reaches, and it is the single lever that decides whether
+#: `r` is 12 or is small enough for the bracket to be a bracket.
+#:
+#:   block  zero the expert and N-block strides, KEEP the K advance. Every
+#:          weight load lands in `B[0, 0:BLOCK_N, :]`: `BLOCK_N * K * 2` bytes,
+#:          0.5 to 1.75 MiB on the shipped models, resident in any L2 here, over
+#:          thousands of lines, walked with the normal arm's own sequential K
+#:          stride. THE DEFAULT.
+#:   tile   zero the K advance as well, so every load in the K loop lands on one
+#:          16 KiB BLOCK_K x BLOCK_N tile. This is the 2026-09-01 design and is
+#:          kept only so a session can measure both and show what the pinning
+#:          cost. Its L2 slice contention is what drove `r` to 6.4-19.1.
+ALIAS_EXTENTS = ("block", "tile")
+DEFAULT_ALIAS_EXTENT = "block"
+
+#: The aliased arm's footprint must be at most this fraction of L2, or it is not
+#: resident and the arm is not an ablation of DRAM traffic at all. A quarter
+#: rather than a whole because the activations and the output share the cache.
+ALIAS_RESIDENT_FRACTION = 0.25
 
 
 # --------------------------------------------------------------------------
@@ -347,6 +555,56 @@ PLACEBO_MAX_FRACTION = 0.10
 #: is not what the kernel is doing, and the difference is measuring something
 #: else with a weight-read label on it.
 MIN_SIGNAL_FRACTION = 0.25
+
+# --------------------------------------------------------------------------
+# the headroom, which is what the 2026-09-01 run did not have
+# --------------------------------------------------------------------------
+
+#: The aliased ladder's achieved request bandwidth, over the card's read roof.
+#: Below 1.0 the shared non-DRAM path is SLOWER than DRAM, DRAM has slack in
+#: the normal arm, and no ablation of DRAM can move the clock however large
+#: alpha is. The 2026-09-01 run measured 0.607 to 0.616 on five geometries.
+#:
+#: IT IS DERIVED FROM `MIN_SIGNAL_FRACTION` AND NOT CHOSEN BESIDE IT, because
+#: two thresholds over the same physical quantity is this repository's recurring
+#: defect written as arithmetic. Let `h` be this ratio. When DRAM binds in the
+#: normal arm and the shared path binds in the aliased one, the normal arm's
+#: time is the DRAM time and the aliased arm's is that time over `h`, so
+#:
+#:     D(1) / T_normal(1) = 1 - 1/h
+#:
+#: `signal` will not admit a run whose left side is below `MIN_SIGNAL_FRACTION`.
+#: Inverting gives the smallest `h` that can produce an admissible run, and a
+#: headroom limit ANY LOWER would pass designs `signal` then voids while a
+#: reader hunts for the reason in alpha. At 0.25 it is 1.333. Written as the
+#: inversion so the two move together for ever.
+MIN_HEADROOM_RATIO = 1.0 / (1.0 - MIN_SIGNAL_FRACTION)
+
+#: D(1) over the card's own floor for the bytes the alias removes. The ablation
+#: claims D(1) IS that read; a D(1) below the floor is a read that beat the
+#: card, which is impossible, so the label is wrong.
+#:
+#: THE SAME NUMBER AS `MIN_SIGNAL_FRACTION`, and for the same reason as above.
+#: `T_normal(1)` is at least the floor, always, so
+#:
+#:     D(1)/floor  >=  D(1)/T_normal(1)  =  1 - 1/h
+#:
+#: and this gate is the WEAKER of the pair whenever the normal arm runs below
+#: the roof, which every real kernel does. It is kept beside `signal` and not
+#: folded into it because it is stated in the CARD's units rather than the
+#: kernel's own time: `signal` says a difference is a small part of a pass and
+#: cannot say why, this says a difference is smaller than physics allows for the
+#: bytes it names. The 2026-09-01 run read 0.053 on the first and 0.093 on the
+#: second, so both failed and only the second one said what was wrong.
+MIN_ATTRIBUTION_RATIO = MIN_SIGNAL_FRACTION
+
+#: `r` above which the two estimators stop bracketing anything. The DIFFERENCE
+#: estimator is `(alpha - r)/(1 - r)`; at `r > 1` that denominator is negative,
+#: the estimator exceeds the truth instead of falling short of it, and the
+#: interval printed between the two is not an interval containing alpha. 0.9
+#: rather than 1.0 because at `r` just under one the bracket is arbitrarily wide
+#: and `band_gate` would call it NOT TESTABLE anyway.
+MAX_BRACKET_R = 0.9
 
 #: D(n) must be affine in (n-1) to at least this R^2, or `W(1 + alpha(n-1))` is
 #: the wrong functional form and its slope-over-intercept is not alpha.
@@ -474,6 +732,24 @@ class Rung:
     def k_iters(self) -> int:
         return self.k // self.block_k
 
+    def alias_bytes(self, extent: str) -> int:
+        """Bytes of B the ALIASED arm touches. This is what must fit in L2.
+
+        `block` keeps the K advance, so every program walks ONE `BLOCK_N x K`
+        column block of expert 0: `BLOCK_N * K * 2` bytes, and the walk is the
+        same sequential stride the normal arm makes. `tile` zeroes the advance
+        as well, so the whole K loop re-reads one `BLOCK_K x BLOCK_N` tile: 16
+        KiB at the shipped constants. Both are resident; only the second is a
+        hot spot, and the hot spot is what the 2026-09-01 report named as the
+        thing setting `r` and then declined to fix.
+        """
+        if extent not in ALIAS_EXTENTS:
+            raise ValueError(f"unknown alias extent {extent!r}; "
+                             f"expected one of {ALIAS_EXTENTS}")
+        if extent == "tile":
+            return self.block_k * self.block_n * 2
+        return self.block_n * self.k * 2
+
 
 def rung_for(model: str, tiles: int, block_m: int, tile: dict) -> Rung:
     """A rung from a real model geometry, shaped as vLLM's up-projection.
@@ -503,6 +779,7 @@ class Design:
     compute: str
     replicates: int
     rungs: tuple[Rung, ...]
+    alias_extent: str = DEFAULT_ALIAS_EXTENT
 
     @property
     def fingerprint(self) -> str:
@@ -510,6 +787,10 @@ class Design:
             "models": list(self.models), "tiles": list(self.tiles),
             "block_m": self.block_m, "tile": self.tile,
             "compute": self.compute, "replicates": self.replicates,
+            # THE EXTENT IS THE EXPERIMENT. `block` and `tile` remove different
+            # bytes and produce different `r`; sharing a directory would let a
+            # resumed run mix the two ladders under one alpha.
+            "alias_extent": self.alias_extent,
             # THE GEOMETRIES, not just the model names. `--replay` and the
             # resume path key on `rung.key`, which is model|tiles|block_m, so a
             # change to the control constants would silently reuse records
@@ -531,11 +812,18 @@ def build_design(args) -> Design:
     tile["GROUP_M"] = args.group_m
     tile["BLOCK_N"] = args.block_n
     tile["BLOCK_K"] = args.block_k
+    # THE PINNING IS PART OF THE DESIGN AND NOT A LAUNCH DETAIL. It sets the
+    # achieved request bandwidth, which is the one thing deciding whether this
+    # arm can see DRAM at all, so it belongs in the fingerprint and therefore in
+    # the run id: two pinnings are two experiments and must not share a
+    # directory. `--probe` changes both of these and rebuilds the design.
+    tile["num_warps"] = args.num_warps
+    tile["num_stages"] = args.num_stages
     rungs = tuple(rung_for(m, t, args.block_m, tile)
                   for m in models for t in args.tiles)
     return Design(models=models, tiles=tuple(args.tiles), block_m=args.block_m,
                   tile=tile, compute=args.compute, replicates=args.replicates,
-                  rungs=rungs)
+                  rungs=rungs, alias_extent=args.alias_extent)
 
 
 # --------------------------------------------------------------------------
@@ -699,6 +987,20 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
             "all rungs below 160.3 FLOP/byte" if not over else
             f"{len(over)} rungs are compute bound: {over[:3]}. A compute-bound "
             "rung pays for extra tiles in padded arithmetic, not in traffic"))
+
+    if l2_bytes:
+        widest = max((r.alias_bytes(design.alias_extent) for r in design.rungs),
+                     default=0)
+        limit = ALIAS_RESIDENT_FRACTION * l2_bytes
+        gates.append(_validity(
+            "the aliased arm is L2-resident, so it removes traffic and not work",
+            widest <= limit,
+            f"extent {design.alias_extent!r}: the widest aliased footprint is "
+            f"{widest / 2**20:.2f} MiB against "
+            f"{ALIAS_RESIDENT_FRACTION:.0%} of an L2 of "
+            f"{l2_bytes / 2**20:.1f} MiB ({limit / 2**20:.2f} MiB). An aliased "
+            "arm that misses is not an ablation of the weight read, it is a "
+            "second copy of it, and D would be noise around zero"))
 
     if l2_bytes:
         spread = sorted({r.per_expert_bytes for r in design.rungs
@@ -1249,8 +1551,23 @@ def isa_gate(records: list[dict]) -> Gate:
 # measuring, which is the only part that needs the box
 # --------------------------------------------------------------------------
 
-def ablation_scalars(rung: Rung) -> dict[str, dict[str, int]]:
+def ablation_scalars(rung: Rung, extent: str = DEFAULT_ALIAS_EXTENT
+                     ) -> dict[str, dict[str, int]]:
     """The three runtime integers that ARE the ablation, per variant.
+
+    THE EXTENT HAS EXACTLY TWO CALL SITES AND THEY MUST AGREE: this function,
+    which tells the kernel what to alias, and `check_output`, which says what
+    the aliased output must then equal. A change made here alone leaves the
+    correctness gate comparing the new kernel against the old closed form,
+    which is a FAIL that reads as a broken alias; a change made THERE alone is
+    worse, because it is a reference that agrees with an alias that did not
+    happen. `test_the_alias_extent_reaches_both_call_sites` pins the pair, and
+    until 2026-09-03 it did not: it called this function and never called
+    `check_output` at all, so the test named for the recurring defect was an
+    instance of it and the dangerous direction was the untested one. It now
+    emulates this kernel's address arithmetic on the CPU in float64 from these
+    very scalars and scores the result through `check_output` at BOTH extents,
+    so neither call site can move alone.
 
     Pure arithmetic over the rung's shape, so the values the pod will pass can
     be checked on a laptop. `B` is a contiguous [E, N, K] tensor, matching
@@ -1265,27 +1582,47 @@ def ablation_scalars(rung: Rung) -> dict[str, dict[str, int]]:
     rests on. Every entry is a large stride or 0, so both take the
     divisible-by-16 path. A test pins this for every shipped rung.
     """
+    if extent not in ALIAS_EXTENTS:
+        raise ValueError(f"unknown alias extent {extent!r}; "
+                         f"expected one of {ALIAS_EXTENTS}")
     stride_be, stride_bn, stride_bk = rung.n * rung.k, rung.k, 1
+    advance = rung.block_k * stride_bk
     return {
         "normal": {"stride_be_eff": stride_be,
                    "stride_bn_blk_eff": rung.block_n * stride_bn,
-                   "b_k_advance": rung.block_k * stride_bk},
+                   "b_k_advance": advance},
+        # `block` KEEPS the advance: the aliased arm walks one BLOCK_N x K
+        # column block, sequentially, exactly as the normal arm walks its own.
+        # `tile` zeroes it and re-reads 16 KiB, which is the 2026-09-01 pinning.
         "aliased": {"stride_be_eff": 0, "stride_bn_blk_eff": 0,
-                    "b_k_advance": 0},
+                    "b_k_advance": 0 if extent == "tile" else advance},
     }
 
 
 def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
-                 torch) -> float | None:
+                 torch, extent: str = DEFAULT_ALIAS_EXTENT) -> float | None:
     """Relative RMS error of a variant's output against its own closed form.
 
     BOTH DIRECTIONS ARE CHECKED AND BOTH ARE LOAD BEARING. NORMAL reproducing
     the reference proves it really read every expert's whole weight block, which
     is what W is supposed to be the cost of. ALIASED reproducing a DIFFERENT
-    closed form -- `K/BLOCK_K` copies of the single aliased tile -- proves the
-    aliasing took effect, which is the failure mode where the three runtime
-    scalars do nothing, D(n) is pure noise, and alpha comes out near zero for
-    the second time in this project's history.
+    closed form -- one BLOCK_N x K column block of expert 0 at `--alias-extent
+    block`, or `K/BLOCK_K` copies of one tile at `tile` -- proves the aliasing
+    took effect, which is the failure mode where the three runtime scalars do
+    nothing, D(n) is pure noise, and alpha comes out near zero for the second
+    time in this project's history. The 2026-09-01 report asserted that a
+    spread alias "has no closed form to check the output against" and used that
+    to justify the 16 KiB pinning that cost it the experiment. It has one, and
+    it is the branch below: the normal reference read at expert 0, N-block 0.
+
+    THE EXTENT ARGUMENT IS THE SECOND OF TWO CALL SITES, `ablation_scalars`
+    being the first, and the two are held together by a CPU emulation rather
+    than by a comment: `test_the_alias_extent_reaches_both_call_sites` walks
+    this kernel's pointer arithmetic in float64 from the scalars that function
+    returns and scores the result here at both extents, matching extent within
+    float32 rounding and mismatched extent off by a factor no tolerance
+    absorbs. Reverting the `block` branch below to the tile closed form used to
+    leave the suite green.
 
     NOTHING IS MATERIALISED AT FULL SIZE. deepseek-v3's weight tensor is 15 GiB
     in bf16, so a float64 copy of it is 60 GiB and an obvious `b.to(float64)`
@@ -1318,8 +1655,12 @@ def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
     a_tile = a.view(rung.num_pid_m, rung.block_m, rung.k).sum(
         dim=(1, 2), dtype=torch.float64)
     if aliased:
-        one = b[0, :rung.block_n, :rung.block_k].sum(dtype=torch.float64)
-        cell = a_tile[:, None] + one * rung.k_iters
+        if extent == "tile":
+            one = b[0, :rung.block_n, :rung.block_k].sum(dtype=torch.float64)
+            one = one * rung.k_iters
+        else:
+            one = b[0, :rung.block_n, :].sum(dtype=torch.float64)
+        cell = a_tile[:, None] + one
         cell = cell.expand(rung.num_pid_m, rung.num_pid_n)
     else:
         b_block = b.view(rung.experts, rung.num_pid_n, rung.block_n,
@@ -1459,7 +1800,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
             "runtime integers from the shape, and a different layout would "
             "alias something other than one BLOCK_K x BLOCK_N tile while every "
             "table still printed numbers.")
-    scalars = ablation_scalars(rung)
+    scalars = ablation_scalars(rung, design.alias_extent)
 
     def launch(variant: str, constexpr_alias: bool = False):
         return kernel[grid](
@@ -1481,7 +1822,8 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
                 digest=hashlib.sha256(ptx.encode()).hexdigest()[:12],
                 counts=count_ops(ptx)))
         correctness[variant] = check_output(
-            rung, a, b, c, design.compute, variant == "aliased", torch)
+            rung, a, b, c, design.compute, variant == "aliased", torch,
+            design.alias_extent)
     with contextlib.suppress(Exception):
         c.zero_()
         handle = launch("normal", constexpr_alias=True)
@@ -1545,6 +1887,458 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
     }
 
 
+# --------------------------------------------------------------------------
+# the probe: a tenth of the arm's wall, spent to protect the other nine
+# --------------------------------------------------------------------------
+
+#: The pinnings the probe walks, and every entry earns its compile.
+#:
+#: The quantity being maximised is the ALIASED ladder's achieved request
+#: bandwidth, because the whole design can only see DRAM while that number is
+#: above the card's DRAM roof. The 2026-09-01 run measured 0.61 of the roof at
+#: the first row of this table, so the shipped pinning is known to fail and the
+#: rest of the table is the search for one that does not.
+#:
+#:   num_stages    bytes in flight per program. 3 was shipped; 4 and 5 are the
+#:                 cheapest lever on a loop that is doing nothing but loading.
+#:   BLOCK_K       128 halves the number of reduction trees per byte and doubles
+#:                 the transaction length. K is 2048 to 7168 on every model here
+#:                 so 128 still divides exactly, which the preflight re-checks.
+#:   num_warps     4 raises the programs resident per SM, 16 raises the width of
+#:                 each one. Both are ways past an issue-rate ceiling and which
+#:                 one works is not predictable from here.
+#:   compute       `dot` moves the reduction onto the tensor cores. It is BIASED
+#:                 (see the header) and `prediction_gate` still refuses to
+#:                 answer P1 from it, but the bias is bounded at BLOCK_M/ridge =
+#:                 16/162.8 and is identical in both arms, while a shared
+#:                 ceiling below the DRAM roof is not a bias at all: it is the
+#:                 absence of a measurement. `choose_pinning` prefers `sum`
+#:                 whenever a `sum` pinning clears, and says so.
+PROBE_PINNINGS = (
+    {"num_warps": 8, "num_stages": 3, "block_k": 64, "compute": "sum"},
+    {"num_warps": 8, "num_stages": 4, "block_k": 128, "compute": "sum"},
+    {"num_warps": 4, "num_stages": 5, "block_k": 128, "compute": "sum"},
+    {"num_warps": 8, "num_stages": 4, "block_k": 128, "compute": "dot"},
+    {"num_warps": 8, "num_stages": 3, "block_k": 64, "compute": "dot"},
+    {"num_warps": 16, "num_stages": 4, "block_k": 128, "compute": "dot"},
+)
+
+#: The probe's own timing knobs. Short on purpose: it is measuring a slope
+#: between two rungs of one small model to three significant figures, not
+#: publishing anything, and every millisecond here is taken off the ladder.
+PROBE_TILES = (1, 2)
+PROBE_WARMUP_MS = 100.0
+PROBE_CELL_BUDGET_MS = 20.0
+PROBE_TRIALS = 2
+
+
+def probe_model(design: Design) -> str | None:
+    """The smallest non-control weight tensor in the design.
+
+    Smallest because the probe measures a RATE, which is geometry independent
+    (the 2026-09-01 run read 0.607 to 0.616 across a 20x spread in footprint),
+    so the cheapest geometry answers the same question as the dearest one and
+    leaves its allocation time on the ladder.
+    """
+    real = [r for r in design.rungs if not r.control]
+    if not real:
+        return None
+    return min(real, key=lambda r: r.weight_bytes).model
+
+
+def choose_pinning(readings: list[dict], roof_bytes_s: float | None,
+                   dot_fallback: bool = True) -> tuple[dict | None, str]:
+    """The pinning to run the ladder at, or None and the reason there is none.
+
+    A pinning CLEARS when its aliased ladder delivers requests faster than the
+    card's DRAM roof by `MIN_HEADROOM_RATIO`, which is the condition under which
+    DRAM binds in the normal arm and the ablation has something to remove.
+
+    AMONG THE CLEARING PINNINGS, `sum` WINS OVER `dot` EVEN WHEN IT IS SLOWER.
+    Speed is not the objective; headroom is, and once a pinning has headroom the
+    remaining question is which estimator is less biased. `sum` is the unbiased
+    one and `prediction_gate` will not answer P1 from `dot` at all, so a `dot`
+    pinning that is 30% faster and cannot answer the question loses to a `sum`
+    pinning that can. Only when no `sum` pinning clears does `dot` get the
+    ladder, and then the report says the answer is a bound.
+
+    THE FALL TO `dot` IS THE OPERATOR'S AND NOT THIS FUNCTION'S. Half the probe
+    grid is `dot`, and the fall is the LIKELY case rather than the corner: the
+    0.61-of-roof ceiling this arm exists to escape has the signature of the
+    cross-lane `tl.sum` tree, which is exactly what `dot` removes. A ladder run
+    in `dot` mode leaves P1 UNKNOWN, `exit_codes.classify` maps an UNKNOWN CLAIM
+    to CLAIM_FAIL, and the driver latches a CLAIM_FAIL and never retries, so a
+    silent fall spends the whole arm and files "alpha is not 0.558" when what
+    happened was "alpha was not asked". `--dot-fallback` makes the choice
+    explicit at the command line, the report prints which was in force, and
+    `dot_mode_reading` prints the disambiguation beside the verdict. Default
+    `allow`, because refusing turns a lower bound on alpha into the 2026-09-01
+    void for the sake of a code the log already explains.
+    """
+    if not roof_bytes_s:
+        return None, ("no committed calibration for this card, so no pinning "
+                      "can be shown to clear a roof that has not been measured")
+    scored = [(r["aliased_bytes_s"] / roof_bytes_s, r) for r in readings
+              if r.get("aliased_bytes_s")]
+    if not scored:
+        return None, "no pinning produced an aliased ladder slope"
+    clearing = [(ratio, r) for ratio, r in scored if ratio >= MIN_HEADROOM_RATIO]
+    if not clearing:
+        best_ratio, best = max(scored, key=lambda pair: pair[0])
+        return None, (
+            f"no pinning cleared the roof. The best of {len(scored)} was "
+            f"{best['pinning']} at {best['aliased_bytes_s'] / 1e9:.0f} GB/s, "
+            f"{best_ratio:.3f} of the measured read roof of "
+            f"{roof_bytes_s / 1e9:.0f} GB/s, against a limit of "
+            f"{MIN_HEADROOM_RATIO}. Every one of them is limited by a shared "
+            "non-DRAM path SLOWER than DRAM, so in the normal arm DRAM has "
+            "slack and removing it cannot move the clock. No ladder run at any "
+            "of these pinnings could have measured alpha, so none was run")
+    sums = [pair for pair in clearing if pair[1]["pinning"]["compute"] == "sum"]
+    if not sums and not dot_fallback:
+        best_ratio, best = max(clearing, key=lambda pair: pair[0])
+        return None, (
+            f"no SUM-mode pinning cleared the roof, and --dot-fallback refuse "
+            f"was in force. {len(clearing)} dot-mode pinning(s) did clear, the "
+            f"best {best['pinning']} at {best_ratio:.3f} of the roof, and a "
+            "ladder run at one of them would have measured a LOWER BOUND on "
+            "alpha rather than alpha. Re-run with --dot-fallback allow to buy "
+            "that bound, or widen the sum half of PROBE_PINNINGS")
+    pool = sums or clearing
+    ratio, best = max(pool, key=lambda pair: pair[0])
+    why = ("the fastest sum-mode pinning that clears" if sums else
+           "no sum-mode pinning cleared, so --dot-fallback allow took the "
+           "fastest dot-mode one and the answer it produces is a LOWER BOUND, "
+           "not P1's answer")
+    return best["pinning"], (
+        f"{best['pinning']} at {best['aliased_bytes_s'] / 1e9:.0f} GB/s, "
+        f"{ratio:.3f} of the roof: {why}")
+
+
+def measure_probe(design: Design, args, roof_bytes_s: float | None,
+                  torch) -> list[dict]:
+    """Time the probe grid. GPU only; the DECIDING is in `choose_pinning`.
+
+    Two rungs and two variants per pinning. The reading kept is the aliased
+    ladder's slope between the two rungs, which is the achieved request
+    bandwidth of the shared path and the only thing that decides whether any
+    ladder here can see DRAM.
+
+    THE TENSORS ARE REBUILT PER RUNG AND DROPPED, because BLOCK_K moves across
+    the grid and a pinning that runs out of memory must not take the rest of the
+    grid with it. `launch` takes them as DEFAULT ARGUMENTS rather than closing
+    over the names, which is what makes the `del` below safe; `measure_rung`
+    carries the opposite warning for the opposite reason.
+
+    NO CORRECTNESS CHECK RUNS HERE, deliberately. The probe measures a rate and
+    quotes no alpha; the ladder that follows checks both closed forms on every
+    rung and `correctness` is a VALIDITY gate, so an alias that did nothing
+    cannot reach a published number through this door.
+    """
+    from moe.bench import timing as T
+    from moe.bench.timing import L2Flusher, flush_mb_for_device
+
+    model = probe_model(design)
+    if model is None:
+        return []
+    flusher = L2Flusher(flush_mb_for_device() if args.l2_flush else 0)
+    readings: list[dict] = []
+    for pinning in PROBE_PINNINGS:
+        tile = dict(design.tile, BLOCK_K=pinning["block_k"],
+                    num_warps=pinning["num_warps"],
+                    num_stages=pinning["num_stages"])
+        rungs = [rung_for(model, t, design.block_m, tile) for t in PROBE_TILES]
+        if any(r.k % r.block_k for r in rungs):
+            readings.append({"pinning": pinning, "aliased_bytes_s": None,
+                             "note": f"K {rungs[0].k} is not a multiple of "
+                                     f"BLOCK_K {pinning['block_k']}"})
+            continue
+        try:
+            kernel = build_kernel()
+            points = []
+            normal_ms = None
+            for rung in rungs:
+                a = torch.empty((rung.total_rows, rung.k), device="cuda",
+                                dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+                b = torch.empty((rung.experts, rung.n, rung.k), device="cuda",
+                                dtype=torch.bfloat16).uniform_(-0.5, 0.5)
+                c = torch.zeros((rung.total_rows, rung.n), device="cuda",
+                                dtype=torch.float32)
+                eot = (torch.arange(rung.num_pid_m, device="cuda",
+                                    dtype=torch.int32) // rung.tiles)
+                scalars = ablation_scalars(rung, design.alias_extent)
+                common = dict(
+                    EM=rung.total_rows, N=rung.n, K=rung.k,
+                    stride_am=a.stride(0), stride_ak=a.stride(1),
+                    stride_bn=b.stride(1), stride_bk=b.stride(2),
+                    stride_cm=c.stride(0), stride_cn=c.stride(1),
+                    BLOCK_M=rung.block_m, BLOCK_N=rung.block_n,
+                    BLOCK_K=rung.block_k, GROUP_M=rung.group_m,
+                    COMPUTE_DOT=(pinning["compute"] == "dot"))
+
+                def launch(variant, k=kernel, r=rung, aa=a, bb=b, cc=c, ee=eot,
+                           sc=scalars, cm=common, pn=pinning):
+                    return k[(r.programs,)](
+                        aa, bb, cc, ee, CONSTEXPR_ALIAS=False,
+                        num_warps=pn["num_warps"], num_stages=pn["num_stages"],
+                        **sc[variant], **cm)
+
+                for variant in ("normal", "aliased"):
+                    measured = T.time_kernel(
+                        lambda v=variant: launch(v),
+                        warmup_ms=PROBE_WARMUP_MS,
+                        target_ms=PROBE_CELL_BUDGET_MS, trials=PROBE_TRIALS,
+                        l2_flush=bool(args.l2_flush),
+                        flusher=flusher if args.l2_flush else None)
+                    if variant == "aliased":
+                        points.append((rung.tiles, measured.ms_p50))
+                    elif rung.tiles == 1:
+                        normal_ms = measured.ms_p50
+                del a, b, c, eot
+                torch.cuda.empty_cache()
+            line = _fit_line(sorted(points))
+            slope = line[1] if line else 0.0
+            readings.append({
+                "pinning": pinning, "model": model,
+                "aliased_bytes_s": (rungs[0].weight_bytes / (slope * 1e-3)
+                                    if slope > 0 else None),
+                "aliased_ms": dict(points), "normal_ms_t1": normal_ms,
+                "note": "" if slope > 0 else "aliased ladder slope was not positive",
+            })
+        except CannotRunHere:
+            # NOT DATA. A missing triton or a card that cannot hold the tensors
+            # is a precondition, and swallowing it here would turn a REFUSED
+            # arm into "no pinning cleared the roof", which is INVALID and says
+            # something false about the kernel.
+            raise
+        except Exception as exc:  # noqa: BLE001 - one pinning failing IS data
+            readings.append({"pinning": pinning, "aliased_bytes_s": None,
+                             "note": f"{type(exc).__name__}: {exc}"})
+    return readings
+
+
+def report_probe(say, readings: list[dict], roof_bytes_s: float | None,
+                 chosen: dict | None, why: str,
+                 dot_fallback: bool = True) -> None:
+    say()
+    say("## the probe: can any pinning see DRAM at all")
+    say()
+    if dot_fallback:
+        say("  --dot-fallback allow: if no sum-mode pinning clears, the "
+            "fastest dot-mode one runs")
+        say("  the ladder, P1 comes back UNKNOWN and the process exits 1. That "
+            "1 is 'not asked',")
+        say("  not 'refuted', and the verdict block below says so in words.")
+    else:
+        say("  --dot-fallback refuse: if no sum-mode pinning clears, the arm "
+            "STOPS at the probe")
+        say("  rather than measure a lower bound. That is INVALID and it costs "
+            "only the probe.")
+    say()
+    say("  Every pinning below is timed on the SMALLEST model at "
+        f"{PROBE_TILES} tiles. The number that")
+    say("  decides is the ALIASED ladder's achieved request bandwidth: while it "
+        "is BELOW the")
+    say("  card's DRAM roof, the shared non-DRAM path is the slower one, DRAM "
+        "has slack in the")
+    say("  normal arm, and no ablation of DRAM can move the clock however "
+        "large alpha is.")
+    say()
+    say("  warps  stages  BLOCK_K  compute      aliased GB/s   of roof   note")
+    for reading in readings:
+        pin = reading["pinning"]
+        rate = reading.get("aliased_bytes_s")
+        rate_s = f"{rate / 1e9:14.0f}" if rate else f"{'none':>14s}"
+        ratio = (f"{rate / roof_bytes_s:9.3f}" if rate and roof_bytes_s
+                 else f"{'-':>9s}")
+        say(f"  {pin['num_warps']:5d}  {pin['num_stages']:6d}  "
+            f"{pin['block_k']:7d}  {pin['compute']:7s} {rate_s} {ratio}   "
+            f"{reading.get('note', '')}")
+    say()
+    if roof_bytes_s:
+        say(f"  measured read roof: {roof_bytes_s / 1e9:.0f} GB/s; a pinning "
+            f"clears at {MIN_HEADROOM_RATIO} of it.")
+    say(f"  ADOPTED: {why}" if chosen else f"  NONE ADOPTED: {why}")
+    if not chosen:
+        say()
+        say("  This is the 2026-09-01 result restated in the units that name "
+            "its cause, and it")
+        say("  is rehearsable off-GPU: --synthetic "
+            f"{SYNTHETIC_ALIAS_LAWS[1]} plants exactly this world and "
+            f"--synthetic {SYNTHETIC_ALIAS_LAWS[0]} plants its opposite.")
+
+
+# --------------------------------------------------------------------------
+# what this costs, in the units the session driver reads
+# --------------------------------------------------------------------------
+
+#: Fraction of the card's read roof this kernel is assumed to deliver when the
+#: cost is priced. 0.61 because that is what it MEASURED on 2026-09-01, on five
+#: geometries spanning 20x in footprint, to three digits. It is the only
+#: measured number available for this kernel and it is stated rather than
+#: rounded to a convenient one; a probe that finds a faster pinning makes every
+#: figure below an OVER-estimate, which is the right direction for a booking.
+KERNEL_EFFICIENCY_PRIOR = 0.61
+
+#: The one measured wall-over-model ratio in this repository:
+#: `scripts/replicate_noise_floor.py` sets it from its own ARMS.tsv, where the
+#: mixtral_g1 arm logged 127 s of wall against a cost model's 54 s.
+#: `scripts/h200_gaps_session.sh:wall_over_model_pct` reads the same 235.
+WALL_OVER_KERNEL = 127.0 / 54.0
+
+#: Seconds allowed per PROBE PINNING for the work `WALL_OVER_KERNEL` cannot
+#: cover: one Triton specialisation (BLOCK_K, num_warps and num_stages all move
+#: across `PROBE_PINNINGS`, so no two entries share a compile) and the two rung
+#: tensor sets that pinning allocates, fills and frees.
+#:
+#: AN ALLOWANCE AND NOT A MEASUREMENT, and it is charged separately because the
+#: 2.35x was measured on `replicate_noise_floor`'s mixtral_g1, an arm that
+#: compiled ONE pinning. Scaling the probe's 0.1 kernel minutes by it yields
+#: 0.24 wall minutes for a grid that compiles six kernels, which is the one
+#: place in this table where the estimate was under the truth rather than over
+#: it, and a booking that is under is the booking that runs out of pod. 12.0 is
+#: `scripts/memory_branch_anchor.py:estimated_seconds`'s own per-setting compile
+#: allowance, which is the largest figure this repository states for a Triton
+#: compile; `scripts/ruler_rebaseline.py` uses 10.0 for the same job.
+PROBE_FIXED_S_PER_PINNING = 12.0
+
+
+def estimated_kernel_ms(design: Design, args, roof_bytes_s: float | None
+                        ) -> float | None:
+    """GPU milliseconds the ladder will deliver, from the byte model.
+
+    Per pass, `time_kernel` delivers `warmup_ms` of sustained load and then
+    `trials` trials of `iters` calls, where `iters` is sized from the warmup's
+    own per-call time against `target_ms` and has a floor of ten. The floor is
+    what dominates the big rungs: deepseek-v3 at eight tiles is tens of
+    milliseconds per call, so ten calls is a 400 ms trial and not the 50 ms
+    trial the budget asks for. Pricing without the floor under-counts the top
+    of the ladder by an order of magnitude, which is how an arm gets booked at
+    eleven minutes and spends thirty-six.
+    """
+    if not roof_bytes_s:
+        return None
+    total = 0.0
+    for rung in design.rungs:
+        per_call = (rung.weight_bytes * rung.tiles
+                    / (roof_bytes_s * KERNEL_EFFICIENCY_PRIOR) * 1e3)
+        iters = max(10, math.ceil(args.cell_budget_ms / max(per_call, 1e-9)))
+        one_pass = args.warmup + iters * per_call * args.trials
+        total += 3 * design.replicates * one_pass
+    return total
+
+
+def report_cost(say, design: Design, args, roof_bytes_s: float | None,
+                probing: bool) -> None:
+    """The booking, labelled WALL or KERNEL the way the session driver labels it.
+
+    `scripts/h200_gaps_session.sh:arm_clock` sorts every arm's figure into WALL
+    (a plan that charges its own compiles and allocation) or KERNEL (one that
+    does not) and prints a second total with the KERNEL rows put on the wall
+    clock. An arm that prints one number and does not say which it is gets
+    booked as whichever the driver guesses.
+
+    THE ONLY DURATION THIS FILE NAMES IS THE ONE THIS FUNCTION PRINTS. The
+    header carried its own copy until 2026-09-03, "three minutes before it
+    spends sixty", against 5.0 KERNEL and 11.8 WALL here, and a header is what a
+    driver owner books from. The header now states a ratio and no minutes, and
+    `test_the_header_quotes_no_duration_of_its_own` scores that ratio against
+    this table rather than against the prose.
+
+    THE PROBE'S COMPILES ARE CHARGED HERE AND NOT LEFT TO THE RATIO. Everywhere
+    else in this table an error is an over-estimate, which is the safe
+    direction; the probe was the one place it ran the other way, because 2.35x
+    was measured on an arm that compiled one pinning and the probe compiles six.
+    `PROBE_FIXED_S_PER_PINNING` is added to the WALL figure outright and the
+    line says so, so the WALL figure is bookable as printed and the driver's
+    `arm_unpriced` entry for this arm can be empty.
+    """
+    kernel_ms = estimated_kernel_ms(design, args, roof_bytes_s)
+    say()
+    say("## what this costs")
+    say()
+    if kernel_ms is None:
+        say("  NOT PRICED. There is no committed calibration for this card, so "
+            "there is no")
+        say("  bandwidth to turn the byte model into milliseconds. Run "
+            "scripts/calibrate_hardware.py")
+        say("  --publish first; this arm needs that file for its gates as well "
+            "as for this line.")
+        return
+    probe_ms = (len(PROBE_PINNINGS) * len(PROBE_TILES) * 2
+                * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_CELL_BUDGET_MS)
+                if probing else 0.0)
+    probe_fixed_min = (len(PROBE_PINNINGS) * PROBE_FIXED_S_PER_PINNING / 60.0
+                       if probing else 0.0)
+    kernel_min = (kernel_ms + probe_ms) / 60000.0
+    wall_min = kernel_min * WALL_OVER_KERNEL + probe_fixed_min
+    say(f"  KERNEL  {kernel_min:5.1f} min   {len(design.rungs)} rungs x 3 "
+        f"passes x {design.replicates} replicates, priced from the byte model "
+        f"at {KERNEL_EFFICIENCY_PRIOR:.2f}")
+    say("                        of this card's read roof, with time_kernel's "
+        "ten-iteration floor applied")
+    say(f"                        per rung. The probe adds "
+        f"{probe_ms / 60000.0:.1f} min of that.")
+    say("  EXCLUDES              Triton specialisations (one per model per "
+        "pinning, plus the")
+    say("                        constexpr variant), tensor allocation and "
+        "fill, and the")
+    say("                        closed-form correctness reductions. THIS IS "
+        "NOT A WALL FIGURE.")
+    say(f"  WALL    {wall_min:5.1f} min   the KERNEL figure at the one measured "
+        f"wall-over-kernel ratio in")
+    say(f"                        this repository, {WALL_OVER_KERNEL:.2f}x "
+        "(replicate_noise_floor.py, mixtral_g1:")
+    say(f"                        127 s of wall against a 54 s model), PLUS "
+        f"{probe_fixed_min:.1f} min charged")
+    say(f"                        outright for the probe: "
+        f"{len(PROBE_PINNINGS)} distinct specialisations at "
+        f"{PROBE_FIXED_S_PER_PINNING:.0f} s each,")
+    say("                        with their tensor sets, which that ratio was "
+        "not measured over")
+    say("                        (mixtral_g1 compiled one pinning). BOOK THIS "
+        "ONE.")
+    if probe_fixed_min:
+        probe_share = ((probe_ms / 60000.0 * WALL_OVER_KERNEL + probe_fixed_min)
+                       / wall_min)
+        say(f"  OF WHICH               {probe_share * 100:.0f}% is the probe, "
+            "and a probe that clears no pinning")
+        say("                        stops the arm having spent only that. It "
+            "is the cheapest")
+        say("                        thing here that can refuse the expensive "
+            "one.")
+    say()
+    say("  The 0.61 is MEASURED, on 2026-09-01, on five geometries; a probe "
+        "that finds a")
+    say("  faster pinning makes both figures over-estimates, which is the "
+        "right direction.")
+
+
+def measurement_order(design: Design) -> tuple[Rung, ...]:
+    """Every model at one tile count before any model's next. Cell by cell.
+
+    THE CONTRAST IS PAIRED IN TIME, AND IT WAS NOT. The rungs used to be walked
+    model-major -- all four of mixtral, then all four of qwen -- so the
+    L2-resident control's ladder was the LAST four cells of the run and the real
+    ladders it is supposed to bound were up to forty minutes earlier, on another
+    thermal state of the card. `control_gate` compares them anyway. Tile-major
+    puts each model's rung and the control's matching rung within one rung of
+    each other, and the normal/aliased/placebo triple inside a rung was already
+    interleaved within seconds.
+
+    IT ALSO CHANGES WHAT AN INTERRUPTED HOUR LEAVES BEHIND. Model-major, a run
+    killed at the two-thirds mark leaves three complete ladders and one empty
+    one, and a model with no ladder contributes nothing. Tile-major leaves every
+    model's ladder complete up to some tile count, which still fits a line, so
+    the arm degrades into a shorter ladder rather than into a smaller pool.
+
+    The allocation count is unchanged: one tensor set per rung either way.
+    """
+    order = {model: index for index, model in enumerate(design.models)}
+    return tuple(sorted(design.rungs,
+                        key=lambda r: (r.tiles, order.get(r.model, 0))))
+
+
 def measure(design: Design, args, out_dir: Path, done: set[str]) -> tuple[list[dict], dict]:
     try:
         import torch
@@ -1565,7 +2359,7 @@ def measure(design: Design, args, out_dir: Path, done: set[str]) -> tuple[list[d
 
     records: list[dict] = []
     path = out_dir / "cells.jsonl"
-    for index, rung in enumerate(design.rungs):
+    for index, rung in enumerate(measurement_order(design)):
         if rung.key in done:
             continue
         need = rung.footprint_bytes + 512 * 2 ** 20
@@ -1633,8 +2427,8 @@ SYNTHETIC_LAWS = {
     "tempo": "alpha = 0.33, TEMPO's value; P1 must FAIL",
     "folded": "alpha = 0.558 but the aliased kernel issued half the global "
               "loads; the ISA gate must FAIL and nothing may be quoted",
-    "l2-step": "alpha is a step function of per-expert bytes against a 50 MiB "
-               "L2, which is P2's mechanism; the per-model bands must separate",
+    "l2-step": "alpha is a step function of per-expert bytes against the "
+               "MEASURED L2, which is P2's mechanism; the bands must separate",
     "noise": "alpha = 0.558 with a placebo drift as large as the signal; the "
              "placebo gate must FAIL",
     "max-model": "alpha = 0.558 but the kernel runs at max(L2, HBM), so the "
@@ -1643,7 +2437,40 @@ SYNTHETIC_LAWS = {
     "l2-heavy": "alpha = 0.558 at max(L2, HBM) with r = 0.45, which is the H200 "
                 "end of plausible; the bracket is too wide to pick a candidate "
                 "and the run must say NOT TESTABLE rather than choose",
+    "alias-free": "alpha = 0.558 and the ALIASED LADDER'S SLOPE IS ZERO: the "
+                  "alias costs nothing per extra tile, so D(n) is the whole "
+                  "weight cost and r is 0. The design working perfectly",
+    "alias-blind": "alpha = 0.558 and the ALIASED LADDER'S SLOPE IS THE NORMAL "
+                   "ONE'S: a shared non-DRAM ceiling at 0.61 of the read roof, "
+                   "which is what 2026-09-01 measured. headroom, attribution "
+                   "and bracket must all FAIL and no alpha may be quoted",
 }
+
+#: The pair the brief asks for, named together because their whole purpose is
+#: to be each other's opposite: in one the aliased slope is ZERO and in the
+#: other it is UNCHANGED from the normal ladder's, and a gate that cannot
+#: separate those two cannot separate the hypothesis from its negation.
+#: `tests/test_alias_ablation.py` runs both and asserts opposite exit codes.
+SYNTHETIC_ALIAS_LAWS = ("alias-free", "alias-blind")
+
+#: The shared non-DRAM ceiling `alias-blind` plants, as a fraction of the read
+#: roof. 0.61 is MEASURED: the 2026-09-01 aliased ladders delivered 0.607,
+#: 0.612, 0.613, 0.616 and 0.616 of this card's read roof on five geometries
+#: spanning 20x in footprint.
+BLIND_CEILING_FRACTION = 0.61
+
+#: How much of the DRAM cost still leaks into the normal arm's clock when the
+#: shared path is the slower one. 0.14 reproduces the 5 to 8% of a pass that
+#: the run reported for D(1), which is what makes `alias-blind` the world that
+#: actually happened rather than a caricature of it.
+BLIND_OVERLAP_LEAK = 0.14
+
+#: What fraction of the card's read roof the planted kernel delivers. Below 1
+#: because no kernel reaches a STREAM ceiling, and stated because
+#: `attribution_gate` divides a planted D(1) by that ceiling: at exactly 1.0 the
+#: `l2-heavy` law would sit 0.05 above its own limit and the rehearsal would
+#: turn on rounding.
+SYNTHETIC_KERNEL_EFFICIENCY = 0.90
 
 #: Laws that compose L2 and HBM service as `max` rather than as a sum. A
 #: streaming kernel is closer to this end, which is why two of the eight are
@@ -1657,7 +2484,17 @@ SYNTHETIC_MAX_LAWS = ("max-model", "l2-heavy")
 SYNTHETIC_L2_RATIO = 0.12
 SYNTHETIC_L2_RATIO_HEAVY = 0.45
 
-SYNTHETIC_L2_BYTES = 50 * 2 ** 20
+#: The L2 the planted laws are stated against: THE H200's, read from its own
+#: calibration rather than typed. It was `50 * 2**20` until 2026-09-03, which is
+#: neither card's L2 (H200 60 MiB, A100 40 MiB) and put deepseek-v3's 56 MiB
+#: expert above a line the real card puts it below. `or` a literal only so this
+#: module imports in a tree with no calibration committed; a test pins the two
+#: together so the fallback can never quietly become the value in use.
+SYNTHETIC_L2_BYTES = measured_card(PLANT_CARD).get("l2_bytes") or 60 * 2 ** 20
+
+#: The read roof the planted laws are stated against, same file, same reason.
+SYNTHETIC_ROOF_BYTES_S = (measured_card(PLANT_CARD).get("roof_bytes_s")
+                          or 4469.60368208941e9)
 
 
 def synthesise(design: Design, law: str, seed: int,
@@ -1673,7 +2510,10 @@ def synthesise(design: Design, law: str, seed: int,
     if law not in SYNTHETIC_LAWS:
         raise ValueError(f"unknown law {law!r}; expected one of {sorted(SYNTHETIC_LAWS)}")
     rng = random.Random(seed)
-    bandwidth = 4.4e12
+    # THE ROOF, NOT A ROUND NUMBER. `attribution_gate` divides a measured D(1)
+    # by `weight_bytes / roof`, so a generator that invents its own bandwidth
+    # plants a world whose gates turn on the ratio between two literals.
+    bandwidth = SYNTHETIC_ROOF_BYTES_S * SYNTHETIC_KERNEL_EFFICIENCY
     records = []
     for rung in design.rungs:
         if law in ("l2-heavy", "max-model"):
@@ -1697,12 +2537,25 @@ def synthesise(design: Design, law: str, seed: int,
         # for all of them, at `r` of a weight read per tile.
         ratio = (SYNTHETIC_L2_RATIO_HEAVY if law == "l2-heavy"
                  else SYNTHETIC_L2_RATIO)
+        if law == "alias-free":
+            ratio = 0.0
         l2_cost = ratio * w_ms * rung.tiles
-        base_alias = fixed + other + l2_cost
         hbm_cost = w_ms * (1.0 + alpha * (rung.tiles - 1))
-        if law in SYNTHETIC_MAX_LAWS:
+        if law == "alias-blind":
+            # THE WORLD OF 2026-09-01. A shared path SLOWER than DRAM sets the
+            # clock in both arms, so the aliased ladder's slope is the normal
+            # one's and the only thing the ablation removes is the residue that
+            # failed to overlap. r comes out near 12, headroom near 0.61 and
+            # D(1) at a seventh of the card's floor, which is what was measured.
+            shared = (rung.weight_bytes * rung.tiles
+                      / (SYNTHETIC_ROOF_BYTES_S * BLIND_CEILING_FRACTION) * 1e3)
+            base_alias = fixed + other + shared
+            base_normal = base_alias + BLIND_OVERLAP_LEAK * hbm_cost
+        elif law in SYNTHETIC_MAX_LAWS:
+            base_alias = fixed + other + l2_cost
             base_normal = fixed + other + max(l2_cost, hbm_cost)
         else:
+            base_alias = fixed + other + l2_cost
             base_normal = base_alias + hbm_cost
         drift = 0.0
         if law == "noise":
@@ -1808,7 +2661,8 @@ MEASURED_SPREAD_MAX = 0.0182
 
 
 def mde_of_alpha(spread: float, replicates: int, top_tile: int,
-                 alpha: float = REFIT_ALPHA) -> float:
+                 alpha: float = REFIT_ALPHA,
+                 signal_share: float = MIN_SIGNAL_FRACTION) -> float:
     """Smallest alpha this design could resolve, from a stated timing spread.
 
     B14: no arm in this study stated a minimum detectable effect, so a gate
@@ -1823,12 +2677,15 @@ def mde_of_alpha(spread: float, replicates: int, top_tile: int,
          imported from the corpus rather than estimated inside the run, so this
          is a known-variance z test, the stricter of the two forms available at
          nine replicates.
-      2. INTO D. D(n) is that difference, and `signal_gate` will not admit a run
-         whose D(1) is below `MIN_SIGNAL_FRACTION` of its own pass time, so the
-         relative error on D is at most step 1 divided by that floor. Using the
-         floor rather than the measured share is deliberate: the measured one
-         does not exist until the box has been rented, and the floor is the
-         worst case this design will accept.
+      2. INTO D. D(n) is that difference, so the relative error on D is step 1
+         divided by D's share of the pass. BEFORE THE RENTAL that share is
+         `MIN_SIGNAL_FRACTION`, the floor `signal_gate` will admit and therefore
+         the worst case the design accepts. AFTER IT the run has measured its
+         own share and `signal_share` carries it, which is not a refinement but
+         the difference between a readable report and the 2026-09-01 one: that
+         run's D(1) was 5.3% of a pass, a fifth of the floor, so every quantity
+         downstream of this division was five times worse than the plan's line
+         said and no number in the report showed it.
       3. INTO THE RATIO. alpha comes from D(n)/D(1), and both are measured, so
          the ratio inherits both: another sqrt(2).
       4. INTO ALPHA. `alpha = (D(n)/D(1) - 1) / (n - 1)`, so a relative error on
@@ -1842,6 +2699,11 @@ def mde_of_alpha(spread: float, replicates: int, top_tile: int,
         raise ValueError(f"an MDE needs at least one replicate, got {replicates}")
     if spread <= 0:
         raise ValueError(f"an MDE needs a positive spread, got {spread}")
+    if signal_share <= 0:
+        raise ValueError(
+            f"an MDE needs a positive signal share, got {signal_share}: D is "
+            "divided by it, and a run whose ablation removed nothing has no "
+            "resolution to quote rather than an infinite one")
     if top_tile < 2:
         raise ValueError(
             f"an MDE needs a rung above the first, got {top_tile}: alpha is the "
@@ -1849,45 +2711,153 @@ def mde_of_alpha(spread: float, replicates: int, top_tile: int,
     normal = statistics.NormalDist()
     z = normal.inv_cdf(1.0 - MDE_LEVEL / 2.0) + normal.inv_cdf(MDE_POWER)
     per_pass = z * spread * math.sqrt(2.0 / replicates)
-    rel_ratio = per_pass / MIN_SIGNAL_FRACTION * math.sqrt(2.0)
+    rel_ratio = per_pass / signal_share * math.sqrt(2.0)
     return rel_ratio * (1.0 + alpha * (top_tile - 1)) / (top_tile - 1)
 
 
-def report_mde(say, design: Design, spreads=None) -> None:
-    """The MDE line, printed in the plan, before anything is measured.
+def observed_spreads(records: list[dict]) -> tuple[tuple[str, float], ...]:
+    """The pass-to-pass spread THIS RUN delivered, median and worst.
 
-    `spreads` overrides the measured pair, which is how the CANNOT-RESOLVE
-    branch is planted in the tests: on today's corpus this ladder clears
-    `MAX_BAND_WIDTH` at both ends, and a branch nothing can reach is a branch
-    nobody has read.
+    WHY THE PLAN'S MDE IS NOT THE WHOLE ANSWER, and this is the MDE's second
+    call site. `MEASURED_SPREAD_MEDIAN` and `MEASURED_SPREAD_MAX` are
+    `timing_spread_median` over the 26 published reports, and
+    `rescore_published_reports.mde_report` states what that quantity is: each
+    sweep's WITHIN-CELL pstdev over p50, "a WITHIN-process spread and therefore
+    a floor". The MDE derivation needs the PASS-TO-PASS spread instead -- the
+    scatter of the `replicates` p50s that `measure_rung` interleaves -- and that
+    is a different number and never a smaller one. So the plan's line is a
+    floor: honest before the box is rented, and useless after it. A run whose
+    passes scattered at 4% prints a plan MDE of 0.04 and could not in fact have
+    separated 0.33 from 0.558, and until this function existed nothing in the
+    report said so. The plan says what the design hoped to see; this says what
+    it saw.
+
+    The reduction is the corpus's own, so the two numbers are comparable: a
+    relative pstdev per pass group, then the median and the worst over every
+    group. A group needs two passes to have a spread and a positive median to
+    have a relative one; a run with neither returns `()` and the caller says
+    NOT STATED rather than inventing a number.
     """
-    spreads = spreads or (("median", MEASURED_SPREAD_MEDIAN),
-                          ("worst", MEASURED_SPREAD_MAX))
+    rel: list[float] = []
+    for row in records:
+        if row.get("skipped"):
+            continue
+        for values in (row.get("ms") or {}).values():
+            if len(values) < 2:
+                continue
+            mid = statistics.median(values)
+            if mid > 0:
+                rel.append(statistics.pstdev(values) / mid)
+    if not rel:
+        return ()
+    return (("median", statistics.median(rel)), ("worst", max(rel)))
+
+
+def report_mde(say, design: Design, spreads=None, measured: bool = False,
+               signal_share: float | None = None) -> None:
+    """The MDE line: what this design can resolve, at a stated timing spread.
+
+    Printed TWICE by a run that measures anything, and the two are different
+    statements. In the plan, `spreads` is None and the corpus floor is used,
+    because the only noise this repository has before the rental is other arms'.
+    In the report, `measured=True` and `spreads` comes from
+    `observed_spreads(records)`, which is this run's own scatter. A design whose
+    plan cleared `MAX_BAND_WIDTH` and whose run did not has not measured alpha,
+    it has spent an hour, and the reader has to be able to see which happened
+    without holding the two numbers in their head.
+
+    `signal_share` is the other half of that and the half that decides it: the
+    MDE divides by D's share of a pass, the plan can only use the floor
+    `signal_gate` will admit, and the 2026-09-01 run's real share was a fifth of
+    it. Passing the run's own worst share, the number `signal_gate` scores on,
+    is what makes the second block a measurement rather than the first one
+    repeated.
+
+    `spreads` is also how the CANNOT-RESOLVE branch is planted off-GPU: on
+    today's corpus this ladder clears `MAX_BAND_WIDTH` at both ends, and a
+    branch nothing can reach is a branch nobody has read.
+    """
+    if spreads is None:
+        spreads = (("median", MEASURED_SPREAD_MEDIAN),
+                   ("worst", MEASURED_SPREAD_MAX))
+    share = MIN_SIGNAL_FRACTION if signal_share is None else signal_share
     top = max(design.tiles)
     say()
-    say("## what this design can see (MDE)")
+    say("## what this run could see (MDE, on its own spread)" if measured
+        else "## what this design can see (MDE)")
     say()
     say(f"Effect under test: the three candidates span "
         f"{REPO_RETRACTED_ALPHA} to {REFIT_ALPHA}, so an interval wider than "
         f"{MAX_BAND_WIDTH} cannot pick one.")
-    say(f"Noise assumption: per-pass timing spread MEASURED over the 26 "
-        f"published reports; median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
-        f"{MEASURED_SPREAD_MAX:.2%}.")
-    say(f"Design: {design.replicates} interleaved replicates per rung, ladder "
-        f"topping out at {top} tiles, D(1) held above "
-        f"{MIN_SIGNAL_FRACTION:.0%} of a pass by the signal gate.")
+    if measured:
+        say("Noise MEASURED IN THIS RUN: pass-to-pass pstdev over p50 across "
+            "the interleaved replicates.")
+        say("The plan's line above used the corpus's WITHIN-cell spread, which "
+            "is a floor and not this.")
+        say(f"Signal MEASURED IN THIS RUN: D(1) is {share:.1%} of the weakest "
+            f"one-tile pass, the number")
+        say(f"signal_gate scores, against the {MIN_SIGNAL_FRACTION:.0%} floor "
+            f"the plan had to assume.")
+    else:
+        say(f"Noise assumption: per-pass timing spread MEASURED over the 26 "
+            f"published reports; median {MEASURED_SPREAD_MEDIAN:.2%}, worst "
+            f"{MEASURED_SPREAD_MAX:.2%}. Within-cell, so a FLOOR.")
+    say(f"Design: {design.replicates} interleaved "
+        f"{'replicate' if design.replicates == 1 else 'replicates'} per rung, "
+        f"ladder topping out at {top} tiles"
+        + ("." if measured else
+           f", D(1) held above {MIN_SIGNAL_FRACTION:.0%} of a pass by the "
+           "signal gate."))
     say()
+    if not spreads:
+        say("  NOT STATED. No pass group carried two replicates and a positive "
+            "median, so this run")
+        say("  recorded no spread of its own and its resolution cannot be "
+            "judged. Raise --replicates.")
+        return
+    if share <= 0:
+        say(f"  NOT STATED. D(1) is {share:.1%} of a pass, so the ablation "
+            f"removed nothing measurable")
+        say("  and there is no resolution to quote. `signal` below is the gate "
+            "that says so.")
+        return
     for label, spread in spreads:
-        mde = mde_of_alpha(spread, design.replicates, top)
+        if spread <= 0:
+            say(f"  at the {label:<6} spread 0.00%: NOT STATED. A zero spread "
+                f"is an instrument that")
+            say("          did not resolve its own passes, not a design that "
+                "can see anything.")
+            continue
+        mde = mde_of_alpha(spread, design.replicates, top, signal_share=share)
         verdict = ("resolves the candidates" if mde <= MAX_BAND_WIDTH
                    else "CANNOT resolve them")
         say(f"  at the {label:<6} spread {spread:.2%}: MDE on alpha "
             f"{mde:.3f} against the {MAX_BAND_WIDTH} limit  {verdict}")
     say()
-    say("An MDE above the limit does not make a PASS wrong; it makes a FAIL "
-        "uninformative, and")
-    say("it is the number to raise --replicates against before the box is "
-        "rented.")
+    if measured:
+        say("An MDE above the limit does not make a PASS wrong; it makes a "
+            "FAIL uninformative. This")
+        say("ladder is already spent, so a CANNOT here means the interval "
+            "below cannot pick a candidate,")
+        # WHICH REMEDY, BY WHICH LEVER MOVED. Replicates buy resolution as
+        # sqrt(n) and cost pod minutes; a thin signal is not noise and no
+        # number of replicates fixes it. Printing "raise --replicates" over a
+        # 5.3% share would send the next rental to buy nine more hours of the
+        # same answer.
+        if share < MIN_SIGNAL_FRACTION:
+            say(f"and replicates are NOT the remedy: at a signal share of "
+                f"{share:.1%} against the {MIN_SIGNAL_FRACTION:.0%} floor the "
+                f"ablation")
+            say("removed too little to resolve, and the lever is the alias and "
+                "the pinning. See `headroom`.")
+        else:
+            say("and the lever is --replicates: the signal cleared its floor, "
+                "so the scatter is what binds.")
+    else:
+        say("An MDE above the limit does not make a PASS wrong; it makes a "
+            "FAIL uninformative, and")
+        say("it is the number to raise --replicates against before the box is "
+            "rented.")
 
 
 def report_design(say, design: Design, gates: list[Gate], l2_bytes: int,
@@ -2122,23 +3092,31 @@ def report_confounds(say, design: Design, results: list[ModelResult]) -> None:
             "this run has no")
         say("  L2-resident control to bound it. Re-run with --control.")
     say()
-    say("  BOUNDED BY THE BRACKET. L2 service, and the cache-set distribution "
-        "that makes it")
-    say("  worse. Both variants push n W bytes through L2, and the aliased "
-        "variant pins every")
-    say("  one of them to a single BLOCK_K x BLOCK_N tile, so its loads land on "
-        "a handful of L2")
-    say("  slices and are served more slowly than the aggregate L2 bandwidth "
-        "would suggest.")
-    say("  Whatever that costs shows up in the ALIASED ladder's own slope, "
-        "which is r above,")
-    say("  and the two estimators bracket the truth for any composition of L2 "
-        "and HBM service")
-    say("  between a sum and a max. Narrowing it means spreading the aliased "
-        "tile across more")
-    say("  slices, which this design does not do because a spread alias has no "
-        "closed form to")
-    say("  check the output against.")
+    widest = max((r.alias_bytes(design.alias_extent) for r in design.rungs),
+                 default=0)
+    say("  BOUNDED BY THE BRACKET, AND GATED. L2 service, and the cache-set "
+        "distribution that")
+    say("  makes it worse. Both variants push n W bytes through L2. At "
+        f"--alias-extent {design.alias_extent!r} the aliased arm touches")
+    if design.alias_extent == "tile":
+        say(f"  ONE {design.tile['BLOCK_K']} x {design.tile['BLOCK_N']} tile, "
+            f"{widest / 2**10:.0f} KiB, re-read every K iteration. That is the "
+            "2026-09-01 pinning and its")
+        say("  slice contention is what drove r to 6.4-19.1; the numbers below "
+            "are here to be")
+        say("  compared with an --alias-extent block run, not to be quoted "
+            "alone.")
+    else:
+        say(f"  one BLOCK_N x K column block, {widest / 2**20:.2f} MiB, walked "
+            "with the normal arm's own")
+        say("  sequential K stride over thousands of lines rather than pinned "
+            "to a handful of")
+        say("  slices. Whatever it still costs shows up in the ALIASED ladder's "
+            "own slope, r, and")
+        say(f"  `bracket` FAILS the page if r exceeds {MAX_BRACKET_R}, above "
+            "which the two estimators")
+        say("  land on the same side of alpha and the interval between them is "
+            "not a bracket.")
     say()
     say("  ABSORBED BY CONSTRUCTION. Any cost that scales with the extra-tile "
         "count and is not a")
@@ -2150,6 +3128,181 @@ def report_confounds(say, design: Design, results: list[ModelResult]) -> None:
 # --------------------------------------------------------------------------
 # gates on the result
 # --------------------------------------------------------------------------
+
+def _aliased_slope_bytes_s(row_group: list[dict]) -> float | None:
+    """One model's aliased ladder as an achieved REQUEST bandwidth, bytes/s.
+
+    The regressor is `tiles - 1` and the response is the aliased median, so the
+    slope is the cost of one extra M-tile per expert. One extra M-tile requests
+    exactly one more pass over every expert's weight block, `weight_bytes`,
+    whatever the alias then does with the addresses. Bytes over seconds is
+    therefore the rate at which the SHARED, non-DRAM path in this kernel can
+    deliver requests, and it is the number the whole headroom question is about.
+    """
+    pts = []
+    weight_bytes = 0
+    for row in row_group:
+        ms = row.get("ms") or {}
+        if not ms.get("aliased"):
+            continue
+        pts.append((row["tiles"], statistics.median(ms["aliased"])))
+        weight_bytes = max(weight_bytes, int(row.get("weight_bytes") or 0))
+    line = _fit_line(sorted(pts))
+    if line is None or line[1] <= 0 or not weight_bytes:
+        return None
+    return weight_bytes / (line[1] * 1e-3)
+
+
+def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
+    """Was DRAM the binding resource at all? The 2026-09-01 run's real defect.
+
+    THE ABLATION CAN ONLY SEE A RESOURCE THAT BINDS. Both arms issue the same
+    loads and both pay the same non-DRAM cost of getting them from L2 into the
+    SM; only the normal arm additionally pays DRAM. If the shared path is
+    SLOWER than DRAM, the normal arm is limited by the shared path too, DRAM has
+    slack, and removing every byte of it moves the clock by the un-overlapped
+    residue and by nothing else. The measured alpha is then a fact about the
+    residue, and it is small for reasons that have nothing to do with alpha.
+
+    That is not hypothetical. The 2026-09-01 run's aliased ladder delivered
+    0.607 to 0.616 of this card's read roof on five geometries spanning 20x in
+    footprint, so the ceiling was shape independent, non-DRAM, and 39% below
+    the roof. `signal` reported the consequence (D(1) at 5.3% of a pass) and
+    `form` reported the consequence of the consequence (R^2 0.42 on the model
+    with the smallest D). Neither named the cause, so the page read as evidence
+    that the per-tile cost is not DRAM. It was evidence that the apparatus
+    could not have seen DRAM.
+
+    UNKNOWN, NOT PASS, WITHOUT A ROOF. This is a VALIDITY gate, so UNKNOWN is
+    INVALID and nothing is quotable: a card with no committed calibration has
+    no ceiling to compare against and this gate will not invent one.
+    """
+    name = "headroom: the shared path is faster than DRAM, so DRAM could bind"
+    if not roof_bytes_s:
+        return Gate(name, None,
+                    "no committed calibration for this card, so there is no "
+                    "measured DRAM roof to compare the aliased ladder against. "
+                    "Run scripts/calibrate_hardware.py --publish first; without "
+                    "it nothing on this page says whether DRAM ever bound")
+    by_model: dict[str, list[dict]] = {}
+    for row in records:
+        if row.get("control") or not (row.get("ms") or {}).get("aliased"):
+            continue
+        by_model.setdefault(row["model"], []).append(row)
+    ratios = []
+    for model, rows in by_model.items():
+        achieved = _aliased_slope_bytes_s(rows)
+        if achieved:
+            ratios.append((achieved / roof_bytes_s, model, achieved))
+    if not ratios:
+        return Gate(name, None, "no model produced an aliased ladder slope")
+    ratio, model, achieved = min(ratios)
+    return Gate(name, ratio >= MIN_HEADROOM_RATIO,
+                f"weakest model {model}: the aliased ladder delivers "
+                f"{achieved / 1e9:.0f} GB/s of weight requests against a "
+                f"measured read roof of {roof_bytes_s / 1e9:.0f} GB/s, a ratio "
+                f"of {ratio:.3f} (limit {MIN_HEADROOM_RATIO}). Below 1 the "
+                "shared non-DRAM path is slower than DRAM, so DRAM had slack "
+                "in the normal arm and no ablation of it can move the clock "
+                "however large alpha is")
+
+
+def attribution_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
+    """Is D(1) big enough to BE the read it is named after?
+
+    D(1) is the whole denominator of this experiment: every alpha is a slope
+    over it, and the design's claim is that it is the time cost of one full
+    pass over every expert's weight block. That pass has a floor, and the floor
+    is the card's own measured read ceiling. A D(1) below it is a read that beat
+    the card, which is not a small effect or a noisy one, it is impossible, and
+    it means the label on D is wrong.
+
+    On 2026-09-01 every one of the five geometries came in between 3.1x and
+    10.7x BELOW its own floor. This gate states that in the units the claim is
+    made in, which `signal` (a fraction of the pass's own time) could not.
+    """
+    name = "attribution: D(1) reaches the card's floor for the bytes it removes"
+    if not roof_bytes_s:
+        return Gate(name, None,
+                    "no committed calibration for this card, so there is no "
+                    "floor for the bytes the alias removes. "
+                    "scripts/calibrate_hardware.py --publish writes one")
+    worst = None
+    for row in records:
+        if row.get("control") or row.get("tiles") != 1:
+            continue
+        ms = row.get("ms") or {}
+        weight_bytes = int(row.get("weight_bytes") or 0)
+        if not ms.get("normal") or not ms.get("aliased") or not weight_bytes:
+            continue
+        d1 = statistics.median(ms["normal"]) - statistics.median(ms["aliased"])
+        floor_ms = weight_bytes / roof_bytes_s * 1e3
+        ratio = d1 / floor_ms
+        if worst is None or ratio < worst[0]:
+            worst = (ratio, row["id"], d1, floor_ms)
+    if worst is None:
+        return Gate(name, None, "no one-tile rung carried both variants")
+    ratio, rid, d1, floor_ms = worst
+    return Gate(name, ratio >= MIN_ATTRIBUTION_RATIO,
+                f"weakest one-tile rung {rid}: D(1) is {d1:.4f} ms against a "
+                f"floor of {floor_ms:.4f} ms for the same bytes at the card's "
+                f"measured read roof, a ratio of {ratio:.3f} (limit "
+                f"{MIN_ATTRIBUTION_RATIO}). Below 1 the difference is smaller "
+                "than the fastest this card can move those bytes, so it is not "
+                "the cost of moving them")
+
+
+def bracket_gate(results: list[ModelResult]) -> Gate:
+    """Is the interval between the two estimators a BRACKET at all?
+
+    The DIFFERENCE estimator returns `(alpha - r)/(1 - r)` under max
+    composition. That is below alpha only while `r < 1`. At `r > 1` the
+    denominator is negative, the estimator sits ABOVE alpha, both ends of the
+    printed interval are on the same side of the truth, and the interval
+    contains nothing in particular while still looking like a measurement with
+    error bars. The 2026-09-01 report printed exactly that: brackets built on
+    an `r` of 6.4 to 19.1, one of which (0.535 to 0.969 pooled) was then read as
+    containing the refit.
+
+    This is a VALIDITY gate and not a resolution one. `band_gate` asks whether a
+    valid interval is narrow enough to choose between candidates; this asks
+    whether it is an interval at all, and a wide answer to the first question is
+    NOT TESTABLE while a failure of the second is INVALID.
+    """
+    name = "bracket: r < 1, so the two estimators sit on opposite sides"
+    shares = [(r.fit.l2_share, r.model) for r in results
+              if r.fit.ok and not r.control and r.fit.l2_share is not None]
+    if not shares:
+        return Gate(name, None,
+                    "no model produced an r; without it nothing says which "
+                    "side of alpha either estimator is on")
+    worst, model = max(shares)
+    return Gate(name, worst <= MAX_BRACKET_R,
+                f"worst r is {worst:.3f} on {model} (limit {MAX_BRACKET_R}). r "
+                "is the aliased ladder's per-tile cost over one weight read, "
+                "and the difference estimator is (alpha - r)/(1 - r): above 1 "
+                "that denominator changes sign, both ends land on the same "
+                "side of alpha, and the printed interval is not a bracket")
+
+
+def probe_gate(readings: list[dict], chosen: dict | None, why: str) -> Gate:
+    """The probe's verdict, as the one RESULT line a stopped run prints.
+
+    A probe that finds no pinning STOPS the arm, and it stops it after
+    measuring, which is INVALID and not REFUSED: the probe's own wall minutes
+    were spent (`report_cost` prices them and is the only place that names a
+    duration) and there is a directory of probe cells on disk that must not be
+    scored as an answer. `exit_codes.classify_text` has to be able to
+    recompute that 3 from the log, so the probe prints this gate's RESULT line
+    through `verdict` exactly as the ladder's gates do. Without it the log would
+    carry no RESULT line at all, which is the REFUSED shape, and the driver
+    would read a spent arm as a free one.
+    """
+    return Gate("probe: some pinning delivers requests faster than DRAM",
+                chosen is not None,
+                f"{len(readings)} pinning(s) timed. {why}",
+                kind=exit_codes.VALIDITY)
+
 
 def correctness_gate(records: list[dict], compute: str) -> Gate:
     checked = [(r["id"], name, value)
@@ -2213,7 +3366,20 @@ def placebo_gate(records: list[dict]) -> Gate:
                 f"{ratio * 100:.1f}% (limit {PLACEBO_MAX_FRACTION * 100:.0f}%)")
 
 
-def signal_gate(records: list[dict]) -> Gate:
+def one_tile_signal_shares(records: list[dict]) -> list[tuple[float, str]]:
+    """D(1) as a fraction of the one-tile pass, per real model, worst first.
+
+    ONE FUNCTION BECAUSE TWO READERS NEED THE SAME NUMBER. `signal_gate` scores
+    the worst of these against `MIN_SIGNAL_FRACTION`, and `report_mde` divides
+    by it to say what the run could resolve. Computed twice they drift, and a
+    report that gates on 5.3% while pricing its resolution at 25% is the exact
+    shape of the defect this rebuild keeps finding: the fix applied at one of
+    two call sites.
+
+    The control is excluded because its D is zero BY DESIGN -- its expert fits
+    in L2, so there is no HBM re-read to remove -- and scoring the signal on it
+    would fail every honest run.
+    """
     fractions = []
     for row in records:
         if row.get("control") or row.get("tiles") != 1:
@@ -2226,10 +3392,15 @@ def signal_gate(records: list[dict]) -> Gate:
             continue
         fractions.append(((normal - statistics.median(ms["aliased"])) / normal,
                           row["id"]))
+    return sorted(fractions)
+
+
+def signal_gate(records: list[dict]) -> Gate:
+    fractions = one_tile_signal_shares(records)
     if not fractions:
         return Gate("signal: the weight read is most of what the kernel does",
                     None, "no one-tile rung was timed")
-    worst, rid = min(fractions)
+    worst, rid = fractions[0]
     return Gate("signal: the weight read is most of what the kernel does",
                 worst >= MIN_SIGNAL_FRACTION,
                 f"weakest one-tile rung {rid} has D(1) at {worst * 100:.1f}% of "
@@ -2309,10 +3480,11 @@ def band_gate(pooled: tuple[float, float] | None,
         detail += (f". r, the aliased ladder's per-tile cost over one weight "
                    f"read, is {min(l2_shares):.3f} to {max(l2_shares):.3f}, and "
                    "r is what sets the bracket's width: the two estimators "
-                   "differ by roughly 2r/(1-r^2). Narrowing this needs a "
-                   "cheaper aliased ladder, which means spreading the aliased "
-                   "tile across more L2 slices rather than pinning every load "
-                   "to one")
+                   f"differ by roughly 2r/(1-r^2), and `bracket` voids the page "
+                   f"above r = {MAX_BRACKET_R}. Narrowing it means a cheaper "
+                   "aliased ladder: --alias-extent block spreads the alias over "
+                   "a whole BLOCK_N x K column block instead of one tile, and "
+                   "--probe finds the pinning that delivers requests fastest")
     # NOT TESTABLE, not FAIL. A wide interval refutes nothing; it says the run
     # did not resolve, and this project has a standing habit of reading a wide
     # number as a finding.
@@ -2326,12 +3498,20 @@ def prediction_gate(pooled: tuple[float, float] | None,
     if pooled is None or pooled_bracket is None:
         return Gate(name, None, "no pooled interval; nothing to score")
     if compute == "dot":
+        # THE FIRST WORDS ARE THE ONES THAT SURVIVE. `Gate.result_line` cuts the
+        # detail at 160 characters, and the RESULT line is the ONE line the
+        # driver may grep. This detail used to open with the interval and reach
+        # "it is a lower bound, not P1's answer" at character 190, so the only
+        # sentence that separates "the world disagreed" from "the question was
+        # not asked" was the one the cut removed, on the gate whose UNKNOWN is
+        # what makes the process exit 1.
         return Gate(name, None,
-                    f"dot mode puts alpha in {pooled[0]:.3f} to "
-                    f"{pooled[1]:.3f}, and dot mode is biased LOW by one copy "
-                    "of the per-tile compute cost on top of everything the "
-                    "bracket already carries. It is a lower bound, not P1's "
-                    "answer. Re-run in sum mode")
+                    "NOT A REFUTATION: dot mode cannot answer P1 at all, so "
+                    f"this exit 1 means the question was not asked. It puts "
+                    f"alpha at {pooled[0]:.3f} or above, a LOWER BOUND biased "
+                    "LOW by one copy of the per-tile compute cost on top of "
+                    "everything the bracket already carries "
+                    f"(upper end {pooled[1]:.3f}). Re-run in sum mode")
     overlap = pooled[0] <= REFIT_BAND[1] and REFIT_BAND[0] <= pooled[1]
     _, sentence = supported_candidate(pooled)
     return Gate(name, overlap,
@@ -2341,6 +3521,46 @@ def prediction_gate(pooled: tuple[float, float] | None,
                 f"{REFIT_BAND[0]:.3f}-{REFIT_BAND[1]:.3f}: "
                 f"{'they overlap' if overlap else 'they are DISJOINT'}. "
                 f"{sentence}")
+
+
+# The sentence that keeps exit 1 from being read as a refutation, in the two
+# places a reader meets it: beside the probe's re-pin and beside the verdict.
+# ONE list and not two copies, because two copies of a disambiguation is the
+# shape that leaves the second one saying the old thing.
+def dot_mode_reading(compute: str) -> list[str]:
+    """How to read this run's exit code when the ladder ran in `dot` mode.
+
+    `exit_codes` has five states and none of them is "measured, sound, and the
+    claim was not askable". `dot` mode is that state: every VALIDITY gate can
+    pass, the numbers are real, and P1 is UNKNOWN because the estimator is
+    biased low by construction. `classify` maps an UNKNOWN CLAIM to CLAIM_FAIL,
+    which is right by the table -- the claim was not established -- and the
+    ledger will latch it and never retry. What it is NOT is evidence that alpha
+    differs from the refit, and the difference between those two readings is a
+    retraction. So the run says which one it is, in words, next to the number.
+
+    Returns an empty list in `sum` mode, where exit 1 means exactly what the
+    table says it means and an extra paragraph would only dilute it.
+    """
+    if compute != "dot":
+        return []
+    return [
+        "READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION.",
+        "",
+        "P1 is UNKNOWN, not FAIL. dot mode moves the reduction onto the tensor",
+        "cores, which is what buys the headroom the sum kernel could not reach,",
+        "and it costs the estimator one copy of the per-tile compute cost. The",
+        "interval it produces is a bound BELOW alpha and it is not alpha, so no",
+        "candidate can be refuted from this page and none is.",
+        "",
+        "The process exits 1 CLAIM_FAIL because exit_codes.classify counts an",
+        "UNKNOWN CLAIM against the gate, which is the right rule: DONE requires",
+        "every gate to say PASS in so many words. But the ledger will latch that",
+        "1 and not retry, so the arm is FINISHED WITHOUT AN ANSWER TO P1 and the",
+        "next attempt has to be booked by a human. What it takes is a sum-mode",
+        "pinning that clears the roof: widen the sum half of PROBE_PINNINGS, or",
+        "run with --compute sum --no-probe at a pinning found by hand.",
+    ]
 
 
 def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
@@ -2372,7 +3592,7 @@ def mechanism_note(say, results: list[ModelResult], l2_bytes: int) -> None:
             f"{side:9s}  alpha {span[0]:.3f} to {span[1]:.3f}")
 
 
-def verdict(say, gates: list[Gate]) -> int:
+def verdict(say, gates: list[Gate], reading: list[str] | None = None) -> int:
     """Print every gate's RESULT line and the human table, and return the code.
 
     THE CODE COMES FROM `exit_codes.classify` OVER THE SAME GATE OBJECTS THAT
@@ -2398,6 +3618,14 @@ def verdict(say, gates: list[Gate]) -> int:
     same way, and `classify` answers separately over the gates. One `EXIT:` line
     beside them names the code in words, so the transcript says which of the
     five states this run ended in without anyone counting brackets.
+
+    `reading` is prose printed between the VERDICT lines and the EXIT line, for
+    the one case where the code is right and its plain reading is wrong:
+    `dot_mode_reading` supplies it when the ladder ran on the tensor cores,
+    where P1 is UNKNOWN, `classify` correctly returns CLAIM_FAIL, and CLAIM_FAIL
+    read plainly says the world disagreed with the refit when what happened is
+    that the estimator could not ask. Empty on every other path, because a
+    caveat printed under every verdict is read under none.
 
     AN EMPTY GATE LIST RAISES `NoGatesScored` rather than returning DONE, which
     is `classify`'s own rule and the right one here: `_analyse` only reaches
@@ -2429,6 +3657,10 @@ def verdict(say, gates: list[Gate]) -> int:
             "the refit's band,")
         say("so the number the tile-corrected roofline rests on has "
             "independent support.")
+    for line in (reading or []):
+        say(line)
+    if reading:
+        say()
     say(f"EXIT: {exit_codes.describe(code)}")
     return code
 
@@ -2497,6 +3729,23 @@ def default_run_id(args, card: str, design: Design) -> str:
         "3design": design.fingerprint, "4seed": args.seed,
         "5flush": bool(args.l2_flush), "6warmup": args.warmup,
         "7budget": args.cell_budget_ms, "8trials": args.trials})
+
+
+def replay_plan(out_dir: Path) -> dict:
+    """`plan.json` of a finished run, for `--replay`. `{}` when there is none.
+
+    A REPLAY MUST BE SCORED AGAINST THE RULER THE RUN WAS MEASURED WITH.
+    `--replay` carries neither `--card` nor `--synthetic`, so without this the
+    card resolves to `NO_CARD`, `measured_card` finds no calibration, and
+    `headroom` and `attribution` -- both VALIDITY -- read UNKNOWN. A finished,
+    passing run would come back INVALID purely because it was re-reported on a
+    laptop, which is the shape of a false retraction. The plan carries the card,
+    the roof and the L2 for exactly this reason, and the synthetic path writes
+    one too so a planted world replays as itself.
+    """
+    with contextlib.suppress(Exception):
+        return json.loads((out_dir / "plan.json").read_text())
+    return {}
 
 
 def results_root() -> Path:
@@ -2572,10 +3821,44 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--block-n", type=int, default=FIXED_TILE["BLOCK_N"])
     parser.add_argument("--block-k", type=int, default=FIXED_TILE["BLOCK_K"])
     parser.add_argument("--group-m", type=int, default=FIXED_TILE["GROUP_M"])
+    parser.add_argument("--num-warps", type=int,
+                        default=FIXED_TILE["num_warps"])
+    parser.add_argument("--num-stages", type=int,
+                        default=FIXED_TILE["num_stages"])
+    parser.add_argument("--alias-extent", choices=ALIAS_EXTENTS,
+                        default=DEFAULT_ALIAS_EXTENT,
+                        help="how far the alias reaches. block (default) zeroes "
+                             "the expert and N-block strides and KEEPS the K "
+                             "advance, so the aliased arm walks one BLOCK_N x K "
+                             "column block, L2-resident and spread. tile zeroes "
+                             "the advance too and re-reads one 16 KiB tile, "
+                             "which is the 2026-09-01 design and the pinning "
+                             "whose L2 slice contention drove r to 12")
+    parser.add_argument("--probe", action="store_true", default=True,
+                        help="before the ladder, time a short pinning grid and "
+                             "adopt the one whose aliased arm delivers requests "
+                             "faster than the card's DRAM roof. Without "
+                             "headroom no ladder can measure alpha, so a probe "
+                             "that finds none stops the arm (default on)")
+    parser.add_argument("--no-probe", dest="probe", action="store_false")
     parser.add_argument("--compute", choices=COMPUTE_MODES, default="sum",
                         help="how the loads are kept live. sum is STUDY.md's "
                              "prescription and is unbiased; dot is the real "
                              "GEMM reduction and is biased low")
+    # A STRING AND NOT A BOOL, because argparse applies `type` BEFORE it checks
+    # `choices`, so a converting type here would score True against
+    # ("allow", "refuse") and reject every value including the default.
+    parser.add_argument("--dot-fallback", choices=("allow", "refuse"),
+                        default="allow", dest="dot_fallback",
+                        help="what the probe may do when no sum-mode pinning "
+                             "clears the DRAM roof. allow (default) takes the "
+                             "fastest dot-mode one, which measures a LOWER "
+                             "BOUND on alpha, leaves P1 UNKNOWN and therefore "
+                             "exits 1 CLAIM_FAIL: a code the ledger latches, "
+                             "so the run prints in words that the claim was "
+                             "not asked rather than refuted. refuse stops the "
+                             "arm at the probe instead, which is INVALID and "
+                             "costs only the probe")
     parser.add_argument("--replicates", type=int, default=DEFAULT_REPLICATES)
     parser.add_argument("--warmup", type=float, default=DEFAULT_WARMUP_MS,
                         help="milliseconds of GPU time delivered under "
@@ -2632,9 +3915,49 @@ def main(argv: list[str] | None = None) -> int:
     design = build_design(args)
     suffix = f"-synthetic-{args.synthetic}" if args.synthetic else ""
     card = resolve_card(args)
-    out_dir = args.replay or args.out or (
-        results_root() / "alias_ablation"
-        / f"{default_run_id(args, card, design)}{suffix}")
+
+    def resolve_out(d: Design) -> Path:
+        return args.replay or args.out or (
+            results_root() / "alias_ablation"
+            / f"{default_run_id(args, card, d)}{suffix}")
+
+    out_dir = resolve_out(design)
+
+    # THE CEILINGS ARE RESOLVED BEFORE ANYTHING IS PRINTED, because every number
+    # on the page divides by one of them: the cost, the headroom, the
+    # attribution and the probe's own verdict. A reader must see which file they
+    # came from at the top, beside the card, and not thirty lines later.
+    planned = replay_plan(out_dir) if args.replay else {}
+    # THE ESTIMATOR IS PART OF THE RULER. `replay_plan` restored the card, the
+    # roof and the L2 so that a finished run is not retracted by being
+    # re-reported on a laptop, and it left out the two knobs that decide what
+    # the numbers MEAN. `--replay` carries no `--compute`, so a dot-mode ladder
+    # replayed with a bare `--replay` was rebuilt as a sum-mode design and
+    # scored by `prediction_gate`'s UNBIASED branch: the run that exited 1 with
+    # P1 UNKNOWN and "this is a LOWER BOUND" came back 0 DONE, "alpha measured",
+    # off the same cells. `scripts/pod_session.sh:2467` copies report.md into
+    # the published arm directory, so that replay is what would have been
+    # published. `--alias-extent` is restored with it, for the same reason and
+    # one line earlier than it would have been needed.
+    for knob in ("compute", "alias_extent"):
+        want = planned.get(knob)
+        if want and want != getattr(args, knob, None):
+            setattr(args, knob, want)
+            design = build_design(args)
+    card = planned.get("card") or card
+    facts = {} if args.synthetic else measured_card(card)
+    if planned.get("roof_bytes_s") and not facts.get("roof_bytes_s"):
+        facts = dict(facts, source=f"{out_dir.name}/plan.json",
+                     roof_pattern=planned.get("roof_pattern", ROOF_PATTERN))
+    l2 = (SYNTHETIC_L2_BYTES if args.synthetic
+          else (planned.get("l2_bytes") or facts.get("l2_bytes")
+                or l2_bytes_here()))
+    # NO FALLBACK ON THE ROOF. Every headroom, attribution and cost number
+    # divides by it, and a datasheet pin rate in its place would move each of
+    # them by the ratio of two machines. None means those gates read UNKNOWN,
+    # which is a VALIDITY UNKNOWN and therefore INVALID, and that is correct.
+    roof = (SYNTHETIC_ROOF_BYTES_S if args.synthetic
+            else (planned.get("roof_bytes_s") or facts.get("roof_bytes_s")))
 
     # PROVENANCE, built once and written into every artefact this run leaves.
     # None of the ten gaps-session scripts wrote a commit, a card or an
@@ -2650,6 +3973,17 @@ def main(argv: list[str] | None = None) -> int:
     say("Everything below is written there as report.md, beside plan.json and "
         "cells.jsonl.")
     say(f"candidate values: {cross_check_candidates()}")
+    if facts.get("source"):
+        say(f"ceilings: {facts['source']}, {facts['roof_pattern']} roof "
+            f"{(roof or 0) / 1e9:.0f} GB/s, L2 {l2 / 2**20:.1f} MiB")
+    elif args.synthetic:
+        say(f"ceilings: PLANTED at {PLANT_CARD}'s measured values, read roof "
+            f"{SYNTHETIC_ROOF_BYTES_S / 1e9:.0f} GB/s, L2 "
+            f"{SYNTHETIC_L2_BYTES / 2**20:.1f} MiB")
+    else:
+        say("ceilings: NO CALIBRATION for this card. The headroom and "
+            "attribution gates will read UNKNOWN, which is INVALID; run "
+            "scripts/calibrate_hardware.py --publish first")
     if args.synthetic:
         say()
         say(f"*** SYNTHETIC ({args.synthetic}): {SYNTHETIC_LAWS[args.synthetic]}.")
@@ -2669,9 +4003,9 @@ def main(argv: list[str] | None = None) -> int:
     # it met an H200, where L2 is 60 MiB and deepseek-v2's 56 MiB/expert crosses
     # from above the line to below it. The whole point of a planted law is that
     # recovering it is machine-independent.
-    l2 = SYNTHETIC_L2_BYTES if args.synthetic else l2_bytes_here()
     pre = preflight(design, l2)
     report_design(say, design, pre, l2, synthetic=bool(args.synthetic))
+    report_cost(say, design, args, roof, probing=bool(args.probe and args.run))
     report_mde(say, design)
     if any(g.ok is False for g in pre):
         say()
@@ -2698,10 +4032,124 @@ def main(argv: list[str] | None = None) -> int:
             out_dir.mkdir(parents=True, exist_ok=True)
             (out_dir / "cells.jsonl").write_text(
                 "".join(json.dumps(r) + "\n" for r in records))
+            # A PLANTED WORLD NEEDS ITS PLAN AS MUCH AS A MEASURED ONE. Without
+            # it `--replay` of this directory has no roof to score headroom and
+            # attribution against and the planted world comes back INVALID for
+            # a reason that has nothing to do with the law it plants.
+            (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
+                {"fingerprint": design.fingerprint, "argv": sys.argv[1:],
+                 "synthetic": args.synthetic, "card": card,
+                 # BOTH WRITERS OR NEITHER. The measured writer below has
+                 # carried `compute` since it was written; this one did not, so
+                 # every planted world replayed as sum mode however it was
+                 # planted, and the rehearsal of the dot path could not
+                 # rehearse its own replay.
+                 "compute": design.compute,
+                 "alias_extent": design.alias_extent,
+                 "roof_bytes_s": SYNTHETIC_ROOF_BYTES_S,
+                 "roof_pattern": ROOF_PATTERN,
+                 "l2_bytes": SYNTHETIC_L2_BYTES,
+                 "run_id": out_dir.name, "seed": args.seed}), indent=2))
     elif args.run:
+        if args.probe:
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    raise CannotRunHere("no CUDA device; the probe measures one")
+                readings = measure_probe(design, args, roof, torch)
+            except (ImportError, CannotRunHere) as exc:
+                say()
+                say(f"REFUSED. CANNOT RUN HERE: {exc}")
+                say("The plan, the prediction and the preflight above are still "
+                    "valid and cost nothing;")
+                say("re-run with --run on the pod, or --synthetic to exercise "
+                    "the gates.")
+                _save(out_dir, say, prov)
+                # REFUSED (2), the same code and the same words the measuring
+                # path uses. The probe is the first thing --run reaches, so on a
+                # box with no card this branch is the one that answers, and it
+                # must not answer differently from the branch below it.
+                return exit_codes.REFUSED
+            chosen, why = choose_pinning(readings, roof,
+                                         args.dot_fallback == "allow")
+            report_probe(say, readings, roof, chosen, why,
+                         args.dot_fallback == "allow")
+            if chosen is None:
+                # INVALID (3), NOT REFUSED (2). The probe SPENT card time and
+                # left cells on disk; REFUSED means free. The one RESULT line
+                # `verdict` prints below is what lets `classify_text` recompute
+                # this 3 from the log, and the arm must not be re-queued: at
+                # this pinning grid the design cannot see DRAM and re-running it
+                # reproduces that exactly.
+                code = verdict(say, [probe_gate(readings, chosen, why)])
+                say()
+                say("The ladder was NOT run. Nothing after the probe could have "
+                    "measured alpha, so")
+                say("the remaining rungs were not paid for. Widen "
+                    "PROBE_PINNINGS or accept that the")
+                say("ablation route is closed on this kernel and take the "
+                    "counter route instead.")
+                _save(out_dir, say, prov)
+                with contextlib.suppress(OSError):
+                    (out_dir / "probe.json").write_text(json.dumps(
+                        prov.stamp({"readings": readings, "chosen": None,
+                                    "why": why, "card": card,
+                                    "roof_bytes_s": roof}), indent=2))
+                return code
+            if chosen["compute"] != args.compute:
+                say()
+                say(f"## the probe changed the COMPUTE MODE: "
+                    f"{args.compute} -> {chosen['compute']}")
+                say()
+                for line in dot_mode_reading(chosen["compute"]):
+                    say(f"  {line}")
+            args.num_warps = chosen["num_warps"]
+            args.num_stages = chosen["num_stages"]
+            args.block_k = chosen["block_k"]
+            args.compute = chosen["compute"]
+            design = build_design(args)
+            out_dir = resolve_out(design)
+            pre = preflight(design, l2)
+            say()
+            say(f"## re-pinned by the probe; output directory is now {out_dir}")
+            say()
+            for gate in pre:
+                say(f"  [{gate.label}] {gate.name}")
+                say(f"          {gate.detail}")
+            if any(g.ok is False for g in pre):
+                say()
+                say("REFUSED: the adopted pinning does not pass the preflight.")
+                _save(out_dir, say, prov)
+                return exit_codes.REFUSED
         out_dir.mkdir(parents=True, exist_ok=True)
         if args.fresh:
             (out_dir / "cells.jsonl").unlink(missing_ok=True)
+        # THE RUN ID IS ONE WAY IN AND `--out` IS THE OTHER. Every knob that
+        # moves a row is in `default_run_id`, so the default path cannot resume
+        # into another design's directory. `--out` names a directory outright
+        # and walks past all of it, and `scripts/pod_session.sh:1676` passes
+        # `--out`. The resume key is `rung.key`, which carries no pinning and no
+        # extent, so a second design landing in the first one's directory finds
+        # every rung present, spends no GPU time, and reports the other design's
+        # timings under its own label. The probe makes that live rather than
+        # hypothetical: it can adopt a different pinning on two runs of one
+        # command. The fingerprint is checked here, on the way in.
+        prior = replay_plan(out_dir)
+        if prior.get("fingerprint") and prior["fingerprint"] != design.fingerprint:
+            say()
+            say(f"REFUSED: {out_dir} holds a run of design "
+                f"{prior['fingerprint']} and this is {design.fingerprint}.")
+            say(f"  its argv: {prior.get('argv')}")
+            say("  The resume key is the rung, which carries neither the "
+                "pinning nor the alias extent, so")
+            say("  resuming here would report that design's timings under this "
+                "one's label. Use a")
+            say("  different --out, or --fresh, or drop --out and let the run "
+                "id separate them.")
+            _save(out_dir, say, prov)
+            # REFUSED (2): nothing was measured and nothing is owed. The fix is
+            # a flag, and the log's first REFUSED line says which.
+            return exit_codes.REFUSED
         existing = read_records(out_dir / "cells.jsonl")
         done = {r["id"] for r in existing}
         (out_dir / "plan.json").write_text(json.dumps(prov.stamp(
@@ -2709,6 +4157,9 @@ def main(argv: list[str] | None = None) -> int:
              "git": git_head(), "models": list(design.models),
              "tiles": list(design.tiles), "block_m": design.block_m,
              "tile": design.tile, "compute": design.compute,
+             "alias_extent": design.alias_extent,
+             "roof_bytes_s": roof, "roof_pattern": ROOF_PATTERN,
+             "l2_bytes": l2,
              "card": card, "run_id": out_dir.name, "seed": args.seed,
              "l2_flush": bool(args.l2_flush),
              "warmup_ms": args.warmup, "cell_budget_ms": args.cell_budget_ms,
@@ -2754,11 +4205,12 @@ def main(argv: list[str] | None = None) -> int:
         # is what a REFUSED log looks like from there: the two agree.
         return exit_codes.REFUSED
 
-    return _analyse(say, design, records, args, out_dir, l2, prov, pre)
+    return _analyse(say, design, records, args, out_dir, l2, prov, pre, roof)
 
 
 def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
-             l2: int, prov=None, pre: list[Gate] | None = None) -> int:
+             l2: int, prov=None, pre: list[Gate] | None = None,
+             roof: float | None = None) -> int:
     known = {r.key for r in design.rungs}
     stray = [r for r in records if r.get("id") not in known]
     synthetic = bool(args.synthetic) or any(
@@ -2775,6 +4227,43 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
             "flags differ from the ones that")
         say("  produced the file; re-run --replay with the argv in plan.json.")
     records = [r for r in records if r.get("id") in known]
+
+    # THE SECOND WAY IN, AND THE ONE THAT DOES NOT DEPEND ON A FILE BEING
+    # RIGHT. Above, `--replay` adopts the mode out of plan.json; here the CELLS
+    # are asked, and they are asked on every path. A plan.json written before
+    # 2026-09-03, a hand-edited one, a directory named with `--out` and replayed
+    # from somewhere else: all of them reach this line, and every record on both
+    # the measured and the synthetic paths carries its own `compute`. Two walls
+    # because there are two ways in, which is the defect this rebuild has hit
+    # eight times.
+    modes = {r.get("compute") for r in records if r.get("compute")}
+    if len(modes) > 1:
+        say()
+        say("REFUSED: these cells were measured in more than one compute mode "
+            f"({', '.join(sorted(modes))}), and one")
+        say("  page cannot score an unbiased estimator and a lower bound as one "
+            "ladder. Split the")
+        say("  directory or re-run with --fresh.")
+        _save(out_dir, say, prov)
+        return exit_codes.REFUSED
+    if modes and modes != {design.compute}:
+        found = modes.pop()
+        design = replace(design, compute=found)
+        say()
+        say(f"## SCORED AS {found.upper()} MODE: the cells say so and this "
+            f"invocation said {args.compute}")
+        say()
+        say(f"  Every record in cells.jsonl carries compute={found}. The design "
+            "this process built")
+        say(f"  said {args.compute}, and the two decide different things: "
+            "prediction_gate answers P1 from")
+        say("  sum and refuses to answer it from dot. The CELLS win, because "
+            "they are the measurement")
+        say("  and the flags are only how it was asked for. The verdict below "
+            "is scored on the mode")
+        say("  named on this line.")
+        args.compute = found
+
     timed = [r for r in records if r.get("ms")]
     if not timed:
         say()
@@ -2816,14 +4305,32 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     report_alphas(say, results, pooled, pooled_bracket)
     mechanism_note(say, results, l2)
     report_confounds(say, design, results)
+    # THE MDE'S SECOND CALL SITE. `main` printed one before a rung was timed,
+    # against the corpus's within-cell floor; this one is against the scatter
+    # this run's own interleaved passes delivered. Both are needed and neither
+    # substitutes: the first sizes the booking, the second says whether the
+    # gates below are informative when they FAIL. Stating only the first is how
+    # an arm returns a FAIL nobody can read.
+    shares = one_tile_signal_shares(timed)
+    report_mde(say, design, observed_spreads(timed), measured=True,
+               signal_share=shares[0][0] if shares else None)
 
+    # ORDER IS THE READING ORDER. headroom and attribution come before signal
+    # and form because they are the CAUSE those two report the consequence of:
+    # on 2026-09-01 signal said D(1) was 5.3% of a pass and form said R^2 0.42,
+    # and a reader who stopped there concluded the per-tile cost is not DRAM.
+    # These two say, in the card's own units, that DRAM was never on the
+    # critical path, which is a statement about the apparatus.
     gates = [
         isa_gate(timed),
         correctness_gate(timed, design.compute),
+        headroom_gate(timed, roof),
+        attribution_gate(timed, roof),
         placebo_gate(timed),
         signal_gate(timed),
         linearity_gate(results),
         control_gate(results),
+        bracket_gate(results),
         band_gate(pooled, l2_shares),
         prediction_gate(pooled, pooled_bracket, design.compute),
     ]
@@ -2831,7 +4338,8 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # before a rung is timed, but their RESULT lines belong to a page that HAS
     # timings on it: printed at plan time they let a run that measured nothing
     # classify as DONE. `main` only reaches this call after `records` exist.
-    code = verdict(say, list(pre or []) + gates)
+    code = verdict(say, list(pre or []) + gates,
+                   dot_mode_reading(design.compute))
     _save(out_dir, say, prov)
     return code
 
@@ -2852,5 +4360,41 @@ def _save(out_dir: Path, say: Report, prov=None) -> None:
         print(f"[alias] measurements at  {out_dir / 'cells.jsonl'}")
 
 
+def _guarded(argv: list[str] | None = None) -> int:
+    """`main`, with the ERROR(4) handler the session ledger needs.
+
+    THE HOLE THIS CLOSES IS WORTH A RENTAL. Python spends 1 on any exception
+    that escapes, `moe/bench/exit_codes` reads 1 as CLAIM_FAIL, and
+    `scripts/h200_gaps_session.sh` LATCHES CLAIM_FAIL: the arm is marked
+    finished, skipped on every resume, and its silence is printed in the closing
+    summary as a refuted prediction. A crash is the apparatus failing, not the
+    world disagreeing, so it exits 4 and the driver may attempt it again.
+
+    A `SystemExit` carrying a string is argparse or an explicit refusal, which
+    is REFUSED(2) and free, not a crash.
+    """
+    import traceback
+    try:
+        return main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            message = (exc.code if exc.code.startswith("REFUSED")
+                       else f"REFUSED: {exc.code}")
+            print(message, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except KeyboardInterrupt:
+        print("REFUSED: interrupted before a verdict", file=sys.stderr)
+        return exit_codes.REFUSED
+    except Exception:  # noqa: BLE001 - the whole point is to catch everything
+        traceback.print_exc()
+        print("ERROR: alias_ablation crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_guarded())
