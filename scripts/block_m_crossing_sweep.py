@@ -3843,6 +3843,13 @@ def run_sweep(args, cfg, grid, block_sizes, csv_path: Path, cache_root: Path,
                                  l2_flush=t.l2_flush)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+            except timing.TimingRefused:
+                # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR. TimingRefused
+                # subclasses RuntimeError, so the handler below would file "no CUDA",
+                # "trials=0" or "warmup too short" as a failed cell and move on: the
+                # arm then walks its whole grid writing zeroed rows and exits DONE.
+                # Reproduced on the driver path on 2026-09-03; same door here.
+                raise
             except Exception as exc:                    # noqa: BLE001
                 cell = make_cell(cfg, rows, bm, 0.0, sm_count=sm_count,
                                  block_n=pinned["BLOCK_SIZE_N"], status="failed",

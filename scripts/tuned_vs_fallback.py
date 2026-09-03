@@ -104,6 +104,7 @@ import random
 import statistics
 import sys
 import time
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1864,7 +1865,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     models = [m for m in args.models.split(",") if m]
     tokens = sorted({int(t) for t in args.tokens.split(",") if t})
@@ -2070,6 +2071,41 @@ def main(argv: list[str] | None = None) -> int:
     rc = exit_codes.classify(g.scored() for g in gates)
     print(f"exit     {exit_codes.describe(rc)}")
     return rc
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Convert a string SystemExit into REFUSED, and an unplanned crash to ERROR.
+
+    THIS WAS THE ONE MEASURING SCRIPT WITHOUT THE GUARD. Every sibling grew it
+    on 2026-09-02; this file kept `raise SystemExit(main())` bare, so an
+    unplanned exception here exited the interpreter's ONE, which
+    moe/bench/exit_codes.py defines as CLAIM_FAIL: a RESULT, in FINISHED_CODES,
+    recorded by the driver and never retried. A torch OOM in this arm would
+    have been filed as one of its registered outcomes and latched. Found by a
+    reviewer of a sibling slice on 2026-09-03.
+
+    `raise SystemExit("sentence")` also exits ONE, so a refusal written that way
+    is caught here and mapped to REFUSED, with the sentence on stderr. Caught at
+    the wrapper rather than at each raise site so a refusal added later cannot
+    reintroduce the code by forgetting it. An int SystemExit (argparse's 2,
+    --help's 0) passes through untouched.
+    """
+    try:
+        return _main(argv)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            msg = exc.code if exc.code.startswith("REFUSED") else f"REFUSED: {exc.code}"
+            print(msg, file=sys.stderr)
+            return exit_codes.REFUSED
+        raise
+    except Exception:                                   # noqa: BLE001
+        traceback.print_exc()
+        print("ERROR: tuned_vs_fallback crashed before it could reach a verdict. "
+              "This is the apparatus failing, not a claim failing, so it exits "
+              f"{exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: the "
+              "traceback above is the thing to fix, and the arm may be re-run.",
+              file=sys.stderr)
+        return exit_codes.ERROR
 
 
 if __name__ == "__main__":                                # pragma: no cover

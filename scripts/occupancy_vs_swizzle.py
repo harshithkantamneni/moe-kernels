@@ -1513,6 +1513,13 @@ def measure(args, cfg, plan: Plan, csv_path: Path, cache_root: Path,
                     if t.clock_level_ok is False or t.host_bound:
                         print(f"  ^ {t.clock_note or ''} "
                               f"{t.host_note or ''}".rstrip())
+                except timing.TimingRefused:
+                    # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR. TimingRefused
+                    # subclasses RuntimeError, so the handler below would file "no CUDA",
+                    # "trials=0" or "warmup too short" as a failed cell and move on: the
+                    # arm then walks its whole grid writing zeroed rows and exits DONE.
+                    # Reproduced on the driver path on 2026-09-03; same door here.
+                    raise
                 except Exception as exc:                # noqa: BLE001
                     sample = Sample(st.key, st.num_stages, st.num_warps,
                                     st.group_m, bm, n, rows, tokens, rep, 0.0,
