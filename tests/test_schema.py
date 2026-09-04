@@ -137,7 +137,7 @@ def test_appending_under_a_matching_header_is_fine(tmp_path):
 
 def test_schema_version_tracks_the_column_set():
     """A reminder in code: the version must move whenever COLUMNS does."""
-    assert SC.SCHEMA_VERSION == 5
+    assert SC.SCHEMA_VERSION == 6
     assert "pct_of_achieved_bw" not in SC.COLUMNS
     assert "pct_of_achieved_tflops" in SC.COLUMNS
     assert "achieved_peak_tflops" in SC.COLUMNS
@@ -150,6 +150,16 @@ def test_schema_version_tracks_the_column_set():
     for name in SC.COLUMNS_ADDED_IN[4]:
         assert name in SC.COLUMNS, name
     assert "tile_block_m" in SC.COLUMNS
+    # v6: the LEVEL flag's left-hand side and its grade, the side a bad clock
+    # fell on, and the roof AT THE CELL'S OWN CLOCK. Before these a row at
+    # 1980 MHz was scored against a roof measured at 1515 and read 31% closer
+    # to compute-bound than it was, and nothing in the row could show it.
+    for name in SC.COLUMNS_ADDED_IN[6]:
+        assert name in SC.COLUMNS, name
+    for name in ("reference_clock_mhz", "reference_clock_source",
+                 "clock_level_side", "roof_at_cell_clock_tflops",
+                 "pct_of_roof_at_cell_clock"):
+        assert name in SC.COLUMNS_ADDED_IN[6], name
     assert "tile_config_source" in SC.COLUMNS
     assert "sm_capability" in SC.COLUMNS
     # v5: which timer produced ms_*, and what the card was doing while it did.

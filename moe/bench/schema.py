@@ -24,7 +24,26 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
+# v6: added the reference the LEVEL verdict was scored against and the roof AT
+#     THE CLOCK THE CELL RAN. Until v6 a v5 row said `clock_level_ok = ok`
+#     without saying against what: the reference was resolved from a per-device
+#     yaml that every recalibration overwrites, so a verdict could not be
+#     re-derived from the CSV, and a recalibration that changed the field it was
+#     read from (idle scalar to under-load median) silently changed what "ok"
+#     meant between arms carrying the same basis string. Worse, LEVEL was
+#     one-sided: a memory-shaped cell boosted to 1980 MHz against a compute roof
+#     measured at 1515 passed, and `pct_of_achieved_tflops` on it was inflated
+#     by 1980/1515 = 1.31x, toward the study's claim. v6 writes
+#     `reference_clock_mhz` and `reference_clock_source` (with its grade) onto
+#     every row, names the SIDE a LEVEL failure went (`clock_level_side`), and
+#     carries `roof_at_cell_clock_tflops` / `pct_of_roof_at_cell_clock`, the
+#     compute roof rescaled to the row's own `sm_clock_load_mhz` when the
+#     reference is an under-load median, with `roof_note` saying why when it is
+#     not. `achieved_peak_tflops` and `pct_of_achieved_tflops` KEEP their v2
+#     meaning (the fixed roof) rather than being redefined: one column may not
+#     mean two things either side of a version boundary. Also
+#     `host_backlog_iters`, the ratio the host-bound verdict thresholds.
 # v5: added the instrument block, i.e. WHICH TIMER produced the ms_* columns and
 #     what the card was doing while it did. Until v5 the driver timed through
 #     `timing.time_eager`/`time_graph` -- a COUNT of warmup calls, an iteration
@@ -70,7 +89,7 @@ SCHEMA_VERSION = 5
 #: WRITING is still single-version. CsvWriter refuses to append under a header
 #: from another schema, so a v3 run cannot be resumed by v4 code, and
 #: merge_csvs refuses to mix versions in one output file.
-READABLE_VERSIONS = frozenset({3, 4, 5})
+READABLE_VERSIONS = frozenset({3, 4, 5, 6})
 
 #: What a v4-only column reads as on a row that predates it.
 #:
@@ -91,6 +110,9 @@ COLUMNS_ADDED_IN: dict[int, tuple[str, ...]] = {
     5: ("instrument", "warmup_ms", "sm_clock_load_mhz", "clock_level_ok",
         "clock_drift_ok", "host_bound_ok", "clock_samples", "clock_source",
         "clock_note", "host_enqueue_ms", "host_note"),
+    6: ("reference_clock_mhz", "reference_clock_source", "clock_level_side",
+        "host_backlog_iters", "roof_at_cell_clock_tflops",
+        "pct_of_roof_at_cell_clock", "roof_note"),
 }
 
 #: What the ms_* columns of a row written before v5 were measured with.
@@ -345,9 +367,19 @@ class Row:
     # Which STREAM pattern defined achieved_bw_gbps: read | copy | triad | write.
     bw_ceiling_pattern: str = ""
     # The measured compute ceiling for THIS row's dtype, not necessarily bf16.
+    # THE FIXED ROOF: the calibration's number at the clock the calibration's
+    # GEMM ran at, the same on every row of a run. Kept with that meaning.
     achieved_peak_tflops: float = 0.0
-    # Compute-side efficiency against the measured cuBLAS ceiling. Not
-    # derivable from the memory-side number, so both are carried.
+    # Compute-side efficiency against the FIXED roof above. Not derivable from
+    # the memory-side number, so both are carried. KNOWN BIAS, stated rather
+    # than repaired in place: a cell whose under-load clock differs from the
+    # reference ran at a different tensor-core issue rate than this roof
+    # assumed, so this figure is off by `sm_clock_load_mhz /
+    # reference_clock_mhz` (up to 1.31x on an H200 decode cell boosted to 1980
+    # against a 1515 roof, toward the study's claim). The honest figure is
+    # `pct_of_roof_at_cell_clock` below (v6); this one stays because a column
+    # may not change meaning across a version boundary, and it is the number
+    # to compare with a pre-v6 row's.
     pct_of_achieved_tflops: float = 0.0
     # Counter-free stand-in for measured DRAM traffic, which needs Nsight
     # Compute and a host permission a rented pod does not grant. Only emitted
@@ -437,6 +469,45 @@ class Row:
     host_enqueue_ms: float = 0.0
     host_note: str = ""
 
+    # --- the reference LEVEL was scored against, and the roof per row (v6) --
+    #: The SM clock `clock_level_ok` compared `sm_clock_load_mhz` against, in
+    #: MHz, 0.0 when none was resolved. ON THE ROW so the verdict can be
+    #: re-derived from the CSV alone: the yaml it came from is overwritten by
+    #: every recalibration, and `CalibrationStamp` documents an arm that
+    #: shipped with a ruler it never used.
+    reference_clock_mhz: float = 0.0
+    #: Where that number came from, `roofline.ReferenceClock.source`: the
+    #: file, the field, and the GRADE. Read it before trusting the verdict: a
+    #: source that says DISOWNED was the post-hoc idle scalar (30% spread
+    #: across one card's calibrations) and LEVEL against it is provisional.
+    reference_clock_source: str = ""
+    #: Which way a LEVEL failure went: "low" (the throttle the flag was built
+    #: for; also sets `throttled`), "high" (a boosted cell whose fixed-roof
+    #: fraction is inflated by the ratio; NOT a thermal event, does not set
+    #: `throttled`), "" when level or undetermined. A consumer that excludes
+    #: on `clock_level_ok == failed` without reading this drops every
+    #: memory-shaped cell that boosted, which on an H200 is the normal state.
+    clock_level_side: str = ""
+    #: Smallest per-trial GPU backlog when the host finished enqueueing, in
+    #: iterations of the trial's own per-iteration wall. The host-bound verdict
+    #: is `< timing.HOST_BOUND_BACKLOG_ITERS` on this; the ratio shows how far
+    #: from the boundary the row sat. 0.0 on an untimed or retired-seam row.
+    host_backlog_iters: float = 0.0
+    #: The compute roof AT THE CLOCK THIS CELL RAN: `achieved_peak_tflops *
+    #: sm_clock_load_mhz / reference_clock_mhz`, `roofline.roof_at_clock`.
+    #: Written only when the reference is an UNDER-LOAD median; 0.0 with the
+    #: reason in `roof_note` otherwise. 0.0 means "not scored", never a roof
+    #: of zero: read it through `has_cell_clock_roof`.
+    roof_at_cell_clock_tflops: float = 0.0
+    #: `tflops` as a percentage of that roof. The compute-side efficiency to
+    #: quote from a v6 row; `pct_of_achieved_tflops` is the fixed-roof figure
+    #: with the bias its own comment states.
+    pct_of_roof_at_cell_clock: float = 0.0
+    #: Why the two columns above are 0.0 when they are, in words: no under-load
+    #: clock on the row, no reference, or a reference whose grade is not
+    #: under-load (the committed calibrations' idle scalar). Empty when scored.
+    roof_note: str = ""
+
     notes: str = ""
 
 
@@ -509,6 +580,18 @@ class TimingInstrumentUnrecorded(ColumnUnrecorded):
     """
 
 
+class CellClockRoofUnrecorded(ColumnUnrecorded):
+    """This row predates the per-row roof and the reference it was scored against.
+
+    Raised on a pre-v6 row asked for `roof_at_cell_clock_tflops`,
+    `reference_clock_mhz` or the other v6 columns. A v5 row DID carry a LEVEL
+    verdict, so this is not the v5 hole under another name: the row was timed
+    on the instrument and its verdict is readable, but what it was level
+    AGAINST is not on it, and its fixed-roof fraction may carry the boost bias
+    v6 exists to name. Split with `has_cell_clock_roof` before reading these.
+    """
+
+
 #: Which refusal a stamped column raises, and which predicate the message sends
 #: the caller to, by the version that added the column. A v5 column asked of a
 #: v4 row is not a tile problem and must not arrive as one: the two holes have
@@ -522,8 +605,10 @@ class TimingInstrumentUnrecorded(ColumnUnrecorded):
 _UNRECORDED_ERRORS: dict[int, type[ColumnUnrecorded]] = {
     4: TileConfigUnrecorded,
     5: TimingInstrumentUnrecorded,
+    6: CellClockRoofUnrecorded,
 }
-_PREDICATE_FOR: dict[int, str] = {4: "has_tile_config", 5: "has_kernel_timing"}
+_PREDICATE_FOR: dict[int, str] = {4: "has_tile_config", 5: "has_kernel_timing",
+                                  6: "has_cell_clock_roof"}
 
 
 def _added_in(key: str) -> int:
@@ -714,6 +799,27 @@ def has_kernel_timing(row: dict) -> bool:
     it out of a bool that was never carrying it.
     """
     return instrument_of(row) not in NO_KERNEL_TIMING
+
+
+def has_cell_clock_roof(row: dict) -> bool:
+    """Was this row's compute roof rescaled to the clock the cell ran at?
+
+    The predicate to split a pool on BEFORE reading `roof_at_cell_clock_tflops`
+    or `pct_of_roof_at_cell_clock`. False for every pre-v6 row (the columns did
+    not exist), false for a v6 row the driver could not score: no under-load
+    clock on the row (the retired seam, a container that forbids NVML), no
+    reference, or a reference the calibration disowns (the idle scalar both
+    committed calibrations carry). `roof_note` says which. Keyed on the roof
+    being positive, because a roof of zero does not exist and 0.0 is the
+    driver's "not scored".
+    """
+    value = row.get("roof_at_cell_clock_tflops")
+    if value in (None, "", UNRECORDED):
+        return False
+    try:
+        return float(value) > 0.0
+    except (TypeError, ValueError):
+        return False
 
 
 def timing_verdict(row: dict, key: str) -> str:

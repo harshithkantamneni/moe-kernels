@@ -1043,7 +1043,14 @@ def test_the_retired_instrument_is_gone_rather_than_wrapped():
     measured interval. A wrapper would have kept the two-instrument problem and
     hidden it; the roof and the ladders are queue-deep, so this arm is too."""
     assert not hasattr(mba, "time_call")
-    assert mba.timing_basis() in (None, "queue-deep/l2-flush/clock-under-load/v2")
+    # The live basis, whatever version it is at, and never the retired timer's.
+    # A literal here broke on the v2 -> v3 bump that added the two-sided LEVEL
+    # band, and pinning the string is the wrong guard: the guard is that the
+    # anchor reports the SAME instrument the sweep does and not the one it
+    # retired.
+    from moe.bench import timing as _T
+    assert mba.timing_basis() in (None, _T.TIMING_BASIS)
+    assert mba.timing_basis() != _T.RETIRED_TIMER_BASIS
 
 
 def test_every_timing_column_the_apparatus_requires_reaches_the_row():

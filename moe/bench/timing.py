@@ -15,6 +15,16 @@ Both timing modes use per-iteration CUDA events so the two are measured
 identically and remain comparable. Event overhead (a few microseconds) is
 therefore included in both, and is not subtracted.
 
+THE RESIDUAL THE EVENT PAIR CANNOT REMOVE, with its size and its sign. Each
+interval holds the kernel plus the GPU-side inter-kernel gap between the
+previous end record and this start record: ~1-3 us on Hopper. It is inside
+every interval on both sides of a ratio and it does NOT cancel, because the
+two sides are different lengths: on the roof's 1.4 ms GEMM it is ~0.2%, on a
+50 us cell it is 2-6%. Direction: the cell reads SLOWER than the kernel, so
+every fraction-of-roof this module feeds is UNDERSTATED by that amount. That
+is the conservative direction, and it is a bias, not noise, so it is stated
+here rather than absorbed into ms_std.
+
 ONE INSTRUMENT, AND WHY IT HAS A NAME
 -------------------------------------
 Until 2026-09-02 this repository had two timing instruments and compared their
@@ -37,6 +47,14 @@ consumer that adopts the instrument writes the string into every row it
 produces, so a reader can tell at a glance which apparatus made a number, and
 a row without it is a row from before the fix. Change the string when the
 instrument changes in a way that moves numbers; never otherwise.
+
+v3 (2026-09-03) is such a change: the warmup now runs the FLUSHED loop when
+the trials are flushed (see `warm_until`), which moves the operating point a
+short cell is measured at, and `iters` is sized from a flushed per-iteration
+probe rather than from the warm-L2 batch mean. `LOOP_SHAPE` below binds the
+string to the loop's shape, and `tests/test_timing.py` pins both, so a change
+to the flush position, the iteration cap or the warmup's shape fails the
+suite until the string is bumped with it.
 
 THE HOST-BOUND CASE IS DETECTED, NOT ASSUMED AWAY
 -------------------------------------------------
@@ -62,11 +80,32 @@ whether the START sample had caught the idle boost, not throttling. And a
 card sitting at 1500 MHz for the whole cell, with a roof measured at 1980,
 passed it with drift 0.0. `time_kernel` polls the clock from a background
 thread WHILE the trials run, reports the median as `sm_clock_load_mhz`, and
-sets two flags: LEVEL (`clock_level_ok`: the loaded clock is within
-`LEVEL_FRACTION` of the reference the roof was measured at) and DRIFT
-(`clock_drift_ok`: first and last under-load samples agree within
+sets two flags: LEVEL (`clock_level_ok`: the loaded clock is inside the band
+[`LEVEL_FRACTION`, `LEVEL_HIGH_FRACTION`] around the reference the roof was
+measured at, and `clock_level_side` names which way it left the band) and
+DRIFT (`clock_drift_ok`: first and last under-load samples agree within
 `DRIFT_FRACTION`, in either direction). A rise is a defect too: it means the
 warmup did not reach the operating point, so the trials were not at one clock.
+
+LEVEL IS TWO-SIDED, AND WHY THE HIGH SIDE WAS THE ONE THAT MATTERED
+--------------------------------------------------------------------
+Until 2026-09-03 LEVEL was `load >= 0.95 * reference`: a BOOSTED clock passed.
+The H200's compute plateau under a dense GEMM is ~1455-1515 MHz, because the
+roof's GEMM is power limited; memory-shaped work draws less power and runs at
+1980. The study's decode cells are mostly memory-shaped, so they ran at 1980
+against a compute roof measured at 1515, with 1980/1515 = 1.31x the tensor-
+core issue rate the roof assumed, and the intermediate-intensity cells the
+ridge-crossing analysis is about had their fraction-of-roof inflated by up to
+31%, TOWARD the claim. That is the mirror image of the throttle defect the
+LEVEL flag was built to catch, and the flag could not see it by construction.
+
+Two things close it. The flag is now a band in EITHER direction, and the row
+names the side. And the roof is normalised PER ROW: `sm_clock_load_mhz` is a
+row column, so every fraction-of-compute-roof can be scored against the roof
+AT THE CLOCK THE CELL RAN (`roofline.roof_at_clock`, applied by the driver as
+`roof_at_cell_clock_tflops`), post hoc, for every row that carries a load
+clock and an under-load reference. The flag says a row's FIXED-roof fraction
+is not comparable; the per-row roof is the number that is.
 """
 from __future__ import annotations
 
@@ -81,15 +120,34 @@ import torch
 
 #: The name of the instrument `time_kernel` implements. Written into every row
 #: it produces. Bump the version suffix when a change would move a published
-#: number; the reader compares this string, not a commit hash.
-TIMING_BASIS = "queue-deep/l2-flush/clock-under-load/v2"
+#: number; the reader compares this string, not a commit hash. v3: flushed
+#: warmup and a flushed per-iteration probe for `iters` (see `warm_until`).
+TIMING_BASIS = "queue-deep/l2-flush/clock-under-load/v3"
 
-#: LEVEL flag: the SM clock sampled under load must be at least this fraction
-#: of the reference clock (the one the roof was measured at) for the cell to
-#: be comparable with the roof. 0.95 because the H200's compute plateau moves
-#: 1455-1515 MHz across sessions of one card (calibrate.py), a 4% band, and a
-#: flag inside the band would fire on the card's own session-to-session noise.
+#: The name the RETIRED timers stamp on their `TimingResult`. `time_eager` and
+#: `time_graph` run the same `_timed_trials` loop as `time_kernel` and differ
+#: only around it (the seven differences are listed on `time_eager`), and a
+#: record that did not say which apparatus produced it was the defect the
+#: v5 schema was cut for. Deliberately NOT `TIMING_BASIS`: the calibration's
+#: roof is measured through `time_eager`, and `scripts/calibrate_hardware.py`
+#: asserts that it never claims the instrument's name.
+RETIRED_TIMER_BASIS = "time_eager+time_graph/count-warmup/isolated-iters/no-clock"
+
+#: LEVEL flag, LOW edge: the SM clock sampled under load must be at least this
+#: fraction of the reference clock (the one the roof was measured at) for the
+#: cell to be comparable with the roof. 0.95 because the H200's compute
+#: plateau moves 1455-1515 MHz across sessions of one card (calibrate.py), a
+#: 4% band, and a flag inside the band would fire on the card's own
+#: session-to-session noise.
 LEVEL_FRACTION = 0.95
+
+#: LEVEL flag, HIGH edge, the same 5% the other way. Symmetric because the
+#: session-to-session plateau noise the low edge was sized for is symmetric
+#: about the reference. A clock ABOVE the band is a cell that ran at a higher
+#: tensor-core issue rate than the roof assumed (a memory-shaped cell that
+#: boosted to 1980 against a power-limited 1515 roof), and its fixed-roof
+#: fraction is inflated by the ratio; before 2026-09-03 that side passed.
+LEVEL_HIGH_FRACTION = 1.05
 
 #: DRIFT flag: first and last under-load samples may differ by at most this
 #: fraction of the first, in EITHER direction. The same 5% `clock_drift` used,
@@ -139,6 +197,32 @@ HOST_BOUND_BACKLOG_ITERS = 2
 
 #: Fallback when the device cannot be queried. Prefer flush_mb_for_device().
 DEFAULT_FLUSH_MB = 256
+
+#: Iterations of the flushed per-iteration probe `warm_until` runs after the
+#: warmup, queue-deep, to size `iters` from. Enough samples that one slow
+#: interval does not size the trials; small enough (200 x ~50 us of flush on
+#: an H200) that the probe is a rounding error on the warmup it follows.
+WARMUP_PROBE_CALLS = 200
+
+#: THE LOOP'S SHAPE, bound to `TIMING_BASIS`. Every entry is a property of the
+#: loop that moves numbers if it changes: where the flush sits relative to the
+#: start record, the iteration cap `iters_for` applies, the warmup batch
+#: length, whether the warmup runs flushed, the L2 multiple the flush buffer is
+#: sized by, and where `iters` is sized from. `tests/test_timing.py` pins this
+#: dict AND the basis string, and derives the live values from the code (the
+#: `iters_for` signature, the source order of `_timed_trials`), so a change to
+#: any of them fails the suite until the string is bumped with it. The knobs
+#: a caller can set (warmup_ms, target_ms, trials, flush_mb) are row columns
+#: and need no such guard: pooling across them is visible in the data.
+LOOP_SHAPE = {
+    "flush_position": "before start record",
+    "iters_hi": 2000,
+    "iters_lo": 10,
+    "warmup_batch_ms": 25.0,
+    "warmup_flushed": True,
+    "iters_sized_from": "flushed per-iteration probe",
+    "flush_l2_multiple": 4.0,
+}
 
 
 def flush_mb_for_device(multiple: float = 4.0, minimum_mb: int = 128) -> int:
@@ -249,24 +333,49 @@ def runtime_info() -> dict:
     return info
 
 
+#: The readers `ClockState.sample` can have used, as `ClockState.source` names
+#: them. `nvml` is torch's binding, tens of microseconds; `nvidia-smi` is a
+#: forked process, tens of milliseconds plus an NVML init, and a sample that
+#: came through it landed that long after the moment it was asked for.
+CLOCK_SOURCE_NVML = "nvml"
+CLOCK_SOURCE_NVIDIA_SMI = "nvidia-smi"
+CLOCK_SOURCE_NONE = "none"
+
+
 @dataclass(frozen=True)
 class ClockState:
     sm_clock_mhz: int
     temp_c: int
+    #: Which reader produced this sample. Defaults to NVML so the positional
+    #: `ClockState(mhz, temp)` every fake and reader constructs keeps meaning
+    #: what it meant; `sample()` sets it explicitly on every branch. It exists
+    #: because a sample from the nvidia-smi fallback is not the same kind of
+    #: number as one from NVML (see `calibrate.clock_under_load`, which refuses
+    #: the fallback for the roof's reference), and a caller could not tell.
+    source: str = CLOCK_SOURCE_NVML
 
     @classmethod
     def sample(cls) -> ClockState:
-        """Sample SM clock and temperature.
+        """Sample SM clock and temperature, and say which reader answered.
 
         Prefers torch's NVML bindings, which cost tens of microseconds. The
         nvidia-smi fallback below runs twice per timing mode, eight times per
         cell, and a fork that initialises NVML costs tens of milliseconds on
         Linux: tens of minutes of a large sweep spent on process startup.
+
+        The fallback is kept for the idle-instant callers (the retired seam's
+        two samples around a cell, the calibration's before/after pair) where a
+        sample tens of milliseconds late is still an idle sample. It is NOT
+        acceptable where the sample has to land while a queue is busy, and the
+        `source` field is how such a caller tells: `clock_under_load` refuses a
+        forked sample rather than publishing an idle reading as the clock the
+        roof ran at, and `nvml_clock_reader` never forks at all.
         """
         if torch.cuda.is_available():
             try:
                 return cls(int(torch.cuda.clock_rate()),
-                           int(torch.cuda.temperature()))
+                           int(torch.cuda.temperature()),
+                           source=CLOCK_SOURCE_NVML)
             except Exception:  # noqa: BLE001
                 # Deliberately broad. torch routes this through pynvml, which
                 # raises ModuleNotFoundError when absent and its own
@@ -277,12 +386,12 @@ class ClockState:
                 pass
         vals = _nvidia_smi("clocks.current.sm,temperature.gpu")
         if not vals:
-            return cls(0, 0)
+            return cls(0, 0, source=CLOCK_SOURCE_NONE)
         try:
             sm, temp = (int(float(v)) for v in vals[0].split(","))
         except (ValueError, IndexError):
-            return cls(0, 0)
-        return cls(sm, temp)
+            return cls(0, 0, source=CLOCK_SOURCE_NONE)
+        return cls(sm, temp, source=CLOCK_SOURCE_NVIDIA_SMI)
 
 
 def clock_drift(start: ClockState, end: ClockState) -> tuple[float, bool]:
@@ -423,6 +532,17 @@ def calibrate_iters(fn: Callable[[], None], target_ms: float = 200.0,
 
 @dataclass
 class TimingResult:
+    """The RETIRED timers' record. Names its apparatus, as `KernelTiming` does.
+
+    `instrument` is `RETIRED_TIMER_BASIS`, never `TIMING_BASIS`: the loop is
+    the same `_timed_trials`, but the warmup, the iteration sizing and the
+    absence of a clock are not, and a calibration row that said "the
+    instrument" while it was measured by this would put the roof and the cells
+    under one name for two apparatus. `ms_std` here, as in `KernelTiming`, is
+    the dispersion of consecutive iterations in one thermal state: intra-run,
+    not a between-replicate figure.
+    """
+
     ms_p50: float
     ms_p90: float
     ms_min: float
@@ -436,6 +556,7 @@ class TimingResult:
     samples: int
     flush_mb: int = 0
     flush_mode: str = "read"
+    instrument: str = RETIRED_TIMER_BASIS
 
 
 def _stats(samples: list[float]) -> tuple[float, float, float, float]:
@@ -523,8 +644,18 @@ def _timed_trials(fn: Callable[[], None], iters: int, trials: int, events,
 
 
 def host_bound_verdict(walls: list[TrialWall], iters: int,
-                       ) -> tuple[bool | None, float | None, str]:
-    """Was any trial host-bound? Pure. Returns (verdict, enqueue_ms, note).
+                       ) -> tuple[bool | None, float | None, float | None, str]:
+    """Was any trial host-bound? Pure.
+
+    Returns (verdict, enqueue_ms, backlog_iters, note). `backlog_iters` is the
+    SMALLEST per-trial backlog in units of the trial's own per-iteration wall,
+    the very number the verdict thresholds against `HOST_BOUND_BACKLOG_ITERS`,
+    written out so a reader can see how far from the boundary a row sat
+    rather than only which side of it. The verdict is binary and flips only
+    when the host is slower than the GPU; analytically the backlog is about
+    N(g - h) + g for a GPU-bound trial, so the ratio is what shows a callable
+    that is nearly host-bound (backlog of 3 on a 2 threshold) beside one that
+    is nowhere near (backlog of 200).
 
     A trial's GPU backlog at the end of its enqueue loop is `wall_s -
     enqueue_s`. If the host was slower than the GPU the backlog is at most the
@@ -547,25 +678,29 @@ def host_bound_verdict(walls: list[TrialWall], iters: int,
     time elapsed (only a fake can manage that) or there were no trials.
     """
     if not walls or iters < 1:
-        return None, None, "no trials; host-bound not determinable"
+        return None, None, None, "no trials; host-bound not determinable"
     if any(w.wall_s <= 0 for w in walls):
-        return None, None, ("a trial spanned no wall time; host-bound not "
-                            "determinable")
+        return None, None, None, ("a trial spanned no wall time; host-bound "
+                                  "not determinable")
     bound = []
+    ratios = []
     for w in walls:
         backlog = w.wall_s - w.enqueue_s
+        ratios.append(backlog / (w.wall_s / iters))
         bound.append(backlog < HOST_BOUND_BACKLOG_ITERS * (w.wall_s / iters))
     enqueue_ms = float(statistics.median(w.enqueue_s for w in walls)) * 1e3
+    backlog_iters = float(min(ratios))
     if any(bound):
         n = sum(bound)
-        return True, enqueue_ms, (
+        return True, enqueue_ms, backlog_iters, (
             f"host-bound: in {n} of {len(walls)} trials the GPU had fewer than "
             f"{HOST_BOUND_BACKLOG_ITERS} iterations of work queued when the host "
-            f"finished enqueueing (host enqueue {enqueue_ms / iters:.4f} ms per "
+            f"finished enqueueing (smallest backlog {backlog_iters:.2f} "
+            f"iterations; host enqueue {enqueue_ms / iters:.4f} ms per "
             "call); the intervals include host enqueue time and the number is "
             "an upper bound on the kernel time; time the callable as a graph "
             "replay or through a fused launcher to measure the GPU alone")
-    return False, enqueue_ms, ""
+    return False, enqueue_ms, backlog_iters, ""
 
 
 def time_eager(
@@ -581,11 +716,35 @@ def time_eager(
     """Per-iteration CUDA-event timing of an eagerly launched callable.
 
     Runs the same `_timed_trials` loop as `time_kernel`, so the two agree on
-    the measured interval; what differs is around it. This warms up for a
-    COUNT of calls (`warmup`) and calibrates from one isolated call, and reads
-    no clock; the driver depends on those semantics and on `TimingResult`, so
-    they are unchanged. New consumers use `time_kernel`, which warms up for a
-    duration of sustained load and samples the clock during the trials.
+    the measured interval; what differs is around it, and every difference is
+    listed here so nobody has to diff the two functions to find one:
+
+      1. warmup: a COUNT of back-to-back calls then one synchronise, not a
+         duration of delivered GPU time. For the roof's 8192^3 GEMM the five
+         calls are ~7 ms, and the roof is warm because `calibrate()` settled
+         under compute load for up to 30 s first, not because of this;
+      2. iters: caller-fixed (20 for the GEMMs) or `calibrate_iters` from ONE
+         isolated call on an idle GPU, which reads a 5 us kernel as 15 us and
+         sizes the trials at a third of the target; `time_kernel` sizes from
+         a queue-deep flushed probe;
+      3. no clock during the trials. The roof's clock is taken by a separate
+         `calibrate.clock_under_load` run afterwards (same kernel, same
+         state, NVML only);
+      4. no host-bound verdict: the trial walls are discarded, so a
+         host-bound `measure_bandwidth` pattern would not be marked;
+      5. `flush_mb` defaults to `DEFAULT_FLUSH_MB` (256), not
+         `flush_mb_for_device()` (240 MiB on an H200); the driver passes
+         `cfg.flush_mb = DEFAULT_FLUSH_MB` on both paths, so cells and the
+         bandwidth roof agree in practice and only direct callers differ;
+      6. the warmup is UNFLUSHED whatever `l2_flush` is; `time_kernel` warms
+         the loop it measures;
+      7. the record is `TimingResult`, stamped `RETIRED_TIMER_BASIS`, with no
+         clock or host fields; a row off it is a legacy-seam row.
+
+    The driver depends on these semantics for the retired seam, so they are
+    unchanged. New consumers use `time_kernel`. The GPU acceptance test
+    (`tests/test_timing.py`, marked gpu) holds the two within 2% on a 55 us
+    kernel; it runs only on the box.
     """
     require_cuda()
     flusher = L2Flusher(flush_mb if l2_flush else 0, mode=flush_mode)
@@ -675,22 +834,37 @@ def time_graph(
 class WarmupReport:
     """What the sustained-load warmup actually did, for the row and the tests.
 
-    `per_call_ms` is the LAST batch's mean per call, measured queue-deep with
-    the governor already responding to the load. It is what `time_kernel`
-    calibrates `iters` from: an isolated single call (what `calibrate_iters`
-    measures) includes launch latency on an idle GPU and reads a 5 us kernel
-    as 15, so an iteration count sized from it lands at a third of the target.
+    `per_call_ms` is the mean of the PROBE's per-iteration intervals: the
+    kernel alone, measured queue-deep after the warmup, with the flush (when
+    there is one) outside the interval exactly as the trials have it. It is
+    what `time_kernel` calibrates `iters` from. An isolated single call (what
+    `calibrate_iters` measures) includes launch latency on an idle GPU and
+    reads a 5 us kernel as 15, so an iteration count sized from it lands at a
+    third of the target; the last batch's mean (what this was until v3)
+    measured the kernel warm in L2 while the trials measure it cold, so under
+    a flush it sized the trials from the wrong number too.
+
+    `calls` counts every call the warmup made, probe included, because every
+    one of them was load the governor saw; `probe_calls` says how many of
+    them were the probe. `delivered_ms` is GPU time under load: the batches'
+    whole intervals (flush included when flushing, since the flush is load)
+    plus the probe's kernel intervals (its flushes are outside those, so the
+    probe is under-counted by its flush share; the direction is that the
+    warmup ran slightly longer than the figure says).
     """
 
     delivered_ms: float
     calls: int
     batches: int
     per_call_ms: float
+    probe_calls: int = 0
 
 
 def warm_until(fn: Callable[[], None], warmup_ms: float, events,
-               batch_ms: float = WARMUP_BATCH_MS) -> WarmupReport:
-    """Run `fn` under sustained load until `warmup_ms` of GPU time has passed.
+               batch_ms: float = WARMUP_BATCH_MS,
+               flush: Callable[[], None] | None = None,
+               probe_calls: int = WARMUP_PROBE_CALLS) -> WarmupReport:
+    """Run the loop the trials will run until `warmup_ms` of GPU time has passed.
 
     A COUNT of warmup calls is the wrong unit, and the ladders that compared
     cells warmed at 5 against cells warmed at 20 were comparing clock states:
@@ -703,9 +877,31 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
     at `WARMUP_BATCH_MAX_CALLS` calls, so for a kernel under 2.5 us a batch
     delivers less than `batch_ms` and the loop takes more of them.
 
-    The warmup runs UNFLUSHED and so does `per_call_ms`: it is the kernel's
-    own queue-deep time, warm in L2, and it is what `iters_for` sizes the
-    trials from. The trials then add a flush per iteration on top.
+    THE WARMUP RUNS THE LOOP THE TRIALS RUN. Until v3 it ran unflushed while
+    the trials ran flushed. For a 50 us kernel the flushed loop is roughly
+    half kernel and half flush, and the flush is pure HBM streaming, which
+    `L2Flusher`'s own hazard note records as holding clocks UP; the unflushed
+    warmup therefore brought the card to the operating point of a DIFFERENT
+    workload, and DRIFT could only catch the transition if it was still in
+    progress after the first sample landed 50 ms into the trials. With
+    `flush` given, every warmup call is preceded by a flush exactly as in
+    `_timed_trials`, so the governor is responding to the load that is about
+    to be measured.
+
+    THEN A PROBE, to size `iters`. `probe_calls` iterations (or one batch's
+    worth, whichever is fewer) through `_timed_trials` with the same flush,
+    one interval per call, and `per_call_ms` is their mean: the kernel's own
+    queue-deep, cold-L2-when-flushing time, which is the quantity `target_ms`
+    budgets. The batch mean cannot give that under a flush, because one pair
+    around a batch of `flush(); fn()` holds both.
+
+    WHAT NONE OF THIS SEES: thermal ORDER. `warmup_ms` (300 ms by default)
+    reaches the governor's fast response, not thermal equilibrium;
+    `calibrate.settle_clocks` needs up to 30 s and documents an 840 to 1980
+    MHz ramp from idle. In a sweep the thermal state a cell starts in is
+    inherited from the cells before it, so cell order is a confound this
+    warmup cannot remove and the row cannot show; the LEVEL and DRIFT
+    verdicts are the instrument's only witnesses to it.
     """
     if warmup_ms <= 0:
         raise TimingRefused(
@@ -717,10 +913,12 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
     calls = 0
     batches = 0
     batch = 1
-    per_call = 0.0
+    per_batch_call = 0.0
     while delivered < warmup_ms:
         pair.starts[0].record()
         for _ in range(batch):
+            if flush is not None:
+                flush()
             fn()
         pair.ends[0].record()
         pair.synchronize()
@@ -728,10 +926,16 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
         delivered += ms
         calls += batch
         batches += 1
-        per_call = ms / batch
-        batch = max(1, min(WARMUP_BATCH_MAX_CALLS, int(batch_ms / per_call)))
+        per_batch_call = ms / batch
+        batch = max(1, min(WARMUP_BATCH_MAX_CALLS, int(batch_ms / per_batch_call)))
+    # The probe: the trials' own loop, one interval per call, flush outside.
+    n = max(1, min(int(probe_calls), batch))
+    samples, _ = _timed_trials(fn, n, 1, events(n), flush)
+    delivered += sum(samples)
+    calls += n
+    per_call = max(sum(samples) / n, 1e-4)
     return WarmupReport(delivered_ms=delivered, calls=calls, batches=batches,
-                        per_call_ms=per_call)
+                        per_call_ms=per_call, probe_calls=n)
 
 
 def iters_for(per_call_ms: float, target_ms: float, lo: int = 10,
@@ -908,15 +1112,45 @@ class BackgroundClockSampler:
                 self.note = (self.note + "; " if self.note else "") + slow
 
 
+#: What `level_side` answers with. Empty is INSIDE the band; the other two
+#: name the direction a cell left it, and the direction is the finding: "low"
+#: is the throttle the flag was built for, "high" is the boosted memory-shaped
+#: cell whose fixed-roof fraction is inflated by the ratio. `None` is not a
+#: side; it is "no comparison could be made".
+LEVEL_LOW = "low"
+LEVEL_HIGH = "high"
+
+
+def level_side(load_mhz: float | None, reference_mhz: float | None) -> str | None:
+    """Which side of the LEVEL band a loaded clock sits on. Pure.
+
+    THE ONE DEFINITION of the band: `clock_flags` derives its LEVEL bool from
+    this, so the flag and the side cannot disagree about where the edges are.
+    Inside `[LEVEL_FRACTION, LEVEL_HIGH_FRACTION] * reference` is "", below is
+    `LEVEL_LOW`, above is `LEVEL_HIGH`; None when there is no reference or no
+    load sample, because half a comparison is not a verdict.
+    """
+    if load_mhz is None or reference_mhz is None or reference_mhz <= 0:
+        return None
+    if load_mhz < LEVEL_FRACTION * reference_mhz:
+        return LEVEL_LOW
+    if load_mhz > LEVEL_HIGH_FRACTION * reference_mhz:
+        return LEVEL_HIGH
+    return ""
+
+
 def clock_flags(load_mhz: float | None, start_mhz: float | None,
                 end_mhz: float | None, reference_mhz: float | None,
                 ) -> tuple[bool | None, bool | None]:
     """LEVEL and DRIFT verdicts on under-load clock samples. Pure.
 
-    LEVEL: the loaded clock is at least `LEVEL_FRACTION` of `reference_mhz`,
-    the clock the roof was measured at. None when there is no reference or no
-    load sample: the flag is a comparison and half a comparison is not a
-    verdict.
+    LEVEL: the loaded clock is inside the band `[LEVEL_FRACTION,
+    LEVEL_HIGH_FRACTION]` around `reference_mhz`, the clock the roof was
+    measured at, in EITHER direction (`level_side` names which). Until
+    2026-09-03 this was one-sided, `load >= 0.95 * reference`, and a cell
+    boosted to 1980 against a 1515 roof passed with a fixed-roof fraction
+    inflated by 31%. None when there is no reference or no load sample: the
+    flag is a comparison and half a comparison is not a verdict.
 
     DRIFT: first and last under-load samples agree within `DRIFT_FRACTION` of
     the first, in either direction. A drop is throttling during the trials; a
@@ -925,10 +1159,8 @@ def clock_flags(load_mhz: float | None, start_mhz: float | None,
     """
     level: bool | None
     drift: bool | None
-    if load_mhz is None or reference_mhz is None or reference_mhz <= 0:
-        level = None
-    else:
-        level = load_mhz >= LEVEL_FRACTION * reference_mhz
+    side = level_side(load_mhz, reference_mhz)
+    level = None if side is None else side == ""
     if start_mhz is None or end_mhz is None or start_mhz <= 0:
         drift = None
     else:
@@ -957,7 +1189,22 @@ class KernelTiming:
     in which case the intervals include host time and `ms_*` bound the kernel
     from above. `host_enqueue_ms` is the median per-trial host wall of the
     enqueue loop; divided by `iters` it is the host's per-call cost, the
-    number to hold beside `ms_p50` when the flag is up. `host_note` says why.
+    number to hold beside `ms_p50` when the flag is up. `host_backlog_iters`
+    is the smallest per-trial backlog in iterations, the quantity the verdict
+    thresholds at `HOST_BOUND_BACKLOG_ITERS`, so the distance from the
+    boundary is on the record and not only the side. `host_note` says why.
+
+    `clock_level_side` names which way a LEVEL failure went (`LEVEL_LOW`,
+    `LEVEL_HIGH`, or "" when level or undetermined); `reference_clock_mhz` is
+    the number LEVEL was scored against, kept on the record so a verdict can
+    be re-derived from the row alone.
+
+    `ms_std` IS INTRA-RUN. The `iters * trials` samples are consecutive
+    iterations in one thermal state; the trials add samples, not
+    independence, and there is no between-replicate variance or confidence
+    interval in this record. That lives in `scripts/replicate_noise_floor.py`,
+    which needs independent runs, and a reader who quotes `ms_std` as an
+    uncertainty on the cell is quoting the wrong thing.
     """
 
     ms_p50: float
@@ -984,6 +1231,9 @@ class KernelTiming:
     clock_note: str = ""
     host_note: str = ""
     instrument: str = TIMING_BASIS
+    clock_level_side: str = ""
+    host_backlog_iters: float | None = None
+    reference_clock_mhz: float | None = None
 
 
 def time_kernel(
@@ -1000,18 +1250,23 @@ def time_kernel(
 ) -> KernelTiming:
     """Time `fn` the one way this repository times anything it publishes.
 
-    In order: warm up under sustained load until `warmup_ms` of GPU time has
-    been delivered (`warm_until`); size `iters` so a trial lasts `target_ms`
-    from the warmup's own queue-deep per-call time; prime one event pair per
-    iteration; start the clock poller; run `trials` trials of `_timed_trials`
-    (flush before each call when `l2_flush`, one synchronise per trial); stop
-    the poller; summarise the `iters * trials` samples the way `time_eager`
-    does and the clock samples the way `clock_flags` does.
+    In order: warm up under sustained load, running the SAME loop the trials
+    will run (flush before each call when `l2_flush`), until `warmup_ms` of
+    GPU time has been delivered (`warm_until`); size `iters` so a trial holds
+    `target_ms` of kernel time, from a flushed queue-deep per-iteration probe;
+    prime one event pair per iteration; start the clock poller; run `trials`
+    trials of `_timed_trials` (flush before each call when `l2_flush`, one
+    synchronise per trial); stop the poller; summarise the `iters * trials`
+    samples the way `time_eager` does and the clock samples the way
+    `clock_flags` does.
 
     `reference_clock_mhz` is the clock the roof was measured at
     (`calibrate.LoadedClock.median_mhz`); without it the LEVEL flag is None,
     because a level is relative to something and this function will not
-    invent the something.
+    invent the something. The verdict is two-sided and the record names the
+    side; a cell above the band is not "faster", its fixed-roof fraction is
+    inflated by `load / reference`, and the driver rescales the roof per row
+    (`roofline.roof_at_clock`) so the honest fraction is on the row beside it.
 
     The default sampler is bound to the calling thread's current device and
     reads NVML only; on a host without `nvidia-ml-py` the record says so in
@@ -1051,7 +1306,7 @@ def time_kernel(
     flush = flusher.flush if l2_flush else None
     flush_mb = int(flusher.megabytes) if l2_flush else 0
 
-    warm = warm_until(fn, warmup_ms, events)
+    warm = warm_until(fn, warmup_ms, events, flush=flush)
     iters = iters_for(warm.per_call_ms, target_ms)
     pairs = events(iters)
     with clock_sampler as poller:
@@ -1082,7 +1337,21 @@ def time_kernel(
                      f"{CLOCK_SAMPLE_FLOOR} a median is taken from; level not "
                      f"determinable, {what}")
     level_ok, drift_ok = clock_flags(load, start, end, reference_clock_mhz)
-    host_bound, host_ms, host_note = host_bound_verdict(walls, iters)
+    side = level_side(load, reference_clock_mhz) or ""
+    if side == LEVEL_LOW:
+        notes.append(
+            f"LEVEL failed LOW: loaded clock {load:.0f} MHz is under "
+            f"{LEVEL_FRACTION:.0%} of the {reference_clock_mhz:.0f} MHz "
+            "reference; the card sat below the clock the roof was measured "
+            "at and the cell is not comparable with the fixed roof")
+    elif side == LEVEL_HIGH:
+        notes.append(
+            f"LEVEL failed HIGH: loaded clock {load:.0f} MHz is over "
+            f"{LEVEL_HIGH_FRACTION:.0%} of the {reference_clock_mhz:.0f} MHz "
+            f"reference; the cell ran at {load / reference_clock_mhz:.2f}x the "
+            "issue rate the fixed compute roof assumed, so its fraction of that "
+            "roof is inflated by the ratio; read roof_at_cell_clock_tflops")
+    host_bound, host_ms, backlog_iters, host_note = host_bound_verdict(walls, iters)
 
     p50, p90, lo, std = _stats(samples)
     return KernelTiming(
@@ -1094,5 +1363,7 @@ def time_kernel(
         clock_samples=len(usable), clock_source=poller.source,
         clock_poll_ms=poller.poll_cost_ms, host_bound=host_bound,
         host_enqueue_ms=host_ms, clock_note="; ".join(notes),
-        host_note=host_note,
+        host_note=host_note, clock_level_side=side,
+        host_backlog_iters=backlog_iters,
+        reference_clock_mhz=reference_clock_mhz,
     )
