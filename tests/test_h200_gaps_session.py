@@ -54,10 +54,26 @@ So this file checks what can be checked off GPU:
      all 28 branches, while `scripts/alias_ablation.py` is the only instrument
      in the tree that tests whether the per-tile slope every alpha is built
      from IS DRAM traffic. The tests below pin that it is scheduled, that it is
-     booked at what its own plan prints FOR THE POD rather than for the plan
-     mode that under-charges the probe, that its dry branch cannot measure, and
-     that the two rental subsets the banner prints are priced by the same two
-     functions as the table rather than by a second copy of it.
+     booked at what its own plan prints (which, since the alias slice made the
+     plan page charge the probe, is the pod's own figure and no longer 1.4
+     minutes under it), that its dry branch cannot measure, and that the two
+     rental subsets the banner prints are priced by the same two functions as
+     the table rather than by a second copy of it.
+ 10. THE SECOND OPINION IS TAKEN. `exit_codes.classify_text` was written so the
+     driver could recompute a script's verdict from the RESULT lines it printed
+     and compare it with the exit code, and until 2026-09-03 nothing in the
+     driver called it: `arm` read the integer and the summary grepped the lines
+     for display. A `RESULT: CLAIM C1 FAIL` page under exit 0 was latched DONE.
+     `second_opinion` is one function with a printed table, every row of it is
+     planted here through the shipped `arm()`, and the four proofs the review
+     ran (a FAIL line under exit 0, no line under exit 0, all-PASS lines under
+     exit 1, and a Python import-time crash under the real pod command lines
+     with a broken torch on PYTHONPATH) are the tests below.
+ 11. THE LATCH IS REACHABLE. The ledger lives in one session directory; a plain
+     re-invocation used to open a fresh one beside it and re-run every row the
+     latch protects, and nothing in --help said SESSION= was the way back.
+     `session_choice` decides the directory in one place, so every branch
+     (named, resumed, new, refused, latest-exists) is planted off GPU.
 
 HOW THE SHELL FUNCTIONS ARE TESTED. Sourcing the driver would run the session,
 so the file marks a block of pure function definitions between
@@ -508,6 +524,13 @@ def measuring_invocation(arm_name):
              if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
     # The dry-run branch and the measuring branch, in that order in every arm.
     measuring = [ln for ln in found if "--dry-run" not in ln]
+    # alias_ablation.py has no --dry-run flag: a BARE invocation is its plan and
+    # --run is what makes it measure, so its two plan branches carry no flag to
+    # exclude on. Where more than one line survives, the one that names --run
+    # is the pod's. This used to assert one survivor and was only ever reached
+    # for arms whose script defines a gate flag, which that one does not.
+    if len(measuring) > 1:
+        measuring = [ln for ln in measuring if "--run" in ln]
     assert len(measuring) == 1, (arm_name, found)
     return shlex.split(measuring[0])
 
@@ -937,7 +960,7 @@ def test_a_dry_run_records_the_exit_code_and_a_tracebacking_plan_is_broken(tmp_p
     stub.write_text("raise RuntimeError('the plan did not survive its own dry run')\n")
     got = lift(f'arm stub {sys.executable} {stub}',
                REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-               DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0)
+               DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert got.returncode == 0, got.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
     assert row[0] == "stub"
@@ -1004,7 +1027,7 @@ def test_the_session_exits_non_zero_when_a_plan_is_broken(tmp_path):
         f'arm stub {sys.executable} {stub}\n'
         'if (( DRY )) && (( BROKEN_ARMS > 0 )); then exit 3; fi\nexit 0',
         REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0)
+        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert counted.returncode == 3, counted.stdout
     # ...and the shipped script contains that same branch, not a variant.
     assert "if (( DRY )) && (( BROKEN_ARMS > 0 )); then" in CODE
@@ -1014,7 +1037,7 @@ def test_the_session_exits_non_zero_when_a_plan_is_broken(tmp_path):
         f'arm stub {sys.executable} {stub}\n'
         'if (( DRY )) && (( BROKEN_ARMS > 0 )); then exit 3; fi\nexit 0',
         REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0)
+        DRY=1, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert clean.returncode == 0, clean.stdout
 
 
@@ -1027,19 +1050,35 @@ def test_an_invalid_arm_is_recorded_in_its_own_state_and_not_retried(tmp_path):
     ledger = tmp_path / "ARMS.tsv"
     logs = tmp_path / "logs"
     logs.mkdir()
-    first = lift('arm stub bash -c "exit 3"',
+    # The stub NAMES the gate that failed, as a real INVALID does. A bare
+    # `exit 3` used to stand here; since the second opinion an INVALID that
+    # scored no gate is UNEARNED and not latched, which the last block below
+    # plants as the FAIL branch of this same test.
+    invalid = 'arm stub bash -c "echo RESULT: VALIDITY M0 FAIL stream check; exit 3"'
+    first = lift(invalid,
                  REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert first.returncode == 0, first.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
     assert row[1] == "INVALID"
     assert "Do NOT re-run and do NOT quote it" in first.stdout
     # A second pass over the same ledger must not spend the arm again.
-    again = lift('arm stub bash -c "exit 3"',
+    again = lift(invalid,
                  REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert "SKIP stub (already INVALID" in again.stdout
     assert len(ledger.read_text().splitlines()) == 1
+    # UNEARNED: exit 3 over a page with no scored gate names no failed VALIDITY
+    # gate, so there is nothing to latch. UNKNOWN, and re-attempted.
+    bare = tmp_path / "BARE.tsv"
+    for _ in range(2):
+        got = lift('arm stub bash -c "exit 3"',
+                   REPO=str(ROOT), LEDGER=str(bare), LOGS=str(logs), ONLY="",
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
+        assert "SKIP stub" not in got.stdout
+        assert "UNEARNED INVALID" in got.stdout
+    rows = [r.split("\t") for r in bare.read_text().splitlines()]
+    assert [r[1] for r in rows] == ["UNKNOWN", "UNKNOWN"], rows
 
 
 def test_a_refused_arm_is_re_attempted_because_refusing_costs_nothing(tmp_path):
@@ -1052,7 +1091,7 @@ def test_a_refused_arm_is_re_attempted_because_refusing_costs_nothing(tmp_path):
     for _ in range(2):
         got = lift('arm stub bash -c "exit 2"',
                    REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
         assert "SKIP stub" not in got.stdout
     rows = [r.split("\t") for r in ledger.read_text().splitlines()]
     assert [r[1] for r in rows] == ["REFUSED", "REFUSED"]
@@ -1069,7 +1108,7 @@ def test_the_ledger_records_the_dirty_file_count_after_every_arm(tmp_path):
     logs.mkdir()
     got = lift('arm stub bash -c "exit 0"',
                REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert got.returncode == 0, got.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
     assert row[4].isdigit(), row
@@ -1081,7 +1120,7 @@ def test_the_ledger_records_the_dirty_file_count_after_every_arm(tmp_path):
     try:
         dirtying = lift(f'arm dirtystub bash -c "echo x > {scratch}"',
                         REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs),
-                        ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                        ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
         assert "WARNING: this arm dirtied the work tree" in dirtying.stdout
     finally:
         scratch.unlink(missing_ok=True)
@@ -1489,12 +1528,36 @@ def test_the_pre_hopper_gate_decides_exactly_the_four_arms_that_need_the_shape()
 # 11. the state word is disclosed when the file that produced it uses another table
 # --------------------------------------------------------------------------
 
+def plant_exit_codes(repo: Path) -> Path:
+    """Make `moe.bench.exit_codes` importable from a planted repo.
+
+    `arm()` takes its second opinion by running `exit_codes.classify_text` over
+    the log through $PY_BASE with REPO on sys.path, so a planted repo with no
+    such module makes every row UNREADABLE and therefore UNKNOWN, which is the
+    refusal working and not the branch these tests are planting. The one file
+    is linked rather than the package copied: the point is that the driver and
+    the scripts read one line format from one module, and a copy would be a
+    second one."""
+    target = repo / "moe" / "bench" / "exit_codes.py"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # Regular packages, not namespace portions: the venv has the real `moe`
+    # installed, and a namespace portion at sys.path[0] does not shadow an
+    # installed regular package, so without these two files the driver would
+    # read the installed module and the planting would be decorative.
+    for init in (repo / "moe" / "__init__.py", repo / "moe" / "bench" / "__init__.py"):
+        if not init.exists():
+            init.write_text("")
+    if not target.exists():
+        target.symlink_to(ROOT / "moe" / "bench" / "exit_codes.py")
+    return repo
+
+
 def adopting_repo(tmp_path, rel):
     """A repo whose `rel` imports the module, for the caveat's silent branch."""
     path = tmp_path / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("from moe.bench.exit_codes import classify\n")
-    return tmp_path
+    return plant_exit_codes(tmp_path)
 
 
 def unadopting_repo(tmp_path, rel):
@@ -1507,7 +1570,7 @@ def unadopting_repo(tmp_path, rel):
     path = tmp_path / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("def main():\n    raise SystemExit(2)\n")
-    return tmp_path
+    return plant_exit_codes(tmp_path)
 
 
 def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path):
@@ -1529,7 +1592,12 @@ def test_a_blocked_counter_route_is_not_reported_as_a_broken_instrument(tmp_path
     log = tmp_path / "counter_plan.log"
     log.write_text(RESULT_LOG)
     got = lift(f'summarize_arm counter_plan {log} INVALID', REPO=str(repo))
-    assert "dram_counter_route.py returns 3 for" in got.stdout
+    # Told as history: that script adopted the table on 2026-09-02 and exits
+    # DONE on BLOCKED, and a caveat that said "returns 3" in the present tense
+    # was the recurring defect (a description of the old behaviour standing at
+    # a second site) inside the function that exists to disclose it.
+    assert "dram_counter_route.py used to return 3 for" in got.stdout
+    assert "dram_counter_route.py returns 3 for" not in got.stdout
     assert "not OPEN" in got.stdout
     assert "not a broken instrument" in got.stdout
     # and it still says what INVALID does to the ledger, because that is what
@@ -1692,7 +1760,7 @@ def test_a_ledger_of_one_claim_fail_row_does_not_print_the_all_clear(tmp_path):
     ("CLAIM_FAIL", "1", "1 is three things"),
     ("UNKNOWN", "1", "1 is three things"),
     ("REFUSED", "2", "used to document 2"),
-    ("INVALID", "3", "returns 3 for"),
+    ("INVALID", "3", "used to return 3 for"),
     ("RETRY", "4", "may spend such a code on a REGISTERED ANSWER"),
 ])
 def test_every_state_a_non_adopting_file_can_produce_is_disclosed(
@@ -1753,7 +1821,7 @@ def test_an_exit_one_from_a_file_that_does_not_speak_the_table_is_not_latched(tm
     repo = unadopting_repo(tmp_path, "scripts/check_mma_path.sh")
     got = lift('arm mma_switch bash -c "exit 1"',
                REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert got.returncode == 0, got.stderr
     row = ledger.read_text().splitlines()[-1].split("\t")
     assert row[1] == "UNKNOWN", row
@@ -1763,7 +1831,7 @@ def test_an_exit_one_from_a_file_that_does_not_speak_the_table_is_not_latched(tm
     # ...and NOT latched means exactly that: the arm is attempted again.
     again = lift('arm mma_switch bash -c "exit 1"',
                  REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert "SKIP mma_switch" not in again.stdout
     assert len(ledger.read_text().splitlines()) == 2
 
@@ -1778,16 +1846,22 @@ def test_an_exit_one_from_a_file_that_does_speak_the_table_is_still_a_result(tmp
     logs = tmp_path / "logs"
     logs.mkdir()
     repo = adopting_repo(tmp_path, "scripts/check_mma_path.sh")
-    got = lift('arm mma_switch bash -c "exit 1"',
+    # The stub prints the gate it failed, as an adopting script does: one
+    # RESULT line per scored gate, then `classify`. A bare `exit 1` stood here
+    # until the second opinion, and from an adopting file a 1 with no gate line
+    # is a crash before the first gate, which is the test after this one.
+    refuted = 'arm mma_switch bash -c "echo RESULT: CLAIM S6a FAIL observed none; exit 1"'
+    got = lift(refuted,
                REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert got.returncode == 0, got.stderr
     assert "CAVEAT" not in got.stdout
     row = ledger.read_text().splitlines()[-1].split("\t")
     assert row[1] == "CLAIM_FAIL", row
-    again = lift('arm mma_switch bash -c "exit 1"',
+    assert row[6].startswith("log agrees"), row
+    again = lift(refuted,
                  REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                 DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert "SKIP mma_switch (already CLAIM_FAIL" in again.stdout
 
 
@@ -1798,7 +1872,13 @@ def test_the_unknown_state_is_the_drivers_word_and_not_a_second_table():
     spoken and only for a file that has not adopted the module."""
     body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
     assert 'state="$(ledger_state "$rc")"' in body
-    assert '[[ "$state" == "CLAIM_FAIL" ]] && ! adopts_exit_codes' in body
+    # The adoption question is asked ONCE, in `arm`, and handed to
+    # `second_opinion`, which holds the non-adopter branch. Until 2026-09-03 it
+    # was an inline demotion here and the only second look the row got.
+    assert 'adopts_exit_codes "$(arm_script "$name")" || adopts=$?' in body
+    assert 'second_opinion "$rc" "$state" "$(log_verdict "$log")" "$adopts"' in body
+    opinion = CODE.split("\nsecond_opinion() {", 1)[1].split("\n}", 1)[0]
+    assert "has not adopted moe/bench/exit_codes" in opinion
     assert "UNKNOWN" not in exit_codes.LEDGER_STATES
     for rc in (0, 1, 2, 3, 4):
         assert lift(f'ledger_state {rc}', REPO=str(ROOT)).stdout.strip() == \
@@ -1927,6 +2007,7 @@ def test_a_fresh_stamp_is_not_a_ruler_the_arm_stood_behind(tmp_path):
     (repo / "scripts").mkdir(parents=True)
     yaml = repo / "moe" / "bench" / "hardware" / "measured_testcard.yaml"
     yaml.parent.mkdir(parents=True)
+    plant_exit_codes(repo)
     fake = repo / "scripts" / "calibrate_hardware.py"
     fake.write_text(
         "#!/usr/bin/env bash\n"
@@ -1948,7 +2029,7 @@ def test_a_fresh_stamp_is_not_a_ruler_the_arm_stood_behind(tmp_path):
                'echo "row=$ROW state=$STATE"\n'
                'calibration_verdict "$ROW" "$STATE"; echo "rc=$?"',
                REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+               DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
     assert got.returncode == 0, got.stderr
     lines = got.stdout.strip().splitlines()
     # The yaml IS this session's by date, and the arm is still not one to trust.
@@ -2071,16 +2152,22 @@ def test_a_calibrate_that_does_not_publish_leaves_the_gate_refusing(tmp_path):
     for honours, expected in ((True, "PUBLISHED"), (False, "MISSING")):
         repo = tmp_path / ("honours" if honours else "ignores")
         (repo / "scripts").mkdir(parents=True)
+        plant_exit_codes(repo)
         fake = repo / "scripts" / "calibrate_hardware.py"
         body = ('printf "name: T\\nprovenance:\\n  utc: \'$(date -u '
                 '+%Y-%m-%dT%H:%M:%S)+00:00\'\\n" > "$out"\n'
                 if honours else 'echo "[calibrate] wrote a session path only"\n')
+        # Both fakes score a gate, as the real calibrate does before it exits
+        # 0: DONE has to be EARNED by a RESULT line or the second opinion
+        # records UNKNOWN, and what this test plants is the publish decision,
+        # not the scoring.
         fake.write_text(
             '#!/usr/bin/env bash\n'
             'set -uo pipefail\n'
             f'out="{repo}/moe/bench/hardware/measured_testcard.yaml"\n'
             'mkdir -p "$(dirname "$out")"\n'
             f'[[ "${{1:-}}" == "--publish" ]] && {body}'
+            'echo "RESULT: VALIDITY clock_established PASS plateau held"\n'
             'echo "[calibrate] done"\n')
         ledger = tmp_path / f"ARMS-{expected}.tsv"
         got = lift(f'SESSION_SINCE="$(date -u +%Y%m%d%H%M%S)"\n'
@@ -2088,7 +2175,7 @@ def test_a_calibrate_that_does_not_publish_leaves_the_gate_refusing(tmp_path):
                    f'calibration_state {repo}/moe/bench/hardware/'
                    'measured_testcard.yaml "$SESSION_SINCE"',
                    REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
-                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0)
+                   DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0, PY_BASE=sys.executable)
         assert got.returncode == 0, got.stderr
         assert ledger.read_text().splitlines()[-1].split("\t")[1] == "DONE"
         assert got.stdout.strip().splitlines()[-1] == expected, got.stdout
@@ -2175,12 +2262,13 @@ def test_the_counter_arm_says_to_read_its_verdict_and_not_its_ledger_state():
 # 12. the alias ablation, and what a rental of a given length reaches
 # --------------------------------------------------------------------------
 
-#: The command whose plan the alias row is booked from. It carries --run, which
-#: is what makes `report_cost` charge the probe's six specialisations
-#: (`probing=bool(args.probe and args.run)`); off a GPU box it prints the table
-#: and then refuses at the probe having measured nothing. Every test below that
-#: runs it is skipped on a machine with a CUDA device, because there the same
-#: command IS the arm and would spend thirteen minutes of somebody's card.
+#: The command whose plan the alias row is booked from. It carries --run, the
+#: pod's own line; off a GPU box it prints the table and then refuses at the
+#: probe having measured nothing. `report_cost` used to charge the probe's six
+#: specialisations only under --run, and the test that runs this line now pins
+#: that the bare plan prints the SAME figure. Every test below that runs it is
+#: skipped on a machine with a CUDA device, because there the same command IS
+#: the arm and would spend thirteen minutes of somebody's card.
 ALIAS_POD_PLAN = (
     "scripts/alias_ablation.py --card 'NVIDIA H200' "
     "--models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 "
@@ -2504,3 +2592,531 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
     assert "P1 PASS" in closes and "P1 FAIL" in closes
     for word in ("P1 PASS", "P1 FAIL", "headroom or attribution FAIL"):
         assert word in entry, word
+
+
+# --------------------------------------------------------------------------
+# 16. the second opinion: the page is compared with the exit code, and no word
+#     the page does not support is latched
+# --------------------------------------------------------------------------
+
+def arm_lift(script, repo, ledger, logs, **extra):
+    """`lift` with every global `arm()` reads, in measuring mode."""
+    return lift(script, REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs),
+                ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0,
+                PY_BASE=sys.executable, **extra)
+
+
+def test_the_second_opinion_is_actually_called_and_not_only_described():
+    """THE VERDICT OF THE 2026-09-03 REVIEW, PINNED. `classify_text` had four
+    mentions in the driver and every one was a comment or an echo; `arm()`
+    decided the state from the integer alone. The function has to be CALLED,
+    from the one place a state is written, and the mention that matters is the
+    one inside `log_verdict`'s python rather than in prose."""
+    body = CODE.split("\narm() {", 1)[1].split("\n}", 1)[0]
+    assert 'second_opinion "$rc" "$state" "$(log_verdict "$log")" "$adopts"' in body
+    verdict = CODE.split("\nlog_verdict() {", 1)[1].split("\n}", 1)[0]
+    assert "EC.classify_text(text)" in verdict
+    assert "NoGatesScored" in verdict
+    # ...and only in measuring mode: a plan scores no gate and gets planning
+    # words, so a dry run must never reach the second opinion.
+    assert 'if (( DRY )); then\n    state="$(dry_state "$rc" "$log")"\n  else' in body
+
+
+@pytest.mark.parametrize("text,want", [
+    ("RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 PASS fine\n", "0"),
+    ("prose\nRESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 FAIL gap\n", "1"),
+    ("RESULT: VALIDITY V0 FAIL broke\nRESULT: CLAIM C1 PASS fine\n", "3"),
+    ("RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 UNKNOWN NOT A REFUTATION\n", "1"),
+    ("C1 ... [PASS]  a pre-registered expectation\nfloor: 0.0905\n", "NONE"),
+    ("", "NONE"),
+])
+def test_log_verdict_reads_the_result_lines_through_the_module(tmp_path, text, want):
+    """The integer, or NONE, and the module's own regex rather than a shell
+    copy of it: the prose log is the one the old summary matched eighteen
+    times, and it must read as no gate at all."""
+    log = tmp_path / "arm.log"
+    log.write_text(text)
+    got = lift(f"log_verdict {log}", REPO=str(ROOT), PY_BASE=sys.executable)
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.strip() == want
+
+
+def test_log_verdict_says_unreadable_rather_than_none_when_it_cannot_ask(tmp_path):
+    """"COULD NOT CHECK" IS NOT "CHECKED AND FOUND NOTHING". A missing log, and
+    a REPO with no moe/bench/exit_codes to import, both answer UNREADABLE, and
+    `second_opinion` refuses to latch on that word in every state."""
+    gone = lift(f"log_verdict {tmp_path}/gone.log", REPO=str(ROOT),
+                PY_BASE=sys.executable)
+    assert gone.stdout.strip() == "UNREADABLE"
+    log = tmp_path / "arm.log"
+    log.write_text("RESULT: CLAIM C1 PASS fine\n")
+    # A REPO whose exit_codes will not import. Planted as a regular package so
+    # it shadows the `moe` the venv has installed; a bare tmp_path would not,
+    # and the driver would quietly read the installed module and answer 0.
+    broken = plant_exit_codes(tmp_path / "broken")
+    (broken / "moe" / "bench" / "exit_codes.py").unlink()
+    (broken / "moe" / "bench" / "exit_codes.py").write_text(
+        "raise ImportError('planted: this checkout has no readable table')\n")
+    bare = lift(f"log_verdict {log}", REPO=str(broken), PY_BASE=sys.executable)
+    assert bare.stdout.startswith("UNREADABLE"), bare.stdout
+    assert "ImportError" in bare.stdout
+    # ...and the same page from a repo whose module DOES import reads 0.
+    assert lift(f"log_verdict {log}", REPO=str(plant_exit_codes(tmp_path / "ok")),
+                PY_BASE=sys.executable).stdout.strip() == "0"
+    for rc in (0, 1, 2, 3):
+        got = lift(f'second_opinion {rc} "$(ledger_state {rc})" '
+                   f'{shlex.quote(bare.stdout.strip())} 0', REPO=str(ROOT))
+        word, _, note = got.stdout.rstrip("\n").partition("\t")
+        assert word == "UNKNOWN", (rc, got.stdout)
+        assert "SECOND OPINION UNAVAILABLE" in note
+
+
+#: The printed table in `second_opinion`'s own comment, row for row, plus the
+#: adoption split. (rc, what the log implied, adopts_exit_codes rc) -> (state,
+#: a phrase the note must carry). Every latched word here is EARNED by an
+#: agreeing page; every other row is UNKNOWN or RETRY and says why.
+def defect(rc, implied):
+    """The note a DEFECT row carries: both codes, both words, in that order."""
+    return (f"DEFECT: the process exited {rc} {exit_codes.ledger_state(rc)} but its "
+            f"RESULT lines imply {implied} {exit_codes.ledger_state(implied)}")
+
+
+SECOND_OPINION = [
+    (0, "0", 0, "DONE", "log agrees"),
+    (1, "1", 0, "CLAIM_FAIL", "log agrees"),
+    (3, "3", 0, "INVALID", "log agrees"),
+    (0, "1", 0, "UNKNOWN", defect(0, 1)),
+    (1, "0", 0, "UNKNOWN", defect(1, 0)),
+    (2, "0", 0, "UNKNOWN", defect(2, 0)),
+    (3, "1", 0, "UNKNOWN", defect(3, 1)),
+    (0, "3", 0, "UNKNOWN", defect(0, 3)),
+    (0, "NONE", 0, "UNKNOWN", "UNEARNED DONE"),
+    (1, "NONE", 0, "RETRY", "CRASH"),
+    (1, "NONE", 1, "UNKNOWN", "1 is three things"),
+    (1, "NONE", 2, "UNKNOWN", "1 is three things"),
+    (1, "1", 1, "UNKNOWN", "has not adopted"),
+    (2, "NONE", 0, "REFUSED", ""),
+    (3, "NONE", 0, "UNKNOWN", "UNEARNED INVALID"),
+    (4, "0", 0, "RETRY", "process code wins"),
+    (4, "NONE", 0, "RETRY", ""),
+    (127, "1", 0, "RETRY", "process code wins"),
+    (130, "NONE", 0, "RETRY", ""),
+]
+
+
+@pytest.mark.parametrize("rc,implied,adopts,state,tell", SECOND_OPINION)
+def test_the_second_opinion_table(rc, implied, adopts, state, tell):
+    """Every row of the table, through the shipped function. The three rows
+    that LATCH all carry an agreeing page; the DEFECT rows carry both codes in
+    the note so the ledger says what disagreed with what; the crash row is
+    RETRY only for a file that speaks the table, because from one that does not
+    a 1 is still three things."""
+    got = lift(f'second_opinion {rc} "$(ledger_state {rc})" {shlex.quote(implied)} {adopts}',
+               REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.count("\n") == 1, "one line, read by one `read`"
+    word, _, note = got.stdout.rstrip("\n").partition("\t")
+    assert word == state, got.stdout
+    assert tell in note, note
+    if state in ("DONE", "CLAIM_FAIL", "INVALID"):
+        assert note.startswith("log agrees"), note
+    elif state == "UNKNOWN":
+        assert "NOT latched" in note, note
+    if note.startswith("DEFECT:"):
+        assert f"exited {rc}" in note and f"imply {implied}" in note
+
+
+@pytest.mark.parametrize("label,page,rc,state,tell,latched", [
+    ("fail_line_exit_0", "RESULT: CLAIM C1 FAIL gap 0.05 < 0.10",
+     0, "UNKNOWN", "DEFECT", False),
+    ("no_line_exit_0", "measured something and printed no gate",
+     0, "UNKNOWN", "UNEARNED DONE", False),
+    ("pass_lines_exit_1", "RESULT: VALIDITY V0 PASS ok\nRESULT: CLAIM C1 PASS fine",
+     1, "UNKNOWN", "DEFECT", False),
+    ("no_line_exit_3", "nothing scored",
+     3, "UNKNOWN", "UNEARNED INVALID", False),
+    ("fail_line_exit_1", "RESULT: CLAIM C1 FAIL gap",
+     1, "CLAIM_FAIL", "log agrees", True),
+    ("pass_line_exit_0", "RESULT: CLAIM C1 PASS fine",
+     0, "DONE", "log agrees", True),
+    ("validity_fail_exit_3", "RESULT: VALIDITY V0 FAIL broke",
+     3, "INVALID", "log agrees", True),
+    ("scored_then_crash_4", "RESULT: CLAIM C1 PASS fine\nTraceback: boom",
+     4, "RETRY", "process code wins", False),
+])
+def test_arm_latches_only_a_word_the_page_earned(tmp_path, label, page, rc, state,
+                                                 tell, latched):
+    """THE THREE PROOFS THE REVIEW RAN, PLUS THE ROWS AROUND THEM, through the
+    shipped `arm()`. `RESULT: CLAIM C1 FAIL` under exit 0 used to land DONE and
+    be SKIPPED on the next pass; no RESULT line under exit 0 landed DONE and
+    was latched; all-PASS lines under exit 1 landed CLAIM_FAIL and was latched.
+    Each is UNKNOWN now, carries its reason in the ledger note, and is
+    re-attempted. The honest rows still latch, which is the branch that must
+    not move: a CLAIM_FAIL with its FAIL line on the page is the most valuable
+    outcome this study has and re-running it is the failure mode
+    exit_codes.py is named against."""
+    stub = tmp_path / f"{label}.sh"
+    stub.write_text(f"#!/bin/bash\nprintf '%s\\n' {shlex.quote(page)}\nexit {rc}\n")
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    first = arm_lift(f"arm cap_test bash {stub}", ROOT, ledger, logs)
+    assert first.returncode == 0, first.stderr
+    row = ledger.read_text().splitlines()[-1].split("\t")
+    assert row[1] == state, (row, first.stdout)
+    assert row[2] == str(rc)
+    assert tell in row[6], row
+    assert tell in first.stdout
+    if row[6].startswith("DEFECT:"):
+        assert f"exited {rc}" in row[6] and "imply" in row[6]
+    if state == "RETRY":
+        assert "last 5 lines of" in first.stdout
+        assert "RETRY_ARMS=1" in arm_lift(
+            f"arm cap_test bash {stub}; echo RETRY_ARMS=$RETRY_ARMS",
+            ROOT, tmp_path / "again.tsv", logs).stdout
+    # The lifted `arm()` writes rows only; the header is the session's. One
+    # row after a latched pass, two after a re-attempted one.
+    again = arm_lift(f"arm cap_test bash {stub}", ROOT, ledger, logs)
+    if latched:
+        assert f"SKIP cap_test (already {state}" in again.stdout
+        assert len(ledger.read_text().splitlines()) == 1
+    else:
+        assert "SKIP cap_test" not in again.stdout
+        assert len(ledger.read_text().splitlines()) == 2
+
+
+def test_an_import_time_crash_is_retry_not_a_refuted_claim(tmp_path):
+    """THE POD'S REAL 2026-09-01 SHAPE, through the real `arm()` with the real
+    pod command lines. Python exits 1 for an exception that escapes, the
+    scripts' ERROR(4) guards wrap `_main()` and cannot catch a failure at
+    import, and every measuring arm has adopted the table, so the third pass's
+    "UNKNOWN for a non-adopter" covered none of them: alias_ablation,
+    pin_probe, calibrate and dtype all landed CLAIM_FAIL, latched, and were
+    skipped on every resume. For calibrate that made the calibration gate say
+    ARM CLAIM_FAIL and refuse every resume until the row was deleted by hand.
+
+    A `torch.py` that raises ImportError is planted on PYTHONPATH, which is
+    what an ABI drift looks like to the interpreter; each script crashes at
+    `<module>` with zero RESULT lines, and the tracked tree is never touched
+    because nothing gets past the import."""
+    broken = tmp_path / "pp"
+    broken.mkdir()
+    (broken / "torch.py").write_text(
+        "raise ImportError('planted ABI drift: torch was built for a different runtime')\n")
+    session = tmp_path / "session"
+    session.mkdir()
+    logs = session / "logs"
+    logs.mkdir()
+    ledger = session / "ARMS.tsv"
+    values = {
+        "PY_VLLM": sys.executable, "PY_BASE": sys.executable, "REPO": str(ROOT),
+        "SESSION": str(session),
+        "PIN_SWEPT": re.search(r"^PIN_SWEPT='([^']*)'", CODE, re.M).group(1),
+        "ALIAS_MODELS": re.search(r"^ALIAS_MODELS=(\S+)$", CODE, re.M).group(1),
+    }
+
+    def expand(word):
+        def one(m):
+            name = m.group(1)
+            assert name in values, f"{word}: no planted value for ${name}"
+            return values[name]
+        return re.sub(r"\$\{?(\w+)\}?", one, word)
+
+    tracked = ["git", "-C", str(ROOT), "status", "--porcelain", "--",
+               "moe/bench/hardware", "results/published"]
+    before = subprocess.run(tracked, capture_output=True, text=True, timeout=60).stdout
+    for arm_name in ("alias_ablation", "pin_probe-n64-g1", "calibrate", "dtype"):
+        words = [expand(w) for w in measuring_invocation(arm_name)]
+        assert words[0] == "arm" and words[1] == arm_name, words
+        command = ["env", f"PYTHONPATH={broken}",
+                   f"MOE_RESULTS_DIR={tmp_path}/gaps-nocard", *words[2:]]
+        got = arm_lift(f"arm {arm_name} {shlex.join(command)}", ROOT, ledger, logs)
+        assert got.returncode == 0, got.stderr
+        log = (logs / f"{arm_name}.log").read_text()
+        assert "Traceback" in log and "planted ABI drift" in log, (arm_name, log[-1500:])
+        assert "RESULT: " not in log, arm_name
+        row = ledger.read_text().splitlines()[-1].split("\t")
+        assert row[0] == arm_name and row[2] == "1", row
+        assert row[1] == "RETRY", (arm_name, row)
+        assert row[6].startswith("CRASH:"), row
+        assert "planted ABI drift" in got.stdout, "the tail of the log is printed"
+        again = arm_lift(f"arm {arm_name} {shlex.join(command)}", ROOT, ledger, logs)
+        assert f"SKIP {arm_name}" not in again.stdout, "a crash is not latched"
+    after = subprocess.run(tracked, capture_output=True, text=True, timeout=60).stdout
+    assert before == after, "an import-time crash wrote into the tracked tree"
+    # And the calibration gate no longer blocks every resume: the row is RETRY,
+    # the gate refuses THIS pass (arm 0 did not stand behind a ruler) and the
+    # next pass re-runs arm 0 instead of skipping a latched CLAIM_FAIL forever.
+    verdict = lift('calibration_verdict "$(ledger_arm_state calibrate)" PUBLISHED; echo "rc=$?"',
+                   REPO=str(ROOT), LEDGER=str(ledger))
+    assert verdict.stdout.splitlines()[0] == "ARM RETRY", verdict.stdout
+    assert verdict.stdout.strip().endswith("rc=1")
+
+
+def test_a_defective_page_is_printed_under_its_own_heading_and_fails_the_session(tmp_path):
+    """RECORDING THE WORD AND EXITING 0 WOULD LEAVE IT IN A FILE NOBODY READS.
+    `defect_rows` is the one source for the heading and the exit code; last row
+    per arm wins, so a defect that a later pass re-ran cleanly is gone and one
+    a later pass did not touch is still shown."""
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text(
+        "arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+        f"cap_test\tUNKNOWN\t0\t9\t0\t/a.log\t{defect(0, 1)}. x\n"
+        f"ruler\tUNKNOWN\t1\t9\t0\t/b.log\t{defect(1, 0)}. y\n"
+        "ruler\tDONE\t0\t9\t0\t/b.log\tlog agrees: RESULT lines imply 0\n"
+        "dtype\tUNKNOWN\t0\t9\t0\t/c.log\tUNEARNED DONE: exit 0 with no RESULT line. z\n"
+        "span\tREFUSED\t2\t0\t0\t/d.log\t\n")
+    got = lift(f"defect_rows {ledger}", REPO=str(ROOT))
+    lines = got.stdout.splitlines()
+    assert len(lines) == 1, got.stdout
+    assert lines[0].startswith("  cap_test") and "exit 0" in lines[0]
+    assert "imply 1 CLAIM_FAIL" in lines[0]
+    clean = tmp_path / "CLEAN.tsv"
+    clean.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                     "ruler\tDONE\t0\t9\t0\t/z.log\tlog agrees: RESULT lines imply 0\n")
+    assert lift(f"defect_rows {clean}", REPO=str(ROOT)).stdout == ""
+    # The shipped session reads that function, prints the heading, and exits
+    # INVALID over a non-empty answer: what is on the page is not a verdict.
+    assert 'DEFECTS="$(defect_rows "$LEDGER")"' in CODE
+    assert 'say "THE ROWS WHOSE PAGE AND EXIT CODE DISAGREE"' in CODE
+    tail = CODE.split('DEFECTS="$(defect_rows "$LEDGER")"', 1)[1]
+    assert 'if (( DRY == 0 )) && [[ -n "$DEFECTS" ]]; then' in tail
+    assert tail.split('[[ -n "$DEFECTS" ]]; then', 2)[2].split("fi", 1)[0].count(
+        'exit "$RC_INVALID"') == 1
+
+
+def test_the_summary_prints_the_reason_a_row_is_unknown_rather_than_one_paraphrase(tmp_path):
+    """THE PARAPHRASE WAS THE RECURRING DEFECT. `summarize_arm` used to say
+    "this arm exited 1 and the file it ran has not adopted ...", which was one
+    of the five reasons a row can be UNKNOWN and wrong for the other four the
+    moment they existed. The note on the ledger row is printed instead."""
+    log = tmp_path / "arm.log"
+    log.write_text(RESULT_LOG)
+    note = "DEFECT: the process exited 0 DONE but its RESULT lines imply 1 CLAIM_FAIL."
+    got = lift(f"summarize_arm cap_test {log} UNKNOWN {shlex.quote(note)}", REPO=str(ROOT))
+    assert "STATE UNKNOWN, NOT LATCHED" in got.stdout
+    assert note in got.stdout
+    assert "has not adopted" not in got.stdout, "the old paraphrase is gone"
+    # The RESULT lines are still printed after it: which gate disagreed with
+    # the exit code is the whole content of a DEFECT row.
+    assert "RESULT: CLAIM C1 FAIL" in got.stdout
+    # A row with no note says so rather than inventing one.
+    bare = lift(f"summarize_arm cap_test {log} UNKNOWN", REPO=str(ROOT))
+    assert "the reason was not recorded" in bare.stdout
+    # And the shipped loop passes the note through.
+    assert 'summarize_arm "$n" "$log" "$state" "$reason"' in CODE
+
+
+@pytest.mark.parametrize("arm_name", ARMS)
+def test_every_measuring_invocation_runs_a_script_the_second_opinion_can_read(arm_name):
+    """THE WALKER, EXTENDED TO THE SECOND OPINION. For every arm the pod runs:
+    the file it runs speaks the table (so a 1 with no gate line is a crash and
+    not "three things"), renders RESULT lines (so `log_verdict` has something
+    to read and DONE can be earned), and exits through `classify` (so agreement
+    is the expected shape and a disagreement is a defect in that file).
+
+    counter_plan is the one arm that fails the middle check today, and the
+    check is written to go RED when it stops failing: dram_counter_route.py
+    prints no RESULT line in any mode (review finding 4, in a file this slice
+    does not own), so on the pod its exit 0 is an UNEARNED DONE and lands
+    UNKNOWN. `arm_closes counter_plan` says so; when that script prints one
+    line per verdict, delete the special case here and that sentence there."""
+    words = measuring_invocation(arm_name)
+    rel = lift(f"arm_script {shlex.quote(arm_name)}", REPO=str(ROOT)).stdout.strip()
+    assert rel and (ROOT / rel).exists(), (arm_name, rel)
+    if rel == "moe/bench/cli.py":
+        assert "-m" in words and words[words.index("-m") + 1] == "moe.bench.cli", words
+    else:
+        assert any(w.endswith(rel) for w in words), (arm_name, rel, words)
+    adopts = lift(f"adopts_exit_codes {shlex.quote(rel)}; echo rc=$?",
+                  REPO=str(ROOT)).stdout.strip()
+    assert adopts.endswith("rc=0"), (arm_name, rel, adopts)
+    source = (ROOT / rel).read_text()
+    renders = "result_line(" in source or "RESULT: " in source
+    assert "classify(" in source, (arm_name, rel)
+    if arm_name == "counter_plan":
+        assert not renders, (
+            "dram_counter_route.py now renders RESULT lines: drop this special "
+            "case and the UNEARNED DONE sentence in arm_closes counter_plan")
+        closes = lift("arm_closes counter_plan", REPO=str(ROOT)).stdout
+        assert "UNEARNED DONE" in closes and "no RESULT line" in closes
+        return
+    assert renders, (arm_name, rel, "the second opinion would read NONE on every run")
+
+
+# --------------------------------------------------------------------------
+# 17. the ledger is reachable: SESSION=, --resume-latest, --new
+# --------------------------------------------------------------------------
+
+def planted_root(tmp_path):
+    """A session root with a dry-only directory, two measuring sessions for
+    this card and one for another card. The newest for THIS card is the one
+    with the March stamp; the April one is another card's and must never be
+    picked."""
+    root = tmp_path / "root"
+    (root / "session-nocard-20260101T000000Z").mkdir(parents=True)
+    for stamp in ("20260201T000000Z", "20260301T000000Z"):
+        d = root / f"session-nocard-{stamp}"
+        d.mkdir()
+        (d / "ARMS.tsv").write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    other = root / "session-othercard-20260401T000000Z"
+    other.mkdir()
+    (other / "ARMS.tsv").write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    return root
+
+
+def choose(dry, resume, new, explicit, root):
+    got = lift(f'session_choice {dry} {resume} {new} {shlex.quote(explicit)} '
+               f'{shlex.quote(str(root))} session-nocard-; echo "rc=$?"',
+               REPO=str(ROOT))
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.rstrip("\n").splitlines()
+    how, _, what = lines[0].partition("\t")
+    return how, what, lines[-1]
+
+
+def test_latest_session_is_the_newest_for_this_card_with_a_measuring_ledger(tmp_path):
+    root = planted_root(tmp_path)
+    got = lift(f"latest_session {root} session-nocard-; echo rc=$?", REPO=str(ROOT))
+    assert got.stdout.splitlines() == [str(root / "session-nocard-20260301T000000Z"), "rc=0"]
+    # A dry-only directory is not a session to resume into, and an empty root
+    # is nothing at all rather than the literal glob.
+    (root / "session-nocard-20260201T000000Z" / "ARMS.tsv").unlink()
+    (root / "session-nocard-20260301T000000Z" / "ARMS.tsv").unlink()
+    got = lift(f"latest_session {root} session-nocard-; echo rc=$?", REPO=str(ROOT))
+    assert got.stdout.strip() == "rc=1", got.stdout
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert lift(f"latest_session {empty} session-nocard-; echo rc=$?",
+                REPO=str(ROOT)).stdout.strip() == "rc=1"
+
+
+def test_session_choice_every_branch(tmp_path):
+    """EVERY BRANCH, PLANTED, because the one that matters (a measuring run
+    finding a session it would have silently ignored) cannot be reached end to
+    end on a box with no card: the driver refuses before it chooses."""
+    root = planted_root(tmp_path)
+    latest = str(root / "session-nocard-20260301T000000Z")
+    # A measuring run without --new, with a latest: refused, naming it.
+    assert choose(0, 0, 0, "", root) == ("LATEST_EXISTS", latest, "rc=1")
+    # A dry run is free and skips nothing, so it opens a fresh one.
+    how, what, rc = choose(1, 0, 0, "", root)
+    assert (how, rc) == ("NEW", "rc=0") and what.startswith(f"{root}/session-nocard-2")
+    assert what != latest
+    # --new says so on purpose.
+    how, what, rc = choose(0, 0, 1, "", root)
+    assert (how, rc) == ("NEW", "rc=0") and what != latest
+    # --resume-latest lands in the newest measuring session for THIS card.
+    assert choose(0, 1, 0, "", root) == ("RESUMED", latest, "rc=0")
+    assert choose(1, 1, 0, "", root) == ("RESUMED", latest, "rc=0")
+    # SESSION= names it outright and wins.
+    assert choose(0, 0, 0, "/x/y", root) == ("NAMED", "/x/y", "rc=0")
+    # Contradictions are refused, not resolved.
+    how, what, rc = choose(0, 1, 1, "", root)
+    assert (how, rc) == ("REFUSED", "rc=1") and "contradict" in what
+    for resume, new in ((1, 0), (0, 1)):
+        how, what, rc = choose(0, resume, new, "/x/y", root)
+        assert (how, rc) == ("REFUSED", "rc=1") and "names the directory" in what
+    # Nothing to resume is a refusal that says so.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    how, what, rc = choose(0, 1, 0, "", empty)
+    assert (how, rc) == ("REFUSED", "rc=1") and "found no session" in what
+    # With no latest, a measuring run opens a new one without being asked.
+    how, what, rc = choose(0, 0, 0, "", empty)
+    assert (how, rc) == ("NEW", "rc=0")
+
+
+def test_resume_latest_and_new_end_to_end_in_dry_mode(tmp_path):
+    """The flags reach the shipped driver, and the resumed directory is the one
+    the ledger is read from and written into."""
+    root = planted_root(tmp_path)
+    latest = root / "session-nocard-20260301T000000Z"
+    env = {"SESSION_ROOT": str(root)}
+    got = run(["--dry-run", "--resume-latest", "--only", "counter_plan"], env_extra=env)
+    assert got.returncode == 0, got.stdout[-2000:]
+    assert f"session   {latest}" in got.stdout
+    assert (latest / "ARMS-dryrun.tsv").exists()
+    assert "(RESUMED)" in got.stdout
+    assert "--resume-latest" in got.stdout.split("THE SESSION DIRECTORY IS")[1]
+    # A bare dry run beside it opens a fresh directory, and says NEW.
+    bare = run(["--dry-run", "--only", "counter_plan"], env_extra=env)
+    assert bare.returncode == 0, bare.stdout[-2000:]
+    assert f"session   {latest}" not in bare.stdout and "(NEW)" in bare.stdout
+    # Refusals: nothing to resume, contradictory flags, SESSION= plus a flag.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    none = run(["--dry-run", "--resume-latest"], env_extra={"SESSION_ROOT": str(empty)})
+    assert none.returncode == exit_codes.REFUSED
+    assert "REFUSED: --resume-latest found no session" in none.stdout
+    both = run(["--dry-run", "--resume-latest", "--new"], env_extra=env)
+    assert both.returncode == exit_codes.REFUSED and "contradict" in both.stdout
+    named = run(["--dry-run", "--resume-latest"], session=tmp_path / "s", env_extra=env)
+    assert named.returncode == exit_codes.REFUSED and "names the directory" in named.stdout
+    assert not (tmp_path / "s").exists()
+    # And the usage block, which is also --help, documents all three.
+    helped = run(["--help"]).stdout
+    for word in ("SESSION=", "--resume-latest", "--new"):
+        assert word in helped, word
+    assert "SESSION=" in TEXT.split("set -uo pipefail", 1)[0]
+
+
+def test_the_measuring_refusal_names_all_three_ways_out():
+    """The refusal's words, since the branch itself cannot run off GPU: an
+    operator who reads it has to be able to paste the way forward."""
+    block = CODE.split("LATEST_EXISTS)", 1)[1].split("exit \"$RC_REFUSED\"", 1)[0]
+    assert "--resume-latest" in block and "--new" in block and "SESSION=" in block
+    assert "EMPTY ledger" in block
+    assert 'read -r SESSION_HOW SESSION_WHAT' in CODE
+    assert 'session_choice "$DRY" "$RESUME_LATEST" "$NEW_SESSION" "${SESSION:-}"' in CODE
+
+
+# --------------------------------------------------------------------------
+# 18. descriptions of behaviour that has since changed are told as history
+# --------------------------------------------------------------------------
+
+def test_the_caveat_tells_the_adopters_old_codes_as_history():
+    """THE RECURRING DEFECT, INSIDE THE FUNCTION THAT EXISTS TO DISCLOSE IT.
+    `contract_caveat` said check_mma_path.sh spends 1 on refusals (2 since it
+    adopted), that its --dry-run exits 0 (2), that cli.py returns 4 on a pin
+    miss (INVALID through classify) and that dram_counter_route.py returns 3 on
+    BLOCKED (DONE). Each is checked against the file it describes, not against
+    memory."""
+    caveat = CODE.split("\ncontract_caveat() {", 1)[1].split("\n}", 1)[0]
+    for stale in ('documents "1 a gate failed"',
+                  "returns 4 when the implementations",
+                  "exits 0 from\\n",
+                  "returns 3 for\\n"):
+        assert stale not in caveat, stale
+    for history in ('used to document "1 a gate failed"',
+                    "used to return 4",
+                    "used to exit 0",
+                    "used to return 3",
+                    "no longer reaches this caveat"):
+        assert history in caveat, history
+    mma = (ROOT / "scripts" / "check_mma_path.sh").read_text()
+    assert 'refuse() { echo "[mma] REFUSED: $*" >&2; exit "$EXIT_REFUSED"; }' in mma
+    assert 'exit "$EXIT_REFUSED"' in mma.split("--dry-run scored no gate", 1)[1][:400]
+    cli = (ROOT / "moe" / "bench" / "cli.py").read_text()
+    assert "rc = EC.classify(scored)" in cli
+    route = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    assert "return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE" in route
+
+
+def test_the_alias_booking_gap_survives_only_as_closed_history():
+    """prose.md items 1 and 34. The 11.6-versus-13.0 gap was closed at
+    00f3324; a heading in the alias arm's own body comment still stated it as
+    current ("UNDER-BOOKS ITSELF BY 1.4 MINUTES") over a paragraph that said it
+    was closed. Every remaining mention of 11.6 in the driver sits within two
+    lines of a word that dates it, and the row states the agreement."""
+    assert "UNDER-BOOKS ITSELF BY" not in TEXT
+    assert "reads the difference rather than absorbing it" not in TEXT
+    lines = TEXT.splitlines()
+    hits = [i for i, ln in enumerate(lines) if "11.6" in ln]
+    assert hits, "the history should still be told"
+    for i in hits:
+        window = " ".join(lines[max(0, i - 2): i + 3])
+        assert re.search(r"[Uu]ntil|used to|closed", window), lines[i]
+    basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
+    assert "the two agree" in basis and "the gap is closed" in basis
+    assert "NO LONGER\n# UNDER-BOOKS ITSELF" in TEXT
