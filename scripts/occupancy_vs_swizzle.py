@@ -92,25 +92,53 @@ verdict is the `RESULT: CLAIM P6 ... UNKNOWN` line above it, which is why every
 gate prints one and why `classify_text` over the log is the second opinion.
 
 WHAT alpha IS HERE, stated because the name has caused trouble in this study. A
-ladder fit at BLOCK_M returns
+ladder fit at BLOCK_M -- `LadderFit.alpha` = B/(A+B) -- returns on the
+three-term byte ladder
 
-    alpha_fitted = alpha_b + alpha_a (BM / BN) + BM / K
+    alpha_fitted = (alpha_b + phi) / (1 + phi + delta)                     (EXA)
 
-and not the weight-side miss fraction alone. Every setting in this experiment
-runs at the SAME BM, BN and K, so `alpha_a (BM/BN)` and `BM/K` are IDENTICAL
-constants across the whole grid and cancel exactly out of every difference this
-script computes. That is the reason the experiment is a comparison of settings
-and never a level: the level carries two terms this design cannot separate, and
-the differences carry only the cache term, which is the one under test.
+and not the weight-side miss fraction alone (`moe/bench/ai_model.py`; the
+earlier form this header carried, `alpha_b + alpha_a (BM/BN) + BM/K`, is that
+expression's numerator with the level taken as 1, withdrawn 2026-09-02). `phi`
+is the activation-plus-output cost of one M-tile in weight-read units and
+`delta` the fused layer's fixed cost in the same units. Every setting in this
+experiment runs at the SAME BM, BN and K, so `phi` is the same number at every
+setting if `alpha_a` is, and what a contrast between two settings measures is
+
+    alpha_fitted(1) - alpha_fitted(2) = (alpha_b(1) - alpha_b(2)) / (1 + phi + delta)
+
+when `delta` is common as well: the cache term's difference SCALED by
+1/(1 + phi + delta), not the difference itself. THE GEOMETRIC TERMS DO NOT
+CANCEL EXACTLY, which is what an earlier version of this header said, for two
+reasons. The scaling is a BRACKET, because `alpha_a` inside `phi` has no
+measurement in this repository: at BM=64, BN=64 on mixtral `phi` runs from
+0.018 (alpha_a = 0) to 1.016 (alpha_a = 1), so a difference in alpha_b arrives
+in the fitted numbers multiplied by 0.98 down to 0.50 (0.86 at the (LIN)-era
+alpha_a = 0.143), and `delta` only lowers it further. And `delta` is
+PER-SETTING: `num_stages` and `num_warps` change the prologue and the
+occupancy, so the two settings in a contrast need not share a level, and a
+level difference alone moves a fitted alpha with no change in the cache term.
+What survives is weaker than cancellation and is what the gates are scored on:
+the SIGN and ORDER of contrasts, which the common positive scaling preserves,
+and their magnitude only as a lower bound on the alpha_b difference. That is
+the reason the experiment is a comparison of settings and never a level: the
+level carries two terms this design cannot separate, and the differences carry
+the cache term attenuated by a factor this design brackets rather than knows.
 
 WHY BLOCK_M=64 AND NOT 128. 128 is the production-relevant tile and is useless
-here: its cap sits ON the ridge, the memory and compute branches are the same
-line to about 1%, and `fit_ladder` discards the memory branch outright, so there
-is no alpha at 128 to watch move. At BLOCK_M=64 the cap is 2 BM / (alpha b) ~ 71
-FLOP/byte against calibrated ridges of 145.8 and 162.8, so the memory branch is
-the steeper line, every tread is memory bound, and alpha is identifiable on 16
-treads. The mechanism question -- what sets the re-read fraction -- is not a
-question about a particular tile height, so it is asked where it can be answered.
+here: the memory and compute branches were measured as the same line to about
+1%, and `fit_ladder` discards the memory branch outright, so there is no alpha
+at 128 to watch move. (An earlier version of this paragraph said "its cap sits
+ON the ridge". That was the LIN caps 150.4 and 158.6 against 145.8 and 162.8;
+read through (EXA) at the fused layer's own `phi` they are 135.4 and 130.7,
+upper bounds, both BELOW their cards' ridges -- `scripts/bm128_depth.py`. The
+parallel branches are a measured fact about the ladder; the straddle is not.)
+At BLOCK_M=64 the LIN cap is 2 BM / (alpha b) ~ 71 FLOP/byte against calibrated
+ridges of 145.8 and 162.8, and the exact cap is lower still, so the memory
+branch is the steeper line, every tread is memory bound, and alpha is
+identifiable on 16 treads. The mechanism question -- what sets the re-read
+fraction -- is not a question about a particular tile height, so it is asked
+where it can be answered.
 
 THE THREE OUTCOMES, all of them reportable:
 
@@ -169,7 +197,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 
@@ -627,8 +655,11 @@ class Setting:
 
     Everything else -- BLOCK_M, BLOCK_N, BLOCK_K, model, dtype, routing, the
     row ladder -- is pinned across the whole experiment, which is what makes
-    `alpha_a (BM/BN) + BM/K` a common constant that cancels out of every
-    difference this script reports.
+    `phi` (the per-tile activation-and-output cost in (EXA)) common to every
+    setting, so that a contrast between two settings is the alpha_b difference
+    scaled by 1/(1 + phi + delta) rather than something else entirely. The
+    scaling is a bracket and `delta` may differ between settings: see the
+    header. Nothing cancels exactly.
     """
 
     num_stages: int
@@ -813,6 +844,31 @@ class Registered:
     l2_bytes: int
     l2_source: str
     limits: CardLimits
+    #: `(at alpha_a = 0, at alpha_a = 1)`: the factor 1/(1 + phi) by which a
+    #: difference in alpha_b between two settings arrives in the fitted alphas,
+    #: under (EXA) with the fixed cost delta taken as zero. A BRACKET, because
+    #: alpha_a is unmeasured, and an upper bound at both ends, because delta
+    #: only lowers it. P5 prints it so "the geometric terms cancel" cannot be
+    #: read off a plan that never stated by how much they do not.
+    contrast_attenuation: tuple[float, float]
+
+
+def contrast_attenuation_bracket(cfg, block_m: int, block_n: int, b: int
+                                 ) -> tuple[float, float]:
+    """1/(1 + phi) at alpha_a = 0 and alpha_a = 1 on the up-projection GEMM.
+
+    The shape is `N = 2F, K = H`, the GEMM whose B operand is the weight slab
+    the re-read is about, the same choice `block_m_crossing_sweep.
+    cap_overstatement` makes. delta is taken as zero, so both ends are upper
+    bounds on the attenuation a measured contrast actually carries.
+    """
+    n, k = 2 * cfg.intermediate_size, cfg.hidden_size
+    ends = []
+    for alpha_a in (0.0, 1.0):
+        p = ai_model.phi(n, k, block_m=block_m, block_n=block_n,
+                         alpha_a=alpha_a, b=b)
+        ends.append(1.0 / ai_model.lin_overstatement(phi=p, delta=0.0))
+    return ends[0], ends[1]
 
 
 def identifiability_window(ridge: float, b: int, block_m: int, treads: int
@@ -895,7 +951,9 @@ def register(cfg, settings: list[Setting], limits: CardLimits, *, block_n: int,
     return Registered(res, foot, conc, swing,
                       OCCUPANCY_SWING_FRACTION * swing, cap, ratio,
                       ORDER_RATIO_TOLERANCE * ratio, window, g_hi,
-                      limits.l2_bytes, l2_source, limits)
+                      limits.l2_bytes, l2_source, limits,
+                      contrast_attenuation_bracket(cfg, SUBJECT_BLOCK_M,
+                                                   block_n, b))
 
 
 #: The published BLOCK_M=64 alpha at GROUP_SIZE_M=1, used ONLY to turn P2's
@@ -1012,11 +1070,25 @@ def predictions_text(reg: Registered, settings: list[Setting]) -> str:
         f"    floor: wide-G settings losing their memory branch while "
         f"G={BASE_GROUP} keeps its is scored as",
         "    a PASS for P2, and the report says which route it took.",
-        "P5  THE LEVEL IS NOT PREDICTED, only the differences. alpha_fitted =",
-        "    alpha_b + alpha_a (BM/BN) + BM/K, and this grid pins BM, BN and K,",
-        "    so the two geometric terms are identical constants at every",
-        "    setting and cancel out of every contrast above. No gate here is",
-        "    scored on an absolute alpha.",
+        "P5  THE LEVEL IS NOT PREDICTED, only the differences, and the "
+        "differences are ATTENUATED.",
+        "    A B/(A+B) ladder fit returns alpha_fitted = (alpha_b + phi) / "
+        "(1 + phi + delta) (EXA), and",
+        "    this grid pins BM, BN and K, so phi is common to every setting "
+        "and a contrast reads",
+        "    (alpha_b(1) - alpha_b(2)) / (1 + phi + delta): the cache term's "
+        "difference scaled, not the",
+        "    difference itself. The scaling is a BRACKET, "
+        f"{reg.contrast_attenuation[1]:.2f} to "
+        f"{reg.contrast_attenuation[0]:.2f} here at alpha_a = 1 to 0",
+        "    (alpha_a is unmeasured; delta only lowers it), and delta is "
+        "per-setting, so a level",
+        "    difference alone can move a fitted alpha. The geometric terms do "
+        "NOT cancel exactly; the",
+        "    sign and order of every contrast above survive the scaling and "
+        "their magnitude is a lower",
+        "    bound on the alpha_b difference. No gate here is scored on an "
+        "absolute alpha.",
     ])
 
 
@@ -1878,9 +1950,11 @@ def gate_geometry_fixed(samples, plan: Plan) -> Gate:
         f"{{{SUBJECT_BLOCK_M}, {REFERENCE_BLOCK_M}}} at "
         f"BLOCK_SIZE_N={plan.block_n}, BLOCK_SIZE_K={plan.block_k}",
         ok if seen else None, f"block sizes in the CSV: {seen}",
-        "P5, hence every contrast: alpha_fitted carries alpha_a (BM/BN) and "
-        "BM/K, and those cancel out of a difference only while BM, BN and K "
-        "are identical on both sides of it")
+        "P5, hence every contrast: alpha_fitted is (alpha_b + phi) / "
+        "(1 + phi + delta), and phi is common to both sides of a difference "
+        "only while BM, BN and K are identical on both sides of it; with "
+        "them pinned a contrast is the alpha_b difference scaled by "
+        "1/(1 + phi + delta), and with them not pinned it is nothing")
 
 
 def gate_references(results: list[SettingResult]) -> Gate:
