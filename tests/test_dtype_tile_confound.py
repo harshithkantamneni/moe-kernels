@@ -1002,16 +1002,148 @@ def test_clock_drift_is_per_cell_so_a_resumed_csv_cannot_invent_one(planned,
     assert not analysis.clock_throttled
 
 
+def _flag_every_arm(results, *, level=True, drift=True):
+    """Give every synthetic arm a determined under-load clock verdict."""
+    for per_cell in results.values():
+        for arm in per_cell.values():
+            arm.clock_level_ok, arm.clock_drift_ok = level, drift
+
+
 def test_v5_fails_on_a_throttled_clock(planned, ceilings):
+    """The FAIL branch, planted through the flag `time_kernel` actually sets.
+
+    The first version of this test planted a 1980 -> 1400 MHz drop between
+    the two BETWEEN-LOAD samples and V5 failed on that, which is the idle-boost
+    catch retraction (f) withdrew, carried into this script under another
+    name. The scored quantity is the under-load LEVEL flag on the arm.
+    """
     cells, _ = planned
     results = synth(cells, ceilings)
+    _flag_every_arm(results)
     for arm in results[list(results)[2]].values():
-        arm.sm_clock_start_mhz, arm.sm_clock_end_mhz = 1980, 1400
+        arm.clock_level_ok = False
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert analysis.clock_throttled
+    assert analysis.clock_flagged_arms > 0
     got = verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
                                    synthetic=False))
     assert got["V5"] == DTC.FAIL
+
+
+def test_v5_fails_on_an_under_load_drift_flag_too(planned, ceilings):
+    """Both flags are read: a DRIFT False alone is enough to fail."""
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    _flag_every_arm(results)
+    next(iter(results[list(results)[0]].values())).clock_drift_ok = False
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert analysis.clock_throttled and analysis.clock_flagged_arms == 1
+    got = verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                                   synthetic=False))
+    assert got["V5"] == DTC.FAIL
+
+
+def test_v5_passes_when_every_arm_carries_a_good_under_load_verdict(planned,
+                                                                     ceilings):
+    """The PASS branch needs the clock clause DETERMINED, not merely unflagged."""
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    _flag_every_arm(results)
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert not analysis.clock_throttled
+    assert analysis.clock_determined_arms == analysis.timed_arms
+    gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                            synthetic=False)
+    v5 = next(g for g in gates if g.name.startswith("V5"))
+    assert v5.verdict == DTC.PASS
+    assert "0 of" in v5.observed and "determined arms flagged" in v5.observed
+
+
+def test_between_load_clock_movement_is_printed_as_context_and_never_scored(
+        planned, ceilings):
+    """A 1980 -> 1400 MHz drop between the two ClockState samples is what the
+    old flag scored. Under (f) it is context: printed, labelled, and unable to
+    fail V5 on its own, because a between-load sample can be an idle boost."""
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    _flag_every_arm(results)
+    for arm in results[list(results)[2]].values():
+        arm.sm_clock_start_mhz, arm.sm_clock_end_mhz = 1980, 1400
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert analysis.clock_drift_pct == pytest.approx(29.3, abs=0.1)
+    assert not analysis.clock_throttled
+    gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                            synthetic=False)
+    v5 = next(g for g in gates if g.name.startswith("V5"))
+    assert v5.verdict == DTC.PASS
+    assert "between-load clock movement +29.3%" in v5.observed
+    assert "context only" in v5.observed
+    assert "clock drift" not in v5.rule
+
+
+def test_v5_is_unknown_not_pass_when_no_arm_determined_its_clock(planned,
+                                                                  ceilings):
+    """Absent NVML is not a steady clock. With no LEVEL or DRIFT verdict on
+    any arm and nothing else failing, V5 reads UNKNOWN; a determined failure
+    elsewhere in the gate still reads FAIL."""
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert analysis.clock_determined_arms == 0
+    gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                            synthetic=False)
+    v5 = next(g for g in gates if g.name.startswith("V5"))
+    assert v5.verdict == DTC.UNKNOWN
+    assert "NOT DETERMINED on any arm" in v5.observed
+
+
+# --------------------------------------------------------------------------
+# the cost estimate prices what time_kernel spends (retraction g)
+# --------------------------------------------------------------------------
+
+def test_estimated_seconds_prices_warmup_ms_plus_trials_times_budget(planned,
+                                                                      ceilings):
+    """`--warmup` is MILLISECONDS of sustained load and `time_kernel` sizes
+    iters from `--cell-budget-ms`, so a repeat costs warmup + trials x budget.
+    The old estimate billed `reps * (warmup + iters) + warmup + 1` CALLS at a
+    per-call time with warmup = 300, i.e. 1,246 calls per cell."""
+    cells, _ = planned
+    dtypes = list(DTC.DTYPES)
+    n_arms = sum(1 for c in cells for a in DTC.ARMS
+                 if not DTC.arm_is_redundant(c, a)) * len(dtypes)
+    seconds = DTC.estimated_seconds(cells, dtypes, ceilings, 3, 3, 300.0, 200.0)
+    assert seconds == pytest.approx(n_arms * 3 * (300.0 + 3 * 200.0) / 1e3)
+    # Not a function of the retired iteration count or of the per-call time
+    # while a call fits inside the budget; doubling the budget doubles the
+    # trial term and nothing else.
+    doubled = DTC.estimated_seconds(cells, dtypes, ceilings, 3, 3, 300.0, 400.0)
+    assert doubled == pytest.approx(n_arms * 3 * (300.0 + 3 * 400.0) / 1e3)
+
+
+def test_estimated_seconds_bills_a_call_longer_than_the_budget_at_its_length(
+        planned, ceilings):
+    """A trial is at least one call. With a 1 ms budget every call is longer
+    than it, so the trial term is the model's own per-call time, not 1 ms."""
+    cells, _ = planned
+    dtypes = list(DTC.DTYPES)
+    tiny = DTC.estimated_seconds(cells, dtypes, ceilings, 1, 1, 1.0, 0.001)
+    n_arms = sum(1 for c in cells for a in DTC.ARMS
+                 if not DTC.arm_is_redundant(c, a)) * len(dtypes)
+    floor = n_arms * (1.0 + 0.001) / 1e3
+    assert tiny > floor
+
+
+@pytest.mark.parametrize("bad", [
+    dict(reps=0), dict(trials=0), dict(warmup_ms=0.0), dict(budget_ms=0.0),
+])
+def test_estimated_seconds_refuses_a_plan_time_kernel_would_refuse(planned,
+                                                                     ceilings,
+                                                                     bad):
+    cells, _ = planned
+    kw = dict(reps=3, trials=3, warmup_ms=300.0, budget_ms=200.0)
+    kw.update(bad)
+    with pytest.raises(DTC.ConfoundRefusal):
+        DTC.estimated_seconds(cells, list(DTC.DTYPES), ceilings, **kw)
 
 
 def test_v5_fails_on_a_wide_placebo_band(planned, ceilings):

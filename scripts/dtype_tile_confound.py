@@ -56,10 +56,15 @@ BLOCK_SIZE_M AGREES between the dtypes. What still differs there is
 BLOCK_SIZE_K (64 bf16 vs 128 fp8, forced by the `dtype_selector == "fp8_w8a8"`
 branch of `get_default_config` and by the tuned files) and GROUP_SIZE_M (16 vs
 32 on mixtral at M = 448-768; 16 vs 1 on qwen2 above M = 896). GROUP_SIZE_M is
-the swizzle knob this project has MEASURED alpha against -- 0.84 / 0.73 / 0.68 /
-0.67 at G = 1 / 8 / 16 / 64 on both cards -- so it moves weight re-read traffic
-directly. The confound is real; the docs name the wrong knob for it. C2 below
-is that correction, and it is decided off-GPU.
+the swizzle knob this project has MEASURED alpha against, and it moves weight
+re-read traffic directly. The per-G medians this paragraph used to quote (0.84 /
+0.73 / 0.68 / 0.67 at G = 1 / 8 / 16 / 64, "on both cards") are POOLED, unpaired
+medians over different fits and establish NO direction in G -- the one matched
+A100 cell moves the other way; see the pooled-curve note beside
+`ALPHA_BY_GROUP_M` -- so the claim here is only that the knob differs, not
+which way alpha goes. The confound is
+real; the docs name the wrong knob for it. C2 below is that correction, and it
+is decided off-GPU.
 
 The other two models in the published table take the FALLBACK LADDER in both
 dtypes, and there BLOCK_SIZE_M is identical at every M by construction --
@@ -117,14 +122,31 @@ tilt. It is often None, and that is the point: see below.
 
 AT THE MEASURED ALPHA THE COMPUTE ROOF IS OUT OF REACH FOR THE CONFIGS vLLM
 PICKS, which this script's own `--dry-run` established before any GPU time and
-which shapes everything above. Arithmetic intensity is bounded at
-`2 BM / (alpha b)`. At GROUP_SIZE_M = 1, where alpha measures 0.84, and
-BLOCK_SIZE_M = 128, that ceiling is 152.4 FLOP/byte against a measured ridge of
-162.8: the configuration vLLM's fallback ladder holds across the whole decode
-range cannot be compute bound at any batch. Where the tuned file lifts the
-swizzle to 16 -- mixtral above M=448 -- alpha falls to 0.68, the ceiling rises
-to 188, and the compute branch IS reachable. So whether a "crossing" exists at
-all is a property of the CONFIG, not of the model, and a published crossing
+which shapes everything above. The study writes the ceiling on arithmetic
+intensity as `2 BM / (alpha b)`, and READ FROM A FITTED ALPHA that number is
+HIGH: `LadderFit.alpha` returns `(alpha_b + phi) / (1 + phi + delta)` (EXA,
+`moe/bench/ai_model.py`), so the LIN ceiling is the exact one times
+`1 + phi + delta`, and `alpha_a` inside `phi` is unmeasured, so the factor is a
+BRACKET. At GROUP_SIZE_M = 1 with the pooled level 0.84 and BLOCK_SIZE_M = 128
+the LIN ceiling is 152.4 FLOP/byte against the H200's measured ridge of 162.8,
+and dividing it by any factor above 1 only lowers it: the configuration vLLM's
+fallback ladder holds across the whole decode range cannot be compute bound at
+any batch, a fortiori. Where the tuned file lifts the swizzle to 16 -- mixtral
+above M=448 -- an earlier version of this paragraph said "alpha falls to 0.68,
+the ceiling rises to 188, and the compute branch IS reachable". That sentence
+does not survive (EXA). 188 is the LIN ceiling at the pooled 0.68; it stays
+above 162.8 only while `1 + phi + delta < 1.156`. At BM=128, BN=64 on mixtral
+`block_m_crossing_sweep.cap_overstatement` brackets the factor at 1.04
+(alpha_a = 0, delta = 0, both floors) to 3.03 (alpha_a = 1), and at the two
+`phi` values this repository has actually written down -- 1.32 at the (LIN)-era
+alpha_a = 0.143 and 1.21 at the fused-layer `Act1 / W` `scripts/bm128_depth.py`
+measures on its H200 G=16 ladder -- the corrected ceiling is 142 to 155, BELOW
+162.8. So the corrected G=16 ceiling is a bracket of 62 to 182 that straddles
+the ridge, every input pushing it down is a floor, and the one ladder where
+`delta` was pinned (0.166, A100 qwen2) puts it below on its own. "Reachable"
+is therefore NOT established at G=16 and is the direction the evidence leans
+against; what stands is the weaker statement that whether a "crossing" exists
+at all is a property of the CONFIG, not of the model, and a published crossing
 ratio that assumed otherwise was reading tile steps. That is the same fact that
 retracted C5.
 
@@ -341,6 +363,11 @@ DEFAULT_CALIBRATION = "measured_nvidia_h200"
 #:
 #: run on this tree on 2026-09-02. bf16 vLLM 313/730/931/2925 and SGLang
 #: 313/730/1004/3104; fp8 vLLM 391/806/962/2930 and SGLang 394/844/1178/3329.
+#: THE `--ridge 160.3` IN THAT RECORD IS THE RIDGE THOSE COMMANDS WERE RUN AT
+#: and is kept because the numbers quoted are at it; it is the sibling module's
+#: band constant and no card's own calibration (H200 162.8, A100 145.8), so the
+#: crossings above are staircase readings at a borrowed ridge and are not
+#: quotable as this card's.
 
 #: The uniform-only fp8/bf16 CROSSING ratios, per model and kernel, from those
 #: two commands. They are the thing being explained; nothing here re-measures
@@ -446,8 +473,14 @@ MIN_REGION_CELLS = 3
 MEMORY_SLOPE_MAX = 0.40
 COMPUTE_SLOPE_MIN = 0.60
 
-#: V4. Percent SM clock drop across the run before the ratios stop being
-#: comparable. `timing.clock_drift` calls anything past 5% throttled.
+#: V5, CONTEXT ONLY. Percent SM clock movement between the two `ClockState`
+#: samples that bracket a cell's timing block. Those samples are taken BETWEEN
+#: loads, and a between-load sample is exactly the idle-boost catch the study's
+#: old `throttled` flag turned out to be detecting (retraction f), so this
+#: number is PRINTED beside V5 and never scored. What V5 scores is the two
+#: under-load verdicts `timing.time_kernel` puts on every repeat, LEVEL (the
+#: loaded clock against the clock the roof was measured at) and DRIFT (first
+#: against last under-load sample), folded per arm by `summarise_timings`.
 MAX_CLOCK_DRIFT_PCT = 5.0
 
 #: V4. Per-timing relative spread. A ratio of two medians inherits both spreads,
@@ -788,11 +821,13 @@ def predicted_ms(cfg, num_tokens: int, config: dict[str, int], dtype: str, *,
     prediction to be scored against: the config effect has to be MEASURED, which
     is the argument for running this at all rather than deriving it.
 
-    `alpha` overrides the swizzle curve, for `--self-test` only. At the MEASURED
-    alpha the compute term never binds on this grid -- the ceiling
-    `2 BM / (alpha b)` is 152 at G=1 against a ridge of 163 -- so a synthetic
-    world generated at the measured alpha is insensitive to the planted fp8 FLOP
-    rate, and a gate exercised only there could not tell the two worlds apart.
+    `alpha` overrides the swizzle curve, for `--self-test` only. At the pooled
+    alpha level the compute term never binds on this grid -- the LIN ceiling
+    `2 BM / (alpha b)` is 152 at G=1 against a ridge of 163, and the exact
+    ceiling is that divided by `1 + phi + delta` (EXA), lower still -- so a
+    synthetic world generated at that alpha is insensitive to the planted fp8
+    FLOP rate, and a gate exercised only there could not tell the two worlds
+    apart.
     """
     rows = rows_per_expert(cfg, num_tokens)
     block_m = config["BLOCK_SIZE_M"]
@@ -977,9 +1012,10 @@ def crossing_bracket_cells(cells: list[Cell], bracket: float = CROSSING_BRACKET
 #
 # THE FIRST DRAFT OF THIS SCRIPT CLASSIFIED CELLS BY `AI = 2R/b` AGAINST THE
 # MEASURED RIDGE, AND ITS OWN DRY RUN REFUTED THAT. Arithmetic intensity is
-# BOUNDED at `2 BM / (alpha b)`, and at the swizzle vLLM actually picks --
-# GROUP_SIZE_M = 1, where alpha measures 0.84 -- BLOCK_SIZE_M = 128 caps at
-# 152.4 FLOP/byte against a ridge of 162.8. That configuration cannot be
+# BOUNDED, and at the swizzle vLLM actually picks -- GROUP_SIZE_M = 1, pooled
+# alpha level 0.84 -- BLOCK_SIZE_M = 128 has a LIN ceiling `2 BM / (alpha b)`
+# of 152.4 FLOP/byte against a ridge of 162.8, and the exact ceiling is lower
+# by `1 + phi + delta` (EXA). That configuration cannot be
 # compute bound at any batch, so cells the byte model labelled "compute" were
 # still on the memory branch, `rc` was a second `rm`, and the predicted shift
 # came out at a meaningless 1.000. Assuming the label is how a gate stops being
@@ -1036,7 +1072,7 @@ def classify_branches(series: list[tuple[float, float]]
     EMPTY IS AN ANSWER AND IT IS THE LIKELY ONE HERE. On the memory branch
     traffic is `Q(n) = 1 + alpha (n - 1)` full weight reads, so for `n` well past
     `1/alpha` the memory branch is itself nearly LINEAR in the batch: at the
-    measured alpha of 0.68 to 0.84 it reaches slope 0.8 by four M-tiles. A
+    pooled alpha level of 0.68 to 0.84 it reaches slope 0.8 by four M-tiles. A
     flat-versus-steep test therefore cannot separate the two branches in this
     regime at all, which is the same fact that retracted C5 and the same fact
     `all_crossings_from_points` documents as a staircase. That is why the TILT
@@ -1297,9 +1333,13 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
         None if none was False and any was None, True only when every repeat
         said so. A single throttled repeat makes the arm throttled;
       * `sm_clock_load_mhz` is the median of the repeats that reported one;
-      * `iters` and `warmup_ms` are medians, and they are per-repeat counts, not
-        totals: a reader checking `iters x trials x repeats = n_samples` has to
-        be able to;
+      * `iters` and `warmup_ms` are medians over the repeats, not totals, and
+        they are two different kinds of number: `iters` is the per-TRIAL
+        iteration count `time_kernel` sized from `--cell-budget-ms`, so a
+        reader checking `iters x trials x repeats = n_samples` has to be able
+        to; `warmup_ms` is MILLISECONDS of sustained load delivered before the
+        trials, never a call count (`warmup_calls` on the `KernelTiming` is the
+        count, and it is not a knob);
       * `instrument` and `l2_flush` are constant across the repeats of one arm
         by construction, and a disagreement would be a bug, so the first is
         taken and the mismatch would show as a differing column between arms.
@@ -2212,8 +2252,18 @@ class Analysis:
     fp8_weight_dtypes: set[str] = field(default_factory=set)
     fp8_quant_kinds: set[str] = field(default_factory=set)
     spreads: list[float] = field(default_factory=list)
+    #: Worst between-load clock movement across cells, percent. CONTEXT, never
+    #: scored: see `MAX_CLOCK_DRIFT_PCT`.
     clock_drift_pct: float | None = None
+    #: The under-load verdicts, folded over every timed arm. `clock_throttled`
+    #: is True when ANY arm's LEVEL or DRIFT flag is False; `clock_flagged_arms`
+    #: and `clock_determined_arms` are the counts behind it, and zero determined
+    #: arms means the clock state of this run is NOT DETERMINED, which V5 reports
+    #: as UNKNOWN rather than as a pass. A run scored on the between-load
+    #: movement alone was the old single drop-only flag under another name.
     clock_throttled: bool = False
+    clock_flagged_arms: int = 0
+    clock_determined_arms: int = 0
     timed_arms: int = 0
     failed_arms: list[str] = field(default_factory=list)
     crossings: dict[tuple[str, str, str], list[float]] = field(default_factory=dict)
@@ -2367,14 +2417,32 @@ def analyse(cells: list[Cell], results, ceilings: Ceilings, dtypes: list[str]
     # session's opening clock against the second's closing clock is a number
     # about nothing. Each cell carries the clocks that bracket its own timing
     # block, which is the window every ratio in that cell was measured inside.
+    # CONTEXT ONLY: these two samples are taken between loads, and the first
+    # version of this function scored `clock_throttled` on them, which is the
+    # idle-boost catch the study's old throttle flag turned out to be
+    # (retraction f) carried into this script under another name.
     drifts = [(r.sm_clock_start_mhz - r.sm_clock_end_mhz)
               / r.sm_clock_start_mhz * 100.0
               for per in results.values() for r in per.values()
               if r.sm_clock_start_mhz > 0 and r.sm_clock_end_mhz > 0]
     if drifts:
-        worst = max(drifts, key=abs)
-        analysis.clock_drift_pct = worst
-        analysis.clock_throttled = abs(worst) > MAX_CLOCK_DRIFT_PCT
+        analysis.clock_drift_pct = max(drifts, key=abs)
+    # WHAT IS SCORED: the under-load LEVEL and DRIFT verdicts `time_kernel` put
+    # on every repeat, folded per arm by `summarise_timings` (False if any
+    # repeat was False). An arm with neither flag determined contributes
+    # nothing, and a run with no determined arm has an undetermined clock
+    # state, which V5 prints as UNKNOWN: an absent NVML is not a steady clock.
+    for per in results.values():
+        for r in per.values():
+            if r.error or r.redundant:
+                continue
+            flags = (r.clock_level_ok, r.clock_drift_ok)
+            if all(f is None for f in flags):
+                continue
+            analysis.clock_determined_arms += 1
+            if any(f is False for f in flags):
+                analysis.clock_flagged_arms += 1
+    analysis.clock_throttled = analysis.clock_flagged_arms > 0
     return analysis
 
 
@@ -2579,17 +2647,36 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
                      f"{len(analysis.placebo_deviations)} pairs")
     if spread is not None:
         parts.append(f"p90 per-timing spread {spread:.2%}")
+    if analysis.clock_determined_arms:
+        parts.append(f"under-load LEVEL/DRIFT flags: {analysis.clock_flagged_arms} "
+                     f"of {analysis.clock_determined_arms} determined arms "
+                     "flagged")
+    else:
+        parts.append("under-load LEVEL/DRIFT flags: NOT DETERMINED on any arm "
+                     "(no clock reference or no NVML), so the clock state is "
+                     "unknown")
     if drift is not None:
-        parts.append(f"worst per-cell SM clock drift {drift:+.1f}%")
+        parts.append(f"between-load clock movement {drift:+.1f}% worst cell, "
+                     "context only")
     if band is not None:
-        noise_ok = (band < PLACEBO_BAND
-                    and (spread is None or spread < MAX_TIMING_SPREAD)
-                    and not analysis.clock_throttled)
+        # A determined failure is a FAIL whatever else is unknown; a pass needs
+        # every clause determined, and the clock clause is determined only when
+        # at least one arm carried a LEVEL or DRIFT verdict from `time_kernel`.
+        failed = (band >= PLACEBO_BAND
+                  or (spread is not None and spread >= MAX_TIMING_SPREAD)
+                  or analysis.clock_throttled)
+        if failed:
+            noise_ok = False
+        elif analysis.clock_determined_arms == 0:
+            noise_ok = None
+        else:
+            noise_ok = True
     gates.append(Gate(
         "V5 noise floor", "VALIDITY",
         "the box can resolve an effect the size of the one being measured",
         f"p90 |placebo - 1| < {PLACEBO_BAND:.0%}, p90 timing spread < "
-        f"{MAX_TIMING_SPREAD:.0%}, |clock drift| <= {MAX_CLOCK_DRIFT_PCT:.0f}%",
+        f"{MAX_TIMING_SPREAD:.0%}, and no timed arm carries a False "
+        "under-load LEVEL or DRIFT flag from time_kernel",
         _verdict(noise_ok),
         "no placebo pair was timed" if band is None
         else "; ".join(parts) + (f"; worst {analysis.placebo_worst}"
@@ -3222,13 +3309,38 @@ def render_report(header: str, analysis: Analysis, gates: list[Gate],
 # --------------------------------------------------------------------------
 
 def estimated_seconds(cells: list[Cell], dtypes: list[str], ceilings: Ceilings,
-                      reps: int, iters: int, warmup: int) -> float:
-    """GPU seconds at the model's own timings, compiles and allocation excluded.
+                      reps: int, trials: int, warmup_ms: float,
+                      budget_ms: float) -> float:
+    """GPU seconds of timed kernel, compiles and allocation excluded.
 
-    Excluded because they do not scale with the grid and they dominate a short
-    run: every distinct forced config is one Triton specialisation, and the count
-    of those is printed beside this number rather than folded into it.
+    PRICED THE WAY `time_kernel` SPENDS. Each repeat of each (cell, arm, dtype)
+    is one `time_kernel` call: `warmup_ms` of sustained load, then `trials`
+    trials each sized to `budget_ms`. So a repeat costs
+    `warmup_ms + trials * max(budget_ms, one call)` whatever the kernel's own
+    duration is; the `max` is the one place the model's timing enters, because
+    a trial is at least one call and a call longer than the budget is billed
+    at its own length. The first version of this function multiplied a
+    per-call time by `reps * (warmup + iters) + warmup + 1` CALLS and was
+    handed `--warmup` in MILLISECONDS (300), so `--dry-run` priced 1,246 calls
+    per cell and printed 315 s: a number about a call count the instrument
+    does not use. Priced by the instrument's own budget the default plan is
+    about 450 s, so the old figure was wrong in kind and low as well;
+    `--iters` is a retired knob and does not enter here at all.
+
+    Compiles and allocation are excluded because they do not scale with the
+    grid and they dominate a short run: every distinct forced config is one
+    Triton specialisation, and the count of those is printed beside this
+    number rather than folded into it.
     """
+    if reps <= 0 or trials <= 0:
+        raise ConfoundRefusal(
+            f"reps={reps}, trials={trials}: a cost needs at least one repeat "
+            "of at least one trial")
+    if warmup_ms <= 0 or budget_ms <= 0:
+        raise ConfoundRefusal(
+            f"warmup_ms={warmup_ms}, budget_ms={budget_ms}: time_kernel refuses "
+            "a non-positive warmup and a non-positive budget, so a run priced "
+            "at them would not start")
     total_ms = 0.0
     for cell in cells:
         cfg = MODEL_CONFIGS[cell.model]
@@ -3237,9 +3349,9 @@ def estimated_seconds(cells: list[Cell], dtypes: list[str], ceilings: Ceilings,
                 continue
             for dtype in dtypes:
                 config = arm_config(cell, arm) or cell.configs[dtype]
-                total_ms += predicted_ms(cfg, cell.num_tokens, config, dtype,
-                                         ceilings=ceilings, act_bytes=2) * (
-                    reps * (warmup + iters) + warmup + 1)
+                one_call = predicted_ms(cfg, cell.num_tokens, config, dtype,
+                                        ceilings=ceilings, act_bytes=2)
+                total_ms += reps * (warmup_ms + trials * max(budget_ms, one_call))
     return total_ms / 1e3
 
 
@@ -3463,8 +3575,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="lognormal sigma applied to every synthetic timing")
     ap.add_argument("--self-test-alpha", type=float, default=None,
                     help="override the measured swizzle alpha in the synthetic "
-                         "world. Needed to exercise C3 at all: at the measured "
-                         "0.68-0.84 the compute term never binds, so the planted "
+                         "world. Needed to exercise C3 at all: at the pooled "
+                         "level 0.68-0.84 the compute term never binds, so the planted "
                          "FLOP ratio changes nothing and two different worlds "
                          "generate identical reports. 0.2 lifts the ceiling "
                          "2*BLOCK_M/(alpha*b) clear of the ridge")
@@ -3595,8 +3707,8 @@ def _main(argv: list[str] | None = None) -> int:
     csv_path, report_path = out_dir / "timings.csv", out_dir / "report.md"
 
     compiles = distinct_compiles(cells, dtypes)
-    seconds = estimated_seconds(cells, dtypes, ceilings, args.reps, args.iters,
-                                args.warmup)
+    seconds = estimated_seconds(cells, dtypes, ceilings, args.reps, args.trials,
+                                args.warmup, args.cell_budget_ms)
     header_lines = [
         "# Is the fp8/bf16 crossing shift the DTYPE or the TILE?",
         "",
@@ -3624,8 +3736,10 @@ def _main(argv: list[str] | None = None) -> int:
         "",
         f"COST  {len(cells)} cells x {len(ARMS)} arms x {len(dtypes)} dtypes; "
         f"{compiles} distinct Triton specialisations;",
-        f"      {seconds:.0f} s of timed kernel at the model's own timings, "
-        f"excluding compiles and allocation.",
+        f"      {seconds:.0f} s of timed kernel: {args.reps} repeats x "
+        f"({args.warmup:.0f} ms warmup + {args.trials} trials x max("
+        f"{args.cell_budget_ms:.0f} ms budget, one call)) per (cell, arm, "
+        "dtype), excluding compiles and allocation.",
         "",
         SIGN_BANNER,
         "",

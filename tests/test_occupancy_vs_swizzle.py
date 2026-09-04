@@ -1237,3 +1237,40 @@ def test_a_string_refusal_still_exits_REFUSED_and_is_not_relabelled_ERROR(
     assert code == EX.REFUSED
     assert err.startswith("REFUSED: no calibration")
     assert "Traceback" not in err
+
+
+# --------------------------------------------------------------------------
+# retraction (a): the geometric terms do not cancel exactly out of a contrast
+# --------------------------------------------------------------------------
+
+def test_p5_states_the_exa_attenuation_as_a_bracket_not_a_cancellation():
+    """The printed plan said `alpha_a (BM/BN)` and `BM/K` "cancel exactly out
+    of every contrast". Under (EXA) a contrast is the alpha_b difference
+    scaled by 1/(1 + phi + delta), phi carries the unmeasured alpha_a and
+    delta is per-setting, so the plan has to print the bracket and the word
+    "not". Pinned on the rendered text and on the number behind it, which is
+    recomputed here from ai_model rather than read back from the script.
+    """
+    args, cfg, b, plan, reg, _ = _plan_and_reg()
+    text = OVS.predictions_text(reg, plan.settings)
+    p5 = text[text.index("P5"):]
+    assert "cancel exactly out" not in p5 and "do NOT cancel exactly" in p5
+    assert "(alpha_b + phi) / (1 + phi + delta)" in p5
+    assert "BRACKET" in p5 and "delta is per-setting" in p5
+    lo_a, hi_a = reg.contrast_attenuation
+    assert f"{hi_a:.2f} to {lo_a:.2f}" in p5
+    # The bracket is what ai_model says it is, at alpha_a = 0 and 1, delta = 0.
+    n, k = 2 * cfg.intermediate_size, cfg.hidden_size
+    expect = tuple(
+        1.0 / (1.0 + OVS.ai_model.phi(n, k, block_m=OVS.SUBJECT_BLOCK_M,
+                                      block_n=args.block_n, alpha_a=a, b=b))
+        for a in (0.0, 1.0))
+    assert reg.contrast_attenuation == pytest.approx(expect)
+    # Attenuation, not amplification, and the alpha_a = 1 end is the smaller.
+    # The pair is in alpha_a order (at 0, at 1), not value order: more
+    # activation re-read means a larger phi and a SMALLER attenuation factor.
+    assert 0.0 < hi_a < lo_a <= 1.0
+    # The V3 gate's rationale says the same thing at its own call site.
+    v3 = OVS.gate_geometry_fixed([], plan)
+    assert "scaled by 1/(1 + phi + delta)" in v3.invalidates
+    assert "those cancel out" not in v3.invalidates
