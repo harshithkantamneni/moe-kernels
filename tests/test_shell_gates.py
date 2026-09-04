@@ -969,7 +969,9 @@ def test_every_published_surface_requalifies_the_candidate_line(surface):
     note = "\n".join(lines[hits[0] + 1:hits[0] + 9])
     assert note.startswith("  NOTE 2026-09-03: the line above is requalified"), note
     assert "ANCHOR_RESCORE" in note and "W4" in note
-    assert "scripts/alpha_surface.py still prints" in note
+    # The two facts, not their punctuation: the note names the generator and
+    # says it still prints the line, so a reader knows regenerating erases it.
+    assert "scripts/alpha_surface.py" in note and "still prints" in note, note
 
 
 def test_the_a100_surface_withdraws_the_direction_asserted_from_one_cell():
