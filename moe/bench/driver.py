@@ -370,6 +370,18 @@ class RunConfig:
     #: Where that number came from, or, when it is None, why it is not known.
     #: One field either way, from `roofline.ReferenceClock.source`.
     reference_clock_source: str = ""
+    #: HOW that number was taken, `roofline.ReferenceClock.grade`: one of the
+    #: `roofline.REFERENCE_*` constants, "caller" for an explicit number, ""
+    #: for none. The per-row roof (`_apply_cost`) is rescaled only against
+    #: `REFERENCE_UNDER_LOAD`; against the idle scalar both committed
+    #: calibrations carry it is REFUSED with the reason in `roof_note`, because
+    #: scaling by `load / reference` puts the reference into every number and
+    #: that scalar moved 30% across one card's calibrations. LEVEL is still
+    #: scored against a disowned reference, and every row carries the source
+    #: so the verdict can be discounted; the alternative, refusing the sweep,
+    #: would refuse every sweep against the committed yamls until a
+    #: recalibration, and the pod runbook recalibrates at step 1 anyway.
+    reference_clock_grade: str = ""
     #: The attached card the resolution saw, "" for none, and SET ON EVERY PATH
     #: that ends without a clock. The refusal turns on it together with the
     #: clock: a card with no usable calibration is a pod misconfiguration, and
@@ -504,6 +516,9 @@ class RunConfig:
             self.reference_clock_source = (
                 f"{supplied:.0f} MHz, given by the caller rather than read "
                 "from this card's calibration")
+            # A caller's number has no grade the code can vouch for, so the
+            # per-row roof is not rescaled against it; the LEVEL flag is.
+            self.reference_clock_grade = "caller"
             return
 
         # The one assignment of the card, on the one path that can end with no
@@ -525,6 +540,7 @@ class RunConfig:
 
         self.reference_clock_mhz = ref.mhz
         self.reference_clock_source = ref.source
+        self.reference_clock_grade = ref.grade if ref.mhz is not None else ""
         if (ref.mhz is not None and self.hardware is not None
                 and ref.profile and ref.profile != self.hardware.name):
             self.reference_clock_source = (
@@ -534,6 +550,7 @@ class RunConfig:
                 "clock THE ROOF was measured at, and a datasheet roof was "
                 "never measured at any clock")
             self.reference_clock_mhz = None
+            self.reference_clock_grade = ""
         if self.reference_clock_mhz is None:
             self.missing["reference_clock_mhz"] = self.reference_clock_source
 
@@ -767,8 +784,62 @@ def _apply_correctness(row: SC.Row, c: CorrectnessResult) -> None:
     row.tol_calibrated = c.calibrated
 
 
+def roof_scale_refusal(cfg: RunConfig, load_mhz: float) -> str:
+    """Why the per-row roof cannot be scored for a row, or "" when it can. Pure.
+
+    Three refusals, each named so `roof_note` says which: no under-load clock
+    on the row (the retired seam writes none; an NVML-less container polls
+    none), no reference resolved for the run, or a reference whose grade is
+    not the under-load median. The third is the one that fires against both
+    committed calibrations today: they carry only `detail.gemm_clock_mhz`, the
+    post-hoc idle scalar `calibrate.py` records a 30% spread for, and scaling
+    a roof by `load / reference` against it would move every fraction by up to
+    that much under the name of a correction. REFUSED rather than defaulted
+    to the fixed roof: the fixed-roof figure is still on the row under its own
+    name, with its bias stated, and this column stays 0.0 with the reason.
+    """
+    if not load_mhz or load_mhz <= 0:
+        return ("no under-load clock on this row (retired seam, or no NVML "
+                "during the trials), so the roof cannot be placed at the "
+                "clock the cell ran")
+    if cfg.reference_clock_mhz is None or cfg.reference_clock_mhz <= 0:
+        return ("no reference clock was resolved for this run, so the roof "
+                "has no clock to be rescaled from")
+    if cfg.reference_clock_grade != RF.REFERENCE_UNDER_LOAD:
+        return (f"the reference is graded {cfg.reference_clock_grade or 'none'!r}, "
+                "not an under-load median; rescaling the roof against it "
+                "would put a disowned number into every fraction (see "
+                "reference_clock_source); recalibrate to record the "
+                "under-load median")
+    return ""
+
+
 def _apply_cost(row: SC.Row, cost, ms: float | None,
                 cfg: RunConfig | None = None) -> None:
+    """Cost, the FIXED-roof efficiency, and the roof AT THE CLOCK THE CELL RAN.
+
+    Two compute-side fractions are written and they are not the same number.
+    `pct_of_achieved_tflops` is against `achieved_peak_tflops`, the
+    calibration's roof at the calibration's clock, identical on every row of
+    the run; it keeps its v2 meaning and its comment in `schema.Row` states
+    the bias it carries. `pct_of_roof_at_cell_clock` is against
+    `roof_at_cell_clock_tflops`, `roofline.roof_at_clock` applied to THIS row's
+    `sm_clock_load_mhz` and the run's under-load reference. On a memory-shaped
+    H200 cell boosted to 1980 MHz against a 1515 roof the two differ by 1.31x,
+    and the one-sided LEVEL flag used to pass that cell. Read the second; the
+    first is there to compare with pre-v6 rows.
+
+    ORDER MATTERS AND IS RELIED ON: `_apply_kernel_timing` has already put
+    `sm_clock_load_mhz` on the row when this runs (`_run_modes` applies the
+    timing before the cost), so the per-row roof reads it off the row rather
+    than being handed it, and a caller that applied cost first would find 0.0
+    there and get the refusal named for it. The bandwidth roof is NOT
+    rescaled: HBM does not run on the SM clock (1.7% measured sensitivity),
+    and the ridge `hw.bound` classifies against therefore stays the fixed
+    one, which UNDER-classifies memory-bound cells on a boosted card (the
+    effective ridge is higher), so `implied_traffic_ratio` is omitted on some
+    cells that earned it rather than written on some that did not.
+    """
     row.flops = cost.flops
     row.compulsory_bytes = cost.bytes_total
     row.arith_intensity_compulsory = cost.arithmetic_intensity
@@ -791,6 +862,20 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
     if peak:
         row.achieved_peak_tflops = peak / 1e12
         row.pct_of_achieved_tflops = 100.0 * row.tflops / row.achieved_peak_tflops
+        why = roof_scale_refusal(cfg, row.sm_clock_load_mhz)
+        if why:
+            row.roof_note = why
+        else:
+            roof = RF.roof_at_clock(row.achieved_peak_tflops,
+                                    cfg.reference_clock_mhz, row.sm_clock_load_mhz)
+            # `roof_at_clock` has already refused every non-positive input
+            # above; a None here would be a contract change, not a row.
+            assert roof is not None
+            row.roof_at_cell_clock_tflops = roof
+            row.pct_of_roof_at_cell_clock = 100.0 * row.tflops / roof
+            row.roof_note = ""
+    else:
+        row.roof_note = f"no measured compute ceiling for dtype {row.dtype!r}"
 
     # Only sound when the cell is genuinely memory bound. Compulsory intensity
     # is an UPPER bound on true intensity, so compulsory < ridge implies true <
@@ -826,7 +911,7 @@ def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
     return kw
 
 
-def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
+def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     """One `KernelTiming` onto one row, including what the instrument was.
 
     THE FIVE RETIRED QUANTITIES ARE LEFT AT THEIR DEFAULTS: `sm_clock_start_mhz`,
@@ -855,6 +940,25 @@ def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
     bound rather than a thermal event. Folding it in here would report a Python
     launcher as a hot box.
 
+    AND FROM THE LOW SIDE OF LEVEL ONLY. LEVEL is two-sided since 2026-09-03
+    and a cell can fail it HIGH: a memory-shaped cell that boosted to 1980 MHz
+    against a compute roof measured at 1515. That is the mirror image of a
+    throttle, not a throttle; on an H200 it is the NORMAL state of decode
+    work, and writing it into `throttled` would fail S6d on every honest
+    decode session and empty `efficiency_report` of the cells the study is
+    about. The HIGH failure is on the row as `clock_level_ok = failed` with
+    `clock_level_side = high`, its fixed-roof fraction is the thing that is
+    wrong, and `roof_at_cell_clock_tflops` is the correction. A consumer that
+    excludes on `clock_level_ok == failed` alone now drops boosted cells; it
+    should read the side.
+
+    THE REFERENCE IS WRITTEN ONTO THE ROW, from the config and not from the
+    record: `cfg.reference_clock_mhz` is what `_instrument_kwargs` handed the
+    instrument, so the two are one number on the real path, and the config
+    also carries the SOURCE, which the record does not. A row that says
+    `clock_level_ok = ok` and does not say against what cannot be re-derived
+    once the yaml it came from has been overwritten by a recalibration.
+
     "undetermined" IS NOT THROTTLED, which is the one place this departs from
     "unknown counts against the gate". These consumers are inclusion filters
     over a whole arm, not release gates over a claim: on a pod whose container
@@ -870,21 +974,35 @@ def _apply_kernel_timing(row: SC.Row, kt, flush_mode: str) -> None:
     row.iters, row.trials = kt.iters, kt.trials
     row.l2_flush = kt.l2_flush
     row.flush_mb = kt.flush_mb
-    row.flush_mode = flush_mode if kt.l2_flush else ""
     row.ms_p50, row.ms_p90 = kt.ms_p50, kt.ms_p90
     row.ms_min, row.ms_std = kt.ms_min, kt.ms_std
     row.jitter_p90_over_p50 = (kt.ms_p90 / kt.ms_p50) if kt.ms_p50 > 0 else 0.0
+    row.flush_mode = cfg.flush_mode if kt.l2_flush else ""
     row.sm_clock_load_mhz = kt.sm_clock_load_mhz or 0.0
     row.clock_level_ok = SC.verdict_word(kt.clock_level_ok)
     row.clock_drift_ok = SC.verdict_word(kt.clock_drift_ok)
-    row.throttled = SC.VERDICT_FAILED in (row.clock_level_ok, row.clock_drift_ok)
+    # The side is derived from the record's clocks by the instrument's own
+    # rule, so a record built by a fake that set the verdict without the side
+    # (every fake in tests/ before v6) still gets the right one; the
+    # instrument's own field is preferred when it carries one.
+    side = kt.clock_level_side or (
+        T.level_side(kt.sm_clock_load_mhz, cfg.reference_clock_mhz) or "")
+    if row.clock_level_ok != SC.VERDICT_FAILED:
+        side = ""
+    row.clock_level_side = side
+    row.throttled = (row.clock_drift_ok == SC.VERDICT_FAILED
+                     or (row.clock_level_ok == SC.VERDICT_FAILED
+                         and side != T.LEVEL_HIGH))
     row.host_bound_ok = SC.verdict_word(
         None if kt.host_bound is None else not kt.host_bound)
     row.clock_samples = kt.clock_samples
     row.clock_source = kt.clock_source
     row.clock_note = kt.clock_note
     row.host_enqueue_ms = kt.host_enqueue_ms or 0.0
+    row.host_backlog_iters = kt.host_backlog_iters or 0.0
     row.host_note = kt.host_note
+    row.reference_clock_mhz = cfg.reference_clock_mhz or 0.0
+    row.reference_clock_source = cfg.reference_clock_source
 
 
 def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:
@@ -910,7 +1028,8 @@ def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:
 #: Timing and derived columns, zeroed whenever a row did not earn them.
 _TIMED_FIELDS = ("ms_p50", "ms_p90", "ms_min", "ms_std", "jitter_p90_over_p50",
                  "tflops", "compulsory_gbps", "pct_of_achieved_tflops",
-                 "implied_traffic_ratio")
+                 "implied_traffic_ratio", "roof_at_cell_clock_tflops",
+                 "pct_of_roof_at_cell_clock")
 
 
 def _apply_load(row: SC.Row, load) -> None:
@@ -1236,7 +1355,7 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
         if legacy is not None:
             _apply_legacy_timing(row, res, clocks_start, cfg.clock_sampler())
         else:
-            _apply_kernel_timing(row, res, cfg.flush_mode)
+            _apply_kernel_timing(row, res, cfg)
         _apply_cost(row, cost, res.ms_p50, cfg)
 
         if not verdict.passed:
