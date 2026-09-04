@@ -36,6 +36,9 @@ PROFILE="standard"
 MAX_MINUTES=""
 RUN_ID=""
 DRY_RUN=""
+#: --summary-only DIR: print the end-of-run summary over rows that already
+#: exist and exit. It is how the summary's wording is tested without a sweep.
+SUMMARY_ONLY=""
 #: Empty means AUTO-DETECT. "base" is no longer a default, it is an answer.
 ENVS=""
 SKIP_SETUP=""
@@ -50,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --run-id)       RUN_ID="$2"; shift 2 ;;
     --envs)         ENVS="$2"; shift 2 ;;
     --dry-run)      DRY_RUN=1; shift ;;
+    --summary-only) SUMMARY_ONLY="$2"; shift 2 ;;
     --skip-setup)   SKIP_SETUP=1; shift ;;
     --skip-tests)   SKIP_TESTS=1; shift ;;
     --allow-missing-envs) ALLOW_MISSING_ENVS=1; shift ;;
@@ -81,6 +85,107 @@ log() { printf '\n[run_all] %s\n' "$*"; }
 PY="${MOE_PYTHON:-$VENVS/base/bin/python}"
 [[ -x "$PY" ]] || PY="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PY" ]] || PY="python3"
+
+#: The end-of-run summary over a results directory. A function because it has
+#: two callers, the end of a sweep and --summary-only, and the wording of the
+#: throttled line was wrong at one call site for as long as it had only one.
+print_summary() {
+  "$PY" - "$1" <<'PYEOF'
+import sys
+sys.path.insert(0, ".")
+from pathlib import Path
+from moe.bench.schema import passed, read_csv
+
+results = Path(sys.argv[1])
+rows = []
+# NOT *.csv: merged.csv contains the same rows as the run_*.csv files it was
+# built from, so globbing both counts every row twice.
+for p in sorted(results.glob("run_*.csv")):
+    try:
+        rows.extend(read_csv(p))
+    except Exception as e:
+        print(f"  {p.name}: unreadable ({e})")
+print(f"  rows            {len(rows)}")
+ok = [r for r in rows if passed(r)]
+print(f"  correctness ok  {len(ok)}")
+failed = [r for r in rows if not passed(r)]
+if failed:
+    print(f"  CORRECTNESS FAILURES {len(failed)}:")
+    for r in failed[:10]:
+        print(f"    {r['impl']:<28} {r['model']}/T{r['num_tokens']} "
+              f"abs_err={float(r['max_abs_err']):.3e}")
+
+
+def emit(line):
+    print(f"  CLOCK FLAG      {line}")
+
+
+# `throttled` IS ONE COLUMN WITH TWO MEANINGS, split by the instrument that
+# wrote the row, and until 2026-09-03 this line described neither: "clocks
+# dropped >5% mid-cell" named a detector that never existed. On a row written
+# before schema v5 the flag is the retired two-sample drift check: the SM clock
+# read at an idle instant before the cell and again after it, set on a >5%
+# drop. That detected whether the FIRST read had caught the idle boost clock,
+# not throttling under load (moe/bench/timing.py, CLOCKS ARE READ UNDER LOAD:
+# on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged
+# and unflagged replicates timed at ratio 0.998). On a v5 row the driver sets
+# it when the LEVEL or DRIFT verdict taken WHILE the trials ran failed
+# (moe/bench/driver.py). The two are counted apart and named by what each
+# detected; a row whose instrument cannot be read is reported as exactly that
+# rather than filed under either.
+from moe.bench.schema import (VERDICT_FAILED, TimingInstrumentUnrecorded,
+                              has_kernel_timing, row_bool, timing_verdict)
+try:
+    from moe.bench.timing import DRIFT_FRACTION, LEVEL_FRACTION
+    level_word = f"below {LEVEL_FRACTION:.0%} of"
+    drift_word = f"more than {DRIFT_FRACTION:.0%} apart"
+except Exception:  # torch absent: name the constant rather than guess its value
+    level_word = "below timing.LEVEL_FRACTION of"
+    drift_word = "more than timing.DRIFT_FRACTION apart"
+flagged = [r for r in rows if row_bool(r, "throttled")]
+if flagged:
+    under_load, legacy, unreadable = [], [], []
+    level = drift = 0
+    for r in flagged:
+        try:
+            if not has_kernel_timing(r):
+                legacy.append(r)
+                continue
+            lv = timing_verdict(r, "clock_level_ok")
+            dr = timing_verdict(r, "clock_drift_ok")
+        except TimingInstrumentUnrecorded:
+            unreadable.append(r)
+            continue
+        under_load.append(r)
+        level += lv == VERDICT_FAILED
+        drift += dr == VERDICT_FAILED
+    if under_load:
+        emit(f"{len(under_load)} rows carry throttled=True from the under-load clock "
+             f"check: LEVEL failed on {level} (SM clock under load {level_word} the "
+             f"clock the calibration GEMM ran at), DRIFT failed on {drift} (first and "
+             f"last under-load samples {drift_word}, either direction)")
+    if legacy:
+        emit(f"{len(legacy)} rows carry throttled=True from the retired pre-v5 drift "
+             f"flag: two idle-instant SM-clock reads either side of the cell, >5% "
+             f"apart. It detected an idle-boost catch, not throttling under load "
+             f"(moe/bench/timing.py)")
+    if unreadable:
+        emit(f"{len(unreadable)} rows carry throttled=True with an unreadable "
+             f"instrument column, so which detector set it cannot be said")
+# WHICH ENVS ACTUALLY LANDED ROWS. A sweep that meant to run three and ran one
+# is invisible in a total, and that is exactly what the ENVS default did for
+# every documented session.
+envs = sorted({r.get("env_name", "") for r in rows})
+print(f"  envs with rows  {', '.join(e for e in envs if e) or 'NONE'}")
+print(f"  results in      {results}")
+PYEOF
+}
+
+if [[ -n "$SUMMARY_ONLY" ]]; then
+  log "summary only: $SUMMARY_ONLY"
+  print_summary "$SUMMARY_ONLY"
+  exit 0
+fi
 
 # --------------------------------------------------------------------------
 # which environments will actually run
@@ -380,39 +485,6 @@ log "plots (this session's results dir, for looking at; publish redraws per arm)
   echo "[run_all] plotting skipped"
 
 log "summary"
-"$PY" - "$RESULTS_DIR" <<'PYEOF'
-import sys
-from pathlib import Path
-from moe.bench.schema import passed, read_csv
-
-results = Path(sys.argv[1])
-rows = []
-# NOT *.csv: merged.csv contains the same rows as the run_*.csv files it was
-# built from, so globbing both counts every row twice.
-for p in sorted(results.glob("run_*.csv")):
-    try:
-        rows.extend(read_csv(p))
-    except Exception as e:
-        print(f"  {p.name}: unreadable ({e})")
-print(f"  rows            {len(rows)}")
-ok = [r for r in rows if passed(r)]
-print(f"  correctness ok  {len(ok)}")
-failed = [r for r in rows if not passed(r)]
-if failed:
-    print(f"  CORRECTNESS FAILURES {len(failed)}:")
-    for r in failed[:10]:
-        print(f"    {r['impl']:<28} {r['model']}/T{r['num_tokens']} "
-              f"abs_err={float(r['max_abs_err']):.3e}")
-from moe.bench.schema import row_bool
-throttled = [r for r in rows if row_bool(r, "throttled")]
-if throttled:
-    print(f"  THROTTLED ROWS  {len(throttled)} (clocks dropped >5% mid-cell)")
-# WHICH ENVS ACTUALLY LANDED ROWS. A sweep that meant to run three and ran one
-# is invisible in a total, and that is exactly what the ENVS default did for
-# every documented session.
-envs = sorted({r.get("env_name", "") for r in rows})
-print(f"  envs with rows  {', '.join(e for e in envs if e) or 'NONE'}")
-print(f"  results in      {results}")
-PYEOF
+print_summary "$RESULTS_DIR"
 
 log "done. Stop or terminate the pod now; the volume keeps everything."

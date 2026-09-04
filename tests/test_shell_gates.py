@@ -813,3 +813,187 @@ def test_figures_are_drawn_from_the_arm_and_never_copied_from_the_repo_root():
     text = PUBLISH.read_text()
     assert "cp plots/*.png" not in text
     assert 'scripts/plot.py --results "$DEST"' in text
+
+
+# --------------------------------------------------------------------------
+# The `throttled` line in both generators, and the published files that carry it
+# --------------------------------------------------------------------------
+#
+# `publish_results.sh` and `run_all.sh` printed "N rows throttled (clocks
+# dropped >5% mid-cell)", and the first of those went into the SUMMARY.md of
+# nine published arms. The rows carry the retired two-sample drift flag,
+# which detected an idle-boost catch (moe/bench/timing.py); no detector ever
+# measured a mid-cell drop. The generators now name the flag by the instrument
+# that set it, and the published files carry a dated note beneath the line.
+
+def _legacy_run(results: Path, run_id: str, flagged: int, total: int) -> Path:
+    """A run in the shape every published arm has: schema 3, no verdict
+    columns, `throttled` from the retired drift flag."""
+    cols = ["schema_version", "run_id", "env_name", "gpu_name", "impl", "model",
+            "num_tokens", "ms_p50", "correctness_passed", "l2_flush", "cuda_graph",
+            "throttled", "clock_drift_pct"]
+    path = results / f"run_{run_id}_base.csv"
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        for i in range(total):
+            w.writerow(dict(schema_version=3, run_id=run_id, env_name="base",
+                            gpu_name="NVIDIA H200", impl="torch_grouped_mm",
+                            model="toy", num_tokens=32, ms_p50=1.0,
+                            correctness_passed="True", l2_flush="True",
+                            cuda_graph="False", throttled=str(i < flagged),
+                            clock_drift_pct=7.0))
+    return path
+
+
+def _v5_run(results: Path, run_id: str, verdicts) -> Path:
+    from moe.bench.schema import COLUMNS, SCHEMA_VERSION
+    from moe.bench.timing import TIMING_BASIS
+    path = results / f"run_{run_id}_base.csv"
+    with path.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=COLUMNS)
+        w.writeheader()
+        for level, drift in verdicts:
+            row = dict.fromkeys(COLUMNS, "")
+            row.update(schema_version=SCHEMA_VERSION, run_id=run_id, env_name="base",
+                       gpu_name="NVIDIA H200", impl="torch_grouped_mm", model="toy",
+                       num_tokens=32, ms_p50=1.0, correctness_passed="True",
+                       l2_flush="True", cuda_graph="False", instrument=TIMING_BASIS,
+                       clock_level_ok=level, clock_drift_ok=drift, host_bound_ok="ok",
+                       throttled=str("failed" in (level, drift)))
+            w.writerow(row)
+    return path
+
+
+def test_the_summary_names_the_retired_flag_on_pre_v5_rows(tmp_path):
+    results, published = tmp_path / "results", tmp_path / "published"
+    results.mkdir()
+    _legacy_run(results, "aa1", flagged=2, total=5)
+    r = _publish(results, published, "--label", "legacy")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = next(iter(sorted(published.glob("*/SUMMARY.md")))).read_text()
+    assert "2 rows carry throttled=True from the retired pre-v5 drift flag" in text, text
+    assert "idle-boost catch" in text
+    assert "clocks dropped" not in text
+
+
+def test_the_summary_names_level_and_drift_on_v5_rows(tmp_path):
+    results, published = tmp_path / "results", tmp_path / "published"
+    results.mkdir()
+    _v5_run(results, "aa1", [("failed", "ok"), ("ok", "failed"), ("failed", "failed"),
+                             ("ok", "ok")])
+    r = _publish(results, published, "--label", "v5")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = next(iter(sorted(published.glob("*/SUMMARY.md")))).read_text()
+    assert "3 rows carry throttled=True from the under-load clock check" in text, text
+    assert "LEVEL failed on 2" in text and "DRIFT failed on 2" in text
+    assert "retired pre-v5" not in text and "clocks dropped" not in text
+
+
+def test_the_summary_says_when_the_instrument_cannot_be_read(tmp_path):
+    """A v5-shaped row with an empty instrument is a file nothing sane wrote;
+    the flag on it is reported as unattributable, not filed under either."""
+    results, published = tmp_path / "results", tmp_path / "published"
+    results.mkdir()
+    from moe.bench.schema import COLUMNS, SCHEMA_VERSION
+    with (results / "run_aa1_base.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=COLUMNS)
+        w.writeheader()
+        row = dict.fromkeys(COLUMNS, "")
+        row.update(schema_version=SCHEMA_VERSION, run_id="aa1", env_name="base",
+                   gpu_name="NVIDIA H200", impl="torch_grouped_mm", model="toy",
+                   num_tokens=32, ms_p50=1.0, correctness_passed="True",
+                   l2_flush="True", cuda_graph="False", throttled="True")
+        w.writerow(row)
+    r = _publish(results, published, "--label", "blank")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = next(iter(sorted(published.glob("*/SUMMARY.md")))).read_text()
+    assert "1 rows carry throttled=True with an unreadable instrument column" in text, text
+
+
+def test_run_all_summary_names_the_flag_the_same_way(tmp_path):
+    """The second call site. `--summary-only` prints the end-of-run summary
+    over existing rows, which is the only way to reach it without a sweep."""
+    results = tmp_path / "results"
+    results.mkdir()
+    _legacy_run(results, "aa1", flagged=3, total=4)
+    _v5_run(results, "bb2", [("failed", "ok")])
+    r = sh(RUN_ALL, "--summary-only", str(results))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert ("CLOCK FLAG      3 rows carry throttled=True from the retired pre-v5 "
+            "drift flag") in r.stdout, r.stdout
+    assert ("CLOCK FLAG      1 rows carry throttled=True from the under-load clock "
+            "check: LEVEL failed on 1") in r.stdout
+    assert "clocks dropped" not in r.stdout
+    assert "THROTTLED ROWS" not in r.stdout
+
+
+def test_neither_generator_types_the_old_parenthetical():
+    for script in (PUBLISH, RUN_ALL):
+        for ln in script.read_text().splitlines():
+            if "clocks dropped >5% mid-cell" in ln:
+                assert ln.lstrip().startswith("#"), f"{script.name}: {ln}"
+
+
+PUBLISHED = REPO / "results" / "published"
+
+
+@pytest.mark.parametrize("summary", sorted(PUBLISHED.glob("*/SUMMARY.md")),
+                         ids=lambda p: p.parent.name)
+def test_every_published_summary_that_counts_the_flag_carries_the_dated_note(summary):
+    """History is not rewritten: the line stays, its number stays, and the
+    line beneath it says what the flag was and where the truth now lives."""
+    lines = summary.read_text().splitlines()
+    hits = [i for i, ln in enumerate(lines) if "rows throttled" in ln]
+    if not hits:
+        pytest.skip("this arm never printed the line")
+    assert len(hits) == 1
+    note = lines[hits[0] + 1]
+    assert note.lstrip().startswith("- NOTE 2026-09-03:"), note
+    assert "idle boost" in note and "moe/bench/timing.py" in note
+    assert "clock_level_ok" in note and "00f3324" in note
+    if "clocks dropped" in lines[hits[0]]:
+        assert "withdrawn" in note
+
+
+@pytest.mark.parametrize("surface", sorted(PUBLISHED.glob("*/SURFACE.txt")),
+                         ids=lambda p: p.parent.name)
+def test_every_published_surface_requalifies_the_candidate_line(surface):
+    """ANCHOR_RESCORE.txt W3: the "0 of N fits within 0.05" count against
+    0.558 is a property of an unidentified anchor. The generator still prints
+    it, so the published file carries the requalification beneath the line."""
+    lines = surface.read_text().splitlines()
+    hits = [i for i, ln in enumerate(lines)
+            if ln.startswith("  alpha = 0.558 (the 2026-09-01 pooled refit)")]
+    assert len(hits) == 1, surface
+    note = "\n".join(lines[hits[0] + 1:hits[0] + 9])
+    assert note.startswith("  NOTE 2026-09-03: the line above is requalified"), note
+    assert "ANCHOR_RESCORE" in note and "W4" in note
+    assert "scripts/alpha_surface.py still prints" in note
+
+
+def test_the_a100_surface_withdraws_the_direction_asserted_from_one_cell():
+    surface = PUBLISHED / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3" / "SURFACE.txt"
+    lines = surface.read_text().splitlines()
+    i = lines.index("  paired change 1 -> 64: median +0.028   (every cell moves the same way: yes)")
+    assert lines[i - 7].startswith("  MDE: only 1 matched cell(s)"), "the n=1 refusal moved"
+    note = "\n".join(lines[i + 1:i + 8])
+    assert note.startswith("  NOTE 2026-09-03: the line above is withdrawn as a direction"), note
+    assert "n=1" in note and "retraction (d)" in note
+
+
+def test_the_surface_generator_still_prints_a_direction_at_n_equals_1():
+    """The defect the notes exist for, pinned so that fixing the generator
+    turns this into a signal to regenerate the three files and drop the notes.
+    Run against the published A100 arm, whose G lever has one matched cell."""
+    arm = PUBLISHED / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
+    r = subprocess.run([PY, str(REPO / "scripts" / "alpha_surface.py"), str(arm)],
+                       cwd=REPO, text=True, capture_output=True)
+    assert r.returncode == 0, r.stderr
+    out = r.stdout.splitlines()
+    i = next(k for k, ln in enumerate(out) if ln.startswith("  MDE: only 1 matched cell(s)"))
+    block = "\n".join(out[i:i + 9])
+    assert "paired change 1 -> 64: median +0.028   (every cell moves the same way: yes)" in block, (
+        "scripts/alpha_surface.py now refuses a direction at n=1: regenerate the "
+        "three published SURFACE.txt files and remove their 2026-09-03 notes")
+    assert "alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 12 fits within 0.05" in r.stdout

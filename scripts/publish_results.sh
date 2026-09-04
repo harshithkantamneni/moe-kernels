@@ -377,9 +377,64 @@ if rows:
     print(f"- commit: {sorted({r.get('git_sha','')[:12] for r in rows})}")
     if "True" in {r.get("git_dirty") for r in rows}:
         print("- **WARNING: some rows were measured from a dirty working tree**")
-throttled = [r for r in rows if r.get("throttled") == "True"]
-if throttled:
-    print(f"- **{len(throttled)} rows throttled (clocks dropped >5% mid-cell)**")
+
+
+def emit(line):
+    print(f"- **{line}**")
+
+
+# `throttled` IS ONE COLUMN WITH TWO MEANINGS, split by the instrument that
+# wrote the row, and until 2026-09-03 this line described neither: "clocks
+# dropped >5% mid-cell" named a detector that never existed. On a row written
+# before schema v5 the flag is the retired two-sample drift check: the SM clock
+# read at an idle instant before the cell and again after it, set on a >5%
+# drop. That detected whether the FIRST read had caught the idle boost clock,
+# not throttling under load (moe/bench/timing.py, CLOCKS ARE READ UNDER LOAD:
+# on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged
+# and unflagged replicates timed at ratio 0.998). On a v5 row the driver sets
+# it when the LEVEL or DRIFT verdict taken WHILE the trials ran failed
+# (moe/bench/driver.py). The two are counted apart and named by what each
+# detected; a row whose instrument cannot be read is reported as exactly that
+# rather than filed under either.
+from moe.bench.schema import (VERDICT_FAILED, TimingInstrumentUnrecorded,
+                              has_kernel_timing, row_bool, timing_verdict)
+try:
+    from moe.bench.timing import DRIFT_FRACTION, LEVEL_FRACTION
+    level_word = f"below {LEVEL_FRACTION:.0%} of"
+    drift_word = f"more than {DRIFT_FRACTION:.0%} apart"
+except Exception:  # torch absent: name the constant rather than guess its value
+    level_word = "below timing.LEVEL_FRACTION of"
+    drift_word = "more than timing.DRIFT_FRACTION apart"
+flagged = [r for r in rows if row_bool(r, "throttled")]
+if flagged:
+    under_load, legacy, unreadable = [], [], []
+    level = drift = 0
+    for r in flagged:
+        try:
+            if not has_kernel_timing(r):
+                legacy.append(r)
+                continue
+            lv = timing_verdict(r, "clock_level_ok")
+            dr = timing_verdict(r, "clock_drift_ok")
+        except TimingInstrumentUnrecorded:
+            unreadable.append(r)
+            continue
+        under_load.append(r)
+        level += lv == VERDICT_FAILED
+        drift += dr == VERDICT_FAILED
+    if under_load:
+        emit(f"{len(under_load)} rows carry throttled=True from the under-load clock "
+             f"check: LEVEL failed on {level} (SM clock under load {level_word} the "
+             f"clock the calibration GEMM ran at), DRIFT failed on {drift} (first and "
+             f"last under-load samples {drift_word}, either direction)")
+    if legacy:
+        emit(f"{len(legacy)} rows carry throttled=True from the retired pre-v5 drift "
+             f"flag: two idle-instant SM-clock reads either side of the cell, >5% "
+             f"apart. It detected an idle-boost catch, not throttling under load "
+             f"(moe/bench/timing.py)")
+    if unreadable:
+        emit(f"{len(unreadable)} rows carry throttled=True with an unreadable "
+             f"instrument column, so which detector set it cannot be said")
 
 fails = [r for r in rows if not passed(r)]
 if fails:

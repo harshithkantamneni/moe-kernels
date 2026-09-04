@@ -66,5 +66,13 @@ READ IT AGAINST THE THREE CANDIDATES:
   alpha = 0.100 (this repo, retracted): 0 of 11 fits within 0.05
   alpha = 0.330 (TEMPO arXiv:2608.13057): 0 of 11 fits within 0.05
   alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 11 fits within 0.05
+  NOTE 2026-09-03: the line above is requalified (results/published/ANCHOR_RESCORE.txt
+  W3, W4): "within 0.05" of a fitted point is a property of an unidentified
+  anchor, not of the data, so the 0-of-11 count may not be quoted as evidence
+  against 0.558. Read against the anchor bracket per fit in ANCHOR_RESCORE.json,
+  0 of the 11 fits the anchor rescored in this arm have a bracket containing
+  0.558. No alpha in this study may be quoted as a number (W4). The generator,
+  scripts/alpha_surface.py, still prints the unqualified count (defect reported
+  2026-09-03), so a regenerated file would print it again.
 
 A pooled scalar cannot describe this surface if the levers move it.
