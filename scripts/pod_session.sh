@@ -25,23 +25,42 @@
 #     AI(r) = (2r/b) / Q(r),   Q(r) = 1 + alpha (ceil(r/BM) - 1)
 #
 # because each extra M-tile re-reads that expert's weights, discounted by L2 by
-# alpha. Two consequences: AI is BOUNDED at 2 BM / (alpha b), and the crossing
+# alpha. Two consequences: AI is BOUNDED by the tile height, and the crossing
 # solves R = ridge b Q(R)/2, a step function on both sides.
 #
+# THE CAP IS NOT 2 BM / (alpha b), AND THE RIDGE IS NOT 160.3. Both stood in
+# this header until 2026-09-03 and both are withdrawn:
+#   * a ladder fit returns alpha_fitted = (alpha_b + phi) / (1 + phi + delta)
+#     (moe/bench/ai_model.py, the EXA identity), so a cap read as
+#     2 BM / (alpha_fitted b) is HIGH by the factor (1 + phi + delta). phi
+#     depends on alpha_a, the miss fraction on the activation re-read, which
+#     nothing in this repository has measured, so every corrected cap is a
+#     BRACKET over alpha_a in [0, 1] and never a point. The bracket printed
+#     here is scripts/block_m_crossing_sweep.py cap_overstatement, the same
+#     function the sweep prints beside its own caps, imported rather than
+#     restated;
+#   * 160.3 FLOP/byte was one H200 calibration (701.6 TFLOP/s over 4377.2
+#     GB/s) and 160.3-176.2 the spread across three of them. Neither is any
+#     card's own ridge: the committed rulers say 162.8 on the H200 and 145.8
+#     on the A100 (moe/bench/hardware/measured_<device>.yaml, the file the
+#     sweep itself resolves through moe.bench.roofline). Every prediction this
+#     session prints is stated against the ridge read out of the attached
+#     card's calibration, and the file it was read from is printed beside it.
+#
 # alpha was refit on 2026-09-01 from 0.10 to 0.558 (90% band 0.529-0.588, 10,813
-# rows, placebo -0.002); the 0.10 was an estimator artefact. At 0.558 the ceiling
-# puts BLOCK_M of 16, 32 AND 64 below the measured ridge band 160.3-176.2, so
-# only 128 and 256 can ever cross. The two alphas differ QUALITATIVELY, not by a
-# few percent, which is what makes this session worth a pod:
-#
-#     BLOCK_M=32   AI cap  57   NO CROSSING AT ALL
-#     BLOCK_M=64   AI cap 115   NO CROSSING AT ALL
-#     BLOCK_M=128  AI cap 229   R_cross 250   (mixtral 999 tok, qwen2 1998, ds-v3 7992)
-#     BLOCK_M=256  AI cap 459   R_cross 160   (mixtral 641 tok, qwen2 1282, ds-v3 5130)
-#
-# 128 and 256 must differ by 1.56x. At the retracted 0.10 all four crossed and the
-# spread was 1.10x. So the sweep either separates them by about 1.56x or the
-# refit is wrong, and there is no reading of the data where both hold.
+# rows, placebo -0.002); the 0.10 was an estimator artefact. The prediction
+# table is COMPUTED by predictions_table below, at that alpha against this
+# card, and says per BLOCK_M whether the corrected cap sits below the ridge at
+# BOTH ends of its bracket (NO CROSSING at any batch), above at both (a
+# crossing exists) or straddles it (UNDECIDED until alpha_a is measured). On
+# both committed rulers BLOCK_M 32 and 64 are below at both ends and 128 and
+# 256 straddle, so the 2026-09-01 table that put 128 and 256 1.56x apart, and
+# the reading that "128 straddles the ridge", are withdrawn with the cap they
+# were scored on: the one measured BM=128 fit per card corrects to 135.4
+# against 145.8 (A100) and 130.7 against 162.8 (H200), both BELOW
+# (scripts/bm128_depth.py --audit). The two alphas still differ QUALITATIVELY:
+# the retracted 0.10 put every tile above the ridge, the refit puts the small
+# tiles below it, and that is what makes this session worth a pod.
 #
 # AND THAT IS ONE REGRESSION AGAINST A BYTE MODEL WITH NO TILE TERM IN IT.
 # alpha_refit fits alpha from implied_traffic_ratio = time x bandwidth /
@@ -126,6 +145,10 @@ LABEL=""
 EXPECT_GPU="${MOE_EXPECT_GPU:-NVIDIA H200}"
 SESSION_DIR=""
 SKIP_TESTS=0
+#: --gate-sweep: run the step 6 row gates over rows that already exist and
+#: exit. It is how the gates are exercised off a GPU, in both directions.
+GATE_SWEEP_DIR=""
+GATE_SWEEP_RUN=""
 
 #: The header comment IS the help text, so it is extracted rather than restated.
 #: Bounded by the first non-comment line rather than a hardcoded line number: the
@@ -137,6 +160,7 @@ usage() {
   echo "flags: --dry-run --preflight-only --from N --only N --force --allow-dirty"
   echo "       --no-download --no-nsys --skip-tests --label NAME --expect-gpu NAME"
   echo "       --session-dir DIR"
+  echo "       --gate-sweep DIR RUN_ID   score an existing sweep through S6c/S6d, run nothing"
   echo "steps: 0 1 2 2b 3 4 5 6 7 8   (--only takes any one of these; --from a number)"
 }
 
@@ -154,6 +178,8 @@ while [[ $# -gt 0 ]]; do
     --label)          LABEL="${2:?--label needs a name}"; shift 2 ;;
     --expect-gpu)     EXPECT_GPU="${2:?--expect-gpu needs a name}"; shift 2 ;;
     --session-dir)    SESSION_DIR="${2:?--session-dir needs a path}"; shift 2 ;;
+    --gate-sweep)     GATE_SWEEP_DIR="${2:?--gate-sweep needs a results dir}"
+                      GATE_SWEEP_RUN="${3:?--gate-sweep needs a run id after the dir}"; shift 3 ;;
     -h|--help)        usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 3 ;;
   esac
@@ -1118,7 +1144,7 @@ PYEOF
     note "throttle reasons $thr, ${temp}C"
     [[ "$thr" == "0x0000000000000000" ]]; verdict P13a "no active throttle" $? \
       "$thr" "== 0x0000000000000000" soft \
-      "Timings will carry a thermal component the ridge band already blames for a 9.9% spread on one card. Wait for the card to settle, or accept a wider band and say so in the writeup."
+      "Timings will carry a thermal component. The H200 compute ceiling already spread 9.9% across three calibrations of one card, which is the size of effect at stake. Wait for the card to settle, or accept a wider interval and say so in the writeup."
     [[ "${temp:-100}" -le 60 ]]; verdict P13b "cold start" $? \
       "${temp:-?} C" "<= 60 C" soft \
       "The calibration in step 1 is measured on a hot card and every efficiency figure this session is quoted against it."
@@ -1269,6 +1295,226 @@ gate_from_log() {
   echo "${p:-0} ${f:-0}"
 }
 
+#: The prediction table, COMPUTED against a named card rather than typed.
+#:
+#: Until 2026-09-03 steps 2 and 6 printed a table typed on 2026-09-01: caps
+#: as 2 BM / (alpha b) against "ridge 160.3". Both halves were wrong in ways a
+#: reader could not see. The cap form is the LIN reading, which no estimator
+#: in this repository returns (moe/bench/ai_model.py), and 160.3 was one H200
+#: calibration, not the card the session was about to run on. A table that is
+#: typed cannot follow the card; this one is read out of the calibration the
+#: sweep itself resolves, with the file named, and it REFUSES when there is
+#: nothing to read: no card, no file for the card, or a file with no ridge.
+#: It never borrows another card's file.
+#:
+#: The cap arithmetic and the bracket are imported from
+#: scripts/block_m_crossing_sweep.py, the script step 2 runs, so the numbers
+#: here and the numbers in its report are one computation. alpha_a is
+#: unmeasured, so the factor and the cap are printed as brackets and the
+#: verdict is stated per end.
+#:
+#:   predictions_table
+#: reads $HAVE_GPU/$GPU_NAME; without a card it rehearses against the committed
+#: calibration for --expect-gpu and SAYS so on the first line.
+predictions_table() {
+  local card how
+  if [[ "$HAVE_GPU" == "1" ]]; then
+    card="$GPU_NAME"; how="the attached card, $GPU_NAME"
+  else
+    card="$EXPECT_GPU"
+    how="REHEARSAL: no card attached, the committed calibration for --expect-gpu $EXPECT_GPU stands in; the pod run re-resolves against the attached card"
+  fi
+  "$PY_BASE" - "$card" "$how" "$REPO_ROOT" <<'PYEOF'
+import importlib.util
+import sys
+from pathlib import Path
+sys.path.insert(0, ".")
+from moe.bench.calibrate import read_stamp
+from moe.bench.roofline import HARDWARE_DIR, measured_slug
+from moe.spec import MODEL_CONFIGS
+
+card, how, root = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+ALPHA, BAND_LO, BAND_HI = 0.558, 0.529, 0.588
+BLOCK_N = 64
+B = 2
+MODELS = ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v3")
+TILES = (32, 64, 128, 256)
+
+# The sweep step 2 runs owns the cap arithmetic; import it, do not restate it.
+spec = importlib.util.spec_from_file_location(
+    "block_m_crossing_sweep", root / "scripts" / "block_m_crossing_sweep.py")
+bmcs = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = bmcs
+spec.loader.exec_module(bmcs)
+
+print(f"  PREDICTIONS, computed now against {how}:")
+if not card:
+    print("    REFUSED: no card to resolve a ridge for. Predictions are stated")
+    print("    against a calibration and there is none to name here.")
+    raise SystemExit(0)
+path = HARDWARE_DIR / (measured_slug(card) + ".yaml")
+if not path.exists():
+    print(f"    REFUSED: no calibration for {card!r} at {path}, so no ridge")
+    print("    and no prediction. Step 1 (scripts/calibrate_hardware.py --publish)")
+    print("    writes it; nothing is borrowed from another card.")
+    raise SystemExit(0)
+stamp = read_stamp(path)
+ridge = stamp.ridge("bf16")
+if not ridge:
+    print(f"    REFUSED: {path} carries no bf16 ceiling or no bandwidth, so it")
+    print("    has no ridge. Recalibrate before reading a prediction.")
+    raise SystemExit(0)
+print(f"    ridge  {ridge:.1f} FLOP/byte (bf16), read from {path}:")
+print(f"           {stamp.peak_for('bf16'):.1f} TFLOP/s over {stamp.bandwidth_gbps:.1f} GB/s, "
+      f"checked_on {stamp.checked_on}, commit {stamp.measured_commit[:12] or 'unrecorded'}")
+print(f"    alpha  {ALPHA} (the 2026-09-01 refit; the 90% band {BAND_LO}-{BAND_HI} moves every cap by "
+      f"{100 * (ALPHA / BAND_HI - 1):+.1f}% to {100 * (ALPHA / BAND_LO - 1):+.1f}%)")
+print("    cap    2 BM / (alpha b) is what a LadderFit alpha implies only under LIN, which is not")
+print("           the estimator; the exact cap is that number over (1 + phi + delta)")
+print("           (moe/bench/ai_model.py). alpha_a is unmeasured, so phi is bracketed over")
+print(f"           alpha_a = 0 and 1 at the sweep's pinned BLOCK_N = {BLOCK_N}; delta is taken as 0,")
+print("           so both ends of the factor are floors and both caps are ceilings.")
+print()
+print(f"    {'BM':>4}  {'model':<15} {'2BM/(ab)':>9}  {'factor':>11}  {'exact cap':>14}  {'cap/ridge':>12}  verdict")
+for bm in TILES:
+    lin = bmcs.ai_cap(bm, ALPHA, B)
+    for name in MODELS:
+        cfg = MODEL_CONFIGS[name]
+        f_lo, f_hi = bmcs.cap_overstatement(cfg, bm, BLOCK_N, B)
+        cap_hi, cap_lo = lin / f_lo, lin / f_hi
+        if cap_hi < ridge:
+            verdict = "NO CROSSING at any batch: below the ridge at both ends"
+        elif cap_lo >= ridge:
+            verdict = "crosses: above the ridge at both ends"
+        else:
+            verdict = "UNDECIDED: the bracket straddles the ridge; alpha_a decides"
+        print(f"    {bm:>4}  {name:<15} {lin:>9.1f}  {f_lo:>4.2f}-{f_hi:<5.2f}  "
+              f"{cap_lo:>6.1f}-{cap_hi:<6.1f}  {cap_lo / ridge:>5.2f}-{cap_hi / ridge:<5.2f}  {verdict}")
+print()
+print("    A crossing tread is not printed here: under the corrected cap it is the")
+print("    sweep's own report that states it per cell, with the factor beside it.")
+PYEOF
+}
+
+#: The ruler THIS card already had, read out of git HEAD rather than the
+#: working tree, because step 1 has just overwritten the working-tree file with
+#: today's numbers and the question is whether today reproduces the last
+#: session on this card. Prints "bw|ridge|checked_on" or "||" when HEAD holds
+#: no calibration for the card, which the caller treats as a refusal to score
+#: and not as a pass. Replaces a typed band (150-185, "160.3-176.2") that was
+#: three H200 calibrations' spread and failed an A100 for being an A100.
+committed_ruler() {
+  "$PY_BASE" - "$1" <<'PYEOF' 2>/dev/null
+import subprocess
+import sys
+sys.path.insert(0, ".")
+import yaml
+from moe.bench.calibrate import ridge_flop_per_byte
+from moe.bench.roofline import measured_slug
+# NO APOSTROPHES IN THIS BLOCK: the caller captures it with $( ) and bash 3.2
+# tracks quotes through a heredoc inside a command substitution.
+rel = "moe/bench/hardware/" + measured_slug(sys.argv[1]) + ".yaml"
+got = subprocess.run(["git", "show", "HEAD:" + rel], capture_output=True, text=True)
+if got.returncode != 0:
+    print("||")
+    raise SystemExit(0)
+doc = yaml.safe_load(got.stdout) or {}
+peaks = doc.get("compute_dense_tflops") or {}
+bw = ((doc.get("memory") or {}).get("bandwidth_tb_s") or 0.0) * 1000.0
+ridge = ridge_flop_per_byte(peaks.get("bf16") or None, bw or None) or 0.0
+print("%.1f|%.1f|%s" % (bw, ridge, doc.get("checked_on")))
+PYEOF
+}
+
+#: Step 6's row gates, over the rows of one run id, callable without a GPU.
+#:
+#:   sweep_clock_gates <results_dir> <run_id> [<planned_rows>]
+#:
+#: S6d used to count rows carrying `throttled` and call the rate "thermal
+#: stability". On rows written before schema v5 that column is the retired
+#: two-sample drift flag, which compared two idle-instant clock reads either
+#: side of the cell and so detected whether the FIRST read had caught the boost
+#: clock, not throttling (moe/bench/timing.py, CLOCKS ARE READ UNDER LOAD; on
+#: the alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged
+#: and unflagged replicates timed at ratio 0.998). The instrument now records
+#: two verdicts taken WHILE the trials ran, LEVEL and DRIFT, and this reads
+#: those. It REFUSES rows that predate them: a row with no verdict is not a
+#: row that passed, and it may not be pooled with rows that were checked.
+#:
+#: Three outcomes, each planted by tests/test_pod_session.py: PASS on a low
+#: failure rate, FAIL on a high one, and FAIL-as-refusal when any timed row
+#: carries no verdict or no row carries a determined one.
+sweep_clock_gates() {
+  local dir="$1" run_id="$2" planned="${3:-}"
+  local sweepstat
+  sweepstat="$("$PY_BASE" - "$dir" "$run_id" <<'PYEOF' 2>/dev/null
+import sys
+sys.path.insert(0, ".")
+from pathlib import Path
+from moe.bench.schema import (VERDICT_FAILED, VERDICT_UNDETERMINED, TimingInstrumentUnrecorded,
+                              has_kernel_timing, passed, read_csv, timing_verdict)
+# NO APOSTROPHES IN THIS BLOCK (command substitution, bash 3.2).
+rows = []
+for p in sorted(Path(sys.argv[1]).glob(f"run_{sys.argv[2]}*.csv")):
+    rows.extend(read_csv(p))
+timed = [r for r in rows if float(r.get("ms_p50") or 0) > 0]
+bad = [r for r in rows if not passed(r)]
+# Split the pool on the instrument BEFORE reading a verdict, as
+# schema.timing_verdict requires: a pre-v5 row has no verdict columns and an
+# empty instrument is a file nothing sane wrote. Both are "no verdict".
+no_verdict = level = drift = undetermined = flagged = 0
+for r in timed:
+    try:
+        if not has_kernel_timing(r):
+            no_verdict += 1
+            continue
+        lv = timing_verdict(r, "clock_level_ok")
+        dr = timing_verdict(r, "clock_drift_ok")
+    except TimingInstrumentUnrecorded:
+        no_verdict += 1
+        continue
+    if lv == VERDICT_FAILED:
+        level += 1
+    if dr == VERDICT_FAILED:
+        drift += 1
+    if VERDICT_FAILED in (lv, dr):
+        flagged += 1
+    elif VERDICT_UNDETERMINED in (lv, dr):
+        undetermined += 1
+pct = (100.0 * flagged / len(timed)) if timed else 100.0
+print(f"{len(rows)} {len(timed)} {len(bad)} {no_verdict} {level} {drift} {undetermined} {pct:.1f}")
+PYEOF
+)"
+  local nrows ntimed nbad nnov nlevel ndrift nundet pflag
+  read -r nrows ntimed nbad nnov nlevel ndrift nundet pflag <<< "$sweepstat"
+  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $nlevel failed LEVEL, $ndrift failed DRIFT, $nundet undetermined, $nnov carry no verdict"
+  [[ "${nbad:-1}" == "0" ]]; verdict S6c "correctness" $? \
+    "${nbad:-?} failing rows" "== 0" fatal \
+    "A correctness failure means the kernel computed the wrong layer, so every timing in this arm is a timing of the wrong thing. Do not publish it."
+  if [[ "${ntimed:-0}" == "0" ]]; then
+    verdict S6d "clock under load" 1 "no timed rows for run $run_id under $dir" "at least one timed row" soft \
+      "REFUSED: there is nothing to score. Either the sweep wrote nothing or the run id is not the one the rows carry."
+  elif [[ "${nnov:-1}" != "0" ]]; then
+    verdict S6d "clock under load" 1 \
+      "$nnov of $ntimed timed rows carry no LEVEL/DRIFT verdict" "every timed row scored by the v5 instrument" soft \
+      "REFUSED. Rows without the two verdicts predate schema v5 (before 00f3324) and carry only the retired two-sample drift flag, which detected an idle-boost catch and not throttling (moe/bench/timing.py). Nothing about the clock under load is known for them and they may not be pooled with rows that were checked. If this sweep ran today, the driver is not stamping the instrument: check moe/bench/driver.py."
+  elif [[ "${nundet:-0}" == "${ntimed:-0}" ]]; then
+    verdict S6d "clock under load" 1 \
+      "every one of $ntimed timed rows is undetermined" "a determined verdict on at least one row" soft \
+      "REFUSED. The sampler had no clock source (P13d) or no reference clock, so LEVEL and DRIFT decided nothing and the rate below would be 0% by silence. Install nvidia-ml-py into $PY_BASE, confirm the calibration records a GEMM clock, and re-run."
+  else
+    "$PY_BASE" -c "import sys; sys.exit(0 if float('${pflag:-100}') < 5.0 else 1)"
+    verdict S6d "clock under load" $? \
+      "${pflag:-?}% of timed rows failed LEVEL or DRIFT ($nlevel level, $ndrift drift; $nundet undetermined)" "< 5%" soft \
+      "A row failing either verdict carries throttled=True (moe/bench/driver.py sets it from the two) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. LEVEL failing on most rows means the card sat below the clock the roof was measured at: recalibrate in this thermal state or let it cool. DRIFT failing means the warmup never reached one operating point."
+  fi
+  if [[ -n "$planned" ]]; then
+    [[ "${ntimed:-0}" -ge "${planned:-1}" ]]; verdict S6e "coverage against the plan" $? \
+      "${ntimed:-0} timed rows against a base-env plan of ${planned:-?}" ">= the base plan" soft \
+      "The sweep stopped short, almost certainly on --max-minutes. Resume with --from 6 and run id $run_id rather than reading a crossing off a truncated grid."
+  fi
+}
+
 # --------------------------------------------------------------------------
 step0_download() {
   head1 "STEP 0  (0:00)  mixtral weights, backgrounded off the critical path"
@@ -1359,11 +1605,14 @@ step1_calibrate() {
   be exactly the borrowed calibration of instrument defect 7, and
   scripts/recompute_ceilings.py is the wrong tool here.
 
-  PREDICTION, from the three existing H200 calibrations:
-    bandwidth (triad)  4374-4377 GB/s   reproduces to 0.06% across sessions
-    dense bf16         701-771 TFLOP/s  the term that does NOT reproduce, 9.9% spread
-    bf16 ridge         160.3-176.2 FLOP/byte
-    fp8_e4m3 peak      about 1409 TFLOP/s, 1.83x the bf16 figure
+  PREDICTION: today reproduces the ruler this card already has, which S1d and
+  S1e read out of git HEAD and gate against, with the numbers printed. On the
+  H200 three earlier calibrations agreed on bandwidth to 0.06% and disagreed
+  on the dense bf16 ceiling by 9.9%; the ridge is their quotient and inherits
+  the 9.9%. The band 160.3-176.2 that stood here until 2026-09-03 was that
+  spread across three files and no card's own ridge; the committed rulers say
+  162.8 on the H200 and 145.8 on the A100. The fp8 ceiling exists only on a
+  card with fp8 tensor cores: the H200 ruler carries one, the A100 none (S1c).
 TXT
   # The dtype headline is a RATIO OF EFFICIENCIES, and an efficiency is a time
   # divided by a modelled byte count. Whether those bytes were counted or
@@ -1449,21 +1698,35 @@ PYEOF
     "fp8_e4m3 ${cfp8:-0} TFLOP/s" "> 0" soft \
     "Any fp8 row measured today will again carry achieved_peak_tflops = 0.0 and be unquotable, so the dtype headline stays resting on a refused arm. On a card without fp8 tensor cores (the A100) this SHOULD be 0 and the failure is correct."
 
-  "$PY_BASE" -c "
+  # AGAINST THIS CARD'S OWN LAST RULER, not a typed band. The bands that stood
+  # here (3900-4800 GB/s, 150-185 FLOP/byte "band is 160.3-176.2") were the H200's
+  # and would have failed an A100 (1799 GB/s, 145.8) for being an A100. HEAD is
+  # read because --publish above has already overwritten the working-tree file.
+  # No committed ruler is a refusal to score, said as such: a first calibration
+  # of a card has nothing to reproduce against and must not pass by default.
+  local prior pbw pridge pdate
+  prior="$(committed_ruler "$GPU_NAME")"
+  IFS='|' read -r pbw pridge pdate <<< "$prior"
+  if [[ -z "$pbw" ]]; then
+    skipped S1d "bandwidth reproduces the committed ruler" "REFUSED to score: HEAD holds no calibration for $GPU_NAME; first measurement of this card, nothing to reproduce against"
+    skipped S1e "bf16 ridge reproduces the committed ruler" "REFUSED to score: same reason; every prediction below is stated against today's ridge and step 2 names the file"
+  else
+    note "committed ruler at HEAD for $GPU_NAME: bw ${pbw} GB/s, bf16 ridge ${pridge} FLOP/byte, checked_on ${pdate}"
+    "$PY_BASE" -c "
 import sys
-bw = float('${cbw:-0}')
-sys.exit(0 if 3900.0 <= bw <= 4800.0 else 1)"
-  verdict S1d "bandwidth in the reproducible band" $? \
-    "${cbw:-0} GB/s" "3900-4800" soft \
-    "Bandwidth reproduces to 0.06% across three sessions on this part. A figure outside this band means the buffer fit in cache (too high) or the card is contended (too low), and every implied_traffic_ratio this session is divided by it."
-
-  "$PY_BASE" -c "
+a, p = float('${cbw:-0}'), float('${pbw}')
+sys.exit(0 if p > 0 and abs(a - p) / p <= 0.05 else 1)"
+    verdict S1d "bandwidth reproduces the committed ruler" $? \
+      "${cbw:-0} GB/s against ${pbw} committed" "within 5%" soft \
+      "Bandwidth reproduced to 0.06% across three H200 sessions, so 5% is not noise: the buffer fit in cache (too high) or the card is contended (too low), and every implied_traffic_ratio this session is divided by it."
+    "$PY_BASE" -c "
 import sys
-r = float('${cridge:-0}')
-sys.exit(0 if 150.0 <= r <= 185.0 else 1)"
-  verdict S1e "bf16 ridge in the measured band" $? \
-    "${cridge:-0} FLOP/byte" "150-185, band is 160.3-176.2" soft \
-    "Every AI-cap prediction in this session is stated against 160.3. A ridge outside the band moves which BLOCK_M can cross, so re-derive the predictions before reading step 2."
+a, p = float('${cridge:-0}'), float('${pridge}')
+sys.exit(0 if p > 0 and abs(a - p) / p <= 0.10 else 1)"
+    verdict S1e "bf16 ridge reproduces the committed ruler" $? \
+      "${cridge:-0} FLOP/byte against ${pridge} committed" "within 10%" soft \
+      "Every prediction this session prints is computed against the ridge THIS calibration measured, and step 2 names the file. A ridge this far from the card's committed ruler is a different card state, not noise: the H200's three calibrations spread 9.9% on the compute term, and that spread is the size of the effect the crossings are about, so today's crossings cannot be compared with the published arms' until the cause is named."
+  fi
 
   # Snapshot the ruler and its checksum NOW. publish_results.sh copies whatever
   # is in measured_<device>.yaml AT PUBLISH TIME, and on 2026-08-28 a
@@ -1512,17 +1775,20 @@ step2_block_m() {
   head1 "STEP 2  (0:08)  BLOCK_M sweep, multi-tile -- the session's central result"
   cat <<'TXT'
   WHAT IT TESTS. Whether arithmetic intensity is BOUNDED by the tile height, as
-  AI -> 2 BM / (alpha b) says it is, or whether the uncorrected 2R/b holds and
+  the tile-corrected model says it is, or whether the uncorrected 2R/b holds and
   the crossing does not move with BLOCK_M at all.
-
-  PREDICTION at alpha = 0.558, ridge 160.3, bf16:
-    BLOCK_M=32    AI cap  57    NO CROSSING AT ANY BATCH
-    BLOCK_M=64    AI cap 115    NO CROSSING AT ANY BATCH
-    BLOCK_M=128   AI cap 229    R_cross 250  (mixtral 999 tok, qwen2 1998, ds-v3 7992)
-    BLOCK_M=256   AI cap 459    R_cross 160  (mixtral 641 tok, qwen2 1282, ds-v3 5130)
-  128 and 256 must separate by 1.56x. The retracted alpha = 0.10 predicts all four
-  crossing with a 1.10x spread, so the two alphas are QUALITATIVELY different here
-  and one sweep decides between them.
+TXT
+  predictions_table
+  cat <<'TXT'
+  THE TABLE IS THE PREDICTION, and it is computed against this card. A tile
+  whose corrected cap sits below the ridge at BOTH ends of its bracket cannot be
+  compute bound at any batch, and a crossing observed there refutes the refit
+  at its most generous end. A tile whose bracket STRADDLES the ridge is not
+  predicted either way by this text: the sweep prints the factor per cell
+  beside its caps and its gate 3 is two-sided against the refit's band, so
+  read its verdicts. The retracted alpha = 0.10 put every tile above the ridge
+  and the refit puts the small tiles below it, which is QUALITATIVE, and one
+  sweep decides between them.
 
   RUN IT IN THE MULTI-TILE REGIME. C3 measured the tile at T=16, where every
   expert is one tile at every BLOCK_M and there are no re-reads to save, so only
@@ -1530,9 +1796,10 @@ step2_block_m() {
   transfer. Wave count must exceed about 10 on BOTH sides of a step.
 
   A PASS means the tile-corrected roofline survives a test that could have
-  killed it. A FAIL where 32 or 64 DOES cross means alpha < 0.0998 after all and
-  the refit is wrong; a FAIL where 128 and 256 separate by ~1.10x instead of
-  1.56x means the uncorrected 2R/b is right and this whole section retracts.
+  killed it. A FAIL where a tile the table marks NO CROSSING does cross means
+  the cap is wrong at the generous end of its bracket and the refit is wrong;
+  a FAIL where the crossing does not move with BLOCK_M at all means the
+  uncorrected 2R/b is right and this whole section retracts.
 
   STEP 2b RUNS STRAIGHT AFTER THIS ONE and measures the same alpha by ablation,
   touching no byte model at all. Read the two together in the summary; this step
@@ -1878,8 +2145,10 @@ step6_dense_grid() {
   WHAT IT TESTS. The crossing itself, on the profile built for it. crossing-uniform
   is uniform-only (2R/b is a uniform-routing statement and pooling the seven
   regimes is INVALID, not merely noisy), 7 seeds, a 2^(1/4) grid from 1 to 16384
-  over the ridge band, L2-warm eager because the cold basis loses 5 of 8
-  one-stage crossings to throttle exclusion.
+  across this card's ridge, L2-warm eager because on the 2026-08-26 arm the cold
+  basis lost 5 of 8 one-stage crossings to rows the retired pre-v5 drift flag
+  excluded (that flag detected an idle-boost catch, not throttling; the LEVEL
+  and DRIFT verdicts S6d reads replaced it).
 
   WHY THE TILE MUST BE PINNED. Along an unpinned grid the tile CHANGES with the
   token count -- mixtral climbs 16, 32, 64, 128 across the sweep -- so the
@@ -1888,9 +2157,13 @@ step6_dense_grid() {
   usually a tile step. Pinning removes the first mechanism, so what remains is
   attributable.
 
-  PREDICTION at a pinned BLOCK_M=128, alpha 0.558, ridge 160.3: mixtral crosses
-  near 999 tokens, qwen2 near 1998, deepseek-v3 near 7992. At BLOCK_M=64 the cap
-  is 115 and no crossing exists at any batch on the grid.
+  PREDICTION at a pinned BLOCK_M=128 is read off the same table step 2 prints,
+  against this card's ridge and with the cap bracketed over the unmeasured
+  alpha_a. The token counts that stood here (999 / 1998 / 7992) were solved
+  from the uncorrected cap against 160.3 and are withdrawn with it.
+TXT
+  predictions_table
+  cat <<'TXT'
 
   READ IT WITH octave_ladders. Fed whole to crossing_from_points this grid is
   biased 4-18% LOW and twice as wide as the powers-of-two grid it extends.
@@ -1963,36 +2236,10 @@ PYEOF
   [[ "$rc" == "0" ]]; verdict S6b "sweep exit" $? "exit $rc" "== 0" soft \
     "Resume with --from 6 and the same run id ($run_id); completed cells are skipped before the expensive fp32 oracle runs."
 
+  # The row gates live in sweep_clock_gates so --gate-sweep can run them over
+  # existing rows without a card; this is the one other call site.
   if [[ "$DRY_RUN" != "1" ]]; then
-    local sweepstat
-    sweepstat="$("$PY_BASE" - "$RESULTS_DIR" "$run_id" <<'PYEOF' 2>/dev/null
-import sys
-sys.path.insert(0, ".")
-from pathlib import Path
-from moe.bench.schema import passed, read_csv, row_bool
-rows = []
-for p in sorted(Path(sys.argv[1]).glob(f"run_{sys.argv[2]}*.csv")):
-    rows.extend(read_csv(p))
-timed = [r for r in rows if float(r.get("ms_p50") or 0) > 0]
-bad = [r for r in rows if not passed(r)]
-thr = [r for r in timed if row_bool(r, "throttled")]
-pct = (100.0 * len(thr) / len(timed)) if timed else 100.0
-print(f"{len(rows)} {len(timed)} {len(bad)} {pct:.1f}")
-PYEOF
-)"
-    local nrows ntimed nbad pthr
-    read -r nrows ntimed nbad pthr <<< "$sweepstat"
-    note "$nrows rows, $ntimed timed, $nbad correctness failures, ${pthr}% throttled"
-    [[ "${nbad:-1}" == "0" ]]; verdict S6c "correctness" $? \
-      "${nbad:-?} failing rows" "== 0" fatal \
-      "A correctness failure means the kernel computed the wrong layer, so every timing in this arm is a timing of the wrong thing. Do not publish it."
-    "$PY_BASE" -c "import sys; sys.exit(0 if float('${pthr:-100}') < 5.0 else 1)"
-    verdict S6d "thermal stability" $? \
-      "${pthr:-?}% of timed rows throttled" "< 5%" soft \
-      "Throttled rows are excluded from crossing detection, and the cold-L2 basis already loses 5 of 8 one-stage crossings that way. A high rate here narrows the grid the detector can actually use."
-    [[ "${ntimed:-0}" -ge "${planned:-1}" ]]; verdict S6e "coverage against the plan" $? \
-      "${ntimed:-0} timed rows against a base-env plan of ${planned:-?}" ">= the base plan" soft \
-      "The sweep stopped short, almost certainly on --max-minutes. Resume with --from 6 and run id $run_id rather than reading a crossing off a truncated grid."
+    sweep_clock_gates "$RESULTS_DIR" "$run_id" "${planned:-1}"
   fi
 }
 
@@ -2505,6 +2752,13 @@ TXT
 # main
 # ==========================================================================
 main() {
+  if [[ -n "$GATE_SWEEP_DIR" ]]; then
+    # Score rows that already exist and stop. No probe, no preflight, nothing
+    # spent: this is the path the tests plant both branches of S6d through.
+    head1 "SWEEP ROW GATES ONLY  $GATE_SWEEP_DIR  run $GATE_SWEEP_RUN"
+    sweep_clock_gates "$GATE_SWEEP_DIR" "$GATE_SWEEP_RUN"
+    [[ "$N_FAIL_SOFT" == "0" && "$N_FAIL_FATAL" == "0" ]]; return $?
+  fi
   head1 "MoE pod session  $STAMP  label=$LABEL"
   probe_capabilities
   if [[ "$DRY_RUN" == "1" ]]; then
