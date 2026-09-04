@@ -160,9 +160,14 @@ class ForcedTile:
         """Short, stable, and legible in a manifest: `bm128-3f2a1c9d`.
 
         The digest covers EVERY key, not only BLOCK_SIZE_M. Two runs that differ
-        only in GROUP_SIZE_M are different experiments -- the 2026-09-01 session
-        measured alpha 0.84 at G=1 against 0.67 at G=64 on both cards -- and a
-        key that omitted the swizzle would let the second resume the first.
+        only in GROUP_SIZE_M are different experiments: on the H200 surface
+        (2026-09-01-nvidia_h200-alpha-surface-s4) mixtral at BLOCK_M=32 reads
+        alpha 1.016 at G=1 and 0.646 at G=64, and on the A100 the one matched
+        cell (qwen2, BLOCK_M=32) reads 0.651 against 0.679, so the swizzle
+        moves alpha and not in one direction across cards. The earlier "0.84 at
+        G=1 against 0.67 at G=64 on both cards" was a pooled reading and is
+        withdrawn. A key that omitted the swizzle would let the second run
+        resume the first.
         """
         blob = json.dumps(dict(self.items), sort_keys=True).encode()
         return f"bm{self.block_m}-{hashlib.sha1(blob).hexdigest()[:8]}"

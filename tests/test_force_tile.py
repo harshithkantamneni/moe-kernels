@@ -145,8 +145,9 @@ def test_a_swizzle_width_that_is_not_a_power_of_two_is_allowed():
 def test_two_tiles_that_differ_only_in_the_swizzle_get_different_keys():
     """A run id that omits a swept parameter lets the second setting resume the
     first, skip every completed cell, and print the first's numbers under the
-    second's label. GROUP_SIZE_M is exactly such a parameter: alpha measured
-    0.84 at G=1 against 0.67 at G=64 on both cards."""
+    second's label. GROUP_SIZE_M is exactly such a parameter: on the H200 s4
+    surface mixtral BLOCK_M=32 reads alpha 1.016 at G=1 and 0.646 at G=64 (the
+    old "0.84 against 0.67 on both cards" was pooled and is withdrawn)."""
     assert forced_tile().fingerprint() != forced_tile(GROUP_SIZE_M=64).fingerprint()
     assert forced_tile().fingerprint() == forced_tile().fingerprint()
 

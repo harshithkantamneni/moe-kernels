@@ -33,6 +33,7 @@ import pytest
 # while both kept passing.
 from test_crossing_uncertainty import from_slopes
 
+from moe.bench import roofline
 from moe.bench.crossing import (
     STORED_TILE_EFF,
     all_crossings_from_points,
@@ -246,13 +247,15 @@ def test_two_models_go_from_a_half_to_agreement_on_the_last_crossing(model, firs
 
 
 @needs_published
-def test_rows_per_expert_at_the_last_crossing_lands_in_the_measured_ridge_band():
+def test_rows_per_expert_at_the_last_crossing_lands_near_the_card_s_own_ridge():
     """Why the ambiguity is worth resolving rather than averaging over. `2R/b`
-    at bf16 puts the crossing at `rows_per_expert = ridge`, and the H200's ridge
-    was measured three times at 160.3 to 176.2. The last crossings sit at a mean
-    175.8 with CV 21.2%; the first at 123.4 with CV 40.0%, below the band and
-    twice as scattered. Suggestive, not decisive -- it is one prediction scoring
-    itself -- which is why nothing here picks a winner."""
+    at bf16 puts the crossing at `rows_per_expert = ridge`, and the H200's own
+    ridge is 162.8 (`measured_nvidia_h200.yaml`; the 160.3-176.2 band this test
+    used to score against is two compute calibrations disagreeing, withdrawn
+    2026-09-02). The last crossings sit at a mean 175.8 with CV 21.2%, 8% above
+    the ridge and inside their own scatter of it; the first at 123.4 with CV
+    40.0%, 24% below and twice as scattered. Suggestive, not decisive -- it is
+    one prediction scoring itself -- which is why nothing here picks a winner."""
     def spread(pick: int) -> tuple[float, float]:
         vals = [rows_per_expert(model, crossings(model, impl)[pick])
                 for (model, impl) in sorted(pool())
@@ -264,8 +267,10 @@ def test_rows_per_expert_at_the_last_crossing_lands_in_the_measured_ridge_band()
     last_mean, last_cv = spread(-1)
     assert round(first_mean, 1) == 123.4 and round(first_cv, 3) == 0.400
     assert round(last_mean, 1) == 175.8 and round(last_cv, 3) == 0.212
-    assert 160.3 <= last_mean <= 176.2
-    assert first_mean < 160.3
+    ridge = roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16")
+    assert abs(last_mean - ridge) / ridge < last_cv, \
+        "the last crossing sits within its own scatter of the card's ridge"
+    assert first_mean < 0.8 * ridge, "the first sits well below it"
 
 
 # ------------------------------------------------------------ the mechanism

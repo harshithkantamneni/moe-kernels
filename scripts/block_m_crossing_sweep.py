@@ -28,8 +28,15 @@ full; each extra tile re-reads them, discounted by L2 to a fraction `alpha`:
 
 Two consequences, and they are the whole experiment:
 
-  * AI is BOUNDED at `2 BM / (alpha b)`. A block size whose cap sits below the
-    hardware ridge can NEVER be compute bound, at any batch, ever.
+  * AI is BOUNDED, and the bound is NOT `2 BM / (alpha b)` for a fitted alpha.
+    A ladder fit returns `alpha_fitted = (alpha_b + phi) / (1 + phi + delta)`
+    (`moe.bench.ai_model`, form EXA), so a cap read as `2 BM / (alpha_fitted
+    b)` is HIGH by `(1 + phi + delta)`: about 1.3x at BLOCK_M=128 on mixtral
+    at BLOCK_N=64. The cap this file prints beside each block size is that
+    uncorrected reading, labelled with its overstatement factor. And because
+    `alpha_a` is unmeasured, any cap quoted here is a BRACKET, not a point. A
+    block size whose corrected cap sits below the hardware ridge cannot be
+    compute bound at any batch; whether 128's does is what the arm measures.
   * the crossing solves `R = ridge b Q(R) / 2`, a step function on both sides,
     so it moves in jumps of `Q` as the block size changes which tread it lands
     in.
@@ -40,12 +47,17 @@ quantitative disagreement, they are two different worlds, and this sweep is
 built to tell them apart:
 
     BLOCK_M   AI cap    alpha=0.558                 alpha=0.10 (retracted)
-       32       57.3    NO CROSSING EVER            crosses at R=304.6
-       64      114.7    NO CROSSING EVER            crosses at R=208.4
-      128      229.4    crosses at R=249.7          crosses at R=176.3
-      256      458.8    crosses at R=160.3          crosses at R=160.3
+       32       57.3    NO CROSSING EVER            crosses at R=309.3
+       64      114.7    NO CROSSING EVER            crosses at R=211.7
+      128      229.4    crosses at R=253.7          crosses at R=179.1
+      256      458.8    crosses at R=162.8          crosses at R=162.8
 
-At 0.558 the 128-to-256 crossing ratio is 1.558 and two of the four block sizes
+at the H200's own ridge of 162.8 FLOP/byte (`measured_nvidia_h200.yaml`,
+712.3 TFLOP/s over 4374.8 GB/s; `predict_tile(bm, alpha, 162.81)`, recomputed
+2026-09-03). The "AI cap" column is the uncorrected `2 BM / (alpha b)` reading,
+high by `(1 + phi + delta)` as above. This table used to be scored at 160.3,
+the low end of a withdrawn band (md5 4d84542b) that was no card's ridge. At
+0.558 the 128-to-256 crossing ratio is 1.558 and two of the four block sizes
 never cross. At 0.10 the ratio is 1.10 and all four cross. Everything below is
 arranged so the data has to pick one.
 
@@ -280,28 +292,40 @@ RETRACTED_ALPHA = 0.10
 #: delta, which this report prints beside every such cap.
 ALPHA_BY_BLOCK_M = {64: 0.466, 128: 0.625}
 
-#: THE 2026-08-26 H200 RIDGE BAND. Three calibrations of that card disagreed by
-#: 9.9% on the compute term, and the two ends do not merely widen a band: they
-#: change which TREAD the BLOCK_M=128 crossing lands in (2 at 160.3, 3 at 176.2).
+#: THE WITHDRAWN H200 RIDGE BAND, kept by name as history. Its two ends are two
+#: calibrations of the same card disagreeing by 9.9% on the COMPUTE term while
+#: bandwidth reproduced to 0.06%: 160.3 is calibration md5 `4d84542b` (701.6
+#: TFLOP/s over 4377.2 GB/s, the `fp8-three-kernel` / `v2lite` arms) and 176.2
+#: is 770.9 over 4374.5 (`fp8-refixed` / `whole-layer`). It is NOT "the
+#: 2026-08-26 band", which this comment used to call it: the arms of that date
+#: quote 160.4 and 162.8 (`scripts/rescore_published_reports.py`,
+#: `WITHDRAWN_RIDGE_WHY`). So it measures how badly the compute ceiling
+#: reproduces, not any device's ridge, and the two ends do not merely widen a
+#: band: they change which TREAD the BLOCK_M=128 crossing lands in (2 at
+#: 160.3, 3 at 176.2). It was withdrawn from all 26 published reports on
+#: 2026-09-02.
 #:
 #: IT IS NOT A DEFAULT AND MUST NEVER BECOME ONE AGAIN. `--ridge` used to default
 #: to `RIDGE_BAND[0]` and `scripts/cross_card_surface.sh` never passed `--ridge`,
-#: so all 7 published A100 reports carry ridge=160.3 and ridge_band=[160.3,176.2]
-#: -- a band belonging to NEITHER card. The A100's own contemporaneous
+#: so all 7 published A100 reports carried ridge=160.3 and ridge_band=[160.3,
+#: 176.2] -- a band belonging to NEITHER card. The A100's own contemporaneous
 #: calibration is 262.371/1.79936 = 145.8 and the H200's is 712.259/4.37476 =
 #: 162.8, so every printed `ridge x bandwidth` on the A100 was a hybrid of two
-#: machines. `resolve_ridge` now reads the ATTACHED device's calibration and
+#: machines. `resolve_ridge` reads the ATTACHED device's calibration and
 #: REFUSES when there is none; this constant survives only as the hypothesis a
 #: laptop planning run (--dry-run / --self-test) is allowed to assume, where
 #: nothing was measured and so nothing can be mislabelled, and as the value
-#: `scripts/tile_cap_test.py` imports.
+#: `scripts/tile_cap_test.py` imports. The name is unchanged because that file
+#: and its tests import it by name and are not this slice's to edit.
 RIDGE_BAND = (160.3, 176.2)
 
 #: What a report says when its ridge is this constant rather than a measurement.
 #: Carried into `report.json` so the provenance cannot be lost between the
 #: printout and the file, which is how 160.3 reached seven A100 reports unnoticed.
 HYPOTHESIS_RIDGE_SOURCE = (
-    "HYPOTHESIS: the 2026-08-26 H200 band, which belongs to no attached device")
+    "HYPOTHESIS: the withdrawn H200 band 160.3-176.2 (md5 4d84542b at the low "
+    "end, two compute calibrations 9.9% apart), which belongs to no attached "
+    "device")
 
 #: The card slug a run id carries when no device is attached: every --dry-run
 #: and every --self-test on a laptop. Visible rather than blank, so a laptop
@@ -447,12 +471,20 @@ def q_of_tiles(tiles: int, alpha: float) -> float:
 
 
 def ai_cap(block_m: int, alpha: float, b: int = 2) -> float:
-    """`2 BM / (alpha b)`, the arithmetic intensity this tile height cannot pass.
+    """`2 BM / (alpha b)`: the UNCORRECTED cap reading for a fitted alpha.
 
-    The reason alpha is not a nuisance parameter. If this sits below the ridge,
-    the block size cannot be compute bound at any batch size that exists.
-    Infinite at alpha <= 0, which is the correct reading and not a guard: with
-    no re-read cost `2r/b` is exact and unbounded.
+    It is the cap only when `alpha` is the true miss fraction `alpha_b`. For a
+    ladder alpha, which is `(alpha_b + phi) / (1 + phi + delta)` (EXA), this
+    number is HIGH by `ai_model.lin_overstatement` = `1 + phi + delta`, and
+    the report prints that factor beside every cap it quotes; `ai_model.
+    cap_from_fitted` is the corrected reading. Kept in this form because the
+    published reports and `scripts/tile_cap_test.py` quote it, and a cap
+    printed without its factor is the defect the audit found.
+
+    Why alpha is not a nuisance parameter: if the CORRECTED cap sits below the
+    ridge, the block size cannot be compute bound at any batch size that
+    exists. Infinite at alpha <= 0, which is the correct reading and not a
+    guard: with no re-read cost `2r/b` is exact and unbounded.
     """
     return math.inf if alpha <= 0 else 2.0 * block_m / (alpha * b)
 
@@ -2498,8 +2530,9 @@ def no_crossing_reason(pred: TilePrediction) -> str:
     2026-09-02 this file did not have a sentence for it. `predict_tile` returned
     `crossing_rows=None` exactly when `ai_cap <= ridge`, which is the whole
     claim the study is making, and the report then formatted that None with
-    `:.0f`. `--self-test 0.90` and `--self-test 1.0` -- the two worlds the
-    measured alphas 0.92-1.02 actually describe -- died with a TypeError before
+    `:.0f`. `--self-test 0.90` and `--self-test 1.0` -- the two worlds
+    mixtral's G=1 ladders (0.95-1.02 on both cards; qwen2 and deepseek read
+    0.62-0.84) actually describe -- died with a TypeError before
     report.json was written, so the analysis crashed in precisely the world the
     data pointed at.
     """
@@ -3099,9 +3132,10 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     exercise the SAME code the pod run prints, rather than a second
     implementation that agrees with it until it does not.
 
-    `ridge_band` IS NOT DEFAULTED TO `RIDGE_BAND`. That module constant is one
-    machine's 2026-08-26 calibration, and defaulting to it is exactly how all 7
-    published A100 reports came to carry a band belonging to neither card. When
+    `ridge_band` IS NOT DEFAULTED TO `RIDGE_BAND`. That module constant is the
+    withdrawn gap between two H200 compute calibrations, and defaulting to it
+    is exactly how all 7 published A100 reports came to carry a band belonging
+    to neither card. When
     the caller does not state a band, the band is this run's own single ridge
     twice over, and the report says so -- a degenerate band is honest about
     being one calibration, a borrowed band is not.
@@ -3431,7 +3465,7 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         # was a null in `crossing_rows_ridge_lo`, which a report generator read
         # as a missing measurement -- and which this file formatted with `:.0f`
         # and crashed on at every alpha above about 0.79, i.e. at every alpha
-        # the measured 0.92-1.02 ladders actually describe.
+        # mixtral's measured G=1 ladders (0.95-1.02) actually describe.
         "predictions": {
             str(bm): {"ai_cap": preds_lo[bm].ai_cap,
                       "crossing_rows_ridge_lo": preds_lo[bm].crossing_rows,
@@ -4370,11 +4404,15 @@ def build_parser() -> argparse.ArgumentParser:
                          "GROUP_SIZE_M is what groups consecutive M-tiles onto "
                          "one weight read, and alpha measured here is therefore "
                          "alpha AT THIS SWIZZLE rather than a property of the "
-                         "kernel. Sweeping it is the point: the 2026-09-01 "
-                         "session measured alpha 0.92-1.02 at 1 and 0.58-0.62 at "
-                         "8 and above, so the ceiling 2*BM/(alpha*b) -- and "
-                         "therefore whether a given tile can EVER reach the "
-                         "compute roof -- moves with this number")
+                         "kernel. Sweeping it is the point: on the published "
+                         "surfaces the identifiable G=1 ladders read 0.62-1.02 "
+                         "across models (mixtral 0.95-1.02 on both cards, qwen2 "
+                         "0.65-0.84, deepseek-v2-lite 0.62) against 0.63-0.78 "
+                         "at 8 and above, so the uncorrected ceiling "
+                         "2*BM/(alpha*b) -- a BRACKET, and high by (1+phi+delta) "
+                         "-- and therefore whether a given tile can EVER reach "
+                         "the compute roof, moves with this number and with "
+                         "the model")
     ap.add_argument("--block-n", type=int, default=FIXED["BLOCK_SIZE_N"],
                     help="the N tile, applied to EVERY setting. Exists to bound "
                          "the ACTIVATION confound rather than to tune anything. "
@@ -4579,7 +4617,8 @@ class RidgeUnavailable(RuntimeError):
 
     Raised rather than defaulted. `--ridge` used to default to `RIDGE_BAND[0]`
     and `scripts/cross_card_surface.sh` never passed it, so seven A100 reports
-    were written against 160.3 Op/B -- a stale H200 figure -- and every
+    were written against 160.3 Op/B -- a withdrawn H200 figure, calibration
+    md5 4d84542b -- and every
     `ridge x bandwidth` they printed was a hybrid of two machines. Nothing
     about that failure was visible in the output, which is precisely why the
     replacement refuses instead of choosing.
@@ -4780,8 +4819,9 @@ def resolve_ridge(args, *, synthetic: bool) -> ResolvedRidge:
         "this run has no ridge it is entitled to quote.\n"
         "    Every roof fraction, every AI cap comparison and every crossing "
         "prediction below would be scored against another machine's ceiling: "
-        f"the module constant is {RIDGE_BAND[0]} Op/B, which is a 2026-08-26 "
-        "H200 figure and belongs to no attached device.\n"
+        f"the module constant is {RIDGE_BAND[0]} Op/B, which is a withdrawn "
+        "H200 figure (calibration md5 4d84542b) and belongs to no attached "
+        "device.\n"
         "    Run:  python scripts/calibrate_hardware.py\n"
         "    or state the assertion yourself:  --ridge <Op/B> "
         "[--ridge-band LO,HI]\n"
@@ -4892,10 +4932,11 @@ PUBLISHED_H200_TRIAD_GBPS = 4374.5
 #: What a report says when its bandwidth is the module constant rather than a
 #: measurement. Only reachable on a laptop plan or replay whose RIDGE is the
 #: matching hypothesis, so the two halves of the roof still come from one
-#: machine's 2026-08-26 calibration.
+#: machine: 4374.5 GB/s is the bandwidth behind the withdrawn band's 176.2 end
+#: (770.9 TFLOP/s over 4374.5), not a 2026-08-26 figure as this used to say.
 HYPOTHESIS_BANDWIDTH_SOURCE = (
-    "HYPOTHESIS: the 2026-08-26 H200 triad ceiling, which belongs to no "
-    "attached device, paired with the H200 hypothesis ridge")
+    "HYPOTHESIS: the H200 triad ceiling behind the withdrawn ridge band, which "
+    "belongs to no attached device, paired with the H200 hypothesis ridge")
 
 
 def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwidth:
@@ -4910,10 +4951,9 @@ def resolve_bandwidth(args, *, synthetic: bool | None = None) -> ResolvedBandwid
          GIVEN, the module's H200 triad as a stated HYPOTHESIS, source
          `hypothesis`. The second condition is the whole point: a hypothesis
          bandwidth is safe only while the ridge beside it is the MATCHING
-         hypothesis from the same 2026-08-26 calibration, so the roof is one
-         machine's. The moment the operator asserts a ridge for another card,
-         pairing it with this constant is the hybrid roof, and the escape
-         closes.
+         hypothesis, the withdrawn H200 band, so the roof is one machine's.
+         The moment the operator asserts a ridge for another card, pairing it
+         with this constant is the hybrid roof, and the escape closes.
       4. Otherwise REFUSE, on exactly the terms `resolve_ridge` refuses.
 
     RETURN TYPE CHANGED on 2026-09-02, from `(float, str)` to

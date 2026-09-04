@@ -383,10 +383,14 @@ def all_crossings_from_points(points: list[tuple[float, float]],
     WHICH CROSSING IS THE RIDGE IS NOT SETTLED HERE, and this function
     deliberately does not choose. What is on the record is that taking the LAST
     moves the five-stage over one-stage separation from 0.5602 to 0.8889, and
-    that rows per expert at the last crossing (mean 175.8, CV 21.2%) sit inside
-    the measured ridge band of 160.3-176.2 where the first (mean 123.4, CV
-    40.0%) does not. A dense token grid is what settles it; reporting both is
-    what stops a number being quoted before it is settled.
+    that rows per expert at the last crossing (mean 175.8, CV 21.2%) sit 8%
+    above the H200's own ridge of 162.8 FLOP/byte, within their scatter of it,
+    where the first (mean 123.4, CV 40.0%) sit 24% below it. 162.8 is
+    `measured_nvidia_h200.yaml`; the "measured ridge band of 160.3-176.2" this
+    sentence used to score against is two compute calibrations of one card
+    disagreeing by 9.9%, withdrawn from every published report on 2026-09-02,
+    and no card's ridge. A dense token grid is what settles it; reporting both
+    is what stops a number being quoted before it is settled.
 
     `min_tokens` discards points below it. Pass the model's saturation batch:
     below `E/k` tokens a batch does not reach every expert, so active experts

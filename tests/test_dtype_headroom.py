@@ -470,3 +470,19 @@ def test_in_graph_mode_fp8_is_faster_than_bf16_but_by_less_than_the_bytes():
     speed = statistics.median(float(b[c, "graph"]["ms_p50"])
                               / float(a[c, "graph"]["ms_p50"]) for c in quad)
     assert 0.5 < speed < 0.8
+
+
+@needs_published
+def test_the_notes_name_the_legacy_flag_and_how_many_rows_it_removed():
+    """The `throttled` column on these v3 rows is the legacy `clock_drift`
+    flag, an idle-boost catch and not a throttle detector, and a table built
+    with it on has to say so and say how many rows it cost: 65 fp8 rows (61
+    eager, 4 graph: 336 -> 275 and 288 -> 284). With the filter off there is
+    no note, because nothing was removed."""
+    _, notes = load_rows(_paths(FP8_ARMS))
+    flagged = [n for n in notes if n.startswith("[flag]")]
+    assert len(flagged) == 1
+    assert "65 row(s)" in flagged[0] and "idle-boost catch" in flagged[0]
+    assert "--include-throttled" in flagged[0]
+    _, notes_all = load_rows(_paths(FP8_ARMS), include_throttled=True)
+    assert not [n for n in notes_all if n.startswith("[flag]")]
