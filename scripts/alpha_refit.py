@@ -19,7 +19,12 @@ L2 absorbs part of the re-read:
     weight bytes = N_w b (1 + alpha (M-tiles - 1)),   AI(r) = (2r/b) / Q(r)
 
 It decides which tile heights can ever reach the compute roof at all, since
-`AI -> 2 BM / (alpha b)` as `r` grows, so it is not a nuisance parameter.
+`AI -> 2 BM / (alpha b)` as `r` grows, so it is not a nuisance parameter. That
+reading is an UPPER BOUND on the cap when alpha is a ladder fit: the fit's
+denominator carries the first tread's activation, output and fixed cost, so the
+exact cap is lower by (1 + phi + delta) (`moe/bench/ai_model.py`), and with
+alpha_a unmeasured the factor is a bracket. Section 4 of the report prints it
+that way.
 
 TWO NUMBERS DISAGREE THREEFOLD AND THIS SCRIPT EXISTS TO SAY WHY. This repo
 published `alpha = 0.10` (CV 12.8%) off 151 rows; arXiv:2608.13057 (TEMPO,
@@ -107,6 +112,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from moe.bench import ai_model  # noqa: E402
 from moe.bench import schema as SC  # noqa: E402
 from moe.bench.bytes_model import weight_bytes_for_stage  # noqa: E402
 from moe.bench.crossing import m_tiles_for_row  # noqa: E402
@@ -146,10 +152,11 @@ TEMPO_ALPHA = 0.33
 #: `scripts/rescore_published_reports.py`.
 #:
 #: NOTHING IN THIS FILE SCORES AGAINST IT ANY MORE. `card_ridge_bands()` is
-#: where a ceiling comes from. The name survives only because
-#: `scripts/group_m_alpha_sweep.py` and two test modules import it, and deleting
-#: a constant out from under other people's files is not this slice's to do;
-#: those callers are the next thing to move onto per-card bands.
+#: where a ceiling comes from. `scripts/group_m_alpha_sweep.py` resolved its
+#: own ridge from the attached card's calibration on 2026-09-03 and no longer
+#: reads this; the name survives only for `tests/test_group_m_sweep.py`'s
+#: loader, which imports this module and is not this slice's to edit. Delete
+#: it when that test stops loading it.
 RIDGE_BAND = (160.3, 176.2)
 
 #: torch's `grouped_mm` tile, OBSERVED under claim C1 by reading the CUTLASS
@@ -703,14 +710,92 @@ def _mean_ratio(observations, alpha: float) -> float:
 
 
 def ai_cap(block_m: int, alpha: float, dtype_bytes: int = 2) -> float:
-    """`2 BM / (alpha b)`: the rows per expert this tile height can never exceed.
+    """`2 BM / (alpha b)`: an UPPER BOUND on the AI this tile height can reach.
 
     The consequence the whole parameter is being measured for. If this sits
     below the hardware ridge, that tile cannot reach compute bound at any batch
-    size at all. Infinite at `alpha <= 0`, which is the correct reading: with no
-    re-read cost the intensity is unbounded and `2R/b` is exact.
+    size at all, and lowering it only strengthens that. Infinite at
+    `alpha <= 0`, which is the correct reading of THIS formula: with no
+    weight re-read cost it names no other traffic.
+
+    IT IS NOT THE CAP when `alpha` is a ladder fit, and every alpha this file
+    fits is one. A B/(A+B) fit returns `(alpha_b + phi) / (1 + phi + delta)`,
+    the per-tile slope over the first tread's level, and the level holds one
+    tile's activation and output traffic plus the fixed cost. Read through
+    this formula that level cancels the wrong way and the figure is HIGH by
+    exactly `(1 + phi + delta)` (`moe/bench/ai_model.py`, `cap_from_fitted`,
+    retraction (a)): 1.02 to 3.0 at BLOCK_M=128 with BLOCK_N=64, the width
+    being alpha_a, which has no measurement in this repository. So a number
+    from here is quoted as a bound, and `print_ai_cap_table` prints the
+    corrected cap beside it as a bracket. The rows-per-expert unit is the
+    b=2 identity, not an error.
     """
     return 2.0 * block_m / (alpha * dtype_bytes) if alpha > 0 else math.inf
+
+
+#: The tile width the correction bracket is taken at: vLLM's pin for every
+#: swept arm and the BN the study's activation-confound bound uses. CUTLASS's
+#: grouped_mm tile is not observed, and the bracket says so where it quotes
+#: BLOCK_M=64.
+CAP_TABLE_BLOCK_N = 64
+
+#: The models the pooled refit is fitted over, which is what the correction
+#: bracket in `print_ai_cap_table` spans when the caller has no observation
+#: list to take them from. Stated in the table header, never silent.
+CAP_TABLE_MODELS = ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite",
+                    "deepseek-v3")
+
+
+def lin_overstatement_bracket(block_m: int, models=CAP_TABLE_MODELS,
+                              block_n: int = CAP_TABLE_BLOCK_N,
+                              dtype_bytes: int = 2) -> tuple[float, float]:
+    """`(low, high)` of `(1 + phi + delta)` at this tile, alpha_a in [0, 1], delta 0.
+
+    The factor `2 BM / (alpha b)` overstates the exact cap by, as a BRACKET,
+    because `phi` is one M-tile's activation-and-output traffic in weight-read
+    units and its activation term is `alpha_a * BM / BN`, with alpha_a
+    unmeasured. The low end is alpha_a = 0 on the shape with the smallest
+    once-read cost, the high end alpha_a = 1 on the shape with the largest
+    re-read cost, over the up and down GEMMs of every model in `models`.
+    `delta`, the fixed cost, is unmeasured too and can only widen the factor,
+    so 0 is the honest floor: the corrected caps this produces are themselves
+    upper bounds, and the table says so.
+    """
+    lo, hi = math.inf, 0.0
+    for name in models:
+        cfg = MODEL_CONFIGS[name]
+        for N, K in ((2 * cfg.intermediate_size, cfg.hidden_size),
+                     (cfg.hidden_size, cfg.intermediate_size)):
+            for alpha_a in (0.0, 1.0):
+                phi = ai_model.phi(N, K, block_m=block_m, block_n=block_n,
+                                   alpha_a=alpha_a, b=dtype_bytes)
+                factor = ai_model.lin_overstatement(phi=phi, delta=0.0)
+                lo, hi = min(lo, factor), max(hi, factor)
+    return lo, hi
+
+
+def corrected_cap_bracket(block_m: int, alpha: float, models=CAP_TABLE_MODELS,
+                          block_n: int = CAP_TABLE_BLOCK_N,
+                          dtype_bytes: int = 2) -> tuple[float, float]:
+    """`(low, high)` cap in FLOP/byte: `ai_cap` divided by the factor bracket.
+
+    Low is the alpha_a = 1 end, high the alpha_a = 0 end. Infinite at
+    `alpha <= 0` like `ai_cap`, because dividing infinity by a finite factor
+    is still the statement "this formula names no bound".
+    """
+    cap = ai_cap(block_m, alpha, dtype_bytes)
+    lo, hi = lin_overstatement_bracket(block_m, models, block_n, dtype_bytes)
+    return cap / hi, cap / lo
+
+
+def cap_bracket_verdict(low: float, high: float, band: list[float]) -> str:
+    """`cap_verdict` over a BRACKET: one word when both ends agree, and when
+    they do not, the honest answer is that alpha_a decides and this study has
+    not measured it."""
+    a, b = cap_verdict(low, band), cap_verdict(high, band)
+    if a == b:
+        return a
+    return f"undecided ({a} at alpha_a=1, {b} at alpha_a=0)"
 
 
 def max_alpha_that_still_crosses(block_m: int, ridge: float,
@@ -1481,20 +1566,36 @@ def _report_adversarial(triton: list[Observation], alpha: float, args) -> None:
     print("### 4. the fitted alpha contradicts a crossing this study measured")
     print("  alpha here is fitted to TIME, so it absorbs an extra tile's padded")
     print("  arithmetic and scheduling as well as its re-read, and read as a traffic")
-    print("  coefficient it is an UPPER bound. That bound caps arithmetic intensity at")
-    print("  2 BM / (alpha b), in rows per expert:")
+    print("  coefficient it is an UPPER bound. Read as 2 BM / (alpha b) it gives an")
+    print("  UPPER BOUND on the AI cap, not the cap: a ladder fit's level carries one")
+    print("  tile's activation, output and fixed cost, so the exact cap is that figure")
+    print("  over (1 + phi + delta) (moe/bench/ai_model.py, retraction (a)), and with")
+    print("  alpha_a unmeasured the factor is a BRACKET. Both are printed, in rows per")
+    print("  expert (the b=2 identity):")
     print()
-    print_ai_cap_table(alpha)
+    print_ai_cap_table(alpha, sorted({o.model for o in triton}) or None)
 
 
-def print_ai_cap_table(alpha: float) -> None:
+def print_ai_cap_table(alpha: float, models=None) -> None:
     """The AI-cap table, and the C2 comparison, each against a NAMED card's band.
 
     A SEPARATE FUNCTION SO ITS REFUSALS CAN BE PLANTED. Both failure branches
     here -- no calibration at all, and no H200 calibration for a paragraph about
     H200 rows -- have to be reachable in a test, and they are not while the only
     way in is a full adversarial run over the corpus.
+
+    TWO NUMBERS PER TILE, AND THE VERDICT IS SCORED ON THE BRACKET. `2 BM /
+    (alpha b)` is printed as what it is, an upper bound on the cap for a
+    ladder-fitted alpha; beside it is the `(1 + phi + delta)` factor as a
+    bracket over alpha_a in [0, 1] at delta = 0 (`lin_overstatement_bracket`,
+    over the up and down GEMMs of `models`, BLOCK_N = 64), and the corrected
+    cap the bracket gives. Each card's verdict is `cap_bracket_verdict`: one
+    word when both ends of the bracket land on the same side of the card's
+    band, "undecided" when alpha_a would decide. Until 2026-09-03 this table
+    scored the uncorrected figure as the cap, which at BLOCK_M=128 is high by
+    1.03 to 3.0.
     """
+    models = tuple(models) if models else CAP_TABLE_MODELS
     bands = card_ridge_bands()
     if not bands:
         print("  REFUSED: no committed calibration resolves, so there is no ceiling")
@@ -1504,15 +1605,24 @@ def print_ai_cap_table(alpha: float) -> None:
     print("  Scored against EACH CARD'S OWN band, off its own measured_*.yaml. The")
     print("  cross-machine 160.3-176.2 this table used to quote was withdrawn from")
     print("  all 26 published reports on 2026-09-02 and is not a ceiling of anything.")
+    print("  Correction bracket: (1 + phi + delta) over alpha_a in [0, 1] at delta = 0,")
+    print(f"  the up and down GEMMs of {', '.join(models)}, BLOCK_N = {CAP_TABLE_BLOCK_N}.")
+    print("  delta >= 0 is unmeasured and only lowers the cap, so the corrected column")
+    print("  is itself an upper bound; alpha_a is unmeasured, so it is a bracket.")
     print()
-    print("  | BLOCK_M | AI cap | "
+    print("  | BLOCK_M | 2BM/(alpha b), upper bound | (1+phi+delta) bracket | "
+          "cap bracket [alpha_a=1, alpha_a=0] | "
           + " | ".join(f"vs {card} {band[0]}-{band[-1]}"
                        for card, _ridge, band in bands) + " |")
-    print("  |---:|---:|" + "---|" * len(bands))
+    print("  |---:|---:|---|---|" + "---|" * len(bands))
     for block_m in (16, 32, 64, 128, 256):
         cap = ai_cap(block_m, alpha)
-        print(f"  | {block_m} | {cap:.0f} | "
-              + " | ".join(cap_verdict(cap, band) for _c, _r, band in bands) + " |")
+        f_lo, f_hi = lin_overstatement_bracket(block_m, models)
+        c_lo, c_hi = corrected_cap_bracket(block_m, alpha, models)
+        print(f"  | {block_m} | {cap:.0f} | {f_lo:.2f}-{f_hi:.2f} | "
+              f"[{c_lo:.0f}, {c_hi:.0f}] | "
+              + " | ".join(cap_bracket_verdict(c_lo, c_hi, band)
+                           for _c, _r, band in bands) + " |")
     print()
 
     # FINDINGS C2's crossing was measured on the H200, so the ceiling it is
@@ -1529,11 +1639,16 @@ def print_ai_cap_table(alpha: float) -> None:
     card, _ridge, band = h200[0]
     measured = rows_per_expert("mixtral-8x7b", MIXTRAL_ONE_STAGE_CROSSING_TOKENS)
     ceiling = max_alpha_that_still_crosses(CUTLASS_BLOCK_M, band[0])
+    c_lo, c_hi = corrected_cap_bracket(CUTLASS_BLOCK_M, alpha, models)
     print("  AND THAT IS REFUTED BY THIS STUDY'S OWN ROWS. torch grouped_mm runs at")
     print(f"  CUTLASS BLOCK_M={CUTLASS_BLOCK_M} and DOES cross: FINDINGS C2 puts mixtral's")
     print(f"  one-stage bf16 crossing at {MIXTRAL_ONE_STAGE_CROSSING_TOKENS} tokens, "
           f"which is {measured:.0f} rows per expert,")
-    print(f"  well above the {ai_cap(CUTLASS_BLOCK_M, alpha):.0f} this alpha allows.")
+    print(f"  well above the {ai_cap(CUTLASS_BLOCK_M, alpha):.0f} this alpha allows as an")
+    print(f"  upper bound, and further above the corrected [{c_lo:.0f}, {c_hi:.0f}] "
+          f"(at BLOCK_N={CAP_TABLE_BLOCK_N}, vLLM's pin;")
+    print("  CUTLASS's own tile width is not observed, so that bracket is the sweep's")
+    print("  geometry applied to torch's rows). The correction only widens the gap.")
     print(f"  Those rows are {card} rows, and the band below is {card}'s.")
     print()
     print("  So one of three things is true, and this pool cannot say which:")

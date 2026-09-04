@@ -36,9 +36,11 @@ from scripts.dram_counter_route import (
     Anchors,
     activation_bytes_per_tile,
     alpha_from_counters,
+    anchor_cap_bracket,
     anchors_from_points,
     bracket_directory,
     build_parser,
+    cap_from_counter,
     card_key,
     discrimination,
     git_visibility,
@@ -282,22 +284,92 @@ def test_byte_model_gate_fails_when_n1_traffic_is_wrong():
 
 
 def test_tile_cap_gate_fails_only_below_the_block_specific_threshold():
-    """`ai_cap = 2 BM / (alpha b) >= ridge` is `alpha <= BM / ridge`, so the
-    threshold is 0.219 at BLOCK_M=32 and 0.439 at 64 on the A100's own ridge.
-    A single hardcoded threshold would pass one and silently misjudge the other.
+    """The cap a counter alpha implies is `2 BM W / (b dR/dn)`, with the
+    once-read share a/W restored, so `cap < ridge` is `alpha > BM/ridge - a/W`:
+    0.210 at BLOCK_M=32 and 0.420 at 64 on the A100's own ridge (a/W is 0.0093
+    and 0.0186). A single hardcoded threshold would pass one and silently
+    misjudge the other, and the study's `2 BM / (alpha b)` reading, which drops
+    a/W, would put an alpha between the two thresholds on the wrong side.
     """
-    def run(bm, alpha):
+    def gate(bm, alpha, **extra):
         rows = [{"n": n, "launches": 5,
                  "dram_bytes_read": predicted_read_bytes(MIXTRAL, bm, n, alpha)}
                 for n in (1, 2, 3, 4)]
         payload = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
-                   "block_m": bm, "cache_control": "all", "ridge": 145.81, "rows": rows}
-        return {g.number: g for g in score_counter_run(payload)[0]}["C3"].verdict
+                   "block_m": bm, "cache_control": "all", "ridge": 145.81,
+                   "rows": rows, **extra}
+        return {g.number: g for g in score_counter_run(payload)[0]}["C3"]
 
-    assert run(32, 0.30) == PASS      # 0.30 > 32/145.81 = 0.219, the cap holds
+    def run(bm, alpha):
+        return gate(bm, alpha).verdict
+
+    assert run(32, 0.30) == PASS      # 0.30 > 0.210, the cap holds
     assert run(32, 0.15) == FAIL      # below it, the cap claim would be withdrawn
-    assert run(64, 0.50) == PASS      # 0.50 > 64/145.81 = 0.439
+    assert run(64, 0.50) == PASS      # 0.50 > 0.420
     assert run(64, 0.30) == FAIL
+
+    # THE FLIP. An alpha just under the uncorrected threshold BM/ridge = 0.2195
+    # but above the corrected one: `2 BM / (alpha b)` = 146.3 says the tile
+    # reaches the ridge; the measured slope's cap, 139.9, says it does not.
+    a_over_w = activation_bytes_per_tile(MIXTRAL, 32) / weight_bytes_total(MIXTRAL)
+    boundary = 32 / 145.81 - a_over_w / 2
+    cap, uncorrected = cap_from_counter(MIXTRAL, 32, boundary)
+    assert uncorrected > 145.81 > cap
+    assert run(32, boundary) == PASS
+    # ...and the gate says which number decided it and what the other one is.
+    g = gate(32, boundary)
+    assert f"cap {cap:.1f}" in g.measured and f"upper bound {uncorrected:.1f}" in g.measured
+    assert any("UPPER BOUND" in line for line in g.lines)
+    assert any("no level in it" in line for line in g.lines)
+
+
+def test_the_counter_cap_is_finite_at_alpha_zero_and_below_the_uncorrected_reading():
+    """`ai_cap` is infinite at alpha = 0 because it names only the weight
+    re-read; a tile still carries its own activations, so the traffic slope's
+    cap is finite. And at every alpha the corrected cap is below the study's
+    reading by exactly the once-read share."""
+    cap0, unc0 = cap_from_counter(MIXTRAL, 32, 0.0)
+    assert math.isinf(unc0) and math.isfinite(cap0)
+    a_over_w = activation_bytes_per_tile(MIXTRAL, 32) / weight_bytes_total(MIXTRAL)
+    for alpha in (0.05, 0.3, 0.558, 1.0):
+        cap, unc = cap_from_counter(MIXTRAL, 32, alpha)
+        assert cap < unc
+        assert cap == pytest.approx(32.0 / (alpha + a_over_w))
+    with pytest.raises(ValueError, match="not positive"):
+        cap_from_counter(MIXTRAL, 32, -1.0)
+
+
+def test_the_registered_anchors_are_bracketed_through_cap_from_fitted():
+    """The anchors are B/(A+B) LADDER fits, so the cap each implies is the
+    study's reading divided by (1 + phi + delta), retraction (a), and with
+    alpha_a unmeasured that is a bracket: alpha_a = 1 is the low end, alpha_a = 0
+    the high end, delta = 0 the generous end, and both ends sit below the
+    uncorrected figure. An anchor too small for the alpha_a = 1 end is
+    REFUSED at that end rather than clamped."""
+    br = anchor_cap_bracket(MIXTRAL, 32, 64, 0.647)
+    assert br.low is not None and br.high is not None
+    assert br.low < br.high < br.uncorrected == pytest.approx(32 / 0.647)
+    assert br.high == pytest.approx(br.uncorrected / (1 + 0.0089), rel=1e-3)
+    assert br.low == pytest.approx(br.uncorrected / (1 + 0.5078), rel=1e-3)
+    assert not br.refused
+    # phi/(1+phi) at alpha_a = 1 is 0.337: a fitted 0.30 cannot have come from
+    # the three-term model with a full activation re-read.
+    low = anchor_cap_bracket(MIXTRAL, 32, 64, 0.30)
+    assert low.low is None and low.high is not None
+    assert "alpha_a=1" in low.refused and "REFUSED" in low.render()
+
+    # On the gate: with block_n the anchors are bracketed, without it the line
+    # says so rather than assuming the sweep's 64.
+    rows = [{"n": n, "launches": 5,
+             "dram_bytes_read": predicted_read_bytes(MIXTRAL, 32, n, 0.5)}
+            for n in (1, 2, 3, 4)]
+    base = {"device": "nvidia_a100_sxm4_80gb", "model": "mixtral-8x7b",
+            "block_m": 32, "cache_control": "all", "ridge": 145.81, "rows": rows,
+            "anchors": {"published": 0.6473, "t1": 0.4522, "n3": 0.7047}}
+    with_bn = {g.number: g for g in score_counter_run({**base, "block_n": 64})[0]}["C3"]
+    assert sum("alpha_a=1" in line for line in with_bn.lines) == 3
+    without = {g.number: g for g in score_counter_run(base)[0]}["C3"]
+    assert any("REFUSED rather than assumed 64" in line for line in without.lines)
 
 
 # --------------------------------------------------------------------------
@@ -412,11 +484,30 @@ def test_dry_run_prints_predictions_and_a_cost(capsys):
     # The plan must name this card's own ridge, never the stale 160.3 default.
     assert "ridge 145.81 FLOP/byte" in out
     assert "ridge 160.3" not in out
+    # THE RECIPE RUNS ON THE CURRENT INSTRUMENT. `timing.warm_until` refuses
+    # `warmup_ms <= 0` and `--iters` is retired, so the "--warmup 0 --iters 1"
+    # recipe this printed until 2026-09-03 could not run; the launch count is
+    # the instrument's, read back from the profile, never an assumed one.
+    assert "--warmup 0 --iters 1" not in out
+    commands = [line for line in out.splitlines() if line.strip().startswith("--")]
+    assert commands and not any("--iters" in line or "--warmup 0" in line
+                                for line in commands)
+    assert "--warmup 1 --trials 1 --cell-budget-ms 1" in out
+    assert "warmup_calls + iters x trials" in out
+    assert "Never divide" in out and '"calls": 11' in out
+    # C3 is registered as a bracket per anchor, through cap_from_fitted.
+    assert "C3, REGISTERED" in out
+    assert out.count("at alpha_a=1") == 3 and "delta = 0" in out
+    assert "BM/ridge - a/W = 0.2102" in out
 
 
 def test_self_test_mode_passes(capsys):
     assert main(["--self-test"]) == exit_codes.DONE
-    assert "SELF TEST PASS" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "SELF TEST PASS" in out
+    lines = exit_codes.parse_result_lines(out)
+    assert [(ln.kind, ln.name, ln.verdict) for ln in lines] == [("VALIDITY", "S1", "PASS")]
+    assert exit_codes.classify_text(out) == exit_codes.DONE
 
 
 def test_bracket_mode_runs_and_reports_both_violation_kinds(capsys):
@@ -433,6 +524,12 @@ def test_bracket_mode_runs_and_reports_both_violation_kinds(capsys):
     out = capsys.readouterr().out
     assert "ABOVE" in out and "GATE B1" in out
     assert "28 identifiable fits" in out or "identifiable fits" in out
+    # ONE RESULT LINE PER GATE, and the log implies the code the process
+    # returned. Until 2026-09-03 this mode printed zero RESULT lines beside
+    # exit 1 and `classify_text` raised on its own log.
+    lines = exit_codes.parse_result_lines(out)
+    assert [ln.name for ln in lines] == ["B0", "B1", "B2", "B3"]
+    assert exit_codes.classify_text(out) == exit_codes.CLAIM_FAIL
 
 
 # --------------------------------------------------------------------------
@@ -513,26 +610,40 @@ def test_stamping_refuses_to_layer_a_second_provenance_block():
 # The exit-code table. Failure mode 5: an ANSWER filed as a broken instrument.
 # --------------------------------------------------------------------------
 
-def test_a_blocked_counter_route_is_an_answer_and_not_a_validity_failure(monkeypatch):
+def test_a_blocked_counter_route_is_an_answer_and_not_a_validity_failure(
+        monkeypatch, capsys):
     """`return 0 if verdict == "OPEN" else 3` is what stood here.
 
     3 is INVALID in the shared table -- "measured, then a VALIDITY gate failed,
     nothing quotable" -- so the finding this arm exists to obtain, that ncu is
     blocked by a host module flag a tenant cannot change, was filed as a broken
-    instrument and latched the row for every resume. OPEN and BLOCKED are both
-    results; REFUSE, where the machine did not say enough to name a route, is
-    the one that costs nothing and is REFUSED (2).
+    instrument and latched the row for every resume. Then it returned DONE for
+    BLOCKED with no RESULT line at all, so the log implied nothing and the
+    driver's summary printed "NOT scored" beside a finished arm. The probe is
+    now one scored CLAIM gate, "a counter route is open": OPEN passes it and
+    BLOCKED is the world refuting it, CLAIM_FAIL, which the table defines as a
+    result the ledger files as finished and never retries. REFUSE, where the
+    machine did not say enough to name a route, scores nothing and is
+    REFUSED (2). In every case the log's RESULT lines imply the code returned.
     """
     import scripts.dram_counter_route as DCR
     for verdict, expected in (("OPEN", exit_codes.DONE),
-                              ("BLOCKED", exit_codes.DONE),
+                              ("BLOCKED", exit_codes.CLAIM_FAIL),
                               (REFUSE, exit_codes.REFUSED)):
         monkeypatch.setattr(DCR, "route_verdict",
                             lambda *a, _v=verdict: (_v, ["planted"]))
         assert DCR.main(["--probe"]) == expected, verdict
+        out = capsys.readouterr().out
+        lines = exit_codes.parse_result_lines(out)
+        if expected == exit_codes.REFUSED:
+            assert lines == [], "a refusal scored a gate"
+        else:
+            assert [(ln.name, ln.verdict) for ln in lines] == [
+                ("P1", "PASS" if verdict == "OPEN" else "FAIL")]
+            assert exit_codes.classify_text(out) == expected
 
 
-def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path):
+def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path, capsys):
     """The two codes were INVERTED: 1 for a VALIDITY failure and 3 for a CLAIM
     failure. 1 is CLAIM_FAIL, which the driver files as finished, so an unsound
     counter run was recorded as a refuted claim; 3 is INVALID, which would have
@@ -546,6 +657,9 @@ def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path)
     thin.write_text(json.dumps(payload(
         [{"n": 1, "launches": 5, "dram_bytes_read": 2.8e9}])))
     assert main(["--analyse", str(thin)]) == exit_codes.INVALID
+    thin_out = capsys.readouterr().out
+    assert [ln.name for ln in exit_codes.parse_result_lines(thin_out)] == ["V1"]
+    assert exit_codes.classify_text(thin_out) == exit_codes.INVALID
 
     # A clean run at a planted alpha passes everything: DONE.
     good = tmp_path / "good.json"
@@ -558,6 +672,11 @@ def test_analyse_maps_validity_and_claim_the_way_the_shared_table_does(tmp_path)
     # UNKNOWN counts AGAINST a gate: the claim was not established, so
     # CLAIM_FAIL, never DONE. A check that examined nothing reports no failures.
     assert main(["--analyse", str(good)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    # ...and the log says the same thing the code does, one line per gate.
+    assert [ln.name for ln in exit_codes.parse_result_lines(out)] == [
+        "V1", "V2", "V3", "V4", "C1", "C2", "C3"]
+    assert exit_codes.classify_text(out) == exit_codes.CLAIM_FAIL
 
 
 def test_anchors_dataclass_is_pure_arithmetic():
