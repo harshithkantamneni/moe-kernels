@@ -16,9 +16,14 @@ them and keeps them apart:
     fail whatever the estimator did (audit X57).
 
 The consequence that matters: a cap computed as 2*BM/(alpha*b) from a ladder
-alpha is HIGH by (1 + phi + delta), 31% at BM=128 / BN=64 on mixtral. The (LIN)
-identity the earlier test pinned holds only for a fit that divides by weight
-bytes, which no estimator in this repository does.
+alpha is HIGH by (1 + phi + delta). That factor is a BRACKET over the
+unmeasured alpha_a, 3.6% to 203% at BM=128 / BN=64 on mixtral
+(`overstatement_bracket`); the 31% this docstring once quoted as a point is
+the value at alpha_a = 0.143, the withdrawn (LIN)-solved pair, and every
+point figure in this file is pinned at that pair BY NAME (AUDIT_ALPHA_A) and
+checked to lie inside the bracket. The (LIN) identity the earlier test pinned
+holds only for a fit that divides by weight bytes, which no estimator in this
+repository does.
 """
 from __future__ import annotations
 
@@ -42,6 +47,7 @@ from moe.bench.ai_model import (
     ladder,
     lin_blend,
     lin_overstatement,
+    overstatement_bracket,
     phi,
     traffic,
 )
@@ -55,7 +61,11 @@ K = MIX.hidden_size                 # 4096
 N = 2 * MIX.intermediate_size       # 28672, gate and up
 
 #: The parameters the audit reproduced its numbers at: this module's own
-#: (LIN)-solved pair, at the sweep's pinned BLOCK_N, with no fixed cost.
+#: (LIN)-solved pair, at the sweep's pinned BLOCK_N, with no fixed cost. The
+#: pair is WITHDRAWN as evidence (two points cannot choose a reading, and
+#: alpha_a is unmeasured); it is kept here as the named point at which every
+#: reproduced figure in this file was computed, so that no figure below is a
+#: point quoted without the alpha_a it assumes.
 AUDIT_ALPHA_B, AUDIT_ALPHA_A, AUDIT_BN = 0.307, 0.143, 64
 
 
@@ -104,17 +114,41 @@ def test_intensity_converges_to_the_cap():
             "above it by the dropped slab term")
 
 
-def test_the_three_term_cap_drops_the_slab_term_by_under_one_percent():
-    """Audit X66, stated rather than hidden. `cap()` omits (1-alpha_a)/N and is
-    kept in that form because tests/test_memory_branch_anchor.py pins
-    `ai_cap` to it. On mixtral shapes the gap is 0.4-0.8%, always in the
-    direction of `cap()` being the higher number."""
+def test_the_three_term_cap_gap_is_a_bracket_over_alpha_a_not_a_point():
+    """Audit X66, stated as what it is. `cap()` omits (1-alpha_a)/N, so it
+    sits above `exact_cap` by ((1-alpha_a)/N) / (alpha_b/BM + alpha_a/BN + 1/K),
+    always in the direction of `cap()` being the higher number. The "0.4-0.8%"
+    this test's name once carried was that gap at the withdrawn (0.307, 0.143)
+    pair; over the unmeasured alpha_a at alpha_b = 0.307 it is 0.00% (alpha_a
+    = 1, the slab is a re-read and cap() counts it) to 2.42% (alpha_a = 0 at
+    BM=256), and over the whole legal square its ceiling is K/N = 14.3% at the
+    perfect-caching corner, at every BM. The reason the module gives for
+    keeping `cap()` is no longer the memory_branch_anchor pin (removed in
+    c0efa7d; `ai_cap` goes through `cap_from_fitted`), so this test does not
+    say it is."""
+    worst = 0.0
     for bm in (64, 128, 256):
         c = cap(N, K, block_m=bm, block_n=AUDIT_BN,
                 alpha_b=AUDIT_ALPHA_B, alpha_a=AUDIT_ALPHA_A)
         e = exact_cap(N, K, block_m=bm, block_n=AUDIT_BN,
                       alpha_b=AUDIT_ALPHA_B, alpha_a=AUDIT_ALPHA_A)
-        assert 1.003 < c / e < 1.01, (bm, c / e)
+        assert 1.003 < c / e < 1.01, ("at the audit's own pair", bm, c / e)
+        # the ends of the bracket over alpha_a at that alpha_b
+        lo = cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=AUDIT_ALPHA_B, alpha_a=1.0) \
+            / exact_cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=AUDIT_ALPHA_B, alpha_a=1.0)
+        hi = cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=AUDIT_ALPHA_B, alpha_a=0.0) \
+            / exact_cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=AUDIT_ALPHA_B, alpha_a=0.0)
+        assert lo == pytest.approx(1.0, abs=1e-12), "at alpha_a = 1 nothing is dropped"
+        assert lo < c / e < hi, "the audit's point lies inside the bracket"
+        worst = max(worst, hi - 1.0)
+    assert worst == pytest.approx(0.0242, abs=5e-4), "2.42% at BM=256, alpha_a=0"
+    # the whole-square ceiling: alpha_b = alpha_a = 0 leaves the slab as the
+    # only per-tile activation traffic, and the gap is K/N at any tile
+    for bm in (16, 128, 1024):
+        corner = cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=0.0, alpha_a=0.0) \
+            / exact_cap(N, K, block_m=bm, block_n=AUDIT_BN, alpha_b=0.0, alpha_a=0.0)
+        assert corner - 1.0 == pytest.approx(K / N, rel=1e-9), (bm, corner)
+    assert K / N == pytest.approx(0.1429, abs=1e-4)
 
 
 def test_plugging_a_component_where_the_slope_belongs_overstates_the_cap():
@@ -193,13 +227,22 @@ def test_phi_is_the_one_tile_cost_that_is_not_weights():
     """At BN | N, phi = alpha_a*BM/BN + BM/K + (1-alpha_a)*BM/N, and it does not
     depend on alpha_b. The closed form is checked against the byte count so
     that a reader can trust the pieces the docstrings quote: 0.16 / 0.32 / 0.64
-    at BM = 64 / 128 / 256 on mixtral at BN=64."""
-    for bm, want in ((64, 0.1605), (128, 0.3211), (256, 0.6422)):
+    at BM = 64 / 128 / 256 on mixtral at BN=64 AT alpha_a = 0.143, the
+    withdrawn pair, and the ends 0.018 to 1.02 / 0.036 to 2.03 / 0.071 to 4.06
+    over alpha_a in [0, 1], between which every point figure has to lie."""
+    for bm, want, want_lo, want_hi in ((64, 0.1605, 0.0179, 1.0156),
+                                       (128, 0.3211, 0.0357, 2.0312),
+                                       (256, 0.6422, 0.0714, 4.0625)):
         p = phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=AUDIT_ALPHA_A)
         closed = (AUDIT_ALPHA_A * bm / AUDIT_BN + bm / K
                   + (1 - AUDIT_ALPHA_A) * bm / N)
         assert p == pytest.approx(closed, rel=1e-12)
         assert p == pytest.approx(want, abs=5e-4)
+        lo = phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=0.0)
+        hi = phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=1.0)
+        assert lo == pytest.approx(want_lo, abs=5e-4)
+        assert hi == pytest.approx(want_hi, abs=5e-4)
+        assert lo < p < hi
 
 
 def test_exa_the_real_ladder_fit_on_a_traffic_ladder_returns_exa_not_lin():
@@ -207,18 +250,23 @@ def test_exa_the_real_ladder_fit_on_a_traffic_ladder_returns_exa_not_lin():
     sweep's own `fit_ladder`, and read `LadderFit.alpha` back. It must be
     (alpha_b + phi)/(1 + phi + delta) to a part in 1e9, and it must NOT be the
     (LIN) blend: the two differ by the factor (1 + phi + delta), 32% at
-    BM=128 / BN=64. Run with and without a fixed cost, because delta is the
-    term that only shows up in the level.
+    BM=128 / BN=64 at the audit's alpha_a = 0.143 (3.6% to 203% over the
+    unmeasured alpha_a). Run with and without a fixed cost, because delta is
+    the term that only shows up in the level.
 
     Membership goes through the production path: a `ComputeReference` whose
     scaled compute branch sits well below every tread, so all eight are memory
     bound and the fit is the sweep's own `_line` over all of them. The
-    no-reference split search is NOT used, and the reason is recorded: on an
-    affine ladder a through-origin line over the last tread alone is exact, so
-    the search ties between "all memory" and "all but one", takes the first,
-    and then discards the memory branch as parallel to a one-point compute
-    branch. That is a property of the fallback, not of B/(A+B), and the
-    reference path is the one every published ladder was read through."""
+    no-reference split search is NOT used, for two reasons. It is not the
+    path any published ladder was read through, so a test of "what the
+    estimator returns" that went through it would be testing a different
+    estimator. And its membership is an OUTCOME of a search rather than an
+    input: on these five ladders it returns `undecided_parallel_branch` and
+    no alpha at all on the fixed-cost BM=128 case (review 2026-09-03,
+    review_fallback.py), which is a property of the fallback's split logic
+    and not of B/(A+B). The first version of this docstring said the search
+    ties, takes the first split, and discards the memory branch on every
+    ladder; it does not, and that description was never executed."""
     sweep = _load_sweep()
     for bm, fixed in ((64, 0.0), (128, 0.0), (256, 0.0),
                       (128, 0.05 * K * N * 2), (32, 0.2 * K * N * 2)):
@@ -248,7 +296,7 @@ def test_exa_the_real_ladder_fit_on_a_traffic_ladder_returns_exa_not_lin():
             "factor (1+phi+delta) above the fit, to under 1%")
         assert abs(lin - fit.alpha) / fit.alpha > 0.10, (
             "if LIN and the fit agreed to 10% the correction would not matter; "
-            "at these tiles it is 16% to 64%")
+            "at these tiles and the audit's alpha_a = 0.143 it is 16% to 64%")
 
 
 def test_exa_reproduces_the_audits_numbers_where_lin_predicted_others():
@@ -320,8 +368,11 @@ def test_cap_from_fitted_is_the_exact_cap_and_lin_overstates_it_by_the_factor():
        (1 + phi + delta), with and without a fixed cost.
     3. Against `cap()`, which drops the slab term, the audit measured the
        overstatement as 15.6 / 31.3 / 62.9% at BM = 64 / 128 / 256 (mixtral,
-       BN=64, no fixed cost). Reproduced to 0.2 points; the exact factor is
-       16.1 / 32.1 / 64.2% and the difference is X66, not this defect."""
+       BN=64, no fixed cost, AT alpha_a = 0.143). Reproduced to 0.2 points;
+       the exact factor at that alpha_a is 16.1 / 32.1 / 64.2% and the
+       difference is X66, not this defect. Both are points inside the
+       `overstatement_bracket` over the unmeasured alpha_a, and the last
+       assertion says so rather than letting the point stand alone."""
     b = 2
     for bm, bn, ab, aa, fixed in ((64, 64, 0.307, 0.143, 0.0),
                                   (128, 64, 0.307, 0.143, 0.0),
@@ -349,6 +400,53 @@ def test_cap_from_fitted_is_the_exact_cap_and_lin_overstates_it_by_the_factor():
         assert (lin_cap / three_term - 1.0) * 100 == pytest.approx(want_pct, abs=0.2)
         assert (d.lin_overstatement - 1.0) * 100 > want_pct, (
             "the exact factor is larger still, because cap() is already high")
+        lo, hi = overstatement_bracket(N, K, block_m=bm, block_n=AUDIT_BN, b=b)
+        assert lo < 1.0 + want_pct / 100 < d.lin_overstatement < hi, (
+            "both the audit's point and the exact point are POINTS inside the "
+            "bracket over alpha_a; neither is the overstatement")
+
+
+def test_overstatement_bracket_has_exact_ends_and_every_point_figure_sits_inside():
+    """The overstatement is a bracket because alpha_a is unmeasured, and the
+    bracket's ends are exact because phi is linear and increasing in alpha_a.
+    Three things are pinned: the ends ARE `lin_overstatement` at alpha_a = 0
+    and 1; every interior alpha_a lands between them; and the two ends at
+    BM=128 / BN=64 on mixtral are 1.036 and 3.031, the 3.6% to 203% that
+    replaces the 32% the docstrings once quoted as a point. delta shifts both
+    ends together, and the FAIL branches are a negative delta and a shape
+    that is not a GEMM, refused through the functions the bracket is built
+    from rather than by a check of its own."""
+    b = 2
+    for bm, want_lo, want_hi in ((64, 1.0179, 2.0156), (128, 1.0357, 3.0312),
+                                 (256, 1.0714, 5.0625)):
+        lo, hi = overstatement_bracket(N, K, block_m=bm, block_n=AUDIT_BN, b=b)
+        assert lo == pytest.approx(want_lo, abs=5e-4), bm
+        assert hi == pytest.approx(want_hi, abs=5e-4), bm
+        assert lo == lin_overstatement(
+            phi=phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=0.0, b=b), delta=0.0)
+        assert hi == lin_overstatement(
+            phi=phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=1.0, b=b), delta=0.0)
+        for aa in (0.05, AUDIT_ALPHA_A, 0.5, 0.95):
+            inside = lin_overstatement(
+                phi=phi(N, K, block_m=bm, block_n=AUDIT_BN, alpha_a=aa, b=b), delta=0.0)
+            assert lo < inside < hi, (bm, aa)
+    # the retracted headline: 32% was the point at alpha_a = 0.143, inside
+    # a bracket whose ends differ by a factor of 56 in the overstatement
+    lo, hi = overstatement_bracket(N, K, block_m=128, block_n=64, b=b)
+    assert (lo - 1.0) * 100 == pytest.approx(3.6, abs=0.05)
+    assert (hi - 1.0) * 100 == pytest.approx(203.1, abs=0.1)
+    assert lo < 1.32 < hi
+    # a fixed cost lifts both ends by the same delta
+    lo_d, hi_d = overstatement_bracket(N, K, block_m=128, block_n=64, b=b, delta=0.05)
+    assert lo_d == pytest.approx(lo + 0.05, rel=1e-12)
+    assert hi_d == pytest.approx(hi + 0.05, rel=1e-12)
+    # FAIL branches
+    with pytest.raises(AIModelRefused, match="delta=.*negative"):
+        overstatement_bracket(N, K, block_m=128, block_n=64, b=b, delta=-0.01)
+    with pytest.raises(AIModelRefused, match="positive"):
+        overstatement_bracket(N, K, block_m=0, block_n=64, b=b)
+    with pytest.raises(AIModelRefused, match="positive"):
+        overstatement_bracket(N, math.nan, block_m=128, block_n=64, b=b)
 
 
 def test_lin_cap_of_the_lin_blend_is_the_three_term_cap_and_that_is_all_it_is():
@@ -492,9 +590,16 @@ def test_the_g1_ladders_read_near_0_92_through_exa_not_0_307():
 
 
 def test_the_byte_ladder_is_affine_and_a_non_affine_one_is_refused(monkeypatch):
-    """`decompose` reads slope and level off the ladder and checks them against
-    the closed form, so that a `traffic()` that stopped growing one M-tile at a
-    time would be refused rather than read as (EXA). Plant that world."""
+    """`decompose` fits slope and level over an eight-tread ladder and checks
+    EVERY tread against the closed form, so that a `traffic()` that stopped
+    growing one M-tile at a time would be refused rather than read as (EXA).
+    Plant that world twice: bent at the second tile, which the two-tread guard
+    this function had until 2026-09-03 could see, and bent at the THIRD, which
+    it could not. The review that found the hole (review_fallback.py) bent the
+    weights at n_tiles > 2, got the unbent (EXA) 0.3737 back from `decompose`,
+    and 0.5433 from the real eight-tread `fit_ladder` on the same bytes. The
+    docstrings said such a `traffic()` "is refused"; it was not. `n_max=2`
+    reproduces the old guard so its blind spot stays executable."""
     import moe.bench.ai_model as m
 
     pts = ladder(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1, n_max=8)
@@ -503,18 +608,50 @@ def test_the_byte_ladder_is_affine_and_a_non_affine_one_is_refused(monkeypatch):
         assert dd == pytest.approx(diffs[0], rel=1e-12)
     with pytest.raises(AIModelRefused, match="slope"):
         ladder(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1, n_max=1)
+    # on the unbent ladder the eight-tread OLS and the two-tread read agree,
+    # so widening the guard changed no number
+    full = m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+    two = m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1, n_max=2)
+    assert full.alpha_fitted == pytest.approx(two.alpha_fitted, rel=1e-12)
+    unbent = full.alpha_fitted
 
     real = m.traffic
 
-    def bent(M, N_, K_, **kw):
-        t = real(M, N_, K_, **kw)
-        # a second tile costs 1.5x what the model says: not affine any more
-        return m.Traffic(t.activation_bytes, t.weight_bytes * (1.0 + 0.5 * (t.n_tiles > 1)),
-                         t.output_bytes, t.m_tiles, t.n_tiles)
+    def bent_after(first_bent_tile):
+        def bent(M, N_, K_, **kw):
+            t = real(M, N_, K_, **kw)
+            # every tile from `first_bent_tile` on costs 1.5x what the model
+            # says: not affine any more
+            factor = 1.0 + 0.5 * (t.n_tiles >= first_bent_tile)
+            return m.Traffic(t.activation_bytes, t.weight_bytes * factor,
+                             t.output_bytes, t.m_tiles, t.n_tiles)
+        return bent
 
-    monkeypatch.setattr(m, "traffic", bent)
-    with pytest.raises(AIModelRefused, match="not affine"):
+    # bent at tile 2: the case the old guard saw, still refused
+    monkeypatch.setattr(m, "traffic", bent_after(2))
+    with pytest.raises(AIModelRefused, match="not affine.*tread 2"):
         m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+
+    # bent at tile 3: THE FAIL BRANCH the old guard could not see
+    monkeypatch.setattr(m, "traffic", bent_after(3))
+    with pytest.raises(AIModelRefused, match="not affine.*tread 3"):
+        m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+    with pytest.raises(AIModelRefused, match="not affine"):
+        m.fitted_alpha(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+    # and the two-tread form returns the unbent number as if nothing happened,
+    # which is exactly what the review caught
+    blind = m.decompose(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1, n_max=2)
+    assert blind.alpha_fitted == pytest.approx(unbent, rel=1e-12)
+    assert unbent == pytest.approx(0.3737, abs=5e-4)
+    # the real estimator on the same bent bytes returns a different number,
+    # so the two-tread guard was hiding a real disagreement
+    sweep = _load_sweep()
+    bent_pts = m.ladder(N, K, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1, n_max=8)
+    monkeypatch.setattr(m, "traffic", real)
+    fit = sweep.fit_ladder(bent_pts, 64, sweep.ComputeReference(1024, 0.0, 1e-6, 0.0, "planted"))
+    assert fit.memory_points == 8
+    assert fit.alpha == pytest.approx(0.5433, abs=5e-4)
+    assert abs(fit.alpha - unbent) > 0.1
 
 
 def test_a_nan_is_refused_before_it_can_pass_the_wall_comparisons():
@@ -531,11 +668,19 @@ def test_a_nan_is_refused_before_it_can_pass_the_wall_comparisons():
             alpha_b_from_fitted(**kwargs)
 
 
-def test_an_infinity_is_still_refused_by_the_band():
-    """The sibling case, kept beside it: infinity DOES order against the walls,
-    so it is caught by the band refusal rather than the NaN guard."""
-    with pytest.raises(AIModelRefused):
+def test_an_infinite_alpha_fitted_is_refused_by_the_finiteness_guard():
+    """The sibling case, kept beside it. Until ee83978 this docstring said an
+    infinite alpha_fitted "is caught by the band refusal rather than the NaN
+    guard", because infinity does order against the walls. ee83978 widened
+    the guard to `isfinite` for phi and delta, and alpha_fitted went through
+    the same loop, so an infinite alpha_fitted is now refused as "infinite"
+    BEFORE any wall comparison; the sentence outlived the code it described
+    by one commit. Pin the message so the site that refuses is the one the
+    docstring names."""
+    with pytest.raises(AIModelRefused, match="alpha_fitted is infinite"):
         alpha_b_from_fitted(alpha_fitted=math.inf, phi=0.3, delta=0.0)
+    with pytest.raises(AIModelRefused, match="alpha_fitted is infinite"):
+        alpha_b_from_fitted(alpha_fitted=-math.inf, phi=0.3, delta=0.0)
 
 
 def test_an_infinite_phi_or_delta_is_refused_rather_than_returning_nan():
