@@ -243,30 +243,88 @@ def test_a_span_that_covers_no_gemm_carries_no_per_expert_weight():
 
 
 def test_the_ai_cap_is_the_bound_findings_states_and_is_infinite_at_alpha_zero():
-    """`2 BM / (alpha b)`. At alpha = 0 there is no re-read cost, intensity is
-    unbounded and `2R/b` is exact, so infinity is the right answer and not a
-    guard against division."""
+    """`2 BM / (alpha b)`, an UPPER BOUND on the cap. At alpha = 0 the formula
+    names no re-read cost and no other traffic, so infinity is the right
+    reading of the formula and not a guard against division."""
     assert AR.ai_cap(128, 0.10) == pytest.approx(1280.0)
     assert AR.ai_cap(16, 0.10) == pytest.approx(160.0)
     assert AR.ai_cap(64, 0.33) == pytest.approx(193.9, abs=0.1)
     assert math.isinf(AR.ai_cap(128, 0.0))
 
 
+def _card_ridges() -> dict[str, float]:
+    """Each committed card's own ridge, the numbers the caps are judged against.
+    Not the withdrawn 160.3-176.2, which these tests iterated over until
+    2026-09-03 and which belongs to no card."""
+    return {card: ridge for card, ridge, _band in AR.card_ridge_bands()}
+
+
 def test_the_alpha_at_which_a_tile_stops_being_able_to_cross_is_the_caps_inverse():
     """The two forms have to agree, because the report prints one and reasons
     with the other."""
+    ridges = _card_ridges()
+    assert set(ridges) == {"nvidia_h200", "nvidia_a100_sxm4_80gb"}
     for block_m in (16, 32, 64, 128):
-        for ridge in AR.RIDGE_BAND:
+        for ridge in ridges.values():
             ceiling = AR.max_alpha_that_still_crosses(block_m, ridge)
             assert AR.ai_cap(block_m, ceiling) == pytest.approx(ridge)
 
 
-def test_block_m_16_cannot_reach_the_ridge_at_any_alpha_this_study_has_fitted():
-    """The consequence FINDINGS calls a knife edge. At the repo's old 0.10 the cap
-    is 160 against a ridge band starting at 160.3, so it JUST fails; at anything
-    larger it fails by a mile. Nothing about that conclusion needed the refit."""
-    assert AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA) < AR.RIDGE_BAND[0]
-    assert AR.ai_cap(16, AR.TEMPO_ALPHA) < AR.RIDGE_BAND[0]
+def test_block_m_16_cannot_reach_either_cards_ridge_at_any_alpha_this_study_has_fitted():
+    """The consequence FINDINGS calls a knife edge, on each card's OWN ridge. At
+    the repo's old 0.10 the upper bound is 160 against the H200's 162.8 and the
+    A100's 145.8: it fails the H200 by 2%, and it PASSES the A100's ridge on the
+    uncorrected reading, which is the knife edge the withdrawn 160.3 hid. The
+    corrected bracket does not settle the A100 either way: at alpha_a = 0 the
+    BM=16 correction is 0.45%, so the bracket [127, 159] straddles 145.8 and
+    the A100 verdict at the retracted 0.10 is UNDECIDED, which is the honest
+    form of the knife edge. At TEMPO's 0.33 and the refit's 0.558 the upper
+    bound alone fails both cards by a mile."""
+    ridges = _card_ridges()
+    assert AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA) < ridges["nvidia_h200"]
+    assert AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA) > ridges["nvidia_a100_sxm4_80gb"]
+    lo, hi = AR.corrected_cap_bracket(16, AR.REPO_PUBLISHED_ALPHA)
+    assert lo < ridges["nvidia_a100_sxm4_80gb"] < hi
+    assert AR.cap_bracket_verdict(lo, hi, [139.6, 149.3]).startswith("undecided")
+    for ridge in ridges.values():
+        assert AR.ai_cap(16, AR.TEMPO_ALPHA) < ridge
+        assert AR.ai_cap(16, 0.558) < ridge
+
+
+def test_the_cap_table_prints_the_correction_as_a_bracket_and_scores_on_it(capsys):
+    """Retraction (a): `2 BM / (alpha b)` from a ladder alpha is HIGH by
+    (1 + phi + delta). The table prints that factor as a bracket over the
+    unmeasured alpha_a, the corrected cap beside the uncorrected one, and each
+    card's verdict on the bracket: one word where both ends agree, "undecided"
+    where alpha_a would decide. At BLOCK_M=128 the two ends straddle both
+    cards' bands, so the verdict the old table printed as a point is the
+    bracket's honest answer."""
+    AR.print_ai_cap_table(0.558)
+    out = capsys.readouterr().out
+    assert "upper bound" in out and "(1+phi+delta) bracket" in out
+    assert "alpha_a in [0, 1] at delta = 0" in out
+    rows = {int(line.split("|")[1]): line for line in out.splitlines()
+            if line.strip().startswith("| ") and line.split("|")[1].strip().isdigit()}
+    assert set(rows) == {16, 32, 64, 128, 256}
+    assert "undecided" in rows[128] and "undecided" in rows[256]
+    assert "NEVER crosses" in rows[16] and "undecided" not in rows[16]
+    # The factor bracket is what ai_model says it is, on the shapes named.
+    lo, hi = AR.lin_overstatement_bracket(128)
+    assert 1.03 < lo < 1.05 and 3.0 < hi < 3.2
+    c_lo, c_hi = AR.corrected_cap_bracket(128, 0.558)
+    assert c_lo == pytest.approx(AR.ai_cap(128, 0.558) / hi)
+    assert c_hi == pytest.approx(AR.ai_cap(128, 0.558) / lo)
+    assert c_lo < 139.6 < 165.6 < c_hi
+
+
+def test_the_bracket_verdict_has_a_fourth_word_only_when_the_ends_disagree():
+    band = [152.1, 165.6]
+    assert AR.cap_bracket_verdict(100.0, 140.0, band) == "NEVER crosses"
+    assert AR.cap_bracket_verdict(170.0, 300.0, band) == "crosses"
+    assert AR.cap_bracket_verdict(100.0, 300.0, band).startswith("undecided")
+    assert "alpha_a=1" in AR.cap_bracket_verdict(100.0, 300.0, band)
+    lo, hi = AR.corrected_cap_bracket(128, 0.0)
+    assert math.isinf(lo) and math.isinf(hi)
 
 
 def test_recounting_at_another_block_m_is_a_ceiling_and_never_a_rescale():

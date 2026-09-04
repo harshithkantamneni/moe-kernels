@@ -15,10 +15,17 @@ the first reads that expert's weight block in full and each later one costs
 
     Q(r) = 1 + alpha (ceil(r/BM) - 1),   AI(r) = (2r/b) / Q(r) -> 2 BM / (alpha b)
 
-That bound is why alpha is not a nuisance parameter: at 0.558 it puts BLOCK_M of
-16, 32 and 64 BELOW the measured ridge band of 160.3-176.2, and vLLM runs
-BLOCK_M=16 through the whole decode range, so a decode-configured MoE kernel can
-never reach its compute roof. The whole tile-corrected roofline rests on it.
+That bound is why alpha is not a nuisance parameter. Read as `2 BM / (alpha b)`
+at 0.558 it puts BLOCK_M 16, 32 and 64 at 57, 115 and 229 FLOP/byte, and the
+first two sit below EITHER card's own ridge (H200 162.8, A100 145.8, each off
+its own calibration); vLLM runs BLOCK_M=16 through the whole decode range, so a
+decode-configured MoE kernel can never reach its compute roof. That reading is
+an UPPER BOUND on the cap and not the cap: a ladder-fitted alpha carries the
+first tread's activation and fixed cost in its denominator, so the exact cap is
+lower by (1 + phi + delta) (`moe/bench/ai_model.py`, retraction (a)), and with
+alpha_a unmeasured the factor is a bracket, 1.02 to 3.0 at BM=128. Lowering the
+cap only strengthens the "never" for the small tiles. The whole tile-corrected
+roofline rests on it.
 
 AND IT RESTS ON ONE REGRESSION AGAINST A BYTE MODEL THAT HAS NO TILE TERM.
 `scripts/alpha_refit.py` fits alpha from `implied_traffic_ratio`, which is
@@ -381,7 +388,7 @@ DEFAULT_MODELS = ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite",
 #: the multi-tile and memory-bound windows overlap generously: multi-tile needs
 #: rows per expert above BLOCK_M, memory bound needs rows per expert below the
 #: ridge, and at BLOCK_M=16 the whole ladder (16, 32, 64, 128 rows per expert)
-#: sits inside 160.3.
+#: sits below both cards' own ridges (H200 162.8, A100 145.8).
 DEFAULT_BLOCK_M = 16
 
 #: Everything else about the tile, held fixed so the ONLY thing that varies
@@ -476,6 +483,15 @@ def measured_card(card: str) -> dict:
     a missing ruler makes the headroom gates NOT TESTABLE, which is a VALIDITY
     UNKNOWN and therefore INVALID, and that is the right answer. It is not a
     reason to invent a roof.
+
+    `ridge` IS ALSO READ HERE, AND IT NEVER REACHES THE ESTIMATOR. It is this
+    card's `compute_dense_tflops.bf16` over `memory.bandwidth_tb_s`, the same
+    two fields `calibrate.CalibrationStamp.ridge` divides, and it exists for
+    one consumer: the dot-mode regime gate in `preflight`, which asks whether a
+    rung's compulsory intensity sits below the card's ridge and until
+    2026-09-03 asked that against a hard-coded 160.3 on every card. A regime
+    gate is a statement about the design, not about alpha; the alpha this
+    file measures still touches no ridge, no bandwidth and no byte model.
     """
     import yaml
 
@@ -489,10 +505,18 @@ def measured_card(card: str) -> dict:
     for entry in detail.get("bandwidth_patterns") or []:
         if entry.get("pattern") == ROOF_PATTERN and entry.get("gbps"):
             roof = float(entry["gbps"]) * 1e9
+    peak = float((data.get("compute_dense_tflops") or {}).get("bf16") or 0.0)
+    tb_s = float((data.get("memory") or {}).get("bandwidth_tb_s") or 0.0)
+    ridge = peak / tb_s if peak > 0 and tb_s > 0 else None
     return {"card": data.get("name", card),
             "l2_bytes": int((data.get("observed") or {}).get("l2_bytes") or 0),
             "roof_bytes_s": roof,
             "roof_pattern": ROOF_PATTERN,
+            "ridge": ridge,
+            "ridge_source": (f"{path.name}: {peak:.1f} TFLOP/s bf16 over "
+                             f"{tb_s * 1e3:.1f} GB/s = {ridge:.1f} FLOP/byte"
+                             if ridge else f"{path.name} names no bf16 peak or "
+                             "no bandwidth, so no ridge"),
             "source": path.name}
 
 
@@ -989,7 +1013,8 @@ class Gate:
         return (self.kind, self.token, self.verdict)
 
 
-def preflight(design: Design, l2_bytes: int) -> list[Gate]:
+def preflight(design: Design, l2_bytes: int, ridge: float | None = None,
+              ridge_source: str = "") -> list[Gate]:
     """Refuse a design that cannot answer the question, before it is paid for.
 
     EVERY GATE HERE IS VALIDITY, PASSED EXPLICITLY, and the one that made it
@@ -998,6 +1023,13 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
     and the gate came out CLAIM: a design that cannot ask the question announced
     itself to the driver as a refuted claim about the world. None of these six
     is a claim about the world. They say whether the apparatus can answer one.
+
+    `ridge` is THIS card's own, from `measured_card`, and only the dot-mode
+    regime gate reads it. None means no calibration named one, and that gate
+    is then UNKNOWN (not testable, so INVALID) rather than scored against a
+    number from another machine: it was scored against a hard-coded 160.3 on
+    every card until 2026-09-03, the withdrawn H200 figure, 10% above the
+    A100's own 145.8.
     """
     def _validity(name: str, ok, detail: str) -> Gate:
         return Gate(name, ok, detail, kind=exit_codes.VALIDITY)
@@ -1039,14 +1071,26 @@ def preflight(design: Design, l2_bytes: int) -> list[Gate]:
         "what it could free it for is the activation re-stream"))
 
     if design.compute == "dot":
-        over = [r.key for r in design.rungs
-                if not r.control and r.arith_intensity >= 160.3]
-        gates.append(_validity(
-            "in dot mode every rung stays below the ridge band",
-            not over,
-            "all rungs below 160.3 FLOP/byte" if not over else
-            f"{len(over)} rungs are compute bound: {over[:3]}. A compute-bound "
-            "rung pays for extra tiles in padded arithmetic, not in traffic"))
+        if ridge is None:
+            gates.append(_validity(
+                "in dot mode every rung stays below this card's ridge",
+                None,
+                "NOT TESTABLE: no calibration names a ridge for this card "
+                f"({ridge_source or 'no measured_*.yaml'}), and the gate is not "
+                "scored against another card's; run "
+                "scripts/calibrate_hardware.py --publish first"))
+        else:
+            over = [r.key for r in design.rungs
+                    if not r.control and r.arith_intensity >= ridge]
+            gates.append(_validity(
+                "in dot mode every rung stays below this card's ridge",
+                not over,
+                f"all rungs below {ridge:.1f} FLOP/byte ({ridge_source})"
+                if not over else
+                f"{len(over)} rungs at or above {ridge:.1f} FLOP/byte "
+                f"({ridge_source}) are compute bound: {over[:3]}. A "
+                "compute-bound rung pays for extra tiles in padded arithmetic, "
+                "not in traffic"))
 
     if l2_bytes:
         widest = max((r.alias_bytes(design.alias_extent) for r in design.rungs),
@@ -2677,6 +2721,13 @@ SYNTHETIC_L2_BYTES = measured_card(PLANT_CARD).get("l2_bytes") or 60 * 2 ** 20
 SYNTHETIC_ROOF_BYTES_S = (measured_card(PLANT_CARD).get("roof_bytes_s")
                           or 4469.60368208941e9)
 
+#: The ridge a synthetic dot-mode design is gated against: the planted card's
+#: own, same file. None when the tree carries no calibration for it, in which
+#: case the dot-mode regime gate reads NOT TESTABLE rather than a constant.
+SYNTHETIC_RIDGE = measured_card(PLANT_CARD).get("ridge")
+SYNTHETIC_RIDGE_SOURCE = (f"PLANTED from {PLANT_CARD}'s calibration: "
+                          + str(measured_card(PLANT_CARD).get("ridge_source")))
+
 
 def synthesise(design: Design, law: str, seed: int,
                noise: float = 0.004) -> list[dict]:
@@ -4221,12 +4272,29 @@ def main(argv: list[str] | None = None) -> int:
     # which is a VALIDITY UNKNOWN and therefore INVALID, and that is correct.
     roof = (SYNTHETIC_ROOF_BYTES_S if args.synthetic
             else (planned.get("roof_bytes_s") or facts.get("roof_bytes_s")))
+    # THE RIDGE, THE SAME WAY: this card's own or None, never a constant. A
+    # replay carries the one its cells were gated against in plan.json, so a
+    # finished dot-mode run re-reported on a laptop is not rescored against
+    # whatever card is attached there.
+    planned_ridge = (planned.get("provenance") or {}).get("ridge")
+    if args.synthetic:
+        ridge, ridge_source = SYNTHETIC_RIDGE, SYNTHETIC_RIDGE_SOURCE
+    elif planned_ridge:
+        ridge = float(planned_ridge)
+        ridge_source = f"{out_dir.name}/plan.json: {planned.get('ridge_source', '')}"
+    else:
+        ridge = facts.get("ridge")
+        ridge_source = str(facts.get("ridge_source") or
+                           f"no calibration for {card}")
 
     # PROVENANCE, built once and written into every artefact this run leaves.
     # None of the ten gaps-session scripts wrote a commit, a card or an
     # instrument, so not one of the 26 published reports can be attributed to a
-    # code version (A5).
-    prov = PV.provenance_block(instrument=timing.TIMING_BASIS)
+    # code version (A5). The ridge the regime gate scored against rides in the
+    # block's own `ridge`/`ridge_source` fields, which is where a replay reads
+    # it back from; a plan key of the same name would collide with the stamp.
+    prov = PV.provenance_block(instrument=timing.TIMING_BASIS,
+                               ridge=ridge, ridge_source=ridge_source)
 
     say = Report()
     say(f"# alpha by ablation, without the byte model   ({git_head() or 'no git'})")
@@ -4266,7 +4334,7 @@ def main(argv: list[str] | None = None) -> int:
     # it met an H200, where L2 is 60 MiB and deepseek-v2's 56 MiB/expert crosses
     # from above the line to below it. The whole point of a planted law is that
     # recovering it is machine-independent.
-    pre = preflight(design, l2)
+    pre = preflight(design, l2, ridge, ridge_source)
     report_design(say, design, pre, l2, synthetic=bool(args.synthetic))
     # `args.probe` ALONE. `and args.run` denied the probe's cost on the only
     # page an operator can read before they have a card, which is the page a
@@ -4375,7 +4443,7 @@ def main(argv: list[str] | None = None) -> int:
             args.compute = chosen["compute"]
             design = build_design(args)
             out_dir = resolve_out(design)
-            pre = preflight(design, l2)
+            pre = preflight(design, l2, ridge, ridge_source)
             say()
             say(f"## re-pinned by the probe; output directory is now {out_dir}")
             say()

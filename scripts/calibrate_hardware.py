@@ -290,6 +290,13 @@ def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
     the sound fixture puts write below the pin rate and the over-the-pin fixture
     drops the write pattern entirely, so the gate was not even emitted there.
 
+    `not_throttled` IS SCORED ON THE UNDER-LOAD VERDICT, `under_load_clock_verdict`,
+    never on `clocks["throttled"]`. That field is `timing.clock_drift` over two
+    idle-instant samples taken between loads, which detects whether the first
+    sample caught the idle boost, not throttling (`TIMING_BASIS` v2 retired
+    it), and this gate scored it until 2026-09-03. A calibration that carries
+    no under-load flag is UNKNOWN here, which counts against the gate.
+
     Two of the six are CONDITIONAL, and a gate that is absent is not a gate that
     passed: `write_rate_is_a_store_rate` is scored only when a write pattern was
     measured, and neither pin-rate gate can be scored without a bus width, which
@@ -353,14 +360,92 @@ def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
                   if cal.clock_ramped else
                   "every pattern was measured in the same clock state"))
 
-    throttled = bool((cal.clocks or {}).get("throttled"))
-    gates.append((EX.CLAIM, "not_throttled",
-                  EX.FAIL if throttled else EX.PASS,
-                  f"clocks {(cal.clocks or {}).get('sm_start_mhz')} -> "
-                  f"{(cal.clocks or {}).get('sm_end_mhz')} MHz"
-                  + (", THROTTLED: ceilings measured on a throttling GPU are "
-                     "low" if throttled else "")))
+    verdict, detail = under_load_clock_verdict(cal)
+    gates.append((EX.CLAIM, "not_throttled", verdict, detail))
     return gates
+
+
+#: Where a calibration may carry its under-load clock verdict, in the order
+#: they are read. `calibrate.py` writes the loaded-clock record beside the
+#: idle pair (`clocks`) or inside the GEMM's own `LoadedClock` block
+#: (`gemm_clock`); the field names are `timing.KernelTiming`'s, so a cell and a
+#: roof are levelled by one vocabulary and `write_cells` already writes the
+#: same three columns.
+UNDER_LOAD_BLOCKS = ("clocks", "gemm_clock")
+
+
+def under_load_clock_verdict(cal) -> tuple[str, str]:
+    """`(verdict, detail)` for gate `not_throttled`, from the flags taken UNDER LOAD.
+
+    THE FLAG THIS REPLACES. `Calibration.clocks["throttled"]` is
+    `timing.clock_drift(before, after)`: two idle-instant samples, one before
+    the settle and one after the last bandwidth pass, and a >5% DROP between
+    them. On the committed H200 file that pair reads `drift_pct: -36.08`, a
+    RISE, because the first sample caught a cold card, and on the published
+    alpha-0558 arm the same detector flagged 91% of vLLM rows above T=4096
+    while flagged and unflagged replicates timed at ratio 0.998. It says
+    whether the START sample caught the idle boost. It cannot say whether the
+    ceilings were measured at the clock they are quoted at, and this gate
+    passed on it until 2026-09-03.
+
+    WHAT IT READS INSTEAD, in `timing.clock_flags`' own words. LEVEL,
+    `clock_level_ok`: the SM clock sampled WHILE the GEMM ran, as a median of
+    at least `CLOCK_SAMPLE_FLOOR` samples, is within `LEVEL_FRACTION` of the
+    reference clock the roof is quoted at. That is the question a ceiling has
+    to answer. DRIFT, `clock_drift_ok`: the first and last under-load samples
+    agree within `DRIFT_FRACTION`, either direction. LEVEL is scored when it is
+    present and DRIFT when only DRIFT is; the detail names which, with the
+    numbers it compared, so a reader of the RESULT line knows what decided it.
+
+    REFUSES on the legacy shape. A calibration that carries neither flag in
+    any of `UNDER_LOAD_BLOCKS` predates the under-load verdict, and the only
+    clock evidence it has is the retired pair; the verdict is UNKNOWN with the
+    reason, which `exit_codes.classify` counts AGAINST the gate. Substituting
+    the retired flag would let the gate pass on evidence the instrument has
+    already disowned. A flag that is present but None (no usable sample) is
+    UNKNOWN for the same reason.
+    """
+    for name in UNDER_LOAD_BLOCKS:
+        block = getattr(cal, name, None) or {}
+        if not isinstance(block, dict):
+            continue
+        if "clock_level_ok" not in block and "clock_drift_ok" not in block:
+            continue
+        level = block.get("clock_level_ok")
+        drift = block.get("clock_drift_ok")
+        load = block.get("sm_clock_load_mhz")
+        ref = block.get("reference_clock_mhz")
+        where = f"{name}.{{clock_level_ok,clock_drift_ok}}"
+        if level is not None:
+            level = bool(level)
+            return (EX.PASS if level else EX.FAIL,
+                    f"scored LEVEL (clock_level_ok={level}) from {where}: "
+                    f"{load if load is not None else 'unrecorded'} MHz under load "
+                    f"against reference {ref if ref is not None else 'unrecorded'} MHz"
+                    + ("" if level else
+                       "; the card ran below the clock its roof is quoted at, so "
+                       "the ceilings are low"))
+        if drift is not None:
+            drift = bool(drift)
+            return (EX.PASS if drift else EX.FAIL,
+                    f"scored DRIFT (clock_drift_ok={drift}) from {where}, LEVEL "
+                    "undetermined (no reference clock): first and last under-load "
+                    f"samples {block.get('sm_clock_start_mhz', 'unrecorded')} -> "
+                    f"{block.get('sm_clock_end_mhz', 'unrecorded')} MHz"
+                    + ("" if drift else
+                       "; the clock moved during the measurement, so the ceilings "
+                       "are a blend of two states"))
+        return (EX.UNKNOWN,
+                f"{where} are present but both None: no usable under-load clock "
+                "sample, so neither LEVEL nor DRIFT can be scored; the retired "
+                "idle-instant `throttled` flag is NOT substituted")
+    return (EX.UNKNOWN,
+            "this calibration predates the under-load clock verdict: none of "
+            f"{', '.join(UNDER_LOAD_BLOCKS)} carries clock_level_ok or "
+            "clock_drift_ok, and the only clock evidence in it is the retired "
+            "idle-instant `throttled` pair, which detects an idle-boost catch, "
+            "not throttling. NOT scored on it; recalibrate with a calibrate.py "
+            "that records the clock under load")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -595,13 +680,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    {pat.pattern:<8}{pat.sm_clock_start_mhz:>6} -> "
                   f"{pat.sm_clock_end_mhz:<6} MHz")
 
-    c = cal.clocks
-    print(f"\n  clocks            {c['sm_start_mhz']} -> {c['sm_end_mhz']} MHz, "
-          f"{c['temp_start_c']} -> {c['temp_end_c']} C"
-          + ("  THROTTLED" if c["throttled"] else ""))
-    if c["throttled"]:
-        print("                    ceilings measured on a throttling GPU are low; "
-              "let it cool and re-run")
+    c = cal.clocks or {}
+    # The idle-instant pair is printed AS the retired reading it is, and the
+    # verdict beside it is the under-load one the gate scores. Until 2026-09-03
+    # this block printed "THROTTLED" off that pair, which on the committed H200
+    # file is a -36% "drift" caused by a cold first sample.
+    print(f"\n  clocks (idle pair) {c.get('sm_start_mhz', '?')} -> "
+          f"{c.get('sm_end_mhz', '?')} MHz, {c.get('temp_start_c', '?')} -> "
+          f"{c.get('temp_end_c', '?')} C  [retired idle-instant reading, not scored]")
+    verdict, detail = under_load_clock_verdict(cal)
+    print(f"  clock under load  {verdict}: {detail}")
+    if verdict == EX.FAIL:
+        print("                    ceilings measured off the reference clock are "
+              "low; let it settle and re-run")
 
     # A write figure at or above datasheet peak means the byte accounting is
     # wrong (a read-for-ownership would make real traffic 2N), not that the
