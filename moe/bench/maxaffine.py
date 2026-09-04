@@ -40,9 +40,13 @@ pool at uniform routing, 16 cells, `N = tokens`, relative weighting:
    of up to 263%. A model that misses by 260% is not locating anything.
  - its single answer is EARLY, and on the five-stage cells it is not the ridge.
    Rows per expert at the inflection is 145.8 (CV 6%) on the one-stage cells,
-   just under the measured ridge band of 160.3 to 176.2, and 48.2 (CV 30%) on the
-   five-stage cells, three to nine times below it. The slope detector's LAST
-   crossing gives 175.8 (CV 21%), inside the band.
+   10% under the H200's own ridge of 162.8 FLOP/byte (`2R/b` puts the crossing
+   at `R = ridge` rows per expert; 162.8 is `measured_nvidia_h200.yaml`, and
+   the "measured ridge band of 160.3 to 176.2" this line used to quote is two
+   compute calibrations disagreeing, withdrawn 2026-09-02), and 48.2 (CV 30%)
+   on the five-stage cells, three to nine times below it. The slope detector's
+   LAST crossing gives 175.8 (CV 21%), 8% above that ridge and within its own
+   scatter of it.
  - "one crossing by construction" IS FALSE ALONG A MEASURED GRID. 14 of the 16
    cells have the fitted compute branch on top at T=1 and T=2, below it by T=4
    and on top again at the inflection, because `G` rises steeply at tiny batches
@@ -495,8 +499,10 @@ class Comparison:
         AMBIGUITY IS NOT THE SAME AS BEING RIGHT: on the eight cells where this
         is true, the single answer max-affine returns sits below the slope
         detector's FIRST crossing on six, and on the six five-stage cells among
-        them it sits at 39 to 63 rows per expert against a measured ridge band of
-        160.3 to 176.2. Read it with `fit.mean_rel_err` beside it.
+        them it sits at 39 to 63 rows per expert against the H200's own ridge
+        of 162.8 (`measured_nvidia_h200.yaml`; the 160.3-176.2 band once quoted
+        here is withdrawn, it was no card's ridge). Read it with
+        `fit.mean_rel_err` beside it.
         """
         return self.slope_ambiguous and self.affine_single
 

@@ -41,6 +41,7 @@ from test_multiple_crossings import (
     pool,
 )
 
+from moe.bench import roofline
 from moe.bench.maxaffine import (
     ABSOLUTE,
     PADDED_ROWS,
@@ -60,10 +61,12 @@ from moe.routing.imbalance import TileEfficiencyUndetermined
 
 REPO = Path(__file__).resolve().parent.parent
 
-#: The H200 ridge band `docs/FINDINGS.md` scores every bf16 crossing against.
+#: The H200's OWN ridge, `peak(bf16) / bandwidth` off its committed calibration.
 #: `2R/b` puts the crossing at `R = ridge` rows per expert, so this is also the
-#: rows-per-expert window an estimator's answer has to land in to be the ridge.
-RIDGE_BAND = (160.3, 176.2)
+#: rows-per-expert mark an estimator's answer has to land near to be the ridge.
+#: This used to be `RIDGE_BAND = (160.3, 176.2)`, two compute calibrations of
+#: the card 9.9% apart and no card's ridge, withdrawn 2026-09-02.
+H200_RIDGE = roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16")
 
 
 def grid(a: float, b: float, c: float, beta: float,
@@ -287,20 +290,19 @@ def test_max_affine_does_not_describe_the_five_stage_staircase():
 
 @needs_published
 def test_the_five_stage_inflection_lands_far_below_the_ridge_it_should_find():
-    """`2R/b` puts the crossing at `R = ridge` rows per expert, and the measured
-    band is 160.3 to 176.2. Max-affine reaches 135 to 157 on the one-stage cells,
-    just under the band, and 18 to 63 on the five-stage cells, three to nine
-    times below it. So on the cells where it removes the slope detector's
-    ambiguity it is not reporting the ridge, and the ambiguity was not the
-    problem."""
+    """`2R/b` puts the crossing at `R = ridge` rows per expert, and the H200's
+    own ridge is 162.8. Max-affine reaches 135 to 157 on the one-stage cells,
+    just under it, and 18 to 63 on the five-stage cells, three to nine times
+    below it. So on the cells where it removes the slope detector's ambiguity
+    it is not reporting the ridge, and the ambiguity was not the problem."""
     fits = canonical_fits()
     five = sorted(rows_per_expert(k[0], f.inflection)
                   for k, f in fits.items() if k[1] in FIVE_STAGE)
     one = sorted(rows_per_expert(k[0], f.inflection)
                  for k, f in fits.items() if k[1] in ONE_STAGE)
     assert max(five) < min(one)
-    assert max(five) < RIDGE_BAND[0] / 2
-    assert RIDGE_BAND[0] * 0.75 < statistics.fmean(one) < RIDGE_BAND[0]
+    assert max(five) < H200_RIDGE / 2
+    assert H200_RIDGE * 0.75 < statistics.fmean(one) < H200_RIDGE
 
 
 @needs_published

@@ -618,7 +618,7 @@ def test_sharding_must_not_move_the_predicted_crossing(model):
     crossing, `2R/b` is incomplete in a way no dtype or device test has caught.
     """
     shard = f"{model}-tp8"
-    for ridge in PR.H200_RIDGE_BAND:
+    for ridge in PR.CROSSING_RIDGE_BAND:
         assert crossing_batch(shard, ridge) == crossing_batch(model, ridge)
 
 

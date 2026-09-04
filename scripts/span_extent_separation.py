@@ -338,13 +338,122 @@ PUBLISHED_FIVE_STAGE_CROSSING: dict[str, float] = {
     "deepseek-v3": 3010.0,
 }
 
-#: The measured H200 ridge band, both ends (`docs/STUDY.md:163-170`). NOT used
-#: by any ratio here -- the prediction cancels -- and carried only so the cost
-#: model has a peak to divide by. Any number that touches it says so.
-RIDGE_BAND = (160.3, 176.2)
+#: THE COST MODEL'S CEILINGS ARE RESOLVED, NOT WRITTEN DOWN. Until 2026-09-03
+#: this file carried `RIDGE_BAND = (160.3, 176.2)` as "the measured H200 ridge
+#: band, both ends" and `BANDWIDTH_GBPS = 4374.5`, and `--ridge` defaulted to
+#: the band's low end. That band is two H200 compute calibrations disagreeing
+#: by 9.9% (160.3 is calibration md5 `4d84542b`), no card's ridge, withdrawn
+#: from all 26 published reports on 2026-09-02. No ratio on this page touches
+#: the ridge -- the predicted crossing cancels -- but the cost model divides by
+#: `ridge x bandwidth`, and a plan priced against a withdrawn number is a plan
+#: nobody can reproduce. `resolve_cost_ceilings` is where both now come from.
+WITHDRAWN_RIDGE_BAND_WHY = (
+    "160.3-176.2 FLOP/byte was two H200 compute calibrations 9.9% apart (md5 "
+    "4d84542b at the low end), no card's ridge; withdrawn 2026-09-02")
 
-#: Measured H200 ceilings, same source. Cost model only.
-BANDWIDTH_GBPS = 4374.5
+#: The calibration a laptop plan is allowed to PRICE against when no device is
+#: attached: the committed H200 file, read through `roofline` so the number is
+#: the file's and not a literal here. It is a stated hypothesis and the
+#: provenance block says so; a run with a real card never reads it.
+HYPOTHESIS_CALIBRATION = "measured_nvidia_h200"
+
+
+@dataclasses.dataclass(frozen=True)
+class CostCeilings:
+    """The ridge and bandwidth the cost model divides by, each with its source.
+
+    `ridge_source` and `bandwidth_source` are prose, and both start with
+    "COST MODEL ONLY" because that is the whole scope of these two numbers in
+    this script: `render_instrument_plan` and the synthetic worlds price and
+    generate against `ridge x bandwidth`, and no measured ratio consults
+    either. `kind` is the short token: `cli`, `calibration` or `hypothesis`.
+    """
+
+    ridge: float
+    bandwidth_gbps: float
+    ridge_source: str
+    bandwidth_source: str
+    kind: str
+
+
+def resolve_cost_ceilings(ridge_arg: float, bandwidth_arg: float, card: str,
+                          dtype: str) -> CostCeilings:
+    """The ceilings THIS run is entitled to price against, or a refusal.
+
+    Order, and each step is a different kind of claim:
+
+      1. `--ridge` / `--bandwidth-gbps`, each independently: the operator's
+         assertion, in the run's own command line.
+      2. THE ATTACHED DEVICE'S OWN CALIBRATION, through `roofline.load_measured`:
+         `peak(dtype) / bandwidth` off the yaml `scripts/calibrate_hardware.py`
+         wrote for this GPU. A card with no calibration REFUSES rather than
+         being priced against another machine's file, and a calibration for a
+         different device (`HardwareMismatch`) refuses the same way.
+      3. NO DEVICE (`NO_CARD`: a laptop plan, a dry run, a self test), where
+         nothing is measured and so nothing can be mislabelled: the committed
+         `HYPOTHESIS_CALIBRATION`, labelled HYPOTHESIS in both source strings.
+
+    The refusal is a string `SystemExit`, which `main` files as REFUSED (2),
+    never CLAIM_FAIL: a plan that could not name its ceiling measured nothing.
+    """
+    from moe.bench import roofline
+
+    if ridge_arg > 0.0 and bandwidth_arg > 0.0:
+        return CostCeilings(
+            ridge_arg, bandwidth_arg,
+            "COST MODEL ONLY: --ridge, given on the command line",
+            "COST MODEL ONLY: --bandwidth-gbps, given on the command line",
+            "cli")
+
+    if card == NO_CARD:
+        try:
+            hw = roofline.load_hardware(HYPOTHESIS_CALIBRATION)
+        except (FileNotFoundError, ValueError, KeyError,
+                roofline.UnverifiedHardware) as exc:
+            raise SystemExit(
+                f"REFUSED: no device is attached and the committed "
+                f"{HYPOTHESIS_CALIBRATION}.yaml cannot be read ({exc}), so the "
+                "cost model has no ceiling to price against. State one: "
+                "--ridge <FLOP/byte> --bandwidth-gbps <GB/s>. Nothing measured.") \
+                from exc
+        label = (f"HYPOTHESIS, no device attached: {hw.name} from "
+                 f"{HYPOTHESIS_CALIBRATION}.yaml, which belongs to no card in "
+                 "this run")
+        kind = "hypothesis"
+    else:
+        try:
+            hw = roofline.load_measured(card)
+        except roofline.HardwareMismatch as exc:
+            raise SystemExit(f"REFUSED: {exc}\nNothing measured.") from exc
+        if hw is None:
+            raise SystemExit(
+                f"REFUSED: no calibration for this device ({card}), so this run "
+                "has no ceiling it is entitled to price against; the withdrawn "
+                f"constant ({WITHDRAWN_RIDGE_BAND_WHY}) does not stand in.\n"
+                "    Run:  python scripts/calibrate_hardware.py\n"
+                "    or state the assertion yourself:  --ridge <FLOP/byte> "
+                "--bandwidth-gbps <GB/s>\nNothing measured.")
+        label = f"measured on this device: {hw.name}"
+        kind = "calibration"
+
+    try:
+        ridge = ridge_arg if ridge_arg > 0.0 else hw.ridge_point(dtype)
+    except ValueError as exc:
+        raise SystemExit(
+            f"REFUSED: {hw.name} has a measured bandwidth but no verified "
+            f"{dtype} peak, so it cannot state a ridge: {exc}\nNothing "
+            "measured.") from exc
+    bandwidth = bandwidth_arg if bandwidth_arg > 0.0 else hw.bandwidth_bytes_s / 1e9
+    ridge_source = ("COST MODEL ONLY: --ridge, given on the command line"
+                    if ridge_arg > 0.0 else
+                    f"COST MODEL ONLY: {label}; {dtype} ridge {ridge:.1f} FLOP/byte "
+                    "= peak over bandwidth. No ratio on this page touches it; "
+                    "the predicted crossing cancels out of every one")
+    bandwidth_source = ("COST MODEL ONLY: --bandwidth-gbps, given on the command line"
+                        if bandwidth_arg > 0.0 else
+                        f"COST MODEL ONLY: {label}; {bandwidth:.1f} GB/s")
+    return CostCeilings(ridge, bandwidth, ridge_source, bandwidth_source,
+                        "cli" if ridge_arg > 0.0 and bandwidth_arg > 0.0 else kind)
 
 #: The models the published separation was computed over.
 DEFAULT_MODELS: tuple[str, ...] = ("mixtral-8x7b", "qwen2-57b-a14b",
@@ -4192,10 +4301,17 @@ def build_parser() -> argparse.ArgumentParser:
                          "script scores no ratio against the roof, so DRIFT is "
                          "the flag that matters here and it needs no reference")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--ridge", type=float, default=RIDGE_BAND[0],
-                    help="COST MODEL ONLY. No ratio in this script touches it")
-    ap.add_argument("--bandwidth-gbps", type=float, default=BANDWIDTH_GBPS,
-                    help="COST MODEL ONLY, same reason")
+    ap.add_argument("--ridge", type=float, default=0.0,
+                    help="COST MODEL ONLY; no ratio in this script touches it. "
+                         "FLOP/byte. 0 (the default) reads the attached "
+                         "device's own calibration and REFUSES if there is "
+                         "none; with no device it prices against the committed "
+                         "H200 calibration and labels that a HYPOTHESIS. It "
+                         "used to default to 160.3, a withdrawn figure that "
+                         "was no card's ridge")
+    ap.add_argument("--bandwidth-gbps", type=float, default=0.0,
+                    help="COST MODEL ONLY, same reason and same resolution; "
+                         "0 (the default) reads the same calibration as --ridge")
     ap.add_argument("--out-dir", type=Path, default=None)
     ap.add_argument("--run-id", default=None,
                     help="defaults to a hash of the plan, so re-running the "
@@ -4262,14 +4378,14 @@ def _main(argv: list[str] | None = None) -> int:
                                 warmup_ms=args.warmup_ms, trials=args.trials)
     gpu_name = "" if card == NO_CARD else card
     resume = survey_resume(csv_path, gpu_name)
+    ceilings = resolve_cost_ceilings(args.ridge, args.bandwidth_gbps, card,
+                                     args.dtype)
+    args.ridge, args.bandwidth_gbps = ceilings.ridge, ceilings.bandwidth_gbps
     prov = PV.provenance_block(
-        instrument=timing_basis(), ridge=args.ridge,
-        ridge_source="COST MODEL ONLY: --ridge, default RIDGE_BAND[0] from "
-                     "docs/STUDY.md:163-170. No ratio on this page touches it; "
-                     "the predicted crossing cancels out of every one",
-        bandwidth=args.bandwidth_gbps,
-        bandwidth_source="COST MODEL ONLY: --bandwidth-gbps, default "
-                         "BANDWIDTH_GBPS from docs/STUDY.md:163-170",
+        instrument=timing_basis(), ridge=ceilings.ridge,
+        ridge_source=ceilings.ridge_source,
+        bandwidth=ceilings.bandwidth_gbps,
+        bandwidth_source=ceilings.bandwidth_source,
         warmup_ms=args.warmup_ms, target_ms=args.target_ms)
 
     header = "\n\n".join([

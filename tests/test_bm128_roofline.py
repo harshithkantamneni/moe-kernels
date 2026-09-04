@@ -161,7 +161,8 @@ def test_the_grid_is_a_chain_of_doublings_spanning_the_onset(rf, cfg):
     assert all(b == 2 * a for a, b in zip(rows, rows[1:], strict=False))
     assert [r for r in rows if r < 128] and [r for r in rows if r > 128], \
         "the sweep must spend cells on both sides of the onset"
-    assert max(rows) // 128 == 32, "the observed arm reaches 32 M-tiles"
+    assert max(rows) // 128 == 32, \
+        "the observed arm reaches 32 M-tiles on mean rows (34 at the busiest expert)"
 
 
 def test_a_grid_that_does_not_double_is_refused(rf, cfg):
@@ -1362,7 +1363,13 @@ def test_the_stale_cap_sentence_is_gone_and_the_estimator_is_named(rf):
     assert "used to read" in doc and "Both halves are retracted" in doc
     assert doc.count("near 150") == 1, "quoted once, asserted never"
     assert "(EXA)" in doc and "alpha_fitted" in doc
-    assert "0.92-1.02" in doc, "the alpha the ladders actually read"
+    # The G=1 alpha is a BRACKET across models (0.62 to 1.02), not the
+    # mixtral-only 0.92-1.02 once quoted for every model; the old figure
+    # survives only inside its own retraction sentence.
+    assert "0.62 to 1.02" in doc, "the alphas the ladders actually read"
+    assert "BRACKET" in doc
+    assert doc.count("0.92-1.02") == 1 and "used to say" in doc
+    assert doc.count("163.7") == 1, "the old ridge figure survives only in the retraction"
 
 
 def test_the_script_no_longer_asks_the_sweep_for_the_retired_instrument(rf):
