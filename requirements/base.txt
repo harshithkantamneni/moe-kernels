@@ -21,6 +21,17 @@
 # Check `nvidia-smi` first: a cu13 wheel needs driver r580+. Pick the wheel index
 # that matches the driver, not the image name. The download is a few GB, once,
 # onto the persistent volume.
+#
+# ON A LAPTOP the same omission has to be filled by hand, because
+# tests/conftest.py and moe/bench/timing.py import torch at module level and
+# nothing here installs it: after `uv pip install -e ".[dev]"`, add
+#
+#   uv pip install --python .venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+#
+# README.md "Running it" is the documented path and tests/test_docs.py keeps
+# the numbers on that page true. Without the CPU wheel pytest fails while
+# loading conftest.py with zero tests collected and run_all.sh --dry-run exits
+# 1, which is what a stranger got from this file's silence until 2026-09-03.
 numpy
 pandas
 matplotlib

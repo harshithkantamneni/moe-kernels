@@ -51,10 +51,17 @@ and autotuning results survive the pod.
 
 **Autotune and graph capture interact.** `triton.autotune` benchmarks its config
 space on the first call with a new key, and that involves synchronising, which
-cannot happen inside a graph capture. `time_graph` runs three warmup iterations
-on a side stream before capturing, which is enough to populate the autotune
-cache. If you build a very large autotune space, warm it once outside the timed
-path rather than discovering the cost inside it.
+cannot happen inside a graph capture. `driver.time_kernel_graph` calls the
+callable three times on a side stream before capturing, which is enough to
+populate the autotune cache; that pre-capture loop is a call count because it
+exists to populate a cache, not to settle a clock. The TIMED warmup is a
+different thing: the replay is then handed to `timing.time_kernel`, which warms
+for `warmup_ms` of sustained GPU load (a duration, never a count; see
+`docs/APPARATUS.md`) before sizing its iterations. An earlier version of this
+paragraph described "three warmup iterations" as the whole warmup (retracted
+2026-09-02: a count was the wrong unit, and the instrument now refuses a zero
+duration). If you build a very large autotune space, warm it once outside the
+timed path rather than discovering the cost inside it.
 
 ## CUDA C++
 

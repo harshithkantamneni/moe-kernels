@@ -1,7 +1,8 @@
 # Findings
 
 What this project has measured, claim by claim. Written 2026-08-31, against the
-ten published arms in `results/published/`.
+ten arms then in `results/published/`; the evidence base below now lists all 14
+(the four published since carry a v4 CSV and three sets of ladder reports).
 
 `docs/STUDY.md` is the working state: how each claim got where it is, what was
 retracted and why, what runs where, what to do next. This file is the result.
@@ -14,10 +15,109 @@ tile sweep, the vLLM config ladders) are quoted from run logs and named as such.
 
 ---
 
+## RETRACTIONS (read before any table below)
+
+Added 2026-09-03. Every entry names what was withdrawn, when, why, and where
+the corrected number lives. The retracted text and table rows below are left
+in place and marked inline "(retracted ...)", so the history is visible
+without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
+(e) `moe/bench/roofline.py` and the rescored reports, behind (f)
+`moe/bench/timing.py`; `docs/APPARATUS.md` is the one-page summary.
+
+- **(a) The cap identity, `cap = 2 BM / (alpha b)`.** Withdrawn 2026-09-02.
+  The three-term cap is `2 / (b (alpha_b/BM + alpha_a/BN + 1/K))`, and it is
+  exact for `alpha_b`, the weight miss fraction. The study's alpha is not
+  `alpha_b`: it is a ladder fit `B/(A+B)`, which over the three-term model
+  returns `(alpha_b + phi) / (1 + phi + delta)` (EXA), so a cap computed as
+  `2 BM / (alpha_fitted b)` is HIGH by `(1 + phi + delta)`. `alpha_a` has no
+  measurement anywhere in this repository, so every corrected cap is a
+  BRACKET over it. Corrected form: `ai_model.cap_from_fitted`, which refuses a
+  fit the model cannot have produced. The tile-corrected roofline section
+  below is marked wherever it reads a fitted alpha into the `alpha_b` slot.
+- **(b) The BLOCK_M=128 straddle.** Withdrawn 2026-09-02. Published: cap 150.4
+  on the A100 against its ridge 145.8 (above) and 158.6 on the H200 against
+  162.8 (below), read as the tile straddling the ridge. Through (EXA), with
+  the fused layer's own `phi = Act1/W` (0.069 A100, 0.123 H200) and `delta` at
+  its floor of 0, the caps are 135.4 (0.929 of the A100 ridge) and 130.7
+  (0.803 of the H200 ridge). Both inputs are floors, so those are UPPER bounds,
+  and neither reaches its ridge: no straddle on either card
+  (`scripts/bm128_depth.py --audit`). For the pooled alpha = 0.558 row of the
+  cap table below (published 229): through (EXA) on the single-GEMM model at
+  BN=64 with `delta = BM/K`, the cap is 214.1 at `alpha_a = 0`, 169.1 at
+  0.143, 111.0 at 0.5; it falls below the H200's 162.8 once `alpha_a` exceeds
+  0.17 and below the A100's 145.8 past 0.255, and `ai_model` refuses the fit
+  outright from `alpha_a = 0.635`. So "128 crosses" requires `alpha_a < 0.17`,
+  and `alpha_a` is what the `bn_g16` arm of `scripts/h200_gaps_session.sh`
+  exists to measure.
+- **(c) alpha_b = 0.307 and the 2% match to TEMPO's b2/b.** Withdrawn
+  2026-09-02: a unit artefact of reading two anchor points through the (LIN)
+  form; through (EXA) the same G=1 ladders read `alpha_b` near 0.92
+  (`scripts/bn_decomposition.py`, LADDER column). This file never printed
+  0.307; listed because scripts and STUDY readers quoted it.
+- **(d) The direction of alpha with GROUP_SIZE_M on the A100.** Withdrawn
+  2026-09-02. The pooled surface's swizzle column fell 0.896 to 0.782 by
+  composition (two models in the G=1 median, one in the G=64); the one
+  matched cell moves the other way, by 0.028, and a paired MDE needs two
+  cells. No direction is established on either card. The "falls with
+  GROUP_SIZE_M (0.570 at 1, 0.488 at 16)" below is a fit over the published
+  pool and predicts nothing beyond it.
+- **(e) The ridge "band" 160.3 to 176.2.** Withdrawn 2026-09-02 as a ridge of
+  any card. The two ends are two calibrations of this one H200, and their
+  spread is its compute ceiling failing to reproduce (`docs/INSTRUMENTATION.md`
+  entry 6); 26 ladder reports on BOTH cards had been scored against it. The
+  committed calibrations give H200 162.8 and A100 145.8 FLOP/byte, every
+  report has been rescored to the attached card's own figure with
+  `rescored_from` keeping the withdrawn one (each ladder arm's `NOTE.md`), and
+  `scripts/rescore_published_reports.py` refuses a report that quotes another
+  card's. Where this file quotes 160.3 or 176.2 it names ONE calibration of
+  ONE card, and the CSV arms each have exactly one they may quote
+  (`results/published/CALIBRATION_PROVENANCE.md`); the "band" phrasing is
+  marked below wherever it appears.
+- **(f) The throttle flag.** Withdrawn 2026-09-02. The `throttled` column
+  compared two idle-instant clock samples either side of a cell and fired on a
+  drop over 5%; on the alpha-0558 arm it flagged 91% of vLLM rows above
+  T=4096 while flagged and unflagged replicates timed at ratio 0.998 with
+  identical end clocks. It detected whether the first sample had caught the
+  idle boost. Every "unthrottled" basis in this file is that flag; every
+  published row predates its replacement, LEVEL and DRIFT sampled under load
+  (`docs/APPARATUS.md` section 1).
+- **(g) `--warmup` is milliseconds of sustained load, not a count**, and
+  `--iters` is retired as a timing knob. Not quoted in this file.
+- **(h) Gate 3 of the BLOCK_M sweep is two-sided against the ridge band**,
+  not one-sided against a 0.33 midpoint. Not quoted in this file.
+- **(i) The regime table.** Withdrawn 2026-09-02: "59 of 87, up to 32 tiles,
+  and 16/32/64 never multi-tile" was counted on seed rows. On max rows, which
+  is what `moe_align_block_size` pads to, and on UNIFORM routing, vLLM runs
+  BLOCK_M=128 multi-tile in 65 of 87 cells, up to 33-34 tiles per expert;
+  BLOCK_M=16 in 1 of 24 cells and BLOCK_M=64 in 5 of 112. Skewed routings were
+  never counted. Consequence for the sentence "a decode-configured MoE kernel
+  is structurally incapable of reaching its compute roof": the BLOCK_M=16 cap
+  is a fact about the formula, and on uniform routing it binds in 1 of 24
+  cells (`scripts/tile_cap_test.py`, demoted). What survives is narrower:
+  production tiles do impose an AI ceiling, and shipped decode configurations
+  sit nowhere near it.
+- **(j) The alias arm's plan and pod figure agree at 13.0 min.** Not quoted
+  in this file.
+- **The C2 headline is at pooled routing.** The fp8/bf16 table below (bf16
+  crossings 454 / 810 / 922 / 3240, 1.149 +/- 0.069) pools seven routing
+  regimes, which C5 in this same file shows is invalid for a crossing.
+  Uniform-only the bf16 crossings are 313 / 730 / 931 / 2925 and the headline
+  is 1.131 +/- 0.095: the centre barely moves and the dispersion grows 38%
+  (`scripts/dtype_tile_confound.py`, `PUBLISHED_SHIFT`). The table stands as
+  published and is marked; dtype-invariance against the naive 0.50 survives
+  either way.
+- **The CUDA-graph pair count** below was 14,050; recomputed 2026-09-01 as
+  13,565 (`docs/INSTRUMENTATION.md`, "What did not reproduce"). Corrected
+  inline.
+
+---
+
 ## The evidence base
 
-96,448 measured rows on two cards. 69,064 of them are current; the rest are
-superseded and are kept for provenance, not for analysis.
+100,144 measured rows on two cards. 72,760 of them are current; the rest are
+superseded and are kept for provenance, not for analysis. Three further arms
+carry ladder reports (26 `*.report.json`) and no CSV. Every count in this
+section is asserted against the tree by `tests/test_docs.py`.
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|
@@ -31,6 +131,10 @@ superseded and are kept for provenance, not for analysis.
 | `2026-08-28-...-h200-v2lite` | 5,880 | 5,880 | adds deepseek-v2-lite to the bf16 pool |
 | `2026-08-28-...-h200-whole-layer` | 9,408 | 9,408 | router included, six stages of six |
 | `2026-08-28-...-ridge-resolution` | 6,300 | 6,300 | bf16 re-run at a second calibration |
+| `2026-09-01-...-alpha-0558` | 3,696 | 3,696 | schema v4, the BLOCK_M ladders behind the 0.558 refit; the first arm to record which tile ran |
+| `2026-09-01-...-alpha-surface-s4` | reports | | ladder arm: alpha against swizzle and footprint on the H200 |
+| `2026-09-01-...-cross-card-s3` | reports | | ladder arm: the H200 leg of the cross-card pair |
+| `2026-09-02-...-alpha-surface-s3` | reports | | ladder arm: the A100 leg, rescored to its own ridge 2026-09-02 |
 
 Two arms are partially or wholly retired and both say so in a `SUPERSEDED` file
 that `moe/bench/published.py` reads. The fp8 arm's retirement is per
@@ -46,6 +150,9 @@ definition of it anywhere in the repo, which is a gap: `published.py` can say
 which arms are retired but not which are comparable.
 
 ```
+# --ridge 160.3 is the v2lite arm's own ruler and the lowest of this pool's
+# four entitled ridges (166.8 / 162.8 / 162.8 / 160.3); it is not "the H200's
+# ridge", which the card's 2026-09-02 calibration puts at 162.8 (RETRACTIONS (e)).
 python scripts/crossing_report.py \
   results/published/2026-08-22-standard-sweep/run_*.csv \
   results/published/2026-08-26-nvidia_h200-full-three-way-recalibrated/run_*.csv \
@@ -54,7 +161,7 @@ python scripts/crossing_report.py \
   --ridge 160.3
 ```
 
-### The ruler is a band, and it moves on one side only
+### The ruler does not reproduce, and it moves on one side only
 
 Three calibrations of the same H200:
 
@@ -65,9 +172,16 @@ Three calibrations of the same H200:
 | `fp8-refixed`, `whole-layer` | 4374.5 GB/s | 770.9 TFLOP/s | 1530 MHz | 93.2% | 176.2 |
 
 Bandwidth reproduces to 0.06%. The compute term does not: 9.9% between the
-extremes. So the ridge is **160.3 to 176.2 FLOP/byte**, and every absolute
-measured-over-predicted figure in this file carries that band. The A100 measures
-145.7 (262.0 TFLOP/s over 1798.5 GB/s).
+extremes. So every absolute measured-over-predicted figure in this file moves
+across **160.3 to 176.2 FLOP/byte** depending on which calibration it was
+scored with. (Retracted 2026-09-02 as "the ridge is 160.3 to 176.2": that
+range is one card's compute ceiling failing to reproduce, not a ridge band any
+card owns, and 26 ladder reports on both cards were scored against it; they
+now quote their own card's, H200 162.8 and A100 145.8 on the committed
+calibrations, RETRACTIONS (e). The 2026-09-01 alpha-0558 arm ships a fourth
+H200 calibration, 716.0 TFLOP/s over 4373.9 GB/s at 1935 MHz, ridge 163.7.)
+The A100 cross-card arm's own calibration measures 145.7 (262.0 TFLOP/s over
+1798.5 GB/s); the 2026-09-02 A100 calibration measures 145.8.
 
 **The clock is not the explanation, which is worth stating because STUDY.md says
 it is.** Across the three calibrations the clock moves 20.6% and the achieved
@@ -241,6 +355,11 @@ fp8/bf16 crossing ratio. Corrected theory says 1.00; the retracted 2x says 0.50.
 | deepseek-v2-lite | 922 | 976 | 1.06 | 1025 | 1193 | 1.16 |
 | deepseek-v3 | 3240 | 3459 | 1.07 | 3048 | 3741 | 1.23 |
 
+(Retracted 2026-09-02 as the headline: this table POOLS seven routing regimes,
+which C5 below shows is invalid for a crossing. Uniform-only, vLLM, the bf16
+crossings are 313 / 730 / 931 / 2925 and the ratio is **1.131 +/- 0.095**;
+RETRACTIONS above. The rows stand as the pooled record.)
+
 **1.149 +/- 0.069** over eight measurements from two unrelated kernels, which
 also agree with each other on absolute bf16 crossings to within a few percent
 (454 vs 464, 810 vs 819, 3240 vs 3048). The two columns come from arms measured
@@ -250,6 +369,10 @@ up in the time rather than the crossing: mixtral at T=512 goes 1.1568 to 0.6383
 ms, 0.55x.
 
 ```
+# --ridge 160.3 is the fp8-three-kernel arm's bf16 calibration figure; the arm
+# is entitled to NO ridge (its calibration measured no fp8 ceiling), the
+# crossings are read off time and do not use it, and it is not the card's
+# ridge (RETRACTIONS (e)). Add --routing uniform for the corrected headline.
 python scripts/crossing_report.py \
   results/published/2026-08-28-nvidia_h200-h200-fp8-three-kernel/run_*.csv \
   results/published/2026-08-28-nvidia_h200-h200-fp8-refixed/run_*.csv \
@@ -452,7 +575,8 @@ ratio below the compulsory floor, and they are not scattered:
 - all 82 are `vllm_fused_experts`
 - all 82 are deepseek-v3
 - all 82 are at T of 16, 32 or 64
-- 27 are throttled and 55 are not, so throttling does not explain them
+- 27 are flagged by the retired throttle detector and 55 are not, so whatever
+  that flag detected does not explain them (RETRACTIONS (f))
 - peak is 4483.4 GB/s, and **zero rows anywhere exceed the 4916.7 GB/s pin rate**
 
 4483.4 GB/s is **100.28% of the corrected read ceiling**: at the ceiling within
@@ -493,9 +617,12 @@ expert -- a DIFFERENT R on each card. Two cards should therefore show a
 rows-per-expert ratio equal to their RIDGE ratio:
 
     A100 ridge 145.7,  H200 ridge 176.2  ->  target 0.827
-    with the H200 ridge at the low end of its band (160.3) ->  target 0.909
+    with the H200 arm's other candidate ruler (160.3)  ->  target 0.909
 
-so the target is a band, **0.81 to 0.91**, and it never reaches 1.00. Reaching
+so the target is a band, **0.81 to 0.91**, and it never reaches 1.00. (The
+two H200 figures here are the two candidate rulers of ONE arm, the whole-layer
+arm, whose shipped calibration postdates its rows; that is a legitimate
+bracket for that arm and not a ridge band for the card, RETRACTIONS (e).) Reaching
 1.00 would need the A100 above its datasheet dense peak, or the H200 nine percent
 below the worst of its six measured calibrations.
 
@@ -541,8 +668,8 @@ monotonic, and mixtral moves from worst to best.
 Times reproduce to 0.2%. Crossings do not. The crossing is interpolated between
 two slopes with leverage `1/(s1 - s0)`, which is small on a flat curve, so the
 detector amplifies timing noise about 10x. Measured directly: at A100 qwen2
-T=512 throttling dropped one of two replicate rows, moving that single point 6%,
-and the crossing moved from 593 to 824.
+T=512 the retired throttle flag (RETRACTIONS (f)) dropped one of two replicate
+rows, moving that single point 6%, and the crossing moved from 593 to 824.
 
 Propagating each cell's own replicate spread (`crossing.crossing_interval`,
 4000 draws):
@@ -614,8 +741,9 @@ that line is two lines of code and turns this section from derived into measured
 Recorded so the next reader does not re-run them: an expert-count trend (a pooling
 artifact), grid or seed noise (the deviation reproduces across all three seeds,
 A100 208-232 against H200 291-317), and throttle-exclusion bias (including the
-throttled rows moves every ratio by 2% or less, despite the exclusion dropping
-33% of H200 rows near the crossing and ~0% of A100 rows).
+rows the retired flag marked moves every ratio by 2% or less, despite the
+exclusion dropping 33% of H200 rows near the crossing and ~0% of A100 rows;
+RETRACTIONS (f) says what that flag was detecting).
 
 ### The occupancy hypothesis is refuted
 
@@ -711,8 +839,10 @@ anything about span extent. The CUTLASS-versus-Triton confound named below is no
 a nuisance variable here, it is the whole effect.
 
 WHICH READING IS RIGHT IS NOT SETTLED. Rows-per-expert at the LAST crossing is
-mean 175.8 with CV 21%, against a measured ridge band of 160.3 to 176.2, which is
-exactly what `2R/b` says R should equal. At the FIRST it is 123.4 with CV 40%.
+mean 175.8 with CV 21%, against the 160.3 to 176.2 that this card's calibrations
+span (retracted 2026-09-02 as a "measured ridge band", RETRACTIONS (e): the
+card's own 2026-09-02 ridge is 162.8 and 175.8 sits 8% above it, inside that
+CV), which is what `2R/b` says R should equal. At the FIRST it is 123.4 with CV 40%.
 That favours the last, but the dip is only visible because one arm added
 T=576/640/704/768: on powers of two alone the slopes read 0.175, 0.587, 0.643,
 0.791, perfectly monotone, staircase invisible. Four points revealed structure the
@@ -759,6 +889,10 @@ cancels algebraically:
 | `2R/b`, ridge 176.2 | 0.576 | 1.028 | 0.561 |
 | full byte model, ridge 160.3 | 0.578 | 1.027 | 0.563 |
 | full byte model, ridge 176.2 | 0.521 | 0.925 | 0.563 |
+
+(160.3 and 176.2 are two calibrations of this H200, not a band it owns,
+RETRACTIONS (e); the point of the table is that the separation does not care
+which one is used, and it holds at the card's own 162.8 for the same reason.)
 
 AND IT SURVIVES THE RESTRICTION THAT KILLED C5. The table above is computed on
 crossings pooled over seven routing regimes, which C5 shows is invalid for a
@@ -888,8 +1022,9 @@ per row in `covers`, enforced by `scripts/compare.py`, and the reason
 
 **Distance from the compulsory byte floor.** `implied_traffic_ratio` is bytes the
 timing implies were moved over bytes the arithmetic requires. Basis is L2-cold,
-eager, unthrottled: 3,225 of the recalibrated arm's 17,640 rows, of which 2,861
-are memory-bound and therefore carry the column.
+eager, unthrottled (by the retired idle-instant flag, RETRACTIONS (f)): 3,225 of
+the recalibrated arm's 17,640 rows, of which 2,861 are memory-bound and
+therefore carry the column.
 
 | implementation | span | n | min | median | max |
 |---|---|---:|---:|---:|---:|
@@ -1022,8 +1157,12 @@ found in TEMPO, RaMP, Yun or Sieve:
 
  - the CEILING `2 BM / (alpha b)` stated as a bound on arithmetic intensity, and
    its consequence that a tile height can put the compute roof permanently out of
-   reach. TEMPO models TIME as a max-affine with two branches, which cannot
-   express a bounded AI.
+   reach. (Retracted in this form 2026-09-02, RETRACTIONS (a): the bound is
+   exact for `alpha_b` and the study's alpha is a ladder fit, so the ceiling a
+   fitted alpha implies is `2 BM / (alpha b) / (1 + phi + delta)`, a bracket over
+   the unmeasured `alpha_a`. The claim survives as a form; its published
+   numbers do not.) TEMPO models TIME as a max-affine with two branches, which
+   cannot express a bounded AI.
    AND MEASURED 2026-09-01: max-affine was implemented and run against these rows.
    It gives one stable answer on all 8 ambiguous cells, its advertised property,
    but it does NOT describe the stepped curves: p95 relative error 61-263% on the
@@ -1051,17 +1190,31 @@ changing ONLY the estimator on those same rows gives 0.484: the 0.10 came from
 minimising the CV of a POOLED ratio, an objective that falls 0.7% across its whole
 range and lets alpha absorb a between-cell level trend running the wrong way.
 
-    BLOCK_M    cap @0.10   cap @0.33   cap @0.558   ridge band 160.3-176.2
-         16          160          48           29   NEVER at any alpha
-         32          320          97           57   NEVER at 0.33 and 0.558
-         64          640         194          115   NEVER at 0.558
-        128         1280         388          229   crosses
-        256         2560         776          459   crosses
+    BLOCK_M    cap @0.10   cap @0.33   cap @0.558   ridge band 160.3-176.2   (retracted 2026-09-02, see below)
+         16          160          48           29   NEVER at any alpha        RETRACTED as a point: 28.4 at alpha_a=0, 22.8 at alpha_a=1; still never
+         32          320          97           57   NEVER at 0.33 and 0.558   RETRACTED as a point: 56.3 at alpha_a=0, 37.8 at alpha_a=1; still never
+         64          640         194          115   NEVER at 0.558            RETRACTED as a point: 110.7 at alpha_a=0, 56.5 at alpha_a=1; still never
+        128         1280         388          229   crosses                   RETRACTED: 214.1 at alpha_a=0, 169.1 at 0.143, 111.0 at 0.5; crosses the H200 (162.8) only for alpha_a < 0.17; refused from 0.635
+        256         2560         776          459   crosses                   RETRACTED: 401.4 at alpha_a=0, 267.9 at 0.143; refused from alpha_a = 0.32
 
-AT THE REFITTED ALPHA, BLOCK_M OF 16, 32 AND 64 ALL CAP BELOW THE RIDGE. vLLM's
-tuned configs run BLOCK_M = 16 through the entire decode range. So on this
-hardware a decode-configured MoE kernel is structurally incapable of reaching its
-compute roof, at any batch size.
+    (retracted 2026-09-02: every "cap @alpha" column reads a LADDER alpha into
+    the alpha_b slot, RETRACTIONS (a), and the "ridge band" is no card's own,
+    RETRACTIONS (e). The right-hand annotations are `ai_model.cap_from_fitted`
+    at alpha = 0.558 on the single-GEMM model, mixtral shapes, BN=64,
+    delta = BM/K, and are brackets over the unmeasured alpha_a; the two
+    measured BLOCK_M=128 ladders give 130.7 and 135.4, below both ridges,
+    RETRACTIONS (b). The card ridges are H200 162.8 and A100 145.8 on the
+    committed calibrations.)
+
+AT THE REFITTED ALPHA, BLOCK_M OF 16, 32 AND 64 ALL CAP BELOW THE RIDGE, and
+that part survives the correction, since the correction only lowers a cap.
+vLLM's tuned configs run BLOCK_M = 16 through the entire decode range. So on
+this hardware a decode-configured MoE kernel is structurally incapable of
+reaching its compute roof, at any batch size. (Qualified 2026-09-02,
+RETRACTIONS (i): on uniform routing BLOCK_M=16 runs multi-tile in 1 of 24
+cells, so that cap is a fact about the formula that binds almost nowhere; what
+survives is that production tiles impose an AI ceiling and shipped decode
+configurations sit nowhere near it.)
 
 AND ALPHA IS NOT A SCALAR, which the fit also shows: it drifts with BLOCK_M
 (0.466 at 64, 0.625 at 128) and falls with GROUP_SIZE_M (0.570 at 1, 0.488 at 16).
@@ -1104,9 +1257,14 @@ As `r` grows, `ceil(r/BM)` tends to `r/BM`, so
 
 AI does not grow without limit with batch. It saturates at a value set by the TILE
 HEIGHT. And if that ceiling sits below the hardware ridge, the kernel can never
-become compute bound at any batch size at all.
+become compute bound at any batch size at all. (Retracted 2026-09-02 as a
+formula for a FITTED alpha, RETRACTIONS (a): with alpha_b in the slot the
+limit is right and incomplete, the full three-term cap being
+`2 / (b (alpha_b/BM + alpha_a/BN + 1/K))`; with a ladder alpha in the slot it
+is high by `(1 + phi + delta)`, `ai_model.cap_from_fitted`.)
 
-    ridge 160.3, bf16, alpha = 0.10
+    ridge 160.3, bf16, alpha = 0.10     (retracted twice: alpha is 0.558, RETRACTIONS
+                                         (a) for the cap, (e) for the ridge)
       BLOCK_M =  16  ->  AI cap  160   NEVER CROSSES (needs alpha < 0.0998)
       BLOCK_M =  32  ->          320   crosses
       BLOCK_M =  64  ->          640   crosses
@@ -1126,12 +1284,12 @@ A step function on both sides can have several solutions, or none inside a step.
 So the multiple crossings recorded above are not a detector artefact; they are a
 property of the equation. Solving it:
 
-    | BLOCK_M | uncorrected 2R/b | tile-corrected | shift |
-    |--------:|-----------------:|---------------:|------:|
-    |      32 |            160.3 |          304.6 | 1.90x |
-    |      64 |            160.3 |          208.4 | 1.30x |
-    |     128 |            160.3 |          176.3 | 1.10x |
-    |     256 |            160.3 |          160.3 | 1.00x |
+    | BLOCK_M | uncorrected 2R/b | tile-corrected | shift |     (retracted 2026-09-02: solved at
+    |--------:|-----------------:|---------------:|------:|      alpha = 0.10, which is retracted,
+    |      32 |            160.3 |          304.6 | 1.90x |      at ridge 160.3, which is one
+    |      64 |            160.3 |          208.4 | 1.30x |      calibration and not the card's,
+    |     128 |            160.3 |          176.3 | 1.10x |      and with a fitted alpha in the
+    |     256 |            160.3 |          160.3 | 1.00x |      alpha_b slot; RETRACTIONS (a), (e))
 
 ### A DEGENERACY THAT MUST BE STATED
 
@@ -1164,7 +1322,11 @@ spread between 32 and 256 which is not subtle. Three readouts from one sweep:
 4. AND THE CAP: force `BLOCK_M = 16` and sweep T as far as the grid allows. The
    formula says no crossing exists. If one appears, `alpha < 0.0998` and the cap
    is real but higher than assumed. If none appears, a decode-tuned MoE kernel is
-   structurally incapable of reaching its compute roof.
+   structurally incapable of reaching its compute roof. (Qualified 2026-09-02,
+   RETRACTIONS (a) and (i): the 0.0998 threshold is the (LIN) identity and the
+   corrected one is a bracket over alpha_a; and on uniform routing vLLM runs
+   BLOCK_M=16 multi-tile in 1 of 24 cells, so this readout tests the formula,
+   not production. `scripts/tile_cap_test.py` runs it as `cap_test`, demoted.)
 
 WAYS THE FORMULA MAY NEED MODIFYING, to look for in the fit: `alpha` may itself
 depend on `BLOCK_M` (a taller tile holds more of B resident, so L2 reuse changes),
@@ -1182,7 +1344,9 @@ first is the largest single effect in the dataset.
 
 ### CUDA-graph replay is worth up to 2.87x at decode, and nothing at all to a single kernel
 
-14,050 matched pairs, same cell, same L2 mode, both timed, neither throttled.
+13,565 matched pairs (corrected 2026-09-01 from 14,050, `docs/INSTRUMENTATION.md`
+"What did not reproduce"), same cell, same L2 mode, both timed, neither flagged
+by the retired throttle detector (RETRACTIONS (f)).
 Median `ms_p50(graph) / ms_p50(eager)`:
 
 | implementation | T=1 | 2 | 8 | 32 | 256 | 4096 |
@@ -1269,20 +1433,29 @@ proposed and discarded in this project.
 ## What this does not establish
 
 - **DRAM traffic is modelled, not counted.** `ncu` needs a host module flag a
-  container tenant cannot set (`ERR_NVGPUCTRPERM`), so every byte figure here is
-  compulsory-traffic arithmetic. `nsys` does run and its `--gpu-metrics-device`
-  route is untested. That is the open path, not a closed door.
+  container tenant cannot set (`ERR_NVGPUCTRPERM`), or `--cap-add=SYS_ADMIN` on
+  the container, which nobody has asked a provider for; so every byte figure
+  here is compulsory-traffic arithmetic. `nsys` launches on the pod but the
+  image ships it without its importer, so no capture has ever become a report
+  and its `--gpu-metrics-device` route is untested rather than closed
+  (`docs/COUNTERS.md`). That is the open path, not a closed door.
 - **C1 and C3 rest on transient pod output.** The PTX dumps, the CUTLASS kernel
   names and the `Using default MoE config` warning are quoted from run logs that
   were never committed. `scripts/check_mma_path.sh`, `scripts/kernel_name.py` and
   `scripts/tile_sweep.py` regenerate them on a GPU, but nothing in the repository
   lets a reader check them without one. Every other claim here can be recomputed
   from `results/published/` on a laptop.
-- **The MACs-versus-weight-reads separation has not been run.** The cheap route is
-  the GPU MODE method: alias B by taking the tile offset modulo so every iteration
-  reloads the same tile (loads execute, L2 hits, no HBM traffic, nothing folds
-  because the values are runtime), with `acc += tl.sum(b) + tl.sum(a)` to keep the
-  loads live. It settles the critical path without relying on the byte model.
+- **The MACs-versus-weight-reads separation has not been run to a result.** The
+  cheap route is the GPU MODE method: alias B by taking the tile offset modulo
+  so every iteration reloads the same tile (loads execute, L2 hits, no HBM
+  traffic, nothing folds because the values are runtime), with
+  `acc += tl.sum(b) + tl.sum(a)` to keep the loads live. It settles the critical
+  path without relying on the byte model. `scripts/alias_ablation.py` is that
+  instrument; its 2026-09-01 attempt was INVALID on its own headroom and
+  attribution gates (an apparatus finding, not a null result about DRAM), and it
+  is now arm 3 of `scripts/h200_gaps_session.sh`, ahead of every alpha arm,
+  because its P1 line decides whether the word "DRAM" may appear in the
+  mechanism sentence at all (`docs/POD_RUNBOOK.md`).
 - **Nothing separates a kernel-quality gap from a span-extent gap.** The traffic
   table is reported per span for that reason. Settling it needs the fused
   implementations run at a single-stage extent, or the harness's own spans fused,
@@ -1327,8 +1500,9 @@ proposed and discarded in this project.
 ## Regenerating this file
 
 ```bash
-# tests, all green off-GPU
-.venv/bin/python -m pytest tests/ -q            # 605 passed, 34 skipped
+# tests, all green off-GPU; the count moves, README.md quotes it and
+# tests/test_docs.py checks it against a collect-only run
+.venv/bin/python -m pytest tests/ -q
 
 # EVERY CROSSING BELOW IS UNIFORM-ONLY. Pooling the seven routing regimes is
 # INVALID for a crossing, not merely noisy: 2R/b describes uniform routing, and
@@ -1349,13 +1523,17 @@ python scripts/crossing_report.py \
   results/published/2026-08-28-nvidia_h200-h200-fp8-refixed/run_*.csv \
   --ridge 160.3 --routing uniform --uncertainty
 
-# C5, one card each. Quote the band, never the point estimate.
+# C5, one card each. Quote the band, never the point estimate. Each --ridge is
+# the arm's OWN ruler: 145.7 is the A100 cross-card arm's calibration, and
+# 160.3 is what the whole-layer arm's rows carry (its shipped yaml says 176.2
+# and entitled_ridge refuses it; this command said 176.2 until 2026-09-03
+# while the section above had already re-scored at 160.3).
 python scripts/crossing_report.py \
   results/published/2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card/run_*.csv \
   --ridge 145.7 --impl vllm_fused_experts --routing uniform --uncertainty
 python scripts/crossing_report.py \
   results/published/2026-08-28-nvidia_h200-h200-whole-layer/run_*.csv \
-  --ridge 176.2 --impl vllm_fused_experts --routing uniform --uncertainty
+  --ridge 160.3 --impl vllm_fused_experts --routing uniform --uncertainty
 
 # the ridge band, the span-extent separation, C5's scoring, tile provenance
 .venv/bin/python -m pytest tests/test_ridge_band.py tests/test_c5_cross_card.py \

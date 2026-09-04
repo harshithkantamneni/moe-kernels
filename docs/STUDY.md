@@ -7,6 +7,92 @@ retracted, what runs where, what to do next. The RESULTS are in
 `docs/FINDINGS.md`, organised around C1-C5 and regenerated from the published
 rows.
 
+## RETRACTIONS (read before any table below)
+
+Added 2026-09-03. This file is the working state and is NOT regenerated from
+the rows, so it carried several figures for days after the tree withdrew them.
+Each entry says what was withdrawn, when, why, and where the corrected number
+lives; the retracted text below is left in place and marked inline
+"(retracted ...)" so the history is visible without git. The mechanism behind
+(a)-(c) is `moe/bench/ai_model.py`; behind (e) and (f) it is
+`moe/bench/timing.py` and `moe/bench/roofline.py`; `docs/APPARATUS.md` is the
+one-page summary of both.
+
+- **(a) The cap identity, `cap = 2 BM / (alpha b)`.** Withdrawn 2026-09-02.
+  The study's alpha is a ladder fit, `B/(A+B)`, and over the three-term byte
+  model that fit returns `(alpha_b + phi) / (1 + phi + delta)`, so a cap read
+  from it as `2 BM / (alpha b)` is high by `(1 + phi + delta)`: 1.11x and
+  1.21x on the two BLOCK_M=128 ladders, up to 1.36x at BM=128 on the
+  single-GEMM model with alpha_a = 0.143. `alpha_a` is unmeasured, so every
+  corrected cap is a bracket over it, never a point. Corrected form:
+  `ai_model.cap_from_fitted`. Where this file says "AI is BOUNDED at
+  2 BM / (alpha b)" it is stating the three-term cap at alpha_b, which is
+  right, and reading a fitted alpha into that slot, which is not.
+- **(b) The BLOCK_M=128 straddle.** Withdrawn 2026-09-02. The published caps
+  of 150.4 (A100, above its 145.8) and 158.6 (H200, below its 162.8) were the
+  (a) identity. Through (EXA) with the fused layer's own phi and delta at its
+  floor they are 135.4 (0.929 of the A100 ridge) and 130.7 (0.803 of the
+  H200 ridge), both upper bounds, no straddle on either card
+  (`scripts/bm128_depth.py --audit`). `docs/FINDINGS.md` RETRACTIONS carries
+  the bracket for the pooled 0.558 row.
+- **(c) alpha_b = 0.307 and the 2% match to TEMPO's b2/b.** Withdrawn
+  2026-09-02: a unit artefact of reading two anchor points through the (LIN)
+  form; through (EXA) the same G=1 ladders read alpha_b near 0.92, which is the
+  number that has to be explained (`scripts/bn_decomposition.py`, LADDER
+  column). This file never quoted 0.307; listed because scripts and STUDY's
+  readers did.
+- **(d) The direction of alpha with GROUP_SIZE_M, on either card.** Withdrawn
+  2026-09-02. The pooled surfaces' fall of the swizzle column (H200 0.827 to
+  0.675, A100 0.896 to 0.782) was composition: the G=1 median mixed two models
+  and the G=64 median was one, and the one matched cell on the A100 moves the
+  OTHER way, by 0.028, with no paired MDE possible from one cell. No direction
+  is established; the refit's "0.570 at 1, 0.488 at 16" below stands as a
+  fit over the published pool and predicts nothing beyond it
+  (`SURFACE.txt` and `SURFACE.pooled.txt` in the two cross-card-s3 arms).
+- **(e) The ridge "band" 160.3-176.2.** Withdrawn 2026-09-02 as a ridge of
+  any card. It is this one H200's compute ceiling failing to reproduce across
+  sessions (`docs/INSTRUMENTATION.md` entry 6), and 26 ladder reports on BOTH
+  cards had been scored against it. The committed calibrations give H200 162.8
+  and A100 145.8 FLOP/byte; every report has been rescored to the attached
+  card's own figure with `rescored_from` keeping the withdrawn one, and each
+  ladder arm's `NOTE.md` says so. Where this file quotes 160.3 or 176.2 it
+  names one calibration of one card, and is marked where it called that a
+  band.
+- **(f) The throttle flag.** Withdrawn 2026-09-02. It compared two
+  idle-instant clock samples either side of a cell and fired on a drop, so it
+  detected whether the first sample had caught the idle boost: on the
+  alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged and
+  unflagged replicates timed at ratio 0.998. "Unthrottled" bases in this file
+  are that flag. The replacement is LEVEL and DRIFT under load
+  (`docs/APPARATUS.md` section 1), and no published row carries it yet.
+- **(g) `--warmup` is milliseconds of sustained load, not a count**, and
+  `--iters` is retired as a timing knob. Not quoted in this file.
+- **(h) Gate 3 of the BLOCK_M sweep is two-sided against the ridge band**,
+  not a one-sided test against a 0.33 midpoint. Not quoted in this file.
+- **(i) The regime table.** Withdrawn 2026-09-02: "59 of 87, up to 32, and
+  16/32/64 never" was counted on seed rows. On max rows, which is what
+  `moe_align_block_size` pads to, and on UNIFORM routing: BLOCK_M=128 runs
+  multi-tile in 65 of 87 cells, up to 33-34 tiles per expert; BLOCK_M=16 in
+  1 of 24 and BLOCK_M=64 in 5 of 112. Skewed routings were never counted.
+- **(j) The alias arm's plan and pod figure agree at 13.0 min**; the 11.6 the
+  plan used to print was the probe left off the plan page. Not quoted in this
+  file.
+- **The C2 headline is at pooled routing.** The fp8/bf16 crossing table below
+  (454 / 810 / 922 / 3240 bf16 tokens, 1.15 +/- 0.07) pools seven routing
+  regimes, which `docs/FINDINGS.md` C5 shows is invalid for a crossing.
+  Uniform-only the bf16 crossings are 313 / 730 / 931 / 2925 and the headline
+  is 1.131 +/- 0.095: the centre barely moves and the dispersion grows 38%
+  (`scripts/dtype_tile_confound.py`, `PUBLISHED_SHIFT`). The table is left
+  as published and marked.
+- **The whole-layer crossing table** below was scored at ridge 176.2 on
+  pooled routing; the arm's own rows carry 160.3 and pooling is invalid.
+  Re-scored 2026-09-01 in `docs/FINDINGS.md` ("What a whole MoE layer costs");
+  the table here is marked.
+- **The C5 table** below is the pooled, wrong-target reading that FINDINGS
+  rewrote on 2026-08-31 (wrong target, invalid routing pool, two cards on
+  different kernels; the "monotonic in expert count" pattern is a pooling
+  artefact). Marked; FINDINGS C5 is current.
+
 ## What changed
 
 This started as a kernel project: build a grouped GEMM that beats the incumbent
@@ -77,7 +163,9 @@ fp8/bf16 crossing ratio -- corrected theory says 1.00, the retracted 2x says 0.5
 
 **1.15 +/- 0.07** over eight measurements from two unrelated kernels, which also
 agree with EACH OTHER on absolute bf16 crossings to within a few percent (454 vs
-464, 810 vs 819, 3240 vs 3048). The traffic reduction is real and appears in the
+464, 810 vs 819, 3240 vs 3048). (Retracted 2026-09-02 as the headline: these
+are POOLED over seven routing regimes; uniform-only the bf16 crossings are
+313 / 730 / 931 / 2925 and the ratio is 1.131 +/- 0.095, RETRACTIONS above.) The traffic reduction is real and appears in the
 TIME rather than the crossing: mixtral at T=512 goes 1.1567 -> 0.6383 ms, 0.55x.
 
 A CONFOUND ON THE 1.15, found 2026-08-28 while rescoping C3. vLLM's tuned
@@ -161,8 +249,11 @@ the offset is not the kernel falling short of datasheet peak -- it belongs to th
 extra stages, whose permute, activation and unpermute traffic the weights-only
 model never counted.
 
-READ THOSE ABSOLUTES WITH THE RIDGE BAND, NOT AS FIXED. Two calibrations of the
-same H200 give:
+READ THOSE ABSOLUTES AGAINST THE CALIBRATION THEY WERE SCORED WITH, NOT AS
+FIXED. Two calibrations of the same H200 give (the two figures were called a
+"ridge band" here until 2026-09-02; retracted, RETRACTIONS (e): they are one
+card's compute ceiling failing to reproduce, not a band any card owns, and the
+card's own 2026-09-02 calibration gives 162.8):
 
     bandwidth   4377.2 -> 4374.5 GB/s       0.06% apart
     bf16 GEMM    701.6 ->  770.9 TFLOP/s    9.9% apart
@@ -206,7 +297,12 @@ The one-stage span lands within about 10% of prediction under every combination,
 sits at 0.52 to 0.63 whatever is done to the model. And the separation is 0.563
 throughout.
 
-So the claim is the SEPARATION, and the absolutes are quoted with their band.
+So the claim is the SEPARATION, and the absolutes are quoted with the
+calibration they were scored against. (Downgraded 2026-09-01 in
+`docs/FINDINGS.md`: the detector reads the first upcrossing of a tile
+staircase and 8 of 16 cells cross twice; on the last crossing the separation
+is 0.889, not 0.563, and the two spans run different tiles. The 0.563 is
+probably an artefact and FINDINGS says why.)
 
 THE fp8 RIDGE RATIO IS MEASURED NOW, AND IT IS NOT 2. The `ridge_fp8 =
 2 x ridge_bf16` above is the datasheet relationship. Measured on the H200:
@@ -317,15 +413,22 @@ ceiling. On the H200 it hid, because read landed just above triad.
 **Caveat on the ridge.** Bandwidth is stable to 0.005% across three
 calibrations (4377.0 / 4377.0 / 4377.2). The GEMM is not: it lands at 1560 or
 1845 MHz depending on the run, giving 701.6 or 712.4 TFLOP/s and a ridge of
-160.3 or 162.8. The clock normalisation works, but the ridge is a +/-1.5%
-quantity and should be quoted as approximate. Mixtral's predicted crossing spans
+160.3 or 162.8. (Corrected 2026-08-31 in FINDINGS and retracted here 2026-09-02:
+the clock is NOT the explanation, the achieved rate moves the other way from
+the clock, the spread across all calibrations is 9.9-12%, not +/-1.5%, and
+none of it is a band the card owns. The ridge to quote is the one of the
+calibration a row was scored against; the card's own 2026-09-02 calibration
+gives 162.8.) Mixtral's predicted crossing spans
 641 to 651 across that range, all inside the same measured bracket, so C2 is
 unaffected.
 
 **C5. Does the crossing scale with the ridge across architectures?**
 `AI = 2R/b` says the crossing is at a fixed rows-per-expert set by the ridge, so
 two cards with different ridges should cross at rows-per-expert in the same
-proportion. H200 ridge 176.2, A100 ridge 145.7.
+proportion. H200 ridge 176.2, A100 ridge 145.7. (The whole section below is
+RETRACTED as scored, 2026-08-31, and superseded by `docs/FINDINGS.md` C5: the
+table pools seven routing regimes, the H200 arm is not entitled to 176.2, and
+the two cards ran different kernels. Kept as the history of the claim.)
 
 STATUS: **PARTIAL, measured 2026-08-28, RESCORED 2026-08-31.** Same profile, same
 kernel, one run per card, `vllm_fused_experts` bf16.
@@ -350,7 +453,9 @@ deepseek-v3 as agreeing "to 1% across two architectures, three years apart",
 which was agreement with the null. No model confirms cleanly and none refutes by
 an order of magnitude.
 
-WHAT SURVIVES: the deviation is monotonic in EXPERT COUNT either way, 0.52, 0.86,
+WHAT SURVIVES (retracted 2026-08-31: it does not; under uniform routing the
+scores are 0.88 / 1.14 / 1.18 / 1.14, not monotonic, a pooling artefact,
+FINDINGS C5): the deviation is monotonic in EXPERT COUNT either way, 0.52, 0.86,
 1.06, 1.22 against E of 8, 64, 64, 256, and expert count is not a term in the
 model. Correcting the target moves the deviation from "approaches agreement from
 below" to "crosses agreement between 64 and 256 experts" without changing its
@@ -403,7 +508,11 @@ to 48% is an UPPER bound on the share, not a measurement of what vLLM spends. It
 does establish that a whole-layer number is not the fused span's number, and how
 much is missing.
 
-THE CROSSING IS UNMOVED, which is the confirmation. Same run, ridge 176.2:
+THE CROSSING IS UNMOVED, which is the confirmation. Same run, ridge 176.2
+(retracted 2026-09-01: this arm's own rows carry 160.3 and `entitled_ridge`
+refuses 176.2, and the crossings below are pooled over routing; re-scored at
+160.3 on uniform routing in `docs/FINDINGS.md`, where the conclusion survives
+with predicted 641 / 1282 / 1710 / 5130 against 316 / 787 / 931 / 3010):
 
 | model            | predicted | span | whole layer |
 |------------------|----------:|-----:|------------:|
@@ -442,7 +551,8 @@ saturation batch, which `ridge.saturation_batch` already computed.
 - **Span extent is a trap.** `grouped_mm` covers 1 of 6 canonical stages;
   `fused_experts` covers 5. Comparing their milliseconds compares a GEMM to a
   fused block. Recorded per row in `covers`, enforced by `scripts/compare.py`.
-- **Distance from the compulsory byte floor**, L2-cold eager unthrottled,
+- **Distance from the compulsory byte floor**, L2-cold eager unthrottled
+  ("unthrottled" by the retired idle-instant flag, RETRACTIONS (f)),
   n=3225: vLLM 1.16x, SGLang 1.17x, torch `grouped_mm` 1.62x, reference 12.43x.
 - **Bimodality is real but cheap.** At deepseek T=4096 zipf:2.0, 24 of 248 active
   experts hold 89% of the rows. One global tile costs only 1.00x-1.18x of ideal
@@ -498,7 +608,12 @@ work is already done and unused.
 | `scripts/preflight_cutile.py` | pod | whether cuTile is worth more of this pod's time |
 | `moe/bench/ridge.py` | anywhere | predicts the crossing per model from a calibration |
 | `moe/bench/published.py` | anywhere | which published arms an analysis should read |
-| `tests/` | anywhere | 549 tests, all green off-GPU |
+| `moe/bench/timing.py` | pod | THE instrument, `time_kernel`; LEVEL, DRIFT and host-bound verdicts per cell (`docs/APPARATUS.md`) |
+| `moe/bench/exit_codes.py` | anywhere | the one exit-code table and the `RESULT:` line every arm prints |
+| `moe/bench/provenance.py` | anywhere | the provenance block and the run-id rule |
+| `moe/bench/ai_model.py` | anywhere | the byte model with both re-reads, and what a ladder fit returns over it |
+| `scripts/h200_gaps_session.sh` | pod | every open experiment as one resumable session with a ledger (`docs/POD_RUNBOOK.md`) |
+| `tests/` | anywhere | all green off-GPU; the count moves, `README.md` quotes it and `tests/test_docs.py` checks it |
 
 ## Order of work
 
