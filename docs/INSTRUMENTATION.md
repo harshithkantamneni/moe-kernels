@@ -18,12 +18,16 @@ this file rather than transcribed from `docs/FINDINGS.md`, and the three that di
 not reproduce are named as such in "What did not reproduce" at the end. That
 section is the point of the exercise as much as the catalogue is.
 
-Environment for every command here:
+Environment for every command here: the laptop venv `README.md` describes
+(CPU torch installed), from the repository root.
 
 ```bash
-cd /Users/harshithkantamneni/Desktop/moe-kernels
-.venv/bin/python -m pytest tests/ -q          # 874 passed, 34 skipped
+.venv/bin/python -m pytest tests/ -q          # the count moves; README.md quotes it
+                                              # and tests/test_docs.py checks it
 ```
+
+An earlier version of this file quoted "874 passed, 34 skipped" here; it was
+stale within a week, and a stale count teaches a reader to ignore the line.
 
 ---
 
@@ -234,9 +238,13 @@ the token count so the staircase is visible instead of arguable. Landed in
 ```
 
 WHICH CROSSING IS THE RIDGE IS STILL NOT SETTLED. Rows per expert at the last
-crossing is mean 175.8 with CV 21.2%, inside the measured ridge band of
-160.3-176.2, which is what `2R/b` says it should equal; at the first it is 123.4
-with CV 40.0%, below the band. That favours the last and does not establish it,
+crossing is mean 175.8 with CV 21.2%, inside the range 160.3-176.2 that the
+H200's own calibrations span (retracted 2026-09-02 as a "measured ridge band":
+that range is the compute ceiling failing to reproduce across sessions of one
+card, entry 6 below, not a band any card owns; the H200's own ridge on its
+2026-09-02 calibration is 162.8, and 175.8 sits 8% above it with a CV that
+covers both), which is what `2R/b` says it should equal; at the first it is
+123.4 with CV 40.0%, below the range. That favours the last and does not establish it,
 since it is one prediction scoring itself. The experiment that decides it is
 pinning `BLOCK_M` and sweeping it, which `override_config` already does in
 `scripts/tile_sweep.py`.
@@ -259,7 +267,10 @@ without saying so.
 
 **How much it moved.** Nothing, and that is the finding: a **2.87x** effect sat in
 the CSV unread. 13,565 matched pairs (same cell, same L2 mode, both timed,
-neither throttled), median `ms_p50(graph) / ms_p50(eager)`:
+neither throttled; "throttled" here and everywhere in this file is the RETIRED
+drop-only flag on two idle-instant samples, which `moe/bench/timing.py`
+replaced with LEVEL and DRIFT under load on 2026-09-02, see
+`docs/APPARATUS.md`), median `ms_p50(graph) / ms_p50(eager)`:
 
 | implementation | T=1 | 2 | 8 | 32 | 256 | 4096 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -335,8 +346,10 @@ naive count of ratio < 1.0          : 2,142
 ```
 
 The 82 are not scattered. All 82 are `vllm_fused_experts`, all 82 are
-deepseek-v3, all 82 are at T of 16, 32 or 64, and 27 are throttled against 55
-not, so throttling does not explain them. The other 2,060 are the default.
+deepseek-v3, all 82 are at T of 16, 32 or 64, and 27 are flagged by the retired
+throttle detector against 55 not, so whatever that flag detected (the idle-boost
+catch, `docs/APPARATUS.md`) does not explain them. The other 2,060 are the
+default.
 
 This is the same shape as `ms_p50 = 0.0`, which means the cell never ran: a
 skipped or uncapturable graph mode still writes a row, 8,848 of the canonical
@@ -363,8 +376,10 @@ signature exists to resolve, and that documentation is the whole mitigation.
 ## 6. A ridge that moves 9.9% run to run on ONE card, and not because of clock
 
 **What the instrument did.** Every efficiency column in the study divides by a
-measured ceiling, and the H200 was recalibrated six times. Six DISTINCT
-`measured.yaml` files ship inside the ten published arms:
+measured ceiling, and the H200 was recalibrated six times before this entry was
+written. Six DISTINCT `measured.yaml` files ship inside the ten arms published
+by 2026-08-28; the 2026-09-01 `alpha-0558` arm ships a seventh (716.0 TFLOP/s,
+4373.9 GB/s, 1935 MHz, ridge 163.7), and the three ladder arms ship none:
 
 | md5 | bf16 TFLOP/s | bandwidth GB/s | GEMM clock | % of that clock's peak | ridge | arms |
 |---|---:|---:|---:|---:|---:|---|
@@ -378,8 +393,16 @@ measured ceiling, and the H200 was recalibrated six times. Six DISTINCT
 **How much it moved.** Bandwidth reproduces to **0.06%** across all six. The
 compute term does not: **9.9%** across the three that current arms quote, and
 **12.0%** across all six. Every absolute measured-over-predicted figure in
-`docs/FINDINGS.md` therefore carries the band **160.3 to 176.2 FLOP/byte**, and
-across all six calibrations that band widens to 160.3 to 179.5.
+`docs/FINDINGS.md` therefore moves across the range **160.3 to 176.2 FLOP/byte**
+of the calibrations it was scored against, and across all six calibrations
+that range widens to 160.3 to 179.5. (Retracted 2026-09-02: the range was
+being quoted as a "measured ridge band", as if it were a card's uncertainty
+about its own ridge, and 26 ladder reports on BOTH cards were scored against
+`[160.3, 176.2]`. It is no card's own: it is this one H200's compute ceiling
+failing to reproduce across sessions. The committed calibrations give H200
+162.8 and A100 145.8 FLOP/byte, every report has been rescored to the attached
+card's own figure with `rescored_from` carrying the withdrawn one, and a new
+figure quotes the ridge of the calibration it was measured against, by name.)
 
 **THE CLOCK IS NOT THE EXPLANATION**, which is worth stating because STUDY.md said
 it was. Across the three the GEMM clock moves **20.6%** (1530 to 1845) and the
@@ -430,18 +453,27 @@ both arms' measured.yaml: md5 db981ff9  (identical)
 reports 770.92 over 4374.49, giving **176.2**. That is the 9.9% of entry 6, now
 attached to a single arm that cannot say which is its own. The bill is claim C5:
 `2R/b` scales with the ridge, so a cross-card prediction needs a ridge, and C5 is
-scored against the band **0.81 to 0.91** rather than against 0.83.
+scored against the band **0.81 to 0.91** rather than against 0.83. (This is the
+one place the two H200 figures legitimately bracket something: they are the two
+candidates for ONE arm's ruler. That is not the same object as a ridge band for
+the card, which the 2026-09-02 rescoring withdrew, entry 6.)
 
-**9 of 10 arms pass** the gate. **2 are entitled to no ridge at all**: the
-whole-layer arm for the disagreement above, and `-fp8-three-kernel` because its
-calibration measured no fp8 ceiling, which is why every one of its 19,908 rows
-carries `achieved_peak_tflops = 0.0`.
+**10 of 14 arms pass** the gate (`results/published/CALIBRATION_PROVENANCE.md`,
+regenerated from the tree; the count is checked by `tests/test_docs.py`). **5
+are entitled to no ridge at all**: the whole-layer arm for the disagreement
+above; `-fp8-three-kernel` because its calibration measured no fp8 ceiling,
+which is why every one of its 19,908 rows carries `achieved_peak_tflops = 0.0`;
+and the three ladder arms (`alpha-surface-s4`, `cross-card-s3`, the A100
+`alpha-surface-s3`), which ship report files rather than rows and carry no
+`measured.yaml`, so their ridge lives in each report's `ridge_source` field
+rather than in this gate. This entry said "9 of 10" until 2026-09-03; the four
+arms published since were never counted.
 
 **How it was found.** Not by the date and not by the commit. `checked_on` has DAY
 resolution and the swap happened inside one day. The commit differing is the
 NORMAL state, since the workflow is calibrate, commit the yaml, then sweep, so the
-sweep runs one commit later by construction and six of ten arms differ this way
-with nothing wrong. The only decisive signal is that `driver.py` stamps
+sweep runs one commit later by construction and six of the eleven CSV arms
+differ this way with nothing wrong. The only decisive signal is that `driver.py` stamps
 `achieved_peak_tflops` and `achieved_bw_gbps` onto EVERY timed row, so the rows
 themselves say which ruler they were computed against, and they disagreed with the
 file next to them.
@@ -577,7 +609,11 @@ file. The ones with a committed command:
 # entry 7: the calibration gate, regenerating its own report
 .venv/bin/python -m moe.bench.published results/published/*/ | diff - results/published/CALIBRATION_PROVENANCE.md
 
-# the crossings every entry above is scored against, uniform only, with bands
+# the crossings every entry above is scored against, uniform only, with bands.
+# --ridge 160.3 is the v2lite arm's own ruler and the lowest of the pool's four
+# entitled ridges (166.8 / 162.8 / 162.8 / 160.3, CALIBRATION_PROVENANCE.md);
+# it is NOT "the H200's ridge", which the card's 2026-09-02 calibration puts
+# at 162.8. Pass the ridge you mean and say whose it is.
 python scripts/crossing_report.py \
   results/published/2026-08-22-standard-sweep/run_*.csv \
   results/published/2026-08-26-nvidia_h200-full-three-way-recalibrated/run_*.csv \
@@ -669,9 +705,13 @@ deliberately defeating a guard.
   crossing and the published figures are still read off it. Which crossing is the
   ridge is unsettled, so nothing can be enforced yet. The 0.563 separation is
   DOWNGRADED in `docs/FINDINGS.md` rather than retracted or replaced.
-- **The ridge band** (6). `tests/test_ridge_band.py` protects the comparison that
-  survives the band; the absolutes still carry a hand-written band, and nothing
-  forces a new figure to carry one.
+- **The ridge range** (6). `tests/test_ridge_band.py` protects the comparison that
+  survives it; the absolutes still carry a hand-written range, and nothing
+  forces a new figure to carry one. What IS now enforced is the other half:
+  `scripts/rescore_published_reports.py` rewrote every ladder report to its own
+  card's ridge and its `ridge_is_own_card` gate refuses a report that quotes
+  another card's, so the 2026-09-02 defect (an H200 range scored onto A100
+  reports) cannot recur silently.
 - **`implied_traffic_ratio = 0.0`** (5, the other half). No guard covers it. It is
   documented in `moe/bench/efficiency.py` and has to be filtered per analysis.
 - **The unread axes** (4). Now reported. No mechanism would have caught them and

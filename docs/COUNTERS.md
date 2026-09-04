@@ -403,7 +403,14 @@ surface.
 Run the `BLOCK_M=64` twin as well. `BM=32`'s roof threshold is `32/145.81 = 0.219`
 and every estimator already sits above it, so `BM=32` alone cannot test the
 tile-cap claim; `BM=64`'s threshold is `64/145.81 = 0.439`, which is the number
-the surviving result actually rests on.
+the surviving result actually rests on. (Retracted 2026-09-02, in part: the
+threshold `alpha > BM/ridge` is the identity `cap = 2BM/(alpha b)`, which for a
+LADDER alpha is high by `(1 + phi + delta)`, `moe/bench/ai_model.py` (EXA). A
+COUNTER alpha is a byte ratio, not a ladder fit, so the identity is exact for it
+and the `0.219` / `0.439` thresholds stand for what C3 scores; what does not
+stand is comparing them with a ladder alpha, which is what every estimator
+"already sitting above" 0.219 is. Score the ladder side through
+`ai_model.cap_from_fitted` at a stated `alpha_a`, and print the `alpha_a`.)
 
 ### 4.2 The metric
 
@@ -469,7 +476,7 @@ decided. Each states what its own failure invalidates.
 | V4 | validity | the traffic ladder is affine in `n` | max residual `<= 3%` | the single-slope reading; a curved ladder means no scalar `alpha` describes it |
 | C1 | claim | exactly one anchor matches | 1 anchor within 0.05 | zero survivors means all three anchors are wrong and the branch model needs replacing, not re-anchoring; more than one means the cell was badly chosen |
 | C2 | claim | the counter lands inside the counter-free bracket | `0.4522 <= alpha <= 0.6313` | one of the two measurements; the bracket uses only measured time and the pin rate, so a counter outside it means timing or counter is wrong and the run cannot say which |
-| C3 | claim | this `BLOCK_M` still cannot reach the compute roof | `alpha > BM/ridge` | **the one result the 2026-09 evaluation did not kill.** A counter alpha below the threshold means the tile height *can* reach the roof and the cap claim must be withdrawn |
+| C3 | claim | this `BLOCK_M` still cannot reach the compute roof | `alpha > BM/ridge`, exact for a COUNTER alpha; a ladder alpha must go through `ai_model.cap_from_fitted` first (retracted 2026-09-02: the bare identity is high by `(1 + phi + delta)` on a fit) | **the one result the 2026-09 evaluation did not kill.** A counter alpha below the threshold means the tile height *can* reach the roof and the cap claim must be withdrawn |
 
 Note what C2 already says before any run: the published anchor for this cell,
 0.6473, is **already above** the bracket's upper bound of 0.6313. The plan is
@@ -497,8 +504,22 @@ python scripts/block_m_crossing_sweep.py --model mixtral-8x7b --dtype bf16 \
     --r-max 256 --row-step 32 --step-probes 0
 
 # 2. the same cell under the counter, one tile count per invocation.
-#    warmup 0 and iters 1: every profiled launch then belongs to ONE
-#    fused_experts call, so the per-launch bytes can simply be summed.
+#    THE INSTRUMENT WILL NOT RUN ONE LAUNCH PER CELL. Until 2026-09-02 this
+#    recipe passed `--warmup 0 --iters 1` so that every profiled launch
+#    belonged to one fused_experts call and the per-launch bytes could be
+#    summed. Retracted: `--warmup` is now MILLISECONDS of sustained load and
+#    moe/bench/timing.warm_until raises TimingRefused at 0, and `--iters` is
+#    retired as a timing knob (time_kernel sizes iterations from the warmup's
+#    own per-call time). Every profiled cell therefore holds
+#    warmup_calls + iters x trials launches of the fused kernel, and the
+#    KernelTiming record beside it carries all three counts. Divide the
+#    summed per-kernel-name bytes by the launch count the record names, or
+#    read one launch's bytes off the ncu CSV by kernel id, before comparing
+#    with the table above. Do NOT pass a smaller warmup than the default to
+#    make the arithmetic easier: a cold governor is a different cell.
+#    scripts/dram_counter_route.py still prints the retracted flags in its
+#    own --dry-run recipe; that script owns that fix, and until it lands the
+#    recipe it prints cannot run as printed.
 for cc in all none; do
   for n in 1 2 3 4 6 8; do
     ncu --metrics dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sector_op_read_hit_rate.pct,gpu__time_duration.sum \
@@ -508,7 +529,7 @@ for cc in all none; do
         python scripts/block_m_crossing_sweep.py --model mixtral-8x7b \
           --tiles 32 --group-m 16 --block-n 64 \
           --r-max $(( n * 32 )) --row-step $(( n * 32 )) --step-probes 0 \
-          --warmup 0 --iters 1
+          --warmup-ms 300
   done
 done
 
@@ -565,7 +586,8 @@ check and a test that asserts it.
 * `docs/COUNTERS.md` (this file)
 * `scripts/dram_counter_route.py` -- `--dry-run`, `--bracket`, `--probe`,
   `--self-test`, `--analyse`
-* `tests/test_dram_counter_route.py` -- 38 tests, all off GPU
+* `tests/test_dram_counter_route.py` -- 46 tests, all off GPU (the count is
+  checked by `tests/test_docs.py`)
 
 ```bash
 .venv/bin/python -m pytest tests/test_dram_counter_route.py -q
