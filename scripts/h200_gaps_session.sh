@@ -14,6 +14,36 @@
 #                                                   # gate below is not scoped to
 #                                                   # --only, because nothing that
 #                                                   # measures is either.
+#   bash scripts/h200_gaps_session.sh --resume-latest
+#                                                   # RESUME the newest session
+#                                                   # for this card that holds a
+#                                                   # measuring ledger (ARMS.tsv).
+#                                                   # Finished arms in it are
+#                                                   # skipped; that skip is the
+#                                                   # latch, and it lives in the
+#                                                   # session directory and
+#                                                   # nowhere else.
+#   SESSION=/workspace/session/gaps-<card>-<stamp> bash scripts/h200_gaps_session.sh
+#                                                   # the same, naming the
+#                                                   # directory outright. SESSION=
+#                                                   # is the only way to resume
+#                                                   # into a directory that is
+#                                                   # not the newest.
+#   bash scripts/h200_gaps_session.sh --new         # open a fresh session even
+#                                                   # though one exists. Without
+#                                                   # it a MEASURING run that
+#                                                   # finds a session for this
+#                                                   # card REFUSES rather than
+#                                                   # opening an empty ledger
+#                                                   # beside a full one, because
+#                                                   # an empty ledger re-runs
+#                                                   # every DONE arm and every
+#                                                   # CLAIM_FAIL and INVALID row
+#                                                   # the latch exists to keep.
+#                                                   # A --dry-run is free and
+#                                                   # skips nothing, so it opens
+#                                                   # a fresh session without
+#                                                   # being asked.
 #
 # WHAT THIS FILE IS. A schedule and a ledger. It measures nothing itself: every
 # number comes from the script an arm runs, and every verdict comes from that
@@ -65,12 +95,16 @@
 #     arms: every script this driver runs to time a cell imports the module,
 #     which is why `adopts_exit_codes` is a live check per row rather than a
 #     list maintained here. What remains unadopted is the analysis and probe
-#     tail, and one of them is an arm: dram_counter_route.py returns 3 for
-#     every verdict that is not
+#     tail, and one of them is an arm: dram_counter_route.py returned 3 for
+#     every verdict that was not
 #     OPEN -- so a BLOCKED counter route, which is that arm's registered ANSWER
-#     on a rented pod, lands in the ledger as INVALID and is described to the
+#     on a rented pod, landed in the ledger as INVALID and was described to the
 #     operator as measured-and-unquotable. The dry-run said this, for free,
 #     where it costs nothing; the pod run said nothing, where it costs an arm.
+#     (That script adopted the table later the same day and exits DONE on
+#     BLOCKED. What it still does not do is print a RESULT line for either
+#     verdict, so under the seventh pass below its exit 0 is an UNEARNED DONE
+#     and the row lands UNKNOWN; `arm_closes counter_plan` says so.)
 #     The states are NOT patched per arm -- that is the list R1 deleted. Instead
 #     `adopts_exit_codes` ASKS each arm's file whether it imports the module,
 #     and `contract_caveat` / `contract_disclosure` print, next to every REFUSED
@@ -302,6 +336,64 @@
 #     UNKNOWN. Nothing about the booking, the order or the arithmetic moved:
 #     this is a reporting defect and the fix is in what the operator reads.
 #
+# WHAT CHANGED ON 2026-09-03, seventh pass, after a reviewer ran this file's own
+# LIFTABLE `arm()` over planted commands and read what the ledger latched. Four
+# defects, and the first is the one every other pass had been describing as
+# fixed while nothing called the function that fixes it:
+#
+#   * THE SECOND OPINION WAS NEVER TAKEN. exit_codes.classify_text exists so the
+#     driver can recompute a script's verdict from the RESULT lines it printed
+#     and compare it with the code the process returned, and this file said so
+#     in four places, every one of them a comment or an echo. `arm` decided the
+#     state from the integer alone and `summarize_arm` grepped RESULT lines for
+#     display only. Proven with the driver's own functions: a log reading
+#     `RESULT: CLAIM C1 FAIL` under exit 0 landed DONE and was latched; a log
+#     with no RESULT line at all under exit 0 landed DONE and was latched; a
+#     log of all-PASS lines under exit 1 landed CLAIM_FAIL and was latched.
+#     `arm` now runs `log_verdict` over the captured log and `second_opinion`
+#     over the pair. When the log HAS RESULT lines and they imply a different
+#     code from the one returned, the row is a DEFECT: both codes go in the
+#     ledger note, the state is UNKNOWN, nothing is latched, the closing
+#     summary prints it under its own heading and the session exits INVALID
+#     over it, because what is on that page is not a verdict. When the log has
+#     NO RESULT lines and the code is 0, DONE is UNEARNED: a check that
+#     examined nothing reports no failures, and the row is UNKNOWN. The same
+#     for 3: an INVALID that names no failed gate is not latched either. The
+#     one disagreement that is not a defect is a code OUTSIDE the table over a
+#     scored page: the arm printed its gates and then crashed, the process code
+#     wins, the row is RETRY and the note says what the page implied.
+#   * AN INTERPRETER EXIT 1 WITH NO RESULT LINE WAS LATCHED AS A REFUTED CLAIM.
+#     The scripts' ERROR(4) guards wrap `_main()` and cannot catch a failure at
+#     import time, which is the pod's real 2026-09-01 shape (a torch whose ABI
+#     had drifted). With a broken `torch.py` planted on PYTHONPATH and the real
+#     pod command lines run through the real `arm()`: alias_ablation,
+#     pin_probe, calibrate and dtype all exited 1 with zero RESULT lines and
+#     were filed CLAIM_FAIL, latched, and skipped on every resume; for
+#     calibrate that turned the calibration gate's `ARM CLAIM_FAIL` into a
+#     REFUSED on every resume until someone deleted the row by hand. The
+#     UNKNOWN demotion of the third pass covered only a file that has not
+#     adopted the table, and every measuring arm has. scripts/check_mma_path.sh
+#     already reads this exact signal for its own child and maps it to ERROR;
+#     `second_opinion` applies it here: exit 1 with zero RESULT lines from a
+#     file that speaks the table is a CRASH, RETRY, never CLAIM_FAIL, with the
+#     tail of the log printed.
+#   * THE LATCH LIVED IN ONE DIRECTORY AND NOTHING SAID HOW TO GET BACK INTO
+#     IT. SESSION= was read and never documented; a plain re-invocation opened
+#     a fresh stamped directory with an empty ledger, so every DONE arm was
+#     re-attempted and every CLAIM_FAIL and INVALID row, the rows the latch
+#     exists to protect, was re-run. Two consecutive --dry-runs produced two
+#     session directories. SESSION= is in the usage block now, --resume-latest
+#     picks the newest session for this card that holds a measuring ledger, and
+#     a MEASURING run that finds such a session REFUSES to open a fresh one
+#     unless --new is given. The decision is `session_choice`, one function,
+#     so every branch of it is plantable off GPU.
+#   * contract_caveat DESCRIBED THREE FILES AS THEY WERE BEFORE THEY ADOPTED.
+#     It said check_mma_path.sh spends 1 on refusals (2, since it adopted),
+#     that its --dry-run exits 0 (2), that cli.py returns 4 on a pin miss
+#     (INVALID through exit_codes.classify) and that dram_counter_route.py
+#     returns 3 on BLOCKED (DONE). Harmless only because all four adopt and the
+#     caveat never prints for them; each is now told as the history it is.
+#
 # WHAT A 2-HOUR AND A 3-HOUR RENTAL ACTUALLY REACH, since adding an arm is also
 # a claim about what still fits. The whole session does not fit in either, and
 # it did not before this arm was added: the alias hour is 13 minutes and it runs
@@ -524,11 +616,15 @@ RC_RETRY=4
 DRY=0
 ONLY=""
 LIST=0
+RESUME_LATEST=0
+NEW_SESSION=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY=1; shift ;;
     --list)    LIST=1; shift ;;
     --only)    ONLY="$2"; shift 2 ;;
+    --resume-latest) RESUME_LATEST=1; shift ;;
+    --new)     NEW_SESSION=1; shift ;;
     -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' \
                  "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "REFUSED: unknown argument: $1" >&2; exit "$RC_REFUSED" ;;
@@ -556,6 +652,207 @@ ledger_state() { case "$1" in
   3) echo INVALID ;;
   *) echo RETRY ;;
 esac; }
+
+# WHAT THE LOG SAYS THE EXIT CODE SHOULD HAVE BEEN. One of three answers, and
+# the caller must handle all three: an integer, which is exit_codes.classify_text
+# over the RESULT lines the arm printed; NONE, when the log carries no RESULT
+# line at all, which is what a refusal looks like from here and what a crash
+# before the first gate looks like too; UNREADABLE, when the second opinion
+# could not be formed (no log, no interpreter, a moe/bench/exit_codes that
+# would not import). UNREADABLE is not NONE: "could not check" is a different
+# answer from "checked and found nothing", and `second_opinion` refuses to latch
+# on either. Shells out to $PY_BASE once per arm, which is seconds against
+# minutes, and asks the module itself rather than a shell re-implementation of
+# its regex, so the driver and the scripts read one line format from one file.
+log_verdict() {
+  local log="${1:-}" out rc=0
+  [[ -n "$log" && -f "$log" ]] || { echo UNREADABLE; return 0; }
+  out="$("$PY_BASE" - "$REPO" "$log" <<'PY' 2>/dev/null
+import sys
+from pathlib import Path
+
+repo, log = sys.argv[1], sys.argv[2]
+sys.path.insert(0, repo)
+try:
+    from moe.bench import exit_codes as EC
+except Exception as exc:                                          # noqa: BLE001
+    print(f"UNREADABLE {exc.__class__.__name__}")
+    raise SystemExit(0)
+text = Path(log).read_text(errors="replace")
+try:
+    print(EC.classify_text(text))
+except EC.NoGatesScored:
+    print("NONE")
+PY
+)" || rc=$?
+  if (( rc != 0 )) || [[ -z "$out" ]]; then echo UNREADABLE; return 0; fi
+  printf '%s\n' "$out"
+}
+
+# THE SECOND OPINION, TAKEN. $1 the exit code, $2 the word `ledger_state` gave
+# it, $3 what `log_verdict` read off the log, $4 the rc of `adopts_exit_codes`
+# for the file the arm ran (0 adopted, 1 not, 2 could not be found). Prints one
+# line, `<state>TAB<note>`, and the note goes into the ledger row so the reason
+# a row is not latched travels with the row.
+#
+# WHY THIS EXISTS. exit_codes.classify_text was written on 2026-09-02 so that
+# "the exit code a log implies can be recomputed from its RESULT lines and
+# compared with the code the process returned, and a disagreement is itself a
+# defect". Until 2026-09-03 nothing in this file called it: `arm` read the
+# integer and `summarize_arm` grepped the lines for display. Every rule below
+# was proven, not argued, with this file's own LIFTABLE `arm()` over planted
+# commands before it was written:
+#
+#   RESULT lines present, code in the table, and they AGREE   the word stands
+#   RESULT lines present, code in the table, and they DIFFER  DEFECT: UNKNOWN.
+#       A `RESULT: CLAIM C1 FAIL` page under exit 0 was latched DONE. Both
+#       codes go in the note; the closing summary prints these rows under their
+#       own heading; the session exits INVALID over them, because a page that
+#       contradicts its own exit code is not a verdict, in either direction.
+#   RESULT lines present, code OUTSIDE the table                RETRY, and NOT a
+#       defect: the arm printed its gates and then crashed (ERROR 4, a signal,
+#       a 127). The process code wins, the note says what the page implied.
+#   no RESULT line, exit 0                                       UNEARNED DONE:
+#       UNKNOWN. A check that examined nothing reports no failures, and DONE
+#       is the word this ledger latches hardest.
+#   no RESULT line, exit 1, file speaks the table                CRASH: RETRY.
+#       An adopting script prints one RESULT line per scored gate and exits
+#       through `classify`, and moe/bench/cli.py registers only VALIDITY gates
+#       and cannot return 1 on purpose; so a 1 with no gate line is an
+#       exception that escaped BEFORE any gate, which the ERROR(4) guards
+#       around `_main()` cannot catch: an import that drifted, a module-level
+#       failure. The pod's real 2026-09-01 shape. scripts/check_mma_path.sh
+#       reads exactly this signal for its own child and maps it to ERROR.
+#   no RESULT line, exit 1, file does not speak the table        UNKNOWN, as the
+#       third pass already had it: from such a file 1 is three things at once.
+#   no RESULT line, exit 2                                       REFUSED. The
+#       expected shape of a refusal, and the one no-gate exit that is earned.
+#   no RESULT line, exit 3                                       UNEARNED
+#       INVALID: UNKNOWN. INVALID names a VALIDITY gate that failed, and none
+#       was scored. Not latched.
+#   UNREADABLE                                                   UNKNOWN. The
+#       driver could not form the opinion, so it cannot vouch for any word.
+#
+# Never returns non-zero and never prints more than one line, because `arm`
+# reads it with one `read`.
+second_opinion() {
+  local rc="$1" state="$2" implied="$3" adopts="$4"
+  case "$implied" in
+    UNREADABLE*)
+      printf 'UNKNOWN\tSECOND OPINION UNAVAILABLE: exit %s, but exit_codes.classify_text could not be run over the log (%s). A word this driver could not check is not latched.\n' \
+        "$rc" "$implied"
+      return 0 ;;
+  esac
+  if [[ "$state" == RETRY ]]; then
+    if [[ "$implied" == NONE ]]; then
+      printf 'RETRY\t\n'
+    else
+      printf 'RETRY\texit %s is outside the table while the RESULT lines imply %s %s: the arm printed its gates and then did not exit through them. The process code wins; read the traceback.\n' \
+        "$rc" "$implied" "$(ledger_state "$implied")"
+    fi
+    return 0
+  fi
+  if [[ "$implied" == NONE ]]; then
+    case "$rc" in
+      0) printf 'UNKNOWN\tUNEARNED DONE: exit 0 with no RESULT line. A check that examined nothing reports no failures. NOT latched.\n' ;;
+      1) if (( adopts == 0 )); then
+           printf 'RETRY\tCRASH: exit 1 with no RESULT line from a file that speaks the table. An adopting script scores a gate before it can exit 1, so this is an exception that escaped before any gate (an import that drifted, a module-level failure), not a refuted claim. Not latched; read the tail of the log.\n'
+         else
+           printf 'UNKNOWN\texit 1 with no RESULT line from a file that has not adopted moe/bench/exit_codes, where 1 is three things at once. NOT latched.\n'
+         fi ;;
+      2) printf 'REFUSED\t\n' ;;
+      3) printf 'UNKNOWN\tUNEARNED INVALID: exit 3 with no RESULT line. INVALID names a VALIDITY gate that failed and none was scored. NOT latched.\n' ;;
+      *) printf 'UNKNOWN\texit %s with no RESULT line and no rule for that pair. NOT latched.\n' "$rc" ;;
+    esac
+    return 0
+  fi
+  if [[ "$implied" != "$rc" ]]; then
+    printf 'UNKNOWN\tDEFECT: the process exited %s %s but its RESULT lines imply %s %s. The page and the exit code disagree, which moe/bench/exit_codes names as itself a defect. NOT latched.\n' \
+      "$rc" "$(ledger_state "$rc")" "$implied" "$(ledger_state "$implied")"
+    return 0
+  fi
+  if [[ "$rc" == 1 ]] && (( adopts != 0 )); then
+    printf 'UNKNOWN\texit 1 from a file that has not adopted moe/bench/exit_codes; its RESULT lines agree with 1, but the file never agreed to the table they are read by. NOT latched.\n'
+    return 0
+  fi
+  printf '%s\tlog agrees: RESULT lines imply %s\n' "$state" "$implied"
+}
+
+# THE ROWS OF A LEDGER WHOSE PAGE CONTRADICTS THEIR EXIT CODE, one line each,
+# last row per arm winning as everywhere else in this file, so a resume that
+# did not touch a defective arm still shows it and a resume that re-ran it
+# cleanly does not. Empty output is the all-clear; the caller decides what to
+# print for it. Read off the ledger rather than counted in a global so the
+# summary and the exit code have one source.
+defect_rows() {
+  awk -F'\t' 'NR > 1 { st[$1] = $2; rc[$1] = $3; nt[$1] = $7
+                       if (!($1 in seen)) { order[++n] = $1; seen[$1] = 1 } }
+              END { for (i = 1; i <= n; i++) { a = order[i]
+                      if (st[a] == "UNKNOWN" && nt[a] ~ /^DEFECT:/)
+                        printf "  %-19s exit %s   %s\n", a, rc[a], nt[a] } }' "$1"
+}
+
+# THE NEWEST SESSION FOR THIS CARD THAT HOLDS A MEASURING LEDGER, or rc 1 and
+# nothing. "Newest" is by name, and the names carry a UTC stamp, so by name is
+# by time. A directory with no ARMS.tsv is not a session to resume into: a
+# --dry-run leaves ARMS-dryrun.tsv only, and that ledger latches nothing.
+latest_session() {
+  local root="$1" prefix="$2" d found=""
+  for d in "$root/$prefix"*/; do
+    [[ -f "$d/ARMS.tsv" ]] && found="${d%/}"
+  done
+  [[ -n "$found" ]] || return 1
+  printf '%s\n' "$found"
+}
+
+# WHICH DIRECTORY THIS SESSION RUNS IN, decided in one place so that every
+# branch can be planted. $1 DRY, $2 --resume-latest, $3 --new, $4 SESSION= as
+# given (empty when not), $5 the session root, $6 the per-card prefix. Prints
+# `<how>TAB<value>` and returns 1 on the two refusals:
+#   NAMED     <dir>    SESSION= named it; the flags may not also be given
+#   RESUMED   <dir>    --resume-latest, and a session with ARMS.tsv exists
+#   NEW       <dir>    a fresh stamped directory
+#   REFUSED   <why>    contradictory flags, or nothing to resume
+#   LATEST_EXISTS <dir> a measuring run without --new found a session it would
+#                      have silently ignored. The caller words the refusal.
+#
+# WHY A MEASURING RUN REFUSES AND A DRY RUN DOES NOT. The latch, "a DONE or
+# CLAIM_FAIL or INVALID row is never re-run", lives in ARMS.tsv and nowhere
+# else. A fresh directory has an empty ledger, so a plain re-invocation
+# re-attempted every finished arm and re-ran the rows the latch exists to
+# protect, and nothing in --help said SESSION= was how to avoid that. A dry run
+# skips nothing and spends nothing, so a fresh directory costs it nothing.
+session_choice() {
+  local dry="$1" resume="$2" new="$3" explicit="$4" root="$5" prefix="$6" latest=""
+  if (( resume )) && (( new )); then
+    printf 'REFUSED\t--resume-latest and --new contradict each other. Give one.\n'
+    return 1
+  fi
+  if [[ -n "$explicit" ]]; then
+    if (( resume )) || (( new )); then
+      printf 'REFUSED\tSESSION=%s names the directory outright, and --resume-latest / --new choose one under %s. Give one or the other.\n' \
+        "$explicit" "$root"
+      return 1
+    fi
+    printf 'NAMED\t%s\n' "$explicit"
+    return 0
+  fi
+  latest="$(latest_session "$root" "$prefix")" || latest=""
+  if (( resume )); then
+    if [[ -z "$latest" ]]; then
+      printf 'REFUSED\t--resume-latest found no session with a measuring ledger under %s/%s*. Nothing to resume; run without it to open one.\n' \
+        "$root" "$prefix"
+      return 1
+    fi
+    printf 'RESUMED\t%s\n' "$latest"
+    return 0
+  fi
+  if (( dry == 0 )) && (( new == 0 )) && [[ -n "$latest" ]]; then
+    printf 'LATEST_EXISTS\t%s\n' "$latest"
+    return 1
+  fi
+  printf 'NEW\t%s/%s%s\n' "$root" "$prefix" "$(date -u +%Y%m%dT%H%M%SZ)"
+}
 
 # WHICH FILE EACH ARM ACTUALLY RUNS, repo-relative, so this driver can ASK that
 # file whether it speaks the table above instead of assuming it does. It decides
@@ -632,11 +929,12 @@ contract_caveat() {
       printf '  It therefore reads INVALID for one reason and one only: the command\n'
       printf '  exited 3. A file that has not adopted the table may spend 3 on a\n'
       printf '  REFUSAL, which measured nothing and costs nothing to re-run, or on\n'
-      printf '  a registered ANSWER: scripts/dram_counter_route.py returns 3 for\n'
-      printf '  every verdict that is not OPEN, and BLOCKED on a rented pod is what\n'
-      printf '  that arm exists to find out, not a broken instrument. INVALID rows\n'
-      printf '  are latched and skipped on every later run; delete this row from\n'
-      printf '  the ledger to run the arm again.\n' ;;
+      printf '  a registered ANSWER: scripts/dram_counter_route.py used to return 3 for\n'
+      printf '  every verdict that was not OPEN, and BLOCKED on a rented pod is what\n'
+      printf '  that arm exists to find out, not a broken instrument; since adopting\n'
+      printf '  the table on 2026-09-02 it exits DONE on BLOCKED and no longer\n'
+      printf '  reaches this caveat. INVALID rows are latched and skipped on every\n'
+      printf '  later run; delete this row from the ledger to run the arm again.\n' ;;
     CLAIM_FAIL|UNKNOWN)
       printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
       printf '  %b.\n' "$why"
@@ -644,11 +942,14 @@ contract_caveat() {
       printf '  VALIDITY passed, a pre-registered CLAIM did not -- a RESULT, and the\n'
       printf '  one state this ledger LATCHES as finished so the arm is never spent\n'
       printf '  again. From a file that has not adopted the table, 1 is three things\n'
-      printf '  at once. scripts/check_mma_path.sh documents "1 a gate failed" and\n'
-      printf '  spends it on the instruction-follows-the-tile reading, which is a\n'
+      printf '  at once. scripts/check_mma_path.sh used to document "1 a gate failed"\n'
+      printf '  and spend it on the instruction-follows-the-tile reading, which is a\n'
       printf '  VALIDITY gate, AND on "no interpreter at $PY" and "no .ptx under the\n'
-      printf '  dump dir", which measured nothing and are refusals. And 1 is what\n'
-      printf '  Python returns for any exception that escapes main, which is ERROR.\n'
+      printf '  dump dir", which measured nothing and are refusals; since adopting\n'
+      printf '  the table it spends 2 on those refusals and no longer reaches this\n'
+      printf '  caveat, and that is the shape of the risk for whatever has not. And\n'
+      printf '  1 is what Python returns for any exception that escapes main, which\n'
+      printf '  is ERROR.\n'
       printf '  So this driver records UNKNOWN and does NOT latch the row: a state\n'
       printf '  it cannot tell apart is not a result it may file. Read the log --\n'
       printf '  the three cases do not resemble each other in it -- and delete or\n'
@@ -659,9 +960,11 @@ contract_caveat() {
       printf '  It therefore reads DONE for one reason and one only: the command\n'
       printf '  exited 0. Under the table 0 means every VALIDITY and every CLAIM\n'
       printf '  gate PASSED. A file that has not adopted it may spend 0 on a run\n'
-      printf '  that scored no gate at all: scripts/check_mma_path.sh exits 0 from\n'
-      printf '  its own --dry-run, and again from the ladder path whose closing\n'
-      printf '  lines say the cell cannot attribute the instruction to a tile.\n'
+      printf '  that scored no gate at all: scripts/check_mma_path.sh used to exit 0\n'
+      printf '  from its own --dry-run, and again from a ladder path whose closing\n'
+      printf '  lines said the cell could not attribute the instruction to a tile;\n'
+      printf '  since adopting the table its --dry-run exits 2 REFUSED and it no\n'
+      printf '  longer reaches this caveat.\n'
       printf '  DONE is latched and skipped on every later run, so read the RESULT\n'
       printf '  lines above before taking this row for gates that passed. A check\n'
       printf '  that examined nothing reports no failures.\n' ;;
@@ -672,11 +975,13 @@ contract_caveat() {
       printf '  table does not name, and this session exits 4 over it and the next\n'
       printf '  one attempts the arm again. A file that has not adopted the table\n'
       printf '  may spend such a code on a REGISTERED ANSWER rather than a crash:\n'
-      printf '  moe/bench/cli.py returns 4 when the implementations ran under the\n'
-      printf '  pin and no row showed that tile, which is the VALIDITY failure that\n'
-      printf '  probe exists to detect, not an unplanned exception. Re-running it\n'
-      printf '  spends the minutes again to reach the same number. Read the log\n'
-      printf '  before the next session does.\n' ;;
+      printf '  moe/bench/cli.py used to return 4 when the implementations ran under\n'
+      printf '  the pin and no row showed that tile, which is the VALIDITY failure\n'
+      printf '  that probe exists to detect, not an unplanned exception; it now\n'
+      printf '  scores F1 and F2 through exit_codes.classify, exits 3 INVALID there,\n'
+      printf '  and no longer reaches this caveat. Re-running such an arm spends the\n'
+      printf '  minutes again to reach the same number. Read the log before the\n'
+      printf '  next session does.\n' ;;
     *) return 1 ;;
   esac
   return 0
@@ -967,9 +1272,14 @@ result_lines() { grep -E '^RESULT: ' -- "$1" 2>/dev/null; }
 
 # What one arm contributes to the closing summary. Returns 0 when it printed at
 # least one RESULT line, 1 when the arm was not scored, so the caller can say
-# what the absence means in the mode it is in.
+# what the absence means in the mode it is in. $4 is the ledger row's note,
+# which for an UNKNOWN row is the reason `second_opinion` would not read a word
+# out of the exit code; it is printed rather than paraphrased, because the
+# paraphrase this function used to carry ("this arm exited 1 and the file it ran
+# has not adopted ...") described one of the five reasons and was wrong for the
+# other four the moment they existed.
 summarize_arm() {
-  local name="$1" log="$2" state="$3" hits
+  local name="$1" log="$2" state="$3" note="${4:-}" hits
   if [[ "$state" == "NOT_PLANNED" ]]; then
     printf '  NOT PLANNED, and not a result. Nothing was run for this arm.\n'
     return 1
@@ -985,11 +1295,10 @@ summarize_arm() {
     return 1
   fi
   if [[ "$state" == "UNKNOWN" ]]; then
-    printf '  STATE UNKNOWN. This arm exited 1 and the file it ran has not adopted\n'
-    printf '  moe/bench/exit_codes, where 1 is CLAIM_FAIL and a CLAIM_FAIL is a\n'
-    printf '  finding that is never re-run. It may equally be a refusal or an\n'
-    printf '  exception Python exited 1 for. The row is NOT latched; the next\n'
-    printf '  session will attempt this arm again unless you decide otherwise:\n'
+    printf '  STATE UNKNOWN, NOT LATCHED: the next session attempts this arm again\n'
+    printf '  unless you decide otherwise. Why this driver would not read a word\n'
+    printf '  out of the exit code:\n'
+    printf '    %s\n' "${note:-no note on this row: the reason was not recorded, which is itself a defect}"
     contract_caveat "$name" UNKNOWN
   fi
   if [[ "$state" == "INVALID" ]]; then
@@ -1024,7 +1333,7 @@ arm() {
     note "SKIP $name (already $prior in $LEDGER; delete its row to force a re-run)"
     return 0
   fi
-  local log="$LOGS/$name.log" t0 t1 rc state before after
+  local log="$LOGS/$name.log" t0 t1 rc state before after opinion="" adopts=0
   note "-> $name   log $log"
   before="$(dirty_count)"
   t0=$(date -u +%s)
@@ -1032,39 +1341,45 @@ arm() {
   rc=$?
   t1=$(date -u +%s)
   after="$(dirty_count)"
-  if (( DRY )); then state="$(dry_state "$rc" "$log")"; else state="$(ledger_state "$rc")"; fi
-  # AN EXIT 1 FROM A FILE THAT DOES NOT SPEAK THE TABLE IS NOT A RESULT, and
-  # CLAIM_FAIL is the one word this ledger LATCHES as one: the resume check
-  # above skips it forever. Python spends 1 on any exception that escapes main,
-  # and three of the thirteen Python files this driver runs install the ERROR(4)
-  # handler that would say so, so a crash in the other ten would be filed as
-  # "the world disagreed with the claim, do not re-run" -- the most expensive
-  # single mislabel available here, because the arm is never attempted again and
-  # the summary reports its silence as a finding. UNKNOWN is not latched, is not
-  # RETRY either (the session does not exit 4 over it), and is disclosed by name
-  # below. `ledger_state` is untouched: this is the driver declining to read a
-  # word out of a table the file never agreed to, not a second table.
-  if [[ "$state" == "CLAIM_FAIL" ]] && ! adopts_exit_codes "$(arm_script "$name")"; then
-    state=UNKNOWN
+  if (( DRY )); then
+    state="$(dry_state "$rc" "$log")"
+  else
+    # THE INTEGER IS THE FIRST OPINION, AND THE PAGE IS THE SECOND. `ledger_state`
+    # is still the only thing that turns an exit code into a word; what follows
+    # is the driver asking whether the RESULT lines the arm printed agree with
+    # that word, and declining to LATCH a word they do not support. The rules
+    # are in `second_opinion`, one function, so every branch is plantable. Until
+    # 2026-09-03 the only check here was the third pass's "exit 1 from a file
+    # that has not adopted the table is UNKNOWN", which covered no measuring
+    # arm at all once every one of them adopted, and left a `RESULT: CLAIM C1
+    # FAIL` page under exit 0 latched as DONE. The adoption question is asked
+    # here, once, and handed over rather than asked twice.
+    state="$(ledger_state "$rc")"
+    adopts_exit_codes "$(arm_script "$name")" || adopts=$?
+    IFS=$'\t' read -r state opinion \
+      <<< "$(second_opinion "$rc" "$state" "$(log_verdict "$log")" "$adopts")"
   fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$name" "$state" "$rc" "$((t1 - t0))" "$after" "$log" "" >> "$LEDGER"
+    "$name" "$state" "$rc" "$((t1 - t0))" "$after" "$log" "$opinion" >> "$LEDGER"
   note "   $state (exit $rc) in $((t1 - t0))s; work tree $after dirty file(s)"
   case "$state" in
     BROKEN)  BROKEN_ARMS=$((BROKEN_ARMS + 1))
              note "   BROKEN: this is a PLAN, and it did not survive its own --dry-run."
              note "   $(tail -1 "$log")" ;;
     RETRY)   RETRY_ARMS=$((RETRY_ARMS + 1))
-             note "   exit $rc is not in the table. Read the log before re-running." ;;
-    UNKNOWN) note "   exit 1 from a file that has not adopted moe/bench/exit_codes."
-             note "   In that table 1 is CLAIM_FAIL, a RESULT that is never re-run."
-             note "   From this file it may equally be a crash Python exited 1 for,"
-             note "   or a VALIDITY gate. NOT latched: read the log and decide."
+             if [[ -n "$opinion" ]]; then note "   $opinion"
+             else note "   exit $rc is not in the table. Read the log before re-running."; fi
+             note "   last 5 lines of $log:"
+             tail -5 "$log" | sed 's/^/     /' ;;
+    UNKNOWN) note "   $opinion"
              contract_caveat "$name" UNKNOWN ;;
+    DONE|CLAIM_FAIL)
+             note "   $opinion" ;;
     REFUSED|PLAN_REFUSED)
              note "   $(grep -m1 'REFUSED' -- "$log" || tail -1 "$log")"
              [[ "$state" == "REFUSED" ]] && contract_caveat "$name" REFUSED ;;
     INVALID) note "   Do NOT re-run and do NOT quote it: a VALIDITY gate failed after measuring."
+             [[ -n "$opinion" ]] && note "   $opinion"
              contract_caveat "$name" INVALID ;;
   esac
   if [[ "$before" != "-" && "$after" != "-" && "$after" -gt "$before" ]]; then
@@ -1338,7 +1653,7 @@ arm_closes() { case "$1" in
   dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype." ;;
   span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry. IT RUNS WHOLE OR NOT AT ALL: --max-minutes 35 used to cap it, which does not refuse -- it breaks out of the cell loop, records the truncation as prose, and lets the gates score a partial grid to a complete grid's exit code. The 31 priced minutes exclude 21 Triton specialisations and four weight builds, so this is the arm most likely to overrun; overrunning honestly is better than a scored fraction of a grid." ;;
   span)       echo "The same on the PUBLISHED grid, booked --no-densify, which is what puts it in a different run id from span_dense: with --densify the default, a bare arm derived the dense arm's id, restored its rows, measured nothing and still landed DONE. IT REFUSES, and its own --dry-run says so in advance: on a powers-of-two grid the padding factor is exactly 1.00 everywhere, so c2_grid_power stops it before it spends a minute. The refusal is the extent comparison's honest answer on that grid, it is free, and it is booked at ZERO rather than at 30 minutes it cannot spend." ;;
-  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py returns 0 only for OPEN and 3 for everything else, and 3 is INVALID in the table this session adopted, so the BLOCKED answer this arm exists to obtain is filed as a validity failure. BLOCKED is the ANSWER, not a broken instrument; the fix belongs in that script, which audit A4 does not schedule." ;;
+  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS VERDICT LINE, NOT ITS LEDGER STATE: scripts/dram_counter_route.py --probe exits 0 DONE for OPEN and for BLOCKED alike and prints no RESULT line for either (it used to exit 3 for everything but OPEN, which filed BLOCKED as INVALID; that half is fixed). An exit 0 with no scored gate is an UNEARNED DONE under this driver's second opinion, so the row lands UNKNOWN and is not latched however the probe answered, and the summary prints NOT scored beside it. BLOCKED is the ANSWER, not a broken instrument, and it is on the VERDICT line of the log. The fix, one RESULT line per verdict so the ledger word can be earned, belongs in that script, which audit A4 does not schedule." ;;
 esac; }
 
 arm_offgpu_gates() { case "$1" in
@@ -1506,13 +1821,40 @@ fi
 # is a collision this repo has already published (two arms, two sm_counts, one
 # file name). An operator-supplied MOE_RESULTS_DIR is REFUSED rather than
 # silently rewritten if it does not name the card.
+#
+# WHICH SESSION DIRECTORY, through `session_choice`, one function with every
+# branch plantable. The ledger, and with it the latch that keeps a finished arm
+# from being spent twice, lives in that directory and nowhere else; until
+# 2026-09-03 a plain re-invocation opened a fresh one beside it and nothing in
+# --help said SESSION= was the way back. SESSION_ROOT is overridable so the
+# choice can be exercised against a planted root off GPU.
 if [[ -d /workspace ]]; then
-  SESSION="${SESSION:-/workspace/session/gaps-$CARD-$(date -u +%Y%m%dT%H%M%SZ)}"
+  SESSION_ROOT="${SESSION_ROOT:-/workspace/session}"
+  SESSION_PREFIX="gaps-$CARD-"
   RESULTS_ROOT=/workspace/results
 else
-  SESSION="${SESSION:-$REPO/results/h200_gaps/session-$CARD-$(date -u +%Y%m%dT%H%M%SZ)}"
+  SESSION_ROOT="${SESSION_ROOT:-$REPO/results/h200_gaps}"
+  SESSION_PREFIX="session-$CARD-"
   RESULTS_ROOT="$REPO/results"
 fi
+IFS=$'\t' read -r SESSION_HOW SESSION_WHAT \
+  <<< "$(session_choice "$DRY" "$RESUME_LATEST" "$NEW_SESSION" "${SESSION:-}" "$SESSION_ROOT" "$SESSION_PREFIX")"
+case "$SESSION_HOW" in
+  NAMED|RESUMED|NEW) SESSION="$SESSION_WHAT" ;;
+  LATEST_EXISTS)
+    echo "REFUSED: a session for $CARD already exists, with a measuring ledger:"
+    echo "  $SESSION_WHAT"
+    echo "  A fresh session would open an EMPTY ledger beside that one, re-run every"
+    echo "  arm it holds as DONE, and re-run the CLAIM_FAIL and INVALID rows the"
+    echo "  latch exists to keep. Nothing was run. Choose, in words:"
+    echo "      bash scripts/h200_gaps_session.sh --resume-latest     # skip its finished arms"
+    echo "      SESSION=$SESSION_WHAT bash scripts/h200_gaps_session.sh"
+    echo "      bash scripts/h200_gaps_session.sh --new               # a fresh ledger, on purpose"
+    exit "$RC_REFUSED" ;;
+  *)
+    echo "REFUSED: ${SESSION_WHAT:-session_choice printed nothing this driver can read}"
+    exit "$RC_REFUSED" ;;
+esac
 if [[ -n "${MOE_RESULTS_DIR:-}" ]]; then
   RESULTS="$MOE_RESULTS_DIR"
   case "$RESULTS" in
@@ -1942,7 +2284,8 @@ note "alpha, cap and roof fraction the study has published."
 # first"), and the gate after arm 0 is what stops the session before it gets
 # here.
 #
-# THE DRY BRANCH IS BARE ON PURPOSE AND UNDER-BOOKS ITSELF BY 1.4 MINUTES. That
+# THE DRY BRANCH IS BARE ON PURPOSE, AND SINCE 2026-09-03 IT NO LONGER
+# UNDER-BOOKS ITSELF. That
 # script does not take a --dry-run flag at all: a bare invocation IS its plan
 # and --run is what makes it measure. Until 2026-09-03 `report_cost` charged
 # the probe's six specialisations only under --run, so the plan the branch
@@ -1952,7 +2295,7 @@ note "alpha, cap and roof fraction the study has published."
 # refuses at the probe, but a --dry-run session on the pod would then MEASURE,
 # and this file's rule is that a plan is free in every sense. The booking is
 # the 13, `arm_basis` names the command that prints it and says the two agree,
-# and the operator reads the difference rather than absorbing it.
+# and there is no difference left for the operator to read.
 #
 # AND OFF A GPU BOX IT NEEDS A CARD TO NAME, exactly as dtype does: without one
 # it labels the run "no-card-nothing-measured", declines to price the arm at all
@@ -2255,7 +2598,7 @@ for n in "${ARM_NAMES[@]}"; do
   reason="$(awk -F'\t' -v a="$n" '$1==a{s=$7} END{print s}' "$LEDGER")"
   [[ -n "$state" ]] && printf '  state:  %s\n' "$state"
   [[ -n "$reason" ]] && printf '  reason: %s\n' "$reason"
-  if summarize_arm "$n" "$log" "$state"; then
+  if summarize_arm "$n" "$log" "$state" "$reason"; then
     continue
   fi
   if [[ "$state" == "REFUSED" || "$state" == "PLAN_REFUSED" || "$state" == "NOT_PLANNED" ]]; then
@@ -2281,6 +2624,26 @@ done
 say "ARMS"
 cat "$LEDGER"
 (( DRY )) || contract_disclosure "$LEDGER"
+# THE ROWS WHOSE PAGE CONTRADICTS THEIR EXIT CODE, under their own heading, read
+# off the ledger (last row per arm wins, as everywhere else) so a resume that
+# did not touch a defective arm still shows it. A `RESULT: CLAIM C1 FAIL` page
+# under exit 0 used to be latched DONE with nothing on this page to say so.
+DEFECTS=""
+if (( DRY == 0 )); then
+  DEFECTS="$(defect_rows "$LEDGER")"
+  if [[ -n "$DEFECTS" ]]; then
+    say "THE ROWS WHOSE PAGE AND EXIT CODE DISAGREE"
+    printf '  Each arm below printed RESULT lines that imply one exit code and then\n'
+    printf '  returned another. moe/bench/exit_codes names that disagreement as itself\n'
+    printf '  a defect, in either direction: a FAIL line under exit 0 is a refutation\n'
+    printf '  filed as a pass, and all-PASS lines under exit 1 are a pass filed as a\n'
+    printf '  refutation. Neither word is latched and neither may be quoted. The fix\n'
+    printf '  belongs in the script, at the place it chooses its exit code; the\n'
+    printf '  session exits INVALID over these rows, because what is on the page is\n'
+    printf '  not a verdict.\n\n'
+    printf '%s\n' "$DEFECTS"
+  fi
+fi
 printf '\ntotal %s min of wall clock\n' "$(( ($(date -u +%s) - started) / 60 ))"
 printf 'work tree %s dirty file(s) at start, %s now\n' "$DIRTY_AT_START" "$(dirty_count)"
 
@@ -2368,7 +2731,13 @@ cat <<EOF
   than as a fact about the card: that is exactly what the 2026-09-01 run was,
   and its VOID was nearly read as a null result about DRAM.
 
-  THE SESSION DIRECTORY IS $SESSION.
+  THE SESSION DIRECTORY IS $SESSION ($SESSION_HOW).
+  Its ledger is the only place the latch lives. To resume it, skipping every
+  finished arm, run one of:
+      bash scripts/h200_gaps_session.sh --resume-latest
+      SESSION=$SESSION bash scripts/h200_gaps_session.sh
+  A bare re-invocation on this card now REFUSES rather than opening an empty
+  ledger beside this one; --new opens one on purpose.
   Copy it off before releasing the pod:
       tar czf /workspace/exfil-gaps-$CARD.tar.gz -C "$(dirname "$SESSION")" "$(basename "$SESSION")"
 EOF
@@ -2390,8 +2759,12 @@ if (( DRY )) && (( BROKEN_ARMS > 0 )); then
 EOF
   exit "$RC_INVALID"
 fi
+if (( DRY == 0 )) && [[ -n "$DEFECTS" ]]; then
+  say "$(printf '%s\n' "$DEFECTS" | wc -l | tr -d ' ') ROW(S) WHOSE PAGE AND EXIT CODE DISAGREE. Nothing from them may be quoted."
+  exit "$RC_INVALID"
+fi
 if (( DRY == 0 )) && (( RETRY_ARMS > 0 )); then
-  say "$RETRY_ARMS ARM(S) EXITED A CODE OUTSIDE THE TABLE. Read their logs."
+  say "$RETRY_ARMS ARM(S) EXITED A CODE OUTSIDE THE TABLE, OR CRASHED BEFORE SCORING A GATE. Read their logs."
   exit "$RC_RETRY"
 fi
 exit 0
