@@ -278,14 +278,40 @@ def test_the_swizzle_sweep_is_reported_as_1_to_64():
     assert "paired change 1 -> 8:" not in got.stdout
 
 
+def _without_dated_notes(text: str) -> str:
+    """Drop every hand-added `  NOTE 2026-09-03:` paragraph. Those notes
+    requalify a line the generator still prints unqualified (ANCHOR_RESCORE
+    W3, W4) and say so in their own text; they are dated, deliberate, and the
+    one thing in a published surface that is NOT the generator's output."""
+    out, skipping = [], False
+    for line in text.splitlines(keepends=True):
+        if line.startswith("  NOTE 2026-09-03:"):
+            skipping = True
+        if skipping and line.strip() == "":
+            # The blank line that ends the note is the generator's own blank
+            # line between the candidate paragraph and the next one: keep it.
+            skipping = False
+        if not skipping:
+            out.append(line)
+    return "".join(out)
+
+
 def test_the_committed_surface_files_regenerate_byte_for_byte():
-    """A published summary a stranger cannot rebuild is not published evidence."""
+    """A published summary a stranger cannot rebuild is not published evidence.
+
+    Byte for byte APART FROM the dated requalification notes beneath the
+    "0 of N fits within 0.05" line, which are added by hand until
+    scripts/alpha_surface.py prints the requalification itself; the notes say
+    so. Everything the generator writes must match exactly."""
     for arm in ("2026-09-01-nvidia_h200-alpha-surface-s4",
                 "2026-09-01-nvidia_h200-cross-card-s3",
                 "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"):
         got = _run(["scripts/alpha_surface.py", f"results/published/{arm}"])
         assert got.returncode == 0, got.stderr
-        assert got.stdout == (PUBLISHED / arm / "SURFACE.txt").read_text(), arm
+        committed = (PUBLISHED / arm / "SURFACE.txt").read_text()
+        assert got.stdout == _without_dated_notes(committed), arm
+        assert committed != _without_dated_notes(committed), (
+            f"{arm}: the requalification note is gone; W3 requires it")
 
 
 def test_the_pooled_surface_is_kept_and_says_it_is_superseded():

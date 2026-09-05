@@ -2255,9 +2255,21 @@ def _run(argv: list[str] | None = None) -> int:
     # Resolved BEFORE the provenance block so the block carries it.
     ridge: RidgeBand | None = None
     ridge_refusal = ""
+    ridge_is_hypothesis = False
     try:
         if args.synthetic:
             ridge = resolve_ridge_band(SYNTHETIC_CARD, plan.dtype, planted=True)
+        elif card == NO_CARD and not args.run and not args.replay:
+            # A LAPTOP PLAN, nothing measured. Resolving the ridge from the
+            # attached card and refusing without one is right for a run; for
+            # a plan it refused before the plan rendered, so an operator could
+            # not read the design or its MDE until a card was already rented.
+            # The regime gate is shown against the same PLANTED band that
+            # --synthetic uses, said out loud below to be a hypothesis and not
+            # this box's ridge, and the run still refuses at the end. On a card
+            # this branch is never taken: the card's own ridge or a refusal.
+            ridge = resolve_ridge_band(SYNTHETIC_CARD, plan.dtype, planted=True)
+            ridge_is_hypothesis = True
         elif args.replay:
             recorded = replay_card(out_dir)
             if not recorded and any(
@@ -2287,9 +2299,14 @@ def _run(argv: list[str] | None = None) -> int:
                                warmup_ms=args.warmup,
                                target_ms=args.cell_budget_ms,
                                ridge=ridge.low if ridge else None,
-                               ridge_source=(f"low end of {ridge.card}'s own band "
-                                             f"[{ridge.low:.1f}, {ridge.high:.1f}]: "
-                                             f"{ridge.source}") if ridge
+                               ridge_source=(
+                                   (f"PLANNING HYPOTHESIS, no card attached: the "
+                                    f"planted band [{ridge.low:.1f}, {ridge.high:.1f}] "
+                                    "that --synthetic uses; nothing may be scored "
+                                    "against it") if ridge_is_hypothesis else
+                                   (f"low end of {ridge.card}'s own band "
+                                    f"[{ridge.low:.1f}, {ridge.high:.1f}]: "
+                                    f"{ridge.source}")) if ridge
                                else f"REFUSED: {ridge_refusal}")
 
     say = Report()
@@ -2305,6 +2322,14 @@ def _run(argv: list[str] | None = None) -> int:
             "rows come from a")
         say("*** stated law and exist to show the gates can see an effect and "
             "can miss its absence.")
+    if ridge_is_hypothesis:
+        say()
+        say("*** NO CARD ATTACHED. The regime gate below is scored against a "
+            "PLANNING HYPOTHESIS,")
+        say(f"*** the planted band [{ridge.low:.1f}, {ridge.high:.1f}] that "
+            "--synthetic uses, so the plan and its MDE can be read before a card")
+        say("*** is booked. It is not this box's ridge and nothing here may be "
+            "quoted; on a card the gate resolves the card's own ridge or refuses.")
     say()
 
     if ridge is None:
