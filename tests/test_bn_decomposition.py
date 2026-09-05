@@ -1741,3 +1741,38 @@ def test_a_string_refusal_still_exits_REFUSED_and_is_not_relabelled_ERROR(
     assert code == EX.REFUSED
     assert err.startswith("REFUSED: no calibration")
     assert "Traceback" not in err
+
+
+# --------------------------------------------------------------------------
+# retraction (c): 0.307 and the TEMPO 2-4% match are withdrawn, and the
+# printed plan and the C4 gate must say so rather than restate them
+# --------------------------------------------------------------------------
+
+def test_p4_and_c4_state_the_tempo_match_as_withdrawn_not_as_prior_agreement():
+    """The printed plan carried "the study's decomposed 0.307 corroborates
+    TEMPO's b2/b to 2-4%" and C4 explained 0.307 as "a POOLED refit". Both
+    are the retracted claim restated: 0.307 was a (LIN) unit artefact of the
+    estimator, not a pooled measurement, and the 2-4% agreement went with it.
+    Pinned on the rendered text of BOTH sites, because the defect this repo
+    keeps finding is a fix applied at one of two call sites.
+    """
+    plan = BND.predictions_text(MIXTRAL, 2, 160.3, "test", BND.DEFAULT_BLOCK_N,
+                                BND.SUBJECT_BLOCK_M, {}, 1, [])
+    p4 = plan[plan.index("P4"):plan.index("P5")]
+    assert "WITHDRAWN" in p4 and "(LIN)" in p4
+    assert "corroborates TEMPO's b2/b of" not in p4
+    assert "to 2-4%" not in p4.replace("corroborates TEMPO to 2-4%' is WITHDRAWN", "")
+
+    boot = BND.Bootstrap(0, {}, {}, None, None, None, {}, "no draws")
+    fit = BND.Decomposition("EXA", None, 0.92, 0.14, 0.0, 9, 3, (), (), (),
+                            "planted")
+    gate = BND.gate_tempo(fit, boot, 1)
+    text = "\n".join(gate.render()) if hasattr(gate, "render") else "\n".join(gate.lines)
+    assert gate.passed is False                      # 0.92 is far from 0.311/0.319
+    assert "WITHDRAWN" in text and "unit artefact" in text
+    assert "is a POOLED refit" not in text
+    assert "first number in this study that may be compared with TEMPO" in text
+    # The fitted-world table names the withdrawn reading by what it is.
+    table = "\n".join(BND.cell_table(MIXTRAL, 2, 160.3, BND.DEFAULT_BLOCK_N,
+                                     BND.SUBJECT_BLOCK_M, {}))
+    assert "LIN-ERA (0.307, 0.143)" in table and "POOLED (0.307" not in table

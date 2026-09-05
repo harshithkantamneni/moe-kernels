@@ -36,21 +36,29 @@ Three outcomes, and they are the study's fork:
     evidence this is the outcome the pod arm should expect.
 
 WHY 128 AND NOT A --block-m FLAG. 128 is the only production-relevant regime.
-From the one published arm that RECORDS the tile vLLM chose:
+From the one published arm that RECORDS the tile vLLM chose
+(`2026-09-01-nvidia_h200-alpha-0558/merged.csv`, `tile_config_source` in
+{vllm_default, vllm_tuned}, uniform routing only, a cell = one (model, tokens,
+impl) over its seven seeds), counted on `load_max_rows`, which is what
+`moe_align_block_size` actually pads to, and recounted 2026-09-03:
 
     BLOCK_M    cells run multi-tile     max M-tiles per expert
-       16          0 of 24                      1
+       16          1 of 24                      2
        32          0 of  5                      1
-       64          0 of 16                      1
-      128         59 of 87                     32
+       64          2 of 16                      2
+      128         66 of 87                     34
 
-The re-read term only exists when there is more than one M-tile per expert. At
-16, 32 and 64 vLLM never runs multi-tile, so the caps computed for those tiles
-are real and NEVER APPROACHED; at 128 it runs up to 32 tiles per expert. A
-`--block-m` flag would let a run answer a different question under this script's
-name, so there is not one. The tile that IS a parameter is the control,
-`--control`, and it is a parameter because which tile can serve as a control
-depends on the card.
+On `load_mean_rows` the same cells read 0 / 0 / 0 / 59 of 87 and 1 / 1 / 1 / 32,
+which is the table this paragraph used to print as "16, 32 and 64 never run
+multi-tile". The re-read term only exists when there is more than one M-tile
+per expert. At 16, 32 and 64 it fires in isolated cells and never past two
+tiles, so the caps computed for those tiles are real and barely approached; at
+128 it runs up to 34 tiles at the busiest expert. SKEWED ROUTINGS WERE NEVER
+COUNTED and production routing is skewed, so this is a statement about uniform
+routing and nothing else. A `--block-m` flag would let a run answer a different
+question under this script's name, so there is not one. The tile that IS a
+parameter is the control, `--control`, and it is a parameter because which tile
+can serve as a control depends on the card.
 
 WHAT THE FIT SAYS ABOUT 128, AND WHY NO CAP IS QUOTED HERE. This paragraph used
 to read "the cap sits near 150 FLOP/byte against a ridge near 163", computed as
@@ -71,13 +79,21 @@ reasons, and the retraction is the reason this script exists.
     BLOCK_SIZE_N=64 on mixtral is about a third too high. `ai_model.cap_from_
     fitted` is the corrected reading and it REFUSES a fitted alpha the three-term
     model cannot produce, which several of this study's published alphas are.
-  * THE ALPHA. 0.85 is not what the ladders read. At the swizzle this script
-    pins by default (GROUP_SIZE_M=1) the direct ladders on both cards give
-    0.92-1.02, which puts even the UNCORRECTED cap at 128-139 Op/B: BELOW a ridge
-    of 163.7, not near it. Through (EXA) it is lower still. At GROUP_SIZE_M=16
-    the same ladders give 0.63-0.66 and the uncorrected cap clears the ridge. The
-    sign of the answer is a function of the swizzle, which is what `--group-m` is
-    for and why it is in the run id.
+  * THE ALPHA. 0.85 is not what the ladders read, and no single figure is. At
+    the swizzle this script pins by default (GROUP_SIZE_M=1) the identifiable
+    direct ladders read 0.62 to 1.02 across models and cards, and NONE of them
+    is at BLOCK_M=128, where no G=1 ladder was identifiable on either card
+    (published SURFACE.txt of the s4 H200 and s3 A100 arms): mixtral reads
+    0.95-1.02 on both cards, qwen2 0.72/0.71 on the H200 and 0.65/0.84 on the
+    A100, deepseek-v2-lite 0.62. So the UNCORRECTED cap 2 BM / (alpha b) at
+    128 is a BRACKET, 125 to 207 Op/B against the H200's own ridge of 162.8
+    (`measured_nvidia_h200.yaml`): below it at mixtral's alphas, above it at
+    qwen2's and deepseek's, and lower again by (1 + phi + delta) through (EXA).
+    This paragraph used to say "0.92-1.02 on both cards, BELOW a ridge of
+    163.7, not near it"; that was mixtral's number quoted for every model. At
+    GROUP_SIZE_M=16 the same ladders give 0.63-0.66 and the uncorrected cap
+    clears the ridge. The sign of the answer is a function of the model and the
+    swizzle, which is what `--group-m` is for and why it is in the run id.
 
 So this file quotes no cap and computes no verdict from one. It measures the
 fraction of a MEASURED roof with a stopwatch, and the only place a fitted alpha
@@ -543,12 +559,15 @@ THROTTLED_CELL_FRACTION = 0.10
 #: hypothetical: it is the normal state of a dense GEMM.
 ROOF_CLOCK_TOLERANCE = 0.10
 
-#: The alphas this study has actually fitted at BLOCK_M=128 with GROUP_SIZE_M=1.
-#: The low end is the published surface's own 128 row; the high end is the top of
-#: the 0.92-1.02 range `block_m_crossing_sweep`'s --group-m help quotes for that
-#: swizzle. The band is carried rather than a point estimate because the
-#: PREDICTED plateau it implies spans 0.77 to 1.00 of the roof, and a prediction
-#: that wide is the reason this experiment measures instead of computing.
+#: The alphas this study has actually fitted with GROUP_SIZE_M=1, as a band.
+#: The low end is the published surface's own 128 row (0.625, fitted at G=1 on
+#: the 2026-09-01 alpha-0558 arm); the high end is the largest G=1 ladder alpha
+#: on the published surfaces, mixtral BLOCK_M=32 at 1.016 (H200 s4) and 1.018
+#: (A100 s3). No BLOCK_M=128 ladder at G=1 was identifiable on either surface,
+#: so this is a bracket over other tile heights, not a measurement at 128. The
+#: band is carried rather than a point estimate because the PREDICTED plateau
+#: it implies spans 0.77 to 1.00 of the roof, and a prediction that wide is the
+#: reason this experiment measures instead of computing.
 ALPHA_128_BAND = (SWEEP.ALPHA_BY_BLOCK_M.get(SUBJECT_BLOCK_M, SWEEP.ALPHA), 1.02)
 
 #: THE NOISE THIS ARM'S PLAN IS SIZED AGAINST, as a relative spread on one

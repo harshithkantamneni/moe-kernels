@@ -58,16 +58,22 @@ def test_no_pre_existing_profile_changed_dtype_or_routing_axes(name):
 
 
 # --------------------------------------------------------------------------
-# A grid that brackets a ridge BAND, not a ridge
+# A grid that brackets every calibrated card's own ridge, off its own file
 # --------------------------------------------------------------------------
 
-def test_the_dense_region_brackets_both_ends_of_the_ridge_band():
-    """The H200's ridge measured 160.3 and 176.2 on the same card, so the
-    predicted crossing is an interval and a grid that reaches only its midpoint
-    reaches neither end. Both ends of every model's prediction have to sit
-    inside the dense region, with points below and above."""
+#: The band `profiles` used to carry as `H200_RIDGE_BAND`. Two H200 compute
+#: calibrations 9.9% apart, no card's ridge, withdrawn 2026-09-02. It appears
+#: here only so a test can assert it is gone.
+WITHDRAWN_BAND = (160.3, 176.2)
+
+
+def test_the_dense_region_brackets_every_calibrated_card_s_own_ridge():
+    """The band is the span of the committed calibrations' ridges (A100 145.8,
+    H200 162.8), so a profile written on a laptop brackets the crossing on
+    whichever of those cards is rented. Both ends of every model's prediction
+    have to sit inside the dense region, with points below and above."""
     grid = PR.CROSSING_TOKENS
-    lo_band, hi_band = min(PR.H200_RIDGE_BAND), max(PR.H200_RIDGE_BAND)
+    lo_band, hi_band = min(PR.CROSSING_RIDGE_BAND), max(PR.CROSSING_RIDGE_BAND)
     for model in PR.CROSSING_MODELS:
         for ridge in (lo_band, hi_band):
             predicted = crossing_batch(model, ridge)
@@ -80,17 +86,59 @@ def test_the_dense_region_brackets_both_ends_of_the_ridge_band():
             assert min(above) / predicted < 1.20, (model, ridge)
 
 
+def test_the_band_is_each_committed_card_s_own_ridge_and_not_the_withdrawn_one():
+    """Each end must be a number with a yaml behind it: `ridge_point("bf16")`
+    off `measured_nvidia_a100_sxm4_80gb.yaml` and `measured_nvidia_h200.yaml`.
+    160.3 and 176.2 are neither, and the old constant is gone by name."""
+    from moe.bench import roofline
+
+    a100 = roofline.load_hardware("measured_nvidia_a100_sxm4_80gb").ridge_point("bf16")
+    h200 = roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16")
+    assert PR.CROSSING_RIDGE_BAND == (min(a100, h200), max(a100, h200))
+    assert PR.CROSSING_RIDGE_BAND == pytest.approx((145.81, 162.81), abs=0.01)
+    for end in PR.CROSSING_RIDGE_BAND:
+        for withdrawn in WITHDRAWN_BAND:
+            assert abs(end - withdrawn) > 1.0
+    assert not hasattr(PR, "H200_RIDGE_BAND")
+    assert "4d84542b" in PR.WITHDRAWN_RIDGE_BAND_WHY
+
+
+def test_crossing_grid_refuses_to_place_a_dense_region_without_a_stated_band():
+    """The default used to be the withdrawn band. Now there is no default: a
+    caller with models and no band is refused, and the refusal names where a
+    band comes from. An empty model set is still the bare backbone, because
+    nothing is placed."""
+    with pytest.raises(TypeError, match="calibrated_ridge_band"):
+        PR.crossing_grid(PR.CROSSING_MODELS)
+    assert PR.crossing_grid(()) == PR.COARSE_BACKBONE
+
+
+def test_calibrated_ridge_band_refuses_when_no_calibration_carries_the_dtype(
+        monkeypatch):
+    """THE FAIL BRANCH, planted: with no measured yaml readable there is no band,
+    and the answer is a refusal naming the directory, never a constant."""
+    from moe.bench import roofline
+
+    monkeypatch.setattr(roofline, "available_profiles", lambda: ["h200_nvl"])
+    with pytest.raises(LookupError, match="calibrate_hardware"):
+        PR.calibrated_ridge_band("bf16")
+    # A dtype no committed calibration has a verified peak for is the same
+    # refusal, on the real files.
+    with pytest.raises(LookupError, match="no committed calibration"):
+        PR.calibrated_ridge_band("int4")
+
+
 def test_the_grid_is_placed_by_the_ridge_and_not_hardcoded():
     """Move the band and the extra points must move with it. A grid frozen as a
     literal would pass every other test here and silently describe the wrong
-    card the first time this runs on an A100, whose ridge is 145.7."""
-    a100 = PR.crossing_grid(PR.CROSSING_MODELS, ridge_band=(145.7, 145.7))
-    h200 = PR.crossing_grid(PR.CROSSING_MODELS, ridge_band=PR.H200_RIDGE_BAND)
-    assert a100 != h200
-    added_a100 = sorted(set(a100) - set(PR.COARSE_BACKBONE))
-    added_h200 = sorted(set(h200) - set(PR.COARSE_BACKBONE))
-    assert added_a100 != added_h200
-    assert added_a100[0] < added_h200[0], "a lower ridge crosses earlier"
+    card the first time this runs on a card whose ridge sits elsewhere."""
+    low = PR.crossing_grid(PR.CROSSING_MODELS, ridge_band=(120.0, 120.0))
+    own = PR.crossing_grid(PR.CROSSING_MODELS, ridge_band=PR.CROSSING_RIDGE_BAND)
+    assert low != own
+    added_low = sorted(set(low) - set(PR.COARSE_BACKBONE))
+    added_own = sorted(set(own) - set(PR.COARSE_BACKBONE))
+    assert added_low != added_own
+    assert added_low[0] < added_own[0], "a lower ridge crosses earlier"
 
 
 #: DeepSeek-V3's published one-stage bf16 crossings under uniform routing, from
@@ -109,7 +157,7 @@ def test_every_ladder_reaches_past_the_top_of_the_predicted_band():
     """An octave ladder's highest measurable slope sits at its top point over
     sqrt(2), so it is the LADDER's reach that decides whether a crossing can be
     reported, not the grid's. No ladder may stop inside the prediction."""
-    highest = max(crossing_batch(m, max(PR.H200_RIDGE_BAND))
+    highest = max(crossing_batch(m, max(PR.CROSSING_RIDGE_BAND))
                   for m in PR.CROSSING_MODELS)
     for j, ladder in enumerate(PR.octave_ladders(PR.CROSSING_TOKENS)):
         assert _top_slope(ladder) >= highest, (j, _top_slope(ladder), highest)
@@ -117,12 +165,13 @@ def test_every_ladder_reaches_past_the_top_of_the_predicted_band():
 
 def test_the_published_grid_stops_where_deepseek_v3_actually_crossed():
     """THE DEFECT BEING REPAIRED, stated as the numbers that expose it. The
-    powers-of-two grid clears the top of the predicted band by 2.7% and has
+    powers-of-two grid clears DeepSeek-V3's prediction at the H200's own
+    ridge (5210 tokens at 162.8 FLOP/byte) by 11% and has
     nothing above that, and DeepSeek-V3's measured one-stage crossings are past
     it. Half this study's 'no crossing found' answers are this."""
     old = _top_slope(PR.COARSE_BACKBONE)
-    band_top = crossing_batch("deepseek-v3", max(PR.H200_RIDGE_BAND))
-    assert 1.0 < old / band_top < 1.03
+    band_top = crossing_batch("deepseek-v3", max(PR.CROSSING_RIDGE_BAND))
+    assert 1.0 < old / band_top < 1.15
     assert all(old < c for c in _MEASURED_ONE_STAGE_DEEPSEEK_CROSSINGS)
 
     # The new grid clears them on every ladder, ladder 0 included, which is what
@@ -137,7 +186,7 @@ def test_the_grid_reaches_past_the_whole_window_not_just_the_band():
     may land (0.40 to 1.40, from the 0.45-1.13 the study has measured). A grid
     that cannot see the top of its own window has an untestable upper margin."""
     window_top = PR.CROSSING_WINDOW[1] * max(
-        crossing_batch(m, max(PR.H200_RIDGE_BAND)) for m in PR.CROSSING_MODELS)
+        crossing_batch(m, max(PR.CROSSING_RIDGE_BAND)) for m in PR.CROSSING_MODELS)
     assert _top_slope(PR.CROSSING_TOKENS) > window_top
     assert _top_slope(PR.octave_ladders(PR.CROSSING_TOKENS)[0]) > window_top
 
@@ -249,7 +298,9 @@ def test_the_crossing_profile_measures_one_timing_mode():
 
 
 #: How many of the sixteen (model x implementation) cells of the canonical bf16
-#: pool report a crossing at all, uniform routing, ridge 160.3, eager rows only.
+#: pool report a crossing at all, uniform routing, eager rows only (the count
+#: is ridge-independent; it was first taken at the withdrawn 160.3 and reads
+#: the same at the H200's own 162.8).
 #: Counted from `scripts/crossing_report.py` over the four canonical arms with
 #: `--routing uniform --cuda-graph false --l2-flush true`, and again with
 #: `--l2-flush false`. Keyed by `l2_flush`, valued `(five_stage, one_stage)`.

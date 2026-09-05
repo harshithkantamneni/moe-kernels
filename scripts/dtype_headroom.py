@@ -30,7 +30,12 @@ effect, the matched panel is where it would fall apart.
       --bf16 results/published/2026-08-26-nvidia_h200-full-three-way-recalibrated/run_*.csv \
       --bf16 results/published/2026-08-28-nvidia_h200-h200-v2lite/run_*.csv \
       --fp8  results/published/2026-08-28-nvidia_h200-h200-fp8-three-kernel/run_*.csv \
-      --ridge 160.3
+      --ridge 162.8
+
+162.8 is the H200's OWN bf16 ridge off `moe/bench/hardware/
+measured_nvidia_h200.yaml` (these three arms are H200 arms); `ridge_for_dtype`
+scales it for fp8. This line used to read `--ridge 160.3`, the low end of a
+withdrawn two-calibration band (md5 4d84542b) that was no card's ridge.
 """
 from __future__ import annotations
 
@@ -97,13 +102,23 @@ def load_rows(paths: list[Path], *, impl=PRODUCTION_FUSED,
     Returns the notes it wants printed rather than printing them, so the two
     dtype arms report their exclusions in one block instead of interleaved.
 
-    The throttle filter is ON by default and it is not cosmetic: it is what makes
-    the row counts 279 / 182 / 275 / 284 rather than 336 / 184 / 336 / 288, and
-    it moves the fp8 eager median from 1.414 to 1.959. A published table that did
-    not say which it was would be unreproducible.
+    THE `throttled` FILTER IS ON BY DEFAULT, AND WHAT IT FILTERS ON IS NOT
+    THROTTLING. Every row here is schema v3, and its `throttled` column is the
+    legacy `timing.clock_drift` flag: two idle-instant SM-clock samples, one
+    before and one after the cell, fired on a >5% drop. What that detected was
+    the start sample catching the idle boost before sustained load settled the
+    clock, not a card throttling (`moe/bench/timing.py`, "CLOCKS ARE READ UNDER
+    LOAD"); the LEVEL flag `time_kernel` now sets against the calibration's
+    reference clock does not exist on these rows. The filter is kept on because
+    it is what the published table was computed with, and that is the only
+    reason: it makes the row counts 279 / 182 / 275 / 284 rather than 336 /
+    184 / 336 / 288 and moves the fp8 eager median from 1.414 to 1.959, so a
+    table that did not name it would be unreproducible. `--include-throttled`
+    is the other reading, and the notes say how many rows the flag removed.
     """
     notes: list[str] = []
     seen: set[str] = set()
+    flagged = 0
     kept, dropped = filter_superseded(paths)
     for d in dropped:
         note = f"[skip] {d.parent.name}: {superseded_reason(d).splitlines()[0]}"
@@ -138,8 +153,14 @@ def load_rows(paths: list[Path], *, impl=PRODUCTION_FUSED,
                 if row_float(r, "num_tokens") > max_tokens:
                     continue
                 if not include_throttled and row_bool(r, "throttled"):
+                    flagged += 1
                     continue
                 rows.append(r)
+    if flagged:
+        notes.append(
+            f"[flag] {flagged} row(s) dropped by the legacy `throttled` column: "
+            "the pre-v5 clock_drift flag, an idle-boost catch rather than a "
+            "throttle detector; --include-throttled keeps them")
     return rows, notes
 
 

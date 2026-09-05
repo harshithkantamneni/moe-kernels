@@ -1757,3 +1757,89 @@ def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys
     assert "planted: the allocator gave up halfway" in err, \
         "the traceback was swallowed"
     assert "RuntimeError" in err
+
+
+# --------------------------------------------------------------------------
+# 9. the cost model's ceilings are resolved from a file, never a constant
+# --------------------------------------------------------------------------
+
+def test_the_withdrawn_band_is_gone_by_name_and_named_as_history():
+    """`RIDGE_BAND = (160.3, 176.2)` and `BANDWIDTH_GBPS = 4374.5` used to sit
+    in this module and `--ridge` defaulted to the band's low end. The band was
+    two H200 compute calibrations 9.9% apart and no card's ridge."""
+    assert not hasattr(SE, "RIDGE_BAND")
+    assert not hasattr(SE, "BANDWIDTH_GBPS")
+    assert "4d84542b" in SE.WITHDRAWN_RIDGE_BAND_WHY
+    parser = SE.build_parser()
+    assert parser.get_default("ridge") == 0.0
+    assert parser.get_default("bandwidth_gbps") == 0.0
+
+
+def test_a_laptop_plan_prices_against_the_committed_h200_file_and_says_so():
+    """No device: the hypothesis is the committed calibration, read through
+    `roofline`, and both source strings say HYPOTHESIS and COST MODEL ONLY."""
+    from moe.bench import roofline
+
+    hw = roofline.load_hardware(SE.HYPOTHESIS_CALIBRATION)
+    c = SE.resolve_cost_ceilings(0.0, 0.0, SE.NO_CARD, "bf16")
+    assert c.kind == "hypothesis"
+    assert c.ridge == pytest.approx(hw.ridge_point("bf16"))
+    assert c.bandwidth_gbps == pytest.approx(hw.bandwidth_bytes_s / 1e9)
+    assert c.ridge == pytest.approx(162.8, abs=0.1)
+    for src in (c.ridge_source, c.bandwidth_source):
+        assert src.startswith("COST MODEL ONLY") and "HYPOTHESIS" in src
+    assert "160.3" not in c.ridge_source
+
+
+def test_an_operator_s_ridge_and_bandwidth_are_taken_as_stated():
+    c = SE.resolve_cost_ceilings(150.0, 2000.0, "NVIDIA Whatever", "bf16")
+    assert (c.ridge, c.bandwidth_gbps, c.kind) == (150.0, 2000.0, "cli")
+    assert "given on the command line" in c.ridge_source
+    assert "given on the command line" in c.bandwidth_source
+
+
+def test_a_card_with_no_calibration_is_refused_not_priced_against_another(
+        monkeypatch):
+    """THE FAIL BRANCH, planted: a real device, no calibration for it, and no
+    --ridge. The refusal names the fix and the withdrawn constant never
+    stands in; `main` files a string SystemExit as REFUSED, not CLAIM_FAIL."""
+    from moe.bench import roofline
+
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: None)
+    with pytest.raises(SystemExit) as caught:
+        SE.resolve_cost_ceilings(0.0, 0.0, "NVIDIA Planted-GPU", "bf16")
+    msg = str(caught.value.code)
+    assert msg.startswith("REFUSED") and "calibrate_hardware" in msg
+    assert "160.3" in msg and "withdrawn" in msg, "history is named, not used"
+
+    def mismatch(*a, **k):
+        raise roofline.HardwareMismatch("planted: measured on another card")
+
+    monkeypatch.setattr(roofline, "load_measured", mismatch)
+    with pytest.raises(SystemExit, match="planted: measured on another card"):
+        SE.resolve_cost_ceilings(0.0, 0.0, "NVIDIA Planted-GPU", "bf16")
+
+
+def test_a_card_s_own_calibration_is_what_a_run_on_that_card_prices_against(
+        monkeypatch):
+    from moe.bench import roofline
+
+    a100 = roofline.load_hardware("measured_nvidia_a100_sxm4_80gb")
+    monkeypatch.setattr(roofline, "load_measured", lambda *a, **k: a100)
+    c = SE.resolve_cost_ceilings(0.0, 0.0, "NVIDIA A100-SXM4-80GB", "bf16")
+    assert c.kind == "calibration"
+    assert c.ridge == pytest.approx(145.8, abs=0.1)
+    assert c.bandwidth_gbps == pytest.approx(1799.4, abs=0.1)
+    assert "measured on this device" in c.ridge_source
+    assert "HYPOTHESIS" not in c.ridge_source
+
+
+def test_the_dry_run_provenance_carries_the_hypothesis_label(tmp_path):
+    import json
+
+    SE.main(["--self-test", "kernel", "--fail-on-world", "--models",
+             "mixtral-8x7b", "--out-dir", str(tmp_path)])
+    payload = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
+    assert "HYPOTHESIS" in payload["ridge_source"]
+    assert "COST MODEL ONLY" in payload["ridge_source"]
+    assert payload["provenance"]["ridge"] == pytest.approx(162.8, abs=0.1)

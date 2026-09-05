@@ -85,7 +85,7 @@ sys.path.insert(0, str(REPO))
 # The shared exit-code table and the shared provenance block, both imported
 # rather than approximated here: this file spent its life returning integers it
 # chose for itself and writing JSON that named no commit and no machine.
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 
 # Imported, never re-derived. Two byte models for one study is how the padding
@@ -323,6 +323,149 @@ def predicted_read_bytes(cfg, block_m: int, n: int, alpha: float, b: int = 2) ->
             + activation_bytes_per_tile(cfg, block_m) * n)
 
 
+def layer_gemm_shapes(cfg) -> tuple[tuple[int, int], tuple[int, int]]:
+    """`((N, K) of the up GEMM, (N, K) of the down GEMM)` for one expert layer.
+
+    `moe/bench/ai_model.py` is a single-GEMM model and a fused expert layer is
+    two of them: up, `C[M, 2F] = A[M, H] @ W13[H, 2F]`, and down,
+    `C[M, H] = A[M, F] @ W2[F, H]`. A per-tile activation cost `phi` is stated
+    per GEMM, so a bracket over the layer takes the widest of the two.
+    """
+    return ((2 * cfg.intermediate_size, cfg.hidden_size),
+            (cfg.hidden_size, cfg.intermediate_size))
+
+
+def cap_from_counter(cfg, block_m: int, alpha: float, b: int = 2) -> tuple[float, float]:
+    """`(cap, uncorrected)`: the AI ceiling a COUNTER alpha implies, and the
+    study's `2 BM / (alpha b)` reading of the same number, which is an upper
+    bound on it.
+
+    WHY THIS IS NOT `ai_model.cap_from_fitted`. That function inverts a
+    B/(A+B) LADDER fit, whose alpha is `(alpha_b + phi) / (1 + phi + delta)`:
+    the first tread's activation, output and fixed cost sit in the denominator
+    and the cap read as `2 BM / (alpha b)` is high by exactly that level. The
+    counter's alpha is a different quantity with no level in it at all:
+    `alpha_from_counters` returns `(dR/dn - a) / W`, a TRAFFIC SLOPE in
+    weight-read units with the once-read activation share `a` taken out.
+    Applying the level correction to it would divide by a denominator the
+    number never had.
+
+    What the counter alpha does need is the share it removed put back. The
+    intensity at `n` tiles is FLOPs over bytes, both affine in `n`, so the
+    ceiling is the ratio of slopes: `2 BM W / (b dR/dn) = 2 BM / (b (alpha +
+    a/W))`. The study's `2 BM / (alpha b)` drops `a/W` (0.009 at BLOCK_M=32 on
+    mixtral, 0.019 at 64) and is therefore an UPPER BOUND on the cap, not the
+    cap; the difference flips the verdict for an alpha within `a/W` of the
+    threshold, which is why the gate scores the corrected number.
+
+    No alpha_a bracket is needed here, and that is a property of the
+    instrument: a DRAM counter measures the activation re-read and the weight
+    re-read alike, so whichever operand the extra traffic is on, it is in the
+    slope. The counter cannot SPLIT the slope into alpha_b and alpha_a, which
+    is why C1's comparison with the ladder anchors is in different units, and
+    that is stated on the C3 gate rather than hidden.
+
+    Read traffic only: `dram_bytes_read` is the metric the evaluation named,
+    the write slope is not in `alpha`, and the gate says the cap is high by
+    the write share.
+    """
+    # At alpha = 0 the slope is the once-read share alone and the cap is
+    # FINITE, unlike `ai_cap`'s infinity: a tile still carries its own
+    # activations and output whatever the weight re-read costs.
+    W = weight_bytes_total(cfg, b)
+    a = activation_bytes_per_tile(cfg, block_m)
+    slope = alpha + a / W
+    if slope <= 0.0:
+        raise ValueError(
+            f"alpha={alpha} plus the once-read share {a / W:.4f} is not positive; "
+            "a non-positive traffic slope is not a ladder and has no cap")
+    return 2.0 * block_m / (b * slope), ai_cap(block_m, alpha, b)
+
+
+@dataclass(frozen=True)
+class CapBracket:
+    """The cap a LADDER alpha implies, as a bracket over the unmeasured alpha_a.
+
+    `low` is the alpha_a = 1 end (every N-tile re-reads the activation slab,
+    the largest per-tile cost, the lowest cap) and `high` the alpha_a = 0 end;
+    both at delta = 0, the smallest level correction, so even the high end is
+    an upper bound on the corrected cap. An end is None when
+    `ai_model.cap_from_fitted` REFUSED it, because the fitted alpha is below
+    the floor `phi / (1 + phi)` that alpha_b = 0 gives at that alpha_a: the
+    three-term model cannot have produced this reading with that much
+    activation re-read, and `refused` says so per end rather than clamping.
+    """
+
+    alpha_fitted: float
+    uncorrected: float
+    low: float | None
+    high: float | None
+    refused: dict[str, str]
+
+    def render(self) -> str:
+        def end(v):
+            return f"{v:.1f}" if v is not None else "REFUSED"
+        return (f"2BM/(alpha b) = {self.uncorrected:.1f} (upper bound); corrected "
+                f"[{end(self.low)} at alpha_a=1, {end(self.high)} at alpha_a=0] at delta=0"
+                + ("" if not self.refused else
+                   "; " + "; ".join(f"{k}: {v}" for k, v in self.refused.items())))
+
+
+def anchor_cap_bracket(cfg, block_m: int, block_n: int, alpha_fitted: float,
+                       b: int = 2) -> CapBracket:
+    """`ai_model.cap_from_fitted` over alpha_a in {0, 1}, both layer GEMMs.
+
+    The registered anchors (`published`, `t1`, `n3`) are B/(A+B) ladder fits,
+    so the cap each one implies is the study's `2 BM / (alpha b)` divided by
+    `(1 + phi + delta)`, retraction (a). `alpha_a` has no measurement anywhere
+    in this repository, so `phi` is a bracket: its alpha_a = 0 end is the
+    smaller of the two GEMMs' once-read costs and its alpha_a = 1 end the
+    larger of their full re-read costs, which is the widest honest interval.
+    `delta` is unmeasured too and only lowers the cap, so it is held at 0 and
+    the bracket is labelled as the generous end.
+    """
+    uncorrected = ai_cap(block_m, alpha_fitted, b)
+    ends: dict[str, float | None] = {}
+    refused: dict[str, str] = {}
+    for label, alpha_a, pick in (("alpha_a=0", 0.0, min), ("alpha_a=1", 1.0, max)):
+        phi = pick(ai_model.phi(N, K, block_m=block_m, block_n=block_n,
+                                alpha_a=alpha_a, b=b)
+                   for N, K in layer_gemm_shapes(cfg))
+        try:
+            ends[label] = ai_model.cap_from_fitted(
+                alpha_fitted, block_m=block_m, b=b, phi=phi, delta=0.0)
+        except ai_model.AIModelRefused as exc:
+            ends[label] = None
+            refused[label] = str(exc).split(":")[0] + f" (phi {phi:.3f})"
+    return CapBracket(alpha_fitted, uncorrected, ends["alpha_a=1"], ends["alpha_a=0"],
+                      refused)
+
+
+def anchor_cap_lines(cfg, block_m: int, block_n, anchors: dict, ridge: float | None,
+                     b: int = 2) -> list[str]:
+    """One line per registered anchor: the cap it implies, as a bracket.
+
+    Refuses in words when the payload names no BLOCK_N: `phi` needs it and 64
+    is the sweep's pin, not this payload's, so it is not assumed.
+    """
+    if not anchors:
+        return ["no anchors registered in the payload, so no ladder cap to bracket"]
+    if not block_n:
+        return ["anchor caps NOT bracketed: the payload names no block_n and phi "
+                "needs BLOCK_N; REFUSED rather than assumed 64"]
+    out = ["what each registered LADDER anchor implies for the cap, through "
+           "ai_model.cap_from_fitted, alpha_a unmeasured so a bracket:"]
+    for name, value in sorted(anchors.items()):
+        br = anchor_cap_bracket(cfg, block_m, int(block_n), float(value), b)
+        verdict = ""
+        if ridge is not None and br.low is not None and br.high is not None:
+            verdict = ("  both ends below the ridge" if br.high < ridge else
+                       "  both ends at or above the ridge" if br.low >= ridge else
+                       "  the bracket straddles the ridge; alpha_a decides")
+        out.append(f"  {name:<10} alpha {value:.3f}: {br.render()}{verdict}")
+    return out
+
+
 def alpha_from_counters(rows, cfg, block_m: int, b: int = 2) -> tuple[float, float, float]:
     """`(alpha, intercept_bytes, max_relative_residual)` from measured traffic.
 
@@ -390,8 +533,25 @@ class Gate:
         return (self.kind, self.number,
                 exit_codes.UNKNOWN if self.verdict == REFUSE else self.verdict)
 
+    def result_line(self) -> str:
+        """The ONE line the session driver may grep for this gate.
+
+        Rendered by `moe.bench.exit_codes.result_line`, so the prefix, the field
+        order and the UNKNOWN spelling are the shared table's. Until 2026-09-03
+        this file rendered every gate as `GATE B1  CLAIM  FAIL ...` and nothing
+        else, so `--bracket` exited 1 with ZERO RESULT lines, `classify_text`
+        raised `NoGatesScored` on a log whose process said CLAIM_FAIL, and the
+        arm was the log/code disagreement shape by construction in every mode
+        (exit-code review, finding 4). The `GATE` block stays beside it as
+        prose for a human.
+        """
+        kind, name, verdict = self.scored()
+        detail = f"{self.claim}: {self.measured}".replace("\n", " ")[:160]
+        return exit_codes.result_line(kind, name, verdict, detail)
+
     def render(self) -> list[str]:
-        out = [f"GATE {self.number:<3} {self.kind:<8} {self.verdict:<6} {self.claim}",
+        out = [self.result_line(),
+               f"GATE {self.number:<3} {self.kind:<8} {self.verdict:<6} {self.claim}",
                f"              measured {self.measured}   gate {self.threshold}"]
         if self.verdict != PASS and self.invalidates:
             out.append(f"              a {self.verdict} here invalidates: {self.invalidates}")
@@ -500,24 +660,46 @@ def score_counter_run(payload: dict) -> tuple[list[Gate], dict]:
                           "time and the pin rate; a counter outside it means either the "
                           "timing or the counter is wrong, and the run cannot say which"))
 
-    # C3 THE STUDY'S ONE SURVIVING RESULT.
+    # C3 THE STUDY'S ONE SURVIVING RESULT. Scored on the cap the measured
+    # traffic slope implies (`cap_from_counter`), NOT on `2 BM / (alpha b)`,
+    # which drops the once-read share and is an upper bound: until 2026-09-03
+    # this gate printed that upper bound as "ai_cap" and compared it with the
+    # ridge, so a counter alpha within a/W of BM/ridge was scored on the wrong
+    # side. The registered ladder anchors are bracketed beside it through
+    # `ai_model.cap_from_fitted`, since THOSE are the readings retraction (a)
+    # is about.
     ridge = payload.get("ridge")
     if ridge is None:
         gates.append(Gate("C3", "CLAIM", "this BLOCK_M still cannot reach the compute roof",
-                          REFUSE, "no ridge in the payload", "ai_cap < ridge",
+                          REFUSE, "no ridge in the payload", "cap < ridge",
                           "the tile-cap result, which is scored against this card's ridge"))
     else:
         ridge = float(ridge)
-        cap = ai_cap(bm, alpha)
-        thresh = bm / ridge          # ai_cap = 2 BM/(alpha b) >= ridge  <=>  alpha <= BM/ridge
+        cap, uncorrected = cap_from_counter(cfg, bm, alpha)
+        # cap < ridge  <=>  alpha + a/W > BM/ridge  <=>  alpha > BM/ridge - a/W
+        thresh = bm / ridge - a1 / W
+        lines = [
+            "the counter's alpha is a TRAFFIC SLOPE, (dR/dn - a)/W, with no level in it, "
+            "so the (1+phi+delta) correction a LADDER alpha needs (moe/bench/ai_model.py) "
+            "does not apply; the cap is 2 BM W / (b dR/dn), the once-read share a/W "
+            f"= {a1 / W:.4f} restored, and the study's 2 BM/(alpha b) = {uncorrected:.1f} "
+            "drops that share and is an UPPER BOUND on the cap, not the cap",
+            "read traffic only: dram_bytes_write is not in the slope, so the cap above is "
+            "high by the write share; the counter cannot split the slope into alpha_b and "
+            "alpha_a, which is why C1 compares it with ladder anchors in different units",
+            *anchor_cap_lines(cfg, bm, payload.get("block_n"), payload.get("anchors", {}),
+                              ridge),
+        ]
         gates.append(Gate("C3", "CLAIM", "this BLOCK_M still cannot reach the compute roof",
-                          PASS if alpha > thresh else FAIL,
-                          f"alpha {alpha:.4f} against the roof threshold {thresh:.4f} "
-                          f"(ai_cap {cap:.1f} against ridge {ridge:.2f})",
-                          f"alpha > BM/ridge = {thresh:.4f}",
-                          "the ONE result the 2026-09 evaluation did not kill. A counter "
-                          "alpha below the threshold would mean this tile height CAN "
-                          "reach the roof and the cap claim must be withdrawn"))
+                          PASS if cap < ridge else FAIL,
+                          f"cap {cap:.1f} FLOP/byte from the measured slope (uncorrected "
+                          f"upper bound {uncorrected:.1f}) against ridge {ridge:.2f}; "
+                          f"alpha {alpha:.4f} against the threshold {thresh:.4f}",
+                          f"cap < ridge, i.e. alpha > BM/ridge - a/W = {thresh:.4f}",
+                          "the ONE result the 2026-09 evaluation did not kill. A cap at or "
+                          "above the ridge would mean this tile height CAN reach the roof "
+                          "and the cap claim must be withdrawn",
+                          lines))
 
     return gates, {"alpha": alpha, "intercept_bytes": r0, "residual": resid,
                    "survivors": survivors}
@@ -533,7 +715,7 @@ COUNTER_SCHEMA_TEXT = """\
   "ridge": {ridge},                # THIS card's own calibration, never 160.3
   "anchors":  {anchors},
   "bracket":  {bracket},
-  "rows": [ {{"n": 1, "launches": 5, "dram_bytes_read": 2.84e9,
+  "rows": [ {{"n": 1, "calls": 11, "launches": 55, "dram_bytes_read": 2.84e9,
              "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
              "gpu_time_ns": 1.95e6,
              "by_kernel": {{"fused_moe_kernel": 2.81e9, "moe_sum": 3.0e7}} }}, ... ]
@@ -541,7 +723,11 @@ COUNTER_SCHEMA_TEXT = """\
 
   Every key is required. `--analyse` raises on a missing one rather than
   defaulting it: a zero that was never measured is the failure mode this whole
-  file exists to avoid.
+  file exists to avoid. `calls` is the number of fused_experts calls the
+  instrument made (warmup + iters x trials), counted from the profile's own
+  launch list; `launches` is every profiled kernel launch; the byte fields are
+  PER CALL, the sums over all launches divided by `calls`, never by an
+  assumed one.
 """
 
 
@@ -711,8 +897,35 @@ def do_probe(args) -> int:
     print(f"\n  VERDICT   {verdict}")
     for n in notes:
         print(f"            - {n}")
+    # THE PROBE IS A SCORED GATE, so its log carries the one line the driver
+    # greps and `classify_text` over it recomputes the code the process
+    # returns. Until 2026-09-03 this mode scored nothing and returned DONE for
+    # both OPEN and BLOCKED: a log with zero RESULT lines beside exit 0, which
+    # `exit_codes` documents as the shape a REFUSED log has, and the driver's
+    # summary printed "NOT scored" beside a finished arm. The pre-registered
+    # expectation is that a counter route is OPEN; BLOCKED is that expectation
+    # refuted by the box, a CLAIM_FAIL, which the table defines as "measured,
+    # the world disagreed": a RESULT the ledger files as finished and the
+    # summary prints as the finding, never a retry. It is the answer this arm
+    # was written to obtain and it now says so in the greppable line. REFUSE
+    # stays REFUSED (2), before any gate: the box did not say enough to name a
+    # route, nothing was established, and there is no gate to print.
+    gates: list[Gate] = []
+    if verdict != REFUSE:
+        gates.append(Gate(
+            "P1", "CLAIM", "a counter route is open on this box",
+            PASS if verdict == "OPEN" else FAIL,
+            f"route {verdict}: {ncu.get('cause', ncu.get('why', 'no ncu'))}",
+            "OPEN",
+            "the counter experiment on this box; the plan stands and needs "
+            "another box or a provider-side change named in the notes above"))
+        print()
+        for g in gates:
+            for line in g.render():
+                print(line)
     payload = stamped({"verdict": verdict, "notes": notes, "capabilities": caps,
-                       "module_flag": flag, "ncu": ncu, "nsys": nsys},
+                       "module_flag": flag, "ncu": ncu, "nsys": nsys,
+                       "gates": [asdict(g) for g in gates]},
                       mode="probe", args=args, card=live_card(),
                       instrument=PROBE_INSTRUMENT)
     if args.out:
@@ -720,15 +933,9 @@ def do_probe(args) -> int:
         out.write_text(json.dumps(payload, indent=2))
         print(f"\n  wrote {out}")
         print(f"  git   {git_visibility(out)}")
-    # BLOCKED IS THE ANSWER. This arm exists to record WHICH counter route is
-    # open on this box, and "ncu is blocked by the host module flag" is the
-    # finding it was written to obtain, not a broken instrument. It returned 3
-    # for everything except OPEN until 2026-09-02, and 3 is INVALID in the
-    # shared table -- "measured, then a VALIDITY gate failed, nothing quotable"
-    # -- so the driver filed the answer as a validity failure and latched the
-    # row. OPEN and BLOCKED are both results; REFUSE is the one case where the
-    # machine did not say enough to name a route, and that is REFUSED (2).
-    return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE
+    if verdict == REFUSE:
+        return exit_codes.REFUSED
+    return exit_codes.classify(g.scored() for g in gates)
 
 
 # --------------------------------------------------------------------------
@@ -1012,12 +1219,14 @@ def do_bracket(args) -> int:
 def measured_ridge(card: str) -> tuple[float, str] | tuple[None, str]:
     """This card's OWN ridge, from its OWN calibration file.
 
-    NOT `RIDGE_BAND[0]`. All seven published A100 reports carry ridge=160.3
-    because the sweep's `--ridge` default is the H200's band and
+    NOT `RIDGE_BAND[0]`. All seven published A100 reports CARRIED ridge=160.3
+    until `scripts/rescore_published_reports.py` rewrote them on 2026-09-02,
+    because the sweep's `--ridge` default was the H200's band and
     cross_card_surface.sh never passed it; the A100's own contemporaneous
-    calibration is 262.371/1.79936 = 145.81. Repeating that default here would
-    put a stale H200 number in the gate that scores the study's one surviving
-    result, so this reads the yaml and REFUSES when it is absent.
+    calibration is 262.371/1.79936 = 145.81, which is what they carry now.
+    Repeating the old default here would put a withdrawn H200 number in the
+    gate that scores the study's one surviving result, so this reads the yaml
+    and REFUSES when it is absent.
     """
     import yaml
     path = REPO / "moe" / "bench" / "hardware" / f"measured_{card}.yaml"
@@ -1110,6 +1319,19 @@ def do_dry_run(args) -> int:
         anchors.update(dict(args.anchor))
     order = [k for k, _ in sorted(anchors.items(), key=lambda kv: kv[1])]
     print()
+    print("C3, REGISTERED: what each anchor implies for this tile's AI cap, and how")
+    print("  the counter will score it. A ladder anchor is a B/(A+B) fit, so the")
+    print("  study's 2 BM/(alpha b) reading is HIGH by (1 + phi + delta) (retraction")
+    print("  (a), moe/bench/ai_model.py); alpha_a is unmeasured, so the corrected cap")
+    print("  is a BRACKET over alpha_a in [0, 1] at delta = 0, the generous end.")
+    print("  The counter's own alpha is a traffic slope with no level in it and is")
+    print("  scored on 2 BM W / (b dR/dn) instead; see the C3 gate.")
+    for line in anchor_cap_lines(cfg, bm, args.block_n, anchors, ridge)[1:]:
+        print(line)
+    if ridge:
+        print(f"  the counter's cap crosses ridge {ridge:.2f} at alpha = BM/ridge - a/W "
+              f"= {bm / ridge - a / W:.4f}; 2 BM/(alpha b) alone would say {bm / ridge:.4f}")
+    print()
     print("PREDICTIONS, registered here and not adjusted afterwards.")
     print("The three anchors predict the SAME traffic at n=1 and diverge in the slope,")
     print("so n=1 is a validity check and the slope is the claim.")
@@ -1135,8 +1357,16 @@ def do_dry_run(args) -> int:
     print(f"      --r-max {max(args.tiles) * bm} --row-step {bm} --step-probes 0")
     print()
     print("  # 2. the same cell under the counter, one tile count per invocation.")
-    print("  #    warmup 0 and iters 1: every profiled launch then belongs to ONE")
-    print("  #    fused_experts call, so the per-launch bytes can simply be summed.")
+    print("  #    The instrument (moe/bench/timing.time_kernel) warms up for a DURATION")
+    print("  #    of sustained load, --warmup in MILLISECONDS, and sizes its own")
+    print("  #    iteration count from that load: there is no --iters any more (the")
+    print("  #    flag is retired and ignored) and a zero warmup is REFUSED outright")
+    print("  #    (timing.warm_until). So the profiled launch count is never one; it is")
+    print("  #    warmup_calls + iters x trials fused_experts calls of about five kernels")
+    print("  #    each, plus one L2-flush kernel per timed iteration. The smallest")
+    print("  #    settings the instrument accepts keep that small (1 ms of warmup is one")
+    print("  #    call of a millisecond-scale kernel; iters floors at 10; one trial), and")
+    print("  #    the cell row the sweep writes carries the iters and trials it used.")
     print(f"  for n in {tiles.replace(',', ' ')}; do")
     print(f"    ncu --metrics {','.join(NCU_METRICS)} \\")
     print(f"        --replay-mode kernel --cache-control {args.cache_control} \\")
@@ -1145,10 +1375,17 @@ def do_dry_run(args) -> int:
     print(f"        python scripts/block_m_crossing_sweep.py --model {args.model} \\")
     print(f"          --tiles {bm} --group-m {args.group_m} --block-n {args.block_n} \\")
     print(f"          --r-max $(( n * {bm} )) --row-step $(( n * {bm} )) --step-probes 0 \\")
-    print("          --warmup 0 --iters 1")
+    print("          --warmup 1 --trials 1 --cell-budget-ms 1")
     print("  done")
     print()
-    print("  # 3. score it")
+    print("  # 3. reduce, then score. Sum every byte metric PER KERNEL NAME over all")
+    print("  #    profiled launches and divide by the ACTUAL call count: `calls` is the")
+    print("  #    number of moe_align_block_size launches in the CSV (exactly one per")
+    print("  #    fused_experts call; fused_moe_kernel runs twice per call, up and down),")
+    print("  #    and it must equal the row's iters x trials plus the warmup's calls, so")
+    print("  #    REFUSE a CSV whose count is not above iters x trials. Write the per-call")
+    print("  #    figures as dram_bytes_read etc. and the count as `calls`. Never divide")
+    print("  #    by an assumed 1: the instrument decides the count, the row records it.")
     print("  python scripts/dram_counter_route.py --analyse counters.json")
     print()
     print("CACHE CONTROL, and why it is a swept parameter rather than a default.")
@@ -1161,15 +1398,23 @@ def do_dry_run(args) -> int:
     print("  are themselves the result.")
     print()
     n_max = max(args.tiles)
-    launches = len(args.tiles) * 2 * 5      # two cache modes, ~5 kernels per fused call
+    # The instrument's floor: 1 warmup call at 1 ms of a millisecond-scale
+    # kernel, iters floored at 10, one trial. Eleven calls of about five
+    # kernels, plus ten flush kernels, per invocation. A bracket, not a
+    # promise: a sub-millisecond kernel warms in more than one call.
+    calls_per_invocation = 1 + 10
+    launches = len(args.tiles) * 2 * calls_per_invocation * 5
+    flushes = len(args.tiles) * 2 * 10
     print("COST.")
     print(f"  {len(args.tiles)} tile counts x 2 cache modes = {len(args.tiles) * 2} profiled "
-          f"invocations, about {launches} profiled launches.")
+          f"invocations of at least {calls_per_invocation} fused_experts calls each,")
+    print(f"  about {launches} profiled kernel launches plus {flushes} L2-flush launches.")
     print(f"  The largest cell is n={n_max} ({n_max * bm} rows per expert), which the timed")
     print("  sweep measures in single-digit milliseconds; ncu replay and its save/restore")
-    print(f"  of the {W / 1e9:.1f} GB weight buffers dominate. Budget 15 minutes of GPU time")
-    print("  and one pod-hour end to end. At A100 spot rates that is well under a dollar.")
-    print("  The cost of this experiment has never been the money.")
+    print(f"  of the {W / 1e9:.1f} GB weight buffers dominate, at seconds per launch. Budget")
+    print("  an hour of GPU time and two pod-hours end to end, not the fifteen minutes")
+    print("  the one-launch recipe used to promise. At A100 spot rates that is still a")
+    print("  few dollars. The cost of this experiment has never been the money.")
     print()
     print("WHICH KERNELS TO KEEP, and why the profile is NOT name-filtered.")
     print("  All of W moves inside the two `fused_moe_kernel` launches; the auxiliary")
@@ -1244,9 +1489,13 @@ def do_self_test(args) -> int:
     # INVALID (3) and not CLAIM_FAIL (1): an estimator that cannot recover a
     # planted alpha has not refuted anything about the world, it has said that
     # nothing this file computes may be quoted. It returned 1, which the driver
-    # files as a finished result and never retries.
-    return exit_codes.classify([(exit_codes.VALIDITY, "S1",
-                                 exit_codes.PASS if ok else exit_codes.FAIL)])
+    # files as a finished result and never retries. The gate prints its RESULT
+    # line like every other gate in this file, so the log and the code agree.
+    gate = Gate("S1", "VALIDITY", "the estimator and the bracket recover planted alphas",
+                PASS if ok else FAIL, "every planted row above",
+                "all rows PASS", "everything this file computes")
+    print(gate.result_line())
+    return exit_codes.classify([gate.scored()])
 
 
 def do_analyse(args) -> int:

@@ -166,13 +166,18 @@ decides whether renting an H200 for five clean treads at BM=128 is worth doing.
 
 WHAT SURVIVES, AND IT IS THE MEASUREMENT RATHER THAN THE ARITHMETIC.
 BLOCK_SIZE_M=128 is the tile vLLM's fallback ladder actually runs in every
-multi-tile decode cell (up to 32 M-tiles per expert among the arm's vLLM rows;
-the 34 sometimes quoted counts cutlass and sglang rows, which run no Triton
-tile), and the entire 128 row of the published alpha surface rests on TWO fits,
-one per card. And the thing the retracted cap was standing in for is MEASURED
-further down, with no ridge and no alpha in it: 19 of the 22 valid published
-BM=128 ladders have `B/C` between 0.877 and 1.101 with a median of 0.991, so at
-this tile the memory and compute branches ARE one line to about 1%. `B/C` is a
+multi-tile decode cell: on the one arm that records the tile
+(`2026-09-01-nvidia_h200-alpha-0558`, vLLM-tile rows only, uniform routing,
+recounted 2026-09-03 over `merged.csv`) it runs multi-tile in 66 of 87 (model,
+tokens, impl) cells and reaches 34 M-tiles at the busiest expert on
+`load_max_rows`, 32 on `load_mean_rows`. This sentence used to say the 34
+"counts cutlass and sglang rows"; it does not, the vLLM rows alone reach it,
+and 32 is the mean-rows reading of the same cells. The entire 128 row of the
+published alpha surface rests on TWO fits, one per card. And the thing the
+retracted cap was standing in for is MEASURED further down, with no ridge and
+no alpha in it: 19 of the 22 valid published BM=128 ladders have `B/C` between
+0.877 and 1.101 with a median of 0.991, so at this tile the memory and compute
+branches ARE one line to about 1%. `B/C` is a
 ratio of two fitted slopes; no cap, no ridge and no estimator's alpha enters it,
 which is exactly why it survived the correction that took the premise. The
 question this arm answers is therefore "can a BM=128 ladder be swept deep enough
@@ -251,9 +256,13 @@ THE TWO ESCAPE ROUTES, and both are closed at BM=128 on this hardware.
 
 WHAT IS LEFT IN BETWEEN is the discard band, and BM=128 sits in it: 19 of the 22
 valid published ladders have `B/C` between 0.877 and 1.101, and the median is
-0.991. At BLOCK_M=128 the two branches ARE the same line, to about 1%. That is
-not a near miss to be tuned away -- it is what "the cap sits on the ridge" means,
-measured. The levers move the median `B/C` by 3.2% (BLOCK_SIZE_N), 7.5%
+0.991. At BLOCK_M=128 the fitted memory and compute branches ARE the same line,
+to about 1%. That is a statement about two fitted slopes and nothing else: it
+is NOT "the cap sits on the ridge", which the audit paragraph above retracts
+(corrected caps 135.4 and 130.7 sit 7.1% and 19.7% BELOW their own cards'
+ridges, and both are upper bounds). `B/C` carries no cap, no ridge and no
+estimator alpha, which is why it survived the correction that took the
+premise. The levers move the median `B/C` by 3.2% (BLOCK_SIZE_N), 7.5%
 (GROUP_SIZE_M) and 8.5% (card); the model moves it 3.4% in the median of eight
 same-session mixtral/qwen2 pairs, against the 6.4x a "bigger weights to re-read"
 mechanism would need. The requirement is +16.1%, in a direction no lever points.

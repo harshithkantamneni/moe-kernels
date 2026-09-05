@@ -802,12 +802,50 @@ def test_the_shipped_models_straddle_l2_so_the_mechanism_is_testable(design):
 def test_every_shipped_rung_stays_below_the_ridge_in_dot_mode():
     """`dot` mode is the only mode with arithmetic, so it is the only one where
     a rung can be compute bound. A compute-bound rung pays for extra tiles in
-    padded arithmetic rather than traffic and would report a flat alpha."""
+    padded arithmetic rather than traffic and would report a flat alpha.
+
+    Scored against EACH CARD'S OWN ridge off its committed calibration, not the
+    withdrawn cross-machine 160.3 this gate and this test used until
+    2026-09-03; the A100's 145.8 is the tighter of the two."""
     design = AB.build_design(AB.parse_args(["--compute", "dot"]))
-    for rung in design.rungs:
-        if not rung.control:
-            assert rung.arith_intensity < 160.3, rung.key
-    assert all(g.ok is not False for g in AB.preflight(design, 0))
+    for card in ("NVIDIA H200", "NVIDIA A100-SXM4-80GB"):
+        facts = AB.measured_card(card)
+        ridge = facts["ridge"]
+        assert 140.0 < ridge < 170.0 and ridge != 160.3, (card, ridge)
+        for rung in design.rungs:
+            if not rung.control:
+                assert rung.arith_intensity < ridge, (card, rung.key)
+        gates = {g.name: g for g in AB.preflight(design, 0, ridge, facts["ridge_source"])}
+        gate = gates["in dot mode every rung stays below this card's ridge"]
+        assert gate.ok is True
+        assert f"{ridge:.1f} FLOP/byte" in gate.detail and facts["source"] in gate.detail
+
+
+def test_the_dot_mode_regime_gate_can_fail_and_refuses_without_a_ridge():
+    """Both other branches of the same gate. A ridge planted below the rungs
+    FAILS it and names the rungs; no ridge at all is NOT TESTABLE (VALIDITY
+    UNKNOWN, so INVALID), never scored against another card's number."""
+    design = AB.build_design(AB.parse_args(["--compute", "dot"]))
+    highest = max(r.arith_intensity for r in design.rungs if not r.control)
+    name = "in dot mode every rung stays below this card's ridge"
+    failed = {g.name: g for g in AB.preflight(design, 0, highest * 0.5, "planted")}[name]
+    assert failed.ok is False and "compute bound" in failed.detail
+    assert failed.kind == exit_codes.VALIDITY
+    untestable = {g.name: g for g in AB.preflight(design, 0)}[name]
+    assert untestable.ok is None and "NOT TESTABLE" in untestable.detail
+    assert "160.3" not in untestable.detail
+    assert exit_codes.classify([untestable.scored()]) == exit_codes.INVALID
+    # Sum mode has no arithmetic and no ridge gate at all.
+    assert name not in {g.name for g in AB.preflight(AB.build_design(AB.parse_args([])), 0)}
+
+
+def test_the_synthetic_ridge_is_the_planted_cards_own():
+    """The planted world's ceiling is `PLANT_CARD`'s committed calibration, the
+    same file its L2 and read roof come from, so a synthetic dot-mode design is
+    gated against a number that belongs to a named card."""
+    facts = AB.measured_card(AB.PLANT_CARD)
+    assert AB.SYNTHETIC_RIDGE == facts["ridge"]
+    assert AB.PLANT_CARD in AB.SYNTHETIC_RIDGE_SOURCE and "PLANTED" in AB.SYNTHETIC_RIDGE_SOURCE
 
 
 def test_the_shipped_defaults_pass_every_preflight_gate(design):

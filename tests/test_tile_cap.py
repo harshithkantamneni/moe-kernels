@@ -917,44 +917,68 @@ OBSERVED_ARM = (ROOT / "results" / "published"
                 / "2026-09-01-nvidia_h200-alpha-0558" / "merged.csv")
 
 
-def _observed_from_the_published_arm() -> dict[int, tuple[int, int, int]]:
-    """Recount `OBSERVED_MULTI_TILE` from the CSV it claims to come from.
+def _observed_from_the_published_arm(basis: str) -> tuple[
+        dict[int, tuple[int, int, int]], dict[int, tuple[int, int]]]:
+    """Recount the observed-tile tables from the CSV they claim to come from.
 
     The one published arm carrying `tile_block_m` -- the tile vLLM actually
-    chose -- de-duplicated to distinct cells, vLLM rows only, rows per expert
-    read as `load_mean_rows`.
+    chose -- vLLM rows only, a cell being one (model, num_tokens) with its
+    seven routing seeds, rows per expert read as `basis`. Returns the per-cell
+    triple `(multi-tile cells, cells, max tiles)` where a cell is multi-tile
+    when ANY seed needed a second tile, and the per-seed-row pair
+    `(multi-tile seed-rows, seed-rows)`.
+
+    The first version of this helper de-duplicated to the FIRST seed of each
+    cell and read `load_mean_rows`, which is how "16, 32 and 64 never" got
+    pinned by a test: the mean of seven seeds' busiest experts is not what
+    any of the seven launches padded to.
     """
     rows = [r for r in csv.DictReader(OBSERVED_ARM.open())
             if r["tile_config_source"].startswith("vllm")]
-    seen = {}
+    cells: dict[tuple, list[int]] = defaultdict(list)
     for r in rows:
-        key = (r["model"], r["dtype"], r["num_tokens"], r["routing_kind"],
-               r["routing_param"], r["tile_config_source"])
-        seen.setdefault(key, r)
-    by = defaultdict(list)
-    for r in seen.values():
         bm = int(float(r["tile_block_m"]))
-        by[bm].append(max(1, math.ceil(float(r["load_mean_rows"]) / bm)))
-    return {bm: (sum(1 for n in t if n > 1), len(t), max(t))
-            for bm, t in by.items()}
+        key = (bm, r["model"], r["dtype"], r["num_tokens"], r["routing_kind"],
+               r["routing_param"])
+        cells[key].append(max(1, math.ceil(float(r[basis]) / bm)))
+    by_cell: dict[int, list[int]] = defaultdict(list)
+    by_seed: dict[int, list[int]] = defaultdict(list)
+    for key, tiles in cells.items():
+        by_cell[key[0]].append(max(tiles))
+        by_seed[key[0]].extend(tiles)
+    return ({bm: (sum(1 for n in t if n > 1), len(t), max(t))
+             for bm, t in by_cell.items()},
+            {bm: (sum(1 for n in t if n > 1), len(t))
+             for bm, t in by_seed.items()})
 
 
-def test_the_observed_tile_table_is_what_the_published_arm_says():
-    """The count that demotes this experiment, recomputed rather than quoted.
+def test_the_observed_tile_tables_are_what_the_published_arm_says():
+    """The counts that demote this experiment, recomputed rather than quoted.
 
     Failure mode 6 in this project is a constant from documentation sitting
     where a measurement belongs, and the whole "BLOCK_M=16 is a formula test,
-    not a production claim" rewrite rests on one table of counts. So the table
-    is recounted from the file it names.
+    not a production claim" rewrite rests on these tables. So BOTH bases are
+    recounted from the file they name, and the padded one -- what
+    `moe_align_block_size` launches -- is asserted to differ from the mean at
+    16 and 64, because that difference is the finding the earlier single-basis
+    table missed.
     """
-    observed = _observed_from_the_published_arm()
+    mean_cells, _ = _observed_from_the_published_arm("load_mean_rows")
+    max_cells, max_seed = _observed_from_the_published_arm("load_max_rows")
     # NON-VACUITY: a mis-typed column or a filter that matched nothing would
     # produce an empty table and an empty comparison passes.
-    assert sum(cells for _, cells, _ in observed.values()) == 132
-    assert observed == CAP.OBSERVED_MULTI_TILE
-    multi, cells, top = observed[16]
-    assert (multi, top) == (0, 1) and cells > 0      # the tile under test
-    assert observed[128][0] > 0 and observed[128][2] > 1   # the live regime
+    assert sum(cells for _, cells, _ in mean_cells.values()) == 132
+    assert sum(rows for _, rows in max_seed.values()) == 924
+    assert mean_cells == CAP.OBSERVED_MULTI_TILE_MEAN_ROWS
+    assert max_cells == CAP.OBSERVED_MULTI_TILE_MAX_ROWS
+    assert max_seed == CAP.OBSERVED_SEED_ROWS_MAX_ROWS
+    # The tile under test: never on the mean, isolated on the padded count.
+    assert mean_cells[16] == (0, 24, 1)
+    assert max_cells[16][0] == 1 and max_cells[16][2] == 2
+    assert max_seed[16] == (1, 168)
+    # The live regime is multi-tile on both bases and deeper on the padded one.
+    assert mean_cells[128][0] > 0 and max_cells[128][0] >= mean_cells[128][0]
+    assert max_cells[128][2] > mean_cells[128][2]
 
 
 def test_the_note_refuses_for_a_tile_height_nobody_observed():
@@ -966,8 +990,36 @@ def test_the_note_refuses_for_a_tile_height_nobody_observed():
     unobserved = CAP.observed_note(48)
     assert "UNMEASURED" in unobserved
     assert "ONE M-tile" not in unobserved
-    assert "24 of 24" in CAP.observed_note(16)
-    assert "59 of 87" in CAP.observed_note(128)
+    assert "ISOLATED" not in unobserved
+
+
+def test_the_note_says_never_only_where_the_padded_count_agrees():
+    """The guarantee the first version of `observed_note` did not keep.
+
+    It printed "ONE M-tile per expert in 24 of 24 observed cells ... never
+    reached for in production" of BLOCK_M=16 off the mean-rows count, while
+    on the count the launch pads to that tile fires in one cell. So "never"
+    is reserved for a tile with no multi-tile cell on `load_max_rows`, a tile
+    with isolated ones says so, and every note prints both bases.
+    """
+    at_16 = CAP.observed_note(16)
+    assert "ISOLATED CELLS" in at_16
+    assert "1 of 24" in at_16 and "1 of 168 seed-rows" in at_16
+    assert "on mean rows 0 of 24" in at_16
+    assert "never reached for" not in at_16
+    at_32 = CAP.observed_note(32)
+    assert "ONE M-tile per expert in 5 of 5" in at_32
+    assert "never reached for in production" in at_32
+    at_64 = CAP.observed_note(64)
+    assert "ISOLATED CELLS" in at_64 and "5 of 112 seed-rows" in at_64
+    at_128 = CAP.observed_note(128)
+    assert "66 of 87" in at_128 and "34 M-tiles" in at_128
+    assert "on mean rows 59 of 87" in at_128
+    assert "ISOLATED" not in at_128
+    # Every note that reports a tile height states BOTH bases by name.
+    for bm in CAP.OBSERVED_MULTI_TILE_MAX_ROWS:
+        note = CAP.observed_note(bm)
+        assert "load_max_rows" in note and "mean rows" in note
 
 
 def test_the_plan_says_this_is_not_the_production_claim_before_anything_runs():

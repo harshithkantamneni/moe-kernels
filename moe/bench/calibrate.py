@@ -473,6 +473,12 @@ class LoadedClock:
     #: A GEMM pinned at the board limit is power capped, and a clock read near
     #: boost for such a GEMM is not credible whatever NVML said.
     power_w: float = 0.0
+    #: Which reader took `samples`: `timing.CLOCK_SOURCE_NVML` on every record
+    #: this function writes, because `clock_under_load` REFUSES the forked
+    #: nvidia-smi fallback (see there). Recorded so the yaml says so, the way
+    #: a `KernelTiming` row carries `clock_source`, and a reader comparing the
+    #: two clocks can see they came through one kind of reader.
+    source: str = "nvml"
 
     def as_dict(self) -> dict:
         d = asdict(self)
@@ -518,6 +524,19 @@ def clock_under_load(step, label: str, samples: int = 5,
     still in flight, and only then synchronise. Sampling between two synchronises
     measures an idle GPU no matter how much work surrounds it.
 
+    THE SAMPLER IS NVML ONLY, THE SAME RULE `timing.time_kernel` HOLDS ITSELF
+    TO. `ClockState.sample()` falls back to a forked nvidia-smi when pynvml is
+    missing, and until 2026-09-03 this function took whatever came back. Four
+    queued 8192^3 GEMMs are ~5.6 ms of work; a fork plus an NVML init is tens
+    of milliseconds; so on a box without `nvidia-ml-py` every "under-load"
+    sample here landed on an idle GPU, with no note, and the roof's reference
+    clock was the post-hoc idle artefact this function exists to replace,
+    under the name of the fix. `time_kernel` refuses exactly that fallback
+    inside its timed region (`nvml_clock_reader`); the two instruments now
+    agree. A forked sample REFUSES with the reason, before any of the two
+    seconds of GEMM are spent, and `_with_clock` records the refusal in the
+    calibration so the yaml says why it carries no clock.
+
     Raises `ClockUnavailable` rather than returning zeros. Three usable samples
     is the floor because two cannot disagree with each other.
     """
@@ -528,6 +547,16 @@ def clock_under_load(step, label: str, samples: int = 5,
     from . import timing as T
 
     T.require_cuda()
+    probe = T.ClockState.sample()
+    if probe.source != T.CLOCK_SOURCE_NVML:
+        raise ClockUnavailable(
+            f"{label}: the clock reader on this host is {probe.source!r}, not "
+            "NVML. A forked nvidia-smi answers tens of milliseconds after it "
+            "is asked, and four queued GEMMs are ~5.6 ms of work, so every "
+            "sample it took here would land on an idle GPU and be the post-hoc "
+            "idle artefact this sampler exists to replace. Install nvidia-ml-py "
+            "in the pod venv; nothing normalised against a clock may be quoted "
+            "from this run.")
     step()
     torch.cuda.synchronize()
 
@@ -544,6 +573,15 @@ def clock_under_load(step, label: str, samples: int = 5,
         for _ in range(4):
             step()
         state = T.ClockState.sample()
+        if state.source != T.CLOCK_SOURCE_NVML:
+            # The reader changed under us mid-run (NVML lost the device and
+            # the fallback answered). One such sample poisons the median.
+            raise ClockUnavailable(
+                f"{label}: a sample came through {state.source!r} after the "
+                f"probe answered through NVML; {len(got)} NVML samples were "
+                "taken before it and none of them may be published as the "
+                "clock the GEMM ran at, because the set is no longer one kind "
+                "of reading.")
         powers.append(_power_draw_w())
         torch.cuda.synchronize()
         if state.sm_clock_mhz > 0:
@@ -562,7 +600,8 @@ def clock_under_load(step, label: str, samples: int = 5,
         label=label, samples=tuple(got), median_mhz=int(statistics.median(got)),
         spread_pct=round(spread, 2), after_idle_mhz=after,
         temp_c=int(statistics.median(temps)) if temps else 0,
-        power_w=round(statistics.median(live), 1) if live else 0.0)
+        power_w=round(statistics.median(live), 1) if live else 0.0,
+        source=T.CLOCK_SOURCE_NVML)
 
 
 def _load_compute():
@@ -637,6 +676,7 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
     step = step()
 
     history: list[int] = []
+    sources: set[str] = set()
     deadline = time.monotonic() + max_seconds
     settled = False
     while time.monotonic() < deadline:
@@ -649,14 +689,23 @@ def settle_clocks(max_seconds: float = 30.0, tol_pct: float = 2.0,
         while time.monotonic() < stop:
             step()
             torch.cuda.synchronize()
-        history.append(T.ClockState.sample().sm_clock_mhz)
+        state = T.ClockState.sample()
+        history.append(state.sm_clock_mhz)
+        sources.add(state.source)
         if clocks_settled(history, tol_pct):
             settled = True
             break
 
+    # WHICH READER the history came through, recorded because `settle.final_mhz`
+    # is the last field `roofline.reference_clock` falls back to. A settle
+    # polled through the forked fallback is a sequence of samples taken tens of
+    # milliseconds after each synchronise, and a reference read out of it is
+    # the idle artefact again; the yaml has to say so.
+    source = (T.CLOCK_SOURCE_NVML if sources == {T.CLOCK_SOURCE_NVML}
+              else "/".join(sorted(sources)) if sources else T.CLOCK_SOURCE_NONE)
     return {"settled": settled, "clock_history_mhz": history,
             "final_mhz": history[-1] if history else 0,
-            "max_seconds": max_seconds, "load": load}
+            "max_seconds": max_seconds, "load": load, "clock_source": source}
 
 
 def measure_bandwidth(target_bytes: int = DEFAULT_BUFFER_BYTES, warmup: int = 5,

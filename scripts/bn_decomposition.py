@@ -6,11 +6,21 @@
     python scripts/bn_decomposition.py                # the pod run
 
 WHY BLOCK_SIZE_N AND NOTHING ELSE. What a ladder fit returns is not the weight
-miss fraction. It is the blend
+miss fraction. The estimator this repository uses, `LadderFit.alpha` = B/(A+B),
+returns on the three-term byte ladder EXACTLY
+
+    alpha_fitted = (alpha_b + phi) / (1 + phi + delta)                     (EXA)
+
+with `phi = d0 + alpha_a (BM/BN - e)` the activation-plus-output cost of one
+M-tile in weight-read units (derived below) and `delta` the fused layer's fixed
+cost in the same units. The blend an earlier version of this header wrote,
 
     alpha_fitted = alpha_b + alpha_a (BM/BN) + BM/K                        (LIN)
 
-and BM appears in TWO of those terms while BN appears in exactly one. So
+is (EXA)'s numerator with the level taken as 1, the reading `moe/bench/ai_model.py`
+withdrew on 2026-09-02, and it is kept here only to be compared against. Under
+either reading BM appears in TWO places (the activation ratio BM/BN and the
+per-tile cost BM/K) while BN appears in exactly one. So
 sweeping BM moves alpha_a and alpha_b together and can never separate them --
 which is why the study's current alpha_a is a TWO-POINT slope between one BN and
 another. Sweeping BN at FIXED BM moves exactly one term. Three or more BN values
@@ -98,11 +108,18 @@ WHAT IS BEING TESTED, IN ORDER OF WHAT IT WOULD COST TO BE WRONG.
      all, so alpha_a has no counterpart in the closest prior work.
 
 BLOCK_M=128 IS THE PRIMARY AND THE REASON IS PRODUCTION, NOT CONVENIENCE. It is
-the only tile vLLM's fallback ladder ever runs multi-tile: in the one published
-arm that records the tile actually chosen, BLOCK_M 16, 32 and 64 run a single
-M-tile per expert in every one of 45 cells, and 128 runs up to 32 tiles in 59 of
-87. The re-read term only exists when there is more than one tile, so 128 is the
-only block size where alpha_b is a production quantity rather than a curiosity.
+the only tile vLLM's fallback ladder runs multi-tile as a REGIME: in the one
+published arm that records the tile actually chosen (uniform routing, 132 cells
+of 7 seeds), counted on `load_max_rows`, which is what `moe_align_block_size`
+pads to, 128 runs multi-tile in 66 of 87 cells (65 at the median seed), up to
+34 tiles per expert; 16 does in 1 of 24 cells and 64 in 2 of 16 (1 of 168 and 5
+of 112 seed-rows), isolated cells, and 32 never in 5. On `load_mean_rows`, the
+basis an earlier version of this paragraph quoted as "16, 32 and 64 never", the
+small tiles do read never and 128 reads 59 of 87 up to 32 tiles; the mean is a
+fact about the routing histogram and not about the launch, which is why the
+padded count is the one stated first. The re-read term only exists when there is
+more than one tile, so 128 is the only block size where alpha_b is a production
+quantity rather than a curiosity.
 BM=64 and BM=32 are swept beside it because they are where alpha is ROBUSTLY
 identifiable, and because the invariance in (3) needs more than one BM.
 
@@ -466,9 +483,14 @@ ALPHA_A_BAND = (0.10, 0.38)
 TEMPO_B2_OVER_B = (0.311, 0.319)
 
 #: How far alpha_b may sit from TEMPO's pair before C4 calls it a disagreement,
-#: as a fraction. 0.15 is set wider than the 2-4% the study's decomposed 0.307
-#: reaches, because that 0.307 comes from a swizzle-POOLED refit and this run is
-#: pinned to ONE GROUP_SIZE_M -- see the note on C4.
+#: as a fraction. There is NO prior agreement for this to be set relative to:
+#: the "decomposed 0.307 corroborates TEMPO to 2-4%" line the study once
+#: printed is WITHDRAWN, because 0.307 was ALPHA_BY_BLOCK_M solved through
+#: (LIN), a unit artefact of the estimator rather than a measurement of
+#: alpha_b (the same two points through (EXA) give alpha_b 0.07, and the G=1
+#: ladders read near 0.92). 0.15 is the width a three-point BN fit at this
+#: run's bootstrap spread can resolve, and C4 names the swizzle it was scored
+#: at -- see the note on C4.
 TEMPO_TOLERANCE = 0.15
 
 #: alpha_b measured at two block sizes must agree: nothing in the model lets a
@@ -602,10 +624,14 @@ NO_CARD_SLUG = "nocard"
 #: Two worlds, both stated as (alpha_b, alpha_a), used ONLY to predict and to
 #: cost. Neither is a measurement of this run.
 #:
-#:  POOLED   the study's own ALPHA_BY_BLOCK_M = {64: 0.466, 128: 0.625} read
-#:           through (LIN), which is where moe/bench/ai_model.py's 0.307/0.143
-#:           comes from. It is pooled over GROUP_SIZE_M, which swings alpha by
-#:           0.39, so it describes no single pinned setting.
+#:  LIN-ERA  the study's own ALPHA_BY_BLOCK_M = {64: 0.466, 128: 0.625} solved
+#:           through (LIN), the (0.307, 0.143) pair moe/bench/ai_model.py USED
+#:           to quote and has WITHDRAWN: a unit artefact of reading a B/(A+B)
+#:           fit as if it divided by weight bytes alone (the same two points
+#:           through (EXA) give alpha_b 0.07 and alpha_a 0.72), and pooled
+#:           over GROUP_SIZE_M besides, which swings alpha by 0.39. Kept as a
+#:           prediction world because it is the reading the retraction
+#:           replaces, and a run has to be able to land in it.
 #:  LADDER   this study's own G=1 ladder fits, which measure alpha_fitted at
 #:           0.916-0.951 at BM=64, BN=64 on BOTH cards with all 16 treads memory
 #:           bound. Read through (EXA) with alpha_a at the (LIN) value, that is
@@ -615,7 +641,7 @@ NO_CARD_SLUG = "nocard"
 #:
 #: They disagree about alpha_b by a factor of three and they are BOTH derived
 #: from published numbers in this repo. Which one this run lands in is a result.
-WORLD_POOLED = (0.307, 0.143)
+WORLD_LIN_ERA = (0.307, 0.143)
 WORLD_LADDER = (0.920, 0.146)
 
 #: alpha_b implied by the published mixtral BLOCK_M=64, BLOCK_N=64 ladder fits,
@@ -2621,15 +2647,19 @@ def gate_tempo(fit: Decomposition, boot: Bootstrap, group_m: int) -> Gate:
                 None if near is None else near <= TEMPO_TOLERANCE, obs,
                 lines=[f"THIS RUN IS PINNED AT GROUP_SIZE_M={group_m} and "
                        "alpha_b is a property of that swizzle, not of the "
-                       "kernel. The study's own 0.307 is a POOLED refit across "
-                       "GROUP_SIZE_M 1, 8, 16 and 64, which swing alpha by "
-                       "0.39; its G=1 ladder fits sit near 0.92, which is what "
+                       "kernel. The study's earlier 0.307, and its '2-4% from "
+                       "TEMPO', are WITHDRAWN: that number was ALPHA_BY_BLOCK_M "
+                       "solved through (LIN), a unit artefact of reading a "
+                       "B/(A+B) fit as if it divided by weight bytes alone, not "
+                       "a measurement of alpha_b; through (EXA) the same G=1 "
+                       "ladders read alpha_b near 0.92, which is what "
                        "'consecutive M-tiles of one expert are scheduled far "
-                       "apart and the L2 keeps nothing' should look like. So a "
-                       "FAIL at G=1 does NOT refute TEMPO: it says the number "
-                       "the study compared with TEMPO was pooled over a knob "
-                       "TEMPO holds fixed. Re-run at --group-m 16 to compare "
-                       "like with like."])
+                       "apart and the L2 keeps nothing' should look like. It "
+                       "was also pooled over GROUP_SIZE_M 1, 8, 16 and 64, "
+                       "which swing alpha by 0.39. So a FAIL at G=1 does NOT "
+                       "refute TEMPO, and a PASS at any G is the first number "
+                       "in this study that may be compared with TEMPO at all. "
+                       "Re-run at --group-m 16 to compare like with like."])
 
 
 # --------------------------------------------------------------------------
@@ -2642,17 +2672,18 @@ def cell_table(cfg, b: int, ridge: float, block_ns, subjects, treads: dict
 
     Printed BEFORE the run and carried into the report, so "the model predicted
     this" is checkable rather than remembered. The two worlds are the study's
-    own pooled refit and the study's own G=1 ladder fits; they disagree by a
-    factor of three on alpha_b and this run lands in one of them.
+    withdrawn (LIN)-era refit and the study's own G=1 ladder fits read through
+    (EXA); they disagree by a factor of three on alpha_b and this run lands in
+    one of them.
     """
-    out = ["                 POOLED (0.307, 0.143)          "
+    out = ["                 LIN-ERA (0.307, 0.143)         "
            "LADDER (0.920, 0.146)      calibrated-ridge B/C",
            "  BM   BN    a_fit    B/C  treads      a_fit    B/C  treads    "
-           "POOLED  LADDER"]
+           "LIN-ERA LADDER"]
     for bm in sorted(subjects) + [REFERENCE_BLOCK_M]:
         for bn in sorted(block_ns):
             row = f"  {bm:3d} {bn:4d} "
-            for ab, aa in (WORLD_POOLED, WORLD_LADDER):
+            for ab, aa in (WORLD_LIN_ERA, WORLD_LADDER):
                 a = alpha_fitted_exact(cfg, bm, bn, alpha_b=ab, alpha_a=aa)
                 r = anchored_ratio(cfg, bm, bn, alpha_b=ab, alpha_a=aa)
                 n = memory_treads(cfg, bm, bn, alpha_b=ab, alpha_a=aa,
@@ -2661,7 +2692,7 @@ def cell_table(cfg, b: int, ridge: float, block_ns, subjects, treads: dict
                 row += f"  {a:6.3f} {r:6.3f}{flag} {n:3d}/{treads.get(bm, 8):<3d}"
             row += "    " + "  ".join(
                 f"{branch_ratio(cfg, bm, bn, alpha_b=ab, alpha_a=aa, ridge=ridge, b=b):6.3f}"
-                for ab, aa in (WORLD_POOLED, WORLD_LADDER))
+                for ab, aa in (WORLD_LIN_ERA, WORLD_LADDER))
             out.append(row)
     out += [
         "  * = |B/C - 1| <= the parallel-branch tolerance. On a SUBJECT row "
@@ -2740,15 +2771,20 @@ def predictions_text(cfg, b: int, ridge: float, ridge_source: str, block_ns,
         "    weight miss fraction depend on the tile height, so this is the "
         "cheapest test of the whole",
         "    decomposition and it needs no external number.", "",
-        f"P4  alpha_b at GROUP_SIZE_M={group_m}. The study's decomposed 0.307 "
-        "corroborates TEMPO's b2/b of",
-        "    0.311/0.319 to 2-4%, and that 0.307 is POOLED over GROUP_SIZE_M 1, "
-        "8, 16 and 64, which swing",
-        "    alpha by 0.39. This run pins ONE swizzle. At G=1 the study's own "
-        "ladders say alpha_b is near",
-        f"    0.92, so C4 is predicted to FAIL at G={group_m} unless it is 16 "
-        "or above -- and that failure is",
-        "    a statement about the pooling, not about TEMPO.", "",
+        f"P4  alpha_b at GROUP_SIZE_M={group_m}, against TEMPO's b2/b of "
+        "0.311/0.319. NO prior agreement is claimed:",
+        "    the study's earlier 'decomposed 0.307 corroborates TEMPO to 2-4%' "
+        "is WITHDRAWN, because 0.307",
+        "    was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of the "
+        "estimator, and pooled over",
+        "    GROUP_SIZE_M 1, 8, 16 and 64 besides. This run pins ONE swizzle. "
+        "Read through (EXA) the study's",
+        "    own G=1 ladders put alpha_b near 0.92, so C4 is predicted to FAIL "
+        f"at G={group_m} unless it is 16 or",
+        "    above -- and that failure is a statement about the swizzle, not "
+        "about TEMPO. Either verdict is the",
+        "    first alpha_b in this study that may be compared with TEMPO at "
+        "all.", "",
         "P5  WHICH CELLS GO MISSING, registered because two of them are "
         "predicted to.",
         f"    THE PRIMARY AT BN={ANCHOR_BLOCK_N} IS PREDICTED TO BE DISCARDED: "
@@ -2764,7 +2800,7 @@ def predictions_text(cfg, b: int, ridge: float, ridge_source: str, block_ns,
         f"    THE BN=32 ARM IS THE ONE AT RISK: its BLOCK_M="
         f"{REFERENCE_BLOCK_M} reference is predicted compute bound in the "
         "LADDER",
-        "    world and MEMORY bound in the POOLED one, so the two worlds "
+        "    world and MEMORY bound in the LIN-ERA one, so the two worlds "
         "disagree about whether the arm exists.",
         "    If it is refused only two BN values remain, V5 FAILS, alpha_a is "
         "UNIDENTIFIED, and the deliverable is",
@@ -4072,9 +4108,11 @@ def build_parser() -> argparse.ArgumentParser:
              "the resource bill refuses it with the number")
     ap.add_argument("--tiles", default=",".join(str(v) for v in SUBJECT_BLOCK_M),
                     help="subject block sizes. 128 is the primary and the only "
-                         "one production runs multi-tile; 64 and 32 are where "
-                         "alpha is robustly identifiable and are what makes "
-                         "the alpha_b invariance a test")
+                         "one production runs multi-tile as a regime (66 of 87 "
+                         "cells on the padded count; 16 and 64 fire in "
+                         "isolated cells, 32 never); 64 and 32 are where alpha "
+                         "is robustly identifiable and are what makes the "
+                         "alpha_b invariance a test")
     ap.add_argument("--r-max", type=int, default=1024,
                     help="largest rows per expert. 1024 is 4 treads at "
                          "BLOCK_M=256, which is the reference's whole ladder")

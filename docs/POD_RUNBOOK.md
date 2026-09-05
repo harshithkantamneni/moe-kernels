@@ -1,11 +1,166 @@
 # Pod runbook
 
-The human-readable companion to `scripts/pod_session.sh`. That script is the
-session; this file says what each gate MEANS, so a tired person at 02:00 can act
-on a FAIL without rereading `docs/FINDINGS.md`.
+Two session scripts exist and this file covers both, in the order they
+matter. **Part A** is `scripts/h200_gaps_session.sh`, the driver that owns
+every arm of the next session: every open experiment as one unattended,
+resumable pod run with a ledger. **Part B** is the human-readable companion to
+`scripts/pod_session.sh`, the 2026-09-01 sweep session; its pre-flight, its
+step gates and its failure playbook still apply to the sweep, and it is kept
+here as the operator's page for that script. `docs/RUNPOD.md` is how to get a
+pod and an environment; `docs/APPARATUS.md` is what every exit code and every
+`RESULT:` line means. Nothing on this page terminates a pod, commits or pushes.
 
-`docs/RUNPOD.md` is how to get a pod and an environment. This is what to do once
-you have one.
+---
+
+# Part A: the session driver, `scripts/h200_gaps_session.sh`
+
+**Before renting anything, on the laptop, free:**
+
+```bash
+bash scripts/h200_gaps_session.sh --list       # the arms, in read order, and what each closes
+bash scripts/h200_gaps_session.sh --dry-run    # every arm's OWN plan, its cost, the session MDE
+```
+
+`--dry-run` runs each arm's own `--dry-run`, records its exit code, and gives
+each a word: `PLANNED` (it printed a plan), `PLAN_REFUSED` (it refused before
+printing one, which off a GPU box is the refusal working), `BROKEN` (a
+traceback, or any code the table does not name; the session exits 3 and the
+plan on the page is not a plan). It prints the cost table with every figure
+read off the arm's own plan and the command that produced it, the TOTAL in two
+forms, and the two `--only` lines a two-hour and a three-hour rental can
+actually reach.
+
+**On the pod:**
+
+```bash
+cd /workspace/repo
+bash scripts/h200_gaps_session.sh                       # every arm
+bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrate belongs in EVERY subset
+```
+
+## Where things land, and how to resume
+
+- `SESSION=` names the session directory. Default on a pod:
+  `/workspace/session/gaps-<card>-<UTC stamp>`; off a pod,
+  `results/h200_gaps/session-<card>-<UTC stamp>` under the checkout. The
+  ledger is `$SESSION/ARMS.tsv` (`ARMS-dryrun.tsv` under `--dry-run`), one row
+  per arm: `arm  state  rc  seconds  dirty  log  note`, last row wins. Logs are
+  `$SESSION/logs/<arm>.log`.
+- **Resume** by running the same command with `SESSION=<that directory>`. Rows
+  in `DONE`, `CLAIM_FAIL` or `INVALID` are LATCHED and skipped; `REFUSED` and
+  `RETRY` rows are attempted again (a refusal cost nothing, and the usual
+  reason to re-run is that its precondition was fixed); an `UNKNOWN` row
+  (exit 1 from a file that has not adopted `moe/bench/exit_codes`) is not
+  latched and is disclosed by name. Delete a row from the ledger to force a
+  latched arm to run again.
+- The session's own start is read from the UTC stamp at the END of the
+  session directory's name, so a resume into the default directory still
+  counts the calibration its first pass published. An operator-supplied
+  `SESSION` with no stamp falls back to "now", and a resume under such a name
+  refuses until `calibrate` runs again: three minutes rather than a session.
+- Every arm is given `MOE_RESULTS_DIR=<root>/gaps-<card>` with the card in the
+  path. An operator-supplied `MOE_RESULTS_DIR` that does not contain the card
+  is REFUSED, because `/workspace/results` outlives the pod and a second card
+  would resume the first card's directories and publish its timings under the
+  wrong heading (`moe/bench/provenance.py`, collision 2).
+
+## The calibrate --publish gate
+
+Arm 0 is `scripts/calibrate_hardware.py --publish`. Every arm below it
+resolves its ridge, its LEVEL reference clock and its bandwidth through
+`roofline.load_measured()`, which reads the TRACKED
+`moe/bench/hardware/measured_<card>.yaml`; without `--publish` a calibration
+lands only on an untracked path under `results/calibration/` and every later
+arm quotes the last rental's ruler while labelling it "measured on this
+machine". So after arm 0 the driver REFUSES the rest of the session unless
+BOTH halves answer:
+
+| half | question | words |
+|---|---|---|
+| the yaml | does the tracked file for this card carry a `provenance.utc` at or after this session's own start | `PUBLISHED`, else `MISSING` (no file), `UNDATED` (no provenance block: the committed H200 yaml before 2026-09-02 was this), `STALE` (a previous rental's), `NO_BASELINE` (the driver could not stamp its own start) |
+| the arm | does this session's ledger say `calibrate` is `DONE` | anything else refuses, by name: `INVALID` (it measured, failed `clock_established`, and published the yaml BEFORE scoring, so a fresh-stamped file proves nothing), `CLAIM_FAIL`, `REFUSED`, `UNKNOWN`, `NO_ROW` (`--only` left arm 0 out) |
+
+The gate is deliberately NOT scoped to `--only`: nothing that measures is
+either. The yaml is the one tracked file the session is meant to change;
+commit it unless the `ruler` arm's P1 FAILED (the compute peak was then
+sampled in the wrong clock state).
+
+## The arm ledger: what each arm buys
+
+The order is the argument: anything whose result changes how a later arm is
+READ runs before that arm. Minutes and clocks are the driver's own cost table
+(`--dry-run`), each figure read off the arm's plan; WALL charges compiles and
+allocation, KERNEL excludes them in the plan's own words, ALLOW is the
+driver's standing allowance where a plan prints no estimate, FREE is an arm
+booked at zero because it refuses or times nothing. The last column is the
+independent verdict of the 2026-09-03 pod-readiness check (FINAL_VERDICT
+section 3) and what the driver did with it. Arm names below are asserted
+against `--list` by `tests/test_docs.py`.
+
+| arm | min | clock | what it buys | verdict and disposition |
+|---|---:|---|---|---|
+| `calibrate` | 3 | ALLOW | this pod's own ridge and both dtype peaks, published; five arms refuse without it | KEEP: the only file worth committing |
+| `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
+| `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
+| `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
+| `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships; the only arm that could confirm the ceiling | CUT: REFUSES at `--capability 9.0` (no BLOCK_M=256 control fits at BLOCK_N=256: 256 registers per thread against 255, 256 KiB shared against 227); booked zero, the refusal is the finding |
+| `roofline-n256-g32` | 0 | FREE | the same at the swizzle vLLM ships at 2048 tokens | CUT: refuses for the same missing control |
+| `bm128_depth` | 5 | KERNEL | five clean memory-bound treads at the production tile, `--r-max 2048`; the whole 128 row currently rests on two fits | KEEP |
+| `alias_ablation` | 13 | WALL | THE FIRST INFERENTIAL LINK: is the per-tile slope DRAM traffic at all, measured with no byte model, bandwidth, ridge or intercept | ADDED on the verdict's finding that nothing scheduled it; read its P1 RESULT line's WORD, not its exit code (a dot-mode fallback leaves P1 UNKNOWN, which classifies as CLAIM_FAIL and latches) |
+| `noise_floor` | 120 | WALL | a real between-replicate sd, `--replicates 3`, four arms, `--publish` into `results/published/NOISE_FLOOR.json`; until it exists every MDE line says ASSUMED | KEEP only bounded and published, which it now is; the verdict's other precondition (children read on CLAIM_FAIL) is that script's own fix |
+| `bn_g16` | 36 | KERNEL | `alpha_a` as a fitted slope and the residual that says whether the three-term model is complete; the arm that decides the BLOCK_M=128 row (it lives only if `alpha_a < 0.17`) | KEEP, booked 36 not 11 |
+| `anchor_measure` | 5 | WALL | the memory-branch level measured at matched reuse rather than extrapolated | KEEP |
+| `anchor_rescore` | 0 | FREE | every committed report re-scored under the fresh anchor, written under the session directory, never into `results/published` | KEEP |
+| `occupancy` | 23 | KERNEL | does alpha track residency or program order; P2 is EXPECTED to fail and that FAIL is the finding | not in the verdict's KEEP table; booked with `--fail-on-gate` so the failing claim reaches the ledger as one |
+| `mma_switch` | 7 | ALLOW | whether the tile alone selects the instruction at fixed tokens | KEEP |
+| `ruler` | 2 | WALL | prices the read-vs-triad and clocks-first ruler changes on the committed corpus without adopting them | KEEP |
+| `cap_test` | 5 | KERNEL | BLOCK_M=16's cap, DEMOTED: on uniform routing vLLM runs 16 multi-tile in 1 of 24 cells, so this tests the formula | KEEP |
+| `dtype` | 6 | KERNEL | how much of the 1.15 fp8/bf16 crossing is the config vLLM resolved per dtype | CUT in the verdict until its C3 window is re-derived (at the corrected spread the window has no discriminating power); still booked |
+| `span_dense` | 31 | KERNEL | the 0.563 extent-versus-kernel split on the dense grid, run WHOLE: `--max-minutes` was removed because it scored a truncated grid as complete | CUT in the verdict until truncation is a refusal; the driver books the honest time instead |
+| `span` | 0 | FREE | the same on the published grid, `--no-densify`; refuses on `c2_grid_power` before spending a minute | CUT: booked zero, the refusal is the answer |
+| `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is the ANSWER on a rented pod, and that script files it as INVALID (its own fix) | keep the plan, do not act on its printed ncu recipe (`docs/COUNTERS.md` 4.6) |
+
+`bn_g1` was DROPPED, not demoted: at GROUP_SIZE_M=1 that script's own design
+self-test exits INVALID (sd of `alpha_a` 0.1759 against a gate of 0.025) and
+the same self-test fails at every pinning checked except 16, so there is
+nowhere to re-pin it to.
+
+**What a rental reaches.** The driver prints, from its own table, that
+~262 priced minutes (~107 of them KERNEL, which exclude compiles) become
+~407 once the KERNEL part is multiplied by the one wall-over-model ratio this
+repository has measured (2.35x, mixtral_g1 on the s4 arm); that second number
+is an illustration of the gap, not an estimate of any arm. A two-hour rental
+reaches both payload arms and their preconditions
+(`--only calibrate,pin_probe-n64-g1,pin_probe-n256-g16,roofline-n64-g1,roofline-n256-g16,roofline-n256-g32,alias_ablation,bn_g16`);
+a three-hour one adds `bm128_depth`, the anchor pair and the cheap tail.
+NEITHER contains the noise floor: it is 120 WALL minutes on its own and a
+rental that enters it without finishing it fails that script's own V2 and buys
+nothing. Book it on its own.
+
+**Read these four first** when it ends: the `alias_ablation` P1 line, the
+`roofline-n256-g16` verdict line (or its refusal), the `noise_floor` sd, and
+the `bn_g16` residual line. The driver prints them under that heading.
+
+**What to commit.** `moe/bench/hardware/measured_<card>.yaml` and
+`results/published/NOISE_FLOOR.json`, both written under `--publish`, both
+tracked; nothing else lands in the tree. To publish an arm, copy its run
+directory under `results/published/<date>-<gpu>-<arm>/` and run
+`git check-ignore -v <path>`, which must print nothing. The alias ablation has
+no `--publish` because it has no tracked file to land in; copy its directory
+whichever way its P1 line reads, since PASS and FAIL both decide the paper's
+mechanism sentence.
+
+---
+
+# Part B: the companion to `scripts/pod_session.sh` (the 2026-09-01 sweep session)
+
+That script is the sweep session; this part says what each of its gates MEANS,
+so a tired person at 02:00 can act on a FAIL without rereading
+`docs/FINDINGS.md`. It predates the apparatus rebuild: its step scripts speak
+`[PASS]` / `[FAIL]` lines and its own exit codes (0 / 1 / 2 / 3 at the end of
+this part), not the `RESULT:` line and the one table of `docs/APPARATUS.md`,
+and several of its registered predictions have since been retracted; each is
+marked inline below.
 
 **The whole session is one command.**
 
@@ -84,9 +239,9 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P4 | `override_config` binds and releases, on a shape vLLM has never seen | steps 2, 3 and 4 are all `override_config` experiments. If the hook does not bind they sweep nothing while printing a full table. deepseek-v3 (`E=256,N=2048`) is the sharpest probe available because vLLM v0.27.1 ships no tuned file for it on any card or dtype, so a bind failure cannot hide behind a file that happens to agree. **FATAL.** |
 | P5 | an isolated `TRITON_CACHE_DIR` really produces PTX | with the shared `$WORKSPACE/triton-cache` inherited, every fused_moe specialisation is already built, nothing recompiles, no `.ptx` is written, and the dump script exits saying the kernel never compiled. This is very likely why the A100 was never successfully dumped. **FATAL.** |
 | P6 | 110 GB on the volume, 10 GB on the container | the 93 GB download, and the several GB of temp space wheel extraction needs. |
-| P7 | `entitled_ridge` still refuses 2 of the 10 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. |
+| P7 | `entitled_ridge` still refuses 5 of the 14 published arms | the guard that stops an arm being quoted against another session's ruler. A change that silently stops refusing is invisible in any table. The count was "2 of the 10" until 2026-09-03; the three ladder arms published since carry no `measured.yaml` and are refused by construction, and `tests/test_docs.py` checks the number. |
 | P8 | the weights step 7 pulls are reachable | Asks whether the repos in `moe/spec.py` for `mixtral-8x7b` and `deepseek-v2-lite` resolve, using whatever credentials the box has. It used to check for a TOKEN and justify it with "Mixtral is gated" -- Mistral ungated that repo (apache-2.0, `gated=False`, `config.json` downloads anonymously), so the gate demanded a credential nothing needed and gave a reason that had stopped being true. A token still helps: HF rate-limits anonymous transfers and step 0 pulls 93.4 GB, so its absence is reported as an advisory rather than a failure. |
-| P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. Zero `.png` files are tracked under `results/published/` across all ten arms. **FATAL.** |
+| P9 | the exact exfil paths are committable | an unanchored `plots/` rule matched at any depth and silently swallowed `results/published/<arm>/plots/*.png` on every publish. When this row was written zero `.png` files were tracked under `results/published/`; the rule is anchored now and 75 `.png` files are tracked (`git ls-files 'results/published/**/*.png'`, checked by `tests/test_docs.py`). **FATAL.** |
 | P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
 | P11a | the step scripts exist and parse | several are written concurrently by other people. |
 | P11b | those scripts accept the flags this session passes | a renamed flag should cost a line here, not an argparse error forty minutes in. |
@@ -274,7 +429,7 @@ re-measured.
 |---|---|---|
 | bandwidth, triad | 4374-4377 GB/s | reproduces to 0.06% across sessions |
 | dense bf16 | 701-771 TFLOP/s | the term that does NOT reproduce: 9.9% spread |
-| bf16 ridge | 160.3-176.2 FLOP/byte | the band every absolute figure carries |
+| bf16 ridge | about 162.8 FLOP/byte | the card's 2026-09-02 calibration; the three earlier ones spanned 160.3-176.2, which this row called "the band every absolute figure carries" until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, no card's own band, `docs/FINDINGS.md` RETRACTIONS (e)) |
 | fp8_e4m3 | about 1409 TFLOP/s | 1.83x the bf16 figure |
 
 **The gates.**
@@ -285,7 +440,7 @@ re-measured.
 | S1b `checked_on` is today | **STOP.** The yaml was not rewritten, so this session would publish against another session's ruler. That is defect 7 exactly, and it cost claim C5 its target for three days. |
 | S1c fp8 peak > 0 | any fp8 row measured today is again unquotable. **On an A100 this SHOULD fail**: Ampere has no fp8 tensor cores and a number there would be fiction. |
 | S1d bandwidth 3900-4800 | above the band means your buffer fit in cache and it is not a DRAM measurement; below means the card is contended. Every `implied_traffic_ratio` is divided by this. |
-| S1e ridge 150-185 | every AI-cap prediction in this session is stated against 160.3. Outside the band, re-derive them before reading step 2. |
+| S1e ridge 150-185 | every AI-cap prediction in this session was stated against 160.3 (retracted 2026-09-02: 160.3 is one earlier calibration, not this card's ridge, and the cap identity itself is retracted; the predictions are re-derived through `ai_model.cap_from_fitted` at THIS session's published ridge, as brackets over `alpha_a`). Outside the band, re-derive them before reading step 2. |
 | S1f fp8 rows carry a peak | the yaml has the ceiling but the driver is not stamping it onto rows, which repeats the defect this step exists to close. Look at `moe/bench/driver.py` around `achieved_peak_tflops`. |
 
 The step also snapshots the yaml and its sha256 into `$SESSION/calibration/`.
@@ -306,8 +461,11 @@ AI(r) = (2r/b) / Q(r),    Q(r) = 1 + alpha (ceil(r/BM) - 1)
 
 The first M-tile reads the expert's weights in full and each additional M-tile
 re-reads them, discounted by L2 by a factor `alpha`. Two consequences. AI is
-BOUNDED at `2 BM / (alpha b)`, so a tile height can put the compute roof
-permanently out of reach. And the crossing solves `R = ridge b Q(R) / 2`, which is
+BOUNDED at `2 BM / (alpha b)` (retracted 2026-09-02 for a FITTED alpha: the
+study's alpha is a ladder fit, and the cap it implies is
+`2 BM / (alpha b) / (1 + phi + delta)`, a bracket over the unmeasured
+`alpha_a`; `moe/bench/ai_model.py`, `docs/FINDINGS.md` RETRACTIONS (a)), so a
+tile height can put the compute roof permanently out of reach. And the crossing solves `R = ridge b Q(R) / 2`, which is
 a step function on both sides and can therefore have several solutions or none.
 
 **alpha was refit on 2026-09-01 from 0.10 to 0.558.** 90% band 0.529-0.588 over
@@ -316,7 +474,13 @@ from minimising the CV of a POOLED ratio, an objective that falls 0.7% across it
 whole range and lets alpha absorb a between-cell level trend running the wrong
 way. Changing only the estimator on the original 151 rows gives 0.484.
 
-**Prediction, ridge 160.3, bf16.**
+**Prediction, ridge 160.3, bf16.** (Retracted 2026-09-02 as written: the caps
+read a fitted alpha into the `alpha_b` slot and 160.3 is one earlier
+calibration, not this card's ridge, `docs/FINDINGS.md` RETRACTIONS (a), (b),
+(e). Through (EXA) at alpha = 0.558 the 128 cap is 214.1 at `alpha_a = 0` and
+169.1 at 0.143, crosses the H200's 162.8 only for `alpha_a < 0.17`, and the
+two measured 128 ladders give 130.7 and 135.4, below both cards' ridges. The
+rows stand as the registered prediction of the 2026-09-01 session.)
 
 | BLOCK_M | AI cap | crossing | mixtral | qwen2 | deepseek-v3 |
 |---:|---:|---|---:|---:|---:|
@@ -341,13 +505,19 @@ result rather than a proposal. It also makes a strong statement about production
 vLLM's tuned configs run BLOCK_M = 16 through the whole decode range, and at
 alpha = 0.558 that caps AI at 29 against a ridge of 160.3, so a decode-configured
 MoE kernel is structurally incapable of reaching its compute roof at any batch
-size.
+size. (Qualified 2026-09-02: the 29 is a (LIN) point and the corrected cap is a
+bracket, 28.4 at `alpha_a = 0` to 22.8 at 1, so the conclusion at BLOCK_M=16
+survives; but on uniform routing vLLM runs 16 multi-tile in 1 of 24 cells, so
+the cap binds almost nowhere and `scripts/tile_cap_test.py` is demoted to a
+test of the formula, `docs/FINDINGS.md` RETRACTIONS (i).)
 
 **What FAIL means, and there are two different ones.**
 
-- **32 or 64 DOES cross.** Then `alpha < 0.0998` after all, the ceiling is real
-  but higher than the refit says, and the refit needs redoing. This is the more
-  interesting failure and it is worth wanting.
+- **32 or 64 DOES cross.** Then `alpha < 0.0998` after all (retracted 2026-09-02
+  as a threshold: 0.0998 is `BM/ridge`, the (LIN) identity; the corrected
+  threshold goes through `ai_model.cap_from_fitted` and is a bracket over
+  `alpha_a`), the ceiling is real but higher than the refit says, and the refit
+  needs redoing. This is the more interesting failure and it is worth wanting.
 - **128 and 256 separate by about 1.10x rather than 1.56x.** Then the uncorrected
   `2R/b` describes the data and the whole tile-corrected section retracts.
 
@@ -469,7 +639,14 @@ design's own x values at 0.5% noise the top rung alone gives a 90% band of
 effect size of 0.082. The ladder is identical across every GROUP_SIZE_M, so the
 cross-setting comparison is still at fixed design.
 
-**Prediction.** alpha keeps falling monotonically at 32. **g=64 is NOT answerable on the
+**Prediction.** alpha keeps falling monotonically at 32. (Retracted 2026-09-02 as
+anything more than a registered prediction, `docs/FINDINGS.md` RETRACTIONS
+(d): on the published surfaces the apparent direction of alpha with
+GROUP_SIZE_M, on either card, was a pooled artefact, the G=1 and G=64 medians
+being different models; the one matched A100 cell moves the other way by
+0.028 and a paired MDE needs two cells. No direction is established, so a
+rise here is not a "FAIL against a finding", it is the first measurement.)
+**g=64 is NOT answerable on the
 mixtral arm this step runs**: num_pid_m tops out at 59-61, so g=64 saturates at
 every rung and the setting cannot be distinguished from g=32. Answering it needs a
 second arm, `--model qwen2-57b-a14b --tokens 32,64,128,256,512,768,1024`, which
@@ -505,8 +682,10 @@ ever measured what that warning is worth.
 **Prediction.** In the memory-bound regime the difference is small, because the
 tile is not on the critical path there. In the multi-tile regime the tuned file
 climbs to BLOCK_M = 128 at M = 256 while the fallback sits at 64, and the ceiling
-says only 128 can ever cross. So the gap should OPEN with batch rather than being a
-constant offset.
+says only 128 can ever cross (retracted 2026-09-02 as a point: whether 128
+crosses is a bracket over `alpha_a`, and the two measured 128 ladders sit
+below both ridges, `docs/FINDINGS.md` RETRACTIONS (b)). So the gap should OPEN
+with batch rather than being a constant offset.
 
 **Why it matters beyond the number.** This repo once published "BLOCK_M is not a
 knob" and had to retract it, because vLLM and SGLang both ship tuned
@@ -588,7 +767,9 @@ Three things in that sentence are decisions, not defaults.
   batch, so the layer straddles the ridge and there is no single crossing. Dropping
   `--routing uniform` from any crossing command changes the numbers by up to 4.3x.
 - **L2-warm.** The cold basis loses 5 of 8 one-stage crossings to throttle
-  exclusion.
+  exclusion (by the retired idle-instant flag, which detected the idle-boost
+  catch rather than throttling, `docs/FINDINGS.md` RETRACTIONS (f); LEVEL and
+  DRIFT replace it on the instrument).
 - **Read it with `octave_ladders`.** Fed whole to `crossing_from_points` this grid
   is biased 4-18% LOW and twice as wide as the powers-of-two grid it extends.
 
@@ -609,7 +790,11 @@ actually ships.
 
 **Prediction** at a pinned BLOCK_M = 128: mixtral crosses near 999 tokens, qwen2
 near 1998, deepseek-v3 near 7992. At BLOCK_M = 64 the cap is 115 and no crossing
-exists anywhere on the grid.
+exists anywhere on the grid. (Retracted 2026-09-02 as points: 999 / 1998 / 7992
+solve the (LIN) cap at ridge 160.3, and 115 is the (LIN) cap; corrected, the
+64 cap is 110.7 at `alpha_a = 0` and lower above it, so "no crossing" at 64
+survives, while 128's crossing is a bracket over `alpha_a`, `docs/FINDINGS.md`
+RETRACTIONS (a), (b), (e).)
 
 **The gates.**
 
@@ -618,7 +803,7 @@ exists anywhere on the grid.
 | S6a tile pinning honoured | the grid is unpinned. See above. Not fatal. |
 | S6b sweep exit 0 | resume with `--from 6` and the run id the step printed. |
 | S6c zero correctness failures | **STOP.** The kernel computed the wrong layer, so every timing in the arm is a timing of the wrong thing. Do not publish it. |
-| S6d under 5% throttled | throttled rows are excluded from crossing detection, so a high rate narrows the grid the detector can actually use. |
+| S6d under 5% throttled | throttled rows are excluded from crossing detection, so a high rate narrows the grid the detector can actually use. (The flag this gate counts is the retired idle-instant one, retracted 2026-09-02: it fired on 91% of vLLM rows above T=4096 on the alpha-0558 arm while flagged and unflagged replicates timed at ratio 0.998. On the instrument the row-level verdicts are LEVEL and DRIFT, `docs/APPARATUS.md`.) |
 | S6e coverage against the planner's own row count | the sweep stopped short, almost certainly on `--max-minutes`. Resume rather than reading a crossing off a truncated grid. |
 
 **Two defaults that are not measurements, and that any new analysis of these rows

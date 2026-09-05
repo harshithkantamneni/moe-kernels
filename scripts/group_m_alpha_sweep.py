@@ -90,10 +90,18 @@ WHAT WOULD CONFOUND THE FIT, checked where it can be:
      is memory bound, and a compute-bound cell would pay for extra tiles in
      PADDED ARITHMETIC, which GROUP_SIZE_M cannot change -- so it would report a
      flat alpha and look like a clean refutation. Every planned cell is gated
-     against the measured ridge band before anything runs.
+     against THE ATTACHED CARD'S OWN ridge band, resolved from its committed
+     calibration through `moe.bench.roofline` and the crossing sweep's
+     `ridge_band_from_detail`, before anything runs; a card with no calibration
+     is REFUSED, never scored against another machine's ceiling (until
+     2026-09-03 this gate scored every card against a withdrawn H200 constant,
+     160.3, which is 10% above the A100's own 145.8).
   5. DRIFT. Settings are timed in a randomised order inside each cell, on the
-     same tensors, so the GROUP_SIZE_M comparison is paired; clock and
-     temperature are sampled per cell and a throttled cell is flagged.
+     same tensors, so the GROUP_SIZE_M comparison is paired; the SM clock is
+     sampled UNDER LOAD per cell and scored on LEVEL against the clock this
+     card's roof was measured at, and on DRIFT across the trials
+     (`timing.clock_flags`). The retired idle-instant pair is still recorded,
+     labelled retired, so old rows parse.
   6. THE OVERRIDE ITSELF. vLLM's config dict is recorded from inside the call
      and checked against the forced one, so "the sweep swept nothing" is a
      failure the report names rather than a silent flat line.
@@ -189,9 +197,11 @@ FIXED_TILE_SOURCE = "E=8,N=14336,device_name=NVIDIA_H200.json key 16"
 #: THE TOP IS CAPPED BY THE RIDGE, and the cap is tighter than the mean says.
 #: T=512 looks safe on a uniform draw at 127.6 FLOP/byte, but a dirichlet draw
 #: that leaves an expert empty cuts the compulsory weight bytes by an eighth and
-#: pushes that same cell to 145.8, over the 90% of 160.3 the preflight allows.
-#: The ladder is set by the WORST realisation it contains, not by the mean, and
-#: the preflight recomputes that rather than trusting this comment.
+#: pushes that same cell to 145.8, over the 90% of either card's own ridge that
+#: the preflight allows (H200 162.8 -> 146.5, A100 145.8 -> 131.2). The ladder
+#: is set by the WORST realisation it contains, not by the mean, and the
+#: preflight recomputes that, against the attached card's calibration, rather
+#: than trusting this comment.
 DEFAULT_TOKENS = (16, 32, 64, 128, 256, 384, 448)
 
 #: Routing realisations per token count. They are the ONLY thing that varies the
@@ -351,10 +361,164 @@ def load_alpha_refit(path: Path | None = None):
             "will not substitute a second estimator: the whole comparison "
             "depends on these alphas being fitted by the same code as the "
             "published 0.558.") from exc
-    for name in ("Observation", "fit_alpha", "cell_key", "RIDGE_BAND"):
+    # `RIDGE_BAND` is deliberately NOT on this list any more: it is the
+    # withdrawn cross-machine band, and this sweep resolves its ridge from the
+    # attached card's own calibration (`resolve_ridge_band`), so the estimator
+    # is asked only for the three names the fit needs.
+    for name in ("Observation", "fit_alpha", "cell_key"):
         if not hasattr(module, name):
             raise EstimatorMissing(f"{path} has no {name}; it is not the estimator")
     return module
+
+
+def load_sweep(path: Path | None = None):
+    """`scripts/block_m_crossing_sweep.py` as a module, for `ridge_band_from_detail`.
+
+    Loaded by path, like the estimator, because `scripts/` is not a package.
+    Imported rather than re-derived for the reason `rescore_published_reports`
+    gives: the band a calibration supports is the spread of ITS OWN surviving
+    DRAM rulers with the disowned patterns dropped, and a second implementation
+    of that rule here would be free to drift from the one the 26 published
+    reports were rescored with. Registered in `sys.modules` before execution
+    for the same `@dataclass` reason `load_alpha_refit` documents.
+    """
+    path = path or (ROOT / "scripts" / "block_m_crossing_sweep.py")
+    name = "block_m_crossing_sweep_for_group_m"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise CannotRunHere(f"no importable crossing sweep at {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # noqa: BLE001 - any failure means no band rule
+        sys.modules.pop(name, None)
+        raise CannotRunHere(
+            f"{path} did not import ({type(exc).__name__}: {exc}), so the "
+            "ridge band rule this sweep shares with the published reports is "
+            "unavailable; no other band is substituted") from exc
+    if not hasattr(module, "ridge_band_from_detail"):
+        raise CannotRunHere(f"{path} has no ridge_band_from_detail; it is not the sweep")
+    return module
+
+
+#: The card a `--synthetic` run plants its ridge on. A synthetic world still
+#: needs a ceiling for the regime gate, and it is THIS card's committed
+#: calibration, named in the report as planted, rather than a constant that
+#: belongs to no card: the same choice `alias_ablation.PLANT_CARD` makes for
+#: its L2 and read roof. A tree with no calibration for it refuses.
+SYNTHETIC_CARD = "NVIDIA H200"
+
+
+@dataclass(frozen=True)
+class RidgeBand:
+    """The ridge THIS run scores its regime gate against, and where it came from.
+
+    `low` and `high` are the two ends of ONE calibration's own band: the same
+    silicon against its surviving DRAM rulers, carried as a ratio against the
+    ceiling pattern. `card` is the device whose file it is and `source` says
+    which file, which peak over which bandwidth, and which session stamped it,
+    so the printed line can name all three. A band that belongs to no attached
+    device cannot be built through this type at all.
+    """
+
+    low: float
+    high: float
+    card: str
+    source: str
+    #: "calibration" when read off the attached card's file, "planted" when a
+    #: synthetic run named the card whose file it borrowed. Nothing else.
+    kind: str = "calibration"
+
+
+def resolve_ridge_band(card: str, dtype: str, *, planted: bool = False) -> RidgeBand:
+    """THIS card's own ridge band, off its own calibration, or a refusal.
+
+    The regime gate (`preflight`) refuses a cell whose compulsory intensity is
+    within 10% of the ridge, because above it `implied_traffic_ratio` is a
+    statement about padded arithmetic and not about traffic. Until 2026-09-03
+    that ridge was `alpha_refit.RIDGE_BAND`, 160.3 to 176.2, on every card:
+    two H200 calibrations' compute ceilings failing to reproduce, withdrawn
+    from all 26 published reports, and 10% above the A100's own 145.8, so on
+    that card the gate admitted cells it should have refused and the printed
+    line said "measured ridge band" about a number no attached device measured.
+
+    Resolution is the same two readers `block_m_crossing_sweep.resolve_ridge`
+    uses: `roofline.load_measured` for the ridge (`peak(dtype) / bandwidth`, so
+    the roof and the ridge come from ONE file) and `roofline.measured_doc` for
+    the detail block the band is read out of, with `ridge_band_from_detail`
+    dropping the patterns the calibration disowned. Both readers apply
+    `load_hardware`'s own acceptance rule and the device-name check, so a
+    `verified: false` file or another machine's file is a refusal, not a band.
+
+    REFUSES with `CannotRunHere` when there is no card, no calibration for it,
+    or a file that describes another device. Nothing is substituted: a run
+    that cannot name its ceiling cannot ask whether its cells are below it.
+    """
+    from moe.bench import roofline as RF
+
+    if not card or card == NO_CARD:
+        raise CannotRunHere(
+            "no card to resolve a ridge for: the regime gate scores every "
+            "planned cell against the attached card's own calibration, and "
+            "there is no attached card. On the pod the device is read from "
+            "torch; off it, name the card whose committed calibration the "
+            "plan should be previewed against with --card, e.g. "
+            "--card 'NVIDIA H200' or --card 'NVIDIA A100-SXM4-80GB'. No "
+            "constant stands in.")
+    doc, reason = RF.measured_doc(card)
+    if not doc:
+        raise CannotRunHere(f"no ridge for {card!r}: {reason}")
+    try:
+        hw = RF.load_measured(card)
+    except RF.HardwareMismatch as exc:
+        raise CannotRunHere(str(exc)) from exc
+    if hw is None:
+        raise CannotRunHere(
+            f"no ridge for {card!r}: `roofline.load_measured` accepts no "
+            "calibration for it even though a file parsed; fix the file "
+            "`measured_doc` named rather than scoring against another card's")
+    try:
+        ridge = hw.ridge_point(dtype)
+    except ValueError as exc:
+        raise CannotRunHere(
+            f"{hw.name} has a measured bandwidth but no verified {dtype} peak, "
+            f"so it cannot state a ridge: {exc}") from exc
+    sweep = load_sweep()
+    detail = doc.get("detail") or {}
+    band, band_source = sweep.ridge_band_from_detail(detail, ridge)
+    stamp = sweep.calibration_stamp_line(doc)
+    source = (f"{hw.name}: {hw.peak(dtype) / 1e12:.1f} TFLOP/s {dtype} over "
+              f"{hw.bandwidth_bytes_s / 1e9:.1f} GB/s "
+              f"({hw.ceiling_pattern or 'unnamed'} pattern) = {ridge:.1f} "
+              f"FLOP/byte, {stamp}; band {band_source}")
+    if planted:
+        source = (f"PLANTED for a synthetic world on {card}'s committed "
+                  f"calibration, not an attached device: {source}")
+    return RidgeBand(min(band), max(band), card, source,
+                     kind="planted" if planted else "calibration")
+
+
+def replay_card(out_dir: Path) -> str:
+    """The card a finished run recorded in its plan.json, or an empty string.
+
+    `--replay` re-reports a directory on whatever box is convenient, so the
+    ridge its regime gate is re-scored against has to be the card the cells
+    were MEASURED on, not the one attached now. Empty when the directory has no
+    plan.json or it names no card, which the caller turns into a refusal
+    rather than a default.
+    """
+    path = out_dir / "plan.json"
+    if not path.exists():
+        return ""
+    try:
+        planned = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return ""
+    card = str(planned.get("card") or "")
+    return "" if card == NO_CARD else card
 
 
 # --------------------------------------------------------------------------
@@ -654,22 +818,30 @@ class Gate:
         return (self.kind, self.token, self.verdict)
 
 
-def preflight(plan: Plan, ridge_low: float) -> list[Gate]:
+def preflight(plan: Plan, ridge_low: float, ridge_card: str = "") -> list[Gate]:
     """Refuse a design that cannot answer the question, before it is paid for.
 
     Every one of these has a way of passing silently and producing a confident
     wrong answer: a compute-bound cell fits alpha to padded arithmetic, a
     single-tile-everywhere plan fits it to nothing, and a plan with no control
     rung cannot tell an L2 effect from a launch-order one.
+
+    `ridge_low` is the LOW end of the attached card's own band
+    (`resolve_ridge_band`), and `ridge_card` names the card so the gate's
+    detail says whose ceiling decided it. A caller that passes a number from
+    nowhere gets a gate that says "ridge of an unnamed card", which is the
+    honest label for it.
     """
     gates: list[Gate] = []
     worst = max(plan.cells, key=lambda c: c.arith_intensity)
     limit = MEMORY_BOUND_MARGIN * ridge_low
+    whose = f"{ridge_card}'s own" if ridge_card else "an unnamed card's"
     gates.append(Gate(
         "regime: every cell is memory bound",
         worst.arith_intensity <= limit,
         f"max compulsory AI {worst.arith_intensity:.1f} at T={worst.tokens} "
-        f"against {MEMORY_BOUND_MARGIN:.0%} of ridge {ridge_low} = {limit:.1f}"))
+        f"against {MEMORY_BOUND_MARGIN:.0%} of {whose} ridge low end "
+        f"{ridge_low:.1f} = {limit:.1f}"))
 
     multi = plan.multi
     deepest = max((c.tiles_per_expert for c in multi), default=0.0)
@@ -1385,7 +1557,7 @@ def estimated_seconds(plan: Plan, warmup: float, trials: int,
     return len(plan.cells) * len(plan.group_m) * per_setting * plan.passes
 
 
-def report_plan(say, plan: Plan, gates: list[Gate], ridge: tuple[float, float],
+def report_plan(say, plan: Plan, gates: list[Gate], ridge: RidgeBand,
                 warmup: float = 300.0, trials: int = 3) -> None:
     say("## the design")
     say()
@@ -1446,8 +1618,14 @@ def report_plan(say, plan: Plan, gates: list[Gate], ridge: tuple[float, float],
         "large one")
     say("  on both, with the control flat, is stronger still.")
     say()
-    say(f"measured ridge band {ridge[0]}-{ridge[1]} FLOP/byte; every cell above "
-        f"is below {MEMORY_BOUND_MARGIN:.0%} of the low end, so implied_traffic_ratio")
+    # THE CARD AND THE FILE ARE NAMED ON THE SAME LINE AS THE NUMBER. This
+    # printed "measured ridge band 160.3-176.2" on every card until 2026-09-03,
+    # and no attached device had measured either end.
+    say(f"ridge band {ridge.low:.1f}-{ridge.high:.1f} FLOP/byte on {ridge.card}, "
+        f"from its own {ridge.kind}:")
+    say(f"  {ridge.source}")
+    say(f"Every cell above must sit below {MEMORY_BOUND_MARGIN:.0%} of the low "
+        "end, so implied_traffic_ratio")
     say("is a traffic bound rather than a statement about padded arithmetic.")
     say()
     bound = confound_bound(plan)
@@ -2070,15 +2248,66 @@ def _run(argv: list[str] | None = None) -> int:
     out_dir = args.replay or args.out or (
         results_root() / "group_m_alpha"
         / f"{default_run_id(args, card, plan)}{suffix}")
+    # THE RIDGE IS THE ATTACHED CARD'S OWN, OR THE RUN STOPS BELOW. A synthetic
+    # run plants `SYNTHETIC_CARD`'s calibration and says so; a replay reads the
+    # card the cells were measured on out of plan.json; everything else is the
+    # live device or `--card`. `AR.RIDGE_BAND` stood here until 2026-09-03.
+    # Resolved BEFORE the provenance block so the block carries it.
+    ridge: RidgeBand | None = None
+    ridge_refusal = ""
+    ridge_is_hypothesis = False
+    try:
+        if args.synthetic:
+            ridge = resolve_ridge_band(SYNTHETIC_CARD, plan.dtype, planted=True)
+        elif card == NO_CARD and not args.run and not args.replay:
+            # A LAPTOP PLAN, nothing measured. Resolving the ridge from the
+            # attached card and refusing without one is right for a run; for
+            # a plan it refused before the plan rendered, so an operator could
+            # not read the design or its MDE until a card was already rented.
+            # The regime gate is shown against the same PLANTED band that
+            # --synthetic uses, said out loud below to be a hypothesis and not
+            # this box's ridge, and the run still refuses at the end. On a card
+            # this branch is never taken: the card's own ridge or a refusal.
+            ridge = resolve_ridge_band(SYNTHETIC_CARD, plan.dtype, planted=True)
+            ridge_is_hypothesis = True
+        elif args.replay:
+            recorded = replay_card(out_dir)
+            if not recorded and any(
+                    r.get("provenance") == "synthetic"
+                    for r in read_records(out_dir / "cells.jsonl")):
+                ridge = resolve_ridge_band(SYNTHETIC_CARD, plan.dtype, planted=True)
+            elif not recorded and card == NO_CARD:
+                raise CannotRunHere(
+                    f"{out_dir} records no card in plan.json and no card is "
+                    "attached, so the regime gate has no ridge to be re-scored "
+                    "against; pass --card '<the card the cells were measured on>'")
+            else:
+                ridge = resolve_ridge_band(recorded or card, plan.dtype)
+        else:
+            ridge = resolve_ridge_band(card, plan.dtype)
+    except CannotRunHere as exc:
+        ridge_refusal = str(exc)
+
     # PROVENANCE, built once and written into every artefact this run leaves.
     # None of the ten gaps-session scripts wrote a commit, a card or an
     # instrument, so not one of the 26 published reports can be attributed to a
     # code version (A5). `instrument` is the string `time_kernel` stamps on
     # every row it produces, so a reader can tell at a glance which apparatus
-    # made a number.
+    # made a number. `ridge` is the LOW end of the band the regime gate scored
+    # against, and `ridge_source` names the card and the file, or the refusal.
     prov = PV.provenance_block(instrument=timing.TIMING_BASIS,
                                warmup_ms=args.warmup,
-                               target_ms=args.cell_budget_ms)
+                               target_ms=args.cell_budget_ms,
+                               ridge=ridge.low if ridge else None,
+                               ridge_source=(
+                                   (f"PLANNING HYPOTHESIS, no card attached: the "
+                                    f"planted band [{ridge.low:.1f}, {ridge.high:.1f}] "
+                                    "that --synthetic uses; nothing may be scored "
+                                    "against it") if ridge_is_hypothesis else
+                                   (f"low end of {ridge.card}'s own band "
+                                    f"[{ridge.low:.1f}, {ridge.high:.1f}]: "
+                                    f"{ridge.source}")) if ridge
+                               else f"REFUSED: {ridge_refusal}")
 
     say = Report()
     say(f"# GROUP_SIZE_M sweep: is alpha a scalar?   ({git_head() or 'no git'})")
@@ -2093,10 +2322,27 @@ def _run(argv: list[str] | None = None) -> int:
             "rows come from a")
         say("*** stated law and exist to show the gates can see an effect and "
             "can miss its absence.")
+    if ridge_is_hypothesis:
+        say()
+        say("*** NO CARD ATTACHED. The regime gate below is scored against a "
+            "PLANNING HYPOTHESIS,")
+        say(f"*** the planted band [{ridge.low:.1f}, {ridge.high:.1f}] that "
+            "--synthetic uses, so the plan and its MDE can be read before a card")
+        say("*** is booked. It is not this box's ridge and nothing here may be "
+            "quoted; on a card the gate resolves the card's own ridge or refuses.")
     say()
 
-    ridge = AR.RIDGE_BAND
-    gates = preflight(plan, ridge[0])
+    if ridge is None:
+        say()
+        say(f"REFUSED. CANNOT RUN HERE: {ridge_refusal}")
+        _save(out_dir, say, prov)
+        # REFUSED (2): nothing was measured and no gate was scored, so the log
+        # carries no RESULT line and `classify_text` raises `NoGatesScored`,
+        # which is the REFUSED shape. A ridge from another machine would let
+        # the regime gate pass on cells it should refuse, which is the exact
+        # defect this refusal replaces.
+        return exit_codes.REFUSED
+    gates = preflight(plan, ridge.low, ridge.card)
     report_plan(say, plan, gates, ridge, args.warmup, args.trials)
     if any(g.ok is False for g in gates):
         say()
@@ -2141,7 +2387,10 @@ def _run(argv: list[str] | None = None) -> int:
              "routings": list(plan.routings), "seeds": plan.seeds,
              "passes": plan.passes, "fixed_tile": plan.fixed_tile,
              "warmup_ms": args.warmup, "cell_budget_ms": args.cell_budget_ms,
-             "trials": args.trials, "l2_flush": bool(args.l2_flush)}),
+             "trials": args.trials, "l2_flush": bool(args.l2_flush),
+             # The ceiling the regime gate was scored against, named, so a
+             # replay on another box re-scores against the same card.
+             "ridge_band": [ridge.low, ridge.high], "ridge_card": ridge.card}),
             indent=2))
         try:
             fresh, meta = measure(plan, args, out_dir, done)

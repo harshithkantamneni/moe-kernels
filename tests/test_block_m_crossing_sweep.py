@@ -8,8 +8,8 @@ would have caught:
 
   R1  a ridge asserted for one card multiplied by a bandwidth inherited from
       another, silently, whenever `load_measured` returned None or raised.
-  R2  the analysis crashing with a TypeError in the world the measured alphas
-      (0.92-1.02) actually describe, because "this tile never crosses" was a
+  R2  the analysis crashing with a TypeError in the world mixtral's measured
+      G=1 alphas (0.95-1.02) describe, because "this tile never crosses" was a
       None formatted with `:.0f` rather than an outcome with a sentence.
   R3  a one-sided gate 3 that passed for every alpha from 0.33 to 1.0, so all 41
       committed surface fits cleared it while not one was within 0.05 of the
@@ -108,9 +108,10 @@ RIDGE = 160.3
 BANDWIDTH = 4374.5
 REFIT = 0.558
 RETRACTED = 0.10
-#: The two worlds the MEASURED G=1 ladders describe (alpha 0.92-1.02 on both
-#: cards). At these values no tile in the sweep crosses, which is exactly where
-#: the report used to crash.
+#: The worlds mixtral's MEASURED G=1 ladders describe (alpha 0.95-1.02 on both
+#: cards; qwen2 and deepseek-v2-lite read 0.62-0.84 at G=1, so this is one
+#: model's regime, not every model's). At these values no tile in the sweep
+#: crosses, which is exactly where the report used to crash.
 NO_CROSSING_ALPHAS = (0.85, 0.90, 1.0)
 
 
@@ -239,9 +240,9 @@ def test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return():
 def test_the_worlds_the_measured_alphas_describe_write_a_report_instead_of_crashing(
         alpha, tmp_path):
     """`--self-test 0.90` and `--self-test 1.0` exited 1 with a TypeError at
-    the gate-3 provenance line, before report.json was written. The measured
-    G=1 alphas on both cards are 0.92-1.02, so the analysis crashed in exactly
-    the world the data points at."""
+    the gate-3 provenance line, before report.json was written. Mixtral's
+    measured G=1 alphas on both cards are 0.95-1.02, so the analysis crashed
+    in exactly the world that model's data points at."""
     rc, payload = run(["--self-test", str(alpha)], tmp_path)
     # A REPORT, and a code from the gates rather than from the crash. These
     # worlds falsify claims, so CLAIM_FAIL is the RESULT; what this test denies

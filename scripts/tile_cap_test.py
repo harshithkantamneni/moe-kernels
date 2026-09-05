@@ -9,48 +9,71 @@
     python scripts/tile_cap_test.py                     # the pod run, ~80 s of H200
     python scripts/tile_cap_test.py --control 128 --num-stages 3   # A100-safe control
 
-WHAT THIS TESTS. `cap = 2 BM / (alpha b)` -- the ceiling an M-tile height puts on
-arithmetic intensity -- on the one ladder in this study where `alpha` is cleanly
-identifiable. A tile that is memory bound at EVERY tread has no compute branch
-for the fit to run into and imports no alpha from another block size, and
-BLOCK_M=16 is the extreme case of that. Across all 26 published reports the
-FORCED block sizes are 32, 64, 128 and 256 and nothing else, so the formula has
-never been exercised at the bottom of its range, and that is what this buys. The
-experiment is worth the 80 seconds.
+WHAT THIS TESTS. The ceiling an M-tile height puts on arithmetic intensity, on
+the one ladder in this study where `alpha` is cleanly identifiable. The study
+writes that ceiling as `cap = 2 BM / (alpha b)`, and READ FROM A LADDER FIT that
+expression is NOT the ceiling: `LadderFit.alpha` is B/(A+B), which
+`moe/bench/ai_model.py` shows returns `(alpha_b + phi) / (1 + phi + delta)`
+(EXA) on the three-term byte ladder, so `2 BM / (alpha_fitted b)` is the exact
+ceiling times `1 + phi + delta`. That factor is a BRACKET here and not a number,
+because `alpha_a` (the activation-side miss fraction inside `phi`) has no
+measurement anywhere in this repository; C2 prints the bracket beside the cap
+and scores the LIN number, which is the HIGHER one and so the harder bar for a
+claim that the ceiling is low. A tile that is memory bound at EVERY tread has no
+compute branch for the fit to run into and imports no alpha from another block
+size, and BLOCK_M=16 is the extreme case of that. Across all 26 published
+reports the FORCED block sizes are 32, 64, 128 and 256 and nothing else, so the
+formula has never been exercised at the bottom of its range, and that is what
+this buys. The experiment is worth the 80 seconds.
 
 WHAT IT DOES NOT CARRY, AND AN EARLIER VERSION OF THIS HEADER SAID IT DID. The
 production claim. It is BLOCK_M=128 that carries that, and the demotion is not a
 judgement call -- it is the observed-tile data.
 
-THE OBSERVED-TILE DATA. `results/published/2026-09-01-nvidia_h200-alpha-0558/
-merged.csv` is the one published arm that RECORDS the tile vLLM chose
-(`tile_block_m`, with `tile_config_source` in {vllm_default, vllm_tuned}), 132
-distinct cells, rows per expert read as `load_mean_rows`:
+THE OBSERVED-TILE DATA, ON BOTH BASES. `results/published/2026-09-01-nvidia_h200-
+alpha-0558/merged.csv` is the one published arm that RECORDS the tile vLLM chose
+(`tile_block_m`, with `tile_config_source` in {vllm_default, vllm_tuned}). A cell
+is one (model, token count) under UNIFORM routing, 132 cells of 7 routing seeds
+each, 924 seed-rows. Two readings of rows per expert exist and they do not agree:
 
-    BLOCK_M    cells run multi-tile     max M-tiles per expert
-       16          0 of 24                      1
-       32          0 of  5                      1
-       64          0 of 16                      1
-      128         59 of 87                     32
+    BLOCK_M     load_mean_rows              load_max_rows (what production pads to)
+              multi-tile   max tiles     multi-tile cells   max tiles   seed-rows
+       16       0 of 24        1             1 of 24            2        1 of 168
+       32       0 of  5        1             0 of  5            1        0 of  35
+       64       0 of 16        1             2 of 16            2        5 of 112
+      128      59 of 87       32            66 of 87           34      455 of 609
 
-Read instead at the BUSIEST expert (`load_max_rows`) the only lines that move are
-16, where 1 of the 24 cells reaches 2 tiles, and 128, which goes to 65 of 87 and
-33 tiles. Both readings say the same thing about the tile under test.
+`load_max_rows` IS THE ONE PRODUCTION SEES: `moe_align_block_size` pads every
+expert to its own row count, so the launch grid holds the BUSIEST expert's tile
+count and the mean is a number about the routing histogram, not about what ran.
+A cell is counted multi-tile on that basis when ANY of its seven seeds needed a
+second tile; at the median seed the 128 line reads 65 of 87, which is the figure
+`scripts/h200_gaps_session.sh` carries. An earlier version of this table gave
+only the mean-rows column and read it as "16, 32 and 64 never run multi-tile",
+which the padded count refutes in isolated cells: BLOCK_M=16 reaches 2 tiles in
+one cell (qwen2 at T=64, one seed, busiest expert 18 rows) and BLOCK_M=64 in two.
+`OBSERVED_MULTI_TILE_MAX_ROWS` and `..._MEAN_ROWS` below carry both columns and
+tests/test_tile_cap.py recounts both from the CSV.
 
-WHY THAT RETIRES THE PRODUCTION FRAMING. The re-read term is `Q(n) = 1 + alpha
-(n - 1)`, which is exactly 1 at n = 1, so it only exists above one tile per
-expert. vLLM does pick 16 at small batch -- `get_default_config` returns it for
-M <= 32, and 24 of the 132 cells above took that ladder -- but at every batch
-where it picks 16 the expert holds ONE tile. The cap at 16 is therefore REAL and
-NEVER APPROACHED, and a cap that binds nothing is a fact about the formula, not
-about a shipped kernel. The same holds at 32 and 64.
+WHY THAT STILL RETIRES THE PRODUCTION FRAMING AT THIS TILE. The re-read term is
+`Q(n) = 1 + alpha (n - 1)`, which is exactly 1 at n = 1, so it only exists above
+one tile per expert. vLLM does pick 16 at small batch -- `get_default_config`
+returns it for M <= 32, and 24 of the 132 cells above took that ladder -- and in
+23 of those 24 the busiest expert holds ONE tile; in the 24th it holds two, once
+in seven seeds, so Q reaches 1 + alpha in 1 of 168 seed-rows and 1 in the rest.
+The cap at 16 is therefore real and reached for in ISOLATED CELLS, never as a
+regime, and a cap that binds in one seed-row of 168 is a fact about the formula,
+not about a shipped kernel. The same holds at 32 (never) and 64 (5 of 112).
 
 BLOCK_M=128 IS THE PRODUCTION REGIME, and `scripts/bm128_depth.py` is where its
-claim lives. It is the only tile height vLLM runs multi-tile at all, up to 32
-M-tiles per expert, and the only one whose cap and the ridge are close enough for
-the answer to be in doubt: that file computes cap 150.4 against a calibrated
-ridge of 145.8 on the A100 and 158.6 against 162.8 on the H200. Whether the cap
-matters in production is settled there, not here.
+claim lives. It is the only tile height vLLM runs multi-tile as a regime, up to
+34 M-tiles per expert on the padded count (32 on mean rows), and the only one
+whose cap and the ridge are close enough for the answer to be in doubt. The caps
+that file used to print, 150.4 against a calibrated ridge of 145.8 on the A100
+and 158.6 against 162.8 on the H200, were LIN caps, and that straddle DOES NOT
+EXIST: read through (EXA) at the fused layer's own `phi` they are 135.4 and
+130.7, both UPPER bounds (delta taken as zero) and both below their own card's
+ridge. Whether the cap matters in production is settled there, not here.
 
 THE SENTENCE THIS FILE WAS BUILT TO EARN, and the half of it that survives.
 `docs/FINDINGS.md` ("Three readouts from one sweep", which then lists four -- the
@@ -76,8 +99,10 @@ them are comparisons ACROSS tiles:
     those are the same setting, the ratio is exactly 1.000 against a 1.50 gate,
     and the FAIL is arithmetic, not evidence. Run and confirmed, 2026-09-01:
     `ms(BM=16) / ms(BM=16) = 1.000x`.
-  * GATE 3 asks whether the fitted re-read fraction exceeds 0.33, and on a
-    one-tile run it goes UNDECIDED with "No ladder had two memory-bound treads,
+  * GATE 3 asks whether the fitted re-read fraction's interval overlaps the
+    pre-registered `ALPHA_BAND` in BOTH directions (its retired one-sided 0.33
+    threshold is printed beside the verdict, not scored), and on a one-tile
+    run it goes UNDECIDED with "No ladder had two memory-bound treads,
     so no block size measured the re-read fraction". That is not a shortage of
     treads: BLOCK_M=16 is memory bound at EVERY tread and is the best alpha
     estimator in the study. It is that the compute branch membership is decided
@@ -102,7 +127,9 @@ WHAT THE SIBLING'S GATE 4 STILL CANNOT DO, and why this is not a duplicate of
 it. Its bracketing horizon is `2 x` the crossing the retracted alpha predicts
 for the block size under test. At BLOCK_M=64 that is a real number. At
 BLOCK_M=16 the retracted alpha predicts NO crossing either -- its ceiling is
-160.0 against a ridge of 160.3 -- so `crossing_rows` is None, the horizon
+160.0 against the H200's own calibrated ridge of 162.8 (the 160.3 the module
+band starts at is no card's calibration; on the A100's 145.8 that same ceiling
+sits ABOVE the ridge) -- so `crossing_rows` is None, the horizon
 collapses to `2 x 0`, and every depth clears it. The gate that decides whether
 an absence is bracketed would pass after a single tread. `retracted_horizon_
 tiles` below asks the question that threshold is actually about instead.
@@ -111,8 +138,10 @@ WHICH CONTROL, AND WHY 256. At alpha=0.558 only 128 and 256 have an AI cap above
 the ridge, so only they can cross and only they can be a control. 256's crossing
 lands in tread 1, where `Q = 1`, at BOTH ends of the ridge band AND under the
 retracted alpha -- r = 160.3 and 176.2 rows per expert, both inside one 256-row
-tile. Its crossing therefore does not depend on the parameter under test. 128's
-lands in tread 2 at ridge 160.3 and tread 3 at 176.2, moving with alpha, which
+tile, and so is the H200's own 162.8 and the A100's 145.8 (the band is the one
+`--self-test` pins; see requirement 3 below for why it is no card's own). Its
+crossing therefore does not depend on the parameter under test. 128's lands in
+tread 2 at ridge 160.3 or 162.8 and tread 3 at 176.2, moving with alpha, which
 makes a control whose own behaviour is part of the argument.
 
 The price of 256 is shared memory, and it is NOT the number an earlier draft of
@@ -139,8 +168,11 @@ makes a PASS mean anything.
   3. THE RETRACTED WORLD MUST HAVE BEEN GIVEN ITS CHANCE TO TRIP GATE C1, and
      C1 asks two things with two different horizons. Both are fractions of
      `ridge x bandwidth`. At alpha=0.10 the cap tile's ceiling is 160.0 Op/B
-     against a ridge of 160.3 to 176.2, so that world does eventually trip
-     both, and the depths at which it does are:
+     against a ridge of 160.3 to 176.2 -- the band `--self-test` PINS, which is
+     the sibling module's constant and no card's own calibration (H200 162.8,
+     A100 145.8; a measured run resolves the attached card's and the two
+     horizons move with it) -- so that world does eventually trip both, and
+     the depths at which it does are:
 
          condition                    threshold   ridge 160.3   ridge 176.2
          discriminating (midpoint)      0.589      13 tiles      13 tiles
@@ -386,20 +418,46 @@ DEFAULT_CONTROL = 256
 #: WHICH TILE HEIGHTS vLLM ACTUALLY RUNS MULTI-TILE, counted from the one
 #: published arm that records the tile it chose:
 #: `results/published/2026-09-01-nvidia_h200-alpha-0558/merged.csv`, column
-#: `tile_block_m` where `tile_config_source` is vllm_default or vllm_tuned, 132
-#: distinct cells, rows per expert read as `load_mean_rows`.
+#: `tile_block_m` where `tile_config_source` is vllm_default or vllm_tuned. A
+#: cell is one (model, num_tokens) under uniform routing; 132 cells, 7 routing
+#: seeds each. Both readings of rows per expert are carried, because the first
+#: version of this table carried only the mean and read "never" off it.
 #:
-#: `(cells run multi-tile, cells, max M-tiles per expert)`. This is the table
-#: that demotes this experiment from a production claim to a formula test: the
-#: re-read term `Q(n) = 1 + alpha (n - 1)` is exactly 1 at one tile, so a cap at
-#: a tile height that never runs multi-tile is real and never approached. A tile
-#: height ABSENT from this dict was not observed at all, and the report says
-#: "not observed" rather than assuming either answer.
-OBSERVED_MULTI_TILE: dict[int, tuple[int, int, int]] = {
+#: `(cells run multi-tile, cells, max M-tiles per expert)`, rows per expert read
+#: as `load_mean_rows`. The mean is a fact about the routing histogram, not
+#: about the launch, and it is kept because it is the basis the earlier count
+#: and `scripts/bm128_roofline.py` quote.
+OBSERVED_MULTI_TILE_MEAN_ROWS: dict[int, tuple[int, int, int]] = {
     16: (0, 24, 1),
     32: (0, 5, 1),
     64: (0, 16, 1),
     128: (59, 87, 32),
+}
+
+#: The same triple read as `load_max_rows`, the BUSIEST expert, which is what
+#: `moe_align_block_size` pads to and therefore the tile count the launch grid
+#: holds: THIS is the basis production sees. A cell counts as multi-tile when
+#: ANY of its seven seeds needed a second tile. This is the table that demotes
+#: this experiment from a production claim to a formula test: the re-read term
+#: `Q(n) = 1 + alpha (n - 1)` is exactly 1 at one tile, and at 16 a second tile
+#: appears in one cell, one seed. A tile height ABSENT from this dict was not
+#: observed at all, and the report says "not observed" rather than assuming
+#: either answer.
+OBSERVED_MULTI_TILE_MAX_ROWS: dict[int, tuple[int, int, int]] = {
+    16: (1, 24, 2),
+    32: (0, 5, 1),
+    64: (2, 16, 2),
+    128: (66, 87, 34),
+}
+
+#: `(seed-rows run multi-tile, seed-rows)` on `load_max_rows`, the per-seed
+#: count behind the cell count above: the isolated cells at 16 and 64 are 1 of
+#: 168 and 5 of 112 seed-rows, and 128's regime is 455 of 609.
+OBSERVED_SEED_ROWS_MAX_ROWS: dict[int, tuple[int, int]] = {
+    16: (1, 168),
+    32: (0, 35),
+    64: (5, 112),
+    128: (455, 609),
 }
 
 
@@ -410,18 +468,43 @@ def observed_note(block_m: int) -> str:
     observed" are different statements and the second must never print as the
     first: the whole demotion rests on this count, so a tile height nobody
     measured has to say so.
+
+    BOTH BASES ARE PRINTED AND THE PADDED ONE DECIDES THE VERB. The first
+    version of this note printed the mean-rows count alone and said "never
+    reached for in production" of a tile that fires on the padded count in one
+    cell; that kept the guarantee above and broke a second one, which is that
+    "no cell ran multi-tile" must be true on the count the launch actually
+    uses. So a tile height with any multi-tile cell on `load_max_rows` says
+    "isolated cells", one with none says "never", and both print the mean-rows
+    count beside it so the two readings cannot be confused again.
     """
-    seen = OBSERVED_MULTI_TILE.get(block_m)
-    if seen is None:
+    seen_max = OBSERVED_MULTI_TILE_MAX_ROWS.get(block_m)
+    seen_mean = OBSERVED_MULTI_TILE_MEAN_ROWS.get(block_m)
+    if seen_max is None or seen_mean is None:
         return (f"BLOCK_M={block_m} does not appear in the observed-tile arm, "
                 "so whether vLLM ever runs it multi-tile is UNMEASURED here")
-    multi, cells, top = seen
+    multi, cells, top = seen_max
+    mean_multi, _, mean_top = seen_mean
+    seed_multi, seed_rows = OBSERVED_SEED_ROWS_MAX_ROWS[block_m]
+    mean_clause = (f"on mean rows {mean_multi} of {cells} cells, up to "
+                   f"{mean_top} tile{'s' if mean_top != 1 else ''}")
     if multi == 0:
         return (f"vLLM ran BLOCK_M={block_m} as ONE M-tile per expert in "
-                f"{cells} of {cells} observed cells, where Q(n) = 1 exactly, so "
-                "this ceiling is never reached for in production")
+                f"{cells} of {cells} observed cells on the padded count "
+                f"(load_max_rows, {seed_rows} seed-rows; {mean_clause}), where "
+                "Q(n) = 1 exactly, so this ceiling is never reached for in "
+                "production")
+    if seed_multi * 10 < seed_rows:
+        return (f"vLLM ran BLOCK_M={block_m} multi-tile in ISOLATED CELLS: "
+                f"{multi} of {cells} observed cells on the padded count "
+                f"(load_max_rows), {seed_multi} of {seed_rows} seed-rows, up to "
+                f"{top} M-tiles per expert; {mean_clause}. Q(n) = 1 everywhere "
+                "else, so this ceiling is reached for in production only there "
+                "and never as a regime")
     return (f"vLLM ran BLOCK_M={block_m} multi-tile in {multi} of {cells} "
-            f"observed cells, up to {top} M-tiles per expert")
+            f"observed cells on the padded count (load_max_rows; {seed_multi} "
+            f"of {seed_rows} seed-rows), up to {top} M-tiles per expert; "
+            f"{mean_clause}")
 
 #: C1's threshold, and the same number gate 4 of the parent sweep uses, so "near
 #: the roof" means one thing across the two scripts. The model puts the refit
@@ -517,8 +600,10 @@ PUBLISHED_CELL_SPREAD = 0.015
 #: The alpha whose world makes C2 FAIL, and the reason a third world exists.
 #: See `SELF_TEST_WORLDS`: at 0.558 C2 passes and at 0.10 the memory branch runs
 #: parallel to the compute branch so the fit refuses to name an alpha at all.
-#: 0.14 puts `cap = 2*16/(0.14*2) = 114.3` Op/B, which is 0.713 of ridge 160.3
-#: -- above the 0.589 discriminator, so C2 FAILS -- while `ridge/cap = 1.40`
+#: 0.14 puts `cap = 2*16/(0.14*2) = 114.3` Op/B, which is 0.713 of the 160.3
+#: the self-test pins (a module constant, not a card's ridge; the verdict is
+#: the same at 162.8) -- above the 0.589 discriminator, so C2 FAILS -- while
+#: `ridge/cap = 1.40`
 #: sits outside the 15% parallel-branch tolerance, so the fit still identifies
 #: it. Derived once, here, rather than tuned until the world came out right.
 C2_FAIL_ALPHA = 0.14
@@ -758,8 +843,9 @@ def retracted_horizon_tiles(block_m: int, *, retracted: float, ridge: float,
 
     The parent sweep's `Bracketing` derives its horizon from the retracted
     world's CROSSING, which is the right quantity at BLOCK_M=64 and a VACUOUS
-    one here: at BLOCK_M=16 the retracted alpha predicts no crossing either
-    (cap 160.0 against ridge 160.3), `crossing_rows` is None, its horizon
+    one here: at BLOCK_M=16 the retracted alpha predicts no crossing either on
+    the H200 (cap 160.0 against its own 162.8, or the pinned 160.3),
+    `crossing_rows` is None, its horizon
     collapses to `2 * 0.0` and every depth clears it. A check that examined
     nothing reports no failures, so this asks the question the threshold is
     actually about instead.
@@ -1344,8 +1430,12 @@ def gate_c2_measured_cap(fit, corrected: float | None, *, cap_tile: int,
 
     THE STRUCTURAL THRESHOLD DOES NOT DISCRIMINATE, and the gate says so rather
     than taking credit for it. "No crossing exists" is `cap < ridge`, i.e.
-    `alpha > 2 BM / (b ridge) = 0.0998` at ridge 160.3, and the retracted
-    alpha=0.10 clears that by 0.2%. Both worlds predict no crossing. So the gate
+    `alpha > 2 BM / (b ridge)`, which is 0.0983 at the H200's own 162.8 and
+    0.1097 at the A100's 145.8 (0.0998 at the 160.3 the self-test pins, a
+    module constant that is no card's calibration). The retracted alpha=0.10
+    clears the H200's by 1.7% and the A100's not at all, so on the H200 both
+    worlds predict no crossing and on the A100 the retracted one predicts a
+    crossing; the printed NOTE beside the plan says which applies. So the gate
     is the MIDPOINT of the two worlds' predicted `cap/ridge`, computed from the
     two registered alphas at the ridge in use, and the structural comparison is
     printed beside it as the weaker statement it is.
@@ -1697,10 +1787,15 @@ def prediction_lines(cfg, *, cap_tile: int, control_tile: int, alpha: float,
                "tests the CAP FORMULA at this tile height. BLOCK_M=128 is the "
                "regime that carries the production claim and "
                "scripts/bm128_depth.py is where it is asked.")
-    out.append("  NOT RUN: the parent sweep's gate 3 (alpha against a 0.33 "
-               "midpoint) is superseded here by C2, which fits the same "
-               "re-read fraction and then does the thing the cap claim needs: "
-               "converts it to a ceiling and compares that with the ridge.")
+    out.append("  NOT RUN: the parent sweep's gate 3 (the fitted alpha's "
+               f"interval against ALPHA_BAND [{SWEEP.ALPHA_BAND[0]}, "
+               f"{SWEEP.ALPHA_BAND[1]}] in BOTH directions; its retired "
+               f"one-sided {SWEEP.GATE3_ALPHA_DISCRIMINATOR:.2f} threshold is "
+               "printed there, not scored) is superseded here by C2, which "
+               "fits the same re-read fraction and then does the thing the "
+               "cap claim needs: converts it to a ceiling, prints the EXA "
+               "factor that ceiling is high by, and compares it with the "
+               "ridge.")
     return out
 
 
@@ -2268,9 +2363,13 @@ def build_parser() -> argparse.ArgumentParser:
                          "what the fallback ladder holds across the decode "
                          "range, so it is the setting the tile under test "
                          "actually ships with. alpha is measured AT this "
-                         "swizzle: it runs 0.84/0.73/0.68/0.67 at G=1/8/16/64 "
-                         "on both cards, so the ceiling 2 BM/(alpha b) moves "
-                         "with this number and the cap claim is a claim at G=1")
+                         "swizzle and the ceiling 2 BM/(alpha b) moves with "
+                         "it, so the cap claim is a claim at G=1. The per-G "
+                         "medians once quoted here (0.84/0.73/0.68/0.67 at "
+                         "G=1/8/16/64 'on both cards') were POOLED, unpaired "
+                         "medians over different fits; the one matched A100 "
+                         "cell moves the other way, so no direction in G is "
+                         "established and none is assumed here")
     ap.add_argument("--block-n", type=int, default=SWEEP.FIXED["BLOCK_SIZE_N"],
                     help="the N tile, applied to BOTH settings. An extra M-tile "
                          "re-reads activations as well as weights in the ratio "

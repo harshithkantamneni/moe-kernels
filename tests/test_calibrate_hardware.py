@@ -59,14 +59,25 @@ def calibration(**over) -> Calibration:
                             pattern("copy", 4100.0), pattern("write", 3900.0)),
         gemm_shape=(8192, 8192, 8192),
         gemm_clock_mhz=1755,
+        # The idle pair the retired flag was built from stays in the record;
+        # the UNDER-LOAD verdict beside it is what `not_throttled` scores.
         clocks={"sm_start_mhz": 1755, "sm_end_mhz": 1750, "temp_start_c": 40,
-                "temp_end_c": 45, "throttled": False},
+                "temp_end_c": 45, "throttled": False,
+                "sm_clock_load_mhz": 1755.0, "reference_clock_mhz": 1755.0,
+                "clock_level_ok": True, "clock_drift_ok": True},
         settle={"settled": True, "final_mhz": 1755},
         gemm_clock={"median_mhz": 1755, "samples": 5, "spread_pct": 0.4,
                     "after_idle_mhz": 1980},
     )
     fields.update(over)
     return Calibration(**fields)
+
+
+#: The shape `calibrate()` wrote until the under-load verdict landed: the
+#: idle-instant pair and the retired `throttled` flag, nothing sampled under
+#: load. What every committed calibration in this tree carries today.
+LEGACY_CLOCKS = {"sm_start_mhz": 1755, "sm_end_mhz": 1200, "temp_start_c": 40,
+                 "temp_end_c": 85, "drift_pct": -31.6, "throttled": True}
 
 
 #: The derived pin rate for an H200: 3201 MHz x 2 x 6144 bits / 8.
@@ -195,11 +206,96 @@ def test_a_clock_that_moved_across_the_patterns_fails():
     assert verdicts(cal)["clock_steady_across_patterns"] == EX.FAIL
 
 
-def test_a_throttling_card_fails_its_claim():
-    cal = calibration(clocks={"sm_start_mhz": 1755, "sm_end_mhz": 1200,
-                              "temp_start_c": 40, "temp_end_c": 85,
-                              "throttled": True})
-    assert verdicts(cal)["not_throttled"] == EX.FAIL
+def test_a_card_below_its_reference_clock_fails_the_throttle_claim_on_level():
+    """LEVEL is the flag: the clock sampled WHILE the GEMM ran against the
+    clock the roof is quoted at. The gate text names it and the numbers."""
+    cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
+                              "sm_clock_load_mhz": 1400.0,
+                              "reference_clock_mhz": 1755.0,
+                              "clock_level_ok": False, "clock_drift_ok": True})
+    gates = {name: (verdict, detail)
+             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+    verdict, detail = gates["not_throttled"]
+    assert verdict == EX.FAIL
+    assert "scored LEVEL (clock_level_ok=False)" in detail
+    assert "1400.0 MHz under load against reference 1755.0 MHz" in detail
+    assert "ceilings are low" in detail
+    # The retired flag is NOT what decided it: it says the opposite here.
+    assert cal.clocks["throttled"] is False
+
+
+def test_the_under_load_verdict_passes_a_card_at_its_reference_clock():
+    """The PASS branch of the same flag, with the retired flag planted TRUE so
+    that a gate still reading `throttled` would fail here."""
+    cal = calibration(clocks={**LEGACY_CLOCKS, "clock_level_ok": True,
+                              "clock_drift_ok": True, "sm_clock_load_mhz": 1755.0,
+                              "reference_clock_mhz": 1755.0})
+    gates = {name: (verdict, detail)
+             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+    verdict, detail = gates["not_throttled"]
+    assert verdict == EX.PASS and "scored LEVEL (clock_level_ok=True)" in detail
+    assert cal.clocks["throttled"] is True
+
+
+def test_drift_is_scored_only_when_level_has_no_reference():
+    """A calibration that sampled under load but had no reference to level
+    against still has DRIFT, and the gate says that is what it scored."""
+    for drift, want in ((True, EX.PASS), (False, EX.FAIL)):
+        cal = calibration(clocks={**LEGACY_CLOCKS, "clock_level_ok": None,
+                                  "clock_drift_ok": drift,
+                                  "sm_clock_start_mhz": 1755, "sm_clock_end_mhz": 1600})
+        gates = {name: (verdict, detail)
+                 for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+        verdict, detail = gates["not_throttled"]
+        assert verdict == want, drift
+        assert f"scored DRIFT (clock_drift_ok={drift})" in detail
+        assert "LEVEL undetermined" in detail
+
+
+def test_a_calibration_that_predates_the_under_load_verdict_is_refused_not_scored():
+    """The legacy shape: only the idle-instant pair and the retired flag.
+
+    The gate scored `clocks["throttled"]` until 2026-09-03, and that field is
+    `timing.clock_drift` over two samples taken between loads: it detects
+    whether the first sample caught the idle boost, not throttling. The gate
+    now REFUSES it (UNKNOWN, with the reason), and UNKNOWN counts against a
+    CLAIM gate, so a sound-looking legacy calibration exits CLAIM_FAIL rather
+    than DONE. Both legacy values of the retired flag land the same way,
+    because neither is evidence.
+    """
+    for throttled in (True, False):
+        cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": throttled})
+        gates = {name: (verdict, detail)
+                 for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+        verdict, detail = gates["not_throttled"]
+        assert verdict == EX.UNKNOWN, throttled
+        assert "predates the under-load clock verdict" in detail
+        assert "NOT scored" in detail
+        assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) \
+            == EX.CLAIM_FAIL
+
+
+def test_flags_present_but_none_are_unknown_not_passed():
+    """No usable under-load sample is not a pass, and the retired flag is not
+    reached for as a substitute."""
+    cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
+                              "clock_level_ok": None, "clock_drift_ok": None})
+    verdict, detail = CH.under_load_clock_verdict(cal)
+    assert verdict == EX.UNKNOWN
+    assert "both None" in detail and "NOT substituted" in detail
+
+
+def test_the_under_load_verdict_is_read_from_the_gemm_clock_block_too():
+    """`calibrate.py` may carry the loaded-clock record inside the GEMM's own
+    `LoadedClock` block rather than beside the idle pair; both are read, in a
+    stated order, and the detail names which."""
+    cal = calibration(clocks={**LEGACY_CLOCKS},
+                      gemm_clock={"median_mhz": 1755, "samples": 5, "spread_pct": 0.4,
+                                  "after_idle_mhz": 1980, "clock_level_ok": False,
+                                  "clock_drift_ok": True, "sm_clock_load_mhz": 1755.0,
+                                  "reference_clock_mhz": 1900.0})
+    verdict, detail = CH.under_load_clock_verdict(cal)
+    assert verdict == EX.FAIL and "from gemm_clock." in detail
 
 
 def test_every_gate_prints_one_result_line_and_nothing_else_does(capsys):

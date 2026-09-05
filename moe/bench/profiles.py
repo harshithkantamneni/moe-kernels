@@ -134,14 +134,64 @@ SKEW_SWEEP = (
 COARSE_BACKBONE: tuple[int, ...] = (
     1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192)
 
-#: The H200's ridge is a BAND, not a number: three calibrations of the same card
-#: measured 160.3, 162.8 and 176.2 FLOP/byte, because achieved bf16 moved 9.9%
-#: while bandwidth reproduced to 0.06%. See the ridge-band section of
-#: docs/FINDINGS.md, which also shows the spread is not a clock artefact.
-#:
-#: So "the predicted crossing" is itself an interval, and a grid that brackets
-#: only its midpoint brackets neither end of it.
-H200_RIDGE_BAND: tuple[float, float] = (160.3, 176.2)
+#: THE WITHDRAWN BAND THAT USED TO SIT HERE, named so it cannot come back
+#: unrecognised. `H200_RIDGE_BAND = (160.3, 176.2)` was carried as "the
+#: H200's ridge is a band" until 2026-09-03. Its two ends are two calibrations
+#: of the same card disagreeing about the COMPUTE term by 9.9% while bandwidth
+#: reproduced to 0.06%: 160.3 is calibration md5 `4d84542b` (701.6 TFLOP/s over
+#: 4377.2 GB/s) and 176.2 is 770.9 over 4374.5. That is a measurement of how
+#: badly the compute ceiling reproduces, not the width of any device's ridge,
+#: and it was withdrawn from all 26 published reports on 2026-09-02 by
+#: `scripts/rescore_published_reports.py` (`WITHDRAWN_RIDGE_WHY`). Nothing
+#: here scores against it any more; `calibrated_ridge_band` below is where a
+#: grid gets its ends.
+WITHDRAWN_RIDGE_BAND_WHY = (
+    "160.3-176.2 FLOP/byte is the gap between two H200 calibrations' compute "
+    "terms (md5 4d84542b at the low end), withdrawn 2026-09-02; it is no "
+    "card's ridge and no grid is placed from it")
+
+
+def calibrated_ridge_band(dtype: str = "bf16") -> tuple[float, float]:
+    """The lowest and highest ridge among the COMMITTED calibrations, resolved
+    through `roofline`, or a refusal.
+
+    WHAT IT IS. One card, one ridge: `peak(dtype) / bandwidth` off that card's
+    own `moe/bench/hardware/measured_<card>.yaml`, the file
+    `scripts/calibrate_hardware.py` wrote on that device. A profile is written
+    on a laptop and run on whichever card is rented, so the grid it carries has
+    to bracket the crossing on EVERY card the study has calibrated; the band
+    is therefore the span of those cards' own ridges (A100 145.8 to H200 162.8
+    at bf16 as of 2026-09-03), each end a number with a file behind it.
+
+    WHAT FAILURE IT PREVENTS. The band used to be the constant above, which
+    belonged to no card, and `crossing_grid` defaulted to it, so the profile's
+    dense region was placed from a withdrawn number with nothing in the output
+    saying so. This function reads files, and a card added to `hardware/`
+    moves the band without anyone remembering to edit a literal.
+
+    REFUSES rather than defaults: no calibration with a verified `dtype` peak
+    means no band, and the caller gets a `LookupError` naming the directory
+    instead of a grid placed from a guess.
+    """
+    from . import roofline
+
+    ridges: dict[str, float] = {}
+    for stem in roofline.available_profiles():
+        if not roofline.is_measured_profile(stem):
+            continue
+        try:
+            hw = roofline.load_hardware(stem)
+            ridges[stem] = hw.ridge_point(dtype)
+        except (FileNotFoundError, ValueError, KeyError,
+                roofline.UnverifiedHardware):
+            continue
+    if not ridges:
+        raise LookupError(
+            f"no committed calibration in {roofline.HARDWARE_DIR} carries a "
+            f"verified {dtype} peak, so there is no ridge to place a crossing "
+            "grid from. Run scripts/calibrate_hardware.py on the device and "
+            "commit its measured_*.yaml; nothing here substitutes a constant.")
+    return (min(ridges.values()), max(ridges.values()))
 
 #: How far past the predicted band the dense region runs, as a multiple of the
 #: prediction. Not symmetric, and the asymmetry is measured rather than chosen:
@@ -195,26 +245,33 @@ def _merge_grids(*groups: tuple[int, ...]) -> tuple[int, ...]:
 
 
 def crossing_grid(models: tuple[str, ...],
-                  ridge_band: tuple[float, float] = H200_RIDGE_BAND,
+                  ridge_band: tuple[float, float] | None = None,
                   dtype: str = "bf16",
                   backbone: tuple[int, ...] = COARSE_BACKBONE,
                   window: tuple[float, float] = CROSSING_WINDOW,
                   per_octave: int = POINTS_PER_OCTAVE) -> tuple[int, ...]:
     """The backbone, plus a `2^(1/per_octave)` ladder over the crossing region.
 
-    Placed from `ridge.crossing_batch` at BOTH ends of the ridge band rather
+    Placed from `ridge.crossing_batch` at BOTH ends of `ridge_band` rather
     than hardcoded, so the grid follows the models and the calibration instead
     of a table someone has to remember to edit. Change the band or the model set
     and the extra points move.
 
+    `ridge_band` HAS NO DEFAULT. It used to default to the withdrawn
+    `(160.3, 176.2)` (see `WITHDRAWN_RIDGE_BAND_WHY`), which placed the dense
+    region from a number belonging to no card. A caller states the band, in
+    practice `calibrated_ridge_band()`, and a call with `models` and no band
+    is refused with a `TypeError` naming that function.
+
     THE TOP OF THE RANGE IS NOT SET BY THE WINDOW. An octave ladder's highest
     measurable slope sits at its top point over sqrt(2), so the published grid,
-    ending at 8192, has exactly one slope point above DeepSeek-V3's predicted
-    band: 5793 against a band top of 5638, a 2.7% margin and nothing beyond it.
-    Any crossing above 5793 is invisible to it, and DeepSeek-V3's published
-    one-stage bf16 crossings are 6315 and 6446, above that line, while its fp8
-    twin has NO crossing at all under any filter, its slope peaking at 0.497 at
-    T=8192. The grid stopped before the transition.
+    ending at 8192, has exactly one slope point above DeepSeek-V3's prediction
+    at the H200's own ridge: 5793 against 5210 (`2R/b` at 162.8 FLOP/byte), an
+    11% margin and nothing beyond it. Any crossing above 5793 is invisible to
+    it, and DeepSeek-V3's published one-stage bf16 crossings are 6315 and 6446,
+    above that line, while its fp8 twin has NO crossing at all under any
+    filter, its slope peaking at 0.497 at T=8192. The grid stopped before the
+    transition.
 
     So the dense region runs past the band rather than to it. The shortest of
     `per_octave` interleaved ladders tops out a factor
@@ -222,10 +279,10 @@ def crossing_grid(models: tuple[str, ...],
     `2^(((per_octave-1)/per_octave) + 1/2)` times the highest prediction gives
     EVERY ladder a slope above the band. That is then rounded up to a whole
     power of two, which sounds cosmetic and is not: it is what gives ladder 0 a
-    slope above the whole WINDOW rather than 2.7% above the band, and ladder 0
-    is the powers-of-two grid the published arms ran and the one a new arm has
-    to stay comparable with. The offset ladders reach further for free, since
-    they end higher; interleaving buys reach as well as precision.
+    slope above the whole WINDOW rather than 11% above the prediction, and
+    ladder 0 is the powers-of-two grid the published arms ran and the one a new
+    arm has to stay comparable with. The offset ladders reach further for free,
+    since they end higher; interleaving buys reach as well as precision.
 
     Anchored on exact powers of two (`2^(k/per_octave)` for integer k), which is
     what makes residue class 0 the powers-of-two grid itself, so one of the
@@ -236,6 +293,12 @@ def crossing_grid(models: tuple[str, ...],
         raise ValueError(f"per_octave must be at least 1, got {per_octave}")
     if not models:
         return _merge_grids(backbone)
+    if ridge_band is None:
+        raise TypeError(
+            "crossing_grid needs a ridge_band to place the dense region from; "
+            "it no longer defaults to the withdrawn (160.3, 176.2). Pass "
+            "calibrated_ridge_band(dtype), which reads the committed "
+            "calibrations, or a band you can name a file for.")
 
     lo_ridge, hi_ridge = min(ridge_band), max(ridge_band)
     lowest = min(crossing_batch(m, lo_ridge, dtype) for m in models)
@@ -310,9 +373,19 @@ def octave_ladders(token_counts: tuple[int, ...],
 
 #: Token grid for the `crossing-uniform` profile, built at import so the cost is
 #: visible in a dry run rather than discovered on a rented box.
+#:
+#: THE BAND IS READ FROM THE COMMITTED CALIBRATIONS AT IMPORT, through
+#: `roofline`, and the import REFUSES if none carries a bf16 peak. That is
+#: deliberate: the alternative was a literal, and the literal this replaced
+#: belonged to no card. The two files behind it today are
+#: `measured_nvidia_a100_sxm4_80gb.yaml` (145.8) and `measured_nvidia_h200.yaml`
+#: (162.8); the grid brackets the crossing at both, and a card outside that
+#: span is not bracketed until its own calibration is committed.
 CROSSING_MODELS: tuple[str, ...] = (
     "mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite", "deepseek-v3")
-CROSSING_TOKENS: tuple[int, ...] = crossing_grid(CROSSING_MODELS)
+CROSSING_RIDGE_BAND: tuple[float, float] = calibrated_ridge_band("bf16")
+CROSSING_TOKENS: tuple[int, ...] = crossing_grid(
+    CROSSING_MODELS, ridge_band=CROSSING_RIDGE_BAND)
 
 #: Shapes that actually get served, each paired with the TP=1 control it is a
 #: shard of. The controls are not padding: the whole question is whether moving
@@ -436,10 +509,10 @@ PROFILES: dict[str, Profile] = {
     #    16384 so every interleaved ladder reaches past it.
     # 2. THE REPLICATES. Three seeds is not enough: qwen2's crossing moves 1.39x
     #    across the three (593 / 779 / 824), traced to a SINGLE point at T=512
-    #    where throttling dropped one of two replicate rows. Seven seeds survive
-    #    the 33% throttle exclusion that arm saw near the crossing with four or
-    #    five rows still standing, which is more than the current profile starts
-    #    with.
+    #    where the `throttled` flag (the legacy idle-boost catch, see 4 below)
+    #    dropped one of two replicate rows. Seven seeds survive the 33%
+    #    exclusion that arm saw near the crossing with four or five rows still
+    #    standing, which is more than the current profile starts with.
     # 3. THE POOLING. `2R/b` describes uniform routing; under skew the busy
     #    experts are compute-bound while the quiet ones are still memory-bound AT
     #    THE SAME BATCH, so there is no single crossing to find. Pooling the
@@ -455,8 +528,11 @@ PROFILES: dict[str, Profile] = {
     #    The one mode kept is L2-WARM eager, not the L2-cold eager basis every
     #    crossing in docs/FINDINGS.md is quoted on, and that is a correction
     #    rather than a preference. On the canonical bf16 pool, under uniform
-    #    routing at ridge 160.3, eager only, how many of the sixteen
-    #    (model x implementation) cells report a crossing at all:
+    #    routing, eager only, how many of the sixteen (model x implementation)
+    #    cells report a crossing at all (a MEASURED crossing is where the slope
+    #    passes 0.5, so this count does not depend on the ridge: it reads the
+    #    same at the H200's own 162.8 as it did at the withdrawn 160.3 it was
+    #    first counted at, checked 2026-09-03):
     #
     #        basis        five-stage spans   one-stage spans
     #        L2-cold           6 of 8             3 of 8
@@ -467,12 +543,22 @@ PROFILES: dict[str, Profile] = {
     #    extension was built for. A profile that runs cold only would rent a box
     #    to produce the emptier of the two tables.
     #
-    #    THE CAUSE IS NOT CACHE. The flush is a 256 MB read run between every
-    #    pair of timed iterations, thousands of times per row, and that is
-    #    sustained load: it holds the clocks up, `T.clock_drift` sees the drift
-    #    and sets `throttled`, and `crossing.timed_rows` then drops exactly the
-    #    replicates that bracket the crossing. Same pool, same slice, share of
-    #    eager rows carrying `throttled`:
+    #    THE CAUSE IS NOT CACHE, AND IT IS NOT THROTTLING EITHER. The flush is
+    #    a 256 MB read run between every pair of timed iterations, thousands of
+    #    times per row, and that is sustained load: it pulls the SM clock from
+    #    its idle boost to its loaded level and holds it there. The `throttled`
+    #    column those rows carry is the legacy `T.clock_drift` flag: two
+    #    idle-instant samples, one before and one after the cell, fired on a
+    #    >5% DROP. What it detected was the START sample catching the idle
+    #    boost before the flush load settled the clock, not a card throttling
+    #    (`timing.py`, "CLOCKS ARE READ UNDER LOAD": flagged and unflagged
+    #    replicates of one cell timed at ratio 0.998 with identical end
+    #    clocks). `time_kernel` now samples the clock under load and sets
+    #    LEVEL against the calibration's reference clock and DRIFT in both
+    #    directions; nothing in this profile reads the old flag. But
+    #    `crossing.timed_rows` did, and dropped exactly the replicates that
+    #    bracket the crossing. Same pool, same slice, share of eager rows
+    #    carrying `throttled`:
     #
     #        T=2048   cold 48% (29/60)   warm  8% (5/60)
     #        T=4096   cold 62% (50/81)   warm  6% (5/81)
@@ -485,12 +571,14 @@ PROFILES: dict[str, Profile] = {
     #    cannot be twenty times larger for a span covering one stage than for a
     #    span covering five of the same stages on the same rows; a filter that
     #    removes a span's top points can, because a one-stage span reaches 0.5
-    #    later and its crossing lives where the throttling is worst.
+    #    later and its crossing lives where the flag fires most.
     #
     #    Reproduce both tables with:
     #      python scripts/crossing_report.py <the four canonical arms> \
-    #        --ridge 160.3 --routing uniform --cuda-graph false --l2-flush true
-    #    and again with --l2-flush false.
+    #        --ridge 162.8 --routing uniform --cuda-graph false --l2-flush true
+    #    and again with --l2-flush false. 162.8 is the H200's own ridge off
+    #    `measured_nvidia_h200.yaml`; the count is the same at any ridge, and
+    #    the withdrawn 160.3 this line used to carry belonged to no card.
     "crossing-uniform": Profile(
         name="crossing-uniform",
         models=CROSSING_MODELS,
@@ -502,9 +590,10 @@ PROFILES: dict[str, Profile] = {
         graph_modes=(False,),
         include_pipeline_scope=False,
         include_framework_pipeline=False,
-        notes=("uniform only, 7 seeds, 2^(1/4) grid over the ridge band, "
-               "L2-WARM eager: the cold basis loses 5 of 8 one-stage crossings "
-               "to throttle exclusion. READ IT WITH octave_ladders: fed whole "
+        notes=("uniform only, 7 seeds, 2^(1/4) grid over the calibrated "
+               "cards' own ridges, L2-WARM eager: the cold basis loses 5 of 8 "
+               "one-stage crossings to the legacy idle-boost `throttled` flag. "
+               "READ IT WITH octave_ladders: fed whole "
                "to crossing_from_points this grid is biased 4-18% LOW and twice "
                "as wide as the powers-of-two grid it extends, half as wide "
                "read properly"),
@@ -572,8 +661,9 @@ PROFILES: dict[str, Profile] = {
     # which would answer the question backwards.
     #
     # L2-warm eager, for the reason `crossing-uniform` is: the flush is
-    # sustained load that trips the throttle flag on 48-75% of large-T rows and
-    # the analysis then deletes them.
+    # sustained load, the legacy `clock_drift` flag read its start sample off
+    # the idle boost and marked 48-75% of large-T rows `throttled` (an
+    # idle-boost catch, not throttling), and the analysis then deleted them.
     "trace-replay": Profile(
         name="trace-replay",
         models=("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite"),

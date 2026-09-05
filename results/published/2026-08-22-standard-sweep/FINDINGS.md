@@ -31,6 +31,8 @@ clock, so an absolute time from it is softer than one from a pinned-clock row. R
 taken WITHIN a cell are much less affected, because every routing in that cell was
 measured under the same thermal conditions. Section 6 has the counts.
 
+> NOTE 2026-09-03: "throttle" is the word withdrawn from the description above, not the mechanism. Two idle-instant reads either side of the cell, flagged on a >5% drop, is what the detector did; what that detected was whether the first read had caught the idle boost clock, not throttling under load (moe/bench/timing.py, "CLOCKS ARE READ UNDER LOAD": on the alpha-0558 arm the same flag fired on 91% of vLLM rows above T=4096 while flagged and unflagged replicates of one cell timed at ratio 0.998). Every count and conclusion on this page is unchanged. Rows written after 00f3324 carry the LEVEL and DRIFT verdicts taken under load instead (`clock_level_ok`, `clock_drift_ok`).
+
 **DeepSeek-V3 caveat:** its 1369 GB of bf16 weights do not fit on one H200, so its
 routing is parametric rather than replayed from captured traces. Its geometry is real;
 its token distribution is synthetic. Mixtral and Qwen2 are the same way in this run.
@@ -347,6 +349,8 @@ stages they are even (up 42, down 37); across models they are **not** (mixtral 3
 board, affecting only the compute-bound region. Every decode-regime conclusion above comes
 from rows at T <= 64, where zero rows throttled. Throttled rows carry `throttled=True` and
 stay in the CSV rather than being dropped.
+
+> NOTE 2026-09-03: "throttle" is the word withdrawn from the description above, not the mechanism. Two idle-instant reads either side of the cell, flagged on a >5% drop, is what the detector did; what that detected was whether the first read had caught the idle boost clock, not throttling under load (moe/bench/timing.py, "CLOCKS ARE READ UNDER LOAD": on the alpha-0558 arm the same flag fired on 91% of vLLM rows above T=4096 while flagged and unflagged replicates of one cell timed at ratio 0.998). Every count and conclusion on this page is unchanged. Rows written after 00f3324 carry the LEVEL and DRIFT verdicts taken under load instead (`clock_level_ok`, `clock_drift_ok`).
 
 The compute ceiling was measured at its settled 1500 MHz while the bandwidth patterns ran
 at 1980 MHz, so the recorded 166 FLOP/byte ridge is conservative (185 if compute is

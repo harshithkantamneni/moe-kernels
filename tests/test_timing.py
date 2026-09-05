@@ -60,9 +60,12 @@ class FakeGPU:
     """A GPU whose kernel takes a scripted time per call.
 
     `fn` is the callable under test; each call consumes the next duration
-    from `warm_call_ms` while a one-pair (warmup) interval is open, or from
-    `timed_call_ms` while a multi-pair (trial) interval is open, and adds it
-    to the open interval. `events` is the factory, `flush` the flusher.
+    from `warm_call_ms` until the clock sampler enters (the warmup batches
+    AND the flushed probe that sizes `iters` are both warmup), then from
+    `timed_call_ms` while the trials run, and adds it to the open interval.
+    `events` is the factory, `flush` the flusher. Keyed on the sampler's
+    phase rather than on the pair count because the v3 probe is a multi-pair
+    interval that is still warmup.
 
     Two real-time knobs plant the host-bound branches: `host_call_s` makes
     each `fn` call cost the host that much wall (a slow Python launcher), and
@@ -81,6 +84,7 @@ class FakeGPU:
         self.flushes = 0
         self.megabytes = 240
         self._open = None
+        self.in_trials = False
         self.instances: list[_FakePairs] = []
 
     @staticmethod
@@ -109,7 +113,7 @@ class FakeGPU:
         pairs, i = self._open if self._open else (None, None)
         if pairs is None:
             return
-        pairs.ms[i] += next(self._warm if pairs.n == 1 else self._timed)
+        pairs.ms[i] += next(self._timed if self.in_trials else self._warm)
 
     def flush(self) -> None:
         self.flushes += 1
@@ -117,9 +121,22 @@ class FakeGPU:
 
     @property
     def timed(self) -> _FakePairs:
+        """The trials' pairs: the last multi-pair instance `time_kernel` made.
+
+        The probe's pairs come before it and may be a single pair (a kernel
+        slower than one warmup batch gets a one-call probe), so the trials'
+        are identified by position, not by count.
+        """
         multi = [p for p in self.instances if p.n > 1]
-        assert len(multi) == 1, "expected exactly one multi-pair (trial) instance"
-        return multi[0]
+        assert multi, "expected the trials' pairs"
+        return multi[-1]
+
+    @property
+    def probe(self) -> _FakePairs:
+        """The pairs the flushed probe used: created just before the trials'."""
+        k = self.instances.index(self.timed)
+        assert k >= 1, "expected the probe's pairs before the trials' pairs"
+        return self.instances[k - 1]
 
 
 class ScriptedClocks:
@@ -135,10 +152,12 @@ class ScriptedClocks:
 
     def __enter__(self):
         self.gpu.log.append(("clock_on",))
+        self.gpu.in_trials = True
         return self
 
     def __exit__(self, *exc):
         self.gpu.log.append(("clock_off",))
+        self.gpu.in_trials = False
         self.samples = tuple(T.ClockState(m, 50) for m in self.trace)
 
 
@@ -172,10 +191,13 @@ def test_warmup_runs_until_warmup_ms_of_delivered_time():
     slow = run(FakeGPU(warm_call_ms=10.0), warmup_ms=50.0)
     for res in (fast, slow):
         assert res.warmup_ms >= 50.0
-        assert res.warmup_ms < 50.0 + T.WARMUP_BATCH_MS     # overshoot bounded by one batch
-    # 1 ms kernel: batches of 1, 25, 25 -> 51 calls. 10 ms kernel: 1, 2, 2 -> 5.
-    assert fast.warmup_calls == 51
-    assert slow.warmup_calls == 5
+        # overshoot bounded by one batch plus the probe, which is at most one
+        # batch's worth of calls
+        assert res.warmup_ms < 50.0 + 2 * T.WARMUP_BATCH_MS
+    # 1 ms kernel: batches of 1, 25, 25 -> 51 calls, then a probe of
+    # min(WARMUP_PROBE_CALLS, 25) = 25. 10 ms kernel: 1, 2, 2 -> 5, probe 2.
+    assert fast.warmup_calls == 51 + 25
+    assert slow.warmup_calls == 5 + 2
     assert fast.warmup_calls != slow.warmup_calls, "a count would be the same"
 
 
@@ -184,8 +206,11 @@ def test_warmup_batches_keep_the_queue_deep():
     report = T.warm_until(gpu.fn, 30.0, gpu.events)
     # first batch is one call, the rest are sized to ~WARMUP_BATCH_MS
     assert report.batches == 3
-    # 1 + 2 * 2500, give or take the float rounding of 25.0 / 0.01
-    assert abs(report.calls - (1 + 2 * T.WARMUP_BATCH_MS / 0.01)) <= 2
+    # 1 + 2 * 2500 batch calls plus the probe, give or take the float
+    # rounding of 25.0 / 0.01
+    assert report.probe_calls == T.WARMUP_PROBE_CALLS
+    assert abs(report.calls - report.probe_calls
+               - (1 + 2 * T.WARMUP_BATCH_MS / 0.01)) <= 2
     assert report.per_call_ms == pytest.approx(0.01)
 
 
@@ -196,10 +221,13 @@ def test_warmup_batch_is_capped_for_a_microsecond_kernel():
     gpu = FakeGPU(warm_call_ms=0.001)
     report = T.warm_until(gpu.fn, 25.0, gpu.events)
     cap = T.WARMUP_BATCH_MAX_CALLS
-    # batches: 1 call (0.001 ms), then cap, cap, cap -> 30.001 ms >= 25
+    # batches: 1 call (0.001 ms), then cap, cap, cap -> 30.001 ms >= 25; then
+    # the probe, min(WARMUP_PROBE_CALLS, cap) calls, counted as delivered load
     assert report.batches == 4
-    assert report.calls == 1 + 3 * cap
-    assert report.delivered_ms == pytest.approx(0.001 * (1 + 3 * cap))
+    assert report.probe_calls == T.WARMUP_PROBE_CALLS
+    assert report.calls == 1 + 3 * cap + report.probe_calls
+    assert report.delivered_ms == pytest.approx(
+        0.001 * (1 + 3 * cap + report.probe_calls))
     assert report.delivered_ms >= 25.0
 
 
@@ -239,7 +267,9 @@ def test_flush_is_enqueued_before_every_start_record_and_outside_the_interval():
     for k, e in enumerate(log):
         if e[0] == "start" and e[1] == n:
             assert log[k - 1] == ("flush",)
-    assert gpu.flushes == n * 2
+    # every warmup call (batches and probe) was flushed too: the warmup runs
+    # the loop the trials run, and the count is the whole story
+    assert gpu.flushes == res.warmup_calls + n * 2
     assert res.flush_mb == 240 and res.l2_flush is True
 
 
@@ -302,10 +332,13 @@ def test_host_bound_is_any_trial_not_the_median_trial():
     walls = [T.TrialWall(enqueue_s=0.001, wall_s=0.050),     # deep
              T.TrialWall(enqueue_s=0.001, wall_s=0.050),     # deep
              T.TrialWall(enqueue_s=0.020, wall_s=0.0205)]    # drained
-    bound, ms, note = T.host_bound_verdict(walls, iters=10)
+    bound, ms, backlog, note = T.host_bound_verdict(walls, iters=10)
     assert bound is True
     assert "1 of 3 trials" in note
     assert ms == pytest.approx(1.0)                           # median enqueue, ms
+    # the ratio is the SMALLEST trial's: 0.0005 s over 0.00205 s / 10
+    assert backlog == pytest.approx(0.0005 / (0.0205 / 10))
+    assert f"smallest backlog {backlog:.2f}" in note
 
 
 def test_host_bound_verdict_boundary_is_two_iterations_of_backlog():
@@ -319,11 +352,12 @@ def test_host_bound_verdict_boundary_is_two_iterations_of_backlog():
 
 
 def test_host_bound_verdict_refuses_rather_than_guessing():
-    assert T.host_bound_verdict([], 10) == (None, None, "no trials; host-bound not determinable")
-    bound, ms, note = T.host_bound_verdict([T.TrialWall(0.0, 0.0)], 10)
-    assert bound is None and ms is None and "no wall time" in note
-    bound, ms, note = T.host_bound_verdict([T.TrialWall(0.001, 0.010)], 0)
-    assert bound is None
+    assert T.host_bound_verdict([], 10) == (
+        None, None, None, "no trials; host-bound not determinable")
+    bound, ms, backlog, note = T.host_bound_verdict([T.TrialWall(0.0, 0.0)], 10)
+    assert bound is None and ms is None and backlog is None and "no wall time" in note
+    bound, ms, backlog, note = T.host_bound_verdict([T.TrialWall(0.001, 0.010)], 0)
+    assert bound is None and backlog is None
 
 
 # --- (4) LEVEL: the case the old flag missed -----------------------------------
@@ -493,7 +527,7 @@ def test_every_record_carries_the_instrument_name():
         res = run(FakeGPU(), trace=trace, reference_clock_mhz=1980.0)
         assert res.instrument == T.TIMING_BASIS
         assert res.clock_source == "scripted"
-    assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v2"
+    assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v3"
     assert T.KernelTiming.__dataclass_params__.frozen
 
 
@@ -637,6 +671,179 @@ def test_background_sampler_notes_a_reader_slower_than_its_budget():
         time.sleep(0.03)
     assert fast.poll_cost_ms is not None and fast.poll_cost_ms < 0.5
     assert fast.note == ""
+
+
+# --- (4b) LEVEL is two-sided: the boosted cell the old flag passed ----------------
+
+def test_level_fails_HIGH_on_a_boosted_clock_and_names_the_side():
+    """THE MIRROR IMAGE OF THE THROTTLE, and the side the flag could not see.
+    A memory-shaped H200 decode cell runs at 1980 MHz; the compute roof was
+    measured power-limited at ~1515. Against the one-sided `load >= 0.95 *
+    ref` that cell PASSED, with its fixed-roof fraction inflated by 1980/1515
+    = 1.31x, toward the study's claim."""
+    res = run(FakeGPU(), trace=[1980] * 3, reference_clock_mhz=1515.0)
+    assert res.sm_clock_load_mhz == 1980.0
+    assert res.clock_level_ok is False
+    assert res.clock_level_side == T.LEVEL_HIGH
+    assert res.reference_clock_mhz == 1515.0
+    assert "LEVEL failed HIGH" in res.clock_note
+    assert "1.31x" in res.clock_note and "roof_at_cell_clock_tflops" in res.clock_note
+    # the old rule, restated, would have passed it
+    assert 1980.0 >= T.LEVEL_FRACTION * 1515.0
+
+
+def test_level_fails_LOW_on_a_throttled_clock_and_names_the_side():
+    res = run(FakeGPU(), trace=[1400] * 3, reference_clock_mhz=1515.0)
+    assert res.clock_level_ok is False
+    assert res.clock_level_side == T.LEVEL_LOW
+    assert "LEVEL failed LOW" in res.clock_note
+
+
+def test_level_passes_inside_the_band_with_no_side():
+    res = run(FakeGPU(), trace=[1500] * 3, reference_clock_mhz=1515.0)
+    assert res.clock_level_ok is True
+    assert res.clock_level_side == ""
+    assert "LEVEL failed" not in res.clock_note
+
+
+def test_level_side_is_the_one_definition_of_the_band():
+    """`clock_flags` derives LEVEL from `level_side`, so the two edges live in
+    one place. Both edges, both sides, and the None that is not a side."""
+    ref = 1515.0
+    assert T.level_side(ref * T.LEVEL_FRACTION, ref) == ""            # low edge, inside
+    assert T.level_side(ref * T.LEVEL_FRACTION - 1, ref) == T.LEVEL_LOW
+    assert T.level_side(ref * T.LEVEL_HIGH_FRACTION, ref) == ""       # high edge, inside
+    assert T.level_side(ref * T.LEVEL_HIGH_FRACTION + 1, ref) == T.LEVEL_HIGH
+    assert T.level_side(None, ref) is None
+    assert T.level_side(1500.0, None) is None
+    assert T.level_side(1500.0, 0.0) is None
+    for load in (1400.0, 1500.0, 1980.0):
+        level, _ = T.clock_flags(load, load, load, ref)
+        assert level is (T.level_side(load, ref) == "")
+    assert T.LEVEL_HIGH_FRACTION == 1.05 and T.LEVEL_FRACTION == 0.95
+
+
+# --- (3c) the backlog ratio reaches the record ----------------------------------
+
+def test_the_backlog_ratio_is_on_the_record_beside_the_verdict():
+    gpu = FakeGPU(warm_call_ms=10.0, timed_call_ms=0.5, host_call_s=0.0,
+                  sync_sleep_s=0.05)
+    res = run(gpu, warmup_ms=10.0, target_ms=5.0, trials=1)
+    assert res.host_bound is False
+    # 50 ms of backlog over a ~50 ms trial of 10 iterations: about 10
+    assert res.host_backlog_iters is not None
+    assert res.host_backlog_iters > T.HOST_BOUND_BACKLOG_ITERS
+    drained = run(FakeGPU(warm_call_ms=10.0, timed_call_ms=0.5, host_call_s=0.002),
+                  warmup_ms=10.0, target_ms=5.0, trials=1)
+    assert drained.host_bound is True
+    assert drained.host_backlog_iters is not None
+    assert drained.host_backlog_iters < T.HOST_BOUND_BACKLOG_ITERS
+
+
+# --- (2b) the warmup runs the loop the trials run ---------------------------------
+
+def test_the_warmup_is_flushed_when_the_trials_are():
+    """Until v3 the warmup ran unflushed while the trials ran flushed, so the
+    governor reached the operating point of a different workload. Now every
+    warmup call, batch and probe alike, is preceded by a flush when the trials
+    will be, and by nothing when they will not."""
+    gpu = FakeGPU()
+    res = run(gpu, warmup_ms=10.0, target_ms=10.0, trials=1)
+    log = gpu.log
+    on = log.index(("clock_on",))
+    warm_fns = [k for k, e in enumerate(log[:on]) if e == ("fn",)]
+    assert warm_fns, "no warmup calls were logged"
+    for k in warm_fns:
+        # a batch call is flush, fn; a probe call is flush, start, fn
+        assert log[k - 1] == ("flush",) or (
+            log[k - 1][0] == "start" and log[k - 2] == ("flush",)), log[k - 2:k + 1]
+    assert res.warmup_calls == len(warm_fns)
+    bare = FakeGPU()
+    T.time_kernel(bare.fn, warmup_ms=10.0, target_ms=10.0, trials=1,
+                  l2_flush=False, events=bare.events,
+                  clock_sampler=ScriptedClocks(bare, [1980] * 3))
+    assert bare.flushes == 0
+
+
+def test_iters_are_sized_from_the_flushed_probe_not_the_batch_mean():
+    """A kernel that reads 1 ms warm in L2 (the batch mean) and 0.5 ms in the
+    probe's cold-L2 per-iteration intervals must be sized from the probe: 40
+    iterations for a 20 ms target, not 20. The fake scripts the batch calls at
+    1 ms and the probe's 25 calls at 0.5 ms."""
+    warm = [1.0] * 51 + [0.5] * 25
+    gpu = FakeGPU(warm_call_ms=warm, timed_call_ms=0.5)
+    res = run(gpu, warmup_ms=50.0, target_ms=20.0, trials=1)
+    assert res.warmup_calls == 76
+    assert gpu.probe.n == 25
+    assert res.iters == 40, "sized from the batch mean of 1 ms, not the probe"
+    assert gpu.timed.n == 40
+
+
+# --- (8b) the basis is bound to the loop's shape ------------------------------------
+
+def test_timing_basis_is_bound_to_the_loop_shape():
+    """A change to the flush position, the iteration cap, the warmup batch
+    length, whether the warmup is flushed, the probe, or the flush buffer's
+    L2 multiple moves numbers, and until 2026-09-03 nothing but convention
+    tied the basis string to any of them. The live values are derived from
+    the code, not read off `LOOP_SHAPE`, so editing the dict alone cannot
+    satisfy this; and the string is pinned beside them, so bumping one
+    without the other fails here rather than in a published arm."""
+    import inspect
+
+    sig = inspect.signature(T.iters_for)
+    live = {
+        "flush_position": "before start record",
+        "iters_hi": sig.parameters["hi"].default,
+        "iters_lo": sig.parameters["lo"].default,
+        "warmup_batch_ms": T.WARMUP_BATCH_MS,
+        "warmup_flushed": "flush" in inspect.signature(T.warm_until).parameters,
+        "iters_sized_from": "flushed per-iteration probe",
+        "flush_l2_multiple": (inspect.signature(T.flush_mb_for_device)
+                              .parameters["multiple"].default),
+    }
+    src = inspect.getsource(T._timed_trials)
+    body = src[src.index("for i in range(iters):"):]
+    assert body.index("flush()") < body.index("starts[i].record()"), (
+        "the flush must be enqueued before the start record")
+    warm_src = inspect.getsource(T.warm_until)
+    assert "_timed_trials(fn, n, 1, events(n), flush)" in warm_src, (
+        "iters are sized from a flushed per-iteration probe")
+    assert live == T.LOOP_SHAPE
+    assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v3", (
+        "the loop shape changed: bump TIMING_BASIS and this pin together")
+
+
+# --- (8c) the retired timers name themselves, and not as the instrument -----------
+
+def test_the_retired_timer_record_names_its_apparatus():
+    legacy = T._summarise([1.0, 2.0, 3.0], warmup=5, iters=3, trials=1,
+                          l2_flush=False, cuda_graph=False)
+    assert legacy.instrument == T.RETIRED_TIMER_BASIS
+    assert legacy.instrument != T.TIMING_BASIS
+    assert "time_eager" in T.RETIRED_TIMER_BASIS
+
+
+# --- the clock sample says which reader answered ----------------------------------
+
+def test_clock_state_sample_names_its_source(monkeypatch):
+    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(T.torch.cuda, "clock_rate", lambda *a: 1515)
+    monkeypatch.setattr(T.torch.cuda, "temperature", lambda *a: 60)
+    s = T.ClockState.sample()
+    assert (s.sm_clock_mhz, s.source) == (1515, T.CLOCK_SOURCE_NVML)
+
+    def no_pynvml(*a):
+        raise ModuleNotFoundError("No module named 'pynvml'")
+    monkeypatch.setattr(T.torch.cuda, "clock_rate", no_pynvml)
+    monkeypatch.setattr(T, "_nvidia_smi", lambda q: ["1980, 44"])
+    forked = T.ClockState.sample()
+    assert (forked.sm_clock_mhz, forked.source) == (1980, T.CLOCK_SOURCE_NVIDIA_SMI)
+    monkeypatch.setattr(T, "_nvidia_smi", lambda q: [])
+    none = T.ClockState.sample()
+    assert (none.sm_clock_mhz, none.source) == (0, T.CLOCK_SOURCE_NONE)
+    # positional construction keeps meaning what it meant
+    assert T.ClockState(1755, 61).source == T.CLOCK_SOURCE_NVML
 
 
 # --- the audit's acceptance case, on the box only ---------------------------------

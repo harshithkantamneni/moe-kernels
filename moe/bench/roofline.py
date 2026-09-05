@@ -268,22 +268,92 @@ def load_measured(gpu_name: str | None = None,
     return None
 
 
+#: The GRADES a reference clock can carry, i.e. how the number was taken.
+#: Only `REFERENCE_UNDER_LOAD` is a sample of the clock the roof's GEMM was
+#: actually running at. The other two are disowned for scaling the roof per
+#: row (`roof_at_clock`), and a LEVEL verdict scored against them is
+#: provisional: the row carries the grade so a reader can discount it.
+REFERENCE_UNDER_LOAD = "under-load"
+REFERENCE_IDLE_SCALAR = "idle-scalar"
+REFERENCE_SETTLE_PLATEAU = "settle-plateau"
+
 #: Where a calibration records the clock its dense GEMM ran at, in falling
-#: order of directness, with what each field is. `calibrate.clock_established`
-#: exists because the three have disagreed: eleven committed calibrations of one
-#: H200 recorded 1485-1935 MHz for the scalar while their own settle histories
-#: sat at 1455-1515. The order prefers the number measured UNDER THE LOAD THAT
-#: SET THE ROOF, and the record says which field was read, so a LEVEL exclusion
-#: can always be traced back to a field in a file.
+#: order of directness, with what each field is and the grade it earns.
+#: `calibrate.clock_established` exists because the three have disagreed:
+#: eleven committed calibrations of one H200 recorded 1485-1935 MHz for the
+#: scalar while their own settle histories sat at 1455-1515. The order prefers
+#: the number measured UNDER THE LOAD THAT SET THE ROOF, and the record says
+#: which field was read, so a LEVEL exclusion can always be traced back to a
+#: field in a file.
+#:
+#: THE SECOND FIELD IS DISOWNED AND STILL READ. `detail.gemm_clock_mhz` is the
+#: post-hoc idle sample `calibrate.py`'s own header records a 30% spread for
+#: (1485-1935 MHz across eleven calibrations of one card), and both committed
+#: calibrations carry ONLY that field: they predate the `gemm_clock` block. It
+#: is read rather than refused because a run against those files must still
+#: be able to say something about LEVEL, and what it says is graded: the
+#: source names the artefact, the row carries `reference_clock_source`, and
+#: `ReferenceClock.usable_for_roof` is False, so the per-row roof is not
+#: rescaled against a number that could be 30% off. A recalibration writes
+#: the under-load median and the grade rises with it. The order is NOT
+#: changed to put the settle plateau ahead of the scalar, although the
+#: plateau is the steadier number: `scripts/block_m_crossing_sweep.py`
+#: carries its own copy of this walk, `tests/test_driver.py` pins the two
+#: resolvers to one number per card, and a reorder here alone would level the
+#: driver and the ladders against different references.
 CLOCK_FIELDS = (
     (("detail", "gemm_clock", "median_mhz"),
-     "the median of the samples taken while the calibration's dense GEMM ran"),
+     "the median of the samples taken while the calibration's dense GEMM ran",
+     REFERENCE_UNDER_LOAD),
     (("detail", "gemm_clock_mhz"),
-     "gemm_clock_mhz, the scalar the calibration published for its dense GEMM"),
+     "gemm_clock_mhz, the scalar the calibration published for its dense GEMM; "
+     "DISOWNED: a single post-hoc sample taken after the GEMM had synchronised, "
+     "with the GPU idle and boosting, which calibrate.py records moving 30% "
+     "across eleven calibrations of one card. LEVEL against it is provisional "
+     "and the per-row roof is not rescaled against it; recalibrate to record "
+     "the under-load median",
+     REFERENCE_IDLE_SCALAR),
     (("detail", "settle", "final_mhz"),
      "the compute settle's final plateau; this calibration recorded no clock "
-     "sampled during the GEMM itself"),
+     "sampled during the GEMM itself. DISOWNED for the per-row roof: the "
+     "plateau is a different kernel's steady state, within 10% of the GEMM's "
+     "clock by calibrate.CLOCK_VS_SETTLE_TOL_PCT, which is a bracket",
+     REFERENCE_SETTLE_PLATEAU),
 )
+
+
+def roof_at_clock(peak_tflops: float | None, reference_mhz: float | None,
+                  load_mhz: float | None) -> float | None:
+    """The compute roof AT THE CLOCK A CELL RAN, from the roof at its reference.
+
+    `peak_tflops` is the calibration's achieved dense-GEMM figure, measured at
+    `reference_mhz` (the under-load median of that GEMM's own clock). The
+    tensor-core issue rate is linear in the SM clock, so the same GEMM at
+    `load_mhz` would reach `peak * load / reference`; that is the roof a cell
+    which ran at `load_mhz` should be scored against, and it is what
+    `calibrate.sustained_peak_tflops(load_mhz)` gives for the silicon,
+    multiplied by the cuBLAS efficiency the calibration measured. The ratio
+    form is used here so it works off-GPU from a CSV, with the one assumption
+    stated: cuBLAS's fraction of the silicon peak is taken as clock-invariant
+    across the band a cell can sit in.
+
+    WHY THIS EXISTS. A memory-shaped decode cell on an H200 runs at ~1980 MHz;
+    the compute roof was measured at ~1515, power-limited. Scored against the
+    fixed roof the cell's fraction is inflated by 1980/1515 = 1.31x, toward
+    the study's claim, and the one-sided LEVEL flag passed it. The bandwidth
+    roof is NOT rescaled: HBM does not run on the SM clock (calibrate.py
+    measured 1.7% sensitivity) and the ridge moves with this number alone.
+
+    None, never a substitute, when any term is missing or non-positive: no
+    load clock on the row (the retired seam, an NVML-less container), no
+    reference, or a reference the caller has not graded as under-load. The
+    caller decides whether to score at all; this refuses to invent a roof.
+    """
+    if not peak_tflops or not reference_mhz or not load_mhz:
+        return None
+    if peak_tflops <= 0 or reference_mhz <= 0 or load_mhz <= 0:
+        return None
+    return float(peak_tflops) * float(load_mhz) / float(reference_mhz)
 
 
 @dataclass(frozen=True)
@@ -300,6 +370,15 @@ class ReferenceClock:
     than two so a provenance and a reason cannot drift apart, and so a caller
     that prints `source` prints something true either way.
 
+    `grade` is HOW the number was taken, one of the `REFERENCE_*` constants or
+    "" when there is no number. It is the field a consumer branches on:
+    `usable_for_roof` is True only for the under-load median, because scaling
+    a roof by `load / reference` puts the reference INTO the number, and a
+    reference the calibration itself disowns (the idle scalar, 30% spread)
+    would move every fraction-of-roof by up to that much under the name of a
+    correction. The LEVEL flag is still scored against a disowned reference,
+    with the grade written into every row so the verdict can be discounted.
+
     `card` is the attached device, and its emptiness is the load-bearing
     distinction for a caller deciding what to do about a None `mhz`: a card
     with no usable calibration is a POD MISCONFIGURATION, and no card at all is
@@ -312,6 +391,12 @@ class ReferenceClock:
     source: str
     card: str = ""
     profile: str = ""
+    grade: str = ""
+
+    @property
+    def usable_for_roof(self) -> bool:
+        """May the roof be rescaled per row against this reference?"""
+        return self.mhz is not None and self.mhz > 0 and self.grade == REFERENCE_UNDER_LOAD
 
 
 def _dig(doc: dict, path: tuple[str, ...]):
@@ -433,17 +518,29 @@ def reference_clock(gpu_name: str | None = None,
     if not doc:
         return ReferenceClock(None, reason, card=gpu_name or "")
     profile = str(doc.get("name") or "")
-    for path, what in CLOCK_FIELDS:
+    for path, what, grade in CLOCK_FIELDS:
         value = _dig(doc, path)
         if value:
+            # A settle polled through the forked fallback is the idle artefact
+            # in a longer coat; say so where the source is read, not later.
+            if grade == REFERENCE_SETTLE_PLATEAU:
+                polled = _dig(doc, ("detail", "settle", "clock_source"))
+                if polled and polled != "nvml":
+                    what += (f"; and the settle was polled through {polled!r}, "
+                             "a forked reader whose samples land tens of "
+                             "milliseconds after each synchronise")
+            if grade == REFERENCE_UNDER_LOAD:
+                polled = _dig(doc, ("detail", "gemm_clock", "source"))
+                if polled and polled != "nvml":
+                    what += f"; polled through {polled!r}"
             return ReferenceClock(
                 float(value),
                 f"{profile}: {'.'.join(path)} = {float(value):.0f} MHz, {what}",
-                card=gpu_name, profile=profile)
+                card=gpu_name, profile=profile, grade=grade)
     return ReferenceClock(
         None,
         f"{profile} carries no clock at all: none of "
-        f"{', '.join('.'.join(p) for p, _ in CLOCK_FIELDS)} is set, so LEVEL "
+        f"{', '.join('.'.join(p) for p, _, _ in CLOCK_FIELDS)} is set, so LEVEL "
         "cannot be scored against it. Recalibrate with "
         "`python scripts/calibrate_hardware.py --publish`",
         card=gpu_name, profile=profile)

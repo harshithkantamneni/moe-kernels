@@ -2251,10 +2251,18 @@ def test_the_sparse_span_arm_says_it_expects_to_refuse():
     assert lift('arm_minutes span', REPO=str(ROOT)).stdout.strip() == "0"
 
 
-def test_the_counter_arm_says_to_read_its_verdict_and_not_its_ledger_state():
+def test_the_counter_arm_says_its_ledger_word_is_earned_and_blocked_is_an_answer():
+    """Until 2026-09-03 the row told the operator to read the probe's VERDICT
+    line and distrust its ledger state, because the route exited 0 for OPEN
+    and BLOCKED alike and printed no RESULT line. The gates slice made it
+    score one gate per verdict and exit through the table, so the ledger word
+    is earned and the row must say THAT, and must no longer send the operator
+    around the second opinion. BLOCKED being the answer is unchanged."""
     listing = run(["--list"]).stdout
     block = listing.split("  counter_plan ", 1)[1].split("\n\n", 1)[0]
-    assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" in block
+    assert "READ ITS RESULT LINES, AND THE LEDGER WORD IS EARNED" in block
+    assert "READ ITS VERDICT LINE, NOT ITS LEDGER STATE" not in block
+    assert "UNEARNED DONE" not in block
     assert "BLOCKED is the ANSWER" in block
 
 
@@ -2934,13 +2942,9 @@ def test_every_measuring_invocation_runs_a_script_the_second_opinion_can_read(ar
     source = (ROOT / rel).read_text()
     renders = "result_line(" in source or "RESULT: " in source
     assert "classify(" in source, (arm_name, rel)
-    if arm_name == "counter_plan":
-        assert not renders, (
-            "dram_counter_route.py now renders RESULT lines: drop this special "
-            "case and the UNEARNED DONE sentence in arm_closes counter_plan")
-        closes = lift("arm_closes counter_plan", REPO=str(ROOT)).stdout
-        assert "UNEARNED DONE" in closes and "no RESULT line" in closes
-        return
+    # counter_plan was special-cased here while dram_counter_route.py rendered
+    # its gates as prose; since the gates slice it prints RESULT lines like every
+    # other arm, so the second opinion can read it and no exemption remains.
     assert renders, (arm_name, rel, "the second opinion would read NONE on every run")
 
 
@@ -3100,7 +3104,10 @@ def test_the_caveat_tells_the_adopters_old_codes_as_history():
     cli = (ROOT / "moe" / "bench" / "cli.py").read_text()
     assert "rc = EC.classify(scored)" in cli
     route = (ROOT / "scripts" / "dram_counter_route.py").read_text()
-    assert "return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE" in route
+    # The route used to spell its own two codes; since the gates slice it
+    # exits through the table over the same Gate objects that print its lines.
+    assert "exit_codes.classify(" in route
+    assert "return exit_codes.REFUSED if verdict == REFUSE else exit_codes.DONE" not in route
 
 
 def test_the_alias_booking_gap_survives_only_as_closed_history():

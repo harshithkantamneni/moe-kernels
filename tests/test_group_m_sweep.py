@@ -353,7 +353,9 @@ def test_no_cell_in_the_shipped_plan_is_compute_bound(default_plan):
     cannot move, so a compute-bound design reports alpha flat across the ladder
     and looks exactly like a refutation of the mechanism.
     """
-    limit = GM.MEMORY_BOUND_MARGIN * AR.RIDGE_BAND[0]
+    # The H200's OWN band low end, off its committed calibration, not the
+    # withdrawn cross-machine 160.3 this test scored against until 2026-09-03.
+    limit = GM.MEMORY_BOUND_MARGIN * GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16").low
     worst = max(c.arith_intensity for c in default_plan.cells)
     assert worst <= limit, f"worst compulsory AI {worst:.1f} exceeds {limit:.1f}"
 
@@ -373,15 +375,19 @@ def test_the_predicted_floor_sits_inside_the_swept_ladder(default_plan):
 
 
 def test_every_preflight_gate_passes_on_the_shipped_defaults(default_plan):
-    gates = GM.preflight(default_plan, AR.RIDGE_BAND[0])
+    ridge = GM.resolve_ridge_band(GM.SYNTHETIC_CARD, "bf16")
+    gates = GM.preflight(default_plan, ridge.low, ridge.card)
     failed = [g.name for g in gates if g.ok is not True]
     assert not failed, f"the shipped design fails its own preflight: {failed}"
 
 
 def test_a_compute_bound_design_is_refused_before_anything_is_spent(
         tmp_path, monkeypatch, capsys):
+    # `--card` names whose ridge the plan is previewed against; with no card
+    # attached and none named the sweep refuses before the preflight.
     code, out = run_report(["--tokens", "4096", "--seeds", "1",
-                            "--routings", "uniform"], tmp_path, monkeypatch, capsys)
+                            "--routings", "uniform", "--card", "NVIDIA H200"],
+                           tmp_path, monkeypatch, capsys)
     assert "[FAIL] regime: every cell is memory bound" in out
     assert "refused before spending anything" in out
     # REFUSED (2), not CLAIM_FAIL (1). Nothing was spent, which is what the
@@ -697,8 +703,11 @@ def replay_with(records, tmp_path, monkeypatch, capsys, argv=("--synthetic",
         records(row)
     (directory / "cells.jsonl").write_text(
         "".join(json.dumps(r) + "\n" for r in rows))
-    return run_report(["--replay", str(directory)], tmp_path, monkeypatch,
-                      capsys)
+    # The re-labelled rows carry no card and a synthetic directory has no
+    # plan.json to name one, so the replay names the card whose ridge the
+    # regime gate is re-scored against; a real run's plan.json carries it.
+    return run_report(["--replay", str(directory), "--card", "NVIDIA H200"],
+                      tmp_path, monkeypatch, capsys)
 
 
 def measured_row(row, *, level, mhz=1515.0):
