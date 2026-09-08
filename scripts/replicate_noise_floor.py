@@ -206,7 +206,11 @@ REFUSED and left `replicate_floor: null` in git; the driver's real branch passes
 `--publish` bare, so one empty CUDA probe on the pod both refused the arm and
 deleted a floor an earlier pod had paid 120 minutes for. The rule is a property
 of the write now and lives in `write_published`: a document with no floor may
-not replace a file that has one.
+not replace a file that has one. And since 2026-09-08 the `blocked` door does
+not write at all: that wall let a null replace a null, so a REFUSED pod run
+re-stamped the committed (null-floor) file, and a refusal that dirties a tracked
+file is not a free refusal. `--control-only --publish` is the one deliberate
+null-floor writer left.
 
 AND AN UNPLANNED CRASH IS `ERROR`, WHICH IT WAS NOT. `raise SystemExit(main())`
 with no handler exits ONE on any exception, and ONE is `CLAIM_FAIL`: a finished
@@ -2396,7 +2400,7 @@ def published_floor_is_measured(path: Path) -> bool | None:
 def write_published(doc: dict, path: Path | None = None) -> str:
     """Write the floor where git will take it, or refuse and say why.
 
-    TWO WALLS, AND THE SECOND ONE IS HERE BECAUSE THERE ARE THREE DOORS. The
+    TWO WALLS, AND THE SECOND ONE IS HERE BECAUSE THERE WERE THREE DOORS. The
     first is git: `results/*` is ignored with only `!results/published/`
     excepted, so a floor written anywhere else is a floor that disappears on
     commit.
@@ -2423,6 +2427,17 @@ def write_published(doc: dict, path: Path | None = None) -> str:
     legitimate cases nothing, because a null-floor document is field for field
     what `--control-only --publish` regenerates and the file it would replace
     would be identical but for `written_utc`, `git` and `provenance`.
+
+    AND THE BLOCKED DOOR NO LONGER OPENS ONTO IT AT ALL, since 2026-09-08. The
+    wall above stops a null replacing a MEASURED floor; it does not stop a null
+    replacing a null, and the committed floor IS null, so a REFUSED run on the
+    pod line still rewrote the tracked file's `written_utc`, `git` and
+    `provenance` with the floor unmeasured (git: ` M results/published/
+    NOISE_FLOOR.json`, reproduced twice off GPU). A refusal that writes a
+    tracked file is not free, whatever it writes. The blocked path now prints
+    NOT PUBLISHED and touches nothing; two doors reach this function, the
+    measured publish and `--control-only --publish`, and only the second may
+    carry a null floor.
 
     IT REFUSES ON "CANNOT TELL" TOO. `published_floor_is_measured` returns None
     for a file that does not parse, and the refusal fires on anything that is
@@ -3118,8 +3133,23 @@ def _main(argv: list[str] | None = None) -> int:
         print("  No RESULT line was printed, because nothing was scored.")
         print("=" * 72)
         if args.publish:
-            print(write_published(build_document(control, cards, None,
-                                                unmeasured_provenance())))
+            # A REFUSED run writes NOTHING. Until 2026-09-08 this door called
+            # `write_published` with a null-floor document: the null-over-
+            # measured wall in there held, but on the committed file, whose
+            # floor is null, the write went through and re-stamped written_utc,
+            # git and provenance on a TRACKED file from a run that measured
+            # nothing. Run exactly as the pod line minus the GPU
+            # (`--replicates 3 --arms ... --publish`), git status showed
+            # ` M results/published/NOISE_FLOOR.json`, the session driver's
+            # per-arm dirty check flagged it, and a floor that was REFUSED
+            # carried a fresh stamp. The driver's header says a refusal must
+            # be free in every sense; this one was not. The deliberate
+            # regeneration of part (b) stays on `--control-only --publish`,
+            # which is the documented producer of the committed file.
+            print(f"NOT PUBLISHED: --publish was given, but this run REFUSED and "
+                  f"measured nothing, so {NOISE_FLOOR_JSON} is left exactly as it "
+                  f"was, stamp included. A refusal writes no tracked file. To "
+                  f"regenerate part (b) on purpose, run --control-only --publish.")
         print()
         print(IMPORT_BANNER)
         return exit_codes.REFUSED

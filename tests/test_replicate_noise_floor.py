@@ -833,22 +833,25 @@ def test_dry_run_prints_the_plan_the_cost_and_the_registered_predictions(capsys)
 
 
 @needs_arms
-def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch):
+def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch, capsys):
     """THE TRACKED FILE IS NEVER WRITTEN WITHOUT PROVENANCE.
 
-    `--control-only --publish` and the no-GPU `--dry-run --publish` both write
-    `results/published/NOISE_FLOOR.json`, and until 2026-09-02 both called
-    `build_document` without `prov=`, so the committed floor named no machine,
-    no instrument and no ruler. `prov` is a required positional argument now, so
-    the FAIL branch is a TypeError at the call site rather than a silent hole in
-    a published artefact, and that branch is planted here too.
+    `--control-only --publish` writes `results/published/NOISE_FLOOR.json`, and
+    until 2026-09-02 it (and the then-writing no-GPU `--dry-run --publish`
+    door) called `build_document` without `prov=`, so the committed floor
+    named no machine, no instrument and no ruler. `prov` is a required
+    positional argument now, so the FAIL branch is a TypeError at the call
+    site rather than a silent hole in a published artefact, and that branch is
+    planted here too.
 
     THE WRITE ITSELF IS FAKED HERE, and that is the limit of what this proves:
-    it proves what the two call sites BUILD, not what lands on disk. Whether
-    either of them may land at all is the separate question
+    it proves what the call site BUILDS, not what lands on disk. Whether it
+    may land at all is the separate question
     `test_no_unmeasured_publish_path_can_delete_a_measured_floor` asks, and the
     answer changed on 2026-09-03: onto a file that already holds a measured
-    floor, neither may.
+    floor, it may not. And since 2026-09-08 the blocked door (`--dry-run
+    --publish`, or the pod line with no GPU) is not a publish path at all: it
+    prints NOT PUBLISHED and calls nothing, which the second half plants.
     """
     with pytest.raises(TypeError, match="prov"):
         NF.build_document({}, {}, None)
@@ -857,9 +860,13 @@ def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch):
     monkeypatch.setattr(NF, "write_published",
                         lambda doc, *a, **k: written.append(doc) or "wrote (fake)")
     assert NF.main(["--control-only", "--publish"]) == NF.exit_codes.REFUSED
+    assert len(written) == 1, "the deliberate part (b) regeneration still writes"
     assert NF.main(["--dry-run", "--publish", "--gpu-name", "NVIDIA H200"]) \
         == NF.exit_codes.REFUSED
-    assert len(written) == 2, "both publish paths must have been exercised"
+    assert len(written) == 1, "the blocked door wrote a tracked file from a REFUSED run"
+    out = capsys.readouterr().out
+    assert "NOT PUBLISHED: --publish was given, but this run REFUSED" in out
+    assert "left exactly as it was, stamp included" in out
     for doc in written:
         for key in NF.PV.TOP_LEVEL_KEYS:
             assert key in doc, key
@@ -868,6 +875,43 @@ def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch):
         # than naming the live one.
         assert doc["instrument"] == NF.UNMEASURED_INSTRUMENT
         assert doc["replicate_floor"] is None
+
+
+def test_a_refused_pod_line_leaves_the_tracked_floor_untouched(monkeypatch, capsys):
+    """F8, RUN AS THE POD LINE MINUS THE GPU. `replicate_noise_floor.py
+    --replicates 3 --arms mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16 --publish`
+    exits 2 REFUSED off a GPU (detect_gpu reports what is missing) and, until
+    2026-09-08, rewrote results/published/NOISE_FLOOR.json: `write_published`'s
+    wall stops a null replacing a MEASURED floor and the committed floor is
+    null, so the write went through and re-stamped written_utc, git and
+    provenance on a tracked file from a run that measured nothing (git status
+    ` M results/published/NOISE_FLOOR.json`, reproduced twice). Planted in both
+    directions: the pod line calls the writer zero times, `--control-only
+    --publish` still calls it once, and the tracked file's bytes are unchanged
+    across the refused run."""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            pytest.skip("a CUDA device is attached: this line IS the arm and would measure")
+    except ImportError:
+        pass
+    before = NF.NOISE_FLOOR_JSON.read_bytes() if NF.NOISE_FLOOR_JSON.exists() else None
+    calls: list[dict] = []
+    monkeypatch.setattr(NF, "write_published",
+                        lambda doc, *a, **k: calls.append(doc) or "wrote (fake)")
+    rc = NF.main(["--replicates", "3", "--arms", "mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16",
+                  "--publish"])
+    out = capsys.readouterr().out
+    assert rc == NF.exit_codes.REFUSED, out[-2000:]
+    assert "NOT A RESULT. The replicate floor was not measured." in out
+    assert calls == [], "a REFUSED run reached the writer"
+    assert "NOT PUBLISHED: --publish was given, but this run REFUSED" in out
+    assert "wrote " not in out.split("NOT A RESULT", 1)[1]
+    after = NF.NOISE_FLOOR_JSON.read_bytes() if NF.NOISE_FLOOR_JSON.exists() else None
+    assert after == before, "the tracked floor changed across a refused run"
+    # The other direction: the deliberate regeneration is still a writer.
+    assert NF.main(["--control-only", "--publish"]) == NF.exit_codes.REFUSED
+    assert len(calls) == 1
 
 
 @needs_arms
@@ -2122,7 +2166,7 @@ def test_a_null_floor_may_not_replace_a_measured_one(tmp_path, monkeypatch):
 @needs_arms
 def test_no_unmeasured_publish_path_can_delete_a_measured_floor(
         tmp_path, monkeypatch, capsys):
-    """THE VERIFIER'S REPRO, through `main`, at both doors that reach it.
+    """THE VERIFIER'S REPRO, through `main`, at both doors that reached it.
 
     `--dry-run --publish` and `--control-only --publish` both print "NOT A
     RESULT. The replicate floor was not measured", both return REFUSED, and
@@ -2130,6 +2174,11 @@ def test_no_unmeasured_publish_path_can_delete_a_measured_floor(
     session driver's real branch passes `--publish` bare, so a GPU probe coming
     back empty on the pod did both at once: refused the arm and deleted the
     floor an earlier pod had paid for.
+
+    Since 2026-09-08 the two doors differ: `--control-only --publish` still
+    reaches the writer and is stopped by its wall (REFUSING to write, on
+    stderr); the blocked door does not reach the writer at all and says NOT
+    PUBLISHED on stdout. The floor is untouched either way.
     """
     target = tmp_path / "NOISE_FLOOR.json"
     target.write_text(json.dumps(_measured_floor_doc(0.0155)))
@@ -2138,13 +2187,16 @@ def test_no_unmeasured_publish_path_can_delete_a_measured_floor(
     monkeypatch.setattr(NF, "git_accepts", lambda p: True)
     monkeypatch.setattr(NF, "sweep_cost", lambda arm, python: 100.0)
 
-    for argv in (["--control-only", "--publish"],
-                 ["--dry-run", "--publish", "--replicates", "3",
-                  "--arms", "mixtral_g1,mixtral_g16",
-                  "--out-dir", str(tmp_path / "out")]):
-        assert NF.main(argv) == NF.exit_codes.REFUSED, argv
-        assert target.read_text() == before, argv
-        assert "REFUSING to write" in capsys.readouterr().err, argv
+    assert NF.main(["--control-only", "--publish"]) == NF.exit_codes.REFUSED
+    assert target.read_text() == before
+    assert "REFUSING to write" in capsys.readouterr().err
+    blocked = ["--dry-run", "--publish", "--replicates", "3",
+               "--arms", "mixtral_g1,mixtral_g16", "--out-dir", str(tmp_path / "out")]
+    assert NF.main(blocked) == NF.exit_codes.REFUSED
+    assert target.read_text() == before
+    captured = capsys.readouterr()
+    assert "NOT PUBLISHED: --publish was given, but this run REFUSED" in captured.out
+    assert "REFUSING to write" not in captured.err, "the blocked door reached the writer"
     assert NF.noise_floor(target).sd == 0.0155
 
 

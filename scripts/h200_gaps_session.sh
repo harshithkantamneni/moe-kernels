@@ -85,7 +85,10 @@
 #     (moe/bench/hardware/vllm_configs/E=8,N=14336,device_name=NVIDIA_H200.json)
 #     is BLOCK_N=256 with GROUP_SIZE_M=16, and 32 at 2048 tokens. Three roofline
 #     arms now run: the swept-configuration control, which can REFUTE and not
-#     confirm, and the two production configurations, which can confirm.
+#     confirm, and the two production configurations, which were meant to
+#     confirm and CANNOT on sm_90: bm128_roofline refuses them at every warp
+#     and stage count (a 256x256 fp32 accumulator is 65536 of 65536 registers
+#     per block), so no BLOCK_SIZE_N confirms the headline on this card.
 #   * THE PIN WAS PROBED AT A CONFIGURATION NO ARM RUNS. The probe pinned
 #     BLOCK_N=128 while every arm pins 64 (or, now, 256). A pin that reaches the
 #     kernel at one BLOCK_N is evidence about that BLOCK_N.
@@ -101,10 +104,14 @@
 #     on a rented pod, landed in the ledger as INVALID and was described to the
 #     operator as measured-and-unquotable. The dry-run said this, for free,
 #     where it costs nothing; the pod run said nothing, where it costs an arm.
-#     (That script adopted the table later the same day and exits DONE on
-#     BLOCKED. What it still does not do is print a RESULT line for either
-#     verdict, so under the seventh pass below its exit 0 is an UNEARNED DONE
-#     and the row lands UNKNOWN; `arm_closes counter_plan` says so.)
+#     (That script adopted the table later the same day, and since 2026-09-03
+#     it scores one gate per verdict and prints one RESULT line each, so the
+#     ledger word is EARNED: OPEN lands DONE, BLOCKED lands CLAIM_FAIL and is
+#     LATCHED as the answer, and REFUSE -- no ncu on PATH, or nsys without its
+#     importer -- exits 2 with no RESULT line and is re-attempted on every
+#     resume. `arm_closes counter_plan` says the same; an earlier version of
+#     this paragraph said it exited DONE on BLOCKED with no RESULT line, which
+#     was true for one day and contradicted `arm_closes` for five.)
 #     The states are NOT patched per arm -- that is the list R1 deleted. Instead
 #     `adopts_exit_codes` ASKS each arm's file whether it imports the module,
 #     and `contract_caveat` / `contract_disclosure` print, next to every REFUSED
@@ -257,7 +264,7 @@
 #     prints "estimated wall time" and charges a compile per setting), while
 #     seven arms are booked at what their plans call "the model's own timings,
 #     excluding compiles and allocation": roofline-n64-g1 58 s, bm128_depth
-#     252 s, bn_g16 2142 s, occupancy 1342 s, cap_test 242 s, dtype 315 s and
+#     252 s, bn_g16 2142 s, occupancy 1342 s, cap_test 242 s, dtype 454 s and
 #     span_dense 1814 s. The paragraph under the table then said BOOK ABOVE THAT
 #     AND NEVER AT IT and gave no number to book above, leaving the mixed sum as
 #     the only figure on the page. Every row names its clock now, and the total
@@ -466,15 +473,20 @@
 #                    reason it runs first, and its predicted outcome from the
 #                    published G=1 ladders is already known (gap 0.02-0.06
 #                    against a 0.10 separation threshold: NOT TILE-ATTRIBUTABLE).
-#   1 roofline-n256-g16   THE CLAIM. The configuration vLLM actually ships for
-#                    mixtral at BLOCK_M=128 on the H200, at every token count
-#                    from 512 up. This is the only arm in the session that can
-#                    CONFIRM the ceiling, and it has never been run. It REFUSES
-#                    today, free and before the pod, because no BLOCK_M=256
-#                    control fits at BLOCK_N=256; see the note above the arm.
+#   1 roofline-n256-g16   THE CLAIM'S CONFIGURATION. What vLLM actually ships
+#                    for mixtral at BLOCK_M=128 on the H200, at every token
+#                    count from 512 up. It was scheduled as the one arm that
+#                    could CONFIRM the ceiling; it CANNOT on sm_90. bm128_roofline
+#                    refuses it AT EVERY WARP AND STAGE COUNT, free and before
+#                    the pod: the BLOCK_M=256 control's 256x256 fp32 accumulator
+#                    is 65536 of 65536 registers per block however the warps
+#                    are split, no pin rescues it, and NO BLOCK_SIZE_N confirms
+#                    the headline on this card. The refusal is the arm's
+#                    finding and the reason the paper has no confirming arm;
+#                    see the note above the arm.
 #   1 roofline-n256-g32   The same at the swizzle vLLM ships at 2048 tokens,
 #                    which is inside the multi-tile range the claim is about.
-#                    Four minutes; without it the claim rests on one swizzle.
+#                    Refuses for the same accumulator; zero minutes.
 #   2 bm128_depth    The regime every other arm is read in. The whole 128 row
 #                    currently rests on two fits across two cards, one of them
 #                    on a non-monotone ladder that should have been discarded.
@@ -792,6 +804,43 @@ defect_rows() {
                         printf "  %-19s exit %s   %s\n", a, rc[a], nt[a] } }' "$1"
 }
 
+# THE ROWS THIS SESSION STILL OWES: every UNKNOWN row that is NOT a DEFECT,
+# same last-row-wins rule. An UNEARNED DONE (exit 0, no RESULT line), an
+# UNEARNED INVALID, an exit 1 from a non-adopting file, a log the second
+# opinion could not read: each is an arm that examined nothing the driver could
+# vouch for, is not latched, and re-runs on --resume-latest. Until 2026-09-08
+# the session's exit code reached INVALID only through `defect_rows`, so a
+# ledger holding such a row exited 0, the runbook's next line was the exfil
+# tar, and nothing machine-readable said an arm was still owed. The exit rule
+# is `session_rc` below, over both lists, so the summary and the code have one
+# source and both are plantable.
+owed_rows() {
+  awk -F'\t' 'NR > 1 { st[$1] = $2; rc[$1] = $3; nt[$1] = $7
+                       if (!($1 in seen)) { order[++n] = $1; seen[$1] = 1 } }
+              END { for (i = 1; i <= n; i++) { a = order[i]
+                      if (st[a] == "UNKNOWN" && nt[a] !~ /^DEFECT:/)
+                        printf "  %-19s exit %s   %s\n", a, rc[a], nt[a] } }' "$1"
+}
+
+# THE SESSION'S OWN EXIT CODE, from the ledger and the crash count, printed:
+#   RC_INVALID  any UNKNOWN row at all, DEFECT or owed. Nothing on such a page
+#               is a verdict, and exit 0 was read as "every arm produced a
+#               result" by whoever runs the exfil line next.
+#   RC_RETRY    otherwise, when any arm this pass exited a code outside the
+#               table or crashed before scoring a gate.
+#   0           otherwise. It still does not mean every arm is DONE: CLAIM_FAIL
+#               and INVALID are results and REFUSED is free; read the ledger.
+# The two constants are read from the environment on purpose, so a lifted test
+# that forgets to pass them fails unbound rather than reading a default.
+session_rc() {
+  local ledger="$1" retry="${2:-0}"
+  if [[ -n "$(defect_rows "$ledger")" || -n "$(owed_rows "$ledger")" ]]; then
+    echo "$RC_INVALID"; return 0
+  fi
+  if (( retry > 0 )); then echo "$RC_RETRY"; return 0; fi
+  echo 0
+}
+
 # THE NEWEST SESSION FOR THIS CARD THAT HOLDS A MEASURING LEDGER, or rc 1 and
 # nothing. "Newest" is by name, and the names carry a UTC stamp, so by name is
 # by time. A directory with no ARMS.tsv is not a session to resume into: a
@@ -932,13 +981,16 @@ contract_caveat() {
       printf '  a registered ANSWER: scripts/dram_counter_route.py used to return 3 for\n'
       printf '  every verdict that was not OPEN, and BLOCKED on a rented pod is what\n'
       printf '  that arm exists to find out, not a broken instrument; since adopting\n'
-      printf '  the table on 2026-09-02 it exits DONE on BLOCKED and no longer\n'
-      printf '  reaches this caveat. INVALID rows are latched and skipped on every\n'
+      printf '  the table on 2026-09-02 it scores one gate per verdict (OPEN DONE,\n'
+      printf '  BLOCKED CLAIM_FAIL, no ncu on PATH REFUSED) and no longer reaches\n'
+      printf '  this caveat. INVALID rows are latched and skipped on every\n'
       printf '  later run; delete this row from the ledger to run the arm again.\n' ;;
     CLAIM_FAIL|UNKNOWN)
       printf '  CAVEAT: this row came from %s,\n' "${rel:-a command outside scripts/}"
       printf '  %b.\n' "$why"
-      printf '  The command exited 1. Under the table that is CLAIM_FAIL: measured,\n'
+      printf '  The command exited %s; the ledger note reads: %s\n' \
+        "$(ledger_arm_rc "$name")" "$(ledger_arm_note "$name")"
+      printf '  Under the table 1 is CLAIM_FAIL: measured,\n'
       printf '  VALIDITY passed, a pre-registered CLAIM did not -- a RESULT, and the\n'
       printf '  one state this ledger LATCHES as finished so the arm is never spent\n'
       printf '  again. From a file that has not adopted the table, 1 is three things\n'
@@ -1139,6 +1191,74 @@ calibration_verdict() {
   echo OK
 }
 
+# THE GRADE OF THE REFERENCE CLOCK THE PUBLISHED RULER CARRIES, one line:
+#   <grade>|<mhz>|<usable_for_roof>|<source>
+# read through roofline.reference_clock over the card's tracked yaml, which is
+# the same resolver every arm levels against. `grade` is HOW the number was
+# taken (roofline.REFERENCE_UNDER_LOAD, _IDLE_SCALAR, _SETTLE_PLATEAU, or NONE
+# when the file carries no clock) and `usable_for_roof` is True only for the
+# under-load median. UNREADABLE when the module cannot be imported, which is
+# reported and refused rather than read as a grade. No apostrophes in the
+# heredoc: it sits inside a command substitution on a bash-3.2 laptop.
+reference_grade() {
+  local card="$1" dir="$2"
+  "$PY_BASE" - "$REPO" "$card" "$dir" <<'PY' 2>/dev/null
+import sys
+from pathlib import Path
+repo = Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(repo))
+try:
+    from moe.bench import roofline
+except Exception as exc:                                          # noqa: BLE001
+    print(f"UNREADABLE|0|False|moe.bench.roofline is not importable from {repo}: "
+          f"{exc.__class__.__name__}: {exc}")
+    raise SystemExit(0)
+ref = roofline.reference_clock(sys.argv[2], directory=Path(sys.argv[3]))
+mhz = int(ref.mhz) if ref.mhz else 0
+print(f"{ref.grade or 'NONE'}|{mhz}|{ref.usable_for_roof}|{ref.source}".replace(chr(10), " "))
+PY
+}
+
+# THE REFUSAL FOR A RULER WHOSE CLOCK THE ROOF CANNOT BE RESCALED AGAINST.
+# WHY THIS GATE EXISTS. The calibration gate above asks WHEN the yaml was
+# written and whether arm 0 stood behind it. It does not ask what KIND of clock
+# the yaml carries, and every arm below scores LEVEL against that clock and
+# writes a per-row roof (roof_at_cell_clock_tflops, pct_of_roof_at_cell_clock)
+# from it. roofline.reference_clock grades the field it read: only the median
+# sampled WHILE the calibration GEMM ran (under-load) may rescale the roof; the
+# post-hoc idle scalar, which calibrate.py records moving 30% across eleven
+# calibrations of one card, and the settle plateau are DISOWNED, so against
+# them the driver refuses the per-row roof on every row and LEVEL is
+# provisional. Then nothing normalised by the clock is quotable from the
+# session, and until 2026-09-08 no driver gate said so: the committed H200
+# yaml carries only the idle scalar (grade idle-scalar, 1515 MHz) and a session
+# run over it would have printed a ruler line and spent every arm. A DONE
+# calibrate on this tree writes detail.gemm_clock.median_mhz, so a ruler that
+# passed the arm gate and still grades below under-load is a calibrate that
+# published without sampling, which is worth three minutes to re-run and not a
+# session to spend.
+reference_grade_refusal() {
+  local card="$1" yaml="$2" grade="$3" mhz="$4" source="$5"
+  echo "REFUSED: the ruler for $card carries no clock the roof can be rescaled against."
+  echo "  $yaml: reference clock grade '$grade', ${mhz} MHz, usable_for_roof False."
+  echo "  source: $source"
+  echo "  Every arm below scores LEVEL against this clock and writes a per-row roof"
+  echo "  from it. roofline.reference_clock disowns every grade but 'under-load'"
+  echo "  (the median sampled while the calibration GEMM ran) for that rescaling, so"
+  echo "  against this ruler roof_at_cell_clock_tflops is refused on every row, the"
+  echo "  LEVEL verdict is provisional, and NOTHING NORMALISED BY THE CLOCK IS QUOTABLE:"
+  echo "  no roof fraction, no LEVEL exclusion, no alpha read off a ladder that"
+  echo "  excluded on LEVEL. On the H200 a memory-bound cell boosts to ~1980 MHz"
+  echo "  against a ~1515 MHz bf16 GEMM reference, so the fixed-roof fraction is"
+  echo "  inflated by up to 31% and the rescaled column is the correction; without"
+  echo "  it the session would reproduce the bias the fix round was opened for."
+  echo "  Read $LOGS/calibrate.log: a calibrate that lands DONE without writing"
+  echo "  detail.gemm_clock.median_mhz did not sample the clock during its GEMM"
+  echo "  (nvidia-ml-py missing from $PY_BASE is the usual cause). Fix it, delete"
+  echo "  the calibrate row from $LEDGER, and re-run arm 0:"
+  echo "      $PY_BASE $REPO/scripts/calibrate_hardware.py --publish"
+}
+
 # THE REFUSAL ITSELF, for whichever half of the gate failed, as a function so
 # that the WORDS can be planted and read in a test. A refusal that names the
 # wrong cause costs the operator the same hour as no refusal at all: the first
@@ -1147,6 +1267,8 @@ calibration_verdict() {
 # happened is that arm 0 was never scheduled.
 calibration_refusal() {
   local verdict="$1" card="$2" yaml="$3" state="$4" word="${1#* }"
+  local LEDGER_NOTE
+  LEDGER_NOTE="$(ledger_arm_note calibrate)"
   case "${verdict%% *}" in
    ARM)
     echo "REFUSED: arm 0 did not stand behind a ruler for $card."
@@ -1170,9 +1292,16 @@ calibration_refusal() {
                   echo "  is wrong. The yaml it published carries that accounting." ;;
       REFUSED)    echo "  It refused before measuring, so the yaml on disk is some earlier"
                   echo "  run's however fresh its stamp reads." ;;
-      UNKNOWN)    echo "  It exited 1 from a file this driver could not confirm speaks"
-                  echo "  moe/bench/exit_codes, so the driver will not read DONE, CLAIM_FAIL"
-                  echo "  or a crash out of it. Read the log and decide by hand." ;;
+      UNKNOWN)    echo "  The driver would not latch a word for it. The ledger note says why:"
+                  echo "      ${LEDGER_NOTE:-(the reason was not recorded on the row)}"
+                  echo "  UNKNOWN is five things (moe/bench/exit_codes and second_opinion in"
+                  echo "  this file): a DEFECT where the page and the exit code disagree, an"
+                  echo "  UNEARNED DONE or INVALID with no RESULT line, an exit 1 from a file"
+                  echo "  that has not adopted the table, or a log the second opinion could"
+                  echo "  not read. Until 2026-09-08 this branch named only the fourth, which"
+                  echo "  calibrate_hardware.py cannot produce (it adopts), and sent the"
+                  echo "  operator to the wrong cause at minute 3. Read the log and decide"
+                  echo "  by hand; an UNKNOWN row is NOT latched and re-runs on resume." ;;
       *)          echo "  That is not DONE, and DONE is the only state in which this"
                   echo "  instrument stands behind what it wrote." ;;
     esac
@@ -1261,6 +1390,18 @@ wanted() {
 # own gates. Nothing here decides an arm's state; `ledger_state` still does.
 ledger_arm_state() {
   awk -F'\t' -v a="$1" '$1 == a { s = $2 } END { print s }' "$LEDGER" 2>/dev/null
+}
+
+# THE NOTE AND THE EXIT CODE ON THAT SAME LAST ROW. The note is the one place
+# the driver wrote WHY a row is UNKNOWN (second_opinion's five reasons), and a
+# refusal that paraphrases one of the five is wrong for the other four the
+# moment they exist, which is what calibration_refusal did for five days and
+# summarize_arm had already been fixed for. Read, never restated.
+ledger_arm_note() {
+  awk -F'\t' -v a="$1" '$1 == a { s = $7 } END { print s }' "$LEDGER" 2>/dev/null
+}
+ledger_arm_rc() {
+  awk -F'\t' -v a="$1" '$1 == a { s = $3 } END { print s }' "$LEDGER" 2>/dev/null
 }
 
 # THE ONE LINE THE SUMMARY MAY GREP. Anchored at column zero on the prefix
@@ -1490,7 +1631,7 @@ arm_minutes()  { case "$1" in
   bn_g16) echo 36 ;;            anchor_measure) echo 5 ;;
   anchor_rescore) echo 0 ;;     occupancy) echo 23 ;;
   mma_switch) echo 7 ;;         ruler) echo 2 ;;         cap_test) echo 5 ;;
-  dtype) echo 6 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
+  dtype) echo 8 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
   counter_plan) echo 1 ;;
 esac; }
 
@@ -1513,7 +1654,7 @@ arm_basis() { case "$1" in
   mma_switch) echo "check_mma_path.sh --dry-run prints its four gates and NO time estimate. 7 min is this file's allowance for two real fused_moe compiles and two PTX dumps." ;;
   ruler)      echo "ruler_rebaseline.py --dry-run -> 'estimated GPU time 105 s (two settles, two GEMMs, two clock samples, two bandwidth passes, one Triton compile)'. That figure NAMES its compile, so nothing is unpriced here." ;;
   cap_test)   echo "tile_cap_test.py --dry-run --capability 9.0 -> 'estimated GPU time 242 s'." ;;
-  dtype)      echo "dtype_tile_confound.py --dry-run --card 'NVIDIA H200' -> 'COST 28 cells x 3 arms x 2 dtypes; 36 distinct Triton specialisations; 315 s of timed kernel'. Without --card it refuses and prints no cost at all." ;;
+  dtype)      echo "dtype_tile_confound.py --dry-run --card 'NVIDIA H200' -> 'COST 28 cells x 3 arms x 2 dtypes; 36 distinct Triton specialisations; 454 s of timed kernel: 3 repeats x (300 ms warmup + 3 trials x max(200 ms budget, one call))'. 454 s is 7.6 min, booked 8. It read 315 s until d789b5f charged the warmup as time; the three copies of the old figure in this file were not updated with it, and tests/test_h200_gaps_session.py now pins every KERNEL booking to the figure its plan prints. Without --card it refuses and prints no cost at all." ;;
   span_dense) echo "span_extent_separation.py --dry-run --densify -> '84 cells x 9 arms = 756 timed arms. Estimated KERNEL time 1814 s'." ;;
   span)       echo "span_extent_separation.py --dry-run --no-densify -> 'AND THIS GRID WOULD REFUSE: grid too sparse for C2'. Zero minutes: it stops before it spends one, and that refusal is the extent comparison's honest answer on the published grid." ;;
   counter_plan) echo "dram_counter_route.py --dry-run -> 'Budget 15 minutes of GPU time'. That 15 min is the ncu MEASUREMENT, which this arm does not run: the arm is --probe, which asks whether the counter route is open and returns in seconds." ;;
@@ -1638,8 +1779,8 @@ arm_closes() { case "$1" in
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
   pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
   roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
-  roofline-n256-g16) echo "THE CLAIM, and the only arm that can confirm it. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. Contests TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. TODAY IT REFUSES: no BLOCK_M=256 control fits at BLOCK_N=256 (256 registers per thread against 255 at 8 warps; 256 KiB of shared memory against 227 at 16), and this driver will not run the subject without the control that cancels the fused layer." ;;
-  roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim rests on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same missing control as the G=16 arm, and one fix unblocks both." ;;
+  roofline-n256-g16) echo "THE CLAIM'S CONFIGURATION, and NO ARM CAN CONFIRM IT ON sm_90. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. It was scheduled to contest TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. IT REFUSES AT EVERY WARP AND STAGE COUNT: the BLOCK_M=256 control that cancels the fused layer carries a 256x256 fp32 accumulator, 65536 of 65536 registers per block however the warps are split (bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0, and the same with --num-warps 16 --num-stages 3, both exit 2), so no pin rescues it and NO BLOCK_SIZE_N confirms the headline on this card. The refusal is the arm's finding: the paper's headline has no confirming arm on the H200, and this driver will not run the subject without its control." ;;
+  roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim would rest on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same accumulator as the G=16 arm, at every warp and stage count; there is no fix on sm_90 that unblocks either." ;;
   alias_ablation) echo "THE STUDY'S FIRST INFERENTIAL LINK, and the only instrument that tests it. Every alpha here is a slope per extra M-tile RELABELLED as a fraction of a fresh DRAM weight read; every cap, every roof fraction and 'a decode-configured kernel can never reach its compute roof' is that relabelling carried forward, and the relabelling rests on one regression against a byte model with no tile term. This measures the same quantity with no compulsory bytes, no calibrated bandwidth, no ridge and no fitted intercept: one access pattern run twice, one arm's weight loads pointed at an L2-resident column block, alpha = (D(n)/D(1) - 1)/(n-1) with D(1) MEASURED in the same units by the same clock rather than predicted. TWO OUTCOMES, AND BOTH ARE PUBLISHABLE. P1 PASS, the bracket overlapping the refit's 0.529-0.588: the per-tile slope IS DRAM traffic, the mechanism sentence keeps the word, and every cap below keeps its subject. P1 FAIL, the P1 RESULT line saying FAIL in that word and the bracket disjoint from it: the slope is L2-to-shared bandwidth or issue rate or MMA efficiency wearing DRAM's name, alpha_refit is measuring the wrong resource, and the paper's mechanism sentence has to drop the word and say instead which of 0.10 or 0.33 the measured interval did contain. THE THIRD STATE IS NOT AN OUTCOME: headroom or attribution FAILing is INVALID and says the apparatus could not have seen DRAM whatever alpha is, which is exactly what the 2026-09-01 attempt returned and was nearly read as a null result about DRAM. THE FOURTH STATE IS THE LIKELY ONE AND IT IS NOT AN OUTCOME EITHER, and it leaves the ledger with the SAME WORD as the FAIL above. This arm is booked --dot-fallback allow, and alias_ablation.py's own choose_pinning calls the fall to dot mode the LIKELY case rather than the corner: the 0.61-of-roof ceiling this arm exists to escape has the signature of the cross-lane tl.sum tree, which is exactly what dot removes. A dot ladder measures a LOWER BOUND on alpha, cannot ask P1 at all and leaves it UNKNOWN; exit_codes.classify maps an UNKNOWN CLAIM to CLAIM_FAIL; and arm() LATCHES a CLAIM_FAIL, so this arm spends its thirteen minutes, ends with no answer to P1, and is then SKIPPED by every resume of this session: the resume check re-runs no CLAIM_FAIL row, and deleting the row is the only thing that forces one. READ THE P1 RESULT LINE, NOT THE EXIT CODE: FAIL is the outcome above, and UNKNOWN with a detail opening 'NOT A REFUTATION' refutes no candidate at all, so the 0.10-or-0.33 sentence in the FAIL gloss must not be written from it. Re-booking takes a sum-mode pinning that clears the roof, by hand, in a later session. Filing a dot run as 'alpha is not 0.558' when alpha was not asked is the retraction this line exists to prevent. IT NEEDS ARM 0's PUBLISHED CALIBRATION AND DOES NOT REFUSE WITHOUT IT: with no measured yaml for this card both of those gates read UNKNOWN, which is INVALID, so this arm SPENDS its minutes and then may not be quoted. That is a sharper reason for the calibration gate than the five arms that refuse for free." ;;
   bm128_depth) echo "The evaluation's #2: five clean memory-bound treads at 128, monotone. The whole 128 row is currently n=2 across two cards, one on a ladder where time falls as rows rise." ;;
   noise_floor) echo "The evaluation's #3: a real between-replicate sd, WRITTEN INTO THE TRACKED TREE. The study has none; every effect so far is scored against an IMPORTED prior, including the MDE this session prints, and until --publish runs that line keeps saying ASSUMED however many replicates were paid for. Also publishes the num_stages control that would have caught the cross-card null. THE ARM SET IS ALL FOUR ARMS AND THAT IS THE DELIBERATE CHOICE, not the default falling through: two models x two swizzles is the SMALLEST set on which this script's own V7 can pass (>= 2 models, or a floor measured only where the swizzle effect is 0.3855 licensing a surface across models where it is 0.0226) and on which either C3 scores a real contrast (a swizzle delta needs G=1 AND G=16 of the SAME model; drop to two arms and C3 reads G=1 against G=1 and measures nothing). The bound is --replicates 3, not a smaller arm set, and it is bought at a stated price: at N=3 the floor ESTIMATE is known to 1.92x by its own table against 1.44x at N=6, so it is published as a floor with that scope attached and a later session extends it rather than re-deriving it." ;;
@@ -2096,6 +2237,23 @@ else
     calibration_refusal "$CALIB_VERDICT" "$CARD" "$CALIB_YAML" "$CALIB_STATE"
     exit "$RC_REFUSED"
   fi
+  # THE THIRD QUESTION: WHAT KIND OF CLOCK does the ruler carry. See
+  # reference_grade_refusal for why a fresh, DONE, published ruler can still
+  # be one no row below may be normalised against.
+  GRADE_LINE="$(reference_grade "$CARD" "$(dirname "$CALIB_YAML")")"
+  IFS='|' read -r GRADE_WORD GRADE_MHZ GRADE_USABLE GRADE_SOURCE <<< "$GRADE_LINE"
+  if [[ "${GRADE_USABLE:-}" == "True" ]]; then
+    note "   reference ${GRADE_MHZ} MHz, grade '${GRADE_WORD}' (${GRADE_SOURCE%%,*})."
+    note "             The per-row roof is scored on every row below: read"
+    note "             pct_of_roof_at_cell_clock beside pct_of_achieved_tflops, and"
+    note "             read clock_level_side on every LEVEL failure -- HIGH is a"
+    note "             boosted memory-bound cell, kept; only LOW or DRIFT excludes."
+  else
+    echo
+    reference_grade_refusal "$CARD" "$CALIB_YAML" "${GRADE_WORD:-UNREADABLE}" \
+      "${GRADE_MHZ:-0}" "${GRADE_SOURCE:-no source line was read}"
+    exit "$RC_REFUSED"
+  fi
 fi
 
 say "0. does MOE_FORCE_TILE reach the kernel AT THE CONFIGURATIONS THE ARMS RUN"
@@ -2168,19 +2326,23 @@ say "1b. THE CLAIM: BLOCK_M=128 at vLLM's own tuned entry (BN=256, G=16)"
 # bm128_roofline needs a positive control -- the same sweep at a tile with no
 # ceiling of its own, which cancels the fused layer's fixed cost, the clocks and
 # the occupancy -- and it pins ONE BLOCK_N for the subject and the control alike.
-# At BLOCK_N=256 no BLOCK_M=256 control can run on this hardware, by the script's
-# own resource model: at num_warps=8 the 256x256 fp32 accumulator asks 256
-# registers per thread against 255, and at num_warps=16 it fits the registers and
-# then asks 256 KiB of shared memory at num_stages=4 against sm_90's 227. Both
-# escapes (num_stages 3, or num_warps 16) change the SUBJECT away from the
-# configuration vLLM ships, which is the one thing this arm exists to measure.
-# So the arm is scheduled with the control it needs and REFUSES, free, before any
-# pod time, printing the bill. That refusal is the finding: the production
-# configuration has no BLOCK_M=256 control at its own BLOCK_N, and until
-# bm128_roofline can pin the control at a BLOCK_N of its own, the production
-# claim has a subject and nothing to cancel against. Running the subject alone
-# would produce another uninterpretable "0.5 of the roof", which is the number
-# this whole session exists to stop quoting.
+# At BLOCK_N=256 no BLOCK_M=256 control can run on sm_90, by the script's own
+# resource model, AT ANY WARP OR STAGE COUNT: the 256x256 fp32 accumulator is
+# 65536 registers per block, which is the entire register file, however the
+# warps are split. RETRACTED from this note: "256 registers per thread against
+# 255 at 8 warps" (RETRACTED), "256 KiB of shared memory against 227 at 16"
+# (RETRACTED), and the claim that num_stages 3 or num_warps 16 were escapes
+# that merely changed the subject; bm128_roofline now refuses the same command with
+# --num-warps 16 --num-stages 3 too, and prints NO TILE ABOVE BLOCK_M=128 CAN
+# BE PINNED AT BLOCK_SIZE_N=256 and NONE OF THE FIVE CONFIRMS THE HEADLINE ON
+# THIS CARD, AND NO BLOCK_SIZE_N DOES EITHER. So the arm is scheduled with the
+# control it needs and REFUSES, free, before any pod time, printing the bill.
+# That refusal is the finding: the production configuration has no control at
+# its own BLOCK_N on this card, the production claim has a subject and nothing
+# to cancel against, and the study cannot confirm its headline at vLLM's
+# shipped configuration on sm_90. Running the subject alone would produce
+# another uninterpretable "0.5 of the roof", which is the number this whole
+# session exists to stop quoting.
 if pre_hopper; then
   skip_arm roofline-n256-g16 \
     "compute capability $CAPABILITY: BLOCK_N=256 at 4 stages needs 192 KiB of shared memory against 164. The claim is about the H200 entry and this card cannot run it."
@@ -2412,9 +2574,13 @@ if (( DRY )); then
 else
   # On sm_80 it needs --num-stages 3: BM=256 x BN=128 at 4 stages asks 192 KiB
   # against 164. The script refuses and names the fix; we pass it up front.
+  # The empty-array expansion is guarded: under set -u, bash before 4.4 reads
+  # "${STAGES[@]}" of an empty array as an unbound variable and ends the
+  # session at this arm (verified on /bin/bash 3.2). Ubuntu's bash 5 does not,
+  # which is why it was never caught on a pod; the guard costs nothing.
   STAGES=(); [[ "$SM_MAJOR" == "8" ]] && STAGES=(--num-stages 3)
   arm bn_g16 "$PY_VLLM" "$REPO/scripts/bn_decomposition.py" --group-m 16 --reps 17 \
-      --fail-on-gate "${STAGES[@]}"
+      --fail-on-gate ${STAGES[@]+"${STAGES[@]}"}
 fi
 
 say "6. the memory-branch anchor, measured rather than extrapolated"
@@ -2469,12 +2635,21 @@ say "8. the ISA switch: is the instruction selected by the tile alone"
 if pre_hopper; then
   skip_arm mma_switch "compute capability $CAPABILITY reaches no warpgroup MMA at any tile."
 elif (( DRY )); then
-  arm mma_switch bash "$REPO/scripts/check_mma_path.sh" --dry-run --model deepseek-v3 --tokens 256 \
+  arm mma_switch env MOE_PYTHON="$PY_VLLM" bash "$REPO/scripts/check_mma_path.sh" --dry-run \
+      --model deepseek-v3 --tokens 256 \
       --block-m 16,64 --block-n 64 --block-k 64 --group-m 1 --warps 4 --stages 3
 else
   # ONE call, two tiles: --block-m takes a list, and everything else is held
   # fixed, so the only thing that moves between the two PTX dumps is BLOCK_M.
-  arm mma_switch bash "$REPO/scripts/check_mma_path.sh" --model deepseek-v3 --tokens 256 \
+  # THE INTERPRETER IS HANDED ACROSS. check_mma_path.sh chooses its python from
+  # MOE_PYTHON or /workspace/venvs/vllm/bin/python, and this driver resolves
+  # PY_VLLM with fallbacks and passed it to every vLLM arm but this one, so on
+  # a pod where PY_VLLM is overridden the MMA arm silently compiled under a
+  # different interpreter from the pin probes it is read beside, and off a GPU
+  # it refused on a missing /workspace path instead of on CUDA like every
+  # other arm. `env` is a plain command, so `arm` still captures its exit.
+  arm mma_switch env MOE_PYTHON="$PY_VLLM" bash "$REPO/scripts/check_mma_path.sh" \
+      --model deepseek-v3 --tokens 256 \
       --block-m 16,64 --block-n 64 --block-k 64 --group-m 1 --warps 4 --stages 3 \
       --out "$SESSION/ptx/mma-switch"
 fi
@@ -2503,7 +2678,7 @@ say "11. is the 1.15 fp8/bf16 crossing the FORMAT or the CONFIG"
 # did not draw here.
 # The refusal names its own fix, and supplying it plans the arm and prints the
 # cost the operator was never shown: "COST 28 cells x 3 arms x 2 dtypes; 36
-# distinct Triton specialisations; 315 s of timed kernel".
+# distinct Triton specialisations; 454 s of timed kernel".
 #
 # The hypothetical is LABELLED, not smuggled: the run id, the config lookup and
 # every row of a plan made this way say NVIDIA H200, and if the card that gets
@@ -2629,8 +2804,10 @@ cat "$LEDGER"
 # did not touch a defective arm still shows it. A `RESULT: CLAIM C1 FAIL` page
 # under exit 0 used to be latched DONE with nothing on this page to say so.
 DEFECTS=""
+OWED=""
 if (( DRY == 0 )); then
   DEFECTS="$(defect_rows "$LEDGER")"
+  OWED="$(owed_rows "$LEDGER")"
   if [[ -n "$DEFECTS" ]]; then
     say "THE ROWS WHOSE PAGE AND EXIT CODE DISAGREE"
     printf '  Each arm below printed RESULT lines that imply one exit code and then\n'
@@ -2642,6 +2819,17 @@ if (( DRY == 0 )); then
     printf '  session exits INVALID over these rows, because what is on the page is\n'
     printf '  not a verdict.\n\n'
     printf '%s\n' "$DEFECTS"
+  fi
+  if [[ -n "$OWED" ]]; then
+    say "THE ROWS THIS SESSION STILL OWES"
+    printf '  Each arm below is UNKNOWN for a reason other than a defective page:\n'
+    printf '  it exited 0 or 3 with no RESULT line (a check that examined nothing\n'
+    printf '  reports no failures), or exited 1 from a file that has not adopted\n'
+    printf '  the table, or left a log the second opinion could not read. No word\n'
+    printf '  is latched, nothing from them may be quoted, and --resume-latest\n'
+    printf '  re-attempts every one. The session exits INVALID over these rows,\n'
+    printf '  because exit 0 was being read as "every arm produced a result".\n\n'
+    printf '%s\n' "$OWED"
   fi
 fi
 printf '\ntotal %s min of wall clock\n' "$(( ($(date -u +%s) - started) / 60 ))"
@@ -2674,15 +2862,17 @@ cat <<EOF
                three: it is the apparatus saying it could not have seen DRAM
                whatever alpha is, which is what the 2026-09-01 attempt returned
                and what was nearly written up as a null result about DRAM.
-  roofline-n256-g16  the ## Verdict line, and the only arm here that can CONFIRM
-               the study's claim: BLOCK_M=128 at the configuration vLLM ships.
-               CEILING BINDING AT THE PRODUCTION TILE is the claim confirmed;
-               CEILING NOT BINDING refutes it and the paper becomes a model
-               note. Either is publishable. Read roofline-n64-g1 beside it as
-               the control it is: it can only refute. And if this arm REFUSED,
-               read the control bill it printed: the claim has no positive
-               control at BLOCK_N=256 yet, and nothing else in this session can
-               supply one.
+  roofline-n256-g16  its REFUSAL, which is the arm's finding. This is the
+               study's claim at the configuration vLLM ships (BLOCK_M=128,
+               BN=256, G=16) and it CANNOT be confirmed on sm_90: the BLOCK_M=256
+               control is refused at every warp and stage count (65536 of
+               65536 registers per block), no BLOCK_SIZE_N confirms the
+               headline on this card, and nothing else in this session can
+               supply a control. Read roofline-n64-g1 beside it as the control
+               it is: it can only refute. Were a card ever to run the control,
+               CEILING BINDING AT THE PRODUCTION TILE would confirm the claim
+               and CEILING NOT BINDING would refute it; on this card neither
+               line is printed and the paper has no confirming arm.
   noise_floor  the between-replicate sd. Every effect anywhere in this study is
                to be read against it from now on, and until it exists the MDE
                printed at the top of this run is an ASSUMPTION carried from a
@@ -2759,12 +2949,17 @@ if (( DRY )) && (( BROKEN_ARMS > 0 )); then
 EOF
   exit "$RC_INVALID"
 fi
-if (( DRY == 0 )) && [[ -n "$DEFECTS" ]]; then
-  say "$(printf '%s\n' "$DEFECTS" | wc -l | tr -d ' ') ROW(S) WHOSE PAGE AND EXIT CODE DISAGREE. Nothing from them may be quoted."
-  exit "$RC_INVALID"
-fi
-if (( DRY == 0 )) && (( RETRY_ARMS > 0 )); then
-  say "$RETRY_ARMS ARM(S) EXITED A CODE OUTSIDE THE TABLE, OR CRASHED BEFORE SCORING A GATE. Read their logs."
-  exit "$RC_RETRY"
+if (( DRY == 0 )); then
+  SESSION_RC="$(session_rc "$LEDGER" "$RETRY_ARMS")"
+  if [[ -n "$DEFECTS" ]]; then
+    say "$(printf '%s\n' "$DEFECTS" | wc -l | tr -d ' ') ROW(S) WHOSE PAGE AND EXIT CODE DISAGREE. Nothing from them may be quoted."
+  fi
+  if [[ -n "$OWED" ]]; then
+    say "$(printf '%s\n' "$OWED" | wc -l | tr -d ' ') ROW(S) STILL OWED: UNKNOWN, not latched, not a result. --resume-latest re-attempts them."
+  fi
+  if (( SESSION_RC == RC_RETRY )); then
+    say "$RETRY_ARMS ARM(S) EXITED A CODE OUTSIDE THE TABLE, OR CRASHED BEFORE SCORING A GATE. Read their logs."
+  fi
+  exit "$SESSION_RC"
 fi
 exit 0
