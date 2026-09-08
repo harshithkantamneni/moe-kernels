@@ -25,7 +25,8 @@ would have caught:
   R7  26 published report.json files with no commit, card, instrument or ruler
       source in them.
   R8  a fitted alpha read as a weight miss fraction, and caps taken as
-      2*BM/(alpha*b) from it, which overstates them by 32% at BM=128.
+      2*BM/(alpha*b) from it, which overstates them by a factor that is a
+      bracket over the unmeasured alpha_a (1.04x to 3.03x at BM=128).
 
 A SECOND PASS on 2026-09-02 added the block at the end of this file. Two
 reviewers read the first one and found that fixing R1-R8 had introduced or left
@@ -1790,3 +1791,136 @@ def test_a_measured_run_cannot_hide_under_the_synthetic_prefix_either():
     # is what stops this second wall from closing the first one's way out.
     args.self_test = 0.558
     assert BM.resolve_run_id(args, "NVIDIA H200") == args.run_id
+
+
+# --------------------------------------------------------------------------
+# 2026-09-08: the HIGH side of LEVEL. `timing.clock_flags` went two-sided on
+# 2026-09-03 and `Cell.clock_excluded` kept reading a failed verdict as "ran
+# cold", so every boosted memory-shaped cell (the H200's normal state, 1980 MHz
+# against a 1515 MHz GEMM reference) left every ladder fit. Both sides are
+# planted below, through the Cell, the synthetic world and the CLI.
+# --------------------------------------------------------------------------
+
+def _clocked_cell(load, level, side):
+    return BM.make_cell(MIXTRAL, 256, 128, 1.0, sm_count=132, block_n=64,
+                        sm_clock_load_mhz=load, clock_level_ok=level,
+                        clock_drift_ok=True, clock_level_side=side)
+
+
+def test_the_level_sides_are_the_instruments_own():
+    """Mirrored, not imported: `moe.bench.timing` imports torch at module
+    scope and this file replays a CSV on a laptop without one."""
+    timing = pytest.importorskip("moe.bench.timing")
+    assert BM.LEVEL_LOW == timing.LEVEL_LOW
+    assert BM.LEVEL_HIGH == timing.LEVEL_HIGH
+    assert BM.H200_BOOST_RATIO == pytest.approx(1980.0 / 1515.0)
+
+
+def test_a_boosted_cell_is_kept_and_a_cold_one_is_excluded():
+    """1980 against 1515 with the side "high" is not an exclusion; 1400 with
+    the side "low" is; a failed verdict with no side is a pre-side row and is
+    read as low; None is neither."""
+    high = _clocked_cell(1980.0, False, "high")
+    low = _clocked_cell(1400.0, False, "low")
+    legacy = _clocked_cell(1400.0, False, "")
+    unknown = _clocked_cell(None, None, "")
+    assert high.clock_excluded is False and high.clock_boosted is True
+    assert low.clock_excluded is True and low.clock_boosted is False
+    assert legacy.clock_excluded is True and legacy.clock_boosted is False
+    assert unknown.clock_excluded is False and unknown.clock_boosted is False
+    # The instrument's None side is stored as the blank, never as "None".
+    assert _clocked_cell(1515.0, True, None).clock_level_side == ""
+
+
+def test_a_side_on_a_verdict_that_did_not_fail_is_refused():
+    with pytest.raises(ValueError, match="did not fail"):
+        _clocked_cell(1980.0, True, "high")
+    with pytest.raises(ValueError, match="not one of"):
+        _clocked_cell(1980.0, False, "up")
+    with pytest.raises(ValueError, match="did not fail"):
+        BM.check_level_side(None, "low")
+    BM.check_level_side(False, "low")
+    BM.check_level_side(False, "high")
+    BM.check_level_side(True, "")
+
+
+def test_the_side_round_trips_through_the_cells_csv(tmp_path):
+    path = tmp_path / "cells.csv"
+    for cell in (_clocked_cell(1980.0, False, "high"),
+                 _clocked_cell(1400.0, False, "low"),
+                 _clocked_cell(1515.0, True, "")):
+        BM.append_cell(path, cell)
+    _, back = BM.read_cells(path)
+    assert [c.clock_level_side for c in back] == ["high", "low", ""]
+    assert [c.clock_excluded for c in back] == [False, True, False]
+    assert [c.clock_boosted for c in back] == [True, False, False]
+    assert "clock_level_side" in path.read_text().splitlines()[0].split(",")
+
+
+def test_a_boosted_tread_stays_on_the_ladder_and_is_counted_as_kept():
+    """The mirror of `test_a_low_clock_cell_is_excluded_from_the_ladder_and_
+    counted`: the same tread planted HIGH is on the ladder, the exclusion
+    count is zero, the kept count is one, and the fit is the clean world's."""
+    clean = cells_at(REFIT)
+    grid = BM.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    hot = BM.synthetic_cells(MIXTRAL, grid, TILES, alpha=REFIT, ridge=RIDGE,
+                             bandwidth_gbps=BANDWIDTH, b=2, sm_count=132,
+                             high_clock=(64, 2))
+    boosted = [c for c in hot if c.clock_boosted]
+    assert boosted and all(c.block_m == 64 and c.tiles_per_expert == 2
+                           for c in boosted)
+    assert all(c.sm_clock_load_mhz
+               == pytest.approx(BM.SYNTHETIC_CLOCK_MHZ * BM.H200_BOOST_RATIO)
+               for c in boosted)
+    assert not any(c.clock_excluded for c in hot)
+    full, dropped_clean = BM.ladder_treads(clean, 64)
+    kept, dropped = BM.ladder_treads(hot, 64)
+    assert dropped_clean == 0 and dropped == 0
+    assert kept == full
+    assert BM.boosted_treads(hot, 64) == 1 and BM.boosted_treads(clean, 64) == 0
+    assert BM.boosted_treads(hot, 128) == 0
+    report = analyse(hot, alpha=REFIT)
+    fit = report.payload["ladder"]["64"]
+    assert fit["kept_high_clock"] == 1 and fit["excluded_low_clock"] == 0
+    assert fit["alpha"] == pytest.approx(
+        analyse(clean, alpha=REFIT).payload["ladder"]["64"]["alpha"])
+    text = report.text()
+    assert "KEPT with LEVEL failed HIGH" in text
+    assert "fixed-roof fraction not comparable" in text
+    assert "roof_at_cell_clock_tflops" in text
+
+
+def test_the_high_clock_world_reports_kept_treads_and_exits_done(tmp_path):
+    """End to end through the CLI, the way `test_the_low_clock_world_reports_
+    the_exclusion_in_the_report` does for the other side: the nine cells on
+    the planted tread are KEPT and counted, the ladder row says one kept, and
+    the world is DONE with nothing excluded."""
+    rc, payload = run(["--self-test-world", BM.HIGH_CLOCK_WORLD], tmp_path)
+    assert rc == exit_codes.DONE
+    assert payload["cells_excluded_for_clock_level"] == 0
+    assert payload["cells_excluded_for_clock_level_from_ladders"] == 0
+    assert payload["cells_kept_level_high"] == 9
+    assert payload["cells_kept_level_high_from_ladders"] == 1
+    row = payload["ladder"]["64"]
+    assert row["kept_high_clock"] == 1 and row["excluded_low_clock"] == 0
+    assert row["outcome"] == BM.IDENTIFIED
+    _, clean = run(["--self-test", str(BM.ALPHA)], tmp_path / "clean")
+    assert row["alpha"] == pytest.approx(clean["ladder"]["64"]["alpha"])
+    assert len(clean["ladder"]["64"]["points"]) == len(row["points"])
+    _, low = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path / "low")
+    assert low["ladder"]["64"]["excluded_low_clock"] == 1
+    assert len(low["ladder"]["64"]["points"]) == len(row["points"]) - 1
+
+
+def test_the_cap_overstatement_delegates_to_the_one_bracket():
+    """ONE definition of the alpha_a-in-{0, 1} loop: the sweep's bracket is
+    `ai_model.overstatement_bracket` exactly, at every tile."""
+    n, k = 2 * MIXTRAL.intermediate_size, MIXTRAL.hidden_size
+    for bm in (32, 64, 128, 256):
+        assert BM.cap_overstatement(MIXTRAL, bm, 64, 2) == \
+            ai_model.overstatement_bracket(n, k, block_m=bm, block_n=64, b=2)
+    # And the two docstrings that used to state a point state the bracket.
+    for doc in (BM.LadderFit.alpha.__doc__, BM.cap_overstatement.__doc__):
+        assert "overstatement_bracket" in doc
+        assert "32% at BM=128" not in doc
+        assert "about 1.32: a 32% overstatement" not in doc

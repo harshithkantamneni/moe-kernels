@@ -279,7 +279,7 @@ def test_a_single_repeat_has_no_spread_and_so_cannot_resolve_anything(rf):
 # --------------------------------------------------------------------------
 
 def _timing(rf, *, block_m=128, rows=256, rep=1, ms=1.0, load=1500.0,
-            level=True, drift=True, clocks=True):
+            level=True, drift=True, clocks=True, side=None):
     """One row in the shape `time_kernel` writes.
 
     `load`, `level` and `drift` are the three things the instrument reports
@@ -287,7 +287,15 @@ def _timing(rf, *, block_m=128, rows=256, rep=1, ms=1.0, load=1500.0,
     independently: a cell can drift without being cold and be cold without
     drifting. `clocks=False` is the container with no NVML, where all three are
     None and nothing may be excluded on any of them.
+
+    `side` is the direction a FAILED level went. Left None it is the
+    instrument's own rule, `timing.level_side` against the committed H200
+    reference of 1515 MHz, so a row planted at 1980 is "high" and one at 1200
+    is "low" without the test having to say so; given, it is planted as is.
     """
+    if side is None and clocks and level is False:
+        from moe.bench import timing
+        side = timing.level_side(load, 1515.0) or "low"
     return rf.Timing(
         block_m, rows, max(1, -(-rows // block_m)), rows * 4, rep, ms, ms, 0.0,
         10, sm_clock_load_mhz=load if clocks else None,
@@ -295,6 +303,7 @@ def _timing(rf, *, block_m=128, rows=256, rep=1, ms=1.0, load=1500.0,
         sm_clock_end_mhz=load if clocks else None,
         clock_level_ok=level if clocks else None,
         clock_drift_ok=drift if clocks else None,
+        clock_level_side=(side or "") if clocks else "",
         instrument="test/fake", warmup_ms=300.0, trials=3, l2_flush=True)
 
 
@@ -339,6 +348,55 @@ def test_a_cell_below_the_roofs_clock_is_excluded_though_it_never_drifted(
                              clock_ref=1500)
     assert points[0].retained is False
     assert "below" in points[0].excluded_why
+
+
+def test_a_cell_above_the_roofs_clock_is_kept_and_rescored_at_its_own_clock(
+        rf, cfg, roof):
+    """THE HIGH SIDE OF LEVEL IS NOT AN EXCLUSION. A memory-shaped cell on the
+    H200 runs at 1980 MHz against the 1515 MHz bf16 GEMM the roof was measured
+    at; that is the card's normal state, not a throttle. Until 2026-09-08
+    `Timing.cold` was `clock_level_ok is False`, so once `timing.clock_flags`
+    went two-sided every such cell left the gated set.
+
+    What IS wrong about it is its fraction of the fixed roof, inflated by
+    1980/1515; the point carries the fraction of the roof at its own clock,
+    which is the fixed one over that ratio.
+    """
+    assert roof.clock_mhz == 1515
+    hot = _timing(rf, rep=1, ms=2.0, load=1980.0, level=False)
+    assert hot.clock_level_side == "high"
+    assert hot.throttled is False and hot.cold is False
+    assert hot.boosted is True and hot.excluded is False
+    points = rf.build_points([hot], cfg, 128, roof, sm_count=132, block_n=64,
+                             clock_ref=1980)
+    assert points[0].retained is True
+    assert points[0].throttled_reps == 0 and points[0].boosted_reps == 1
+    assert points[0].roof_fraction_at_clock == pytest.approx(
+        points[0].roof_fraction * 1515.0 / 1980.0)
+    # And the LOW row of the same shape is still excluded: the fix is a side
+    # read, not an exclusion removed.
+    cold = _timing(rf, rep=1, ms=2.0, load=1400.0, level=False)
+    assert cold.clock_level_side == "low"
+    assert cold.cold is True and cold.excluded is True
+    assert rf.build_points([cold], cfg, 128, roof, sm_count=132, block_n=64,
+                           clock_ref=1400)[0].retained is False
+
+
+def test_a_failed_level_with_no_side_is_read_as_low(rf):
+    """Rows written before 2026-09-03 could only fail LEVEL one way; a blank
+    side on a failed verdict is that row and stays an exclusion."""
+    legacy = _timing(rf, load=1200.0, level=False, side="")
+    assert legacy.clock_level_side == ""
+    assert legacy.cold is True and legacy.boosted is False
+
+
+def test_a_side_on_a_verdict_that_did_not_fail_is_refused(rf):
+    """A side is the direction a FAILURE went; a passing verdict carrying one
+    was built from two sources, and reading it either way is a default."""
+    with pytest.raises(ValueError, match="did not fail"):
+        _timing(rf, load=1980.0, level=True, side="high")
+    with pytest.raises(ValueError, match="not one of"):
+        _timing(rf, load=1980.0, level=False, side="up")
 
 
 def test_a_clock_verdict_of_none_excludes_nothing(rf, cfg, roof):
@@ -956,7 +1014,7 @@ def test_every_planted_world_reaches_a_different_verdict(rf, cfg, roof):
         assert expected in body
     named = {g.name for g in gates}
     assert {"S discrimination", "S drift exclusion",
-            "S level exclusion"} <= named
+            "S level exclusion", "S high side kept"} <= named
     assert all(g.passed is True for g in gates), \
         [g.name for g in gates if g.passed is not True]
 
@@ -1349,6 +1407,7 @@ def test_the_mirrored_clock_constants_are_the_instruments_own(rf):
     are mirrored rather than imported; this asserts them wherever it imports."""
     timing = pytest.importorskip("moe.bench.timing")
     assert rf.CLOCK_FLOOR_FRACTION == timing.LEVEL_FRACTION
+    assert rf.CLOCK_CEILING_FRACTION == timing.LEVEL_HIGH_FRACTION
     assert rf.THROTTLE_DRIFT_PCT == timing.DRIFT_FRACTION * 100.0
 
 
@@ -1385,23 +1444,57 @@ def test_the_script_no_longer_asks_the_sweep_for_the_retired_instrument(rf):
     assert "reference_clock_mhz" in src_needed
 
 
-def test_a_session_at_the_roofs_clock_passes_where_an_idle_sample_would_fail(
+def test_a_session_that_ran_high_passes_v3_on_the_rescaled_roof_and_a_low_one_fails(
         rf, cfg, roof):
-    """R3. The H200 idles at 1980 and runs a dense GEMM at 1515.
+    """R3, INVERTED ON 2026-09-08. The H200 runs a dense bf16 GEMM at 1515 MHz
+    and a memory-shaped cell at 1980, and the roof is measured at the first.
 
-    Under load at 1515 this session is at the roof's operating point and PASSES.
-    The same session sampled at the idle instant reads 1980, which is +31%
-    against the roof and FAILS a 10% gate for no reason connected to the run.
+    Until this tree the assertion here was that a session at 1980 FAILS V3,
+    on the reading that 1980 was an idle-instant sample. Under load it is the
+    card's normal state for every memory-bound cell, so that FAIL landed the
+    roofline arms INVALID on an honest session and the driver latched them.
+    A session at 1515 passes; a session at 1980 (every cell LEVEL-high)
+    PASSES, with every retained point carrying its fraction of the roof at
+    its own clock, the fixed fraction over 1980/1515; a session at 1400
+    (every cell LEVEL-low) FAILS; and a session whose clocks drifted FAILS.
     """
     assert roof.clock_mhz == 1515
     rows = [_timing(rf, rows=256, rep=r, load=1515.0) for r in range(1, 6)]
     points = rf.build_points(rows, cfg, 128, roof, sm_count=132, block_n=64,
                              clock_ref=1515)
     assert rf.gate_v3_clocks(rows, points, roof, 1515).passed is True
-    idle = [_timing(rf, rows=256, rep=r, load=1980.0) for r in range(1, 6)]
-    idle_points = rf.build_points(idle, cfg, 128, roof, sm_count=132,
+
+    high = [_timing(rf, rows=256, rep=r, load=1980.0, level=False)
+            for r in range(1, 6)]
+    assert all(t.clock_level_side == "high" for t in high)
+    high_points = rf.build_points(high, cfg, 128, roof, sm_count=132,
                                   block_n=64, clock_ref=1980)
-    assert rf.gate_v3_clocks(idle, idle_points, roof, 1980).passed is False
+    gate = rf.gate_v3_clocks(high, high_points, roof, 1980)
+    assert gate.passed is True, gate.observed
+    assert "5 high and kept" in gate.observed
+    assert high_points[0].retained is True
+    assert high_points[0].roof_fraction_at_clock == pytest.approx(
+        high_points[0].roof_fraction * 1515.0 / 1980.0)
+    body = " ".join(gate.lines)
+    assert "OVERSTATED" in body and "1.31x" in body
+    assert f"{high_points[0].roof_fraction:.3f}->" \
+           f"{high_points[0].roof_fraction_at_clock:.3f}" in body
+
+    low = [_timing(rf, rows=256, rep=r, load=1400.0, level=False)
+           for r in range(1, 6)]
+    assert all(t.clock_level_side == "low" for t in low)
+    low_points = rf.build_points(low, cfg, 128, roof, sm_count=132,
+                                 block_n=64, clock_ref=1400)
+    gate = rf.gate_v3_clocks(low, low_points, roof, 1400)
+    assert gate.passed is False
+    assert "5 low" in gate.observed and "0 high" in gate.observed
+
+    drifted = [_timing(rf, rows=256, rep=r, load=1515.0, drift=False)
+               for r in range(1, 6)]
+    drifted_points = rf.build_points(drifted, cfg, 128, roof, sm_count=132,
+                                     block_n=64, clock_ref=1515)
+    assert rf.gate_v3_clocks(drifted, drifted_points, roof, 1515).passed \
+        is False
 
 
 # --------------------------------------------------------------------------
@@ -1411,7 +1504,7 @@ def test_a_session_at_the_roofs_clock_passes_where_an_idle_sample_would_fail(
 
 KERNEL_TIMING_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
                          "sm_clock_load_mhz", "clock_level_ok",
-                         "clock_drift_ok", "l2_flush")
+                         "clock_drift_ok", "clock_level_side", "l2_flush")
 
 
 def test_the_cells_csv_carries_every_kernel_timing_column(rf, tmp_path):
@@ -1443,13 +1536,37 @@ def test_a_clock_verdict_of_none_round_trips_as_none_and_not_as_false(rf,
     assert back[0].cold is False and back[0].throttled is False
 
 
+def test_the_level_side_round_trips_through_the_csv_and_a_blank_is_a_value(
+        rf, tmp_path):
+    """The side is a column so a replayed cells.csv can tell a boosted row
+    from a cold one; a file written before the column existed reads back
+    blank on every row, which `cold` reads as the pre-side one-sided flag."""
+    path = tmp_path / "cells.csv"
+    rf.append_timing(path, _timing(rf, rep=1, load=1980.0, level=False))
+    rf.append_timing(path, _timing(rf, rep=2, load=1200.0, level=False))
+    rf.append_timing(path, _timing(rf, rep=3))
+    _, back = rf.read_timings(path)
+    assert [t.clock_level_side for t in back] == ["high", "low", ""]
+    assert [t.boosted for t in back] == [True, False, False]
+    assert [t.cold for t in back] == [False, True, False]
+    old = tmp_path / "old.csv"
+    old.write_text(
+        "block_m,rows_per_expert,tiles,tokens,rep,ms_p50,ms_min,ms_stdev,"
+        "iters,sm_clock_load_mhz,clock_level_ok,clock_drift_ok\n"
+        "128,256,2,1024,1,1.0,1.0,0.0,10,1200.0,False,True\n")
+    _, legacy = rf.read_timings(old)
+    assert legacy[0].clock_level_side == ""
+    assert legacy[0].cold is True and legacy[0].boosted is False
+
+
 def test_the_figure_csv_carries_the_instrument_on_every_row(rf, roof, tmp_path):
     rows = rf.figure_rows(_series(rf, roof), roof, "nvidia_h200")
     path = tmp_path / "figure.csv"
     rf.write_figure_csv(path, rows)
     header = path.read_text().splitlines()[0].split(",")
     for column in ("instrument", "warmup_ms", "trials", "l2_flush",
-                   "clock_level_ok"):
+                   "clock_level_ok", "clock_level_side", "boosted_reps",
+                   "roof_fraction_at_clock"):
         assert column in header, column
 
 

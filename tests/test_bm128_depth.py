@@ -690,7 +690,8 @@ def _run_world(bm, world, *, seed=0, noise=None, low_clock=None):
         bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
         noise=bm.PUBLISHED_LADDER_SPREAD if noise is None else noise, seed=seed,
         low_clock_treads=(world.low_clock_treads if low_clock is None
-                          else low_clock))
+                          else low_clock),
+        high_clock_treads=world.high_clock_treads)
     return bm.analyse_run(
         samples, cfg, 2,
         ceiling_tflops=world.rho * bm.SELF_TEST_BANDWIDTH * 1e9 / 1e12,
@@ -882,8 +883,15 @@ def test_every_tread_is_still_printed_with_the_dropped_ones_marked(bm):
     world = _world(bm, "low-clock")
     lines, _, _ = _run_world(bm, world)
     text = "\n".join(lines)
-    assert text.count("NO: clock below the roof's") == 6
+    assert text.count("NO: LEVEL low, clock below the roof's") == 6
     assert text.count("  yes") >= 2
+    # And the other side is marked as KEPT on every one of its rows, with the
+    # fixed-roof caveat, rather than passing as an unremarkable "yes".
+    high = _world(bm, "high-clock")
+    lines, _, _ = _run_world(bm, high)
+    text = "\n".join(lines)
+    assert text.count("NO: LEVEL low") == 0
+    assert text.count("(LEVEL high, kept; fixed-roof fraction not comparable)") == 6
 
 
 def test_a_ladder_whose_every_tread_was_excluded_is_vacuous_and_says_so(bm):
@@ -2066,3 +2074,179 @@ def test_a_card_whose_calibration_records_no_clock_is_refused_before_the_ladders
     passed = capsys.readouterr()
     assert "reference clock: 1515 MHz" in passed.out
     assert "timed after the refusal" in passed.err
+
+
+# --------------------------------------------------------------------------
+# 2026-09-08: the HIGH side of LEVEL. `timing.clock_flags` went two-sided on
+# 2026-09-03 and this file's `Sample.clock_excluded` kept reading a failed
+# verdict as "ran cold", so on an H200, where every memory-bound tread boosts
+# to 1980 MHz against the 1515 MHz GEMM reference, the five clean treads this
+# arm exists to measure were all dropped. Each test below plants BOTH sides.
+# --------------------------------------------------------------------------
+
+def _clocked(bm, rep, load, level, side, **over):
+    kw = dict(clock_level_ok=level, clock_drift_ok=True,
+              sm_clock_load_mhz=load, reference_clock_mhz=1515.0,
+              clock_level_side=side)
+    kw.update(over)
+    return bm.Sample(128, 4, 512, 2048, rep, 1.0, 1.0, 0.0, 10, **kw)
+
+
+def test_a_boosted_sample_is_kept_and_a_cold_one_is_excluded(bm):
+    """1980 against 1515 with the side "high" is the H200's normal state for a
+    memory-bound tread and is NOT an exclusion; 1400 with the side "low" is
+    the throttle the exclusion was built for and still is one."""
+    high = _clocked(bm, 1, 1980.0, False, "high")
+    low = _clocked(bm, 2, 1400.0, False, "low")
+    assert high.clock_excluded is False and high.clock_boosted is True
+    assert low.clock_excluded is True and low.clock_boosted is False
+    # A failed verdict with no side is a row from before the side existed and
+    # could only have failed low.
+    legacy = _clocked(bm, 3, 1400.0, False, "")
+    assert legacy.clock_excluded is True and legacy.clock_boosted is False
+    # None is still not an exclusion in either direction.
+    unknown = _clocked(bm, 4, None, None, "")
+    assert unknown.clock_excluded is False and unknown.clock_boosted is False
+
+
+def test_a_side_on_a_verdict_that_did_not_fail_is_refused(bm):
+    """A side is the direction a FAILURE went. A passing verdict carrying one
+    was assembled from two sources and one of them is wrong; a row like that
+    is refused at construction rather than read either way."""
+    with pytest.raises(ValueError, match="did not fail"):
+        _clocked(bm, 1, 1980.0, True, "high")
+    with pytest.raises(ValueError, match="not one of"):
+        _clocked(bm, 1, 1980.0, False, "boosted")
+
+
+def test_tread_clock_reports_the_side_and_only_an_all_high_tread_is_high(bm):
+    """The side travels with the majority verdict. A tread whose repeats failed
+    on BOTH edges was timed at two operating points and its median is a
+    blend, which is the throttle and not the boosted state: it is LOW."""
+    all_high = [_clocked(bm, r, 1980.0, False, "high") for r in range(1, 6)]
+    level, _, mhz, side = bm.tread_clock(all_high, 128)[4]
+    assert level is False and side == "high" and mhz == 1980.0
+    mixed = ([_clocked(bm, 1, 1980.0, False, "high")]
+             + [_clocked(bm, r, 1400.0, False, "low") for r in (2, 3)])
+    level, _, _, side = bm.tread_clock(mixed, 128)[4]
+    assert level is False and side == "low"
+    fine = [_clocked(bm, r, 1515.0, True, "") for r in range(1, 4)]
+    assert bm.tread_clock(fine, 128)[4][3] == ""
+    # One boosted repeat out of five is absorbed by the median, exactly as
+    # one throttled repeat is, and the tread's side is then blank.
+    one_high = ([_clocked(bm, 1, 1980.0, False, "high")]
+                + [_clocked(bm, r, 1515.0, True, "") for r in range(2, 6)])
+    assert bm.tread_clock(one_high, 128)[4][0] is True
+    assert bm.tread_clock(one_high, 128)[4][3] == ""
+
+
+def test_the_level_side_round_trips_through_the_csv(bm, tmp_path):
+    path = tmp_path / "cells.csv"
+    for row in (_clocked(bm, 1, 1980.0, False, "high"),
+                _clocked(bm, 2, 1400.0, False, "low"),
+                _clocked(bm, 3, 1515.0, True, "")):
+        bm.append_sample(path, row)
+    _, back = bm.read_samples(path)
+    assert [s.clock_level_side for s in back] == ["high", "low", ""]
+    assert [s.clock_boosted for s in back] == [True, False, False]
+    assert [s.clock_excluded for s in back] == [False, True, False]
+    # A cells.csv from before the column reads back blank, which on a failed
+    # verdict is the pre-side one-sided flag.
+    old = tmp_path / "old.csv"
+    old.write_text("block_m,tiles,rows_per_expert,tokens,rep,ms_p50,ms_min,"
+                   "ms_stdev,iters,status,detail,sm_clock_load_mhz,"
+                   "clock_level_ok,clock_drift_ok\n"
+                   "128,4,512,2048,1,1.0,1.0,0.0,10,ok,,1400.0,False,True\n")
+    _, legacy = bm.read_samples(old)
+    assert legacy[0].clock_level_side == ""
+    assert legacy[0].clock_excluded is True
+
+
+def test_boosted_treads_stay_in_the_fit_and_the_report_counts_them(bm):
+    """THE ARM'S PAYLOAD. Six subject treads planted HIGH by the H200's own
+    ratio (`SELF_TEST_HIGH_CLOCK_MHZ` against `SELF_TEST_REFERENCE_CLOCK_MHZ`)
+    must be fitted exactly as the quiet world's are: same memory-tread count,
+    same alpha, same outcome, zero excluded, six counted as kept, and the
+    report saying in words that their fixed-roof fraction is not comparable.
+    The same six planted LOW are excluded, so the two sides are told apart by
+    the side and not by the count."""
+    cfg = MODEL_CONFIGS["qwen2-57b-a14b"]
+    kw = dict(alpha=0.95, rho=175.0, bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
+              noise=bm.PUBLISHED_LADDER_SPREAD)
+    quiet = bm.planted_samples(cfg, **kw)
+    hot = bm.planted_samples(cfg, high_clock_treads=(3, 4, 5, 6, 7, 8), **kw)
+    cold = bm.planted_samples(cfg, low_clock_treads=(3, 4, 5, 6, 7, 8), **kw)
+    assert sum(1 for s in hot if s.clock_boosted) == 6 * 5
+    assert not any(s.clock_excluded for s in hot)
+    assert all(s.sm_clock_load_mhz == bm.SELF_TEST_HIGH_CLOCK_MHZ
+               for s in hot if s.clock_boosted)
+    assert bm.SELF_TEST_HIGH_CLOCK_MHZ / bm.SELF_TEST_REFERENCE_CLOCK_MHZ \
+        == pytest.approx(1980.0 / 1515.0)
+    args = dict(ceiling_tflops=175.0 * bm.SELF_TEST_BANDWIDTH * 1e9 / 1e12,
+                ceiling_source="test", compiles={128: 1, 256: 1},
+                executed={128: 40, 256: 20}, ridge=175.0,
+                bandwidth_gbps=bm.SELF_TEST_BANDWIDTH, draws=200)
+    _, _, quiet_pay = bm.analyse_run(quiet, cfg, 2, **args)
+    lines, _, hot_pay = bm.analyse_run(hot, cfg, 2, **args)
+    _, _, cold_pay = bm.analyse_run(cold, cfg, 2, **args)
+    assert hot_pay["excluded_low_clock"] == 0
+    assert hot_pay["kept_high_clock"] == 6
+    assert hot_pay["kept_high_clock_reference"] == 0
+    assert hot_pay["memory_points"] == quiet_pay["memory_points"]
+    assert hot_pay["alpha"] == pytest.approx(quiet_pay["alpha"])
+    assert hot_pay["ladder_outcome"] == quiet_pay["ladder_outcome"]
+    assert cold_pay["excluded_low_clock"] == 6
+    assert cold_pay["kept_high_clock"] == 0
+    assert cold_pay["ladder_outcome"] == "undecided_low_clock"
+    assert any("6 tread(s) KEPT with LEVEL failed HIGH" in ln for ln in lines)
+    assert any("not comparable" in ln for ln in lines)
+    assert any("LEVEL high, kept" in ln for ln in lines)
+    with pytest.raises(ValueError, match="both low and high"):
+        bm.planted_samples(cfg, low_clock_treads=(3,), high_clock_treads=(3,),
+                           **kw)
+
+
+def test_the_high_clock_world_is_registered_done_with_every_tread_kept(bm):
+    """The planted world, through `self_test` the way the pod's `--self-test`
+    runs it, and its payload registration is what would catch the treads
+    being dropped while the ladder still identified."""
+    worlds = {w.name: w for w in bm.SELF_TEST_WORLDS}
+    high = worlds["high-clock"]
+    assert high.high_clock_treads == (3, 4, 5, 6, 7, 8)
+    assert high.exit_code == exit_codes.DONE
+    assert high.expect_payload == {"excluded_low_clock": 0,
+                                   "kept_high_clock": 6}
+    assert worlds["low-clock"].expect_payload["excluded_low_clock"] == 6
+    _, gates, payload = _run_world(bm, high)
+    assert high.check(gates, payload) == []
+    # And the registration can FAIL: checked without a payload, every payload
+    # key is reported missing rather than silently passed.
+    assert len(high.check(gates, None)) == 2
+    assert high.check(gates, dict(payload, kept_high_clock=0)) == [
+        "payload['kept_high_clock']: registered 6, got 0"]
+
+
+def test_the_registered_p1_baseline_is_computed_from_the_corpus_not_typed(bm):
+    """The page carried `sd 0.078` as a literal while its own feasibility block
+    computed 0.0843 from the same 22 ladders. The number is now formed from
+    the corpus by the same arithmetic the audit table uses, and a checkout
+    without a corpus prints NOT RECOMPUTABLE rather than a number."""
+    import statistics
+    corpus = bm.published_bc(ROOT / "results" / "published", "bf16",
+                             bm.HARDWARE_DIR)
+    assert corpus is not None, "the committed corpus must be readable here"
+    records, _ = bm.load_corpus(ROOT / "results" / "published", "bf16",
+                                bm.HARDWARE_DIR)
+    rows = [bm.audit_record(r, draws=20) for r in records]
+    ratios = [r.ratio for r in rows
+              if r.level is not None and r.level.passes and r.ratio is not None]
+    assert corpus.n == len(ratios) >= 2
+    assert corpus.sd == pytest.approx(statistics.pstdev(ratios))
+    assert corpus.median == pytest.approx(statistics.median(ratios))
+    text = bm.predictions_text(2, corpus)
+    assert f"sd {corpus.sd:.3f}" in text
+    assert "0.078" not in text
+    assert f"{corpus.n} published ladders" in text
+    absent = bm.predictions_text(2, None)
+    assert "NOT RECOMPUTABLE" in absent and "sd " not in absent.split("P2")[0]
+    assert bm.published_bc(ROOT / "nowhere", "bf16", bm.HARDWARE_DIR) is None
