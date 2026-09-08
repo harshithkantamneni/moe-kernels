@@ -416,7 +416,7 @@ its own peak than bf16 does of its. That makes the prediction worse, not better:
 | 2.000 (datasheet) | 1.000 |
 | 1.828 (this calibration) | 0.914 |
 | 2.008 (against the older bf16 figure) | 1.004 |
-| **measured, two production kernels** | **1.149 +/- 0.069** |
+| **measured, two production kernels** | **1.149 +/- 0.069** (pooled routing; retracted as the headline 2026-09-02, uniform-only it is **1.131 +/- 0.095**, RETRACTIONS "The C2 headline is at pooled routing") |
 
 The prediction spans 0.914 to 1.004 across two measurements of one machine,
 because the bf16 denominator moves 9.9%. Dtype-invariance holds against the naive
@@ -662,6 +662,14 @@ both this file and STUDY.md previously called the finding that survives and
 attached the next experiment to. It is an artifact of pooling. Under uniform the
 scores are 0.88 / 1.14 / 1.18 / 1.14 against E of 8 / 64 / 64 / 256 -- not
 monotonic, and mixtral moves from worst to best.
+
+(Corrected 2026-09-08 against the cards' OWN committed ridges, H200 162.8 and
+A100 145.8, RETRACTIONS (e), point target 0.896: the uniform scores read 0.81 /
+1.05 / 1.09 / 1.06. Still not monotonic. The sentence "mixtral moves from worst
+to best" was the 0.83 target's: against 0.896 the nearest point is qwen2 and
+mixtral, 19% under, is the worst point in BOTH sets. The verdict does not move
+either way, because every interval in Defect 2 contains both the target and the
+null or excludes both; `tests/test_c5_cross_card.py` pins all of it.)
 
 ### Defect 2: the crossings have no error bars, and they are wide
 
@@ -1274,7 +1282,12 @@ vLLM's tuned configs run `BLOCK_M = 16` through the whole decode range, where th
 cap is 160 against a ridge of 160.3 to 176.2. Whether a decode-configured MoE
 kernel can EVER reach compute bound therefore turns on whether `alpha` is above or
 below 0.0998, and this repo's own refit put `alpha` at about 0.10. That is a knife
-edge, and it is measurable.
+edge, and it is measurable. (Retracted 2026-09-02 as the block above is: the
+"ridge of 160.3 to 176.2" is two calibrations of one H200 and the card's own
+ridge is 162.8, RETRACTIONS (e); "about 0.10" is the withdrawn fit, the refit is
+0.558, and the 0.0998 threshold is the (LIN) identity, which a fitted alpha does
+not satisfy, RETRACTIONS (a) and (i); the BLOCK_M=16 cap binds in 1 of 24 uniform
+cells, RETRACTIONS (i). There is no knife edge to measure.)
 
 ### Consequence 2: the crossing is a fixed point on a staircase
 
