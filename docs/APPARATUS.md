@@ -105,7 +105,11 @@ row, which on an H200 is every memory-bound tread of every ladder; it lands
 the alias arm INVALID and admits no memory-bound row into any refit. That was
 found on 2026-09-08 at thirteen consumers after the instrument went two-sided
 at its one producer: the fifteenth instance of a fix applied at one of two
-call sites.
+call sites. A consumer is correct only when a planted 1980-against-1515 row
+with side `high` is KEPT and a planted LOW row is EXCLUDED; a consumer that
+reads `clock_level_ok` without `clock_level_side` has the one-sided reading
+whatever its comment says, and the `throttled` column is the one place the
+rule was already applied when this was written.
 
 **The reference clock.** LEVEL is a comparison and half a comparison is not a
 verdict, so `clock_level_ok` is `None` unless `reference_clock_mhz` is
