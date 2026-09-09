@@ -891,3 +891,20 @@ def test_the_module_docstring_no_longer_defers_the_ladder_migration():
     private = [p.name for p in scripts.glob("*.py")
                if "def time_call" in p.read_text()]
     assert private == ["block_m_crossing_sweep.py"], private
+
+
+
+def test_the_clock_poll_is_sized_so_the_floor_of_samples_lands_inside_the_region():
+    """2026-09-09: alias_ablation times 50 ms x 3 trials, ~150 ms of region;
+    a fixed 50 ms poll landed two or three samples against a floor of three
+    and LEVEL was undetermined on a sound rung. The poll aims for twice the
+    floor, capped at CLOCK_POLL_SECONDS on long regions and floored at
+    CLOCK_POLL_FLOOR_SECONDS on tiny ones."""
+    alias = T.clock_poll_for(trials=3, iters=50, per_call_ms=1.0)   # 150 ms
+    assert alias == pytest.approx(0.025)
+    assert 0.150 / alias >= 2 * T.CLOCK_SAMPLE_FLOOR
+    assert T.clock_poll_for(trials=3, iters=1000, per_call_ms=1.0) == T.CLOCK_POLL_SECONDS
+    assert T.clock_poll_for(trials=1, iters=1, per_call_ms=0.01) == T.CLOCK_POLL_FLOOR_SECONDS
+    for region_ms in (60, 150, 400, 3000):
+        poll = T.clock_poll_for(trials=1, iters=1, per_call_ms=float(region_ms))
+        assert region_ms / 1e3 / poll >= 2 * T.CLOCK_SAMPLE_FLOOR

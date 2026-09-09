@@ -442,3 +442,14 @@ def test_a_script_with_a_private_walk_gets_each_cell_its_own_reference_from_one_
     one_clock = by_dtype["bf16"].mhz
     assert T.clock_flags(1905.0, 1905.0, 1905.0, one_clock) == (False, True)
     assert T.level_side(1905.0, one_clock) == T.LEVEL_HIGH
+
+
+
+def test_the_decorated_measured_name_slugs_to_the_same_file_as_the_device_name():
+    """2026-09-09: bm128_depth handed `load_measured`'s decorated name to the
+    slug and looked for measured_nvidia_h200_measured.yaml, which no card
+    has, so it refused a calibration that was right there."""
+    from moe.bench import roofline as RF
+    assert RF.measured_slug("NVIDIA H200 (measured)") == RF.measured_slug("NVIDIA H200")
+    assert RF.measured_slug("NVIDIA H200" + RF.MEASURED_DECORATION) == "measured_nvidia_h200"
+    assert RF.measured_slug("NVIDIA A100-SXM4-80GB (measured)") == "measured_nvidia_a100_sxm4_80gb"

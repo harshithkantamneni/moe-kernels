@@ -4305,7 +4305,14 @@ def _run(argv=None) -> int:
     # row's LEVEL verdict is None, which means "not determined" and excludes
     # nothing. Resolved here rather than per tread so the whole ladder is scored
     # against one number and a mid-run yaml rewrite cannot move it.
-    reference_clock, clock_source = SWEEP.reference_clock_mhz(hw.name)
+    # THE ATTACHED DEVICE'S NAME, not hw.name. `load_measured` decorates the
+    # yaml's `name:` as "<device> (measured)"; `measured_slug` of that is the
+    # stem measured_nvidia_h200_measured, which no file carries, so the walk
+    # answered None and this arm REFUSED a sound calibration on the
+    # 2026-09-09 pod. The three sibling arms resolve through
+    # `current_gpu_name()`, the same name `load_measured()` above used.
+    from moe.bench.roofline import current_gpu_name
+    reference_clock, clock_source = SWEEP.reference_clock_mhz(current_gpu_name())
     if reference_clock is None:
         # REFUSE, RATHER THAN MEASURE TWO LADDERS THAT CANNOT REPORT A CLOCK.
         # This printed the absence and carried on until 2026-09-03, which is

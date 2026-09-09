@@ -2263,3 +2263,18 @@ def test_the_registered_p1_baseline_is_computed_from_the_corpus_not_typed(bm):
     absent = bm.predictions_text(2, None)
     assert "NOT RECOMPUTABLE" in absent and "sd " not in absent.split("P2")[0]
     assert bm.published_bc(ROOT / "nowhere", "bf16", bm.HARDWARE_DIR) is None
+
+
+
+def test_the_reference_clock_resolves_under_the_decorated_measured_name():
+    """2026-09-09 H200 pod: this arm handed `load_measured`'s decorated
+    "NVIDIA H200 (measured)" to the sweep's reference-clock walk, the slug
+    named a file no card has, and the arm REFUSED a sound calibration before
+    timing a tread. Both names now resolve to the same record."""
+    SWEEP = _load("sweep_under_the_decorated_name", "block_m_crossing_sweep.py")
+    plain = SWEEP.reference_clock_mhz("NVIDIA H200")
+    decorated = SWEEP.reference_clock_mhz("NVIDIA H200 (measured)")
+    assert plain[0] is not None, plain[1]
+    assert decorated[0] == plain[0]
+    # The reason names the card as the caller spelled it; the field read is one.
+    assert decorated[1].split(": ", 1)[1] == plain[1].split(": ", 1)[1]

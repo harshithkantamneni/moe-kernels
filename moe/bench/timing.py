@@ -175,6 +175,9 @@ WARMUP_BATCH_MAX_CALLS = 10_000
 #: per read, on the same host the enqueue thread needs to keep the queue deep.
 #: Where NVML is unavailable the record says so and carries no clock.
 CLOCK_POLL_SECONDS = 0.05
+#: The shortest poll `clock_poll_for` will ask of NVML. A read is tens of
+#: microseconds, so 5 ms stays far inside `CLOCK_POLL_BUDGET_FRACTION`.
+CLOCK_POLL_FLOOR_SECONDS = 0.005
 
 #: The sampler's per-read cost may take at most this fraction of the poll
 #: interval before the record notes that the poller was competing with the
@@ -1007,6 +1010,25 @@ def nvml_clock_reader(device_index: int | None = None) -> Callable[[], ClockStat
     return read
 
 
+
+def clock_poll_for(trials: int, iters: int, per_call_ms: float) -> float:
+    """Poll interval, seconds, for the under-load sampler over one timed region.
+
+    The region is `trials x iters x per_call_ms`, and `iters_for` truncates, so
+    a trial holds a little UNDER `target_ms`. A fixed `CLOCK_POLL_SECONDS`
+    (50 ms, first sample AT 50 ms) lands two or three samples in a ~150 ms
+    region against `CLOCK_SAMPLE_FLOOR` of three, and two leave
+    `sm_clock_load_mhz` None: LEVEL undetermined on a sound measurement, which
+    alias_ablation's level gate reads as UNKNOWN, INVALID and latched
+    (2026-09-09, 50 ms budget x 3 trials). Aim for TWICE the floor inside the
+    expected region, never slower than `CLOCK_POLL_SECONDS`, never faster than
+    `CLOCK_POLL_FLOOR_SECONDS`. Pure.
+    """
+    expected_s = trials * iters * per_call_ms / 1e3
+    return max(CLOCK_POLL_FLOOR_SECONDS,
+               min(CLOCK_POLL_SECONDS, expected_s / (2 * CLOCK_SAMPLE_FLOOR)))
+
+
 class BackgroundClockSampler:
     """Polls the SM clock from a thread while the calling thread keeps the GPU busy.
 
@@ -1300,12 +1322,6 @@ def time_kernel(
             "does not invent numbers")
     if events is None:
         events = _EventPairs
-    if clock_sampler is None:
-        # The device is read HERE, on the calling thread, and handed to the
-        # poller: torch's current device is per thread and the poll thread
-        # would otherwise start on device 0.
-        clock_sampler = BackgroundClockSampler(
-            device_index=torch.cuda.current_device())
     if l2_flush and flusher is None:
         flusher = L2Flusher(flush_mb_for_device())
     flush = flusher.flush if l2_flush else None
@@ -1313,6 +1329,19 @@ def time_kernel(
 
     warm = warm_until(fn, warmup_ms, events, flush=flush)
     iters = iters_for(warm.per_call_ms, target_ms)
+    if clock_sampler is None:
+        # The device is read HERE, on the calling thread, and handed to the
+        # poller: torch's current device is per thread and the poll thread
+        # would otherwise start on device 0.
+        #
+        # THE POLL IS SIZED FROM THE REGION IT HAS TO LAND IN: see
+        # `clock_poll_for`. On 2026-09-09 alias_ablation's 50 ms budget x 3
+        # trials was ~150 ms of region against a fixed 50 ms poll, two or
+        # three samples around a floor of three, LEVEL undetermined on a
+        # sound rung, level gate UNKNOWN, INVALID, latched.
+        poll = clock_poll_for(trials, iters, warm.per_call_ms)
+        clock_sampler = BackgroundClockSampler(
+            device_index=torch.cuda.current_device(), poll_seconds=poll)
     pairs = events(iters)
     with clock_sampler as poller:
         samples, walls = _timed_trials(fn, iters, trials, pairs, flush)

@@ -265,10 +265,13 @@ from moe.bench import provenance as PV  # noqa: E402
 from moe.bench.crossing import all_crossings_from_points  # noqa: E402
 from moe.bench.roofline import (  # noqa: E402
     HARDWARE_DIR,
+    REFERENCE_FAMILIES,
     Hardware,
     UnverifiedHardware,
     device_matches,
     load_hardware,
+    reference_clock_from_doc,
+    reference_family,
 )
 from moe.bench.tile_resolve import (  # noqa: E402
     VLLM_TAG,
@@ -738,6 +741,18 @@ class Ceilings:
     #: than guessed.
     reference_clock_mhz: float | None = None
     clock_source: str = ""
+    #: ONE REFERENCE PER GEMM THE CALIBRATION RAN, keyed by
+    #: `roofline.reference_family(dtype)`, resolved by the one walk roofline
+    #: owns. The two fields above are the bf16 family's, kept for the plan page
+    #: and plan.json. A cell is levelled against `reference_for(dtype)`: on the
+    #: 2026-09-09 H200 calibration the bf16 GEMM ran at 1470 MHz and the fp8
+    #: GEMM at 1380, and 1380/1470 = 0.939 < LEVEL_FRACTION, so an fp8 cell at
+    #: its own GEMM's clock levelled against the bf16 number was LOW, the side
+    #: that excludes, V5 failed and the arm was INVALID on a sound measurement.
+    reference_clocks: dict[str, float | None] = field(default_factory=dict)
+
+    def reference_for(self, dtype: str) -> float | None:
+        return self.reference_clocks.get(reference_family(dtype))
 
     def peak(self, dtype: str) -> float:
         value = self.peak_flops.get(dtype)
@@ -764,38 +779,17 @@ def load_ceilings(name: str, directory: Path | None = None) -> Ceilings:
     path = (directory or HARDWARE_DIR) / f"{name}.yaml"
     hw: Hardware = load_hardware(name, directory=directory)
     raw = yaml.safe_load(path.read_text())
-    clock, clock_source = _reference_clock(raw, name)
+    # THE SAME WALK THE DRIVER AND recompute USE, per family; this file kept a
+    # third, bf16-only copy until 2026-09-09.
+    refs = {fam: reference_clock_from_doc(raw, hw.name, fam)
+            for fam in REFERENCE_FAMILIES}
+    bf16 = refs[reference_family(BF16)]
     return Ceilings(
         name=hw.name, bandwidth_bytes_s=hw.bandwidth_bytes_s,
         peak_flops=dict(hw.peak_flops), source=hw.source,
         measured_on=str(raw.get("checked_on", "unrecorded")), path=str(path),
-        reference_clock_mhz=clock, clock_source=clock_source)
-
-
-def _reference_clock(raw: dict, name: str) -> tuple[float | None, str]:
-    """The clock the roof was measured at, from the calibration, or the reason.
-
-    Three places in falling order of directness, the same order
-    `block_m_crossing_sweep.reference_clock_mhz` reads them in and for the same
-    reason: the three have disagreed on one card by 450 MHz, and the one
-    measured UNDER the load that set the roof is the one a LEVEL flag has to be
-    scored against. Returns `(None, reason)` rather than a guess; LEVEL is then
-    None on every cell, which reads as "not determined" and excludes nothing.
-    """
-    detail = (raw.get("detail") or {}) if isinstance(raw, dict) else {}
-    median = (detail.get("gemm_clock") or {}).get("median_mhz")
-    if median:
-        return float(median), (f"{name}: median of the samples taken while the "
-                               "calibration's dense GEMM ran")
-    scalar = detail.get("gemm_clock_mhz")
-    if scalar:
-        return float(scalar), f"{name}: gemm_clock_mhz, the calibration's scalar"
-    plateau = (detail.get("settle") or {}).get("final_mhz")
-    if plateau:
-        return float(plateau), (f"{name}: the compute settle's final plateau; "
-                                "no GEMM clock was recorded")
-    return None, (f"{name}: the calibration carries no clock, so LEVEL cannot "
-                  "be scored and stays undetermined")
+        reference_clock_mhz=bf16.mhz, clock_source=bf16.source,
+        reference_clocks={fam: r.mhz for fam, r in refs.items()})
 
 
 def predicted_ms(cfg, num_tokens: int, config: dict[str, int], dtype: str, *,
@@ -1763,7 +1757,7 @@ def _make_call(fused_experts, x, weights, topk_w, ids, kwargs):
 
 def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                  store: Store, meta: dict, hooks, check_correctness: bool,
-                 reference_clock: float | None = None
+                 reference_clocks: dict[str, float | None] | None = None
                  ) -> dict[tuple[str, str], ArmResult]:
     """Time every (arm, dtype) of one cell, round-robin, dtype innermost.
 
@@ -1941,7 +1935,8 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                             calls[dtype], warmup_ms=args.warmup,
                             target_ms=args.cell_budget_ms, trials=args.trials,
                             l2_flush=not args.no_l2_flush,
-                            reference_clock_mhz=reference_clock)
+                            reference_clock_mhz=(reference_clocks or {}).get(
+                                reference_family(dtype)))
                     samples[key].append(t.ms_p50)
                     records[key].append(t)
                 except Exception as exc:  # noqa: BLE001
@@ -3787,9 +3782,9 @@ def _main(argv: list[str] | None = None) -> int:
         f"queue-deep trials sized to {args.cell_budget_ms:.0f} ms, after "
         f"{args.warmup:.0f} ms of warmup, L2 "
         + ("flushed" if not args.no_l2_flush else "WARM (--no-l2-flush)"),
-        f"clock reference {ceilings.clock_source or 'none'}"
-        + ("" if ceilings.reference_clock_mhz is None
-           else f" = {ceilings.reference_clock_mhz:.0f} MHz"),
+        "clock reference per dtype family: " + "; ".join(
+            f"{fam} " + ("none" if mhz is None else f"{mhz:.0f} MHz")
+            for fam, mhz in ceilings.reference_clocks.items()),
         "",
         f"EVERYTHING IS SAVED TO  {out_dir}",
         f"  git     {gitignore_note(out_dir)}",
@@ -3832,6 +3827,7 @@ def _main(argv: list[str] | None = None) -> int:
                      "bandwidth_bytes_s": ceilings.bandwidth_bytes_s,
                      "peak_flops": ceilings.peak_flops,
                      "reference_clock_mhz": ceilings.reference_clock_mhz,
+                     "reference_clocks": ceilings.reference_clocks,
                      "clock_source": ceilings.clock_source},
         "estimated_timed_seconds": seconds, "distinct_compiles": compiles,
         "cells": [{"model": c.model, "num_tokens": c.num_tokens,
@@ -4019,7 +4015,7 @@ def _main(argv: list[str] | None = None) -> int:
                         results[cell.key] = measure_cell(
                             cell, weights, dtypes, args, store, meta, hooks,
                             check_correctness=(index == 1),
-                            reference_clock=ceilings.reference_clock_mhz)
+                            reference_clocks=ceilings.reference_clocks)
                 finally:
                     # Explicit, and inside a finally: expert weights are the
                     # largest allocation in the run (33 GB at deepseek-v3 across

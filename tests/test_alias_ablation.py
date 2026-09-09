@@ -2871,3 +2871,48 @@ def test_the_retired_idle_instant_check_is_labelled_as_what_it_detects(
     fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
               and n.name == "measure_rung")
     assert "drift, idle_instants_moved = clock_drift(" in ast.unparse(fn)
+
+
+
+def test_the_read_roof_is_looked_up_by_the_calibrations_own_pattern_names(tmp_path, monkeypatch):
+    """2026-09-09 H200 pod: arm 0 published a calibration whose bandwidth
+    patterns are read_stream, read_reduce, copy, triad, write (calibrate
+    renamed `read` to read_reduce on 2026-09-02). This file matched the single
+    name `read`, found nothing, priced the arm NOT PRICED, spent the probe,
+    and exited INVALID over a file that was right there. The walk is
+    `calibrate.READ_PATTERNS` then the legacy name, a disowned pattern is
+    skipped, and the name used is recorded."""
+    import yaml
+
+    from moe.bench import calibrate as CAL
+    from moe.bench import roofline as RF
+
+    def write(patterns):
+        doc = {"name": "NVIDIA H200 (measured)", "verified": True,
+               "memory": {"bandwidth_tb_s": 4.3744},
+               "compute_dense_tflops": {"bf16": 712.3},
+               "observed": {"l2_bytes": 62914560},
+               "detail": {"bandwidth_patterns": patterns}}
+        (tmp_path / "measured_nvidia_h200.yaml").write_text(yaml.safe_dump(doc))
+
+    monkeypatch.setattr(RF, "HARDWARE_DIR", tmp_path)
+    fresh = [{"pattern": "read_stream", "gbps": 4469.6, "note": ""},
+             {"pattern": "read_reduce", "gbps": 4389.4, "note": ""},
+             {"pattern": "copy", "gbps": 4200.0, "note": ""},
+             {"pattern": "triad", "gbps": 4374.4, "note": ""},
+             {"pattern": "write", "gbps": 4681.4, "note": ""}]
+    write(fresh)
+    facts = AB.measured_card("NVIDIA H200")
+    assert facts["roof_bytes_s"] == pytest.approx(4469.6e9) and facts["roof_pattern"] == "read_stream"
+    assert facts["l2_bytes"] == 62914560
+    assert facts["ridge"] == pytest.approx(712.3 / 4.3744)
+    disowned = [dict(p) for p in fresh]
+    disowned[0]["note"] = f"probe {CAL.DISOWNED}: the tree bounded it"
+    write(disowned)
+    facts = AB.measured_card("NVIDIA H200")
+    assert facts["roof_bytes_s"] == pytest.approx(4389.4e9) and facts["roof_pattern"] == "read_reduce"
+    write([{"pattern": "read", "gbps": 4469.6}, {"pattern": "copy", "gbps": 4200.0}])
+    facts = AB.measured_card("NVIDIA H200")
+    assert facts["roof_bytes_s"] == pytest.approx(4469.6e9) and facts["roof_pattern"] == "read"
+    write([{"pattern": "copy", "gbps": 4200.0}])
+    assert AB.measured_card("NVIDIA H200")["roof_bytes_s"] is None

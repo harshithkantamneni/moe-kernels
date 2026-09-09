@@ -363,6 +363,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from moe.bench import calibrate as CAL  # noqa: E402
 from moe.bench import exit_codes, timing  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
@@ -452,14 +453,23 @@ CONTROL_N = 4096
 # the card's own ceilings, read from its calibration and never remembered
 # --------------------------------------------------------------------------
 
-#: Which STREAM pattern is the roof a weight read is held to. `read`, because
-#: `measured_nvidia_h200.yaml` says of it in its own file: "closest analogue to
-#: streaming expert weights; reduced along the contiguous axis so the tree does
-#: not bound it". It is also the LARGEST of the four patterns on both cards, so
-#: every headroom and attribution verdict below is scored against the ceiling
-#: most generous to this design. A design that fails against the most generous
-#: roof has not failed on a threshold choice.
-ROOF_PATTERN = "read"
+#: Which STREAM patterns can be the roof a weight read is held to, best first.
+#: THE NAME IS THE CALIBRATION'S, NOT THIS FILE'S. `calibrate.measure_bandwidth`
+#: renamed `read` to `read_reduce` on 2026-09-02 and put the Triton
+#: `read_stream` probe ahead of it; the committed 2026-09-02 H200 file still
+#: carries `read`, and every file `calibrate_hardware.py --publish` writes from
+#: this tree carries the two new names and no `read`. On 2026-09-09 arm 0
+#: published such a file and a single-name match found nothing in it: `roof`
+#: was None, the probe SPENT its minutes, `choose_pinning` said "no committed
+#: calibration for this card" over a file that was right there, and the arm
+#: exited 3 INVALID, which the session latches. The walk is
+#: `calibrate.READ_PATTERNS`, the order `Calibration.matched_pattern` uses,
+#: then the legacy name; a pattern the calibration disowned is skipped exactly
+#: as `matched_pattern` skips it. Still the LARGEST valid read ruler on both
+#: cards, so headroom and attribution stay scored against the most generous
+#: roof. `ROOF_PATTERN` is the name a plan records when no file was read.
+ROOF_PATTERNS = (*CAL.READ_PATTERNS, "read")
+ROOF_PATTERN = ROOF_PATTERNS[0]
 
 #: The card this file's PLANTED laws and its off-GPU arithmetic are stated for.
 #: `--synthetic` must not read the attached hardware (see `main`), so the plant
@@ -501,17 +511,22 @@ def measured_card(card: str) -> dict:
         return {}
     data = yaml.safe_load(path.read_text()) or {}
     detail = data.get("detail") or {}
-    roof = None
-    for entry in detail.get("bandwidth_patterns") or []:
-        if entry.get("pattern") == ROOF_PATTERN and entry.get("gbps"):
-            roof = float(entry["gbps"]) * 1e9
+    roof, roof_pattern = None, ROOF_PATTERN
+    by_name = {e.get("pattern"): e for e in detail.get("bandwidth_patterns") or []
+               if isinstance(e, dict)}
+    for name in ROOF_PATTERNS:
+        entry = by_name.get(name)
+        if (entry and entry.get("gbps")
+                and CAL.DISOWNED not in str(entry.get("note") or "")):
+            roof, roof_pattern = float(entry["gbps"]) * 1e9, name
+            break
     peak = float((data.get("compute_dense_tflops") or {}).get("bf16") or 0.0)
     tb_s = float((data.get("memory") or {}).get("bandwidth_tb_s") or 0.0)
     ridge = peak / tb_s if peak > 0 and tb_s > 0 else None
     return {"card": data.get("name", card),
             "l2_bytes": int((data.get("observed") or {}).get("l2_bytes") or 0),
             "roof_bytes_s": roof,
-            "roof_pattern": ROOF_PATTERN,
+            "roof_pattern": roof_pattern,
             "ridge": ridge,
             "ridge_source": (f"{path.name}: {peak:.1f} TFLOP/s bf16 over "
                              f"{tb_s * 1e3:.1f} GB/s = {ridge:.1f} FLOP/byte"
@@ -2206,8 +2221,10 @@ def choose_pinning(readings: list[dict], roof_bytes_s: float | None,
     void for the sake of a code the log already explains.
     """
     if not roof_bytes_s:
-        return None, ("no committed calibration for this card, so no pinning "
-                      "can be shown to clear a roof that has not been measured")
+        return None, ("no measured READ roof for this card: no committed "
+                      f"calibration, or one naming none of {ROOF_PATTERNS} as a "
+                      "valid ceiling, so no pinning can be shown to clear a roof "
+                      "that has not been measured")
     scored = [(r["aliased_bytes_s"] / roof_bytes_s, r) for r in readings
               if r.get("aliased_bytes_s")]
     if not scored:
@@ -4572,7 +4589,8 @@ def main(argv: list[str] | None = None) -> int:
              "tiles": list(design.tiles), "block_m": design.block_m,
              "tile": design.tile, "compute": design.compute,
              "alias_extent": design.alias_extent,
-             "roof_bytes_s": roof, "roof_pattern": ROOF_PATTERN,
+             "roof_bytes_s": roof,
+             "roof_pattern": facts.get("roof_pattern", ROOF_PATTERN),
              "l2_bytes": l2,
              "card": card, "run_id": out_dir.name, "seed": args.seed,
              "l2_flush": bool(args.l2_flush),

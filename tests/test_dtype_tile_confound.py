@@ -1871,3 +1871,28 @@ def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys
     assert "planted: the allocator gave up halfway" in err, \
         "the traceback was swallowed"
     assert "RuntimeError" in err
+
+
+def test_an_fp8_arm_is_levelled_against_the_fp8_gemm_clock_not_the_bf16_one(tmp_path):
+    """2026-09-09 H200 calibration: bf16 GEMM 1470 MHz, fp8 GEMM 1380 MHz.
+    1380/1470 = 0.939 < LEVEL_FRACTION; against the bf16 clock every fp8 arm
+    is LOW, V5 FAILs and the arm is INVALID on a sound measurement."""
+    import yaml
+
+    from moe.bench import timing as T
+    from moe.bench.calibrate import LoadedClock
+    bf16 = LoadedClock("bf16 GEMM", (1485, 1485, 1455, 1470, 1470), 1470, 2.0, 1470)
+    fp8 = LoadedClock("fp8 GEMM", (1395, 1365, 1395, 1380, 1365), 1380, 2.15, 1980)
+    doc = {"name": "NVIDIA H200 (measured)", "verified": True, "source": "m",
+           "memory": {"bandwidth_tb_s": 4.3744},
+           "compute_dense_tflops": {"bf16": 712.3, "fp16": 712.3,
+                                    "fp8_e4m3": 1447.7, "fp8_e5m2": 1447.7},
+           "detail": {"gpu_name": "NVIDIA H200", "gemm_clock": bf16.as_dict(),
+                      "fp8_gemm_clock": fp8.as_dict()}}
+    (tmp_path / "measured_nvidia_h200.yaml").write_text(yaml.safe_dump(doc))
+    ceil = DTC.load_ceilings("measured_nvidia_h200", directory=tmp_path)
+    assert ceil.reference_clock_mhz == 1470.0
+    assert ceil.reference_for(DTC.BF16) == 1470.0
+    assert ceil.reference_for(DTC.FP8) == 1380.0
+    assert T.level_side(1380.0, ceil.reference_for(DTC.FP8)) == ""
+    assert T.level_side(1380.0, ceil.reference_for(DTC.BF16)) == T.LEVEL_LOW

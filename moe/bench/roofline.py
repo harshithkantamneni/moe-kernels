@@ -216,6 +216,10 @@ def ambiguous_for_device(gpu_name: str) -> list[str]:
     return matched if len(matched) > 1 else []
 
 
+#: What `load_measured` appends to the device name in `Hardware.name`.
+MEASURED_DECORATION = " (measured)"
+
+
 def measured_slug(gpu_name: str) -> str:
     """Filename stem for this device's calibration.
 
@@ -223,6 +227,13 @@ def measured_slug(gpu_name: str) -> str:
     meant calibrating on a second GPU overwrote the first, and a later re-plot
     of the published sweep then scored it against the wrong roof.
     """
+    # `load_measured` hands back `Hardware.name` as "<device> (measured)".
+    # On 2026-09-09 bm128_depth passed that name here, got the stem
+    # measured_nvidia_h200_measured, found no file, and REFUSED a sound
+    # calibration before timing a tread. The decoration is stripped so the
+    # slug is the device's whichever name a caller has in hand.
+    if gpu_name.endswith(MEASURED_DECORATION):
+        gpu_name = gpu_name[:-len(MEASURED_DECORATION)]
     safe = "".join(c if c.isalnum() else "_" for c in gpu_name.lower())
     while "__" in safe:
         safe = safe.replace("__", "_")
