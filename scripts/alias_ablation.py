@@ -287,18 +287,27 @@ WHAT THAT CHANGES HERE, and all three are checkable before the box is rented:
      thousands of lines, with the same sequential K stride the normal arm walks.
      Its closed form is the normal reference evaluated at expert 0, N-block 0.
   2. THE HEADROOM IS MEASURED AND GATED. `headroom` asks whether the aliased
-     arm's achieved request bandwidth EXCEEDS the card's own read roof, which is
-     the condition under which DRAM binds in the normal arm and the ablation can
-     see it at all. `attribution` asks whether D(1) reached the card's floor for
+     arm's achieved request bandwidth exceeds the card's own read roof by
+     `MIN_HEADROOM_RATIO`, which is the condition under which DRAM binds in the
+     normal arm and the ablation can see it at all. That limit is DERIVED and
+     not chosen: it is the larger of what `signal` needs and what `bracket`
+     needs, because all three score one ratio h and r = 1/(h-1). It was the
+     first derivation alone until 2026-09-09, when the probe admitted h = 1.961,
+     the ladder ran, and `bracket` voided the page on that same model at
+     r = 1.004. `attribution` asks whether D(1) reached the card's floor for
      the bytes the alias removed. Either failing means the page is VOID, and it
      is void for a stated arithmetic reason rather than for a threshold.
   3. THE PROBE IS A TENTH OF THE ARM AND CAN STOP THE OTHER NINE. `--probe`
      times the two cheapest rungs of the smallest model across a short pinning
      grid, prints each pinning's achieved bandwidth against the card's roofs,
-     and runs the ladder at the pinning that clears the roof by the widest
-     margin. If none clears it, the arm stops there: nothing measured afterwards
-     could have answered, and the INVALID costs the probe's own wall minutes
-     rather than the whole booking. NO ABSOLUTE MINUTES ARE QUOTED HERE ON
+     writes every reading to `probe.json` whether or not one was adopted, and
+     runs the ladder at the pinning that clears the roof by the widest margin.
+     If none clears it, the arm stops there: nothing measured afterwards could
+     have answered, and the INVALID costs the probe's own wall minutes rather
+     than the whole booking. Until 2026-09-09 `probe.json` was written ONLY on
+     the refused path, so an adopted pinning, the decision that chooses the
+     kernel the ladder runs on, survived as a table in a log and could not be
+     re-driven from the directory it produced. NO ABSOLUTE MINUTES ARE QUOTED HERE ON
      PURPOSE. `report_cost` is the only place in this file that names a
      duration. Until 2026-09-03 this paragraph asserted one of its own, "three
      minutes before it spends sixty", while that function was printing 5.0
@@ -604,6 +613,17 @@ MIN_SIGNAL_FRACTION = 0.25
 # the headroom, which is what the 2026-09-01 run did not have
 # --------------------------------------------------------------------------
 
+#: `r` above which the two estimators stop bracketing anything. The DIFFERENCE
+#: estimator is `(alpha - r)/(1 - r)`; at `r > 1` that denominator is negative,
+#: the estimator exceeds the truth instead of falling short of it, and the
+#: interval printed between the two is not an interval containing alpha. 0.9
+#: rather than 1.0 because at `r` just under one the bracket is arbitrarily wide
+#: and `band_gate` would call it NOT TESTABLE anyway.
+#:
+#: IT IS BOUND BEFORE `MIN_HEADROOM_RATIO` AND NOT AFTER, because that limit is
+#: now derived from this one as well as from `MIN_SIGNAL_FRACTION`.
+MAX_BRACKET_R = 0.9
+
 #: The aliased ladder's achieved request bandwidth, over the card's read roof.
 #: Below 1.0 the shared non-DRAM path is SLOWER than DRAM, DRAM has slack in
 #: the normal arm, and no ablation of DRAM can move the clock however large
@@ -622,7 +642,26 @@ MIN_SIGNAL_FRACTION = 0.25
 #: headroom limit ANY LOWER would pass designs `signal` then voids while a
 #: reader hunts for the reason in alpha. At 0.25 it is 1.333. Written as the
 #: inversion so the two move together for ever.
-MIN_HEADROOM_RATIO = 1.0 / (1.0 - MIN_SIGNAL_FRACTION)
+#:
+#: AND FROM `MAX_BRACKET_R`, BECAUSE `bracket` SCORES THE SAME `h` AGAIN. With
+#: the fixed cost near zero the aliased ladder's per-tile cost is T_aliased(1)
+#: and W is T_normal(1) - T_aliased(1), so `r = 1/(h - 1)` exactly, and a
+#: bracket that voids above r = 0.9 needs h >= 1 + 1/0.9 = 2.111.
+#:
+#: ON 2026-09-09 THE TWO DISAGREED AND THE ARM PAID FOR IT. The probe measured
+#: h = 1.961 on deepseek-v2-lite, admitted it against the 1.333 derived from
+#: `signal` alone, ran the whole 12.8-minute ladder, and `bracket` then voided
+#: the page on that same model at r = 1.004 (mixtral 2.175 -> r 0.837, qwen2
+#: 2.178 -> 0.842, deepseek-v3 2.200 -> 0.852, deepseek-v2-lite 2.017 -> 0.983
+#: fitted 1.004). The gate that exists to refuse the expensive arm cheaply let
+#: through a pinning the bracket gate was bound to void: two thresholds over one
+#: physical quantity, this repository's recurring defect, for the seventeenth
+#: time. The bar is now the LARGER of the two derivations, so the probe refuses
+#: what the bracket would void, and lowering either one alone cannot re-open the
+#: gap. Loosening `MAX_BRACKET_R` instead was rejected: at r near 1 the bracket
+#: is arbitrarily wide and the interval stops containing alpha at all.
+MIN_HEADROOM_RATIO = max(1.0 / (1.0 - MIN_SIGNAL_FRACTION),
+                         1.0 + 1.0 / MAX_BRACKET_R)
 
 #: D(1) over the card's own floor for the bytes the alias removes. The ablation
 #: claims D(1) IS that read; a D(1) below the floor is a read that beat the
@@ -642,17 +681,28 @@ MIN_HEADROOM_RATIO = 1.0 / (1.0 - MIN_SIGNAL_FRACTION)
 #: second, so both failed and only the second one said what was wrong.
 MIN_ATTRIBUTION_RATIO = MIN_SIGNAL_FRACTION
 
-#: `r` above which the two estimators stop bracketing anything. The DIFFERENCE
-#: estimator is `(alpha - r)/(1 - r)`; at `r > 1` that denominator is negative,
-#: the estimator exceeds the truth instead of falling short of it, and the
-#: interval printed between the two is not an interval containing alpha. 0.9
-#: rather than 1.0 because at `r` just under one the bracket is arbitrarily wide
-#: and `band_gate` would call it NOT TESTABLE anyway.
-MAX_BRACKET_R = 0.9
-
 #: D(n) must be affine in (n-1) to at least this R^2, or `W(1 + alpha(n-1))` is
 #: the wrong functional form and its slope-over-intercept is not alpha.
 MIN_LINEARITY_R2 = 0.97
+
+#: ...OR its residuals must be this small against W, which is the SAME question
+#: asked in a way a true alpha of zero can answer.
+#:
+#: R^2 IS UNDEFINED IN SPIRIT WHEN THE TRUE SLOPE IS ZERO. It is the share of
+#: D(n)'s variance the line explains, and a flat D(n) has none to explain, so a
+#: perfectly affine ladder with slope zero reads as a broken form however tight
+#: its residuals are. On 2026-09-09 deepseek-v2-lite, 11 MiB per expert against
+#: a 60 MiB L2 and therefore P2's own prediction of alpha near zero, measured
+#: D(n) = 0.0912, 0.0711, 0.0738, 0.0768 ms: slope -0.0011 ms/tile, residual RMS
+#: 8.9% of W, R^2 0.1356. `form` voided the whole page on it. The L2-resident
+#: control reads R^2 0.0128 for the same reason and is spared only because
+#: `control_gate` scores its bracket instead.
+#:
+#: 0.10 AND NOT 0.05: at 0.05 that same ladder still fails at 8.9%, which would
+#: leave the gate unable to pass exactly the prediction the design was built to
+#: test. The two criteria are an OR and not an AND, so a ladder with a real
+#: slope still has to clear R^2 0.97 and a flat one has to be tight.
+MAX_FORM_RESIDUAL_OVER_W = 0.10
 
 #: A reported interval wider than this cannot separate the three candidate
 #: values, which span 0.10 to 0.558. Half the widest gap between adjacent
@@ -1184,6 +1234,11 @@ class AlphaFit:
     aliased_slope: float | None = None
     per_rung: dict[int, float] = field(default_factory=dict)
     r2: float | None = None
+    #: Residual RMS of the same fit over its own intercept. The second half of
+    #: `form`, and the half that survives a true alpha of zero: see
+    #: `MAX_FORM_RESIDUAL_OVER_W`. Recorded on the fit rather than recomputed at
+    #: the gate so the number the page prints is the number the gate scored.
+    resid_over_w: float | None = None
     diffs: dict[int, float] = field(default_factory=dict)
     why: str = ""
 
@@ -1263,8 +1318,11 @@ def fit_alpha(diffs: dict[int, float]) -> AlphaFit:
     per_rung = {}
     if base and base > 0:
         per_rung = {n: (d / base - 1.0) / (n - 1) for n, d in points if n > 1}
+    resid = [d - (intercept + slope * (n - 1)) for n, d in points]
+    resid_rms = math.sqrt(sum(e * e for e in resid) / len(resid))
     return AlphaFit(alpha=slope / intercept, w_ms=intercept, per_rung=per_rung,
-                    r2=r2, diffs=dict(points))
+                    r2=r2, resid_over_w=resid_rms / intercept,
+                    diffs=dict(points))
 
 
 def fit_bracket(samples: dict[int, dict[str, list[float]]]) -> AlphaFit:
@@ -1803,8 +1861,65 @@ def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
 #: of a published alpha is "was this rung at the roof's clock, and was its L2
 #: cold" -- which a prose note cannot answer and cannot be filtered on.
 TIMING_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
-                  "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
+                  "sm_clock_load_mhz", "sm_clock_start_mhz", "sm_clock_end_mhz",
+                  "power_w", "settle_ms", "clock_level_ok", "clock_level_side",
                   "clock_drift_ok", "l2_flush", "host_bound")
+
+#: What EVERY PASS of a rung carries into `cells.jsonl`, under the row's
+#: `passes` key, beside the fold of the same numbers.
+#:
+#: THE FOLD IS LOSSY AND UNTIL 2026-09-09 IT WAS ALL THERE WAS. A rung is
+#: `3 * replicates` `time_kernel` calls, 27 on the shipped design, and the
+#: row carried one clock, one side and one drift verdict folded over all of
+#: them with the bad value dominating. That fold cannot be inverted, and it was
+#: not merely inconvenient: `timing.clock_flags` over the row's own fields
+#: disagreed with the row's own flags on 8 of the 20 rungs of the 2026-09-09
+#: H200 run, the one LOW rung (qwen2-57b-a14b|t4|bm16) had a folded load of
+#: 1530 MHz sitting INSIDE the band and was LOW only because one unrecorded
+#: pass sat below it, and 16 of 20 rungs were drifted because at least one of
+#: 27 passes moved. Excluding on DRIFT at the rung level, which is all the fold
+#: allows, kept 4 rungs, left no model with a ladder and turned every fit into
+#: "fewer than two rungs". The exclusion has to be applied to the PASS, so the
+#: pass has to be on disk. `drop_drifted_passes` is the reader.
+PASS_COLUMNS = ("replicate", "pass", "ms_p50", "iters", "trials",
+                "sm_clock_load_mhz", "sm_clock_start_mhz", "sm_clock_end_mhz",
+                "clock_samples_mhz", "power_w", "settle_ms",
+                "clock_level_ok", "clock_level_side", "clock_drift_ok",
+                "host_bound", "clock_note")
+
+
+def _clock_samples_of(measured) -> list[int]:
+    """The under-load sample list off one `KernelTiming`, as ints.
+
+    READ WITH `getattr` ON PURPOSE. `clock_samples_mhz` is the instrument's
+    2026-09-09 schema bump and this writer must keep writing rows against the
+    instrument that is installed, not the one it was written beside: an older
+    `time_kernel` records only the count, and an empty list on the pass says
+    exactly that rather than crashing the arm on a pod with a stale tree.
+    """
+    return [int(c) for c in getattr(measured, "clock_samples_mhz", ()) or ()]
+
+
+def pass_record(replicate: int, name: str, measured) -> dict:
+    """One `time_kernel` call as the row it is written as. `PASS_COLUMNS`."""
+    return {
+        "replicate": int(replicate),
+        "pass": name,
+        "ms_p50": measured.ms_p50,
+        "iters": measured.iters,
+        "trials": measured.trials,
+        "sm_clock_load_mhz": measured.sm_clock_load_mhz,
+        "sm_clock_start_mhz": measured.sm_clock_start_mhz,
+        "sm_clock_end_mhz": measured.sm_clock_end_mhz,
+        "clock_samples_mhz": _clock_samples_of(measured),
+        "power_w": getattr(measured, "power_w", None),
+        "settle_ms": getattr(measured, "settle_ms", None),
+        "clock_level_ok": measured.clock_level_ok,
+        "clock_level_side": _clock_side_of(measured),
+        "clock_drift_ok": measured.clock_drift_ok,
+        "host_bound": measured.host_bound,
+        "clock_note": getattr(measured, "clock_note", ""),
+    }
 
 
 def _fold_flag(values: list, bad: bool = False) -> bool | None:
@@ -1866,10 +1981,30 @@ def fold_timings(timings: list) -> dict:
     reported one, and `iters`, `trials` and `warmup_ms` are per-call medians
     rather than totals so `iters * trials * calls = samples` still checks out.
     `instrument` and `l2_flush` are constant across one rung by construction.
+
+    IT IS LOSSY, AND SINCE 2026-09-09 IT IS NO LONGER THE ONLY RECORD. The
+    fold cannot be inverted: on the H200 run its clock flags disagreed with
+    `timing.clock_flags` over the row's own fields on 8 of 20 rungs, and the
+    one LOW rung's offending pass left no clock behind at all. Every pass is
+    now written beside this fold under `passes` (`pass_record`), the fold stays
+    because it is what a filter over the row reads and what every published row
+    was scored on, and `drop_drifted_passes` is the reader that uses the passes
+    where they exist and says the fold is lossy where they do not.
+
+    THE FIRST AND LAST UNDER-LOAD SAMPLES ARE THE RUNG'S, not one pass's:
+    `sm_clock_start_mhz` is the FIRST pass's first sample and `sm_clock_end_mhz`
+    is the LAST pass's last one, so the pair spans the rung the way the retired
+    idle instants did and can be compared with them. Per-pass first/last live on
+    the pass. The full sample list is not folded at all, because 27 passes of
+    tens of samples is not a column; it is on each pass.
     """
     if not timings:
         return {}
     clocks = [t.sm_clock_load_mhz for t in timings if t.sm_clock_load_mhz]
+    powers = [w for w in (getattr(t, "power_w", None) for t in timings)
+              if w is not None]
+    settles = [v for v in (getattr(t, "settle_ms", None) for t in timings)
+               if v is not None]
     return {
         "instrument": timings[0].instrument,
         "warmup_ms": float(statistics.median([t.warmup_ms for t in timings])),
@@ -1877,12 +2012,133 @@ def fold_timings(timings: list) -> dict:
         "trials": int(statistics.median([t.trials for t in timings])),
         "sm_clock_load_mhz": (float(statistics.median(clocks)) if clocks
                               else None),
+        # `getattr`, like the three below it: this fold has to keep writing rows
+        # against whatever instrument is installed, and a record that does not
+        # carry the under-load pair says so with None rather than crashing the
+        # arm on a pod with a stale tree.
+        "sm_clock_start_mhz": getattr(timings[0], "sm_clock_start_mhz", None),
+        "sm_clock_end_mhz": getattr(timings[-1], "sm_clock_end_mhz", None),
+        "power_w": float(statistics.median(powers)) if powers else None,
+        "settle_ms": float(statistics.median(settles)) if settles else None,
         "clock_level_ok": _fold_flag([t.clock_level_ok for t in timings]),
         "clock_level_side": _fold_side([_clock_side_of(t) for t in timings]),
         "clock_drift_ok": _fold_flag([t.clock_drift_ok for t in timings]),
         "l2_flush": bool(timings[0].l2_flush),
         "host_bound": _fold_flag([t.host_bound for t in timings], bad=True),
     }
+
+
+#: Fewest undrifted replicates a pass type must keep for the rung to stay in
+#: the fit. Three because `differences` and `fit_bracket` take a MEDIAN over the
+#: replicates of each pass and a median of two is a mean of two: it has no
+#: middle, it moves with either draw, and it is exactly the number that made a
+#: rung's D swing with one governor excursion. Below three the rung is skipped
+#: and NAMED, never quietly thinned, because a ladder with one rung re-fitted
+#: from a different number of replicates than its neighbours is a different
+#: ladder with the same label.
+MIN_REPLICATES_AFTER_DRIFT = 3
+
+
+@dataclass(frozen=True)
+class DriftDrop:
+    """What `drop_drifted_passes` did, so the page can print it and the gates
+    can read it. Counts and NAMES: a count of dropped passes with no ids is the
+    "a check that examined nothing reports zero failures" shape."""
+
+    dropped: tuple[str, ...] = ()
+    skipped: tuple[tuple[str, str], ...] = ()
+    lossy: tuple[str, ...] = ()
+    passes_seen: int = 0
+
+    @property
+    def per_pass(self) -> bool:
+        """True when at least one rung carried its passes, so the exclusion in
+        force on this page is per pass and not per rung."""
+        return self.passes_seen > 0
+
+
+def drop_drifted_passes(records: list[dict]) -> tuple[list[dict], DriftDrop]:
+    """DRIFT excludes the PASS. Needs the `passes` column; says so when absent.
+
+    THE RULE, from the 2026-09-09 clock memo: a cell is excluded if and only if
+    its clock DRIFTED. A steady clock on either side of the roof's own operating
+    point is the kernel's own power state under the card's cap, it is recorded
+    as `clock_level_side` and it excludes nothing. That rule cannot be applied
+    to a rung: a rung is 27 `time_kernel` calls folded to one verdict with the
+    bad value dominating, so one drifted pass in 27 drifts the rung, 16 of the
+    20 rungs of the H200 run were drifted on that arithmetic, and excluding them
+    left four rungs, no model with a ladder, six UNKNOWN gates and exit 3. The
+    unit the rule is about is the PASS, which is one `time_kernel` call over one
+    warmup and one clock state.
+
+    WHERE THE PASSES ARE ABSENT THE FOLD IS REFUSED AS LOSSY AND THE ROW IS
+    KEPT. Every row written before 2026-09-09 carries the fold alone. Reading
+    that fold as a per-rung DRIFT exclusion would void 80% of the published run
+    on an arithmetic the memo showed is the wrong unit; treating it as clean
+    would be silence read as evidence. So the row stays in the fit, its id is
+    collected in `lossy`, and the page prints that its drift verdict cannot be
+    resolved to a pass and cannot exclude anything. The re-measure is what fixes
+    it, and `PASS_COLUMNS` is what makes the re-measure answerable.
+
+    A row with no clock verdict at all, a planted world or a row from before
+    there was a reference to score against, is neither dropped nor called
+    lossy: there was never a verdict to resolve.
+
+    The returned rows are COPIES for any rung that changed. `ms` is rebuilt from
+    the undrifted passes, and `sm_clock_load_mhz` / `clock_level_side` /
+    `clock_level_ok` / `clock_drift_ok` are re-folded over those same passes, so
+    the LEVEL side the page prints beside a rung is the side of the passes the
+    ladder was actually fitted from. Until 2026-09-09 the HIGH count included
+    rungs that were HIGH only in a pass the fit no longer uses.
+    """
+    out: list[dict] = []
+    dropped: list[str] = []
+    skipped: list[tuple[str, str]] = []
+    lossy: list[str] = []
+    seen = 0
+    for row in records:
+        passes = row.get("passes")
+        if not passes:
+            if row.get("clock_drift_ok") is not None:
+                lossy.append(row.get("id", "?"))
+            out.append(row)
+            continue
+        seen += 1
+        kept_ms: dict[str, list[float]] = {}
+        kept_passes: list[dict] = []
+        for entry in passes:
+            name = entry.get("pass")
+            if entry.get("clock_drift_ok") is False:
+                dropped.append(
+                    f"{row.get('id', '?')}/{name}#{entry.get('replicate')}")
+                continue
+            kept_ms.setdefault(name, []).append(entry.get("ms_p50"))
+            kept_passes.append(entry)
+        names = sorted({e.get("pass") for e in passes})
+        thin = [n for n in names
+                if len(kept_ms.get(n, [])) < MIN_REPLICATES_AFTER_DRIFT]
+        if thin:
+            skipped.append((row.get("id", "?"),
+                            f"fewer than {MIN_REPLICATES_AFTER_DRIFT} "
+                            f"undrifted replicates in {', '.join(thin)}"))
+            out.append(dict(row, skipped=True))
+            continue
+        clocks = [e["sm_clock_load_mhz"] for e in kept_passes
+                  if e.get("sm_clock_load_mhz")]
+        out.append(dict(
+            row,
+            ms={n: list(v) for n, v in kept_ms.items()},
+            passes_kept=len(kept_passes),
+            passes_dropped=len(passes) - len(kept_passes),
+            sm_clock_load_mhz=(float(statistics.median(clocks)) if clocks
+                               else None),
+            clock_level_ok=_fold_flag([e.get("clock_level_ok")
+                                       for e in kept_passes]),
+            clock_level_side=_fold_side([e.get("clock_level_side") or ""
+                                         for e in kept_passes]),
+            clock_drift_ok=_fold_flag([e.get("clock_drift_ok")
+                                       for e in kept_passes])))
+    return out, DriftDrop(tuple(dropped), tuple(skipped), tuple(lossy), seen)
 
 
 def reference_clock_for(gpu_name: str):
@@ -2075,8 +2331,13 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
     rng = random.Random(order_seed)
     samples: dict[str, list[float]] = {"normal": [], "aliased": [], "placebo": []}
     timings: list = []
+    # EVERY PASS ON THE ROW, beside the fold and not instead of it. See
+    # `PASS_COLUMNS`: the fold is not invertible, and a DRIFT exclusion applied
+    # at the rung level kept 4 of the 20 rungs of the 2026-09-09 H200 run and
+    # left no model with a ladder.
+    pass_rows: list[dict] = []
     clock_start = ClockState.sample()
-    for _ in range(args.replicates):
+    for replicate in range(args.replicates):
         passes = ["normal", "aliased", "placebo"]
         rng.shuffle(passes)
         for name in passes:
@@ -2089,6 +2350,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
                 flusher=flusher if args.l2_flush else None)
             samples[name].append(measured.ms_p50)
             timings.append(measured)
+            pass_rows.append(pass_record(replicate, name, measured))
     clock_end = ClockState.sample()
     # THE RETIRED IDLE-INSTANT CHECK, kept for comparison and NOT a throttle
     # detector: two samples taken after a synchronise, one around the whole
@@ -2118,9 +2380,18 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
                  "counts": r.counts} for r in readings],
         # The two idle-instant samples are KEPT beside the queue-deep ones, not
         # instead of them: they are what every published rung was scored on, so
-        # a resumed jsonl still parses and the next pod can compare the two.
-        "sm_clock_start": clock_start.sm_clock_mhz,
-        "sm_clock_end": clock_end.sm_clock_mhz,
+        # the next pod can compare the two.
+        #
+        # UNDER THEIR OWN NAMES SINCE 2026-09-09. They were written as
+        # `sm_clock_start` / `sm_clock_end`, one character away from
+        # `KernelTiming.sm_clock_start_mhz` / `sm_clock_end_mhz`, which ARE the
+        # first and last under-load samples and which this row now also carries
+        # out of `fold_timings`. Two pairs of near-identical names, one measured
+        # under load and one measured at idle around the whole rung, is a reader
+        # taking a 1980 MHz idle boost for a 1980 MHz kernel. `dtype_tile_
+        # confound` had the same pair under the under-load names outright.
+        "sm_clock_idle_before_mhz": clock_start.sm_clock_mhz,
+        "sm_clock_idle_after_mhz": clock_end.sm_clock_mhz,
         "clock_drift": drift, "throttled": bool(idle_instants_moved),
         # WHAT LEVEL WAS SCORED AGAINST, on the row LEVEL was scored on. A
         # `clock_level_ok` False with no reference beside it is an exclusion a
@@ -2128,6 +2399,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
         # outlive the pod they were measured on.
         "reference_clock_mhz": reference_clock_mhz,
         **fold_timings(timings),
+        "passes": pass_rows,
         "provenance": "measured",
     }
 
@@ -2163,6 +2435,23 @@ PROBE_PINNINGS = (
     {"num_warps": 8, "num_stages": 3, "block_k": 64, "compute": "sum"},
     {"num_warps": 8, "num_stages": 4, "block_k": 128, "compute": "sum"},
     {"num_warps": 4, "num_stages": 5, "block_k": 128, "compute": "sum"},
+    # THE SUM HALF WIDENS DOWNWARD IN WARPS, ADDED 2026-09-09. On the H200 the
+    # three rows above read 2641 / 2869 / 5500 GB/s against a 4613 read roof:
+    # 0.573, 0.622 and 1.192 of it, and the one thing that moved the number was
+    # WARPS, 8 -> 4 at 5 stages and BLOCK_K 128 nearly doubling it from 2869 to
+    # 5500. Stages and BLOCK_K moved it by a few percent. That is the signature
+    # of the cross-lane `tl.sum` reduction tree being the limiter rather than
+    # the load path, and the tree gets cheaper with fewer lanes to fold. So the
+    # search continues DOWN: 4 warps at the two BLOCK_K, and 2 warps, which is
+    # the smallest a Triton program can be here. The bar those readings must
+    # clear is MIN_HEADROOM_RATIO x roof = 9736 GB/s on this card; the best dot
+    # pinning managed 9047, so sum has to beat every dot reading of 2026-09-09
+    # to take the ladder, and if it cannot, --dot-fallback refuse stops the arm
+    # having spent only the probe.
+    {"num_warps": 4, "num_stages": 4, "block_k": 64, "compute": "sum"},
+    {"num_warps": 4, "num_stages": 6, "block_k": 128, "compute": "sum"},
+    {"num_warps": 2, "num_stages": 4, "block_k": 128, "compute": "sum"},
+    {"num_warps": 2, "num_stages": 5, "block_k": 64, "compute": "sum"},
     {"num_warps": 8, "num_stages": 4, "block_k": 128, "compute": "dot"},
     {"num_warps": 8, "num_stages": 3, "block_k": 64, "compute": "dot"},
     {"num_warps": 16, "num_stages": 4, "block_k": 128, "compute": "dot"},
@@ -2237,7 +2526,7 @@ def choose_pinning(readings: list[dict], roof_bytes_s: float | None,
             f"{best['pinning']} at {best['aliased_bytes_s'] / 1e9:.0f} GB/s, "
             f"{best_ratio:.3f} of the measured read roof of "
             f"{roof_bytes_s / 1e9:.0f} GB/s, against a limit of "
-            f"{MIN_HEADROOM_RATIO}. Every one of them is limited by a shared "
+            f"{MIN_HEADROOM_RATIO:.3f}. Every one of them is limited by a shared "
             "non-DRAM path SLOWER than DRAM, so in the normal arm DRAM has "
             "slack and removing it cannot move the clock. No ladder run at any "
             "of these pinnings could have measured alpha, so none was run")
@@ -2415,7 +2704,11 @@ def report_probe(say, readings: list[dict], roof_bytes_s: float | None,
     say()
     if roof_bytes_s:
         say(f"  measured read roof: {roof_bytes_s / 1e9:.0f} GB/s; a pinning "
-            f"clears at {MIN_HEADROOM_RATIO} of it.")
+            f"clears at {MIN_HEADROOM_RATIO:.3f} of it "
+            f"({MIN_HEADROOM_RATIO * roof_bytes_s / 1e9:.0f} GB/s), which is "
+            f"the larger of {1 / (1 - MIN_SIGNAL_FRACTION):.3f} from `signal` "
+            f"and {1 + 1 / MAX_BRACKET_R:.3f} from `bracket`: r = 1/(h-1), so "
+            "a pinning below it runs a ladder `bracket` is bound to void.")
     say(f"  ADOPTED: {why}" if chosen else f"  NONE ADOPTED: {why}")
     if not chosen:
         say()
@@ -2486,6 +2779,67 @@ def estimated_kernel_ms(design: Design, args, roof_bytes_s: float | None
     return total
 
 
+#: The invocation that buys a dot-mode LOWER BOUND on alpha, priced below as
+#: the labelled fallback booking.
+#:
+#: WHY IT IS ON THE PAGE AT ALL. The 2026-09-09 H200 run fell to dot mode, and
+#: dot mode cannot answer P1: it moves the reduction onto the tensor cores, the
+#: aliased arm goes compute bound while the normal one stays memory bound, D(n)
+#: loses one copy of the per-tile compute cost and the fitted alpha falls toward
+#: zero. What it can produce is a bound (that run: alpha >= 0.229). Whether the
+#: bound is worth an hour of a rented card is the operator's decision and it
+#: cannot be made from a page that prices only the design in front of it.
+#:
+#: WHY THESE KNOBS. 200 ms per trial rather than 50 puts ~600 ms of timed region
+#: against a governor that moves on the 0.1-1 s scale, which is the cause the
+#: 2026-09-09 placebo failure had: 28.0% on deepseek-v2-lite|t4, four times the
+#: iid expectation for its own pass-to-pass spread, with the normal and placebo
+#: passes landing at different clock states inside one rung. 18 replicates
+#: rather than 9 halves the median's standard error. deepseek-v2-lite is dropped
+#: because it is 11 MiB per expert against a 60 MiB L2: its D(n) does not grow
+#: with the tile count while its pass does, so at t4/t8 D is 18% and 10% of the
+#: pass and a 2.5% clock wobble is 14-25% of D. It is the model that failed
+#: placebo, form and bracket, and it fails them for being the sub-L2 case P2
+#: predicts rather than for anything an operator can buy off.
+DOT_BOUND_FALLBACK = {
+    "cell_budget_ms": 200.0,
+    "replicates": 18,
+    "models": ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v3"),
+}
+
+
+def fallback_booking(roof_bytes_s: float | None, probing: bool = True):
+    """(kernel_min, wall_min, argv) for `DOT_BOUND_FALLBACK`, or None.
+
+    Priced through `estimated_kernel_ms` and this module's own constants, so it
+    cannot drift from the table it is printed under. It moved once already: on
+    2026-09-09 it read 33.4 wall minutes, and widening the sum half of
+    `PROBE_PINNINGS` from three entries to seven added four compiles to the
+    probe and moved it up.
+    """
+    argv = ["--cell-budget-ms", f"{DOT_BOUND_FALLBACK['cell_budget_ms']:.0f}",
+            "--replicates", str(DOT_BOUND_FALLBACK["replicates"]),
+            "--models", ",".join(DOT_BOUND_FALLBACK["models"])]
+    args = parse_args(argv)
+    kernel_ms = estimated_kernel_ms(build_design(args), args, roof_bytes_s)
+    if kernel_ms is None:
+        return None
+    kernel_min, wall_min = _wall_from_kernel(kernel_ms, probing)
+    return kernel_min, wall_min, argv
+
+
+def _wall_from_kernel(kernel_ms: float, probing: bool) -> tuple[float, float]:
+    """The one place the probe's kernel time and its compile allowance are
+    added to a kernel figure. Three callers priced it independently before."""
+    probe_ms = (len(PROBE_PINNINGS) * len(PROBE_TILES) * 2
+                * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_CELL_BUDGET_MS)
+                if probing else 0.0)
+    probe_fixed_min = (len(PROBE_PINNINGS) * PROBE_FIXED_S_PER_PINNING / 60.0
+                       if probing else 0.0)
+    kernel_min = (kernel_ms + probe_ms) / 60000.0
+    return kernel_min, kernel_min * WALL_OVER_KERNEL + probe_fixed_min
+
+
 def report_cost(say, design: Design, args, roof_bytes_s: float | None,
                 probing: bool) -> None:
     """The booking, labelled WALL or KERNEL the way the session driver labels it.
@@ -2544,8 +2898,7 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
                 if probing else 0.0)
     probe_fixed_min = (len(PROBE_PINNINGS) * PROBE_FIXED_S_PER_PINNING / 60.0
                        if probing else 0.0)
-    kernel_min = (kernel_ms + probe_ms) / 60000.0
-    wall_min = kernel_min * WALL_OVER_KERNEL + probe_fixed_min
+    kernel_min, wall_min = _wall_from_kernel(kernel_ms, probing)
     say(f"  KERNEL  {kernel_min:5.1f} min   {len(design.rungs)} rungs x 3 "
         f"passes x {design.replicates} replicates, priced from the byte model "
         f"at {KERNEL_EFFICIENCY_PRIOR:.2f}")
@@ -2586,6 +2939,52 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
         "that finds a")
     say("  faster pinning makes both figures over-estimates, which is the "
         "right direction.")
+
+    # THE TWO BOOKINGS AN OPERATOR ACTUALLY CHOOSES BETWEEN after 2026-09-09,
+    # priced here because this is the only function in this file that names a
+    # duration and a session is booked off the page, not off a memo.
+    sums = [pin for pin in PROBE_PINNINGS if pin["compute"] == "sum"]
+    probe_only_min = _wall_from_kernel(0.0, probing)[1] if probing else 0.0
+    say()
+    say(f"  PROBE   {probe_only_min:5.1f} min   `--dot-fallback refuse`: the "
+        f"widened sum grid, {len(sums)} sum")
+    say("                        pinning(s) of "
+        f"{len(PROBE_PINNINGS)}, stops the arm at the probe when none of them "
+        "clears")
+    say(f"                        {MIN_HEADROOM_RATIO:.3f} x the roof"
+        + (f" ({MIN_HEADROOM_RATIO * roof_bytes_s / 1e9:.0f} GB/s here)"
+           if roof_bytes_s else "")
+        + ". That is INVALID and it is the")
+    say("                        cheapest question this arm can ask. The sum "
+        "half widened DOWN in")
+    say("                        warps on 2026-09-09 because 8 -> 4 warps was "
+        "the only knob that")
+    say("                        moved the rate (2869 -> 5500 GB/s); it was "
+        "1.3 min at three sum")
+    say("                        pinnings before those four were added:")
+    for pin in sums:
+        say(f"                          {pin['num_warps']:2d} warps  "
+            f"{pin['num_stages']} stages  BLOCK_K {pin['block_k']}")
+    booking = fallback_booking(roof_bytes_s, probing)
+    if booking is not None:
+        fb_kernel, fb_wall, fb_argv = booking
+        say()
+        say(f"  FALLBACK{fb_wall:6.1f} min   WALL for the dot-mode LOWER "
+            "BOUND, if one is wanted anyway.")
+        say(f"                        `alias_ablation.py --run "
+            f"{' '.join(fb_argv)}`")
+        say(f"                        ({fb_kernel:.1f} kernel min). dot mode "
+            "cannot answer P1 at all, so this")
+        say("                        buys a bound and not alpha; the longer "
+            "trial and the doubled")
+        say("                        replicates are aimed at the governor "
+            "oscillation that produced")
+        say("                        the 28% placebo, and the sub-L2 model "
+            "that failed placebo, form")
+        say("                        and bracket is dropped. It read 33.4 min "
+            "on 2026-09-09, before")
+        say("                        the sum half of PROBE_PINNINGS widened "
+            "and added four compiles.")
 
 
 def measurement_order(design: Design) -> tuple[Rung, ...]:
@@ -2882,7 +3281,8 @@ def synthesise(design: Design, law: str, seed: int,
             "ms": {"normal": draw(base_normal), "aliased": draw(base_alias),
                    "placebo": draw(base_normal + drift)},
             "correctness": {"normal": 1e-7, "aliased": 1e-7},
-            "isa": isa, "sm_clock_start": 1500, "sm_clock_end": 1500,
+            "isa": isa,
+            "sm_clock_idle_before_mhz": 1500, "sm_clock_idle_after_mhz": 1500,
             "clock_drift": 0.0, "throttled": False,
             "provenance": "synthetic", "law": law,
         })
@@ -3308,8 +3708,12 @@ def report_alphas(say, results: list[ModelResult], pooled: tuple[float, float] |
     say("  exactly when r, the aliased ladder's per-tile cost over one weight "
         "read, is small.")
     say()
+    # BOTH HALVES OF `form` ARE IN THE TABLE, because the gate scores both.
+    # resid/W is the criterion that survives a true alpha of zero, where R^2
+    # has no variance to explain; printing only R^2 showed deepseek-v2-lite as
+    # 0.1356 and said nothing about the 8.9% that is the actual answer.
     say("  model                  MiB/expert    W (ms)   fixed  difference  "
-        "direct       r      R^2")
+        "direct       r      R^2   resid/W   form")
     for res in results:
         fit = res.fit
         if not fit.ok:
@@ -3318,10 +3722,23 @@ def report_alphas(say, results: list[ModelResult], pooled: tuple[float, float] |
             continue
         direct = "none" if fit.alpha_direct is None else f"{fit.alpha_direct:.3f}"
         share = "none" if fit.l2_share is None else f"{fit.l2_share:.3f}"
+        resid = ("none" if fit.resid_over_w is None
+                 else f"{fit.resid_over_w * 100:.1f}%")
+        # THE CONTROL IS NOT SCORED BY `form` and the column says so rather
+        # than printing a verdict nothing acts on: its D(n) is near zero by
+        # construction and `control_gate` scores its bracket instead.
+        form = ("not scored" if res.control else
+                "affine" if form_is_affine(fit) else "NEITHER")
         tag = "  (L2-RESIDENT CONTROL)" if res.control else ""
         say(f"  {res.model:20s} {res.per_expert_mib:11.1f} {fit.w_ms:9.4f} "
             f"{(fit.fixed_ms or 0.0):7.4f} {fit.alpha:11.3f} {direct:>7s} "
-            f"{share:>7s} {fit.r2:8.4f}{tag}")
+            f"{share:>7s} {fit.r2:8.4f} {resid:>8s}   {form}{tag}")
+    say()
+    say(f"  form PASSES on R^2 >= {MIN_LINEARITY_R2} OR resid/W <= "
+        f"{MAX_FORM_RESIDUAL_OVER_W:.0%}. The second is there because a FLAT "
+        "D(n) is alpha")
+    say("  near zero, which P2 predicts below L2, and R^2 has no variance to "
+        "explain there.")
     say()
     say("  model                  bracket           90% interval        "
         "per-rung alphas (difference)")
@@ -3490,10 +3907,14 @@ def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
                 f"weakest model {model}: the aliased ladder delivers "
                 f"{achieved / 1e9:.0f} GB/s of weight requests against a "
                 f"measured read roof of {roof_bytes_s / 1e9:.0f} GB/s, a ratio "
-                f"of {ratio:.3f} (limit {MIN_HEADROOM_RATIO}). Below 1 the "
-                "shared non-DRAM path is slower than DRAM, so DRAM had slack "
-                "in the normal arm and no ablation of it can move the clock "
-                "however large alpha is")
+                f"of {ratio:.3f} (limit {MIN_HEADROOM_RATIO:.3f}, the larger of "
+                f"1/(1-{MIN_SIGNAL_FRACTION}) = "
+                f"{1 / (1 - MIN_SIGNAL_FRACTION):.3f} from `signal` and "
+                f"1+1/{MAX_BRACKET_R} = {1 + 1 / MAX_BRACKET_R:.3f} from "
+                "`bracket`, which scores the same h as r = 1/(h-1)). Below 1 "
+                "the shared non-DRAM path is slower than DRAM, so DRAM had "
+                "slack in the normal arm and no ablation of it can move the "
+                "clock however large alpha is")
 
 
 def attribution_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
@@ -3625,7 +4046,50 @@ def correctness_gate(records: list[dict], compute: str) -> Gate:
 #: characters, so a longer sentence here ships a RESULT token that stops mid
 #: word with a trailing hyphen, and a driver keying on the token would be
 #: keying on where the sentence happened to fall.
-LEVEL_GATE = "level: every rung ran at the roof's measured clock"
+#: How many ids fit on one printed line before it is wrapped. The lists this
+#: page prints were truncated to `[:3]` until 2026-09-09, so a reader told that
+#: 16 of 20 rungs drifted could not learn WHICH 16 from the page, the report.md
+#: or the log, and the three that were named were only the first three in file
+#: order. Twenty ids are two lines.
+IDS_PER_LINE = 4
+
+
+def _wrapped_ids(ids) -> str:
+    """Every id, wrapped, never truncated. Joined with the report's indent."""
+    ids = list(ids)
+    if not ids:
+        return "none"
+    lines = ["  " + ", ".join(ids[i:i + IDS_PER_LINE])
+             for i in range(0, len(ids), IDS_PER_LINE)]
+    return "\n".join(lines).lstrip()
+
+
+def _named_rungs(records: list[dict], ids) -> str:
+    """The named rungs with the folded under-load clock each one carries.
+
+    THE CLOCK IS BESIDE THE ID BECAUSE THE ID ALONE MISLED. On 2026-09-09 the
+    page said "19 of 20 rungs ran ABOVE 105%" and five of those nineteen
+    (deepseek-v3 at t2/t4/t8, qwen2 at t4/t8) had a folded median load INSIDE
+    the band, 1470 to 1545 MHz: they were HIGH because one of 27 passes was, and
+    a reader checking the claim against the row's own `sm_clock_load_mhz` found
+    a number that did not support it.
+    """
+    loads = {r.get("id"): r.get("sm_clock_load_mhz") for r in records}
+    named = [f"{rid}@{loads[rid]:.0f}MHz" if loads.get(rid)
+             else f"{rid}@no-clock" for rid in ids]
+    return _wrapped_ids(named)
+
+
+#: RENAMED ON 2026-09-09 WHEN THE RULE CHANGED, and the old name is the point.
+#: It read "level: every rung ran at the roof's measured clock", which is what
+#: the gate DEMANDED until the clock memo and is not what it does now: the
+#: under-load clock is an outcome of the cell, both sides are kept, and this
+#: gate carries the recorded side into the log. A gate that PASSes a rung at
+#: 1980 MHz under a name asserting it ran at 1485 is a description of the old
+#: behaviour left standing after the behaviour changed, which is this
+#: repository's other recurring defect. The RESULT token moves with the name,
+#: which is why the rename is in the same commit as the rule.
+LEVEL_GATE = "level: the clock each rung ran at is recorded"
 
 
 def level_split(records: list[dict]
@@ -3643,15 +4107,20 @@ def level_split(records: list[dict]
     established (`bm128_roofline.Timing.throttled` says the same thing).
 
     THE SIDE IS READ, NOT ONLY THE VERDICT. LEVEL has been two-sided since
-    03df2d4 (2026-09-03): a rung boosted to 1980 MHz against the H200's 1515
-    MHz bf16-GEMM reference fails LEVEL with `clock_level_side == "high"`, and
+    03df2d4 (2026-09-03): a rung boosted to 1980 MHz against the H200's
+    bf16-GEMM reference fails LEVEL with `clock_level_side == "high"`, and
     until 2026-09-08 this function filed it under `sagged`. On the H200 that
     is the NORMAL state of a memory-bound rung, which is every rung of this
     ladder, so the gate would have voided the arm on a card doing exactly
     what the calibration says it does. Sagged is LOW, or False with no side
-    recorded (the one-sided era's meaning). Boosted is HIGH: the time is a
-    time at one clock and alpha is a ratio of such times, and what is not
-    comparable is a fixed-roof fraction, which this arm never forms.
+    recorded (the one-sided era's meaning). Boosted is HIGH.
+
+    SINCE 2026-09-09 NEITHER SIDE EXCLUDES ANYTHING and this split is a
+    RECORD: `level_gate` reports both counts and passes, and the exclusion is
+    DRIFT, applied per pass. The two lists are still built here and in one
+    place, because the page prints them and the gate reports them and a page
+    that narrates three sagged rungs while the gate reports a different three
+    is the defect this rebuild keeps finding one call site at a time.
     """
     sagged = [r["id"] for r in records if r.get("clock_level_ok") is False
               and r.get("clock_level_side") != timing.LEVEL_HIGH]
@@ -3664,16 +4133,14 @@ def level_split(records: list[dict]
 def level_gate(records: list[dict]) -> Gate:
     """Did this card sit at the clock its roof was measured at, on every rung.
 
-    THIS ARM SCORES LEVEL WHERE ITS SIBLINGS NARRATE OR EXCLUDE IT, and the
-    estimator is the reason. `group_m_alpha_sweep` prints the same two counts as
-    prose; `bm128_roofline` drops the row (`Timing.cold` feeds `excluded`, and
-    the fit skips it). Neither answer is available here. The whole result is
-    D(n) = T_normal(n) - T_aliased(n), a difference of two ladders, and alpha is
-    the slope of that difference over its intercept: a sag part way up one
-    ladder moves D(n) and D(1) by different amounts, so it does not cancel, and
-    dropping the sagged rungs silently re-shapes the very ladder alpha is fitted
-    from. The only honest move left is to refuse the run and name the rungs to
-    re-measure.
+    THIS ARM RECORDS LEVEL WHERE ITS SIBLINGS NARRATE OR EXCLUDE IT, and the
+    estimator is the reason. The whole result is D(n) = T_normal(n) -
+    T_aliased(n), a difference of two ladders, and alpha is the slope of that
+    difference over its intercept: dropping a rung on any rule silently
+    re-shapes the very ladder alpha is fitted from, so this arm drops nothing at
+    the rung level at all. What it can drop is a PASS whose clock moved inside
+    it, which is `drop_drifted_passes`, because the passes of one rung are
+    replicates of one quantity rather than points of the ladder.
 
     IT WAS A PARAGRAPH UNTIL 2026-09-03, AND A PARAGRAPH MOVES NOTHING THE
     SESSION GRADES. `pod_session.sh` scores this arm on exactly two things: the
@@ -3694,48 +4161,48 @@ def level_gate(records: list[dict]) -> Gate:
     measured run; a synthetic pass would otherwise be INVALID for want of
     hardware it never touched.
 
-    A HIGH-SIDE RUNG PASSES, AND THE DETAIL SAYS WHICH SIDE IT SAW. Since
-    03df2d4 LEVEL fails in both directions, and a rung boosted to 1980 MHz
-    against the 1515 MHz reference is a rung at one steady clock whose
-    fixed-roof fraction is not comparable; this arm forms no such fraction
-    (alpha is a ratio of two times at that clock), so it is not the sag the
-    gate exists for. On the H200 every memory-bound rung is one, so reading
-    the verdict without the side would have voided the arm on every rental.
-    Only LOW fails this gate.
+    NEITHER SIDE FAILS THIS GATE SINCE 2026-09-09, AND ONLY DRIFT EXCLUDES.
+    LEVEL has been two-sided since 03df2d4 and HIGH has been kept since
+    2026-09-08; the LOW side went the same way when the H200 session's 750
+    cells showed what the under-load clock is. It is an OUTCOME of the cell, set
+    per tile by the kernel's own power draw under the card's 700 W cap: BM=128
+    with BN=64 holds 1395 MHz median over 215 cells, BM=256 holds 1650, a
+    memory-shaped cell boosts to 1950-1980, and the 8192^3 GEMM the roof was
+    measured on holds 1485 at 691 W, near the LOW end of what dense work does
+    there. A +/-5% band around that one kernel's operating point is 74 MHz,
+    five NVML steps, against a session that spans 660; scoring a tile against it
+    excludes the tile, not a defect, and on this card it removed the study's two
+    primary tiles from measurability on every rerun. So both sides are KEPT, the
+    side is RECORDED on the row and printed here, and the exclusion is DRIFT,
+    applied to the PASS by `drop_drifted_passes`.
+
+    THE GATE STILL EXISTS AND IT IS STILL SCORED. It is the line that carries
+    the recorded sides into the log the session grader reads, and it is still
+    UNKNOWN, never PASS, when a rung carries no reference: a run that could not
+    be scored against a clock has not shown what clock it ran at.
     """
     sagged, blind, boosted = level_split(records)
     low = f"{timing.LEVEL_FRACTION:.0%}"
     high = f"{timing.LEVEL_HIGH_FRACTION:.0%}"
-    boost_note = (f"; {len(boosted)} rung(s) ran ABOVE {high} of it (LEVEL "
-                  "high, first " + boosted[0] + "), which is a boosted "
-                  "memory-bound rung and not a sag: kept, its fixed-roof "
-                  "fraction is not comparable and this arm forms none"
-                  if boosted else "")
-    if sagged:
-        detail = (f"{len(sagged)} of {len(records)} rungs ran BELOW {low} of "
-                  f"the clock this card's roof was measured at (LEVEL low), "
-                  f"first {sagged[0]}. alpha is a slope over an intercept of "
-                  "the same difference, so a sag part way up one ladder does "
-                  "not cancel")
-        if blind:
-            detail += (f", and a further {len(blind)} carry no reference at all")
-        return Gate(LEVEL_GATE, False, detail + boost_note)
     if blind:
         return Gate(LEVEL_GATE, None,
                     f"{len(blind)} of {len(records)} rungs carry no reference "
                     "clock, so they could not be scored against the one this "
                     "card's roof was measured at. Publish a calibration for "
-                    "this card and re-measure them; nothing here says they were "
-                    "level" + boost_note)
-    if boosted:
+                    "this card and re-measure them; nothing here says what "
+                    "clock they ran at")
+    if sagged or boosted:
         return Gate(LEVEL_GATE, True,
-                    f"no rung ran below {low} of the clock this card's roof "
-                    f"was measured at; {len(boosted)} of {len(records)} ran "
-                    f"ABOVE {high} of it (LEVEL high, first {boosted[0]}), the "
-                    "boosted state a memory-bound rung is in on this card: "
-                    "kept, the time is at one clock and alpha is a ratio of "
-                    "such times; only a fixed-roof fraction would not be "
-                    "comparable and this arm forms none")
+                    f"{len(sagged)} of {len(records)} rungs ran BELOW {low} of "
+                    "the clock this card's roof was measured at (LEVEL low"
+                    + (f", first {sagged[0]}" if sagged else "") + f") and "
+                    f"{len(boosted)} ran ABOVE {high} (LEVEL high"
+                    + (f", first {boosted[0]}" if boosted else "") + "). Both "
+                    "sides KEPT and the side recorded on the row: the "
+                    "under-load clock is set per tile by the kernel's own power "
+                    "draw under this card's cap, alpha is a ratio of two times "
+                    "at that clock, and this arm forms no fixed-roof fraction. "
+                    "Only DRIFT excludes, and it excludes the pass")
     return Gate(LEVEL_GATE, True,
                 f"all {len(records)} rungs ran within {low} to {high} of the "
                 "clock this card's roof was measured at")
@@ -3820,17 +4287,54 @@ def signal_gate(records: list[dict]) -> Gate:
                 "label does not cover")
 
 
+def form_is_affine(fit: AlphaFit) -> bool:
+    """Either half of `form`, in ONE place because two readers score it.
+
+    `linearity_gate` decides the page and the alpha table prints the two
+    numbers beside each model; a table that shows a residual the gate did not
+    score is the writer/reader mismatch this rebuild keeps finding one call site
+    at a time.
+    """
+    if fit.r2 is not None and fit.r2 >= MIN_LINEARITY_R2:
+        return True
+    return (fit.resid_over_w is not None
+            and fit.resid_over_w <= MAX_FORM_RESIDUAL_OVER_W)
+
+
 def linearity_gate(results: list[ModelResult]) -> Gate:
+    """Is D(n) affine in (n-1), which is what W(1+alpha(n-1)) asserts.
+
+    TWO CRITERIA AND THEY ARE AN OR, because R^2 alone cannot pass a true alpha
+    of zero. Until 2026-09-09 this gate read R^2 only, and deepseek-v2-lite (11
+    MiB per expert, below the H200's 60 MiB L2, so P2 predicts alpha near zero)
+    came back with a flat D(n), residual RMS 8.9% of W and R^2 0.1356, and
+    voided a whole page for being exactly what the design predicted. The
+    residual criterion asks the same question, how far D(n) is from the line,
+    in units the flat case can answer. See `MAX_FORM_RESIDUAL_OVER_W`.
+
+    THE WORST MODEL NAMED IS THE WORST BY R^2 AND THE VERDICT IS OVER ALL OF
+    THEM. A model that fails both criteria fails the page even when another
+    model has a lower R^2 and passes on its residual.
+    """
+    name = "form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires"
     fitted = [r for r in results if r.fit.ok and not r.control]
     if not fitted:
-        return Gate("form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires",
-                    None, "no model produced a fit")
+        return Gate(name, None, "no model produced a fit")
+    bad = [r for r in fitted if not form_is_affine(r.fit)]
     worst = min(fitted, key=lambda r: r.fit.r2)
-    return Gate("form: D(n) is affine in (n-1), as W(1+alpha(n-1)) requires",
-                worst.fit.r2 >= MIN_LINEARITY_R2,
-                f"worst R^2 {worst.fit.r2:.4f} on {worst.model} "
-                f"(limit {MIN_LINEARITY_R2}). Below it the functional form is "
-                "wrong and slope-over-intercept is not alpha")
+    named = bad[0] if bad else worst
+    resid = named.fit.resid_over_w
+    resid_s = "not recorded" if resid is None else f"{resid * 100:.1f}% of W"
+    detail = (f"worst R^2 {worst.fit.r2:.4f} on {worst.model}; scored on "
+              f"{named.model} at R^2 {named.fit.r2:.4f} (limit "
+              f"{MIN_LINEARITY_R2}) OR residual RMS {resid_s} (limit "
+              f"{MAX_FORM_RESIDUAL_OVER_W:.0%}). A FLAT D(n) is alpha near "
+              "zero, which P2 predicts below L2, and R^2 has no variance to "
+              "explain there; a large residual is a wrong form and "
+              "slope-over-intercept is not alpha")
+    if bad:
+        detail += f". {len(bad)} of {len(fitted)} model(s) clear neither"
+    return Gate(name, not bad, detail)
 
 
 def control_gate(results: list[ModelResult]) -> Gate:
@@ -4521,11 +5025,8 @@ def main(argv: list[str] | None = None) -> int:
                 say("ablation route is closed on this kernel and take the "
                     "counter route instead.")
                 _save(out_dir, say, prov)
-                with contextlib.suppress(OSError):
-                    (out_dir / "probe.json").write_text(json.dumps(
-                        prov.stamp({"readings": readings, "chosen": None,
-                                    "why": why, "card": card,
-                                    "roof_bytes_s": roof}), indent=2))
+                _write_probe_json(out_dir, prov, readings, None, why, card,
+                                  roof, args.dot_fallback)
                 return code
             if chosen["compute"] != args.compute:
                 say()
@@ -4541,6 +5042,15 @@ def main(argv: list[str] | None = None) -> int:
             design = build_design(args)
             out_dir = resolve_out(design)
             pre = preflight(design, l2, ridge, ridge_source)
+            # THE READINGS GO ON DISK WHETHER OR NOT THEY REFUSED. Until
+            # 2026-09-09 probe.json was written only on the branch above, where
+            # nothing cleared, so an ADOPTED pinning left its readings in the
+            # log alone: the 2026-09-09 dot directory has no probe.json and
+            # `choose_pinning` could not be re-driven from it at all, which is
+            # the one decision on the page that changed which kernel ran. The
+            # adopted path is the path a published directory is on.
+            _write_probe_json(out_dir, prov, readings, chosen, why, card, roof,
+                              args.dot_fallback)
             say()
             say(f"## re-pinned by the probe; output directory is now {out_dir}")
             say()
@@ -4698,7 +5208,11 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
                 "on this line.")
             setattr(args, knob, found)
 
-    timed = [r for r in records if r.get("ms")]
+    # DRIFT EXCLUDES THE PASS, and this is the only place that decides which
+    # passes the ladder is fitted from. It runs BEFORE `timed` because a rung
+    # thinned below `MIN_REPLICATES_AFTER_DRIFT` is not a rung this page fits.
+    records, drift_drop = drop_drifted_passes(records)
+    timed = [r for r in records if r.get("ms") and not r.get("skipped")]
     if not timed:
         say()
         say("REFUSED. NOT TESTABLE: nothing was timed, so no gate below could "
@@ -4723,22 +5237,62 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     idle_moved = [r["id"] for r in timed if r.get("throttled")]
     if idle_moved:
         say()
-        say(f"  {len(idle_moved)} rungs moved more than "
+        say(f"  {len(idle_moved)} of {len(timed)} rungs moved more than "
             f"{CLOCK_DRIFT_LIMIT * 100:.0f}% between the two idle-instant SM "
-            f"clock samples of the RETIRED check: {idle_moved[:3]}. That check")
+            "clock samples of the RETIRED check. That check")
         say("  detects whether the first sample caught the idle boost, not "
             "throttling; the under-load")
         say("  DRIFT verdict is clock_drift_ok, and the interleaved order plus "
             "the placebo gate are what")
-        say("  protect a paired difference from either.")
-    drifted = [r["id"] for r in timed if r.get("clock_drift_ok") is False]
-    if drifted:
+        say("  protect a paired difference from either. On the row they are "
+            "sm_clock_idle_before_mhz")
+        say("  and sm_clock_idle_after_mhz, renamed on 2026-09-09 so they "
+            "cannot be read as the")
+        say("  under-load pair sm_clock_start_mhz / sm_clock_end_mhz beside "
+            "them.")
+        say(f"  {_named_rungs(timed, idle_moved)}")
+
+    # THE DRIFT PARAGRAPH IS NOW AN ACCOUNT OF AN EXCLUSION AND NOT A REQUEST.
+    # Until 2026-09-09 it printed "re-measure them" and moved nothing: 16 of 20
+    # rungs were named as drifted and all 20 were fed to the fit, so the count
+    # was invisible to the session grader and to the gates alike.
+    if drift_drop.per_pass:
         say()
-        say(f"  DRIFT: {len(drifted)} of {len(timed)} rungs had their under-load "
-            f"clock move more than {timing.DRIFT_FRACTION:.0%} during the "
-            f"trials: {drifted[:3]}.")
-        say("  Those samples were not taken at one clock and the rung's median "
-            "is a blend; re-measure them.")
+        say(f"  DRIFT: {len(drift_drop.dropped)} passes EXCLUDED across "
+            f"{drift_drop.passes_seen} rungs that carry per-pass records. A "
+            "cell is excluded if and")
+        say("  only if its clock drifted; a steady clock on either side of the "
+            "roof's own operating")
+        say("  point is the kernel's power state under this card's cap, is "
+            "recorded as the LEVEL side")
+        say("  below, and excludes nothing.")
+        if drift_drop.dropped:
+            say(f"  {_wrapped_ids(drift_drop.dropped)}")
+        for rid, why in drift_drop.skipped:
+            say(f"  SKIPPED {rid}: {why}. Its ladder is not fitted.")
+    if drift_drop.lossy:
+        flagged = [r["id"] for r in timed
+                   if r["id"] in set(drift_drop.lossy)
+                   and r.get("clock_drift_ok") is False]
+        say()
+        say(f"  DRIFT: NOT RESOLVABLE on {len(drift_drop.lossy)} of "
+            f"{len(timed)} rungs, {len(flagged)} of them FLAGGED, and the fold "
+            "is REFUSED as a")
+        say("  basis for exclusion.")
+        say("  Those rows carry the rung-level fold alone: one drift verdict "
+            "over 3 x replicates")
+        say("  time_kernel calls, with one drifted pass in 27 drifting the "
+            "rung. Which passes moved,")
+        say("  and their first and last under-load samples, are not on disk, "
+            "so the exclusion cannot")
+        say("  be applied at the unit the rule is about and the fold cannot be "
+            "inverted to find it.")
+        say("  The rungs are KEPT and the verdict below is scored on all their "
+            "passes, drifted ones")
+        say("  included. Re-measure on an instrument that writes `passes` "
+            "(PASS_COLUMNS, 2026-09-09)")
+        say("  before any alpha on this page is quoted as excluding drift.")
+        say(f"  FLAGGED: {_named_rungs(timed, flagged)}")
 
     # A COLUMN NOTHING READS IS A COLUMN NOTHING PROTECTS. `clock_level_ok`
     # reached `cells.jsonl` on every rung and was consulted by no line of this
@@ -4769,29 +5323,49 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
                 "2026-09-03, so none of")
             say("  them can be excluded on the clock it ran at.")
         if sagged:
+            # THE LOW SIDE, NAMED AS KEPT SINCE 2026-09-09. It failed this gate
+            # and stopped the page until the clock memo: on this card the
+            # under-load clock is set per tile by the kernel's own power draw
+            # under the 700 W cap, so a steady LOW is the operating point of a
+            # tile family and not a throttled box. Excluding on it removes a
+            # tile from measurability on every rerun. Only DRIFT excludes.
             say(f"  LEVEL: {len(sagged)} of {len(timed)} rungs ran below "
                 f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
-                f"was measured at (LEVEL low): {sagged[:3]}.")
-            say("  D(n) and D(1) are differences between two ladders, and a sag "
-                "part way up one moves")
-            say("  them by different amounts, so the slope over intercept does "
-                "not cancel it. Those")
-            say("  rungs have to be re-measured before their alpha means "
-                "anything.")
+                "was measured at (LEVEL low).")
+            say("  KEPT, side recorded. A steady clock below the roof's own "
+                "operating point is this")
+            say("  kernel's power state under the card's cap, not a sag in the "
+                "box: alpha is a ratio of")
+            say("  two times at that clock and this arm forms no fixed-roof "
+                "fraction. What does not")
+            say("  cancel is a clock that MOVED inside a pass, and that is "
+                "DRIFT, reported above.")
+            say(f"  {_named_rungs(timed, sagged)}")
         if boosted:
             # THE HIGH SIDE, NAMED AS KEPT. On the H200 a memory-bound rung
-            # runs at 1980 MHz against the 1515 MHz reference, and every rung
+            # runs at 1980 MHz against the 1485 MHz reference, and every rung
             # of this ladder is memory-bound; reading these as sagged would
             # void the arm on every rental.
             say(f"  LEVEL: {len(boosted)} of {len(timed)} rungs ran ABOVE "
                 f"{timing.LEVEL_HIGH_FRACTION:.0%} of the clock this card's "
-                f"roof was measured at (LEVEL high): {boosted[:3]}.")
+                "roof was measured at (LEVEL high).")
             say("  That is a boosted memory-bound rung, not a sag: the time is "
                 "at one clock and alpha is a")
             say("  ratio of such times. Kept. What is not comparable is a "
                 "fixed-roof fraction, which this")
             say("  arm never forms; a reader who needs one reads "
                 "roof_at_cell_clock.")
+            say(f"  {_named_rungs(timed, boosted)}")
+        if (sagged or boosted) and not drift_drop.per_pass:
+            say("  THE SIDES ABOVE ARE FOLDED OVER EVERY PASS, DRIFTED ONES "
+                "INCLUDED, because these")
+            say("  rows carry no per-pass records. A rung reads LOW or HIGH "
+                "when one of its 3 x")
+            say("  replicates passes did, whatever its own median load says, "
+                "so the load printed")
+            say("  beside an id here can sit inside the band. With `passes` on "
+                "the row the side is")
+            say("  re-folded over the passes the fit actually uses.")
         if not blind and not sagged and not boosted:
             say(f"  LEVEL: all {len(timed)} rungs ran within "
                 f"{timing.LEVEL_FRACTION:.0%} to "
@@ -4861,6 +5435,29 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
                    dot_mode_reading(design.compute))
     _save(out_dir, say, prov)
     return code
+
+
+def _write_probe_json(out_dir: Path, prov, readings: list[dict],
+                      chosen: dict | None, why: str, card: str,
+                      roof_bytes_s: float | None, dot_fallback: str) -> None:
+    """The probe's six-to-ten readings and its decision, beside the cells.
+
+    ONE WRITER FOR BOTH OUTCOMES. It was two call sites, one of which did not
+    exist: the refused path wrote the file and the adopted path wrote nothing,
+    so the decision that chose the kernel the ladder ran on survived only as a
+    table in a log. `choose_pinning(readings, roof, dot_fallback)` is
+    re-drivable from this file alone, which is what makes the pinning a datum
+    rather than a recollection.
+    """
+    with contextlib.suppress(OSError):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        payload = {"readings": readings, "chosen": chosen, "why": why,
+                   "card": card, "roof_bytes_s": roof_bytes_s,
+                   "dot_fallback": dot_fallback,
+                   "min_headroom_ratio": MIN_HEADROOM_RATIO}
+        (out_dir / "probe.json").write_text(
+            json.dumps(prov.stamp(payload) if prov is not None else payload,
+                       indent=2))
 
 
 def _save(out_dir: Path, say: Report, prov=None) -> None:
