@@ -89,6 +89,18 @@ default is what gets quoted. An observation that names NO instrument is refused
 by either route (`UNSTATED_INSTRUMENT`): pooling weighs two apparatus a reader
 can name, and an absent fact is not one of them.
 
+THE LEVEL VERDICT HAS A SIDE, AND THE GATE READS IT. Since 03df2d4 the
+instrument's LEVEL check is a BAND around the reference clock, so a
+memory-shaped cell boosted to 1980 MHz against the 1515 MHz bf16-GEMM reference
+FAILS LEVEL with `clock_level_side = "high"`. On an H200 that is the normal
+state of every memory-bound cell, which is every cell this fit is identified on.
+`clock_gate` therefore excludes only LOW (the throttle the flag was built for)
+and DRIFT; a HIGH row is ADMITTED and marked, because its time is the kernel's
+and only its FIXED-roof fraction is wrong. The rows are pooled with the level
+ones because nothing the fit reads depends on the fixed roof; the roof section
+of the report prints the fraction against the roof at the cell's own clock
+beside the fixed one and says on how many rows it is available.
+
 Everything here is arithmetic over published CSVs: no GPU, no torch. That was
 a promise this file could not keep until 2026-09-02: `moe.bench.tile_resolve`
 imported `moe.quant`, which imported torch at module scope, and torch is not one
@@ -165,6 +177,26 @@ RIDGE_BAND = (160.3, 176.2)
 #: tree, which is why these rows are collected separately and labelled.
 CUTLASS_BLOCK_M = 64
 CUTLASS_IMPLS = frozenset({"torch_grouped_mm_up", "torch_grouped_mm_down"})
+
+#: The two words `schema.Row.clock_level_side` carries on a LEVEL failure.
+#: They ARE `timing.LEVEL_LOW` and `timing.LEVEL_HIGH`, spelled here rather
+#: than imported because `moe/bench/timing.py` imports torch at module scope
+#: and this script's header promises never to need it; `tests/test_alpha_refit.py`
+#: pins the two spellings to the instrument's own so they cannot drift.
+LEVEL_LOW = "low"
+LEVEL_HIGH = "high"
+#: Every value the column may hold: "" when LEVEL held, was undetermined, or
+#: the row predates the side. Any other word is refused, not defaulted.
+LEVEL_SIDES = frozenset({"", LEVEL_LOW, LEVEL_HIGH})
+
+#: What a HIGH-side row is marked with when it is admitted. One sentence, kept
+#: in one place, because it is printed beside the count and quoted in tests.
+HIGH_SIDE_NOTE = ("LEVEL failed HIGH: the cell ran above the band around the "
+                  "reference clock, so its fixed-roof fraction is not "
+                  "comparable; use pct_of_roof_at_cell_clock")
+
+#: `Observation.roof_note` on a row that predates the per-row roof (schema v6).
+ROOF_PREDATES = "not available (v<6 row)"
 
 #: The manifest that pins the pool FINDINGS' numbers were fitted on. See the
 #: file itself for why a glob is not a reproducible input set (audit B8).
@@ -281,6 +313,27 @@ class Observation:
     #: `UNSTATED_INSTRUMENT` for the caller that a convenient default
     #: mislabelled. `collect` always sets it from the row itself.
     instrument: str = UNSTATED_INSTRUMENT
+    #: Which way this row's LEVEL verdict failed, off the row. `LEVEL_HIGH` for
+    #: a boosted cell `clock_gate` ADMITTED (its time is the kernel's; only the
+    #: fixed-roof fraction beside it is wrong), `LEVEL_LOW` only when
+    #: `--include-throttled` re-admitted a throttled row, "" when LEVEL held,
+    #: was undetermined, or the row predates the side. The report counts the
+    #: HIGH rows beside the fit so a reader can see how much of the pool the
+    #: fixed roof misdescribes.
+    clock_level_side: str = ""
+    #: `pct_of_achieved_tflops` off the row: `tflops` against the FIXED roof,
+    #: the calibration's peak at the calibration's clock, identical on every
+    #: row of a run. Inflated by `load / reference` on a HIGH-side row.
+    pct_fixed_roof: float = 0.0
+    #: `pct_of_roof_at_cell_clock` off the row when the driver scored it
+    #: (`schema.has_cell_clock_roof`): `tflops` against the roof AT THE CLOCK
+    #: THE CELL RAN. None when it is not on the row, and never 0.0 in its
+    #: place, because 0.0 is the driver's "not scored" and a median over it
+    #: would be a number about nothing.
+    pct_cell_clock_roof: float | None = None
+    #: Why the per-row roof is absent, in the driver's words; "" when scored,
+    #: `ROOF_PREDATES` on a row from before schema v6.
+    roof_note: str = ""
 
     @property
     def extra_tile_bytes(self) -> float:
@@ -376,6 +429,39 @@ def clock_gate(row: dict, instrument: str) -> str:
     the number, and folding it into a failure would silently discard every row
     measured in a container that forbids NVML.
 
+    A LEVEL FAILURE IS READ WITH ITS SIDE, AND ONLY LOW EXCLUDES. Since 03df2d4
+    the instrument scores LEVEL as a band around the reference clock, and a
+    memory-shaped cell boosted to 1980 MHz against the 1515 MHz bf16-GEMM
+    reference fails it with `clock_level_side = "high"`. That is not a
+    throttle: the cell's time is the kernel's, and what is wrong is the
+    FIXED-roof fraction beside it, inflated by the ratio, which this fit never
+    reads. Until 2026-09-08 this gate dropped such a row on the bare verdict,
+    which on an H200 is every memory-bound cell, which is every cell alpha is
+    identified on: a rental re-measured on the instrument would have had its
+    memory-bound half silently removed from the refit, and `--include-throttled`
+    could not rescue it because that flag also re-admits the genuinely
+    throttled. So: LOW excludes, DRIFT excludes, host-bound excludes; HIGH is
+    admitted with "" here and the row is marked (`Observation.clock_level_side`,
+    `HIGH_SIDE_NOTE`) so the report can count it. A LEVEL failure carrying no
+    side is excluded and says why: a pre-v6 LEVEL was one-sided and could only
+    fail low, and a v6 row always carries one. A side word outside
+    `LEVEL_SIDES` is refused with an exception, never read as either.
+
+    WHY HIGH ROWS MAY BE POOLED WITH THE LEVEL ONES. The fit's per-row inputs
+    are `implied_traffic_ratio`, `compulsory_bytes`, the per-expert weight bytes
+    and the M-tile count. The ratio is `driver._apply_cost`'s
+    `implied_traffic_ratio(bytes, ms, bandwidth)`: measured time over the
+    compulsory bytes at the BANDWIDTH ceiling, which is not rescaled with the SM
+    clock (HBM does not run on it; calibrate.py measured 1.7% sensitivity). The
+    fixed compute roof enters only the driver's memory-bound CLASSIFICATION,
+    which decides whether the column is written at all, and on a boosted card
+    that under-classifies (the effective ridge is higher), so it omits rows
+    that earned the column rather than writing it on rows that did not. No
+    admitted row's regressor or response therefore depends on the fixed roof,
+    and one fit over both sides is one fit over one quantity. The report still
+    splits the pool by side under "is alpha a scalar?" so the claim is checked
+    on the data rather than only argued here.
+
     AN UNTIMED ROW IS ITS OWN ANSWER, and it used to be nobody's. The driver
     stamps `NO_INSTRUMENT` on every cell it declines or fails, and such a row
     fell into the v5 branch, read three default "undetermined" words and was
@@ -397,10 +483,69 @@ def clock_gate(row: dict, instrument: str) -> str:
         return ""
     failed = [c for c in SC.TIMING_VERDICT_COLUMNS
               if SC.timing_verdict(row, c) == SC.VERDICT_FAILED]
+    if "clock_level_ok" in failed:
+        side = level_side_of(row)
+        failed.remove("clock_level_ok")
+        if side == LEVEL_LOW:
+            failed.insert(0, "clock_level_ok failed LOW (the card sat below "
+                             "the band around the reference clock: the "
+                             "throttle the flag was built for)")
+        elif side == "":
+            failed.insert(0, "clock_level_ok failed with no side recorded (a "
+                             "pre-v6 LEVEL was one-sided and could only fail "
+                             "low; a v6 row always carries one)")
+        # LEVEL_HIGH: admitted. The time is the kernel's; the mark is carried
+        # on the Observation and counted by the report.
     if failed:
         return ("under-load check failed on the instrument: "
                 + ", ".join(failed))
     return ""
+
+
+def level_side_of(row: dict) -> str:
+    """`clock_level_side` off a row, as one of `LEVEL_SIDES`, or raise.
+
+    "" for an absent column, an empty one, or the UNRECORDED stamp `read_csv`
+    puts on a pre-v6 row: none of those is a side. Any other word outside the
+    set is refused, because a side no branch of `clock_gate` matches would be
+    admitted by falling through, which is the silent default this gate exists
+    to prevent.
+    """
+    value = row.get("clock_level_side")
+    if value is None or value == "" or value == SC.UNRECORDED:
+        return ""
+    side = str(value)
+    if side not in LEVEL_SIDES:
+        raise ValueError(
+            f"clock_level_side {side!r} is not one of {sorted(LEVEL_SIDES)}; "
+            "the instrument writes only those and a word it never wrote is "
+            "not a verdict")
+    return side
+
+
+def roof_fractions(row: dict) -> tuple[float, float | None, str]:
+    """The two compute-side fractions off a row, and why the second is absent.
+
+    `(pct_of_achieved_tflops, pct_of_roof_at_cell_clock or None, roof_note)`.
+    The first is the FIXED-roof figure every row since v2 carries; the second
+    is against the roof at the clock the cell ran, present only on a v6 row
+    the driver scored (`schema.has_cell_clock_roof`). None, not 0.0, when it
+    is absent: 0.0 is the driver's "not scored" and a reader that medianed it
+    would quote a fraction of nothing. The note is the driver's own reason on
+    a v6 row it refused, `ROOF_PREDATES` on a row from before the column, and
+    "" when scored.
+    """
+    fixed = SC.row_float(row, "pct_of_achieved_tflops")
+    if SC.has_cell_clock_roof(row):
+        return fixed, SC.row_float(row, "pct_of_roof_at_cell_clock"), ""
+    note = row.get("roof_note")
+    if note is None or note == SC.UNRECORDED:
+        return fixed, None, ROOF_PREDATES
+    if "roof_at_cell_clock_tflops" not in row:
+        return fixed, None, ROOF_PREDATES
+    return fixed, None, (str(note) or "not scored, and the driver recorded "
+                                      "no reason (a v6 row with an empty "
+                                      "roof_note and no roof)")
 
 
 def instrument_mix(observations) -> collections.Counter:
@@ -478,6 +623,7 @@ def collect(paths, census: collections.Counter, *, cutlass: bool = False,
             if compulsory <= 0.0 or per_expert <= 0.0:
                 census["no compulsory byte model for this span"] += 1
                 continue
+            pct_fixed, pct_cell, roof_note = roof_fractions(row)
             out.append(Observation(
                 traffic_ratio=ratio,
                 compulsory_bytes=compulsory,
@@ -494,7 +640,10 @@ def collect(paths, census: collections.Counter, *, cutlass: bool = False,
                 tile_columns=tuple((c, str(row.get(c, ""))) for c in TILE_COLUMNS),
                 arm=path.parent.name,
                 dirty_raw=str(row.get("git_dirty", "")),
-                instrument=instrument))
+                instrument=instrument,
+                clock_level_side=level_side_of(row),
+                pct_fixed_roof=pct_fixed, pct_cell_clock_roof=pct_cell,
+                roof_note=roof_note))
             census["ADMITTED"] += 1
     return out
 
@@ -921,6 +1070,13 @@ def count_excluded_memory_bound(paths, alpha: float,
             extra = per_expert * max(tiles - active, 0.0)
             extra = extra if tiles - active > TILE_EPSILON else 0.0
             corrected = SC.row_float(row, "flops") / max(compulsory + alpha * extra, 1.0)
+            # The ridge is the compute roof over the bandwidth roof, and on a
+            # v6 row the driver scored the compute roof AT THE CLOCK THE CELL
+            # RAN. Classifying against it is what the driver's own fixed-ridge
+            # call could not do (its docstring says it under-classifies on a
+            # boosted card); the bandwidth roof stays fixed, as there.
+            if SC.has_cell_clock_roof(row):
+                peak = SC.row_float(row, "roof_at_cell_clock_tflops")
             ridge = peak * 1e12 / (bandwidth * 1e9)
             if corrected < ridge:
                 census["NO COLUMN BUT TILE-CORRECTED MEMORY-BOUND: "
@@ -1108,6 +1264,73 @@ def _report_pool(triton: list[Observation], census: collections.Counter) -> None
         print("  every admitted row was measured from a clean tree, which is a "
               "finding and")
         print("  is printed for that reason rather than omitted as an absence.")
+
+
+def _pct_summary(values: list[float]) -> str:
+    """median and the 10th to 90th percentile span of a list of percentages."""
+    ordered = sorted(values)
+    return (f"median {statistics.median(ordered):6.2f}%   "
+            f"p10-p90 {_percentile(ordered, 0.10):6.2f}% to "
+            f"{_percentile(ordered, 0.90):6.2f}%   over {len(ordered)} rows")
+
+
+def _report_roof(triton: list[Observation]) -> None:
+    """THE READER FOR `pct_of_roof_at_cell_clock`, printed beside the fixed one.
+
+    Commit 03df2d4 wrote the per-row roof (`roof_at_cell_clock_tflops`,
+    `pct_of_roof_at_cell_clock`) so a boosted cell's efficiency is against the
+    roof at its own clock rather than the calibration's, and until 2026-09-08
+    nothing under scripts/ read the column: the LEVEL-HIGH clock note told the
+    reader to "read roof_at_cell_clock_tflops" and no report printed it. This
+    section prints the two fractions together, says on how many admitted rows
+    the corrected one exists and why it is absent on the rest (the committed
+    corpus is v3 to v5, so what shows there is "not available"), and counts
+    the HIGH-side rows the gate admitted, with the note that their fixed-roof
+    figure is the one not to quote.
+
+    Nothing in the fit reads either column (see `clock_gate`); this is the
+    fraction a reader would otherwise take off a row by hand, printed once with
+    its provenance.
+    """
+    print("## fraction of the compute roof on the admitted rows")
+    print()
+    fixed = [o.pct_fixed_roof for o in triton if o.pct_fixed_roof > 0.0]
+    print("  pct_of_achieved_tflops   (FIXED roof, the calibration's clock):")
+    if fixed:
+        print("      " + _pct_summary(fixed))
+    unscored = len(triton) - len(fixed)
+    if unscored:
+        print(f"      not scored on {unscored} rows (achieved_peak_tflops = 0: "
+              "no ceiling for the dtype)")
+    cell = [o.pct_cell_clock_roof for o in triton
+            if o.pct_cell_clock_roof is not None]
+    print("  pct_of_roof_at_cell_clock (roof AT THE CLOCK THE CELL RAN):")
+    if cell:
+        print("      " + _pct_summary(cell))
+    absent = collections.Counter(o.roof_note for o in triton
+                                 if o.pct_cell_clock_roof is None)
+    for note, count in absent.most_common():
+        print(f"      {note}: {count} rows")
+    if not cell:
+        print("      no admitted row carries the corrected fraction; every "
+              "fraction of roof above")
+        print("      is the fixed-roof figure with the bias `schema.Row` "
+              "states for it.")
+    print()
+    high = [o for o in triton if o.clock_level_side == LEVEL_HIGH]
+    low = [o for o in triton if o.clock_level_side == LEVEL_LOW]
+    print(f"  {len(high)} of {len(triton)} admitted rows are {HIGH_SIDE_NOTE}")
+    if high:
+        by_arm = collections.Counter(o.arm for o in high)
+        print("      kept on purpose: the time is the kernel's, and nothing "
+              "the fit reads depends")
+        print("      on the fixed roof. By arm: "
+              + ", ".join(f"{a} {n}" for a, n in by_arm.most_common()))
+    if low:
+        print(f"  {len(low)} admitted rows failed LEVEL LOW and are in the pool "
+              "only because")
+        print("      --include-throttled re-admitted them; their time is NOT "
+              "the kernel's.")
 
 
 def _report_instruments(triton: list[Observation], pool: bool) -> bool:
@@ -1446,6 +1669,15 @@ def _report_splits(triton: list[Observation]) -> None:
     for routing in sorted({o.routing for o in triton}):
         print(_split_line(f"routing {routing}",
                           [o for o in triton if o.routing == routing]))
+    print()
+    # The check on the pooling argument in `clock_gate`: if a HIGH-side row's
+    # traffic ratio were a different quantity from a level row's, this split
+    # would show it. Labelled by what the side means, not by the word.
+    side_label = {"": "LEVEL held or pre-v6", LEVEL_HIGH: "LEVEL failed HIGH",
+                  LEVEL_LOW: "LEVEL failed LOW (re-admitted)"}
+    for side in sorted({o.clock_level_side for o in triton}):
+        print(_split_line(side_label[side],
+                          [o for o in triton if o.clock_level_side == side]))
 
 
 def _report_original(cutlass: list[Observation], alpha_new: float) -> None:
@@ -1680,6 +1912,8 @@ def report(args, arms: list[str] | None = None) -> int:
         print("nothing admitted; there is no fit to report")
         return 1
     print()
+    _report_roof(triton)
+    print()
     if not _report_instruments(triton, args.pool_instruments):
         return REFUSED
     alpha = fit_alpha(triton)
@@ -1728,9 +1962,12 @@ def main(argv: list[str] | None = None) -> int:
                              "default, because such a row's time is not the "
                              "kernel's. The gate is whichever one the row's own "
                              "instrument recorded: `throttled` on a pre-v5 row, "
-                             "the three under-load verdicts on a v5 one. The "
-                             "name is the pre-v5 flag's and is kept so the "
-                             "option means one thing across the boundary")
+                             "the three under-load verdicts on a v5 one, of "
+                             "which a LEVEL failure counts only on its LOW "
+                             "side (a HIGH-side row is admitted without this "
+                             "flag; see clock_gate). The name is the pre-v5 "
+                             "flag's and is kept so the option means one thing "
+                             "across the boundary")
     parser.add_argument("--pool-instruments", action="store_true",
                         help="fit rows from two or more timing instruments in "
                              "one pool. Off by default, and the run REFUSES "

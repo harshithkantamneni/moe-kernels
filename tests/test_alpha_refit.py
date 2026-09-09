@@ -722,3 +722,288 @@ def test_a_stated_instrument_still_passes_the_same_gate(capsys):
     assert AR._report_instruments(on_bench, False) is True
     assert AR._report_instruments(stated + on_bench, False) is False
     assert AR._report_instruments(stated + on_bench, True) is True
+
+
+# --------------------------------------------------------------------------
+# the LEVEL verdict has a side, and the gate reads it (F1 of the 2026-09-08
+# pre-pod verdict; instance fifteen of a fix landing at one of two call sites)
+# --------------------------------------------------------------------------
+
+#: The instrument's own reference and boosted clock on the committed H200
+#: calibration: 1515 MHz is the bf16 GEMM plateau LEVEL is scored against,
+#: 1980 MHz is what the card runs at under memory load for the whole settle.
+REFERENCE_MHZ = 1515.0
+BOOSTED_MHZ = 1980.0
+THROTTLED_MHZ = 1400.0
+
+#: The instrument that writes the side, `timing.TIMING_BASIS` spelled out so
+#: this file does not import torch to name it.
+ON_BENCH = "queue-deep/l2-flush/clock-under-load/v3"
+
+
+def high_row(**over) -> dict:
+    """A v6 row whose LEVEL failed on the HIGH side and nothing else failed."""
+    row = {"clock_level_ok": "failed", "clock_level_side": "high",
+           "clock_drift_ok": "ok", "host_bound_ok": "ok",
+           "throttled": "False", "host_bound": "False"}
+    row.update(over)
+    return row
+
+
+def test_the_side_words_are_the_instruments_own():
+    """`alpha_refit` spells the two side words itself because `timing.py`
+    imports torch at module scope; the spelling must be the instrument's or the
+    gate reads a word it never wrote."""
+    from moe.bench import timing as T
+    assert AR.LEVEL_LOW == T.LEVEL_LOW
+    assert AR.LEVEL_HIGH == T.LEVEL_HIGH
+    assert AR.LEVEL_SIDES == {"", T.LEVEL_LOW, T.LEVEL_HIGH}
+
+
+def test_the_clock_gate_admits_a_high_side_level_failure_and_excludes_low():
+    """THE DEFECT: a memory-shaped cell boosted to 1980 MHz against the 1515
+    reference fails LEVEL with side "high", and until 2026-09-08 this gate
+    dropped it on the bare verdict, which on an H200 is every memory-bound
+    cell, which is every cell alpha is identified on. HIGH is admitted (""),
+    LOW is excluded with a reason that says LOW, and both are planted."""
+    assert AR.clock_gate(high_row(), ON_BENCH) == ""
+    low = AR.clock_gate(high_row(clock_level_side="low", throttled="True"), ON_BENCH)
+    assert low, "a LOW-side LEVEL failure is the throttle the flag was built for"
+    assert "failed LOW" in low and low.startswith("under-load check failed")
+    # DRIFT still excludes a boosted row: the samples were not taken at one
+    # clock, whichever side the median landed on.
+    drifted = AR.clock_gate(high_row(clock_drift_ok="failed"), ON_BENCH)
+    assert "clock_drift_ok" in drifted and "clock_level_ok" not in drifted
+    hosted = AR.clock_gate(high_row(host_bound_ok="failed"), ON_BENCH)
+    assert "host_bound_ok" in hosted
+    # A LEVEL failure with NO side is not read as HIGH: a pre-v6 LEVEL was
+    # one-sided and could only fail low. Both spellings of "no side".
+    for absent in ("", SC.UNRECORDED):
+        reason = AR.clock_gate(high_row(clock_level_side=absent), ON_BENCH)
+        assert "no side recorded" in reason, reason
+    reason = AR.clock_gate({k: v for k, v in high_row().items()
+                            if k != "clock_level_side"}, ON_BENCH)
+    assert "no side recorded" in reason
+    # A word the instrument never wrote is refused, not admitted by falling
+    # through every branch.
+    with pytest.raises(ValueError, match="clock_level_side 'sideways'"):
+        AR.clock_gate(high_row(clock_level_side="sideways"), ON_BENCH)
+    # The retired instrument has no side and is untouched by any of this.
+    assert AR.clock_gate({"throttled": "True"}, SC.LEGACY_INSTRUMENT).startswith(
+        "throttled")
+
+
+def test_roof_fractions_returns_none_and_a_reason_rather_than_a_zero():
+    """0.0 is the driver's "not scored" for both roof columns, and a median
+    over it is a fraction of nothing."""
+    scored = {"schema_version": "6", "pct_of_achieved_tflops": "6.0",
+              "roof_at_cell_clock_tflops": "914.85",
+              "pct_of_roof_at_cell_clock": "4.59", "roof_note": ""}
+    assert AR.roof_fractions(scored) == (6.0, 4.59, "")
+    refused = dict(scored, roof_at_cell_clock_tflops="0.0",
+                   pct_of_roof_at_cell_clock="0.0",
+                   roof_note="the reference is graded 'idle-scalar'")
+    fixed, cell, why = AR.roof_fractions(refused)
+    assert (fixed, cell) == (6.0, None)
+    assert why.startswith("the reference is graded")
+    predates = {"schema_version": "3", "pct_of_achieved_tflops": "6.0"}
+    assert AR.roof_fractions(predates) == (6.0, None, AR.ROOF_PREDATES)
+    stamped = dict(predates, roof_at_cell_clock_tflops=SC.UNRECORDED,
+                   pct_of_roof_at_cell_clock=SC.UNRECORDED,
+                   roof_note=SC.UNRECORDED)
+    assert AR.roof_fractions(stamped) == (6.0, None, AR.ROOF_PREDATES)
+
+
+#: Token counts of the fixture arm's memory-bound vLLM rows (4096, 4608 and
+#: 5120), split by side so an admitted observation's `tokens` says which side
+#: it was planted on and the expected counts come off an UNPLANTED baseline
+#: rather than off a guess. 5120 is left level on purpose, so the pool holds
+#: both sides and the side split has two lines to print.
+PLANT_HIGH_TOKENS = frozenset({4096})
+PLANT_LOW_TOKENS = frozenset({4608})
+
+
+def v6_corpus(tmp_path, *, plant: bool):
+    """The fixture arm restamped at v6, on the instrument, every verdict ok.
+
+    With `plant`, every memory-bound vLLM row at a `PLANT_HIGH_TOKENS` count is
+    a cell that boosted to 1980 MHz against the 1515 reference (LEVEL failed
+    HIGH, roof rescaled 1.307x, `throttled` False as the driver writes it) and
+    every one at a `PLANT_LOW_TOKENS` count sat at 1400 MHz (LEVEL failed LOW,
+    `throttled` True). Real rows through `read_csv`, `collect` and the tile
+    resolver, so the gate is exercised where it sits and not around it.
+    """
+    import csv
+
+    from moe.bench.roofline import roof_at_clock
+
+    raw = list(csv.DictReader((ROOT / "results" / "published" / FIXTURE_ARM)
+                              .open(newline="")))
+    directory = tmp_path / ("planted" if plant else "baseline")
+    directory.mkdir()
+    counts = {"high": 0, "low": 0}
+    with (directory / "run_x.csv").open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=SC.COLUMNS, restval="")
+        writer.writeheader()
+        for r in raw:
+            row = {k: v for k, v in r.items() if k in SC.COLUMNS}
+            row["schema_version"] = SC.SCHEMA_VERSION
+            row["instrument"] = ON_BENCH
+            for name in SC.TIMING_VERDICT_COLUMNS:
+                row[name] = SC.VERDICT_OK
+            row["throttled"] = "False"
+            peak = float(row.get("achieved_peak_tflops") or 0.0)
+            tflops = float(row.get("tflops") or 0.0)
+            load = REFERENCE_MHZ
+            memory_bound = (row.get("impl") == "vllm_fused_experts"
+                            and float(row.get("implied_traffic_ratio") or 0.0) > 0
+                            and float(row.get("ms_p50") or 0.0) > 0
+                            and row.get("correctness_passed") == "True")
+            tokens = int(float(row["num_tokens"]))
+            if plant and memory_bound and tokens in PLANT_HIGH_TOKENS:
+                row["clock_level_ok"] = SC.VERDICT_FAILED
+                row["clock_level_side"] = AR.LEVEL_HIGH
+                load = BOOSTED_MHZ
+                counts["high"] += 1
+            elif plant and memory_bound and tokens in PLANT_LOW_TOKENS:
+                row["clock_level_ok"] = SC.VERDICT_FAILED
+                row["clock_level_side"] = AR.LEVEL_LOW
+                row["throttled"] = "True"
+                load = THROTTLED_MHZ
+                counts["low"] += 1
+            row["sm_clock_load_mhz"] = load
+            row["reference_clock_mhz"] = REFERENCE_MHZ
+            row["reference_clock_source"] = "test: under-load bf16 median"
+            roof = roof_at_clock(peak, REFERENCE_MHZ, load) if peak > 0 else None
+            if roof:
+                row["roof_at_cell_clock_tflops"] = roof
+                row["pct_of_roof_at_cell_clock"] = 100.0 * tflops / roof
+                row["roof_note"] = ""
+            else:
+                row["roof_at_cell_clock_tflops"] = 0.0
+                row["pct_of_roof_at_cell_clock"] = 0.0
+                row["roof_note"] = "no measured compute ceiling for dtype"
+            writer.writerow(row)
+    return sorted(directory.glob("run_*.csv")), counts
+
+
+def test_collect_keeps_the_boosted_rows_and_drops_the_throttled_ones(tmp_path):
+    """Planted through the real path. Every admitted observation at a HIGH
+    token count carries the mark, the LOW rows are named in the census by
+    their side and are absent from the pool, and the admitted count is the
+    baseline's minus exactly the LOW rows the baseline admitted."""
+    import collections
+
+    base_paths, _ = v6_corpus(tmp_path, plant=False)
+    baseline = AR.collect(base_paths, collections.Counter())
+    base_high = [o for o in baseline if o.tokens in PLANT_HIGH_TOKENS]
+    base_low = [o for o in baseline if o.tokens in PLANT_LOW_TOKENS]
+    assert base_high and base_low, "the fixture must admit rows on both sides"
+    assert all(o.clock_level_side == "" for o in baseline)
+
+    paths, counts = v6_corpus(tmp_path, plant=True)
+    census: collections.Counter = collections.Counter()
+    pool = AR.collect(paths, census)
+    high = [o for o in pool if o.clock_level_side == AR.LEVEL_HIGH]
+    assert len(high) == len(base_high), "a boosted row must be KEPT"
+    assert all(o.tokens in PLANT_HIGH_TOKENS for o in high)
+    assert not any(o.clock_level_side == AR.LEVEL_LOW for o in pool)
+    assert not any(o.tokens in PLANT_LOW_TOKENS for o in pool)
+    assert len(pool) == len(baseline) - len(base_low)
+    low_reason = next(k for k in census if "failed LOW" in k)
+    assert census[low_reason] == counts["low"]
+    # The mark carries the corrected fraction beside the fixed one, and on a
+    # boosted row the two differ by the clock ratio exactly.
+    for o in high:
+        assert o.pct_cell_clock_roof is not None and o.roof_note == ""
+        assert o.pct_fixed_roof / o.pct_cell_clock_roof == pytest.approx(
+            BOOSTED_MHZ / REFERENCE_MHZ, rel=1e-9)
+    # `--include-throttled` re-admits the LOW rows and they keep their side,
+    # so the report can say they are in the pool and why.
+    readmitted = AR.collect(paths, collections.Counter(), include_throttled=True)
+    assert sum(o.clock_level_side == AR.LEVEL_LOW for o in readmitted) == len(base_low)
+
+
+def test_the_report_counts_the_high_side_rows_and_prints_both_roof_fractions(
+        tmp_path, capsys):
+    """THE READER FOR `pct_of_roof_at_cell_clock` (F4). Printed beside the
+    fixed-roof fraction, with the count of admitted rows it exists on, and the
+    HIGH-side count with the note that the fixed figure is the one not to
+    quote. The side split under "is alpha a scalar?" is the check on the
+    pooling argument in `clock_gate`'s docstring."""
+    import collections
+
+    paths, _ = v6_corpus(tmp_path, plant=True)
+    pool = AR.collect(paths, collections.Counter())
+    n_high = sum(o.clock_level_side == AR.LEVEL_HIGH for o in pool)
+    assert AR.main([str(p) for p in paths] + ["--bootstrap", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "## fraction of the compute roof on the admitted rows" in out
+    section = out.split("## fraction of the compute roof", 1)[1].split("## ", 1)[0]
+    assert "pct_of_achieved_tflops   (FIXED roof" in section
+    assert "pct_of_roof_at_cell_clock (roof AT THE CLOCK THE CELL RAN):" in section
+    assert f"over {len(pool)} rows" in section, "every v6 row here was scored"
+    assert AR.ROOF_PREDATES not in section
+    assert f"{n_high} of {len(pool)} admitted rows are {AR.HIGH_SIDE_NOTE}" in out
+    assert "kept on purpose" in out
+    assert "alpha = " in out
+    assert "LEVEL failed HIGH" in out.split("## is alpha a scalar?", 1)[1]
+    assert "LEVEL held or pre-v6" in out.split("## is alpha a scalar?", 1)[1]
+
+
+def test_the_pinned_set_says_the_corrected_fraction_is_not_available(capsys):
+    """The committed corpus is v3 to v5, so on it the reader's other branch is
+    what shows, and it says so per row rather than printing a zero."""
+    assert AR.main(["--pinned-set", "--bootstrap", "3"]) == 0
+    out = capsys.readouterr().out
+    assert f"{AR.ROOF_PREDATES}: 10813 rows" in out
+    assert f"0 of 10813 admitted rows are {AR.HIGH_SIDE_NOTE}" in out
+
+
+def test_the_memory_bound_census_classifies_against_the_cells_own_roof(
+        tmp_path, monkeypatch):
+    """`count_excluded_memory_bound` asks whether a row with no traffic column
+    is memory-bound once the tile is corrected, against a ridge that is the
+    compute roof over the bandwidth roof. On a boosted v6 row the compute roof
+    the driver scored is 1.307x the fixed one, the ridge moves with it, and a
+    row between the two ridges is memory-bound at its own clock. Planted at
+    AI 200 between the fixed ridge (175) and the rescaled one (228.7): the
+    level row is compute-bound, the boosted row is not, and a boosted row the
+    driver refused to score stays on the fixed ridge."""
+    import csv
+
+    class Tile:
+        block_m_derived, group_m_derived, provenance = 64, 1, "test"
+
+    monkeypatch.setattr(AR, "resolve_tile_for_row", lambda row: Tile())
+    monkeypatch.setattr(AR, "m_tiles_for_row", lambda row, block_m: 8.0)
+
+    def row(load: float, roof: float, note: str = "") -> dict:
+        return {"schema_version": SC.SCHEMA_VERSION, "impl": "vllm_fused_experts",
+                "model": "mixtral-8x7b", "num_tokens": 256, "dtype": "bf16",
+                "covers": "permute+up_gemm+act+down_gemm+unpermute",
+                "ms_p50": 1.0, "correctness_passed": "True",
+                "instrument": ON_BENCH, "clock_drift_ok": SC.VERDICT_OK,
+                "host_bound_ok": SC.VERDICT_OK,
+                "clock_level_ok": (SC.VERDICT_OK if load == REFERENCE_MHZ
+                                   else SC.VERDICT_FAILED),
+                "clock_level_side": "" if load == REFERENCE_MHZ else AR.LEVEL_HIGH,
+                "sm_clock_load_mhz": load, "reference_clock_mhz": REFERENCE_MHZ,
+                "achieved_peak_tflops": 700.0, "achieved_bw_gbps": 4000.0,
+                "roof_at_cell_clock_tflops": roof, "roof_note": note,
+                "flops": 2.0e11, "compulsory_bytes": 1.0e9,
+                "load_active_experts": 8, "implied_traffic_ratio": ""}
+
+    directory = tmp_path / "arm"
+    directory.mkdir()
+    boosted_roof = 700.0 * BOOSTED_MHZ / REFERENCE_MHZ
+    with (directory / "run_x.csv").open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=SC.COLUMNS, restval="")
+        writer.writeheader()
+        writer.writerow(row(REFERENCE_MHZ, 700.0))
+        writer.writerow(row(BOOSTED_MHZ, boosted_roof))
+        writer.writerow(row(BOOSTED_MHZ, 0.0, "the reference is graded 'idle-scalar'"))
+    census = AR.count_excluded_memory_bound([directory / "run_x.csv"], 0.558)
+    wrongly = next(v for k, v in census.items() if k.startswith("NO COLUMN BUT"))
+    both = next(v for k, v in census.items() if k.startswith("compute-bound under both"))
+    assert (wrongly, both) == (1, 2)

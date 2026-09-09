@@ -47,6 +47,18 @@ by default, and the default output is byte for byte what it was without it. Read
 `moe/bench/maxaffine.py` before quoting the number it prints: on the five-stage
 cells it fits to a mean relative error of 24% and lands three times below the
 ridge, so it removes the ambiguity without resolving it.
+
+THE CLOCK GATE HERE IS `throttled`, AND ON A v6 ROW THAT WORD MEANS LOW OR
+DRIFT. `moe/bench/driver.py` sets it from the under-load verdicts and keeps a
+LEVEL failure on the HIGH side out of it (a cell boosted above the reference
+clock is not a thermal event; its time is the kernel's), so a boosted
+memory-bound cell is KEPT by this report and counted beside the kept total. What
+a HIGH-side row cannot be quoted for is its FIXED-roof fraction, and this report
+prints both compute-side fractions per cell: `pct_of_achieved_tflops` against the
+calibration's roof, and `pct_of_roof_at_cell_clock` against the roof at the clock
+the cell ran, which exists only on a v6 row the driver scored and reads "not
+available (v<6 row)" on the committed corpus. Until 2026-09-08 no script read
+that column, so the correction 03df2d4 wrote had no reader.
 """
 from __future__ import annotations
 
@@ -107,7 +119,11 @@ from moe.bench.ridge import (  # noqa: E402
     rows_per_expert,
     saturation_batch,
 )
-from moe.bench.schema import TileConfigUnrecorded  # noqa: E402
+from moe.bench.schema import (  # noqa: E402
+    UNRECORDED,
+    TileConfigUnrecorded,
+    has_cell_clock_roof,
+)
 from moe.routing.imbalance import TileEfficiencyUndetermined  # noqa: E402
 
 
@@ -465,6 +481,73 @@ def print_head_to_head(summary: list[tuple[str, dict]]) -> None:
           "ridge.")
 
 
+#: The word the instrument writes in `clock_level_side` for a boosted cell:
+#: `timing.LEVEL_HIGH`, spelled here because `moe/bench/timing.py` imports
+#: torch at module scope and this report runs off-GPU from a CSV.
+LEVEL_HIGH = "high"
+
+#: What is printed for the corrected fraction on a row that predates it.
+ROOF_PREDATES = "not available (v<6 row)"
+
+
+def is_level_high(row: dict) -> bool:
+    """Did this row's LEVEL verdict fail on the HIGH side? False on a pre-v6 row."""
+    side = row.get("clock_level_side")
+    return side is not None and side != UNRECORDED and str(side) == LEVEL_HIGH
+
+
+def roof_fractions(row: dict) -> tuple[float | None, float | None, str]:
+    """`(pct_of_achieved_tflops, pct_of_roof_at_cell_clock, why the second is absent)`.
+
+    None, never 0.0, for a fraction that is not on the row: 0.0 is the driver's
+    "not scored" for both columns and a median over it is a fraction of nothing.
+    The first is None when the run had no compute ceiling for the dtype. The
+    second exists only on a v6 row the driver scored (`has_cell_clock_roof`);
+    the reason is the driver's own `roof_note` on a v6 row it refused,
+    `ROOF_PREDATES` on a row from before the column, and "" when scored.
+    """
+    try:
+        fixed = float(row.get("pct_of_achieved_tflops") or 0.0)
+    except (TypeError, ValueError):
+        fixed = 0.0
+    fixed_or_none = fixed if fixed > 0.0 else None
+    if has_cell_clock_roof(row):
+        return fixed_or_none, float(row["pct_of_roof_at_cell_clock"]), ""
+    note = row.get("roof_note")
+    if "roof_at_cell_clock_tflops" not in row or note is None or note == UNRECORDED:
+        return fixed_or_none, None, ROOF_PREDATES
+    return fixed_or_none, None, (str(note) or "not scored, and the driver "
+                                              "recorded no reason")
+
+
+def print_roof_fractions(fixed: list[float], cell: list[float],
+                         absent: collections.Counter, high: int, total: int) -> None:
+    """The two compute-side fractions of one cell, medianed, side by side.
+
+    Printed under every cell's table because the fraction of roof is what a
+    reader takes off a row by hand, and the one they would take (the fixed
+    roof) is the one that is inflated on a boosted cell.
+    """
+    print("  fraction of compute roof (median over the rows in this cell):")
+    if fixed:
+        print(f"    pct_of_achieved_tflops    (FIXED roof, calibration clock):  "
+              f"{statistics.median(fixed):6.2f}%  over {len(fixed)} rows")
+    else:
+        print("    pct_of_achieved_tflops    (FIXED roof, calibration clock):  "
+              "not scored (no compute ceiling for this dtype)")
+    if cell:
+        print(f"    pct_of_roof_at_cell_clock (roof AT THE CELL'S CLOCK):      "
+              f"{statistics.median(cell):6.2f}%  over {len(cell)} rows")
+    for note, count in absent.most_common():
+        print(f"    pct_of_roof_at_cell_clock (roof AT THE CELL'S CLOCK):      "
+              f"{note}  [{count} rows]")
+    if high:
+        print(f"    {high} of {total} rows failed LEVEL HIGH (boosted above the "
+              "reference clock): kept,")
+        print("    their fixed-roof fraction is not comparable; use "
+              "pct_of_roof_at_cell_clock")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("csvs", nargs="+", type=Path)
@@ -474,7 +557,13 @@ def main() -> int:
                          "changes the peak as well as the bytes")
     ap.add_argument("--impl", default=None, help="restrict to one implementation")
     ap.add_argument("--routing", default=None, help="restrict to one routing kind")
-    ap.add_argument("--include-throttled", action="store_true")
+    ap.add_argument("--include-throttled", action="store_true",
+                    help="keep rows whose `throttled` column is True. On a v6 "
+                         "row that word means the under-load LEVEL check failed "
+                         "LOW or the DRIFT check failed; a LEVEL failure on the "
+                         "HIGH side (a boosted cell) never sets it and such "
+                         "rows are kept without this flag. On a pre-v5 row it "
+                         "is the retired idle-instant flag")
     ap.add_argument("--l2-flush", choices=["true", "false"], default=None,
                     help="restrict to one L2 mode; default mixes both")
     ap.add_argument("--cuda-graph", choices=["true", "false"], default=None,
@@ -553,6 +642,13 @@ def main() -> int:
     # ever looked at it (audit A6). One tiny dict per kept row rather than the
     # row itself: a published row is 94 columns and there are up to 70k of them.
     admitted_dirty: list[dict] = []
+    # THE READER FOR THE PER-ROW ROOF, reduced at ingest like everything else
+    # here: two floats and a reason per kept row, keyed by cell.
+    roof_fixed: dict[tuple[str, str, str], list[float]] = {}
+    roof_cell: dict[tuple[str, str, str], list[float]] = {}
+    roof_absent: dict[tuple[str, str, str], collections.Counter] = {}
+    level_high: collections.Counter = collections.Counter()
+    cell_rows: collections.Counter = collections.Counter()
     kept = skipped = untimed = tileless = 0
     for path in csvs:
         with path.open(newline="") as fh:
@@ -597,6 +693,16 @@ def main() -> int:
                     affine.setdefault(key, {}).setdefault(t, []).append(
                         {c: r.get(c, "") for c in AFFINE_COLUMNS})
                 admitted_dirty.append({"git_dirty": r.get("git_dirty", "")})
+                fixed, at_cell, why = roof_fractions(r)
+                if fixed is not None:
+                    roof_fixed.setdefault(key, []).append(fixed)
+                if at_cell is not None:
+                    roof_cell.setdefault(key, []).append(at_cell)
+                else:
+                    roof_absent.setdefault(key, collections.Counter())[why] += 1
+                cell_rows[key] += 1
+                if is_level_high(r):
+                    level_high[key] += 1
                 try:
                     tiles.setdefault(key, {}).setdefault(t, []).append(
                         m_tiles_for_row(r, args.block_m))
@@ -612,6 +718,12 @@ def main() -> int:
     print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
           f"{untimed} never timed (skipped graph mode: ms_p50 is 0.0, "
           f"which is not a measurement)")
+    # `throttled` on a v6 row is LOW or DRIFT; a HIGH-side LEVEL failure is a
+    # boosted cell, kept, and said so here rather than folded into either count.
+    n_high = sum(level_high.values())
+    print(f"  of the kept rows, {n_high} failed LEVEL HIGH (boosted above the "
+          "reference clock): kept, their")
+    print("  fixed-roof fraction is not comparable; use pct_of_roof_at_cell_clock")
     print(dirty_share_line(admitted_dirty, "admitted rows"))
     if len(modes) > 1:
         print("  timing modes mixed into each median (l2_flush, cuda_graph): "
@@ -780,6 +892,10 @@ def main() -> int:
                           f"   {lo / predicted:.2f}-{hi / predicted:.2f}x "
                           f"predicted")
             print_staircase(found, predicted, tiles.get(key_, {}), bands)
+        print()
+        print_roof_fractions(roof_fixed.get(key_, []), roof_cell.get(key_, []),
+                             roof_absent.get(key_, collections.Counter()),
+                             level_high[key_], cell_rows[key_])
         # Outside the else: a cell whose grid does not bracket a slope crossing
         # is exactly the cell where a second estimator is worth having, and
         # printing it only where the first one succeeded would hide that.
