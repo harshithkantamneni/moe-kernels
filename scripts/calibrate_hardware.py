@@ -158,9 +158,17 @@ def _device_facts() -> dict:
     The memory clock is the important one. HBM is DDR, so the pin rate is
     clk x 2 x bus_width / 8, and the doubling is mandatory: omitting it gives
     exactly half, the same class of silent 2x error as the read-for-ownership
-    question. On this H200, 3201 MHz gives 4916.7 GB/s, which is 2.4% above
-    NVIDIA's published 4.8 TB/s -- so the datasheet figure is already derated
-    and is not a theoretical maximum.
+    question.
+
+    THE BUS WIDTH IS THE ENABLED ONE, FROM NVML. On the 2026-09-09 H200 pod
+    NVML reported 6016 bits: 6144 x 141/144, the same harvest as the 141-of-144
+    GB capacity. 3201 MHz x 2 x 6016 / 8 = 4814.3 GB/s, which is NVIDIA's
+    published 4.8 TB/s to 0.3%. Until that day this function took 6144 from
+    the table below, printed 4916.7, and then explained the 2.4% gap as "the
+    datasheet figure is already derated". The datasheet was the pin rate and
+    the table was the unharvested width. The table is the fallback when NVML
+    cannot answer, and a disagreement between the two is written into the
+    facts rather than resolved silently.
     """
     import torch
 
@@ -182,11 +190,16 @@ def _device_facts() -> dict:
         except (ValueError, IndexError):
             pass
     clk = out.get("clocks_max_memory_mhz")
-    bits = _memory_bus_bits(props.name)
+    bits, source, table = resolve_memory_bus_bits(props.name, _nvml_memory_bus_bits())
     if clk and bits:
-        # DDR doubles the transfer rate, hence the factor of two.
         out["memory_bus_bits"] = bits
-        out["pin_rate_gbps"] = round(clk * 2 * bits / 8 / 1000, 1)
+        out["memory_bus_bits_source"] = source
+        if table is not None:
+            # The table disagreed with the device. Both are recorded so a
+            # reader can see the harvest, and the pin rate is the device's.
+            out["memory_bus_bits_table"] = table
+            out["pin_rate_gbps_at_table_width"] = pin_rate_gbps(clk, table)
+        out["pin_rate_gbps"] = pin_rate_gbps(clk, bits)
     elif clk:
         # No width, no pin rate. A wrong one is worse than none: it is the
         # only hard physical bound in this file, and every "nothing exceeded
@@ -195,17 +208,19 @@ def _device_facts() -> dict:
     return out
 
 
-#: Memory bus width in bits, by substring of the device name. nvidia-smi has no
-#: query for this and torch does not expose cudaDeviceProp.memoryBusWidth, so it
-#: is a table. Each entry is checked by reproducing the vendor bandwidth figure:
-#:   H200  3201 MHz x 2 x 6144 / 8 = 4916.7 GB/s  (spec 4.8 TB/s, derated)
+#: Memory bus width in bits, by substring of the device name: THE FALLBACK when
+#: NVML cannot answer (`_nvml_memory_bus_bits`), and the number NVML is checked
+#: against. Each entry is checked by reproducing the vendor bandwidth figure:
+#:   H200  3201 MHz x 2 x 6016 / 8 = 4814.3 GB/s  (spec 4.8 TB/s; NVML reports
+#:         6016 on the 141 GB part, the unharvested width is 6144)
 #:   A100  1593 MHz x 2 x 5120 / 8 = 2038.8 GB/s  (spec 2039 GB/s)
 #:   H100  2619 MHz x 2 x 5120 / 8 = 3352.3 GB/s  (spec 3.35 TB/s)
 #: An earlier version hardcoded 6144 for every device, which reported an A100's
 #: pin rate as 2446.8 instead of 2038.8: 20% high, on the one number that is
-#: supposed to be a hard physical bound.
+#: supposed to be a hard physical bound; and until 2026-09-09 the H200 entry was
+#: 6144, 2.1% high on the same number, explained away as a derated datasheet.
 _MEMORY_BUS_BITS = {
-    "H200": 6144,
+    "H200": 6016,
     "H100": 5120,
     "A100": 5120,
     "B200": 8192,
@@ -217,6 +232,51 @@ def _memory_bus_bits(gpu_name: str) -> int | None:
         if key in gpu_name:
             return bits
     return None
+
+
+def _nvml_memory_bus_bits(index: int = 0) -> int | None:
+    """The ENABLED memory bus width in bits, from NVML, or None.
+
+    None when pynvml is missing, NVML will not initialise, or the answer is
+    not a positive integer; the caller then falls back to the table and says
+    so. Never raises: a missing width costs a pin rate, and a pin rate is
+    only ever compared against, never divided by.
+    """
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        try:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+            bits = int(pynvml.nvmlDeviceGetMemoryBusWidth(handle))
+        finally:
+            pynvml.nvmlShutdown()
+    except Exception:                                   # noqa: BLE001
+        return None
+    return bits if bits > 0 else None
+
+
+def resolve_memory_bus_bits(gpu_name: str, nvml_bits: int | None,
+                            ) -> tuple[int | None, str, int | None]:
+    """`(bits, source, table_bits)`: the width the pin rate is built from.
+
+    NVML first, because it reports the bus the part actually enables; the
+    table second, because a box without NVML still deserves a bound. The
+    third element is the table's value ONLY when it disagrees with NVML, so
+    the yaml records the harvest and nobody averages the two. `(None, "none",
+    None)` for a card NVML cannot see and the table does not know: no pin
+    rate rather than a wrong one.
+    """
+    table = _memory_bus_bits(gpu_name)
+    if nvml_bits:
+        return nvml_bits, "nvml", (table if table and table != nvml_bits else None)
+    if table:
+        return table, "table", None
+    return None, "none", None
+
+
+def pin_rate_gbps(clk_mhz: float, bits: int) -> float:
+    """clk x 2 (DDR) x bits / 8, in GB/s, to one decimal. Pure."""
+    return round(clk_mhz * 2 * bits / 8 / 1000, 1)
 
 
 def swept(args) -> dict:
@@ -557,8 +617,12 @@ def main(argv: list[str] | None = None) -> int:
     if pin:
         print(f"  memory clock      {observed['clocks_max_memory_mhz']:.0f} MHz"
               f"  -> pin rate {pin:.1f} GB/s")
-        print("                    (clk x 2 for DDR x 6144 bits / 8; a "
-              "datasheet figure below this is already derated)")
+        print(f"                    (clk x 2 for DDR x {observed['memory_bus_bits']} "
+              f"bits / 8; bus width from {observed.get('memory_bus_bits_source', '?')})")
+        if observed.get("memory_bus_bits_table") is not None:
+            print(f"                    the table says {observed['memory_bus_bits_table']} "
+                  f"bits, {observed['pin_rate_gbps_at_table_width']:.1f} GB/s: the "
+                  "device's enabled bus is narrower, and the device's number is used")
 
     spec_bw = spec_tf = None
     profile = args.compare_to

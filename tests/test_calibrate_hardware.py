@@ -500,3 +500,30 @@ def test_a_loaded_clock_that_drifted_under_load_fails_the_gate_and_an_empty_one_
     cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=d)
     verdict, detail = CH.under_load_clock_verdict(cal)
     assert verdict == EX.UNKNOWN and "both None" in detail
+
+
+
+def test_the_pin_rate_is_built_from_the_enabled_bus_nvml_reports():
+    """2026-09-09 H200 pod: NVML reported a 6016-bit bus, 6144 x 141/144, the
+    same harvest as the 141-of-144 GB capacity. 3201 MHz x 2 x 6016 / 8 =
+    4814.3 GB/s is NVIDIA's 4.8 TB/s to 0.3%. The table's 6144 gave 4916.7,
+    and this file then called the datasheet "already derated". The datasheet
+    was the pin rate. NVML first, the table as the fallback with its source
+    named, and a disagreement recorded beside the device's number, never
+    averaged and never resolved in the table's favour."""
+    bits, source, table = CH.resolve_memory_bus_bits("NVIDIA H200", 6016)
+    assert (bits, source) == (6016, "nvml")
+    assert CH.pin_rate_gbps(3201, bits) == 4814.3
+    assert abs(CH.pin_rate_gbps(3201, bits) - 4800.0) / 4800.0 < 0.005
+    assert CH.pin_rate_gbps(3201, 6144) == 4916.7
+    bits, source, table = CH.resolve_memory_bus_bits("NVIDIA H200", None)
+    assert (bits, source, table) == (CH._MEMORY_BUS_BITS["H200"], "table", None)
+    assert CH._MEMORY_BUS_BITS["H200"] == 6016
+    bits, source, table = CH.resolve_memory_bus_bits("NVIDIA A100-SXM4-80GB", 5120)
+    assert (bits, source, table) == (5120, "nvml", None)
+    bits, source, table = CH.resolve_memory_bus_bits("NVIDIA A100-SXM4-80GB", 5000)
+    assert (bits, source, table) == (5000, "nvml", 5120)
+    assert CH.resolve_memory_bus_bits("Unknown GPU", None) == (None, "none", None)
+    # Off a GPU the NVML reader answers None and never raises.
+    got = CH._nvml_memory_bus_bits()
+    assert got is None or (isinstance(got, int) and got > 0)
