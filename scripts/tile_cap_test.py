@@ -616,6 +616,26 @@ C2_FAIL_ALPHA = 0.14
 #: the same reason it exists there.
 MIN_MEMORY_TREADS = SWEEP.MIN_MEMORY_TREADS
 
+#: Exactly-full stacks EACH tile has to put on the grid before a cell is timed.
+#: Three is the floor a through-origin fit reads, and V1 has always demanded it
+#: AFTER the sweep. It is a PLAN-TIME requirement now.
+#:
+#: 2026-09-09, H200: `r_max = depth.rows` was 688 on that card's own ridge band,
+#: `build_grid` stopped at 672 because 688 is not a multiple of --row-step 32,
+#: and only 256 and 512 are multiples of the 256 control. The plan printed
+#: "BM=256:2" and ran anyway; 72 cells were measured to a foregone V1 FAIL and
+#: nothing on the page was quotable.
+V1_ALIGNED_NEEDED = 3
+
+#: Control stacks the grid is FLOORED at, which is a stronger requirement than
+#: V1's three and comes from V2 rather than from V1. V2 reads the control's LAST
+#: tread gain: on the model itself a 3-tread control is still amortising its
+#: fixed cost and gains +3.10% against a +/-3.00% gate, while a 4-tread control
+#: reads -1.97% and 5 and 6 treads read +0.38% and +0.60% (planted alpha 1.0 and
+#: 0.558 worlds at a 1% spread, H200 band). Three treads would satisfy V1 and
+#: then fail V2 for a reason that is a property of the grid, not of the card.
+CONTROL_STACKS_FLOOR = 4
+
 #: The published H200 triad ceiling, and the bandwidth `--self-test` uses unless
 #: one is given on the command line.
 #:
@@ -1061,7 +1081,7 @@ def adopt(gate: SWEEP.Gate, tag: str, kind: str, consequence: str) -> CapGate:
 
 
 def gate_v1_non_vacuity(cells, *, tiles, planned_cells: int,
-                        aligned_needed: int = 3) -> CapGate:
+                        aligned_needed: int = V1_ALIGNED_NEEDED) -> CapGate:
     """Did the run actually measure the grid it planned.
 
     A CHECK THAT EXAMINED NOTHING REPORTS NO FAILURES. Every gate below reads
@@ -1104,6 +1124,51 @@ def gate_v1_non_vacuity(cells, *, tiles, planned_cells: int,
         detail)
 
 
+def control_reference(cells, *, tiles: tuple[int, ...], control_tile: int, cfg,
+                      ridge: float, bandwidth_gbps: float, b: int,
+                      pinned: dict | None = None,
+                      capability=None) -> SWEEP.ComputeReference:
+    """Qualify the CONTROL ladder as the compute branch, or decline in its name.
+
+    THE CAP TILE IS THE SUBJECT AND MUST NEVER CLASSIFY ITSELF. The sibling's
+    `compute_reference` walks the block sizes from largest down and skips any
+    ladder with fewer than three treads, which is right for a sweep of many
+    tiles and wrong for a two-tile experiment where the smaller of the two is
+    the thing being measured. On 2026-09-09 the H200 grid gave the control two
+    treads, the walk fell through to BLOCK_M=16, fitted the cap tile's own
+    ladder at 0.72% error and then refused it on non-vacuity at 1.044, a
+    physically correct refusal since a per-tile slope equal to one full weight
+    read IS alpha ~ 1, and the report printed "BLOCK_M=16 ... its LEVEL is
+    wrong" for the subject of the experiment while the control's own numbers
+    (C = 1.9902 ms/tile, 0.96% through-origin error, every level check passed)
+    were never computed. Every tread at the cap tile is classified against the
+    reference, so a reference taken from the cap tile makes the answer.
+
+    EVERY SWEPT LADDER STILL TAKES PART IN THE LEVEL CHECKS, which is why
+    `tiles` and not `(control_tile,)` goes to `_level_checks`: non-vacuity
+    scales the candidate's slope to the SMALLEST swept block size, and telling
+    the sibling that 256 is the smallest tile on the grid moves the H200
+    control's vacuity ratio from 0.106 to 1.690 and refuses it. Candidacy is
+    what is restricted here, not the comparison set.
+    """
+    ref = SWEEP.compute_reference(cells, tiles, cfg=cfg, ridge=ridge,
+                                  bandwidth_gbps=bandwidth_gbps, b=b,
+                                  pinned=pinned, capability=capability)
+    if control_tile in (ref.block_m, ref.refused_block_m):
+        return ref
+    treads = len(SWEEP.ladder_points(cells, control_tile))
+    fell_through = (f", and the sweep's own walk reached BLOCK_M="
+                    f"{ref.block_m or ref.refused_block_m} next, which is the "
+                    "cap tile and is not a candidate"
+                    if (ref.block_m or ref.refused_block_m) else "")
+    return SWEEP.ComputeReference(
+        None, 0.0, None, math.inf,
+        f"BLOCK_M={control_tile}, the control and the ONLY candidate, has "
+        f"{treads} exactly-full tread(s) against the 3 a through-origin fit "
+        f"needs{fell_through}. No compute branch was qualified: membership "
+        "falls back to a split search and NO alpha may decide a verdict")
+
+
 def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
                     control_tile: int, noise: float) -> CapGate:
     """Is the control's ladder SHAPED like a compute branch.
@@ -1126,7 +1191,16 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
     the SHAPE the reference is taken from, because every tread at the cap tile
     is classified against it.
     """
+    # THE FIRST CONDITION IS AN IDENTITY, not a number: the reference has to BE
+    # the control. On 2026-09-09 it was not, and `ref.mean_rel_err` then
+    # belonged to whichever ladder the sibling tried last, the cap tile's own
+    # 0.7%, so the FAIL line printed a number comfortably inside its printed
+    # bound and named nothing that had failed. Say which ladder the reference
+    # is on every line, passing or failing.
     proportional = ref.block_m == control_tile
+    which = (f"BLOCK_M={ref.block_m}" if ref.block_m is not None
+             else f"BLOCK_M={ref.refused_block_m}, REFUSED on its level"
+             if ref.refused_block_m is not None else "none")
     gain = (tp_control[-1][1] / tp_control[-2][1] - 1.0
             if len(tp_control) >= 2 and tp_control[-2][1] > 0 else None)
     # The gain is a ratio of two single cells and so carries `sqrt(2)` times the
@@ -1134,7 +1208,10 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
     # own rule for its memory-branch margin, and it is the difference between a
     # validity gate and a coin flip on a card that is not perfectly quiet.
     flat_gate = max(CONTROL_FLAT_GAIN, 3.0 * noise)
-    lines = [f"compute reference: {ref.note}",
+    lines = [f"compute reference: {which} (the only candidate is the control "
+             f"BLOCK_M={control_tile}; the cap tile is the subject and may not "
+             "classify itself)",
+             f"  {ref.note}",
              "throughput per tread against ridge x bandwidth: "
              + ", ".join(f"n={n}:{v:.3f}" for n, v in tp_control)]
     if gain is None:
@@ -1162,15 +1239,18 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
         "V2", VALIDITY,
         f"the control BLOCK_M={control_tile} reached a compute roof in this grid",
         verdict,
-        f"proportional to {ref.mean_rel_err:.1%}"
+        (f"proportional to {ref.mean_rel_err:.1%}" if proportional
+         else f"reference is {which}, not the control")
         + (f", last tread {gain:+.2%}" if gain is not None else ", no gain readable"),
-        f"through-origin fit within {PROPORTIONALITY_MAX_ERR:.0%} and last "
-        f"tread within +/-{flat_gate:.2%}",
+        f"the reference IS BLOCK_M={control_tile}, its through-origin fit "
+        f"within {PROPORTIONALITY_MAX_ERR:.0%}, and its last tread within "
+        f"+/-{flat_gate:.2%}",
         "the compute branch every tread at the cap tile is classified against "
-        "is not one, so neither C1 nor C2 may be quoted. A REFUSAL from the "
-        "level checks is the likeliest cause and it names itself in the note "
-        "above; membership then falls back to a split search, which invents "
-        "an alpha rather than declining to",
+        "is not one, so neither C1 nor C2 may be quoted. Either the control's "
+        "own level checks REFUSED it, and they name themselves in the lines "
+        "above, or its ladder is too short to qualify, which the plan now "
+        "refuses before the pod is rented; membership then falls back to a "
+        "split search, which invents an alpha rather than declining to",
         lines)
 
 
@@ -1843,14 +1923,53 @@ def plan_lines(cfg, args, *, tiles, grid, depth: Depth, b: int,
         "timing afterwards:",
     ]
     lines += [resources[bm].render() for bm in tiles]
-    deepest = max(aligned[tiles[0]]) // tiles[0] if aligned[tiles[0]] else 0
-    if deepest < depth.tiles:
-        lines.append(
-            f"            WARNING: the grid's deepest exactly-full stack at "
-            f"BLOCK_M={tiles[0]} is {deepest} tiles, short of the {depth.tiles} "
-            "V4 requires. Raise --r-max, or lower --row-step so more multiples "
-            f"of {tiles[0]} land on the grid.")
+    lines.append(
+        f"            deepest exactly-full stack at BLOCK_M={tiles[0]}: "
+        f"{grid_depth(grid, tiles[0])} tiles, against the {depth.tiles} V4 "
+        "requires")
+    # A SHORT GRID IS A REFUSAL AND NOT A WARNING; `grid_refusal` states it and
+    # `_main` returns REFUSED on it, right after this plan is printed. Until
+    # 2026-09-09 this line read "WARNING: ... Raise --r-max" and the run went on
+    # to measure 72 cells against gates the grid had already made unsatisfiable.
     return lines
+
+
+def grid_depth(grid, cap_tile: int) -> int:
+    """Tiles in the deepest exactly-full stack of `cap_tile` on this grid."""
+    aligned = [r for r in grid if r % cap_tile == 0]
+    return max(aligned) // cap_tile if aligned else 0
+
+
+def grid_refusal(grid, *, tiles: tuple[int, ...], depth: Depth,
+                 row_step: int) -> str:
+    """Empty when the grid can satisfy V1 and V4, else why it cannot.
+
+    ASKED BEFORE THE POD IS RENTED, because every gate below reads ladders and
+    a ladder needs treads: a grid that cannot put three exactly-full stacks on
+    each tile has decided V1 FAIL before the first cell is timed, and one whose
+    deepest cap stack is short of the horizon has decided V4 the same way. On
+    2026-09-09 both were true of the H200 grid, the plan printed "BM=256:2" and
+    a WARNING, and 72 measured cells produced nothing quotable.
+    """
+    stacks = {bm: sum(1 for r in grid if r % bm == 0) for bm in tiles}
+    short = {bm: n for bm, n in stacks.items() if n < V1_ALIGNED_NEEDED}
+    deepest = grid_depth(grid, tiles[0])
+    if not short and deepest >= depth.tiles:
+        return ""
+    why = ["exactly-full tile stacks on this grid: "
+           + ", ".join(f"BLOCK_M={bm}:{stacks[bm]}" for bm in tiles)]
+    why += [f"  BLOCK_M={bm} has {n} exactly-full stack(s) against the "
+            f"{V1_ALIGNED_NEEDED} V1 requires"
+            for bm, n in sorted(short.items())]
+    if deepest < depth.tiles:
+        why.append(f"  the deepest BLOCK_M={tiles[0]} stack is {deepest} tiles "
+                   f"against the {depth.tiles} V4 requires")
+    needed = max(V1_ALIGNED_NEEDED * max(tiles), depth.rows,
+                 CONTROL_STACKS_FLOOR * max(tiles))
+    needed += (-needed) % row_step
+    why.append(f"  raise --r-max to at least {needed}, or lower --row-step so "
+               f"more multiples of {max(tiles)} land on the grid")
+    return "\n".join(why)
 
 
 # --------------------------------------------------------------------------
@@ -1915,9 +2034,11 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
     # study's reference at 44x too steep, and every ladder in the report is
     # classified against it. A reference that is refused there makes C2
     # UNDECIDED here, which is the honest outcome and not a hole.
-    ref = SWEEP.compute_reference(ok, tiles, cfg=cfg, ridge=ridge,
-                                  bandwidth_gbps=bandwidth_gbps, b=b,
-                                  pinned=pinned, capability=capability)
+    #
+    # THE CONTROL IS THE ONLY CANDIDATE; see `control_reference`.
+    ref = control_reference(ok, tiles=tiles, control_tile=control_tile, cfg=cfg,
+                            ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b,
+                            pinned=pinned, capability=capability)
     # Same margin rule the parent uses: the reference slope carries the timing
     # spread too, and a compute branch estimated 2% low makes every
     # compute-bound tread look memory bound.
@@ -1959,7 +2080,13 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
     lines.append(f"  per-cell timing spread, median {noise:.2%}; memory-branch "
                  f"margin raised to {margin:.2%}")
     lines.append(f"  {sm_count} SMs ({sm_source})")
-    lines.append(f"  compute reference: {ref.note}")
+    # THE QUALIFICATION, AS NUMBERS AGAINST THRESHOLDS, whether it passed or
+    # failed. The sibling sweep prints this block; before 2026-09-09 this file
+    # printed only `ref.note`, so the H200 report said "its LEVEL is wrong" and
+    # never printed the 1.044 non-vacuity ratio that was the failing check, the
+    # one number that would have told a reader the refused ladder's slope IS one
+    # full weight read per tile.
+    lines += ["  " + line for line in ref.render()]
     lines.append("")
     lines.append("THE LADDERS: milliseconds per exactly-full tile stack")
     lines.append("  BLOCK_M  treads  memory-bound  alpha  alpha-corrected  "
@@ -2096,7 +2223,19 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
         "peak_roof_fraction": {str(bm): (max((v for _, v in tp), default=None))
                                for bm, tp in ((cap_tile, tp_cap),
                                               (control_tile, tp_control))},
+        # THE REFERENCE'S OWN QUALIFICATION, in the machine-readable artefact
+        # and not only in the prose. `ref.note` alone said "its LEVEL is wrong"
+        # on 2026-09-09 and report.json carried the same sentence, so which
+        # check failed and by how much survived nowhere.
         "compute_reference": ref.note,
+        "compute_reference_candidate": control_tile,
+        "compute_reference_block_m": ref.block_m,
+        "compute_reference_refused_block_m": ref.refused_block_m,
+        "compute_reference_refusals": list(ref.refusals),
+        "compute_reference_roof_fraction": ref.roof_fraction,
+        "compute_reference_vacuity_ratio": ref.vacuity_ratio,
+        "compute_reference_level_ratio": ref.level_ratio,
+        "compute_reference_level_comparisons": ref.level_comparisons,
         "ladder": {str(bm): {"points": list(f.points),
                              "memory_points": f.memory_points,
                              "alpha": f.alpha,
@@ -2530,7 +2669,15 @@ def _main(argv=None) -> int:
     except CapTestRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
-    r_max = args.r_max or depth.rows
+    # THE DEFAULT GRID MUST CARRY V1, V2 AND V4. `depth.rows` is the cap tile's
+    # own horizon and nothing else: it need not be a multiple of --row-step, and
+    # it knows nothing about the control. On the H200's own ridge band it is
+    # 688 = 43 x 16, `build_grid` stops at 672, and exactly two multiples of the
+    # 256 control land on the grid. Floor it at the control's stacks as well and
+    # round UP to the step, which puts the H200 default at 1024.
+    floor = max(depth.rows, CONTROL_STACKS_FLOOR * args.control)
+    floor += (-floor) % args.row_step
+    r_max = args.r_max or floor
     card = detect_card_slug()
 
     grid = SWEEP.build_grid(cfg, tiles, r_max, args.row_step, args.step_probes)
@@ -2584,6 +2731,18 @@ def _main(argv=None) -> int:
               "dropped setting. Lower --num-stages, raise --block-n, or pick "
               "another --control, and note that moving any of them moves BOTH "
               "arms, which is what keeps the comparison pinned.")
+        return exit_codes.REFUSED
+
+    # A GRID THAT CANNOT SATISFY ITS OWN VALIDITY GATES IS REFUSED HERE, not
+    # measured and then voided. This is the 2026-09-09 H200 arm: the plan
+    # printed "BM=256:2" beside a WARNING, 72 cells were timed, V1 FAILed on
+    # the stack count the plan had already printed, and nothing on the page was
+    # quotable. --r-max is honoured as given; the default is floored above.
+    short = grid_refusal(grid, tiles=tiles, depth=depth, row_step=args.row_step)
+    if short:
+        print("\nREFUSED: the grid cannot satisfy its own validity gates, so "
+              "nothing measured on it would be quotable.")
+        print("\n".join("  " + line for line in short.splitlines()))
         return exit_codes.REFUSED
 
     if args.dry_run:
