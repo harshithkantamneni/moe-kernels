@@ -53,7 +53,10 @@ from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
 TILES = (16, 256)
-RIDGE, RIDGE_HI = 160.3, 176.2
+#: WITHDRAWN 2026-09-02 as any card's ridge: two compute calibrations of one H200
+#: (its own is 162.8). Planted here because the self-test pins it as HYPOTHESIS and
+#: a planted number is not a measurement; nothing below reads it as a card's ridge.
+RIDGE, RIDGE_HI = 160.3, 176.2   # withdrawn pair
 BAND = (RIDGE, RIDGE_HI)
 BANDWIDTH = 4374.5
 ROOF = RIDGE * BANDWIDTH * 1e9 / 1e12
