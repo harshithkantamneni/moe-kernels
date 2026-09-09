@@ -126,9 +126,18 @@ which is the same size as the cross-card effect this study registered. Every
 cell is now timed by `moe.bench.timing.time_kernel` under `TIMING_BASIS`, and
 the instrument name, the warmup duration, the iteration and trial counts, the
 SM clock sampled UNDER LOAD, its two verdicts and the flush state are columns on
-every row. A cell whose loaded clock came in below the clock the roof was
-measured at is EXCLUDED from the ladder fit and counted, because a tread timed
-on a throttled card is a tread at a different compute branch.
+every row. LEVEL is two-sided since 2026-09-03 and the SIDE is a column too. A
+cell whose loaded clock came in BELOW the band around the clock the roof was
+measured at (`clock_level_side` "low") is EXCLUDED from the ladder fit and
+counted, because a tread timed on a throttled card is a tread at a different
+compute branch. A cell that came in ABOVE the band ("high") is KEPT and counted
+separately: on the H200 that is the normal state of a memory-shaped cell, 1980
+MHz under memory load against the 1515 MHz bf16 GEMM the roof was measured at,
+its milliseconds are a measurement, and only its fraction of the FIXED roof is
+not comparable (the driver's `roof_at_cell_clock_tflops` is the roof it should
+be read against). Until this tree every consumer read `clock_level_ok is
+False` as "ran cold" and would have dropped every boosted tread from the fit
+whose purpose is to find the memory branch.
 
 EXIT CODES AND THE ONE GREPPABLE LINE. `moe.bench.exit_codes` owns both. Every
 scored gate prints exactly one `RESULT: KIND NAME VERDICT detail` line, the
@@ -143,9 +152,10 @@ exception exits ERROR (4), not the interpreter's 1, for the same reason.
 OFF-GPU. `--self-test ALPHA` generates the cells from the physical model at that
 alpha and runs the entire analysis on them, so the gates, the fits and the
 report are exercised on a laptop, and so the claim "these gates can tell 0.558
-from 0.10" is checkable rather than asserted. `--self-test-world` plants the two
-worlds that are not a single alpha: a low-clock tread, which must be excluded,
-and a memory branch parallel to the compute branch, which must come out
+from 0.10" is checkable rather than asserted. `--self-test-world` plants the
+three worlds that are not a single alpha: a low-clock tread, which must be
+excluded; a high-clock tread, the boosted memory-shaped state, which must be
+KEPT; and a memory branch parallel to the compute branch, which must come out
 UNDECIDED. A planted run whose directory this script NAMES writes under a
 `synthetic-` directory carrying one `plant` token that spells the alpha, the
 noise and the world, so one self-test can never overwrite another; a metered run
@@ -830,6 +840,65 @@ def scaled_iters(ms: float, iters: int, cell_budget_ms: float,
 # A measured cell.
 # --------------------------------------------------------------------------
 
+#: The two sides a failed LEVEL verdict can have, mirrored from
+#: `moe.bench.timing.LEVEL_LOW` / `LEVEL_HIGH` rather than imported, because
+#: that module imports torch at module scope and this file is documented to
+#: plan a run and replay a CSV on a laptop that has none;
+#: `tests/test_block_m_crossing_sweep.py` asserts the mirror against the
+#: instrument wherever torch imports. The instrument writes them; this file
+#: only reads them, and only `LEVEL_LOW` excludes.
+LEVEL_LOW = "low"
+LEVEL_HIGH = "high"
+LEVEL_SIDES = ("", LEVEL_LOW, LEVEL_HIGH)
+
+
+def check_level_side(clock_level_ok: bool | None, clock_level_side: str) -> None:
+    """REFUSE a clock verdict and side that contradict each other.
+
+    A side is the direction a FAILED verdict went. A side on a passing or
+    undetermined verdict is not a state the instrument produces (`timing.
+    time_kernel` derives both from one `level_side` call and `driver` blanks
+    the side unless the verdict is failed), so a row carrying one was built by
+    hand from two sources and one of them is wrong; reading it either way
+    would be a default. A side outside `LEVEL_SIDES` is a typo that would
+    otherwise be read as "not high", which is LOW, which excludes. Both are
+    raised here, at construction, rather than discovered as an exclusion count
+    that does not add up.
+
+    AND A FAILED VERDICT WITHOUT A SIDE IS REFUSED TOO. Since 2026-09-03
+    `timing.clock_flags` derives the verdict FROM the side, so a failed LEVEL
+    with a blank side is not a state the instrument produces either: it is a
+    caller that copied `KernelTiming.clock_level_ok` and dropped
+    `KernelTiming.clock_level_side`, which is exactly the shape of the defect
+    this column closes (2026-09-08: `bn_decomposition` and
+    `occupancy_vs_swizzle` did that through `make_cell`, and
+    `span_extent_separation` in its own row class; every boosted tread they
+    timed would have been read as LOW and dropped). Reading the blank as LOW
+    drops every memory-bound tread on an H200; reading it as HIGH admits a
+    sagged card into the fit; both are defaults. No cells.csv in the tree
+    carries such a row (the verdict column
+    is from 2026-09-02 and the side column from 2026-09-08, and no pod ran in
+    between), so a file that does was written by a sibling that dropped the
+    side, and its failed rows have to be re-measured.
+    """
+    if clock_level_side not in LEVEL_SIDES:
+        raise ValueError(
+            f"clock_level_side {clock_level_side!r} is not one of "
+            f"{LEVEL_SIDES}; the instrument writes only those")
+    if clock_level_side and clock_level_ok is not False:
+        raise ValueError(
+            f"clock_level_side {clock_level_side!r} with clock_level_ok="
+            f"{clock_level_ok!r}: a side is the direction a FAILED verdict "
+            "went, and this verdict did not fail")
+    if clock_level_ok is False and not clock_level_side:
+        raise ValueError(
+            "clock_level_ok=False with no clock_level_side: a failed LEVEL "
+            "verdict has carried a side since 2026-09-03 (timing.level_side) "
+            "and without it the row cannot be told from a sagged card or a "
+            "boosted one; pass KernelTiming.clock_level_side, or re-measure "
+            "a cells.csv whose failed rows were written without the column")
+
+
 @dataclass
 class Cell:
     """One (BLOCK_SIZE_M, tokens) measurement, and everything derivable from it.
@@ -841,19 +910,33 @@ class Cell:
 
     THE STATE THE CELL WAS TIMED IN IS A COLUMN, not a property of the session.
     `instrument`, `warmup_ms`, `iters`, `trials`, `sm_clock_load_mhz`,
-    `clock_level_ok`, `clock_drift_ok` and `l2_flush` are what
-    `moe.bench.timing.time_kernel` reports about the measurement it just made,
-    and they are written per row because they are what makes a row comparable
-    with the roof or not. Before 2026-09-02 none of them existed here: the
-    published cells carry an iteration count and nothing else, so a reader
-    cannot tell a cell timed on a card at 1980 MHz from one timed at 1500, and
-    every one of them was timed by a different instrument from the roof.
+    `clock_level_ok`, `clock_level_side`, `clock_drift_ok` and `l2_flush` are
+    what `moe.bench.timing.time_kernel` reports about the measurement it just
+    made, and they are written per row because they are what makes a row
+    comparable with the roof or not. Before 2026-09-02 none of them existed
+    here: the published cells carry an iteration count and nothing else, so a
+    reader cannot tell a cell timed on a card at 1980 MHz from one timed at
+    1500, and every one of them was timed by a different instrument from the
+    roof.
 
     THE THREE CLOCK FIELDS ARE OPTIONAL AND None MEANS "NOT DETERMINED", never
     "fine". A container without NVML, a trial too short for the poller to land a
     sample, and a laptop replay all produce None, and a filter that reads None
     as True would quietly re-admit exactly the rows this column exists to keep
-    out. `clock_level_ok is False` is the only state `ladder_treads` excludes.
+    out.
+
+    AND A FAILED LEVEL HAS A SIDE. `clock_level_side` is `LEVEL_LOW`,
+    `LEVEL_HIGH` or "" (inside the band, or not determined), the instrument's
+    own word for which way the loaded clock left the band around the reference.
+    `ladder_treads` excludes on the LOW side only: a tread timed on a card that
+    sagged is a tread at a different compute branch. The HIGH side is KEPT: a
+    memory-shaped cell that boosted to 1980 MHz against a 1515 MHz GEMM
+    reference is the H200's normal state, its time is a measurement, and what
+    is not comparable is its fraction of the FIXED roof, which the report says
+    beside the count. A LEVEL failure carrying no side is REFUSED at
+    construction (`check_level_side`): the instrument derives the verdict from
+    the side, so a failed verdict without one was copied by a caller that
+    dropped the side, and reading it either way is a default.
     """
 
     block_m: int
@@ -882,7 +965,13 @@ class Cell:
     sm_clock_load_mhz: float | None = None
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
+    #: Which way a failed LEVEL went: `LEVEL_LOW`, `LEVEL_HIGH`, or "" when the
+    #: verdict passed or was not determined. Only the LOW side excludes.
+    clock_level_side: str = ""
     l2_flush: bool = False
+
+    def __post_init__(self) -> None:
+        check_level_side(self.clock_level_ok, self.clock_level_side)
 
     @property
     def rel_spread(self) -> float:
@@ -890,14 +979,35 @@ class Cell:
 
     @property
     def clock_excluded(self) -> bool:
-        """Was this cell timed below the clock the roof was measured at.
+        """Was this cell timed BELOW the band around the clock the roof was
+        measured at, which is the one clock state a ladder fit excludes.
 
         False for None on purpose, and this is the one place that reading is
         correct: an EXCLUSION has to be positively established. A row with no
         clock is a row whose comparability is unknown, and the report says how
         many of those there are rather than throwing them away.
+
+        AND False FOR THE HIGH SIDE, on purpose too. Until this tree the rule
+        was `clock_level_ok is False`, written when LEVEL could only fail low;
+        `timing.clock_flags` went two-sided on 2026-09-03 and the same rule
+        then dropped every boosted memory-shaped cell, which on the H200 is
+        every memory-bound tread (1980 MHz under memory load against the 1515
+        MHz GEMM reference). A boosted tread's time is a measurement; what is
+        not comparable is its fraction of the fixed roof, and `clock_boosted`
+        is how the report counts those. The side alone decides, because
+        `check_level_side` has already refused every row on which the side and
+        the verdict could disagree: a failed verdict always carries one and a
+        passing or undetermined verdict never does.
         """
-        return self.clock_level_ok is False
+        return self.clock_level_side == LEVEL_LOW
+
+    @property
+    def clock_boosted(self) -> bool:
+        """Did LEVEL fail on the HIGH side: the cell ran above the band around
+        the roof's clock. KEPT in every fit; its fixed-roof fraction is inflated
+        by the clock ratio and the driver's `roof_at_cell_clock_tflops` is the
+        roof it should be read against."""
+        return self.clock_level_side == LEVEL_HIGH
 
 
 def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
@@ -907,6 +1017,7 @@ def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
               sm_clock_load_mhz: float | None = None,
               clock_level_ok: bool | None = None,
               clock_drift_ok: bool | None = None,
+              clock_level_side: str | None = "",
               l2_flush: bool = False) -> Cell:
     """One cell, with the state it was timed in.
 
@@ -916,6 +1027,15 @@ def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
     keep working unchanged. A cell built without them carries the empty
     instrument and three None clock verdicts, which is the honest record of a
     row whose timing state nobody wrote down.
+
+    EXTENDED AGAIN 2026-09-08 with `clock_level_side`, the instrument's
+    `KernelTiming.clock_level_side`. A caller that passes a FAILED verdict and
+    not the side is REFUSED by `check_level_side` at construction: the only
+    readings of that row are LOW (drops every boosted tread, the defect this
+    column closes) and HIGH (admits a sagged card), and both are defaults. The
+    sibling scripts that copy `t.clock_level_ok` into this call must copy
+    `t.clock_level_side` beside it. None (the instrument's "no comparison was
+    made", which only accompanies a verdict that is not False) is stored as "".
     """
     tiles = tiles_per_expert(rows, block_m)
     padded = cfg.num_experts * tiles * block_m
@@ -933,7 +1053,8 @@ def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
         status=status, detail=detail, instrument=instrument,
         warmup_ms=warmup_ms, trials=trials,
         sm_clock_load_mhz=sm_clock_load_mhz, clock_level_ok=clock_level_ok,
-        clock_drift_ok=clock_drift_ok, l2_flush=l2_flush)
+        clock_drift_ok=clock_drift_ok, clock_level_side=clock_level_side or "",
+        l2_flush=l2_flush)
 
 
 #: What the synthetic cells claim as their instrument. A planted world is not a
@@ -961,13 +1082,22 @@ SYNTHETIC_CARD_SLUG = "synthetic"
 #: move the first without moving the second.
 SYNTHETIC_CLOCK_MHZ = 1980.0
 
+#: How far above its GEMM reference a boosted memory-shaped cell runs on the
+#: H200: the committed calibration's `bandwidth_settle.final_mhz` 1980 over its
+#: `gemm_clock_mhz` 1515 (moe/bench/hardware/measured_nvidia_h200.yaml). The
+#: high-clock world applies this RATIO to the planted reference, so the planted
+#: cell fails LEVEL on the HIGH side by the margin a real H200 cell does, and
+#: not by a margin chosen to clear the band.
+H200_BOOST_RATIO = 1980.0 / 1515.0
+
 
 def synthetic_cells(cfg, grid, block_sizes, *, alpha: float, ridge: float,
                     bandwidth_gbps: float, b: int, sm_count: int,
                     overhead_ms: float = 0.03, noise: float = 0.0,
                     seed: int = 0, low_clock: tuple[int, int] | None = None,
                     warmup_ms: float = 0.0, trials: int = 0,
-                    l2_flush: bool = True) -> list[Cell]:
+                    l2_flush: bool = True,
+                    high_clock: tuple[int, int] | None = None) -> list[Cell]:
     """Cells generated FROM the model, so the analysis has a known answer.
 
     This is what makes the whole report testable on a laptop, and it is what
@@ -980,9 +1110,15 @@ def synthetic_cells(cfg, grid, block_sizes, *, alpha: float, ridge: float,
     `clock_level_ok` is False is excluded from every ladder fit, and an
     exclusion path that only ever runs on a pod is a path nobody has watched
     work. `low_clock=(BLOCK_M, tiles)` plants exactly one tread that failed the
-    LEVEL flag, so the self-test can assert it was dropped, counted and named.
-    Everything else carries `clock_level_ok=True` and `SYNTHETIC_INSTRUMENT`,
-    which is deliberately NOT `TIMING_BASIS`: these rows were not measured.
+    LEVEL flag LOW, so the self-test can assert it was dropped, counted and
+    named. `high_clock=(BLOCK_M, tiles)` plants exactly one tread that failed
+    LEVEL HIGH, at `H200_BOOST_RATIO` times the reference, so the self-test can
+    assert it was KEPT, counted and named: a kept path nobody has watched work
+    is the path that dropped every boosted tread until 2026-09-08. Its
+    milliseconds are the model's, unchanged, because a memory-bound tread's
+    time does not follow the SM clock. Everything else carries
+    `clock_level_ok=True` and `SYNTHETIC_INSTRUMENT`, which is deliberately NOT
+    `TIMING_BASIS`: these rows were not measured.
     """
     rng = random.Random(seed)
     out = []
@@ -995,15 +1131,23 @@ def synthetic_cells(cfg, grid, block_sizes, *, alpha: float, ridge: float,
                 ms *= math.exp(rng.gauss(0.0, noise))
             slow = (low_clock is not None and bm == low_clock[0]
                     and tiles_per_expert(r, bm) == low_clock[1])
+            boosted = (high_clock is not None and bm == high_clock[0]
+                       and tiles_per_expert(r, bm) == high_clock[1])
+            if slow:
+                clock, side = SYNTHETIC_CLOCK_MHZ * 0.7, LEVEL_LOW
+            elif boosted:
+                clock, side = SYNTHETIC_CLOCK_MHZ * H200_BOOST_RATIO, LEVEL_HIGH
+            else:
+                clock, side = SYNTHETIC_CLOCK_MHZ, ""
             out.append(make_cell(
                 cfg, r, bm, ms, sm_count=sm_count,
                 block_n=FIXED["BLOCK_SIZE_N"], ms_min=ms,
                 ms_stdev=ms * noise, iters=0,
                 instrument=SYNTHETIC_INSTRUMENT, warmup_ms=warmup_ms,
                 trials=trials, l2_flush=l2_flush,
-                sm_clock_load_mhz=(SYNTHETIC_CLOCK_MHZ * 0.7 if slow
-                                   else SYNTHETIC_CLOCK_MHZ),
-                clock_level_ok=not slow, clock_drift_ok=True))
+                sm_clock_load_mhz=clock,
+                clock_level_ok=not (slow or boosted), clock_drift_ok=True,
+                clock_level_side=side))
     return out
 
 
@@ -1120,8 +1264,13 @@ class LadderFit:
     #: and the text a table generator reads cannot drift apart.
     outcome_reason: str = ""
     #: Cells dropped from this ladder because their loaded clock was below the
-    #: clock the roof was measured at. Counted rather than silently missing.
+    #: band around the clock the roof was measured at (LEVEL failed LOW).
+    #: Counted rather than silently missing.
     excluded_low_clock: int = 0
+    #: Treads KEPT in this ladder whose LEVEL failed HIGH: the boosted
+    #: memory-shaped state. Their times are in the fit; their fraction of the
+    #: fixed roof is not comparable, and the report says so beside this count.
+    kept_high_clock: int = 0
     #: Index into `points` of the FIRST tread on the memory branch. Non-zero
     #: means the lowest tread(s) sat inside the margin and the branch starts
     #: above them; see `memory_branch_members` for why that is allowed and why
@@ -1180,11 +1329,18 @@ class LadderFit:
 
         WHAT A CAP FROM THIS NUMBER COSTS. `2 BM / (alpha b)` treats the level
         as one full weight read, which it is not, so a cap taken that way is
-        HIGH by `ai_model.lin_overstatement` = 1 + phi + delta: 16% at BM=64,
-        32% at BM=128 and 64% at BM=256 with BN=64 on mixtral. At BM=128, the
-        tile this study's claim is about, that is larger than the cap-to-ridge
-        gap the cap was being used to decide. The report prints the factor
-        beside every cap it derives from this number.
+        HIGH by `ai_model.lin_overstatement` = 1 + phi + delta. That factor
+        is a BRACKET and not a number, because phi depends on alpha_a, the
+        activation re-read fraction, which has no measurement anywhere in this
+        repository: `ai_model.overstatement_bracket` gives its two ends, at
+        alpha_a = 0 and alpha_a = 1, and with BN=64 on mixtral at delta = 0
+        they are 1.02 to 2.02 at BM=64, 1.04 to 3.03 at BM=128 and 1.07 to
+        5.06 at BM=256. The 16% / 32% / 64% this docstring once quoted as
+        points were the values at alpha_a = 0.143, the withdrawn (LIN)-solved
+        pair. Even the LOW end at BM=128, the tile this study's claim is about,
+        is of the order of the cap-to-ridge gap the cap was being used to
+        decide. The report prints the bracket beside every cap it derives from
+        this number (`cap_overstatement`).
         """
         load = self.load_ms
         if load is None or load <= 0 or self.slope_memory is None:
@@ -1257,11 +1413,19 @@ def ladder_treads(cells, block_m: int) -> tuple[list[tuple[int, float]], int]:
     roof measured at the calibration's own clock. A tread timed on a card at
     1500 MHz against a roof measured at 1980 sits about 30% above that line for
     a reason that has nothing to do with weight re-reads, and it would be read
-    as memory bound and fitted into alpha. `clock_level_ok is False` is the only
-    exclusion; None (no NVML, too short a trial, a laptop replay) is NOT an
-    exclusion, because an exclusion has to be positively established, and the
-    count returned here is what the report says out loud so a ladder that lost
-    half its treads to a hot box cannot look like a ladder that never had them.
+    as memory bound and fitted into alpha. `Cell.clock_excluded`, LEVEL failed
+    on the LOW side, is the only exclusion; None (no NVML, too short a trial, a
+    laptop replay) is NOT an exclusion, because an exclusion has to be
+    positively established, and the count returned here is what the report
+    says out loud so a ladder that lost half its treads to a hot box cannot
+    look like a ladder that never had them.
+
+    A CELL THAT CAME IN HIGH IS ON THIS LADDER. LEVEL failing on the HIGH side
+    is the boosted memory-shaped cell, the H200's normal state for exactly the
+    treads this fit is looking for, and its time is a measurement of the
+    memory branch: that branch does not follow the SM clock. `boosted_treads`
+    counts them for the report. The signature is unchanged so the four sibling
+    scripts that unpack `(points, excluded)` keep working.
     """
     pts: dict[int, float] = {}
     excluded = 0
@@ -1279,6 +1443,22 @@ def ladder_points(cells, block_m: int) -> list[tuple[int, float]]:
     """`ladder_treads` without the exclusion count. The four sibling scripts
     call this name and take a bare list; it stays exactly that."""
     return ladder_treads(cells, block_m)[0]
+
+
+def boosted_treads(cells, block_m: int) -> int:
+    """How many of this ladder's treads were KEPT with LEVEL failed HIGH.
+
+    The count that goes beside `ladder_treads`' exclusion count, over the same
+    membership (aligned, ok, timed). It exists so a report can say "N treads
+    ran above the band around the roof's clock; their times are in the fit and
+    their fixed-roof fractions are not comparable" instead of either dropping
+    them (the defect this closes) or keeping them silently (the defect that
+    would replace it: a fraction of the fixed roof printed for a cell the
+    fixed roof does not describe).
+    """
+    return sum(1 for c in cells
+               if c.block_m == block_m and c.aligned and c.status == "ok"
+               and c.ms_p50 > 0 and c.clock_boosted)
 
 
 #: A tread has to stand this far above the compute branch to be called memory
@@ -1894,7 +2074,8 @@ def memory_branch_members(xs, ys, c_ref: float, overhead: float,
 
 def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                margin: float = MEMORY_BRANCH_MARGIN,
-               excluded_low_clock: int = 0) -> LadderFit:
+               excluded_low_clock: int = 0,
+               kept_high_clock: int = 0) -> LadderFit:
     """Split the ladder into a memory branch and a compute branch.
 
     Membership comes from the reference compute branch when there is one, by the
@@ -1922,7 +2103,10 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
     `SWEEP.fit_ladder(points, bm, ref[, margin])` are unaffected; pass it and
     the fit can tell a ladder that never had treads from one whose treads were
     dropped for clock level, which is the difference between
-    `NOT_IDENTIFIED_TOO_FEW` and `UNDECIDED_LOW_CLOCK`.
+    `NOT_IDENTIFIED_TOO_FEW` and `UNDECIDED_LOW_CLOCK`. `kept_high_clock` is
+    the same kind of count for the other side of LEVEL, carried onto the fit
+    so the ladder row can say how many of its treads were boosted; it changes
+    no outcome, because a boosted tread is a tread.
     """
     overhead = ref.overhead_ms if ref else 0.0
     pts = [(n, ms) for n, ms in points if ms > 0]
@@ -1935,7 +2119,8 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                              "carried a usable time"
                              + (f"; {excluded_low_clock} cell(s) were excluded "
                                 "for clock level" if excluded_low_clock else "")),
-                         excluded_low_clock=excluded_low_clock)
+                         excluded_low_clock=excluded_low_clock,
+                         kept_high_clock=kept_high_clock)
     xs = [float(n) for n, _ in pts]
     ys = [ms for _, ms in pts]
     c_ref = ref.slope_for(block_m) if ref else None
@@ -2012,6 +2197,7 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
     made = LadderFit(block_m, tuple(points), k, a, b, c_own, c_ref, err,
                      overhead, basis, outcome=outcome, outcome_reason=reason,
                      excluded_low_clock=excluded_low_clock,
+                     kept_high_clock=kept_high_clock,
                      branch_start=start if k else 0)
     if outcome:
         return made
@@ -2019,6 +2205,7 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
     return LadderFit(block_m, tuple(points), k, a, b, c_own, c_ref, err,
                      overhead, basis, outcome=outcome, outcome_reason=reason,
                      excluded_low_clock=excluded_low_clock,
+                     kept_high_clock=kept_high_clock,
                      branch_start=start if k else 0)
 
 
@@ -2037,8 +2224,8 @@ def _ladder_outcome(fit: LadderFit, ref, excluded: int) -> tuple[str, str]:
     if excluded and fit.memory_points < MIN_MEMORY_TREADS:
         return UNDECIDED_LOW_CLOCK, (
             f"UNDECIDED at BLOCK_M={fit.block_m}: {excluded} cell(s) were "
-            "excluded because their SM clock under load came in below the clock "
-            "the roof was measured at, leaving "
+            "excluded because their SM clock under load came in LOW, below the "
+            "band around the clock the roof was measured at, leaving "
             f"{fit.memory_points} memory-bound tread(s) against the "
             f"{MIN_MEMORY_TREADS} a verdict needs. What this ladder measured is "
             "the card's clock state, not the tile. Re-time the arm on a settled "
@@ -2110,8 +2297,11 @@ def cap_overstatement(cfg, block_m: int, block_n: int, b: int
     `2 BM / (alpha b)` from a FITTED alpha, and `moe/bench/ai_model.py` shows
     that a B/(A+B) fit returns `(alpha_b + phi) / (1 + phi + delta)`, so the cap
     that division gives is the exact cap times `1 + phi + delta`. At BM=128,
-    BN=64 on mixtral that is about 1.32: a 32% overstatement, larger than the
-    cap-to-ridge gap the cap is being used to decide.
+    BN=64 on mixtral at delta = 0 the bracket is 1.04 to 3.03, a 3.6% to 203%
+    overstatement, and even its low end is of the order of the cap-to-ridge
+    gap the cap is being used to decide. The "about 1.32" this docstring once
+    quoted was the point at alpha_a = 0.143, the withdrawn (LIN)-solved pair;
+    it sits inside the bracket and is not a measurement.
 
     IT IS A BRACKET AND NOT A NUMBER, and the reason is the honest one:
     `alpha_a`, the miss fraction on the ACTIVATION re-read, has no measurement
@@ -2122,17 +2312,19 @@ def cap_overstatement(cfg, block_m: int, block_n: int, b: int
     report's own `overhead_ms` is the measured stand-in for delta and is printed
     beside them.
 
+    ONE DEFINITION. This delegates to `ai_model.overstatement_bracket`, which
+    owns the alpha_a-in-{0, 1} loop, rather than carrying a second copy of
+    it: two copies of one bracket are how a point re-enters at one of them
+    (this file printed the withdrawn 1.32 point for two commits after the
+    module it cites had replaced it with the bracket).
+
     The single-GEMM shape this is evaluated on is the up-projection,
     `N = 2 F` and `K = H`, because that is the GEMM whose B operand is the
     weight slab whose re-read the whole study is about.
     """
     n, k = 2 * cfg.intermediate_size, cfg.hidden_size
-    ends = []
-    for alpha_a in (0.0, 1.0):
-        p = ai_model.phi(n, k, block_m=block_m, block_n=block_n,
-                         alpha_a=alpha_a, b=b)
-        ends.append(ai_model.lin_overstatement(phi=p, delta=0.0))
-    return min(ends), max(ends)
+    return ai_model.overstatement_bracket(n, k, block_m=block_m,
+                                          block_n=block_n, b=b, delta=0.0)
 
 
 def cap_note(cfg, block_m: int, block_n: int, b: int) -> str:
@@ -3169,6 +3361,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # block size. None is not an exclusion anywhere; see `ladder_treads`.
     ok = [c for c in timed if not c.clock_excluded]
     excluded_from_gates = len(timed) - len(ok)
+    # THE HIGH SIDE IS IN `ok` AND IS COUNTED, NOT DROPPED. A boosted cell's
+    # milliseconds are a measurement; what the fixed roof does not describe is
+    # its fraction of that roof, so the report names how many cells the gates
+    # read that way and which direction the fixed-roof fraction is off in.
+    boosted_from_gates = sum(1 for c in timed if c.clock_boosted)
     aligned = [c for c in ok if c.aligned]
     plateau = max((c.useful_tflops for c in aligned), default=0.0)
     noise = statistics.median([c.rel_spread for c in ok]) if ok else 0.0
@@ -3191,10 +3388,13 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # Handing it the already-filtered list would report every ladder as having
     # lost nothing.
     treads = {bm: ladder_treads(timed, bm) for bm in block_sizes}
-    fits = {bm: fit_ladder(pts, bm, ref, margin, excluded_low_clock=dropped)
+    boosted = {bm: boosted_treads(timed, bm) for bm in block_sizes}
+    fits = {bm: fit_ladder(pts, bm, ref, margin, excluded_low_clock=dropped,
+                           kept_high_clock=boosted[bm])
             for bm, (pts, dropped) in treads.items()}
     fits = {bm: f for bm, f in fits.items() if f.points}
     excluded_total = sum(dropped for _, dropped in treads.values())
+    boosted_total = sum(boosted.values())
 
     preds_lo = predictions(block_sizes, alpha, ridge_band[0], b)
     preds_hi = predictions(block_sizes, alpha, ridge_band[1], b)
@@ -3323,6 +3523,25 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
             f"estimate that sets the margin, and gates 1, 2, 3 and 4. "
             f"{excluded_total} of them were aligned treads and are counted per "
             "ladder below.")
+    if boosted_from_gates or boosted_total:
+        # THE OTHER SIDE OF LEVEL, SAID OUT LOUD. Kept everywhere the low side
+        # is excluded, and the reason is stated beside the count so a reader
+        # cannot take "kept" for "comparable with the fixed roof".
+        lines.append(
+            f"  {boosted_from_gates} cell(s) KEPT with LEVEL failed HIGH: their "
+            "SM clock under load came in above the band around the clock the "
+            "roof was measured at, the boosted memory-shaped state (1980 "
+            "against 1515 MHz on the H200). Their milliseconds are "
+            "measurements and stay in every fit; their fraction of the FIXED "
+            "roof is NOT comparable, inflated by the clock ratio, and the roof "
+            "at their own clock (the driver's roof_at_cell_clock_tflops) is "
+            "the one to read them against.")
+        lines.append(
+            f"    The plateau gates 1, 2 and 4 read is still the fixed-roof "
+            "fraction, so on a boosted cell it is HIGH: gate 4's absence claim "
+            "(the null tile never reaches the roof) is biased toward FAIL by "
+            f"it, the conservative direction. {boosted_total} of them were "
+            "aligned treads and are counted per ladder below.")
     if ref.refused:
         # Said BEFORE the table, because the table is all n/a and a reader who
         # meets the blanks first will reach for the tread count -- which is what
@@ -3352,7 +3571,9 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
             + "  " + (f"{f.slope_compute:9.4f}" if f.slope_compute is not None else "      n/a")
             + f"  {f.mean_rel_err:6.2%}"
             + (f"   [{f.excluded_low_clock} excluded for clock level]"
-               if f.excluded_low_clock else ""))
+               if f.excluded_low_clock else "")
+            + (f"   [{f.kept_high_clock} kept with LEVEL high; fixed-roof "
+               "fraction not comparable]" if f.kept_high_clock else ""))
         if f.outcome_reason:
             lines.append(f"           {f.outcome_reason}")
         # Last eligible ladder wins, and the loop runs in ascending order, so
@@ -3443,6 +3664,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              or "NOT STATED by the caller"),
         "cells_excluded_for_clock_level": excluded_from_gates,
         "cells_excluded_for_clock_level_from_ladders": excluded_total,
+        # THE HIGH SIDE, kept and counted. A reader of report.json can tell a
+        # ladder whose memory treads all boosted (the H200's normal state) from
+        # one whose fixed-roof fractions mean what they say.
+        "cells_kept_level_high": boosted_from_gates,
+        "cells_kept_level_high_from_ladders": boosted_total,
         "clock_exclusion_reaches": [
             "plateau", "compute_reference", "noise_margin",
             "gate_1", "gate_2", "gate_3", "gate_4", "ladder_fits"],
@@ -3510,6 +3736,7 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              "undecided": f.undecided,
                              "branch_start": f.branch_start,
                              "excluded_low_clock": f.excluded_low_clock,
+                             "kept_high_clock": f.kept_high_clock,
                              "mean_rel_err": f.mean_rel_err}
                    for bm, f in fits.items()},
         "bracketing": asdict(brack),
@@ -3874,9 +4101,17 @@ def run_sweep(args, cfg, grid, block_sizes, csv_path: Path, cache_root: Path,
                                  sm_clock_load_mhz=t.sm_clock_load_mhz,
                                  clock_level_ok=t.clock_level_ok,
                                  clock_drift_ok=t.clock_drift_ok,
+                                 # THE SIDE TRAVELS WITH THE VERDICT. A failed
+                                 # LEVEL without it is refused by make_cell,
+                                 # because read as LOW it drops every boosted
+                                 # tread.
+                                 clock_level_side=t.clock_level_side,
                                  l2_flush=t.l2_flush)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+                    if t.clock_level_side == LEVEL_HIGH:
+                        print("  ^ LEVEL HIGH: kept in every fit; its fraction "
+                              "of the fixed roof is not comparable")
             except timing.TimingRefused:
                 # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR. TimingRefused
                 # subclasses RuntimeError, so the handler below would file "no CUDA",
@@ -3949,7 +4184,12 @@ def _cell_value(type_name: str, raw: str):
     `clock_drift_ok` are tri-state by design: a cell timed on a host without
     NVML has no clock, and reading that blank back as `False` would mark it
     excluded while reading it as `True` would mark it comparable. Both are
-    claims the row does not make.
+    claims the row does not make. `clock_level_side` is a plain string whose
+    blank IS a value ("inside the band, or not determined"). A cells.csv
+    written before the column existed reads back with it blank on every row,
+    which is correct for every row whose verdict is not False and is REFUSED
+    by `Cell` for a failed one, because that row's side cannot be recovered
+    from the file and reading it either way would be a default.
     """
     optional = type_name.replace(" ", "").endswith("|None")
     base = type_name.replace(" ", "").removesuffix("|None")
@@ -4312,11 +4552,18 @@ def resolve_run_id(args, card: str) -> str:
 #: One tread of the null tile's ladder is planted below the roof's clock. It
 #: must be excluded by `ladder_treads`, counted on the ladder row, and named.
 LOW_CLOCK_WORLD = "low-clock"
+#: One tread of the null tile's ladder is planted ABOVE the band around the
+#: roof's clock, at `H200_BOOST_RATIO` times the reference: the boosted
+#: memory-shaped state. It must be KEPT by `ladder_treads`, counted on the
+#: ladder row as kept, and the ladder must come out exactly as the clean
+#: world's does. This is the world the 2026-09-08 fix is for: the same cells
+#: through the pre-fix rule land `UNDECIDED_LOW_CLOCK`.
+HIGH_CLOCK_WORLD = "high-clock"
 #: The subject tile's memory branch is planted ON the compute branch, which is
 #: the regime `PARALLEL_BRANCH_TOLERANCE` refuses to decide. The outcome must be
 #: `UNDECIDED_PARALLEL_BRANCH` with its reason, not a blank and not an import.
 PARALLEL_WORLD = "parallel-branch"
-SELF_TEST_WORLDS = (LOW_CLOCK_WORLD, PARALLEL_WORLD)
+SELF_TEST_WORLDS = (LOW_CLOCK_WORLD, HIGH_CLOCK_WORLD, PARALLEL_WORLD)
 
 #: How each planted world spells itself INSIDE A RUN ID and nowhere else. The
 #: flag values keep their hyphens, which `run_id` would render as underscores
@@ -4324,7 +4571,8 @@ SELF_TEST_WORLDS = (LOW_CLOCK_WORLD, PARALLEL_WORLD)
 #: construction and covered for every world in `SELF_TEST_WORLDS`; both
 #: properties are asserted by a test, because a world that fell out of this map
 #: would either collide with another world's directory or raise mid-run.
-WORLD_ID_TAGS = {LOW_CLOCK_WORLD: "lowclock", PARALLEL_WORLD: "parallel"}
+WORLD_ID_TAGS = {LOW_CLOCK_WORLD: "lowclock", HIGH_CLOCK_WORLD: "highclock",
+                 PARALLEL_WORLD: "parallel"}
 
 
 def plant_tag(alpha: float, noise: float, world: str) -> str:
@@ -4504,6 +4752,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="a planted world that is not a single alpha. "
                          f"{LOW_CLOCK_WORLD} puts one tread below the roof's "
                          "clock, which must be excluded and counted; "
+                         f"{HIGH_CLOCK_WORLD} puts one tread above the band "
+                         "around it (the boosted memory-shaped state), which "
+                         "must be KEPT and counted; "
                          f"{PARALLEL_WORLD} puts the memory branch on the "
                          "compute branch, which must come out UNDECIDED rather "
                          "than blank. Implies --self-test at the refit alpha "
@@ -4530,10 +4781,17 @@ def self_test_cells(cfg, grid, block_sizes, *, alpha: float, ridge: float,
     BLOCK_M=128 row exists at all were therefore never exercised off-GPU:
 
       `low-clock` puts ONE tread of the null tile below the clock the roof was
-      measured at, by setting its `clock_level_ok` False. `ladder_treads` must
-      drop it, the ladder row must say how many were dropped, and if that takes
-      the ladder under `MIN_MEMORY_TREADS` the outcome must be
-      `UNDECIDED_LOW_CLOCK` and not "too few treads".
+      measured at, by setting its `clock_level_ok` False with the side LOW.
+      `ladder_treads` must drop it, the ladder row must say how many were
+      dropped, and if that takes the ladder under `MIN_MEMORY_TREADS` the
+      outcome must be `UNDECIDED_LOW_CLOCK` and not "too few treads".
+
+      `high-clock` puts the SAME tread above the band, `clock_level_ok` False
+      with the side HIGH at `H200_BOOST_RATIO` times the reference.
+      `ladder_treads` must KEEP it, the ladder row must say one tread was kept
+      that way, and every number the clean world reports must come back
+      unchanged: the boosted memory-shaped cell is a measurement of the memory
+      branch, and until 2026-09-08 this file dropped it.
 
       `parallel-branch` puts the SUBJECT tile's whole ladder on a line whose
       slope is the compute slope, which is the regime
@@ -4550,10 +4808,12 @@ def self_test_cells(cfg, grid, block_sizes, *, alpha: float, ridge: float,
                          f"choices are {list(SELF_TEST_WORLDS)}")
     null_bm = null_block_m(block_sizes)
     low = (null_bm, 2) if world == LOW_CLOCK_WORLD else None
+    high = (null_bm, 2) if world == HIGH_CLOCK_WORLD else None
     cells = synthetic_cells(cfg, grid, block_sizes, alpha=alpha, ridge=ridge,
                             bandwidth_gbps=bandwidth_gbps, b=b,
                             sm_count=sm_count, noise=noise, seed=seed,
-                            low_clock=low, warmup_ms=warmup_ms, trials=trials,
+                            low_clock=low, high_clock=high,
+                            warmup_ms=warmup_ms, trials=trials,
                             l2_flush=l2_flush)
     if world != PARALLEL_WORLD:
         return cells

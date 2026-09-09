@@ -2,7 +2,7 @@
 """Can BLOCK_SIZE_M=128 ever show FIVE clean memory-bound treads? Arithmetic first.
 
     python scripts/bm128_depth.py --audit        # the answer, off GPU, from published data
-    python scripts/bm128_depth.py --self-test    # four worlds, through the pod's own analysis
+    python scripts/bm128_depth.py --self-test    # five worlds, through the pod's own analysis
     python scripts/bm128_depth.py --dry-run      # the pod plan, the cost, and what it can detect
     python scripts/bm128_depth.py                # the pod run
 
@@ -18,8 +18,11 @@ should know them first.
   inside the interval, a per-card bias in the fitted alpha of 8-16% at the
   smallest treads, the same size as the cross-card effect this study
   registered. `Sample` now carries the instrument's own columns and
-  `analyse_run` carries them into the fit, so a tread timed below the clock the
-  roof was measured at is EXCLUDED and counted rather than fitted.
+  `analyse_run` carries them into the fit, so a tread timed below the band
+  around the clock the roof was measured at (LEVEL failed LOW) is EXCLUDED and
+  counted rather than fitted, and a tread timed above it (LEVEL failed HIGH,
+  the boosted memory-shaped state that is every memory-bound tread on an H200)
+  is KEPT and counted, with its fixed-roof fraction named as not comparable.
 
   THE EXCLUSION REACHES EVERY GATE, not only the fit. It stopped at
   `fit_ladder` for one commit: V2's inversions, V3's slope sequence, V5's
@@ -1245,9 +1248,91 @@ def gate_non_vacuity(counts: dict[str, int],
 # The registered predictions, printed with numbers before anything is measured.
 # --------------------------------------------------------------------------
 
-def predictions_text(b: int = 2) -> str:
+@dataclass(frozen=True)
+class CorpusBC:
+    """B/C over the published BLOCK_M=128 ladders with a valid reference: the
+    baseline P1 is registered against, COMPUTED from the corpus at print time
+    and never typed.
+
+    Until 2026-09-08 the registered prediction carried `sd 0.078` as a literal
+    while the feasibility block on the same page computed 0.0843 from the same
+    22 ladders; a registered prediction contradicted by its own page is what
+    an adversarial reader quotes first. `sd` is the population sd, the same
+    `statistics.pstdev` the feasibility block prints, over the same ratios
+    (`record_ratio`), so the two lines cannot disagree.
+    """
+
+    n: int
+    lo: float
+    median: float
+    hi: float
+    sd: float
+
+    def line(self) -> str:
+        return (f"{self.n} published ladders with a valid reference: "
+                f"{self.lo:.3f} to {self.hi:.3f}, median {self.median:.3f}, "
+                f"sd {self.sd:.3f} (population sd, computed from the corpus "
+                "when this page was printed)")
+
+
+def record_ratio(rec) -> tuple:
+    """`(reference level, B/C)` for one published ladder.
+
+    The two things `audit_record` and `published_bc` both read, from ONE
+    place, so the audit table and the registered prediction are the same
+    arithmetic over the same rows. The branch assignment for B is the
+    LEADING RUN the fit itself reported (`memory_points`), except that a
+    ladder the fit gave 0 or 1 treads is measured over its whole length: not
+    to claim a memory branch, but so its B/C can be read against the escape
+    thresholds.
+    """
+    cfg = MODEL_CONFIGS[rec.model]
+    level = None
+    if rec.ref_slope and rec.ref_block_m:
+        level = reference_level(cfg, rec.ref_block_m, rec.ref_slope,
+                                rec.ceiling_tflops,
+                                f"{rec.card.upper()} calibration")
+    k = rec.memory_points if rec.memory_points >= 2 else len(rec.points)
+    ratio = _refit_ratio(rec.points, k, rec.points[k:], rec.c_ref,
+                         rec.overhead_ms)
+    return level, ratio
+
+
+def published_bc(published: Path, dtype: str = "bf16",
+                 hardware_dir: Path | None = None) -> CorpusBC | None:
+    """The corpus baseline for P1, or None when there is none to compute.
+
+    None is a checkout without `results/published`, or a dtype with no
+    BLOCK_M=128 ladder whose reference qualifies; it is printed as NOT
+    RECOMPUTABLE and never as a number. Two ladders are the floor a spread
+    can be formed over.
+    """
+    records, _ = load_corpus(published, dtype, hardware_dir)
+    ratios = []
+    for rec in records:
+        level, ratio = record_ratio(rec)
+        if level is not None and level.passes and ratio is not None:
+            ratios.append(ratio)
+    if len(ratios) < 2:
+        return None
+    return CorpusBC(len(ratios), min(ratios), statistics.median(ratios),
+                    max(ratios), statistics.pstdev(ratios))
+
+
+def predictions_text(b: int = 2, corpus: CorpusBC | None = None) -> str:
+    """The registered predictions, with P1's baseline computed from the corpus.
+
+    `corpus` is `published_bc` over the checkout's published arms; None
+    prints the baseline as NOT RECOMPUTABLE rather than as the number the
+    page used to carry, because a registered prediction has to be checkable
+    against the page that registers it.
+    """
     up = escape_up_alpha_rho(SUBJECT_BLOCK_M, b)
     down = escape_down_rho(SUBJECT_BLOCK_M, b, TARGET_TREADS)
+    p1 = (corpus.line() if corpus is not None else
+          "the published corpus is NOT RECOMPUTABLE on this checkout (no "
+          "valid-reference BLOCK_M=128 ladder under results/published), so "
+          "the baseline this prediction is read against is not printed here")
     return f"""\
 ## Predictions, registered before anything is measured
 
@@ -1259,8 +1344,8 @@ THE LAW (arithmetic, not a prediction; check it, do not test it)
   in between, |B/C - 1| <= {TOLERANCE:.2f}, the fit discards the memory branch entirely.
 
 P1  A NEW BM=128 ladder lands at B/C in [0.94, 1.10].
-    22 published ladders with a valid reference: 0.795 to 1.175, median 0.991,
-    sd 0.078. FAIL means B/C at 128 is not stationary across arms and the
+    {p1}.
+    FAIL means B/C at 128 is not stationary across arms and the
     feasibility argument below rests on a quantity that moves.
 P2  C1 FAILS: fewer than {TARGET_TREADS} clean memory-bound treads.
     Escape up needs {up:.1f} and the corpus tops out at 150.4, on a ladder whose
@@ -1804,17 +1889,10 @@ def audit_record(rec: LadderRecord, seed: int = 0,
     branch, but so its `B/C` can be read and compared against the escape
     thresholds. Which of the two happened is in `reasons`.
     """
-    cfg = MODEL_CONFIGS[rec.model]
-    level = None
-    if rec.ref_slope and rec.ref_block_m:
-        level = reference_level(cfg, rec.ref_block_m, rec.ref_slope,
-                                rec.ceiling_tflops,
-                                f"{rec.card.upper()} calibration")
+    level, ratio = record_ratio(rec)
     inv = inversions(rec.points, rec.spread or None)
     drops = slope_drops(rec.points, rec.spread or None)
     k = rec.memory_points if rec.memory_points >= 2 else len(rec.points)
-    ratio = _refit_ratio(rec.points, k, rec.points[k:], rec.c_ref,
-                         rec.overhead_ms)
     margin = margin_of(rec.points, k, c_ref=rec.c_ref,
                        overhead=rec.overhead_ms, spread=rec.spread or None,
                        draws=draws, seed=seed)
@@ -2146,6 +2224,18 @@ class Sample:
     ladder measured on a card that never sagged. `reference_clock_mhz` is what
     separates them, on the row it scored, so a resume or a replay a week later
     can still say which run this was.
+
+    AND A FAILED LEVEL HAS A SIDE. `clock_level_side` is "low", "high" or ""
+    (passed, or not determined), the instrument's own word for which edge of
+    the band the loaded clock crossed. `clock_excluded` is the LOW side only;
+    `clock_boosted` is the HIGH side and is kept, because a memory-bound tread
+    does not follow the SM clock and its time is a measurement; what the fixed
+    roof does not describe is that tread's fraction of it.
+    `SWEEP.check_level_side` refuses, at construction, a side on a verdict
+    that did not fail and a failed verdict with no side: the instrument derives
+    the verdict from the side, so a failed row without one was copied by a
+    caller that dropped the side, and reading its blank as LOW (the rule until
+    2026-09-08) is what dropped every boosted tread.
     """
 
     block_m: int
@@ -2173,17 +2263,35 @@ class Sample:
     #: against. None means the run resolved none, so the verdict beside it could
     #: only ever have been None; see the class docstring.
     reference_clock_mhz: float | None = None
+    #: Which edge of the LEVEL band a failed verdict crossed: "low", "high",
+    #: or "" when it passed or was not determined.
+    clock_level_side: str = ""
+
+    def __post_init__(self) -> None:
+        SWEEP.check_level_side(self.clock_level_ok, self.clock_level_side)
 
     @property
     def clock_excluded(self) -> bool:
-        """Was this timing taken below the clock the roof was measured at.
+        """Was this timing taken BELOW the band around the clock the roof was
+        measured at, the one clock state the ladder excludes.
 
         False for None on purpose, and this is the one place that reading is
         correct: an EXCLUSION has to be positively established. A row with no
         clock is a row whose comparability is unknown, and the report says how
-        many of those there are rather than dropping them.
+        many of those there are rather than dropping them. False for the HIGH
+        side too: until 2026-09-08 this read `clock_level_ok is False`, which
+        after the flag went two-sided dropped every boosted tread, and on an
+        H200 that is every memory-bound tread this arm exists to measure. The
+        side alone decides, since `SWEEP.check_level_side` refused at
+        construction every row on which it and the verdict could disagree.
         """
-        return self.clock_level_ok is False
+        return self.clock_level_side == SWEEP.LEVEL_LOW
+
+    @property
+    def clock_boosted(self) -> bool:
+        """Did LEVEL fail on the HIGH side. Kept; the fixed-roof fraction of
+        this tread is inflated by the clock ratio and is reported as such."""
+        return self.clock_level_side == SWEEP.LEVEL_HIGH
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
@@ -2335,8 +2443,9 @@ def _spread_of(reps: dict[int, list[float]]) -> float | None:
 
 
 def tread_clock(samples: list[Sample], block_m: int
-                ) -> dict[int, tuple[bool | None, bool | None, float | None]]:
-    """Per tread: `(clock_level_ok, clock_drift_ok, median loaded SM clock)`.
+                ) -> dict[int, tuple[bool | None, bool | None, float | None, str]]:
+    """Per tread: `(clock_level_ok, clock_drift_ok, median loaded SM clock,
+    clock_level_side)`.
 
     THE INSTRUMENT'S COLUMNS HAVE TO REACH THE FIT OR THEY ARE DECORATION.
     `collapse` takes a median across repeats and throws everything else away, so
@@ -2353,8 +2462,15 @@ def tread_clock(samples: list[Sample], block_m: int
     number. `None` (not determined) is not evidence either way and is returned
     as None: a reader that treats it as True re-admits exactly the rows the
     column exists to flag.
+
+    THE SIDE OF A FAILED TREAD IS "high" ONLY WHEN EVERY FAILED REPEAT IS
+    HIGH. A tread whose repeats failed on both edges was timed at two operating
+    points and its median is a blend; that is the throttle the exclusion is
+    for, not the boosted state the HIGH side names, so it is returned as LOW
+    and excluded. A tread whose verdict is not False carries "" whatever its
+    repeats say, because a side is the direction of a failure.
     """
-    out: dict[int, tuple[bool | None, bool | None, float | None]] = {}
+    out: dict[int, tuple[bool | None, bool | None, float | None, str]] = {}
     by: dict[int, list[Sample]] = {}
     for s in samples:
         if s.block_m == block_m and s.status == "ok" and s.ms_p50 > 0:
@@ -2367,9 +2483,15 @@ def tread_clock(samples: list[Sample], block_m: int
             return sum(1 for f in known if f) * 2 > len(known)
         clocks = [s.sm_clock_load_mhz for s in group
                   if s.sm_clock_load_mhz is not None]
-        out[tiles] = (_majority([s.clock_level_ok for s in group]),
-                      _majority([s.clock_drift_ok for s in group]),
-                      statistics.median(clocks) if clocks else None)
+        level = _majority([s.clock_level_ok for s in group])
+        side = ""
+        if level is False:
+            failed = [s for s in group if s.clock_level_ok is False]
+            side = (SWEEP.LEVEL_HIGH
+                    if failed and all(s.clock_boosted for s in failed)
+                    else SWEEP.LEVEL_LOW)
+        out[tiles] = (level, _majority([s.clock_drift_ok for s in group]),
+                      statistics.median(clocks) if clocks else None, side)
     return out
 
 
@@ -2482,6 +2604,9 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
                 # reference, so their LEVEL column was empty for that reason and
                 # not for want of clock samples.
                 reference_clock_mhz=_opt_float(row.get("reference_clock_mhz")),
+                # Blank on every row written before the column existed, and
+                # blank is a value: passed, or not determined.
+                clock_level_side=(row.get("clock_level_side") or "").strip(),
                 l2_flush=(row.get("l2_flush", "") or "").strip()
                          .lower() in ("1", "true", "yes")))
     # Only successful timings count as done, for the same reason the sweep does
@@ -2581,9 +2706,17 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                                 # cannot be told from a passing one, and this
                                 # ladder's exclusion count then reports zero for
                                 # a run in which nothing could be examined.
-                                reference_clock_mhz=reference_clock)
+                                reference_clock_mhz=reference_clock,
+                                # THE SIDE TRAVELS WITH THE VERDICT: a failed
+                                # LEVEL without it is refused by Sample,
+                                # because read as LOW it dropped every
+                                # boosted tread.
+                                clock_level_side=t.clock_level_side)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+                    if t.clock_level_side == SWEEP.LEVEL_HIGH:
+                        print("  ^ LEVEL HIGH: kept in the fit; its fraction "
+                              "of the fixed roof is not comparable")
             except timing.TimingRefused:
                 # THE SECOND DOOR INTO THE SAME ROOM. `RefusedBeforeMeasuring`
                 # is a `SystemExit` precisely because this handler swallows a
@@ -2638,12 +2771,14 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     for bm, points in ((REFERENCE_BLOCK_M, ref_points),
                        (SUBJECT_BLOCK_M, sub_points)):
         for n, ms in points:
-            level, drift_ok, mhz = clocks[bm].get(n, (None, None, None))
+            level, drift_ok, mhz, side = clocks[bm].get(
+                n, (None, None, None, ""))
             cells.append(SWEEP.make_cell(cfg, n * bm, bm, ms,
                                          sm_count=1, block_n=1,
                                          sm_clock_load_mhz=mhz,
                                          clock_level_ok=level,
-                                         clock_drift_ok=drift_ok))
+                                         clock_drift_ok=drift_ok,
+                                         clock_level_side=side))
     ref = SWEEP.compute_reference(
         cells, (SUBJECT_BLOCK_M, REFERENCE_BLOCK_M), cfg=cfg, ridge=ridge,
         bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned)
@@ -2660,8 +2795,18 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     # weight re-reads -- and returns how many it dropped. Passing `sub_points`
     # here instead, which is what this file used to do, fitted those treads in
     # and reported the card as the tile.
-    fit_points, excluded = SWEEP.ladder_treads(
-        [c for c in cells if c.block_m == SUBJECT_BLOCK_M], SUBJECT_BLOCK_M)
+    subject_cells = [c for c in cells if c.block_m == SUBJECT_BLOCK_M]
+    fit_points, excluded = SWEEP.ladder_treads(subject_cells, SUBJECT_BLOCK_M)
+    # THE OTHER SIDE OF LEVEL, COUNTED AND KEPT. A boosted tread is in
+    # `fit_points`; this says how many are, so the report can name them and
+    # say that their fraction of the fixed roof is not comparable. The
+    # reference ladder is counted too, because `reference_level` scores its
+    # slope against the FIXED ceiling and a boosted reference is high by the
+    # same ratio.
+    kept_high = SWEEP.boosted_treads(subject_cells, SUBJECT_BLOCK_M)
+    boosted_n = {c.tiles_per_expert for c in subject_cells if c.clock_boosted}
+    reference_high = SWEEP.boosted_treads(
+        [c for c in cells if c.block_m == REFERENCE_BLOCK_M], REFERENCE_BLOCK_M)
     # THE EXCLUSION REACHES EVERY GATE THAT READS THE SUBJECT LADDER, not just
     # the fit. Until 2026-09-02 it stopped at `fit_ladder`: V2's inversions, V3's
     # slope sequence, V5's replication and the membership band were all computed
@@ -2691,7 +2836,8 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     kept_spread = _spread_of(kept_reps)
     margin_band = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (kept_spread or 0.0))
     fit = SWEEP.fit_ladder(fit_points, SUBJECT_BLOCK_M, ref, margin=margin_band,
-                           excluded_low_clock=excluded)
+                           excluded_low_clock=excluded,
+                           kept_high_clock=kept_high)
     c_ref = ref.slope_for(SUBJECT_BLOCK_M)
     k = fit.memory_points if fit.memory_points >= 2 else len(fit_points)
     margin = margin_of(fit_points, k, c_ref=c_ref, overhead=ref.overhead_ms,
@@ -2734,12 +2880,25 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                else ("DECLINED, see the outcome above" if fit.undecided
                      else "NOT IDENTIFIABLE")),
             f"             {margin.line()}",
-            (f"             {excluded} tread(s) EXCLUDED: timed below the clock "
-             "the roof was measured at, so they sit on a different compute "
-             "branch. A ladder that lost treads to a hot box must not look "
-             "like a ladder that never had them."
+            (f"             {excluded} tread(s) EXCLUDED: LEVEL failed LOW, "
+             "timed below the band around the clock the roof was measured at, "
+             "so they sit on a different compute branch. A ladder that lost "
+             "treads to a hot box must not look like a ladder that never had "
+             "them."
              if excluded else
-             "             no tread was excluded for clock level"), "",
+             "             no tread was excluded for clock level"),
+            (f"             {kept_high} tread(s) KEPT with LEVEL failed HIGH: "
+             "timed above that band, the boosted memory-shaped state (1980 "
+             "against 1515 MHz on the H200). Their times are in the fit; "
+             "their fraction of the FIXED roof is NOT comparable, inflated by "
+             "the clock ratio, and the roof at their own clock (the driver's "
+             "roof_at_cell_clock_tflops) is the one to read them against."
+             + (f" The reference ladder has {reference_high} such tread(s), "
+                "so its level against the fixed ceiling is overstated by the "
+                "ratio too." if reference_high else "")
+             if kept_high or reference_high else
+             "             no tread ran above the band around the roof's "
+             "clock"), "",
             f"{'n':>3s} {'rows':>6s} {'ms':>10s} {'slope':>9s} {'reps':>5s} "
             f"{'spread':>8s}  scored"]
     # EVERY TREAD IS PRINTED, the excluded ones included and marked. The gates
@@ -2754,7 +2913,9 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                    + (f"{display_slopes[i - 1]:9.4f}" if i else "        -")
                    + f" {len(reps):5d} "
                    + (f"{sp:8.3%}" if sp is not None else "       -")
-                   + ("  yes" if n in kept else "  NO: clock below the roof's"))
+                   + (("  yes" + ("  (LEVEL high, kept; fixed-roof fraction "
+                                  "not comparable)" if n in boosted_n else ""))
+                      if n in kept else "  NO: LEVEL low, clock below the roof's"))
 
     gates = [
         gate_non_vacuity({
@@ -2795,6 +2956,9 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
         "ladder_outcome": fit.outcome,
         "ladder_undecided": fit.undecided,
         "excluded_low_clock": fit.excluded_low_clock,
+        # THE HIGH SIDE, kept and counted, for the subject and the reference.
+        "kept_high_clock": fit.kept_high_clock,
+        "kept_high_clock_reference": reference_high,
         # The two columns that say whether that count examined anything. A
         # consumer reading `excluded_low_clock: 0` alone cannot tell a quiet
         # card from a ladder with no reference to be level against.
@@ -3071,7 +3235,7 @@ def default_run_id(args, card: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# Self test: plant four worlds, check the gates tell them apart.
+# Self test: plant five worlds, check the gates tell them apart.
 # --------------------------------------------------------------------------
 
 #: What the planted BLOCK_M=256 reference achieves, as a fraction of the planted
@@ -3086,6 +3250,12 @@ REFERENCE_KERNEL_EFFICIENCY = 0.97
 #: to their traffic, because that is what a lower SM clock does.
 SELF_TEST_REFERENCE_CLOCK_MHZ = 1980.0
 SELF_TEST_LOW_CLOCK_MHZ = 1000.0
+#: The clock a BOOSTED tread was timed at: the planted reference times the
+#: H200's own memory-load-over-GEMM ratio (`SWEEP.H200_BOOST_RATIO`, 1980 over
+#: 1515 from the committed calibration). The ratio is the measured thing; the
+#: planted reference is a fixture, so the ratio is applied to it rather than
+#: the H200's absolute 1980 being written here beside a 1980 reference.
+SELF_TEST_HIGH_CLOCK_MHZ = SELF_TEST_REFERENCE_CLOCK_MHZ * SWEEP.H200_BOOST_RATIO
 
 
 def planted_ladder(treads: int, *, alpha: float, rho: float, block_m: int,
@@ -3113,7 +3283,8 @@ def planted_ladder(treads: int, *, alpha: float, rho: float, block_m: int,
 def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                     b: int = 2, reps: int = 5, noise: float = 0.0,
                     seed: int = 0, r_max: int = 1024,
-                    low_clock_treads: tuple[int, ...] = ()) -> list[Sample]:
+                    low_clock_treads: tuple[int, ...] = (),
+                    high_clock_treads: tuple[int, ...] = ()) -> list[Sample]:
     """A whole replicated run, as the CSV rows a pod would have written.
 
     GENERATED THROUGH `SWEEP.model_ms`, NOT BY HAND, and that is not a
@@ -3161,7 +3332,20 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
     generated at `rho x low / reference` and the shape of the ladder bends where
     the throttling starts. That bend is what V2 and V3 would score if the
     exclusion did not reach them.
+
+    `high_clock_treads` is the other side. Those SUBJECT treads are timed at
+    `SELF_TEST_HIGH_CLOCK_MHZ`, LEVEL failed HIGH, and their compute branch is
+    generated FASTER by the same ratio, which is what a boosted clock does to
+    a tread; their traffic branch is unchanged. On a ladder whose memory branch
+    binds at every tread (the escape-up world) that moves no time at all,
+    which is the point: the boosted tread is a measurement of the memory
+    branch and the fit must come out exactly as the clean world's does. A
+    tread may not be planted on both lists.
     """
+    if set(low_clock_treads) & set(high_clock_treads):
+        raise ValueError(
+            f"treads {sorted(set(low_clock_treads) & set(high_clock_treads))} "
+            "are planted both low and high; a tread has one clock")
     rng = random.Random(seed)
     out: list[Sample] = []
     throttled = SELF_TEST_LOW_CLOCK_MHZ / SELF_TEST_REFERENCE_CLOCK_MHZ
@@ -3171,6 +3355,8 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                 tiles = rows // block_m
                 low = (block_m == SUBJECT_BLOCK_M
                        and tiles in low_clock_treads)
+                high = (block_m == SUBJECT_BLOCK_M
+                        and tiles in high_clock_treads)
                 # ONE KNOB CARRIES BOTH EFFECTS because both are the same
                 # physics: `ridge` is `peak / bandwidth`, so scaling it scales
                 # the compute branch and leaves the traffic branch alone. The
@@ -3179,6 +3365,8 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                 scale = REFERENCE_KERNEL_EFFICIENCY if block_m == REFERENCE_BLOCK_M else 1.0
                 if low:
                     scale *= throttled
+                if high:
+                    scale *= SWEEP.H200_BOOST_RATIO
                 ms = SWEEP.model_ms(cfg, rows, block_m, alpha=alpha,
                                     ridge=rho * scale,
                                     bandwidth_gbps=bandwidth_gbps, b=b,
@@ -3187,10 +3375,14 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                     ms *= math.exp(rng.gauss(0.0, noise))
                 out.append(Sample(block_m, tiles, rows,
                                   SWEEP.tokens_for_rows(cfg, rows), rep, ms, ms,
-                                  0.0, 0, clock_level_ok=not low,
+                                  0.0, 0, clock_level_ok=not (low or high),
                                   clock_drift_ok=True,
+                                  clock_level_side=(
+                                      SWEEP.LEVEL_LOW if low
+                                      else SWEEP.LEVEL_HIGH if high else ""),
                                   sm_clock_load_mhz=(
                                       SELF_TEST_LOW_CLOCK_MHZ if low
+                                      else SELF_TEST_HIGH_CLOCK_MHZ if high
                                       else SELF_TEST_REFERENCE_CLOCK_MHZ),
                                   # The planted world HAS a reference: its
                                   # `clock_level_ok` is a real verdict, and a
@@ -3232,9 +3424,24 @@ class PlantedWorld:
     exit_code: int = exit_codes.DONE
     #: Subject treads planted as having been timed below the roof's clock.
     low_clock_treads: tuple[int, ...] = ()
+    #: Subject treads planted as having been timed ABOVE the band around it,
+    #: the boosted state, which must be KEPT.
+    high_clock_treads: tuple[int, ...] = ()
+    #: `analyse_run` payload keys this world registers a value for, checked
+    #: exactly. The exclusion and kept counts live here, because a world that
+    #: plants six boosted treads and registers only its gates would pass with
+    #: all six dropped as long as the ladder still identified.
+    expect_payload: dict[str, object] = field(default_factory=dict)
 
-    def check(self, gates: list[Gate]) -> list[str]:
-        """The registrations that did not come back. Empty is a pass."""
+    def check(self, gates: list[Gate], payload: dict | None = None
+              ) -> list[str]:
+        """The registrations that did not come back. Empty is a pass.
+
+        `payload` is optional so a caller with gates alone can still score
+        them; a world that registers payload keys and is checked without a
+        payload reports every one of them missing, which is the check-that-
+        examined-nothing shape said out loud rather than a silent pass.
+        """
         got = {g.tag: g.passed for g in gates}
         word = {True: "PASS", False: "FAIL", None: "UNKNOWN"}
         bad = []
@@ -3248,6 +3455,13 @@ class PlantedWorld:
         if rc != self.exit_code:
             bad.append(f"exit code: registered {exit_codes.describe(self.exit_code)}, "
                        f"got {exit_codes.describe(rc)}")
+        for key, want in sorted(self.expect_payload.items()):
+            if payload is None or key not in payload:
+                bad.append(f"payload[{key!r}]: registered {want!r}, but the "
+                           "report carries no such key")
+            elif payload[key] != want:
+                bad.append(f"payload[{key!r}]: registered {want!r}, got "
+                           f"{payload[key]!r}")
         return bad
 
 
@@ -3368,13 +3582,33 @@ SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
         {"V0": True, "V1": True, "V2": True, "V3": None, "V4": True,
          "C1": None, "V6": None},
         exit_code=exit_codes.INVALID,
-        low_clock_treads=(3, 4, 5, 6, 7, 8)),
+        low_clock_treads=(3, 4, 5, 6, 7, 8),
+        expect_payload={"excluded_low_clock": 6, "kept_high_clock": 0}),
+    PlantedWorld(
+        "high-clock", 0.95, 175.0,
+        "the escape-up world again, with the same six subject treads TIMED AT "
+        f"{SELF_TEST_HIGH_CLOCK_MHZ:.0f} MHz against a roof measured at "
+        f"{SELF_TEST_REFERENCE_CLOCK_MHZ:.0f}: LEVEL failed HIGH by the H200's "
+        "own memory-load-over-GEMM ratio, the boosted memory-shaped state that "
+        "is every memory-bound tread on that card. Their compute branch is "
+        "generated faster by the ratio and their traffic is not, and because "
+        "the memory branch binds at every tread here, not one millisecond "
+        "moves. EVERY GATE MUST COME BACK AS IN escape-up, all six treads must "
+        "be KEPT and counted as kept, and the arm must exit DONE. Until "
+        "2026-09-08 `Sample.clock_excluded` read `clock_level_ok is False` "
+        "and this world came out as low-clock does: UNDECIDED, INVALID, and "
+        "on a pod latched so that no resume re-ran it",
+        {"V0": True, "V1": True, "V2": True, "V3": True, "V4": True,
+         "V5": True, "C1": True, "C2": True, "V6": True},
+        exit_code=exit_codes.DONE,
+        high_clock_treads=(3, 4, 5, 6, 7, 8),
+        expect_payload={"excluded_low_clock": 0, "kept_high_clock": 6}),
 )
 
 
 def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
               ) -> tuple[list[str], list[Gate]]:
-    """Four worlds, routed through the code the pod runs, with registered verdicts.
+    """Five worlds, routed through the code the pod runs, with registered verdicts.
 
     WHAT THIS USED TO DO AND WHY IT PROVED NOTHING ABOUT THE POD PATH. It built
     a bare list of `(tread, ms)` pairs from `planted_ladder`, computed the
@@ -3436,7 +3670,8 @@ def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
         samples = planted_samples(cfg, alpha=world.alpha, rho=world.rho,
                                   bandwidth_gbps=SELF_TEST_BANDWIDTH, b=b,
                                   noise=noise, seed=seed,
-                                  low_clock_treads=world.low_clock_treads)
+                                  low_clock_treads=world.low_clock_treads,
+                                  high_clock_treads=world.high_clock_treads)
         ceiling = world.rho * SELF_TEST_BANDWIDTH * 1e9 / 1e12
         _, world_gates, payload = analyse_run(
             samples, cfg, b, ceiling_tflops=ceiling,
@@ -3446,7 +3681,7 @@ def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
             ridge=world.rho, bandwidth_gbps=SELF_TEST_BANDWIDTH, seed=seed,
             draws=draws)
         law = depth_verdict(SUBJECT_BLOCK_M, b, world.alpha, world.rho)
-        bad = world.check(world_gates)
+        bad = world.check(world_gates, payload)
         rc = exit_codes.classify(g.scored() for g in world_gates)
         out += ["",
                 f"### {world.name}  alpha {world.alpha} rho {world.rho}",
@@ -3500,7 +3735,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="calibration yaml directory; the ceiling every "
                          "reference level is scored against")
     ap.add_argument("--self-test", action="store_true",
-                    help="plant four worlds from the law and check the gates "
+                    help="plant five worlds from the law and check the gates "
                          "tell them apart, off GPU")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, then stop")
@@ -3867,11 +4102,14 @@ def _run(argv=None) -> int:
     args = build_parser().parse_args(argv)
     cfg = MODEL_CONFIGS[args.model]
     b = dtype_bytes(args.dtype)
+    # THE BASELINE P1 IS READ AGAINST, computed from the corpus before anything
+    # is measured, so the registered page and the audit page are one number.
+    corpus = published_bc(args.published, args.dtype, args.hardware_dir)
     lines: list[str] = [f"experiment  bm128_depth: can BLOCK_M={SUBJECT_BLOCK_M} "
                         f"show {TARGET_TREADS} clean memory-bound treads?", "",
-                        predictions_text(b)]
+                        predictions_text(b, corpus)]
     gates: list[Gate] = []
-    payload: dict = {"predictions": predictions_text(b)}
+    payload: dict = {"predictions": predictions_text(b, corpus)}
 
     if args.audit or args.self_test:
         if args.self_test:
