@@ -1092,3 +1092,107 @@ def test_the_surface_generator_still_prints_a_direction_at_n_equals_1():
         "scripts/alpha_surface.py now refuses a direction at n=1: regenerate the "
         "three published SURFACE.txt files and remove their 2026-09-03 notes")
     assert "alpha = 0.558 (the 2026-09-01 pooled refit): 0 of 12 fits within 0.05" in r.stdout
+
+
+# --------------------------------------------------------------------------
+# The second call site, as a tripwire: a reader of the LEVEL flag that never
+# reads the side
+# --------------------------------------------------------------------------
+
+LEVEL_FLAG = "clock_level_ok"
+LEVEL_SIDE = "clock_level_side"
+
+#: Scripts that read `clock_level_ok` and did not read `clock_level_side` when
+#: the four shell consumers were fixed (d55a38e). This is the pre-pod verdict's
+#: own check, `grep -c clock_level_side scripts/`, kept as a ledger so the
+#: fifteenth instance of this project's recurring defect (a fix landing at one
+#: of two call sites) cannot recur silently at a sixteenth: a script added later
+#: that reads the flag without the side FAILS `test_no_new_reader...` below.
+#: The ledger is ONE-DIRECTIONAL. An entry that starts reading the side is not
+#: a failure here (the F1 to F3 slices fix the first nine in their own
+#: worktrees, and this test must not go red on the merge that lands them); it
+#: is a stale entry to prune, which the test names in its output.
+#:
+#: Why each is on it. The first nine are the verdict's F2 list. The next four
+#: were found by the 2026-09-08 review of this slice and belong to no slice yet:
+#: group_m_alpha_sweep.py:2482 `level_failed` reports HIGH rows as "ran below
+#: the clock"; dtype_tile_confound.py:1356 and tuned_vs_fallback.py:1025 fold a
+#: HIGH failure into `clock_flagged` / `clock_throttled`; calibrate_read_variants
+#: copies the flag without the side. calibrate_hardware.py:412-425 scores a
+#: calibration's `clocks`/`gemm_clock` block FAIL on `clock_level_ok is False`
+#: with the words "ran below the clock its roof is quoted at"; no writer in this
+#: tree emits the flag into those blocks yet, so it is latent, and it is the
+#: same shape.
+SIDE_BLIND_READERS = {
+    "alias_ablation.py": "F1 slice (verdict F2 list)",
+    "block_m_crossing_sweep.py": "F1 slice (verdict F2 list)",
+    "bm128_depth.py": "F1 slice (verdict F2 list)",
+    "bm128_roofline.py": "F1 slice (verdict F2 list)",
+    "bn_decomposition.py": "F2 slice (verdict F2 list)",
+    "memory_branch_anchor.py": "F2 slice (verdict F2 list)",
+    "occupancy_vs_swizzle.py": "F2 slice (verdict F2 list)",
+    "span_extent_separation.py": "F3 slice (verdict F2 list)",
+    "tile_sweep.py": "F3 slice (verdict F2 list)",
+    "group_m_alpha_sweep.py": "unassigned; :2482 level_failed reports HIGH as below",
+    "dtype_tile_confound.py": "unassigned; :1356 _fold_flag, :2439-2445 clock_flagged",
+    "tuned_vs_fallback.py": "unassigned; :1025 _fold_flag",
+    "calibrate_read_variants.py": "unassigned; :196 copies the flag without the side",
+    "calibrate_hardware.py": "unassigned, latent; :412-425 scores the block FAIL as below",
+}
+
+
+def side_blind_readers(root: Path) -> list[str]:
+    """Names of the `.py`/`.sh` files directly under `root` that mention the
+    LEVEL flag and never the side. A grep, deliberately: it is the verdict's own
+    check, and it decides membership, not correctness. A file that names the
+    side somewhere can still read it wrongly; that is what each consumer's
+    planted HIGH and LOW rows are for."""
+    out = []
+    for p in sorted(root.iterdir()):
+        if p.suffix not in (".py", ".sh") or not p.is_file():
+            continue
+        text = p.read_text()
+        if LEVEL_FLAG in text and LEVEL_SIDE not in text:
+            out.append(p.name)
+    return out
+
+
+def test_the_side_blind_tripwire_can_pass_and_fail(tmp_path):
+    """Planted both ways: a reader that names the side and a file that never
+    reads the flag are clean; a reader that drops on `is False` alone is
+    caught. Without this the tripwire could be a grep for a string that is
+    never present and pass forever."""
+    (tmp_path / "reads_side.py").write_text(
+        "ok = r['clock_level_ok']\nside = r['clock_level_side']\n")
+    (tmp_path / "never_reads_flag.sh").write_text("echo nothing to do with clocks\n")
+    (tmp_path / "notes.md").write_text("clock_level_ok is described here, not read\n")
+    assert side_blind_readers(tmp_path) == []
+    (tmp_path / "blind.py").write_text(
+        "if r.get('clock_level_ok') is False:\n    drop(r)\n")
+    assert side_blind_readers(tmp_path) == ["blind.py"]
+
+
+def test_the_four_shell_consumers_read_the_side():
+    blind = side_blind_readers(REPO / "scripts")
+    for script in (POD, RUN_ALL, PUBLISH, REPO / "scripts" / "h200_gaps_session.sh"):
+        assert script.name not in blind, script.name
+
+
+def test_no_new_reader_of_the_level_flag_is_blind_to_its_side():
+    """Every script that reads `clock_level_ok` either reads `clock_level_side`
+    or is on the dated ledger above. A new one is the sixteenth instance and
+    fails here with the rule to install: LOW or DRIFT excludes, HIGH is kept and
+    quoted by `pct_of_roof_at_cell_clock`. Ledger entries that have since been
+    fixed are named so the ledger can be pruned; they do not fail."""
+    blind = side_blind_readers(REPO / "scripts")
+    new = [n for n in blind if n not in SIDE_BLIND_READERS]
+    assert not new, (
+        f"{new} read {LEVEL_FLAG} and never {LEVEL_SIDE}. A LEVEL failure is "
+        "two-sided since 03df2d4: LOW or DRIFT excludes, HIGH is NOT an "
+        "exclusion, it means the fixed-roof fraction is not comparable and "
+        "roofline.pct_of_roof_at_cell_clock is the column to quote. Read the "
+        "side, plant a HIGH row (1980 against 1515) that is kept and a LOW row "
+        "that is excluded, then decide whether the ledger is the place for it")
+    fixed = sorted(set(SIDE_BLIND_READERS) - set(blind))
+    if fixed:
+        print(f"\nledger entries that now name the side; prune them: {fixed}")
