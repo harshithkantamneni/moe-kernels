@@ -1357,6 +1357,12 @@ def measure(plan: Plan, args, out_dir: Path, done: set[str]) -> tuple[list[dict]
                     trials=measured.trials,
                     sm_clock_load_mhz=measured.sm_clock_load_mhz,
                     clock_level_ok=measured.clock_level_ok,
+                    # Which way a LEVEL failure went. Without it the report
+                    # below cannot tell a cell that sagged from one that
+                    # boosted, and on the H200 the boost is the ordinary state
+                    # of a memory-bound cell (1980 MHz against the 1515 GEMM
+                    # reference). "" when level or undetermined.
+                    clock_level_side=measured.clock_level_side,
                     # The number LEVEL was scored against, on the row it scored,
                     # so a replay a week later can tell a row that PASSED the
                     # flag from one that had nothing to be level against. The
@@ -1410,6 +1416,62 @@ def _append(path: Path, record: dict) -> None:
         handle.write(json.dumps(record) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def level_side_of(row: dict) -> str:
+    """Which side of the LEVEL band a timed record sat on.
+
+    `timing.LEVEL_LOW`, `timing.LEVEL_HIGH`, or "" for level, undetermined,
+    or a failure whose side cannot be told. The record's own `clock_level_side`
+    is preferred. A record that failed LEVEL and carries no side (a jsonl
+    written before 2026-09-08, when the column reached this arm) has it
+    derived from the load and the reference it carries, the same rule
+    `timing.clock_flags` applied when it scored the row; one carrying neither
+    answers "", which `level_split` reads as the one-sided era's below.
+    """
+    from moe.bench import timing
+
+    side = row.get("clock_level_side") or ""
+    if not side and row.get("clock_level_ok") is False:
+        side = timing.level_side(row.get("sm_clock_load_mhz"),
+                                 row.get("reference_clock_mhz")) or ""
+    return side
+
+
+def level_split(timed: list[dict]) -> dict[str, list[dict]]:
+    """The timed records by the side of the LEVEL band they failed on.
+
+    THE FIFTEENTH INSTANCE OF A FIX LANDING AT ONE OF TWO CALL SITES, found
+    by the reviewer of the other six. Commit 03df2d4 made `timing.clock_flags`
+    two-sided at the producer, so a cell boosted to 1980 MHz against the 1515
+    MHz bf16-GEMM reference now fails LEVEL with `clock_level_side == "high"`.
+    Until 2026-09-08 the report read `clock_level_ok is False` alone and
+    printed every such cell as "ran below the clock this card's roof was
+    measured at; their time is the governor's", which on the H200 would have
+    labelled every memory-bound cell of the ladder as governor-bound when it
+    was the opposite. Nothing in this arm's fit drops a row for its clock, so
+    the defect was in what the page told the reader and not in alpha; the
+    page is what gets quoted.
+
+    `low` is the exclusion-shaped state: the card sagged under the roof's
+    clock and the time is the governor's. `high` is KEPT: the time is a time
+    at one clock, the fixed-roof fraction is what is not comparable, and
+    `roof_at_cell_clock` is the number to read beside it. A False with no
+    side and no way to derive one is the one-sided era's below and is counted
+    `low`. `blind` is the rows whose LEVEL was not determined, which is a
+    fact about the apparatus and not about the card.
+    """
+    from moe.bench import timing
+
+    out: dict[str, list[dict]] = {"low": [], "high": [], "blind": []}
+    for row in timed:
+        ok = row.get("clock_level_ok")
+        if ok is None:
+            out["blind"].append(row)
+        elif ok is False:
+            key = "high" if level_side_of(row) == timing.LEVEL_HIGH else "low"
+            out[key].append(row)
+    return out
 
 
 def read_records(path: Path) -> list[dict]:
@@ -2472,15 +2534,19 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
         # so the log carries no RESULT line and `exit_codes.classify_text`
         # raises `NoGatesScored`, which is the REFUSED shape.
         return exit_codes.REFUSED
-    # THE TWO CLOCK VERDICTS, AND THEY ARE NOT THE SAME MEASUREMENT. LEVEL asks
-    # whether the card sat at the clock the ROOF was measured at while the cell
-    # ran, sampled under load; `throttled` below is the retired idle-instant
-    # pair, kept so a resumed jsonl still parses and so the two can be compared
-    # on the next pod. LEVEL is printed FIRST because it is the one the
-    # instrument is at v2 for, and because "undetermined on every row" is a
-    # fact about the apparatus that a reader has to have before the alpha.
-    level_failed = [r for r in timed if r.get("clock_level_ok") is False]
-    level_blind = [r for r in timed if r.get("clock_level_ok") is None]
+    # THE THREE CLOCK VERDICTS, AND THEY ARE NOT THE SAME MEASUREMENT. LEVEL
+    # asks whether the card sat at the clock the ROOF was measured at while the
+    # cell ran, sampled under load, and since 03df2d4 it fails on EITHER side:
+    # `level_split` names which, because only the low side is the governor's
+    # time. DRIFT asks whether the under-load samples agreed with each other.
+    # `throttled` below is the retired idle-instant pair, kept so a resumed
+    # jsonl still parses and so the two can be compared on the next pod. LEVEL
+    # is printed FIRST because it is the one the instrument is at v2 for, and
+    # because "undetermined on every row" is a fact about the apparatus that a
+    # reader has to have before the alpha.
+    split = level_split(timed)
+    level_low, level_high, level_blind = (split["low"], split["high"],
+                                          split["blind"])
     if not synthetic and timed:
         # THE APPARATUS BEFORE THE FINDING: whether the column could have said
         # anything is a different question from what it said, and a reader who
@@ -2497,11 +2563,24 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
             say("  every timed cell was scored against "
                 + (f"{float(against):.0f} MHz" if against else "a reference")
                 + ", so a clock problem could have been seen.")
-        if level_failed:
-            say(f"  {len(level_failed)} of them ran below the clock this card's "
+        if level_low:
+            say(f"  {len(level_low)} of them ran BELOW the clock this card's "
                 "roof was measured at and")
-            say("  are flagged LEVEL failed; their time is the governor's, not "
+            say("  are flagged LEVEL low; their time is the governor's, not "
                 "the kernel's.")
+        if level_high:
+            say(f"  {len(level_high)} of them ran ABOVE the clock this card's "
+                "roof was measured at and")
+            say("  are flagged LEVEL high; KEPT. The time is a time at one "
+                "clock; what is not")
+            say("  comparable is the fixed-roof fraction, so read "
+                "roof_at_cell_clock beside them.")
+        drifted = [r for r in timed if r.get("clock_drift_ok") is False]
+        if drifted:
+            say(f"  {len(drifted)} of them failed DRIFT: the under-load "
+                "samples did not agree, so the")
+            say("  median is a blend of clocks and their time is not the "
+                "kernel's at any one clock.")
     throttled = [r for r in timed if r.get("throttled")]
     if throttled:
         say(f"  {len(throttled)} cells drifted more than 5% in SM clock by the "
