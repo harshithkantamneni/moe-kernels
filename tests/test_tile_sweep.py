@@ -283,10 +283,10 @@ def test_a_sagging_card_now_reads_clock_level_ok_false_on_every_row(pod):
     """THE DEAD COLUMN, brought to life, and this is the FAIL branch of it.
 
     1000 MHz against the card's 1485 MHz reference is below `LEVEL_FRACTION`,
-    so the
-    real `clock_flags` returns False. Before the fix `reference_clock_mhz` was
-    never passed, `clock_flags` returned None, and this cell was EMPTY on every
-    row the sweep has ever written while the branch below it could not run.
+    so the real `clock_flags` returns False. Before the fix
+    `reference_clock_mhz` was never passed, `clock_flags` returned None, and
+    this cell was EMPTY on every row the sweep has ever written while the
+    branch below it could not run.
     """
     pod.timing_result = lambda **kw: timing_at(1000.0, kw["reference_clock_mhz"])
     assert run(pod) == exit_codes.DONE
