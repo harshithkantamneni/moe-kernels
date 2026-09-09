@@ -483,7 +483,41 @@ class LoadedClock:
     def as_dict(self) -> dict:
         d = asdict(self)
         d["samples"] = list(self.samples)
+        d.update(self.under_load_verdict())
         return d
+
+    def under_load_verdict(self) -> dict:
+        """The keys `calibrate_hardware.under_load_clock_verdict` scores, in
+        `timing.clock_flags`' own vocabulary.
+
+        WHY THEY ARE HERE. On 2026-09-09, the first H200 session on the merged
+        tree, arm 0 sampled the clock under load (1470 MHz, five NVML samples,
+        spread 2.0%), and its own `not_throttled` gate came back UNKNOWN,
+        "predates the under-load clock verdict": this record carried samples,
+        median and spread, and the scorer reads `clock_drift_ok` and
+        `clock_level_ok`. Two sites, one vocabulary, written at neither.
+        UNKNOWN counts against a CLAIM gate, so a sound calibration exited
+        CLAIM_FAIL and every arm below it was refused.
+
+        DRIFT is the question a calibration can answer about itself: first and
+        last under-load samples within `timing.DRIFT_FRACTION`, the rule
+        `timing.clock_flags` applies to a cell. LEVEL is None BY CONSTRUCTION,
+        not by omission: this record IS the reference clock a roof is quoted
+        at, and a comparison of a clock against itself is not a verdict. A
+        record with no samples carries both as None, which the scorer reads
+        as UNKNOWN, never as a pass.
+        """
+        from . import timing as T
+
+        if not self.samples:
+            return {"sm_clock_load_mhz": None, "sm_clock_start_mhz": None,
+                    "sm_clock_end_mhz": None, "clock_level_ok": None,
+                    "clock_drift_ok": None}
+        start, end = self.samples[0], self.samples[-1]
+        _level, drift = T.clock_flags(self.median_mhz, start, end, None)
+        return {"sm_clock_load_mhz": self.median_mhz, "sm_clock_start_mhz": start,
+                "sm_clock_end_mhz": end, "clock_level_ok": None,
+                "clock_drift_ok": drift}
 
 
 def _power_draw_w() -> float:

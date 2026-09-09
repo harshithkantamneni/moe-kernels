@@ -443,3 +443,60 @@ def test_the_cells_written_beside_the_yaml_carry_the_instrument_and_no_invented_
                        "clock_drift_ok", "sm_clock_load_mhz"):
         assert rows[0][unreported] == "", unreported
     assert rows[0]["prov_instrument"] == CH.instrument_name()
+
+
+# --------------------------------------------------------------------------
+# the producer writes the block the scorer reads (2026-09-09, the pod's arm 0)
+# --------------------------------------------------------------------------
+
+
+def test_the_loaded_clock_record_carries_the_under_load_verdict_the_gate_scores():
+    """2026-09-09, first H200 session on the merged tree: arm 0 measured the
+    clock under load (1470 MHz, five NVML samples, spread 2.0%) and its own
+    `not_throttled` gate came back UNKNOWN, 'predates the under-load clock
+    verdict', because `LoadedClock.as_dict` wrote samples, median and spread
+    and never the `clock_drift_ok` / `clock_level_ok` keys the scorer reads.
+    CLAIM_FAIL, session refused, on a calibration that was sound: the
+    sixteenth instance of a fix at one of two sites. The record now carries
+    the verdict in `timing.clock_flags`' vocabulary: DRIFT scored from the
+    first and last under-load samples, LEVEL None because this record IS the
+    reference a roof is quoted at. Planted in the pod's exact shape: the
+    legacy idle pair in `clocks`, the LoadedClock block in `gemm_clock`."""
+    from moe.bench.calibrate import LoadedClock
+
+    steady = LoadedClock(label="bf16 GEMM", samples=(1485, 1485, 1455, 1470, 1470),
+                         median_mhz=1470, spread_pct=2.0, after_idle_mhz=1470)
+    d = steady.as_dict()
+    assert d["clock_drift_ok"] is True and d["clock_level_ok"] is None
+    assert (d["sm_clock_load_mhz"], d["sm_clock_start_mhz"],
+            d["sm_clock_end_mhz"]) == (1470, 1485, 1470)
+    cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=d)
+    gates = {name: (verdict, detail)
+             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+    verdict, detail = gates["not_throttled"]
+    assert verdict == EX.PASS
+    assert "scored DRIFT (clock_drift_ok=True) from gemm_clock." in detail
+    assert "LEVEL undetermined" in detail and "1485 -> 1470 MHz" in detail
+    # Scored, not refused: no gate is UNKNOWN. (clock_established FAILs on the
+    # legacy fixture pair; on the pod it PASSED, and it is not this gate.)
+    assert all(v != EX.UNKNOWN for _k, _n, v, _d in CH.score(cal, H200_PIN))
+
+
+def test_a_loaded_clock_that_drifted_under_load_fails_the_gate_and_an_empty_one_is_unknown():
+    """The FAIL branch the same record can take, and the no-sample record,
+    which the scorer must read as UNKNOWN and never as a pass."""
+    from moe.bench.calibrate import LoadedClock
+
+    drifted = LoadedClock(label="bf16 GEMM", samples=(1980, 1800, 1600, 1500, 1470),
+                          median_mhz=1600, spread_pct=26.0, after_idle_mhz=1470)
+    cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=drifted.as_dict())
+    verdict, detail = CH.under_load_clock_verdict(cal)
+    assert verdict == EX.FAIL
+    assert "1980 -> 1470 MHz" in detail and "blend of two states" in detail
+    empty = LoadedClock(label="bf16 GEMM", samples=(), median_mhz=0,
+                        spread_pct=0.0, after_idle_mhz=0)
+    d = empty.as_dict()
+    assert d["clock_drift_ok"] is None and d["clock_level_ok"] is None
+    cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=d)
+    verdict, detail = CH.under_load_clock_verdict(cal)
+    assert verdict == EX.UNKNOWN and "both None" in detail
