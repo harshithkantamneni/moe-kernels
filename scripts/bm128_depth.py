@@ -2230,9 +2230,12 @@ class Sample:
     the band the loaded clock crossed. `clock_excluded` is the LOW side only;
     `clock_boosted` is the HIGH side and is kept, because a memory-bound tread
     does not follow the SM clock and its time is a measurement; what the fixed
-    roof does not describe is that tread's fraction of it. A failed verdict
-    with no side is a row from before 2026-09-03 and is read as LOW.
-    `SWEEP.check_level_side` refuses a side on a verdict that did not fail.
+    roof does not describe is that tread's fraction of it.
+    `SWEEP.check_level_side` refuses, at construction, a side on a verdict
+    that did not fail and a failed verdict with no side: the instrument derives
+    the verdict from the side, so a failed row without one was copied by a
+    caller that dropped the side, and reading its blank as LOW (the rule until
+    2026-09-08) is what dropped every boosted tread.
     """
 
     block_m: int
@@ -2278,17 +2281,17 @@ class Sample:
         many of those there are rather than dropping them. False for the HIGH
         side too: until 2026-09-08 this read `clock_level_ok is False`, which
         after the flag went two-sided dropped every boosted tread, and on an
-        H200 that is every memory-bound tread this arm exists to measure.
+        H200 that is every memory-bound tread this arm exists to measure. The
+        side alone decides, since `SWEEP.check_level_side` refused at
+        construction every row on which it and the verdict could disagree.
         """
-        return (self.clock_level_ok is False
-                and self.clock_level_side != SWEEP.LEVEL_HIGH)
+        return self.clock_level_side == SWEEP.LEVEL_LOW
 
     @property
     def clock_boosted(self) -> bool:
         """Did LEVEL fail on the HIGH side. Kept; the fixed-roof fraction of
         this tread is inflated by the clock ratio and is reported as such."""
-        return (self.clock_level_ok is False
-                and self.clock_level_side == SWEEP.LEVEL_HIGH)
+        return self.clock_level_side == SWEEP.LEVEL_HIGH
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
@@ -2704,8 +2707,10 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                                 # ladder's exclusion count then reports zero for
                                 # a run in which nothing could be examined.
                                 reference_clock_mhz=reference_clock,
-                                # THE SIDE TRAVELS WITH THE VERDICT, or a
-                                # failed LEVEL can only be read as LOW.
+                                # THE SIDE TRAVELS WITH THE VERDICT: a failed
+                                # LEVEL without it is refused by Sample,
+                                # because read as LOW it dropped every
+                                # boosted tread.
                                 clock_level_side=t.clock_level_side)
                 if t.clock_level_ok is False or t.host_bound:
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())

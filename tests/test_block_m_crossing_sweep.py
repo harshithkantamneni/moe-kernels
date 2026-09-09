@@ -579,7 +579,8 @@ def test_a_throttled_cell_cannot_set_the_number_gate_4_scores():
     cells = cells_at(REFIT)
     top = max((c for c in cells if c.block_m == 64),
               key=lambda c: c.useful_tflops)
-    flagged = [replace(c, clock_level_ok=False, sm_clock_load_mhz=1500.0)
+    flagged = [replace(c, clock_level_ok=False, clock_level_side="low",
+                       sm_clock_load_mhz=1500.0)
                if c is top else c for c in cells]
     before = gate(analyse(cells, alpha=REFIT), 4)
     after = gate(analyse(flagged, alpha=REFIT), 4)
@@ -1818,18 +1819,58 @@ def test_the_level_sides_are_the_instruments_own():
 
 def test_a_boosted_cell_is_kept_and_a_cold_one_is_excluded():
     """1980 against 1515 with the side "high" is not an exclusion; 1400 with
-    the side "low" is; a failed verdict with no side is a pre-side row and is
-    read as low; None is neither."""
+    the side "low" is; None is neither."""
     high = _clocked_cell(1980.0, False, "high")
     low = _clocked_cell(1400.0, False, "low")
-    legacy = _clocked_cell(1400.0, False, "")
     unknown = _clocked_cell(None, None, "")
     assert high.clock_excluded is False and high.clock_boosted is True
     assert low.clock_excluded is True and low.clock_boosted is False
-    assert legacy.clock_excluded is True and legacy.clock_boosted is False
     assert unknown.clock_excluded is False and unknown.clock_boosted is False
     # The instrument's None side is stored as the blank, never as "None".
     assert _clocked_cell(1515.0, True, None).clock_level_side == ""
+
+
+def test_a_failed_verdict_without_a_side_is_refused_not_read_as_low():
+    """THE SIBLING'S SHAPE. `bn_decomposition`, `occupancy_vs_swizzle` and
+    `span_extent_separation` copy `t.clock_level_ok` into `make_cell` and
+    drop `t.clock_level_side`; until this test the blank side was read as LOW
+    and every boosted tread they timed left the fit (the second call site of
+    the defect the side column closed). The instrument never produces a failed
+    verdict without a side, so the row is refused at construction, through
+    `make_cell` and through the dataclass, and with the side None as well as
+    blank."""
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _clocked_cell(1980.0, False, "")
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _clocked_cell(1980.0, False, None)
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        BM.check_level_side(False, "")
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        replace(_clocked_cell(1980.0, False, "high"), clock_level_side="")
+    # The same verdict WITH its side is the kept row the refusal exists for.
+    assert _clocked_cell(1980.0, False, "high").clock_excluded is False
+
+
+def test_a_pre_side_cells_csv_is_refused_only_on_its_failed_rows(tmp_path):
+    """A cells.csv written before the side column reads back blank on every
+    row. Blank is the value on a passing or undetermined verdict, so those rows
+    resume; a FAILED row's side cannot be recovered from the file and is
+    refused rather than read as LOW."""
+    header = ("block_m,tokens,rows_per_expert,tiles_per_expert,padded_rows,"
+              "tile_eff,aligned,waves_up,waves_down,ms_p50,sm_clock_load_mhz,"
+              "clock_level_ok,clock_drift_ok\n")
+    fine = tmp_path / "fine.csv"
+    fine.write_text(header
+                    + "128,2048,256.0,2,2048,1.0,True,1.0,1.0,1.0,1515.0,True,True\n"
+                    + "128,4096,512.0,4,4096,1.0,True,1.0,1.0,2.0,,,\n")
+    _, back = BM.read_cells(fine)
+    assert [c.clock_level_side for c in back] == ["", ""]
+    assert [c.clock_excluded for c in back] == [False, False]
+    failed = tmp_path / "failed.csv"
+    failed.write_text(header
+                      + "128,2048,256.0,2,2048,1.0,True,1.0,1.0,1.0,1980.0,False,True\n")
+    with pytest.raises(ValueError, match="re-measure"):
+        BM.read_cells(failed)
 
 
 def test_a_side_on_a_verdict_that_did_not_fail_is_refused():

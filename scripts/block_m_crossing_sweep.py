@@ -864,6 +864,22 @@ def check_level_side(clock_level_ok: bool | None, clock_level_side: str) -> None
     otherwise be read as "not high", which is LOW, which excludes. Both are
     raised here, at construction, rather than discovered as an exclusion count
     that does not add up.
+
+    AND A FAILED VERDICT WITHOUT A SIDE IS REFUSED TOO. Since 2026-09-03
+    `timing.clock_flags` derives the verdict FROM the side, so a failed LEVEL
+    with a blank side is not a state the instrument produces either: it is a
+    caller that copied `KernelTiming.clock_level_ok` and dropped
+    `KernelTiming.clock_level_side`, which is exactly the shape of the defect
+    this column closes (2026-09-08: `bn_decomposition` and
+    `occupancy_vs_swizzle` did that through `make_cell`, and
+    `span_extent_separation` in its own row class; every boosted tread they
+    timed would have been read as LOW and dropped). Reading the blank as LOW
+    drops every memory-bound tread on an H200; reading it as HIGH admits a
+    sagged card into the fit; both are defaults. No cells.csv in the tree
+    carries such a row (the verdict column
+    is from 2026-09-02 and the side column from 2026-09-08, and no pod ran in
+    between), so a file that does was written by a sibling that dropped the
+    side, and its failed rows have to be re-measured.
     """
     if clock_level_side not in LEVEL_SIDES:
         raise ValueError(
@@ -874,6 +890,13 @@ def check_level_side(clock_level_ok: bool | None, clock_level_side: str) -> None
             f"clock_level_side {clock_level_side!r} with clock_level_ok="
             f"{clock_level_ok!r}: a side is the direction a FAILED verdict "
             "went, and this verdict did not fail")
+    if clock_level_ok is False and not clock_level_side:
+        raise ValueError(
+            "clock_level_ok=False with no clock_level_side: a failed LEVEL "
+            "verdict has carried a side since 2026-09-03 (timing.level_side) "
+            "and without it the row cannot be told from a sagged card or a "
+            "boosted one; pass KernelTiming.clock_level_side, or re-measure "
+            "a cells.csv whose failed rows were written without the column")
 
 
 @dataclass
@@ -910,9 +933,10 @@ class Cell:
     memory-shaped cell that boosted to 1980 MHz against a 1515 MHz GEMM
     reference is the H200's normal state, its time is a measurement, and what
     is not comparable is its fraction of the FIXED roof, which the report says
-    beside the count. A LEVEL failure carrying no side is read as LOW, because
-    before 2026-09-03 the flag could only fail that way and every row written
-    then carries "".
+    beside the count. A LEVEL failure carrying no side is REFUSED at
+    construction (`check_level_side`): the instrument derives the verdict from
+    the side, so a failed verdict without one was copied by a caller that
+    dropped the side, and reading it either way is a default.
     """
 
     block_m: int
@@ -970,10 +994,12 @@ class Cell:
         every memory-bound tread (1980 MHz under memory load against the 1515
         MHz GEMM reference). A boosted tread's time is a measurement; what is
         not comparable is its fraction of the fixed roof, and `clock_boosted`
-        is how the report counts those. A failed verdict with no side recorded
-        is a pre-side row and is read as LOW.
+        is how the report counts those. The side alone decides, because
+        `check_level_side` has already refused every row on which the side and
+        the verdict could disagree: a failed verdict always carries one and a
+        passing or undetermined verdict never does.
         """
-        return self.clock_level_ok is False and self.clock_level_side != LEVEL_HIGH
+        return self.clock_level_side == LEVEL_LOW
 
     @property
     def clock_boosted(self) -> bool:
@@ -981,7 +1007,7 @@ class Cell:
         the roof's clock. KEPT in every fit; its fixed-roof fraction is inflated
         by the clock ratio and the driver's `roof_at_cell_clock_tflops` is the
         roof it should be read against."""
-        return self.clock_level_ok is False and self.clock_level_side == LEVEL_HIGH
+        return self.clock_level_side == LEVEL_HIGH
 
 
 def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
@@ -1003,11 +1029,13 @@ def make_cell(cfg, rows: float, block_m: int, ms: float, *, sm_count: int,
     row whose timing state nobody wrote down.
 
     EXTENDED AGAIN 2026-09-08 with `clock_level_side`, the instrument's
-    `KernelTiming.clock_level_side`. A caller that passes the LEVEL verdict and
-    not the side hands this file a failed verdict it can only read as LOW, and
-    that reading drops boosted treads; the sibling that does so is the next
-    instance of the defect this column closes. None (the instrument's "no
-    comparison was made") is stored as "".
+    `KernelTiming.clock_level_side`. A caller that passes a FAILED verdict and
+    not the side is REFUSED by `check_level_side` at construction: the only
+    readings of that row are LOW (drops every boosted tread, the defect this
+    column closes) and HIGH (admits a sagged card), and both are defaults. The
+    sibling scripts that copy `t.clock_level_ok` into this call must copy
+    `t.clock_level_side` beside it. None (the instrument's "no comparison was
+    made", which only accompanies a verdict that is not False) is stored as "".
     """
     tiles = tiles_per_expert(rows, block_m)
     padded = cfg.num_experts * tiles * block_m
@@ -4073,9 +4101,10 @@ def run_sweep(args, cfg, grid, block_sizes, csv_path: Path, cache_root: Path,
                                  sm_clock_load_mhz=t.sm_clock_load_mhz,
                                  clock_level_ok=t.clock_level_ok,
                                  clock_drift_ok=t.clock_drift_ok,
-                                 # THE SIDE TRAVELS WITH THE VERDICT. Without
-                                 # it a failed LEVEL can only be read as LOW,
-                                 # and every boosted tread is dropped.
+                                 # THE SIDE TRAVELS WITH THE VERDICT. A failed
+                                 # LEVEL without it is refused by make_cell,
+                                 # because read as LOW it drops every boosted
+                                 # tread.
                                  clock_level_side=t.clock_level_side,
                                  l2_flush=t.l2_flush)
                 if t.clock_level_ok is False or t.host_bound:
@@ -4156,9 +4185,11 @@ def _cell_value(type_name: str, raw: str):
     NVML has no clock, and reading that blank back as `False` would mark it
     excluded while reading it as `True` would mark it comparable. Both are
     claims the row does not make. `clock_level_side` is a plain string whose
-    blank IS a value ("inside the band, or not determined"), and a cells.csv
+    blank IS a value ("inside the band, or not determined"). A cells.csv
     written before the column existed reads back with it blank on every row,
-    which `Cell.clock_excluded` reads as the pre-side one-sided flag.
+    which is correct for every row whose verdict is not False and is REFUSED
+    by `Cell` for a failed one, because that row's side cannot be recovered
+    from the file and reading it either way would be a default.
     """
     optional = type_name.replace(" ", "").endswith("|None")
     base = type_name.replace(" ", "").removesuffix("|None")

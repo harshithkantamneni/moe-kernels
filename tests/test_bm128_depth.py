@@ -644,10 +644,13 @@ def test_a_throttled_tread_is_excluded_from_the_fit_and_counted(bm):
 
 
 def test_a_tread_is_excluded_on_a_majority_of_its_repeats_not_on_one(bm):
-    """One throttled repeat out of seven is what the median exists to absorb."""
+    """One throttled repeat out of seven is what the median exists to absorb.
+    A failed repeat carries its side, as the instrument's does; without one
+    `Sample` refuses it."""
     def sample(rep, level):
         return bm.Sample(128, 4, 512, 2048, rep, 1.0, 1.0, 0.0, 10,
-                         clock_level_ok=level)
+                         clock_level_ok=level,
+                         clock_level_side="low" if level is False else "")
     one_bad = [sample(1, False)] + [sample(r, True) for r in range(2, 8)]
     most_bad = [sample(r, False) for r in range(1, 6)] + [sample(6, True)]
     unknown = [sample(r, None) for r in range(1, 4)]
@@ -2100,10 +2103,13 @@ def test_a_boosted_sample_is_kept_and_a_cold_one_is_excluded(bm):
     low = _clocked(bm, 2, 1400.0, False, "low")
     assert high.clock_excluded is False and high.clock_boosted is True
     assert low.clock_excluded is True and low.clock_boosted is False
-    # A failed verdict with no side is a row from before the side existed and
-    # could only have failed low.
-    legacy = _clocked(bm, 3, 1400.0, False, "")
-    assert legacy.clock_excluded is True and legacy.clock_boosted is False
+    # A failed verdict with no side is a caller that dropped the side (the
+    # sibling shape of the defect): read as LOW it drops every boosted tread,
+    # read as HIGH it admits a sagged one, so it is refused rather than read.
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _clocked(bm, 3, 1400.0, False, "")
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _clocked(bm, 3, 1980.0, False, "")
     # None is still not an exclusion in either direction.
     unknown = _clocked(bm, 4, None, None, "")
     assert unknown.clock_excluded is False and unknown.clock_boosted is False
@@ -2150,16 +2156,23 @@ def test_the_level_side_round_trips_through_the_csv(bm, tmp_path):
     assert [s.clock_level_side for s in back] == ["high", "low", ""]
     assert [s.clock_boosted for s in back] == [True, False, False]
     assert [s.clock_excluded for s in back] == [False, True, False]
-    # A cells.csv from before the column reads back blank, which on a failed
-    # verdict is the pre-side one-sided flag.
+    # A cells.csv from before the column reads back blank on every row. That
+    # is the value on a passing or undetermined verdict, so those rows resume;
+    # a FAILED row's side cannot be recovered from the file and is refused
+    # rather than read as LOW.
+    header = ("block_m,tiles,rows_per_expert,tokens,rep,ms_p50,ms_min,"
+              "ms_stdev,iters,status,detail,sm_clock_load_mhz,"
+              "clock_level_ok,clock_drift_ok\n")
     old = tmp_path / "old.csv"
-    old.write_text("block_m,tiles,rows_per_expert,tokens,rep,ms_p50,ms_min,"
-                   "ms_stdev,iters,status,detail,sm_clock_load_mhz,"
-                   "clock_level_ok,clock_drift_ok\n"
-                   "128,4,512,2048,1,1.0,1.0,0.0,10,ok,,1400.0,False,True\n")
+    old.write_text(header + "128,4,512,2048,1,1.0,1.0,0.0,10,ok,,1515.0,True,True\n"
+                   + "128,4,512,2048,2,1.0,1.0,0.0,10,ok,,,,\n")
     _, legacy = bm.read_samples(old)
-    assert legacy[0].clock_level_side == ""
-    assert legacy[0].clock_excluded is True
+    assert [s.clock_level_side for s in legacy] == ["", ""]
+    assert [s.clock_excluded for s in legacy] == [False, False]
+    failed = tmp_path / "failed.csv"
+    failed.write_text(header + "128,4,512,2048,1,1.0,1.0,0.0,10,ok,,1980.0,False,True\n")
+    with pytest.raises(ValueError, match="re-measure"):
+        bm.read_samples(failed)
 
 
 def test_boosted_treads_stay_in_the_fit_and_the_report_counts_them(bm):

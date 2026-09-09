@@ -382,12 +382,18 @@ def test_a_cell_above_the_roofs_clock_is_kept_and_rescored_at_its_own_clock(
                            clock_ref=1400)[0].retained is False
 
 
-def test_a_failed_level_with_no_side_is_read_as_low(rf):
-    """Rows written before 2026-09-03 could only fail LEVEL one way; a blank
-    side on a failed verdict is that row and stays an exclusion."""
-    legacy = _timing(rf, load=1200.0, level=False, side="")
-    assert legacy.clock_level_side == ""
-    assert legacy.cold is True and legacy.boosted is False
+def test_a_failed_level_with_no_side_is_refused_not_read_as_low(rf):
+    """A failed verdict without a side is a caller that dropped
+    `KernelTiming.clock_level_side` (the sibling shape of the defect); read as
+    LOW it excluded every boosted cell, read as HIGH it would admit a sagged
+    one, so `Timing` refuses it at construction rather than pick."""
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _timing(rf, load=1200.0, level=False, side="")
+    with pytest.raises(ValueError, match="no clock_level_side"):
+        _timing(rf, load=1980.0, level=False, side="")
+    # The same rows with their sides are the two states the refusal protects.
+    assert _timing(rf, load=1200.0, level=False, side="low").cold is True
+    assert _timing(rf, load=1980.0, level=False, side="high").cold is False
 
 
 def test_a_side_on_a_verdict_that_did_not_fail_is_refused(rf):
@@ -1539,8 +1545,11 @@ def test_a_clock_verdict_of_none_round_trips_as_none_and_not_as_false(rf,
 def test_the_level_side_round_trips_through_the_csv_and_a_blank_is_a_value(
         rf, tmp_path):
     """The side is a column so a replayed cells.csv can tell a boosted row
-    from a cold one; a file written before the column existed reads back
-    blank on every row, which `cold` reads as the pre-side one-sided flag."""
+    from a cold one. A file written before the column existed reads back
+    blank on every row: that is the value on a passing or undetermined
+    verdict, so those rows resume, and a FAILED row is refused because its
+    side cannot be recovered from the file and reading it as LOW is the
+    exclusion this column was added to stop."""
     path = tmp_path / "cells.csv"
     rf.append_timing(path, _timing(rf, rep=1, load=1980.0, level=False))
     rf.append_timing(path, _timing(rf, rep=2, load=1200.0, level=False))
@@ -1549,14 +1558,18 @@ def test_the_level_side_round_trips_through_the_csv_and_a_blank_is_a_value(
     assert [t.clock_level_side for t in back] == ["high", "low", ""]
     assert [t.boosted for t in back] == [True, False, False]
     assert [t.cold for t in back] == [False, True, False]
+    header = ("block_m,rows_per_expert,tiles,tokens,rep,ms_p50,ms_min,ms_stdev,"
+              "iters,sm_clock_load_mhz,clock_level_ok,clock_drift_ok\n")
     old = tmp_path / "old.csv"
-    old.write_text(
-        "block_m,rows_per_expert,tiles,tokens,rep,ms_p50,ms_min,ms_stdev,"
-        "iters,sm_clock_load_mhz,clock_level_ok,clock_drift_ok\n"
-        "128,256,2,1024,1,1.0,1.0,0.0,10,1200.0,False,True\n")
+    old.write_text(header + "128,256,2,1024,1,1.0,1.0,0.0,10,1500.0,True,True\n"
+                   + "128,256,2,1024,2,1.0,1.0,0.0,10,,,\n")
     _, legacy = rf.read_timings(old)
-    assert legacy[0].clock_level_side == ""
-    assert legacy[0].cold is True and legacy[0].boosted is False
+    assert [t.clock_level_side for t in legacy] == ["", ""]
+    assert [t.cold for t in legacy] == [False, False]
+    failed = tmp_path / "failed.csv"
+    failed.write_text(header + "128,256,2,1024,1,1.0,1.0,0.0,10,1980.0,False,True\n")
+    with pytest.raises(ValueError, match="re-measure"):
+        rf.read_timings(failed)
 
 
 def test_the_figure_csv_carries_the_instrument_on_every_row(rf, roof, tmp_path):

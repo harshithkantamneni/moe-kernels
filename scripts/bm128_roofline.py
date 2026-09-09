@@ -1253,10 +1253,12 @@ class Timing:
     AND A FAILED LEVEL HAS A SIDE. `clock_level_side` is "low", "high" or ""
     (passed, or not determined), the instrument's own word. `cold` is the LOW
     side and is the exclusion; `boosted` is the HIGH side and is kept, with the
-    row's fixed-roof fraction flagged as not comparable. A failed verdict with
-    no side is a row written before 2026-09-03 and is read as LOW, which is the
-    only way it could fail then. `SWEEP.check_level_side` refuses a side on a
-    verdict that did not fail, at construction.
+    row's fixed-roof fraction flagged as not comparable. `SWEEP.check_level_side`
+    refuses, at construction, a side on a verdict that did not fail AND a
+    failed verdict with no side: the instrument derives the verdict from the
+    side, so the second shape is a caller that dropped the side, and reading
+    its blank as LOW (the pre-2026-09-08 rule) is what excluded every boosted
+    cell.
     """
 
     block_m: int
@@ -1321,20 +1323,19 @@ class Timing:
     @property
     def cold(self) -> bool:
         """Did this cell run BELOW the band around the clock the ROOF was
-        measured at: LEVEL failed on the LOW side, or failed with no side on a
-        row from before the side existed. This is the exclusion. Until
+        measured at: LEVEL failed on the LOW side. This is the exclusion. Until
         2026-09-08 it was `clock_level_ok is False`, which after the flag went
-        two-sided also caught every boosted cell."""
-        return (self.clock_level_ok is False
-                and self.clock_level_side != SWEEP.LEVEL_HIGH)
+        two-sided also caught every boosted cell. The side alone decides, since
+        `SWEEP.check_level_side` refused at construction every row on which the
+        side and the verdict could disagree."""
+        return self.clock_level_side == SWEEP.LEVEL_LOW
 
     @property
     def boosted(self) -> bool:
         """Did this cell run ABOVE the band: LEVEL failed on the HIGH side.
         Kept; its fixed-roof fraction is inflated by the clock ratio and
         `Point.roof_fraction_at_clock` is the comparable number."""
-        return (self.clock_level_ok is False
-                and self.clock_level_side == SWEEP.LEVEL_HIGH)
+        return self.clock_level_side == SWEEP.LEVEL_HIGH
 
     @property
     def excluded(self) -> bool:
@@ -3436,9 +3437,9 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                              sm_clock_end_mhz=t.sm_clock_end_mhz,
                              clock_level_ok=t.clock_level_ok,
                              clock_drift_ok=t.clock_drift_ok,
-                             # THE SIDE TRAVELS WITH THE VERDICT, or a failed
-                             # LEVEL can only be read as LOW and every
-                             # boosted cell is excluded.
+                             # THE SIDE TRAVELS WITH THE VERDICT: a failed
+                             # LEVEL without it is refused by Timing, because
+                             # read as LOW it excluded every boosted cell.
                              clock_level_side=t.clock_level_side,
                              instrument=t.instrument, warmup_ms=t.warmup_ms,
                              trials=t.trials, l2_flush=t.l2_flush)
