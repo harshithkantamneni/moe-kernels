@@ -7,7 +7,7 @@ predicted benefit of a fusion is readable off the plot before it is measured.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import schema as SC
@@ -35,6 +35,16 @@ class Hardware:
     #: For a measured profile, which STREAM pattern defined the bandwidth.
     #: Empty for a datasheet profile, where the figure is a pin rate.
     ceiling_pattern: str = ""
+    #: The clock each compute roof was measured at, keyed by REFERENCE FAMILY
+    #: (`reference_family`: "bf16" for the dense bf16 GEMM every non-fp8 dtype
+    #: is scored against, "fp8" for the fp8 GEMM), read out of the SAME file
+    #: as the peaks by `load_hardware`. Empty for a datasheet profile, which
+    #: was never measured at any clock. Carried here so a per-row roof can be
+    #: re-derived off-GPU from the one file the roof came from: `recompute`
+    #: used to rebuild the fixed-roof columns from a `Hardware` that had
+    #: dropped the clock, and left `roof_at_cell_clock_tflops` at the old
+    #: peak's value beside a rewritten `achieved_peak_tflops`.
+    reference_clocks: dict[str, ReferenceClock] = field(default_factory=dict)
 
     def peak(self, dtype: str) -> float:
         v = self.peak_flops.get(dtype)
@@ -79,6 +89,7 @@ def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
 
     peaks = {k: (v * 1e12 if v else None)
              for k, v in (data.get("compute_dense_tflops") or {}).items()}
+    card = str((data.get("detail") or {}).get("gpu_name") or "")
     return Hardware(
         name=data["name"],
         bandwidth_bytes_s=float(bw) * 1e12,
@@ -86,6 +97,14 @@ def load_hardware(name: str = "h200_nvl", allow_unverified: bool = False,
         source=data.get("source", ""),
         ceiling_pattern=(data.get("detail") or {}).get("ceiling_pattern", ""),
         tdp_w=data.get("tdp_w"),
+        # Only the families this file records a clock for. A datasheet
+        # profile has no `detail` and gets none; a measured profile whose
+        # fp8 GEMM was refused (the A100 writes fp8_gemm_clock_mhz: 0) gets
+        # the bf16 one alone, and an fp8 row scored against it is refused by
+        # name rather than levelled against the other GEMM's clock.
+        reference_clocks={
+            family: ref for family in REFERENCE_FAMILIES
+            if (ref := reference_clock_from_doc(data, card, family)).mhz},
     )
 
 
@@ -301,6 +320,46 @@ REFERENCE_SETTLE_PLATEAU = "settle-plateau"
 #: carries its own copy of this walk, `tests/test_driver.py` pins the two
 #: resolvers to one number per card, and a reorder here alone would level the
 #: driver and the ladders against different references.
+#: `scripts/dtype_tile_confound.py:_reference_clock` is a THIRD copy, and
+#: since the reference went per family it is a divergent one: it walks the
+#: bf16 fields only and hands that clock to the fp8 cells the arm exists to
+#: time, so on the committed H200 an fp8 cell at the fp8 GEMM's own 1905 MHz
+#: is level under the driver and LEVEL-failed HIGH under that script. A
+#: script with a private walk should call `reference_clock_from_doc(raw,
+#: name, reference_family(dtype))` per cell; `tests/test_roofline.py` pins
+#: that call's contract on the committed file so the replacement is a swap.
+#: THE REFERENCE IS PER GEMM, AND A CALIBRATION RUNS TWO. `calibrate.py`
+#: measures a dense bf16 GEMM and, on silicon that has the format, a dense fp8
+#: GEMM, and records the clock each ran at: the committed H200 file carries
+#: `gemm_clock_mhz: 1515` beside `fp8_gemm_clock_mhz: 1905`. Those are two
+#: roofs at two clocks, and a row's reference is the clock of the roof ITS
+#: dtype is scored against. Until 2026-09-08 every row was levelled against
+#: the bf16 number, so an fp8 cell running at the fp8 roof's own 1905 MHz was
+#: filed LEVEL-failed HIGH, and `roof_at_clock(1447.7, 1515, 1905)` would have
+#: rescaled the fp8 roof to 1820 TFLOP/s, 26% above the figure the calibration
+#: measured at that very clock. Two families, named by the GEMM: "bf16" is the
+#: dense bf16 GEMM, the roof for bf16 and for fp16 (the yaml publishes one
+#: number for both) and the only compute reference anything else has; "fp8"
+#: is the fp8 GEMM, for the `spec.FP8_WEIGHT_DTYPES`.
+BF16_FAMILY = "bf16"
+FP8_FAMILY = "fp8"
+REFERENCE_FAMILIES = (BF16_FAMILY, FP8_FAMILY)
+
+
+def reference_family(dtype: str) -> str:
+    """Which GEMM's clock a row of `dtype` is levelled against. Pure, total.
+
+    Every fp8 weight format is scored against the fp8 GEMM's roof, so it is
+    levelled against that GEMM's clock; everything else against the bf16
+    GEMM's. Total rather than refusing on an unknown dtype because the roof
+    lookup (`Hardware.peak`) is where an unknown dtype is refused, with the
+    file to fill in, and a second refusal here would fire first with less to
+    say. The two calls agree on what "fp8" means: `spec.FP8_WEIGHT_DTYPES`.
+    """
+    from ..spec import FP8_WEIGHT_DTYPES
+    return FP8_FAMILY if dtype in FP8_WEIGHT_DTYPES else BF16_FAMILY
+
+
 CLOCK_FIELDS = (
     (("detail", "gemm_clock", "median_mhz"),
      "the median of the samples taken while the calibration's dense GEMM ran",
@@ -320,6 +379,27 @@ CLOCK_FIELDS = (
      "clock by calibrate.CLOCK_VS_SETTLE_TOL_PCT, which is a bracket",
      REFERENCE_SETTLE_PLATEAU),
 )
+
+#: The fp8 GEMM's clock, in the same falling order and with the same grades.
+#: NO SETTLE-PLATEAU FALLBACK, deliberately: the settle is run under the bf16
+#: GEMM's power regime, and the committed H200 file puts the fp8 GEMM 435 MHz
+#: above that plateau (1905 against 1470), far outside the 10% bracket that
+#: makes the plateau a stand-in for the bf16 GEMM. A file with neither fp8
+#: field has no fp8 reference, and says so.
+FP8_CLOCK_FIELDS = (
+    (("detail", "fp8_gemm_clock", "median_mhz"),
+     "the median of the samples taken while the calibration's dense fp8 GEMM "
+     "ran", REFERENCE_UNDER_LOAD),
+    (("detail", "fp8_gemm_clock_mhz"),
+     "fp8_gemm_clock_mhz, the scalar the calibration published for its dense "
+     "fp8 GEMM; DISOWNED for the same reason as gemm_clock_mhz: a single "
+     "post-hoc sample taken with the GPU idle and boosting. LEVEL against it "
+     "is provisional and the per-row roof is not rescaled against it; "
+     "recalibrate to record the under-load median",
+     REFERENCE_IDLE_SCALAR),
+)
+
+CLOCK_FIELDS_BY_FAMILY = {BF16_FAMILY: CLOCK_FIELDS, FP8_FAMILY: FP8_CLOCK_FIELDS}
 
 
 def roof_at_clock(peak_tflops: float | None, reference_mhz: float | None,
@@ -354,6 +434,64 @@ def roof_at_clock(peak_tflops: float | None, reference_mhz: float | None,
     if peak_tflops <= 0 or reference_mhz <= 0 or load_mhz <= 0:
         return None
     return float(peak_tflops) * float(load_mhz) / float(reference_mhz)
+
+
+def roof_scale_refusal(load_mhz: float | None, reference_mhz: float | None,
+                       grade: str) -> str:
+    """Why the per-row roof cannot be scored for a row, or "" when it can. Pure.
+
+    THE ONE STATEMENT OF THE RULE, read by both writers of the per-row roof:
+    `driver._apply_cost` on the pod and `recompute.ceiling_columns` off it.
+    The recompute used to carry no statement at all and left the column at the
+    old peak's value, which is the shape this repository keeps producing (a
+    rule applied at one of two call sites), so the rule now lives where both
+    sites have to import it.
+
+    Three refusals, each named so `roof_note` says which: no under-load clock
+    on the row (the retired seam writes none; an NVML-less container polls
+    none), no reference resolved for the row's dtype family, or a reference
+    whose grade is not the under-load median. The third is the one that fires
+    against both committed calibrations today: they carry only the post-hoc
+    idle scalars `calibrate.py` records a 30% spread for, and scaling a roof
+    by `load / reference` against one would move every fraction by up to that
+    much under the name of a correction. REFUSED rather than defaulted to the
+    fixed roof: the fixed-roof figure is still on the row under its own name,
+    with its bias stated, and this column stays 0.0 with the reason.
+    """
+    if not load_mhz or load_mhz <= 0:
+        return ("no under-load clock on this row (retired seam, or no NVML "
+                "during the trials), so the roof cannot be placed at the "
+                "clock the cell ran")
+    if reference_mhz is None or reference_mhz <= 0:
+        return ("no reference clock was resolved for this row's dtype family, "
+                "so the roof has no clock to be rescaled from")
+    if grade != REFERENCE_UNDER_LOAD:
+        return (f"the reference is graded {grade or 'none'!r}, "
+                "not an under-load median; rescaling the roof against it "
+                "would put a disowned number into every fraction (see "
+                "reference_clock_source); recalibrate to record the "
+                "under-load median")
+    return ""
+
+
+def cell_clock_roof(peak_tflops: float, load_mhz: float | None,
+                    reference_mhz: float | None, grade: str
+                    ) -> tuple[float, str]:
+    """`(roof_at_cell_clock_tflops, roof_note)` for one row. Pure.
+
+    The pair the two writers put on a row, computed once: `(roof, "")` when
+    `roof_scale_refusal` is empty, `(0.0, why)` otherwise. 0.0 is "not
+    scored", never a roof of zero; `schema.has_cell_clock_roof` reads it so.
+    """
+    why = roof_scale_refusal(load_mhz, reference_mhz, grade)
+    if why:
+        return 0.0, why
+    roof = roof_at_clock(peak_tflops, reference_mhz, load_mhz)
+    # `roof_at_clock` refuses exactly the inputs the refusal above named, and
+    # `peak_tflops` is the caller's positive roof; a None here would be a
+    # contract change between the two, not a row.
+    assert roof is not None
+    return roof, ""
 
 
 @dataclass(frozen=True)
@@ -392,6 +530,11 @@ class ReferenceClock:
     card: str = ""
     profile: str = ""
     grade: str = ""
+    #: Which GEMM's clock this is, one of `REFERENCE_FAMILIES`. The bf16 GEMM
+    #: unless a caller asked for the other, because that is the roof every
+    #: non-fp8 dtype is scored against and the only clock a calibration is
+    #: guaranteed to have measured; `reference_family` maps a dtype to it.
+    family: str = BF16_FAMILY
 
     @property
     def usable_for_roof(self) -> bool:
@@ -492,11 +635,63 @@ def measured_doc(gpu_name: str | None = None, directory: Path | None = None
                 "box, which writes it")
 
 
+def reference_clock_from_doc(doc: dict, card: str, family: str) -> ReferenceClock:
+    """The reference clock of one family, read out of a parsed calibration.
+
+    The walk `reference_clock` performs, split out so a calibration already in
+    hand (a yaml beside a published arm, in `recompute`) is read by the SAME
+    rule as the one the driver resolves on the pod, rather than by a second
+    copy of the field order. `doc` must be a mapping; the caller decided which
+    file it is and whether the roof came from it.
+    """
+    if family not in CLOCK_FIELDS_BY_FAMILY:
+        raise ValueError(
+            f"{family!r} is not a reference family; one of {REFERENCE_FAMILIES}")
+    profile = str(doc.get("name") or "")
+    for path, what, grade in CLOCK_FIELDS_BY_FAMILY[family]:
+        value = _dig(doc, path)
+        if value:
+            # A settle polled through the forked fallback is the idle artefact
+            # in a longer coat; say so where the source is read, not later.
+            if grade == REFERENCE_SETTLE_PLATEAU:
+                polled = _dig(doc, ("detail", "settle", "clock_source"))
+                if polled and polled != "nvml":
+                    what += (f"; and the settle was polled through {polled!r}, "
+                             "a forked reader whose samples land tens of "
+                             "milliseconds after each synchronise")
+            if grade == REFERENCE_UNDER_LOAD:
+                polled = _dig(doc, path[:-1] + ("source",))
+                if polled and polled != "nvml":
+                    what += f"; polled through {polled!r}"
+            return ReferenceClock(
+                float(value),
+                f"{profile}: {'.'.join(path)} = {float(value):.0f} MHz, {what} "
+                f"({family} GEMM)",
+                card=card, profile=profile, grade=grade, family=family)
+    return ReferenceClock(
+        None,
+        f"{profile} carries no {family} GEMM clock at all: none of "
+        f"{', '.join('.'.join(p) for p, _, _ in CLOCK_FIELDS_BY_FAMILY[family])} "
+        f"is set, so LEVEL cannot be scored against it for a {family}-family "
+        "row. Recalibrate with `python scripts/calibrate_hardware.py --publish`",
+        card=card, profile=profile, family=family)
+
+
 def reference_clock(gpu_name: str | None = None,
-                    directory: Path | None = None) -> ReferenceClock:
+                    directory: Path | None = None,
+                    family: str = BF16_FAMILY) -> ReferenceClock:
     """The clock THIS card's roof was measured at, from THIS card's calibration.
 
-    The LEVEL verdict is why `TIMING_BASIS` is at v2. The retired throttle check
+    PER DTYPE FAMILY since 2026-09-08: `family` names the GEMM whose clock is
+    the reference, one of `REFERENCE_FAMILIES`, the bf16 one unless the caller
+    asks for the fp8 GEMM's, because the roof an fp8 row is scored against was
+    measured at that GEMM's own clock and the committed H200 file has the two
+    390 MHz apart. A FAMILY and not a dtype, so a caller has to go through
+    `reference_family(dtype)` and cannot hand a format name to a function
+    that would quietly read it as "not fp8". Every caller before that date
+    meant the bf16 GEMM and still gets it.
+
+    The LEVEL verdict is why `TIMING_BASIS` left v1. The retired throttle check
     compared two IDLE-INSTANT samples either side of a cell, so it detected
     whether the first sample caught the idle boost rather than whether the card
     throttled under load, and on the published alpha-0558 arm it flagged 91% of
@@ -514,36 +709,14 @@ def reference_clock(gpu_name: str | None = None,
     """
     if gpu_name is None:
         gpu_name = current_gpu_name()
+    if family not in REFERENCE_FAMILIES:
+        raise ValueError(
+            f"{family!r} is not a reference family; one of {REFERENCE_FAMILIES}. "
+            "Map a dtype with reference_family() first")
     doc, reason = measured_doc(gpu_name, directory)
     if not doc:
-        return ReferenceClock(None, reason, card=gpu_name or "")
-    profile = str(doc.get("name") or "")
-    for path, what, grade in CLOCK_FIELDS:
-        value = _dig(doc, path)
-        if value:
-            # A settle polled through the forked fallback is the idle artefact
-            # in a longer coat; say so where the source is read, not later.
-            if grade == REFERENCE_SETTLE_PLATEAU:
-                polled = _dig(doc, ("detail", "settle", "clock_source"))
-                if polled and polled != "nvml":
-                    what += (f"; and the settle was polled through {polled!r}, "
-                             "a forked reader whose samples land tens of "
-                             "milliseconds after each synchronise")
-            if grade == REFERENCE_UNDER_LOAD:
-                polled = _dig(doc, ("detail", "gemm_clock", "source"))
-                if polled and polled != "nvml":
-                    what += f"; polled through {polled!r}"
-            return ReferenceClock(
-                float(value),
-                f"{profile}: {'.'.join(path)} = {float(value):.0f} MHz, {what}",
-                card=gpu_name, profile=profile, grade=grade)
-    return ReferenceClock(
-        None,
-        f"{profile} carries no clock at all: none of "
-        f"{', '.join('.'.join(p) for p, _, _ in CLOCK_FIELDS)} is set, so LEVEL "
-        "cannot be scored against it. Recalibrate with "
-        "`python scripts/calibrate_hardware.py --publish`",
-        card=gpu_name, profile=profile)
+        return ReferenceClock(None, reason, card=gpu_name or "", family=family)
+    return reference_clock_from_doc(doc, gpu_name or "", family)
 
 
 def hardware_for_rows(name: str, rows, allow_unverified: bool = False,

@@ -20,7 +20,7 @@ import time
 import traceback
 import uuid
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
 
@@ -269,38 +269,74 @@ class ReferenceClockRefused(T.TimingRefused):
     """
 
 
-def unreferenced_clock(cfg: RunConfig) -> list[str]:
+def _missing_key(family: str) -> str:
+    """The `RunConfig.missing` key a family's absent reference is recorded
+    under. The bf16 GEMM's is the bare field name, as it has been since the
+    field existed; the others are suffixed so one map can say which GEMM."""
+    if family == RF.BF16_FAMILY:
+        return "reference_clock_mhz"
+    return f"reference_clock_mhz[{family}]"
+
+
+def unreferenced_clock(cfg: RunConfig, dtype: str | None = None) -> list[str]:
     """The instrument modes this run would measure with no reference clock.
 
     Empty unless ALL THREE hold: a mode goes through `time_kernel`, no
-    reference was resolved or supplied, and A CARD IS ATTACHED. The third is
-    the one that decides what this check is for. With a card and no reference,
-    the run is about to spend metered minutes writing rows whose LEVEL column
-    can never say anything, which is the state that wrote all 100,144 published
-    rows. With no card, `time_kernel` already refuses unless the caller injected
-    the fakes that stand in for CUDA, and a fake clock sampler has no clock to
-    be level against in the first place -- so the reason is recorded in
-    `cfg.missing` and the laptop run proceeds.
+    reference was resolved or supplied FOR THIS CELL'S DTYPE FAMILY, and A
+    CARD IS ATTACHED. The third is the one that decides what this check is
+    for. With a card and no reference, the run is about to spend metered
+    minutes writing rows whose LEVEL column can never say anything, which is
+    the state that wrote all 100,144 published rows. With no card,
+    `time_kernel` already refuses unless the caller injected the fakes that
+    stand in for CUDA, and a fake clock sampler has no clock to be level
+    against in the first place -- so the reason is recorded in `cfg.missing`
+    and the laptop run proceeds.
+
+    PER DTYPE since 2026-09-08. `dtype` None asks about the run's own
+    reference, the bf16 GEMM's, which is what every caller before that date
+    asked; an fp8 dtype asks about the fp8 GEMM's clock (`RunConfig.
+    reference_for`), because levelling an fp8 cell against the bf16 GEMM's
+    clock filed a cell running at its own roof's 1905 MHz as LEVEL-failed
+    HIGH against 1515.
     """
-    if cfg.reference_clock_mhz is not None or not cfg.reference_clock_card:
+    if dtype is None or RF.reference_family(dtype) == RF.BF16_FAMILY:
+        if cfg.reference_clock_mhz is not None or not cfg.reference_clock_card:
+            return []
+        return instrument_modes(cfg)
+    ref = cfg.reference_for(dtype)
+    if ref.mhz is not None or not (ref.card or cfg.reference_clock_card):
         return []
     return instrument_modes(cfg)
 
 
-def _reference_clock_refusal(cfg: RunConfig, modes: list[str]) -> str:
-    """The message. Names the card, the reason from the missing map, what is
-    lost, and both ways out.
+def _reference_clock_refusal(cfg: RunConfig, modes: list[str],
+                             dtype: str | None = None) -> str:
+    """The message. Names the card, the GEMM, the reason from the missing map,
+    what is lost, and both ways out.
 
-    The reason is `cfg.missing["reference_clock_mhz"]`, quoted rather than
-    re-derived, so the sentence the operator reads on the pod is the same
+    The reason is `cfg.missing[...]` under the family's key, quoted rather
+    than re-derived, so the sentence the operator reads on the pod is the same
     sentence a report stamping that map would carry.
     """
+    family = RF.reference_family(dtype) if dtype is not None else RF.BF16_FAMILY
     which = (f"the {' and '.join(modes)} modes of this run measure"
              if len(modes) > 1 else f"the {modes[0]} mode of this run measures")
+    card = cfg.reference_clock_card
+    if family != RF.BF16_FAMILY:
+        card = cfg.family_references[family].card or card
+    if family == RF.BF16_FAMILY:
+        way_out = ("or pass RunConfig(reference_clock_mhz=...) with the clock "
+                   "you are levelling against and say in the write-up where "
+                   "the number came from.")
+    else:
+        way_out = (f"or inject RunConfig(reference_clock_resolvers={{{family!r}: "
+                   "...}}) with a `roofline.ReferenceClock` for that GEMM and "
+                   "say in the write-up where the number came from.")
     return (
-        f"{which} on `timing.time_kernel` against the card "
-        f"{cfg.reference_clock_card!r}, and no clock was resolved for it: "
-        f"{cfg.missing.get('reference_clock_mhz', 'reason not recorded')}.\n"
+        f"{which} on `timing.time_kernel` against the card {card!r}, and no "
+        f"clock was resolved for its {family} GEMM, the roof a "
+        f"{dtype or family} cell is scored against: "
+        f"{cfg.missing.get(_missing_key(family), 'reason not recorded')}.\n"
         "    Without a reference, `timing.clock_flags` leaves clock_level_ok "
         "None on every cell and the LEVEL verdict -- the flag that exists "
         "because the retired throttle check detected an idle boost rather than "
@@ -309,23 +345,23 @@ def _reference_clock_refusal(cfg: RunConfig, modes: list[str]) -> str:
         "and it costs the same rental as a sweep that can.\n"
         "    Two ways out, both cheap: run `python "
         "scripts/calibrate_hardware.py --publish` on this box, which measures "
-        "this card's roof and writes the clock its dense GEMM ran at into "
-        "moe/bench/hardware/, or pass RunConfig(reference_clock_mhz=...) with "
-        "the clock you are levelling against and say in the write-up where the "
-        "number came from.")
+        "this card's roofs and writes the clock each dense GEMM ran at into "
+        f"moe/bench/hardware/, {way_out}")
 
 
-def refuse_unreferenced_clock(cfg: RunConfig) -> None:
-    """Raise if this run would measure an attached card with no LEVEL reference.
+def refuse_unreferenced_clock(cfg: RunConfig, dtype: str | None = None) -> None:
+    """Raise if this cell would measure an attached card with no LEVEL reference.
 
     CHECKED BESIDE `refuse_dropped_retired_knobs`, per cell and just before the
     first thing that costs anything, for the reason that function gives: a
     sweep can construct a config it never measures with, and a refusal at
     construction would fail a run whose every cell is declined by the pin.
+    Per cell is also what makes it per DTYPE: the cell's format names the
+    GEMM whose clock it is levelled against, and a run may carry both.
     """
-    modes = unreferenced_clock(cfg)
+    modes = unreferenced_clock(cfg, dtype)
     if modes:
-        raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes))
+        raise ReferenceClockRefused(_reference_clock_refusal(cfg, modes, dtype))
 
 
 @dataclass
@@ -347,15 +383,23 @@ class RunConfig:
     #: comment that stood here until 2026-09-03 said "no committed calibration
     #: records it yet", and `moe/bench/hardware/measured_nvidia_h200.yaml` has
     #: carried `detail.gemm_clock_mhz: 1515` since 2026-09-02. What is true is
-    #: only the parenthetical: `roofline.Hardware` carries bandwidth and peaks
-    #: and DROPS everything under `detail`, so the driver read the roof through
-    #: a type that had already thrown the clock away and concluded the number
-    #: did not exist. The cost of that was total, not partial: `clock_level_ok`
-    #: is None without a reference, so the LEVEL verdict -- the flag installed
-    #: because the retired throttle check detected an idle boost rather than
-    #: throttling, and the whole reason `TIMING_BASIS` is at v2 -- could never
+    #: only the parenthetical: `roofline.Hardware` carried bandwidth and peaks
+    #: and DROPPED everything under `detail` (it carries the reference clocks
+    #: since 2026-09-08, for the recompute mirror; the driver still resolves
+    #: its own through the resolver below, which also answers whether a card
+    #: is attached), so the driver read the roof through a type that had
+    #: already thrown the clock away and concluded the number did not exist.
+    #: The cost of that was total, not partial: `clock_level_ok` is None
+    #: without a reference, so the LEVEL verdict -- the flag installed because
+    #: the retired throttle check detected an idle boost rather than
+    #: throttling, and the whole reason `TIMING_BASIS` left v1 -- could never
     #: fire on the path that wrote all 100,144 published rows and that
     #: `scripts/alpha_refit.py` reads for the headline alpha.
+    #:
+    #: THIS IS THE bf16 GEMM'S CLOCK, the run's primary reference: the roof
+    #: for every non-fp8 dtype. An fp8 cell is levelled and roofed against the
+    #: fp8 GEMM's clock, resolved per family by `reference_for` below; this
+    #: field and its source/grade/card describe the bf16 one only.
     #:
     #: Set it explicitly to a POSITIVE number to override the calibration; that
     #: is recorded in `reference_clock_source` and skips the resolution
@@ -471,6 +515,81 @@ class RunConfig:
     #: that matter -- a card with a calibration, and a card without one -- have
     #: to be plantable on a laptop or neither is ever tested before the rental.
     reference_clock_resolver: Callable[[], RF.ReferenceClock] = RF.reference_clock
+    #: Resolvers for the OTHER reference families (`roofline.REFERENCE_FAMILIES`
+    #: minus the bf16 one), keyed by family. A family absent here is resolved
+    #: on first use from the SAME CARD the primary came from, through
+    #: `roofline.reference_clock(card, family=...)`; injected per family for
+    #: the same reason `reference_clock_resolver` is. The bf16 family is not
+    #: accepted here: it is the primary, and two ways to set one reference is
+    #: how this project ends up with two references.
+    reference_clock_resolvers: dict[str, Callable[[], RF.ReferenceClock]] = field(
+        default_factory=dict)
+    #: What `reference_for` resolved, by family, so a run resolves each GEMM's
+    #: clock once and every cell of that family levels against one number.
+    #: Filled lazily: a bf16-only sweep never asks for the fp8 GEMM's clock and
+    #: never records it as missing.
+    family_references: dict[str, RF.ReferenceClock] = field(default_factory=dict)
+
+    def reference_for(self, dtype: str) -> RF.ReferenceClock:
+        """The reference clock a cell of `dtype` is levelled and roofed against.
+
+        WHY PER DTYPE. The calibration measures two GEMMs at two clocks (the
+        committed H200 file: bf16 at 1515 MHz, fp8 at 1905), and a row's roof
+        is its dtype's GEMM. One reference per run levelled every fp8 cell
+        against the bf16 clock, which files a cell at its own roof's clock as
+        LEVEL-failed HIGH and, once an under-load fp8 reference exists, would
+        rescale the fp8 roof by 1905/1515 on top of a peak already measured
+        at 1905. The family is `roofline.reference_family(dtype)`.
+
+        The bf16 family IS the run's primary, returned from the fields
+        `__post_init__` resolved, so the two cannot disagree. Any other
+        family is resolved here on first use, checked against `hardware` the
+        way the primary is (the clock and the roof must come from one file),
+        cached in `family_references`, and recorded in `missing` under
+        `reference_clock_mhz[<family>]` when it has no number. A resolver that
+        hands back a clock of the WRONG family is treated as no clock, with
+        the reason, rather than trusted: the whole point of the family is
+        that the number belongs to a particular GEMM.
+
+        NEVER RAISES, for the reason `__post_init__` gives: it is reached from
+        inside `run_sweep`, where a missing reference is a `ReferenceClockRefused`
+        (REFUSED, exit 2) and not a traceback (ERROR, exit 4).
+        """
+        family = RF.reference_family(dtype)
+        if family == RF.BF16_FAMILY:
+            return RF.ReferenceClock(
+                self.reference_clock_mhz, self.reference_clock_source,
+                card=self.reference_clock_card, grade=self.reference_clock_grade,
+                family=family)
+        if family in self.family_references:
+            return self.family_references[family]
+        resolver = self.reference_clock_resolvers.get(family)
+        if resolver is None:
+            ref = RF.reference_clock(self.reference_clock_card or None,
+                                     family=family)
+        else:
+            ref = resolver()
+        if ref.family != family:
+            ref = replace(
+                ref, mhz=None, grade="",
+                source=(f"the resolver for the {family} family returned a "
+                        f"{ref.family!r}-family clock ({ref.source}); a clock "
+                        "that belongs to another GEMM is not this family's "
+                        "reference"))
+        if (ref.mhz is not None and self.hardware is not None
+                and ref.profile and ref.profile != self.hardware.name):
+            ref = replace(
+                ref, mhz=None, grade="",
+                source=(f"{ref.profile} records {ref.mhz:.0f} MHz for its "
+                        f"{family} GEMM, but the roof this run is scored "
+                        f"against is {self.hardware.name!r}, which is a "
+                        "different profile. LEVEL asks whether the card sat "
+                        "at the clock THE ROOF was measured at, and a "
+                        "datasheet roof was never measured at any clock"))
+        self.family_references[family] = ref
+        if ref.mhz is None:
+            self.missing[_missing_key(family)] = ref.source
+        return ref
 
     def __post_init__(self) -> None:
         """Resolve the reference clock, or record in `missing` why there is none.
@@ -511,6 +630,18 @@ class RunConfig:
         against a number belonging to something else. That is dropped too, with
         both names in the reason.
         """
+        if RF.BF16_FAMILY in self.reference_clock_resolvers:
+            # Recorded, not raised, like every other refusal this method makes
+            # (see above): the run refuses at its first cell with the reason.
+            self.reference_clock_resolvers = {
+                k: v for k, v in self.reference_clock_resolvers.items()
+                if k != RF.BF16_FAMILY}
+            self.missing["reference_clock_resolvers"] = (
+                f"a resolver for the {RF.BF16_FAMILY!r} family was passed in "
+                "reference_clock_resolvers; the bf16 GEMM's clock is the "
+                "primary and is set by reference_clock_resolver or "
+                "reference_clock_mhz, so the entry was dropped rather than "
+                "read as a second primary")
         supplied = self.reference_clock_mhz
         if supplied is not None and supplied > 0:
             self.reference_clock_source = (
@@ -784,39 +915,19 @@ def _apply_correctness(row: SC.Row, c: CorrectnessResult) -> None:
     row.tol_calibrated = c.calibrated
 
 
-def roof_scale_refusal(cfg: RunConfig, load_mhz: float) -> str:
-    """Why the per-row roof cannot be scored for a row, or "" when it can. Pure.
-
-    Three refusals, each named so `roof_note` says which: no under-load clock
-    on the row (the retired seam writes none; an NVML-less container polls
-    none), no reference resolved for the run, or a reference whose grade is
-    not the under-load median. The third is the one that fires against both
-    committed calibrations today: they carry only `detail.gemm_clock_mhz`, the
-    post-hoc idle scalar `calibrate.py` records a 30% spread for, and scaling
-    a roof by `load / reference` against it would move every fraction by up to
-    that much under the name of a correction. REFUSED rather than defaulted
-    to the fixed roof: the fixed-roof figure is still on the row under its own
-    name, with its bias stated, and this column stays 0.0 with the reason.
-    """
-    if not load_mhz or load_mhz <= 0:
-        return ("no under-load clock on this row (retired seam, or no NVML "
-                "during the trials), so the roof cannot be placed at the "
-                "clock the cell ran")
-    if cfg.reference_clock_mhz is None or cfg.reference_clock_mhz <= 0:
-        return ("no reference clock was resolved for this run, so the roof "
-                "has no clock to be rescaled from")
-    if cfg.reference_clock_grade != RF.REFERENCE_UNDER_LOAD:
-        return (f"the reference is graded {cfg.reference_clock_grade or 'none'!r}, "
-                "not an under-load median; rescaling the roof against it "
-                "would put a disowned number into every fraction (see "
-                "reference_clock_source); recalibrate to record the "
-                "under-load median")
-    return ""
-
-
 def _apply_cost(row: SC.Row, cost, ms: float | None,
                 cfg: RunConfig | None = None) -> None:
     """Cost, the FIXED-roof efficiency, and the roof AT THE CLOCK THE CELL RAN.
+
+    THE PER-ROW ROOF HAS TWO WRITERS AND ONE RULE. This function on the pod
+    and `recompute.ceiling_columns` off it both write
+    `roof_at_cell_clock_tflops` / `pct_of_roof_at_cell_clock` / `roof_note`,
+    and both do it through `roofline.cell_clock_roof` with the reference of
+    the ROW'S DTYPE FAMILY (`cfg.reference_for(row.dtype)`: an fp8 row is
+    roofed at the fp8 GEMM's clock, everything else at the bf16 GEMM's). The
+    recompute used to carry no rule and left the per-row roof at the old
+    peak's value beside a rewritten fixed roof; the driver used to hand every
+    dtype the bf16 clock.
 
     Two compute-side fractions are written and they are not the same number.
     `pct_of_achieved_tflops` is against `achieved_peak_tflops`, the
@@ -862,18 +973,12 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
     if peak:
         row.achieved_peak_tflops = peak / 1e12
         row.pct_of_achieved_tflops = 100.0 * row.tflops / row.achieved_peak_tflops
-        why = roof_scale_refusal(cfg, row.sm_clock_load_mhz)
-        if why:
-            row.roof_note = why
-        else:
-            roof = RF.roof_at_clock(row.achieved_peak_tflops,
-                                    cfg.reference_clock_mhz, row.sm_clock_load_mhz)
-            # `roof_at_clock` has already refused every non-positive input
-            # above; a None here would be a contract change, not a row.
-            assert roof is not None
-            row.roof_at_cell_clock_tflops = roof
-            row.pct_of_roof_at_cell_clock = 100.0 * row.tflops / roof
-            row.roof_note = ""
+        ref = cfg.reference_for(row.dtype)
+        roof, why = RF.cell_clock_roof(row.achieved_peak_tflops,
+                                       row.sm_clock_load_mhz, ref.mhz, ref.grade)
+        row.roof_at_cell_clock_tflops = roof
+        row.pct_of_roof_at_cell_clock = (100.0 * row.tflops / roof) if roof else 0.0
+        row.roof_note = why
     else:
         row.roof_note = f"no measured compute ceiling for dtype {row.dtype!r}"
 
@@ -886,8 +991,15 @@ def _apply_cost(row: SC.Row, cost, ms: float | None,
             cost.bytes_total, ms, hw.bandwidth_bytes_s)
 
 
-def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
+def _instrument_kwargs(cfg: RunConfig, l2_flush: bool, dtype: str) -> dict:
     """What `time_kernel` is called with for one mode of one cell.
+
+    THE REFERENCE IS THE CELL'S DTYPE FAMILY'S (`cfg.reference_for`), not the
+    run's one number: the instrument scores LEVEL against what it is handed,
+    and handing an fp8 cell the bf16 GEMM's clock made it fail HIGH at its own
+    roof's clock. `_apply_kernel_timing` writes the same reference onto the
+    row, from the same call, so the verdict and the number it was scored
+    against cannot come from two places.
 
     The flusher is BUILT HERE rather than left to `time_kernel`'s own default,
     so `flush_mb` and `flush_mode` stay the run's knobs and stay recorded: the
@@ -904,7 +1016,7 @@ def _instrument_kwargs(cfg: RunConfig, l2_flush: bool) -> dict:
     """
     kw = dict(warmup_ms=cfg.warmup_ms, target_ms=cfg.target_ms,
               trials=cfg.trials, l2_flush=l2_flush,
-              reference_clock_mhz=cfg.reference_clock_mhz)
+              reference_clock_mhz=cfg.reference_for(dtype).mhz)
     if l2_flush:
         kw["flusher"] = T.L2Flusher(cfg.flush_mb, device=cfg.device,
                                     mode=cfg.flush_mode)
@@ -948,16 +1060,20 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     decode session and empty `efficiency_report` of the cells the study is
     about. The HIGH failure is on the row as `clock_level_ok = failed` with
     `clock_level_side = high`, its fixed-roof fraction is the thing that is
-    wrong, and `roof_at_cell_clock_tflops` is the correction. A consumer that
-    excludes on `clock_level_ok == failed` alone now drops boosted cells; it
-    should read the side.
+    wrong, and `roof_at_cell_clock_tflops` is the correction. THE RULE FOR
+    EVERY CONSUMER: LOW or DRIFT excludes (that is exactly `throttled`); HIGH
+    is not an exclusion, it means "the fixed-roof fraction is not comparable,
+    read pct_of_roof_at_cell_clock". A consumer that excludes on
+    `clock_level_ok == failed` alone drops boosted cells; it must read the
+    side or branch on `throttled`.
 
     THE REFERENCE IS WRITTEN ONTO THE ROW, from the config and not from the
-    record: `cfg.reference_clock_mhz` is what `_instrument_kwargs` handed the
-    instrument, so the two are one number on the real path, and the config
-    also carries the SOURCE, which the record does not. A row that says
-    `clock_level_ok = ok` and does not say against what cannot be re-derived
-    once the yaml it came from has been overwritten by a recalibration.
+    record: `cfg.reference_for(row.dtype)` is what `_instrument_kwargs` handed
+    the instrument for this cell, so the two are one number on the real path,
+    and the config also carries the SOURCE, which the record does not. A row
+    that says `clock_level_ok = ok` and does not say against what cannot be
+    re-derived once the yaml it came from has been overwritten by a
+    recalibration. Per dtype family: an fp8 row names the fp8 GEMM's clock.
 
     "undetermined" IS NOT THROTTLED, which is the one place this departs from
     "unknown counts against the gate". These consumers are inclusion filters
@@ -985,11 +1101,13 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     # rule, so a record built by a fake that set the verdict without the side
     # (every fake in tests/ before v6) still gets the right one; the
     # instrument's own field is preferred when it carries one.
+    ref = cfg.reference_for(row.dtype)
     side = kt.clock_level_side or (
-        T.level_side(kt.sm_clock_load_mhz, cfg.reference_clock_mhz) or "")
+        T.level_side(kt.sm_clock_load_mhz, ref.mhz) or "")
     if row.clock_level_ok != SC.VERDICT_FAILED:
         side = ""
     row.clock_level_side = side
+    # LOW or DRIFT -> throttled; HIGH -> not throttled, per-row roof instead.
     row.throttled = (row.clock_drift_ok == SC.VERDICT_FAILED
                      or (row.clock_level_ok == SC.VERDICT_FAILED
                          and side != T.LEVEL_HIGH))
@@ -1001,8 +1119,8 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     row.host_enqueue_ms = kt.host_enqueue_ms or 0.0
     row.host_backlog_iters = kt.host_backlog_iters or 0.0
     row.host_note = kt.host_note
-    row.reference_clock_mhz = cfg.reference_clock_mhz or 0.0
-    row.reference_clock_source = cfg.reference_clock_source
+    row.reference_clock_mhz = ref.mhz or 0.0
+    row.reference_clock_source = ref.source
 
 
 def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:
@@ -1165,7 +1283,7 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
     (`CellPin()` with status "off") on every unpinned sweep.
     """
     refuse_dropped_retired_knobs(cfg)
-    refuse_unreferenced_clock(cfg)
+    refuse_unreferenced_clock(cfg, spec.dtype)
     written = 0
     x, weights = make_inputs(spec, device=cfg.device, scale=cfg.input_scale,
                              reuse_weights=cfg.reuse_weights)
@@ -1317,9 +1435,9 @@ def _run_modes(spec: BenchSpec, pipe: Pipeline, span, impl: str, keyed,
                              flush_mode=cfg.flush_mode, **extra)
             elif use_graph:
                 res = cfg.graph_timer(call, on_captured=verify_replay,
-                                      **_instrument_kwargs(cfg, l2))
+                                      **_instrument_kwargs(cfg, l2, spec.dtype))
             else:
-                res = cfg.timer(call, **_instrument_kwargs(cfg, l2))
+                res = cfg.timer(call, **_instrument_kwargs(cfg, l2, spec.dtype))
         except T.NotCapturable as e:
             # A finding, not a failure: an implementation that cannot be
             # graph-captured cannot be used in real MoE inference. It belongs in

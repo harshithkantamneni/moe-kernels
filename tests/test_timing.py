@@ -869,3 +869,25 @@ def test_time_kernel_matches_time_eager_on_a_short_kernel_within_two_percent():
     else:
         assert ours.clock_source == "none" and "nvidia-ml-py" in ours.clock_note
     assert abs(ours.ms_p50 - eager.ms_p50) / eager.ms_p50 <= 0.02
+
+
+# --- the header describes the tree it is in ---------------------------------
+
+def test_the_module_docstring_no_longer_defers_the_ladder_migration():
+    """Inverse hit, closed: the header said the ladder scripts "still carry
+    their private `time_call`" and that moving them was "the next phase",
+    after every arm script had moved. Asserted against the tree, not against
+    the prose alone: the scripts that call `time_kernel` are counted."""
+    import pathlib
+
+    doc = T.__doc__ or ""
+    assert "still carry their private" not in doc
+    assert "next phase" not in doc
+    assert "moved onto it" in doc
+    scripts = pathlib.Path(__file__).resolve().parents[1] / "scripts"
+    on_instrument = [p.name for p in scripts.glob("*.py")
+                     if "time_kernel(" in p.read_text()]
+    assert len(on_instrument) >= 10, on_instrument
+    private = [p.name for p in scripts.glob("*.py")
+               if "def time_call" in p.read_text()]
+    assert private == ["block_m_crossing_sweep.py"], private

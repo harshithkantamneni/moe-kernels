@@ -425,9 +425,12 @@ class Row:
     # 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
     # the same cell timed at ratio 0.998 with identical end clocks. On a v5 row
     # `driver._apply_kernel_timing` writes the instrument's answer to the same
-    # question -- either under-load clock verdict FAILED -- because four
+    # question -- DRIFT failed, or LEVEL failed on the LOW side -- because four
     # consumers read this one column as "do not pool this row", and a column
     # that is False by construction turns all five into checks that cannot fail.
+    # A LEVEL failure on the HIGH side (v6, `clock_level_side`) does NOT set
+    # it: a cell that boosted above the roof's clock is the mirror image of a
+    # throttle, and on an H200 the normal state of a memory-bound cell.
     sm_clock_start_mhz: int = 0
     sm_clock_end_mhz: int = 0
     temp_start_c: int = 0
@@ -440,8 +443,12 @@ class Row:
     # polled from a background thread during the measurement, not sampled at an
     # idle instant beside it, and the three verdicts are the three ways a cell
     # can be untrustworthy without the timer noticing anything wrong:
-    #   LEVEL   the card sat below `timing.LEVEL_FRACTION` of the clock the roof
-    #           was measured at, so the cell is not comparable with the roof.
+    #   LEVEL   the card sat outside `[timing.LEVEL_FRACTION,
+    #           timing.LEVEL_HIGH_FRACTION]` of the clock the roof was measured
+    #           at (two-sided since 2026-09-03; `clock_level_side` names the
+    #           side). LOW: the cell is not comparable with the roof, exclude.
+    #           HIGH: the FIXED-roof fraction is not comparable; keep the row
+    #           and read `pct_of_roof_at_cell_clock`.
     #   DRIFT   first and last under-load samples disagree by more than
     #           `timing.DRIFT_FRACTION` in EITHER direction. A rise is a defect
     #           too: the warmup never reached the operating point.
@@ -477,9 +484,12 @@ class Row:
     #: shipped with a ruler it never used.
     reference_clock_mhz: float = 0.0
     #: Where that number came from, `roofline.ReferenceClock.source`: the
-    #: file, the field, and the GRADE. Read it before trusting the verdict: a
-    #: source that says DISOWNED was the post-hoc idle scalar (30% spread
-    #: across one card's calibrations) and LEVEL against it is provisional.
+    #: file, the field, the GRADE, and which GEMM. Read it before trusting the
+    #: verdict: a source that says DISOWNED was the post-hoc idle scalar (30%
+    #: spread across one card's calibrations) and LEVEL against it is
+    #: provisional. PER DTYPE FAMILY: an fp8 row's reference is the fp8
+    #: GEMM's clock (`detail.fp8_gemm_clock*`), every other row's the bf16
+    #: GEMM's, because those are two roofs measured at two clocks.
     reference_clock_source: str = ""
     #: Which way a LEVEL failure went: "low" (the throttle the flag was built
     #: for; also sets `throttled`), "high" (a boosted cell whose fixed-roof
@@ -494,10 +504,12 @@ class Row:
     #: from the boundary the row sat. 0.0 on an untimed or retired-seam row.
     host_backlog_iters: float = 0.0
     #: The compute roof AT THE CLOCK THIS CELL RAN: `achieved_peak_tflops *
-    #: sm_clock_load_mhz / reference_clock_mhz`, `roofline.roof_at_clock`.
-    #: Written only when the reference is an UNDER-LOAD median; 0.0 with the
-    #: reason in `roof_note` otherwise. 0.0 means "not scored", never a roof
-    #: of zero: read it through `has_cell_clock_roof`.
+    #: sm_clock_load_mhz / reference_clock_mhz`, `roofline.cell_clock_roof`,
+    #: with the reference of the row's dtype family. Written only when that
+    #: reference is an UNDER-LOAD median; 0.0 with the reason in `roof_note`
+    #: otherwise. 0.0 means "not scored", never a roof of zero: read it
+    #: through `has_cell_clock_roof`. Written by two mirrors, `driver.
+    #: _apply_cost` and `recompute.ceiling_columns`, through one rule.
     roof_at_cell_clock_tflops: float = 0.0
     #: `tflops` as a percentage of that roof. The compute-side efficiency to
     #: quote from a v6 row; `pct_of_achieved_tflops` is the fixed-roof figure

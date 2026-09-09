@@ -40,13 +40,15 @@ the A100 pod, a bias of 8-16% in alpha at the smallest ladder cells, different
 per card, and of the order of the cross-card effect the study registered.
 
 `time_kernel` is the instrument that replaces both, and `TIMING_BASIS` is its
-name. The ladder scripts still carry their private `time_call` as this is
-written; moving them onto `time_kernel` is the next phase, and until it lands
-a row is comparable with the roof only if it carries `TIMING_BASIS`. A
-consumer that adopts the instrument writes the string into every row it
-produces, so a reader can tell at a glance which apparatus made a number, and
-a row without it is a row from before the fix. Change the string when the
-instrument changes in a way that moves numbers; never otherwise.
+name. The ladder scripts moved onto it in the phase after this header was
+written (every `scripts/*.py` that times a kernel calls `time_kernel`; the one
+remaining `def time_call`, in `block_m_crossing_sweep.py`, is the retired path
+kept for reproducing old rows). A row is comparable with the roof only if it
+carries `TIMING_BASIS`: a consumer on the instrument writes the string into
+every row it produces, so a reader can tell at a glance which apparatus made
+a number, and a row without it is a row from before the fix. Change the
+string when the instrument changes in a way that moves numbers; never
+otherwise.
 
 v3 (2026-09-03) is such a change: the warmup now runs the FLUSHED loop when
 the trials are flushed (see `warm_until`), which moves the operating point a
@@ -1182,7 +1184,10 @@ class KernelTiming:
     and `sm_clock_end_mhz` need two. `clock_level_ok` and `clock_drift_ok` are
     the two verdicts `clock_flags` documents; a consumer that filters rows
     must test BOTH, since the old single drop-only flag is the defect this
-    record exists to replace.
+    record exists to replace, AND must read `clock_level_side` before
+    excluding on LEVEL: LOW or DRIFT excludes, HIGH does not (the cell ran
+    above the roof's clock; its fixed-roof fraction is not comparable, and
+    the driver writes the roof at the cell's clock instead).
 
     `host_bound` is the third verdict, from `host_bound_verdict`: True when
     any trial's queue had drained by the time the host finished enqueueing,

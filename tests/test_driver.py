@@ -363,7 +363,10 @@ def test_an_instrument_row_leaves_the_retired_clock_QUANTITIES_alone(tmp_path):
 
 @pytest.mark.parametrize("level,drift,throttled", [
     (True, True, "False"),      # both clock checks passed
-    (False, True, "True"),      # LEVEL failed: the card sat under the roof's clock
+    (False, True, "True"),      # LEVEL failed with no side derivable (this
+                                # config resolves no reference), which is the
+                                # LOW case the flag was built for; the HIGH
+                                # side is planted in the v6 section below
     (True, False, "True"),      # DRIFT failed: it moved while the trials ran
     (None, None, "False"),      # undetermined is not evidence, see below
 ])
@@ -1145,13 +1148,17 @@ def test_an_uncapturable_span_becomes_a_finding_not_a_crash(monkeypatch):
 # --- the LEVEL reference: resolved from the card, or refused ----------------
 
 def clock_from(mhz, *, card="NVIDIA H200", profile="NVIDIA H200 (measured)",
-               source=""):
+               source="", grade="", family=RF.BF16_FAMILY):
     """A resolver returning one planted `ReferenceClock`, the way `cfg_for`
     plants a timer. Both branches that matter -- a card with a calibration and a
-    card without one -- need a card ATTACHED, and no test box has one."""
+    card without one -- need a card ATTACHED, and no test box has one.
+
+    `grade` defaults to none, which REFUSES the per-row roof; a test that wants
+    the roof written plants `RF.REFERENCE_UNDER_LOAD` and says so."""
     return lambda: RF.ReferenceClock(
         mhz, source or (f"{profile}: planted" if mhz else "planted refusal"),
-        card=card, profile=profile if mhz else "")
+        card=card, profile=profile if mhz else "", grade=grade if mhz else "",
+        family=family)
 
 
 def levelling_timer(fn, *, load_mhz, reference_clock_mhz=None, warmup_ms=300.0,
@@ -1188,7 +1195,7 @@ def test_the_reference_clock_comes_from_the_attached_card_s_own_calibration():
     `reference_clock_mhz()` has read it. Without a reference `clock_flags`
     leaves `clock_level_ok` None, so the LEVEL verdict could never fire on the
     path that wrote all 100,144 published rows -- and LEVEL is the entire reason
-    `TIMING_BASIS` is at v2."""
+    `TIMING_BASIS` left v1."""
     cfg = D.RunConfig(reference_clock_resolver=lambda: RF.reference_clock("NVIDIA H200"))
     assert cfg.reference_clock_mhz == 1515.0
     assert "gemm_clock_mhz" in cfg.reference_clock_source
@@ -1591,3 +1598,211 @@ def test_a_kernel_s_own_RuntimeError_is_still_one_cell_s_error(tmp_path):
     r = SC.read_csv(cfg.csv_path)[0]
     assert "timing error" in r["notes"] and "illegal memory access" in r["notes"]
     assert float(r["ms_p50"]) == 0.0
+
+
+# --- v6: the producer's own second sites -------------------------------------
+# The LEVEL verdict went two-sided at ONE producer and the driver was taught
+# to read the side. These pin every place the driver writes `throttled`,
+# `clock_level_ok`, `clock_level_side`, `roof_at_cell_clock_tflops` and
+# `pct_of_roof_at_cell_clock` to one rule: LOW or DRIFT -> throttled; HIGH ->
+# not throttled, per-row roof written; and the reference is the row's dtype
+# family's GEMM.
+
+from moe.bench.bytes_model import PipelineCost  # noqa: E402
+
+UNDER_LOAD = RF.REFERENCE_UNDER_LOAD
+PLANTED_HW = RF.Hardware(
+    name="NVIDIA H200 (measured)", bandwidth_bytes_s=4.37e12,
+    peak_flops={"fp32": 700e12, "bf16": 700e12, "fp8_e4m3": 1447.7e12},
+    source="planted", ceiling_pattern="triad")
+
+
+def _timing(load, *, level, drift, side="", ref=1515.0):
+    end = load if drift else load * 0.9
+    return T.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=4, trials=1,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load,
+        sm_clock_start_mhz=load, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=4, warmup_calls=9,
+        flush_mb=8, clock_samples=4, clock_source="injected", clock_poll_ms=0.01,
+        host_bound=False, host_enqueue_ms=0.1, clock_level_side=side,
+        reference_clock_mhz=ref)
+
+
+def _timed_row(cfg, kt, dtype="bf16"):
+    row = SC.Row(impl="base", model="mixtral-8x7b", dtype=dtype, num_tokens=64,
+                 gpu_name="NVIDIA H200")
+    D._apply_kernel_timing(row, kt, cfg)
+    D._apply_cost(row, PipelineCost(flops=2e11, bytes_total=10**9), 1.0, cfg)
+    return row
+
+
+@pytest.mark.parametrize("name,load,level,drift,side,throttled", [
+    ("clean", 1500.0, True, True, "", False),
+    ("high", 1980.0, False, True, T.LEVEL_HIGH, False),
+    ("low", 1400.0, False, True, T.LEVEL_LOW, True),
+    ("drift", 1500.0, True, False, "", True),
+])
+def test_the_five_fields_agree_on_the_rule_for_every_shape_of_row(
+        tmp_path, name, load, level, drift, side, throttled):
+    """HIGH, LOW, DRIFT and clean, through `_apply_kernel_timing` then
+    `_apply_cost`, against an under-load 1515 reference. The rule: LOW or
+    DRIFT is `throttled`; HIGH is not, and is the row whose fixed-roof
+    fraction is wrong by 1980/1515 and whose per-row roof is the correction.
+    The roof is written on EVERY shape (a LOW cell's roof is lower, and right
+    for it): the roof is a number, `throttled` is the verdict, and a consumer
+    excludes on the verdict."""
+    cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
+                  reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD))
+    assert cfg.reference_clock_grade == UNDER_LOAD
+    row = _timed_row(cfg, _timing(load, level=level, drift=drift, side=side))
+    assert row.clock_level_ok == SC.verdict_word(level), name
+    assert row.clock_level_side == side, name
+    assert row.throttled is throttled, name
+    assert row.roof_at_cell_clock_tflops == pytest.approx(700.0 * load / 1515), name
+    assert row.pct_of_roof_at_cell_clock == pytest.approx(
+        100.0 * row.tflops / (700.0 * load / 1515)), name
+    assert row.roof_note == ""
+    assert row.reference_clock_mhz == 1515.0
+    # And the ratio between the two fractions is exactly the clock ratio.
+    assert (row.pct_of_achieved_tflops / row.pct_of_roof_at_cell_clock
+            == pytest.approx(load / 1515))
+
+
+def test_a_high_side_row_derived_from_the_clocks_alone_is_not_throttled(tmp_path):
+    """A record that carries the verdict without the side (every fake before
+    v6) still lands on the right side: the driver derives it from the clocks
+    by the instrument's own rule. And the side is cleared when LEVEL did not
+    fail, so a stale side on a record cannot outlive its verdict."""
+    cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
+                  reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD))
+    high = _timed_row(cfg, _timing(1980.0, level=False, drift=True))
+    assert high.clock_level_side == T.LEVEL_HIGH and high.throttled is False
+    low = _timed_row(cfg, _timing(1400.0, level=False, drift=True))
+    assert low.clock_level_side == T.LEVEL_LOW and low.throttled is True
+    passed = _timed_row(cfg, _timing(1500.0, level=True, drift=True, side=T.LEVEL_HIGH))
+    assert passed.clock_level_side == "" and passed.throttled is False
+
+
+def test_a_v6_row_round_trips_through_the_csv_with_its_side_intact(tmp_path):
+    """The wire, end to end: a boosted cell EARNS its HIGH verdict from a
+    resolved under-load 1515 through `clock_flags`, is written, and reads back
+    with the side, `throttled = False`, the roof at its clock and the
+    reference on the row. The LOW row beside it reads back excluded. This is
+    the row every ladder and gate will see on the H200, where the boost is
+    the normal state of a memory-bound cell."""
+    seen = {}
+    for load in (1980.0, 1400.0, 1500.0):
+        cfg = cfg_for(tmp_path / str(int(load)), hardware=PLANTED_HW,
+                      timer=partial(levelling_timer, load_mhz=load),
+                      reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD))
+        D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                      "t_counting_up_gemm")], cfg, routing=lambda s: None,
+                    info=FAKE_INFO)
+        seen[load] = SC.read_csv(cfg.csv_path)[0]
+    high, low, clean = seen[1980.0], seen[1400.0], seen[1500.0]
+    assert SC.timing_verdict(high, "clock_level_ok") == SC.VERDICT_FAILED
+    assert high["clock_level_side"] == T.LEVEL_HIGH
+    assert SC.row_bool(high, "throttled") is False              # KEPT
+    assert SC.has_cell_clock_roof(high)
+    assert float(high["roof_at_cell_clock_tflops"]) == pytest.approx(700 * 1980 / 1515)
+    assert float(high["pct_of_roof_at_cell_clock"]) > 0
+    assert float(high["reference_clock_mhz"]) == 1515.0
+    assert "planted" in high["reference_clock_source"]
+    assert SC.timing_verdict(low, "clock_level_ok") == SC.VERDICT_FAILED
+    assert low["clock_level_side"] == T.LEVEL_LOW
+    assert SC.row_bool(low, "throttled") is True                # EXCLUDED
+    assert float(low["roof_at_cell_clock_tflops"]) == pytest.approx(700 * 1400 / 1515)
+    assert clean["clock_level_side"] == "" and SC.row_bool(clean, "throttled") is False
+
+
+def test_an_fp8_cell_is_levelled_and_roofed_against_the_fp8_gemm_s_clock(tmp_path):
+    """TWO ROOFS, TWO CLOCKS. The instrument is handed the fp8 GEMM's clock
+    for an fp8 cell and the bf16 GEMM's for everything else, from one call
+    (`reference_for`) that also writes the reference onto the row. An fp8
+    cell at 1905 is AT its roof's clock: level, side "", roof unchanged; the
+    one-reference design filed it HIGH against 1515 and would have rescaled a
+    peak measured at 1905 by 1905/1515."""
+    cfg = cfg_for(
+        tmp_path, hardware=PLANTED_HW,
+        reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD),
+        reference_clock_resolvers={RF.FP8_FAMILY: clock_from(
+            1905.0, grade=UNDER_LOAD, family=RF.FP8_FAMILY)})
+    assert D._instrument_kwargs(cfg, True, "fp8_e4m3")["reference_clock_mhz"] == 1905.0
+    assert D._instrument_kwargs(cfg, True, "bf16")["reference_clock_mhz"] == 1515.0
+    assert D.unreferenced_clock(cfg, "fp8_e4m3") == []
+    level, drift = T.clock_flags(1905.0, 1905.0, 1905.0, 1905.0)
+    row = _timed_row(cfg, _timing(1905.0, level=level, drift=drift, ref=1905.0),
+                     dtype="fp8_e4m3")
+    assert row.clock_level_ok == SC.VERDICT_OK and row.clock_level_side == ""
+    assert row.throttled is False
+    assert row.reference_clock_mhz == 1905.0
+    assert row.roof_at_cell_clock_tflops == pytest.approx(1447.7)
+    assert row.roof_at_cell_clock_tflops != pytest.approx(1447.7 * 1905 / 1515)
+    assert cfg.missing == {}
+    # and a bf16 row on the same config is still against 1515
+    bf16 = _timed_row(cfg, _timing(1980.0, level=False, drift=True), dtype="bf16")
+    assert bf16.reference_clock_mhz == 1515.0 and bf16.clock_level_side == T.LEVEL_HIGH
+
+
+def test_an_fp8_cell_on_a_card_with_no_fp8_reference_is_refused_by_name(tmp_path):
+    """REFUSE rather than level against the other GEMM. The card is attached,
+    the bf16 reference resolved, the fp8 one did not: the bf16 cells measure,
+    the fp8 cell is a `ReferenceClockRefused` naming the family, the card and
+    the reason, before anything is spent."""
+    cfg = cfg_for(
+        tmp_path, hardware=PLANTED_HW,
+        reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD),
+        reference_clock_resolvers={RF.FP8_FAMILY: clock_from(
+            None, card="NVIDIA H200", family=RF.FP8_FAMILY,
+            source="the calibration wrote fp8_gemm_clock_mhz: 0")})
+    assert D.unreferenced_clock(cfg, "bf16") == []
+    assert D.unreferenced_clock(cfg) == []
+    assert D.unreferenced_clock(cfg, "fp8_e4m3") == ["eager"]
+    assert cfg.missing == {"reference_clock_mhz[fp8]":
+                           "the calibration wrote fp8_gemm_clock_mhz: 0"}
+    with pytest.raises(D.ReferenceClockRefused) as e:
+        D.refuse_unreferenced_clock(cfg, "fp8_e4m3")
+    msg = str(e.value)
+    assert "fp8 GEMM" in msg and "fp8_e4m3" in msg and "NVIDIA H200" in msg
+    assert "fp8_gemm_clock_mhz: 0" in msg
+    assert "reference_clock_resolvers" in msg
+    D.refuse_unreferenced_clock(cfg, "bf16")              # the PASS branch
+    # A resolver that hands back the OTHER GEMM's clock is no reference
+    # either: the family is the point of the number.
+    wrong = cfg_for(tmp_path / "wrong", hardware=PLANTED_HW,
+                    reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD),
+                    reference_clock_resolvers={RF.FP8_FAMILY: clock_from(1515.0)})
+    assert wrong.reference_for("fp8_e4m3").mhz is None
+    assert "another GEMM" in wrong.missing["reference_clock_mhz[fp8]"]
+    # And a bf16 entry is not a second primary; it is dropped with the reason.
+    two = cfg_for(tmp_path / "two", reference_clock_resolver=clock_from(1515.0),
+                  reference_clock_resolvers={RF.BF16_FAMILY: clock_from(1980.0)})
+    assert two.reference_clock_mhz == 1515.0
+    assert two.reference_clock_resolvers == {}
+    assert "second primary" in two.missing["reference_clock_resolvers"]
+
+
+def test_the_fp8_reference_defaults_to_the_same_card_the_primary_came_from():
+    """No injected fp8 resolver: the fp8 GEMM's clock is read from the SAME
+    card's calibration as the bf16 one, and only when asked, so a bf16-only
+    sweep never records the fp8 GEMM as missing."""
+    cfg = D.RunConfig(reference_clock_resolver=clock_from(1515.0))
+    assert cfg.family_references == {} and cfg.missing == {}
+    fp8 = cfg.reference_for("fp8_e4m3")
+    assert fp8.mhz == 1905.0 and fp8.family == RF.FP8_FAMILY
+    assert fp8.grade == RF.REFERENCE_IDLE_SCALAR
+    assert cfg.missing == {}
+    assert cfg.reference_for("fp8_e5m2") is fp8          # resolved once
+    # The A100's calibration has no fp8 GEMM, and says so on first use.
+    a100 = D.RunConfig(reference_clock_resolver=clock_from(
+        1335.0, card="NVIDIA A100-SXM4-80GB", profile="NVIDIA A100-SXM4-80GB (measured)"))
+    assert a100.reference_for("fp8_e4m3").mhz is None
+    assert "no fp8 GEMM clock" in a100.missing["reference_clock_mhz[fp8]"]
+    # The clock and the roof must come from one file, per family too.
+    datasheet = RF.load_hardware("h200_nvl", allow_unverified=True)
+    mixed = D.RunConfig(hardware=datasheet, reference_clock_mhz=1515.0,
+                        reference_clock_resolvers={RF.FP8_FAMILY: clock_from(
+                            1905.0, grade=UNDER_LOAD, family=RF.FP8_FAMILY)})
+    assert mixed.reference_for("fp8_e4m3").mhz is None
+    assert "different profile" in mixed.missing["reference_clock_mhz[fp8]"]
