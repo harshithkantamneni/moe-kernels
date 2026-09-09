@@ -2903,14 +2903,16 @@ def test_the_read_roof_is_looked_up_by_the_calibrations_own_pattern_names(tmp_pa
              {"pattern": "write", "gbps": 4681.4, "note": ""}]
     write(fresh)
     facts = AB.measured_card("NVIDIA H200")
-    assert facts["roof_bytes_s"] == pytest.approx(4469.6e9) and facts["roof_pattern"] == "read_stream"
+    assert facts["roof_bytes_s"] == pytest.approx(4469.6e9)
+    assert facts["roof_pattern"] == "read_stream"
     assert facts["l2_bytes"] == 62914560
     assert facts["ridge"] == pytest.approx(712.3 / 4.3744)
     disowned = [dict(p) for p in fresh]
     disowned[0]["note"] = f"probe {CAL.DISOWNED}: the tree bounded it"
     write(disowned)
     facts = AB.measured_card("NVIDIA H200")
-    assert facts["roof_bytes_s"] == pytest.approx(4389.4e9) and facts["roof_pattern"] == "read_reduce"
+    assert facts["roof_bytes_s"] == pytest.approx(4389.4e9)
+    assert facts["roof_pattern"] == "read_reduce"
     write([{"pattern": "read", "gbps": 4469.6}, {"pattern": "copy", "gbps": 4200.0}])
     facts = AB.measured_card("NVIDIA H200")
     assert facts["roof_bytes_s"] == pytest.approx(4469.6e9) and facts["roof_pattern"] == "read"
