@@ -46,13 +46,32 @@ bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrat
   ledger is `$SESSION/ARMS.tsv` (`ARMS-dryrun.tsv` under `--dry-run`), one row
   per arm: `arm  state  rc  seconds  dirty  log  note`, last row wins. Logs are
   `$SESSION/logs/<arm>.log`.
-- **Resume** by running the same command with `SESSION=<that directory>`. Rows
-  in `DONE`, `CLAIM_FAIL` or `INVALID` are LATCHED and skipped; `REFUSED` and
-  `RETRY` rows are attempted again (a refusal cost nothing, and the usual
-  reason to re-run is that its precondition was fixed); an `UNKNOWN` row
-  (exit 1 from a file that has not adopted `moe/bench/exit_codes`) is not
-  latched and is disclosed by name. Delete a row from the ledger to force a
-  latched arm to run again.
+- **Resume** by running the same command with `SESSION=<that directory>`, or
+  `--resume-latest`. Rows in `DONE`, `CLAIM_FAIL` or `INVALID` are LATCHED and
+  skipped; `REFUSED` and `RETRY` rows are attempted again (a refusal cost
+  nothing, and the usual reason to re-run is that its precondition was fixed);
+  an `UNKNOWN` row (exit 1 from a file that has not adopted
+  `moe/bench/exit_codes`) is not latched and is disclosed by name. Delete a row
+  from the ledger to force a latched arm to run again.
+- **A RESUME RE-RUNS NO INVALID ROW.** That is the latch, and it means a
+  session whose arms landed INVALID resumes into nothing however many defects
+  have been fixed since. The 2026-09-09 session landed six. The next session
+  for those arms is `--new`, which opens a fresh ledger deliberately; the
+  driver prints the exact command and the state each arm is expected to reach
+  under the heading THE NEXT SESSION, AND WHY IT IS `--new`:
+
+  ```bash
+  bash scripts/h200_gaps_session.sh --new \
+    --only calibrate,pin_probe-n64-g1,roofline-n64-g1,cap_test,bn_g16,dtype,bm128_depth,alias_ablation
+  ```
+
+  ~71 priced / ~143 bounded minutes. `roofline-n64-g1` is expected to reach
+  CLAIM_FAIL and that is its result (C3 at +0.053 against a 0.10 gate, C4 at
+  0.552 against 0.95); `alias_ablation` is expected either to ask P1 or to stop
+  at its probe for 1.3 min and exit 3; the other five are expected DONE or
+  CLAIM_FAIL, and an INVALID among them means that arm's fix did not land.
+  Editing rows out of a ledger by hand is the other way back and it rewrites
+  the record of what was spent.
 - The session's own start is read from the UTC stamp at the END of the
   session directory's name, so a resume into the default directory still
   counts the calibration its first pass published. An operator-supplied
@@ -105,8 +124,8 @@ against `--list` by `tests/test_docs.py`.
 | `roofline-n64-g1` | 1 | KERNEL | THE CONTROL: BLOCK_M=128 at the swept configuration; can refute the ceiling, cannot confirm it for production; its predicted outcome is already NOT TILE-ATTRIBUTABLE | KEEP as the control for `bm128_depth` |
 | `roofline-n256-g16` | 0 | FREE | THE CLAIM: BLOCK_M=128 at the configuration vLLM ships. No arm confirms the headline on sm_90: at BLOCK_N=256 no BLOCK_M=256 control fits at ANY warp or stage count (65536 of 65536 registers per block; `bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0` exits 2), and no BLOCK_SIZE_N does either | CUT: REFUSES at `--capability 9.0`; booked zero, the refusal is the finding. It is not one fix away: `--num-warps 16 --num-stages 3` refuses too, so the paper's headline has no confirming arm on this card |
 | `roofline-n256-g32` | 0 | FREE | the same at the swizzle vLLM ships at 2048 tokens | CUT: refuses for the same missing control |
-| `bm128_depth` | 5 | KERNEL | five clean memory-bound treads at the production tile, `--r-max 2048`; the whole 128 row currently rests on two fits | KEEP |
-| `alias_ablation` | 13 | WALL | THE FIRST INFERENTIAL LINK: is the per-tile slope DRAM traffic at all, measured with no byte model, bandwidth, ridge or intercept | ADDED on the verdict's finding that nothing scheduled it; read its P1 RESULT line's WORD, not its exit code (a dot-mode fallback leaves P1 UNKNOWN, which classifies as CLAIM_FAIL and latches) |
+| `bm128_depth` | 5 | KERNEL | five clean memory-bound treads at the production tile, `--r-max 2048 --partner-block-m 32`; the whole 128 row currently rests on two fits | KEEP, and the partner is not optional: at the pairing {128, 256} the non-vacuity floor is 0.838 of the roof, no BLOCK_M=256 ladder in the corpus reaches it, and the arm refused its own reference and landed INVALID after 292 s on 2026-09-09. The 5 min prices the BLOCK_M=128 ladder only; the partner's treads are not in that figure yet |
+| `alias_ablation` | 13 | WALL | THE FIRST INFERENTIAL LINK: is the per-tile slope DRAM traffic at all, measured with no byte model, bandwidth, ridge or intercept | ADDED on the verdict's finding that nothing scheduled it; read its P1 RESULT line's WORD, not its exit code. BOOKED `--dot-fallback refuse` SINCE 2026-09-09: under `allow` the 2026-09-09 run fell to dot mode, spent 308 s and latched a CLAIM_FAIL with P1 UNKNOWN at alpha >= 0.229. A probe miss now costs 1.3 min and exits 3; the sum grid it probes was widened downward in warps |
 | `noise_floor` | 120 | WALL | a real between-replicate sd, `--replicates 3`, four arms, `--publish` into `results/published/NOISE_FLOOR.json`; until it exists every MDE line says ASSUMED | KEEP only bounded and published, which it now is; the verdict's other precondition (children read on CLAIM_FAIL) is that script's own fix |
 | `bn_g16` | 36 | KERNEL | `alpha_a` as a fitted slope and the residual that says whether the three-term model is complete; the arm that decides the BLOCK_M=128 row (it lives only if `alpha_a < 0.17`) | KEEP, booked 36 not 11 |
 | `anchor_measure` | 5 | WALL | the memory-branch level measured at matched reuse rather than extrapolated | KEEP |
@@ -114,8 +133,8 @@ against `--list` by `tests/test_docs.py`.
 | `occupancy` | 23 | KERNEL | does alpha track residency or program order; P2 is EXPECTED to fail and that FAIL is the finding | not in the verdict's KEEP table; booked with `--fail-on-gate` so the failing claim reaches the ledger as one |
 | `mma_switch` | 7 | ALLOW | whether the tile alone selects the instruction at fixed tokens | KEEP |
 | `ruler` | 2 | WALL | prices the read-vs-triad and clocks-first ruler changes on the committed corpus without adopting them | KEEP |
-| `cap_test` | 5 | KERNEL | BLOCK_M=16's cap, DEMOTED: on uniform routing vLLM runs 16 multi-tile in 1 of 24 cells, so this tests the formula | KEEP |
-| `dtype` | 6 | KERNEL | how much of the 1.15 fp8/bf16 crossing is the config vLLM resolved per dtype | CUT in the verdict until its C3 window is re-derived (at the corrected spread the window has no discriminating power); still booked |
+| `cap_test` | 3 | KERNEL | BLOCK_M=16's cap, DEMOTED: on uniform routing vLLM runs 16 multi-tile in 1 of 24 cells, so this tests the formula | KEEP, booked `--r-max 1024`: at the default r_max comes from `depth.rows` (688 on the H200 band), the grid stops at 672 with two exactly-full BLOCK_M=256 stacks against V1's three, and the arm is unsatisfiable from its own plan page. 1024 is 96 cells and 143 s where the default was 242 |
+| `dtype` | 8 | KERNEL | how much of the 1.15 fp8/bf16 crossing is the config vLLM resolved per dtype | CUT in the verdict until its C3 window is re-derived (at the corrected spread the window has no discriminating power); still booked. RE-SCOPED 2026-09-09: the cross-config arm transplants BLOCK_SIZE_M and GROUP_SIZE_M only, because the full fp8-config-at-bf16-width transplant is infeasible on sm_90 at 22 of 28 cells and, when it was run, vLLM 0.27.1's `override_config` (no try/finally) leaked the fp8 config process-wide and corrupted 41 arms |
 | `span_dense` | 31 | KERNEL | the 0.563 extent-versus-kernel split on the dense grid, run WHOLE: `--max-minutes` was removed because it scored a truncated grid as complete | CUT in the verdict until truncation is a refusal; the driver books the honest time instead |
 | `span` | 0 | FREE | the same on the published grid, `--no-densify`; refuses on `c2_grid_power` before spending a minute | CUT: booked zero, the refusal is the answer |
 | `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is the ANSWER on a rented pod, and that script files it as INVALID (its own fix) | keep the plan, do not act on its printed ncu recipe (`docs/COUNTERS.md` 4.6) |
@@ -429,7 +448,7 @@ re-measured.
 |---|---|---|
 | bandwidth, triad | 4374-4377 GB/s | reproduces to 0.06% across sessions |
 | dense bf16 | 701-771 TFLOP/s | the term that does NOT reproduce: 9.9% spread |
-| bf16 ridge | about 162.8 FLOP/byte | the card's 2026-09-02 calibration; the three earlier ones spanned 160.3-176.2, which this row called "the band every absolute figure carries" until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, no card's own band, `docs/FINDINGS.md` RETRACTIONS (e)) |
+| bf16 ridge | about 152.8 FLOP/byte | the card's 2026-09-09 calibration, 668.5 TFLOP/s over 4374.5 GB/s; the 2026-09-02 one gave 162.8 and this row said so until 2026-09-09, and the three before that spanned 160.3-176.2, which this row called "the band every absolute figure carries" until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, no card's own band, `docs/FINDINGS.md` RETRACTIONS (e)). The 6.1% move between the last two rentals is the same effect and is the largest single uncertainty in any roof fraction quoted here |
 | fp8_e4m3 | about 1409 TFLOP/s | 1.83x the bf16 figure |
 
 **The gates.**
@@ -769,7 +788,8 @@ Three things in that sentence are decisions, not defaults.
 - **L2-warm.** The cold basis loses 5 of 8 one-stage crossings to throttle
   exclusion (by the retired idle-instant flag, which detected the idle-boost
   catch rather than throttling, `docs/FINDINGS.md` RETRACTIONS (f); LEVEL and
-  DRIFT replace it on the instrument).
+  DRIFT replace it on the instrument, and only DRIFT excludes a row since
+  2026-09-09).
 - **Read it with `octave_ladders`.** Fed whole to `crossing_from_points` this grid
   is biased 4-18% LOW and twice as wide as the powers-of-two grid it extends.
 
@@ -803,7 +823,7 @@ RETRACTIONS (a), (b), (e).)
 | S6a tile pinning honoured | the grid is unpinned. See above. Not fatal. |
 | S6b sweep exit 0 | resume with `--from 6` and the run id the step printed. |
 | S6c zero correctness failures | **STOP.** The kernel computed the wrong layer, so every timing in the arm is a timing of the wrong thing. Do not publish it. |
-| S6d under 5% throttled | The count is the driver's `throttled` column (`moe/bench/driver.py`): a v5+ row whose LEVEL failed LOW or whose DRIFT failed. Those are the rows the rule excludes from crossing detection, so a high rate narrows the grid the detector can actually use. A LEVEL failure on the HIGH side (`clock_level_side = high`, the expected state of a memory-bound cell on the H200: the calibration's memory load holds 1980 MHz against the 1515 MHz GEMM reference, bracket in `docs/APPARATUS.md` section 1) is NOT throttled and NOT an exclusion anywhere; its fixed-roof fraction is the thing that is wrong, and `pct_of_roof_at_cell_clock` is the column to read (`docs/APPARATUS.md` section 1). A gate or ladder that increments on `clock_level_ok = failed` without reading `clock_level_side` carries the one-sided reading found at thirteen consumers on 2026-09-08: on this card it counts every memory-bound cell as throttled and fails S6d on a healthy sweep. Read that as a defect in the gate, not as a throttle rate, and fix the gate before resuming; the proof a gate is correct is a planted 1980-against-1515 row with side `high` that it keeps and a planted LOW row that it counts. (Before 2026-09-02 this gate counted the retired idle-instant flag, which fired on 91% of vLLM rows above T=4096 on the alpha-0558 arm while flagged and unflagged replicates timed at ratio 0.998.) |
+| S6d under 5% DRIFT | The count is the driver's `throttled` column (`moe/bench/driver.py`), which SINCE 2026-09-09 is `clock_drift_ok is False` and nothing else. A drifted cell never reached one operating point, so its timing is of two clock states averaged together; those are the rows the rule excludes from crossing detection, and a high rate narrows the grid the detector can actually use. Fix it at the instrument (warm until two consecutive clock reads agree within one 15 MHz step) rather than by widening the gate: all 135 drifted cells of the 2026-09-09 session were the first cell of a rep after a workload change, the governor settling. A LEVEL failure on EITHER side (`clock_level_side` = `low` or `high`, written on every row that fails it) is NOT throttled and NOT an exclusion anywhere. Under the 700 W cap the clock under load is set per tile by the kernel's own draw, so `high` is a memory-shaped cell boosting (the calibration's memory load holds 1980 MHz) and `low` is a hungry tile at its steady state (BLOCK_M=128 holds a median 1395 MHz over 215 cells against a 1485 MHz GEMM reference); the per-tile table is in `docs/APPARATUS.md` section 1. What is wrong for both is the fixed-roof fraction, and `pct_of_roof_at_cell_clock` is the column to read beside it. A gate or ladder that excludes on `clock_level_ok = failed` carries one of the two readings this repo has already paid for: the one-sided one found at thirteen consumers on 2026-09-08, which counts every memory-bound cell as throttled, or the two-sided one that landed the roofline and depth arms INVALID on 2026-09-09 by excluding 15 of 39 cells and 110 of 168 treads that were never throttled. Read either as a defect in the gate, not as a throttle rate, and fix the gate before resuming; the proof a gate is correct is a planted 1980-against-1485 row with side `high` and a planted 1395-against-1485 row with side `low` that it both KEEPS, and a planted DRIFT row that it excludes. (Before 2026-09-02 this gate counted the retired idle-instant flag, which fired on 91% of vLLM rows above T=4096 on the alpha-0558 arm while flagged and unflagged replicates timed at ratio 0.998.) |
 | S6e coverage against the planner's own row count | the sweep stopped short, almost certainly on `--max-minutes`. Resume rather than reading a crossing off a truncated grid. |
 
 **Two defaults that are not measurements, and that any new analysis of these rows

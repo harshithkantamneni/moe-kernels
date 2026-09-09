@@ -56,10 +56,16 @@ def line_for(out: str, gate: str) -> str:
 # rows for --gate-sweep
 # --------------------------------------------------------------------------
 
-#: The two operating points the committed H200 calibration records: the bf16
-#: GEMM reference the roof was measured at, and the clock the card holds for
-#: the whole 30 s memory settle. 1980 / 1515 = 1.307 against a 1.05 band, so a
-#: memory-bound cell fails LEVEL on the HIGH side as its normal state.
+#: Three operating points this card really runs at, planted as rows. 1515 is
+#: the bf16 GEMM reference the 2026-09-02 calibration recorded (the 2026-09-09
+#: one records 1485; the ratios below are what matter, not the year) and 1980
+#: is the clock it holds for the whole 30 s memory settle: 1980 / 1515 = 1.307
+#: against a 1.05 band, so a memory-bound cell fails LEVEL on the HIGH side as
+#: its normal state. COLD_MHZ
+#: is the other steady state the 2026-09-09 census found: 1400 is the
+#: BLOCK_M=128/BLOCK_N=64 family sitting under the reference in every rep,
+#: because at 700 W a hungry tile clocks itself down. Both sides are planted
+#: below and neither is an exclusion.
 REFERENCE_MHZ = 1515
 BOOSTED_MHZ = 1980
 COLD_MHZ = 1400
@@ -72,8 +78,8 @@ def _v5_rows(path: Path, verdicts: list[tuple], run_id: str = "aa1",
     A tuple is (LEVEL, DRIFT) or (LEVEL, DRIFT, side). A LEVEL failure with no
     side given is written as the driver writes it on a v6 row: side "low" with
     a cold clock. Side "high" gets the boosted clock. `throttled` follows the
-    driver's rule (moe/bench/driver.py): DRIFT failed, or LEVEL failed on the
-    LOW side; the HIGH side is never throttled.
+    driver's rule (moe/bench/driver.py), which since 2026-09-09 is the DRIFT
+    verdict and nothing else: neither side of a LEVEL failure is throttled.
     """
     with path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=COLUMNS)
@@ -92,8 +98,7 @@ def _v5_rows(path: Path, verdicts: list[tuple], run_id: str = "aa1",
                        clock_drift_ok=drift, host_bound_ok="ok",
                        clock_level_side=side, sm_clock_load_mhz=load,
                        reference_clock_mhz=REFERENCE_MHZ,
-                       throttled=str(drift == "failed"
-                                     or (level == "failed" and side != "high")))
+                       throttled=str(drift == "failed"))
             w.writerow(row)
 
 
@@ -124,25 +129,27 @@ def test_s6d_passes_when_the_under_load_verdicts_are_clean(tmp_path):
     _v5_rows(results / "run_aa1_base.csv", [("ok", "ok")] * 10)
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
-    assert "PASS" in line and "0.0% of timed rows failed LEVEL low or DRIFT" in line, line
-    assert "0 high kept" in line, line
+    assert "PASS" in line and "0.0% of timed rows failed DRIFT" in line, line
+    assert "0 low and 0 high kept" in line, line
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_s6d_fails_on_a_high_failure_rate_and_says_which_verdict(tmp_path):
-    """The planted FAIL: 2 of 10 rows failed LEVEL and 1 failed DRIFT, so 30%
-    of timed rows are unquotable against the roof. The old gate would have
-    reported a "throttled" percentage and called it thermal."""
+def test_s6d_fails_on_a_high_drift_rate_and_says_what_drift_is(tmp_path):
+    """The planted FAIL: 3 of 10 rows failed DRIFT, so 30% of timed rows never
+    reached one operating point. The old gate would have reported a
+    "throttled" percentage and called it thermal; between 03df2d4 and
+    2026-09-09 it would have added the LEVEL-low rows to this rate."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_rows(results / "run_aa1_base.csv",
-             [("failed", "ok"), ("failed", "ok"), ("ok", "failed")] + [("ok", "ok")] * 7)
+             [("ok", "failed"), ("ok", "failed"), ("ok", "failed")] + [("ok", "ok")] * 7)
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
     assert "FAIL" in line, line
-    assert "30.0% of timed rows failed LEVEL low or DRIFT (2 low, 1 drift" in line, line
+    assert "30.0% of timed rows failed DRIFT (3 drift; 0 low and 0 high kept" in line, line
     assert "thermal stability" not in r.stdout
-    assert "sat below the clock the roof was measured at" in r.stdout
+    assert "the warmup never reached one operating point" in r.stdout
+    assert "two consecutive clock reads agree within one 15 MHz step" in r.stdout
     assert r.returncode != 0
 
 
@@ -150,11 +157,11 @@ def test_s6d_keeps_the_high_side_and_passes_on_sixty_percent_boosted_rows(tmp_pa
     """THE PLANTED HIGH-SIDE ROWS, the fifteenth instance of the recurring
     defect. Six of ten rows are memory-bound cells that boosted to 1980 MHz
     against the 1515 MHz reference and fail LEVEL with side "high"; none fail
-    LOW and none DRIFT. Until 2026-09-08 this gate counted them as failed LEVEL
-    and FAILED at 60% on the H200's normal decode state, with a consequence
-    saying the card sat BELOW the roof's clock. They are KEPT: the rate is
-    0.0%, the gate PASSES, and the page says what was kept and which column
-    to read them by."""
+    DRIFT. Until 2026-09-08 this gate counted them as failed LEVEL and FAILED
+    at 60% on the H200's normal decode state, with a consequence saying the
+    card sat BELOW the roof's clock. They are KEPT: the rate is 0.0%, the gate
+    PASSES, and the page says what was kept and which column to read them
+    by."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_rows(results / "run_aa1_base.csv",
@@ -162,24 +169,53 @@ def test_s6d_keeps_the_high_side_and_passes_on_sixty_percent_boosted_rows(tmp_pa
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
     assert "PASS" in line, line
-    assert "0.0% of timed rows failed LEVEL low or DRIFT (0 low, 0 drift; 6 high kept" in line, line
-    assert "S6d kept 6 of 10 timed rows that failed LEVEL on the HIGH side" in r.stdout
+    assert "0.0% of timed rows failed DRIFT (0 drift; 0 low and 6 high kept" in line, line
+    assert ("S6d kept 0 of 10 timed rows that failed LEVEL on the LOW side "
+            "and 6 on the HIGH side") in r.stdout
     assert "pct_of_roof_at_cell_clock" in r.stdout
-    assert "6 failed LEVEL high (kept)" in r.stdout
+    assert "6 failed LEVEL high (both kept, side recorded)" in r.stdout
     assert r.returncode == 0, r.stdout + r.stderr
-    # And the rows themselves carry the driver's rule: a HIGH row is not
-    # throttled, so nothing downstream that drops `throttled` loses it.
+    # And the rows themselves carry the driver's rule: neither side is
+    # throttled, so nothing downstream that drops `throttled` loses them.
     import csv as _csv
     with (results / "run_aa1_base.csv").open() as fh:
         rows = list(_csv.DictReader(fh))
     assert all(r_["throttled"] == "False" for r_ in rows)
 
 
-def test_s6d_counts_the_low_side_beside_kept_high_rows(tmp_path):
-    """Both sides in one sweep, and only one of them counts. Two LOW rows and
-    one DRIFT out of ten is 30% and FAILS; the three HIGH rows beside them are
-    reported as kept and do not move the rate. The old gate would have said
-    60%."""
+def test_s6d_keeps_the_low_side_too_and_passes_on_a_hungry_tile(tmp_path):
+    """THE 2026-09-09 CHANGE, planted in the shape that forced it. Six of ten
+    rows are BLOCK_M=128/BLOCK_N=64 cells holding 1395 MHz against a 1485 MHz
+    reference: not throttled, not drifting, just a hungry tile at its own
+    steady state under the 700 W cap. Under the rule in force until 2026-09-09
+    this sweep FAILED at 60% and the study's primary tile was unmeasurable on
+    this card. The rate is 0.0% now, both sides are reported, and neither is an
+    exclusion."""
+    results = tmp_path / "results"
+    results.mkdir()
+    _v5_rows(results / "run_aa1_base.csv",
+             [("failed", "ok", "low")] * 6 + [("ok", "ok")] * 4)
+    r = _gate(tmp_path, results)
+    line = line_for(r.stdout, "S6d")
+    assert "PASS" in line, line
+    assert "0.0% of timed rows failed DRIFT (0 drift; 6 low and 0 high kept" in line, line
+    assert ("S6d kept 6 of 10 timed rows that failed LEVEL on the LOW side "
+            "and 0 on the HIGH side") in r.stdout
+    assert "Neither side is an exclusion" in r.stdout
+    # The consequence paragraph prints on a FAIL, and this sweep PASSES: the
+    # rule is asserted where it fires, in the two FAIL tests below.
+    assert r.returncode == 0, r.stdout + r.stderr
+    import csv as _csv
+    with (results / "run_aa1_base.csv").open() as fh:
+        rows = list(_csv.DictReader(fh))
+    assert all(r_["throttled"] == "False" for r_ in rows)
+
+
+def test_s6d_counts_both_sides_beside_the_drift_rate(tmp_path):
+    """Both sides and a drift in one sweep, and only the drift counts. One
+    DRIFT out of ten is 10.0% and FAILS; the two LOW and three HIGH rows beside
+    it are reported as kept and move nothing. The gate as it stood on
+    2026-09-08 would have said 30%, and the one before that 60%."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_rows(results / "run_aa1_base.csv",
@@ -189,43 +225,45 @@ def test_s6d_counts_the_low_side_beside_kept_high_rows(tmp_path):
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
     assert "FAIL" in line, line
-    assert ("30.0% of timed rows failed LEVEL low or DRIFT (2 low, 1 drift; 3 high kept"
-            in line), line
-    assert "LEVEL failing HIGH is NOT in this rate" in r.stdout
+    assert "10.0% of timed rows failed DRIFT (1 drift; 2 low and 3 high kept" in line, line
+    assert "LEVEL IS NOT IN THIS RATE ON EITHER SIDE" in r.stdout
     assert r.returncode != 0
 
 
-def test_s6d_refuses_a_v6_level_failure_that_names_no_side(tmp_path):
-    """REFUSE RATHER THAN DEFAULT. A v6 row that fails LEVEL without a side was
-    not written by moe/bench/driver.py, and LOW and HIGH mean opposite things,
-    so the gate will not file it on either side."""
+def test_s6d_notes_a_v6_level_failure_that_names_no_side_and_does_not_refuse(tmp_path):
+    """NOTE RATHER THAN REFUSE, since 2026-09-09. A v6 row that fails LEVEL
+    without a side was still not written by moe/bench/driver.py and is still
+    worth finding, but the side now decides nothing, so refusing a whole sweep
+    over it would exclude on the one column that excludes nothing. It is
+    recorded and the sweep is scored on DRIFT."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_rows(results / "run_aa1_base.csv",
              [("failed", "ok", "")] + [("ok", "ok")] * 9)
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
-    assert "FAIL" in line, line
-    assert "1 of 10 timed rows failed LEVEL on a v6 row that names no side" in line, line
-    assert "REFUSED" in r.stdout and "will not guess which side" in r.stdout
-    assert r.returncode != 0
+    assert "PASS" in line, line
+    assert "0.0% of timed rows failed DRIFT" in line, line
+    assert "S6d found 1 of 10 timed rows failing LEVEL on a v6 row that names no side" in r.stdout
+    assert "recorded here rather than refused" in r.stdout
+    assert "will not guess which side" not in r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_a_v5_level_failure_is_low_by_that_instruments_own_definition(tmp_path):
     """The v5 instrument (00f3324 to 03df2d4) had no high edge, so a v5 row
     that fails LEVEL fell below the reference by construction. It is counted
-    LOW, not refused as unsided: that is the instrument's definition, not this
-    gate's guess."""
+    LOW rather than unsided: that is the instrument's definition, not this
+    gate's guess. Counted, and kept, like every other LEVEL failure."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_rows(results / "run_aa1_base.csv",
              [("failed", "ok", "")] * 2 + [("ok", "ok")] * 8, schema_version=5)
     r = _gate(tmp_path, results)
     line = line_for(r.stdout, "S6d")
-    assert "FAIL" in line, line
-    assert ("20.0% of timed rows failed LEVEL low or DRIFT (2 low, 0 drift; 0 high kept"
-            in line), line
-    assert r.returncode != 0
+    assert "PASS" in line, line
+    assert "0.0% of timed rows failed DRIFT (0 drift; 2 low and 0 high kept" in line, line
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_s6d_refuses_rows_that_predate_the_verdicts(tmp_path):
@@ -280,9 +318,19 @@ def dry_run() -> str:
 
 
 def test_the_table_resolves_the_ridge_from_the_cards_calibration(dry_run):
-    """The ridge is READ, with the file it came from, not typed. The committed
-    H200 ruler says 162.8, not the 160.3 the text carried."""
-    assert "ridge  162.8 FLOP/byte (bf16), read from" in dry_run, dry_run
+    """The ridge is READ, with the file it came from, not typed.
+
+    THE EXPECTED NUMBER IS READ TOO, from the same committed yaml, because
+    typing it here is the defect this test exists to catch one level up: it
+    said 162.8 from 2026-09-03, the 2026-09-09 calibration moved the H200's
+    dense bf16 ceiling and the ridge with it to 152.8, and this assertion went
+    stale the moment the ruler it describes was replaced."""
+    import yaml
+    card = yaml.safe_load(
+        (REPO / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml").read_text())
+    ridge = (card["compute_dense_tflops"]["bf16"] * 1000.0
+             / (card["memory"]["bandwidth_tb_s"] * 1000.0))
+    assert f"ridge  {ridge:.1f} FLOP/byte (bf16), read from" in dry_run, dry_run
     assert "measured_nvidia_h200.yaml" in dry_run
     # Rehearsal is labelled as rehearsal: no card is attached here.
     assert "REHEARSAL: no card attached" in dry_run

@@ -21,6 +21,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from moe.bench import published as P  # noqa: E402
@@ -119,11 +121,14 @@ def test_the_runbook_arm_table_names_only_arms_the_driver_lists():
 # LEVEL is a band with a side, and the docs must say so in the same words
 # --------------------------------------------------------------------------
 
-#: Sentences that describe the RETIRED one-sided LEVEL ("at least 0.95 of the
-#: reference"), or call the n256 roofline arm confirmable. Each was standing
-#: in a doc on 2026-09-08 after the instrument went two-sided (03df2d4), the
-#: docs slice and the timing slice having merged side by side. A doc that
-#: carries one describes a flag the tree no longer computes.
+#: Sentences that describe a RETIRED clock rule. The first group is the
+#: one-sided LEVEL ("at least 0.95 of the reference"), retired when the
+#: instrument went two-sided on 03df2d4; the second is the two-sided rule that
+#: EXCLUDED the LOW side, retired on 2026-09-09 when the 750-cell H200 census
+#: showed the under-load clock is set per tile by the kernel's own power draw,
+#: so a band around the calibration GEMM's clock excluded the study's two
+#: primary tiles and nothing else. A doc that carries one describes a rule the
+#: tree no longer applies.
 STALE_LEVEL_PHRASES = (
     "at least `LEVEL_FRACTION",
     "at least LEVEL_FRACTION",  # the retired one-sided wording, hunted here
@@ -132,52 +137,184 @@ STALE_LEVEL_PHRASES = (
     "only arm that can confirm",
 )
 
-#: What each doc that describes LEVEL has to say: the high edge exists, the
-#: side is a column, the rule is stated in these words, and the corrected
-#: column has a name a reader can grep the CSV for.
+#: The LOW-excludes wording, retired 2026-09-09. Checked over `docs/` only:
+#: README.md is the integrator's file and its sentence is landed once, with the
+#: test count, in the same integration. When it lands, fold these into
+#: STALE_LEVEL_PHRASES above and delete this tuple.
+RETIRED_LOW_EXCLUDES_PHRASES = (
+    "LOW or DRIFT excludes",
+    "Only LOW or DRIFT excludes",
+    "must test LEVEL AND",
+)
+
+#: What each doc that describes the clock rule has to say: the high edge
+#: exists, the side is a column, DRIFT is the exclusion, the side excludes
+#: nothing, and the corrected column has a name a reader can grep the CSV for.
 REQUIRED_LEVEL_PHRASES = {
     "docs/APPARATUS.md": ("LEVEL_HIGH_FRACTION", "clock_level_side",
-                          "pct_of_roof_at_cell_clock", "LOW or DRIFT excludes",
-                          "NOT an exclusion"),
+                          "pct_of_roof_at_cell_clock",
+                          "EXCLUDED IF AND ONLY IF `clock_drift_ok` IS FALSE",
+                          "excludes nothing"),
     "docs/POD_RUNBOOK.md": ("clock_level_side", "pct_of_roof_at_cell_clock",
-                            "NOT an exclusion"),
+                            "NOT an exclusion",
+                            "`clock_drift_ok is False`"),
     "docs/RUNPOD.md": ("clock_level_side", "pct_of_roof_at_cell_clock",
-                       "Only LOW or DRIFT excludes"),
-    "README.md": ("pct_of_roof_at_cell_clock", "LOW or DRIFT excludes",
-                  "not an exclusion"),
+                       "DRIFT alone excludes a row"),
+    "README.md": ("pct_of_roof_at_cell_clock",),
 }
 
 
-def _level_prose_defects(text: str) -> list[str]:
-    """The stale phrases a text carries. Empty means clean."""
-    return [phrase for phrase in STALE_LEVEL_PHRASES if phrase in text]
+#: A line that dates its own retraction may quote the retired sentence: that is
+#: how this repository keeps the history visible without git, and forbidding it
+#: would push the correction out of the document. The marker is the date.
+RETRACTION_MARKER = "Until 2026-09-"
+
+
+def _level_prose_defects(text: str, extra: tuple = ()) -> list[str]:
+    """The stale phrases a text carries, ignoring lines that retract them.
+
+    Read paragraph by paragraph rather than line by line, because these
+    documents wrap at 78 columns and a retracted sentence and its date
+    routinely sit on different lines of one paragraph."""
+    found = []
+    for para in text.split("\n\n"):
+        para = " ".join(para.split())   # these documents wrap at 78 columns
+        if RETRACTION_MARKER in para:
+            continue
+        found += [phrase for phrase in STALE_LEVEL_PHRASES + extra
+                  if phrase in para and phrase not in found]
+    return found
 
 
 def test_the_level_prose_checker_fires_on_a_planted_stale_row_and_not_on_a_clean_one():
     """Both sides planted: the exact table row APPARATUS.md carried on
-    2026-09-08 must be caught, and the corrected wording must pass, or the
-    test below proves nothing either way."""
+    2026-09-08 must be caught, the LOW-excludes sentence it carried on
+    2026-09-09 must be caught, and the corrected wording must pass, or the test
+    below proves nothing either way."""
     planted = ("| LEVEL | `clock_level_ok` | was the SM clock under load at least "
                "`LEVEL_FRACTION = 0.95` of the reference clock the ROOF was "
                "measured at |")
     assert _level_prose_defects(planted) == ["at least `LEVEL_FRACTION"]
     assert _level_prose_defects("THE CLAIM ... the only arm that could confirm "
                                 "the ceiling") == ["only arm that could confirm"]
+    two_sided = ("inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = "
+                 "1.05`]; LOW or DRIFT excludes; HIGH is NOT an exclusion, read "
+                 "`pct_of_roof_at_cell_clock`")
+    assert _level_prose_defects(two_sided) == []
+    assert _level_prose_defects(two_sided, RETIRED_LOW_EXCLUDES_PHRASES) == [
+        "LOW or DRIFT excludes"]
     clean = ("inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = "
-             "1.05`]; LOW or DRIFT excludes; HIGH is NOT an exclusion, read "
-             "`pct_of_roof_at_cell_clock`")
-    assert _level_prose_defects(clean) == []
+             "1.05`], and the side is recorded: DRIFT alone excludes a row, "
+             "read `pct_of_roof_at_cell_clock` beside the fixed-roof fraction")
+    assert _level_prose_defects(clean, RETIRED_LOW_EXCLUDES_PHRASES) == []
 
 
-def test_every_doc_describes_LEVEL_as_a_two_sided_band_and_names_the_column_to_read():
-    """No doc or the README may describe the retired one-sided LEVEL or call
-    the n256 arm confirmable, and each doc that describes LEVEL states the
-    band, the side, the rule (LOW or DRIFT excludes; HIGH is not an exclusion)
-    and `pct_of_roof_at_cell_clock` as the column to read."""
-    for path in [ROOT / "README.md", *(ROOT / "docs").glob("*.md")]:
-        defects = _level_prose_defects(path.read_text())
+def test_every_doc_describes_the_clock_rule_as_drift_only_with_the_side_recorded():
+    """No doc or the README may describe a retired one-sided LEVEL or call the
+    n256 arm confirmable; no doc under `docs/` may say the LOW side excludes;
+    and each doc that describes the rule states the band, the side, the
+    exclusion (DRIFT alone) and `pct_of_roof_at_cell_clock` as the column to
+    read.
+
+    README.md is checked for the retired ONE-SIDED wording only. Its
+    LOW-excludes sentence is the integrator's to land, in the same pass that
+    sets the test count; the exact edit is in that slice's report. When it
+    lands, fold RETIRED_LOW_EXCLUDES_PHRASES into STALE_LEVEL_PHRASES and this
+    exemption disappears."""
+    assert _level_prose_defects((ROOT / "README.md").read_text()) == []
+    for path in sorted((ROOT / "docs").glob("*.md")):
+        defects = _level_prose_defects(path.read_text(),
+                                       RETIRED_LOW_EXCLUDES_PHRASES)
         assert defects == [], f"{path.relative_to(ROOT)} still says {defects}"
     for rel, needles in REQUIRED_LEVEL_PHRASES.items():
-        text = (ROOT / rel).read_text()
+        # Flattened: a required sentence that straddles a wrap is still there.
+        text = " ".join((ROOT / rel).read_text().split())
         for needle in needles:
             assert needle in text, f"{rel} does not say {needle!r}"
+
+
+# --------------------------------------------------------------------------
+# the 2026-09-09 H200 session, in the two documents that carry results
+# --------------------------------------------------------------------------
+
+#: What FINDINGS and STUDY have to carry from that session, as (needle, why)
+#: pairs. Every number here is off a `RESULT:` line in
+#: `results/published/2026-09-09-nvidia_h200-gaps-session/session/logs/`, or
+#: off the committed calibration, so a number that drifts here has drifted from
+#: the page that produced it.
+SESSION_2026_09_09 = (
+    ("4814.3", "the derived pin rate every anchor result is quoted against"),
+    ("668.5", "the measured dense bf16 rate"),
+    ("1485", "the GEMM's own clock under load, the LEVEL reference"),
+    ("1395", "the BLOCK_M=128/BLOCK_N=64 tile's own clock"),
+    ("1650", "the BLOCK_M=256 tile's own clock"),
+    ("76.2-77.9%", "anchor_measure P2, the anchor rate against the pin rate"),
+    ("2.28%", "anchor_measure P1, swizzle invariance"),
+    ("0.31%", "anchor_measure P3, slope independence"),
+    ("BLOCK_M % 64 == 0", "mma_switch G4, the wgmma condition"),
+    ("2025.1.1", "the ncu build that attached, so the counter route is open"),
+    ("0.094", "the median re-anchoring shift against a quoted 0.05"),
+    ("0.678", "the worst cap/ridge the BLOCK_M <= 64 cap survives at"),
+    ("53,188", "the ruler's classified rows"),
+    ("90", "the rows the 2.2% denominator swing flips"),
+    ("144.9-152.8", "the ridge band a crossing inside it must be quoted as"),
+)
+
+
+@pytest.mark.parametrize("needle,why", SESSION_2026_09_09,
+                         ids=[n for n, _ in SESSION_2026_09_09])
+def test_findings_carries_the_2026_09_09_session_numbers(needle, why):
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    assert "## The 2026-09-09 H200 session" in text, "the dated section is gone"
+    assert needle in text, f"FINDINGS no longer states {needle!r}: {why}"
+
+
+def test_findings_files_the_six_invalid_arms_as_apparatus_and_not_as_results():
+    """The INVALID arms are in the session section with a CAUSE each, and their
+    numbers are not quoted as results. `cap_test`'s counterfactual alpha is the
+    one most likely to be lifted out of context, so the page has to say in
+    words that it is not a result until the arm is re-run."""
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    section = text.split("## The 2026-09-09 H200 session")[1].split("\n## ")[0]
+    for arm in ("roofline-n64-g1", "bm128_depth", "bn_g16", "alias_ablation",
+                "cap_test", "dtype"):
+        assert f"`{arm}`" in section, arm
+    assert "as apparatus findings" in section
+    assert "Nothing on their pages\nis a result" in section
+    assert "NOT quoted as a result until the arm is re-run" in section
+    # And the defect of each is named, not just the arm.
+    for cause in ("override_config", "688 % 32 = 16", "0.838 of the roof",
+                  "smallest SWEPT block size", "5500 GB/s"):
+        assert cause in section, cause
+
+
+def test_study_records_what_the_session_settled_and_what_it_left():
+    text = (ROOT / "docs" / "STUDY.md").read_text()
+    assert "## What the 2026-09-09 H200 session settled" in text
+    # Item 3's loose end is struck through where it lives, not only claimed.
+    order = text.split("## Order of work")[1]
+    assert "~~Loose end: confirm the instruction actually switched" in order
+    assert "CLOSED 2026-09-09" in order
+    # The three things that changed the study's working state.
+    for needle in ("BLOCK_M % 64 == 0", "counter route is OPEN",
+                   "may be quoted as a point", "0.678 of the ridge",
+                   "144.9-152.8", "--new"):
+        assert needle in text, needle
+
+
+def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():
+    """R1-R3 on one page: the rule, the date it changed, and the per-tile
+    numbers that changed it. A rule with no reason on the page is a setting,
+    and the next reader will widen it."""
+    # Flattened: this page wraps at 78 columns and a sentence that straddles
+    # two lines is still the sentence.
+    text = " ".join((ROOT / "docs" / "APPARATUS.md").read_text().split())
+    assert "SINCE 2026-09-09 A CELL IS EXCLUDED IF AND ONLY IF" in text
+    for needle in ("1395 MHz", "1650 MHz", "1736 MHz", "1485 MHz", "700 W",
+                   "15 MHz step", "settle_ms", "power_w", "1469.9",
+                   "15 of the roofline arm's 39 cells",
+                   "110 of the depth arm's 168 treads"):
+        assert needle in text, needle
+    # The scoring half of the rule, which is the half a gate reads.
+    assert "compute-bound CLAIM gates read the FIXED roof fraction" in text
+    assert "issue efficiency" in text

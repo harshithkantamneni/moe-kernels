@@ -1441,31 +1441,38 @@ PYEOF
 #: those. It REFUSES rows that predate them: a row with no verdict is not a
 #: row that passed, and it may not be pooled with rows that were checked.
 #:
-#: LEVEL IS A BAND AND THE SIDE IS READ. Since 03df2d4 (2026-09-03) the
-#: instrument scores LEVEL two-sided, [LEVEL_FRACTION, LEVEL_HIGH_FRACTION]
-#: around the reference the roof was measured at, and writes the side of a
-#: failure onto the row as `clock_level_side`. Only the LOW side is a cell that
-#: ran cold against its roof; the HIGH side is a cell boosted ABOVE it, which on
-#: an H200 is the NORMAL state of every memory-bound cell (the committed
-#: calibration records 1980 MHz for the whole 30 s memory settle against a 1515
-#: MHz bf16 GEMM reference, ratio 1.307 against a 1.05 band). Until 2026-09-08
-#: this gate counted `clock_level_ok == failed` on either side, so an honest
-#: decode sweep, ~67% of whose memory-bound rows fail HIGH, FAILED S6d on every
-#: session that behaved correctly, and its consequence text said the card had
-#: sat BELOW the roof's clock. The rule is now the driver's own
-#: (moe/bench/driver.py sets `throttled` from DRIFT or LEVEL-low and leaves
-#: the HIGH side out): LOW or DRIFT counts toward the rate, HIGH is KEPT and
-#: reported, because its fixed-roof fraction is not comparable and
-#: pct_of_roof_at_cell_clock is the column that is. A v6 row that fails LEVEL
-#: and names no side was not written by the driver and is REFUSED rather than
-#: filed on either side; a v5 row (one-sided instrument, no high edge) that
-#: fails LEVEL is LOW by that instrument's definition.
+#: DRIFT IS THE RATE. LEVEL IS A RECORD. Since 2026-09-09 a cell is excluded
+#: if and only if its DRIFT verdict failed, and the LEVEL side (low, high or
+#: unrecorded) is carried on the row and excludes nothing. The reason is the
+#: 750-cell census that closed the first gaps session: under the H200's 700 W
+#: cap the SM clock under load is set PER TILE by the kernel's own power draw
+#: (BLOCK_M=128 median 1395 MHz over 215 cells, BLOCK_M=256 1650
+#: over 311, BLOCK_M=32 1736 over 68, memory-shaped cells 1950-1980), and the
+#: calibration GEMM's own 1485 MHz at 691 W sits near the LOW end of dense work
+#: rather than in the middle. A band around it is therefore a rule against a
+#: TILE: on 2026-09-09 it removed every multi-tile BLOCK_M=128 cell of the
+#: roofline arm and 110 of 168 depth treads, each of them a steady state
+#: repeated in every rep, and removed nothing in the arms whose tiles sit near
+#: the GEMM's clock. Between 03df2d4 (2026-09-03) and 2026-09-09 this gate
+#: counted LEVEL-low in the rate and its consequence text said the card had sat
+#: BELOW the roof's clock; before 03df2d4 it counted BOTH sides, so an honest
+#: decode sweep, ~67% of whose memory-bound rows fail HIGH, FAILED on every
+#: session that behaved correctly. Both readings are gone. What is wrong on any
+#: cell whose clock differs from the reference is the FIXED-roof fraction, and
+#: `pct_of_roof_at_cell_clock` is the correction, on the low side exactly as on
+#: the high side.
 #:
-#: Outcomes, each planted by tests/test_pod_session.py: PASS on a low rate of
-#: LOW-or-DRIFT failures (including one where 60% of rows fail HIGH and 0%
-#: LOW), FAIL on a high rate of LOW ones, and FAIL-as-refusal when any timed
-#: row carries no verdict, no row carries a determined one, or a v6 LEVEL
-#: failure names no side.
+#: THE SIDE IS REPORTED AND NEVER GUESSED. A v6 row that fails LEVEL and names
+#: no side is NOTED as unsided rather than filed on a side; it no longer
+#: refuses the sweep, because since the side decides nothing, refusing a whole
+#: run over it would be an exclusion by the one column that excludes nothing.
+#: A v5 row (one-sided instrument, no high edge) that fails LEVEL is LOW by
+#: that instrument's definition rather than by this file's default.
+#:
+#: Outcomes, each planted by tests/test_pod_session.py: PASS on a low DRIFT
+#: rate (including sweeps where 60% of rows fail LEVEL high and where 20% fail
+#: LEVEL low, both kept), FAIL on a high DRIFT rate, and FAIL-as-refusal when
+#: any timed row carries no verdict or no row carries a determined one.
 sweep_clock_gates() {
   local dir="$1" run_id="$2" planned="${3:-}"
   local sweepstat
@@ -1486,10 +1493,12 @@ bad = [r for r in rows if not passed(r)]
 # Split the pool on the instrument BEFORE reading a verdict, as
 # schema.timing_verdict requires: a pre-v5 row has no verdict columns and an
 # empty instrument is a file nothing sane wrote. Both are "no verdict".
-# A LEVEL failure is then split on its SIDE: LOW counts, HIGH is kept, and a
-# v6 row that fails LEVEL without naming a side is refused (unsided). A v5 row
-# has no side column because that instrument had no high edge, so its LEVEL
-# failure is LOW by definition rather than by default.
+# DRIFT sets the rate. A LEVEL failure is counted on its SIDE and excludes
+# nothing: LOW is a hungry tile at its own steady state under the power cap,
+# HIGH is a memory-shaped cell boosting, and a v6 row that fails LEVEL without
+# naming a side is counted as unsided and noted. A v5 row has no side column
+# because that instrument had no high edge, so its LEVEL failure is LOW by
+# definition rather than by default.
 no_verdict = low = high = unsided = drift = undetermined = flagged = 0
 for r in timed:
     try:
@@ -1501,7 +1510,6 @@ for r in timed:
     except TimingInstrumentUnrecorded:
         no_verdict += 1
         continue
-    side = ""
     if lv == VERDICT_FAILED:
         side = str(r.get("clock_level_side") or "").strip()
         if side == UNRECORDED:
@@ -1520,7 +1528,6 @@ for r in timed:
             unsided += 1
     if dr == VERDICT_FAILED:
         drift += 1
-    if dr == VERDICT_FAILED or side == LEVEL_LOW:
         flagged += 1
     elif VERDICT_UNDETERMINED in (lv, dr):
         undetermined += 1
@@ -1530,7 +1537,7 @@ PYEOF
 )"
   local nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag
   read -r nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag <<< "$sweepstat"
-  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $nlow failed LEVEL low, $nhigh failed LEVEL high (kept), $ndrift failed DRIFT, $nundet undetermined, $nunsided failed LEVEL with no side, $nnov carry no verdict"
+  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $ndrift failed DRIFT (excluded), $nlow failed LEVEL low and $nhigh failed LEVEL high (both kept, side recorded), $nundet undetermined, $nunsided failed LEVEL with no side, $nnov carry no verdict"
   [[ "${nbad:-1}" == "0" ]]; verdict S6c "correctness" $? \
     "${nbad:-?} failing rows" "== 0" fatal \
     "A correctness failure means the kernel computed the wrong layer, so every timing in this arm is a timing of the wrong thing. Do not publish it."
@@ -1545,17 +1552,16 @@ PYEOF
     verdict S6d "clock under load" 1 \
       "every one of $ntimed timed rows is undetermined" "a determined verdict on at least one row" soft \
       "REFUSED. The sampler had no clock source (P13d) or no reference clock, so LEVEL and DRIFT decided nothing and the rate below would be 0% by silence. Install nvidia-ml-py into $PY_BASE, confirm the calibration records a GEMM clock, and re-run."
-  elif [[ "${nunsided:-1}" != "0" ]]; then
-    verdict S6d "clock under load" 1 \
-      "$nunsided of $ntimed timed rows failed LEVEL on a v6 row that names no side" "every v6 LEVEL failure carries clock_level_side" soft \
-      "REFUSED. Since 03df2d4 LEVEL is a two-sided band and moe/bench/driver.py writes the side (low or high) onto every row that fails it. A v6 row failing LEVEL with an empty clock_level_side was not written by that driver, and this gate will not guess which side it fell on: LOW is a cell that ran cold against its roof and HIGH is a cell boosted above it, and they mean opposite things. Find what wrote the row."
   else
     "$PY_BASE" -c "import sys; sys.exit(0 if float('${pflag:-100}') < 5.0 else 1)"
     verdict S6d "clock under load" $? \
-      "${pflag:-?}% of timed rows failed LEVEL low or DRIFT ($nlow low, $ndrift drift; $nhigh high kept, $nundet undetermined)" "< 5%" soft \
-      "A row failing DRIFT, or LEVEL on the LOW side, carries throttled=True (moe/bench/driver.py sets it from those two and leaves the HIGH side out) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. LEVEL failing LOW on most rows means the card sat below the clock the roof was measured at: recalibrate in this thermal state or let it cool. DRIFT failing means the warmup never reached one operating point. LEVEL failing HIGH is NOT in this rate: a cell boosted above the band is the normal state of a memory-bound cell on an H200 (1980 MHz under memory load against a 1515 MHz bf16 GEMM reference); it is kept, its fixed-roof fraction is not comparable, and pct_of_roof_at_cell_clock is the column to read for it."
-    if [[ "${nhigh:-0}" != "0" ]]; then
-      note "S6d kept $nhigh of $ntimed timed rows that failed LEVEL on the HIGH side (boosted above the band). They are not throttled and not excluded; their fixed-roof fraction (pct_of_achieved_tflops) is not comparable and pct_of_roof_at_cell_clock is the one to quote."
+      "${pflag:-?}% of timed rows failed DRIFT ($ndrift drift; $nlow low and $nhigh high kept, $nundet undetermined)" "< 5%" soft \
+      "A row failing DRIFT carries throttled=True (moe/bench/driver.py sets the column from the DRIFT verdict and nothing else since 2026-09-09) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. DRIFT failing means the warmup never reached one operating point: the governor was still settling when the first samples were taken, which is what every readable drift in the 2026-09-09 session was, on the first cell of a rep after a workload change. Fix it at the instrument (warm until two consecutive clock reads agree within one 15 MHz step), not by widening the gate. LEVEL IS NOT IN THIS RATE ON EITHER SIDE: under a 700 W cap the clock under load is set per tile by the kernel own draw, so a LOW cell is a hungry tile at its steady state and a HIGH one a memory-shaped cell boosting; both are kept, their fixed-roof fraction is what is not comparable, and pct_of_roof_at_cell_clock is the column to read for them."
+    if [[ "${nhigh:-0}" != "0" || "${nlow:-0}" != "0" ]]; then
+      note "S6d kept $nlow of $ntimed timed rows that failed LEVEL on the LOW side and $nhigh on the HIGH side. Neither side is an exclusion: the side is a record of the clock the tile held, their fixed-roof fraction (pct_of_achieved_tflops) is not comparable, and pct_of_roof_at_cell_clock is the one to quote."
+    fi
+    if [[ "${nunsided:-0}" != "0" ]]; then
+      note "S6d found $nunsided of $ntimed timed rows failing LEVEL on a v6 row that names no side. Since 03df2d4 moe/bench/driver.py writes the side onto every row that fails LEVEL, so a v6 row without one was not written by that driver. It is recorded here rather than refused, because the side decides nothing: find what wrote the row before quoting its clock."
     fi
   fi
   if [[ -n "$planned" ]]; then
@@ -1660,8 +1666,14 @@ step1_calibrate() {
   H200 three earlier calibrations agreed on bandwidth to 0.06% and disagreed
   on the dense bf16 ceiling by 9.9%; the ridge is their quotient and inherits
   the 9.9%. The band 160.3-176.2 that stood here until 2026-09-03 was that
-  spread across three files and no card's own ridge; the committed rulers say
-  162.8 on the H200 and 145.8 on the A100. The fp8 ceiling exists only on a
+  spread across three files and no card's own ridge. The committed rulers say
+  152.8 on the H200 (2026-09-09, 668.5 TFLOP/s over 4374.5 GB/s) and 145.8 on
+  the A100 (2026-09-02). The H200 figure was 162.8 until 2026-09-09 and this
+  line said so: the 2026-09-09 calibration moved the dense bf16 ceiling and
+  with it the ridge, by 6.1%, which is the same 9.9%-class disagreement
+  between rentals that this prediction is about. Nothing in this file is
+  rescored to it; the ridge each table is entitled to is the one its own arm
+  measured. The fp8 ceiling exists only on a
   card with fp8 tensor cores: the H200 ruler carries one, the A100 none (S1c).
 TXT
   # The dtype headline is a RATIO OF EFFICIENCIES, and an efficiency is a time
@@ -2197,8 +2209,9 @@ step6_dense_grid() {
   regimes is INVALID, not merely noisy), 7 seeds, a 2^(1/4) grid from 1 to 16384
   across this card's ridge, L2-warm eager because on the 2026-08-26 arm the cold
   basis lost 5 of 8 one-stage crossings to rows the retired pre-v5 drift flag
-  excluded (that flag detected an idle-boost catch, not throttling; the LEVEL
-  and DRIFT verdicts S6d reads replaced it).
+  excluded (that flag detected an idle-boost catch, not throttling; the DRIFT
+  verdict S6d excludes on, with the LEVEL side recorded beside it and excluding
+  nothing, replaced it).
 
   WHY THE TILE MUST BE PINNED. Along an unpinned grid the tile CHANGES with the
   token count -- mixtral climbs 16, 32, 64, 128 across the sweep -- so the

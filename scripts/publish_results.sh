@@ -392,22 +392,33 @@ def emit(line):
 # not throttling under load (moe/bench/timing.py, CLOCKS ARE READ UNDER LOAD:
 # on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096 while flagged
 # and unflagged replicates timed at ratio 0.998). On a v5 row the driver sets
-# it when the DRIFT verdict taken WHILE the trials ran failed, or when the
-# LEVEL verdict failed on the LOW side (moe/bench/driver.py). LEVEL IS A BAND,
-# not a floor: since 03df2d4 (2026-09-03) it is [LEVEL_FRACTION,
-# LEVEL_HIGH_FRACTION] around the clock the calibration GEMM ran at, and the
-# side of a failure is on the row as `clock_level_side`. A HIGH failure is a
-# cell boosted ABOVE the band, the normal state of a memory-bound decode cell
-# on an H200 (1980 MHz under memory load against a 1515 MHz bf16 reference);
-# it is not throttling, the driver does not write it into `throttled`, and its
-# fixed-roof fraction is what is wrong, with pct_of_roof_at_cell_clock as the
-# correction. So this line reads the SIDE: it names the band rather than
-# "below 95%", reports the side on every flagged LEVEL failure, and reports the
-# HIGH rows that were KEPT beside them rather than filing them under the flag.
-# Until 2026-09-08 this comment described LEVEL as one-sided ("LEVEL or DRIFT
-# ... failed") and the printed line said "below 95% of". The two flag origins
-# are counted apart and named by what each detected; a row whose instrument
-# cannot be read is reported as exactly that rather than filed under either.
+# it when the DRIFT verdict taken WHILE the trials ran failed, and on nothing
+# else (moe/bench/driver.py).
+#
+# DRIFT IS THE WHOLE EXCLUSION RULE, SINCE 2026-09-09, AND THE LEVEL SIDE IS A
+# RECORD. Between 03df2d4 (2026-09-03) and that day the driver also wrote a
+# LEVEL failure on the LOW side into `throttled`, and this line reported it as
+# a throttle. The 750-cell H200 census that closed the first gaps session says
+# it is not one: under a 700 W cap the SM clock under load is set PER TILE by
+# that kernel's own power draw. BLOCK_M=128 holds a median 1395 MHz
+# over 215 cells, BLOCK_M=256 1650 over 311, BLOCK_M=32 1736 over 68, memory-shaped
+# cells 1950-1980, and the calibration GEMM itself 1485 at 691 W, which is near
+# the LOW end of what dense tensor work does on this card rather than the
+# middle of anything. So a +/-5% band around the GEMM's clock is a rule against
+# a TILE: it excluded every multi-tile BLOCK_M=128 cell of the roofline arm and
+# 110 of 168 depth treads, each of them the steady state of one tile family in
+# every rep, while excluding nothing at all in the arms whose tiles happen to
+# sit near the GEMM. LEVEL is still SCORED and its side is still WRITTEN, on
+# every row, because "this cell ran at 1395 and the roof was measured at 1485"
+# is a fact the reader needs; it excludes nothing on either side. What is wrong
+# on a cell whose clock differs from the reference is the FIXED-roof fraction
+# `pct_of_achieved_tflops`, and `pct_of_roof_at_cell_clock` is the correction,
+# on the LOW side exactly as on the HIGH side.
+#
+# So this line reads DRIFT for the flag and reports the LEVEL sides beside it
+# as the record they are. The two flag origins are counted apart and named by
+# what each detected; a row whose instrument cannot be read is reported as
+# exactly that rather than filed under either.
 from collections import Counter
 
 from moe.bench.schema import (UNRECORDED, VERDICT_FAILED, TimingInstrumentUnrecorded,
@@ -445,47 +456,44 @@ def sides_text(counter):
 
 
 flagged = [r for r in rows if row_bool(r, "throttled")]
-kept_high = Counter()
+# EVERY LEVEL FAILURE IN THE FILE, flagged or not, because none of them is an
+# exclusion and all of them are a record. Counted over all rows and not over
+# the un-flagged ones, which is what this file did while LOW was a throttle.
+level_sides = Counter()
 for r in rows:
-    if row_bool(r, "throttled"):
-        continue
     try:
         if has_kernel_timing(r) and timing_verdict(r, "clock_level_ok") == VERDICT_FAILED:
-            kept_high[side_of(r)] += 1
+            level_sides[side_of(r)] += 1
     except TimingInstrumentUnrecorded:
         continue
 if flagged:
     under_load, legacy, unreadable = [], [], []
-    level = drift = 0
-    level_sides = Counter()
+    drift = no_drift = 0
     for r in flagged:
         try:
             if not has_kernel_timing(r):
                 legacy.append(r)
                 continue
-            lv = timing_verdict(r, "clock_level_ok")
             dr = timing_verdict(r, "clock_drift_ok")
         except TimingInstrumentUnrecorded:
             unreadable.append(r)
             continue
         under_load.append(r)
-        level += lv == VERDICT_FAILED
-        drift += dr == VERDICT_FAILED
-        if lv == VERDICT_FAILED:
-            level_sides[side_of(r)] += 1
+        if dr == VERDICT_FAILED:
+            drift += 1
+        else:
+            no_drift += 1
     if under_load:
         emit(f"{len(under_load)} rows carry throttled=True from the under-load clock "
-             f"check: LEVEL failed on {level} (SM clock under load {level_word} the "
-             f"clock the calibration GEMM ran at; side: {sides_text(level_sides) or 'none'}), "
-             f"DRIFT failed on {drift} (first and last under-load samples {drift_word}, "
-             f"either direction)")
-        odd = {s: n for s, n in level_sides.items() if s != "low"}
-        if odd:
-            emit(f"{sum(odd.values())} of those rows fail LEVEL on a side other than low "
-                 f"({sides_text(odd)}) and still carry throttled=True, which "
-                 f"moe/bench/driver.py never writes: a HIGH failure is a boosted cell, "
-                 f"not a throttle. This file was not written by that driver or its side "
-                 f"column is wrong; do not read its throttled flag as a throttle")
+             f"check: DRIFT failed on {drift} (first and last under-load samples "
+             f"{drift_word}, either direction), which is the whole rule since "
+             f"2026-09-09")
+    if no_drift:
+        emit(f"{no_drift} of those rows carry throttled=True with DRIFT not failed, "
+             f"which moe/bench/driver.py never writes: since 2026-09-09 it sets the "
+             f"column from the DRIFT verdict alone. This file was not written by that "
+             f"driver, or it predates the rule and carries a LEVEL-low exclusion; do "
+             f"not pool its flagged rows with rows scored under the current rule")
     if legacy:
         emit(f"{len(legacy)} rows carry throttled=True from the retired pre-v5 drift "
              f"flag: two idle-instant SM-clock reads either side of the cell, >5% "
@@ -494,19 +502,15 @@ if flagged:
     if unreadable:
         emit(f"{len(unreadable)} rows carry throttled=True with an unreadable "
              f"instrument column, so which detector set it cannot be said")
-if kept_high:
-    high = kept_high.get("high", 0)
-    if high:
-        emit(f"{high} rows failed LEVEL on the HIGH side (SM clock under load boosted "
-             f"above the band) and are NOT throttled: KEPT, as the driver keeps them. "
-             f"Their fixed-roof fraction (pct_of_achieved_tflops) is not comparable; "
-             f"pct_of_roof_at_cell_clock is the column to read for them")
-    other = {s: n for s, n in kept_high.items() if s != "high"}
-    if other:
-        emit(f"{sum(other.values())} rows failed LEVEL on a side other than high "
-             f"({sides_text(other)}) without throttled=True, which moe/bench/driver.py "
-             f"never writes: a LOW failure is a throttle and is flagged. This file was "
-             f"not written by that driver or its side column is wrong")
+if level_sides:
+    emit(f"{sum(level_sides.values())} rows failed LEVEL (SM clock under load "
+         f"{level_word} the clock the calibration GEMM ran at) and NONE of them is "
+         f"excluded for it: side {sides_text(level_sides)}, recorded. Under a power "
+         f"cap the clock is set per tile by the kernel's own draw, so a LOW cell is a "
+         f"hungry tile at its steady state and a HIGH one a memory-shaped cell "
+         f"boosting; what is wrong for both is the fixed-roof fraction "
+         f"(pct_of_achieved_tflops), and pct_of_roof_at_cell_clock is the column to "
+         f"read beside it")
 
 fails = [r for r in rows if not passed(r)]
 if fails:

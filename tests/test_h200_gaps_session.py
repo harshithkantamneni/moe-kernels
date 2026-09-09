@@ -117,6 +117,37 @@ from moe.bench import exit_codes  # noqa: E402
 # --self-test` exits 3 INVALID and the arm's own plan says C1 reads UNKNOWN
 # however the data fall, and no other pinning that self-test was checked at
 # passes either, so there was nowhere to re-pin it to.
+#: THE ONE CROSS-SLICE CONTRACT THIS BRANCH CARRIES, and it is written here
+#: rather than left to be discovered on a pod. On 2026-09-09 the depth arm was
+#: given `--partner-block-m 32`: with the pairing {128, 256} its own
+#: non-vacuity floor is 0.838 of the roof, no BLOCK_M=256 ladder in the corpus
+#: reaches it, and the arm refused its own reference and landed INVALID after
+#: 292 s. The partner is what makes the floor scale to a tile that is actually
+#: swept. This file's rule is that every knob setting a booking or a gate is
+#: NAMED on the line rather than left to a default in the sibling script, so
+#: the driver names it; `scripts/bm128_depth.py` defines it in the depth slice
+#: of the same integration and does not define it yet on this branch.
+#:
+#: While it is missing, that arm's `--dry-run` exits 2 (argparse) and plans
+#: nothing, so the three plan-reading tests below skip it BY NAME and the test
+#: at the end of this block FAILS the moment the flag lands. That failure is
+#: the instruction: delete this dict and its four uses, and the plan tests
+#: cover the arm again. It is the only arm allowed to be in this state.
+PENDING_SCRIPT_FLAGS = {
+    "bm128_depth": ("scripts/bm128_depth.py", "--partner-block-m"),
+}
+
+
+def pending_flag(arm_name):
+    """The flag `arm_name` is given that its script does not define yet, or
+    None. Asked of the SCRIPT, so the answer changes by itself."""
+    entry = PENDING_SCRIPT_FLAGS.get(arm_name)
+    if not entry:
+        return None
+    rel, flag = entry
+    return None if flag in (ROOT / rel).read_text() else flag
+
+
 ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
@@ -396,6 +427,8 @@ def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
             assert "estimat" not in plan.lower(), (name, plan[-1500:])
             continue
         # Everything else is decided by the arm's own words, in its own plan.
+        if pending_flag(name):
+            continue        # PENDING_SCRIPT_FLAGS: no plan to read a clock off
         disclaims = ("excluding compiles and allocation" in plan
                      or "not the wall clock" in plan.lower())
         assert plan, f"{name} printed no plan to read the clock off"
@@ -833,9 +866,64 @@ def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
         "NOT_PLANNED"))
     expected.update(dict.fromkeys(
         ("roofline-n256-g16", "roofline-n256-g32"), "PLAN_REFUSED"))
+    # PLAN_REFUSED for a third reason while a cross-slice flag is pending: the
+    # script exits 2 on the flag it does not define yet (PENDING_SCRIPT_FLAGS
+    # at the top of this file, with the date and the contract).
+    expected.update({n: "PLAN_REFUSED" for n in ARMS if pending_flag(n)})
     for name in ARMS:
         assert rows.get(name) == expected[name], (
             name, rows.get(name), got.stdout[-3000:])
+
+
+def test_the_pending_cross_slice_flag_is_still_pending():
+    """THIS TEST EXISTS TO FAIL ONCE, and its failure is the instruction.
+
+    `PENDING_SCRIPT_FLAGS` records the one flag this driver passes that its
+    sibling script does not define yet, so that three plan-reading tests can
+    skip that arm by name instead of the whole file going red on a contract
+    that is being landed in another slice of the same integration. A record
+    like that is exactly what this repository keeps finding stale, so it is
+    asserted rather than trusted: when `scripts/bm128_depth.py` gains
+    `--partner-block-m`, this test FAILS, and the fix is to delete
+    `PENDING_SCRIPT_FLAGS` and its four uses (this test, and the three
+    `pending_flag(...)` calls), after which the plan tests cover the arm
+    again."""
+    for arm, (rel, flag) in PENDING_SCRIPT_FLAGS.items():
+        assert (ROOT / rel).exists(), rel
+        assert flag not in (ROOT / rel).read_text(), (
+            f"{rel} now defines {flag}: the cross-slice contract for {arm} has "
+            "landed. Delete PENDING_SCRIPT_FLAGS and its four uses in this "
+            "file, and let the plan tests cover the arm again.")
+        # And the driver really is passing it, or the entry is a leftover.
+        assert flag in CODE, f"{arm} no longer passes {flag}; drop the entry"
+
+
+def test_a_command_line_refusal_is_reported_as_one_and_not_as_a_blank_reason(tmp_path):
+    """The other half of the usage-error fix. `summarize_arm` greps a refused
+    log for the word REFUSED, which argparse never prints, so an arm refused by
+    its own command line printed the heading "REFUSED BEFORE MEASURING" and
+    then nothing at all, sending the reader to the log to find one line on
+    stderr. It now prints that line and says whose fault it is: a flag this
+    driver passed that the script does not define is not a refusal the script
+    chose."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    log = logs / "bm128_depth.log"
+    log.write_text(
+        "usage: bm128_depth.py [-h] [--dry-run] [--r-max R_MAX]\n"
+        "bm128_depth.py: error: unrecognized arguments: --partner-block-m 32\n")
+    got = lift(f'summarize_arm bm128_depth {log} PLAN_REFUSED', REPO=str(ROOT),
+               LEDGER=str(tmp_path / "ARMS.tsv"), LOGS=str(logs))
+    assert "REFUSED BY ITS OWN COMMAND LINE" in got.stdout, got.stdout
+    assert "unrecognized arguments: --partner-block-m 32" in got.stdout
+    assert "not a refusal the script chose" in got.stdout
+    # A script's own refusal still reads the way it did.
+    own = logs / "span.log"
+    own.write_text("plan line\nREFUSED: grid too sparse for C2\n")
+    got = lift(f'summarize_arm span {own} PLAN_REFUSED', REPO=str(ROOT),
+               LEDGER=str(tmp_path / "ARMS.tsv"), LOGS=str(logs))
+    assert "REFUSED BEFORE MEASURING" in got.stdout, got.stdout
+    assert "grid too sparse for C2" in got.stdout
 
 
 def test_no_arm_is_skipped_in_a_dry_run_with_a_reason_that_is_false(tmp_path):
@@ -1927,6 +2015,23 @@ def test_a_plan_that_printed_and_then_refused_is_planned_and_one_that_did_not_is
     # ...and rc 0 and a traceback are still decided by the code alone.
     assert lift(f'dry_state 0 {refused}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
     assert lift(f'dry_state 1 {planned}', REPO=str(ROOT)).stdout.strip() == "BROKEN"
+    # AN ARGPARSE USAGE ERROR IS NOT A PLAN, found on 2026-09-09 by handing an
+    # arm a flag its script had not landed yet: argparse writes a usage block
+    # and one error line to stderr, the driver captures both into the log, and
+    # every line of that block counted as a line of plan printed before a
+    # refusal marker that never comes, so the arm was filed PLANNED. The
+    # signature is argparse's own error line, which no plan prints.
+    usage = tmp_path / "usage.log"
+    usage.write_text(
+        "usage: bm128_depth.py [-h] [--dry-run] [--model MODEL] [--r-max R_MAX]\n"
+        "                      [--reps REPS] [--group-m GROUP_M]\n"
+        "bm128_depth.py: error: unrecognized arguments: --partner-block-m 32\n")
+    assert lift(f'dry_state 2 {usage}', REPO=str(ROOT)).stdout.strip() == "PLAN_REFUSED"
+    # And a plan that merely contains the word "error" in prose is still a plan.
+    prose = tmp_path / "prose.log"
+    prose.write_text(PLANNED_LOG.replace("\n", "\n", 1)
+                     + "\n  the estimator error is 1.5%\n")
+    assert lift(f'dry_state 2 {prose}', REPO=str(ROOT)).stdout.strip() == "PLANNED"
 
 
 def test_the_dry_run_ledger_still_distinguishes_the_two(tmp_path):
@@ -2089,6 +2194,52 @@ def test_the_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(tmp_path
     assert "no --only to explain it" in alone.stdout, alone.stdout
 
 
+def test_the_claim_fail_refusal_reads_the_page_instead_of_naming_the_pin_rate(tmp_path):
+    """THE PIN-RATE GATE WAS NAMED FOR ALL FOUR OF THEM, and backwards.
+    `calibrate_hardware.py` scores four CLAIM gates
+    (no_pattern_exceeds_the_pin_rate, write_rate_is_a_store_rate,
+    clock_steady_across_patterns, not_throttled). Until 2026-09-09 this refusal
+    told the operator, whichever had failed, that "no access pattern reached the
+    pin rate", which is the wrong gate three times in four, and a
+    misdescription of the fourth: that gate fails when a pattern EXCEEDS the
+    derived pin rate. The refusal now reads the arm's own RESULT lines."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "calibrate.log").write_text(
+        "RESULT: VALIDITY clock_established PASS the samples agree\n"
+        "RESULT: CLAIM no_pattern_exceeds_the_pin_rate PASS write 4680.2 GB/s\n"
+        "RESULT: CLAIM clock_steady_across_patterns FAIL two clock states: "
+        "1980 -> 1650 MHz\n")
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("calibrate\tCLAIM_FAIL\t1\t31\t1\t"
+                      f"{logs / 'calibrate.log'}\tlog agrees\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "RESULT: CLAIM clock_steady_across_patterns FAIL" in got.stdout, got.stdout
+    assert "1980 -> 1650 MHz" in got.stdout
+    # The gate that PASSED is not reported as the failure, and the old sentence
+    # is gone from the driver entirely.
+    assert "no access pattern reached the" not in TEXT
+    assert "no_pattern_exceeds_the_pin_rate PASS" not in got.stdout
+    # A page with no failing CLAIM line is a disagreement, and says so rather
+    # than inventing a gate.
+    (logs / "calibrate.log").write_text(
+        "RESULT: VALIDITY clock_established PASS the samples agree\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "holds no failing CLAIM line" in got.stdout, got.stdout
+    # UNKNOWN counts: classify maps an UNKNOWN CLAIM to CLAIM_FAIL, so an arm
+    # can wear the word with no FAIL line on its page.
+    (logs / "calibrate.log").write_text(
+        "RESULT: CLAIM not_throttled UNKNOWN no reference clock\n")
+    got = lift('calibration_refusal "ARM CLAIM_FAIL" testcard /nowhere/y.yaml MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(logs), ONLY="",
+               PY_BASE=sys.executable, SESSION_SINCE="20260902134501")
+    assert "not_throttled UNKNOWN" in got.stdout, got.stdout
+
+
 def test_a_refusal_this_gate_cannot_read_refuses_rather_than_proceeding():
     """REFUSE RATHER THAN DEFAULT, over the one input neither half issues. A
     verdict word this refusal does not know is a bug in the gate, and the two
@@ -2119,12 +2270,26 @@ def test_a_calibration_measured_before_this_session_is_stale(tmp_path, state, ut
 
 def test_a_calibration_that_cannot_say_when_it_was_measured_is_not_this_ones(tmp_path):
     """REFUSE RATHER THAN DEFAULT, over the three ways the answer can be absent.
-    The committed moe/bench/hardware/measured_nvidia_h200.yaml is the UNDATED
-    case in the tree today: it predates the provenance block, so it cannot name
-    the rental that measured it, and "cannot say" is not "this one"."""
-    got = lift(f'calibration_state {ROOT}/moe/bench/hardware/'
-               'measured_nvidia_h200.yaml 20260902134501', REPO=str(ROOT))
+
+    Every case is PLANTED here. Until 2026-09-09 the UNDATED case was read off
+    the committed `measured_nvidia_h200.yaml`, which predated the provenance
+    block; the 2026-09-09 calibration carries `provenance.utc`, so that
+    assertion became a statement about a file that had been replaced. A
+    yaml with no provenance is planted instead, and the committed one is
+    asserted to be what a yaml that CAN say when it was measured looks
+    like."""
+    undated = tmp_path / "undated.yaml"
+    undated.write_text("name: testcard (measured)\nmemory:\n  bandwidth_tb_s: 4.0\n")
+    got = lift(f'calibration_state {undated} 20260902134501', REPO=str(ROOT))
     assert got.stdout.strip() == "UNDATED", got.stdout
+    # And the committed ruler is dated, so it is decided on its date and not
+    # on "cannot say": measured 2026-09-09, so a session started before that
+    # sees it as this rental's and one started after sees it as STALE.
+    h200 = f"{ROOT}/moe/bench/hardware/measured_nvidia_h200.yaml"
+    assert lift(f'calibration_state {h200} 20260909000000',
+                REPO=str(ROOT)).stdout.strip() == "PUBLISHED"
+    assert lift(f'calibration_state {h200} 20260910000000',
+                REPO=str(ROOT)).stdout.strip() == "STALE"
     gone = lift(f'calibration_state {tmp_path}/nothing.yaml 20260902134501',
                 REPO=str(ROOT))
     assert gone.stdout.strip() == "MISSING"
@@ -2277,11 +2442,15 @@ def test_the_counter_arm_says_its_ledger_word_is_earned_and_blocked_is_an_answer
 #: that the bare plan prints the SAME figure. Every test below that runs it is
 #: skipped on a machine with a CUDA device, because there the same command IS
 #: the arm and would spend thirteen minutes of somebody's card.
+#: The pod's own command, which since 2026-09-09 books `--dot-fallback refuse`:
+#: the allow branch was bought once, on 2026-09-09, and returned P1 UNKNOWN
+#: after 308 s. The fallback does not move the plan's figure, because both
+#: price the whole ladder; what it changes is the cost of a probe miss.
 ALIAS_POD_PLAN = (
     "scripts/alias_ablation.py --card 'NVIDIA H200' "
     "--models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 "
     "--alias-extent block --compute sum --replicates 9 --probe "
-    "--dot-fallback allow --run")
+    "--dot-fallback refuse --run")
 
 
 def _no_cuda():
@@ -2367,11 +2536,14 @@ def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
     # The row says where the figure came from, names the flag that separates the
     # two, and warns that on a GPU box the same command is the arm.
     basis = lift("arm_basis alias_ablation", REPO=str(ROOT)).stdout
-    assert "--run" in basis and "13.0" in basis
+    assert "--run" in basis and f"{pod_wall:.1f}" in basis, (basis, pod_wall)
     assert "11.6 is what the dry branch" not in basis, (
         "arm_basis still describes the gap the alias slice closed")
     assert "the two agree" in basis
-    assert "ON A BOX WITH NO GPU" in basis
+    assert "on a box with no GPU" in basis
+    # And the row says which fallback the figure was read at, because the two
+    # cost the same to plan and different amounts to MISS.
+    assert "--dot-fallback refuse" in basis, basis
     # WALL, not KERNEL: its plan charges the probe's compiles outright rather
     # than leaving them to the ratio, and says BOOK THIS ONE beside the figure.
     assert lift("arm_clock alias_ablation", REPO=str(ROOT)).stdout.strip() == "WALL"
@@ -2549,7 +2721,15 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
     gate builder renders FAIL in `sum` mode and UNKNOWN in `dot` mode, both
     classify to CLAIM_FAIL, and the verdict WORD is the only thing between a
     finding and an unasked question. That is why both surfaces have to send the
-    operator to the RESULT line rather than to the exit code."""
+    operator to the RESULT line rather than to the exit code.
+
+    SINCE 2026-09-09 THE ARM IS BOOKED `--dot-fallback refuse`, and the two
+    surfaces have to disclose THAT: the fourth state was reached on 2026-09-09
+    (308 s, P1 UNKNOWN at alpha >= 0.229, latched CLAIM_FAIL), the bound it
+    buys has been bought, and a probe miss now costs 1.3 min and exits 3. The
+    state is still described, because an operator reading the page has to know
+    what the flag is protecting them from; what may not stand is a surface
+    saying the arm is booked at a flag it is not."""
     sys.path.insert(0, str(ROOT / "scripts"))
     import alias_ablation as aa
 
@@ -2574,7 +2754,7 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
     joined = re.sub(r"\\\n\s+", " ", CODE)
     lines = [ln for ln in joined.splitlines()
              if re.match(r"\s*arm alias_ablation\s", ln)]
-    assert lines and all("--dot-fallback allow" in ln for ln in lines), lines
+    assert lines and all("--dot-fallback refuse" in ln for ln in lines), lines
 
     closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
     block = run(["--dry-run"], session=tmp_path / "s").stdout.split(
@@ -2585,8 +2765,10 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
         # a phrase that straddles two of its lines is still the phrase.
         flat = " ".join(surface.split())
         low = flat.lower()
-        assert "--dot-fallback allow" in flat, surface
-        assert "likely" in low, surface
+        assert "--dot-fallback refuse" in flat, surface
+        assert "1.3 min" in flat, surface
+        # The branch it replaced is named as history, not as the booking.
+        assert "allow" in low, surface
         assert "unknown" in low and "not a refutation" in low, surface
         assert "lower bound" in low, surface
         assert "latch" in low, surface
@@ -3309,12 +3491,16 @@ def test_the_reference_grade_gate_passes_an_under_load_ruler_and_refuses_the_res
     """F4, THE DRIVER'S HALF. The calibration gate asked WHEN the yaml was
     written and whether arm 0 stood behind it, never what KIND of clock it
     carries. roofline.reference_clock grades the field it read, and only the
-    under-load median may rescale the roof per row; against the idle scalar
-    (which the committed H200 yaml carries, 1515 MHz, grade idle-scalar) the
+    under-load median may rescale the roof per row; against an idle scalar the
     driver refuses roof_at_cell_clock on every row and LEVEL is provisional,
     so nothing normalised by the clock is quotable, and no driver gate said
-    so. Both directions are planted, and the committed ruler is shown to be
-    exactly the shape the gate refuses."""
+    so. Every grade is planted here, and the committed ruler is read rather
+    than described: until 2026-09-09 this test asserted that the H200's own
+    yaml was the REFUSED shape (idle-scalar, 1515 MHz), which was true of the
+    2026-09-02 calibration and false the moment the 2026-09-09 one landed
+    carrying `detail.gemm_clock.median_mhz`. The assertion is now that the
+    committed ruler's grade agrees with what the file holds, whichever way
+    that falls."""
     grade, mhz, usable, source = grade_of(
         tmp_path / "under" if planted_ruler(tmp_path / "under",
                                             {"gemm_clock": {"median_mhz": 1470}}) else None)
@@ -3333,11 +3519,24 @@ def test_the_reference_grade_gate_passes_an_under_load_ruler_and_refuses_the_res
     (tmp_path / "empty").mkdir()
     grade, mhz, usable, source = grade_of(tmp_path / "empty")
     assert (grade, usable) == ("NONE", "False") and "no calibration for" in source
-    # The committed H200 ruler is the refused shape today: a session over it
-    # without arm 0 re-measuring would quote nothing normalised by the clock.
+    # The committed H200 ruler, graded against what the file actually carries.
+    # An under-load median is the one usable shape and the 2026-09-09
+    # calibration carries one (1485 MHz, the clock its dense GEMM held); the
+    # 2026-09-02 one carried only the idle scalar and was refused.
+    import yaml as _yaml
+    committed = _yaml.safe_load(
+        (ROOT / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml").read_text())
+    detail = committed.get("detail") or {}
     got = lift(f"reference_grade nvidia_h200 {ROOT / 'moe' / 'bench' / 'hardware'}",
                REPO=str(ROOT), PY_BASE=sys.executable).stdout.strip().split("|", 3)
-    assert got[0] == "idle-scalar" and got[2] == "False", got
+    if (detail.get("gemm_clock") or {}).get("median_mhz"):
+        expect = ("under-load",
+                  str(int(detail["gemm_clock"]["median_mhz"])), "True")
+    elif detail.get("gemm_clock_mhz"):
+        expect = ("idle-scalar", str(int(detail["gemm_clock_mhz"])), "False")
+    else:
+        expect = ("settle-plateau", got[1], "False")
+    assert tuple(got[:3]) == expect, (got, expect)
     # And the refusal says the consequence in the words that matter.
     refusal = lift('reference_grade_refusal testcard /x/measured_testcard.yaml idle-scalar 1515 '
                    '"detail.gemm_clock_mhz = 1515 MHz, DISOWNED"',
@@ -3360,7 +3559,11 @@ def test_the_reference_grade_gate_is_wired_after_the_calibration_gate_and_refuse
     # The PASS branch tells the operator which column and which side to read.
     assert "pct_of_roof_at_cell_clock beside pct_of_achieved_tflops" in TEXT
     assert "read clock_level_side on every LEVEL failure" in TEXT
-    assert "only LOW or DRIFT excludes" in TEXT
+    # The rule, in the words the instrument applies it in. Until 2026-09-09
+    # this line said "only LOW or DRIFT excludes", which on this card excluded
+    # the two tiles the study is about.
+    assert "ONLY DRIFT EXCLUDES A ROW, since 2026-09-09" in TEXT
+    assert "only LOW or DRIFT excludes" not in TEXT
 
 
 #: What each KERNEL plan prints its figure as, in its own words. Three shapes,
@@ -3381,6 +3584,8 @@ def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_
     got = run(["--dry-run"], session=session)
     assert got.returncode == 0, got.stdout[-3000:]
     for name in KERNEL_ARMS:
+        if pending_flag(name):
+            continue        # PENDING_SCRIPT_FLAGS: no plan to read a figure off
         plan = (session / "logs" / f"{name}.log").read_text()
         hits = [m for pat in PLAN_SECONDS for m in re.finditer(pat, plan)]
         assert len(hits) == 1, (name, [h.group(0) for h in hits])
@@ -3484,3 +3689,154 @@ def test_the_empty_stage_array_is_guarded_for_bash_3():
         bare = subprocess.run(["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a "${STAGES[@]}" b'],
                               capture_output=True, text=True)
         assert bare.returncode != 0 and "unbound variable" in bare.stderr, bare
+
+
+# --------------------------------------------------------------------------
+# 22. what the 2026-09-09 session changed: the arm lines, the clock probe, the
+#     rerun booking, and the two sentences that named the wrong gate
+# --------------------------------------------------------------------------
+
+def test_the_cap_test_arm_carries_the_r_max_that_makes_its_own_v1_satisfiable():
+    """THE ARM THAT WAS UNSATISFIABLE FROM ITS PLAN PAGE. `tile_cap_test.py`
+    takes `r_max` from `depth.rows` when it is not given one; on the H200 band
+    that is 688, 688 % 32 = 16 so the grid stops at 672, and the grid then holds
+    two exactly-full BLOCK_M=256 stacks against V1's requirement of three
+    aligned treads per tile. The 2026-09-09 run printed "BM=256:2" on its plan
+    page and spent 141 s to fail V1. Both branches carry --r-max 1024, because
+    r_max is in the grid, the cost and the run id."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm cap_test\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--r-max 1024" in ln, ln
+    measuring = [ln for ln in lines if "--dry-run" not in ln]
+    assert len(measuring) == 1 and "--fail-on-gate" in measuring[0], measuring
+    # And the booking is the figure that plan prints, not the one it replaced.
+    assert lift("arm_minutes cap_test", REPO=str(ROOT)).stdout.strip() == "3"
+    basis = lift("arm_basis cap_test", REPO=str(ROOT)).stdout
+    assert "--r-max 1024" in basis and "143 s" in basis, basis
+    assert "688" in basis, "the row does not say what the default did"
+
+
+def test_the_alias_arm_refuses_at_the_probe_rather_than_buying_a_bound_twice():
+    """--dot-fallback refuse on all three branches, and the dot lower bound
+    named as the separate booking it is. The allow branch was bought on
+    2026-09-09: 308 s, P1 UNKNOWN at alpha >= 0.229, latched CLAIM_FAIL."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm alias_ablation\s", ln)]
+    assert len(lines) == 3, lines
+    for ln in lines:
+        assert "--dot-fallback refuse" in ln, ln
+    closes = " ".join(lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout.split())
+    for needle in ("--cell-budget-ms 200", "--replicates 18", "33.4 WALL min",
+                   "5500 GB/s", "6151"):
+        assert needle in closes, needle
+
+
+def test_the_depth_arm_carries_the_small_tile_partner_on_both_branches():
+    """Without a small tile in the SWEPT set the arm's own non-vacuity floor is
+    0.838 of the roof and no BLOCK_M=256 ladder in the corpus reaches it, so the
+    arm refuses its own reference on every card and under every clock rule: it
+    is pre-registered INVALID, which is what 292 s bought on 2026-09-09. This
+    file's rule is that a knob setting a booking or a gate is named on the line
+    (PENDING_SCRIPT_FLAGS at the top of this file carries the cross-slice
+    contract while the script is landing it)."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm bm128_depth\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--partner-block-m 32" in ln, ln
+        assert "--r-max 2048" in ln, ln
+    # The booking says the partner is not in its figure yet, rather than
+    # quietly pricing an arm that grew a ladder.
+    unpriced = lift("arm_unpriced bm128_depth", REPO=str(ROOT)).stdout
+    assert "BM=32 scaling partner" in unpriced, unpriced
+
+
+def test_the_clock_probe_checks_what_it_says_and_survives_pipefail():
+    """IT PRINTED THE OPPOSITE OF WHAT IT MEASURED. `nvidia-smi -q -d CLOCK |
+    grep -q ...` under `set -o pipefail` returns 141 on a MATCH, because grep
+    exits at the first hit and nvidia-smi takes SIGPIPE writing the rest: on
+    2026-09-09 the session reported "does NOT report clocks" on a pod where the
+    query reports four. And it probed the wrong reader: every LEVEL and DRIFT
+    verdict comes from `torch.cuda.clock_rate()` in the arm's own interpreter,
+    not from nvidia-smi. The shipped matcher is lifted and run over a large
+    planted query, and the pipeline version is re-planted beside it to show the
+    two disagree."""
+    matcher = re.search(r'if \[\[ "\$SMI_CLOCK_Q" =~ ([^\n]+) \]\]; then', TEXT)
+    assert matcher, "the clock probe no longer matches with bash's own regex"
+    body = (
+        'set -uo pipefail\n'
+        'big() { for i in $(seq 1 5000); do '
+        'echo "        Graphics                          : 1980 MHz"; done; }\n'
+        'SMI_CLOCK_Q="$(big)"\n'
+        f'if [[ "$SMI_CLOCK_Q" =~ {matcher.group(1)} ]]; then echo SHIPPED_OK; '
+        'else echo SHIPPED_MISSED; fi\n'
+        'if big | grep -qE "Graphics[[:space:]]*:[[:space:]]*[0-9]+ MHz"; '
+        'then echo PIPE_OK; else echo "PIPE_MISSED $?"; fi\n')
+    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=120)
+    assert "SHIPPED_OK" in done.stdout, done.stdout
+    assert "PIPE_MISSED 141" in done.stdout, (
+        "the pipefail artefact no longer reproduces; if bash changed, the "
+        "shipped probe must still be the one that does not use a pipeline")
+    # No pipeline in the shipped probe, and the reader the arms use is asked.
+    probe = TEXT.split("# CLOCK VISIBILITY")[1].split("# The session and results root")[0]
+    assert "nvidia-smi -q -d CLOCK 2>/dev/null | grep" not in probe
+    assert "torch.cuda.clock_rate()" in probe
+    assert "$PY_VLLM" in probe, "the probe asks an interpreter no arm runs"
+
+
+def test_the_next_session_booking_names_new_and_a_state_per_arm():
+    """AN INVALID ROW IS LATCHED AND NO RESUME RE-RUNS IT, so a session that
+    landed six INVALID arms resumes into nothing. The closing summary prints
+    the --new command and what each arm is expected to reach, priced through
+    the same `arm_minutes` and `arm_clock` as the cost table so a re-booked arm
+    moves it by itself."""
+    arms = lift("rerun_arms", REPO=str(ROOT)).stdout.split()
+    assert arms == ["calibrate", "pin_probe-n64-g1", "roofline-n64-g1",
+                    "cap_test", "bn_g16", "dtype", "bm128_depth",
+                    "alias_ablation"], arms
+    out = lift("next_session_booking", REPO=str(ROOT)).stdout
+    assert "--new" in out and "--only " + ",".join(arms) in out, out
+    priced, bound = lift(f"session_bound {' '.join(arms)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"~{priced} priced / ~{bound} bounded minutes" in out, (out, priced)
+    for arm in arms:
+        expectation = lift(f"rerun_expectation {shlex.quote(arm)}",
+                           REPO=str(ROOT)).stdout.strip()
+        assert expectation, arm
+        assert expectation in " ".join(out.split()), arm
+    # The one arm expected to exit 1 is named as a RESULT, not as a failure.
+    assert "CLAIM_FAIL, and that is the arm's result" in out
+    assert "re-runs no INVALID and no CLAIM_FAIL row" in out
+
+
+def test_the_commit_advice_names_the_ruler_gate_that_exists_and_its_polarity():
+    """TWO THINGS WRONG IN ONE SENTENCE. It said "arm 9 (ruler) P1 FAILED" and
+    `ruler_rebaseline.py` scores V1-V3 and C1-C5 with no P1 at all, so the
+    operator was sent to a gate that is not on the page; and it read the verdict
+    backwards. C1 is "the GEMM clock was sampled in the wrong state", gated
+    above a 5% post-hoc-versus-under-load delta, so a PASS is the arm
+    sustaining the charge and a FAIL is the designed null. On 2026-09-09 C1
+    read FAIL at a measured delta of 0.0%, which is the state in which the
+    calibration is committable."""
+    ruler = (ROOT / "scripts" / "ruler_rebaseline.py").read_text()
+    assert "P1" not in re.sub(r"P1[0-9]", "", ruler), "ruler now has a P1 gate"
+    body = TEXT.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
+    assert "arm 9 (ruler) C1 PASSED" in body, body[:1500]
+    assert "P1 FAILED" not in body
+    assert "a C1 FAIL is the designed null" in " ".join(body.split()).lower() or \
+        "A C1 FAIL is the designed null" in " ".join(body.split()), body[:1500]
+
+
+def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
+    """The latch is right and the advice around it was not: "to resume it" was
+    the only route named, and a resume re-runs no INVALID row."""
+    got = run(["--dry-run"], session=tmp_path / "s")
+    flat = " ".join(got.stdout.split())
+    assert "A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW" in flat, flat[-3000:]
+    assert "The next session for those arms is --new" in flat

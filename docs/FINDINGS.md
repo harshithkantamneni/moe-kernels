@@ -65,7 +65,10 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   any card. The two ends are two calibrations of this one H200, and their
   spread is its compute ceiling failing to reproduce (`docs/INSTRUMENTATION.md`
   entry 6); 26 ladder reports on BOTH cards had been scored against it. The
-  committed calibrations give H200 162.8 and A100 145.8 FLOP/byte, every
+  committed calibrations gave H200 162.8 and A100 145.8 FLOP/byte when this
+  entry was written; the H200's has since been re-measured to 152.8
+  (2026-09-09, "The 2026-09-09 H200 session" below), which is the same ceiling
+  failing to reproduce and does not rescore anything. Every
   report has been rescored to the attached card's own figure with
   `rescored_from` keeping the withdrawn one (each ladder arm's `NOTE.md`), and
   `scripts/rescore_published_reports.py` refuses a report that quotes another
@@ -109,6 +112,178 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
 - **The CUDA-graph pair count** below was 14,050; recomputed 2026-09-01 as
   13,565 (`docs/INSTRUMENTATION.md`, "What did not reproduce"). Corrected
   inline.
+- **(k) Every published alpha is an INTERVAL, not a point, and four of them are
+  impossible.** Added 2026-09-09, from `memory_branch_anchor.py --rescore` over
+  the whole corpus on the first H200 gaps session (40 fits, two cards). Four of
+  40 fits imply a bandwidth the card does not have (worst 2335 GB/s against the
+  A100's 2039 pin rate, 114.5%, at `2026-09-02-...-alpha-surface-s3` qwen2-57b
+  G=16 BM=32); 12 of 40 alpha-corrected values fall outside their own anchor
+  bracket; and re-anchoring moves the published alpha by a median 0.094 (max
+  0.193, median bracket width 0.242) against the 0.05 those alphas are quoted
+  to. So no alpha in this repository may be quoted as a point: quote the anchor
+  interval. Two consequences follow directly. `SURFACE.txt`'s "0 of 12 fits
+  within 0.05 of the pooled 0.558" is WITHDRAWN, because 4 of 40 brackets
+  contain 0.558. And the BLOCK_M <= 64 cap SURVIVES: at the bracket's most
+  generous alpha, through the corrected cap `2BM/(b(alpha_b + phi))`, the worst
+  case is 0.678 of the ridge, still below it
+  (`RESULT: CLAIM tile_cap PASS`).
+- **(l) A crossing inside 144.9-152.8 FLOP/byte is a band, not a number.**
+  Added 2026-09-09 from `ruler_rebaseline.py` on the same session: the
+  bandwidth patterns reproduce across sessions to 0.05%, and the compute term
+  moves 5.0x more than the denominator choice does, but the 2.2% denominator
+  swing flips 90 of 53,188 classified rows, every one of them within 6% of the
+  ridge. Crossings that land inside the ridge band inherit the ruler's bias and
+  must be quoted as a band.
+
+---
+
+## The 2026-09-09 H200 session: what it established, and what it did not
+
+Added 2026-09-09. One rented H200, one driver
+(`scripts/h200_gaps_session.sh`), sixteen arms, 33 minutes of wall clock
+against a three-hour booking. Everything below is from
+`results/published/2026-09-09-nvidia_h200-gaps-session/`: the ledger is
+`session/ARMS.tsv`, each arm's page is `session/logs/<arm>.log`, and the cells
+are under `results/<script>/<run id>/`. The ledger's own count is six DONE,
+two REFUSED, two CLAIM_FAIL as designed, and six INVALID. The INVALID six are
+apparatus findings and are listed as such at the end of this section; not one
+of them is a fact about the card.
+
+### The ruler this session ran on
+
+`scripts/calibrate_hardware.py --publish`, 31 s, 6 of 6 gates:
+
+> On the H200 under a 700 W cap the dense bf16 8192^3 GEMM holds 1485 MHz
+> (samples 1470-1515) at 691 W and delivers 668.5 TFLOP/s, which is 83.3% of
+> the silicon's 802.9 at that clock and 67.6% of the 989.5 datasheet figure.
+> The fp8 GEMM delivers 1469.9 TFLOP/s at 1395 MHz. Triad is 4374.5 GB/s,
+> read_stream 4613, write 4680.2, and that write rate is 97.2% of the
+> 4814.3 GB/s pin rate derived from the 6016-bit enabled bus, so it is a 1N
+> store rate and not a read-for-ownership. Ridge 152.8 FLOP/byte, band
+> 144.9-152.8.
+
+The pin rate is the denominator every anchor result below is quoted against.
+
+**The H200's ridge moved again, and nothing below is rescored to it.** The
+2026-09-02 calibration put this card at 162.8 FLOP/byte; this one puts it at
+152.8, a 6.1% move, and it is the dense bf16 ceiling that moved (bandwidth
+reproduces across sessions to 0.05%, which the ruler arm re-measured on the
+same day). Every table in this file is scored against the ridge its own arm
+was entitled to, which is RETRACTIONS (e)'s rule and is why the move does not
+propagate; where this file says 162.8 for the H200 it names the 2026-09-02
+calibration. What the move does say is that the ruler's between-rental spread
+is the largest single uncertainty in every roof fraction here, and that a
+crossing quoted inside 144.9-152.8 is a band (RETRACTIONS (l)).
+
+### The under-load clock is set per tile, by the kernel's own power draw
+
+This is the session's cross-cutting finding and it is not about any one arm.
+Over 750 cells with an under-load clock on the row, the SM clock is a property
+of the KERNEL rather than of the card's health:
+
+| held fixed | median SM clock under load | cells |
+|---|---:|---|
+| BLOCK_M=128 (any BLOCK_N; the same 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 215 |
+| BLOCK_M=256 | 1650 MHz | 311 |
+| BLOCK_M=32 (any GROUP_SIZE_M) | 1736 MHz | 68 |
+| BLOCK_M=64, GROUP_SIZE_M=1 | 1358 MHz | 16 |
+| BLOCK_M=256, BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 311 |
+| memory-shaped cells (streaming, high flush duty) | 1950-1980 MHz | |
+| the calibration's own dense bf16 GEMM at 691 W | 1485 MHz | the reference |
+
+It also moves with tread depth within one tile (bn_g16 at BN=128 rises 1470 to
+1605 MHz from n=1 to n=4) and with flush duty within one tile (cap_test's
+control runs 1980 MHz at T=56 and 1650 at T=1024). The reference is near the
+LOW end of dense work, not in the middle: a +/-5% band around it is 74 MHz
+where the session spans 660.
+
+Two consequences, both structural. First, the clock rule: excluding a cell for
+sitting below the band is a rule against a TILE, and it removed 15 of the
+roofline arm's 39 cells and 110 of the depth arm's 168 treads, in every
+replicate, for running at their own steady state. Exclusion is DRIFT-only from
+2026-09-09 and the LEVEL side is recorded (`docs/APPARATUS.md` section 1).
+Second, the scoring rule: because every cell ran under the same 700 W cap, the
+FIXED roof is the fair delivered-throughput comparison for a compute-bound
+claim, and the cell's own-clock fraction is printed beside it as issue
+efficiency. Scoring a compute-bound claim at its own clock credits a tile for
+its own throttle: on these cells it flips the roofline arm's control-subject
+gap from +0.053 to -0.032.
+
+For a paper this is a publishable fact in its own right: on a power-capped
+H200, MoE grouped-GEMM tiles run at clocks that span a factor of 1.46 between
+tile shapes (1358 MHz at BLOCK_M=64/GROUP_SIZE_M=1, 1980 on a streaming cell),
+so any "fraction of peak" is a statement about a tile and a power cap
+together.
+
+### The BM=32 anchor, measured for every published ladder
+
+`memory_branch_anchor.py --measure`, DONE, 7 of 7 gates, 128 of 128 cells:
+
+> The BLOCK_M=32 anchor rate is 76.2-77.9% of the 4814 GB/s pin rate over 4
+> cells; the anchor t(1) is swizzle-invariant to 2.28% across all G; the fitted
+> slope is anchor-independent to 0.31% (worst, at BM=64 G=1 over 16 treads);
+> and the anchor never exceeds the measured ceiling, tightest at 80.2%.
+
+It ran with 18 LOW cells and dropped none, which is what the rule change makes
+possible. This gives every published ladder a MEASURED n=1 tread where it
+previously had an extrapolation, and it is the input to the corpus rescore
+below.
+
+### The corpus rescore: alphas are intervals
+
+`memory_branch_anchor.py --rescore`, CLAIM_FAIL, 40 fits over two cards. The
+four failing CLAIM gates are the finding and they are in RETRACTIONS (k): 4 of
+40 published alphas imply more than the card's pin rate, 12 of 40 fall outside
+their own anchor bracket, 4 brackets contain the pooled 0.558 (so `SURFACE.txt`'s
+"0 of 12 within 0.05" is withdrawn), and re-anchoring moves the median alpha by
+0.094 against a quoted 0.05. What did NOT move: the `tile_cap` gate passes, so
+the BLOCK_M <= 64 cap holds at the bracket's most generous alpha, worst 0.678
+of the ridge.
+
+### The ISA switch closes STUDY item 3
+
+`check_mma_path.sh`, DONE, 4 of 4 gates, two arms at fixed T=256 and
+num_warps=4 with only BLOCK_M moved:
+
+> wgmma (m64n64k16) appears exactly where `BLOCK_M % 64 == 0` and nowhere else;
+> BLOCK_M=16 emits `mma.sync` only. The instruction is selected by the tile
+> height, not by the batch or the warp count, and the two arms compiled
+> distinct PTX checksums.
+
+That closes the loose end STUDY item 3 left open on 2026-08-27 ("confirm the
+instruction actually switched by re-running check_mma_path.sh under the
+override").
+
+### The DRAM counter route is OPEN on this box
+
+`dram_counter_route.py --probe`, DONE: ncu 2025.1.1 attached with no permission
+error on this RunPod H200 (nsys is absent). The 15-minute
+`dram__bytes_read.sum` plan over the alpha-surface cell can be booked, which is
+the only route to `alpha_b` as a number rather than as an interval. Every
+previous rented pod refused the counter.
+
+### The six INVALID arms, as apparatus findings
+
+Each of these measured and then failed a VALIDITY gate. Nothing on their pages
+is a result and none of the numbers below is quoted as one; they are recorded
+because each names a defect that would have repeated on the next rental. All
+six were reproduced off GPU, in-process, over the committed cells.
+
+| arm | spent | the defect, not a property of the card |
+|---|---:|---|
+| `roofline-n64-g1` | 96 s | The clock rule excluded every multi-tile BLOCK_M=128 subject cell (15 of 39; five missed the 1410.75 MHz floor by 0.75 MHz, a twentieth of one 15 MHz NVML step) while keeping all 15 BLOCK_M=256 control cells. Under DRIFT-only the arm's V2/V4 pass and C1 reads 0.499 of the fixed roof; V3 still fails at 4 of 39 settling DRIFTs, which is why the settle-on-clock warmup is an instrument change and not a gate change. |
+| `bm128_depth` | 292 s | The pairing {128, 256} puts the arm's own non-vacuity floor at 0.838 of the roof; the BLOCK_M=256 reference measured 0.547 and no BLOCK_M=256 ladder in the corpus reaches 0.838 on either card. The arm was pre-registered to refuse its own reference, on any card and under any clock rule, and the refusal reasons were never printed. |
+| `bn_g16` | 364 s | The non-vacuity check scaled C to the smallest SWEPT block size, and both call sites passed only the reference, so it scaled to BLOCK_M=256 itself and demanded 1.675 AT the roof. With the swept set passed in, all three references qualify at 36.7 / 54.6 / 71.6% of the roof at BN=32/64/128 and the cross-BN spread is 1.95x raw (2.15x normalised to 1485 MHz). The arm then SKIPPED every subject while its warning said they were measured anyway. |
+| `alias_ablation` | 308 s | No sum-mode pinning cleared the read roof (best 5500 GB/s against a 6151 bar), the run fell to a dot ladder, and P1 was never asked: "not asked", alpha >= 0.229. Three of its four failing gates are apparatus, not physics: a folded row taking one pass of 27 below the band, a 28% placebo on a sub-L2 model whose D cannot grow, and a bracket threshold the probe's own headroom floor was allowed to admit. |
+| `cap_test` | 141 s | `r_max` defaulted to the depth requirement, 688 rows; 688 % 32 = 16, so the grid stopped at 672 and held two exactly-full BLOCK_M=256 stacks against V1's three. The arm was unsatisfiable from its plan page, which printed "BM=256:2" and continued. The counterfactual with the control qualified from its own two treads gives alpha 0.998 raw / 0.994 corrected and a cap of 16.1 Op/B = 0.105 of the ridge: a 10x refutation of the retracted 0.10, and it is NOT quoted as a result until the arm is re-run at `--r-max 1024`. |
+| `dtype` | 413 s | vLLM 0.27.1's `override_config` has no try/finally (verified from the tag). A Triton `OutOfResources` raised inside it at 22 of 28 cells left the fp8 config installed process-wide: all 28 bf16 native cells timed the leaked fp8 tile, 13 fp8 native cells timed the previous cell's tile, and one model's tuned files were never looked up. 41 arms were corrupted by one infeasible pairing, which shared-memory arithmetic refuses at plan time (SM90_SMEM_LIMIT 232448 against `num_stages x (BM*BK + BK*BN) x bytes`). |
+
+Two more arms are worth reading beside them. `roofline-n256-g16` and
+`-g32` REFUSED before spending GPU time, from the register-file arithmetic
+alone: the BLOCK_M=256 control that cancels the fused layer needs 65536 of
+65536 registers per block at every warp and stage count, so the paper's
+headline configuration (BLOCK_M=128, BLOCK_N=256, GROUP_SIZE_M=16) has no
+confirming arm on sm_90 at any BLOCK_SIZE_N. That refusal is the finding.
 
 ---
 
@@ -118,6 +293,13 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
 superseded and are kept for provenance, not for analysis. Three further arms
 carry ladder reports (26 `*.report.json`) and no CSV. Every count in this
 section is asserted against the tree by `tests/test_docs.py`.
+
+A fifteenth published directory,
+`2026-09-09-nvidia_h200-gaps-session`, is in neither shape and is not in the
+table below: it is a SESSION rather than an arm, holding a ledger, sixteen arm
+logs and each arm's own run directory, and its numbers are read in "The
+2026-09-09 H200 session" above. It contributes no row to the pools any
+crossing here is computed from.
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|
@@ -177,8 +359,9 @@ across **160.3 to 176.2 FLOP/byte** depending on which calibration it was
 scored with. (Retracted 2026-09-02 as "the ridge is 160.3 to 176.2": that
 range is one card's compute ceiling failing to reproduce, not a ridge band any
 card owns, and 26 ladder reports on both cards were scored against it; they
-now quote their own card's, H200 162.8 and A100 145.8 on the committed
-calibrations, RETRACTIONS (e). The 2026-09-01 alpha-0558 arm ships a fourth
+now quote their own card's, H200 162.8 and A100 145.8 on the calibrations
+committed when that was written, RETRACTIONS (e) and (the H200's 2026-09-09
+re-measure to 152.8) the session section above. The 2026-09-01 alpha-0558 arm ships a fourth
 H200 calibration, 716.0 TFLOP/s over 4373.9 GB/s at 1935 MHz, ridge 163.7.)
 The A100 cross-card arm's own calibration measures 145.7 (262.0 TFLOP/s over
 1798.5 GB/s); the 2026-09-02 A100 calibration measures 145.8.

@@ -61,8 +61,8 @@ determined" and never "zero":
 
 | flag | column | what it asks | the retired check it replaces |
 |---|---|---|---|
-| LEVEL | `clock_level_ok`, side in `clock_level_side` | was the SM clock under load inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = 1.05`] of the reference clock the ROOF was measured at, in EITHER direction; a failure names its side, `low` or `high` | nothing asked this. A card sitting at 1500 MHz for a whole cell, with a roof measured at 1980, passed the old check with drift 0.0. And until 2026-09-04 (03df2d4) LEVEL itself was one-sided, `load >= 0.95 * reference`, so a memory-shaped cell boosted to 1980 against a 1515 roof passed with its fixed-roof fraction inflated by 1.31x |
-| DRIFT | `clock_drift_ok` | do the first and last under-load samples agree within `DRIFT_FRACTION = 0.05`, in EITHER direction | the old `clock_drift` fired only on a >5% DROP between two idle-instant samples |
+| LEVEL | `clock_level_ok`, side in `clock_level_side` | was the SM clock under load inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = 1.05`] of the reference clock the ROOF was measured at, in EITHER direction; a failure names its side, `low` or `high`. IT IS A RECORD, NOT AN EXCLUSION: since 2026-09-09 no consumer drops a row for it | nothing asked this. A card sitting at 1500 MHz for a whole cell, with a roof measured at 1980, passed the old check with drift 0.0. And until 2026-09-04 (03df2d4) LEVEL itself was one-sided, `load >= 0.95 * reference`, so a memory-shaped cell boosted to 1980 against a 1515 roof passed with its fixed-roof fraction inflated by 1.31x |
+| DRIFT | `clock_drift_ok` | do the first and last under-load samples agree within `DRIFT_FRACTION = 0.05`, in EITHER direction. THE ONLY EXCLUSION: a cell is excluded if and only if this verdict failed | the old `clock_drift` fired only on a >5% DROP between two idle-instant samples |
 | host-bound | `host_bound` | had the GPU fewer than `HOST_BOUND_BACKLOG_ITERS = 2` iterations of work queued when the host finished enqueueing any trial | nothing; the drained-queue case silently included host enqueue time in the interval |
 
 **What the old throttle flag detected.** The retired `throttled` column compared
@@ -72,54 +72,110 @@ flagged 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
 the same cell timed at ratio 0.998 with identical end clocks. It was detecting
 whether the START sample had caught the idle boost, not throttling. Every
 "N rows throttled" figure in a pre-v5 `SUMMARY.md`, and every "unthrottled"
-basis in `docs/FINDINGS.md`, is that flag. LEVEL is the flag that means
-something against a roof; a consumer that filters v5 rows must test LEVEL AND
-DRIFT, not one of them. A rise is a defect too: it means the warmup did not
-reach the operating point.
+basis in `docs/FINDINGS.md`, is that flag. DRIFT under load is what replaced
+it, and DRIFT is what a consumer filters on; a rise fails it as a drop does,
+because a rise means the warmup did not reach the operating point. LEVEL is
+scored beside it and says which clock state the cell ran in, which is a fact
+about the tile rather than a reason to drop the row (next paragraph). Until
+2026-09-09 this page said a consumer "must test LEVEL AND DRIFT"; that is the
+rule that made the study's two primary tiles unmeasurable on the H200.
 
-**The side, and the rule every consumer must apply.** A LEVEL failure is not
-one thing. `low` means the card sat BELOW the clock the roof was measured at:
-the cell is not comparable with the fixed roof and it is EXCLUDED, as a DRIFT
-failure is. `high` means the cell ran ABOVE that clock, and on the H200 that
-is the EXPECTED state of a memory-bound cell: the roof's dense GEMM is power
-limited and plateaus at 1455-1515 MHz, while the committed calibration's
-memory load, which draws less power, held 1980 for its whole 30 s settle, a
-ratio of 1.31 against a 1.05 band. Stated as the bracket it is: 1980 is the
-calibration's streaming load, no Triton `fused_moe` cell has been traced under
-the instrument, and such a cell may sit anywhere between 1515 and 1980; but
-anything above 1591 fails the band, and the 2026-09-01 idle-instant proxy put
-67% of memory-bound rows there. A HIGH row is NOT an exclusion. Its timing is
-sound; what is wrong is the fixed-roof fraction `pct_of_achieved_tflops`,
-inflated by `load / reference`, and the driver writes the correction onto the
-row: `roof_at_cell_clock_tflops` (`roofline.roof_at_clock`) and
-`pct_of_roof_at_cell_clock`, the compute-side fraction to read from a v6 row,
-scored only when the reference is graded `under-load` and refused with the
-reason in `roof_note` otherwise (`schema.has_cell_clock_roof` is the predicate
-to split a pool on). The rule in one line: LOW or DRIFT excludes; HIGH means
-"the fixed-roof fraction is not comparable, read `pct_of_roof_at_cell_clock`".
-The driver's `throttled` column already encodes exactly LOW-or-DRIFT
-(`moe/bench/driver.py`), so a consumer may branch on it instead of
-re-deriving the side. What failure this prevents: a consumer that treats
-`clock_level_ok = failed` alone as "ran cold, exclude" drops every boosted
-row, which on an H200 is every memory-bound tread of every ladder; it lands
-the alias arm INVALID and admits no memory-bound row into any refit. That was
-found on 2026-09-08 at thirteen consumers after the instrument went two-sided
-at its one producer: the fifteenth instance of a fix applied at one of two
-call sites. A consumer is correct only when a planted 1980-against-1515 row
-with side `high` is KEPT and a planted LOW row is EXCLUDED; a consumer that
-reads `clock_level_ok` without `clock_level_side` has the one-sided reading
-whatever its comment says, and the `throttled` column is the one place the
-rule was already applied when this was written.
+**The rule every consumer must apply, and what the side is for.** SINCE
+2026-09-09 A CELL IS EXCLUDED IF AND ONLY IF `clock_drift_ok` IS FALSE. The
+LEVEL side is written on every row and excludes nothing on either side.
 
-**The reference clock.** LEVEL is a comparison and half a comparison is not a
-verdict, so `clock_level_ok` is `None` unless `reference_clock_mhz` is
-supplied. `roofline.reference_clock(gpu_name)` reads it from THIS card's
-committed calibration, `moe/bench/hardware/measured_<card>.yaml`, trying in
-order `detail.gemm_clock.median_mhz`, `detail.gemm_clock_mhz`, then
+Why the rule changed, in the numbers that changed it. The first H200 gaps
+session (2026-09-09, `results/published/2026-09-09-nvidia_h200-gaps-session/`)
+left 750 cells with an under-load clock on every one of them, and a census over
+them says the SM clock under load is not a property of the card's health but of
+the KERNEL, set per tile by that kernel's own power draw under the 700 W cap:
+
+| what is held fixed | median SM clock under load | cells |
+|---|---:|---|
+| BLOCK_M=128 (any BLOCK_N; 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 215 |
+| BLOCK_M=256 | 1650 MHz | 311 |
+| BLOCK_M=32 (any GROUP_SIZE_M) | 1736 MHz | 68 |
+| BLOCK_M=64, GROUP_SIZE_M=1 | 1358 MHz | 16 treads, 15 of them below the band |
+| memory-shaped cells (the calibration's own streaming load, cap_test's flush duty at T=56) | 1950-1980 MHz | |
+| the calibration's dense bf16 8192^3 GEMM, 691 W | 1485 MHz (samples 1470-1515) | the reference |
+| at fixed BLOCK_M=256: BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 311 |
+
+The reference is therefore not the middle of anything: 1485 MHz at 691 W sits
+near the LOW end of what dense tensor work does on this card, and a +/-5% band
+around it is 74 MHz where the session spans 660. Under the rule in force until
+2026-09-09, LEVEL-low excluded 15 of the roofline arm's 39 cells (every
+multi-tile BLOCK_M=128 subject cell; five of them missed the 1410.75 MHz floor
+by 0.75 MHz, a twentieth of the 15 MHz the clock can even move in) and 110 of
+the depth arm's 168 treads, in every rep and at every depth,
+while excluding nothing at all in the arms whose tiles happen to sit near the
+GEMM's clock. That is a rule against a TILE, and it made the study's two
+primary tiles unmeasurable on this card on any rerun. There is no "level" state
+to demand of a power-capped kernel.
+
+What the side is for, then. `low` is a hungry tile at its own steady state;
+`high` is a memory-shaped cell boosting above the reference, which on this card
+is the normal state of every memory-bound tread. Both are sound timings. What
+is wrong for both is the FIXED-roof fraction `pct_of_achieved_tflops`, scaled
+by `load / reference`, and the driver writes the correction onto the row:
+`roof_at_cell_clock_tflops` (`roofline.roof_at_clock`) and
+`pct_of_roof_at_cell_clock`, scored only when the reference is graded
+`under-load` and refused with the reason in `roof_note` otherwise
+(`schema.has_cell_clock_roof` is the predicate to split a pool on). Which of
+the two a gate reads is settled and is not a matter of taste: **compute-bound
+CLAIM gates read the FIXED roof fraction**, because the GEMM and every cell ran
+under the same 700 W cap, so the fixed roof is the fair delivered-throughput
+comparison; **the own-clock fraction is printed beside it on every point line
+and every gate line as issue efficiency**, and is a gate input only for
+memory-shaped cells and cross-card work, labelled. Scoring a compute-bound
+claim at the cell's own clock credits a tile for its own throttle: on the
+2026-09-09 roofline cells it flips C3's control-subject gap from +0.053 to
+-0.032, which is a sign change on a registered claim.
+
+The rule in one line: DRIFT alone excludes; the LEVEL side is recorded and
+excludes nothing; a compute-bound gate reads `pct_of_achieved_tflops` and
+prints `pct_of_roof_at_cell_clock` beside it. The driver's `throttled` column
+encodes exactly `clock_drift_ok is False` (`moe/bench/driver.py`), so a
+consumer may branch on it instead of re-deriving anything. What failure this
+prevents: a consumer that treats `clock_level_ok = failed` as "exclude" drops
+either every boosted row (the one-sided reading found at thirteen consumers on
+2026-09-08, the fifteenth instance of a fix landing at one of two call sites)
+or every hungry tile (the two-sided reading that landed two arms INVALID on
+2026-09-09, the sixteenth). A consumer is correct only when a planted
+1980-against-1485 row with side `high` and a planted 1395-against-1485 row with
+side `low` are both KEPT and a planted DRIFT row is EXCLUDED.
+
+**What DRIFT is, and why it is the instrument's job and not the gate's.** All
+135 drifted cells of the 2026-09-09 session are the first cell of a rep after a
+workload change: the governor settling, on the shortest cell, in the direction
+the new tile's power draw demands (1875 to 1725, 1560 to 1650, 1560 to 1650,
+1620 to 1710 on the four with samples on disk). A gate cannot fix that, and
+widening it would only hide it. The instrument does: after `warmup_ms`,
+`warm_until` keeps warming until two consecutive NVML reads agree within one
+15 MHz step (capped at 3x `warmup_ms`), records `settle_ms` and the number of
+extra warm calls on the row, and a DRIFT note names the direction (settling
+upward, dropping, oscillating). `TIMING_BASIS` moves to a v4 string for it,
+because it moves published numbers. Every writer persists the first and last
+under-load samples and the sample list, and `power_w` is read at the same NVML
+call and carried on every row, so a future LOW can be told apart as a throttled
+card rather than a hungry tile. Any band edge that survives anywhere snaps to
+the 15 MHz grid: the retired LOW edge at 1410.75 sat inside a step, so 1410 was
+LOW and 1425 was level for timings 0.1% apart, and 23 of 148 LOW verdicts sat
+within one step of it.
+
+**The reference clock, and the fp8 family.** LEVEL is a comparison and half a
+comparison is not a verdict, so `clock_level_ok` is `None` unless
+`reference_clock_mhz` is supplied. `roofline.reference_clock(gpu_name)` reads
+it from THIS card's committed calibration,
+`moe/bench/hardware/measured_<card>.yaml`, trying in order
+`detail.gemm_clock.median_mhz`, `detail.gemm_clock_mhz`, then
 `detail.settle.final_mhz`, and returns `mhz=None` with a reason when the card
-has no measured file or the file carries no clock. That is why a session
-starts with `scripts/calibrate_hardware.py --publish` and refuses to continue
-without it (section 5).
+has no measured file or the file carries no clock. That is why a session starts
+with `scripts/calibrate_hardware.py --publish` and refuses to continue without
+it (section 5). The fp8 family resolves its own reference, the fp8 GEMM's
+under-load median (1395 MHz at 690 W on this card), and that too is A RECORD:
+fp8 compute-bound cells are scored against the fixed 1469.9 TFLOP/s fp8 roof
+with `1469.9 x load / 1395` carried beside it, and there is no fp8 band either
+(76 of 84 fp8 rows sit above 1395).
 
 **Two things the instrument does not cover yet, stated so nobody infers them.**
 The roof itself is timed by `moe.bench.calibrate` through `timing.time_eager`
