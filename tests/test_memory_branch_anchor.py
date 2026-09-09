@@ -1559,38 +1559,46 @@ def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
         reference_clock_mhz=reference_mhz)
 
 
-def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
-    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
 
-    `moe.bench.driver` writes `throttled = drift failed or (level failed and
-    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
-    consumer has no such column and restates the rule; the two must agree on
-    every cell of the truth table or a boosted tread is kept by one reader and
-    dropped by the next, which is the shape of the defect.
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm, BLOCK_M=64 at
+    GROUP_SIZE_M=1 1358), so excluding it excluded a tile rather than a
+    defect, and removed both of this study's primary tiles from measurability
+    on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
     """
     from moe.bench import timing
     ex = mba.clock_excluded
-    # HIGH is not an exclusion, in any combination with a good drift.
+    # Neither side is an exclusion when the clock held still.
     assert ex(False, timing.LEVEL_HIGH, True) is False
     assert ex(False, timing.LEVEL_HIGH, None) is False
-    # LOW is, and so is a False that recorded no side (the one-sided era).
-    assert ex(False, timing.LEVEL_LOW, True) is True
-    assert ex(False, "", True) is True
-    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
     assert ex(True, "", False) is True
     assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
     assert ex(None, "", False) is True
     # Not determined is not an exclusion: one has to be positively established.
     assert ex(None, "", None) is False
     assert ex(True, "", True) is False
     assert ex(True, "", None) is False
-    # The driver's rule, evaluated over the same table.
+    # The whole table: DRIFT and nothing else.
     for level in (True, False, None):
         for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
             for drift in (True, False, None):
-                driver_rule = (drift is False
-                               or (level is False and side != timing.LEVEL_HIGH))
-                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
 
 
 def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
@@ -1606,13 +1614,14 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     assert mba.clock_excluded(high.clock_level_ok, mba.clock_side_of(high),
                                  high.clock_drift_ok) is False, "HIGH is kept"
     assert mba.clock_excluded(low.clock_level_ok, mba.clock_side_of(low),
-                                 low.clock_drift_ok) is True, "LOW is excluded"
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
     # A record without the field (every fake before 2026-09-03) gets its side
     # derived from its own numbers, the way driver.py derives it.
     import dataclasses
     bare = dataclasses.replace(high, clock_level_side="")
     assert mba.clock_side_of(bare) == timing.LEVEL_HIGH
-    # And one with neither answers "", which the rule reads as below.
+    # And one with neither answers "", which is "no side recorded".
     blind = dataclasses.replace(bare, reference_clock_mhz=None)
     assert mba.clock_side_of(blind) == ""
 
@@ -1639,11 +1648,12 @@ def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
         "without its side; route them through clock_excluded")
 
 
-def test_timing_columns_carry_the_side_and_a_boosted_cell_is_kept():
-    """THE PLANTED HIGH ROW, KEPT, AND THE PLANTED LOW ROW, EXCLUDED, through
-    `timing_columns` and `clock_state`, the two places this arm's rows meet
-    the clock verdicts. On the H200 every tread past the anchor is the HIGH
-    row."""
+def test_timing_columns_carry_the_side_and_both_level_sides_are_kept():
+    """THE PLANTED HIGH ROW AND THE PLANTED LOW ROW, BOTH KEPT AND BOTH
+    RECORDED, through `timing_columns` and `clock_state`, the two places this
+    arm's rows meet the clock verdicts. On the H200 every tread past the
+    anchor is the HIGH row, and the 18 LOW cells of the 2026-09-09 session
+    were this arm's BLOCK_M=64 at GROUP_SIZE_M=1, which it scored and kept."""
     from moe.bench import timing
     high = mba.timing_columns(
         _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ))
@@ -1656,20 +1666,26 @@ def test_timing_columns_carry_the_side_and_a_boosted_cell_is_kept():
     state = mba.clock_state(rows)
     assert state["timed"] == 2
     assert state["high"] == 1 and state["low"] == 1
-    assert state["excluded_shaped"] == 1, "the boosted cell is not excluded-shaped"
+    assert state["excluded_shaped"] == 0, "neither side is an exclusion"
     said = "\n".join(mba.clock_state_lines(state))
-    assert "1 HIGH (boosted above the band, kept" in said
-    assert "1 LOW (below the band, excluded-shaped)" in said
+    assert "1 steady HIGH (kept, side recorded)" in said
+    assert "1 steady LOW (kept, side recorded)" in said
+    # And a drifting cell IS excluded-shaped, so the count still moves.
+    drifting = mba.timing_columns(
+        _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ,
+                          drift_to=1300.0))
+    drift_state = mba.clock_state([dict(drifting, status="ok")])
+    assert drift_state["drift"] == 1 and drift_state["excluded_shaped"] == 1
 
 
-def test_a_high_world_scores_exactly_as_the_clean_world_and_excludes_nothing():
-    """THE HIGH WORLD: the clean planted grid with every cell stamped at the
-    H200's memory-load clock against the GEMM reference. Every M gate must
-    return what it returns for the clean world, the exit code must be DONE,
-    and the clock-state block must count zero excluded-shaped cells. A LOW
-    twin counts every cell excluded-shaped and, because this arm reports and
-    does not gate on the clock, still scores the same: the counts are what a
-    reader has, and they say opposite things about the two worlds."""
+def test_neither_a_high_world_nor_a_low_world_excludes_anything():
+    """THE HIGH WORLD AND THE LOW WORLD: the clean planted grid stamped at the
+    H200's memory-load clock, and at the clock a hungry tile holds, both
+    against the GEMM reference. Every M gate must return what it returns for
+    the clean world, the exit code must be DONE, and BOTH clock-state blocks
+    must count zero excluded-shaped cells: since 2026-09-09 a steady clock on
+    either side is an operating point the row records. The counts still tell
+    the two worlds apart, which is what they are for."""
     from moe.bench import exit_codes
     clean = mba.plant_cells(MIXTRAL)
     high_t = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
@@ -1696,13 +1712,17 @@ def test_a_high_world_scores_exactly_as_the_clean_world_and_excludes_nothing():
     high_state = mba.clock_state(stamped(high_t))
     low_state = mba.clock_state(stamped(low_t))
     assert high_state["high"] == len(clean) and high_state["excluded_shaped"] == 0
-    assert low_state["low"] == len(clean) and low_state["excluded_shaped"] == len(clean)
+    assert low_state["low"] == len(clean) and low_state["excluded_shaped"] == 0
+    drift_state = mba.clock_state(stamped(_kernel_timing_at(
+        H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ, drift_to=1300.0)))
+    assert drift_state["drift"] == len(clean)
+    assert drift_state["excluded_shaped"] == len(clean)
     # A planted cell carries no clock and says so in the side column too.
     assert all(row["clock_level_side"] == "" and row["clock_level_ok"] is None
                for row in clean)
 
 
-def test_the_measure_loop_marks_a_boosted_cell_as_kept():
+def test_the_measure_loop_names_both_level_sides_as_kept():
     import ast
     tree = ast.parse((ROOT / "scripts" / "memory_branch_anchor.py").read_text())
     fns = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
@@ -1711,5 +1731,70 @@ def test_the_measure_loop_marks_a_boosted_cell_as_kept():
     assert len(fns) == 1, [f.name for f in fns]
     body = ast.unparse(fns[0])
     assert 'clock_excluded(t.clock_level_ok, timed["clock_level_side"]' in body.replace("'", '"')
-    assert "kept (LEVEL high is not an exclusion)" in body
+    assert "is recorded, not excluded" in body
+    assert 'timed["clock_level_side"] == timing.LEVEL_HIGH' not in body.replace("'", '"')
     assert "t.clock_level_ok is False" not in body
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-09 H200 ARM, REPLAYED. This arm ran DONE 7/7 with 18 LOW cells
+# on the board and dropped none of them, which is the evidence the rule change
+# rests on: the LOW side was BLOCK_M=64 at GROUP_SIZE_M=1, the hungriest tile
+# of the session, at its own steady operating point under the 700 W cap. The
+# rule change must leave every verdict where it is and only change what the
+# page says about those cells.
+# --------------------------------------------------------------------------
+
+SESSION_MEASURE = (ROOT / "results" / "published"
+                   / "2026-09-09-nvidia_h200-gaps-session" / "results"
+                   / "memory_branch_anchor")
+
+
+def _session_measure_json():
+    found = sorted(SESSION_MEASURE.glob("*/measure.json"))
+    if not found:
+        pytest.skip(f"the 2026-09-09 session measure.json is not here: "
+                    f"{SESSION_MEASURE}")
+    return found[0]
+
+
+def test_the_session_anchor_arm_still_scores_seven_of_seven():
+    """`--score-measured` over the committed rows: every gate PASS, exit DONE.
+    Pinned because this is the arm the rule change must not move."""
+    from moe.bench import exit_codes
+    args = mba.build_parser().parse_args(
+        ["--score-measured", str(_session_measure_json())])
+    assert mba.run_score_measured(args) == exit_codes.DONE
+
+
+def test_the_session_anchor_page_says_the_low_cells_were_kept(capsys):
+    """18 steady LOW, 48 steady HIGH, 12 DRIFT over 128 timed cells, and the
+    arm drops none of them. The committed payload's own `clock_state` block
+    still carries the retired rule string, so the page recomputes it from the
+    rows rather than reprinting what the pod wrote."""
+    args = mba.build_parser().parse_args(
+        ["--score-measured", str(_session_measure_json())])
+    mba.run_score_measured(args)
+    out = capsys.readouterr().out
+    assert ("clock state: 128 timed cells: 62 level, 18 steady LOW (kept, "
+            "side recorded), 48 steady HIGH (kept, side recorded), 12 DRIFT "
+            "failed (excluded-shaped), 0 with LEVEL not determined") in out
+    assert "this arm drops no cell for its clock" in out
+    stale = json.loads(_session_measure_json().read_text())["clock_state"]
+    assert stale["rule"].startswith("LOW or DRIFT excludes"), (
+        "the committed payload is from before the rule changed, which is why "
+        "the page must not reprint its rule string")
+    assert stale["rule"] not in out
+
+
+def test_the_new_clock_columns_reach_the_rows_this_arm_writes():
+    """R3's evidence columns, through `timing_columns`, the one place this
+    arm's rows meet the instrument. The 12 DRIFT cells of the 2026-09-09 run
+    say a clock moved and cannot say which way, because these were dropped."""
+    t = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ,
+                          drift_to=1300.0)
+    row = mba.timing_columns(t)
+    assert row["sm_clock_start_mhz"] == H200_GEMM_REFERENCE_MHZ
+    assert row["sm_clock_end_mhz"] == 1300.0
+    assert row["clock_samples_mhz"] == "" and row["power_w"] is None
+    assert mba.clock_state([dict(row, status="ok")])["drift"] == 1

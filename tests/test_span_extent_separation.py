@@ -1877,38 +1877,46 @@ def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
         reference_clock_mhz=reference_mhz)
 
 
-def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
-    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
 
-    `moe.bench.driver` writes `throttled = drift failed or (level failed and
-    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
-    consumer has no such column and restates the rule; the two must agree on
-    every cell of the truth table or a boosted tread is kept by one reader and
-    dropped by the next, which is the shape of the defect.
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm, BLOCK_M=64 at
+    GROUP_SIZE_M=1 1358), so excluding it excluded a tile rather than a
+    defect, and removed both of this study's primary tiles from measurability
+    on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
     """
     from moe.bench import timing
     ex = SE.clock_excluded
-    # HIGH is not an exclusion, in any combination with a good drift.
+    # Neither side is an exclusion when the clock held still.
     assert ex(False, timing.LEVEL_HIGH, True) is False
     assert ex(False, timing.LEVEL_HIGH, None) is False
-    # LOW is, and so is a False that recorded no side (the one-sided era).
-    assert ex(False, timing.LEVEL_LOW, True) is True
-    assert ex(False, "", True) is True
-    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
     assert ex(True, "", False) is True
     assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
     assert ex(None, "", False) is True
     # Not determined is not an exclusion: one has to be positively established.
     assert ex(None, "", None) is False
     assert ex(True, "", True) is False
     assert ex(True, "", None) is False
-    # The driver's rule, evaluated over the same table.
+    # The whole table: DRIFT and nothing else.
     for level in (True, False, None):
         for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
             for drift in (True, False, None):
-                driver_rule = (drift is False
-                               or (level is False and side != timing.LEVEL_HIGH))
-                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
 
 
 def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
@@ -1924,13 +1932,14 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     assert SE.clock_excluded(high.clock_level_ok, SE.clock_side_of(high),
                                  high.clock_drift_ok) is False, "HIGH is kept"
     assert SE.clock_excluded(low.clock_level_ok, SE.clock_side_of(low),
-                                 low.clock_drift_ok) is True, "LOW is excluded"
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
     # A record without the field (every fake before 2026-09-03) gets its side
     # derived from its own numbers, the way driver.py derives it.
     import dataclasses
     bare = dataclasses.replace(high, clock_level_side="")
     assert SE.clock_side_of(bare) == timing.LEVEL_HIGH
-    # And one with neither answers "", which the rule reads as below.
+    # And one with neither answers "", which is "no side recorded".
     blind = dataclasses.replace(bare, reference_clock_mhz=None)
     assert SE.clock_side_of(blind) == ""
 
@@ -1994,8 +2003,10 @@ def test_with_timing_copies_the_side_off_the_instrument():
 
 
 def test_the_representative_repeat_folds_the_side_with_low_dominating():
-    """One sagged repeat makes the arm sagged whatever the median repeat did;
-    an arm whose failures were all boosts keeps that word."""
+    """One sagged repeat makes the arm's RECORDED side low whatever the median
+    repeat did; an arm whose failures were all boosts keeps that word. Since
+    2026-09-09 the fold decides what the row says it ran at, not whether the
+    row is kept: DRIFT is the only exclusion and it folds through `worst`."""
     from moe.bench import timing
     high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
     low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
@@ -2006,6 +2017,16 @@ def test_the_representative_repeat_folds_the_side_with_low_dominating():
     mixed = SE.representative_timing([high, low, level])
     assert mixed.clock_level_side == timing.LEVEL_LOW
     assert SE.representative_timing([level, level]).clock_level_side == ""
+    # None of those folds is an exclusion; a drifted repeat is.
+    for folded in (boosted, mixed):
+        assert SE.clock_excluded(folded.clock_level_ok, folded.clock_level_side,
+                                 folded.clock_drift_ok) is False
+    drifting = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ,
+                                 H200_GEMM_REFERENCE_MHZ, drift_to=1300.0)
+    one_bad = SE.representative_timing([level, drifting, level])
+    assert one_bad.clock_drift_ok is False
+    assert SE.clock_excluded(one_bad.clock_level_ok, one_bad.clock_level_side,
+                             one_bad.clock_drift_ok) is True
 
 
 def _restamp(results, **flags):
@@ -2013,12 +2034,14 @@ def _restamp(results, **flags):
             for key, arms in results.items()}
 
 
-def test_a_high_world_counts_every_arm_boosted_and_none_excluded_shaped():
+def test_both_level_sides_are_counted_apart_and_neither_is_excluded():
     """THE HIGH WORLD: the kernel world with every timed arm at the H200's
     memory-load clock. `clock_level_bad` used to count all of them as "the
     card sat low"; now they are `clock_level_high`, the page names them as
     kept, and the gates read exactly as they do for the unstamped world. The
-    LOW twin puts every arm in `clock_level_bad`."""
+    LOW twin puts every arm in `clock_level_bad`, and since 2026-09-09 the
+    page names those as kept too: a steady clock on either side is the
+    operating point the tile held under the power cap."""
     cells, results, plain, plain_gates = run_world("kernel")
     high = SE.analyse(cells, _restamp(results, clock_level_ok=False,
                                       clock_level_side="high"))
@@ -2036,8 +2059,14 @@ def test_a_high_world_counts_every_arm_boosted_and_none_excluded_shaped():
     assert verdicts(high_gates) == verdicts(plain_gates)
     said = "\n".join(str(getattr(g, "observed", "")) + str(getattr(g, "detail", ""))
                       + "\n".join(getattr(g, "lines", []) or []) for g in high_gates)
-    assert f"LEVEL high on {high.arms_timed} (boosted, kept" in said
-    assert "LEVEL low on 0 (excluded-shaped)" in said
+    assert f"LEVEL high on {high.arms_timed} (steady, kept, side recorded)" in said
+    assert "LEVEL low on 0 (steady, kept, side recorded)" in said
+    low_gates = SE.build_gates(low)
+    low_said = "\n".join(str(getattr(g, "observed", "")) + str(getattr(g, "detail", ""))
+                         + "\n".join(getattr(g, "lines", []) or [])
+                         for g in low_gates)
+    assert verdicts(low_gates) == verdicts(plain_gates)
+    assert f"LEVEL low on {low.arms_timed} (steady, kept, side recorded)" in low_said
 
 
 def test_the_summary_carries_the_high_count_beside_the_low_one():
@@ -2048,3 +2077,29 @@ def test_the_summary_carries_the_high_count_beside_the_low_one():
     assert '"clock_level_bad_arms": analysis.clock_level_bad,' in source
     assert '"clock_level_high_arms": analysis.clock_level_high,' in source
     assert source.index('"clock_level_high_arms"') - source.index('"clock_level_bad_arms"') < 200
+
+
+def test_the_new_clock_columns_round_trip_through_the_store(tmp_path):
+    """R3's evidence columns, through `with_timing`, `row` and `Store.restore`.
+    `time_kernel` computed the first and last under-load sample and this
+    writer dropped them, so a resumed row that failed DRIFT could not say
+    which way its clock went."""
+    t = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ,
+                          drift_to=1300.0)
+    arm = SE.ArmResult("mixtral-8x7b", 256, "gemm_up").with_timing(t)
+    assert (arm.sm_clock_start_mhz, arm.sm_clock_end_mhz) == (
+        H200_GEMM_REFERENCE_MHZ, 1300.0)
+    assert arm.clock_samples_mhz == "" and arm.power_w is None
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in SE.CSV_COLUMNS, column
+    store = SE.Store(tmp_path / "t.csv", "H200")
+    store.write(dataclasses.replace(arm, ms_median=1.0), SE.Cell(
+        "mixtral-8x7b", 256, "bf16"), meta_for())
+    store.close()
+    fresh = SE.Store(tmp_path / "t.csv", "H200")
+    back = fresh.restore(("mixtral-8x7b", 256, "gemm_up"))
+    fresh.close()
+    assert (back.sm_clock_start_mhz, back.sm_clock_end_mhz) == (
+        H200_GEMM_REFERENCE_MHZ, 1300.0)
+    assert back.power_w is None

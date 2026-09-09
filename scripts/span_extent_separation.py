@@ -269,7 +269,11 @@ def clock_side_of(t) -> str:
     LEVEL and carries no side (a fake built before the field existed on
     2026-09-03) has it derived from its own load and reference, the rule
     `moe.bench.driver` applies to the same records; one with neither answers
-    "", which `clock_excluded` reads as the one-sided era's False, below.
+    "", which is "no side recorded" and not "level".
+
+    SINCE 2026-09-09 THE SIDE IS A RECORD AND NOT A FILTER. `clock_excluded`
+    below reads DRIFT alone; the side is written on the row, printed beside the
+    fixed-roof fraction, and is what `roof_at_cell_clock` is scored from.
     """
     from moe.bench import timing
 
@@ -280,33 +284,64 @@ def clock_side_of(t) -> str:
     return side
 
 
+def clock_samples_of(t) -> dict:
+    """The under-load clock evidence a DRIFT verdict rests on, as row columns.
+
+    THE FIRST AND LAST SAMPLE WERE COMPUTED AND THROWN AWAY. `time_kernel` has
+    put `sm_clock_start_mhz` and `sm_clock_end_mhz` on every `KernelTiming`
+    since the clock-under-load instrument landed, and six of the seven writers
+    in this repo kept only the median. The 2026-09-09 H200 session therefore
+    ended with 135 rows that say DRIFT and cannot say which way the clock went:
+    "the governor was still settling after a workload change" had to be argued
+    from where the drifted cells sat in each rep rather than from the cells.
+    Persisted from here on so the next session can be read off its own rows.
+
+    Every field is fetched with `getattr` because the instrument gained
+    `clock_samples_mhz` and `power_w` after these rows first existed: a record
+    without them writes the column EMPTY, which is NOT DETERMINED and never
+    zero. The sample list is space-joined integers, one representation that
+    serves a CSV cell and a JSON value alike.
+    """
+    samples = getattr(t, "clock_samples_mhz", None) or ()
+    return {
+        "sm_clock_start_mhz": getattr(t, "sm_clock_start_mhz", None),
+        "sm_clock_end_mhz": getattr(t, "sm_clock_end_mhz", None),
+        "clock_samples_mhz": " ".join(f"{c:.0f}" for c in samples),
+        "power_w": getattr(t, "power_w", None),
+    }
+
+
 def clock_excluded(level_ok: bool | None, side: str,
                    drift_ok: bool | None) -> bool:
-    """Do a cell's clock verdicts exclude it. LOW or DRIFT do; HIGH does not.
+    """Do a cell's clock verdicts exclude it. DRIFT does; no LEVEL side does.
 
-    THE FIFTEENTH INSTANCE OF A FIX LANDING AT ONE OF TWO CALL SITES. Commit
-    03df2d4 made `timing.clock_flags` two-sided at the producer, so a cell
-    boosted to 1980 MHz against the 1515 MHz bf16-GEMM reference now fails
-    LEVEL with `clock_level_side == "high"`. Until 2026-09-08 this file read
-    `clock_level_ok is False` alone, the one-sided era's test, which takes
-    that cell for one that ran cold. On the H200 the HIGH side is the NORMAL
-    state of a memory-shaped cell: the committed calibration holds 1980 MHz
-    under memory load for 30 s against a 1515 MHz GEMM plateau, so the old
-    test flagged exactly the cells the memory branch is made of.
+    THE RULE CHANGED ON 2026-09-09. Until then this file excluded a cell
+    whose LEVEL failed LOW, and before 2026-09-08 one whose LEVEL failed at
+    all, which took a memory-shaped cell boosted to 1980 MHz for one that had
+    run cold. The 750-cell census of the H200 gaps session settled what the LOW
+    side is. Under the 700 W cap the under-load clock is an OUTCOME of the
+    cell, set per tile by the kernel's own power draw: BLOCK_M=128 at
+    BLOCK_N=64 sat at 1380-1410 MHz in every rep and every tread, BLOCK_M=256
+    at 1620-1755, memory-shaped cells at 1950-1980, against a calibration
+    GEMM that itself held 1485 MHz at 691 W, near the LOW end of what dense
+    work does on this card. A band around that GEMM's operating point therefore
+    excludes a TILE and not a defect: it dropped 148 cells session-wide,
+    every one of them the steady state of one of the two tile families this
+    study is about, and it would drop the same ones on every rerun.
 
-    HIGH means the fixed-roof fraction is not comparable and the per-row
-    `roof_at_cell_clock` is the number to read. The time itself is a time at
-    one clock and stays. This is the `throttled` rule `moe.bench.driver`
-    writes on its own rows, restated because the rows this file writes carry
-    the verdicts and not that column. A False with no side is the one-sided
-    era's meaning, below, and stays excluded. None is not determined, and an
-    exclusion has to be positively established.
+    DRIFT survives, because it says something else: the clock MOVED while the
+    cell was timed, so the median load is a blend of two clocks and the time
+    is not a time at one operating point. All 135 drifts in that session were
+    the governor settling on the first cell of a rep after a workload change,
+    which is an instrument problem and is fixed at the instrument.
+
+    `level_ok` and `side` are still taken and still written on the row. The
+    side is a RECORD of where the cell ran, printed beside the fixed-roof
+    fraction and used for `roof_at_cell_clock`, and it excludes nothing. None
+    is not determined and an exclusion has to be positively established, so
+    only a False DRIFT excludes.
     """
-    from moe.bench import timing
-
-    if drift_ok is False:
-        return True
-    return level_ok is False and side != timing.LEVEL_HIGH
+    return drift_ok is False
 
 #: `moe.bench.timing` is imported LAZILY, everywhere, and this comment is the
 #: reason. That module imports torch at module scope; this one documents
@@ -713,6 +748,7 @@ CSV_COLUMNS = (
     # row measured queue-deep from a row measured one synchronize per iteration,
     # nor a row timed while the card sat at 1425 MHz from one at 1980.
     "instrument", "warmup_ms", "iters", "trials", "sm_clock_load_mhz",
+    "sm_clock_start_mhz", "sm_clock_end_mhz", "clock_samples_mhz", "power_w",
     "clock_level_ok", "clock_level_side", "clock_drift_ok", "l2_flush",
     "host_bound", "host_enqueue_ms", "clock_note", "host_note",
     "error",
@@ -1107,6 +1143,14 @@ class ArmResult:
     iters: int | None = None
     trials: int | None = None
     sm_clock_load_mhz: float | None = None
+    #: The first and last under-load sample, the whole sample list (space-
+    #: joined MHz) and the draw at the same NVML call. Persisted since
+    #: 2026-09-09 so a DRIFT row says which way the clock went and a LEVEL
+    #: side can be told apart as a hungry tile from a throttled card.
+    sm_clock_start_mhz: float | None = None
+    sm_clock_end_mhz: float | None = None
+    clock_samples_mhz: str = ""
+    power_w: float | None = None
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
     l2_flush: bool | None = None
@@ -1135,6 +1179,7 @@ class ArmResult:
         return dataclasses.replace(
             self, ms_p90=t.ms_p90, instrument=t.instrument, warmup_ms=t.warmup_ms,
             iters=t.iters, trials=t.trials, sm_clock_load_mhz=t.sm_clock_load_mhz,
+            **clock_samples_of(t),
             clock_level_ok=t.clock_level_ok, clock_drift_ok=t.clock_drift_ok,
             l2_flush=t.l2_flush, host_bound=t.host_bound,
             host_enqueue_ms=t.host_enqueue_ms, clock_note=t.clock_note,
@@ -1198,6 +1243,10 @@ class ArmResult:
             "iters": "" if self.iters is None else self.iters,
             "trials": "" if self.trials is None else self.trials,
             "sm_clock_load_mhz": num(self.sm_clock_load_mhz, ".0f"),
+            "sm_clock_start_mhz": num(self.sm_clock_start_mhz, ".0f"),
+            "sm_clock_end_mhz": num(self.sm_clock_end_mhz, ".0f"),
+            "clock_samples_mhz": self.clock_samples_mhz,
+            "power_w": num(self.power_w, ".1f"),
             "clock_level_ok": flag(self.clock_level_ok),
             "clock_level_side": self.clock_level_side,
             "clock_drift_ok": flag(self.clock_drift_ok),
@@ -1773,9 +1822,11 @@ class Analysis:
     rulers: dict[str, int]
     #: Timed arms whose LEVEL verdict was False on the LOW side, or False with
     #: no side recorded (the one-sided era's meaning). Counted rather than
-    #: gated: every ratio here is between two arms of the SAME round-robin
-    #: repeat, so a card that sat low all session moves neither, and what the
-    #: counts are for is a reader deciding whether to believe a 5% effect.
+    #: gated, and since 2026-09-09 not excluded anywhere: a steady LOW is the
+    #: operating point a hungry tile holds under the power cap. Every ratio
+    #: here is between two arms of the SAME round-robin repeat, so a card that
+    #: sat low all session moves neither, and what the counts are for is a
+    #: reader deciding whether to believe a 5% effect.
     clock_level_bad: int
     #: Timed arms whose LEVEL verdict was False on the HIGH side: boosted
     #: above the band, 1980 MHz against the H200's 1515 MHz reference, the
@@ -1951,7 +2002,10 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
                 ruler = arm_ruler(arm)
                 rulers[ruler] = rulers.get(ruler, 0) + 1
                 # THE SIDE IS READ, NOT ONLY THE VERDICT: LEVEL is two-sided
-                # since 03df2d4 and a HIGH failure is a boosted arm, kept.
+                # since 03df2d4 and since 2026-09-09 both sides are kept and
+                # counted apart. Each names an operating point the tile held
+                # under the power cap, and this page reports rather than gates
+                # on it: every ratio is between two arms of one repeat.
                 if arm.clock_level_ok is False:
                     if arm.clock_level_side == LEVEL_HIGH:
                         clock_level_high += 1
@@ -2357,9 +2411,9 @@ def build_gates(analysis: Analysis) -> list[Gate]:
                   "divided by it -- nothing here is (see `roof_comparable`)"
                   if basis_unflushed else "")
                + (f"; clock LEVEL low on {analysis.clock_level_bad} "
-                  f"(excluded-shaped), LEVEL high on "
-                  f"{analysis.clock_level_high} (boosted, kept: fixed-roof "
-                  f"fraction not comparable), DRIFT bad "
+                  f"(steady, kept, side recorded), LEVEL high on "
+                  f"{analysis.clock_level_high} (steady, kept, side "
+                  f"recorded), DRIFT bad "
                   f"on {analysis.clock_drift_bad}, host-bound on "
                   f"{analysis.host_bound_arms} of {analysis.arms_timed} timed "
                   f"arms (reported, not gated: every ratio here is between two "
@@ -3408,11 +3462,14 @@ def representative_timing(timings: list):
     row that was host-bound in one repeat out of three is a row whose median is
     bounding the kernel from above.
 
-    THE SIDE FOLDS THE SAME WAY, WITH LOW DOMINATING. One repeat below the
-    band makes the arm excluded-shaped whatever the others did; an arm whose
-    failures were all HIGH is a boosted arm and keeps that word; a level or
-    undetermined repeat contributes "". Folding it as "the chosen repeat's
-    side" would let the median repeat's boost hide a sibling's sag.
+    THE SIDE FOLDS THE SAME WAY, WITH LOW DOMINATING, AND IT IS A RECORD AND
+    NOT AN EXCLUSION. Since 2026-09-09 neither side excludes anything: DRIFT
+    alone does, and it folds through `worst` above. The side still folds
+    LOW-first so the arm's recorded side names the lowest operating point any
+    of its repeats sat at; an arm whose failures were all HIGH keeps that
+    word; a level or undetermined repeat contributes "". Folding it as "the
+    chosen repeat's side" would let the median repeat's boost hide a
+    sibling's sag, and the sag is what `roof_at_cell_clock` is scored from.
     """
     if not timings:
         raise ValueError("representative_timing needs at least one repeat")
@@ -3779,10 +3836,14 @@ class Store:
             warmup_ms=num("warmup_ms"), iters=num("iters", int),
             trials=num("trials", int),
             sm_clock_load_mhz=num("sm_clock_load_mhz"),
+            sm_clock_start_mhz=num("sm_clock_start_mhz"),
+            sm_clock_end_mhz=num("sm_clock_end_mhz"),
+            clock_samples_mhz=row.get("clock_samples_mhz", "") or "",
+            power_w=num("power_w"),
             clock_level_ok=flag("clock_level_ok"),
             # Tri-state, and "" on a row from before 2026-09-08 is the
-            # one-sided era's "no side recorded", which `clock_excluded` reads
-            # as below when the verdict is False.
+            # one-sided era's "no side recorded". Since 2026-09-09 the side is
+            # a record either way and excludes nothing.
             clock_level_side=row.get("clock_level_side", "") or "",
             clock_drift_ok=flag("clock_drift_ok"), l2_flush=flag("l2_flush"),
             host_bound=flag("host_bound"),

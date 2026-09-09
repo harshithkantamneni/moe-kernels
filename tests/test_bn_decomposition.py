@@ -1810,38 +1810,45 @@ def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
         reference_clock_mhz=reference_mhz)
 
 
-def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
-    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
 
-    `moe.bench.driver` writes `throttled = drift failed or (level failed and
-    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
-    consumer has no such column and restates the rule; the two must agree on
-    every cell of the truth table or a boosted tread is kept by one reader and
-    dropped by the next, which is the shape of the defect.
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm), so excluding it
+    excluded a tile rather than a defect, and removed both of this study's
+    primary tiles from measurability on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
     """
     from moe.bench import timing
     ex = BND.clock_excluded
-    # HIGH is not an exclusion, in any combination with a good drift.
+    # Neither side is an exclusion when the clock held still.
     assert ex(False, timing.LEVEL_HIGH, True) is False
     assert ex(False, timing.LEVEL_HIGH, None) is False
-    # LOW is, and so is a False that recorded no side (the one-sided era).
-    assert ex(False, timing.LEVEL_LOW, True) is True
-    assert ex(False, "", True) is True
-    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
     assert ex(True, "", False) is True
     assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
     assert ex(None, "", False) is True
     # Not determined is not an exclusion: one has to be positively established.
     assert ex(None, "", None) is False
     assert ex(True, "", True) is False
     assert ex(True, "", None) is False
-    # The driver's rule, evaluated over the same table.
+    # The whole table: DRIFT and nothing else.
     for level in (True, False, None):
         for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
             for drift in (True, False, None):
-                driver_rule = (drift is False
-                               or (level is False and side != timing.LEVEL_HIGH))
-                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
 
 
 def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
@@ -1857,13 +1864,14 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     assert BND.clock_excluded(high.clock_level_ok, BND.clock_side_of(high),
                                  high.clock_drift_ok) is False, "HIGH is kept"
     assert BND.clock_excluded(low.clock_level_ok, BND.clock_side_of(low),
-                                 low.clock_drift_ok) is True, "LOW is excluded"
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
     # A record without the field (every fake before 2026-09-03) gets its side
     # derived from its own numbers, the way driver.py derives it.
     import dataclasses
     bare = dataclasses.replace(high, clock_level_side="")
     assert BND.clock_side_of(bare) == timing.LEVEL_HIGH
-    # And one with neither answers "", which the rule reads as below.
+    # And one with neither answers "", which is "no side recorded".
     blind = dataclasses.replace(bare, reference_clock_mhz=None)
     assert BND.clock_side_of(blind) == ""
 
@@ -1922,19 +1930,21 @@ def test_a_boosted_tread_travels_through_the_csv_and_is_counted_as_kept(tmp_path
     assert state["timed"] == 4
     assert state["high"] == 1 and state["low"] == 1
     assert state["level"] == 2 and state["drift"] == 1
-    # The boosted tread is NOT in the excluded-shaped count; the sagged and the
-    # drifting ones are.
-    assert state["excluded_shaped"] == 2
+    # NEITHER SIDE IS IN THE EXCLUDED-SHAPED COUNT SINCE 2026-09-09. Only the
+    # drifting tread is: its median load is a blend of two clocks.
+    assert state["excluded_shaped"] == 1
     text = "\n".join(BND.clock_state_lines(state))
-    assert "1 HIGH (boosted above the band, kept" in text
-    assert "1 LOW (below the band, excluded-shaped)" in text
+    assert "1 steady HIGH (kept, side recorded)" in text
+    assert "1 steady LOW (kept, side recorded)" in text
+    assert "1 DRIFT failed (excluded-shaped)" in text
     assert "roof_at_cell_clock" in text
 
 
-def test_a_high_world_excludes_nothing_and_a_low_world_excludes_everything():
-    """A whole ladder at the H200's memory-load clock, the state every
-    memory-bound tread of bn_g16 will be in on a rental, counts ZERO
-    excluded-shaped treads; the same ladder sagged counts every one."""
+def test_neither_a_high_world_nor_a_low_world_excludes_anything():
+    """A whole ladder at the H200's memory-load clock, and the same ladder at
+    the clock a hungry tile holds, both count ZERO excluded-shaped treads: the
+    session that settled the rule found 148 steady-LOW cells and every one of
+    them was a tile at its own operating point under the power cap."""
     from moe.bench import timing
     def ladder(t):
         return [BND.Sample(64, 128, n, 128 * n, 512 * n, 1, 1.0, 0.9, 0.01, 100,
@@ -1949,14 +1959,20 @@ def test_a_high_world_excludes_nothing_and_a_low_world_excludes_everything():
     assert high_world["high"] == 8 and high_world["excluded_shaped"] == 0
     low_world = BND.clock_state(
         ladder(_kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)))
-    assert low_world["low"] == 8 and low_world["excluded_shaped"] == 8
-    assert high_world["rule"].startswith("LOW or DRIFT excludes; HIGH is kept")
+    assert low_world["low"] == 8 and low_world["excluded_shaped"] == 0
+    # And a whole ladder that drifted IS excluded, so the count still moves.
+    drift_world = BND.clock_state(
+        ladder(_kernel_timing_at(H200_GEMM_REFERENCE_MHZ,
+                                 H200_GEMM_REFERENCE_MHZ, drift_to=1300.0)))
+    assert drift_world["drift"] == 8 and drift_world["excluded_shaped"] == 8
+    assert high_world["rule"].startswith("DRIFT excludes; BOTH LEVEL sides")
     assert timing.LEVEL_HIGH == "high" and timing.LEVEL_LOW == "low"
 
 
 def test_a_row_from_before_the_side_column_reads_back_as_no_side(tmp_path):
-    """A False with no side is the one-sided era's meaning, below, and the
-    rule keeps excluding it; the reader must not invent a side for it."""
+    """A False with no side is the one-sided era's meaning, below. The reader
+    must not invent a side for it, and since 2026-09-09 the rule keeps it: a
+    steady clock on either side is an operating point, not an exclusion."""
     path = tmp_path / "old.csv"
     path.write_text("block_n,block_m,tiles,rows_per_expert,tokens,rep,ms_p50,"
                     "ms_min,ms_stdev,iters,status,detail,clock_level_ok\n"
@@ -1964,13 +1980,14 @@ def test_a_row_from_before_the_side_column_reads_back_as_no_side(tmp_path):
     _, back = BND.read_samples(path)
     assert back[0].clock_level_ok is False and back[0].clock_level_side == ""
     assert BND.clock_excluded(back[0].clock_level_ok, back[0].clock_level_side,
-                              back[0].clock_drift_ok) is True
+                              back[0].clock_drift_ok) is False
 
 
-def test_the_measure_loop_marks_a_boosted_tread_as_kept_and_a_sagged_one_as_flagged():
-    """The print branch is the operator's only live warning, and it used to
-    fire the exclusion-shaped marker on every boosted tread. Checked in the
-    source: the branch calls `clock_excluded` and names HIGH as kept."""
+def test_the_measure_loop_names_both_level_sides_as_kept():
+    """The print branch is the operator's only live warning. It used to fire
+    the exclusion-shaped marker on every boosted tread, then on every sagged
+    one; since 2026-09-09 it fires on DRIFT and host-bound alone and names
+    whichever side the cell sat on as recorded."""
     import ast
     tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
     fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
@@ -1978,5 +1995,217 @@ def test_the_measure_loop_marks_a_boosted_tread_as_kept_and_a_sagged_one_as_flag
                       for c in ast.walk(n)))
     body = ast.unparse(fn)
     assert "clock_excluded(t.clock_level_ok, sample.clock_level_side" in body
-    assert "kept (LEVEL high is not an exclusion)" in body
+    assert "is recorded, not excluded" in body
+    assert "sample.clock_level_side == timing.LEVEL_HIGH" not in body
     assert "t.clock_level_ok is False" not in body
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-09 H200 ARM, REPLAYED. The session measured 204 reference
+# timings, refused all three references and skipped every subject, and the
+# cause was `block_sizes`: the sweep's non-vacuity check scales the compute
+# branch to the SMALLEST SWEPT tile, and both call sites in this file passed
+# only the reference's own tile, which makes the bound 1.675 of one full
+# weight read AT THE ROOF and refuses a kernel running at 100% of peak. These
+# drive the committed cells.csv through the script's own `analyse_run` and
+# pin the numbers the fix has to produce.
+# --------------------------------------------------------------------------
+
+SESSION_CELLS = (ROOT / "results" / "published"
+                 / "2026-09-09-nvidia_h200-gaps-session" / "results"
+                 / "bn_decomposition"
+                 / ("nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-"
+                    "g16-iters50-k64-modelmixtral_8x7b-n32_64-b59b409f")
+                 / "cells.csv")
+#: The calibration that session ran against, committed at ab61e55. Passed in
+#: rather than resolved, because this replay runs on a laptop with no card.
+SESSION_RIDGE = 152.8120650229884
+SESSION_BANDWIDTH = 4374.549151491332
+SESSION_CEILING = 668.4838893839521
+SESSION_REFERENCE_MHZ = 1485.0
+
+
+def _session_run():
+    """`analyse_run` over the committed 2026-09-09 rows, in the arm's pinning."""
+    if not SESSION_CELLS.exists():
+        import pytest
+        pytest.skip(f"the 2026-09-09 session rows are not here: {SESSION_CELLS}")
+    cfg = BND.MODEL_CONFIGS["mixtral-8x7b"]
+    base = dict(BND.SWEEP.FIXED, num_stages=4, num_warps=8, GROUP_SIZE_M=16,
+                BLOCK_SIZE_K=64)
+    _, samples = BND.read_samples(SESSION_CELLS)
+    args = BND.build_parser().parse_args(
+        ["--group-m", "16", "--card", "nvidia_h200", "--draws", "200"])
+    lines, gates, payload = BND.analyse_run(
+        samples, cfg, args, ridge=SESSION_RIDGE,
+        bandwidth_gbps=SESSION_BANDWIDTH, b=BND.dtype_bytes("bf16"),
+        ceiling_tflops=SESSION_CEILING,
+        ceiling_source="measured on NVIDIA H200 (measured)", capability=(9, 0),
+        base_pinned=base, compiles={(32, 256): 17, (64, 256): 16, (128, 256): 16},
+        executed={(32, 256): 68, (64, 256): 68, (128, 256): 68},
+        sm_count=132, block_ns=(32, 64, 128), subjects=(32, 64, 128),
+        probe_c2_power=False, reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    return samples, lines, {g.name.split()[0]: g for g in gates}, payload
+
+
+def test_the_session_references_qualify_and_v2_passes():
+    """All three references qualify OWN at 36.7 / 54.6 / 71.6% of the fixed
+    roof. On 2026-09-09 they were refused at vacuity 4.559 / 3.068 / 2.339,
+    which is the ratio scaled to BLOCK_M=256 itself."""
+    _, lines, gates, _ = _session_run()
+    text = "\n".join(lines)
+    assert "BN=32 36.7%; BN=64 54.6%; BN=128 71.6%" in gates["V2"].observed
+    assert gates["V2"].scored()[2] == "PASS"
+    for fraction in ("36.7% of 668.5", "54.6% of 668.5", "71.6% of 668.5"):
+        assert fraction in text, fraction
+    assert "REFUSED" not in text
+
+
+def test_the_session_v3_prints_the_raw_spread_and_the_normalised_one():
+    """THE GATE READS THE RAW, FIXED-ROOF SPREAD AND THE BAR STAYS AT 2.0x.
+    The two numbers land on opposite sides of it, 1.95x raw against 2.15x
+    rescaled to each arm's own clock (1725 / 1620 / 1560 MHz), so both are printed
+    and which one gates is pre-registered rather than chosen afterwards."""
+    _, lines, gates, _ = _session_run()
+    assert BND.REFERENCE_CROSS_BN_SPREAD == 2.0
+    assert gates["V3"].scored()[2] == "PASS"
+    assert "1.95x raw (fixed roof, the gate input)" in gates["V3"].observed
+    assert "2.15x normalised" in gates["V3"].observed
+    text = "\n".join(lines)
+    assert "implied rates span 1.95x (gate <= 2.0x" in text
+    assert "rescaled to its own clock is 2.15x" in text
+
+
+def test_the_session_prints_the_issue_efficiency_beside_every_fixed_fraction():
+    """R2: the own-clock fraction on every point line, never a gate input.
+    The three reference ladders held 1725 / 1620 / 1560 MHz under the cap, so
+    the roofs at their own clocks are 776.5 / 729.3 / 702.2 TFLOP/s."""
+    _, lines, _, _ = _session_run()
+    text = "\n".join(lines)
+    for own, clock in (("31.6% of 776.5", "1725 MHz"),
+                       ("50.1% of 729.3", "1620 MHz"),
+                       ("68.2% of 702.2", "1560 MHz")):
+        assert f"issue efficiency  {own} TFLOP/s" in text, own
+        assert clock in text, clock
+    assert text.count("never a gate input") == 3
+
+
+def test_the_session_excludes_the_eight_drifted_treads_and_nothing_else():
+    """0 LOW, 161 HIGH, 8 DRIFT over 204 timed treads. Under the rule in force
+    until 2026-09-09 this arm also dropped nothing, because its fit reads
+    `status == "ok"`; what the rule change moves is what the page SAYS, and a
+    page that called 161 treads unusable would be describing the wrong card."""
+    samples, lines, _, _ = _session_run()
+    state = BND.clock_state(samples)
+    assert (state["timed"], state["low"], state["high"], state["drift"]) == (
+        204, 0, 161, 8)
+    assert state["excluded_shaped"] == 8
+    text = "\n".join(lines)
+    assert "0 steady LOW (kept, side recorded)" in text
+    assert "161 steady HIGH (kept, side recorded)" in text
+    assert "8 DRIFT failed (excluded-shaped)" in text
+
+
+def test_both_reference_qualification_call_sites_pass_the_swept_tiles():
+    """THE DEFECT WAS ONE OF TWO CALL SITES BEING WRONG, TWICE OVER: the early
+    qualifier in `_main` passed `(REFERENCE_BLOCK_M,)` and `arm_alphas` passed
+    `tuple(sorted(ladders))`, which is the same thing whenever no subject has
+    been measured yet, which, references-first, is always. Checked in the
+    source so a third call site cannot be added on the old shape."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and getattr(n.func, "id", "") == "qualify_reference"]
+    assert len(calls) == 2, [ast.unparse(c) for c in calls]
+    shapes = sorted(ast.unparse(c.args[1]) for c in calls)
+    assert shapes == ["(*subjects, REFERENCE_BLOCK_M)",
+                      "tuple(sorted(set(ladders) | set(subjects) | "
+                      "{REFERENCE_BLOCK_M}))"], shapes
+
+
+def test_the_skip_warning_says_the_subjects_are_skipped():
+    """The WARNING said "the subjects are measured anyway" while the loop three
+    lines below skipped every arm without a branch, and the 2026-09-09 log
+    printed both."""
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    assert "subjects of the arms WITHOUT one are SKIPPED below" in source
+    # The retired sentence survives only where it is history: in the comment
+    # that says what it used to claim, never in the string that is printed.
+    printed = source[source.index('print(f"\\nWARNING: only'):]
+    assert "subjects are measured anyway" not in printed[:1200]
+
+
+def test_the_reference_clock_is_read_off_the_reference_ladder_only():
+    """The arm's own operating point, from its reference rows, drifted rows
+    left out. On the committed session that is 1725 / 1620 / 1560 MHz."""
+    samples, _, _, _ = _session_run()
+    assert [BND.reference_load_clock(samples, bn) for bn in (32, 64, 128)] == [
+        1725.0, 1620.0, 1560.0]
+    assert BND.reference_load_clock(samples, 256) is None, (
+        "an arm that was never measured has no clock, and None is not 1485")
+
+
+def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
+    """R3's evidence columns. `time_kernel` computed the first and last
+    under-load sample and this writer dropped them, so the 135 drifted rows of
+    the 2026-09-09 session say a clock moved and cannot say which way."""
+    t = _kernel_timing_at(1560.0, 1485.0, drift_to=1300.0)
+    columns = BND.clock_samples_of(t)
+    assert columns["sm_clock_start_mhz"] == 1560.0
+    assert columns["sm_clock_end_mhz"] == 1300.0
+    # An instrument that carries neither the sample list nor the draw yet
+    # writes them EMPTY, which is NOT DETERMINED and never zero.
+    assert columns["clock_samples_mhz"] == "" and columns["power_w"] is None
+    path = tmp_path / "cells.csv"
+    BND.append_sample(path, BND.Sample(
+        64, 128, 1, 128, 512, 1, t.ms_p50, t.ms_min, t.ms_std, t.iters,
+        sm_clock_load_mhz=t.sm_clock_load_mhz,
+        clock_level_ok=t.clock_level_ok, clock_drift_ok=t.clock_drift_ok,
+        clock_level_side=BND.clock_side_of(t), **columns))
+    header = path.read_text().splitlines()[0].split(",")
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in header, column
+    _, back = BND.read_samples(path)
+    assert (back[0].sm_clock_start_mhz, back[0].sm_clock_end_mhz) == (1560.0, 1300.0)
+    assert back[0].power_w is None and back[0].clock_samples_mhz == ""
+
+
+def test_an_instrument_that_carries_the_samples_and_the_draw_writes_them():
+    """Forward-compatible on purpose: the two fields land on `KernelTiming`
+    with the settle-on-clock warmup, and this writer must pick them up on the
+    day they do rather than in a later commit."""
+    import dataclasses
+
+    @dataclasses.dataclass
+    class Richer:
+        sm_clock_start_mhz: float = 1470.0
+        sm_clock_end_mhz: float = 1485.0
+        clock_samples_mhz: tuple = (1470.0, 1477.5, 1485.0)
+        power_w: float = 691.4
+
+    columns = BND.clock_samples_of(Richer())
+    assert columns["clock_samples_mhz"] == "1470 1478 1485"
+    assert columns["power_w"] == 691.4
+
+
+def test_report_json_carries_both_roofs_for_every_arm():
+    """THE SECOND CALL SITE OF THE RECORD. `report.json`'s arm block rebuilds
+    RefVerdict field by field to drop the sweep's own dataclass, so a field
+    added to the record and not to the rebuild is written as null while the
+    page prints it. That is how `load_clock_mhz` read null on its first run.
+    """
+    _, _, _, payload = _session_run()
+    arms = {a["block_n"]: a for a in payload["arms"]}
+    assert set(arms) == {32, 64, 128}
+    for bn, clock, roof, own in ((32, 1725.0, 776.5, 0.316),
+                                 (64, 1620.0, 729.3, 0.501),
+                                 (128, 1560.0, 702.2, 0.682)):
+        assert arms[bn]["load_clock_mhz"] == clock
+        assert arms[bn]["reference_clock_mhz"] == SESSION_REFERENCE_MHZ
+        assert abs(arms[bn]["roof_at_cell_clock_tflops"] - roof) < 0.1
+        assert abs(arms[bn]["own_clock_fraction"] - own) < 0.001
+        # The fixed-roof fraction, the gate input, is still the one on the row.
+        assert arms[bn]["ceiling_tflops"] == SESSION_CEILING
+    assert payload["clock_state"]["excluded_shaped"] == 8
+    assert payload["clock_state"]["rule"].startswith("DRIFT excludes")

@@ -53,8 +53,10 @@ from moe.bench import exit_codes, timing  # noqa: E402
 H200 = "NVIDIA H200"
 #: The clock `moe/bench/hardware/measured_nvidia_h200.yaml` publishes for its
 #: dense GEMM. Named here so a test that asserts the instrument was handed a
-#: reference asserts it was handed THE reference, not merely something.
-H200_REFERENCE_MHZ = 1515.0
+#: reference asserts it was handed THE reference, not merely something. It was
+#: 1515.0 until the 2026-09-09 recalibration (ab61e55) measured 1485 under a
+#: 700 W cap and left this literal behind, red in two tests.
+H200_REFERENCE_MHZ = 1485.0
 #: No calibration names this, and none can: `measured_slug` would look for
 #: `measured_nvidia_not_a_card.yaml`.
 UNCALIBRATED = "NVIDIA NOT-A-CARD"
@@ -280,7 +282,8 @@ def test_the_reference_clock_is_the_cards_own_and_says_where_it_came_from():
 def test_a_sagging_card_now_reads_clock_level_ok_false_on_every_row(pod):
     """THE DEAD COLUMN, brought to life, and this is the FAIL branch of it.
 
-    1000 MHz against a 1515 MHz reference is below `LEVEL_FRACTION`, so the
+    1000 MHz against the card's 1485 MHz reference is below `LEVEL_FRACTION`,
+    so the
     real `clock_flags` returns False. Before the fix `reference_clock_mhz` was
     never passed, `clock_flags` returned None, and this cell was EMPTY on every
     row the sweep has ever written while the branch below it could not run.
@@ -293,7 +296,7 @@ def test_a_sagging_card_now_reads_clock_level_ok_false_on_every_row(pod):
     rows = cells(pod)
     assert len(rows) == 2
     assert [r["clock_level_ok"] for r in rows] == ["0", "0"]
-    assert [r["reference_clock_mhz"] for r in rows] == ["1515", "1515"], (
+    assert [r["reference_clock_mhz"] for r in rows] == ["1485", "1485"], (
         "the number LEVEL was scored AGAINST belongs on the row it scored; the "
         "tri-state alone cannot tell a row that passed from one with no "
         "reference at all, since both read empty")
@@ -408,38 +411,46 @@ def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
         reference_clock_mhz=reference_mhz)
 
 
-def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
-    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+def test_the_exclusion_rule_is_drift_alone_and_both_level_sides_are_kept():
+    """THE RULE AS IT STANDS SINCE 2026-09-09: DRIFT excludes, LEVEL records.
 
-    `moe.bench.driver` writes `throttled = drift failed or (level failed and
-    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
-    consumer has no such column and restates the rule; the two must agree on
-    every cell of the truth table or a boosted tread is kept by one reader and
-    dropped by the next, which is the shape of the defect.
+    Until then this asserted "LOW or DRIFT excludes, HIGH is kept". The
+    750-cell census of the H200 gaps session showed the LOW side is the steady
+    operating point of a hungry tile under the 700 W cap (BLOCK_M=128 at
+    BLOCK_N=64 held 1380-1410 MHz in every rep of every arm, BLOCK_M=64 at
+    GROUP_SIZE_M=1 1358), so excluding it excluded a tile rather than a
+    defect, and removed both of this study's primary tiles from measurability
+    on the card.
+
+    `moe.bench.driver`'s `throttled` assignment is the twin of this rule and
+    moves in the same commit; the truth table below is written out here rather
+    than imported so this file states the rule instead of quoting whatever the
+    driver currently does.
     """
     from moe.bench import timing
     ex = TILE.clock_excluded
-    # HIGH is not an exclusion, in any combination with a good drift.
+    # Neither side is an exclusion when the clock held still.
     assert ex(False, timing.LEVEL_HIGH, True) is False
     assert ex(False, timing.LEVEL_HIGH, None) is False
-    # LOW is, and so is a False that recorded no side (the one-sided era).
-    assert ex(False, timing.LEVEL_LOW, True) is True
-    assert ex(False, "", True) is True
-    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(False, timing.LEVEL_LOW, True) is False
+    assert ex(False, timing.LEVEL_LOW, None) is False
+    # A False that recorded no side is the one-sided era's row: still kept.
+    assert ex(False, "", True) is False
+    # DRIFT excludes whatever LEVEL said, on either side.
     assert ex(True, "", False) is True
     assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(False, timing.LEVEL_LOW, False) is True
     assert ex(None, "", False) is True
     # Not determined is not an exclusion: one has to be positively established.
     assert ex(None, "", None) is False
     assert ex(True, "", True) is False
     assert ex(True, "", None) is False
-    # The driver's rule, evaluated over the same table.
+    # The whole table: DRIFT and nothing else.
     for level in (True, False, None):
         for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
             for drift in (True, False, None):
-                driver_rule = (drift is False
-                               or (level is False and side != timing.LEVEL_HIGH))
-                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+                assert ex(level, side, drift) is (drift is False), (
+                    level, side, drift)
 
 
 def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
@@ -455,13 +466,14 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     assert TILE.clock_excluded(high.clock_level_ok, TILE.clock_side_of(high),
                                  high.clock_drift_ok) is False, "HIGH is kept"
     assert TILE.clock_excluded(low.clock_level_ok, TILE.clock_side_of(low),
-                                 low.clock_drift_ok) is True, "LOW is excluded"
+                                 low.clock_drift_ok) is False, (
+        "since 2026-09-09 a steady LOW is kept and its side recorded")
     # A record without the field (every fake before 2026-09-03) gets its side
     # derived from its own numbers, the way driver.py derives it.
     import dataclasses
     bare = dataclasses.replace(high, clock_level_side="")
     assert TILE.clock_side_of(bare) == timing.LEVEL_HIGH
-    # And one with neither answers "", which the rule reads as below.
+    # And one with neither answers "", which is "no side recorded".
     blind = dataclasses.replace(bare, reference_clock_mhz=None)
     assert TILE.clock_side_of(blind) == ""
 
@@ -492,7 +504,7 @@ def test_a_boosted_card_is_kept_and_named_so_on_every_row(pod, capsys):
     """THE PLANTED HIGH RUN: the H200's memory-load clock against its GEMM
     reference, which is every decode cell this sweep times. The rows carry
     side "high", the report's clock-state block counts them as HIGH and as
-    zero excluded-shaped, and the operator's line says kept."""
+    zero excluded-shaped, and the operator's line says kept, recorded."""
     pod.timing_result = lambda **kw: timing_at(H200_MEMORY_LOAD_MHZ,
                                                kw["reference_clock_mhz"])
     assert run(pod) == exit_codes.DONE
@@ -503,24 +515,28 @@ def test_a_boosted_card_is_kept_and_named_so_on_every_row(pod, capsys):
     assert state["high"] == 2 and state["low"] == 0
     assert state["excluded_shaped"] == 0
     out = capsys.readouterr().out
-    assert out.count("kept (LEVEL high is not an exclusion): scripted clock") == 2
-    assert "2 HIGH (boosted above the band, kept" in out
+    assert out.count("kept (LEVEL high is recorded, not excluded): "
+                     "scripted clock") == 2
+    assert "2 steady HIGH (kept, side recorded)" in out
 
 
-def test_a_sagging_card_is_excluded_shaped_and_says_low(pod, capsys):
-    """THE PLANTED LOW RUN, the FAIL branch of the same rule: side "low", both
-    rows excluded-shaped, and the note printed without the word kept."""
+def test_a_sagging_card_is_kept_and_says_low(pod, capsys):
+    """THE PLANTED LOW RUN: side "low" on both rows, both KEPT since
+    2026-09-09, and the operator's line naming the side as recorded. Until
+    then this run counted two excluded-shaped rows, which on the H200 is what
+    a BLOCK_M=128 tile at its own operating point under the power cap looks
+    like."""
     pod.timing_result = lambda **kw: timing_at(SAGGED_MHZ, kw["reference_clock_mhz"])
     assert run(pod) == exit_codes.DONE
     rows = cells(pod)
     assert [r["clock_level_side"] for r in rows] == ["low", "low"]
     state = report(pod)["clock_state"]
     assert state["low"] == 2 and state["high"] == 0
-    assert state["excluded_shaped"] == 2
+    assert state["excluded_shaped"] == 0
     out = capsys.readouterr().out
-    assert "kept (LEVEL high" not in out
-    assert out.count("^ scripted clock") == 2
-    assert "2 LOW (below the band, excluded-shaped)" in out
+    assert out.count("kept (LEVEL low is recorded, not excluded): "
+                     "scripted clock") == 2
+    assert "2 steady LOW (kept, side recorded)" in out
 
 
 def test_a_level_card_carries_an_empty_side(pod):
@@ -550,4 +566,37 @@ def test_clock_state_reads_the_csv_cells_it_wrote():
     assert state["high"] == 1
     assert state["low"] == 2, "a False with no side is the one-sided era's below"
     assert state["level"] == 1 and state["drift"] == 1 and state["unknown"] == 1
-    assert state["excluded_shaped"] == 3
+    # Only the drifted row: since 2026-09-09 neither LEVEL side excludes.
+    assert state["excluded_shaped"] == 1
+
+
+def test_the_new_clock_columns_are_in_the_header_and_the_row():
+    """R3's evidence columns. `time_kernel` computed the first and last
+    under-load sample and this writer dropped them, so a row that failed DRIFT
+    could not say which way its clock went."""
+    t = timing_at(H200_MEMORY_LOAD_MHZ, H200_REFERENCE_MHZ)
+    row = TILE.timing_columns(t)
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in TILE.TIMING_CSV_COLUMNS, column
+        assert column in TILE.CSV_COLUMNS, column
+        assert column in row, column
+    assert row["sm_clock_start_mhz"] == f"{H200_MEMORY_LOAD_MHZ:.0f}"
+    assert row["sm_clock_end_mhz"] == f"{H200_MEMORY_LOAD_MHZ:.0f}"
+    # An instrument without the sample list or the draw writes them EMPTY,
+    # which is NOT DETERMINED and never zero.
+    assert row["clock_samples_mhz"] == "" and row["power_w"] == ""
+    assert set(row) == set(TILE.TIMING_CSV_COLUMNS)
+
+
+def test_a_row_with_no_clock_at_all_writes_the_new_columns_empty():
+    class Blind:
+        instrument, warmup_ms, iters, trials = "queue-deep/test", 300.0, 10, 3
+        sm_clock_load_mhz = None
+        clock_level_ok = clock_drift_ok = host_bound = None
+        l2_flush = True
+
+    row = TILE.timing_columns(Blind())
+    assert row["sm_clock_load_mhz"] == ""
+    assert row["sm_clock_start_mhz"] == "" and row["sm_clock_end_mhz"] == ""
+    assert row["power_w"] == ""
