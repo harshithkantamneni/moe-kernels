@@ -1864,7 +1864,11 @@ def _pass_timing(load_mhz: float, reference: float | None):
         sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=load_mhz,
         clock_level_ok=level, clock_drift_ok=drift, samples=30, warmup_calls=5,
         flush_mb=256, clock_samples=8, clock_source="injected",
-        clock_poll_ms=0.1, host_bound=False, host_enqueue_ms=0.1)
+        clock_poll_ms=0.1, host_bound=False, host_enqueue_ms=0.1,
+        # The side and the reference, as `time_kernel` stamps them: LEVEL is
+        # two-sided and `level_split` reads which way it went.
+        clock_level_side=AB.timing.level_side(load_mhz, reference) or "",
+        reference_clock_mhz=reference)
 
 
 def test_the_level_reference_reaches_both_of_this_arms_time_kernel_calls():
@@ -2102,11 +2106,13 @@ def test_only_one_function_decides_which_rungs_sagged():
         # A READER pulls the column back OUT of a cells.jsonl row. `_fold_flag`
         # and `fold_timings` put it in, off `KernelTiming` attributes, and are
         # not readers of it.
-        if "get('clock_level_ok')" in body or "['clock_level_ok']" in body:
+        if ("get('clock_level_ok')" in body or "['clock_level_ok']" in body
+                or "get('clock_level_side')" in body
+                or "['clock_level_side']" in body):
             readers.add(node.name)
     assert readers == {"level_split"}, (
         f"{sorted(readers - {'level_split'})} decide for themselves which "
-        "rungs sagged; route them through level_split")
+        "rungs sagged or boosted; route them through level_split")
 
 
 def test_the_level_gate_is_scored_on_measured_runs_and_not_on_planted_ones(
@@ -2699,3 +2705,169 @@ def test_the_remedy_named_is_the_lever_that_actually_moved():
     AB.report_mde(_collect(edge), design, (("median", 0.0077),), measured=True,
                   signal_share=AB.MIN_SIGNAL_FRACTION)
     assert "the lever is --replicates" in "\n".join(edge)
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and the gate reads the side
+# --------------------------------------------------------------------------
+
+#: The H200 shape the fifteenth instance of the recurring defect was found on:
+#: the bf16-GEMM reference the roof was measured at, and the clock the
+#: committed calibration holds under memory load for 30 s. Every rung of this
+#: ladder is memory-bound, so on a rental every rung is the HIGH row.
+H200_GEMM_REFERENCE_MHZ = 1515.0
+H200_MEMORY_LOAD_MHZ = 1980.0
+SAGGED_MHZ = 1400.0
+
+
+def _sided(*sides) -> list[dict]:
+    """Rung rows with a LEVEL verdict and a side: "high" / "low" / "" (level)
+    / None (no reference, key absent)."""
+    rows = []
+    for i, side in enumerate(sides):
+        row = {"id": f"r{i}"}
+        if side is None:
+            pass
+        elif side == "":
+            row.update(clock_level_ok=True, clock_level_side="")
+        else:
+            row.update(clock_level_ok=False, clock_level_side=side)
+        rows.append(row)
+    return rows
+
+
+def test_a_boosted_rung_folds_to_high_and_a_sagged_one_to_low():
+    """Through this file's own fold, from records scored the way `time_kernel`
+    scores them: 1980 against 1515 fails LEVEL on the HIGH side, 1400 on the
+    LOW side, and one LOW pass dominates a rung however many boosted."""
+    ref = H200_GEMM_REFERENCE_MHZ
+    high = AB.fold_timings([_pass_timing(H200_MEMORY_LOAD_MHZ, ref)] * 3)
+    assert high["clock_level_ok"] is False
+    assert high["clock_level_side"] == AB.timing.LEVEL_HIGH
+    low = AB.fold_timings([_pass_timing(SAGGED_MHZ, ref)] * 3)
+    assert low["clock_level_side"] == AB.timing.LEVEL_LOW
+    mixed = AB.fold_timings([_pass_timing(H200_MEMORY_LOAD_MHZ, ref),
+                             _pass_timing(SAGGED_MHZ, ref),
+                             _pass_timing(ref, ref)])
+    assert mixed["clock_level_ok"] is False
+    assert mixed["clock_level_side"] == AB.timing.LEVEL_LOW
+    level = AB.fold_timings([_pass_timing(ref, ref)] * 3)
+    assert level["clock_level_ok"] is True and level["clock_level_side"] == ""
+    assert "clock_level_side" in AB.TIMING_COLUMNS
+    # A pass without the field (every fake before 2026-09-03) has its side
+    # derived from its own load and reference, as driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(_pass_timing(H200_MEMORY_LOAD_MHZ, ref),
+                               clock_level_side="")
+    assert AB.fold_timings([bare])["clock_level_side"] == AB.timing.LEVEL_HIGH
+
+
+def test_level_split_files_a_boosted_rung_apart_from_a_sagged_one():
+    sagged, blind, boosted = AB.level_split(_sided("high", "low", "", None, "high"))
+    assert sagged == ["r1"]
+    assert boosted == ["r0", "r4"]
+    assert blind == ["r3"]
+    # A False with no side is the one-sided era's meaning, below.
+    sagged, _, boosted = AB.level_split([{"id": "old", "clock_level_ok": False}])
+    assert sagged == ["old"] and boosted == []
+
+
+def test_the_level_gate_passes_a_high_side_rung_fails_a_low_one_and_says_which():
+    """THE VALIDITY GATE THAT WOULD HAVE VOIDED THE ARM. On the H200 every
+    memory-bound rung boosts to 1980 MHz against the 1515 MHz reference and
+    fails LEVEL on the HIGH side; until 2026-09-08 `level_gate` read that as a
+    sag and returned FAIL, exit 3 INVALID, latched by the session driver so no
+    resume re-ran the 13-minute arm. HIGH passes, LOW fails, and the detail
+    names the side it saw either way."""
+    from moe.bench import exit_codes
+    high = AB.level_gate(_sided("high", "high", "high"))
+    assert high.ok is True, high.detail
+    assert "LEVEL high" in high.detail and "r0" in high.detail
+    assert "kept" in high.detail
+    low = AB.level_gate(_sided("low", "", ""))
+    assert low.ok is False
+    assert "LEVEL low" in low.detail and "r0" in low.detail
+    assert low.kind == exit_codes.VALIDITY
+    # LOW outranks HIGH: one sag fails the ladder however many boosted, and the
+    # detail still names the boosted rungs so the reader sees both states.
+    mixed = AB.level_gate(_sided("high", "low", "high"))
+    assert mixed.ok is False
+    assert "LEVEL low" in mixed.detail and "r1" in mixed.detail
+    assert "2 rung(s) ran ABOVE" in mixed.detail
+    # A boosted ladder with a blind rung is still NOT TESTABLE, never PASS.
+    assert AB.level_gate(_sided("high", None)).ok is None
+    # And the all-level ladder names both edges of the band it passed inside.
+    level = AB.level_gate(_sided("", "", ""))
+    assert level.ok is True and "95% to 105%" in level.detail
+
+
+def test_a_high_world_passes_the_level_gate_end_to_end_and_excludes_nothing(
+        tmp_path, monkeypatch, capsys):
+    """THE HIGH WORLD, through `_analyse`: a measured directory whose every
+    rung carries the boosted verdict. The gate PASSES, the page says ABOVE and
+    kept, every rung reaches the fit, and the run exits DONE. The LOW twin is
+    the FAIL branch: INVALID, and the page says below."""
+    from moe.bench import exit_codes
+    out_dir = tmp_path / "boosted"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+
+    def replay(side):
+        for row in rows:
+            row["provenance"] = "measured"
+            row["clock_level_ok"] = False
+            row["clock_level_side"] = side
+            row["sm_clock_load_mhz"] = (H200_MEMORY_LOAD_MHZ if side == "high"
+                                        else SAGGED_MHZ)
+            row["reference_clock_mhz"] = H200_GEMM_REFERENCE_MHZ
+        cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+        return run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                          capsys)
+
+    code, out = replay("high")
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert f"LEVEL: {len(rows)} of {len(rows)} rungs ran ABOVE 105%" in out
+    assert "Kept." in out
+    assert "rungs ran below" not in out
+    assert code == exit_codes.DONE, out
+    assert exit_codes.classify_text(out) == code
+
+    code, out = replay("low")
+    assert f"[FAIL] {AB.LEVEL_GATE}" in out
+    assert f"LEVEL: {len(rows)} of {len(rows)} rungs ran below 95%" in out
+    assert code == exit_codes.INVALID
+
+
+def test_the_retired_idle_instant_check_is_labelled_as_what_it_detects(
+        tmp_path, monkeypatch, capsys):
+    """F12. `throttled` on a rung row is `clock_drift` over two idle-instant
+    samples around the whole rung, which the audit showed detects whether the
+    START sample caught the idle boost; the page called those rungs "drifted
+    more than 5% in SM clock", the sentence `group_m_alpha_sweep` had already
+    corrected. The under-load DRIFT verdict is `clock_drift_ok` and gets its
+    own line."""
+    out_dir = tmp_path / "idle"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for i, row in enumerate(rows):
+        row["provenance"] = "measured"
+        row["clock_level_ok"] = True
+        row["throttled"] = i < 2
+        row["clock_drift_ok"] = i != 3
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    _, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch, capsys)
+    assert "2 rungs moved more than 5% between the two idle-instant SM clock" in out
+    assert "RETIRED check" in out
+    assert "not throttling" in out
+    assert "drifted more than" not in out
+    assert f"DRIFT: 1 of {len(rows)} rungs had their under-load clock move" in out
+    # The source no longer binds the idle-instant pair to the word throttled.
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "measure_rung")
+    assert "drift, idle_instants_moved = clock_drift(" in ast.unparse(fn)

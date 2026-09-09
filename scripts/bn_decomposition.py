@@ -230,8 +230,8 @@ network volume, which outlives the pod), else `<repo>/results`:
 
 `cells.csv` is appended and flushed per timing and a re-run resumes it. Each row
 carries the `KernelTiming` columns the instrument produced (instrument,
-warmup_ms, iters, trials, sm_clock_load_mhz, clock_level_ok, clock_drift_ok,
-l2_flush) and the run's `provenance` columns, so a row can be attributed to a
+warmup_ms, iters, trials, sm_clock_load_mhz, clock_level_ok, clock_level_side,
+clock_drift_ok, l2_flush) and the run's `provenance` columns, so a row can be attributed to a
 commit, a card and a ruler without the report beside it. The run id is built by
 `moe.bench.provenance.run_id` from EVERY swept knob AND the card, because the
 results root is a network volume shared between pods and this repo has already
@@ -1564,6 +1564,15 @@ class Sample:
     trial too short for the poller, no calibration to compare a level against --
     never "fine". Both must be read: the drop-only flag they replace was the one
     the audit found detecting whether the first sample caught the idle boost.
+
+    `clock_level_side` SAYS WHICH WAY A LEVEL FAILURE WENT: `timing.LEVEL_LOW`,
+    `timing.LEVEL_HIGH`, or "" for level or undetermined. LEVEL has been
+    two-sided since 03df2d4 (2026-09-03), and on the H200 a memory-shaped
+    tread boosts to 1980 MHz against the 1515 MHz bf16-GEMM reference and
+    fails HIGH. That is not a cold tread: `clock_excluded` is the one reader of
+    the verdicts and it excludes on LOW or DRIFT only. A row that carries
+    `clock_level_ok` False and no side was written before this column
+    existed, when LEVEL was one-sided and False meant below.
     """
 
     block_n: int
@@ -1586,9 +1595,111 @@ class Sample:
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
     host_bound: bool | None = None
+    clock_level_side: str = ""
 
 
 SAMPLE_FIELDS = list(Sample.__dataclass_fields__)
+
+
+def clock_side_of(t) -> str:
+    """Which side of the LEVEL band the instrument saw a cell on.
+
+    `timing.LEVEL_LOW`, `timing.LEVEL_HIGH`, or "" for level or undetermined.
+    The record's own `clock_level_side` is preferred. A record that failed
+    LEVEL and carries no side (a fake built before the field existed on
+    2026-09-03) has it derived from its own load and reference, the rule
+    `moe.bench.driver` applies to the same records; one with neither answers
+    "", which `clock_excluded` reads as the one-sided era's False, below.
+    """
+    from moe.bench import timing
+
+    side = getattr(t, "clock_level_side", "") or ""
+    if not side and getattr(t, "clock_level_ok", None) is False:
+        side = timing.level_side(getattr(t, "sm_clock_load_mhz", None),
+                                 getattr(t, "reference_clock_mhz", None)) or ""
+    return side
+
+
+def clock_excluded(level_ok: bool | None, side: str,
+                   drift_ok: bool | None) -> bool:
+    """Do a tread's clock verdicts exclude it. LOW or DRIFT do; HIGH does not.
+
+    THE FIFTEENTH INSTANCE OF A FIX LANDING AT ONE OF TWO CALL SITES. Commit
+    03df2d4 made `timing.clock_flags` two-sided at the producer, so a tread
+    boosted to 1980 MHz against the 1515 MHz bf16-GEMM reference now fails
+    LEVEL with `clock_level_side == "high"`. Until 2026-09-08 this file read
+    `clock_level_ok is False` alone, the one-sided era's test, which takes
+    that tread for one that ran cold. On the H200 the HIGH side is the NORMAL
+    state of a memory-shaped tread: the committed calibration holds 1980 MHz
+    under memory load for 30 s against a 1515 MHz GEMM plateau, so the old
+    test flagged exactly the small-T end the memory branch is made of.
+
+    HIGH means the fixed-roof fraction is not comparable and the per-row
+    `roof_at_cell_clock` is the number to read. The time itself is a time at
+    one clock and stays. This is the `throttled` rule `moe.bench.driver`
+    writes on its own rows, restated because the rows this file writes carry
+    the verdicts and not that column. A False with no side is the one-sided
+    era's meaning, below, and stays excluded. None is not determined, and an
+    exclusion has to be positively established.
+    """
+    from moe.bench import timing
+
+    if drift_ok is False:
+        return True
+    return level_ok is False and side != timing.LEVEL_HIGH
+
+
+def clock_state(samples: list[Sample]) -> dict:
+    """How many timed treads sat where against the roof's clock, in one block.
+
+    Counts and never a verdict: this file drops no tread for its clock (the
+    fit reads `status == "ok"`), so the block is what a reader of report.json
+    has to decide whether the ladders were timed at the clock the roof was.
+    `low` and `drift` are the excluded-shaped states `clock_excluded` names;
+    `high` is kept and counted apart from them because on the H200 it is the
+    ordinary state of a memory-bound tread and a report that folded it in with
+    "cold" would say the memory branch was mostly unusable. `unknown` is the
+    treads whose LEVEL was not determined, counted separately because a run
+    that could not read its clocks and a run whose clocks were fine are not
+    the same state.
+    """
+    from moe.bench import timing
+
+    timed = [s for s in samples if s.status == "ok"]
+    low = sum(1 for s in timed if s.clock_level_ok is False
+              and s.clock_level_side != timing.LEVEL_HIGH)
+    high = sum(1 for s in timed if s.clock_level_ok is False
+               and s.clock_level_side == timing.LEVEL_HIGH)
+    return {
+        "timed": len(timed),
+        "level": sum(1 for s in timed if s.clock_level_ok is True),
+        "low": low,
+        "high": high,
+        "drift": sum(1 for s in timed if s.clock_drift_ok is False),
+        "unknown": sum(1 for s in timed if s.clock_level_ok is None),
+        "excluded_shaped": sum(
+            1 for s in timed
+            if clock_excluded(s.clock_level_ok, s.clock_level_side,
+                              s.clock_drift_ok)),
+        "rule": "LOW or DRIFT excludes; HIGH is kept, its fixed-roof fraction "
+                "is not comparable and roof_at_cell_clock is the number to "
+                "read; this fit drops no tread for its clock",
+    }
+
+
+def clock_state_lines(state: dict) -> list[str]:
+    """The printed form of `clock_state`, saying which side each count is."""
+    return [
+        f"  {state['timed']} timed treads: {state['level']} level, "
+        f"{state['low']} LOW (below the band, excluded-shaped), "
+        f"{state['high']} HIGH (boosted above the band, kept: the fixed-roof "
+        "fraction is not comparable, read roof_at_cell_clock), "
+        f"{state['drift']} DRIFT failed (excluded-shaped), "
+        f"{state['unknown']} with LEVEL not determined",
+        "  this fit drops no tread for its clock; the counts are for a reader "
+        "deciding whether to believe it, and None means NOT DETERMINED, never "
+        "fine",
+    ]
 
 
 def ladder_rows(cfg, block_m: int, r_max: int, max_treads: int) -> list[int]:
@@ -3081,7 +3192,11 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int, int]], list[Sampl
                 sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
                 clock_level_ok=_opt_bool(row.get("clock_level_ok")),
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
-                host_bound=_opt_bool(row.get("host_bound"))))
+                host_bound=_opt_bool(row.get("host_bound")),
+                # Tri-state, and "" on a row from before 2026-09-08 is the
+                # one-sided era's "no side recorded", which `clock_excluded`
+                # reads as below when the verdict is False.
+                clock_level_side=row.get("clock_level_side", "") or ""))
     return ({(s.block_n, s.block_m, s.tiles, s.rep)
              for s in out if s.status == "ok"}, out)
 
@@ -3296,9 +3411,19 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
                     trials=t.trials, l2_flush=t.l2_flush,
                     sm_clock_load_mhz=t.sm_clock_load_mhz,
                     clock_level_ok=t.clock_level_ok,
-                    clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound)
-                if t.clock_level_ok is False or t.host_bound:
+                    clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound,
+                    clock_level_side=clock_side_of(t))
+                # THE SIDE IS READ HERE, NOT ONLY THE VERDICT. `clock_level_ok
+                # is False` alone was the one-sided era's test and on the H200
+                # it fires on every memory-shaped tread, which boosts to 1980
+                # MHz against the 1515 MHz reference. LOW, DRIFT and host-bound
+                # get the exclusion-shaped marker; HIGH is named as kept.
+                if (clock_excluded(t.clock_level_ok, sample.clock_level_side,
+                                   t.clock_drift_ok) or t.host_bound):
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
+                elif sample.clock_level_side == timing.LEVEL_HIGH:
+                    print(f"  ^ kept (LEVEL high is not an exclusion): "
+                          f"{t.clock_note or ''}".rstrip())
             except timing.TimingRefused:
                 raise
             except Exception as exc:                    # noqa: BLE001
@@ -3490,6 +3615,12 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     if power is not None:
         lines += ["  " + line for line in power.lines()]
 
+    # NOT IN `counts`: `gate_non_vacuity` fails on any zero there, and a run
+    # with zero LOW treads is the run one wants.
+    clocks = clock_state(samples)
+    lines += ["", "## Clock state of the timed treads", ""]
+    lines += clock_state_lines(clocks)
+
     gates = [
         gate_non_vacuity(counts),
         gate_override(compiles, executed),
@@ -3558,6 +3689,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                       "cross_arm_prior_sd_source": (floor_why if floor is None
                                                     else floor.source)},
         "measured_spread": spread, "measured_spread_source": spread_source,
+        "clock_state": clocks,
         "c2_power": (None if power is None else
                      {**asdict(power), "discriminates": power.discriminates,
                       "reason": power.reason()}),

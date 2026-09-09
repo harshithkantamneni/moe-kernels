@@ -710,13 +710,25 @@ def replay_with(records, tmp_path, monkeypatch, capsys, argv=("--synthetic",
                       tmp_path, monkeypatch, capsys)
 
 
-def measured_row(row, *, level, mhz=1515.0):
-    """One synthetic row re-labelled as a measurement that carries a clock."""
+def measured_row(row, *, level, mhz=1515.0, side=None, load=None,
+                 drift=None):
+    """One synthetic row re-labelled as a measurement that carries a clock.
+
+    `side` None leaves the column off the row, the shape of a jsonl written
+    before 2026-09-08; `load` None likewise for `sm_clock_load_mhz`, so a test
+    can plant a row the report has to read the side of from the row itself.
+    """
     row["provenance"] = "measured"
     row.pop("law", None)
     row.pop("planted_alpha", None)
     row["clock_level_ok"] = level
     row["reference_clock_mhz"] = mhz
+    if side is not None:
+        row["clock_level_side"] = side
+    if load is not None:
+        row["sm_clock_load_mhz"] = load
+    if drift is not None:
+        row["clock_drift_ok"] = drift
 
 
 def test_the_report_says_how_many_cells_the_clock_could_not_examine(
@@ -741,11 +753,128 @@ def test_the_report_names_the_cells_that_ran_under_the_roofs_clock(
     prints one of its three is not evidence about the run."""
     _, failed = replay_with(lambda r: measured_row(r, level=False),
                             tmp_path, monkeypatch, capsys)
-    assert "ran below the clock this card's roof was measured at" in failed
+    assert "ran BELOW the clock this card's roof was measured at" in failed
+    assert "the governor's, not the kernel's" in failed
     _, clean = replay_with(lambda r: measured_row(r, level=True),
                            tmp_path, monkeypatch, capsys)
     assert "every timed cell was scored against 1515 MHz" in clean
     assert "could not be examined" not in clean
+
+
+def test_a_boosted_ladder_is_kept_and_named_high_not_governor_bound(
+        tmp_path, monkeypatch, capsys):
+    """THE HIGH WORLD: every cell at 1980 MHz against the 1515 MHz reference,
+    the normal state of a memory-bound cell on the H200. The page must say
+    ABOVE and KEPT and must not call one of them the governor's time; until
+    2026-09-08 it read `clock_level_ok is False` alone and would have printed
+    the whole ladder as below the roof's clock. Nothing in this arm's fit
+    drops a row for its clock, so the alpha lines are unchanged either way;
+    the defect was in the sentence a reader quotes."""
+    code, out = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0),
+        tmp_path, monkeypatch, capsys)
+    assert "ran ABOVE the clock this card's roof was measured at" in out
+    assert "flagged LEVEL high; KEPT" in out
+    assert "roof_at_cell_clock" in out
+    assert "governor's" not in out
+    assert "ran BELOW" not in out
+    assert "VERDICT: PREDICTION HELD" in out
+    assert code == 0
+
+
+def test_a_sagging_ladder_is_named_low_and_governor_bound(
+        tmp_path, monkeypatch, capsys):
+    """THE LOW WORLD, the FAIL twin of the one above: 1400 MHz against 1515
+    with side low is the governor's time and the page says so; nothing on it
+    reads KEPT."""
+    _, out = replay_with(
+        lambda r: measured_row(r, level=False, side="low", load=1400.0),
+        tmp_path, monkeypatch, capsys)
+    assert "ran BELOW the clock this card's roof was measured at" in out
+    assert "flagged LEVEL low; their time is the governor's" in out
+    assert "KEPT" not in out
+    assert "ran ABOVE" not in out
+
+
+def test_a_jsonl_from_before_the_side_column_derives_the_side_from_its_own_row(
+        tmp_path, monkeypatch, capsys):
+    """A row that failed LEVEL, carries no `clock_level_side`, and does carry
+    load 1980 and reference 1515: the report derives high from the row, by the
+    same `level_side` that scored it. The one with load 1400 derives low. A
+    replay of a pre-2026-09-08 pod jsonl must not be read as a cold run because
+    the column was not yet on the row."""
+    _, high = replay_with(lambda r: measured_row(r, level=False, load=1980.0),
+                          tmp_path, monkeypatch, capsys)
+    assert "flagged LEVEL high; KEPT" in high
+    assert "governor's" not in high
+    _, low = replay_with(lambda r: measured_row(r, level=False, load=1400.0),
+                         tmp_path, monkeypatch, capsys)
+    assert "flagged LEVEL low; their time is the governor's" in low
+    assert "KEPT" not in low
+
+
+def test_a_drift_failure_gets_its_own_line(tmp_path, monkeypatch, capsys):
+    """DRIFT is the other exclusion-shaped verdict and it is a different
+    measurement from LEVEL: the under-load samples disagreeing with each
+    other. A boosted-but-steady ladder must not print it; one whose samples
+    moved must, whatever side LEVEL landed on."""
+    _, steady = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0,
+                               drift=True),
+        tmp_path, monkeypatch, capsys)
+    assert "failed DRIFT" not in steady
+    _, moved = replay_with(
+        lambda r: measured_row(r, level=False, side="high", load=1980.0,
+                               drift=False),
+        tmp_path, monkeypatch, capsys)
+    assert "failed DRIFT" in moved
+    assert "flagged LEVEL high; KEPT" in moved
+
+
+def test_level_split_keeps_high_excludes_low_and_reads_a_bare_false_as_low():
+    """The rule itself, on planted rows, so the page and the split cannot
+    disagree: a 1980-vs-1515 row with side high is `high`; a 1400 row with
+    side low is `low`; a False with no side and no load is the one-sided era's
+    below and is `low`; None is `blind`; True is in none of the three."""
+    high = {"clock_level_ok": False, "clock_level_side": "high",
+            "sm_clock_load_mhz": 1980.0, "reference_clock_mhz": 1515.0}
+    low = {"clock_level_ok": False, "clock_level_side": "low",
+           "sm_clock_load_mhz": 1400.0, "reference_clock_mhz": 1515.0}
+    bare = {"clock_level_ok": False}
+    derived_high = {"clock_level_ok": False, "sm_clock_load_mhz": 1980.0,
+                    "reference_clock_mhz": 1515.0}
+    blind = {"clock_level_ok": None}
+    level = {"clock_level_ok": True, "clock_level_side": ""}
+    split = GM.level_split([high, low, bare, derived_high, blind, level])
+    assert split["high"] == [high, derived_high]
+    assert split["low"] == [low, bare]
+    assert split["blind"] == [blind]
+    assert GM.level_side_of(high) == "high"
+    assert GM.level_side_of(derived_high) == "high"
+    assert GM.level_side_of(bare) == ""
+    assert GM.level_side_of(level) == ""
+
+
+def test_the_report_never_tests_the_level_flag_bare():
+    """The shape of the fifteenth instance, refused at the source: no function
+    in this arm outside `level_split` and `level_side_of` may test
+    `clock_level_ok is False` without reading the side. A reviewer found this
+    file doing exactly that after the other six were fixed."""
+    tree = ast.parse((ROOT / "scripts" / "group_m_alpha_sweep.py").read_text())
+    offenders = []
+    for func in ast.walk(tree):
+        if not isinstance(func, ast.FunctionDef):
+            continue
+        if func.name in ("level_split", "level_side_of"):
+            continue
+        for node in ast.walk(func):
+            if (isinstance(node, ast.Compare)
+                    and any(isinstance(op, ast.Is) for op in node.ops)
+                    and any(isinstance(c, ast.Constant) and c.value is False
+                            for c in node.comparators)
+                    and "clock_level_ok" in ast.unparse(node.left)):
+                offenders.append(f"{func.name}:{node.lineno}")
+    assert offenders == [], offenders
 
 
 def test_a_synthetic_report_claims_no_clock_evidence_either_way(

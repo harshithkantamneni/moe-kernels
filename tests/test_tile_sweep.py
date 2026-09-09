@@ -149,7 +149,11 @@ def timing_at(load_mhz: float, reference_mhz: float | None,
         sm_clock_end_mhz=load_mhz, clock_level_ok=level, clock_drift_ok=drift,
         samples=100 * trials, warmup_calls=10, flush_mb=64, clock_samples=9,
         clock_source="injected", clock_poll_ms=1.0, host_bound=False,
-        host_enqueue_ms=0.01, clock_note="scripted clock")
+        host_enqueue_ms=0.01, clock_note="scripted clock",
+        # The side and the reference, as `time_kernel` stamps them: LEVEL is
+        # two-sided and a consumer reads which way it went.
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
 
 
 @pytest.fixture
@@ -370,3 +374,180 @@ def test_a_kernels_own_runtime_error_is_still_one_cells_error(pod):
     verdicts = {g["name"].split()[0]: g["verdict"] for g in report(pod)["gates"]}
     assert verdicts["V1"] == exit_codes.FAIL
     assert verdicts["C1"] == exit_codes.UNKNOWN
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+#: The H200 shape the fifteenth instance of the recurring defect was found on:
+#: the bf16-GEMM reference the roof was measured at, and the clock the
+#: committed calibration holds under memory load for 30 s.
+H200_GEMM_REFERENCE_MHZ = 1515.0
+H200_MEMORY_LOAD_MHZ = 1980.0
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
+    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+
+    `moe.bench.driver` writes `throttled = drift failed or (level failed and
+    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
+    consumer has no such column and restates the rule; the two must agree on
+    every cell of the truth table or a boosted tread is kept by one reader and
+    dropped by the next, which is the shape of the defect.
+    """
+    from moe.bench import timing
+    ex = TILE.clock_excluded
+    # HIGH is not an exclusion, in any combination with a good drift.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    # LOW is, and so is a False that recorded no side (the one-sided era).
+    assert ex(False, timing.LEVEL_LOW, True) is True
+    assert ex(False, "", True) is True
+    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The driver's rule, evaluated over the same table.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                driver_rule = (drift is False
+                               or (level is False and side != timing.LEVEL_HIGH))
+                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert TILE.clock_side_of(high) == timing.LEVEL_HIGH
+    assert TILE.clock_side_of(low) == timing.LEVEL_LOW
+    assert TILE.clock_excluded(high.clock_level_ok, TILE.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert TILE.clock_excluded(low.clock_level_ok, TILE.clock_side_of(low),
+                                 low.clock_drift_ok) is True, "LOW is excluded"
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert TILE.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which the rule reads as below.
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert TILE.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "tile_sweep.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(node.name)
+    allowed = {"clock_excluded"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def test_a_boosted_card_is_kept_and_named_so_on_every_row(pod, capsys):
+    """THE PLANTED HIGH RUN: the H200's memory-load clock against its GEMM
+    reference, which is every decode cell this sweep times. The rows carry
+    side "high", the report's clock-state block counts them as HIGH and as
+    zero excluded-shaped, and the operator's line says kept."""
+    pod.timing_result = lambda **kw: timing_at(H200_MEMORY_LOAD_MHZ,
+                                               kw["reference_clock_mhz"])
+    assert run(pod) == exit_codes.DONE
+    rows = cells(pod)
+    assert [r["clock_level_ok"] for r in rows] == ["0", "0"]
+    assert [r["clock_level_side"] for r in rows] == ["high", "high"]
+    state = report(pod)["clock_state"]
+    assert state["high"] == 2 and state["low"] == 0
+    assert state["excluded_shaped"] == 0
+    out = capsys.readouterr().out
+    assert out.count("kept (LEVEL high is not an exclusion): scripted clock") == 2
+    assert "2 HIGH (boosted above the band, kept" in out
+
+
+def test_a_sagging_card_is_excluded_shaped_and_says_low(pod, capsys):
+    """THE PLANTED LOW RUN, the FAIL branch of the same rule: side "low", both
+    rows excluded-shaped, and the note printed without the word kept."""
+    pod.timing_result = lambda **kw: timing_at(SAGGED_MHZ, kw["reference_clock_mhz"])
+    assert run(pod) == exit_codes.DONE
+    rows = cells(pod)
+    assert [r["clock_level_side"] for r in rows] == ["low", "low"]
+    state = report(pod)["clock_state"]
+    assert state["low"] == 2 and state["high"] == 0
+    assert state["excluded_shaped"] == 2
+    out = capsys.readouterr().out
+    assert "kept (LEVEL high" not in out
+    assert out.count("^ scripted clock") == 2
+    assert "2 LOW (below the band, excluded-shaped)" in out
+
+
+def test_a_level_card_carries_an_empty_side(pod):
+    pod.timing_result = lambda **kw: timing_at(H200_REFERENCE_MHZ,
+                                               kw["reference_clock_mhz"])
+    assert run(pod) == exit_codes.DONE
+    assert [r["clock_level_side"] for r in cells(pod)] == ["", ""]
+    state = report(pod)["clock_state"]
+    assert state["level"] == 2 and state["excluded_shaped"] == 0
+
+
+def test_clock_state_reads_the_csv_cells_it_wrote():
+    """The block reads the string cells `timing_columns` wrote, so a replay of
+    cells.csv and the live run count the same rows the same way, and an empty
+    flag is NOT DETERMINED rather than a pass or a fail."""
+    rows = [
+        {"clock_level_ok": "0", "clock_level_side": "high", "clock_drift_ok": "1"},
+        {"clock_level_ok": "0", "clock_level_side": "low", "clock_drift_ok": "1"},
+        {"clock_level_ok": "0", "clock_level_side": "", "clock_drift_ok": "1"},
+        {"clock_level_ok": "1", "clock_level_side": "", "clock_drift_ok": "0"},
+        {"clock_level_ok": "", "clock_level_side": "", "clock_drift_ok": ""},
+        {"clock_level_ok": "0", "clock_level_side": "high", "clock_drift_ok": "1",
+         "error": "OOM"},
+    ]
+    state = TILE.clock_state(rows)
+    assert state["timed"] == 5
+    assert state["high"] == 1
+    assert state["low"] == 2, "a False with no side is the one-sided era's below"
+    assert state["level"] == 1 and state["drift"] == 1 and state["unknown"] == 1
+    assert state["excluded_shaped"] == 3

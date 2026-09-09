@@ -1776,3 +1776,207 @@ def test_p4_and_c4_state_the_tempo_match_as_withdrawn_not_as_prior_agreement():
     table = "\n".join(BND.cell_table(MIXTRAL, 2, 160.3, BND.DEFAULT_BLOCK_N,
                                      BND.SUBJECT_BLOCK_M, {}))
     assert "LIN-ERA (0.307, 0.143)" in table and "POOLED (0.307" not in table
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+#: The H200 shape the fifteenth instance of the recurring defect was found on:
+#: the bf16-GEMM reference the roof was measured at, and the clock the
+#: committed calibration holds under memory load for 30 s.
+H200_GEMM_REFERENCE_MHZ = 1515.0
+H200_MEMORY_LOAD_MHZ = 1980.0
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
+    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+
+    `moe.bench.driver` writes `throttled = drift failed or (level failed and
+    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
+    consumer has no such column and restates the rule; the two must agree on
+    every cell of the truth table or a boosted tread is kept by one reader and
+    dropped by the next, which is the shape of the defect.
+    """
+    from moe.bench import timing
+    ex = BND.clock_excluded
+    # HIGH is not an exclusion, in any combination with a good drift.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    # LOW is, and so is a False that recorded no side (the one-sided era).
+    assert ex(False, timing.LEVEL_LOW, True) is True
+    assert ex(False, "", True) is True
+    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The driver's rule, evaluated over the same table.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                driver_rule = (drift is False
+                               or (level is False and side != timing.LEVEL_HIGH))
+                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert BND.clock_side_of(high) == timing.LEVEL_HIGH
+    assert BND.clock_side_of(low) == timing.LEVEL_LOW
+    assert BND.clock_excluded(high.clock_level_ok, BND.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert BND.clock_excluded(low.clock_level_ok, BND.clock_side_of(low),
+                                 low.clock_drift_ok) is True, "LOW is excluded"
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert BND.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which the rule reads as below.
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert BND.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(node.name)
+    allowed = {"clock_excluded", "clock_state"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def test_a_boosted_tread_travels_through_the_csv_and_is_counted_as_kept(tmp_path):
+    """THE PLANTED HIGH ROW, KEPT, AND THE PLANTED LOW ROW, EXCLUDED, through
+    this file's own row builder, CSV writer and reader, and its clock-state
+    block. Until 2026-09-08 the row had no side column, so a resumed cells.csv
+    from a boosted H200 could not have told the two apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    level = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ)
+    drifting = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ,
+                                 drift_to=1300.0)
+    prov = BND.PV.provenance_block(instrument="queue-deep/test", iters=None)
+    path = tmp_path / "cells.csv"
+    for n, t in enumerate((high, low, level, drifting), start=1):
+        row = BND.Sample(64, 128, n, 128 * n, 512 * n, 1, t.ms_p50, t.ms_min,
+                         t.ms_std, t.iters, instrument=t.instrument,
+                         sm_clock_load_mhz=t.sm_clock_load_mhz,
+                         clock_level_ok=t.clock_level_ok,
+                         clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound,
+                         clock_level_side=BND.clock_side_of(t))
+        BND.append_sample(path, row, prov)
+    assert "clock_level_side" in path.read_text().splitlines()[0].split(",")
+    _, back = BND.read_samples(path)
+    assert [s.clock_level_side for s in back] == [timing.LEVEL_HIGH,
+                                                 timing.LEVEL_LOW, "", ""]
+    assert [s.clock_level_ok for s in back] == [False, False, True, True]
+    assert back[3].clock_drift_ok is False
+
+    state = BND.clock_state(back)
+    assert state["timed"] == 4
+    assert state["high"] == 1 and state["low"] == 1
+    assert state["level"] == 2 and state["drift"] == 1
+    # The boosted tread is NOT in the excluded-shaped count; the sagged and the
+    # drifting ones are.
+    assert state["excluded_shaped"] == 2
+    text = "\n".join(BND.clock_state_lines(state))
+    assert "1 HIGH (boosted above the band, kept" in text
+    assert "1 LOW (below the band, excluded-shaped)" in text
+    assert "roof_at_cell_clock" in text
+
+
+def test_a_high_world_excludes_nothing_and_a_low_world_excludes_everything():
+    """A whole ladder at the H200's memory-load clock, the state every
+    memory-bound tread of bn_g16 will be in on a rental, counts ZERO
+    excluded-shaped treads; the same ladder sagged counts every one."""
+    from moe.bench import timing
+    def ladder(t):
+        return [BND.Sample(64, 128, n, 128 * n, 512 * n, 1, 1.0, 0.9, 0.01, 100,
+                           instrument=t.instrument,
+                           sm_clock_load_mhz=t.sm_clock_load_mhz,
+                           clock_level_ok=t.clock_level_ok,
+                           clock_drift_ok=t.clock_drift_ok,
+                           clock_level_side=BND.clock_side_of(t))
+                for n in range(1, 9)]
+    high_world = BND.clock_state(
+        ladder(_kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)))
+    assert high_world["high"] == 8 and high_world["excluded_shaped"] == 0
+    low_world = BND.clock_state(
+        ladder(_kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)))
+    assert low_world["low"] == 8 and low_world["excluded_shaped"] == 8
+    assert high_world["rule"].startswith("LOW or DRIFT excludes; HIGH is kept")
+    assert timing.LEVEL_HIGH == "high" and timing.LEVEL_LOW == "low"
+
+
+def test_a_row_from_before_the_side_column_reads_back_as_no_side(tmp_path):
+    """A False with no side is the one-sided era's meaning, below, and the
+    rule keeps excluding it; the reader must not invent a side for it."""
+    path = tmp_path / "old.csv"
+    path.write_text("block_n,block_m,tiles,rows_per_expert,tokens,rep,ms_p50,"
+                    "ms_min,ms_stdev,iters,status,detail,clock_level_ok\n"
+                    "64,128,3,384,1536,1,1.25,1.2,0.01,50,ok,,0\n")
+    _, back = BND.read_samples(path)
+    assert back[0].clock_level_ok is False and back[0].clock_level_side == ""
+    assert BND.clock_excluded(back[0].clock_level_ok, back[0].clock_level_side,
+                              back[0].clock_drift_ok) is True
+
+
+def test_the_measure_loop_marks_a_boosted_tread_as_kept_and_a_sagged_one_as_flagged():
+    """The print branch is the operator's only live warning, and it used to
+    fire the exclusion-shaped marker on every boosted tread. Checked in the
+    source: the branch calls `clock_excluded` and names HIGH as kept."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "bn_decomposition.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "time_kernel"
+                      for c in ast.walk(n)))
+    body = ast.unparse(fn)
+    assert "clock_excluded(t.clock_level_ok, sample.clock_level_side" in body
+    assert "kept (LEVEL high is not an exclusion)" in body
+    assert "t.clock_level_ok is False" not in body

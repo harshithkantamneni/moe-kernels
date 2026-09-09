@@ -111,11 +111,15 @@ def timing_at(load_mhz: float, reference_mhz: float | None,
     sweep hands the instrument a reference at all -- whichever way it went.
     """
     level, drift = timing.clock_flags(load_mhz, load_mhz, load_mhz, reference_mhz)
+    # The side comes from the real `level_side` too, so a fake cannot carry a
+    # LEVEL verdict and a side that disagree about where the band's edges are.
+    side = timing.level_side(load_mhz, reference_mhz) or ""
     return timing.KernelTiming(
         ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100,
         trials=trials, warmup_ms=300.0, l2_flush=True,
         sm_clock_load_mhz=load_mhz, sm_clock_start_mhz=load_mhz,
         sm_clock_end_mhz=load_mhz, clock_level_ok=level, clock_drift_ok=drift,
+        clock_level_side=side,
         samples=100 * trials, warmup_calls=10, flush_mb=64, clock_samples=9,
         clock_source="injected", clock_poll_ms=1.0, host_bound=False,
         host_enqueue_ms=0.01, clock_note="scripted clock")
@@ -302,7 +306,22 @@ def test_a_sagging_card_reads_clock_level_ok_false_on_every_row(pod):
     assert meta["reference_clock_mhz"] == H200_REFERENCE_MHZ
     assert "gemm_clock" in meta["reference_clock_source"]
     assert [r["clock_level_ok"] for r in fresh] == [False, False]
+    assert [r["clock_level_side"] for r in fresh] == ["low", "low"]
     assert [r["reference_clock_mhz"] for r in fresh] == [H200_REFERENCE_MHZ] * 2
+
+
+def test_a_boosted_card_reads_level_false_with_side_high_on_every_row(pod):
+    """The right-hand side of the same flag, the one the H200 lives on. 1980
+    MHz against the 1515 MHz GEMM reference is over `LEVEL_HIGH_FRACTION`, so
+    the real `clock_flags` says False AND the record carries side high, the
+    column that lets the report tell this row from a sagging one. Until
+    2026-09-08 the row carried no side, and the report read the False as
+    "below the roof's clock; the governor's time"."""
+    pod.timing_result = lambda **kw: timing_at(1980.0, kw["reference_clock_mhz"])
+    fresh, _ = measure(pod)
+    assert [r["clock_level_ok"] for r in fresh] == [False, False]
+    assert [r["clock_level_side"] for r in fresh] == ["high", "high"]
+    assert [r["sm_clock_load_mhz"] for r in fresh] == [1980.0, 1980.0]
 
 
 def test_a_card_at_its_reference_clock_reads_true(pod):
@@ -312,3 +331,4 @@ def test_a_card_at_its_reference_clock_reads_true(pod):
                                                kw["reference_clock_mhz"])
     fresh, _ = measure(pod)
     assert [r["clock_level_ok"] for r in fresh] == [True, True]
+    assert [r["clock_level_side"] for r in fresh] == ["", ""]

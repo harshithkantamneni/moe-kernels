@@ -1843,3 +1843,208 @@ def test_the_dry_run_provenance_carries_the_hypothesis_label(tmp_path):
     assert "HYPOTHESIS" in payload["ridge_source"]
     assert "COST MODEL ONLY" in payload["ridge_source"]
     assert payload["provenance"]["ridge"] == pytest.approx(162.8, abs=0.1)
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+#: The H200 shape the fifteenth instance of the recurring defect was found on:
+#: the bf16-GEMM reference the roof was measured at, and the clock the
+#: committed calibration holds under memory load for 30 s.
+H200_GEMM_REFERENCE_MHZ = 1515.0
+H200_MEMORY_LOAD_MHZ = 1980.0
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
+    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+
+    `moe.bench.driver` writes `throttled = drift failed or (level failed and
+    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
+    consumer has no such column and restates the rule; the two must agree on
+    every cell of the truth table or a boosted tread is kept by one reader and
+    dropped by the next, which is the shape of the defect.
+    """
+    from moe.bench import timing
+    ex = SE.clock_excluded
+    # HIGH is not an exclusion, in any combination with a good drift.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    # LOW is, and so is a False that recorded no side (the one-sided era).
+    assert ex(False, timing.LEVEL_LOW, True) is True
+    assert ex(False, "", True) is True
+    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The driver's rule, evaluated over the same table.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                driver_rule = (drift is False
+                               or (level is False and side != timing.LEVEL_HIGH))
+                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert SE.clock_side_of(high) == timing.LEVEL_HIGH
+    assert SE.clock_side_of(low) == timing.LEVEL_LOW
+    assert SE.clock_excluded(high.clock_level_ok, SE.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert SE.clock_excluded(low.clock_level_ok, SE.clock_side_of(low),
+                                 low.clock_drift_ok) is True, "LOW is excluded"
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert SE.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which the rule reads as below.
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert SE.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "span_extent_separation.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(node.name)
+    allowed = {"clock_excluded", "analyse"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def test_the_mirrored_side_constants_are_the_instruments_own():
+    """This file imports `timing` lazily and mirrors the two side strings; the
+    mirror must be the instrument's, or a row stamped by `time_kernel` would
+    be read against a different alphabet."""
+    from moe.bench import timing
+    assert SE.LEVEL_LOW == timing.LEVEL_LOW
+    assert SE.LEVEL_HIGH == timing.LEVEL_HIGH
+
+
+def test_the_side_round_trips_through_the_csv_and_an_old_row_reads_no_side(tmp_path):
+    store = SE.Store(tmp_path / "t.csv", "H200")
+    cell = SE.Cell("mixtral-8x7b", 256, "bf16")
+    store.write(timed_arm(clock_level_ok=False, clock_level_side="high",
+                          sm_clock_load_mhz=1980.0), cell, meta_for())
+    store.close()
+    rows = list(csv.DictReader((tmp_path / "t.csv").open(newline="")))
+    assert rows[0]["clock_level_side"] == "high"
+    fresh = SE.Store(tmp_path / "t.csv", "H200")
+    back = fresh.restore(("mixtral-8x7b", 256, "gemm_up"))
+    fresh.close()
+    assert back.clock_level_ok is False and back.clock_level_side == "high"
+    assert "clock_level_side" in SE.CSV_COLUMNS
+    # A row written before the column existed reads back with no side.
+    assert SE.ArmResult("m", 1, "gemm_up").clock_level_side == ""
+
+
+def test_with_timing_copies_the_side_off_the_instrument():
+    from moe.bench import timing
+    high = SE.ArmResult("m", 256, "gemm_up").with_timing(
+        _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ))
+    low = SE.ArmResult("m", 256, "gemm_up").with_timing(
+        _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ))
+    assert high.clock_level_ok is False and high.clock_level_side == timing.LEVEL_HIGH
+    assert low.clock_level_ok is False and low.clock_level_side == timing.LEVEL_LOW
+
+
+def test_the_representative_repeat_folds_the_side_with_low_dominating():
+    """One sagged repeat makes the arm sagged whatever the median repeat did;
+    an arm whose failures were all boosts keeps that word."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    level = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ)
+    boosted = SE.representative_timing([high, high, level])
+    assert boosted.clock_level_ok is False
+    assert boosted.clock_level_side == timing.LEVEL_HIGH
+    mixed = SE.representative_timing([high, low, level])
+    assert mixed.clock_level_side == timing.LEVEL_LOW
+    assert SE.representative_timing([level, level]).clock_level_side == ""
+
+
+def _restamp(results, **flags):
+    return {key: {arm: dataclasses.replace(r, **flags) for arm, r in arms.items()}
+            for key, arms in results.items()}
+
+
+def test_a_high_world_counts_every_arm_boosted_and_none_excluded_shaped():
+    """THE HIGH WORLD: the kernel world with every timed arm at the H200's
+    memory-load clock. `clock_level_bad` used to count all of them as "the
+    card sat low"; now they are `clock_level_high`, the page names them as
+    kept, and the gates read exactly as they do for the unstamped world. The
+    LOW twin puts every arm in `clock_level_bad`."""
+    cells, results, plain, plain_gates = run_world("kernel")
+    high = SE.analyse(cells, _restamp(results, clock_level_ok=False,
+                                      clock_level_side="high"))
+    assert high.arms_timed == plain.arms_timed > 0
+    assert high.clock_level_high == high.arms_timed
+    assert high.clock_level_bad == 0
+    low = SE.analyse(cells, _restamp(results, clock_level_ok=False,
+                                     clock_level_side="low"))
+    assert low.clock_level_bad == low.arms_timed and low.clock_level_high == 0
+    # And the one-sided era's row, False with no side, is counted as low.
+    old = SE.analyse(cells, _restamp(results, clock_level_ok=False))
+    assert old.clock_level_bad == old.arms_timed
+    verdicts = lambda gates: [(g.name, g.passed) for g in gates]  # noqa: E731
+    high_gates = SE.build_gates(high)
+    assert verdicts(high_gates) == verdicts(plain_gates)
+    said = "\n".join(str(getattr(g, "observed", "")) + str(getattr(g, "detail", ""))
+                      + "\n".join(getattr(g, "lines", []) or []) for g in high_gates)
+    assert f"LEVEL high on {high.arms_timed} (boosted, kept" in said
+    assert "LEVEL low on 0 (excluded-shaped)" in said
+
+
+def test_the_summary_carries_the_high_count_beside_the_low_one():
+    """The published summary is built inside `_main`, so the key is pinned in
+    the source: a `clock_level_bad_arms` with no `clock_level_high_arms`
+    beside it is the one-sided count published again."""
+    source = (ROOT / "scripts" / "span_extent_separation.py").read_text()
+    assert '"clock_level_bad_arms": analysis.clock_level_bad,' in source
+    assert '"clock_level_high_arms": analysis.clock_level_high,' in source
+    assert source.index('"clock_level_high_arms"') - source.index('"clock_level_bad_arms"') < 200

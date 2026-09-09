@@ -1788,8 +1788,8 @@ def check_output(rung: Rung, a, b, c, compute: str, aliased: bool,
 #: of a published alpha is "was this rung at the roof's clock, and was its L2
 #: cold" -- which a prose note cannot answer and cannot be filtered on.
 TIMING_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
-                  "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
-                  "l2_flush", "host_bound")
+                  "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
+                  "clock_drift_ok", "l2_flush", "host_bound")
 
 
 def _fold_flag(values: list, bad: bool = False) -> bool | None:
@@ -1806,6 +1806,38 @@ def _fold_flag(values: list, bad: bool = False) -> bool | None:
     if any(v is None for v in values):
         return None
     return not bad
+
+
+def _clock_side_of(t) -> str:
+    """Which side of the LEVEL band one pass sat on, off its `KernelTiming`.
+
+    `timing.LEVEL_LOW`, `timing.LEVEL_HIGH`, or "" for level or undetermined.
+    The record's own `clock_level_side` is preferred. A record that failed
+    LEVEL and carries no side (a fake built before the field existed on
+    2026-09-03) has it derived from its own load and reference, the rule
+    `moe.bench.driver` applies to the same records; one with neither answers
+    "", which `level_split` reads as the one-sided era's False, below.
+    """
+    side = getattr(t, "clock_level_side", "") or ""
+    if not side and getattr(t, "clock_level_ok", None) is False:
+        side = timing.level_side(getattr(t, "sm_clock_load_mhz", None),
+                                 getattr(t, "reference_clock_mhz", None)) or ""
+    return side
+
+
+def _fold_side(sides: list[str]) -> str:
+    """Fold a rung's per-pass LEVEL sides, with LOW dominating.
+
+    One pass below the band makes the rung sagged whatever the others did;
+    a rung whose failures were all HIGH is boosted and keeps that word; level
+    or undetermined passes contribute "". The same discipline as `_fold_flag`:
+    the fold cannot be more permissive than a filter over the passes.
+    """
+    if timing.LEVEL_LOW in sides:
+        return timing.LEVEL_LOW
+    if timing.LEVEL_HIGH in sides:
+        return timing.LEVEL_HIGH
+    return ""
 
 
 def fold_timings(timings: list) -> dict:
@@ -1831,6 +1863,7 @@ def fold_timings(timings: list) -> dict:
         "sm_clock_load_mhz": (float(statistics.median(clocks)) if clocks
                               else None),
         "clock_level_ok": _fold_flag([t.clock_level_ok for t in timings]),
+        "clock_level_side": _fold_side([_clock_side_of(t) for t in timings]),
         "clock_drift_ok": _fold_flag([t.clock_drift_ok for t in timings]),
         "l2_flush": bool(timings[0].l2_flush),
         "host_bound": _fold_flag([t.host_bound for t in timings], bad=True),
@@ -2042,7 +2075,14 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
             samples[name].append(measured.ms_p50)
             timings.append(measured)
     clock_end = ClockState.sample()
-    drift, throttled = clock_drift(clock_start, clock_end)
+    # THE RETIRED IDLE-INSTANT CHECK, kept for comparison and NOT a throttle
+    # detector: two samples taken after a synchronise, one around the whole
+    # rung. The audit showed it detects whether the START sample caught the
+    # idle boost. Its second return is still written under the `throttled`
+    # key so a resumed cells.jsonl parses; the under-load verdicts a reader
+    # should filter on are `clock_level_ok` / `clock_level_side` /
+    # `clock_drift_ok`, folded from the queue-deep passes below.
+    drift, idle_instants_moved = clock_drift(clock_start, clock_end)
 
     # NOT `del a, b, c` here: `launch` closes over them, and deleting a name a
     # nested function reads is a live bug the moment anyone adds a call below.
@@ -2066,7 +2106,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
         # a resumed jsonl still parses and the next pod can compare the two.
         "sm_clock_start": clock_start.sm_clock_mhz,
         "sm_clock_end": clock_end.sm_clock_mhz,
-        "clock_drift": drift, "throttled": bool(throttled),
+        "clock_drift": drift, "throttled": bool(idle_instants_moved),
         # WHAT LEVEL WAS SCORED AGAINST, on the row LEVEL was scored on. A
         # `clock_level_ok` False with no reference beside it is an exclusion a
         # reader cannot trace back to a field in a file, and this arm's rows
@@ -3571,11 +3611,12 @@ def correctness_gate(records: list[dict], compute: str) -> Gate:
 LEVEL_GATE = "level: every rung ran at the roof's measured clock"
 
 
-def level_split(records: list[dict]) -> tuple[list[str], list[str]]:
-    """The rungs that sagged and the rungs that carry no reference, in that
-    order, from ONE place.
+def level_split(records: list[dict]
+                ) -> tuple[list[str], list[str], list[str]]:
+    """The rungs that sagged, the rungs that carry no reference, and the rungs
+    that boosted, in that order, from ONE place.
 
-    TWO READERS NEED THE SAME TWO COUNTS, which is the shape
+    TWO READERS NEED THE SAME THREE COUNTS, which is the shape
     `one_tile_signal_shares` exists in for the same reason: `_analyse` prints
     them as prose and `level_gate` scores them, and a page that narrates three
     sagged rungs while the gate scores a different three is the defect this
@@ -3583,10 +3624,24 @@ def level_split(records: list[dict]) -> tuple[list[str], list[str]]:
     is ABSENT or null: a row written before there was a reference to sag
     against is unknown, never bad, and an exclusion has to be positively
     established (`bm128_roofline.Timing.throttled` says the same thing).
+
+    THE SIDE IS READ, NOT ONLY THE VERDICT. LEVEL has been two-sided since
+    03df2d4 (2026-09-03): a rung boosted to 1980 MHz against the H200's 1515
+    MHz bf16-GEMM reference fails LEVEL with `clock_level_side == "high"`, and
+    until 2026-09-08 this function filed it under `sagged`. On the H200 that
+    is the NORMAL state of a memory-bound rung, which is every rung of this
+    ladder, so the gate would have voided the arm on a card doing exactly
+    what the calibration says it does. Sagged is LOW, or False with no side
+    recorded (the one-sided era's meaning). Boosted is HIGH: the time is a
+    time at one clock and alpha is a ratio of such times, and what is not
+    comparable is a fixed-roof fraction, which this arm never forms.
     """
-    sagged = [r["id"] for r in records if r.get("clock_level_ok") is False]
+    sagged = [r["id"] for r in records if r.get("clock_level_ok") is False
+              and r.get("clock_level_side") != timing.LEVEL_HIGH]
+    boosted = [r["id"] for r in records if r.get("clock_level_ok") is False
+               and r.get("clock_level_side") == timing.LEVEL_HIGH]
     blind = [r["id"] for r in records if r.get("clock_level_ok") is None]
-    return sagged, blind
+    return sagged, blind, boosted
 
 
 def level_gate(records: list[dict]) -> Gate:
@@ -3621,27 +3676,52 @@ def level_gate(records: list[dict]) -> Gate:
     Planted rows carry no clock, so `_analyse` scores this gate only on a
     measured run; a synthetic pass would otherwise be INVALID for want of
     hardware it never touched.
+
+    A HIGH-SIDE RUNG PASSES, AND THE DETAIL SAYS WHICH SIDE IT SAW. Since
+    03df2d4 LEVEL fails in both directions, and a rung boosted to 1980 MHz
+    against the 1515 MHz reference is a rung at one steady clock whose
+    fixed-roof fraction is not comparable; this arm forms no such fraction
+    (alpha is a ratio of two times at that clock), so it is not the sag the
+    gate exists for. On the H200 every memory-bound rung is one, so reading
+    the verdict without the side would have voided the arm on every rental.
+    Only LOW fails this gate.
     """
-    sagged, blind = level_split(records)
-    limit = f"{timing.LEVEL_FRACTION:.0%}"
+    sagged, blind, boosted = level_split(records)
+    low = f"{timing.LEVEL_FRACTION:.0%}"
+    high = f"{timing.LEVEL_HIGH_FRACTION:.0%}"
+    boost_note = (f"; {len(boosted)} rung(s) ran ABOVE {high} of it (LEVEL "
+                  "high, first " + boosted[0] + "), which is a boosted "
+                  "memory-bound rung and not a sag: kept, its fixed-roof "
+                  "fraction is not comparable and this arm forms none"
+                  if boosted else "")
     if sagged:
-        detail = (f"{len(sagged)} of {len(records)} rungs ran below {limit} of "
-                  f"the clock this card's roof was measured at, first "
-                  f"{sagged[0]}. alpha is a slope over an intercept of the same "
-                  "difference, so a sag part way up one ladder does not cancel")
+        detail = (f"{len(sagged)} of {len(records)} rungs ran BELOW {low} of "
+                  f"the clock this card's roof was measured at (LEVEL low), "
+                  f"first {sagged[0]}. alpha is a slope over an intercept of "
+                  "the same difference, so a sag part way up one ladder does "
+                  "not cancel")
         if blind:
             detail += (f", and a further {len(blind)} carry no reference at all")
-        return Gate(LEVEL_GATE, False, detail)
+        return Gate(LEVEL_GATE, False, detail + boost_note)
     if blind:
         return Gate(LEVEL_GATE, None,
                     f"{len(blind)} of {len(records)} rungs carry no reference "
                     "clock, so they could not be scored against the one this "
                     "card's roof was measured at. Publish a calibration for "
                     "this card and re-measure them; nothing here says they were "
-                    "level")
+                    "level" + boost_note)
+    if boosted:
+        return Gate(LEVEL_GATE, True,
+                    f"no rung ran below {low} of the clock this card's roof "
+                    f"was measured at; {len(boosted)} of {len(records)} ran "
+                    f"ABOVE {high} of it (LEVEL high, first {boosted[0]}), the "
+                    "boosted state a memory-bound rung is in on this card: "
+                    "kept, the time is at one clock and alpha is a ratio of "
+                    "such times; only a fixed-roof fraction would not be "
+                    "comparable and this arm forms none")
     return Gate(LEVEL_GATE, True,
-                f"all {len(records)} rungs ran within {limit} of the clock this "
-                "card's roof was measured at")
+                f"all {len(records)} rungs ran within {low} to {high} of the "
+                "clock this card's roof was measured at")
 
 
 def placebo_gate(records: list[dict]) -> Gate:
@@ -4615,14 +4695,32 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
         # `NoGatesScored`, which is the REFUSED shape.
         return exit_codes.REFUSED
 
-    throttled = [r["id"] for r in timed if r.get("throttled")]
-    if throttled:
+    # THE RETIRED IDLE-INSTANT CHECK, labelled as what it is. `throttled` on
+    # a rung row is `clock_drift(start, end)` over two idle samples around the
+    # whole rung, and the audit showed that detects whether the START sample
+    # caught the idle boost, not throttling. Until 2026-09-08 this line called
+    # those rungs "drifted more than 5% in SM clock", the same sentence
+    # `group_m_alpha_sweep` corrected in the same fix round. The under-load
+    # verdict is `clock_drift_ok`, reported next.
+    idle_moved = [r["id"] for r in timed if r.get("throttled")]
+    if idle_moved:
         say()
-        say(f"  {len(throttled)} rungs drifted more than "
-            f"{CLOCK_DRIFT_LIMIT * 100:.0f}% in SM clock: {throttled[:3]}. The "
-            "interleaved order is what")
-        say("  protects a paired difference from that, and the placebo gate is "
-            "what measures it.")
+        say(f"  {len(idle_moved)} rungs moved more than "
+            f"{CLOCK_DRIFT_LIMIT * 100:.0f}% between the two idle-instant SM "
+            f"clock samples of the RETIRED check: {idle_moved[:3]}. That check")
+        say("  detects whether the first sample caught the idle boost, not "
+            "throttling; the under-load")
+        say("  DRIFT verdict is clock_drift_ok, and the interleaved order plus "
+            "the placebo gate are what")
+        say("  protect a paired difference from either.")
+    drifted = [r["id"] for r in timed if r.get("clock_drift_ok") is False]
+    if drifted:
+        say()
+        say(f"  DRIFT: {len(drifted)} of {len(timed)} rungs had their under-load "
+            f"clock move more than {timing.DRIFT_FRACTION:.0%} during the "
+            f"trials: {drifted[:3]}.")
+        say("  Those samples were not taken at one clock and the rung's median "
+            "is a blend; re-measure them.")
 
     # A COLUMN NOTHING READS IS A COLUMN NOTHING PROTECTS. `clock_level_ok`
     # reached `cells.jsonl` on every rung and was consulted by no line of this
@@ -4644,7 +4742,7 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # different question from what it said, and a count of flagged rungs read
     # without it is silence read as evidence.
     if not synthetic:
-        sagged, blind = level_split(timed)
+        sagged, blind, boosted = level_split(timed)
         say()
         if blind:
             say(f"  LEVEL: UNDETERMINED on {len(blind)} of {len(timed)} rungs. "
@@ -4655,17 +4753,32 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
         if sagged:
             say(f"  LEVEL: {len(sagged)} of {len(timed)} rungs ran below "
                 f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
-                f"was measured at: {sagged[:3]}.")
+                f"was measured at (LEVEL low): {sagged[:3]}.")
             say("  D(n) and D(1) are differences between two ladders, and a sag "
                 "part way up one moves")
             say("  them by different amounts, so the slope over intercept does "
                 "not cancel it. Those")
             say("  rungs have to be re-measured before their alpha means "
                 "anything.")
-        if not blind and not sagged:
+        if boosted:
+            # THE HIGH SIDE, NAMED AS KEPT. On the H200 a memory-bound rung
+            # runs at 1980 MHz against the 1515 MHz reference, and every rung
+            # of this ladder is memory-bound; reading these as sagged would
+            # void the arm on every rental.
+            say(f"  LEVEL: {len(boosted)} of {len(timed)} rungs ran ABOVE "
+                f"{timing.LEVEL_HIGH_FRACTION:.0%} of the clock this card's "
+                f"roof was measured at (LEVEL high): {boosted[:3]}.")
+            say("  That is a boosted memory-bound rung, not a sag: the time is "
+                "at one clock and alpha is a")
+            say("  ratio of such times. Kept. What is not comparable is a "
+                "fixed-roof fraction, which this")
+            say("  arm never forms; a reader who needs one reads "
+                "roof_at_cell_clock.")
+        if not blind and not sagged and not boosted:
             say(f"  LEVEL: all {len(timed)} rungs ran within "
-                f"{timing.LEVEL_FRACTION:.0%} of the clock this card's roof "
-                "was measured at.")
+                f"{timing.LEVEL_FRACTION:.0%} to "
+                f"{timing.LEVEL_HIGH_FRACTION:.0%} of the clock this card's "
+                "roof was measured at.")
 
     report_measurements(say, timed, design)
     report_isa(say, timed)
