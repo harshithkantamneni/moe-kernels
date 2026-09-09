@@ -1,0 +1,149 @@
+experiment  tile_cap / nvidia_h200-bm16-budget400.0-ctl256-dtypebf16-g1-iters50-l2flushtrue-modelmixtral_8x7b-n64-plant-5e99665d
+model       mixtral-8x7b E=8 k=2  bf16 (2 bytes)
+tiles       cap BLOCK_M=16, positive control BLOCK_M=256
+pinned      {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+grid        36 rows-per-expert x 2 tiles = 72 cells
+            r in [14, 672], T in [56, 2688], token step 4
+            exactly-full tile stacks (all a ladder fit can read): BM=16:24, BM=256:2
+bandwidth   4374.5 GB/s, measured on this device: NVIDIA H200 (measured), 4374.5 GB/s (triad pattern)
+card        nvidia_h200
+WRITES TO   /workspace/results/gaps-nvidia_h200/tile_cap/nvidia_h200-bm16-budget400.0-ctl256-dtypebf16-g1-iters50-l2flushtrue-modelmixtral_8x7b-n64-plant-5e99665d
+            cells.csv (appended per cell), report.txt, report.json, triton-cache/
+git         git check-ignore exited 128; path UNVERIFIED (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/tile_cap': No such file or directory). Common cause: the path is outside this work tree, e.g. /workspace/results on a pod, which git has no opinion about at all.
+resources    one CTA's bill under the pinned constants, so a setting that cannot physically run is refused here and not diagnosed from its timing afterwards:
+  BLOCK_M=  16  smem     40 KiB of    227 KiB  acc     4 reg/thread of 255  ok
+  BLOCK_M= 256  smem    160 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+            WARNING: the grid's deepest exactly-full stack at BLOCK_M=16 is 42 tiles, short of the 43 V4 requires. Raise --r-max, or lower --row-step so more multiples of 16 land on the grid.
+
+PREDICTIONS, registered before the run and printed before any measurement
+  alpha 0.558 (band 0.529-0.588) against the retracted 0.1, ridge band 142.8112754272431-155.4122703178822 Op/B, 2 bytes per element
+  ridge       152.81 Op/B, measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s (triad pattern); calibrated 2026-09-09 at 981a42f6
+  ridge band  142.81-155.41 Op/B, this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+  BLOCK_M   AI cap   crossing @142.8       crossing @155.4       retracted @142.8 
+       16     28.7   NO CROSSING EVER       NO CROSSING EVER       r=1199.6 T=  4798 n=75
+      256    458.8   r= 142.8 T=   571 n=1   r= 155.4 T=   622 n=1   r= 142.8 T=   571 n=1
+
+  the two worlds at this grid's depth, which is what every gate below discriminates on
+    alpha=0.558 refit      cap   28.7 Op/B = 0.188 of ridge 152.8   AI at the last tread is 98.2% of it   ms(BM=16)/ms(BM=256) at r=512 is 5.506x
+    alpha=0.100 retracted  cap  160.0 Op/B = 1.047 of ridge 152.8   AI at the last tread is 82.7% of it   ms(BM=16)/ms(BM=256) at r=512 is 1.268x
+    C1 fails above 0.85 of ridge x bandwidth (near-roof) or above 0.617 of it (discriminating), each scored only where the depth makes it live; C2 fails above 0.617 of the ridge; C3 fails below 1.50x
+
+depth required: 43 tiles of 16 rows = 688 rows per expert (T = 2752)
+     29 tiles: depth at which alpha=0.1 would trip C1's near-roof condition at ridge 142.8112754272431
+     43 tiles: depth at which alpha=0.1 would trip C1's near-roof condition at ridge 155.4122703178822
+     13 tiles: depth at which alpha=0.1 would trip C1's discriminating condition at ridge 142.8112754272431
+     13 tiles: depth at which alpha=0.1 would trip C1's discriminating condition at ridge 155.4122703178822
+     17 tiles: modelled AI within 5% of its own ceiling at alpha=0.529, the band's low end
+  binding requirement: the near-roof horizon at the worst end of the ridge band
+
+  NOT A READOUT: whether a crossing appears at BLOCK_M=16. On the H200 band both worlds say none does (160.0 against ridge 142.8112754272431 is 12.0% of headroom), so the presence or absence of one separates nothing there. How CLOSE the tile gets is the readout, and that is C1.  NOTE: at THIS band's low end 142.8112754272431 the retracted ceiling 160.0 is ABOVE the ridge, so on this card the retracted world does predict a crossing and its absence is informative as well.
+  NOT A PRODUCTION CLAIM: vLLM ran BLOCK_M=16 multi-tile in ISOLATED CELLS: 1 of 24 observed cells on the padded count (load_max_rows), 1 of 168 seed-rows, up to 2 M-tiles per expert; on mean rows 0 of 24 cells, up to 1 tile. Q(n) = 1 everywhere else, so this ceiling is reached for in production only there and never as a regime. This run tests the CAP FORMULA at this tile height. BLOCK_M=128 is the regime that carries the production claim and scripts/bm128_depth.py is where it is asked.
+  NOT RUN: the parent sweep's gate 3 (the fitted alpha's interval against ALPHA_BAND [0.529, 0.588] in BOTH directions; its retired one-sided 0.33 threshold is printed there, not scored) is superseded here by C2, which fits the same re-read fraction and then does the thing the cap claim needs: converts it to a ceiling, prints the EXA factor that ceiling is high by, and compares it with the ridge.
+
+MINIMUM DETECTABLE EFFECT, from ONE stated assumption and no other
+  assumed per-cell relative timing spread 1.50% (--plant-noise; the published H200 ladders run 0.76-1.82% and the A100 ones 0.48-0.61%, so the default 1.50% is near the top of the range a gate has to survive, not a floor)
+  two-sided 5% at 80% power throughout, which is the convention every MDE in this repository uses
+  C1  peak roof fraction, ONE cell against a registered threshold: MDE 4.20% relative = 0.0079 of the roof at the refit world's predicted ceiling 0.188. The discriminating threshold 0.617 sits 54x that away, and the retracted world's ceiling 1.047 sits 109x away. C1 is not the gate that runs out of power
+  C2  cap/ridge from an alpha fitted over 24 treads: the slope's relative sd is 0.717% (heteroscedastic OLS, sd_i = spread x t_i), so the cap's is 0.317% and the MDE is 0.013% relative = 2.50e-05 of the ridge. The discriminator sits 17201x that away. THIS IS THE OPTIMISTIC END and is stated as one: it assumes every tread is on the memory branch and the two-line model is exactly right, so it bounds the TIMING noise and not the model error, which at this tile height is what actually limits the fit
+  V2  flatness, a RATIO OF TWO SINGLE CELLS and so sqrt(2) times the per-cell spread: MDE 5.94%, against a gate of max(2%, 3 x spread) = 4.50%. THE GATE IS INSIDE ITS OWN MDE at this spread: a true gain between 4.50% and 5.94% would be missed more often than not. That is why V2 REFUSES (UNDECIDED) once 3 x spread passes 10% instead of widening further
+
+MEASURED  mixtral-8x7b bf16  72 cells, 26 of them exactly-full tile stacks
+  compute plateau 364.0 TFLOP/s useful, which is 54.4% of ridge x bandwidth (668 TFLOP/s)
+  every roof fraction below is against ridge x bandwidth and NOT against that plateau: the plateau is the maximum over the same cells, so a control read against it scores 1.00 by construction. Far below 100% means nothing in the sweep reached a roof, which is what V3 tests
+  per-cell timing spread, median 0.99%; memory-branch margin raised to 2.97%
+  132 SMs (reported by the driver)
+  compute reference: BLOCK_M=16 ladder is proportional to 0.7% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads
+
+THE LADDERS: milliseconds per exactly-full tile stack
+  BLOCK_M  treads  memory-bound  alpha  alpha-corrected  B ms/tile  C ms/tile  fit err  basis
+       16      24             0    n/a             n/a        n/a     0.6725   0.72%  split search: the compute reference was REFUSED at BLOCK_M=16 on its level, so this ladder is unidentifiable BECAUSE OF THE REFERENCE and not for want of treads; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line
+      256       2             2  0.962             n/a     1.9436        n/a   0.00%  split search: the compute reference was REFUSED at BLOCK_M=16 on its level, so this ladder is unidentifiable BECAUSE OF THE REFERENCE and not for want of treads
+
+GATES.  V = validity: a FAIL voids the page.  C = claim: a FAIL is a result.
+RESULT: VALIDITY V0 PASS [VALIDITY] override_config changed the kernel at every setting | measured fresh Triton artefacts per setting: BM=16:17, BM=256:16 | gate >= 1 per setting
+V0  VALIDITY PASS      override_config changed the kernel at every setting
+             measured fresh Triton artefacts per setting: BM=16:17, BM=256:16   gate >= 1 per setting
+             if this FAILS: the two settings may have been one kernel, every difference below is a comparison of that kernel with itself, and nothing on this page is evidence
+
+RESULT: VALIDITY V1 FAIL [VALIDITY] the run measured the grid it planned | measured 72/72 cells, 24/2 aligned treads | gate all 72 cells and >= 3 aligned treads per tile
+V1  VALIDITY FAIL      the run measured the grid it planned
+             measured 72/72 cells, 24/2 aligned treads   gate all 72 cells and >= 3 aligned treads per tile
+             if this FAILS: the ladders below were fitted on a grid with holes in it, and no roof fraction, alpha or ratio on this page may be quoted
+             72 of 72 planned cells measured
+             exactly-full tile stacks per setting: BM=16:24, BM=256:2
+             0 cell(s) failed and were not recovered
+
+RESULT: VALIDITY V2 FAIL [VALIDITY] the control BLOCK_M=256 reached a compute roof in this grid | measured proportional to 0.7%, last tread +1.96% | gate through-origin fit within 5% and last tread within +/-2.97%
+V2  VALIDITY FAIL      the control BLOCK_M=256 reached a compute roof in this grid
+             measured proportional to 0.7%, last tread +1.96%   gate through-origin fit within 5% and last tread within +/-2.97%
+             if this FAILS: the compute branch every tread at the cap tile is classified against is not one, so neither C1 nor C2 may be quoted. A REFUSAL from the level checks is the likeliest cause and it names itself in the note above; membership then falls back to a split search, which invents an alpha rather than declining to
+             compute reference: BLOCK_M=16 ladder is proportional to 0.7% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads
+             throughput per tread against ridge x bandwidth: n=1:0.534, n=2:0.544
+             last tread gained +1.96% over the one before it, against a gate of +/-2.97% = max(2%, 3 x the 0.99% median per-cell spread)
+
+RESULT: VALIDITY V3 PASS [VALIDITY] the control BLOCK_M=256 reached the fused-layer roof | measured peak 0.544 of the dense peak (364 TFLOP/s) | gate in [0.465, 1.050] of ridge x bandwidth, i.e. >= the fused-layer roof 311 TFLOP/s and <= the dense peak 668 widened by max(5%, 3 x the 0.99% per-cell spread)
+V3  VALIDITY PASS      the control BLOCK_M=256 reached the fused-layer roof
+             measured peak 0.544 of the dense peak (364 TFLOP/s)   gate in [0.465, 1.050] of ridge x bandwidth, i.e. >= the fused-layer roof 311 TFLOP/s and <= the dense peak 668 widened by max(5%, 3 x the 0.99% per-cell spread)
+             if this FAILS: nothing in this sweep reached a roof a fused layer can reach, so C1 is a statement about the instrument rather than about the tile. THE WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED: this is a VALIDITY gate and a VALIDITY gate that is not PASS exits INVALID under moe.bench.exit_codes, which means nothing in the report may be quoted. What is true of C2 is narrower and is not a licence: C2's NUMBER is arithmetically independent of the roof -- it fits a re-read fraction from the cap tile's own treads and never divides by ridge x bandwidth -- so re-running the CONTROL is enough to recover it and the cap tile's cells need not be re-measured. Until that control is re-run, C2 is not a result
+             the fused-layer roof is 0.465 x ridge x bandwidth = 311 TFLOP/s. `ridge x bandwidth` = 668 TFLOP/s is the DENSE cuBLAS peak and this layer is a gate, an alignment kernel, two GEMMs, a SiLU and a reduction with only the two GEMMs' FLOPs counted, so it is the wrong ruler for a control and is printed below as a diagnostic only
+             DIAGNOSTIC, not the verdict: peak 0.544 of the dense peak, against the 0.465-0.756 band the 26 published fused-layer reports occupy and the 0.95 the sibling calls dense-compute-bound
+             the sweep's best useful throughput is 364.0 TFLOP/s, 54.4% of the dense peak. Against that plateau the control would score 1.00 by construction, which is why neither side of this gate is read against it
+             throughput per tread against the dense peak: n=1:0.534, n=2:0.544
+
+RESULT: VALIDITY V4 PASS [VALIDITY] the sweep reached the depth at which the retracted world would trip C1 | measured 42 tiles | gate >= 13 tiles
+V4  VALIDITY PASS      the sweep reached the depth at which the retracted world would trip C1
+             measured 42 tiles   gate >= 13 tiles
+             if this FAILS: the sweep stopped before the competing hypothesis would have shown itself, so C1 rules nothing out and its PASS may not be quoted
+             swept to 42 tiles of 16 rows = 672 rows per expert
+             modelled AI is 98.1% of its ceiling at alpha=0.558, and 82.4% of it at alpha=0.1
+             C1's near-roof condition needs 43 tiles and is NOT TESTABLE at this depth: the retracted world would not have got near the roof either, so passing it says nothing
+             a sweep short of the horizon PASSES C1 for the wrong reason: the retracted world simply had not got there yet
+             required depth: 43 tiles = max(near-roof horizon 43, discriminating horizon 13, saturation 17, fit floor 3); binding: the near-roof horizon at the worst end of the ridge band
+
+RESULT: CLAIM C1 PASS [CLAIM] BLOCK_M=16 never gets near the compute roof, at any batch | measured peak 0.101 of the roof | gate <= 0.617 (discriminating)
+C1  CLAIM    PASS      BLOCK_M=16 never gets near the compute roof, at any batch
+             measured peak 0.101 of the roof   gate <= 0.617 (discriminating)
+             if this FAILS: BLOCK_M=16 DOES approach its compute roof, which retracts the structural ceiling this study put on a decode-tuned MoE kernel and is the publishable answer in the other direction
+             predicted ceiling at alpha=0.558 is cap/ridge = 28.7/152.8 = 0.188
+             predicted ceiling at the retracted alpha=0.1 is 160.0/152.8 = 1.047
+             the roof is ridge x bandwidth = 668 TFLOP/s, not the sweep's own best, which would make the fraction a comparison with itself
+             conditions: near-roof <= 0.850 NOT TESTABLE, discriminating <= 0.617 LIVE
+             throughput per tread against the roof: n=28:0.100, n=30:0.100, n=32:0.100, n=34:0.100, n=36:0.100, n=38:0.100, n=40:0.100, n=42:0.100  (last 8 of 24 treads)
+
+RESULT: CLAIM C2 UNKNOWN [CLAIM] the re-read fraction measured at BLOCK_M=16 puts its AI ceiling far below the ridge | measured alpha from 0 memory-bound tread(s) | gate needs >= 3
+C2  CLAIM    UNDECIDED the re-read fraction measured at BLOCK_M=16 puts its AI ceiling far below the ridge
+             measured alpha from 0 memory-bound tread(s)   gate needs >= 3
+             if this FAILS: the mechanical half of the cap claim is unmeasured and only C1 carries it
+             BLOCK_M=16 should be memory bound at EVERY tread, so too few of them is itself a finding and not a shrug.
+             ladder basis: split search: the compute reference was REFUSED at BLOCK_M=16 on its level, so this ladder is unidentifiable BECAUSE OF THE REFERENCE and not for want of treads; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line
+             THE READING THAT MATTERS. `B/C = ridge/cap` exactly, so a memory branch running parallel to the compute branch -- which is what the discard message above says when it appears -- is a tile sitting ON its own crossing. That is precisely the retracted world at BLOCK_M=16: cap 160.0 against ridge 152.8 is a ratio of 0.955, inside the 15% tolerance, so the fit refuses to name an alpha rather than inventing one. Read C1 with that in mind: an UNDECIDED here alongside a C1 FAIL is the retracted world's signature, not a broken instrument.
+             The other two causes are a mis-scaled compute reference and a ladder that is not the one this run thinks it is. Read V1 and V2 before reading any of this as a property of the hardware.
+
+RESULT: CLAIM C3 PASS [CLAIM] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy) | measured ms(BM=16) / ms(BM=256) = 5.427x at 512 rows per expert | gate >= 1.50x
+C3  CLAIM    PASS      time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)
+             measured ms(BM=16) / ms(BM=256) = 5.427x at 512 rows per expert   gate >= 1.50x
+             if this FAILS: time did NOT fall with the tile height in the multi-tile regime, so the extra weight re-reads a short tile pays are outweighed by padded arithmetic or lost occupancy, and the traffic reading of the cap is wrong
+             time moves DOWN with BLOCK_M, as traffic requires
+             model at alpha=0.558: 5.506x   model at the retracted alpha=0.10: 1.268x
+             a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 32 weight re-reads
+             rows/expert  BM=16         BM=256         ms(lo)/ms(hi)
+                     256    10.7339 ms     2.0213 ms   5.310x
+                     512    21.5183 ms     3.9649 ms   5.427x
+
+RESULT: CLAIM C4 PASS [CLAIM] time steps at T = n x BLOCK_M x E/k | measured median step minus tread +36.14% | gate >= +15.47% (half the model's step) and > 3x noise (2.97%)
+C4  CLAIM    PASS      time steps at T = n x BLOCK_M x E/k
+             measured median step minus tread +36.14%   gate >= +15.47% (half the model's step) and > 3x noise (2.97%)
+             if this FAILS: the time steps do not land where the tile count changes, so whatever the ladders measured is not the tile quantum and the mechanism behind C1 and C2 is not the one claimed
+             8 boundaries bracketed, 0 where the tread moved at least as much as the step
+             median step +35.91%, median tread +0.12%, model step +30.93%
+             waves are printed on both sides of every step so occupancy can be ruled out as the cause:
+             BM= 16 n= 1 T=    64 r=    16  tread  +1.16%  STEP +72.43%  (model +55.60%)  waves   27.2/  54.3
+             BM= 16 n= 2 T=   128 r=    32  tread  +1.11%  STEP +45.46%  (model +35.64%)  waves   54.3/  81.5
+             BM= 16 n= 3 T=   192 r=    48  tread  +0.77%  STEP +30.98%  (model +26.23%)  waves   81.5/ 108.6
+             BM= 16 n= 4 T=   256 r=    64  tread  +0.14%  STEP +23.46%  (model +20.75%)  waves  108.6/ 135.8
+             BM= 16 n= 5 T=   320 r=    80  tread  +0.11%  STEP +18.95%  (model +17.16%)  waves  135.8/ 162.9
+             BM= 16 n= 6 T=   384 r=    96  tread  +0.01%  STEP +15.62%  (model +14.63%)  waves  162.9/ 190.1
+             BM=256 n= 1 T=  1024 r=   256  tread  -0.22%  STEP +76.91%  (model +100.00%)  waves   27.2/  54.3
+             BM=256 n= 2 T=  2048 r=   512  tread  -1.22%  STEP +40.84%  (model +50.00%)  waves   54.3/  81.5
+
+READING IT. Validity gates ['V1', 'V2'] did not pass. No roof fraction, alpha or ratio on this page may be quoted, and each of those gates says what to change.

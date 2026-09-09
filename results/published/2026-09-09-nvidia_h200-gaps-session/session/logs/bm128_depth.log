@@ -1,0 +1,561 @@
+experiment  bm128_depth: can BLOCK_M=128 show 5 clean memory-bound treads?
+
+## Predictions, registered before anything is measured
+
+THE LAW (arithmetic, not a prediction; check it, do not test it)
+  B/C = alpha b rho / (2 BM) = ridge / ai_cap, and E, F, H cancel exactly.
+  escape UP   needs alpha x rho >= 147.2 FLOP/byte  -> every tread memory bound
+  escape DOWN needs rho        >= 204.8 FLOP/byte  -> 5 treads below the crossing
+    equivalently alpha <= 0.500, a bound needing no card
+  in between, |B/C - 1| <= 0.15, the fit discards the memory branch entirely.
+
+P1  A NEW BM=128 ladder lands at B/C in [0.94, 1.10].
+    22 published ladders with a valid reference: 0.795 to 1.175, median 0.991, sd 0.084 (population sd, computed from the corpus when this page was printed).
+    FAIL means B/C at 128 is not stationary across arms and the
+    feasibility argument below rests on a quantity that moves.
+P2  C1 FAILS: fewer than 5 clean memory-bound treads.
+    Escape up needs 147.2 and the corpus tops out at 150.4, on a ladder whose
+    slope rises then falls. Escape down needs rho >= 204.8 and the highest
+    achieved rho on any published ladder is 166.5, against calibrated ridges of
+    145.8 (A100) and 162.8 (H200). FAIL here is the good outcome and would mean
+    the cap CAN be measured at the tile vLLM actually runs.
+P3  C2 FAILS: no BM=128 fit clears the tolerance by 3 sd.
+P4  EXPERT SIZE does not enter B/C. mixtral's per-expert weight is 6.4x qwen2's
+    (3 F H = 176.2 M elements against 27.5 M), so a "bigger weights to re-read"
+    mechanism predicts B/C scaling like 6.4. The identity predicts NO size term
+    at all: the model can still move B/C, but only by moving alpha or rho, which
+    it does by tens of percent and not by factors. Gate: at matched card,
+    GROUP_SIZE_M and BLOCK_N, |B/C(mixtral) / B/C(qwen2) - 1| < 0.20 in the
+    median. FAIL at 6.4 means the identity is wrong and the feasibility argument
+    goes with it; FAIL at 0.3 means alpha differs by more between models than
+    this bound allows and the bound was too tight.
+P5  --r-max does not move the memory-tread COUNT in the prefix regime: n* has no
+    r_max in it. Sweeping deeper adds treads to measure, not treads that qualify.
+    UNKNOWN in --audit unless the corpus holds two depths at one setting.
+P6  V2 FAILS on exactly one published ladder -- A100 qwen2-57b-a14b at
+    GROUP_SIZE_M=64, whose tread 8 is 1.237% below tread 7 at a 0.482% spread
+    (2.6 sigma) -- and PASSES on the other 21.
+P7  Of the ladders that HAVE a compute reference, the level bar fails on exactly
+    the two BLOCK_N=256 arms -- 1.4% (A100) and 12.3% (H200) of their cards'
+    calibrated ceilings -- and passes on the other 22 at 38.2% to 63.7%. Two
+    further ladders have no reference at all to level-check and are counted
+    separately, because "the reference is corrupt" and "there is no reference"
+    are different states and only the first is what this bar is for.
+P8  Of the two published BM=128 fits the study quotes, ZERO survive V1+V2+V3+C2.
+    FAIL means one of them is admissible and the 128 row of the alpha surface
+    stands.
+P9  No alpha this study has measured, at ANY block size, is at or below
+    0.500. The lowest is 0.596 (H200
+    deepseek-v2-lite, BLOCK_M=32, activation-corrected). FAIL means the
+    escape-down route is open on hardware the study already owns and the pod run
+    should be aimed at whichever arm produced it.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+reference    BLOCK_M=256 at rows [256, 512, 768, 1024, 1280, 1536, 1792, 2048] -- MEASURED FIRST, and its level checked before the subject costs anything
+subject      BLOCK_M=128 at rows [128, 256, 384, 512, 640, 768, 896, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048]
+repeats      7 round-robin passes per setting, so an inversion can be told from noise
+timing       moe.bench.timing.time_kernel: 300 ms of delivered warmup load, then 3 queue-deep trials of 400 ms each, L2 flushed between iterations, SM clock sampled under load
+             --iters 50 is RETIRED as a timing knob and is kept only in the run id; the instrument sizes each cell's iteration count from --cell-budget-ms and records it per row
+cells        168 timings (24 treads x 7 reps)
+estimate     252 s of GPU at the model's own timings, excluding compiles and allocation
+costing      ridge 152.812 (this machine's calibration (NVIDIA H200 (measured))); bandwidth 4374.5 GB/s (this machine's calibration (NVIDIA H200 (measured)))
+card         nvidia_h200
+WRITES TO    /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0
+             git check-ignore exited 128; path unverified (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/bm128_depth': No such file or directory)
+             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/
+
+qualification ridge 152.812 Op/B and bandwidth 4374.5 GB/s, both from NVIDIA H200 (measured)
+reference clock: 1485 MHz, NVIDIA H200: median of the samples taken while the calibration's dense GEMM ran
+
+-- reference ladder, BLOCK_M=256 --
+  ^ LEVEL failed HIGH: loaded clock 1695 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.14x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 1 r=  256 T=  1024     1.9524 ms (205 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 1 r=  512 T=  2048     3.9275 ms (97 iters)
+  ^ LEVEL failed HIGH: loaded clock 1658 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 1 r=  768 T=  3072     5.8647 ms (68 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 1 r= 1024 T=  4096     7.7944 ms (49 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 1 r= 1280 T=  5120     9.7929 ms (40 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 1 r= 1536 T=  6144    11.7620 ms (33 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 1 r= 1792 T=  7168    13.7524 ms (28 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 1 r= 2048 T=  8192    15.7080 ms (25 iters)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 2 r=  256 T=  1024     2.0021 ms (185 iters)
+  ^ LEVEL failed HIGH: loaded clock 1680 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 2 r=  512 T=  2048     3.8931 ms (103 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 2 r=  768 T=  3072     5.9122 ms (65 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 2 r= 1024 T=  4096     7.8619 ms (50 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 2 r= 1280 T=  5120     9.8104 ms (39 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 2 r= 1536 T=  6144    11.8218 ms (34 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 2 r= 1792 T=  7168    13.7459 ms (28 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 2 r= 2048 T=  8192    15.8556 ms (25 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 3 r=  256 T=  1024     2.0221 ms (185 iters)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 3 r=  512 T=  2048     3.9322 ms (101 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 3 r=  768 T=  3072     5.9218 ms (66 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 3 r= 1024 T=  4096     7.9123 ms (50 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 3 r= 1280 T=  5120     9.8084 ms (41 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 3 r= 1536 T=  6144    11.9023 ms (32 iters)
+  ^ LEVEL failed HIGH: loaded clock 1605 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 3 r= 1792 T=  7168    13.8997 ms (28 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 3 r= 2048 T=  8192    15.8571 ms (25 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 4 r=  256 T=  1024     2.0201 ms (183 iters)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 4 r=  512 T=  2048     3.9337 ms (101 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 4 r=  768 T=  3072     5.9221 ms (65 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 4 r= 1024 T=  4096     7.8897 ms (50 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 4 r= 1280 T=  5120     9.8567 ms (39 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 4 r= 1536 T=  6144    11.8083 ms (34 iters)
+  ^ LEVEL failed HIGH: loaded clock 1605 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 4 r= 1792 T=  7168    13.8734 ms (27 iters)
+  ^ LEVEL failed HIGH: loaded clock 1590 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.07x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 4 r= 2048 T=  8192    16.1970 ms (24 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 5 r=  256 T=  1024     2.0228 ms (192 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 5 r=  512 T=  2048     3.9649 ms (100 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 5 r=  768 T=  3072     5.9264 ms (66 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 5 r= 1024 T=  4096     7.8734 ms (49 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 5 r= 1280 T=  5120     9.8455 ms (39 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 5 r= 1536 T=  6144    11.8857 ms (33 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 5 r= 1792 T=  7168    13.8932 ms (27 iters)
+  ^ LEVEL failed HIGH: loaded clock 1605 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 5 r= 2048 T=  8192    15.8646 ms (25 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 6 r=  256 T=  1024     2.0245 ms (186 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 6 r=  512 T=  2048     3.9648 ms (100 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 6 r=  768 T=  3072     5.9283 ms (66 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 6 r= 1024 T=  4096     7.8843 ms (48 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 6 r= 1280 T=  5120     9.8198 ms (40 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 6 r= 1536 T=  6144    11.9868 ms (31 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 6 r= 1792 T=  7168    13.7646 ms (29 iters)
+  ^ LEVEL failed HIGH: loaded clock 1605 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 6 r= 2048 T=  8192    16.0126 ms (23 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 1 rep= 7 r=  256 T=  1024     2.0258 ms (186 iters)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 2 rep= 7 r=  512 T=  2048     3.9632 ms (99 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 3 rep= 7 r=  768 T=  3072     5.9738 ms (66 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 4 rep= 7 r= 1024 T=  4096     7.8871 ms (49 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 5 rep= 7 r= 1280 T=  5120     9.8237 ms (40 iters)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 6 rep= 7 r= 1536 T=  6144    11.8623 ms (32 iters)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 7 rep= 7 r= 1792 T=  7168    13.7718 ms (28 iters)
+  ^ LEVEL failed HIGH: loaded clock 1605 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  ^ LEVEL HIGH: kept in the fit; its fraction of the fixed roof is not comparable
+  BM=256 n= 8 rep= 7 r= 2048 T=  8192    16.0155 ms (23 iters)
+
+reference did not qualify: BLOCK_M=256 ladder is proportional to 0.5% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads
+
+-- subject ladder, BLOCK_M=128 --
+  BM=128 n= 1 rep= 1 r=  128 T=   512     1.1017 ms (362 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 1 r=  256 T=  1024     2.2005 ms (177 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 1 r=  384 T=  1536     3.3085 ms (123 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 1 r=  512 T=  2048     4.3504 ms (90 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 1 r=  640 T=  2560     5.4816 ms (73 iters)
+  ^ LEVEL failed LOW: loaded clock 1388 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 1 r=  768 T=  3072     6.5519 ms (61 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 1 r=  896 T=  3584     7.6462 ms (52 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 1 r= 1024 T=  4096     8.7248 ms (45 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 1 r= 1152 T=  4608     9.7550 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 1 r= 1280 T=  5120    10.8354 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 1 r= 1408 T=  5632    11.9019 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 1 r= 1536 T=  6144    12.9904 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 1 r= 1664 T=  6656    14.1197 ms (28 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 1 r= 1792 T=  7168    15.2308 ms (26 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 1 r= 1920 T=  7680    16.3787 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 1 r= 2048 T=  8192    17.5360 ms (22 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 1 rep= 2 r=  128 T=   512     1.1331 ms (337 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 2 r=  256 T=  1024     2.2027 ms (181 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 2 r=  384 T=  1536     3.2787 ms (121 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 2 r=  512 T=  2048     4.3540 ms (90 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 2 r=  640 T=  2560     5.4368 ms (72 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 2 r=  768 T=  3072     6.5371 ms (60 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 2 r=  896 T=  3584     7.6128 ms (51 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 2 r= 1024 T=  4096     8.6601 ms (45 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 2 r= 1152 T=  4608     9.7027 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 2 r= 1280 T=  5120    10.8375 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 2 r= 1408 T=  5632    11.9152 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 2 r= 1536 T=  6144    13.0130 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 2 r= 1664 T=  6656    14.1125 ms (28 iters)
+  ^ LEVEL failed LOW: loaded clock 1372 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 2 r= 1792 T=  7168    15.3209 ms (26 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 2 r= 1920 T=  7680    16.4190 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 2 r= 2048 T=  8192    17.5500 ms (22 iters)
+  BM=128 n= 1 rep= 3 r=  128 T=   512     1.1303 ms (343 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 3 r=  256 T=  1024     2.2026 ms (183 iters)
+  ^ LEVEL failed LOW: loaded clock 1388 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 3 r=  384 T=  1536     3.2961 ms (120 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 3 r=  512 T=  2048     4.3737 ms (91 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 3 r=  640 T=  2560     5.4362 ms (72 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 3 r=  768 T=  3072     6.5716 ms (60 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 3 r=  896 T=  3584     7.6123 ms (51 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 3 r= 1024 T=  4096     8.7291 ms (45 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 3 r= 1152 T=  4608     9.6945 ms (41 iters)
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 3 r= 1280 T=  5120    10.8392 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 3 r= 1408 T=  5632    11.8575 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 3 r= 1536 T=  6144    12.9045 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 3 r= 1664 T=  6656    14.1349 ms (27 iters)
+  ^ LEVEL failed LOW: loaded clock 1365 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 3 r= 1792 T=  7168    15.4345 ms (25 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 3 r= 1920 T=  7680    16.2612 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 3 r= 2048 T=  8192    17.5961 ms (22 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 1 rep= 4 r=  128 T=   512     1.1318 ms (348 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 4 r=  256 T=  1024     2.2030 ms (180 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 4 r=  384 T=  1536     3.2837 ms (120 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 4 r=  512 T=  2048     4.3706 ms (90 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 4 r=  640 T=  2560     5.4660 ms (72 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 4 r=  768 T=  3072     6.5698 ms (61 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 4 r=  896 T=  3584     7.6499 ms (51 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 4 r= 1024 T=  4096     8.7283 ms (46 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 4 r= 1152 T=  4608     9.7528 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 4 r= 1280 T=  5120    10.8022 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 4 r= 1408 T=  5632    11.9041 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 4 r= 1536 T=  6144    13.0540 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 4 r= 1664 T=  6656    14.1367 ms (28 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 4 r= 1792 T=  7168    15.2147 ms (26 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 4 r= 1920 T=  7680    16.3884 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 4 r= 2048 T=  8192    17.5511 ms (22 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 1 rep= 5 r=  128 T=   512     1.1323 ms (347 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 5 r=  256 T=  1024     2.2013 ms (181 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 5 r=  384 T=  1536     3.2910 ms (120 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 5 r=  512 T=  2048     4.3640 ms (91 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 5 r=  640 T=  2560     5.4745 ms (72 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 5 r=  768 T=  3072     6.5675 ms (61 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 5 r=  896 T=  3584     7.6443 ms (52 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 5 r= 1024 T=  4096     8.7261 ms (44 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 5 r= 1152 T=  4608     9.7470 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 5 r= 1280 T=  5120    10.8347 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 5 r= 1408 T=  5632    11.8191 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 5 r= 1536 T=  6144    12.9334 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 5 r= 1664 T=  6656    14.1242 ms (28 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 5 r= 1792 T=  7168    15.2576 ms (25 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 5 r= 1920 T=  7680    16.3809 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 5 r= 2048 T=  8192    17.5343 ms (22 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 1 rep= 6 r=  128 T=   512     1.1336 ms (338 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 6 r=  256 T=  1024     2.2039 ms (180 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 6 r=  384 T=  1536     3.2774 ms (120 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 6 r=  512 T=  2048     4.3562 ms (91 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 6 r=  640 T=  2560     5.4804 ms (71 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 6 r=  768 T=  3072     6.5720 ms (60 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 6 r=  896 T=  3584     7.6485 ms (52 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 6 r= 1024 T=  4096     8.7315 ms (45 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 6 r= 1152 T=  4608     9.7510 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 6 r= 1280 T=  5120    10.8309 ms (36 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 6 r= 1408 T=  5632    11.9232 ms (32 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 6 r= 1536 T=  6144    12.9282 ms (31 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 6 r= 1664 T=  6656    14.1136 ms (28 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 6 r= 1792 T=  7168    15.2703 ms (26 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 6 r= 1920 T=  7680    16.4052 ms (24 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 6 r= 2048 T=  8192    17.6390 ms (22 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 1 rep= 7 r=  128 T=   512     1.1315 ms (350 iters)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 2 rep= 7 r=  256 T=  1024     2.2042 ms (185 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 3 rep= 7 r=  384 T=  1536     3.2791 ms (121 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 4 rep= 7 r=  512 T=  2048     4.3596 ms (90 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 5 rep= 7 r=  640 T=  2560     5.4732 ms (72 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 6 rep= 7 r=  768 T=  3072     6.5639 ms (61 iters)
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 7 rep= 7 r=  896 T=  3584     7.6465 ms (51 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 8 rep= 7 r= 1024 T=  4096     8.7313 ms (45 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n= 9 rep= 7 r= 1152 T=  4608     9.7555 ms (40 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=10 rep= 7 r= 1280 T=  5120    10.8338 ms (37 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=11 rep= 7 r= 1408 T=  5632    11.9138 ms (33 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=12 rep= 7 r= 1536 T=  6144    13.0160 ms (30 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=13 rep= 7 r= 1664 T=  6656    14.1186 ms (27 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=14 rep= 7 r= 1792 T=  7168    15.2596 ms (25 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=15 rep= 7 r= 1920 T=  7680    16.3804 ms (23 iters)
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 n=16 rep= 7 r= 2048 T=  8192    17.5076 ms (22 iters)
+
+measured in 283 s
+
+## The measured ladder
+
+reference    BLOCK_M=256 ladder is proportional to 0.5% but its LEVEL is wrong, so it is REFUSED as a compute branch. Membership falls back to a split search, NO alpha may decide a verdict, and every 'not identifiable' in this report is CAUSED BY THIS REFUSAL rather than by a sweep that lacked treads
+             no level: no reference
+subject      16 treads (0 scored after 16 excluded for clock level), across-repeat spread UNKNOWN (one repeat) over the scored treads (all 16: 0.263%)
+             membership margin 2.000% (floor 2%, 3x the measured spread)
+             drift first->last repeat +0.043%
+             no usable treads
+             ladder outcome: no_usable_treads
+             memory treads 0, alpha NOT IDENTIFIABLE
+             B/C nan  |B/C - 1| nan  tolerance 0.15  margin +nan (+nan% of the tolerance, sigma unknown)
+             16 tread(s) EXCLUDED: LEVEL failed LOW, timed below the band around the clock the roof was measured at, so they sit on a different compute branch. A ladder that lost treads to a hot box must not look like a ladder that never had them.
+             0 tread(s) KEPT with LEVEL failed HIGH: timed above that band, the boosted memory-shaped state (1980 against 1515 MHz on the H200). Their times are in the fit; their fraction of the FIXED roof is NOT comparable, inflated by the clock ratio, and the roof at their own clock (the driver's roof_at_cell_clock_tflops) is the one to read them against. The reference ladder has 8 such tread(s), so its level against the fixed ceiling is overstated by the ratio too.
+
+  n   rows         ms     slope  reps   spread  scored
+  1    128     1.1318         -     7   0.944%  NO: LEVEL low, clock below the roof's
+  2    256     2.2027    1.0709     7   0.055%  NO: LEVEL low, clock below the roof's
+  3    384     3.2837    1.0811     7   0.324%  NO: LEVEL low, clock below the roof's
+  4    512     4.3596    1.0759     7   0.183%  NO: LEVEL low, clock below the roof's
+  5    640     5.4732    1.1136     7   0.331%  NO: LEVEL low, clock below the roof's
+  6    768     6.5675    1.0942     7   0.183%  NO: LEVEL low, clock below the roof's
+  7    896     7.6462    1.0787     7   0.205%  NO: LEVEL low, clock below the roof's
+  8   1024     8.7283    1.0821     7   0.276%  NO: LEVEL low, clock below the roof's
+  9   1152     9.7510    1.0228     7   0.251%  NO: LEVEL low, clock below the roof's
+ 10   1280    10.8347    1.0837     7   0.109%  NO: LEVEL low, clock below the roof's
+ 11   1408    11.9041    1.0693     7   0.297%  NO: LEVEL low, clock below the roof's
+ 12   1536    12.9904    1.0863     7   0.395%  NO: LEVEL low, clock below the roof's
+ 13   1664    14.1197    1.1293     7   0.063%  NO: LEVEL low, clock below the roof's
+ 14   1792    15.2596    1.1399     7   0.451%  NO: LEVEL low, clock below the roof's
+ 15   1920    16.3809    1.1213     7   0.292%  NO: LEVEL low, clock below the roof's
+ 16   2048    17.5500    1.1692     7   0.233%  NO: LEVEL low, clock below the roof's
+
+## Gates
+
+RESULT: VALIDITY V0 FAIL [VALIDITY] this report examined real work | saw bootstrap resamples=0, reference treads=8, repeats per tread=7, scored treads=0, settings that executed=2, subject treads=16, timings=168 | gate every one of the report's own input counts is above zero
+[FAIL] VALIDITY V0 non-vacuity  this report examined real work
+         gate: every one of the report's own input counts is above zero
+         saw:  bootstrap resamples=0, reference treads=8, repeats per tread=7, scored treads=0, settings that executed=2, subject treads=16, timings=168
+         a FAIL here invalidates: every gate in this report: a check with no input reports no failures
+         nothing was counted for: scored treads
+         not counted, and NOT scored here: bootstrap resamples. That count belongs to a gate that declined to answer, and its own UNKNOWN is what carries the refusal into the exit code.
+RESULT: VALIDITY V4 PASS [VALIDITY] each setting compiled its own kernel | saw BM=128:16, BM=256:17 | gate >= 1 fresh Triton artefact per setting that ran
+[PASS] VALIDITY V4 override took effect  each setting compiled its own kernel
+         gate: >= 1 fresh Triton artefact per setting that ran
+         saw:  BM=128:16, BM=256:17
+RESULT: VALIDITY V1 UNKNOWN [VALIDITY] the compute reference runs at a plausible rate | saw no compute reference was qualified at all | gate implied TFLOP/s in [25%, 100%] of the attached card's calibrated bf16 ceiling
+[UNKNOWN] VALIDITY V1 reference level  the compute reference runs at a plausible rate
+         gate: implied TFLOP/s in [25%, 100%] of the attached card's calibrated bf16 ceiling
+         saw:  no compute reference was qualified at all
+         a FAIL here invalidates: every membership decision, hence every alpha and every tread count in this report
+RESULT: VALIDITY V2 UNKNOWN [VALIDITY] time rises with every extra M-tile | saw the ladder had fewer than two treads, so no boundary was examined | gate zero inversions beyond 2 sigma
+[UNKNOWN] VALIDITY V2 monotone ladder  time rises with every extra M-tile
+         gate: zero inversions beyond 2 sigma
+         saw:  the ladder had fewer than two treads, so no boundary was examined
+         a FAIL here invalidates: the fitted slopes, which are what alpha is
+RESULT: VALIDITY V3 UNKNOWN [VALIDITY] the per-tread slope never rises and then falls | saw fewer than three treads, so no second difference exists | gate zero slope drops over 5% and 3 sigma
+[UNKNOWN] VALIDITY V3 max-affine shape  the per-tread slope never rises and then falls
+         gate: zero slope drops over 5% and 3 sigma
+         saw:  fewer than three treads, so no second difference exists
+         a FAIL here invalidates: the two-line fit: max(A+Bn, D+Cn) is convex, so a slope that rises then falls is not describable by ANY two-line model and its fitted B/C is the slope of a bend
+RESULT: VALIDITY V5 UNKNOWN [VALIDITY] the ladder was measured often enough to weigh an inversion | saw 0 repeat(s) on the thinnest tread, so no across-repeat spread exists | gate >= 2 repeats per tread and spread <= 2%
+[UNKNOWN] VALIDITY V5 replication  the ladder was measured often enough to weigh an inversion
+         gate: >= 2 repeats per tread and spread <= 2%
+         saw:  0 repeat(s) on the thinnest tread, so no across-repeat spread exists
+         a FAIL here invalidates: V2 and C2, which both need a noise band; without one an inversion cannot be told from a mechanism, which is how the published A100 ladder shipped
+RESULT: CLAIM C1 FAIL [CLAIM] at least 5 clean memory-bound treads at BLOCK_M=128 | saw 0 of 0 treads above the compute branch (a verdict also needs 3) | gate >= 5 treads standing above the compute branch
+[FAIL] CLAIM    C1 depth  at least 5 clean memory-bound treads at BLOCK_M=128
+         gate: >= 5 treads standing above the compute branch
+         saw:  0 of 0 treads above the compute branch (a verdict also needs 3)
+         A FAIL is the registered expectation and is a result: see the escape thresholds above.
+         ladder outcome: no_usable_treads
+RESULT: CLAIM C2 UNKNOWN [CLAIM] the memory branch is not the compute branch again | saw no memory branch: fewer than 2 treads above the compute branch, so there is no slope to compare | gate |B/C - 1| - 0.15 >= 3 sd
+[UNKNOWN] CLAIM    C2 tolerance margin  the memory branch is not the compute branch again
+         gate: |B/C - 1| - 0.15 >= 3 sd
+         saw:  no memory branch: fewer than 2 treads above the compute branch, so there is no slope to compare
+         no memory branch: fewer than 2 treads above the compute branch, so there is no slope to compare
+RESULT: VALIDITY V6 PASS [VALIDITY] the observed tread count matches n* from the fitted (alpha, B/C) | saw VACUOUS: no memory branch was identified, so there is no alpha to put into the law | gate within 1 tread, or vacuous when the report carries no alpha
+[PASS] VALIDITY V6 fit self-consistency  the observed tread count matches n* from the fitted (alpha, B/C)
+         gate: within 1 tread, or vacuous when the report carries no alpha
+         saw:  VACUOUS: no memory branch was identified, so there is no alpha to put into the law
+         This gate is a check on the FIT and not a prediction about the world; see its docstring.
+         A PASS here is NOT a statement that the ladder is two lines. It is a statement that the report publishes no alpha, so no alpha can be mis-quoted out of it.
+
+2 PASS, 2 FAIL, 5 UNKNOWN
+cells    /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/cells.csv
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/cells.csv: '/workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/cells.csv' is outside repository at '/workspace/moe-kernels')
+report   /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.txt
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.txt: '/workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.txt' is outside repository at '/workspace/moe-kernels')
+json     /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.json
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.json: '/workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0/report.json' is outside repository at '/workspace/moe-kernels')
+exit     3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

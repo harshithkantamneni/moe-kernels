@@ -1,0 +1,502 @@
+{
+  "run_id": "nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810",
+  "card": "NVIDIA H200",
+  "row_label_gpu": "NVIDIA H200",
+  "vllm_version": "0.27.1",
+  "vllm_tag": "v0.27.1",
+  "self_test_fp8_ratio": null,
+  "sign": "r = fp8_time / bf16_time; shift = rm/rc; shift > 1 means fp8 crosses LATER",
+  "ceilings": {
+    "path": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "measured_on": "2026-09-09",
+    "peak_flops": {
+      "bf16": 668483889383952.1,
+      "fp16": 668483889383952.1,
+      "fp8_e4m3": 1469872500413912.0,
+      "fp8_e5m2": 1469872500413912.0
+    },
+    "bandwidth_bytes_s": 4374549151491.3315
+  },
+  "shifts": {
+    "mixtral-8x7b|cfg_bf16": {
+      "tilt": 0.9791771585329037,
+      "r_low": 0.583555650370801,
+      "r_high": 0.5959653422115561,
+      "log_slope": -0.005561573468074695,
+      "n_paired": 14,
+      "low_tokens": [
+        32.0,
+        64.0,
+        128.0,
+        256.0
+      ],
+      "high_tokens": [
+        3072.0,
+        4096.0,
+        6144.0,
+        8192.0
+      ],
+      "memory_tokens": [
+        32.0,
+        64.0,
+        128.0,
+        256.0,
+        384.0
+      ],
+      "compute_tokens": [
+        512.0,
+        768.0,
+        1024.0,
+        1536.0,
+        2048.0,
+        3072.0,
+        4096.0,
+        6144.0,
+        8192.0
+      ],
+      "rm": 0.5870370161602555,
+      "rc": 0.6097562232070957,
+      "branch_shift": 0.9627405081208595,
+      "branch_note": "",
+      "memory_slope_bf16": 0.08505733499487794,
+      "compute_slope_bf16": 0.8866285024410522,
+      "unpaired_tokens": [],
+      "ratios": [
+        {
+          "num_tokens": 32,
+          "bf16_ms": 0.6923199892044067,
+          "fp8_ms": 0.3887999951839447,
+          "r": 0.5615900179781634
+        },
+        {
+          "num_tokens": 64,
+          "bf16_ms": 0.6762720048427582,
+          "fp8_ms": 0.3922879993915558,
+          "r": 0.5800742845813465
+        },
+        {
+          "num_tokens": 128,
+          "bf16_ms": 0.7084800004959106,
+          "fp8_ms": 0.4159039855003357,
+          "r": 0.5870370161602555
+        },
+        {
+          "num_tokens": 256,
+          "bf16_ms": 0.7999039888381958,
+          "fp8_ms": 0.6254079937934875,
+          "r": 0.7818538256095567
+        },
+        {
+          "num_tokens": 384,
+          "bf16_ms": 0.8387200236320496,
+          "fp8_ms": 0.6567680239677429,
+          "r": 0.7830599073140408
+        },
+        {
+          "num_tokens": 512,
+          "bf16_ms": 0.8760640025138855,
+          "fp8_ms": 0.6802880167961121,
+          "r": 0.7765277592093844
+        },
+        {
+          "num_tokens": 768,
+          "bf16_ms": 1.4483840465545654,
+          "fp8_ms": 0.9477440118789673,
+          "r": 0.6543457960155478
+        },
+        {
+          "num_tokens": 1024,
+          "bf16_ms": 1.4987519979476929,
+          "fp8_ms": 0.9944959878921509,
+          "r": 0.6635493992694976
+        },
+        {
+          "num_tokens": 1536,
+          "bf16_ms": 2.1954879760742188,
+          "fp8_ms": 1.401568055152893,
+          "r": 0.6383856666156995
+        },
+        {
+          "num_tokens": 2048,
+          "bf16_ms": 2.892591953277588,
+          "fp8_ms": 1.7637759447097778,
+          "r": 0.6097562232070957
+        },
+        {
+          "num_tokens": 3072,
+          "bf16_ms": 4.220112085342407,
+          "fp8_ms": 2.535904049873352,
+          "r": 0.6009091698491218
+        },
+        {
+          "num_tokens": 4096,
+          "bf16_ms": 5.390527963638306,
+          "fp8_ms": 3.2328319549560547,
+          "r": 0.5997245495734472
+        },
+        {
+          "num_tokens": 6144,
+          "bf16_ms": 8.169871807098389,
+          "fp8_ms": 4.827167987823486,
+          "r": 0.5908499058246427
+        },
+        {
+          "num_tokens": 8192,
+          "bf16_ms": 10.717727661132812,
+          "fp8_ms": 6.347104072570801,
+          "r": 0.5922061348496648
+        }
+      ]
+    },
+    "qwen2-57b-a14b|cfg_bf16": {
+      "tilt": 0.8688357991133703,
+      "r_low": 0.5628068494701643,
+      "r_high": 0.6477712475067183,
+      "log_slope": 0.020024341160628102,
+      "n_paired": 14,
+      "low_tokens": [
+        32.0,
+        64.0,
+        128.0,
+        256.0
+      ],
+      "high_tokens": [
+        3072.0,
+        4096.0,
+        6144.0,
+        8192.0
+      ],
+      "memory_tokens": [
+        32.0,
+        64.0,
+        128.0,
+        256.0,
+        384.0,
+        512.0,
+        768.0
+      ],
+      "compute_tokens": [
+        1024.0,
+        1536.0,
+        2048.0,
+        3072.0,
+        4096.0,
+        6144.0,
+        8192.0
+      ],
+      "rm": 0.7509018404844013,
+      "rc": 0.6692693349128448,
+      "branch_shift": 1.1219725771272444,
+      "branch_note": "",
+      "memory_slope_bf16": 0.08743446922270474,
+      "compute_slope_bf16": 0.8473184501599285,
+      "unpaired_tokens": [],
+      "ratios": [
+        {
+          "num_tokens": 32,
+          "bf16_ms": 0.8234559893608093,
+          "fp8_ms": 0.4556159973144531,
+          "r": 0.5532973263915606
+        },
+        {
+          "num_tokens": 64,
+          "bf16_ms": 0.8439200222492218,
+          "fp8_ms": 0.4755200147628784,
+          "r": 0.5634657339868759
+        },
+        {
+          "num_tokens": 128,
+          "bf16_ms": 0.8521599769592285,
+          "fp8_ms": 0.4790399968624115,
+          "r": 0.5621479649534528
+        },
+        {
+          "num_tokens": 256,
+          "bf16_ms": 0.9424639940261841,
+          "fp8_ms": 0.7747200131416321,
+          "r": 0.8220155019737638
+        },
+        {
+          "num_tokens": 384,
+          "bf16_ms": 0.9641280174255371,
+          "fp8_ms": 0.8164799809455872,
+          "r": 0.846858473344435
+        },
+        {
+          "num_tokens": 512,
+          "bf16_ms": 1.0290559530258179,
+          "fp8_ms": 0.7727200090885162,
+          "r": 0.7509018404844013
+        },
+        {
+          "num_tokens": 768,
+          "bf16_ms": 1.0850080251693726,
+          "fp8_ms": 0.8238080143928528,
+          "r": 0.7592644434719773
+        },
+        {
+          "num_tokens": 1024,
+          "bf16_ms": 1.1479679942131042,
+          "fp8_ms": 0.9075199961662292,
+          "r": 0.7905446848178946
+        },
+        {
+          "num_tokens": 1536,
+          "bf16_ms": 1.8867520093917847,
+          "fp8_ms": 1.2880640029907227,
+          "r": 0.682688555029521
+        },
+        {
+          "num_tokens": 2048,
+          "bf16_ms": 1.9963679909706116,
+          "fp8_ms": 1.4080640077590942,
+          "r": 0.7053128552088783
+        },
+        {
+          "num_tokens": 3072,
+          "bf16_ms": 2.9303359985351562,
+          "fp8_ms": 1.961184024810791,
+          "r": 0.6692693349128448
+        },
+        {
+          "num_tokens": 4096,
+          "bf16_ms": 3.662832021713257,
+          "fp8_ms": 2.4020800590515137,
+          "r": 0.655798585578588
+        },
+        {
+          "num_tokens": 6144,
+          "bf16_ms": 5.440351963043213,
+          "fp8_ms": 3.4804320335388184,
+          "r": 0.6397439094348487
+        },
+        {
+          "num_tokens": 8192,
+          "bf16_ms": 7.131487846374512,
+          "fp8_ms": 4.486015796661377,
+          "r": 0.6290434609577252
+        }
+      ]
+    }
+  },
+  "predicted": {
+    "mixtral-8x7b|native|activations bf16": {
+      "tilt": 1.0706961319114063,
+      "branch_shift": 1.0391924087300255
+    },
+    "mixtral-8x7b|cfg_bf16|activations bf16": {
+      "tilt": 1.0706961319114063,
+      "branch_shift": 1.0365495942482417
+    },
+    "mixtral-8x7b|cfg_fp8|activations bf16": {
+      "tilt": 1.0706961319114063,
+      "branch_shift": 1.0391924087300255
+    },
+    "mixtral-8x7b|native|activations quantised": {
+      "tilt": 1.0994075726854746,
+      "branch_shift": 1.074007807319046
+    },
+    "mixtral-8x7b|cfg_bf16|activations quantised": {
+      "tilt": 1.0994075726854746,
+      "branch_shift": 1.0711465115431247
+    },
+    "mixtral-8x7b|cfg_fp8|activations quantised": {
+      "tilt": 1.0994075726854746,
+      "branch_shift": 1.074007807319046
+    },
+    "qwen2-57b-a14b|native|activations bf16": {
+      "tilt": 0.8418110704813598,
+      "branch_shift": 0.8860333434463169
+    },
+    "qwen2-57b-a14b|cfg_bf16|activations bf16": {
+      "tilt": 0.953012270222102,
+      "branch_shift": 0.9552700323906661
+    },
+    "qwen2-57b-a14b|cfg_fp8|activations bf16": {
+      "tilt": 0.937717635163763,
+      "branch_shift": 0.954784502493411
+    },
+    "qwen2-57b-a14b|native|activations quantised": {
+      "tilt": 0.8983776363251916,
+      "branch_shift": 0.9176773245130467
+    },
+    "qwen2-57b-a14b|cfg_bf16|activations quantised": {
+      "tilt": 1.0268671406449066,
+      "branch_shift": 1.0
+    },
+    "qwen2-57b-a14b|cfg_fp8|activations quantised": {
+      "tilt": 1.0,
+      "branch_shift": 1.0
+    }
+  },
+  "refusals": [
+    "RegimeNotResolved: mixtral-8x7b arm native: 0 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 64, 128, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192].",
+    "RegimeNotResolved: mixtral-8x7b arm cfg_fp8: 2 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192].",
+    "RegimeNotResolved: qwen2-57b-a14b arm native: 0 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 64, 128, 256, 384, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192].",
+    "RegimeNotResolved: qwen2-57b-a14b arm cfg_fp8: 4 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 512, 768, 1024, 1536, 2048, 3072, 4096, 6144, 8192]."
+  ],
+  "published_confounded_shift": 1.131,
+  "block_m_agreement_at_crossing": [
+    7,
+    7
+  ],
+  "timed_arms": 118,
+  "failed_arms": [
+    "mixtral-8x7b T=32 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=32 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=64 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=128 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=256 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=256 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=384 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=384 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=512 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=512 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=768 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=768 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=1024 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=1024 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=1536 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=1536 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=2048 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=2048 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=3072 native bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=3072 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=4096 native bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=4096 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=6144 native bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=6144 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=8192 native bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "mixtral-8x7b T=8192 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=32 native bf16: OutOfResources: out of resource: shared memory, Required: 294912, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=32 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=64 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=128 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=256 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=384 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=512 native bf16: OutOfResources: out of resource: shared memory, Required: 409600, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=512 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=768 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=768 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=1024 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=1024 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=1536 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=1536 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=2048 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=2048 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=3072 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=3072 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=4096 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=4096 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=6144 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=6144 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=8192 native bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help.",
+    "qwen2-57b-a14b T=8192 cfg_fp8 bf16: OutOfResources: out of resource: shared memory, Required: 393216, Hardware limit: 232448. Reducing block sizes or `num_stages` may help."
+  ],
+  "partial": "",
+  "gates": [
+    {
+      "name": "V0 ceilings",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml has a measured peak for both ('bf16', 'fp8_e4m3')",
+      "observed": "bf16 668.5 TFLOP/s, fp8_e4m3 1469.9 TFLOP/s, bandwidth 4374.5 GB/s, measured 2026-09-09"
+    },
+    {
+      "name": "V1 fp8 is fp8",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "every fp8 arm's weight dtype is a torch float8 type and its quant config is not None",
+      "observed": "fp8 weights arrived as ['torch.float8_e4m3fn'], quant config ['FusedMoEQuantConfig']; fp8 preflight OK: silicon has fp8 tensor cores, torch has torch.float8_e4m3fn, vLLM has fp8_w8a8_moe_quant_config"
+    },
+    {
+      "name": "V2 correctness",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "relative error against golden_forward within moe.bench.tolerance's budget",
+      "observed": "2 checks, worst rel err 5.436e-02, 0 over budget"
+    },
+    {
+      "name": "V3 override",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "zero arms running a config they were not given, and >= 2 distinct observed configs across the run",
+      "observed": "0 of 90 forced arms ran a config they were not given; 18 distinct observed configs"
+    },
+    {
+      "name": "V4 derivation",
+      "kind": "VALIDITY",
+      "verdict": "FAIL",
+      "rule": "zero native cells where the observed config differs from the derived one",
+      "observed": "14 mismatches over 28 observed native arms; first: mixtral-8x7b T=64 native fp8_e4m3: DERIVED M64  N128 K128 G1  w4 s3 but the run OBSERVED {'BLOCK_SIZE_N': (128, 256), 'GROUP_SIZE_M': (1, 32), 'num_stages': (3, 5)} (derived, observed)"
+    },
+    {
+      "name": "V5 noise floor",
+      "kind": "VALIDITY",
+      "verdict": "FAIL",
+      "rule": "p90 |placebo - 1| < 3%, p90 timing spread < 3%, and no timed arm carries a False under-load DRIFT flag or a LOW-side LEVEL flag from time_kernel (a HIGH-side LEVEL flag is not an exclusion)",
+      "observed": "p90 placebo deviation 1.04% over 28 pairs; p90 per-timing spread 0.94%; under-load LEVEL/DRIFT flags: 81 of 118 determined arms flagged LOW or DRIFT (excluded); 27 boosted above the band (LEVEL HIGH: kept, its fixed-roof fraction is not comparable, read the roof at the cell's clock); between-load clock movement +27.3% worst cell, context only; worst qwen2-57b-a14b T=2048 fp8_e4m3: cfg_fp8/native = 1.0130"
+    },
+    {
+      "name": "C1 confound exists",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "the configs differ in at least one key at every crossing-bracketing cell",
+      "observed": "7 of 7 cells within 2.0x of the published bf16 crossing have differing configs"
+    },
+    {
+      "name": "C2 not the M tile",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "agreement fraction >= 90% over cells within 2.0x of the published bf16 crossing",
+      "observed": "BLOCK_SIZE_M agrees in 7 of 7 bracketing cells (100%); this is DERIVED from vLLM's shipped configs and is decided off GPU"
+    },
+    {
+      "name": "C3 pure dtype",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "median matched tilt in [0.9, 1.08]; the model at the MEASURED alpha predicts [0.938, 1.099] over the same cells",
+      "observed": "median matched tilt 0.924 over 2 (model, arm) pairs, 90% interval [0.869, 0.979]; the published confounded figure is 1.131 +/- 0.095"
+    },
+    {
+      "name": "C4 config share",
+      "kind": "CLAIM",
+      "verdict": "UNKNOWN",
+      "rule": "median (tilt_native - tilt_matched) / (tilt_native - 1) >= 50%",
+      "observed": "the native arm showed no excess over 1.0 to apportion, so there is nothing for the config to explain"
+    }
+  ],
+  "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "981a42f6caeb8b634a6a2e62113cc622d75910bc",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-09T17:07:08+00:00",
+    "hostname": "238b79f71e94",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+    "ridge": 152.8120650229884,
+    "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "bandwidth": 4374549151491.3315,
+    "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 200.0,
+    "missing": {
+      "iters": "not supplied by caller",
+      "sglang": "package not installed"
+    }
+  }
+}

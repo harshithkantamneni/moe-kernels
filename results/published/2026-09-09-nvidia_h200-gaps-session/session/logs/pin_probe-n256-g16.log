@@ -1,0 +1,20 @@
+/workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+
+forced tile     BLOCK_SIZE_M=128 BLOCK_SIZE_N=256 BLOCK_SIZE_K=64 GROUP_SIZE_M=16 num_warps=8 num_stages=4  [MOE_FORCE_TILE]
+  resume key    bm128-ef7e08ce (in every manifest key, so a pinned run cannot resume an unpinned one)
+  CAN PIN       vllm_fused_experts
+[cli] gates registered before the run, with their thresholds:
+[cli]   F1  every row produced under the pin shows the forced tile: == 0
+[cli]   F2  cells of this run stand under the pin: >= 1
+[driver] wrote 1 rows -> /workspace/session/gaps-nvidia_h200-20260909T031848Z/pin-probe-n256-g16/run_c49083c14b81_vllm.csv
+[force-tile] BLOCK_SIZE_M=128 BLOCK_SIZE_N=256 BLOCK_SIZE_K=64 GROUP_SIZE_M=16 num_warps=8 num_stages=4  [MOE_FORCE_TILE]
+[force-tile] 1 cells ran pinned, 0 were already complete under this tile, 0 skipped as unpinnable
+[cli] run_id=c49083c14b81 elapsed=2.3s
+{"csv": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/pin-probe-n256-g16/run_c49083c14b81_vllm.csv", "manifest": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/pin-probe-n256-g16/run_c49083c14b81_vllm.manifest.jsonl", "run_id": "c49083c14b81"}
+RESULT: VALIDITY F1 PASS [VALIDITY] every row produced under the pin shows the forced tile | measured 0 cells disagreed | gate == 0
+[force-tile] GATE F1  every row produced under the pin shows the forced tile: 0 cells disagreed against == 0  PASS
+RESULT: VALIDITY F2 PASS [VALIDITY] cells of this run stand under the pin | measured 1 measured + 0 already complete, 0 skipped as unpinnable | gate >= 1
+[force-tile] GATE F2  cells of this run stand under the pin: 1 measured + 0 already complete, 0 skipped as unpinnable against >= 1  PASS
+[force-tile] exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED

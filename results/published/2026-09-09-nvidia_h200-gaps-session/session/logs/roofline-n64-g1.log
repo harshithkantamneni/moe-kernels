@@ -1,0 +1,308 @@
+experiment  bm128_roofline: at BLOCK_M=128, does achieved throughput plateau BELOW
+            this card's own measured dense bf16 rate, in the multi-tile regime?
+
+## Registered predictions, with numbers, before anything is measured
+
+  the roof            668.5 TFLOP/s dense bf16, MEASURED on the attached card
+  multi-tile onset    T > 512 on mixtral-8x7b (r > 128 rows per expert, from T = r E / k with E=8, k=2)
+  deepest point       4096 rows per expert = 32 M-tiles per expert, 5 multi-tile points
+
+  P1  the control BLOCK_M=256 beats the subject by at least 0.10 of the roof
+      (67 TFLOP/s). Its cap is 89.7 Op/B against the subject's 75.1 and a ridge of 152.8: 0.59x, so it has headroom on the subject and
+      still a ceiling of its own at 0.59x the ridge, under the 1.30x a control with none would need. P5 below is registered to FAIL on that arithmetic alone.
+  P2  the subject plateaus between 0.821 and 1.000 of the roof (549 to 668 TFLOP/s), which is what the
+      study's own alpha band at BLOCK_M=128 predicts (alpha 0.625 to 1.020, cap 125 Op/B at the top). THE BAND SPANS A QUARTER OF THE RANGE
+      IT PREDICTS. It is registered so the fit is on the record, and it is compared against nothing.
+  P3  the subject's gain falls below 2.0% per doubling over the last 2 doublings, by n=32 M-tiles.
+  P4  the control does NOT plateau below the roof over the same span.
+  P5  the control REACHES the roof (0.95 of 668.5 = 635 TFLOP/s), which is what makes the subject's
+      shortfall a located ceiling rather than a gap of unknown height. REGISTERED AS THE ONE THIS
+      STUDY EXPECTS TO FAIL: no tile in the published corpus reaches 0.95 of ridge x bandwidth,
+      the BLOCK_M=256 control peaking at 0.48-0.54 of the roof on the H200 and 0.56-0.64 on the A100,
+      and this control's own cap is 0.59x the ridge, so the arithmetic registers the same failure the corpus does.
+
+  THE FORK, in three ways. Throughput reaches the roof -> the ceiling is not binding and the study's
+  central claim is about a regime that does not occur. It plateaus below the roof and the control
+  plateaus with it -> the shortfall is the fused layer's, not the tile's. It plateaus below the roof,
+  the control beats it by the separation, and the control reaches the roof -> the ceiling is real and
+  binds where production runs; the control beats it and does NOT reach the roof -> a tile-dependent
+  gap with the ceiling unlocated. All four are results; only one is the study's.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+subject      BLOCK_M=128 at rows [32, 64, 128, 256, 512, 1024, 2048, 4096]
+             tokens [128, 256, 512, 1024, 2048, 4096, 8192, 16384]
+control      BLOCK_M=256 at rows [256, 512, 1024, 2048, 4096] -- the same batches, a tile with no ceiling
+repeats      3 round-robin passes per tile, so a throttled cell can be told from a tile effect
+timing       queue-deep/l2-flush/clock-under-load/v3
+             300 ms of delivered GPU load to warm, then 3 queue-deep trials each sized by the instrument to hold 400 ms of kernel time
+             L2 flushed between iterations, as the roof was
+cells        39 timings
+estimate     58 s of GPU at the model's own timings, excluding compiles and allocation
+resources    BLOCK_M= 128  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+resources    BLOCK_M= 256  smem    160 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+
+CONTROL SEARCH at BLOCK_SIZE_N=64, BLOCK_SIZE_K=64, 2 B per element, sm_90
+  the bills: accumulator BLOCK_M x BLOCK_SIZE_N fp32 registers per block against 65536 and 255 per thread; shared memory num_stages x (BLOCK_M x BLOCK_K + BLOCK_K x BLOCK_N) x 2 B against 227 KiB
+  the subject BLOCK_M=128 caps at 75.1 Op/B = 0.49x the ridge, at alpha 0.558 in both slots of moe.bench.ai_model.cap. A control has to sit ABOVE that line and be held by one block
+  BLOCK_M=256: cap 89.7 Op/B = 0.59x the ridge (+14.7 Op/B on the subject, a predicted separation of +0.096 of the roof); accumulator 256x64 = 16384 registers per block, 25% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.59x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+      FITS at --num-warps 8 --num-stages 5: 64 reg/thread, 200 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 8 --num-stages 4: 64 reg/thread, 160 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 8 --num-stages 3: 64 reg/thread, 120 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 8 --num-stages 2: 64 reg/thread, 80 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 5: 32 reg/thread, 200 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 4: 32 reg/thread, 160 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 3: 32 reg/thread, 120 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 2: 32 reg/thread, 80 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 5: 16 reg/thread, 200 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 4: 16 reg/thread, 160 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 3: 16 reg/thread, 120 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 2: 16 reg/thread, 80 KiB of shared memory against 227 KiB, and the subject fits the same pin
+  BLOCK_M=512: cap 99.5 Op/B = 0.65x the ridge (+24.4 Op/B on the subject, a predicted separation of +0.160 of the roof); accumulator 512x64 = 32768 registers per block, 50% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.65x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+      FITS at --num-warps 8 --num-stages 3: 128 reg/thread, 216 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 8 --num-stages 2: 128 reg/thread, 144 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 3: 64 reg/thread, 216 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 16 --num-stages 2: 64 reg/thread, 144 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 3: 32 reg/thread, 216 KiB of shared memory against 227 KiB, and the subject fits the same pin
+      FITS at --num-warps 32 --num-stages 2: 32 reg/thread, 144 KiB of shared memory against 227 KiB, and the subject fits the same pin
+  BLOCK_M=1024: cap 105.2 Op/B = 0.69x the ridge (+30.1 Op/B on the subject, a predicted separation of +0.197 of the roof); accumulator 1024x64 = 65536 registers per block, 100% of the file
+      ITS OWN CEILING IS BELOW THE RIDGE (0.69x of the 1.30x a control with no ceiling would need), so C4 is pre-registered to FAIL and the best verdict this pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. NOT a refusal: the gap it measures is a result, and cancelling an arm for its expected answer is not how a claim is registered
+      REFUSED AT EVERY WARP AND STAGE COUNT: 8 warps = 256 reg/thread, 16 warps = 128 reg/thread, 32 warps = 64 reg/thread, and 65536 of 65536 per block in all of them. Warps divide this total, they do not shrink it; stages and BLOCK_SIZE_K do not touch it.
+  AND NO ARM OF THIS EXPERIMENT REACHES 'CEILING BINDING AT THE PRODUCTION TILE' ON THIS CARD, AT ANY BLOCK_SIZE_N. Over 56 power-of-two tiles up to 2048x1024, 17 clear the ridge of 152.81 Op/B at alpha 0.558 and the smallest accumulator among them is 65536 registers, against a per-block file of 65536. So no tile a thread block can hold is capable of reaching a compute roof here, C4 fails for every control that can be built, and the best verdict any pairing can reach is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'. The two limits very nearly coincide, which is the finding: the register file runs out exactly where the arithmetic intensity would have become enough.
+roof         668.5 TFLOP/s dense bf16, MEASURED on the attached card
+             measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s; calibrated 2026-09-09 at 981a42f6
+             ridge 152.81 Op/B over 4374.5 GB/s
+             measured at 1485 MHz
+card         nvidia_h200
+WRITES TO    /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b
+             git check-ignore exited 128; path unverified (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/bm128_roofline': No such file or directory)
+             cells.csv (one row per repeat, flushed, with the instrument and provenance columns), figure.csv (the
+             plot's data), CARD, report.txt, report.json, triton-cache/
+MDE          noise assumption 1.40% relative spread per cell, timing_spread_median of the published alpha-surface-s4 mixtral g1/n64 arm
+             two-sided 5% at 80% power, the convention scripts/replicate_noise_floor.py uses
+             C3 gap: at --reps 3 the MDE on the control-minus-subject difference is 0.0212 of the roof against a gate of 0.10: RESOLVABLE.
+             C2 gain: the ratio of two per-tread medians carries 1.143% at --reps 3 against a gate of 2.0%: RESOLVABLE. Scored on the spread this run MEASURES, not on this assumption.
+PREDICTION   from arms already in this repository, at BLOCK_SIZE_N=64, GROUP_SIZE_M=1, nvidia_h200
+             predicted from results/published/2026-09-01-nvidia_h200-cross-card-s3/mixtral-8x7b-bf16-r1024-g1-n64-4867a2.report.json, the arm with the HIGHEST subject peak of 2 matching model=mixtral-8x7b, BLOCK_SIZE_N=64, GROUP_SIZE_M=1, card=nvidia_h200 (gaps +0.021 to +0.062); the highest subject peak is the SMALLEST gap when the controls sit close, so this is the arm least likely to predict a tile effect
+             BLOCK_M=128 peaked at 0.514 of the roof; BLOCK_M=256 0.534 of the roof
+             gap +0.021 against a CONTROL_SEPARATION of 0.10 and a ROOF_REACHED of 0.95: this run's expected verdict is NOT_TILE (PLATEAU IS NOT TILE-ATTRIBUTABLE).
+             A PREDICTION AND NOT A RESULT. It is computed from ladders timed by the RETIRED per-call instrument, so it is what the corpus says, not what this run will measure.
+
+reference clock: 1485 MHz, NVIDIA H200: median of the samples taken while the calibration's dense GEMM ran
+
+-- control tile, BLOCK_M=256 --
+  ^ LEVEL failed HIGH: loaded clock 1725 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.16x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  256 n=  1 T=   1024 rep= 1     1.9289 ms   1725 MHz under load  DRIFTED  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  512 n=  2 T=   2048 rep= 1     3.9250 ms   1665 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 1024 n=  4 T=   4096 rep= 1     7.8193 ms   1635 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1620 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.09x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 2048 n=  8 T=   8192 rep= 1    15.8616 ms   1620 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1680 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 4096 n= 16 T=  16384 rep= 1    32.2273 ms   1680 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  256 n=  1 T=   1024 rep= 2     2.0015 ms   1665 MHz under load  DRIFTED  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1688 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.14x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  512 n=  2 T=   2048 rep= 2     3.8870 ms   1688 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 1024 n=  4 T=   4096 rep= 2     7.8551 ms   1650 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1650 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.11x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 2048 n=  8 T=   8192 rep= 2    15.6984 ms   1650 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 4096 n= 16 T=  16384 rep= 2    32.2909 ms   1665 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1680 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  256 n=  1 T=   1024 rep= 3     2.0026 ms   1680 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r=  512 n=  2 T=   2048 rep= 3     3.9278 ms   1665 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 1024 n=  4 T=   4096 rep= 3     7.8256 ms   1665 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1635 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.10x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 2048 n=  8 T=   8192 rep= 3    15.7234 ms   1635 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1665 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.12x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=256 r= 4096 n= 16 T=  16384 rep= 3    32.5788 ms   1665 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+
+-- subject tile, BLOCK_M=128 --
+  ^ LEVEL failed HIGH: loaded clock 1785 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.20x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   32 n=  1 T=    128 rep= 1     0.9485 ms   1785 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1598 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.08x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   64 n=  1 T=    256 rep= 1     1.0515 ms   1598 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  128 n=  1 T=    512 rep= 1     1.1335 ms   1410 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  256 n=  2 T=   1024 rep= 1     2.1822 ms   1410 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  512 n=  4 T=   2048 rep= 1     4.3482 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 1024 n=  8 T=   4096 rep= 1     8.6485 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 2048 n= 16 T=   8192 rep= 1    17.4447 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  BM=128 r= 4096 n= 32 T=  16384 rep= 1    36.4934 ms   1425 MHz under load
+  ^ LEVEL failed HIGH: loaded clock 1680 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.13x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   32 n=  1 T=    128 rep= 2     1.0008 ms   1680 MHz under load  DRIFTED  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1590 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.07x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   64 n=  1 T=    256 rep= 2     1.0669 ms   1590 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  128 n=  1 T=    512 rep= 2     1.1317 ms   1410 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1402 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  256 n=  2 T=   1024 rep= 2     2.2008 ms   1402 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  512 n=  4 T=   2048 rep= 2     4.3452 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 1024 n=  8 T=   4096 rep= 2     8.6555 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 2048 n= 16 T=   8192 rep= 2    17.5002 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  BM=128 r= 4096 n= 32 T=  16384 rep= 2    36.5023 ms   1425 MHz under load
+  ^ LEVEL failed HIGH: loaded clock 1710 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.15x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   32 n=  1 T=    128 rep= 3     0.9949 ms   1710 MHz under load  DRIFTED  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  ^ LEVEL failed HIGH: loaded clock 1575 MHz is over 105% of the 1485 MHz reference; the cell ran at 1.06x the issue rate the fixed compute roof assumed, so its fraction of that roof is inflated by the ratio; read roof_at_cell_clock_tflops
+  BM=128 r=   64 n=  1 T=    256 rep= 3     1.0815 ms   1575 MHz under load  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction not comparable)
+  BM=128 r=  128 n=  1 T=    512 rep= 3     1.1310 ms   1425 MHz under load
+  ^ LEVEL failed LOW: loaded clock 1402 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  256 n=  2 T=   1024 rep= 3     2.2008 ms   1402 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1395 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r=  512 n=  4 T=   2048 rep= 3     4.3498 ms   1395 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1388 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 1024 n=  8 T=   4096 rep= 3     8.7212 ms   1388 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1380 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 2048 n= 16 T=   8192 rep= 3    17.5355 ms   1380 MHz under load  BELOW THE ROOF'S CLOCK
+  ^ LEVEL failed LOW: loaded clock 1410 MHz is under 95% of the 1485 MHz reference; the card sat below the clock the roof was measured at and the cell is not comparable with the fixed roof
+  BM=128 r= 4096 n= 32 T=  16384 rep= 3    36.5289 ms   1410 MHz under load  BELOW THE ROOF'S CLOCK
+
+measured in 83 s
+
+## The curve
+
+fraction of the 668.5 TFLOP/s measured dense bf16 roof
+  1.00 |--------------------------------------------------------  <- the roof
+  0.94 |
+  0.88 |
+  0.82 |
+  0.76 |
+  0.71 |
+  0.65 |
+  0.59 |
+  0.53 |                        o      o      o      o      o
+  0.47 |                 #      x      x      x      x      #
+  0.41 |
+  0.35 |
+  0.29 |
+  0.24 |          #
+  0.18 |
+  0.12 |   #
+  0.06 |
+  0.00 |
+       +--------------------------------------------------------
+    T     128    256    512   1024   2048   4096   8192   16384
+        o BLOCK_M=256  # BLOCK_M=128   x excluded (drifted or LEVEL-low)   * both
+
+
+  BM       T   rows    n     regime tile_eff         ms   TFLOP/s  of roof   MHz reps  note
+ 256    1024    256    1      onset    1.000     2.0026     360.3    0.539  1680    1  2 repeat(s) excluded; 1 repeat(s) LEVEL-high, kept; of roof at own clock 0.476
+ 256    2048    512    2 multi-tile    1.000     3.9250     367.7    0.550  1665    3  3 repeat(s) LEVEL-high, kept; of roof at own clock 0.491
+ 256    4096   1024    4 multi-tile    1.000     7.8256     368.8    0.552  1650    3  3 repeat(s) LEVEL-high, kept; of roof at own clock 0.497
+ 256    8192   2048    8 multi-tile    1.000    15.7234     367.1    0.549  1635    3  3 repeat(s) LEVEL-high, kept; of roof at own clock 0.499
+ 256   16384   4096   16 multi-tile    1.000    32.2909     357.5    0.535  1665    3  3 repeat(s) LEVEL-high, kept; of roof at own clock 0.477
+ 128     128     32    1  pre-onset    0.250     0.9485      95.1    0.142  1785    1  2 repeat(s) excluded; 1 repeat(s) LEVEL-high, kept; of roof at own clock 0.118
+ 128     256     64    1  pre-onset    0.500     1.0669     169.1    0.253  1590    3  3 repeat(s) LEVEL-high, kept; of roof at own clock 0.236
+ 128     512    128    1      onset    1.000     1.1310     319.0    0.477  1425    1  2 repeat(s) excluded
+ 128    1024    256    2 multi-tile    1.000     2.2008     327.9    0.490  1402    3  every one of 3 repeats was excluded: 0 drifted more than 5% across their own trials, 3 ran below 95% of the clock the roof was measured at
+ 128    2048    512    4 multi-tile    1.000     4.3482     331.9    0.496  1395    3  every one of 3 repeats was excluded: 0 drifted more than 5% across their own trials, 3 ran below 95% of the clock the roof was measured at
+ 128    4096   1024    8 multi-tile    1.000     8.6555     333.5    0.499  1395    3  every one of 3 repeats was excluded: 0 drifted more than 5% across their own trials, 3 ran below 95% of the clock the roof was measured at
+ 128    8192   2048   16 multi-tile    1.000    17.5002     329.9    0.493  1395    3  every one of 3 repeats was excluded: 0 drifted more than 5% across their own trials, 3 ran below 95% of the clock the roof was measured at
+ 128   16384   4096   32 multi-tile    1.000    36.4979     316.3    0.473  1425    2  1 repeat(s) excluded
+
+## The derivative
+
+  subject BLOCK_M=128: no derivative: 1 retained multi-tile point(s); a derivative needs at least two
+  control BLOCK_M=256: -1.543% per doubling over 2 doublings (n=4 -> 16 tiles, 368.8 -> 357.5 TFLOP/s, -3.06% in total); resolvable to 0.387%
+
+## Verdict
+
+  NOT SETTLED
+
+  The instrument did not qualify: V2 non-vacuity (FAIL); V3 clocks (FAIL); V4 control ran (FAIL)
+  No claim gate below may be quoted. What each failure invalidates is printed with it.
+  ONE CONFOUND NO GATE HERE REMOVES. The subject and the control differ in OCCUPANCY as well as in tile: at the production pin of num_stages=4 the resident-block ratio is 2:1, at 2 stages it is still 2:1, at 3 it is 3:1, and the only matched setting is 5 stages, which sm_80 cannot run and which unpins the comparison from every published arm. So no --num-stages choice disambiguates a result here, in either direction: a gap can be residency rather than tile, and an absent gap can be residency cancelling a tile effect. scripts/occupancy_vs_swizzle.py measures the residency effect directly, and its size is what to subtract before this verdict is read as being about the tile at all.
+
+## Gates
+
+RESULT: VALIDITY V0_roof_provenance PASS the roof is the ATTACHED card's own measured dense bf16 rate | saw measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s; calibrated 2026-09-09 at 981a42f6 | gate the calibration names this device and was written by scripts/calibrate_hardware.py on it
+[PASS] VALIDITY V0 roof provenance  the roof is the ATTACHED card's own measured dense bf16 rate
+         gate: the calibration names this device and was written by scripts/calibrate_hardware.py on it
+         saw:  measured on this device: NVIDIA H200 (measured), 668.5 TFLOP/s bf16 over 4374.5 GB/s; calibrated 2026-09-09 at 981a42f6
+         The H200 calibrates at 712 TFLOP/s dense bf16 against a 989 marketing figure: the datasheet denominator would understate every fraction by 28% and manufacture a plateau.
+RESULT: VALIDITY V1_tile_pinned PASS the forced tile really ran at each of (128, 256) | saw fresh Triton artefacts per setting: BM=128:16, BM=256:17 | gate >= 1 per setting fresh Triton artefacts, per tile
+[PASS] VALIDITY V1 tile pinned  the forced tile really ran at each of (128, 256)
+         gate: >= 1 per setting fresh Triton artefacts, per tile
+         saw:  fresh Triton artefacts per setting: BM=128:16, BM=256:17
+RESULT: VALIDITY V2_non_vacuity FAIL the sweep crossed the multi-tile onset and measured both tiles there | saw 1 retained subject points of 5 multi-tile batches planned, deepest 32 M-tiles per expert, 1 token counts shared with the control | gate >= 3 retained full-stack multi-tile subject points, >= 4 M-tiles per expert reached, >= 2 token counts shared with the control
+[FAIL] VALIDITY V2 non-vacuity  the sweep crossed the multi-tile onset and measured both tiles there
+         gate: >= 3 retained full-stack multi-tile subject points, >= 4 M-tiles per expert reached, >= 2 token counts shared with the control
+         saw:  1 retained subject points of 5 multi-tile batches planned, deepest 32 M-tiles per expert, 1 token counts shared with the control
+         a non-PASS here invalidates: every claim gate. Below the onset there is one tile per expert, the re-read term does not exist, and this script has measured the regime the prior work already agrees about
+         multi-tile begins above T=512 for this model, which is where the second M-tile per expert appears.
+RESULT: VALIDITY V3_clocks FAIL every cell was timed at one clock, and every retained point is scored against the roof at the clock it ran | saw 19 of 39 cells excluded (48.7%): 4 drifted, 15 low; 21 high and kept; session 1590 MHz, +7.1% against the roof's | gate <= 10% of clocked cells drifting past 5% or LEVEL-low (under 95% of the roof's clock); LEVEL-high cells (over 105%) are kept and scored against the roof at their own clock
+[FAIL] VALIDITY V3 clocks  every cell was timed at one clock, and every retained point is scored against the roof at the clock it ran
+         gate: <= 10% of clocked cells drifting past 5% or LEVEL-low (under 95% of the roof's clock); LEVEL-high cells (over 105%) are kept and scored against the roof at their own clock
+         saw:  19 of 39 cells excluded (48.7%): 4 drifted, 15 low; 21 high and kept; session 1590 MHz, +7.1% against the roof's
+         a non-PASS here invalidates: the fractions, in the direction stated below. Individual sagging cells are already excluded; a box that sags this often is not something an exclusion can fix
+         39 of 39 cells carry an under-load clock; session median of those 1590 MHz
+         4 cells drifted past 5% between their first and last under-load sample; 15 ran LOW, under 95% of the roof's clock; 21 ran HIGH, over 105% of it, and are KEPT; 4 points lost every repeat and are excluded
+         this session's median ran +7.1% against the 1485 MHz the roof was measured at. Direction: a LEVEL-high cell's fraction of the FIXED roof is OVERSTATED by its clock ratio, up to 1.20x here. Read `of roof at own clock`, which divides by roofline.roof_at_clock(roof, roof clock, cell clock); a memory-bound cell does not follow the SM clock, so that rescaled fraction is the comparable one and the fixed one is not.
+         fraction of roof, fixed -> at the point's own clock, per retained point: BM=128 r=32 0.142->0.118, BM=128 r=64 0.253->0.236, BM=128 r=128 0.477->0.497, BM=128 r=4096 0.473->0.493, BM=256 r=256 0.539->0.476, BM=256 r=512 0.550->0.491, BM=256 r=1024 0.552->0.497, BM=256 r=2048 0.549->0.499, BM=256 r=4096 0.535->0.477
+         points that lost EVERY repeat and left the gated set: [(128, 256), (128, 512), (128, 1024), (128, 2048)]. Losing the deepest one shortens the doubling chain, which C2 reports as a span too short rather than as a plateau.
+RESULT: VALIDITY V4_control_ran FAIL the control tile BLOCK_M=256 ran the same batches | saw 4 control points, 1 of them at shared token counts [16384] | gate >= 3 retained full-stack control points at token counts the subject also ran
+[FAIL] VALIDITY V4 control ran  the control tile BLOCK_M=256 ran the same batches
+         gate: >= 3 retained full-stack control points at token counts the subject also ran
+         saw:  4 control points, 1 of them at shared token counts [16384]
+         a non-PASS here invalidates: gate C3, and with it every attribution of the subject's shortfall to its TILE rather than to the fused layer both tiles run inside
+         Without a control a plateau below the roof could be the layer's permute, activation and scatter rather than an AI ceiling: an absence recorded by an instrument never shown to detect a presence.
+RESULT: CLAIM C1_roof PASS BLOCK_M=128 stays below the compute roof in the multi-tile regime | saw peak 0.473 of the roof at n=32 M-tiles | gate peak roof fraction < 0.95
+[PASS] CLAIM    C1 roof  BLOCK_M=128 stays below the compute roof in the multi-tile regime
+         gate: peak roof fraction < 0.95
+         saw:  peak 0.473 of the roof at n=32 M-tiles
+         predicted plateau band, from the study's own alpha at BLOCK_M=128 (GROUP_SIZE_M=1): 0.821 to 1.000 of the roof, i.e. 549 to 668 TFLOP/s. PRE-REGISTERED AND SCORED AGAINST NOTHING: a band that wide is a statement about the fit, not about the hardware.
+         the deepest point measured is n=32 M-tiles per expert at T=16384, reaching 0.473 of the roof (316.3 of 668.5 TFLOP/s), and it was STILL RISING there.
+         the fraction UNDERSTATES the GEMM's own efficiency: the numerator counts GEMM flops and the denominator is a dense GEMM, while the timed call is the whole fused layer. C3 is what removes that term.
+RESULT: CLAIM C2_plateau UNKNOWN throughput has stopped rising by n=32 M-tiles per expert | saw 1 retained multi-tile point(s); a derivative needs at least two | gate gain <= 2.0% per doubling over the last 2 doublings, and the spread must resolve that
+[UNKNOWN] CLAIM    C2 plateau  throughput has stopped rising by n=32 M-tiles per expert
+         gate: gain <= 2.0% per doubling over the last 2 doublings, and the spread must resolve that
+         saw:  1 retained multi-tile point(s); a derivative needs at least two
+         a non-PASS here invalidates: the word 'plateau'. Without it the reading is 'still rising at the largest batch measured', which is a statement about this sweep's depth and not about the hardware
+         no derivative: 1 retained multi-tile point(s); a derivative needs at least two
+         the last point reached 0.473 of the roof and cannot be called either way.
+         THE HONEST SENTENCE IS 'cannot be decided from these points'. Nothing in this report may say 'plateaued'.
+RESULT: CLAIM C3_tile_attribution FAIL the shortfall belongs to BLOCK_M=128, not to the fused layer both tiles run inside | saw gap +0.062 of the roof | gate control peak - subject peak >= 0.10 of the roof
+[FAIL] CLAIM    C3 tile attribution  the shortfall belongs to BLOCK_M=128, not to the fused layer both tiles run inside
+         gate: control peak - subject peak >= 0.10 of the roof
+         saw:  gap +0.062 of the roof
+         over the 1 shared token counts [16384]: BLOCK_M=128 peaks at 0.473 of the roof, BLOCK_M=256 at 0.535, a gap of +0.062 (+41 TFLOP/s)
+         the control's own derivative: -1.543% per doubling over 2 doublings (n=4 -> 16 tiles, 368.8 -> 357.5 TFLOP/s, -3.06% in total); resolvable to 0.387%
+         the control did NOT reach the roof either (0.535 < 0.95). The gap below is then the whole of the evidence: what the two tiles share has cancelled, but the height of the ceiling has not been demonstrated. Gate C4 is where that is scored, and the verdict it produces is TILE-DEPENDENT GAP, CEILING UNLOCATED rather than the study's headline.
+         BOTH TILES PLATEAU TOGETHER, at fractions this gate cannot separate. That is a result: the shortfall is a property of the fused layer, and whatever binds it is not the tile-dependent AI ceiling this study proposed.
+         ONE CONFOUND NO GATE HERE REMOVES. The subject and the control differ in OCCUPANCY as well as in tile: at the production pin of num_stages=4 the resident-block ratio is 2:1, at 2 stages it is still 2:1, at 3 it is 3:1, and the only matched setting is 5 stages, which sm_80 cannot run and which unpins the comparison from every published arm. So no --num-stages choice disambiguates a result here, in either direction: a gap can be residency rather than tile, and an absent gap can be residency cancelling a tile effect. scripts/occupancy_vs_swizzle.py measures the residency effect directly, and its size is what to subtract before this verdict is read as being about the tile at all.
+RESULT: CLAIM C4_ceiling_located FAIL the control BLOCK_M=256 reaches this card's roof, so the roof is somewhere this instrument can see a tile arrive | saw control peak 0.552 of the roof | gate control peak roof fraction >= 0.95
+[FAIL] CLAIM    C4 ceiling located  the control BLOCK_M=256 reaches this card's roof, so the roof is somewhere this instrument can see a tile arrive
+         gate: control peak roof fraction >= 0.95
+         saw:  control peak 0.552 of the roof
+         the control's best point is n=4 M-tiles per expert at T=4096: 368.8 of 668.5 TFLOP/s, 0.552 of the roof.
+         the fraction UNDERSTATES the GEMM's efficiency by whatever the fused layer spends outside its GEMMs, so a control below the roof is not proof that no tile can reach it -- it is a failure to DEMONSTRATE that this instrument can see one arrive, which is all this gate claims.
+         the published corpus agrees: BLOCK_M=256 peaks at 0.48-0.54 of the roof on the H200 and 0.56-0.64 on the A100, so a FAIL here is the expected reading and the verdict below is 'TILE-DEPENDENT GAP, CEILING UNLOCATED'.
+         ONE CONFOUND NO GATE HERE REMOVES. The subject and the control differ in OCCUPANCY as well as in tile: at the production pin of num_stages=4 the resident-block ratio is 2:1, at 2 stages it is still 2:1, at 3 it is 3:1, and the only matched setting is 5 stages, which sm_80 cannot run and which unpins the comparison from every published arm. So no --num-stages choice disambiguates a result here, in either direction: a gap can be residency rather than tile, and an absent gap can be residency cancelling a tile effect. scripts/occupancy_vs_swizzle.py measures the residency effect directly, and its size is what to subtract before this verdict is read as being about the tile at all.
+
+3 PASS, 5 FAIL, 1 UNKNOWN
+cells    /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/cells.csv
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/cells.csv: '/workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/cells.csv' is outside repository at '/workspace/moe-kernels')
+figure   /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/figure.csv
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/figure.csv: '/workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/figure.csv' is outside repository at '/workspace/moe-kernels')
+report   /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.txt
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.txt: '/workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.txt' is outside repository at '/workspace/moe-kernels')
+json     /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.json
+         git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.json: '/workspace/results/gaps-nvidia_h200/bm128_roofline/nvidia_h200-b400.0-c256-dbf16-e0-ftrue-g1-hi4096-k64-lo32-mmixtral_8x7b-n64-s4-t3-u300.0-w8-x3-4a935e0b/report.json' is outside repository at '/workspace/moe-kernels')
+
+exit 3 INVALID: measured; a VALIDITY gate failed after measuring; nothing quotable

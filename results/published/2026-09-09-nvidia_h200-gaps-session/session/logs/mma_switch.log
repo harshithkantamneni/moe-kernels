@@ -1,0 +1,157 @@
+=== plan: the instruction at a FIXED token count, only BLOCK_SIZE_M moving ===
+  model deepseek-v3   tokens 256   env vllm
+  pinned across every arm: BLOCK_SIZE_N=64 BLOCK_SIZE_K=64
+                           GROUP_SIZE_M=1 num_warps=4 num_stages=3
+  forced through MOE_FORCE_TILE, and each arm's OBSERVED tile columns are
+  read back out of its own run CSV before its PTX is censused.
+
+  PREDICTIONS, registered before the run. Triton emits wgmma only when
+  BLOCK_M % 64 == 0 AND num_warps % 4 == 0; num_warps is pinned at
+  4 in every arm, so only the first term can move:
+    BLOCK_SIZE_M=16   wgmma == 0   (16 % 64 != 0, so mma.sync)
+    BLOCK_SIZE_M=64   wgmma  > 0   (64 % 64 == 0)
+
+  GATES
+    G1 VALIDITY  every arm's OBSERVED six tile columns equal the forced ones
+    G2 VALIDITY  every arm dumped at least one PTX carrying a tensor-core instruction
+    G3 VALIDITY  the arms compiled DIFFERENT kernels (distinct PTX checksums)
+    G4 CLAIM     wgmma is present in exactly the arms the predicate names
+  A G1-G3 FAIL means no census on the page may be attributed to a tile,
+  and the run exits 3 INVALID: measured, unquotable, and NOT re-run.
+  A G4 FAIL is a result: the instruction is not selected by the tile alone,
+  and the run exits 1 CLAIM_FAIL, which the session records as finished.
+  Each of the four prints one RESULT: line, which is all the driver reads.
+  dumps to /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm<N>/
+
+[mma] dumping Triton IR and PTX to /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch
+
+############ arm BLOCK_SIZE_M=16  (T=256, everything else pinned) ############
+MOE_FORCE_TILE={"BLOCK_SIZE_M":16,"BLOCK_SIZE_N":64,"BLOCK_SIZE_K":64,"GROUP_SIZE_M":1,"num_warps":4,"num_stages":3}
+/workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+
+forced tile     BLOCK_SIZE_M=16 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+  resume key    bm16-2332a366 (in every manifest key, so a pinned run cannot resume an unpinned one)
+  CAN PIN       vllm_fused_experts
+[cli] gates registered before the run, with their thresholds:
+[cli]   F1  every row produced under the pin shows the forced tile: == 0
+[cli]   F2  cells of this run stand under the pin: >= 1
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+[driver] wrote 2 rows -> /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm16/results/run_5f1eaeec7937_vllm.csv
+[force-tile] BLOCK_SIZE_M=16 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+[force-tile] 2 cells ran pinned, 0 were already complete under this tile, 0 skipped as unpinnable
+[cli] run_id=5f1eaeec7937 elapsed=4.3s
+{"csv": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm16/results/run_5f1eaeec7937_vllm.csv", "manifest": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm16/results/run_5f1eaeec7937_vllm.manifest.jsonl", "run_id": "5f1eaeec7937"}
+[BM=16 sweep] RESULT: VALIDITY F1 PASS [VALIDITY] every row produced under the pin shows the forced tile | measured 0 cells disagreed | gate == 0
+[force-tile] GATE F1  every row produced under the pin shows the forced tile: 0 cells disagreed against == 0  PASS
+[BM=16 sweep] RESULT: VALIDITY F2 PASS [VALIDITY] cells of this run stand under the pin | measured 2 measured + 0 already complete, 0 skipped as unpinnable | gate >= 1
+[force-tile] GATE F2  cells of this run stand under the pin: 2 measured + 0 already complete, 0 skipped as unpinnable against >= 1  PASS
+[force-tile] exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+
+=== [BM=16] which config vLLM resolved (quote this, do not derive it) ===
+  NEITHER LINE IN /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm16/run.log. vLLM logs one of them once per
+  (E,N,dtype,device) via logger.info_once/warning_once, so a second cell in the
+  same process is silent; check that this run was the first fused_experts call,
+  and that the log level lets info through.
+
+=== [BM=16] tensor core instructions, by kernel ===
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=8      ld.global=7
+  fused_moe_kernel.ptx                                 wgmma=0      mma.sync=8      ld.global=3
+
+=== [BM=16] exact instruction shapes seen ===
+     16 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32
+
+  observed tile: bm=16 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override rows=2
+  asked for    : bm=16 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override
+
+############ arm BLOCK_SIZE_M=64  (T=256, everything else pinned) ############
+MOE_FORCE_TILE={"BLOCK_SIZE_M":64,"BLOCK_SIZE_N":64,"BLOCK_SIZE_K":64,"GROUP_SIZE_M":1,"num_warps":4,"num_stages":3}
+/workspace/moe-kernels/moe/baselines/__init__.py:13: UserWarning: baseline 'sglang_fused_moe' did not import: No module named 'sglang'
+  return load_package(__path__, __name__, "baseline", strict)
+[cli] env=vllm 0.27.1 gpu=NVIDIA H200
+
+forced tile     BLOCK_SIZE_M=64 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+  resume key    bm64-7350efad (in every manifest key, so a pinned run cannot resume an unpinned one)
+  CAN PIN       vllm_fused_experts
+[cli] gates registered before the run, with their thresholds:
+[cli]   F1  every row produced under the pin shows the forced tile: == 0
+[cli]   F2  cells of this run stand under the pin: >= 1
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+nvdisasm warning : Disassembling Std Elf to Old format or Old Elf to Std format not supported yet, switching to Old format
+[driver] wrote 2 rows -> /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm64/results/run_ab87e7efb70d_vllm.csv
+[force-tile] BLOCK_SIZE_M=64 BLOCK_SIZE_N=64 BLOCK_SIZE_K=64 GROUP_SIZE_M=1 num_warps=4 num_stages=3  [MOE_FORCE_TILE]
+[force-tile] 2 cells ran pinned, 0 were already complete under this tile, 0 skipped as unpinnable
+[cli] run_id=ab87e7efb70d elapsed=3.4s
+{"csv": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm64/results/run_ab87e7efb70d_vllm.csv", "manifest": "/workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm64/results/run_ab87e7efb70d_vllm.manifest.jsonl", "run_id": "ab87e7efb70d"}
+[BM=64 sweep] RESULT: VALIDITY F1 PASS [VALIDITY] every row produced under the pin shows the forced tile | measured 0 cells disagreed | gate == 0
+[force-tile] GATE F1  every row produced under the pin shows the forced tile: 0 cells disagreed against == 0  PASS
+[BM=64 sweep] RESULT: VALIDITY F2 PASS [VALIDITY] cells of this run stand under the pin | measured 2 measured + 0 already complete, 0 skipped as unpinnable | gate >= 1
+[force-tile] GATE F2  cells of this run stand under the pin: 2 measured + 0 already complete, 0 skipped as unpinnable against >= 1  PASS
+[force-tile] exit 0 DONE: measured; every VALIDITY and CLAIM gate PASSED
+
+=== [BM=64] which config vLLM resolved (quote this, do not derive it) ===
+  NEITHER LINE IN /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm64/run.log. vLLM logs one of them once per
+  (E,N,dtype,device) via logger.info_once/warning_once, so a second cell in the
+  same process is silent; check that this run was the first fused_experts call,
+  and that the log level lets info through.
+
+=== [BM=64] tensor core instructions, by kernel ===
+  fused_moe_kernel.ptx                                 wgmma=8      mma.sync=0      ld.global=10
+  fused_moe_kernel.ptx                                 wgmma=8      mma.sync=0      ld.global=6
+
+=== [BM=64] exact instruction shapes seen ===
+      8 wgmma.mma_async.sync.aligned.m64n64k16.f32.bf16.bf16
+      4 wgmma.wait_group.sync.aligned
+      2 wgmma.fence.sync.aligned
+      2 wgmma.commit_group.sync.aligned
+
+  observed tile: bm=64 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override rows=2
+  asked for    : bm=64 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override
+
+=== the switch at T=256, only BLOCK_SIZE_M moving ===
+  BLOCK_M   predicted   kernels   kernels     PTX    observed tile
+            wgmma       w/ wgmma  w/ mma.sync files  
+  16        == 0        0         2           2      bm=16 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override rows=2
+  64        > 0         2         0           2      bm=64 bn=64 bk=64 gm=1 warps=4 stages=3 src=vllm_override rows=2
+  PTX checksums: 3193123663 473994525 
+
+=== gates ===
+RESULT: VALIDITY G1 PASS [VALIDITY] every arm ran the tile it was given | measured 2/2 arms observed exactly what they forced | gate all 2
+G1  VALIDITY PASS every arm ran the tile it was given
+             measured 2/2 arms observed exactly what they forced   gate all 2
+             if this FAILS: MOE_FORCE_TILE did not reach the kernel in some arm, so its census belongs to
+             a tile nobody chose. Nothing on this page may be attributed to a tile.
+             Check that moe/bench/force_tile.py is present in this checkout and that
+             the impl under test exposes the force_tile_config hook.
+RESULT: VALIDITY G2 PASS [VALIDITY] every arm dumped a PTX carrying a tensor-core instruction | measured 2/2 arms | gate all 2
+G2  VALIDITY PASS every arm dumped a PTX carrying a tensor-core instruction
+             measured 2/2 arms   gate all 2
+             if this FAILS: an arm compiled nothing, or nothing with a tensor core in it. An absent
+             instruction and an absent kernel look identical in the table above.
+RESULT: VALIDITY G3 PASS [VALIDITY] the arms compiled DIFFERENT kernels | measured 2 distinct PTX checksum(s) | gate == 2
+G3  VALIDITY PASS the arms compiled DIFFERENT kernels
+             measured 2 distinct PTX checksum(s)   gate == 2
+             if this FAILS: two arms produced byte-identical PTX, so the tile did not reach the compile
+             and the census is one kernel compared with itself.
+RESULT: CLAIM G4 PASS [CLAIM] wgmma appears in exactly the arms BLOCK_M % 64 == 0 names | measured 2/2 arms match the prediction | gate all 2
+G4  CLAIM    PASS wgmma appears in exactly the arms BLOCK_M % 64 == 0 names
+             measured 2/2 arms match the prediction   gate all 2
+             if this FAILS: the instruction is NOT selected by the tile height alone at fixed num_warps,
+             which is a result: Triton's predicate as read from supportMMA does not
+             describe what this build emits.
+
+READING IT. At a FIXED token count of 256, with num_warps pinned at
+4 and every other tile knob equal, the warpgroup instruction
+appears exactly where BLOCK_M % 64 == 0 and nowhere else. THE INSTRUCTION
+IS SELECTED BY THE TILE, not by the batch size and not by the warp count.
+That closes the loose end on STUDY.md item 3: the 2026-08-27 census saw
+the same switch through the config ladder, where the batch, the tile and
+num_warps all moved together.
+
+  PTX kept under /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/bm<N>/, run logs beside it, summary at /workspace/session/gaps-nvidia_h200-20260909T031848Z/ptx/mma-switch/summary.tsv.
+  *.ptx is gitignored at any depth on purpose, so the raw dumps leave a pod
+  as a tarball and the table above leaves as text.
+
+[mma] exit 0 DONE: measured, and every VALIDITY and CLAIM gate PASSED.

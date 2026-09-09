@@ -1,0 +1,155 @@
+ROUTE PROBE
+  host      Linux x86_64
+  caps      {'available': True, 'cap_eff': '0xa80425fb', 'sys_admin': False}
+  module    {'available': False, 'why': 'the parameter is not listed by this driver'}
+  ncu       attached with no permission error  [Version 2025.1.1.0 (build 35528883) (public-release)]
+  nsys      no nsys on PATH
+
+  VERDICT   OPEN
+            - ncu attached with no permission error: run the plan under --dry-run and then profile. This is the decisive route.
+
+RESULT: CLAIM P1 PASS a counter route is open on this box: route OPEN: attached with no permission error
+GATE P1  CLAIM    PASS   a counter route is open on this box
+              measured route OPEN: attached with no permission error   gate OPEN
+
+  wrote /workspace/session/gaps-nvidia_h200-20260909T031848Z/counter_route.json
+  git   git check-ignore exited 128; path UNVERIFIED (fatal: /workspace/session/gaps-nvidia_h200-20260909T031848Z/counter_route.json: '/workspace/session/gaps-nvidia_h200-20260909T031848Z/counter_route.json' is outside repository at '/workspace/moe-kernels')
+DRAM COUNTER RUN -- PLAN  id=mixtral-8x7b-bf16-g16-n64-m32-t1.2.3.4.6.8-ccall-4metrics
+
+THE CELL, which is not a new one. It is the cell the alpha surface already
+measured, so the counter answers the ladder rather than a different question.
+  card            nvidia_a100_sxm4_80gb   ridge 145.81 FLOP/byte  (262.371 TFLOP/s / 1.79936 TB/s from measured_nvidia_a100_sxm4_80gb.yaml)
+  model           mixtral-8x7b bf16  E=8 k=2 H=4096 F=14336
+  pinned          GROUP_SIZE_M=16 BLOCK_SIZE_N=64 BLOCK_SIZE_M=32
+  tiles per expert [1, 2, 3, 4, 6, 8]   rows per expert [32, 64, 96, 128, 192, 256]
+  W  compulsory   2.81857 GB   (8 experts x 3FH x 2 B)
+  a  per tile     26.214 MB   (E x BM x (2H+3F) x 2 B)
+
+THE METRIC: dram__bytes_read.sum, plus 3 companions.
+  dram__bytes_read.sum
+  dram__bytes_write.sum
+  lts__t_sector_op_read_hit_rate.pct
+  gpu__time_duration.sum
+
+ANCHORS, read from mixtral-8x7b-bf16-r1024-g16-n64-b156b5.report.json
+  memory branch   t(1) = 1.94752 ms   A = 0.47982 ms   B = 0.880754 ms/tile
+  counter-free bracket  [0.4522, 0.6313]  (width 0.1790)
+
+C3, REGISTERED: what each anchor implies for this tile's AI cap, and how
+  the counter will score it. A ladder anchor is a B/(A+B) fit, so the
+  study's 2 BM/(alpha b) reading is HIGH by (1 + phi + delta) (retraction
+  (a), moe/bench/ai_model.py); alpha_a is unmeasured, so the corrected cap
+  is a BRACKET over alpha_a in [0, 1] at delta = 0, the generous end.
+  The counter's own alpha is a traffic slope with no level in it and is
+  scored on 2 BM W / (b dR/dn) instead; see the C3 gate.
+  n3         alpha 0.705: 2BM/(alpha b) = 45.4 (upper bound); corrected [30.1 at alpha_a=1, 45.0 at alpha_a=0] at delta=0  both ends below the ridge
+  published  alpha 0.647: 2BM/(alpha b) = 49.4 (upper bound); corrected [32.8 at alpha_a=1, 49.0 at alpha_a=0] at delta=0  both ends below the ridge
+  t1         alpha 0.452: 2BM/(alpha b) = 70.8 (upper bound); corrected [46.9 at alpha_a=1, 70.1 at alpha_a=0] at delta=0  both ends below the ridge
+  the counter's cap crosses ridge 145.81 at alpha = BM/ridge - a/W = 0.2102; 2 BM/(alpha b) alone would say 0.2195
+
+PREDICTIONS, registered here and not adjusted afterwards.
+The three anchors predict the SAME traffic at n=1 and diverge in the slope,
+so n=1 is a validity check and the slope is the claim.
+
+    n  rows/exp        t1 0.452 published 0.647        n3 0.705   spread
+    1        32         2.8448G         2.8448G         2.8448G     0.0%
+    2        64         4.1457G         4.6956G         4.8574G    17.2%
+    3        96         5.4466G         6.5464G         6.8699G    26.1%
+    4       128         6.7475G         8.3971G         8.8825G    31.6%
+    6       192         9.3493G        12.0987G        12.9077G    38.1%
+    8       256        11.9511G        15.8003G        16.9328G    41.7%
+
+  READ THE SPREAD COLUMN AS THE ACCURACY THE EXPERIMENT NEEDS. A counter good
+  to a few percent separates these with an order of magnitude to spare, which
+  is why the cell is worth renting a box for and why a one-launch probe is not.
+
+THE COMMAND, on a box where --probe says OPEN.
+
+  # 1. the timed ladder, unprofiled, so time and traffic come from the same cell
+  python scripts/block_m_crossing_sweep.py --model mixtral-8x7b --dtype bf16 \
+      --tiles 32 --group-m 16 --block-n 64 \
+      --r-max 256 --row-step 32 --step-probes 0
+
+  # 2. the same cell under the counter, one tile count per invocation.
+  #    The instrument (moe/bench/timing.time_kernel) warms up for a DURATION
+  #    of sustained load, --warmup in MILLISECONDS, and sizes its own
+  #    iteration count from that load: there is no --iters any more (the
+  #    flag is retired and ignored) and a zero warmup is REFUSED outright
+  #    (timing.warm_until). So the profiled launch count is never one; it is
+  #    warmup_calls + iters x trials fused_experts calls of about five kernels
+  #    each, plus one L2-flush kernel per timed iteration. The smallest
+  #    settings the instrument accepts keep that small (1 ms of warmup is one
+  #    call of a millisecond-scale kernel; iters floors at 10; one trial), and
+  #    the cell row the sweep writes carries the iters and trials it used.
+  for n in 1 2 3 4 6 8; do
+    ncu --metrics dram__bytes_read.sum,dram__bytes_write.sum,lts__t_sector_op_read_hit_rate.pct,gpu__time_duration.sum \
+        --replay-mode kernel --cache-control all \
+        --csv --page raw --target-processes all \
+        --log-file counters-n$n-ccall.csv \
+        python scripts/block_m_crossing_sweep.py --model mixtral-8x7b \
+          --tiles 32 --group-m 16 --block-n 64 \
+          --r-max $(( n * 32 )) --row-step $(( n * 32 )) --step-probes 0 \
+          --warmup 1 --trials 1 --cell-budget-ms 1
+  done
+
+  # 3. reduce, then score. Sum every byte metric PER KERNEL NAME over all
+  #    profiled launches and divide by the ACTUAL call count: `calls` is the
+  #    number of moe_align_block_size launches in the CSV (exactly one per
+  #    fused_experts call; fused_moe_kernel runs twice per call, up and down),
+  #    and it must equal the row's iters x trials plus the warmup's calls, so
+  #    REFUSE a CSV whose count is not above iters x trials. Write the per-call
+  #    figures as dram_bytes_read etc. and the count as `calls`. Never divide
+  #    by an assumed 1: the instrument decides the count, the row records it.
+  python scripts/dram_counter_route.py --analyse counters.json
+
+CACHE CONTROL, and why it is a swept parameter rather than a default.
+  ncu's default is Flush All: all GPU caches are flushed before each replay
+  iteration. That is a DIFFERENT cache state from the timed sweep, which never
+  flushes. The LEVEL it can move is bounded by L2, and L2 is 40-60 MB against a
+  2.82 GB weight read -- at most 2.1% of R(1). The SLOPE,
+  which is the claim, differences that term away entirely. Run both modes
+  anyway: two agreeing numbers close the question, and two disagreeing ones
+  are themselves the result.
+
+COST.
+  6 tile counts x 2 cache modes = 12 profiled invocations of at least 11 fused_experts calls each,
+  about 660 profiled kernel launches plus 120 L2-flush launches.
+  The largest cell is n=8 (256 rows per expert), which the timed
+  sweep measures in single-digit milliseconds; ncu replay and its save/restore
+  of the 2.8 GB weight buffers dominate, at seconds per launch. Budget
+  an hour of GPU time and two pod-hours end to end, not the fifteen minutes
+  the one-launch recipe used to promise. At A100 spot rates that is still a
+  few dollars. The cost of this experiment has never been the money.
+
+WHICH KERNELS TO KEEP, and why the profile is NOT name-filtered.
+  All of W moves inside the two `fused_moe_kernel` launches; the auxiliary
+  launches (align, reduction) move activation-sized traffic only. Filtering to
+  the GEMM would still be defensible -- but then the measured level would no
+  longer be comparable to the byte model, which charges the whole layer. So
+  profile everything, record bytes PER KERNEL NAME, and let the analysis
+  report both totals. A filter applied at capture cannot be undone afterwards.
+
+SCHEMA the run must write, so --analyse can score it:
+{
+  "device": "nvidia_a100_sxm4_80gb",       # the card slug, matching the calibration file
+  "model": "mixtral-8x7b", "dtype": "bf16",
+  "group_m": 16, "block_n": 64, "block_k": 64,
+  "num_warps": 8, "num_stages": 3, "block_m": 32,
+  "cache_control": "all",           # ncu --cache-control; "all" or "none"
+  "ridge": 145.81,                # THIS card's own calibration, never 160.3
+  "anchors":  {"published": 0.6473, "t1": 0.4522, "n3": 0.7047},
+  "bracket":  [0.4522, 0.6313],
+  "rows": [ {"n": 1, "calls": 11, "launches": 55, "dram_bytes_read": 2.84e9,
+             "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+             "gpu_time_ns": 1.95e6,
+             "by_kernel": {"fused_moe_kernel": 2.81e9, "moe_sum": 3.0e7} }, ... ]
+}
+
+  Every key is required. `--analyse` raises on a missing one rather than
+  defaulting it: a zero that was never measured is the failure mode this whole
+  file exists to avoid. `calls` is the number of fused_experts calls the
+  instrument made (warmup + iters x trials), counted from the profile's own
+  launch list; `launches` is every profiled kernel launch; the byte fields are
+  PER CALL, the sums over all launches divided by `calls`, never by an
+  assumed one.
+
