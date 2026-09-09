@@ -63,7 +63,7 @@ from moe.spec import MODEL_CONFIGS  # noqa: E402
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
 TILES = (32, 64, 128, 256)
 RIDGE = 160.3
-RIDGE_BAND = (160.3, 176.2)
+RIDGE_BAND = (160.3, 176.2)   # withdrawn 2026-09-02 as any card's ridge, see the docstring
 BANDWIDTH = 4374.5
 ROOF = RIDGE * BANDWIDTH * 1e9 / 1e12        # ridge x bandwidth, TFLOP/s
 REFIT = 0.558

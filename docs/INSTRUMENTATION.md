@@ -398,7 +398,7 @@ of the calibrations it was scored against, and across all six calibrations
 that range widens to 160.3 to 179.5. (Retracted 2026-09-02: the range was
 being quoted as a "measured ridge band", as if it were a card's uncertainty
 about its own ridge, and 26 ladder reports on BOTH cards were scored against
-`[160.3, 176.2]`. It is no card's own: it is this one H200's compute ceiling
+`[160.3, 176.2]` (withdrawn). It is no card's own: it is this one H200's compute ceiling
 failing to reproduce across sessions. The committed calibrations give H200
 162.8 and A100 145.8 FLOP/byte, every report has been rescored to the attached
 card's own figure with `rescored_from` carrying the withdrawn one, and a new

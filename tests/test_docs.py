@@ -96,3 +96,88 @@ def test_the_session_driver_is_documented():
     runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
     assert "scripts/h200_gaps_session.sh" in runbook
     assert "SESSION=" in runbook or "--resume-latest" in runbook
+
+
+def test_the_runbook_arm_table_names_only_arms_the_driver_lists():
+    """The runbook says its arm names "are asserted against `--list` by
+    `tests/test_docs.py`"; until 2026-09-08 nothing did. Every `| \`arm\` | min |`
+    row in the runbook has to be an arm `h200_gaps_session.sh --list` prints,
+    off-GPU, so a renamed or retired arm cannot keep a row."""
+    runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
+    documented = set(re.findall(r"^\| `([a-z0-9_-]+)` \| *\d+ \|", runbook, re.M))
+    assert documented, "the runbook's arm table has no rows"
+    out = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "h200_gaps_session.sh"), "--list"],
+        capture_output=True, text=True, cwd=str(ROOT), timeout=120)
+    assert out.returncode == 0, out.stderr[-500:]
+    listed = set(re.findall(r"^  ([a-z0-9_-]+)\s+~\d+ min", out.stdout, re.M))
+    assert listed, out.stdout[-500:]
+    assert documented <= listed, documented - listed
+
+
+# --------------------------------------------------------------------------
+# LEVEL is a band with a side, and the docs must say so in the same words
+# --------------------------------------------------------------------------
+
+#: Sentences that describe the RETIRED one-sided LEVEL ("at least 0.95 of the
+#: reference"), or call the n256 roofline arm confirmable. Each was standing
+#: in a doc on 2026-09-08 after the instrument went two-sided (03df2d4), the
+#: docs slice and the timing slice having merged side by side. A doc that
+#: carries one describes a flag the tree no longer computes.
+STALE_LEVEL_PHRASES = (
+    "at least `LEVEL_FRACTION",
+    "at least LEVEL_FRACTION",  # the retired one-sided wording, hunted here
+    "one fix unblocks",
+    "only arm that could confirm",
+    "only arm that can confirm",
+)
+
+#: What each doc that describes LEVEL has to say: the high edge exists, the
+#: side is a column, the rule is stated in these words, and the corrected
+#: column has a name a reader can grep the CSV for.
+REQUIRED_LEVEL_PHRASES = {
+    "docs/APPARATUS.md": ("LEVEL_HIGH_FRACTION", "clock_level_side",
+                          "pct_of_roof_at_cell_clock", "LOW or DRIFT excludes",
+                          "NOT an exclusion"),
+    "docs/POD_RUNBOOK.md": ("clock_level_side", "pct_of_roof_at_cell_clock",
+                            "NOT an exclusion"),
+    "docs/RUNPOD.md": ("clock_level_side", "pct_of_roof_at_cell_clock",
+                       "Only LOW or DRIFT excludes"),
+    "README.md": ("pct_of_roof_at_cell_clock", "LOW or DRIFT excludes",
+                  "not an exclusion"),
+}
+
+
+def _level_prose_defects(text: str) -> list[str]:
+    """The stale phrases a text carries. Empty means clean."""
+    return [phrase for phrase in STALE_LEVEL_PHRASES if phrase in text]
+
+
+def test_the_level_prose_checker_fires_on_a_planted_stale_row_and_not_on_a_clean_one():
+    """Both sides planted: the exact table row APPARATUS.md carried on
+    2026-09-08 must be caught, and the corrected wording must pass, or the
+    test below proves nothing either way."""
+    planted = ("| LEVEL | `clock_level_ok` | was the SM clock under load at least "
+               "`LEVEL_FRACTION = 0.95` of the reference clock the ROOF was "
+               "measured at |")
+    assert _level_prose_defects(planted) == ["at least `LEVEL_FRACTION"]
+    assert _level_prose_defects("THE CLAIM ... the only arm that could confirm "
+                                "the ceiling") == ["only arm that could confirm"]
+    clean = ("inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = "
+             "1.05`]; LOW or DRIFT excludes; HIGH is NOT an exclusion, read "
+             "`pct_of_roof_at_cell_clock`")
+    assert _level_prose_defects(clean) == []
+
+
+def test_every_doc_describes_LEVEL_as_a_two_sided_band_and_names_the_column_to_read():
+    """No doc or the README may describe the retired one-sided LEVEL or call
+    the n256 arm confirmable, and each doc that describes LEVEL states the
+    band, the side, the rule (LOW or DRIFT excludes; HIGH is not an exclusion)
+    and `pct_of_roof_at_cell_clock` as the column to read."""
+    for path in [ROOT / "README.md", *(ROOT / "docs").glob("*.md")]:
+        defects = _level_prose_defects(path.read_text())
+        assert defects == [], f"{path.relative_to(ROOT)} still says {defects}"
+    for rel, needles in REQUIRED_LEVEL_PHRASES.items():
+        text = (ROOT / rel).read_text()
+        for needle in needles:
+            assert needle in text, f"{rel} does not say {needle!r}"

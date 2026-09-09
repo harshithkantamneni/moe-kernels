@@ -61,7 +61,7 @@ determined" and never "zero":
 
 | flag | column | what it asks | the retired check it replaces |
 |---|---|---|---|
-| LEVEL | `clock_level_ok` | was the SM clock under load at least `LEVEL_FRACTION = 0.95` of the reference clock the ROOF was measured at | nothing asked this. A card sitting at 1500 MHz for a whole cell, with a roof measured at 1980, passed the old check with drift 0.0 |
+| LEVEL | `clock_level_ok`, side in `clock_level_side` | was the SM clock under load inside the band [`LEVEL_FRACTION = 0.95`, `LEVEL_HIGH_FRACTION = 1.05`] of the reference clock the ROOF was measured at, in EITHER direction; a failure names its side, `low` or `high` | nothing asked this. A card sitting at 1500 MHz for a whole cell, with a roof measured at 1980, passed the old check with drift 0.0. And until 2026-09-04 (03df2d4) LEVEL itself was one-sided, `load >= 0.95 * reference`, so a memory-shaped cell boosted to 1980 against a 1515 roof passed with its fixed-roof fraction inflated by 1.31x |
 | DRIFT | `clock_drift_ok` | do the first and last under-load samples agree within `DRIFT_FRACTION = 0.05`, in EITHER direction | the old `clock_drift` fired only on a >5% DROP between two idle-instant samples |
 | host-bound | `host_bound` | had the GPU fewer than `HOST_BOUND_BACKLOG_ITERS = 2` iterations of work queued when the host finished enqueueing any trial | nothing; the drained-queue case silently included host enqueue time in the interval |
 
@@ -76,6 +76,40 @@ basis in `docs/FINDINGS.md`, is that flag. LEVEL is the flag that means
 something against a roof; a consumer that filters v5 rows must test LEVEL AND
 DRIFT, not one of them. A rise is a defect too: it means the warmup did not
 reach the operating point.
+
+**The side, and the rule every consumer must apply.** A LEVEL failure is not
+one thing. `low` means the card sat BELOW the clock the roof was measured at:
+the cell is not comparable with the fixed roof and it is EXCLUDED, as a DRIFT
+failure is. `high` means the cell ran ABOVE that clock, and on the H200 that
+is the EXPECTED state of a memory-bound cell: the roof's dense GEMM is power
+limited and plateaus at 1455-1515 MHz, while the committed calibration's
+memory load, which draws less power, held 1980 for its whole 30 s settle, a
+ratio of 1.31 against a 1.05 band. Stated as the bracket it is: 1980 is the
+calibration's streaming load, no Triton `fused_moe` cell has been traced under
+the instrument, and such a cell may sit anywhere between 1515 and 1980; but
+anything above 1591 fails the band, and the 2026-09-01 idle-instant proxy put
+67% of memory-bound rows there. A HIGH row is NOT an exclusion. Its timing is
+sound; what is wrong is the fixed-roof fraction `pct_of_achieved_tflops`,
+inflated by `load / reference`, and the driver writes the correction onto the
+row: `roof_at_cell_clock_tflops` (`roofline.roof_at_clock`) and
+`pct_of_roof_at_cell_clock`, the compute-side fraction to read from a v6 row,
+scored only when the reference is graded `under-load` and refused with the
+reason in `roof_note` otherwise (`schema.has_cell_clock_roof` is the predicate
+to split a pool on). The rule in one line: LOW or DRIFT excludes; HIGH means
+"the fixed-roof fraction is not comparable, read `pct_of_roof_at_cell_clock`".
+The driver's `throttled` column already encodes exactly LOW-or-DRIFT
+(`moe/bench/driver.py`), so a consumer may branch on it instead of
+re-deriving the side. What failure this prevents: a consumer that treats
+`clock_level_ok = failed` alone as "ran cold, exclude" drops every boosted
+row, which on an H200 is every memory-bound tread of every ladder; it lands
+the alias arm INVALID and admits no memory-bound row into any refit. That was
+found on 2026-09-08 at thirteen consumers after the instrument went two-sided
+at its one producer: the fifteenth instance of a fix applied at one of two
+call sites. A consumer is correct only when a planted 1980-against-1515 row
+with side `high` is KEPT and a planted LOW row is EXCLUDED; a consumer that
+reads `clock_level_ok` without `clock_level_side` has the one-sided reading
+whatever its comment says, and the `throttled` column is the one place the
+rule was already applied when this was written.
 
 **The reference clock.** LEVEL is a comparison and half a comparison is not a
 verdict, so `clock_level_ok` is `None` unless `reference_clock_mhz` is

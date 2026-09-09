@@ -352,9 +352,15 @@ control that requested no metrics at all. Check for
 
 `moe/bench/timing.py` polls the SM clock from a background thread WHILE every
 cell's trials run and records two verdicts per row: LEVEL, the loaded clock is
-within 5% of the clock this card's roof was measured at (`clock_level_ok`), and
-DRIFT, the first and last under-load samples agree within 5% in either
-direction (`clock_drift_ok`). LEVEL needs the reference clock from this card's
+inside the band 0.95 to 1.05 of the clock this card's roof was measured at
+(`clock_level_ok`, with `clock_level_side` naming `low` or `high` on a
+failure), and DRIFT, the first and last under-load samples agree within 5% in
+either direction (`clock_drift_ok`). Only LOW or DRIFT excludes a row. HIGH is
+the expected state of a memory-bound cell on the H200 (the calibration's memory
+load holds 1980 MHz against the 1515 MHz GEMM reference; `docs/APPARATUS.md`
+section 1 states the bracket) and is not an exclusion: it means the fixed-roof
+fraction is not comparable, and `pct_of_roof_at_cell_clock` is the column to
+read. LEVEL needs the reference clock from this card's
 published calibration, which is the second reason `--publish` above is not
 optional. Until 2026-09-02 this section said the harness sampled the clock
 "before and after every cell" and flagged a drift over 5% (retracted: that

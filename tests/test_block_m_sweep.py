@@ -57,8 +57,10 @@ RIDGE = 160.3
 #: the module's `RIDGE_BAND`: defaulting is how seven published A100 reports
 #: came to carry an H200 band. A caller that wants the two-ended prediction has
 #: to say which two ends, and these are the 2026-08-26 H200 pair the published
-#: predictions were computed at.
-RIDGE_BAND = (160.3, 176.2)
+#: predictions were computed at, WITHDRAWN 2026-09-02 as any card's ridge (two
+#: compute calibrations of one H200; its own ridge is 162.8). A test may plant
+#: the pair precisely because a planted number is not a measurement.
+RIDGE_BAND = (160.3, 176.2)   # withdrawn pair, planted
 BANDWIDTH = 4374.5          # the published H200 triad ceiling
 REFIT = 0.558
 RETRACTED = 0.10

@@ -401,7 +401,11 @@ from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 ALPHA = SWEEP.ALPHA                       # 0.558, refit 2026-08-31
 ALPHA_BAND = SWEEP.ALPHA_BAND             # (0.529, 0.588)
 RETRACTED_ALPHA = SWEEP.RETRACTED_ALPHA   # 0.10, the world every gate discriminates against
-RIDGE_BAND = SWEEP.RIDGE_BAND             # (160.3, 176.2) Op/B, both ends of one card
+#: (160.3, 176.2) Op/B: WITHDRAWN 2026-09-02 as any card's ridge. It is two compute
+#: calibrations of one H200 9.9% apart (its own ridge is 162.8, the A100's 145.8),
+#: pinned by --self-test only as the HYPOTHESIS the sibling module labels it, so a
+#: planned run can mislabel nothing. A measured run resolves the attached card's.
+RIDGE_BAND = SWEEP.RIDGE_BAND             # withdrawn pair, HYPOTHESIS_RIDGE_SOURCE
 
 #: The tile under test. 16 is what `get_default_config` returns for M <= 32,
 #: which is the decode regime on every shape in this study that has no tuned

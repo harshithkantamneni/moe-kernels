@@ -130,10 +130,14 @@ numbers omit them and are therefore not comparable to each other:
   bandwidth. Named so nobody reads them as measurements.
 - **Clock under load, flagged on LEVEL and DRIFT.** `moe/bench/timing.py`
   polls the SM clock from a background thread WHILE the trials run and sets
-  two verdicts per cell: LEVEL, the loaded clock is within 5% of the clock the
-  roof was measured at, and DRIFT, the first and last under-load samples agree
-  within 5% in either direction. An earlier version of this line said the
-  clock was "sampled around every cell and flagged" (retracted 2026-09-02:
+  two verdicts per cell: LEVEL, the loaded clock is inside a 0.95 to 1.05 band
+  around the clock the roof was measured at, with the side named on a failure
+  (LOW or DRIFT excludes a row; HIGH is the expected state of a memory-bound
+  cell on the H200 and is not an exclusion: read `pct_of_roof_at_cell_clock`,
+  the roof rescaled to the cell's own clock), and DRIFT, the first and last
+  under-load samples agree within 5% in either direction. An earlier version
+  of this line said the clock was "sampled around every cell and flagged"
+  (retracted 2026-09-02:
   that flag compared two idle-instant samples and fired on a drop, so it
   detected whether the first sample had caught the idle boost, not
   throttling; on the alpha-0558 arm it flagged 91% of vLLM rows above T=4096
@@ -207,7 +211,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 3841 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 3835 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
