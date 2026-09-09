@@ -2558,6 +2558,16 @@ def gate_reference_level(verdicts: list[RefVerdict]) -> Gate:
                               else "no reference")
         + (" (IMPORTED)" if v.imported else "")
         for v in verdicts)
+    # THE GATE READS THE FIXED-ROOF FRACTION ABOVE; the same rates against the
+    # roof at each arm's own clock go on the line beside it, because on this
+    # card the three reference ladders held 1725 / 1620 / 1560 MHz and the two
+    # readings differ by 3-5 points. Printed, never scored.
+    own = "; ".join(
+        f"BN={v.block_n} {v.own_clock_fraction:.1%} at "
+        f"{v.load_clock_mhz:.0f} MHz"
+        for v in verdicts if v.own_clock_fraction is not None)
+    if own:
+        obs += f" | issue efficiency (record, not the gate input): {own}"
     return Gate(VALIDITY, "V2 reference level",
                 "each arm's compute reference runs at a plausible rate",
                 f"implied TFLOP/s in [{REFERENCE_LEVEL_FLOOR:.0%}, "

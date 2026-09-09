@@ -2055,6 +2055,11 @@ def test_the_session_references_qualify_and_v2_passes():
     _, lines, gates, _ = _session_run()
     text = "\n".join(lines)
     assert "BN=32 36.7%; BN=64 54.6%; BN=128 71.6%" in gates["V2"].observed
+    # R2: the fixed-roof fraction is the gate input, the own-clock fraction is
+    # printed beside it on the gate line as well as on every point line.
+    assert ("issue efficiency (record, not the gate input): BN=32 31.6% at "
+            "1725 MHz; BN=64 50.1% at 1620 MHz; BN=128 68.2% at 1560 MHz"
+            ) in gates["V2"].observed
     assert gates["V2"].scored()[2] == "PASS"
     for fraction in ("36.7% of 668.5", "54.6% of 668.5", "71.6% of 668.5"):
         assert fraction in text, fraction
