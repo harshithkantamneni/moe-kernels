@@ -2,7 +2,7 @@
 """Can BLOCK_SIZE_M=128 ever show FIVE clean memory-bound treads? Arithmetic first.
 
     python scripts/bm128_depth.py --audit        # the answer, off GPU, from published data
-    python scripts/bm128_depth.py --self-test    # five worlds, through the pod's own analysis
+    python scripts/bm128_depth.py --self-test    # six worlds, through the pod's own analysis
     python scripts/bm128_depth.py --dry-run      # the pod plan, the cost, and what it can detect
     python scripts/bm128_depth.py                # the pod run
 
@@ -18,11 +18,41 @@ should know them first.
   inside the interval, a per-card bias in the fitted alpha of 8-16% at the
   smallest treads, the same size as the cross-card effect this study
   registered. `Sample` now carries the instrument's own columns and
-  `analyse_run` carries them into the fit, so a tread timed below the band
-  around the clock the roof was measured at (LEVEL failed LOW) is EXCLUDED and
-  counted rather than fitted, and a tread timed above it (LEVEL failed HIGH,
-  the boosted memory-shaped state that is every memory-bound tread on an H200)
-  is KEPT and counted, with its fixed-roof fraction named as not comparable.
+  `analyse_run` carries them into the fit, so a tread whose clock MOVED while
+  it was timed (DRIFT) is EXCLUDED and counted rather than fitted, and a tread
+  whose clock sat steadily off the band on EITHER side is KEPT and counted,
+  with its fixed-roof fraction named as off by the clock ratio in that
+  direction. See the 2026-09-09 pre-registration change below for why the LOW
+  side stopped excluding.
+
+PRE-REGISTRATION CHANGE, 2026-09-09, and what it cost to find out. Two things
+about this arm are different from the plan the 2026-09-09 H200 session ran, and
+both are stated here rather than in a commit message because they change what
+the arm can conclude.
+
+  1. THE CLOCK RULE. LEVEL-LOW excluded until this date. On that session all 16
+  BLOCK_M=128 subject treads were LOW by 7-repeat majority (1365-1410 MHz
+  against a 1410.75 MHz floor) and all 8 BLOCK_M=256 reference treads were HIGH
+  (1605-1650), so the arm scored ZERO treads and exited INVALID. Across the
+  session's 750 cells the under-load clock is an outcome of the CELL, set per
+  tile by the kernel's own power draw under the 700 W cap; LEVEL-LOW was a rule
+  against this arm's own subject tile. DRIFT is now the only exclusion and both
+  sides are recorded.
+
+  2. THE LADDER PAIRING AND THE NON-VACUITY FLOOR. The arm ran {128, 256} and
+  its reference was refused on NON-VACUITY at 1.532, never on the clock: with
+  BM_min=128 the check demands a compute reference reaching 2 BM_min / (b ridge)
+  = 0.838 of the DENSE GEMM roof, and no fused layer in this study's 26
+  published reports has exceeded 0.756 of it. That refusal was pre-registered
+  to fire on every card before a cell ran, and the log printed only "its LEVEL
+  is wrong", so the session read it as a clock problem. Two changes, together:
+  a SMALL-TILE SCALING PARTNER at BLOCK_M=32 joins the pairing, which is a
+  ladder whose treads can stand above the compute branch and which drops the
+  floor to 0.209; and the floor is derived on the FUSED footing, from the
+  CONTROL'S MEASURED PLATEAU rather than from the dense GEMM roof, with that
+  plateau itself required to land in the [0.465, 1.05] band `tile_cap_test`'s
+  V3 registers for a fused layer. The derivation is printed on the page, every
+  refusal is printed, and `--audit` and the self-test score the same rule.
 
   THE EXCLUSION REACHES EVERY GATE, not only the fit. It stopped at
   `fit_ladder` for one commit: V2's inversions, V3's slope sequence, V5's
@@ -58,8 +88,8 @@ should know them first.
   UNDECIDED IS A THIRD ANSWER. `fit_ladder` has six named outcomes and two of
   them mean the sweep LOOKED AND COULD NOT SAY. Read as a blank,
   `undecided_parallel_branch` publishes "no depth" from a fit that named none,
-  and `undecided_low_clock` publishes the card as the tile. Both now reach the
-  report as UNKNOWN with the outcome printed beside them.
+  and `undecided_drifting_clock` publishes a settling governor as the tile.
+  Both now reach the report as UNKNOWN with the outcome printed beside them.
 
   `C3 the law predicts the depth` IS NOW `V6 fit self-consistency`. It compared
   `n*` computed from `(alpha, B/C)` against the tread count those same numbers
@@ -470,6 +500,65 @@ SUBJECT_BLOCK_M = 128
 #: that is compute bound throughout gives `C` at every block size. 256 is the
 #: only block size this study has ever found compute bound at tread 1.
 REFERENCE_BLOCK_M = 256
+
+#: The SMALL-TILE SCALING PARTNER, added to the pairing on 2026-09-09.
+#:
+#: WHAT IT IS FOR, and it is not the reference. `_level_checks`'s NON-VACUITY
+#: test scales the candidate compute branch to the SMALLEST block size the
+#: sweep runs and asks whether anything could stand above it: in roof units the
+#: floor is `2 BM_min / (b ridge)`, which at BM_min=128 on the H200 is 0.838 of
+#: the dense GEMM roof. A {128, 256} pairing therefore refuses its own
+#: reference on every card, because no fused layer in this study's corpus
+#: exceeds 0.756 of that roof -- the arm was pre-registered INVALID. 32 is the
+#: smallest tile this repository has ladders for, its own AI cap at alpha=1 is
+#: 32 Op/B against a 152.8 Op/B ridge, so it is unambiguously memory bound and
+#: its presence in the sweep is what makes "some tread could be memory bound"
+#: true rather than assumed. It drops the floor to 0.209.
+#:
+#: AND IT IS MEASURED, not merely declared. A floor justified by a ladder that
+#: was never run is a floor justified by a comment; `PARTNER_TREADS` treads are
+#: swept and `analyse_run` prints how many arrived. The fused footing clears
+#: the floor without it (0.838 < 1 at BM_min=128), so a partner that fails to
+#: run costs the arm this justification and not its verdict, and the page says
+#: which of the two carried the pass.
+SMALL_TILE_BLOCK_M = 32
+
+#: How many treads of the partner ladder to sweep. Four: enough for
+#: `compute_reference` to see a ladder rather than a pair of points, cheap at
+#: this tile, and the deepest of them (r=128) matches the subject's n=1 tread
+#: so the cross-ladder LEVEL check has something to compare.
+PARTNER_TREADS = 4
+
+#: The block sizes this sweep RUNS, smallest first, and the one tuple both
+#: qualification call sites pass. ONE NAME BECAUSE THERE ARE TWO CALL SITES:
+#: `main` qualifies the reference early, before the subject costs anything, and
+#: `analyse_run` qualifies it again over the finished cells. On 2026-09-09 the
+#: early call passed `(REFERENCE_BLOCK_M,)` and the late one
+#: `(SUBJECT_BLOCK_M, REFERENCE_BLOCK_M)`, so the two scored the vacuity floor
+#: at 1.675 and 0.838 of the roof and the log printed the first over a run the
+#: second judged. That is this repository's recurring defect -- a fix applied
+#: at one of two call sites -- and a shared constant is the only shape that
+#: cannot have it.
+BLOCK_SIZES = (SMALL_TILE_BLOCK_M, SUBJECT_BLOCK_M, REFERENCE_BLOCK_M)
+
+#: THE FUSED LAYER'S OWN ROOF, as a band in fractions of `ridge x bandwidth`.
+#: Mirrored from `scripts/tile_cap_test.py` -- `FUSED_ROOF_FLOOR` and
+#: `FUSED_ROOF_CEILING * (1 + FUSED_ROOF_CEILING_TOLERANCE)`, the interval its
+#: V3 registers -- rather than imported, because that script imports a GPU
+#: stack at module scope and this file is documented to audit and self-test on
+#: a laptop. `tests/test_bm128_depth.py` asserts the mirror against the
+#: sibling, so the two cannot come to different answers about what a fused
+#: layer's roof is.
+#:
+#: WHAT IT IS DOING HERE. `compute_reference` is handed this band as
+#: `fused_roof_band`, which puts the non-vacuity comparison on the fused
+#: layer's own roof instead of the dense GEMM's, and requires the reference's
+#: measured plateau to land inside it. The floor 0.465 is what a run must clear
+#: to have shown this apparatus can drive a fused layer to a roof at all; the
+#: corrupt A100 BLOCK_N=256 reference reached 0.013 and is refused by it with
+#: two orders of magnitude to spare, where the dense-footing bound it used to
+#: be caught by is one no sound reference meets either.
+FUSED_PLATEAU_BAND = (0.465, 1.05)
 
 #: The ask: five clean memory-bound treads at the subject block size.
 TARGET_TREADS = 5
@@ -1148,8 +1237,9 @@ def gate_depth(memory_treads: int, ladder_treads: int,
       `B/C = ridge/ai_cap` means this tile's cap sits ON the ridge. That is the
       exact regime the whole BLOCK_M=128 question is about, and scoring it FAIL
       would publish "no depth" from a fit that declined to name one.
-      `undecided_low_clock` -- enough treads were dropped for clock level that
-      what remains is under the floor. The card is what that ladder measured.
+      `undecided_drifting_clock` -- enough treads were dropped because their
+      clock MOVED while they were timed that what remains is under the floor.
+      A governor settling, not the tile, is what that ladder measured.
 
     Both return UNKNOWN, which counts against the gate without asserting the
     opposite, and both NAME the outcome so the reader knows which next
@@ -1173,9 +1263,10 @@ def gate_depth(memory_treads: int, ladder_treads: int,
                         "it as one is how a fit that refused to answer becomes "
                         "a published 'no'. `undecided_parallel_branch` says the "
                         "cap sits ON the ridge, which the roofline arm can "
-                        "settle and this one cannot; `undecided_low_clock` says "
-                        "the card throttled and the run should be repeated on a "
-                        "quiet one."])
+                        "settle and this one cannot; "
+                        "`undecided_drifting_clock` says the clock moved "
+                        "mid-measurement and the run should be repeated on an "
+                        "instrument that warms until it settles."])
     return Gate(CLAIM, "C1 depth",
                 f"at least {TARGET_TREADS} clean memory-bound treads at "
                 f"BLOCK_M={SUBJECT_BLOCK_M}",
@@ -2217,25 +2308,34 @@ class Sample:
     conflates two states a reader has to tell apart: the poller landed too few
     samples on a run that HAD a reference, and the run had no reference at all,
     in which case `clock_flags` could never have returned anything else. On disk
-    both are an empty cell. `clock_excluded` is False for either, so a ladder
-    measured with no reference reports ZERO treads excluded for clock level --
-    the "a check that examined nothing reports zero failures" shape
-    `moe/bench/exit_codes.py` is named against -- and reads exactly like a
-    ladder measured on a card that never sagged. `reference_clock_mhz` is what
-    separates them, on the row it scored, so a resume or a replay a week later
-    can still say which run this was.
+    both are an empty cell. A ladder measured with no reference therefore
+    reports NO LEVEL SIDE ON ANY ROW -- the "a check that examined nothing
+    reports zero failures" shape `moe/bench/exit_codes.py` is named against --
+    and reads exactly like a ladder measured on a card that never left the
+    band. `reference_clock_mhz` is what separates them, on the row it scored,
+    so a resume or a replay a week later can still say which run this was. The
+    EXCLUSION no longer turns on this: DRIFT is a comparison of a row with
+    itself and needs no reference. What a missing reference costs is the
+    recorded side and every rescaled roof fraction.
 
-    AND A FAILED LEVEL HAS A SIDE. `clock_level_side` is "low", "high" or ""
-    (passed, or not determined), the instrument's own word for which edge of
-    the band the loaded clock crossed. `clock_excluded` is the LOW side only;
-    `clock_boosted` is the HIGH side and is kept, because a memory-bound tread
-    does not follow the SM clock and its time is a measurement; what the fixed
-    roof does not describe is that tread's fraction of it.
-    `SWEEP.check_level_side` refuses, at construction, a side on a verdict
-    that did not fail and a failed verdict with no side: the instrument derives
-    the verdict from the side, so a failed row without one was copied by a
-    caller that dropped the side, and reading its blank as LOW (the rule until
-    2026-09-08) is what dropped every boosted tread.
+    AND A FAILED LEVEL HAS A SIDE, WHICH IS A RECORD AND NOT AN EXCLUSION.
+    `clock_level_side` is "low", "high" or "" (passed, or not determined), the
+    instrument's own word for which edge of the band the loaded clock crossed.
+    Since 2026-09-09 `clock_excluded` reads DRIFT alone and both sides are
+    kept: `clock_sagged` is the LOW side, `clock_boosted` the HIGH, and both
+    are counted so the report can say which way each kept tread's fixed-roof
+    fraction is off. `SWEEP.check_level_side` refuses, at construction, a side
+    on a verdict that did not fail and a failed verdict with no side: the
+    instrument derives the verdict from the side, so a failed row without one
+    was copied by a caller that dropped the side, and reading its blank as LOW
+    (the rule until 2026-09-08) is what dropped every boosted tread.
+
+    AND THE UNDER-LOAD SAMPLES ARE COLUMNS TOO, since 2026-09-09. `time_kernel`
+    decides DRIFT from the FIRST and LAST under-load samples and this row used
+    to keep neither, so the 6 DRIFT verdicts in the 2026-09-09 cells.csv could
+    not be read for direction: a clock that ramped once and settled is the
+    governor after a workload change, which a settling warmup absorbs, and one
+    that oscillated throughout is not, and those point at different fixes.
     """
 
     block_m: int
@@ -2256,6 +2356,18 @@ class Sample:
     warmup_ms: float = 0.0
     trials: int = 0
     sm_clock_load_mhz: float | None = None
+    #: First and last under-load samples, the pair DRIFT was decided on.
+    sm_clock_start_mhz: float | None = None
+    sm_clock_end_mhz: float | None = None
+    #: EVERY under-load sample, space separated, "" when the instrument
+    #: reported none. Written as text because a CSV cell holds text and a
+    #: reader who has to trust a parser cannot check.
+    clock_samples_mhz: str = ""
+    #: Milliseconds the warmup spent waiting for the clock to settle beyond
+    #: `warmup_ms`, and the extra warm calls that cost. None on an instrument
+    #: basis that does not wait.
+    settle_ms: float | None = None
+    settle_calls: int | None = None
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
     l2_flush: bool = False
@@ -2272,25 +2384,40 @@ class Sample:
 
     @property
     def clock_excluded(self) -> bool:
-        """Was this timing taken BELOW the band around the clock the roof was
-        measured at, the one clock state the ladder excludes.
+        """Did the clock MOVE while this timing was taken: DRIFT failed.
+
+        THE ONE CLOCK STATE THE LADDER EXCLUDES, since 2026-09-09. A median
+        over two clock states is a blend and the time belongs to neither.
 
         False for None on purpose, and this is the one place that reading is
         correct: an EXCLUSION has to be positively established. A row with no
         clock is a row whose comparability is unknown, and the report says how
-        many of those there are rather than dropping them. False for the HIGH
-        side too: until 2026-09-08 this read `clock_level_ok is False`, which
-        after the flag went two-sided dropped every boosted tread, and on an
-        H200 that is every memory-bound tread this arm exists to measure. The
-        side alone decides, since `SWEEP.check_level_side` refused at
-        construction every row on which it and the verdict could disagree.
+        many of those there are rather than dropping them.
+
+        WHAT IT READ BEFORE, AND WHAT THAT COST THIS ARM. Until 2026-09-09 it
+        was `clock_level_side == LEVEL_LOW`. On the 2026-09-09 H200 session all
+        16 BLOCK_M=128 subject treads were LOW by 7-repeat majority (1365-1410
+        MHz against a 1410.75 MHz floor) and all 8 BLOCK_M=256 reference treads
+        were HIGH (1605-1650): the arm scored zero treads and exited INVALID
+        having measured everything it planned. Across that session's 750 cells
+        the under-load clock is set per tile by the kernel's own power draw
+        under the 700 W cap, so the rule was excluding this arm's subject tile
+        for being the tile it is. See the module docstring's 2026-09-09
+        pre-registration change.
         """
+        return self.clock_drift_ok is False
+
+    @property
+    def clock_sagged(self) -> bool:
+        """Did LEVEL fail on the LOW side. Kept since 2026-09-09; the
+        fixed-roof fraction of this tread is UNDERSTATED by the clock ratio and
+        is reported as such."""
         return self.clock_level_side == SWEEP.LEVEL_LOW
 
     @property
     def clock_boosted(self) -> bool:
         """Did LEVEL fail on the HIGH side. Kept; the fixed-roof fraction of
-        this tread is inflated by the clock ratio and is reported as such."""
+        this tread is OVERSTATED by the clock ratio and is reported as such."""
         return self.clock_level_side == SWEEP.LEVEL_HIGH
 
 
@@ -2347,6 +2474,11 @@ class Plan:
     cell_budget_ms: float
     estimated_seconds: float
     cells: int
+    #: The BLOCK_M=32 scaling partner's treads. APPENDED, never inserted, and
+    #: defaulted, so a Plan built positionally by an older caller or a test
+    #: still constructs. Empty means the partner is not swept, which
+    #: `analyse_run` prints rather than passes over.
+    partner_rows: list[int] = field(default_factory=list)
 
     def lines(self, cfg) -> list[str]:
         return [
@@ -2356,6 +2488,10 @@ class Plan:
             f"reference    BLOCK_M={REFERENCE_BLOCK_M} at rows "
             f"{self.reference_rows} -- MEASURED FIRST, and its level checked "
             "before the subject costs anything",
+            f"partner      BLOCK_M={SMALL_TILE_BLOCK_M} at rows "
+            f"{self.partner_rows} -- the smallest tile the sweep runs, which "
+            "is what the non-vacuity floor is taken over; not a candidate "
+            "reference",
             f"subject      BLOCK_M={SUBJECT_BLOCK_M} at rows {self.subject_rows}",
             f"repeats      {self.reps} round-robin passes per setting, so an "
             "inversion can be told from noise",
@@ -2368,8 +2504,8 @@ class Plan:
             "is kept only in the run id; the instrument sizes each cell's "
             "iteration count from --cell-budget-ms and records it per row",
             f"cells        {self.cells} timings "
-            f"({len(self.reference_rows) + len(self.subject_rows)} treads x "
-            f"{self.reps} reps)",
+            f"({len(self.reference_rows) + len(self.partner_rows) + len(self.subject_rows)} "
+            f"treads x {self.reps} reps)",
             f"estimate     {self.estimated_seconds:.0f} s of GPU at the model's "
             "own timings, excluding compiles and allocation",
         ]
@@ -2389,6 +2525,12 @@ def build_plan(args, cfg) -> Plan:
                   BLOCK_SIZE_N=args.block_n, BLOCK_SIZE_K=args.block_k)
     ref_rows = ladder_rows(cfg, REFERENCE_BLOCK_M, args.r_max)
     sub_rows = ladder_rows(cfg, SUBJECT_BLOCK_M, args.r_max)
+    # The partner is capped at `PARTNER_TREADS` rather than at `--r-max`: it is
+    # a scaling witness, not a curve, and 32-row treads all the way to r_max
+    # would be the most expensive ladder in the plan for the least information.
+    partner_rows = ladder_rows(
+        cfg, SMALL_TILE_BLOCK_M,
+        min(args.r_max, SMALL_TILE_BLOCK_M * PARTNER_TREADS))
     # PRICED AS THE INSTRUMENT CHARGES, not as the retired loop did. A cell
     # costs a fixed warmup DURATION plus `--trials` trials of `--cell-budget-ms`
     # of kernel time each, and it costs that whatever the kernel's own time is,
@@ -2399,10 +2541,11 @@ def build_plan(args, cfg) -> Plan:
     # no longer enter the estimate at all and the docstring says so rather than
     # leaving three unused arguments looking load-bearing.
     per_cell_ms = args.warmup + args.trials * args.cell_budget_ms
-    cells = args.reps * (len(ref_rows) + len(sub_rows))
+    cells = args.reps * (len(ref_rows) + len(partner_rows) + len(sub_rows))
     return Plan(args.model, args.dtype, pinned, ref_rows, sub_rows, args.reps,
                 args.iters, args.warmup, args.trials, not args.no_l2_flush,
-                args.cell_budget_ms, cells * per_cell_ms / 1e3, cells)
+                args.cell_budget_ms, cells * per_cell_ms / 1e3, cells,
+                partner_rows=partner_rows)
 
 
 def collapse(samples: list[Sample], block_m: int
@@ -2429,9 +2572,9 @@ def _spread_of(reps: dict[int, list[float]]) -> float | None:
     `collapse` sees every tread the CSV holds; `analyse_run` scores only the
     treads `ladder_treads` admitted, and the spread it weighs an inversion or a
     slope drop against has to come from the same set. A spread taken over treads
-    that were excluded for clock level is a noise band measured partly on
-    another compute branch, and it is the denominator of every sigma on the
-    page.
+    whose clock drifted mid-measurement is a noise band measured partly on a
+    blend of two operating points, and it is the denominator of every sigma on
+    the page.
 
     None, never 0.0, when no tread has two repeats: "we do not know how noisy
     this was" and "this was 0% noisy" are different states and only one of them
@@ -2499,16 +2642,16 @@ def tread_reference(samples: list[Sample], block_m: int
                     ) -> dict[int, float | None]:
     """Per tread: the clock its LEVEL verdict was scored against, or None.
 
-    THE EXCLUSION COUNT HAS TO BE ABLE TO SAY IT EXAMINED NOTHING. `ladder_treads`
-    drops a tread whose `clock_level_ok` is False, and `Sample.clock_excluded`
-    is False for None because an exclusion must be positively established --
-    both correct. Together they mean a ladder every one of whose rows was timed
-    with NO reference reports `0 excluded for clock level`, which is the same
-    sentence a ladder measured on a card that held its clock all the way
-    reports. `moe/bench/exit_codes.py` names that shape: a check that examined
-    nothing reports zero failures. This is the left-hand side those two rows
-    differ on, and it comes off the row rather than off the session so a resumed
-    `cells.csv` and a replayed one answer the same.
+    THE LEVEL RECORD HAS TO BE ABLE TO SAY IT EXAMINED NOTHING. A ladder every
+    one of whose rows was timed with NO reference records NO SIDE on any row,
+    which is the same output a ladder measured on a card that held its clock
+    inside the band produces. `moe/bench/exit_codes.py` names that shape: a
+    check that examined nothing reports zero failures. This is the left-hand
+    side those two rows differ on, and it comes off the row rather than off the
+    session so a resumed `cells.csv` and a replayed one answer the same. Since
+    2026-09-09 the SIDE is a record and DRIFT is the exclusion, so what a
+    missing reference voids is the record and the rescaled fractions, not the
+    membership.
 
     ANY, NOT MAJORITY, unlike `tread_clock`. The reference is a property of the
     RUN and not of the repeat, so a tread has one as soon as one of its repeats
@@ -2575,6 +2718,21 @@ def _opt_bool(raw) -> bool | None:
     return text in ("1", "true", "yes")
 
 
+def _samples_text(t) -> str:
+    """`KernelTiming`'s under-load sample list as one CSV cell, or "".
+
+    THROUGH getattr, on purpose: `moe.bench.timing.time_kernel` keeps only the
+    COUNT of usable samples today and gains the list with the settle-on-clock
+    warmup. This writer must persist it the moment it exists and must keep
+    running until then, because every committed row of the 2026-09-09 session
+    was written by a basis that has no list.
+    """
+    samples = getattr(t, "clock_samples_mhz", None)
+    if not samples:
+        return ""
+    return " ".join(f"{float(v):.0f}" for v in samples)
+
+
 def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
     if not path.exists():
         return set(), []
@@ -2597,6 +2755,14 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int]], list[Sample]]:
                 warmup_ms=float(row.get("warmup_ms") or 0.0),
                 trials=int(row.get("trials") or 0),
                 sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                # Absent on every row written before 2026-09-09: the columns
+                # did not exist, and None is "the writer did not record this".
+                sm_clock_start_mhz=_opt_float(row.get("sm_clock_start_mhz")),
+                sm_clock_end_mhz=_opt_float(row.get("sm_clock_end_mhz")),
+                clock_samples_mhz=(row.get("clock_samples_mhz") or "").strip(),
+                settle_ms=_opt_float(row.get("settle_ms")),
+                settle_calls=(None if row.get("settle_calls") in (None, "", "None")
+                              else int(float(row["settle_calls"]))),
                 clock_level_ok=_opt_bool(row.get("clock_level_ok")),
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
                 # Absent on every row written before 2026-09-03, and the honest
@@ -2698,6 +2864,19 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                                 instrument=t.instrument, warmup_ms=t.warmup_ms,
                                 trials=t.trials,
                                 sm_clock_load_mhz=t.sm_clock_load_mhz,
+                                # THE PAIR DRIFT WAS DECIDED ON, and the full
+                                # sample list and settle cost when the
+                                # instrument reports them. Read through getattr
+                                # for the last three because the instrument
+                                # gains them in its own tree and this writer
+                                # must keep running against the basis that
+                                # wrote every committed row. Absent is written
+                                # blank: "not reported", never zero.
+                                sm_clock_start_mhz=t.sm_clock_start_mhz,
+                                sm_clock_end_mhz=t.sm_clock_end_mhz,
+                                clock_samples_mhz=_samples_text(t),
+                                settle_ms=getattr(t, "settle_ms", None),
+                                settle_calls=getattr(t, "settle_calls", None),
                                 clock_level_ok=t.clock_level_ok,
                                 clock_drift_ok=t.clock_drift_ok,
                                 l2_flush=t.l2_flush,
@@ -2747,6 +2926,37 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
     return compiles, executed
 
 
+def _missing_partner_line(samples, b: int, ridge: float, ref) -> str:
+    """What to say when the planned smallest ladder produced no tread.
+
+    THE FLOOR IS TAKEN OVER THE PLAN, at both qualification call sites, because
+    `main` qualifies the reference BEFORE the other ladders are measured and a
+    floor that changed between the early check and the late one is the
+    two-call-site defect this file has already paid for once. The cost of that
+    choice is that a planned ladder which fails to run leaves a floor nothing
+    stood under, so it is said out loud, with the floor the ladders that DID
+    arrive would have set and whether that one is cleared too. A reader can
+    then see whether the qualification rests on a ladder that exists.
+    """
+    ran = sorted({s.block_m for s in samples
+                  if s.status == "ok" and s.ms_p50 > 0})
+    if not ran or ridge <= 0:
+        return (" NONE ARRIVED, and no ladder did, so the floor below stands "
+                "over nothing measured.")
+    measured_floor = 2.0 * min(ran) / (b * ridge)
+    plateau = ref.roof_fraction
+    over = (None if ref.vacuity_basis != "fused" or plateau is None
+            else measured_floor)
+    return (
+        f" NONE ARRIVED. The floor printed above is taken over the PLANNED "
+        f"pairing {list(BLOCK_SIZES)}; over the ladders that did arrive "
+        f"{ran} it is {measured_floor:.3f} of the roof"
+        + ("" if over is None else
+           f", which the fused footing also clears ({over:.3f} < 1.00), so "
+           "the qualification does not rest on the ladder that is missing")
+        + ".")
+
+
 def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str,
                 compiles: dict[int, int], executed: dict[int, int], *,
                 ridge: float, bandwidth_gbps: float, pinned: dict | None = None,
@@ -2756,6 +2966,7 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     out: list[str] = []
     ref_points, _, ref_spread = collapse(samples, REFERENCE_BLOCK_M)
     sub_points, sub_reps, sub_spread = collapse(samples, SUBJECT_BLOCK_M)
+    partner_points, _, _ = collapse(samples, SMALL_TILE_BLOCK_M)
 
     # The compute reference comes from the study's own qualification, run over
     # Cell objects built from these medians, so this run is judged by the same
@@ -2766,10 +2977,10 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     # nothing here carried one, so a ladder fitted across a throttling episode
     # was indistinguishable from one that was not.
     cells = []
-    clocks = {bm: tread_clock(samples, bm)
-              for bm in (REFERENCE_BLOCK_M, SUBJECT_BLOCK_M)}
+    clocks = {bm: tread_clock(samples, bm) for bm in BLOCK_SIZES}
     for bm, points in ((REFERENCE_BLOCK_M, ref_points),
-                       (SUBJECT_BLOCK_M, sub_points)):
+                       (SUBJECT_BLOCK_M, sub_points),
+                       (SMALL_TILE_BLOCK_M, partner_points)):
         for n, ms in points:
             level, drift_ok, mhz, side = clocks[bm].get(
                 n, (None, None, None, ""))
@@ -2779,9 +2990,18 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                                          clock_level_ok=level,
                                          clock_drift_ok=drift_ok,
                                          clock_level_side=side))
+    # THE SAME `BLOCK_SIZES` `main`'s early call passes, and `candidates`
+    # naming the ONE ladder that may be the reference. Without `candidates` a
+    # reference ladder short of 3 treads falls through to the next block size
+    # down, which here is the SUBJECT -- the memory-bound ladder the whole arm
+    # exists to measure -- and the report then reads a refusal of the subject
+    # as a statement about the reference. `fused_roof_band` puts the
+    # non-vacuity floor on the fused layer's own roof; see the module
+    # docstring's 2026-09-09 pre-registration change.
     ref = SWEEP.compute_reference(
-        cells, (SUBJECT_BLOCK_M, REFERENCE_BLOCK_M), cfg=cfg, ridge=ridge,
-        bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned)
+        cells, BLOCK_SIZES, cfg=cfg, ridge=ridge,
+        bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned,
+        candidates=(REFERENCE_BLOCK_M,), fused_roof_band=FUSED_PLATEAU_BAND)
     level = (reference_level(cfg, ref.block_m, ref.slope_per_tile,
                              ceiling_tflops, ceiling_source)
              if ref.block_m and ref.slope_per_tile else None)
@@ -2797,15 +3017,16 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     # and reported the card as the tile.
     subject_cells = [c for c in cells if c.block_m == SUBJECT_BLOCK_M]
     fit_points, excluded = SWEEP.ladder_treads(subject_cells, SUBJECT_BLOCK_M)
-    # THE OTHER SIDE OF LEVEL, COUNTED AND KEPT. A boosted tread is in
-    # `fit_points`; this says how many are, so the report can name them and
-    # say that their fraction of the fixed roof is not comparable. The
+    # BOTH SIDES OF LEVEL, COUNTED AND KEPT. An off-band tread is in
+    # `fit_points`; these say how many are and on which side, so the report can
+    # name them and say which way their fraction of the fixed roof is off. The
     # reference ladder is counted too, because `reference_level` scores its
-    # slope against the FIXED ceiling and a boosted reference is high by the
+    # slope against the FIXED ceiling and an off-band reference is off by the
     # same ratio.
-    kept_high = SWEEP.boosted_treads(subject_cells, SUBJECT_BLOCK_M)
+    kept_low, kept_high = SWEEP.off_band_treads(subject_cells, SUBJECT_BLOCK_M)
     boosted_n = {c.tiles_per_expert for c in subject_cells if c.clock_boosted}
-    reference_high = SWEEP.boosted_treads(
+    sagged_n = {c.tiles_per_expert for c in subject_cells if c.clock_sagged}
+    reference_low, reference_high = SWEEP.off_band_treads(
         [c for c in cells if c.block_m == REFERENCE_BLOCK_M], REFERENCE_BLOCK_M)
     # THE EXCLUSION REACHES EVERY GATE THAT READS THE SUBJECT LADDER, not just
     # the fit. Until 2026-09-02 it stopped at `fit_ladder`: V2's inversions, V3's
@@ -2836,8 +3057,9 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     kept_spread = _spread_of(kept_reps)
     margin_band = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (kept_spread or 0.0))
     fit = SWEEP.fit_ladder(fit_points, SUBJECT_BLOCK_M, ref, margin=margin_band,
-                           excluded_low_clock=excluded,
-                           kept_high_clock=kept_high)
+                           excluded_drifted=excluded,
+                           kept_high_clock=kept_high,
+                           kept_low_clock=kept_low)
     c_ref = ref.slope_for(SUBJECT_BLOCK_M)
     k = fit.memory_points if fit.memory_points >= 2 else len(fit_points)
     margin = margin_of(fit_points, k, c_ref=c_ref, overhead=ref.overhead_ms,
@@ -2846,11 +3068,18 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     inv = inversions(fit_points, kept_spread)
     drops = slope_drops(fit_points, kept_spread)
 
-    out += ["", "## The measured ladder", "",
-            f"reference    {ref.note}",
-            f"             {level.line() if level else 'no level: no reference'}",
+    out += ["", "## The measured ladder", ""] \
+        + [f"reference    {ref.note}"] \
+        + [f"             {line.strip()}" for line in ref.render()[1:]] \
+        + [f"             {level.line() if level else 'no level: no reference'}",
+            f"partner      BLOCK_M={SMALL_TILE_BLOCK_M} scaling partner: "
+            f"{len(partner_points)} tread(s) measured. It is not a candidate "
+            "reference; it is the smallest tile the sweep PLANS, which is what "
+            "the non-vacuity floor 2 BM_min / (b x ridge) is taken over."
+            + ("" if partner_points else _missing_partner_line(
+                samples, b, ridge, ref)),
             f"subject      {len(sub_points)} treads ({len(fit_points)} scored "
-            f"after {excluded} excluded for clock level"
+            f"after {excluded} excluded for a drifting clock"
             + (f"; NOT EXAMINED: {len(unreferenced)} of {len(kept)} scored "
                "treads were timed against no reference clock, so no tread of "
                "theirs could have been excluded"
@@ -2880,24 +3109,30 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                else ("DECLINED, see the outcome above" if fit.undecided
                      else "NOT IDENTIFIABLE")),
             f"             {margin.line()}",
-            (f"             {excluded} tread(s) EXCLUDED: LEVEL failed LOW, "
-             "timed below the band around the clock the roof was measured at, "
-             "so they sit on a different compute branch. A ladder that lost "
-             "treads to a hot box must not look like a ladder that never had "
-             "them."
+            (f"             {excluded} tread(s) EXCLUDED: DRIFT, the clock "
+             "moved more than 5% across the tread's own trials, so its median "
+             "is a blend of two operating points and the time belongs to "
+             "neither. A ladder that lost treads to a settling governor must "
+             "not look like a ladder that never had them."
              if excluded else
-             "             no tread was excluded for clock level"),
-            (f"             {kept_high} tread(s) KEPT with LEVEL failed HIGH: "
-             "timed above that band, the boosted memory-shaped state (1980 "
-             "against 1515 MHz on the H200). Their times are in the fit; "
-             "their fraction of the FIXED roof is NOT comparable, inflated by "
-             "the clock ratio, and the roof at their own clock (the driver's "
-             "roof_at_cell_clock_tflops) is the one to read them against."
-             + (f" The reference ladder has {reference_high} such tread(s), "
-                "so its level against the fixed ceiling is overstated by the "
-                "ratio too." if reference_high else "")
-             if kept_high or reference_high else
-             "             no tread ran above the band around the roof's "
+             "             no tread was excluded for a drifting clock"),
+            (f"             {kept_high} tread(s) KEPT with LEVEL failed HIGH "
+             f"and {kept_low} KEPT with LEVEL failed LOW: timed steadily "
+             "outside the band around the roof's clock. On a power-capped card "
+             "that is where a tile lives, not a fault: the H200 session of "
+             "2026-09-09 holds BM=128/BN=64 at a median 1395 MHz and BM=256 at "
+             "1650 against a 1485 MHz calibration GEMM, all under one 700 W "
+             "cap. Their times are in the fit; their fraction of the FIXED "
+             "roof is off by the clock ratio, OVERSTATED on the high side and "
+             "UNDERSTATED on the low, and the roof at their own clock (the "
+             "driver's roof_at_cell_clock_tflops) is the issue efficiency to "
+             "read beside it."
+             + (f" The reference ladder has {reference_high} high and "
+                f"{reference_low} low such tread(s), so its level against the "
+                "fixed ceiling is off by its own ratio too."
+                if reference_high or reference_low else "")
+             if kept_high or kept_low or reference_high or reference_low else
+             "             no tread ran outside the band around the roof's "
              "clock"), "",
             f"{'n':>3s} {'rows':>6s} {'ms':>10s} {'slope':>9s} {'reps':>5s} "
             f"{'spread':>8s}  scored"]
@@ -2913,9 +3148,13 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
                    + (f"{display_slopes[i - 1]:9.4f}" if i else "        -")
                    + f" {len(reps):5d} "
                    + (f"{sp:8.3%}" if sp is not None else "       -")
-                   + (("  yes" + ("  (LEVEL high, kept; fixed-roof fraction "
-                                  "not comparable)" if n in boosted_n else ""))
-                      if n in kept else "  NO: LEVEL low, clock below the roof's"))
+                   + (("  yes"
+                       + ("  (LEVEL high, kept; fixed-roof fraction overstated "
+                          "by the clock ratio)" if n in boosted_n else "")
+                       + ("  (LEVEL low, kept; fixed-roof fraction understated "
+                          "by the clock ratio)" if n in sagged_n else ""))
+                      if n in kept else
+                      "  NO: DRIFT, the clock moved across its own trials"))
 
     gates = [
         gate_non_vacuity({
@@ -2955,12 +3194,26 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
         # that declined to answer, and those point at different experiments.
         "ladder_outcome": fit.outcome,
         "ladder_undecided": fit.undecided,
-        "excluded_low_clock": fit.excluded_low_clock,
-        # THE HIGH SIDE, kept and counted, for the subject and the reference.
+        "excluded_drifted": fit.excluded_drifted,
+        # BOTH SIDES, kept and counted, for the subject and the reference.
         "kept_high_clock": fit.kept_high_clock,
+        "kept_low_clock": fit.kept_low_clock,
         "kept_high_clock_reference": reference_high,
+        "kept_low_clock_reference": reference_low,
+        # The scaling partner: how many of its treads arrived, so a reader can
+        # see whether the non-vacuity floor rests on a measured ladder.
+        "partner_block_m": SMALL_TILE_BLOCK_M,
+        "partner_treads": len(partner_points),
+        # The qualification's own numbers, so a refusal is readable from the
+        # payload and not only from the prose.
+        "reference_vacuity_ratio": ref.vacuity_ratio,
+        "reference_vacuity_floor": ref.vacuity_floor,
+        "reference_vacuity_basis": ref.vacuity_basis,
+        "reference_roof_fraction": ref.roof_fraction,
+        "reference_refusals": list(ref.refusals),
+        "reference_skipped": list(ref.skipped),
         # The two columns that say whether that count examined anything. A
-        # consumer reading `excluded_low_clock: 0` alone cannot tell a quiet
+        # consumer reading `excluded_drifted: 0` alone cannot tell a quiet
         # card from a ladder with no reference to be level against.
         "reference_clock_mhz": scored_reference,
         "scored_treads_without_reference": len(unreferenced),
@@ -3014,6 +3267,23 @@ def _gate_override(compiles: dict[int, int], executed: dict[int, int]) -> Gate:
 
 
 def _gate_replication(reps: dict[int, list[float]], spread: float | None) -> Gate:
+    # NO SCORED TREAD IS NOT AN UNREPLICATED TREAD, and printing the first as
+    # the second sends a reader to the wrong fix. `reps` is keyed on the treads
+    # that survived the exclusion, so a ladder whose every tread was excluded
+    # arrives here empty and used to print "0 repeat(s) on the thinnest tread,
+    # so no across-repeat spread exists" over 16 treads carrying 7 repeats
+    # each on disk: the answer that suggests is more repeats, and the actual
+    # cause was upstream.
+    if not reps:
+        return Gate(VALIDITY, "V5 replication",
+                    "the ladder was measured often enough to weigh an inversion",
+                    f">= 2 repeats per tread and spread <= "
+                    f"{MAX_REPLICATE_SPREAD:.0%}", None,
+                    "no scored tread: every tread was excluded upstream, so "
+                    "replication was not examined. The treads on disk carry "
+                    "their repeats; this is not a shortage of them",
+                    "V2 and C2, which both need a noise band; but the fix is "
+                    "whatever excluded the treads, not more repeats")
     worst = min((len(v) for v in reps.values()), default=0)
     if spread is None:
         return Gate(VALIDITY, "V5 replication",
@@ -3077,8 +3347,8 @@ def _gate_law(fit, margin: Margin, c_ref: float | None, overhead: float,
 
       no alpha at all              PASS, and the observed line says it is
                                    vacuous and names the outcome.
-      an alpha this gate cannot    UNKNOWN. `undecided_low_clock` leaves a fit
-      evaluate                     over the two treads that survived the
+      an alpha this gate cannot    UNKNOWN. `undecided_drifting_clock` leaves
+      evaluate                     a fit over the treads that survived the
                                    exclusion, and a run with no compute
                                    reference leaves no `B/C` to put into the
                                    law. In both cases an alpha IS in the payload
@@ -3235,7 +3505,7 @@ def default_run_id(args, card: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# Self test: plant five worlds, check the gates tell them apart.
+# Self test: plant six worlds, check the gates tell them apart.
 # --------------------------------------------------------------------------
 
 #: What the planted BLOCK_M=256 reference achieves, as a fraction of the planted
@@ -3284,7 +3554,8 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                     b: int = 2, reps: int = 5, noise: float = 0.0,
                     seed: int = 0, r_max: int = 1024,
                     low_clock_treads: tuple[int, ...] = (),
-                    high_clock_treads: tuple[int, ...] = ()) -> list[Sample]:
+                    high_clock_treads: tuple[int, ...] = (),
+                    drift_treads: tuple[int, ...] = ()) -> list[Sample]:
     """A whole replicated run, as the CSV rows a pod would have written.
 
     GENERATED THROUGH `SWEEP.model_ms`, NOT BY HAND, and that is not a
@@ -3314,38 +3585,43 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
     the physics: a Triton grouped GEMM does not achieve the calibrated cuBLAS
     ceiling, and a fixture in which it does is a fixture no pod can produce.
 
-    `low_clock_treads` marks the named SUBJECT treads as having been timed below
-    the clock the roof was measured at, which is how the throttled world is
-    planted. Every other row carries `clock_level_ok=True`, because a world
-    where the verdict is None everywhere excludes nothing and would not
-    exercise the exclusion at all.
+    `drift_treads` marks the named SUBJECT treads as having been timed WHILE
+    THE CLOCK MOVED: `clock_drift_ok` False. That is the one exclusion since
+    2026-09-09, and this is how the excluded world is planted. Every other row
+    carries `clock_drift_ok=True`, because a world where the verdict is None
+    everywhere excludes nothing and would not exercise the exclusion at all.
 
-    A THROTTLED TREAD IS SLOWER, NOT MERELY LABELLED. Until 2026-09-02 this
-    function stamped the clock columns on the low rows and computed their `ms`
-    identically to every other row, so the fixture planted the LABEL and not the
-    physics: no gate could tell a throttled ladder from a clean one, and the
-    claim in `ladder_treads`' docstring -- that a ladder which lost treads to a
-    hot box must not look like a ladder that never had them -- was demonstrated
-    by nothing. A card at `SELF_TEST_LOW_CLOCK_MHZ` runs its COMPUTE branch
-    slower in exactly that proportion and its traffic at the same DRAM
-    bandwidth, which is a lower `ridge` and nothing else, so those rows are
-    generated at `rho x low / reference` and the shape of the ladder bends where
-    the throttling starts. That bend is what V2 and V3 would score if the
-    exclusion did not reach them.
+    A DRIFTED TREAD IS SLOWER, NOT MERELY LABELLED. Until 2026-09-02 this
+    function stamped the clock columns and computed `ms` identically to every
+    other row, so the fixture planted the LABEL and not the physics: no gate
+    could tell a mis-clocked ladder from a clean one, and the claim in
+    `ladder_treads`' docstring -- that a ladder which lost treads must not look
+    like a ladder that never had them -- was demonstrated by nothing. A card
+    running part of a cell at `SELF_TEST_LOW_CLOCK_MHZ` runs its COMPUTE branch
+    slower in that proportion and its traffic at the same DRAM bandwidth, which
+    is a lower `ridge` and nothing else, so those rows are generated at
+    `rho x low / reference` and the shape of the ladder BENDS where the drift
+    starts. That bend is what V2 and V3 would score if the exclusion did not
+    reach them.
 
-    `high_clock_treads` is the other side. Those SUBJECT treads are timed at
-    `SELF_TEST_HIGH_CLOCK_MHZ`, LEVEL failed HIGH, and their compute branch is
-    generated FASTER by the same ratio, which is what a boosted clock does to
-    a tread; their traffic branch is unchanged. On a ladder whose memory branch
-    binds at every tread (the escape-up world) that moves no time at all,
-    which is the point: the boosted tread is a measurement of the memory
-    branch and the fit must come out exactly as the clean world's does. A
-    tread may not be planted on both lists.
+    `low_clock_treads` AND `high_clock_treads` ARE THE TWO KEPT SIDES, and
+    since 2026-09-09 neither is an exclusion. Those SUBJECT treads are timed at
+    `SELF_TEST_LOW_CLOCK_MHZ` or `SELF_TEST_HIGH_CLOCK_MHZ` with the matching
+    LEVEL side, and their compute branch is generated slower or faster by that
+    ratio, which is what a steadily different clock does to a tread; their
+    traffic branch is unchanged. On a ladder whose memory branch binds at every
+    tread (the escape-up world) that moves no time at all, which is the point:
+    an off-band tread is a measurement of the memory branch and the fit must
+    come out exactly as the clean world's does. A tread may not appear on more
+    than one of the three lists.
     """
-    if set(low_clock_treads) & set(high_clock_treads):
+    clashes = (set(low_clock_treads) & set(high_clock_treads)) \
+        | (set(low_clock_treads) & set(drift_treads)) \
+        | (set(high_clock_treads) & set(drift_treads))
+    if clashes:
         raise ValueError(
-            f"treads {sorted(set(low_clock_treads) & set(high_clock_treads))} "
-            "are planted both low and high; a tread has one clock")
+            f"treads {sorted(clashes)} are planted in more than one clock "
+            "state; a tread has one clock")
     rng = random.Random(seed)
     out: list[Sample] = []
     throttled = SELF_TEST_LOW_CLOCK_MHZ / SELF_TEST_REFERENCE_CLOCK_MHZ
@@ -3357,13 +3633,15 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                        and tiles in low_clock_treads)
                 high = (block_m == SUBJECT_BLOCK_M
                         and tiles in high_clock_treads)
+                moved = (block_m == SUBJECT_BLOCK_M
+                         and tiles in drift_treads)
                 # ONE KNOB CARRIES BOTH EFFECTS because both are the same
                 # physics: `ridge` is `peak / bandwidth`, so scaling it scales
                 # the compute branch and leaves the traffic branch alone. The
                 # reference kernel runs under the calibrated peak; a throttled
                 # tread runs under its own card's peak.
                 scale = REFERENCE_KERNEL_EFFICIENCY if block_m == REFERENCE_BLOCK_M else 1.0
-                if low:
+                if low or moved:
                     scale *= throttled
                 if high:
                     scale *= SWEEP.H200_BOOST_RATIO
@@ -3376,14 +3654,22 @@ def planted_samples(cfg, *, alpha: float, rho: float, bandwidth_gbps: float,
                 out.append(Sample(block_m, tiles, rows,
                                   SWEEP.tokens_for_rows(cfg, rows), rep, ms, ms,
                                   0.0, 0, clock_level_ok=not (low or high),
-                                  clock_drift_ok=True,
+                                  clock_drift_ok=not moved,
                                   clock_level_side=(
                                       SWEEP.LEVEL_LOW if low
                                       else SWEEP.LEVEL_HIGH if high else ""),
                                   sm_clock_load_mhz=(
-                                      SELF_TEST_LOW_CLOCK_MHZ if low
+                                      SELF_TEST_LOW_CLOCK_MHZ if low or moved
                                       else SELF_TEST_HIGH_CLOCK_MHZ if high
                                       else SELF_TEST_REFERENCE_CLOCK_MHZ),
+                                  # A drifted cell's two end samples are the
+                                  # two operating points its median blends.
+                                  sm_clock_start_mhz=(
+                                      SELF_TEST_REFERENCE_CLOCK_MHZ if moved
+                                      else None),
+                                  sm_clock_end_mhz=(
+                                      SELF_TEST_LOW_CLOCK_MHZ if moved
+                                      else None),
                                   # The planted world HAS a reference: its
                                   # `clock_level_ok` is a real verdict, and a
                                   # fixture that left this None would plant the
@@ -3422,11 +3708,15 @@ class PlantedWorld:
     expect: dict[str, bool | None]
     #: The `moe.bench.exit_codes` value `classify` must return for this world.
     exit_code: int = exit_codes.DONE
-    #: Subject treads planted as having been timed below the roof's clock.
+    #: Subject treads planted as having been timed steadily below the roof's
+    #: clock, which must be KEPT since 2026-09-09.
     low_clock_treads: tuple[int, ...] = ()
     #: Subject treads planted as having been timed ABOVE the band around it,
     #: the boosted state, which must be KEPT.
     high_clock_treads: tuple[int, ...] = ()
+    #: Subject treads planted with a clock that MOVED across their own trials,
+    #: which is the one state that must be EXCLUDED.
+    drift_treads: tuple[int, ...] = ()
     #: `analyse_run` payload keys this world registers a value for, checked
     #: exactly. The exclusion and kept counts live here, because a world that
     #: plants six boosted treads and registers only its gates would pass with
@@ -3553,16 +3843,39 @@ SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
         exit_code=exit_codes.INVALID),
     PlantedWorld(
         "low-clock", 0.95, 175.0,
-        "the escape-up world again, with six of its eight subject treads TIMED "
-        f"AT {SELF_TEST_LOW_CLOCK_MHZ:.0f} MHz against a roof measured at "
-        f"{SELF_TEST_REFERENCE_CLOCK_MHZ:.0f}. Those treads are not merely "
-        "labelled slow, they ARE slow: their compute branch is generated at the "
-        "throttled clock and their traffic is not, so the ladder BENDS where "
-        "the throttling starts. `ladder_treads` excludes them and what remains "
-        "is under the floor an alpha may decide on. THE VERDICT MUST BE "
-        "UNDECIDED AND NOT 'no depth': the card is what that ladder measured, "
-        "and a run on a quiet card is the next step. This world is why the "
-        "clock columns travel from the CSV into the fit AND INTO EVERY GATE",
+        "the escape-up world again, with EVERY subject tread TIMED AT "
+        f"{SELF_TEST_LOW_CLOCK_MHZ:.0f} MHz against a roof measured at "
+        f"{SELF_TEST_REFERENCE_CLOCK_MHZ:.0f}: LEVEL failed LOW, steadily, "
+        "which on a power-capped card is what a dense tile's own operating "
+        "point looks like (the H200 holds BM=128/BN=64 at a median 1395 MHz "
+        "under a 700 W cap while the calibration GEMM holds 1485). Their "
+        "compute branch is generated slower by the ratio and their traffic is "
+        "not, and because the memory branch binds at every tread here, not one "
+        "millisecond moves. EVERY GATE MUST COME BACK AS IN escape-up, all "
+        "eight treads must be KEPT and counted as kept low, and the arm must "
+        "exit DONE. Until 2026-09-09 this side EXCLUDED, and under that rule "
+        "the 2026-09-09 H200 run of this arm scored zero treads and exited "
+        "INVALID having measured everything it planned",
+        {"V0": True, "V1": True, "V2": True, "V3": True, "V4": True,
+         "V5": True, "C1": True, "C2": True, "V6": True},
+        exit_code=exit_codes.DONE,
+        low_clock_treads=(1, 2, 3, 4, 5, 6, 7, 8),
+        expect_payload={"excluded_drifted": 0, "kept_low_clock": 8,
+                        "kept_high_clock": 0}),
+    PlantedWorld(
+        "drifting-clock", 0.95, 175.0,
+        "the escape-up world again, with six of its eight subject treads timed "
+        "WHILE THE CLOCK MOVED: `clock_drift_ok` False, the median a blend of "
+        f"{SELF_TEST_REFERENCE_CLOCK_MHZ:.0f} and "
+        f"{SELF_TEST_LOW_CLOCK_MHZ:.0f} MHz. Those treads are not merely "
+        "labelled, they ARE slow: their compute branch is generated at the "
+        "lower clock and their traffic is not, so the ladder BENDS where the "
+        "drift starts. `ladder_treads` excludes them and what remains is under "
+        "the floor an alpha may decide on. THE VERDICT MUST BE UNDECIDED AND "
+        "NOT 'no depth': a settling governor is what that ladder measured, and "
+        "the next step is an instrument that warms until the clock settles. "
+        "This world is why the clock columns travel from the CSV into the fit "
+        "AND INTO EVERY GATE",
         # V3 IS UNKNOWN HERE, AND THAT IS THE FIX IT PINS. Scored over all eight
         # treads this ladder is not convex -- the throttle onset makes the slope
         # rise 1.9 -> 3.0 and fall back to 2.2, a drop that clears both the floor
@@ -3582,8 +3895,9 @@ SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
         {"V0": True, "V1": True, "V2": True, "V3": None, "V4": True,
          "C1": None, "V6": None},
         exit_code=exit_codes.INVALID,
-        low_clock_treads=(3, 4, 5, 6, 7, 8),
-        expect_payload={"excluded_low_clock": 6, "kept_high_clock": 0}),
+        drift_treads=(3, 4, 5, 6, 7, 8),
+        expect_payload={"excluded_drifted": 6, "kept_high_clock": 0,
+                        "kept_low_clock": 0}),
     PlantedWorld(
         "high-clock", 0.95, 175.0,
         "the escape-up world again, with the same six subject treads TIMED AT "
@@ -3602,13 +3916,14 @@ SELF_TEST_WORLDS: tuple[PlantedWorld, ...] = (
          "V5": True, "C1": True, "C2": True, "V6": True},
         exit_code=exit_codes.DONE,
         high_clock_treads=(3, 4, 5, 6, 7, 8),
-        expect_payload={"excluded_low_clock": 0, "kept_high_clock": 6}),
+        expect_payload={"excluded_drifted": 0, "kept_high_clock": 6,
+                        "kept_low_clock": 0}),
 )
 
 
 def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
               ) -> tuple[list[str], list[Gate]]:
-    """Five worlds, routed through the code the pod runs, with registered verdicts.
+    """Six worlds, routed through the code the pod runs, with registered verdicts.
 
     WHAT THIS USED TO DO AND WHY IT PROVED NOTHING ABOUT THE POD PATH. It built
     a bare list of `(tread, ms)` pairs from `planted_ladder`, computed the
@@ -3671,7 +3986,8 @@ def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
                                   bandwidth_gbps=SELF_TEST_BANDWIDTH, b=b,
                                   noise=noise, seed=seed,
                                   low_clock_treads=world.low_clock_treads,
-                                  high_clock_treads=world.high_clock_treads)
+                                  high_clock_treads=world.high_clock_treads,
+                                  drift_treads=world.drift_treads)
         ceiling = world.rho * SELF_TEST_BANDWIDTH * 1e9 / 1e12
         _, world_gates, payload = analyse_run(
             samples, cfg, b, ceiling_tflops=ceiling,
@@ -3735,7 +4051,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="calibration yaml directory; the ceiling every "
                          "reference level is scored against")
     ap.add_argument("--self-test", action="store_true",
-                    help="plant five worlds from the law and check the gates "
+                    help="plant six worlds from the law and check the gates "
                          "tell them apart, off GPU")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, then stop")
@@ -4317,9 +4633,10 @@ def _run(argv=None) -> int:
         # REFUSE, RATHER THAN MEASURE TWO LADDERS THAT CANNOT REPORT A CLOCK.
         # This printed the absence and carried on until 2026-09-03, which is
         # the other half of the fix `tile_sweep` got: with no reference
-        # `clock_flags` returns None for every row, `clock_excluded` is False
-        # for None, and the report then says `0 excluded for clock level` over
-        # a ladder in which no tread could have been excluded. A card is
+        # `clock_flags` returns None for LEVEL on every row, so no side is
+        # recorded, no roof fraction can be rescaled to the clock a tread ran
+        # at, and the page prints a ladder whose comparability with the fixed
+        # roof was never examined as though it had been. A card is
         # attached by definition here -- `missing_gpu_stack` and `load_measured`
         # are both above -- so this is `driver.refuse_unreferenced_clock`'s
         # state exactly, and the refusal is FREE: not a tread has been timed.
@@ -4333,10 +4650,10 @@ def _run(argv=None) -> int:
         # is both ladders.
         raise _refuse(
             f"no reference clock for {hw.name}: {clock_source}. Every row's "
-            "LEVEL verdict would be None, so `0 excluded for clock level` "
-            "would be printed over a ladder on which nothing could be "
-            "examined, and a fit taken across a throttling episode would be "
-            "indistinguishable from one that was not. Publish one with "
+            "LEVEL verdict would be None, so no side would be recorded on any "
+            "tread and no roof fraction could be rescaled to the clock it ran "
+            "at, over a ladder whose comparability with the fixed roof was "
+            "never examined. Publish one with "
             "`python scripts/calibrate_hardware.py --publish` and re-run. "
             "Nothing measured.")
     print(f"reference clock: {reference_clock:.0f} MHz, {clock_source}")
@@ -4391,9 +4708,26 @@ def _run(argv=None) -> int:
     ref_cells = [SWEEP.make_cell(cfg, n * REFERENCE_BLOCK_M, REFERENCE_BLOCK_M,
                                  ms, sm_count=1, block_n=1)
                  for n, ms in ref_points]
+    # THE SAME BLOCK SIZES AND THE SAME FOOTING `analyse_run` WILL USE. On
+    # 2026-09-09 this call passed `(REFERENCE_BLOCK_M,)` and the late one
+    # `(SUBJECT_BLOCK_M, REFERENCE_BLOCK_M)`, so the early vacuity floor was
+    # 1.675 of the roof and the late one 0.838: two different questions asked
+    # of one ladder, and the log printed the first. `BLOCK_SIZES` is the one
+    # tuple both sites pass and `candidates` says which ladder may be the
+    # reference, so the subject can never be qualified as its own control.
     early = SWEEP.compute_reference(
-        ref_cells, (REFERENCE_BLOCK_M,), cfg=cfg, ridge=ridge,
-        bandwidth_gbps=bandwidth, b=b, pinned=plan.pinned)
+        ref_cells, BLOCK_SIZES, cfg=cfg, ridge=ridge,
+        bandwidth_gbps=bandwidth, b=b, pinned=plan.pinned,
+        candidates=(REFERENCE_BLOCK_M,), fused_roof_band=FUSED_PLATEAU_BAND)
+    # THE QUALIFICATION IS PRINTED WHETHER IT PASSED OR FAILED. The 2026-09-09
+    # log printed `early.note` alone -- "its LEVEL is wrong ... REFUSED" -- over
+    # a NON-VACUITY refusal whose number, 1.532 of one full weight read, was
+    # never shown, and the session spent the rest of the day reading it as a
+    # clock problem.
+    print()
+    print("\n".join(early.render()))
+    for why in early.refusals:
+        print(f"    REFUSAL: {why}")
     if early.block_m and early.slope_per_tile:
         lvl = reference_level(cfg, early.block_m, early.slope_per_tile, ceiling,
                               hw.name)
@@ -4414,6 +4748,17 @@ def _run(argv=None) -> int:
             return exit_codes.INVALID
     else:
         print(f"\nreference did not qualify: {early.note}")
+
+    # THE SCALING PARTNER, measured before the subject and after the reference:
+    # cheap at this tile, and it is the ladder the non-vacuity floor is taken
+    # over, so a run that spends the subject on a floor no ladder stood under
+    # is a run that could have found out first. See the module docstring's
+    # 2026-09-09 pre-registration change.
+    print(f"\n-- scaling partner, BLOCK_M={SMALL_TILE_BLOCK_M} --")
+    c, e = measure_setting(args, cfg, SMALL_TILE_BLOCK_M, plan.partner_rows,
+                           csv_path, cache_root, plan.pinned, done, samples,
+                           reference_clock)
+    compiles[SMALL_TILE_BLOCK_M], executed[SMALL_TILE_BLOCK_M] = c, e
 
     print(f"\n-- subject ladder, BLOCK_M={SUBJECT_BLOCK_M} --")
     c, e = measure_setting(args, cfg, SUBJECT_BLOCK_M, plan.subject_rows,

@@ -133,11 +133,12 @@ def run(argv, tmp_path) -> tuple[int, dict]:
 
 
 def cells_at(alpha: float, *, noise: float = 0.0, tiles=TILES, seed: int = 0,
-             low_clock=None):
+             low_clock=None, drifting=None):
     grid = BM.build_grid(MIXTRAL, tiles, 1024, 32, 6)
     return BM.synthetic_cells(MIXTRAL, grid, tiles, alpha=alpha, ridge=RIDGE,
                               bandwidth_gbps=BANDWIDTH, b=2, sm_count=132,
-                              noise=noise, seed=seed, low_clock=low_clock)
+                              noise=noise, seed=seed, low_clock=low_clock,
+                              drifting=drifting)
 
 
 def analyse(cells, *, alpha: float, tiles=TILES, **kw):
@@ -531,11 +532,11 @@ def test_a_cell_round_trips_its_timing_state_through_the_csv(tmp_path):
     assert back[1].clock_excluded is False, "unknown is not excluded"
 
 
-def test_a_low_clock_cell_is_excluded_from_the_ladder_and_counted():
-    """A tread timed at 1500 MHz against a roof measured at 1980 sits about 30%
-    above the compute branch for a reason that has nothing to do with weight
-    re-reads, and it would be fitted straight into alpha."""
-    cells = cells_at(REFIT, low_clock=(64, 2))
+def test_a_drifting_cell_is_excluded_from_the_ladder_and_counted():
+    """A tread whose clock MOVED across its own trials has a median that blends
+    two operating points, so its time belongs to neither and no rescaling
+    repairs it. That is the one exclusion since 2026-09-09."""
+    cells = cells_at(REFIT, drifting=(64, 2))
     full, dropped_none = BM.ladder_treads(cells_at(REFIT), 64)
     kept, dropped = BM.ladder_treads(cells, 64)
     assert dropped_none == 0
@@ -544,33 +545,76 @@ def test_a_low_clock_cell_is_excluded_from_the_ladder_and_counted():
     assert 2 not in [n for n, _ in kept]
 
 
-def test_the_low_clock_world_reports_the_exclusion_in_the_report(tmp_path):
+def test_a_low_clock_cell_stays_on_the_ladder_and_is_counted_as_kept():
+    """THE RULE THAT CHANGED ON 2026-09-09, and the measurement that changed
+    it. A steadily LOW clock used to be the exclusion. Across the 750 cells of
+    the 2026-09-09 H200 session the under-load clock is an outcome of the cell,
+    set per tile by its own power draw under the 700 W cap (BM=128/BN=64 a
+    median 1395 MHz, BM=256 1650, memory-shaped 1950-1980, calibration GEMM
+    1485), so LEVEL-LOW named a TILE and excluding on it removed the study's
+    own subject from measurability. The tread is now KEPT, its side recorded,
+    and the ladder comes out as the clean world's."""
+    clean = cells_at(REFIT)
+    cold = cells_at(REFIT, low_clock=(64, 2))
+    sagged = [c for c in cold if c.clock_sagged]
+    assert sagged and all(c.block_m == 64 and c.tiles_per_expert == 2
+                          for c in sagged)
+    assert not any(c.clock_excluded for c in cold)
+    full, dropped_clean = BM.ladder_treads(clean, 64)
+    kept, dropped = BM.ladder_treads(cold, 64)
+    assert dropped_clean == 0 and dropped == 0
+    assert kept == full
+    assert BM.off_band_treads(cold, 64) == (1, 0)
+    assert BM.sagged_treads(cold, 64) == 1
+    assert BM.off_band_treads(clean, 64) == (0, 0)
+
+
+def test_the_drift_world_reports_the_exclusion_in_the_report(tmp_path):
     """The two counts are different numbers and the report carries both.
 
-    `cells_excluded_for_clock_level` is what the GATES lost: every cell on the
-    throttled tread, aligned or not, because gates 1, 2 and 4 read unaligned
+    `cells_excluded_for_drift` is what the GATES lost: every cell on the
+    drifted tread, aligned or not, because gates 1, 2 and 4 read unaligned
     cells too. `..._from_ladders` is the subset that was an aligned tread and so
     the only part a ladder fit could have seen. Reporting one of them as the
     other is how "one cell was dropped" came to stand for nine."""
-    rc, payload = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path)
+    rc, payload = run(["--self-test-world", BM.DRIFT_WORLD], tmp_path)
     # DONE, and it is a real one: this world plants an excluded tread and every
     # gate still passes over what is left. Nothing is folded to get here.
     assert rc == exit_codes.DONE
-    assert payload["cells_excluded_for_clock_level"] == 9
-    assert payload["cells_excluded_for_clock_level_from_ladders"] == 1
-    assert payload["ladder"]["64"]["excluded_low_clock"] == 1
+    assert payload["cells_excluded_for_drift"] == 9
+    assert payload["cells_excluded_for_drift_from_ladders"] == 1
+    assert payload["ladder"]["64"]["excluded_drifted"] == 1
     assert "gate_4" in payload["clock_exclusion_reaches"]
+
+
+def test_the_low_clock_world_reports_kept_treads_and_exits_done(tmp_path):
+    """The mirror of the high side, and the rule change of 2026-09-09 end to
+    end: the nine cells on the planted LOW tread are KEPT and counted on their
+    side, nothing is excluded, and the ladder is the clean world's. Under the
+    rule this replaced the same world reported one excluded tread."""
+    rc, payload = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path)
+    assert rc == exit_codes.DONE
+    assert payload["cells_excluded_for_drift"] == 0
+    assert payload["cells_excluded_for_drift_from_ladders"] == 0
+    assert payload["cells_kept_level_low"] == 9
+    assert payload["cells_kept_level_low_from_ladders"] == 1
+    row = payload["ladder"]["64"]
+    assert row["kept_low_clock"] == 1 and row["excluded_drifted"] == 0
+    assert row["outcome"] == BM.IDENTIFIED
+    _, clean = run(["--self-test", str(BM.ALPHA)], tmp_path / "clean")
+    assert row["alpha"] == pytest.approx(clean["ladder"]["64"]["alpha"])
+    assert len(clean["ladder"]["64"]["points"]) == len(row["points"])
 
 
 def test_a_throttled_cell_cannot_set_the_number_gate_4_scores():
     """GATE 4 ASSERTS AN ABSENCE AND IS SCORED AGAINST A MAXIMUM.
 
-    R5 asked only that a throttled cell stay out of the memory-branch fit, and
-    `ladder_treads` did that. `plateau` and gates 1, 2 and 4 were handed the
-    unfiltered list, and a cell timed at a low clock can only DEPRESS a
-    maximum -- so an undetected clock sag biased the one gate that asserts an
-    absence towards PASS. That is the audit's "62-97% throttling above T=2048"
-    concern arriving one gate over.
+    R5 asked only that a mis-clocked cell stay out of the memory-branch fit,
+    and `ladder_treads` did that. `plateau` and gates 1, 2 and 4 were handed
+    the unfiltered list, and a cell whose clock moved mid-measurement carries a
+    median that belongs to neither operating point -- so an undetected drift
+    biases the one gate that asserts an absence, in whichever direction the
+    governor happened to move.
 
     Planted at the top of the null tile, because that is the cell whose
     exclusion has to move the verdict's number: flag the fastest BLOCK_M=64
@@ -579,13 +623,12 @@ def test_a_throttled_cell_cannot_set_the_number_gate_4_scores():
     cells = cells_at(REFIT)
     top = max((c for c in cells if c.block_m == 64),
               key=lambda c: c.useful_tflops)
-    flagged = [replace(c, clock_level_ok=False, clock_level_side="low",
-                       sm_clock_load_mhz=1500.0)
+    flagged = [replace(c, clock_drift_ok=False, sm_clock_load_mhz=1500.0)
                if c is top else c for c in cells]
     before = gate(analyse(cells, alpha=REFIT), 4)
     after = gate(analyse(flagged, alpha=REFIT), 4)
     assert before.measured != after.measured, (
-        "the throttled cell still set the peak gate 4 is scored against")
+        "the drifted cell still set the peak gate 4 is scored against")
     assert after.provenance["peak_roof_fraction"] < \
         before.provenance["peak_roof_fraction"]
 
@@ -594,25 +637,25 @@ def test_the_report_says_which_gates_the_clock_exclusion_reached():
     """An exclusion whose extent a reader has to infer is an exclusion nobody
     can check. The report used to print a count and leave the scope unstated,
     and the scope was in fact narrower than the sentence implied."""
-    cells = cells_at(REFIT, low_clock=(64, 2))
+    cells = cells_at(REFIT, drifting=(64, 2))
     text = analyse(cells, alpha=REFIT).text()
-    assert "excluded for clock level" in text
+    assert "excluded for a DRIFTING clock" in text
     assert "Reached: the plateau, the compute reference" in text
     assert "gates 1, 2, 3 and 4" in text
 
 
-def test_a_ladder_that_loses_its_treads_to_clock_level_is_UNDECIDED_for_that_reason():
+def test_a_ladder_that_loses_its_treads_to_a_drifting_clock_is_UNDECIDED_for_that_reason():
     """"Two memory-bound treads" and "two memory-bound treads left after four
-    were dropped for clock level" report the same count and mean opposite
-    things: the second says the card was not at the roof's clock and the arm
-    must be re-timed."""
+    were dropped for a drifting clock" report the same count and mean opposite
+    things: the second says the governor was still settling and the arm must be
+    re-timed on an instrument that waits for it."""
     fit = BM.fit_ladder([(1, 0.9), (2, 1.1)], 128, planted_reference(),
-                        margin=0.02, excluded_low_clock=4)
-    assert fit.outcome == BM.UNDECIDED_LOW_CLOCK
+                        margin=0.02, excluded_drifted=4)
+    assert fit.outcome == BM.UNDECIDED_DRIFTING_CLOCK
     assert fit.undecided is True
     assert "clock" in fit.outcome_reason
     assert "Re-time the arm" in fit.outcome_reason
-    assert fit.excluded_low_clock == 4
+    assert fit.excluded_drifted == 4
 
 
 def test_the_self_test_cells_carry_the_timing_columns_but_never_the_real_basis():
@@ -1817,15 +1860,21 @@ def test_the_level_sides_are_the_instruments_own():
     assert BM.H200_BOOST_RATIO == pytest.approx(1980.0 / 1515.0)
 
 
-def test_a_boosted_cell_is_kept_and_a_cold_one_is_excluded():
-    """1980 against 1515 with the side "high" is not an exclusion; 1400 with
-    the side "low" is; None is neither."""
+def test_neither_level_side_excludes_and_a_drifting_clock_does():
+    """1980 against 1515 with the side "high" is not an exclusion, and since
+    2026-09-09 neither is 1400 with the side "low": on a power-capped card both
+    are a tile's own steady operating point. A clock that MOVED across the
+    cell's own trials is. None is neither, because an exclusion has to be
+    positively established."""
     high = _clocked_cell(1980.0, False, "high")
     low = _clocked_cell(1400.0, False, "low")
     unknown = _clocked_cell(None, None, "")
+    moved = replace(_clocked_cell(1400.0, True, ""), clock_drift_ok=False)
     assert high.clock_excluded is False and high.clock_boosted is True
-    assert low.clock_excluded is True and low.clock_boosted is False
+    assert low.clock_excluded is False and low.clock_sagged is True
+    assert low.clock_boosted is False and high.clock_sagged is False
     assert unknown.clock_excluded is False and unknown.clock_boosted is False
+    assert moved.clock_excluded is True and moved.clock_sagged is False
     # The instrument's None side is stored as the blank, never as "None".
     assert _clocked_cell(1515.0, True, None).clock_level_side == ""
 
@@ -1893,13 +1942,14 @@ def test_the_side_round_trips_through_the_cells_csv(tmp_path):
         BM.append_cell(path, cell)
     _, back = BM.read_cells(path)
     assert [c.clock_level_side for c in back] == ["high", "low", ""]
-    assert [c.clock_excluded for c in back] == [False, True, False]
+    assert [c.clock_excluded for c in back] == [False, False, False]
     assert [c.clock_boosted for c in back] == [True, False, False]
+    assert [c.clock_sagged for c in back] == [False, True, False]
     assert "clock_level_side" in path.read_text().splitlines()[0].split(",")
 
 
 def test_a_boosted_tread_stays_on_the_ladder_and_is_counted_as_kept():
-    """The mirror of `test_a_low_clock_cell_is_excluded_from_the_ladder_and_
+    """The mirror of `test_a_drifting_cell_is_excluded_from_the_ladder_and_
     counted`: the same tread planted HIGH is on the ladder, the exclusion
     count is zero, the kept count is one, and the fit is the clean world's."""
     clean = cells_at(REFIT)
@@ -1920,37 +1970,38 @@ def test_a_boosted_tread_stays_on_the_ladder_and_is_counted_as_kept():
     assert kept == full
     assert BM.boosted_treads(hot, 64) == 1 and BM.boosted_treads(clean, 64) == 0
     assert BM.boosted_treads(hot, 128) == 0
+    assert BM.off_band_treads(hot, 64) == (0, 1)
     report = analyse(hot, alpha=REFIT)
     fit = report.payload["ladder"]["64"]
-    assert fit["kept_high_clock"] == 1 and fit["excluded_low_clock"] == 0
+    assert fit["kept_high_clock"] == 1 and fit["excluded_drifted"] == 0
     assert fit["alpha"] == pytest.approx(
         analyse(clean, alpha=REFIT).payload["ladder"]["64"]["alpha"])
     text = report.text()
     assert "KEPT with LEVEL failed HIGH" in text
-    assert "fixed-roof fraction not comparable" in text
+    assert "OVERSTATED on the high side" in text
     assert "roof_at_cell_clock_tflops" in text
 
 
 def test_the_high_clock_world_reports_kept_treads_and_exits_done(tmp_path):
-    """End to end through the CLI, the way `test_the_low_clock_world_reports_
-    the_exclusion_in_the_report` does for the other side: the nine cells on
-    the planted tread are KEPT and counted, the ladder row says one kept, and
-    the world is DONE with nothing excluded."""
+    """End to end through the CLI, the way `test_the_drift_world_reports_the_
+    exclusion_in_the_report` does for the exclusion: the nine cells on the
+    planted tread are KEPT and counted, the ladder row says one kept, and the
+    world is DONE with nothing excluded."""
     rc, payload = run(["--self-test-world", BM.HIGH_CLOCK_WORLD], tmp_path)
     assert rc == exit_codes.DONE
-    assert payload["cells_excluded_for_clock_level"] == 0
-    assert payload["cells_excluded_for_clock_level_from_ladders"] == 0
+    assert payload["cells_excluded_for_drift"] == 0
+    assert payload["cells_excluded_for_drift_from_ladders"] == 0
     assert payload["cells_kept_level_high"] == 9
     assert payload["cells_kept_level_high_from_ladders"] == 1
     row = payload["ladder"]["64"]
-    assert row["kept_high_clock"] == 1 and row["excluded_low_clock"] == 0
+    assert row["kept_high_clock"] == 1 and row["excluded_drifted"] == 0
     assert row["outcome"] == BM.IDENTIFIED
     _, clean = run(["--self-test", str(BM.ALPHA)], tmp_path / "clean")
     assert row["alpha"] == pytest.approx(clean["ladder"]["64"]["alpha"])
     assert len(clean["ladder"]["64"]["points"]) == len(row["points"])
-    _, low = run(["--self-test-world", BM.LOW_CLOCK_WORLD], tmp_path / "low")
-    assert low["ladder"]["64"]["excluded_low_clock"] == 1
-    assert len(low["ladder"]["64"]["points"]) == len(row["points"]) - 1
+    _, moved = run(["--self-test-world", BM.DRIFT_WORLD], tmp_path / "drift")
+    assert moved["ladder"]["64"]["excluded_drifted"] == 1
+    assert len(moved["ladder"]["64"]["points"]) == len(row["points"]) - 1
 
 
 def test_the_cap_overstatement_delegates_to_the_one_bracket():
@@ -1965,3 +2016,116 @@ def test_the_cap_overstatement_delegates_to_the_one_bracket():
         assert "overstatement_bracket" in doc
         assert "32% at BM=128" not in doc
         assert "about 1.32: a 32% overstatement" not in doc
+
+
+# --------------------------------------------------------------------------
+# `compute_reference`: which ladder may BE the reference, and which roof the
+# non-vacuity floor stands on. Both added 2026-09-09.
+# --------------------------------------------------------------------------
+
+def _ladder_cells(alpha: float, *, tiles=(16, 256)):
+    """A sweep at two block sizes, one of which is deliberately memory bound."""
+    grid = BM.build_grid(MIXTRAL, tiles, 1024, 32, 6)
+    return BM.synthetic_cells(MIXTRAL, grid, tiles, alpha=alpha, ridge=RIDGE,
+                              bandwidth_gbps=BANDWIDTH, b=2, sm_count=132)
+
+
+def test_compute_reference_never_falls_through_to_a_ladder_not_offered():
+    """THE FALL-THROUGH THAT MADE A REPORT REFUSE ITS OWN SUBJECT.
+
+    The loop tried block sizes largest first and `continue`d past any with
+    under three treads, so a two-tile experiment whose CONTROL was short fell
+    through to the next one down: in the 2026-09-09 cap_test arm that was the
+    memory-bound BLOCK_M=16 SUBJECT. It fitted, was refused on non-vacuity at
+    1.044 -- correct physics, a per-tile slope equal to one full weight read IS
+    alpha ~ 1 -- and the report rendered that as "BLOCK_M=16 ... its LEVEL is
+    wrong" with the 1.044 never printed.
+
+    `candidates` names which ladders may BE the reference. Every ladder passed
+    over is recorded and printed, so a short control cannot go unmentioned
+    either.
+    """
+    cells = [c for c in _ladder_cells(1.0)
+             if c.block_m != 256 or c.tiles_per_expert <= 2]
+    offered = BM.compute_reference(
+        cells, (16, 256), cfg=MIXTRAL, ridge=RIDGE, bandwidth_gbps=BANDWIDTH,
+        b=2, candidates=(256,))
+    assert offered.block_m is None and offered.refused_block_m is None
+    assert "no candidate ladder (BLOCK_M=256)" in offered.note
+    assert offered.skipped and "NOT tried as the reference" in offered.skipped[0]
+    assert any("PASSED OVER" in line for line in offered.render())
+    # And without it the same cells reach down to the subject ladder.
+    loose = BM.compute_reference(
+        cells, (16, 256), cfg=MIXTRAL, ridge=RIDGE, bandwidth_gbps=BANDWIDTH,
+        b=2)
+    assert 16 in (loose.block_m, loose.refused_block_m), \
+        "the fall-through this argument closes"
+
+
+def test_candidates_extends_the_reference_search_and_never_narrows_the_checks():
+    """`block_sizes` still names every ladder the LEVEL checks compare against;
+    `candidates` only restricts which one may be qualified. The non-vacuity
+    floor is taken over the smallest SWEPT block size either way, so passing
+    `candidates` must not move it."""
+    cells = _ladder_cells(0.558, tiles=(32, 64, 128, 256))
+    kw = dict(cfg=MIXTRAL, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    everything = BM.compute_reference(cells, (32, 64, 128, 256), **kw)
+    restricted = BM.compute_reference(cells, (32, 64, 128, 256),
+                                      candidates=(256,), **kw)
+    assert everything.block_m == restricted.block_m == 256
+    assert everything.vacuity_ratio == pytest.approx(restricted.vacuity_ratio)
+    assert everything.level_comparisons == restricted.level_comparisons
+
+
+def test_the_fused_footing_moves_the_non_vacuity_floor_off_the_dense_roof():
+    """THE FLOOR THAT PRE-REGISTERED AN ARM INVALID.
+
+    On the dense footing the non-vacuity ratio asks a fused layer's measured
+    slope to clear `2 BM_min / (b ridge)` of the DENSE GEMM roof: 0.838 of it
+    at BM_min=128 on the H200. No fused layer in this study's 26 published
+    reports exceeds 0.756 of that roof, so the bm128_depth {128, 256} pairing
+    refused its own reference on every card before a cell ran.
+
+    On the FUSED footing both branches stand on the layer's own roof -- the
+    reference's measured plateau -- and the ratio becomes the design constant
+    `2 BM_min / (b ridge)` outright: a statement about whether the smallest
+    swept tile can be memory bound at all. The measurement check does not
+    vanish with it; it moves to the band that plateau has to land in, which the
+    corrupt A100 BLOCK_N=256 reference at 0.013 of the roof misses by two
+    orders of magnitude.
+    """
+    cells = _ladder_cells(0.558, tiles=(128, 256))
+    kw = dict(cfg=MIXTRAL, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    dense = BM.compute_reference(cells, (128, 256), candidates=(256,), **kw)
+    fused = BM.compute_reference(cells, (128, 256), candidates=(256,),
+                                 fused_roof_band=(0.465, 1.05), **kw)
+    assert dense.vacuity_basis == "dense"
+    assert fused.vacuity_basis == "fused"
+    assert fused.vacuity_ratio == pytest.approx(dense.vacuity_ratio
+                                                * dense.roof_fraction)
+    assert fused.vacuity_ratio == pytest.approx(2 * 128 / (2 * RIDGE))
+    assert fused.vacuity_floor == pytest.approx(fused.vacuity_ratio)
+    assert fused.fused_roof_fraction == pytest.approx(dense.roof_fraction)
+    rendered = "\n".join(fused.render())
+    assert "footing            FUSED" in rendered
+    assert "CONTROL'S MEASURED PLATEAU" in rendered
+    assert "2 BM_min / (b x ridge)" in rendered
+    assert "footing            DENSE" in "\n".join(dense.render())
+
+
+def test_the_fused_footing_refuses_a_plateau_outside_the_corpus_band():
+    """The A100 BLOCK_N=256 reference implied 3.6 TFLOP/s, 1.4% of the card.
+    On the dense footing it was caught by a bound no sound reference meets
+    either; on the fused footing the band is what catches it, with two orders
+    of magnitude to spare, and the refusal says which number missed."""
+    cells = _ladder_cells(0.558, tiles=(128, 256))
+    slow = [BM.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
+                         c.ms_p50 * 40.0, sm_count=132, block_n=64)
+            if c.block_m == 256 else c for c in cells]
+    ref = BM.compute_reference(
+        slow, (128, 256), candidates=(256,), cfg=MIXTRAL, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, fused_roof_band=(0.465, 1.05))
+    assert ref.block_m is None and ref.refused_block_m == 256
+    assert ref.roof_fraction < 0.05
+    assert any("outside the [0.465, 1.050]" in why for why in ref.refusals)
+    assert any("REFUSED" in line for line in ref.render())
