@@ -525,8 +525,10 @@ peak implied bandwidth, both arms: 4483.4 GB/s
 ```
 
 4483.4 is **100.28% of the corrected read ceiling**: at the ceiling within three
-parts in a thousand, not above it. Zero rows anywhere exceed the 4916.7 GB/s pin
-rate, so nothing impossible ever happened. Those kernels were running at
+parts in a thousand, not above it. Zero rows anywhere exceed the 4814.3 GB/s pin
+rate (the enabled 6016-bit bus NVML reports; 4916.7 was quoted here until
+2026-09-09 from the unharvested 6144-bit width, and the statement holds under
+either), so nothing impossible ever happened. Those kernels were running at
 essentially 100% of achievable read bandwidth on pure weight streaming, which is a
 strong result that the instrument had been reporting as a violation.
 

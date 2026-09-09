@@ -577,7 +577,9 @@ ratio below the compulsory floor, and they are not scattered:
 - all 82 are at T of 16, 32 or 64
 - 27 are flagged by the retired throttle detector and 55 are not, so whatever
   that flag detected does not explain them (RETRACTIONS (f))
-- peak is 4483.4 GB/s, and **zero rows anywhere exceed the 4916.7 GB/s pin rate**
+- peak is 4483.4 GB/s, and **zero rows anywhere exceed the 4814.3 GB/s pin rate**
+  (the enabled 6016-bit bus NVML reports; the 4916.7 quoted here until 2026-09-09
+  used the unharvested 6144-bit width and the statement holds under either)
 
 4483.4 GB/s is **100.28% of the corrected read ceiling**: at the ceiling within
 three parts in a thousand, not above it. Those kernels were running at

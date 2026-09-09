@@ -174,16 +174,21 @@ def test_profiles_declare_their_tdp():
     assert RL.load_hardware("h200_nvl").tdp_w == 600
 
 
-def test_the_datasheet_figure_is_below_the_derived_pin_rate():
-    """Measured on the device: clocks.max.memory 3201 MHz, so the pin rate is
-    3201 x 2 (DDR) x 6144 / 8 = 4916.7 GB/s. NVIDIA publishes 4.8 TB/s, which is
-    2.4% lower, so the datasheet number is already derated. Any published
-    percentage must say which denominator it used."""
-    pin = 3201 * 2 * 6144 / 8 / 1000
-    assert pin == pytest.approx(4916.7, abs=0.1)
+def test_the_datasheet_figure_is_the_pin_rate_of_the_enabled_bus():
+    """Measured on the device: clocks.max.memory 3201 MHz and, on 2026-09-09,
+    NVML's enabled bus of 6016 bits (6144 x 141/144, the same harvest as the
+    141-of-144 GB capacity). 3201 x 2 (DDR) x 6016 / 8 = 4814.3 GB/s, and
+    NVIDIA publishes 4.8 TB/s: the datasheet IS the pin rate, to 0.3%. Until
+    2026-09-09 this test derived 4916.7 from the unharvested 6144 and asserted
+    that the datasheet was "already derated" by 2.4%. It was not; the width
+    was wrong. Any published percentage must still say which denominator it
+    used, because eight published measured.yaml files carry the old 4916.7."""
+    enabled = 3201 * 2 * 6016 / 8 / 1000
+    unharvested = 3201 * 2 * 6144 / 8 / 1000
+    assert enabled == pytest.approx(4814.3, abs=0.1)
+    assert unharvested == pytest.approx(4916.7, abs=0.1)
     spec = RL.load_hardware("h200_sxm").bandwidth_bytes_s / 1e9
-    assert spec < pin
-    assert 100 * spec / pin == pytest.approx(97.6, abs=0.2)
+    assert abs(spec - enabled) / spec < 0.005
 
 
 # --- device-aware calibration -------------------------------------------------

@@ -102,7 +102,7 @@ def test_ampere_does_half_of_hopper_per_sm_per_clock():
 
 
 @pytest.mark.parametrize("name,clk_mhz,published_gbps", [
-    ("NVIDIA H200", 3201, 4800),                # spec 4.8 TB/s, already derated
+    ("NVIDIA H200", 3201, 4800),                # spec 4.8 TB/s = the 6016-bit enabled bus
     ("NVIDIA A100-SXM4-80GB", 1593, 2039),      # spec 2039 GB/s
     ("NVIDIA H100 80GB HBM3", 2619, 3350),      # spec 3.35 TB/s
 ])
@@ -113,8 +113,10 @@ def test_the_pin_rate_reproduces_each_vendor_bandwidth(name, clk_mhz, published_
     GB/s instead of 2038.8: 20% high, on the one number that cannot be wrong.
 
     Each width is checked by reproducing the vendor figure. The derived rate
-    should sit at or slightly above the published one, since published numbers
-    are already derated.
+    should sit at the published one to within a percent: on the H200 the
+    table's 6144 gave 4916.7 against a published 4800 and that 2.4% was called
+    a derated datasheet until 2026-09-09, when NVML on the pod reported the
+    enabled bus as 6016 and the published figure turned out to BE the pin rate.
     """
     from scripts.calibrate_hardware import _memory_bus_bits
 
