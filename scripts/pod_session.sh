@@ -1441,9 +1441,31 @@ PYEOF
 #: those. It REFUSES rows that predate them: a row with no verdict is not a
 #: row that passed, and it may not be pooled with rows that were checked.
 #:
-#: Three outcomes, each planted by tests/test_pod_session.py: PASS on a low
-#: failure rate, FAIL on a high one, and FAIL-as-refusal when any timed row
-#: carries no verdict or no row carries a determined one.
+#: LEVEL IS A BAND AND THE SIDE IS READ. Since 03df2d4 (2026-09-03) the
+#: instrument scores LEVEL two-sided, [LEVEL_FRACTION, LEVEL_HIGH_FRACTION]
+#: around the reference the roof was measured at, and writes the side of a
+#: failure onto the row as `clock_level_side`. Only the LOW side is a cell that
+#: ran cold against its roof; the HIGH side is a cell boosted ABOVE it, which on
+#: an H200 is the NORMAL state of every memory-bound cell (the committed
+#: calibration records 1980 MHz for the whole 30 s memory settle against a 1515
+#: MHz bf16 GEMM reference, ratio 1.307 against a 1.05 band). Until 2026-09-08
+#: this gate counted `clock_level_ok == failed` on either side, so an honest
+#: decode sweep, ~67% of whose memory-bound rows fail HIGH, FAILED S6d on every
+#: session that behaved correctly, and its consequence text said the card had
+#: sat BELOW the roof's clock. The rule is now the driver's own
+#: (moe/bench/driver.py sets `throttled` from DRIFT or LEVEL-low and leaves
+#: the HIGH side out): LOW or DRIFT counts toward the rate, HIGH is KEPT and
+#: reported, because its fixed-roof fraction is not comparable and
+#: pct_of_roof_at_cell_clock is the column that is. A v6 row that fails LEVEL
+#: and names no side was not written by the driver and is REFUSED rather than
+#: filed on either side; a v5 row (one-sided instrument, no high edge) that
+#: fails LEVEL is LOW by that instrument's definition.
+#:
+#: Outcomes, each planted by tests/test_pod_session.py: PASS on a low rate of
+#: LOW-or-DRIFT failures (including one where 60% of rows fail HIGH and 0%
+#: LOW), FAIL on a high rate of LOW ones, and FAIL-as-refusal when any timed
+#: row carries no verdict, no row carries a determined one, or a v6 LEVEL
+#: failure names no side.
 sweep_clock_gates() {
   local dir="$1" run_id="$2" planned="${3:-}"
   local sweepstat
@@ -1451,8 +1473,10 @@ sweep_clock_gates() {
 import sys
 sys.path.insert(0, ".")
 from pathlib import Path
-from moe.bench.schema import (VERDICT_FAILED, VERDICT_UNDETERMINED, TimingInstrumentUnrecorded,
-                              has_kernel_timing, passed, read_csv, timing_verdict)
+from moe.bench.schema import (UNRECORDED, VERDICT_FAILED, VERDICT_UNDETERMINED,
+                              TimingInstrumentUnrecorded, has_kernel_timing, passed,
+                              read_csv, timing_verdict)
+from moe.bench.timing import LEVEL_HIGH, LEVEL_LOW
 # NO APOSTROPHES IN THIS BLOCK (command substitution, bash 3.2).
 rows = []
 for p in sorted(Path(sys.argv[1]).glob(f"run_{sys.argv[2]}*.csv")):
@@ -1462,7 +1486,11 @@ bad = [r for r in rows if not passed(r)]
 # Split the pool on the instrument BEFORE reading a verdict, as
 # schema.timing_verdict requires: a pre-v5 row has no verdict columns and an
 # empty instrument is a file nothing sane wrote. Both are "no verdict".
-no_verdict = level = drift = undetermined = flagged = 0
+# A LEVEL failure is then split on its SIDE: LOW counts, HIGH is kept, and a
+# v6 row that fails LEVEL without naming a side is refused (unsided). A v5 row
+# has no side column because that instrument had no high edge, so its LEVEL
+# failure is LOW by definition rather than by default.
+no_verdict = low = high = unsided = drift = undetermined = flagged = 0
 for r in timed:
     try:
         if not has_kernel_timing(r):
@@ -1473,21 +1501,36 @@ for r in timed:
     except TimingInstrumentUnrecorded:
         no_verdict += 1
         continue
+    side = ""
     if lv == VERDICT_FAILED:
-        level += 1
+        side = str(r.get("clock_level_side") or "").strip()
+        if side == UNRECORDED:
+            side = ""
+        try:
+            version = int(float(r.get("schema_version") or 0))
+        except ValueError:
+            version = 0
+        if not side and version and version < 6:
+            side = LEVEL_LOW
+        if side == LEVEL_LOW:
+            low += 1
+        elif side == LEVEL_HIGH:
+            high += 1
+        else:
+            unsided += 1
     if dr == VERDICT_FAILED:
         drift += 1
-    if VERDICT_FAILED in (lv, dr):
+    if dr == VERDICT_FAILED or side == LEVEL_LOW:
         flagged += 1
     elif VERDICT_UNDETERMINED in (lv, dr):
         undetermined += 1
 pct = (100.0 * flagged / len(timed)) if timed else 100.0
-print(f"{len(rows)} {len(timed)} {len(bad)} {no_verdict} {level} {drift} {undetermined} {pct:.1f}")
+print(f"{len(rows)} {len(timed)} {len(bad)} {no_verdict} {low} {high} {unsided} {drift} {undetermined} {pct:.1f}")
 PYEOF
 )"
-  local nrows ntimed nbad nnov nlevel ndrift nundet pflag
-  read -r nrows ntimed nbad nnov nlevel ndrift nundet pflag <<< "$sweepstat"
-  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $nlevel failed LEVEL, $ndrift failed DRIFT, $nundet undetermined, $nnov carry no verdict"
+  local nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag
+  read -r nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag <<< "$sweepstat"
+  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $nlow failed LEVEL low, $nhigh failed LEVEL high (kept), $ndrift failed DRIFT, $nundet undetermined, $nunsided failed LEVEL with no side, $nnov carry no verdict"
   [[ "${nbad:-1}" == "0" ]]; verdict S6c "correctness" $? \
     "${nbad:-?} failing rows" "== 0" fatal \
     "A correctness failure means the kernel computed the wrong layer, so every timing in this arm is a timing of the wrong thing. Do not publish it."
@@ -1502,11 +1545,18 @@ PYEOF
     verdict S6d "clock under load" 1 \
       "every one of $ntimed timed rows is undetermined" "a determined verdict on at least one row" soft \
       "REFUSED. The sampler had no clock source (P13d) or no reference clock, so LEVEL and DRIFT decided nothing and the rate below would be 0% by silence. Install nvidia-ml-py into $PY_BASE, confirm the calibration records a GEMM clock, and re-run."
+  elif [[ "${nunsided:-1}" != "0" ]]; then
+    verdict S6d "clock under load" 1 \
+      "$nunsided of $ntimed timed rows failed LEVEL on a v6 row that names no side" "every v6 LEVEL failure carries clock_level_side" soft \
+      "REFUSED. Since 03df2d4 LEVEL is a two-sided band and moe/bench/driver.py writes the side (low or high) onto every row that fails it. A v6 row failing LEVEL with an empty clock_level_side was not written by that driver, and this gate will not guess which side it fell on: LOW is a cell that ran cold against its roof and HIGH is a cell boosted above it, and they mean opposite things. Find what wrote the row."
   else
     "$PY_BASE" -c "import sys; sys.exit(0 if float('${pflag:-100}') < 5.0 else 1)"
     verdict S6d "clock under load" $? \
-      "${pflag:-?}% of timed rows failed LEVEL or DRIFT ($nlevel level, $ndrift drift; $nundet undetermined)" "< 5%" soft \
-      "A row failing either verdict carries throttled=True (moe/bench/driver.py sets it from the two) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. LEVEL failing on most rows means the card sat below the clock the roof was measured at: recalibrate in this thermal state or let it cool. DRIFT failing means the warmup never reached one operating point."
+      "${pflag:-?}% of timed rows failed LEVEL low or DRIFT ($nlow low, $ndrift drift; $nhigh high kept, $nundet undetermined)" "< 5%" soft \
+      "A row failing DRIFT, or LEVEL on the LOW side, carries throttled=True (moe/bench/driver.py sets it from those two and leaves the HIGH side out) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. LEVEL failing LOW on most rows means the card sat below the clock the roof was measured at: recalibrate in this thermal state or let it cool. DRIFT failing means the warmup never reached one operating point. LEVEL failing HIGH is NOT in this rate: a cell boosted above the band is the normal state of a memory-bound cell on an H200 (1980 MHz under memory load against a 1515 MHz bf16 GEMM reference); it is kept, its fixed-roof fraction is not comparable, and pct_of_roof_at_cell_clock is the column to read for it."
+    if [[ "${nhigh:-0}" != "0" ]]; then
+      note "S6d kept $nhigh of $ntimed timed rows that failed LEVEL on the HIGH side (boosted above the band). They are not throttled and not excluded; their fixed-roof fraction (pct_of_achieved_tflops) is not comparable and pct_of_roof_at_cell_clock is the one to quote."
+    fi
   fi
   if [[ -n "$planned" ]]; then
     [[ "${ntimed:-0}" -ge "${planned:-1}" ]]; verdict S6e "coverage against the plan" $? \
