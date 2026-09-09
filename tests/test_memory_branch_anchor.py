@@ -1521,3 +1521,195 @@ def test_the_gate_render_has_no_way_to_suppress_its_result_line():
     gate = mba.gate_v1_non_vacuity([], [])
     assert list(inspect.signature(mba.Gate.render).parameters) == ["self"]
     assert gate.render()[0] == gate.result_line()
+
+
+# --------------------------------------------------------------------------
+# LEVEL is two-sided since 03df2d4, and this consumer reads the side
+# --------------------------------------------------------------------------
+
+from pathlib import Path as _Path  # noqa: E402
+
+ROOT = _Path(__file__).resolve().parents[1]
+
+#: The H200 shape the fifteenth instance of the recurring defect was found on:
+#: the bf16-GEMM reference the roof was measured at, and the clock the
+#: committed calibration holds under memory load for 30 s.
+H200_GEMM_REFERENCE_MHZ = 1515.0
+H200_MEMORY_LOAD_MHZ = 1980.0
+SAGGED_MHZ = 1400.0
+
+
+def _kernel_timing_at(load_mhz, reference_mhz, *, drift_to=None):
+    """A `KernelTiming` scored the way `time_kernel` scores one: verdicts from
+    the real `clock_flags`, the side from the real `level_side`, and the
+    reference on the record. Not hand-set booleans: a hand-set side would
+    pass whatever the consumer did with it."""
+    from moe.bench import timing
+    end = load_mhz if drift_to is None else drift_to
+    level, drift = timing.clock_flags(load_mhz, load_mhz, end, reference_mhz)
+    return timing.KernelTiming(
+        ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=100, trials=3,
+        warmup_ms=300.0, l2_flush=True, sm_clock_load_mhz=load_mhz,
+        sm_clock_start_mhz=load_mhz, sm_clock_end_mhz=end,
+        clock_level_ok=level, clock_drift_ok=drift, samples=300,
+        warmup_calls=10, flush_mb=256, clock_samples=9, clock_source="injected",
+        clock_poll_ms=1.0, host_bound=False, host_enqueue_ms=0.01,
+        clock_note="scripted clock",
+        clock_level_side=timing.level_side(load_mhz, reference_mhz) or "",
+        reference_clock_mhz=reference_mhz)
+
+
+def test_the_exclusion_rule_is_the_drivers_low_or_drift_and_high_is_kept():
+    """THE RULE, PINNED TO THE INSTRUMENT'S OWN CONSTANTS AND TO THE DRIVER'S.
+
+    `moe.bench.driver` writes `throttled = drift failed or (level failed and
+    side != HIGH)` on its rows (driver.py, the `throttled` assignment). This
+    consumer has no such column and restates the rule; the two must agree on
+    every cell of the truth table or a boosted tread is kept by one reader and
+    dropped by the next, which is the shape of the defect.
+    """
+    from moe.bench import timing
+    ex = mba.clock_excluded
+    # HIGH is not an exclusion, in any combination with a good drift.
+    assert ex(False, timing.LEVEL_HIGH, True) is False
+    assert ex(False, timing.LEVEL_HIGH, None) is False
+    # LOW is, and so is a False that recorded no side (the one-sided era).
+    assert ex(False, timing.LEVEL_LOW, True) is True
+    assert ex(False, "", True) is True
+    # DRIFT excludes whatever LEVEL said, HIGH included.
+    assert ex(True, "", False) is True
+    assert ex(False, timing.LEVEL_HIGH, False) is True
+    assert ex(None, "", False) is True
+    # Not determined is not an exclusion: one has to be positively established.
+    assert ex(None, "", None) is False
+    assert ex(True, "", True) is False
+    assert ex(True, "", None) is False
+    # The driver's rule, evaluated over the same table.
+    for level in (True, False, None):
+        for side in ("", timing.LEVEL_LOW, timing.LEVEL_HIGH):
+            for drift in (True, False, None):
+                driver_rule = (drift is False
+                               or (level is False and side != timing.LEVEL_HIGH))
+                assert ex(level, side, drift) is driver_rule, (level, side, drift)
+
+
+def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
+    """1980 against 1515 is 1.31x, above `LEVEL_HIGH_FRACTION`; 1400 against
+    1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
+    the only thing that tells them apart."""
+    from moe.bench import timing
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    assert high.clock_level_ok is False and low.clock_level_ok is False
+    assert mba.clock_side_of(high) == timing.LEVEL_HIGH
+    assert mba.clock_side_of(low) == timing.LEVEL_LOW
+    assert mba.clock_excluded(high.clock_level_ok, mba.clock_side_of(high),
+                                 high.clock_drift_ok) is False, "HIGH is kept"
+    assert mba.clock_excluded(low.clock_level_ok, mba.clock_side_of(low),
+                                 low.clock_drift_ok) is True, "LOW is excluded"
+    # A record without the field (every fake before 2026-09-03) gets its side
+    # derived from its own numbers, the way driver.py derives it.
+    import dataclasses
+    bare = dataclasses.replace(high, clock_level_side="")
+    assert mba.clock_side_of(bare) == timing.LEVEL_HIGH
+    # And one with neither answers "", which the rule reads as below.
+    blind = dataclasses.replace(bare, reference_clock_mhz=None)
+    assert mba.clock_side_of(blind) == ""
+
+
+def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
+    """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
+    rule and the counting block is a reader that has not learned the side, and
+    that is how the fifteenth instance happened: one producer fixed, thirteen
+    consumers left on the old meaning."""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "memory_branch_anchor.py").read_text())
+    readers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            # Code, not prose: a docstring that names the old test is history.
+            body = "\n".join(ast.unparse(s) for s in node.body
+                             if not (isinstance(s, ast.Expr)
+                                     and isinstance(s.value, ast.Constant)))
+            if "clock_level_ok is False" in body:
+                readers.add(node.name)
+    allowed = {"clock_excluded", "clock_state"}
+    assert readers <= allowed, (
+        f"{sorted(readers - allowed)} test the LEVEL verdict "
+        "without its side; route them through clock_excluded")
+
+
+def test_timing_columns_carry_the_side_and_a_boosted_cell_is_kept():
+    """THE PLANTED HIGH ROW, KEPT, AND THE PLANTED LOW ROW, EXCLUDED, through
+    `timing_columns` and `clock_state`, the two places this arm's rows meet
+    the clock verdicts. On the H200 every tread past the anchor is the HIGH
+    row."""
+    from moe.bench import timing
+    high = mba.timing_columns(
+        _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ))
+    low = mba.timing_columns(
+        _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ))
+    assert high["clock_level_ok"] is False and high["clock_level_side"] == timing.LEVEL_HIGH
+    assert low["clock_level_ok"] is False and low["clock_level_side"] == timing.LEVEL_LOW
+    rows = [dict(high, status="ok"), dict(low, status="ok"),
+            dict(low, status="failed")]
+    state = mba.clock_state(rows)
+    assert state["timed"] == 2
+    assert state["high"] == 1 and state["low"] == 1
+    assert state["excluded_shaped"] == 1, "the boosted cell is not excluded-shaped"
+    said = "\n".join(mba.clock_state_lines(state))
+    assert "1 HIGH (boosted above the band, kept" in said
+    assert "1 LOW (below the band, excluded-shaped)" in said
+
+
+def test_a_high_world_scores_exactly_as_the_clean_world_and_excludes_nothing():
+    """THE HIGH WORLD: the clean planted grid with every cell stamped at the
+    H200's memory-load clock against the GEMM reference. Every M gate must
+    return what it returns for the clean world, the exit code must be DONE,
+    and the clock-state block must count zero excluded-shaped cells. A LOW
+    twin counts every cell excluded-shaped and, because this arm reports and
+    does not gate on the clock, still scores the same: the counts are what a
+    reader has, and they say opposite things about the two worlds."""
+    from moe.bench import exit_codes
+    clean = mba.plant_cells(MIXTRAL)
+    high_t = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
+    low_t = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+
+    def stamped(t):
+        cols = {k: v for k, v in mba.timing_columns(t).items()
+                if k not in ("ms_p50", "ms_p90", "ms_min", "ms_stdev",
+                             "instrument", "warmup_ms", "iters", "trials")}
+        return [dict(row, **cols) for row in clean]
+
+    def verdicts(cells):
+        _, _, gates, _ = mba.score_measured(
+            cells, MIXTRAL, "bf16", 64, mba.SELF_TEST_CALIBRATION,
+            {"gbps": 1500.0}, len(cells))
+        return ({g.number: g.verdict for g in gates},
+                exit_codes.classify(g.scored() for g in gates))
+    clean_v, clean_rc = verdicts(clean)
+    high_v, high_rc = verdicts(stamped(high_t))
+    low_v, low_rc = verdicts(stamped(low_t))
+    assert clean_rc == exit_codes.DONE
+    assert high_v == clean_v and high_rc == clean_rc
+    assert low_v == clean_v and low_rc == clean_rc
+    high_state = mba.clock_state(stamped(high_t))
+    low_state = mba.clock_state(stamped(low_t))
+    assert high_state["high"] == len(clean) and high_state["excluded_shaped"] == 0
+    assert low_state["low"] == len(clean) and low_state["excluded_shaped"] == len(clean)
+    # A planted cell carries no clock and says so in the side column too.
+    assert all(row["clock_level_side"] == "" and row["clock_level_ok"] is None
+               for row in clean)
+
+
+def test_the_measure_loop_marks_a_boosted_cell_as_kept():
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "memory_branch_anchor.py").read_text())
+    fns = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+           and "timing_columns(t)" in ast.unparse(n)
+           and "clock_excluded(" in ast.unparse(n)]
+    assert len(fns) == 1, [f.name for f in fns]
+    body = ast.unparse(fns[0])
+    assert 'clock_excluded(t.clock_level_ok, timed["clock_level_side"]' in body.replace("'", '"')
+    assert "kept (LEVEL high is not an exclusion)" in body
+    assert "t.clock_level_ok is False" not in body
