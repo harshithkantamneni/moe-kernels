@@ -1184,11 +1184,17 @@ def test_the_ridge_census_names_a_report_that_still_carries_the_swept_ridge(tmp_
     every report carried 160.3 whether or not any did, so it was equally wrong
     before and after the rescoring."""
     cals = _cals()
+    # THE CARD'S OWN RIDGE, READ OFF THE CALIBRATION, NOT A LITERAL. It was
+    # 162.8 here until the 2026-09-09 recalibration (ab61e55) moved the H200
+    # to 152.81 and left this planted "fine" report carrying a stranger's
+    # ridge, which is the failure this test exists to detect and which it then
+    # reported against itself.
+    own = cals["nvidia_h200"].ridge
     _plant_report(tmp_path, "2026-01-01-nvidia_h200-planted", mba.SWEPT_RIDGE)
-    _plant_report(tmp_path, "2026-01-02-nvidia_h200-fine", 162.8,
+    _plant_report(tmp_path, "2026-01-02-nvidia_h200-fine", own,
                   rescored_from={"ridge": mba.SWEPT_RIDGE})
     _plant_report(tmp_path, "2026-01-03-nvidia_a100_sxm4_80gb-odd", 999.0)
-    _plant_report(tmp_path, "2026-01-04-no-card-in-this-name", 162.8)
+    _plant_report(tmp_path, "2026-01-04-no-card-in-this-name", own)
     census = mba.ridge_census(tmp_path, cals)
     assert census["total"] == 4
     assert census["own_card"] == 1
