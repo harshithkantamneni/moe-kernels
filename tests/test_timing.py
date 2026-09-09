@@ -143,8 +143,9 @@ class ScriptedClocks:
     """Stands in for `BackgroundClockSampler`: a scripted trace, in MHz."""
 
     def __init__(self, gpu: FakeGPU, trace, note: str = "",
-                 poll_cost_ms: float | None = None):
+                 poll_cost_ms: float | None = None, powers=None):
         self.gpu, self.trace = gpu, list(trace)
+        self.powers = list(powers) if powers is not None else []
         self.samples: tuple = ()
         self.source = "scripted"
         self.note = note
@@ -158,7 +159,9 @@ class ScriptedClocks:
     def __exit__(self, *exc):
         self.gpu.log.append(("clock_off",))
         self.gpu.in_trials = False
-        self.samples = tuple(T.ClockState(m, 50) for m in self.trace)
+        powers = self.powers or [0.0] * len(self.trace)
+        self.samples = tuple(T.ClockState(m, 50, power_w=w)
+                             for m, w in zip(self.trace, powers, strict=True))
 
 
 def run(gpu: FakeGPU, trace=(1980, 1980, 1980), **kw) -> T.KernelTiming:
@@ -375,11 +378,16 @@ def test_level_fails_when_the_clock_sits_low_at_both_ends_with_zero_drift():
 
 
 def test_level_passes_at_the_reference_and_just_inside_the_fraction():
+    """The edge is on the 15 MHz grid NVML reports on, since 2026-09-09.
+    0.95 x 1980 = 1881 is not a clock any card can report; the edge snaps to
+    1875, so 1875 is inside the band and 1860, one real step below it, is
+    not. Before the snap the verdict turned over inside a single step."""
     ok = run(FakeGPU(), trace=[1980] * 3, reference_clock_mhz=1980.0)
     assert ok.clock_level_ok is True
-    edge = run(FakeGPU(), trace=[1881] * 3, reference_clock_mhz=1980.0)
-    assert edge.clock_level_ok is True          # 0.95 * 1980 = 1881
-    below = run(FakeGPU(), trace=[1880] * 3, reference_clock_mhz=1980.0)
+    assert T.level_band(1980.0) == (1875.0, 2085.0)
+    edge = run(FakeGPU(), trace=[1875] * 3, reference_clock_mhz=1980.0)
+    assert edge.clock_level_ok is True
+    below = run(FakeGPU(), trace=[1860] * 3, reference_clock_mhz=1980.0)
     assert below.clock_level_ok is False
 
 
@@ -527,7 +535,7 @@ def test_every_record_carries_the_instrument_name():
         res = run(FakeGPU(), trace=trace, reference_clock_mhz=1980.0)
         assert res.instrument == T.TIMING_BASIS
         assert res.clock_source == "scripted"
-    assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v3"
+    assert T.TIMING_BASIS == "queue-deep/l2-flush/settled-warmup/clock-under-load/v4"
     assert T.KernelTiming.__dataclass_params__.frozen
 
 
@@ -686,17 +694,20 @@ def test_level_fails_HIGH_on_a_boosted_clock_and_names_the_side():
     assert res.clock_level_ok is False
     assert res.clock_level_side == T.LEVEL_HIGH
     assert res.reference_clock_mhz == 1515.0
-    assert "LEVEL failed HIGH" in res.clock_note
+    assert "LEVEL HIGH" in res.clock_note
     assert "1.31x" in res.clock_note and "roof_at_cell_clock_tflops" in res.clock_note
     # the old rule, restated, would have passed it
     assert 1980.0 >= T.LEVEL_FRACTION * 1515.0
+    # and neither side is an exclusion: the verdict says where it sat.
+    assert "not an exclusion" in res.clock_note
 
 
-def test_level_fails_LOW_on_a_throttled_clock_and_names_the_side():
+def test_level_fails_LOW_on_a_clock_under_the_band_and_names_the_side():
     res = run(FakeGPU(), trace=[1400] * 3, reference_clock_mhz=1515.0)
     assert res.clock_level_ok is False
     assert res.clock_level_side == T.LEVEL_LOW
-    assert "LEVEL failed LOW" in res.clock_note
+    assert "LEVEL LOW" in res.clock_note and "not an exclusion" in res.clock_note
+    assert res.clock_drift_ok is True
 
 
 def test_level_passes_inside_the_band_with_no_side():
@@ -710,10 +721,12 @@ def test_level_side_is_the_one_definition_of_the_band():
     """`clock_flags` derives LEVEL from `level_side`, so the two edges live in
     one place. Both edges, both sides, and the None that is not a side."""
     ref = 1515.0
-    assert T.level_side(ref * T.LEVEL_FRACTION, ref) == ""            # low edge, inside
-    assert T.level_side(ref * T.LEVEL_FRACTION - 1, ref) == T.LEVEL_LOW
-    assert T.level_side(ref * T.LEVEL_HIGH_FRACTION, ref) == ""       # high edge, inside
-    assert T.level_side(ref * T.LEVEL_HIGH_FRACTION + 1, ref) == T.LEVEL_HIGH
+    low, high = T.level_band(ref)
+    assert (low, high) == (1440.0, 1590.0)      # snapped from 1439.25, 1590.75
+    assert T.level_side(low, ref) == ""                               # edge, inside
+    assert T.level_side(low - T.CLOCK_STEP_MHZ, ref) == T.LEVEL_LOW
+    assert T.level_side(high, ref) == ""                              # edge, inside
+    assert T.level_side(high + T.CLOCK_STEP_MHZ, ref) == T.LEVEL_HIGH
     assert T.level_side(None, ref) is None
     assert T.level_side(1500.0, None) is None
     assert T.level_side(1500.0, 0.0) is None
@@ -801,6 +814,10 @@ def test_timing_basis_is_bound_to_the_loop_shape():
         "iters_sized_from": "flushed per-iteration probe",
         "flush_l2_multiple": (inspect.signature(T.flush_mb_for_device)
                               .parameters["multiple"].default),
+        "warmup_settles_on_clock": (
+            "clock_read" in inspect.signature(T.warm_until).parameters),
+        "settle_step_mhz": T.CLOCK_STEP_MHZ,
+        "settle_cap_multiple": T.SETTLE_CAP_MULTIPLE,
     }
     src = inspect.getsource(T._timed_trials)
     body = src[src.index("for i in range(iters):"):]
@@ -810,7 +827,7 @@ def test_timing_basis_is_bound_to_the_loop_shape():
     assert "_timed_trials(fn, n, 1, events(n), flush)" in warm_src, (
         "iters are sized from a flushed per-iteration probe")
     assert live == T.LOOP_SHAPE
-    assert T.TIMING_BASIS == "queue-deep/l2-flush/clock-under-load/v3", (
+    assert T.TIMING_BASIS == "queue-deep/l2-flush/settled-warmup/clock-under-load/v4", (
         "the loop shape changed: bump TIMING_BASIS and this pin together")
 
 
@@ -866,6 +883,14 @@ def test_time_kernel_matches_time_eager_on_a_short_kernel_within_two_percent():
     assert ours.host_bound is False, ours.host_note
     if ours.clock_source == "nvml":
         assert ours.sm_clock_load_mhz is not None and ours.clock_samples >= 3
+        # v4: the same NVML that polls under load settles the warmup first,
+        # and the record says which way that went. None would mean no reader
+        # was available, which contradicts the branch we are in.
+        assert ours.clock_settled in (True, False)
+        assert len(ours.clock_samples_mhz) == ours.clock_samples
+        if ours.clock_settled is False:
+            assert "had not settled" in ours.clock_note
+        assert ours.power_w is None or ours.power_w > 0
     else:
         assert ours.clock_source == "none" and "nvidia-ml-py" in ours.clock_note
     assert abs(ours.ms_p50 - eager.ms_p50) / eager.ms_p50 <= 0.02
@@ -908,3 +933,237 @@ def test_the_clock_poll_is_sized_so_the_floor_of_samples_lands_inside_the_region
     for region_ms in (60, 150, 400, 3000):
         poll = T.clock_poll_for(trials=1, iters=1, per_call_ms=float(region_ms))
         assert region_ms / 1e3 / poll >= 2 * T.CLOCK_SAMPLE_FLOOR
+
+
+# --- (9) the 2026-09-09 H200 session, planted cell by cell -----------------------
+# The session measured 750 cells and the under-load clock turned out to be set
+# PER TILE by the kernel's own power draw under the 700 W cap: BM=128/N=64 a
+# median 1395 MHz over 215 cells, BM=256 1650, memory-shaped work 1950-1980,
+# against a calibration GEMM holding 1485 MHz at 691 W. So a clock BELOW the
+# band names a tile, not a throttle, and the rule that excluded on it removed
+# the study's two primary tiles from measurability on this card. These plant
+# the session's own numbers against the session's own reference.
+
+SESSION_REFERENCE_MHZ = 1485.0
+
+
+def test_a_steady_bm128_cell_is_kept_with_the_low_side_recorded():
+    """1395 MHz for the whole cell, which is what BM=128/N=64 does on this
+    card at 700 W. LEVEL says LOW, DRIFT passes, and DRIFT is the exclusion:
+    the cell is measured, and the side is the record of which tile family it
+    is in."""
+    res = run(FakeGPU(), trace=[1395] * 4,
+              reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert res.sm_clock_load_mhz == 1395.0
+    assert res.clock_level_ok is False and res.clock_level_side == T.LEVEL_LOW
+    assert res.clock_drift_ok is True          # KEPT: nothing moved
+    assert res.clock_drift_direction == ""
+    assert "not an exclusion" in res.clock_note
+
+
+def test_a_settling_first_cell_of_a_rep_is_drift_excluded_and_names_its_direction():
+    """The session's 135 DRIFTs were all the first cell of a rep after the
+    workload changed, and 1560 -> 1650 is one of them verbatim (three cells
+    ran exactly that). 90/1560 = 5.8%, over DRIFT_FRACTION, and the direction
+    is what says it was the governor still climbing rather than the card
+    giving clock back."""
+    res = run(FakeGPU(), trace=[1560, 1620, 1650],
+              reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert res.sm_clock_start_mhz == 1560.0 and res.sm_clock_end_mhz == 1650.0
+    assert res.clock_drift_ok is False
+    assert res.clock_drift_direction == T.DRIFT_UP == "settling upward"
+    assert "DRIFT failed, settling upward" in res.clock_note
+    assert "1560 -> 1650 MHz" in res.clock_note
+    assert "1560, 1620, 1650" in res.clock_note
+
+
+def test_a_boosted_memory_shaped_cell_is_kept_with_the_high_side_recorded():
+    res = run(FakeGPU(), trace=[1980] * 3,
+              reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert res.clock_level_ok is False and res.clock_level_side == T.LEVEL_HIGH
+    assert res.clock_drift_ok is True
+    assert res.clock_drift_direction == ""
+
+
+def test_the_band_edges_sit_on_the_15_mhz_grid_the_card_reports_on():
+    """0.95 x 1485 = 1410.75 is inside one NVML step, so 1410 read LOW and
+    1425 read level for timings 0.1% apart, and 23 of the session's 148 LOW
+    verdicts sat in that step. Snapped, the edge is 1410 and a cell that read
+    exactly 1410 is inside the band."""
+    assert T.CLOCK_STEP_MHZ == 15.0
+    assert T.level_band(SESSION_REFERENCE_MHZ) == (1410.0, 1560.0)
+    assert T.snap_to_clock_step(1410.75) == 1410.0
+    assert T.snap_to_clock_step(1559.25) == 1560.0
+    assert T.level_side(1410.0, SESSION_REFERENCE_MHZ) == ""
+    assert T.level_side(1395.0, SESSION_REFERENCE_MHZ) == T.LEVEL_LOW
+    assert T.level_side(1560.0, SESSION_REFERENCE_MHZ) == ""
+    assert T.level_side(1575.0, SESSION_REFERENCE_MHZ) == T.LEVEL_HIGH
+    # every RAW reading the session recorded is on the grid, so the edges must
+    # be; the off-grid values in that corpus are all half steps, medians of an
+    # even number of readings, and they are not what an edge is compared with.
+    for mhz in (1365, 1395, 1410, 1425, 1485, 1560, 1650, 1725, 1980):
+        assert T.snap_to_clock_step(float(mhz)) == float(mhz)
+    assert T.snap_to_clock_step(1402.5) == 1410.0        # median of 1395, 1410
+
+
+def test_drift_direction_reads_the_whole_list_not_only_the_endpoints():
+    assert T.drift_direction([1560, 1620, 1650]) == T.DRIFT_UP
+    assert T.drift_direction([1875, 1800, 1725]) == T.DRIFT_DOWN
+    # up and back: the endpoints agree, the samples do not, and calling that
+    # steady would hide a governor hunting between two states.
+    assert T.drift_direction([1500, 1980, 1500]) == T.DRIFT_OSCILLATING
+    assert T.drift_direction([1395, 1395, 1395]) == ""
+    assert T.drift_direction([1395]) == ""
+    assert T.drift_direction([]) == ""
+    assert T.drift_direction([0, 0]) == ""
+
+
+# --- (10) the settle-on-clock warmup ---------------------------------------------
+
+class ScriptedReader:
+    """A clock reader with a scripted MHz trace; the last value repeats."""
+
+    def __init__(self, trace, power_w: float = 0.0):
+        self.trace = list(trace)
+        self.reads = 0
+        self.power_w = power_w
+
+    def __call__(self) -> T.ClockState:
+        mhz = self.trace[min(self.reads, len(self.trace) - 1)]
+        self.reads += 1
+        return T.ClockState(int(mhz), 50, power_w=self.power_w)
+
+
+def test_the_warmup_keeps_warming_until_two_reads_agree_within_one_step():
+    """A 1 ms kernel warms 1, 25, 25 = 51 calls to pass warmup_ms=50. The
+    clock is still climbing at that point (1560), so the loop delivers one
+    more batch, reads 1620 (60 MHz away, four steps) and another, reads
+    1620 again. Two consecutive reads within one 15 MHz step: settled, after
+    two extra batches of 25 calls."""
+    gpu = FakeGPU(warm_call_ms=1.0)
+    reader = ScriptedReader([1560, 1620, 1620])
+    report = T.warm_until(gpu.fn, 50.0, gpu.events, clock_read=reader)
+    assert report.settled is True
+    assert report.settle_reads == (1560.0, 1620.0, 1620.0)
+    assert report.settle_calls == 50 and report.settle_ms == pytest.approx(50.0)
+    assert report.settle_note == ""
+    # the settle load is inside the totals, because the governor saw it
+    assert report.calls == 51 + 50 + report.probe_calls
+    assert report.delivered_ms == pytest.approx(51.0 + 50.0 + report.probe_calls)
+
+
+def test_the_probe_that_sizes_iters_runs_after_the_settle():
+    """`iters` must be sized at the operating point the trials will run at,
+    not at whatever the governor had reached when `warmup_ms` elapsed. The
+    probe's calls are the last warmup calls made, after every settle batch."""
+    gpu = FakeGPU(warm_call_ms=1.0)
+    reader = ScriptedReader([1560, 1620, 1620])
+    before = gpu.calls
+    report = T.warm_until(gpu.fn, 50.0, gpu.events, clock_read=reader)
+    assert gpu.calls - before == report.calls
+    # the probe's event pairs are the last ones created
+    assert gpu.instances[-1].n == report.probe_calls
+
+
+def test_the_settle_gives_up_at_the_cap_and_records_that_it_did():
+    """A card hunting between two states never gives two consecutive reads
+    inside a step. The loop stops at SETTLE_CAP_MULTIPLE x warmup_ms with
+    `settled=False` and the reads in the note, rather than reporting a
+    convergence that did not happen."""
+    gpu = FakeGPU(warm_call_ms=1.0)
+    reader = ScriptedReader([1500, 1980] * 20)
+    report = T.warm_until(gpu.fn, 50.0, gpu.events, clock_read=reader)
+    assert report.settled is False
+    assert report.delivered_ms >= T.SETTLE_CAP_MULTIPLE * 50.0
+    assert "had not settled" in report.settle_note
+    assert "cap 3x50 ms" in report.settle_note
+
+
+def test_no_clock_reader_means_no_settle_and_never_a_claimed_one():
+    """Off-GPU, or on a host whose container forbids NVML, there is nothing to
+    settle against. `settled` is None, which is not False and is not True."""
+    gpu = FakeGPU(warm_call_ms=1.0)
+    report = T.warm_until(gpu.fn, 50.0, gpu.events)
+    assert report.settled is None
+    assert report.settle_ms == 0.0 and report.settle_calls == 0
+    assert report.settle_reads == ()
+
+
+def test_a_reader_that_raises_mid_settle_is_reported_not_lost():
+    class Angry:
+        def __init__(self):
+            self.reads = 0
+
+        def __call__(self):
+            self.reads += 1
+            if self.reads > 1:
+                raise ModuleNotFoundError("No module named 'pynvml'")
+            return T.ClockState(1560, 50)
+
+    gpu = FakeGPU(warm_call_ms=1.0)
+    report = T.warm_until(gpu.fn, 50.0, gpu.events, clock_read=Angry())
+    assert report.settled is False
+    assert "clock reader raised after 1 reads" in report.settle_note
+    assert "pynvml" in report.settle_note
+
+
+def test_the_settle_reaches_the_record_and_the_note():
+    gpu = FakeGPU(warm_call_ms=1.0)
+    reader = ScriptedReader([1560, 1620, 1620])
+    res = T.time_kernel(gpu.fn, warmup_ms=50.0, target_ms=20.0, trials=1,
+                        events=gpu.events, flusher=gpu,
+                        clock_sampler=ScriptedClocks(gpu, [1620] * 3),
+                        clock_reader=reader,
+                        reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert res.clock_settled is True
+    assert res.settle_ms == pytest.approx(50.0) and res.settle_calls == 50
+    assert res.instrument == T.TIMING_BASIS
+    other = FakeGPU(warm_call_ms=1.0)
+    stalled = T.time_kernel(
+        other.fn, warmup_ms=50.0, target_ms=20.0, trials=1,
+        events=other.events, flusher=other,
+        clock_sampler=ScriptedClocks(other, [1620] * 3),
+        clock_reader=ScriptedReader([1500, 1980] * 20),
+        reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert stalled.clock_settled is False
+    assert "had not settled" in stalled.clock_note
+
+
+# --- (11) the trace and the watts are persisted, not summarised away -------------
+
+def test_the_whole_sample_list_and_the_median_power_reach_the_record():
+    """131 of the session's 135 DRIFT verdicts could not be examined because
+    the samples were dropped, and the question they had to answer (settling
+    governor or hunting card?) needs the list. The watts come from the same
+    NVML call as the clock, which is what separates a hungry tile at the board
+    cap from a card in trouble."""
+    gpu = FakeGPU()
+    sampler = ScriptedClocks(gpu, [1395, 1395, 1410],
+                             powers=[698.0, 700.0, 699.0])
+    res = T.time_kernel(gpu.fn, warmup_ms=10.0, target_ms=10.0, trials=1,
+                        events=gpu.events, flusher=gpu, clock_sampler=sampler,
+                        reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert res.clock_samples_mhz == (1395.0, 1395.0, 1410.0)
+    assert res.power_w == pytest.approx(699.0)
+    assert res.clock_samples == 3
+    # a zero sample is not a clock and is not in the list
+    zeroed = run(FakeGPU(), trace=[0, 1395, 0, 1410],
+                 reference_clock_mhz=SESSION_REFERENCE_MHZ)
+    assert zeroed.clock_samples_mhz == (1395.0, 1410.0)
+    assert zeroed.power_w is None
+
+
+def test_the_clock_state_carries_the_watts_from_the_same_call(monkeypatch):
+    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(T.torch.cuda, "clock_rate", lambda *a: 1395)
+    monkeypatch.setattr(T.torch.cuda, "temperature", lambda *a: 64)
+    monkeypatch.setattr(T.torch.cuda, "power_draw", lambda *a: 691_000)
+    s = T.ClockState.sample()
+    assert (s.sm_clock_mhz, s.power_w, s.source) == (1395, 691.0, T.CLOCK_SOURCE_NVML)
+
+    def no_pynvml(*a):
+        raise ModuleNotFoundError("No module named 'pynvml'")
+    # the watts are optional and never cost the cell its clock
+    monkeypatch.setattr(T.torch.cuda, "power_draw", no_pynvml)
+    assert T.nvml_power_w() == 0.0
+    assert T.ClockState.sample().sm_clock_mhz == 1395

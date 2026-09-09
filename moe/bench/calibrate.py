@@ -469,9 +469,13 @@ class LoadedClock:
     #: eleven calibrations of one card.
     after_idle_mhz: int
     temp_c: int = 0
-    #: Board power under the load, W, or 0.0 when nvidia-smi did not answer.
+    #: Board power under the load, W, or 0.0 when no reader answered. Taken at
+    #: the same NVML call as the clock samples (`timing.ClockState.power_w`).
     #: A GEMM pinned at the board limit is power capped, and a clock read near
-    #: boost for such a GEMM is not credible whatever NVML said.
+    #: boost for such a GEMM is not credible whatever NVML said. THE 2026-09-09
+    #: H200 CALIBRATION IS SUCH A GEMM: 1485 MHz at 691 W under a 700 W cap,
+    #: which is why the kernels that draw more hold a lower clock and why a
+    #: clock below this one names a tile rather than a fault.
     power_w: float = 0.0
     #: Which reader took `samples`: `timing.CLOCK_SOURCE_NVML` on every record
     #: this function writes, because `clock_under_load` REFUSES the forked
@@ -526,9 +530,19 @@ def _power_draw_w() -> float:
     0.0 rather than a refusal ONLY because nothing divides by it: it is recorded
     to separate a power-capped GEMM from a clock-limited one, and an unavailable
     reading leaves that question open rather than answering it wrongly.
+
+    THE FORKED READER IS THE FALLBACK, not the reader. `nvidia-smi power.draw`
+    costs a fork plus an NVML init, tens of milliseconds, so the watts landed
+    that long after the clock they are supposed to sit beside;
+    `timing.nvml_power_w` is the same binding the clock comes through and costs
+    tens of microseconds, so `ClockState.sample` now carries both from one
+    call and this is only reached where that binding is absent.
     """
     from . import timing as T
 
+    watts = T.nvml_power_w()
+    if watts > 0:
+        return watts
     vals = T._nvidia_smi("power.draw")
     if not vals:
         return 0.0
@@ -616,7 +630,11 @@ def clock_under_load(step, label: str, samples: int = 5,
                 "taken before it and none of them may be published as the "
                 "clock the GEMM ran at, because the set is no longer one kind "
                 "of reading.")
-        powers.append(_power_draw_w())
+        # The watts from the SAME call as the clock when NVML answered them
+        # (`ClockState.sample`), the forked reader only where it did not: a
+        # power reading taken tens of milliseconds after the clock is not the
+        # power the clock was held at.
+        powers.append(state.power_w if state.power_w > 0 else _power_draw_w())
         torch.cuda.synchronize()
         if state.sm_clock_mhz > 0:
             got.append(state.sm_clock_mhz)

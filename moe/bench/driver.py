@@ -1031,7 +1031,9 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     does read a first and a last sample, but UNDER LOAD, and those columns hold
     IDLE-instant readings; writing under-load numbers into them would give one
     column two meanings either side of the version boundary. The under-load
-    numbers have columns of their own and a consumer asks for them by name.
+    numbers have columns of their own and a consumer asks for them by name:
+    `sm_clock_load_first_mhz`, `sm_clock_load_last_mhz` and the whole sample
+    list in `clock_samples_mhz` (v7), beside `power_w` from the same NVML call.
 
     `throttled` IS WRITTEN, and that is the correction this docstring used to
     argue against. It is not a quantity, it is the VERDICT "this row's clock
@@ -1052,20 +1054,27 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     bound rather than a thermal event. Folding it in here would report a Python
     launcher as a hot box.
 
-    AND FROM THE LOW SIDE OF LEVEL ONLY. LEVEL is two-sided since 2026-09-03
-    and a cell can fail it HIGH: a memory-shaped cell that boosted to 1980 MHz
-    against a compute roof measured at 1515. That is the mirror image of a
-    throttle, not a throttle; on an H200 it is the NORMAL state of decode
-    work, and writing it into `throttled` would fail S6d on every honest
-    decode session and empty `efficiency_report` of the cells the study is
-    about. The HIGH failure is on the row as `clock_level_ok = failed` with
-    `clock_level_side = high`, its fixed-roof fraction is the thing that is
-    wrong, and `roof_at_cell_clock_tflops` is the correction. THE RULE FOR
-    EVERY CONSUMER: LOW or DRIFT excludes (that is exactly `throttled`); HIGH
-    is not an exclusion, it means "the fixed-roof fraction is not comparable,
-    read pct_of_roof_at_cell_clock". A consumer that excludes on
-    `clock_level_ok == failed` alone drops boosted cells; it must read the
-    side or branch on `throttled`.
+    FROM DRIFT ALONE SINCE 2026-09-09, AND NEITHER SIDE OF LEVEL. LEVEL went
+    two-sided on 2026-09-03 and the HIGH side was already excluded from this
+    verdict, because a memory-shaped cell that boosts to 1980 MHz against a
+    compute roof measured at 1515 is the mirror image of a throttle and on an
+    H200 the normal state of decode work. The first H200 session then showed
+    the LOW side is the same kind of thing: over 750 cells the under-load
+    clock is set per tile by the kernel's own power draw under the 700 W cap
+    (BM=128/N=64 median 1395 MHz over 215 cells, BM=64/G=1 1358, BM=256 1650,
+    memory-shaped 1950-1980), and the calibration's own GEMM sits at 1485 at
+    691 W, near the LOW end of dense work rather than in the middle. Every
+    LOW cell in that session was the STEADY STATE of one tile family, in every
+    rep and every deep tread; excluding on it removed the study's two primary
+    tiles from measurability on this card and removed nothing elsewhere.
+
+    So the verdict is `clock_drift_ok == failed` and nothing else. The side is
+    still written, on every row, as the record of where the cell sat, and the
+    two roof fractions are written beside it so a consumer can read delivered
+    throughput (fixed roof, the gate input, since every cell ran under the
+    same power cap) and issue efficiency (own clock) without re-deriving
+    either. THE RULE FOR EVERY CONSUMER: exclude iff `throttled`, which is
+    iff DRIFT failed; `clock_level_side` excludes nothing.
 
     THE REFERENCE IS WRITTEN ONTO THE ROW, from the config and not from the
     record: `cfg.reference_for(row.dtype)` is what `_instrument_kwargs` handed
@@ -1107,10 +1116,8 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     if row.clock_level_ok != SC.VERDICT_FAILED:
         side = ""
     row.clock_level_side = side
-    # LOW or DRIFT -> throttled; HIGH -> not throttled, per-row roof instead.
-    row.throttled = (row.clock_drift_ok == SC.VERDICT_FAILED
-                     or (row.clock_level_ok == SC.VERDICT_FAILED
-                         and side != T.LEVEL_HIGH))
+    # DRIFT excludes. LEVEL, on either side, is recorded and excludes nothing.
+    row.throttled = row.clock_drift_ok == SC.VERDICT_FAILED
     row.host_bound_ok = SC.verdict_word(
         None if kt.host_bound is None else not kt.host_bound)
     row.clock_samples = kt.clock_samples
@@ -1121,6 +1128,21 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     row.host_note = kt.host_note
     row.reference_clock_mhz = ref.mhz or 0.0
     row.reference_clock_source = ref.source
+    # v7: the under-load TRACE, not only its summary. Six of the seven ladder
+    # writers dropped the first and last sample and all seven dropped the
+    # list, so of the H200 session's 135 DRIFT verdicts only four could be
+    # examined for what the clock had actually done. These columns are the
+    # under-load pair and are NOT the retired `sm_clock_start_mhz` /
+    # `sm_clock_end_mhz` above, which hold idle instants on 100,144 published
+    # rows and keep that meaning.
+    row.sm_clock_load_first_mhz = kt.sm_clock_start_mhz or 0.0
+    row.sm_clock_load_last_mhz = kt.sm_clock_end_mhz or 0.0
+    row.clock_samples_mhz = " ".join(f"{c:.0f}" for c in kt.clock_samples_mhz)
+    row.clock_drift_direction = kt.clock_drift_direction
+    row.power_w = kt.power_w or 0.0
+    row.warmup_settle_ms = kt.settle_ms
+    row.warmup_settle_calls = kt.settle_calls
+    row.warmup_clock_settled = SC.verdict_word(kt.clock_settled)
 
 
 def _apply_legacy_timing(row: SC.Row, res, start, end) -> None:

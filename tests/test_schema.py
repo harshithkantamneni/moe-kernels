@@ -137,7 +137,7 @@ def test_appending_under_a_matching_header_is_fine(tmp_path):
 
 def test_schema_version_tracks_the_column_set():
     """A reminder in code: the version must move whenever COLUMNS does."""
-    assert SC.SCHEMA_VERSION == 6
+    assert SC.SCHEMA_VERSION == 7
     assert "pct_of_achieved_bw" not in SC.COLUMNS
     assert "pct_of_achieved_tflops" in SC.COLUMNS
     assert "achieved_peak_tflops" in SC.COLUMNS
@@ -175,6 +175,19 @@ def test_schema_version_tracks_the_column_set():
     # And `warmup` survives beside `warmup_ms` rather than changing meaning:
     # every published row records a call count under that name.
     assert "warmup" in SC.COLUMNS
+    # v7: the under-load clock TRACE, the watts read beside it, and what the
+    # settle loop did. Before these a row carried a DRIFT verdict and none of
+    # the samples it came from, so 131 of the 2026-09-09 session's 135 DRIFT
+    # verdicts could not be told apart as a settling governor or a hunting
+    # card. The retired idle-instant pair keeps its own name and meaning.
+    for name in SC.COLUMNS_ADDED_IN[7]:
+        assert name in SC.COLUMNS, name
+    for name in ("sm_clock_load_first_mhz", "sm_clock_load_last_mhz",
+                 "clock_samples_mhz", "clock_drift_direction", "power_w",
+                 "warmup_settle_ms", "warmup_clock_settled"):
+        assert name in SC.COLUMNS_ADDED_IN[7], name
+    assert "sm_clock_start_mhz" not in SC.COLUMNS_ADDED_IN[7]
+    assert set(SC.COLUMNS_ADDED_IN[7]).isdisjoint(SC.TIMING_VERDICT_COLUMNS)
 
 
 # --- the instrument boundary ------------------------------------------------
@@ -405,3 +418,77 @@ def test_merging_the_same_inputs_twice_is_idempotent(tmp_path):
     SC.merge_csvs([a], out)
     SC.merge_csvs([a], out)
     assert len(SC.read_csv(out)) == 2
+
+
+# --- v7: the under-load trace round-trips, and an older row says it cannot ----
+
+def test_the_under_load_trace_round_trips_through_the_csv(tmp_path):
+    """The samples, the direction, the watts and the settle survive the CSV as
+    what they are. The trace is the column 131 of the 2026-09-09 session's 135
+    DRIFT verdicts needed and did not have."""
+    path = tmp_path / "v7.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(
+            sm_clock_load_mhz=1620.0, sm_clock_load_first_mhz=1560.0,
+            sm_clock_load_last_mhz=1650.0,
+            clock_samples_mhz="1560 1620 1650",
+            clock_drift_direction="settling upward", power_w=698.5,
+            warmup_settle_ms=50.0, warmup_settle_calls=50,
+            warmup_clock_settled=SC.VERDICT_OK,
+            clock_drift_ok=SC.VERDICT_FAILED, instrument="x/v4"))
+    r = SC.read_csv(path)[0]
+    assert int(r["schema_version"]) == 7
+    assert SC.has_load_clock_trace(r)
+    assert r["clock_samples_mhz"] == "1560 1620 1650"
+    assert [float(v) for v in r["clock_samples_mhz"].split()] == [1560, 1620, 1650]
+    assert SC.row_float(r, "sm_clock_load_first_mhz") == 1560.0
+    assert SC.row_float(r, "sm_clock_load_last_mhz") == 1650.0
+    assert r["clock_drift_direction"] == "settling upward"
+    assert SC.row_float(r, "power_w") == 698.5
+    assert SC.row_float(r, "warmup_settle_ms") == 50.0
+    assert r["warmup_clock_settled"] == SC.VERDICT_OK
+    # The RETIRED idle-instant pair is untouched, and is a different question.
+    assert SC.row_float(r, "sm_clock_start_mhz") == 0.0
+    assert SC.row_float(r, "sm_clock_end_mhz") == 0.0
+
+
+def test_a_v6_row_is_still_readable_and_says_it_has_no_trace(tmp_path):
+    """Reading v3 to v6 is the point of an additive schema: those arms cost
+    real GPU hours. A v6 row reads back with the v7 columns STAMPED, so
+    "this file predates the trace" cannot be mistaken for "the clock read
+    zero", and the reader is sent to the predicate rather than to a default."""
+    import csv as _csv
+
+    path = tmp_path / "v6.csv"
+    columns = [c for c in SC.COLUMNS if c not in SC.COLUMNS_ADDED_IN[7]]
+    with path.open("w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=columns)
+        w.writeheader()
+        w.writerow({c: "" for c in columns} | {
+            "schema_version": 6, "model": "mixtral-8x7b", "ms_p50": "1.25",
+            "instrument": "queue-deep/l2-flush/clock-under-load/v3",
+            "clock_drift_ok": SC.VERDICT_OK, "clock_level_ok": SC.VERDICT_FAILED,
+            "clock_level_side": "low", "sm_clock_load_mhz": "1395",
+            "correctness_passed": "True"})
+    r = SC.read_csv(path)[0]
+    assert SC.has_kernel_timing(r) and SC.has_cell_clock_roof(r) is False
+    assert SC.has_load_clock_trace(r) is False
+    # its v6 answers are still readable
+    assert SC.timing_verdict(r, "clock_drift_ok") == SC.VERDICT_OK
+    assert SC.row_float(r, "sm_clock_load_mhz") == 1395.0
+    for name in SC.COLUMNS_ADDED_IN[7]:
+        assert r[name] == SC.UNRECORDED, name
+        with pytest.raises(SC.LoadClockTraceUnrecorded, match="has_load_clock_trace"):
+            SC.row_float(r, name)
+    assert 6 in SC.READABLE_VERSIONS and 3 in SC.READABLE_VERSIONS
+
+
+def test_a_v7_row_with_nothing_polled_has_no_trace_either(tmp_path):
+    """An empty list is "nothing was read", which is a different fact from
+    "this file predates the column" and from "the clock read zero"."""
+    path = tmp_path / "empty.csv"
+    with SC.CsvWriter(path) as w:
+        w.write(make_row(clock_source="none", clock_samples_mhz=""))
+    r = SC.read_csv(path)[0]
+    assert SC.has_load_clock_trace(r) is False
+    assert SC.row_float(r, "power_w") == 0.0

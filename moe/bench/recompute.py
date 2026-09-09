@@ -16,7 +16,10 @@ nothing else:
     implied_traffic_ratio       ceiling x time / compulsory bytes
     roof_at_cell_clock_tflops   the fixed roof rescaled to the clock THIS row
                                 ran at (v6), with pct_of_roof_at_cell_clock
-                                and roof_note saying why when it is not scored
+                                and roof_note, which names the FIXED-roof
+                                fraction as the compute-bound gate input on a
+                                scored row and says why the row is not scored
+                                otherwise (roofline.ROOF_NOTE_SCORED)
 
 Everything else, `ms_p50`, `tflops`, `compulsory_gbps`,
 `arith_intensity_compulsory` and the under-load clock `sm_clock_load_mhz`, is

@@ -58,6 +58,13 @@ string to the loop's shape, and `tests/test_timing.py` pins both, so a change
 to the flush position, the iteration cap or the warmup's shape fails the
 suite until the string is bumped with it.
 
+v4 (2026-09-09) is the next such change: the warmup does not stop at
+`warmup_ms`, it stops when the CLOCK has stopped moving (two consecutive NVML
+reads within one 15 MHz step, capped at three times `warmup_ms`), because the
+H200 session's 135 DRIFT verdicts were all the governor still settling on the
+first cell of a rep. That moves the operating point every short cell is
+measured at, so the string moves with it.
+
 THE HOST-BOUND CASE IS DETECTED, NOT ASSUMED AWAY
 -------------------------------------------------
 A queue-deep loop only measures the GPU while the queue is deep. When the
@@ -84,33 +91,55 @@ passed it with drift 0.0. `time_kernel` polls the clock from a background
 thread WHILE the trials run, reports the median as `sm_clock_load_mhz`, and
 sets two flags: LEVEL (`clock_level_ok`: the loaded clock is inside the band
 [`LEVEL_FRACTION`, `LEVEL_HIGH_FRACTION`] around the reference the roof was
-measured at, and `clock_level_side` names which way it left the band) and
-DRIFT (`clock_drift_ok`: first and last under-load samples agree within
-`DRIFT_FRACTION`, in either direction). A rise is a defect too: it means the
-warmup did not reach the operating point, so the trials were not at one clock.
+measured at, snapped to the `CLOCK_STEP_MHZ` grid, and `clock_level_side`
+names which way it left the band) and DRIFT (`clock_drift_ok`: first and last
+under-load samples agree within `DRIFT_FRACTION`, in either direction).
 
-LEVEL IS TWO-SIDED, AND WHY THE HIGH SIDE WAS THE ONE THAT MATTERED
---------------------------------------------------------------------
-Until 2026-09-03 LEVEL was `load >= 0.95 * reference`: a BOOSTED clock passed.
-The H200's compute plateau under a dense GEMM is ~1455-1515 MHz, because the
-roof's GEMM is power limited; memory-shaped work draws less power and runs at
-1980. The study's decode cells are mostly memory-shaped, so they ran at 1980
-against a compute roof measured at 1515, with 1980/1515 = 1.31x the tensor-
-core issue rate the roof assumed, and the intermediate-intensity cells the
-ridge-crossing analysis is about had their fraction-of-roof inflated by up to
-31%, TOWARD the claim. That is the mirror image of the throttle defect the
-LEVEL flag was built to catch, and the flag could not see it by construction.
+LEVEL IS A RECORD, DRIFT IS THE EXCLUSION (2026-09-09)
+------------------------------------------------------
+Until 2026-09-09 a LEVEL failure on the LOW side excluded the cell. The first
+H200 session said what that rule actually is: across 750 cells the under-load
+clock is set PER TILE by the kernel's own power draw under the 700 W cap.
+BM=128/N=64 holds a median 1395 MHz over 215 cells, BM=64/G=1 1358, BM=256
+1650, memory-shaped work 1950-1980; the calibration's own 8192^3 GEMM sits at
+1485 MHz at 691 W, which is near the LOW end of what dense tensor work does on
+this card rather than the middle of anything. So LEVEL-LOW named a TILE, not a
+throttle: it removed the study's two primary tiles from measurability on this
+card and removed nothing anywhere else. The verdict and the side are still
+computed and still written on every row, because "this tile runs 6% under the
+ruler's GEMM" is a finding; they exclude nothing. The exclusion is DRIFT
+alone, and every one of the session's 135 DRIFTs was the governor settling on
+the FIRST cell of a rep after a workload change, which is a property of the
+INSTRUMENT and is fixed below rather than gated around.
 
-Two things close it. The flag is now a band in EITHER direction, and the row
-names the side. And the roof is normalised PER ROW: `sm_clock_load_mhz` is a
-row column, so every fraction-of-compute-roof can be scored against the roof
-AT THE CLOCK THE CELL RAN (`roofline.roof_at_clock`, applied by the driver as
-`roof_at_cell_clock_tflops`), post hoc, for every row that carries a load
-clock and an under-load reference. The flag says a row's FIXED-roof fraction
-is not comparable; the per-row roof is the number that is.
+Two more things follow from the same physics. The band edges snap to the
+15 MHz NVML step (`snap_to_clock_step`): 0.95 x 1485 = 1410.75 sits inside one
+step, so 1410 read LOW and 1425 read level for timings 0.1% apart, and 23 of
+the session's 148 LOW verdicts sat within that step of the edge. And the roof
+is normalised PER ROW: `sm_clock_load_mhz` is a row column, so a
+fraction-of-compute-roof can also be scored against the roof AT THE CLOCK THE
+CELL RAN (`roofline.roof_at_clock`, applied by the driver as
+`roof_at_cell_clock_tflops`). Both fractions are on every row. The FIXED-roof
+fraction is the compute-bound gate input, because the GEMM and every cell ran
+under the same 700 W cap and it is therefore the fair delivered-throughput
+comparison; the own-clock fraction is issue efficiency, carried beside it.
+
+THE WARMUP SETTLES ON THE CLOCK, NOT ONLY ON A DURATION (v4)
+------------------------------------------------------------
+`warmup_ms` of delivered GPU time reaches the governor's fast response but does
+not establish that it has STOPPED moving, and the session's DRIFTs were by
+position exactly that: the first cell of a rep after the workload changed
+(1875->1725, and 1560->1650 three times). So after `warmup_ms` the warmup keeps
+running the trials' own loop until two consecutive NVML reads agree within one
+`CLOCK_STEP_MHZ` step, capped at `SETTLE_CAP_MULTIPLE` x `warmup_ms` of
+delivered time; `settle_ms` and the extra calls are on the record, and a DRIFT
+that survives it names its direction (settling upward, dropping, oscillating).
+The probe that sizes `iters` runs AFTER the settle, so the iteration count is
+sized at the operating point the trials will run at.
 """
 from __future__ import annotations
 
+import math
 import statistics
 import subprocess
 import threading
@@ -124,7 +153,10 @@ import torch
 #: it produces. Bump the version suffix when a change would move a published
 #: number; the reader compares this string, not a commit hash. v3: flushed
 #: warmup and a flushed per-iteration probe for `iters` (see `warm_until`).
-TIMING_BASIS = "queue-deep/l2-flush/clock-under-load/v3"
+#: v4: the warmup runs on past `warmup_ms` until the SM clock has settled
+#: (`warm_until`'s settle loop), so a cell is measured at the operating point
+#: the governor stopped at rather than wherever it had reached at 300 ms.
+TIMING_BASIS = "queue-deep/l2-flush/settled-warmup/clock-under-load/v4"
 
 #: The name the RETIRED timers stamp on their `TimingResult`. `time_eager` and
 #: `time_graph` run the same `_timed_trials` loop as `time_kernel` and differ
@@ -135,12 +167,28 @@ TIMING_BASIS = "queue-deep/l2-flush/clock-under-load/v3"
 #: asserts that it never claims the instrument's name.
 RETIRED_TIMER_BASIS = "time_eager+time_graph/count-warmup/isolated-iters/no-clock"
 
+#: The SM clock's quantum on this hardware. NVML reports Hopper SM clocks on a
+#: 15 MHz grid: every raw reading in the H200 session's 750 cells is a multiple
+#: of it, and the 23 distinct off-grid values in that corpus are all half
+#: steps, medians of an even number of readings. So a threshold that lands
+#: between two grid points is a threshold no reading can sit on: 0.95 x 1485 =
+#: 1410.75 put a 1410 cell outside the band and a 1425 cell inside it for
+#: timings 0.1% apart, and 23 of the session's 148 LOW verdicts sat in that one
+#: step. Every band edge is snapped to this grid (`snap_to_clock_step`), and it
+#: is also the agreement two consecutive warmup reads must reach before the
+#: clock counts as settled.
+CLOCK_STEP_MHZ = 15.0
+
 #: LEVEL flag, LOW edge: the SM clock sampled under load must be at least this
 #: fraction of the reference clock (the one the roof was measured at) for the
-#: cell to be comparable with the roof. 0.95 because the H200's compute
-#: plateau moves 1455-1515 MHz across sessions of one card (calibrate.py), a
-#: 4% band, and a flag inside the band would fire on the card's own
-#: session-to-session noise.
+#: cell to be INSIDE the band. 0.95 because the H200's compute plateau moves
+#: 1455-1515 MHz across sessions of one card (calibrate.py), a 4% band, and an
+#: edge inside that band would fire on the card's own session-to-session noise.
+#:
+#: A CELL OUTSIDE THE BAND IS STILL MEASURED. Since 2026-09-09 neither side
+#: excludes anything: the side is a record of which tile family the cell is in
+#: (BM=128/N=64 sits at 1395 MHz under the 700 W cap, 6% under the ruler's own
+#: GEMM, in every rep and every deep tread), and the exclusion is DRIFT.
 LEVEL_FRACTION = 0.95
 
 #: LEVEL flag, HIGH edge, the same 5% the other way. Symmetric because the
@@ -153,8 +201,19 @@ LEVEL_HIGH_FRACTION = 1.05
 
 #: DRIFT flag: first and last under-load samples may differ by at most this
 #: fraction of the first, in EITHER direction. The same 5% `clock_drift` used,
-#: so one number means one thing here.
+#: so one number means one thing here. THIS is the exclusion: a cell whose
+#: clock moved while the trials ran was not measured at one operating point,
+#: and its median is a blend of two.
 DRIFT_FRACTION = 0.05
+
+#: How much delivered warmup the settle loop may add, as a multiple of
+#: `warmup_ms`. The loop keeps running the trials' own work until two
+#: consecutive clock reads agree within `CLOCK_STEP_MHZ`; the cap is what stops
+#: a genuinely oscillating card from warming forever, and 3x of a 300 ms warmup
+#: is 900 ms, which is under a second per cell against the 33-minute session
+#: the DRIFTs came from. Reaching the cap is recorded, not silently accepted:
+#: `WarmupReport.settled` is False and the note says so.
+SETTLE_CAP_MULTIPLE = 3.0
 
 #: Target duration of one warmup batch between synchronises. Short enough that
 #: warmup overshoots `warmup_ms` by at most this much, long enough that the
@@ -227,7 +286,25 @@ LOOP_SHAPE = {
     "warmup_flushed": True,
     "iters_sized_from": "flushed per-iteration probe",
     "flush_l2_multiple": 4.0,
+    "warmup_settles_on_clock": True,
+    "settle_step_mhz": 15.0,
+    "settle_cap_multiple": 3.0,
 }
+
+
+def snap_to_clock_step(mhz: float, step: float = CLOCK_STEP_MHZ) -> float:
+    """A clock threshold moved onto the grid NVML actually reports on. Pure.
+
+    Nearest grid point, halves up. A threshold between two grid points is a
+    threshold no reading can equal, and the direction of the rounding decides
+    a verdict for readings that differ by one step and time within 0.1% of
+    each other; snapping to the nearest makes the edge itself a clock the card
+    can report, so the verdict is about the reading and not about the
+    arithmetic. Applied to both LEVEL edges by `level_side`.
+    """
+    if step <= 0:
+        return float(mhz)
+    return math.floor(float(mhz) / step + 0.5) * step
 
 
 def flush_mb_for_device(multiple: float = 4.0, minimum_mb: int = 128) -> int:
@@ -347,6 +424,26 @@ CLOCK_SOURCE_NVIDIA_SMI = "nvidia-smi"
 CLOCK_SOURCE_NONE = "none"
 
 
+def nvml_power_w(device_index: int | None = None) -> float:
+    """Board power in watts through torch's NVML binding, 0.0 when it cannot.
+
+    `torch.cuda.power_draw` reports milliwatts and costs the same order as the
+    clock read (tens of microseconds), so it can sit inside the same sample
+    without perturbing what is being measured. 0.0 rather than a raise:
+    nothing divides by it, it is recorded so a LOW clock can be told apart as
+    a power-capped tile from a card in trouble, and a torch old enough not to
+    have the binding should cost a row its watts and not its measurement.
+    """
+    try:
+        return float(torch.cuda.power_draw(device_index)) / 1000.0
+    except Exception:  # noqa: BLE001
+        # As broad as the clock read beside it, and for the same reasons:
+        # torch surfaces a missing pynvml as ModuleNotFoundError, NVML
+        # refusals as its own NVMLError family, and an older torch as
+        # AttributeError. None of them may stop a cell being timed.
+        return 0.0
+
+
 @dataclass(frozen=True)
 class ClockState:
     sm_clock_mhz: int
@@ -358,6 +455,18 @@ class ClockState:
     #: number as one from NVML (see `calibrate.clock_under_load`, which refuses
     #: the fallback for the roof's reference), and a caller could not tell.
     source: str = CLOCK_SOURCE_NVML
+    #: Board power at the instant of the clock read, W; 0.0 when the reader
+    #: could not answer (no card ever draws zero, so the zero is unambiguous).
+    #:
+    #: READ AT THE SAME CALL as the clock, and that is the point of the field.
+    #: The H200 session showed the under-load clock is set per tile by the
+    #: kernel's own power draw under the 700 W cap (BM=128/N=64 1395 MHz, the
+    #: calibration GEMM 1485 at 691 W), so a LOW clock is either a hungry tile
+    #: at the cap or a card in trouble, and the two are only separable if the
+    #: watts arrived beside the megahertz rather than from a later reading.
+    #: `calibrate._power_draw_w` forks nvidia-smi and lands tens of
+    #: milliseconds late; this comes through the same NVML path as the clock.
+    power_w: float = 0.0
 
     @classmethod
     def sample(cls) -> ClockState:
@@ -380,7 +489,8 @@ class ClockState:
             try:
                 return cls(int(torch.cuda.clock_rate()),
                            int(torch.cuda.temperature()),
-                           source=CLOCK_SOURCE_NVML)
+                           source=CLOCK_SOURCE_NVML,
+                           power_w=nvml_power_w())
             except Exception:  # noqa: BLE001
                 # Deliberately broad. torch routes this through pynvml, which
                 # raises ModuleNotFoundError when absent and its own
@@ -856,6 +966,17 @@ class WarmupReport:
     plus the probe's kernel intervals (its flushes are outside those, so the
     probe is under-counted by its flush share; the direction is that the
     warmup ran slightly longer than the figure says).
+
+    `settle_ms` and `settle_calls` are the EXTRA load the settle loop ran after
+    `warmup_ms` was already delivered, waiting for two consecutive clock reads
+    to agree within one `CLOCK_STEP_MHZ` step; both are inside `delivered_ms`
+    and `calls` as well, because they were load the governor saw. `settled` is
+    True when the reads agreed, False when the `SETTLE_CAP_MULTIPLE` cap
+    stopped the loop first, and None when no clock reader was given (off-GPU,
+    or a host without NVML), which is not the same as "did not settle".
+    `settle_reads` is every clock the loop read, in order, so a cell that hit
+    the cap shows what it was doing; `settle_note` says why the loop stopped
+    when it did not settle.
     """
 
     delivered_ms: float
@@ -863,12 +984,19 @@ class WarmupReport:
     batches: int
     per_call_ms: float
     probe_calls: int = 0
+    settle_ms: float = 0.0
+    settle_calls: int = 0
+    settle_reads: tuple[float, ...] = ()
+    settled: bool | None = None
+    settle_note: str = ""
 
 
 def warm_until(fn: Callable[[], None], warmup_ms: float, events,
                batch_ms: float = WARMUP_BATCH_MS,
                flush: Callable[[], None] | None = None,
-               probe_calls: int = WARMUP_PROBE_CALLS) -> WarmupReport:
+               probe_calls: int = WARMUP_PROBE_CALLS,
+               clock_read: Callable[[], ClockState] | None = None,
+               ) -> WarmupReport:
     """Run the loop the trials will run until `warmup_ms` of GPU time has passed.
 
     A COUNT of warmup calls is the wrong unit, and the ladders that compared
@@ -892,6 +1020,19 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
     `flush` given, every warmup call is preceded by a flush exactly as in
     `_timed_trials`, so the governor is responding to the load that is about
     to be measured.
+
+    THEN THE CLOCK HAS TO STOP MOVING (2026-09-09). A duration of load is not
+    the same claim as a settled governor, and the first H200 session paid for
+    the difference: all 135 of its DRIFT verdicts were, by position, the first
+    cell of a rep after the workload changed, the governor still walking from
+    the previous tile's operating point to this one (1875->1725, 1560->1650
+    three times). With a `clock_read` given, the loop keeps running the trials'
+    own work, one batch at a time, until two consecutive reads agree within one
+    `CLOCK_STEP_MHZ` step, and gives up at `SETTLE_CAP_MULTIPLE` x `warmup_ms`
+    of delivered time with `settled=False` on the record rather than pretending
+    it converged. Without one (off-GPU, or a host with no NVML) there is no
+    settle loop and `settled` is None: the fix is at the instrument, so a host
+    that cannot read the clock does not get it and the record says so.
 
     THEN A PROBE, to size `iters`. `probe_calls` iterations (or one batch's
     worth, whichever is fewer) through `_timed_trials` with the same flush,
@@ -933,14 +1074,73 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
         batches += 1
         per_batch_call = ms / batch
         batch = max(1, min(WARMUP_BATCH_MAX_CALLS, int(batch_ms / per_batch_call)))
+
+    # The settle: keep delivering the same load until the clock stops moving.
+    settle_ms = 0.0
+    settle_calls = 0
+    reads: list[float] = []
+    settled: bool | None = None
+    settle_note = ""
+    if clock_read is not None:
+        settled = False
+        cap_ms = SETTLE_CAP_MULTIPLE * warmup_ms
+        previous: float | None = None
+        while True:
+            try:
+                mhz = float(clock_read().sm_clock_mhz)
+            except Exception as e:  # noqa: BLE001
+                # As broad as every other reader in this module: torch reports
+                # a missing pynvml, a revoked NVML and an old binding as three
+                # unrelated types, and none of them may cost the cell its
+                # measurement now that the warmup is already delivered.
+                settle_note = (f"clock reader raised after {len(reads)} reads: "
+                               f"{type(e).__name__}: {e}; settle abandoned")
+                break
+            if mhz > 0:
+                reads.append(mhz)
+                if previous is not None and abs(mhz - previous) <= CLOCK_STEP_MHZ:
+                    settled = True
+                    break
+                previous = mhz
+            else:
+                # A zero is NVML declining to answer, not a clock. It cannot
+                # pair with anything, so it does not become `previous`.
+                settle_note = "a clock read came back zero during the settle"
+            if delivered >= cap_ms:
+                settle_note = (
+                    f"the clock had not settled to within {CLOCK_STEP_MHZ:.0f} MHz "
+                    f"after {delivered:.0f} ms of warmup (cap "
+                    f"{SETTLE_CAP_MULTIPLE:g}x{warmup_ms:.0f} ms); reads "
+                    + ", ".join(f"{r:.0f}" for r in reads))
+                break
+            pair.starts[0].record()
+            for _ in range(batch):
+                if flush is not None:
+                    flush()
+                fn()
+            pair.ends[0].record()
+            pair.synchronize()
+            ms = max(pair.elapsed(1)[0], 1e-4)
+            delivered += ms
+            settle_ms += ms
+            settle_calls += batch
+            calls += batch
+            batches += 1
+
     # The probe: the trials' own loop, one interval per call, flush outside.
+    # AFTER the settle, so `iters` is sized at the operating point the trials
+    # will run at rather than at whatever the governor had reached at
+    # `warmup_ms`.
     n = max(1, min(int(probe_calls), batch))
     samples, _ = _timed_trials(fn, n, 1, events(n), flush)
     delivered += sum(samples)
     calls += n
     per_call = max(sum(samples) / n, 1e-4)
     return WarmupReport(delivered_ms=delivered, calls=calls, batches=batches,
-                        per_call_ms=per_call, probe_calls=n)
+                        per_call_ms=per_call, probe_calls=n,
+                        settle_ms=settle_ms, settle_calls=settle_calls,
+                        settle_reads=tuple(reads), settled=settled,
+                        settle_note=settle_note)
 
 
 def iters_for(per_call_ms: float, target_ms: float, lo: int = 10,
@@ -995,7 +1195,8 @@ def nvml_clock_reader(device_index: int | None = None) -> Callable[[], ClockStat
 
     def read() -> ClockState:
         return ClockState(int(torch.cuda.clock_rate(index)),
-                          int(torch.cuda.temperature(index)))
+                          int(torch.cuda.temperature(index)),
+                          power_w=nvml_power_w(index))
 
     try:
         read()
@@ -1145,22 +1346,76 @@ LEVEL_LOW = "low"
 LEVEL_HIGH = "high"
 
 
+def level_band(reference_mhz: float) -> tuple[float, float]:
+    """The LEVEL band's two edges in MHz, on the NVML grid. Pure.
+
+    `[LEVEL_FRACTION, LEVEL_HIGH_FRACTION] * reference`, each edge snapped to
+    `CLOCK_STEP_MHZ` so it is a clock the card can actually report. Against the
+    session's 1485 MHz bf16 reference that is [1410, 1560]; unsnapped it was
+    [1410.75, 1559.25], which put the 1410 readings outside the band and the
+    1425 ones inside it on a 0.1% difference in time.
+    """
+    return (snap_to_clock_step(LEVEL_FRACTION * reference_mhz),
+            snap_to_clock_step(LEVEL_HIGH_FRACTION * reference_mhz))
+
+
 def level_side(load_mhz: float | None, reference_mhz: float | None) -> str | None:
     """Which side of the LEVEL band a loaded clock sits on. Pure.
 
     THE ONE DEFINITION of the band: `clock_flags` derives its LEVEL bool from
     this, so the flag and the side cannot disagree about where the edges are.
-    Inside `[LEVEL_FRACTION, LEVEL_HIGH_FRACTION] * reference` is "", below is
-    `LEVEL_LOW`, above is `LEVEL_HIGH`; None when there is no reference or no
-    load sample, because half a comparison is not a verdict.
+    Inside `level_band(reference)` is "", below is `LEVEL_LOW`, above is
+    `LEVEL_HIGH`; None when there is no reference or no load sample, because
+    half a comparison is not a verdict.
+
+    A SIDE IS A RECORD AND NOT AN EXCLUSION since 2026-09-09. On the H200 the
+    side names the tile family a cell is in: BM=128/N=64 and BM=64/G=1 sit
+    below the band because they draw more power under the same 700 W cap than
+    the ruler's GEMM does, memory-shaped work boosts above it. Callers exclude
+    on `clock_drift_ok`; this answers "where did it sit", not "may it be used".
     """
     if load_mhz is None or reference_mhz is None or reference_mhz <= 0:
         return None
-    if load_mhz < LEVEL_FRACTION * reference_mhz:
+    low, high = level_band(reference_mhz)
+    if load_mhz < low:
         return LEVEL_LOW
-    if load_mhz > LEVEL_HIGH_FRACTION * reference_mhz:
+    if load_mhz > high:
         return LEVEL_HIGH
     return ""
+
+
+#: What `drift_direction` answers with. The direction is the finding: a rise is
+#: a warmup that had not reached the operating point (which is what the settle
+#: loop in `warm_until` exists to remove), a fall is the card giving clock back
+#: during the trials, and an oscillation is a governor hunting, which no longer
+#: warmup can fix. Empty is "no direction": one sample, or a steady clock.
+DRIFT_UP = "settling upward"
+DRIFT_DOWN = "dropping"
+DRIFT_OSCILLATING = "oscillating"
+
+
+def drift_direction(samples, fraction: float = DRIFT_FRACTION) -> str:
+    """Which way a cell's under-load clock moved, in words. Pure.
+
+    Read from the WHOLE sample list rather than the first and last pair, which
+    is the pair the DRIFT verdict itself is computed from. An excursion that
+    came back reads as no drift at all on the endpoints, and calling it steady
+    would hide a governor hunting between two states; here it is
+    `DRIFT_OSCILLATING`, as is a trace that leaves the first reading's band in
+    both directions. Otherwise the sign of last minus first decides, and
+    endpoints inside the band with no excursion get "".
+    """
+    usable = [float(s) for s in samples if s and float(s) > 0]
+    if len(usable) < 2:
+        return ""
+    first, last = usable[0], usable[-1]
+    above = any(s > first * (1 + fraction) for s in usable)
+    below = any(s < first * (1 - fraction) for s in usable)
+    if above and below:
+        return DRIFT_OSCILLATING
+    if abs(last - first) <= fraction * first:
+        return DRIFT_OSCILLATING if (above or below) else ""
+    return DRIFT_UP if last > first else DRIFT_DOWN
 
 
 def clock_flags(load_mhz: float | None, start_mhz: float | None,
@@ -1168,18 +1423,21 @@ def clock_flags(load_mhz: float | None, start_mhz: float | None,
                 ) -> tuple[bool | None, bool | None]:
     """LEVEL and DRIFT verdicts on under-load clock samples. Pure.
 
-    LEVEL: the loaded clock is inside the band `[LEVEL_FRACTION,
-    LEVEL_HIGH_FRACTION]` around `reference_mhz`, the clock the roof was
-    measured at, in EITHER direction (`level_side` names which). Until
-    2026-09-03 this was one-sided, `load >= 0.95 * reference`, and a cell
-    boosted to 1980 against a 1515 roof passed with a fixed-roof fraction
-    inflated by 31%. None when there is no reference or no load sample: the
-    flag is a comparison and half a comparison is not a verdict.
+    LEVEL: the loaded clock is inside `level_band(reference_mhz)`, around the
+    clock the roof was measured at, in EITHER direction (`level_side` names
+    which). Until 2026-09-03 this was one-sided, `load >= 0.95 * reference`,
+    and a cell boosted to 1980 against a 1515 roof passed with a fixed-roof
+    fraction inflated by 31%. None when there is no reference or no load
+    sample: the flag is a comparison and half a comparison is not a verdict.
+    IT EXCLUDES NOTHING (2026-09-09): the side is the tile's power state under
+    the 700 W cap, and the driver's `throttled` reads DRIFT alone.
 
     DRIFT: first and last under-load samples agree within `DRIFT_FRACTION` of
-    the first, in either direction. A drop is throttling during the trials; a
-    rise is a warmup that did not reach the operating point. Both mean the
-    samples were not taken at one clock and the median is a blend.
+    the first, in either direction. A drop is the card giving clock back
+    during the trials; a rise is a warmup that did not reach the operating
+    point. Both mean the samples were not taken at one clock and the median is
+    a blend of two states, which is why THIS is the verdict a consumer
+    excludes on. `drift_direction` names which of the three it was.
     """
     level: bool | None
     drift: bool | None
@@ -1204,12 +1462,13 @@ class KernelTiming:
     samples, the same floor the reference clock in `calibrate.clock_under_load`
     is held to, so LEVEL compares two numbers of one kind; `sm_clock_start_mhz`
     and `sm_clock_end_mhz` need two. `clock_level_ok` and `clock_drift_ok` are
-    the two verdicts `clock_flags` documents; a consumer that filters rows
-    must test BOTH, since the old single drop-only flag is the defect this
-    record exists to replace, AND must read `clock_level_side` before
-    excluding on LEVEL: LOW or DRIFT excludes, HIGH does not (the cell ran
-    above the roof's clock; its fixed-roof fraction is not comparable, and
-    the driver writes the roof at the cell's clock instead).
+    the two verdicts `clock_flags` documents, and since 2026-09-09 they do two
+    different jobs: DRIFT is the EXCLUSION (the cell was not measured at one
+    operating point), LEVEL and `clock_level_side` are a RECORD of where the
+    cell sat relative to the ruler's GEMM. A consumer filters on DRIFT; a
+    consumer that also drops LEVEL-LOW rows drops the two tiles this study is
+    about, which is what the H200 session's 750 cells showed the old rule
+    doing. Both fractions of the roof are on the driver's row either way.
 
     `host_bound` is the third verdict, from `host_bound_verdict`: True when
     any trial's queue had drained by the time the host finished enqueueing,
@@ -1261,6 +1520,30 @@ class KernelTiming:
     clock_level_side: str = ""
     host_backlog_iters: float | None = None
     reference_clock_mhz: float | None = None
+    #: Every usable under-load clock reading, in order, MHz. THE SAMPLES AND
+    #: NOT ONLY THEIR SUMMARY: six of the seven ladder writers dropped the
+    #: first and last pair and all seven dropped the list, so when the H200
+    #: session produced 135 DRIFT verdicts only four cells could be examined
+    #: for what they had actually done. A median and two endpoints cannot tell
+    #: a settling ramp from a card hunting between two states, and
+    #: `drift_direction` reads the list to say which.
+    clock_samples_mhz: tuple[float, ...] = ()
+    #: Median board power over the under-load samples, W, None when no sample
+    #: carried one. Read at the same NVML call as the clock (`ClockState.
+    #: power_w`), so a LOW clock can be told apart as a hungry tile at the
+    #: 700 W cap from a card in trouble: the session's calibration GEMM held
+    #: 1485 MHz at 691 W, and the BM=128/N=64 cells that sat at 1395 were at
+    #: the same cap doing more work per clock.
+    power_w: float | None = None
+    #: Which way the clock moved when DRIFT failed, from `drift_direction`
+    #: over the sample list; "" when DRIFT passed or was undetermined.
+    clock_drift_direction: str = ""
+    #: Delivered GPU time the settle loop added after `warmup_ms`, ms, and the
+    #: calls it made. 0.0 with `clock_settled` None means no clock reader was
+    #: available to settle against, which is not the same as settling at once.
+    settle_ms: float = 0.0
+    settle_calls: int = 0
+    clock_settled: bool | None = None
 
 
 def time_kernel(
@@ -1272,6 +1555,7 @@ def time_kernel(
     l2_flush: bool = True,
     reference_clock_mhz: float | None = None,
     clock_sampler=None,
+    clock_reader=None,
     events=None,
     flusher=None,
 ) -> KernelTiming:
@@ -1279,7 +1563,8 @@ def time_kernel(
 
     In order: warm up under sustained load, running the SAME loop the trials
     will run (flush before each call when `l2_flush`), until `warmup_ms` of
-    GPU time has been delivered (`warm_until`); size `iters` so a trial holds
+    GPU time has been delivered AND two consecutive clock reads agree within
+    one `CLOCK_STEP_MHZ` step (`warm_until`); size `iters` so a trial holds
     `target_ms` of kernel time, from a flushed queue-deep per-iteration probe;
     prime one event pair per iteration; start the clock poller; run `trials`
     trials of `_timed_trials` (flush before each call when `l2_flush`, one
@@ -1290,10 +1575,18 @@ def time_kernel(
     `reference_clock_mhz` is the clock the roof was measured at
     (`calibrate.LoadedClock.median_mhz`); without it the LEVEL flag is None,
     because a level is relative to something and this function will not
-    invent the something. The verdict is two-sided and the record names the
-    side; a cell above the band is not "faster", its fixed-roof fraction is
-    inflated by `load / reference`, and the driver rescales the roof per row
-    (`roofline.roof_at_clock`) so the honest fraction is on the row beside it.
+    invent the something. The verdict is two-sided, the record names the side,
+    and NEITHER SIDE EXCLUDES the cell: a cell below the band is a tile that
+    draws more power under the same cap, a cell above it is not "faster", and
+    in both cases the fixed-roof fraction is off by `load / reference` while
+    the driver's per-row roof (`roofline.roof_at_clock`) carries the other
+    fraction beside it. DRIFT is the verdict that excludes.
+
+    `clock_reader` is the settle loop's reader, a callable returning a
+    `ClockState`. Left None on a CUDA host it is `nvml_clock_reader` for the
+    calling thread's device; where that refuses there is no settle loop and
+    the record says so in `clock_note`. Injected, it is how the tests drive
+    the loop without a GPU.
 
     The default sampler is bound to the calling thread's current device and
     reads NVML only; on a host without `nvidia-ml-py` the record says so in
@@ -1327,7 +1620,15 @@ def time_kernel(
     flush = flusher.flush if l2_flush else None
     flush_mb = int(flusher.megabytes) if l2_flush else 0
 
-    warm = warm_until(fn, warmup_ms, events, flush=flush)
+    settle_note = ""
+    if clock_reader is None and on_gpu:
+        try:
+            clock_reader = nvml_clock_reader(torch.cuda.current_device())
+        except ClockSourceUnavailable as e:
+            clock_reader = None
+            settle_note = (f"the warmup could not settle on the clock: {e}")
+    warm = warm_until(fn, warmup_ms, events, flush=flush,
+                      clock_read=clock_reader)
     iters = iters_for(warm.per_call_ms, target_ms)
     if clock_sampler is None:
         # The device is read HERE, on the calling thread, and handed to the
@@ -1347,8 +1648,14 @@ def time_kernel(
         samples, walls = _timed_trials(fn, iters, trials, pairs, flush)
     clocks = [c.sm_clock_mhz for c in poller.samples]
     usable = [c for c in clocks if c > 0]
+    powers = [float(c.power_w) for c in poller.samples
+              if getattr(c, "power_w", 0.0) > 0]
 
     notes: list[str] = []
+    if settle_note:
+        notes.append(settle_note)
+    if warm.settle_note:
+        notes.append(warm.settle_note)
     if poller.note:
         notes.append(poller.note)
     load: float | None = None
@@ -1372,19 +1679,32 @@ def time_kernel(
                      f"determinable, {what}")
     level_ok, drift_ok = clock_flags(load, start, end, reference_clock_mhz)
     side = level_side(load, reference_clock_mhz) or ""
+    direction = drift_direction(usable) if drift_ok is False else ""
     if side == LEVEL_LOW:
+        low_edge, _ = level_band(reference_clock_mhz)
         notes.append(
-            f"LEVEL failed LOW: loaded clock {load:.0f} MHz is under "
-            f"{LEVEL_FRACTION:.0%} of the {reference_clock_mhz:.0f} MHz "
-            "reference; the card sat below the clock the roof was measured "
-            "at and the cell is not comparable with the fixed roof")
+            f"LEVEL LOW (recorded, not an exclusion): loaded clock "
+            f"{load:.0f} MHz is under the {low_edge:.0f} MHz edge of the band "
+            f"around the {reference_clock_mhz:.0f} MHz reference; this tile "
+            "draws more power under the same cap than the GEMM the roof was "
+            "measured with, so its fixed-roof fraction is delivered throughput "
+            f"and its issue efficiency is {load / reference_clock_mhz:.2f}x "
+            "away, in roof_at_cell_clock_tflops")
     elif side == LEVEL_HIGH:
+        _, high_edge = level_band(reference_clock_mhz)
         notes.append(
-            f"LEVEL failed HIGH: loaded clock {load:.0f} MHz is over "
-            f"{LEVEL_HIGH_FRACTION:.0%} of the {reference_clock_mhz:.0f} MHz "
-            f"reference; the cell ran at {load / reference_clock_mhz:.2f}x the "
-            "issue rate the fixed compute roof assumed, so its fraction of that "
-            "roof is inflated by the ratio; read roof_at_cell_clock_tflops")
+            f"LEVEL HIGH (recorded, not an exclusion): loaded clock "
+            f"{load:.0f} MHz is over the {high_edge:.0f} MHz edge of the band "
+            f"around the {reference_clock_mhz:.0f} MHz reference; the cell ran "
+            f"at {load / reference_clock_mhz:.2f}x the issue rate the fixed "
+            "compute roof assumed, so its fraction of that roof is inflated by "
+            "the ratio; read roof_at_cell_clock_tflops")
+    if direction:
+        notes.append(
+            f"DRIFT failed, {direction}: under-load clock went "
+            f"{start:.0f} -> {end:.0f} MHz over {len(usable)} samples "
+            f"({', '.join(f'{c:.0f}' for c in usable)}); the trials were not "
+            "at one operating point and the median is a blend")
     host_bound, host_ms, backlog_iters, host_note = host_bound_verdict(walls, iters)
 
     p50, p90, lo, std = _stats(samples)
@@ -1400,4 +1720,9 @@ def time_kernel(
         host_note=host_note, clock_level_side=side,
         host_backlog_iters=backlog_iters,
         reference_clock_mhz=reference_clock_mhz,
+        clock_samples_mhz=tuple(float(c) for c in usable),
+        power_w=float(statistics.median(powers)) if powers else None,
+        clock_drift_direction=direction,
+        settle_ms=warm.settle_ms, settle_calls=warm.settle_calls,
+        clock_settled=warm.settled,
     )

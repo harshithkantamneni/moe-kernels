@@ -330,9 +330,10 @@ def _v6_row(tmp_path: Path, hw, *, dtype: str, load_mhz: float,
     # 2e11 FLOP in 1 ms = 200 TFLOP/s; 1e9 bytes -> intensity 200, compute
     # bound against a 4.37 TB/s ruler at either peak.
     D._apply_cost(row, PipelineCost(flops=2e11, bytes_total=10**9), 1.0, cfg)
-    with SC.CsvWriter(tmp_path / f"v6_{dtype}_{int(load_mhz)}.csv") as w:
+    name = f"v6_{dtype}_{int(load_mhz)}_{'steady' if drift_ok else 'drifted'}.csv"
+    with SC.CsvWriter(tmp_path / name) as w:
         w.write(row)
-    return SC.read_csv(tmp_path / f"v6_{dtype}_{int(load_mhz)}.csv")[0]
+    return SC.read_csv(tmp_path / name)[0]
 
 
 def test_the_ceiling_columns_include_the_per_row_roof():
@@ -384,31 +385,34 @@ def test_a_new_peak_moves_the_per_row_roof_with_the_fixed_one(tmp_path):
     assert got["roof_at_cell_clock_tflops"] == pytest.approx(1045.5, abs=0.05)
     assert got["pct_of_roof_at_cell_clock"] == pytest.approx(
         100.0 * float(row["tflops"]) / (800 * 1980 / 1515))
-    assert got["roof_note"] == ""
+    assert got["roof_note"] == RF.ROOF_NOTE_SCORED
     # The fixed-roof fraction moved by 700/800 and the per-row one by the
     # same factor: the two columns are derived from ONE peak again.
     assert (got["pct_of_roof_at_cell_clock"] / float(row["pct_of_roof_at_cell_clock"])
             == pytest.approx(700 / 800))
 
 
-@pytest.mark.parametrize("load,side,excluded", [
-    (1980.0, T.LEVEL_HIGH, False),   # boosted: kept, roof rescaled UP
-    (1400.0, T.LEVEL_LOW, True),     # throttled: excluded, roof still at its clock
+@pytest.mark.parametrize("load,side", [
+    (1980.0, T.LEVEL_HIGH),   # boosted: kept, roof rescaled UP
+    (1400.0, T.LEVEL_LOW),    # a hungrier tile at the same cap: also kept
 ])
-def test_the_roof_is_written_on_both_sides_and_only_low_is_excluded(
-        tmp_path, load, side, excluded):
-    """The rule every consumer has to carry: LOW excludes, HIGH does not. The
-    recompute is not a gate, so it writes the roof at the cell's clock on both
-    sides (a LOW cell's roof is lower, and correct for it) and never touches
-    `throttled`, which is the driver's verdict and is what a consumer
-    branches on."""
+def test_the_roof_is_written_on_both_sides_and_neither_is_excluded(
+        tmp_path, load, side):
+    """The rule every consumer has to carry, as of 2026-09-09: neither side of
+    LEVEL excludes, DRIFT does. The recompute is not a gate either way, so it
+    writes the roof at the cell's clock on both sides (a LOW cell's roof is
+    lower, and correct for it) and never touches `throttled`, which is the
+    driver's verdict and is what a consumer branches on."""
     hw = load_calibration_hardware(_yaml(tmp_path))
     row = _v6_row(tmp_path, hw, dtype="bf16", load_mhz=load)
     assert row["clock_level_side"] == side
-    assert SC.row_bool(row, "throttled") is excluded
+    assert SC.row_bool(row, "throttled") is False
     got = ceiling_columns(row, hw)
     assert got["roof_at_cell_clock_tflops"] == pytest.approx(BF16_PEAK * load / 1515)
     assert "throttled" not in got and "clock_level_side" not in got
+    # and the row that IS excluded is the one whose clock moved
+    drifted = _v6_row(tmp_path, hw, dtype="bf16", load_mhz=load, drift_ok=False)
+    assert SC.row_bool(drifted, "throttled") is True
 
 
 def test_an_fp8_row_is_roofed_at_the_fp8_gemm_s_clock_not_the_bf16_one(tmp_path):
@@ -435,7 +439,7 @@ def test_an_fp8_row_is_roofed_at_the_fp8_gemm_s_clock_not_the_bf16_one(tmp_path)
     assert refused["roof_at_cell_clock_tflops"] == 0.0
     assert "dtype family" in refused["roof_note"]
     bf16 = _v6_row(tmp_path, hw, dtype="bf16", load_mhz=1500.0)
-    assert ceiling_columns(bf16, no_fp8)["roof_note"] == ""
+    assert ceiling_columns(bf16, no_fp8)["roof_note"] == RF.ROOF_NOTE_SCORED
 
 
 def test_an_idle_scalar_reference_refuses_the_per_row_roof_by_name(tmp_path):
@@ -493,7 +497,7 @@ def test_the_cli_rewrites_the_per_row_roof_of_a_v6_arm(tmp_path):
     arm.mkdir()
     old = load_calibration_hardware(_yaml(tmp_path / "old"))
     row = _v6_row(tmp_path / "old", old, dtype="bf16", load_mhz=1980.0)
-    shutil.copy2(tmp_path / "old" / "v6_bf16_1980.csv", arm / "run_v6.csv")
+    shutil.copy2(tmp_path / "old" / "v6_bf16_1980_steady.csv", arm / "run_v6.csv")
     new_yaml = _yaml(tmp_path / "new", bf16_peak=800.0)
     out = tmp_path / "derived"
     assert RC.main(["--arm", str(arm), "--calibration", str(new_yaml),
@@ -501,7 +505,7 @@ def test_the_cli_rewrites_the_per_row_roof_of_a_v6_arm(tmp_path):
     got = SC.read_csv(out / "run_v6.csv")[0]
     assert float(got["achieved_peak_tflops"]) == pytest.approx(800.0)
     assert float(got["roof_at_cell_clock_tflops"]) == pytest.approx(800 * 1980 / 1515)
-    assert got["roof_note"] == ""
+    assert got["roof_note"] == RF.ROOF_NOTE_SCORED
     assert float(row["roof_at_cell_clock_tflops"]) != pytest.approx(800 * 1980 / 1515)
     doc = json.loads((out / RC.RECOMPUTE_JSON).read_text())
     assert "roof_at_cell_clock_tflops" in doc["ceiling_columns"]

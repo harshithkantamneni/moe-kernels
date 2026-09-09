@@ -24,7 +24,32 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
+# v7: added the under-load clock TRACE, the board power beside it, and what the
+#     warmup did to settle the clock. Until v7 a row carried the median, the
+#     two verdicts and nothing a reader could re-examine: `sm_clock_start_mhz`
+#     and `sm_clock_end_mhz` hold IDLE instants from the retired seam, so the
+#     under-load first and last were computed and dropped, and the sample list
+#     was dropped by every writer. The 2026-09-09 H200 session produced 135
+#     DRIFT verdicts of which only four could be looked at, and the question
+#     they had to answer (a governor settling after a workload change, or a
+#     card hunting?) is exactly the one a median and two endpoints cannot.
+#     v7 writes `sm_clock_load_first_mhz`,
+#     `sm_clock_load_last_mhz`, `clock_samples_mhz` (the whole ordered list),
+#     `clock_drift_direction` (settling upward / dropping / oscillating) and
+#     `power_w`, read at the same NVML call as the clock so a LOW clock can be
+#     told apart as a hungry tile at the 700 W cap from a card in trouble; plus
+#     `warmup_settle_ms`, `warmup_settle_calls` and `warmup_clock_settled`,
+#     which say whether the extra warmup that now runs until two consecutive
+#     clock reads agree (timing v4) actually converged. The retired columns
+#     KEEP their meaning: one column may not mean two things either side of a
+#     version boundary, which is why the new pair is named for the load.
+#
+#     THE EXCLUSION RULE CHANGED IN THE SAME SESSION and no column moved with
+#     it: `throttled` is now `clock_drift_ok == failed` alone. `clock_level_ok`
+#     and `clock_level_side` are unchanged in meaning and are now a RECORD of
+#     the tile's power state, never an exclusion. See `driver.
+#     _apply_kernel_timing`.
 # v6: added the reference the LEVEL verdict was scored against and the roof AT
 #     THE CLOCK THE CELL RAN. Until v6 a v5 row said `clock_level_ok = ok`
 #     without saying against what: the reference was resolved from a per-device
@@ -89,7 +114,7 @@ SCHEMA_VERSION = 6
 #: WRITING is still single-version. CsvWriter refuses to append under a header
 #: from another schema, so a v3 run cannot be resumed by v4 code, and
 #: merge_csvs refuses to mix versions in one output file.
-READABLE_VERSIONS = frozenset({3, 4, 5, 6})
+READABLE_VERSIONS = frozenset({3, 4, 5, 6, 7})
 
 #: What a v4-only column reads as on a row that predates it.
 #:
@@ -113,6 +138,9 @@ COLUMNS_ADDED_IN: dict[int, tuple[str, ...]] = {
     6: ("reference_clock_mhz", "reference_clock_source", "clock_level_side",
         "host_backlog_iters", "roof_at_cell_clock_tflops",
         "pct_of_roof_at_cell_clock", "roof_note"),
+    7: ("sm_clock_load_first_mhz", "sm_clock_load_last_mhz",
+        "clock_samples_mhz", "clock_drift_direction", "power_w",
+        "warmup_settle_ms", "warmup_settle_calls", "warmup_clock_settled"),
 }
 
 #: What the ms_* columns of a row written before v5 were measured with.
@@ -425,12 +453,20 @@ class Row:
     # 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
     # the same cell timed at ratio 0.998 with identical end clocks. On a v5 row
     # `driver._apply_kernel_timing` writes the instrument's answer to the same
-    # question -- DRIFT failed, or LEVEL failed on the LOW side -- because four
-    # consumers read this one column as "do not pool this row", and a column
-    # that is False by construction turns all five into checks that cannot fail.
-    # A LEVEL failure on the HIGH side (v6, `clock_level_side`) does NOT set
-    # it: a cell that boosted above the roof's clock is the mirror image of a
-    # throttle, and on an H200 the normal state of a memory-bound cell.
+    # question, because four consumers read this one column as "do not pool
+    # this row", and a column that is False by construction turns all of them
+    # into checks that cannot fail.
+    #
+    # SINCE 2026-09-09 THE ANSWER IS DRIFT ALONE. Neither side of LEVEL sets
+    # it. The HIGH side never did: a cell that boosted above the roof's clock
+    # is the mirror image of a throttle and on an H200 the normal state of a
+    # memory-bound cell. The LOW side stopped, because the first H200 session's
+    # 750 cells showed the under-load clock is set per tile by the kernel's own
+    # power draw under the 700 W cap (BM=128/N=64 at 1395 MHz in every rep
+    # against a calibration GEMM at 1485), so LOW named a tile, and excluding
+    # on it removed the study's two primary tiles and nothing else.
+    # `clock_level_side` is the record of where the cell sat; this is the
+    # verdict a consumer excludes on.
     sm_clock_start_mhz: int = 0
     sm_clock_end_mhz: int = 0
     temp_start_c: int = 0
@@ -443,15 +479,17 @@ class Row:
     # polled from a background thread during the measurement, not sampled at an
     # idle instant beside it, and the three verdicts are the three ways a cell
     # can be untrustworthy without the timer noticing anything wrong:
-    #   LEVEL   the card sat outside `[timing.LEVEL_FRACTION,
-    #           timing.LEVEL_HIGH_FRACTION]` of the clock the roof was measured
-    #           at (two-sided since 2026-09-03; `clock_level_side` names the
-    #           side). LOW: the cell is not comparable with the roof, exclude.
-    #           HIGH: the FIXED-roof fraction is not comparable; keep the row
-    #           and read `pct_of_roof_at_cell_clock`.
+    #   LEVEL   the card sat outside `timing.level_band` of the clock the roof
+    #           was measured at (two-sided since 2026-09-03, edges snapped to
+    #           the 15 MHz NVML grid since 2026-09-09; `clock_level_side` names
+    #           the side). A RECORD, not an exclusion: either side means the
+    #           fixed-roof fraction is delivered throughput at a different
+    #           issue rate, and `pct_of_roof_at_cell_clock` is the other
+    #           fraction, on the row beside it.
     #   DRIFT   first and last under-load samples disagree by more than
-    #           `timing.DRIFT_FRACTION` in EITHER direction. A rise is a defect
-    #           too: the warmup never reached the operating point.
+    #           `timing.DRIFT_FRACTION` in EITHER direction. THE exclusion: the
+    #           trials were not at one operating point. A rise is a defect too,
+    #           and `clock_drift_direction` names which it was.
     #   HOST    the GPU's queue had drained before the host finished enqueueing,
     #           so the intervals carry host time and ms_* bound the kernel from
     #           ABOVE. Stored INVERTED (`host_bound_ok`) so all three columns
@@ -491,12 +529,13 @@ class Row:
     #: GEMM's clock (`detail.fp8_gemm_clock*`), every other row's the bf16
     #: GEMM's, because those are two roofs measured at two clocks.
     reference_clock_source: str = ""
-    #: Which way a LEVEL failure went: "low" (the throttle the flag was built
-    #: for; also sets `throttled`), "high" (a boosted cell whose fixed-roof
-    #: fraction is inflated by the ratio; NOT a thermal event, does not set
-    #: `throttled`), "" when level or undetermined. A consumer that excludes
-    #: on `clock_level_ok == failed` without reading this drops every
-    #: memory-shaped cell that boosted, which on an H200 is the normal state.
+    #: Which way a LEVEL failure went: "low" (a tile drawing more power than
+    #: the ruler's GEMM under the same cap, so it holds a lower clock), "high"
+    #: (a memory-shaped cell that boosted, whose fixed-roof fraction is
+    #: inflated by the ratio), "" when level or undetermined. NEITHER SETS
+    #: `throttled` and neither excludes the row: the 2026-09-09 session found
+    #: the LOW side is a tile's steady state, not a thermal event, and a
+    #: consumer that dropped it dropped BM=128/N=64 and BM=64/G=1 entirely.
     clock_level_side: str = ""
     #: Smallest per-trial GPU backlog when the host finished enqueueing, in
     #: iterations of the trial's own per-iteration wall. The host-bound verdict
@@ -515,10 +554,52 @@ class Row:
     #: quote from a v6 row; `pct_of_achieved_tflops` is the fixed-roof figure
     #: with the bias its own comment states.
     pct_of_roof_at_cell_clock: float = 0.0
-    #: Why the two columns above are 0.0 when they are, in words: no under-load
+    #: WHICH OF THE TWO FRACTIONS A GATE READS, and why the other one is 0.0
+    #: when it is. On a scored row this is `roofline.ROOF_NOTE_SCORED`, which
+    #: names the fixed-roof fraction as the compute-bound gate input (every
+    #: cell and the calibration GEMM ran under one power cap, so the fixed roof
+    #: is the fair delivered-throughput comparison) and the own-clock fraction
+    #: as issue efficiency. On an unscored row it is the refusal: no under-load
     #: clock on the row, no reference, or a reference whose grade is not
-    #: under-load (the committed calibrations' idle scalar). Empty when scored.
+    #: under-load (the committed calibrations' idle scalar).
     roof_note: str = ""
+
+    # --- the under-load clock trace, power, and the settle (v7) -----------
+    #: First and last UNDER-LOAD samples, MHz, the pair `clock_drift_ok` is
+    #: computed from. NOT `sm_clock_start_mhz`/`sm_clock_end_mhz` above, which
+    #: are the retired seam's idle instants on 100,144 published rows and keep
+    #: that meaning; these are new columns because one column may not mean two
+    #: things either side of a version boundary.
+    sm_clock_load_first_mhz: float = 0.0
+    sm_clock_load_last_mhz: float = 0.0
+    #: Every usable under-load sample, in order, space separated, MHz. The
+    #: 2026-09-09 session flagged 135 cells as DRIFT and kept the samples for
+    #: four of them, so the question the flag exists to raise (a governor
+    #: settling after a workload change, or a card hunting between two states?)
+    #: was unanswerable for 131 of them. Empty on a row nothing polled.
+    clock_samples_mhz: str = ""
+    #: Which way it moved when DRIFT failed: `timing.DRIFT_UP`,
+    #: `timing.DRIFT_DOWN`, `timing.DRIFT_OSCILLATING`, "" otherwise.
+    clock_drift_direction: str = ""
+    #: Median board power over the under-load samples, W, 0.0 when unread. Read
+    #: at the SAME NVML call as the clock, so a cell below the LEVEL band can
+    #: be told apart as a hungry tile at the board cap (the session's BM=128/
+    #: N=64 tiles, against a calibration GEMM holding 1485 MHz at 691 W) from a
+    #: card in trouble. No card draws zero, so 0.0 is unambiguous.
+    power_w: float = 0.0
+    #: What the settle loop added after `warmup_ms`: delivered GPU time and
+    #: calls spent waiting for two consecutive clock reads to agree within one
+    #: 15 MHz step (`timing.warm_until`). 0.0/0 with
+    #: `warmup_clock_settled = undetermined` means no clock reader was
+    #: available to settle against, which is not "it settled at once".
+    warmup_settle_ms: float = 0.0
+    warmup_settle_calls: int = 0
+    #: "ok" when the two reads agreed, "failed" when the
+    #: `timing.SETTLE_CAP_MULTIPLE` cap stopped the loop first, "undetermined"
+    #: when there was no reader. A word from TIMING_VERDICTS, but NOT one of
+    #: `TIMING_VERDICT_COLUMNS`: it is a fact about the warmup, not one of the
+    #: three under-load checks a gate filters on.
+    warmup_clock_settled: str = VERDICT_UNDETERMINED
 
     notes: str = ""
 
@@ -604,6 +685,18 @@ class CellClockRoofUnrecorded(ColumnUnrecorded):
     """
 
 
+class LoadClockTraceUnrecorded(ColumnUnrecorded):
+    """This row predates the under-load clock trace, the power and the settle.
+
+    Raised on a pre-v7 row asked for `clock_samples_mhz`,
+    `sm_clock_load_first_mhz`, `power_w` or the other v7 columns. Such a row
+    DID carry a DRIFT verdict computed from a first and a last sample; what it
+    does not carry is the samples themselves, which is why 131 of the
+    2026-09-09 session's 135 DRIFT verdicts could not be examined after the
+    fact. Split with `has_load_clock_trace` before reading these.
+    """
+
+
 #: Which refusal a stamped column raises, and which predicate the message sends
 #: the caller to, by the version that added the column. A v5 column asked of a
 #: v4 row is not a tile problem and must not arrive as one: the two holes have
@@ -618,9 +711,11 @@ _UNRECORDED_ERRORS: dict[int, type[ColumnUnrecorded]] = {
     4: TileConfigUnrecorded,
     5: TimingInstrumentUnrecorded,
     6: CellClockRoofUnrecorded,
+    7: LoadClockTraceUnrecorded,
 }
 _PREDICATE_FOR: dict[int, str] = {4: "has_tile_config", 5: "has_kernel_timing",
-                                  6: "has_cell_clock_roof"}
+                                  6: "has_cell_clock_roof",
+                                  7: "has_load_clock_trace"}
 
 
 def _added_in(key: str) -> int:
@@ -832,6 +927,23 @@ def has_cell_clock_roof(row: dict) -> bool:
         return float(value) > 0.0
     except (TypeError, ValueError):
         return False
+
+
+def has_load_clock_trace(row: dict) -> bool:
+    """Does this row carry the under-load samples the DRIFT verdict came from?
+
+    The predicate to split a pool on BEFORE reading `clock_samples_mhz`,
+    `sm_clock_load_first_mhz`, `clock_drift_direction` or `power_w`. False for
+    every pre-v7 row (the columns did not exist) and false for a v7 row nothing
+    polled: a container that forbids NVML, or a trial too short for a sample to
+    land. Keyed on the sample LIST being non-empty, because that is the column
+    the others are re-derivable from, and an empty one is "nothing was read"
+    rather than "the clock was zero".
+    """
+    value = row.get("clock_samples_mhz")
+    if value in (None, "", UNRECORDED):
+        return False
+    return True
 
 
 def timing_verdict(row: dict, key: str) -> str:

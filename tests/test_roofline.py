@@ -319,17 +319,20 @@ def test_a_dtype_maps_to_the_gemm_whose_roof_it_is_scored_against():
 
 
 def test_the_committed_h200_resolves_a_different_clock_per_family():
-    """The file the pod will read: bf16 GEMM at 1515, fp8 GEMM at 1905, both
-    the idle scalar today. One number for the two was the defect: an fp8 cell
-    at 1905 is AT its roof's clock and was filed LEVEL-failed HIGH."""
+    """The file the pod reads since the 2026-09-09 calibration (ab61e55):
+    bf16 GEMM at 1485 MHz and fp8 GEMM at 1395, both UNDER-LOAD medians now,
+    so both are usable for the per-row roof. One number for the two was the
+    defect: an fp8 cell at its own roof's clock was filed LEVEL-failed HIGH.
+    The fp8 family's reference is the fp8 GEMM's own median, and that is a
+    RECORD of where that family runs, not a band anything is excluded on."""
     bf16 = RL.reference_clock("NVIDIA H200")
     fp8 = RL.reference_clock("NVIDIA H200", family=RL.FP8_FAMILY)
-    assert (bf16.mhz, bf16.family) == (1515.0, RL.BF16_FAMILY)
-    assert (fp8.mhz, fp8.family) == (1905.0, RL.FP8_FAMILY)
-    assert "fp8_gemm_clock_mhz" in fp8.source and "fp8 GEMM" in fp8.source
-    assert "gemm_clock_mhz" in bf16.source and "(bf16 GEMM)" in bf16.source
-    assert bf16.grade == fp8.grade == RL.REFERENCE_IDLE_SCALAR
-    assert not fp8.usable_for_roof
+    assert (bf16.mhz, bf16.family) == (1485.0, RL.BF16_FAMILY)
+    assert (fp8.mhz, fp8.family) == (1395.0, RL.FP8_FAMILY)
+    assert "fp8_gemm_clock" in fp8.source and "fp8 GEMM" in fp8.source
+    assert "gemm_clock" in bf16.source and "(bf16 GEMM)" in bf16.source
+    assert bf16.grade == fp8.grade == RL.REFERENCE_UNDER_LOAD
+    assert fp8.usable_for_roof and bf16.usable_for_roof
     # THE FAIL BRANCH: the A100 has no fp8 tensor cores, its calibration wrote
     # fp8_gemm_clock_mhz: 0, and that is "no fp8 reference" with the reason,
     # never the bf16 number in the fp8 family's coat.
@@ -365,8 +368,8 @@ def test_a_measured_profile_carries_its_reference_clocks_and_a_datasheet_none():
     roof needs. Read from the SAME file as the peaks, by the same walk the
     driver resolves with."""
     measured = RL.load_hardware("measured_nvidia_h200")
-    assert measured.reference_clocks[RL.BF16_FAMILY].mhz == 1515.0
-    assert measured.reference_clocks[RL.FP8_FAMILY].mhz == 1905.0
+    assert measured.reference_clocks[RL.BF16_FAMILY].mhz == 1485.0
+    assert measured.reference_clocks[RL.FP8_FAMILY].mhz == 1395.0
     assert measured.reference_clocks[RL.BF16_FAMILY] == RL.reference_clock("NVIDIA H200")
     a100 = RL.load_hardware("measured_nvidia_a100_sxm4_80gb")
     assert set(a100.reference_clocks) == {RL.BF16_FAMILY}
@@ -380,7 +383,12 @@ def test_the_per_row_roof_rule_can_pass_and_can_refuse_by_name():
     ok = RL.roof_scale_refusal(1980.0, 1515.0, RL.REFERENCE_UNDER_LOAD)
     assert ok == ""
     assert RL.cell_clock_roof(800.0, 1980.0, 1515.0, RL.REFERENCE_UNDER_LOAD) == (
-        pytest.approx(800 * 1980 / 1515), "")
+        pytest.approx(800 * 1980 / 1515), RL.ROOF_NOTE_SCORED)
+    # THE NOTE ON A SCORED ROW SAYS WHICH FRACTION A GATE READS, since
+    # 2026-09-09. It was empty, so six consumers each decided for themselves.
+    assert "fixed roof" in RL.ROOF_NOTE_SCORED
+    assert "gate input" in RL.ROOF_NOTE_SCORED
+    assert "issue efficiency" in RL.ROOF_NOTE_SCORED
     assert RL.cell_clock_roof(800.0, 1980.0, 1515.0, RL.REFERENCE_UNDER_LOAD)[0] == (
         pytest.approx(1045.5, abs=0.05))
     # A LOW cell's roof is lower, and written: the roof is not the exclusion.
@@ -416,13 +424,14 @@ def test_an_fp8_cell_at_its_own_roof_s_clock_is_level_and_roofed_unchanged():
 def test_a_script_with_a_private_walk_gets_each_cell_its_own_reference_from_one_call():
     """THE DROP-IN FOR THE THIRD COPY OF THE WALK. `scripts/dtype_tile_confound.py`
     resolves one bf16 clock and hands it to its fp8 cells; on the committed
-    H200 that files an fp8 cell at its own roof's 1905 MHz as LEVEL-failed
-    HIGH (1905/1515 = 1.26) and its any-flag noise gate then fails the arm.
+    H200 that files an fp8 cell at its own roof's 1395 MHz as LEVEL-failed
+    LOW (1395/1485 = 0.94) and its any-flag noise gate then fails the arm.
     This pins the call it should make instead, per cell, against the file the
-    pod reads, with the three cells the fix must plant: fp8 at 1905 level and
-    KEPT, bf16 at 1980 HIGH and KEPT (the roof moves, the row does not), bf16
-    at 1400 LOW and EXCLUDED. `.mhz` and `.source` are the pair the private
-    walk returned, so the swap is a rename, not a rewrite."""
+    pod reads, with the three cells the fix must plant: fp8 at 1395 level
+    against its own GEMM, bf16 at 1980 HIGH, bf16 at 1395 LOW. NONE of the
+    three is excluded: since 2026-09-09 the side is a record of the tile's
+    power state and DRIFT is the exclusion. `.mhz` and `.source` are the pair
+    the private walk returned, so the swap is a rename, not a rewrite."""
     import yaml
 
     from moe.bench import timing as T
@@ -430,23 +439,25 @@ def test_a_script_with_a_private_walk_gets_each_cell_its_own_reference_from_one_
     raw = yaml.safe_load((RL.HARDWARE_DIR / "measured_nvidia_h200.yaml").read_text())
     by_dtype = {d: RL.reference_clock_from_doc(raw, "NVIDIA H200", RL.reference_family(d))
                 for d in ("bf16", "fp8_e4m3")}
-    assert (by_dtype["bf16"].mhz, by_dtype["fp8_e4m3"].mhz) == (1515.0, 1905.0)
+    assert (by_dtype["bf16"].mhz, by_dtype["fp8_e4m3"].mhz) == (1485.0, 1395.0)
     for rc in by_dtype.values():
         assert isinstance(rc.mhz, float) and rc.source.startswith(raw["name"])
     # Planted through the instrument's verdict, one cell per row of the rule.
-    cells = (("fp8_e4m3", 1905.0, True, "", False),
-             ("bf16", 1980.0, False, T.LEVEL_HIGH, False),
-             ("bf16", 1400.0, False, T.LEVEL_LOW, True))
-    for dtype, mhz, level_ok, side, excluded in cells:
+    cells = (("fp8_e4m3", 1395.0, True, ""),
+             ("bf16", 1980.0, False, T.LEVEL_HIGH),
+             ("bf16", 1395.0, False, T.LEVEL_LOW))
+    for dtype, mhz, level_ok, side in cells:
         ref = by_dtype[dtype].mhz
-        assert T.clock_flags(mhz, mhz, mhz, ref)[0] is level_ok, (dtype, mhz)
+        level, drift = T.clock_flags(mhz, mhz, mhz, ref)
+        assert level is level_ok, (dtype, mhz)
         assert T.level_side(mhz, ref) == side, (dtype, mhz)
-        # LOW or DRIFT excludes; HIGH is "use roof_at_cell_clock", never exclusion.
-        assert (T.level_side(mhz, ref) == T.LEVEL_LOW) is excluded, (dtype, mhz)
+        # NOTHING here is excluded: a steady clock passes DRIFT whichever side
+        # of the band it sits on, and DRIFT is the exclusion.
+        assert drift is True, (dtype, mhz)
     # THE FAIL BRANCH the private walk takes today: one bf16 clock for all.
     one_clock = by_dtype["bf16"].mhz
-    assert T.clock_flags(1905.0, 1905.0, 1905.0, one_clock) == (False, True)
-    assert T.level_side(1905.0, one_clock) == T.LEVEL_HIGH
+    assert T.clock_flags(1395.0, 1395.0, 1395.0, one_clock) == (False, True)
+    assert T.level_side(1395.0, one_clock) == T.LEVEL_LOW
 
 
 

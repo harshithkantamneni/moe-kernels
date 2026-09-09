@@ -363,22 +363,26 @@ def test_an_instrument_row_leaves_the_retired_clock_QUANTITIES_alone(tmp_path):
 
 @pytest.mark.parametrize("level,drift,throttled", [
     (True, True, "False"),      # both clock checks passed
-    (False, True, "True"),      # LEVEL failed with no side derivable (this
-                                # config resolves no reference), which is the
-                                # LOW case the flag was built for; the HIGH
-                                # side is planted in the v6 section below
+    (False, True, "False"),     # LEVEL failed and DRIFT held: KEPT since
+                                # 2026-09-09, whichever side it failed on
     (True, False, "True"),      # DRIFT failed: it moved while the trials ran
     (None, None, "False"),      # undetermined is not evidence, see below
 ])
 def test_the_throttled_verdict_is_written_and_can_fail(tmp_path, level, drift,
                                                        throttled):
-    """THE GATE THAT COULD NOT FAIL. Four consumers read `throttled` as the
-    one bool for "this row's clock misbehaved, do not pool it":
-    `scripts/pod_session.sh` gate S6d, `run_all.sh`, `publish_results.sh` and
-    `scripts/efficiency_report.py`. Leaving it at its default on every v5 row
-    made S6d compare 0.0% against "< 5%" on every card at every temperature,
-    which is "a check that examined nothing reports zero failures" -- the shape
-    the whole instrument exists to remove.
+    """THE GATE THAT COULD NOT FAIL, AND WHAT IT NOW FAILS ON. Four consumers
+    read `throttled` as the one bool for "this row's clock misbehaved, do not
+    pool it": `scripts/pod_session.sh` gate S6d, `run_all.sh`,
+    `publish_results.sh` and `scripts/efficiency_report.py`. Leaving it at its
+    default on every v5 row made S6d compare 0.0% against "< 5%" on every card
+    at every temperature, which is "a check that examined nothing reports zero
+    failures", the shape the whole instrument exists to remove.
+
+    Since 2026-09-09 the answer is DRIFT alone. The second row is that change:
+    a LEVEL failure with a steady clock is a tile sitting at its own operating
+    point under the board cap, which the H200 session measured over 750 cells,
+    and excluding on it removed BM=128/N=64 and BM=64/G=1 from the study
+    while removing nothing anywhere else.
 
     The last row is the deliberate asymmetry. An undetermined clock check (no
     NVML in the container) is not evidence against the number, and marking it
@@ -1191,14 +1195,16 @@ def test_the_reference_clock_comes_from_the_attached_card_s_own_calibration():
     """THE FLAG THAT WAS PERMANENTLY UNDETERMINED. `RunConfig` left
     `reference_clock_mhz` at None under a comment reading "No committed
     calibration records it yet", while `measured_nvidia_h200.yaml` has carried
-    `detail.gemm_clock_mhz: 1515` and `scripts/block_m_crossing_sweep.py`'s own
+    a GEMM clock all along and `scripts/block_m_crossing_sweep.py`'s own
     `reference_clock_mhz()` has read it. Without a reference `clock_flags`
     leaves `clock_level_ok` None, so the LEVEL verdict could never fire on the
     path that wrote all 100,144 published rows -- and LEVEL is the entire reason
-    `TIMING_BASIS` left v1."""
+    `TIMING_BASIS` left v1. The number is the 2026-09-09 calibration's
+    UNDER-LOAD median, 1485 MHz at 691 W, not the idle scalar the file used to
+    carry."""
     cfg = D.RunConfig(reference_clock_resolver=lambda: RF.reference_clock("NVIDIA H200"))
-    assert cfg.reference_clock_mhz == 1515.0
-    assert "gemm_clock_mhz" in cfg.reference_clock_source
+    assert cfg.reference_clock_mhz == 1485.0
+    assert "gemm_clock" in cfg.reference_clock_source
     assert cfg.missing == {}
     # And it is the same number, from the same field, as the sweep resolves.
     assert cfg.reference_clock_mhz == RF.reference_clock("NVIDIA H200").mhz
@@ -1207,20 +1213,20 @@ def test_the_reference_clock_comes_from_the_attached_card_s_own_calibration():
 def test_a_low_clock_row_off_that_config_reports_LEVEL_failed(tmp_path):
     """The wire, end to end and into the CSV: resolved 1515 -> the instrument's
     `reference_clock_mhz` -> `clock_flags` -> the `clock_level_ok` column. A
-    card at 1400 MHz against a roof measured at 1515 is 92.4%, under
-    `LEVEL_FRACTION`, and its rows are not comparable with that roof. The
-    retired flag passes the same card: both its samples are 1400, so the drop
-    is zero.
+    card at 1400 MHz against a roof measured at 1515 is 92.4%, under the
+    band's snapped 1440 MHz edge, and its fixed-roof fraction is delivered
+    throughput at a lower issue rate. The retired flag cannot see it at all:
+    both its samples are 1400, so the drop is zero.
 
-    AND OUT THE OTHER SIDE INTO `throttled`, which is the half that decides
-    whether anything downstream changes. `test_the_throttled_verdict_is_written_
-    and_can_fail` plants that verdict directly, so it passes whether or not a
-    reference ever reaches the instrument; here the FAILED verdict is EARNED
-    from a resolved 1515, which is the only way the four consumers that read
-    `throttled` -- pod_session.sh S6d, run_all.sh, publish_results.sh,
-    efficiency_report.py -- can see a True on a real sweep."""
+    AND OUT THE OTHER SIDE INTO `throttled`, WHICH IS NOW FALSE FOR BOTH ROWS.
+    Until 2026-09-09 the LOW verdict set it; the H200 session then showed the
+    LOW side is a tile's steady state under the 700 W cap, so the verdict is
+    recorded and the row is kept. `throttled` says DRIFT, and the drift row
+    beside these two is where the four consumers that read it (pod_session.sh
+    S6d, run_all.sh, publish_results.sh, efficiency_report.py) see a True on
+    a real sweep."""
     seen = {}
-    for load, expected, flagged in ((1400.0, SC.VERDICT_FAILED, "True"),
+    for load, expected, flagged in ((1400.0, SC.VERDICT_FAILED, "False"),
                                     (1500.0, SC.VERDICT_OK, "False")):
         cfg = cfg_for(tmp_path / str(load),
                       timer=partial(levelling_timer, load_mhz=load),
@@ -1237,6 +1243,18 @@ def test_a_low_clock_row_off_that_config_reports_LEVEL_failed(tmp_path):
     # idle-instant samples, and this card sat at one clock for the whole cell.
     assert T.clock_drift(T.ClockState(1400, 50), T.ClockState(1400, 50))[1] is False
     assert seen[1400.0]["clock_drift_ok"] == seen[1500.0]["clock_drift_ok"]
+    # The LOW row is KEPT and says where it sat; the side is the record.
+    assert seen[1400.0]["clock_level_side"] == T.LEVEL_LOW
+    assert SC.row_bool(seen[1400.0], "throttled") is False
+    # And a row whose clock MOVED is the one that is excluded.
+    drifted = cfg_for(tmp_path / "drift",
+                      timer=partial(fake_timer, level=True, drift=False),
+                      reference_clock_resolver=clock_from(1515.0))
+    D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
+                  "t_counting_up_gemm")], drifted, routing=lambda s: None,
+                info=FAKE_INFO)
+    moved = SC.read_csv(drifted.csv_path)[0]
+    assert SC.row_bool(moved, "throttled") is True
 
 
 def test_a_card_with_no_calibration_refuses_rather_than_measuring_undetermined(
@@ -1430,11 +1448,13 @@ def test_the_two_resolvers_in_this_tree_read_one_clock_per_card():
     that was: the two paths would level rows against two different references
     and the exclusions would look like a property of the card.
 
-    Numbers AND the field, because agreeing by accident is not agreeing: both
-    name the field they read in their reason, and the reason is what a LEVEL
-    exclusion is traced back to. Unifying the two is not this file's to make --
-    the sweep is another owner's -- so the wall goes here, where a future edit
-    to either one fails the suite instead of the rental.
+    Numbers AND the quantity, because agreeing by accident is not agreeing:
+    both name what they read in their reason, and the reason is what a LEVEL
+    verdict is traced back to. Since the 2026-09-09 recalibration both read
+    the under-load median rather than the post-hoc idle scalar, and both say
+    so in the same words. Unifying the two is not this file's to make (the
+    sweep is another owner's), so the wall goes here, where a future edit to
+    either one fails the suite instead of the rental.
     """
     sweep = load_sweep_module()
     cards = [card for card, _ in committed_calibrations()]
@@ -1443,8 +1463,12 @@ def test_the_two_resolvers_in_this_tree_read_one_clock_per_card():
         ours, theirs = RF.reference_clock(card), sweep.reference_clock_mhz(card)
         assert ours.mhz == theirs[0], card
         assert ours.mhz and ours.mhz > 0, card
-        field = "gemm_clock_mhz"          # what both resolve to on this tree
-        assert field in ours.source and field in theirs[1], card
+        # The QUANTITY, in the words both write. Since the 2026-09-09
+        # recalibration the H200 answers from the under-load median and the
+        # A100 still from the post-hoc idle scalar, so the phrase differs per
+        # card; what may not differ is the two resolvers' account of the same
+        # card. The sweep's reason, past its card prefix, is ours verbatim.
+        assert theirs[1].split(": ", 1)[1] in ours.source, (card, theirs[1])
     # And the missing case is None on both, not a guess on either.
     assert RF.reference_clock("NVIDIA B200").mhz is None
     assert sweep.reference_clock_mhz("NVIDIA B200")[0] is None
@@ -1529,9 +1553,12 @@ def test_a_calibration_resolves_a_reference_its_own_plateau_can_clear(tmp_path):
     history holds the transient (the A100's opens at 1245, 93.3% of its own
     reference) and `time_kernel` warms for a duration of sustained load before
     it samples, so the transient is not what any cell is timed at. Committed
-    margins today are H200 1470/1515 = 97.0% and A100 1275/1335 = 95.5%, the
-    A100 half a point inside the flag, which is the number to watch when either
-    card is recalibrated.
+    margins after the 2026-09-09 recalibration are H200 1470/1485 = 99.0% (it
+    was 97.0% against the old idle scalar of 1515) and A100 1275/1335 = 95.5%,
+    the A100 half a point inside the band, which is the number to watch when
+    either card is recalibrated. The band no longer excludes anything, so this
+    is a check on the RULER rather than on the cells: a calibration whose own
+    plateau cannot clear its own reference has published the wrong clock.
     """
     for card, doc in committed_calibrations():
         ref = RF.reference_clock(card)
@@ -1551,6 +1578,11 @@ def test_a_calibration_resolves_a_reference_its_own_plateau_can_clear(tmp_path):
 
     card, doc = committed_calibrations()[-1]
     doc["detail"]["gemm_clock_mhz"] = 1980
+    # The under-load median is the field that WINS the walk when the file has
+    # one (the H200 does since 2026-09-09), so the planted boost has to go
+    # where the resolver will actually read it.
+    if isinstance(doc["detail"].get("gemm_clock"), dict):
+        doc["detail"]["gemm_clock"]["median_mhz"] = 1980
     (tmp_path / f"{RF.measured_slug(card)}.yaml").write_text(yaml.safe_dump(doc))
     boosted = RF.reference_clock(card, directory=tmp_path)
     assert boosted.mhz == 1980.0
@@ -1600,13 +1632,16 @@ def test_a_kernel_s_own_RuntimeError_is_still_one_cell_s_error(tmp_path):
     assert float(r["ms_p50"]) == 0.0
 
 
-# --- v6: the producer's own second sites -------------------------------------
+# --- v6/v7: the producer's own second sites ----------------------------------
 # The LEVEL verdict went two-sided at ONE producer and the driver was taught
 # to read the side. These pin every place the driver writes `throttled`,
 # `clock_level_ok`, `clock_level_side`, `roof_at_cell_clock_tflops` and
-# `pct_of_roof_at_cell_clock` to one rule: LOW or DRIFT -> throttled; HIGH ->
-# not throttled, per-row roof written; and the reference is the row's dtype
-# family's GEMM.
+# `pct_of_roof_at_cell_clock` to one rule, which since 2026-09-09 is: DRIFT ->
+# throttled, and nothing else; both sides of LEVEL recorded and KEPT, with the
+# per-row roof written on every shape of row; and the reference is the row's
+# dtype family's GEMM.
+
+import dataclasses  # noqa: E402
 
 from moe.bench.bytes_model import PipelineCost  # noqa: E402
 
@@ -1640,17 +1675,19 @@ def _timed_row(cfg, kt, dtype="bf16"):
 @pytest.mark.parametrize("name,load,level,drift,side,throttled", [
     ("clean", 1500.0, True, True, "", False),
     ("high", 1980.0, False, True, T.LEVEL_HIGH, False),
-    ("low", 1400.0, False, True, T.LEVEL_LOW, True),
+    ("low", 1400.0, False, True, T.LEVEL_LOW, False),
     ("drift", 1500.0, True, False, "", True),
 ])
 def test_the_five_fields_agree_on_the_rule_for_every_shape_of_row(
         tmp_path, name, load, level, drift, side, throttled):
     """HIGH, LOW, DRIFT and clean, through `_apply_kernel_timing` then
-    `_apply_cost`, against an under-load 1515 reference. The rule: LOW or
-    DRIFT is `throttled`; HIGH is not, and is the row whose fixed-roof
-    fraction is wrong by 1980/1515 and whose per-row roof is the correction.
-    The roof is written on EVERY shape (a LOW cell's roof is lower, and right
-    for it): the roof is a number, `throttled` is the verdict, and a consumer
+    `_apply_cost`, against an under-load 1515 reference. The rule since
+    2026-09-09: DRIFT is `throttled` and neither side of LEVEL is. A LOW cell
+    is a tile holding a lower clock under the same board cap (the H200's
+    BM=128/N=64 at 1395 MHz against a GEMM at 1485) and a HIGH cell is a
+    memory-shaped one that boosted; both are measured, both carry the fixed
+    fraction and the own-clock fraction, and the roof is written on EVERY
+    shape. The roof is a number, `throttled` is the verdict, and a consumer
     excludes on the verdict."""
     cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
                   reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD))
@@ -1662,35 +1699,42 @@ def test_the_five_fields_agree_on_the_rule_for_every_shape_of_row(
     assert row.roof_at_cell_clock_tflops == pytest.approx(700.0 * load / 1515), name
     assert row.pct_of_roof_at_cell_clock == pytest.approx(
         100.0 * row.tflops / (700.0 * load / 1515)), name
-    assert row.roof_note == ""
+    # BOTH FRACTIONS ON EVERY ROW, and the note says which one a gate reads.
+    assert row.roof_note == RF.ROOF_NOTE_SCORED, name
+    assert "fixed roof" in row.roof_note and "gate input" in row.roof_note
+    assert row.pct_of_achieved_tflops > 0 and row.pct_of_roof_at_cell_clock > 0
     assert row.reference_clock_mhz == 1515.0
     # And the ratio between the two fractions is exactly the clock ratio.
     assert (row.pct_of_achieved_tflops / row.pct_of_roof_at_cell_clock
             == pytest.approx(load / 1515))
 
 
-def test_a_high_side_row_derived_from_the_clocks_alone_is_not_throttled(tmp_path):
+def test_neither_side_of_level_is_throttled_and_the_side_is_still_derived(tmp_path):
     """A record that carries the verdict without the side (every fake before
     v6) still lands on the right side: the driver derives it from the clocks
     by the instrument's own rule. And the side is cleared when LEVEL did not
-    fail, so a stale side on a record cannot outlive its verdict."""
+    fail, so a stale side on a record cannot outlive its verdict. Neither side
+    sets `throttled`; only a moving clock does."""
     cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
                   reference_clock_resolver=clock_from(1515.0, grade=UNDER_LOAD))
     high = _timed_row(cfg, _timing(1980.0, level=False, drift=True))
     assert high.clock_level_side == T.LEVEL_HIGH and high.throttled is False
     low = _timed_row(cfg, _timing(1400.0, level=False, drift=True))
-    assert low.clock_level_side == T.LEVEL_LOW and low.throttled is True
+    assert low.clock_level_side == T.LEVEL_LOW and low.throttled is False
     passed = _timed_row(cfg, _timing(1500.0, level=True, drift=True, side=T.LEVEL_HIGH))
     assert passed.clock_level_side == "" and passed.throttled is False
+    moved = _timed_row(cfg, _timing(1500.0, level=True, drift=False))
+    assert moved.clock_level_side == "" and moved.throttled is True
 
 
 def test_a_v6_row_round_trips_through_the_csv_with_its_side_intact(tmp_path):
     """The wire, end to end: a boosted cell EARNS its HIGH verdict from a
     resolved under-load 1515 through `clock_flags`, is written, and reads back
     with the side, `throttled = False`, the roof at its clock and the
-    reference on the row. The LOW row beside it reads back excluded. This is
-    the row every ladder and gate will see on the H200, where the boost is
-    the normal state of a memory-bound cell."""
+    reference on the row. The LOW row beside it reads back the same way, KEPT
+    with its side recorded, since 2026-09-09. These are the rows every ladder
+    and gate will see on the H200, where the boost is the normal state of a
+    memory-bound cell and the low clock the normal state of a big tile."""
     seen = {}
     for load in (1980.0, 1400.0, 1500.0):
         cfg = cfg_for(tmp_path / str(int(load)), hardware=PLANTED_HW,
@@ -1711,7 +1755,7 @@ def test_a_v6_row_round_trips_through_the_csv_with_its_side_intact(tmp_path):
     assert "planted" in high["reference_clock_source"]
     assert SC.timing_verdict(low, "clock_level_ok") == SC.VERDICT_FAILED
     assert low["clock_level_side"] == T.LEVEL_LOW
-    assert SC.row_bool(low, "throttled") is True                # EXCLUDED
+    assert SC.row_bool(low, "throttled") is False               # KEPT
     assert float(low["roof_at_cell_clock_tflops"]) == pytest.approx(700 * 1400 / 1515)
     assert clean["clock_level_side"] == "" and SC.row_bool(clean, "throttled") is False
 
@@ -1790,8 +1834,11 @@ def test_the_fp8_reference_defaults_to_the_same_card_the_primary_came_from():
     cfg = D.RunConfig(reference_clock_resolver=clock_from(1515.0))
     assert cfg.family_references == {} and cfg.missing == {}
     fp8 = cfg.reference_for("fp8_e4m3")
-    assert fp8.mhz == 1905.0 and fp8.family == RF.FP8_FAMILY
-    assert fp8.grade == RF.REFERENCE_IDLE_SCALAR
+    # The fp8 family's reference is the fp8 GEMM's OWN under-load median, 1395
+    # MHz at 690 W on the committed calibration. It is a record of where that
+    # family runs; nothing is excluded on it.
+    assert fp8.mhz == 1395.0 and fp8.family == RF.FP8_FAMILY
+    assert fp8.grade == RF.REFERENCE_UNDER_LOAD
     assert cfg.missing == {}
     assert cfg.reference_for("fp8_e5m2") is fp8          # resolved once
     # The A100's calibration has no fp8 GEMM, and says so on first use.
@@ -1806,3 +1853,56 @@ def test_the_fp8_reference_defaults_to_the_same_card_the_primary_came_from():
                             1905.0, grade=UNDER_LOAD, family=RF.FP8_FAMILY)})
     assert mixed.reference_for("fp8_e4m3").mhz is None
     assert "different profile" in mixed.missing["reference_clock_mhz[fp8]"]
+
+
+def test_the_producer_persists_the_under_load_trace_the_watts_and_the_settle(
+        tmp_path):
+    """v7 AT THE PRODUCER. The instrument computed a first and a last
+    under-load sample and a whole sample list, and the driver wrote none of
+    them, so when the 2026-09-09 session flagged 135 cells as DRIFT only four
+    could be examined. The pod's own settling cell is planted here: 1560 ->
+    1650 MHz over three samples at 698 W, DRIFT failed, direction on the row.
+
+    AND NOT INTO THE RETIRED COLUMNS. `sm_clock_start_mhz` holds an IDLE
+    instant on 100,144 published rows; the under-load pair has its own names
+    and this pins that they stay apart."""
+    cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
+                  reference_clock_resolver=clock_from(1485.0, grade=UNDER_LOAD))
+    kt = dataclasses.replace(
+        _timing(1620.0, level=True, drift=False, ref=1485.0),
+        sm_clock_start_mhz=1560.0, sm_clock_end_mhz=1650.0,
+        clock_samples_mhz=(1560.0, 1620.0, 1650.0),
+        clock_drift_direction=T.DRIFT_UP, power_w=698.0,
+        settle_ms=50.0, settle_calls=50, clock_settled=True)
+    row = _timed_row(cfg, kt)
+    assert row.sm_clock_load_first_mhz == 1560.0
+    assert row.sm_clock_load_last_mhz == 1650.0
+    assert row.clock_samples_mhz == "1560 1620 1650"
+    assert row.clock_drift_direction == T.DRIFT_UP
+    assert row.power_w == 698.0
+    assert row.warmup_settle_ms == 50.0 and row.warmup_settle_calls == 50
+    assert row.warmup_clock_settled == SC.VERDICT_OK
+    assert row.throttled is True                      # DRIFT, and only DRIFT
+    # the retired idle-instant columns are left alone
+    assert row.sm_clock_start_mhz == 0 and row.sm_clock_end_mhz == 0
+    assert row.clock_drift_pct == 0.0
+    # and it all survives the CSV
+    with SC.CsvWriter(tmp_path / "v7.csv") as w:
+        w.write(row)
+    back = SC.read_csv(tmp_path / "v7.csv")[0]
+    assert SC.has_load_clock_trace(back)
+    assert back["clock_samples_mhz"] == "1560 1620 1650"
+    assert SC.row_float(back, "power_w") == 698.0
+
+
+def test_a_row_off_a_host_with_no_clock_reader_says_so_rather_than_settling(
+        tmp_path):
+    """No NVML, no settle loop, and `warmup_clock_settled` is undetermined --
+    which is not "it settled at once". The row is still measured."""
+    cfg = cfg_for(tmp_path, hardware=PLANTED_HW,
+                  reference_clock_resolver=clock_from(1485.0, grade=UNDER_LOAD))
+    row = _timed_row(cfg, _timing(1485.0, level=True, drift=True, ref=1485.0))
+    assert row.warmup_clock_settled == SC.VERDICT_UNDETERMINED
+    assert row.warmup_settle_ms == 0.0 and row.warmup_settle_calls == 0
+    assert row.clock_samples_mhz == "" and row.power_w == 0.0
+    assert row.throttled is False

@@ -485,14 +485,40 @@ def roof_scale_refusal(load_mhz: float | None, reference_mhz: float | None,
     return ""
 
 
+#: What `roof_note` says on a row that IS scored: which of the two compute
+#: fractions a gate reads, and what the other one is for.
+#:
+#: WHY THE FIXED ROOF IS THE GATE INPUT. Both fractions are on every row and
+#: they differ by exactly `load / reference`. The calibration's GEMM and every
+#: cell of a session run under the SAME board power cap, so the fixed roof
+#: compares delivered throughput under one budget, which is the comparison a
+#: compute-bound claim is about; the own-clock fraction divides that by the
+#: clock the cell happened to hold, which credits a tile for its own power
+#: draw. On the 2026-09-09 H200 session that difference flips the sign of the
+#: roofline arm's control-subject gap (+0.053 fixed, -0.032 own clock), so it
+#: is not a presentational choice. Memory-shaped cells and cross-card work
+#: read the own-clock fraction, labelled as issue efficiency.
+ROOF_NOTE_SCORED = (
+    "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate "
+    "input, since every cell and the calibration GEMM ran under one power cap; "
+    "pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, "
+    "printed beside it and never a gate input")
+
+
 def cell_clock_roof(peak_tflops: float, load_mhz: float | None,
                     reference_mhz: float | None, grade: str
                     ) -> tuple[float, str]:
     """`(roof_at_cell_clock_tflops, roof_note)` for one row. Pure.
 
-    The pair the two writers put on a row, computed once: `(roof, "")` when
-    `roof_scale_refusal` is empty, `(0.0, why)` otherwise. 0.0 is "not
-    scored", never a roof of zero; `schema.has_cell_clock_roof` reads it so.
+    The pair the two writers put on a row, computed once: `(roof,
+    ROOF_NOTE_SCORED)` when `roof_scale_refusal` is empty, `(0.0, why)`
+    otherwise. 0.0 is "not scored", never a roof of zero;
+    `schema.has_cell_clock_roof` reads it so, and never reads the note.
+
+    THE NOTE IS NOT EMPTY ON A SCORED ROW, and that is the 2026-09-09 change.
+    Both fractions were already written; nothing on the row said which one a
+    gate reads, so each of six consumers decided for itself and two of them
+    disagreed with the arm's own text. The rule now travels with the number.
     """
     why = roof_scale_refusal(load_mhz, reference_mhz, grade)
     if why:
@@ -502,7 +528,7 @@ def cell_clock_roof(peak_tflops: float, load_mhz: float | None,
     # `peak_tflops` is the caller's positive roof; a None here would be a
     # contract change between the two, not a row.
     assert roof is not None
-    return roof, ""
+    return roof, ROOF_NOTE_SCORED
 
 
 @dataclass(frozen=True)
