@@ -54,6 +54,7 @@ sys.path.insert(0, str(ROOT))
 
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
+from moe.bench.timing import TIMING_BASIS, KernelTiming  # noqa: E402
 
 
 def _load_script():
@@ -1557,7 +1558,9 @@ def test_the_timing_columns_survive_a_write_and_a_resume(tmp_path, planned):
                            DTC.BF16, ms_median=1.0, n_samples=3,
                            instrument=DTC.timing.TIMING_BASIS, warmup_ms=300.0,
                            iters=120, trials=3, sm_clock_load_mhz=1490.0,
-                           clock_level_ok=False, clock_drift_ok=True,
+                           clock_level_ok=False,
+                           clock_level_side=DTC.timing.LEVEL_LOW,
+                           clock_drift_ok=True,
                            l2_flush=True, host_bound=None)
     meta = {"run_id": "r", "gpu_name": "g", "torch_version": "t",
             "vllm_version": "v", "routing": "uniform", "seed": 0}
@@ -1569,6 +1572,8 @@ def test_the_timing_columns_survive_a_write_and_a_resume(tmp_path, planned):
     assert back.warmup_ms == pytest.approx(300.0)
     assert back.sm_clock_load_mhz == pytest.approx(1490.0)
     assert back.clock_level_ok is False
+    assert back.clock_level_side == DTC.timing.LEVEL_LOW, \
+        "the side must survive a resume or a LOW arm comes back as HIGH-less"
     assert back.clock_drift_ok is True
     assert back.l2_flush is True
     assert back.host_bound is None, "an empty flag is NOT DETERMINED, not False"
@@ -1600,6 +1605,72 @@ def test_one_bad_repeat_makes_the_whole_arm_say_so():
     DTC.summarise_timings(unknown, [T(True, True, False), T(None, None, None)])
     assert unknown.clock_level_ok is None
     assert unknown.host_bound is None
+
+
+def _record(level_ok, side, load_mhz):
+    """A `KernelTiming` the way `time_kernel` writes it against a 1515 MHz
+    bf16-GEMM reference: the flag AND the side, never one without the other."""
+    return KernelTiming(ms_p50=1.0, ms_p90=1.1, ms_min=0.9, ms_std=0.01, iters=10,
+                        trials=3, warmup_ms=500.0, l2_flush=True,
+                        sm_clock_load_mhz=load_mhz, sm_clock_start_mhz=load_mhz,
+                        sm_clock_end_mhz=load_mhz, clock_level_ok=level_ok,
+                        clock_drift_ok=True, samples=30, warmup_calls=5,
+                        flush_mb=64, clock_samples=20, clock_source="nvml",
+                        clock_poll_ms=5.0, host_bound=False, host_enqueue_ms=0.0,
+                        instrument=TIMING_BASIS, clock_level_side=side,
+                        reference_clock_mhz=1515.0)
+
+
+def test_v5_keeps_a_high_side_arm_and_excludes_a_low_side_one(planned, ceilings):
+    """The planted pair, both folded from real `KernelTiming` records.
+
+    HIGH: a memory-shaped dtype arm boosted to 1980 MHz against the 1515 MHz
+    reference. `time_kernel` fails LEVEL on it with side "high" (03df2d4), and
+    on an H200 that is the normal state of a memory-bound cell. It must be
+    KEPT: V5 PASS, counted under `clock_high_side_arms`, not flagged. Until
+    2026-09-08 this census read the flag without the side and failed V5 on it.
+    LOW: the same arm at 1400 MHz, the throttle the flag was built for, must
+    still fail V5. A failed LEVEL with no side (a pre-side record) is LOW.
+    """
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    _flag_every_arm(results)
+    arms = list(results[list(results)[2]].values())
+    high = arms[0]
+    DTC.summarise_timings(high, [_record(False, DTC.timing.LEVEL_HIGH, 1980.0)] * 2)
+    assert high.clock_level_ok is False and high.clock_level_side == DTC.timing.LEVEL_HIGH
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert not analysis.clock_throttled
+    assert analysis.clock_flagged_arms == 0
+    assert analysis.clock_high_side_arms == 1
+    gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "", synthetic=False)
+    assert verdicts(gates)["V5"] == DTC.PASS
+    v5 = next(g for g in gates if g.name.startswith("V5"))
+    assert "1 boosted above the band" in v5.observed and "kept" in v5.observed
+
+    low = arms[1]
+    DTC.summarise_timings(low, [_record(False, DTC.timing.LEVEL_LOW, 1400.0)] * 2)
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert analysis.clock_throttled
+    assert analysis.clock_flagged_arms == 1 and analysis.clock_high_side_arms == 1
+    assert verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                                   synthetic=False))["V5"] == DTC.FAIL
+
+    low.clock_level_side = ""                    # a pre-side record: LOW
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert analysis.clock_throttled and analysis.clock_flagged_arms == 1
+
+
+def test_the_level_side_folds_low_dominant_and_refuses_a_foreign_word():
+    """A mixed arm sat on both sides of the band and is LOW; a word the
+    instrument never writes is refused, not read as a pass."""
+    arm = DTC.ArmResult("m", 1, "native", DTC.BF16)
+    DTC.summarise_timings(arm, [_record(False, DTC.timing.LEVEL_HIGH, 1980.0),
+                                _record(False, DTC.timing.LEVEL_LOW, 1400.0)])
+    assert arm.clock_level_side == DTC.timing.LEVEL_LOW
+    with pytest.raises(ValueError, match="not a side"):
+        DTC.summarise_timings(DTC.ArmResult("m", 1, "native", DTC.BF16),
+                              [_record(False, "sideways", 1980.0)])
 
 
 def test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200(

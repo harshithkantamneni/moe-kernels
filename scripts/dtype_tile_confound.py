@@ -552,8 +552,8 @@ EXIT_INVALID = exit_codes.INVALID
 #: The columns `timing.KernelTiming` contributes to every measured row. Named
 #: as a group so the CSV header and `timing_columns` cannot drift apart.
 TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
-                      "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
-                      "l2_flush", "host_bound")
+                      "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
+                      "clock_drift_ok", "l2_flush", "host_bound")
 
 CSV_COLUMNS = (
     "run_id", "utc", "gpu_name", "lookup_gpu", "torch_version", "vllm_version",
@@ -1287,6 +1287,17 @@ class ArmResult:
     trials: int = 0
     sm_clock_load_mhz: float | None = None
     clock_level_ok: bool | None = None
+    #: Which way a LEVEL failure went, from `KernelTiming.clock_level_side`:
+    #: `timing.LEVEL_LOW`, `timing.LEVEL_HIGH`, or "" when LEVEL passed, was
+    #: not determined, or the record predates the side (before 03df2d4 the
+    #: band had no upper edge, so a failure could only be low, and "" on a
+    #: failed flag is read as LOW). LOW or DRIFT excludes an arm from V5; HIGH
+    #: does not: the card boosted above the band the roof was measured at,
+    #: which is the normal state of a memory-bound cell on an H200, and the
+    #: only thing it invalidates is the fraction of the FIXED roof. Folded so
+    #: LOW dominates HIGH, because an arm with a repeat on each side of the
+    #: band sat at two operating points and belongs with the excluded.
+    clock_level_side: str = ""
     clock_drift_ok: bool | None = None
     l2_flush: bool | None = None
     host_bound: bool | None = None
@@ -1354,9 +1365,37 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
     clocks = [t.sm_clock_load_mhz for t in timings if t.sm_clock_load_mhz]
     result.sm_clock_load_mhz = statistics.median(clocks) if clocks else None
     result.clock_level_ok = _fold_flag([t.clock_level_ok for t in timings])
+    result.clock_level_side = _fold_side(
+        [getattr(t, "clock_level_side", "") for t in timings])
     result.clock_drift_ok = _fold_flag([t.clock_drift_ok for t in timings])
     result.host_bound = _fold_flag([t.host_bound for t in timings], bad=True)
     return result
+
+
+def _fold_side(values: list[str]) -> str:
+    """Fold the LEVEL side over repeats so the EXCLUDING side wins.
+
+    `timing.LEVEL_LOW` if any repeat sat below the band, else
+    `timing.LEVEL_HIGH` if any sat above it, else "". The order is the rule
+    consumers apply: LOW excludes, HIGH is kept, so a mixed arm is LOW. A word
+    the instrument never writes is REFUSED rather than read as "": a side no
+    filter matches would keep the arm while looking like a pass, which is the
+    accident the flag/side pair was introduced to end. A record without the
+    attribute (a pre-side `KernelTiming`) folds as "", the same reading
+    `Store.restore` gives a CSV written before the column existed.
+    """
+    sides = {str(v or "") for v in values}
+    unknown = sides - {"", timing.LEVEL_LOW, timing.LEVEL_HIGH}
+    if unknown:
+        raise ValueError(
+            f"clock_level_side {sorted(unknown)!r} is not a side "
+            f"moe/bench/timing.py writes ({timing.LEVEL_LOW!r}, "
+            f"{timing.LEVEL_HIGH!r} or empty); refusing to fold it")
+    if timing.LEVEL_LOW in sides:
+        return timing.LEVEL_LOW
+    if timing.LEVEL_HIGH in sides:
+        return timing.LEVEL_HIGH
+    return ""
 
 
 def _fold_flag(values: list, bad: bool = False) -> bool | None:
@@ -1452,6 +1491,7 @@ class Store:
             iters=num("iters", int) or 0, trials=num("trials", int) or 0,
             sm_clock_load_mhz=num("sm_clock_load_mhz"),
             clock_level_ok=_unflag(row.get("clock_level_ok", "")),
+            clock_level_side=row.get("clock_level_side", ""),
             clock_drift_ok=_unflag(row.get("clock_drift_ok", "")),
             l2_flush=_unflag(row.get("l2_flush", "")),
             host_bound=_unflag(row.get("host_bound", "")),
@@ -1495,6 +1535,7 @@ class Store:
             "sm_clock_load_mhz": ("" if result.sm_clock_load_mhz is None
                                   else f"{result.sm_clock_load_mhz:.0f}"),
             "clock_level_ok": _flag(result.clock_level_ok),
+            "clock_level_side": result.clock_level_side,
             "clock_drift_ok": _flag(result.clock_drift_ok),
             "l2_flush": _flag(result.l2_flush),
             "host_bound": _flag(result.host_bound),
@@ -1687,6 +1728,7 @@ def timing_columns(t) -> dict:
             "sm_clock_load_mhz": ("" if t.sm_clock_load_mhz is None
                                   else f"{t.sm_clock_load_mhz:.0f}"),
             "clock_level_ok": _flag(t.clock_level_ok),
+            "clock_level_side": t.clock_level_side,
             "clock_drift_ok": _flag(t.clock_drift_ok),
             "l2_flush": int(bool(t.l2_flush)),
             "host_bound": _flag(t.host_bound)}
@@ -2256,13 +2298,21 @@ class Analysis:
     #: scored: see `MAX_CLOCK_DRIFT_PCT`.
     clock_drift_pct: float | None = None
     #: The under-load verdicts, folded over every timed arm. `clock_throttled`
-    #: is True when ANY arm's LEVEL or DRIFT flag is False; `clock_flagged_arms`
-    #: and `clock_determined_arms` are the counts behind it, and zero determined
-    #: arms means the clock state of this run is NOT DETERMINED, which V5 reports
-    #: as UNKNOWN rather than as a pass. A run scored on the between-load
-    #: movement alone was the old single drop-only flag under another name.
+    #: is True when ANY arm's DRIFT flag is False or its LEVEL flag is False on
+    #: the LOW side; `clock_flagged_arms` and `clock_determined_arms` are the
+    #: counts behind it, and zero determined arms means the clock state of this
+    #: run is NOT DETERMINED, which V5 reports as UNKNOWN rather than as a pass.
+    #: `clock_high_side_arms` counts arms whose LEVEL failed HIGH: boosted above
+    #: the band around the reference the roof was measured at. They are KEPT.
+    #: Until 2026-09-08 this census excluded them, which on an H200 (1980 MHz
+    #: under memory load against the 1515 MHz bf16-GEMM reference) failed V5
+    #: on every memory-shaped dtype arm: the fifteenth instance of a two-sided
+    #: producer (moe/bench/timing.py, 03df2d4) with a one-sided consumer. A run
+    #: scored on the between-load movement alone was the old single drop-only
+    #: flag under another name.
     clock_throttled: bool = False
     clock_flagged_arms: int = 0
+    clock_high_side_arms: int = 0
     clock_determined_arms: int = 0
     timed_arms: int = 0
     failed_arms: list[str] = field(default_factory=list)
@@ -2429,9 +2479,15 @@ def analyse(cells: list[Cell], results, ceilings: Ceilings, dtypes: list[str]
         analysis.clock_drift_pct = max(drifts, key=abs)
     # WHAT IS SCORED: the under-load LEVEL and DRIFT verdicts `time_kernel` put
     # on every repeat, folded per arm by `summarise_timings` (False if any
-    # repeat was False). An arm with neither flag determined contributes
-    # nothing, and a run with no determined arm has an undetermined clock
-    # state, which V5 prints as UNKNOWN: an absent NVML is not a steady clock.
+    # repeat was False, the side LOW-dominant). An arm with neither flag
+    # determined contributes nothing, and a run with no determined arm has an
+    # undetermined clock state, which V5 prints as UNKNOWN: an absent NVML is
+    # not a steady clock. LEVEL is TWO-SIDED (moe/bench/timing.py, 03df2d4)
+    # and only the LOW side excludes: a LEVEL failure on the HIGH side means
+    # the card boosted above the band the roof was measured at, the normal
+    # state of every memory-bound cell on an H200, and what it invalidates is
+    # the fraction of the FIXED roof, not the timing. A failed LEVEL with no
+    # side is a pre-side record, whose band had no upper edge, and is LOW.
     for per in results.values():
         for r in per.values():
             if r.error or r.redundant:
@@ -2440,8 +2496,13 @@ def analyse(cells: list[Cell], results, ceilings: Ceilings, dtypes: list[str]
             if all(f is None for f in flags):
                 continue
             analysis.clock_determined_arms += 1
-            if any(f is False for f in flags):
+            side = _fold_side([r.clock_level_side])
+            level_high = r.clock_level_ok is False and side == timing.LEVEL_HIGH
+            if r.clock_drift_ok is False or (r.clock_level_ok is False
+                                             and not level_high):
                 analysis.clock_flagged_arms += 1
+            elif level_high:
+                analysis.clock_high_side_arms += 1
     analysis.clock_throttled = analysis.clock_flagged_arms > 0
     return analysis
 
@@ -2650,7 +2711,10 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
     if analysis.clock_determined_arms:
         parts.append(f"under-load LEVEL/DRIFT flags: {analysis.clock_flagged_arms} "
                      f"of {analysis.clock_determined_arms} determined arms "
-                     "flagged")
+                     "flagged LOW or DRIFT (excluded); "
+                     f"{analysis.clock_high_side_arms} boosted above the band "
+                     "(LEVEL HIGH: kept, its fixed-roof fraction is not "
+                     "comparable, read the roof at the cell's clock)")
     else:
         parts.append("under-load LEVEL/DRIFT flags: NOT DETERMINED on any arm "
                      "(no clock reference or no NVML), so the clock state is "
@@ -2676,7 +2740,8 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
         "the box can resolve an effect the size of the one being measured",
         f"p90 |placebo - 1| < {PLACEBO_BAND:.0%}, p90 timing spread < "
         f"{MAX_TIMING_SPREAD:.0%}, and no timed arm carries a False "
-        "under-load LEVEL or DRIFT flag from time_kernel",
+        "under-load DRIFT flag or a LOW-side LEVEL flag from time_kernel "
+        "(a HIGH-side LEVEL flag is not an exclusion)",
         _verdict(noise_ok),
         "no placebo pair was timed" if band is None
         else "; ".join(parts) + (f"; worst {analysis.placebo_worst}"
