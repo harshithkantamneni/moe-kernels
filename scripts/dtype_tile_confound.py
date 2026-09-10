@@ -171,15 +171,22 @@ ratio that assumed otherwise was reading tile steps. That is the same fact that
 retracted C5.
 
 WHAT THE MODEL PREDICTS, from THIS card's own same-session calibration.
-`moe/bench/hardware/measured_nvidia_h200.yaml` (measured 2026-09-02, commit
-63de5b9) now carries an fp8_e4m3 ceiling next to the bf16 one -- FINDINGS calls
-that "a precondition for publishing this" and it is why this run is possible
-now. Read from that file at run time, not transcribed:
+`moe/bench/hardware/measured_nvidia_h200.yaml` (measured 2026-09-09, written by
+the recalibration at ab61e55) carries an fp8_e4m3 ceiling next to the bf16 one:
+FINDINGS calls that "a precondition for publishing this" and it is why this run
+is possible now. Read from that file at run time, not transcribed, and the
+transcription below is what it holds today:
 
-    bandwidth 4374.8 GB/s   bf16 712.3 TFLOP/s   fp8_e4m3 1447.7 TFLOP/s
-    ridge_bf16 162.8        ridge_fp8 330.9      achieved fp8/bf16 2.033
+    bandwidth 4374.5 GB/s   bf16 668.5 TFLOP/s   fp8_e4m3 1469.9 TFLOP/s
+    ridge_bf16 152.8        ridge_fp8 336.0      achieved fp8/bf16 2.199
 
-Compute time therefore scales by 1/2.033 = 0.492, not by the datasheet's 0.500.
+THOSE SIX NUMBERS ARE THE RECALIBRATION'S. Until 2026-09-09 this block read
+4374.8 / 712.3 / 1447.7, ridge 162.8 / 330.9 and a ratio of 2.033, from the
+2026-09-02 calibration at 63de5b9, and it stayed there after ab61e55 replaced
+the file, so the paragraph below already quoted 2.199 and 152.8 while the table
+above it still said 2.033 and 162.8.
+
+Compute time therefore scales by 1/2.199 = 0.455, not by the datasheet's 0.500.
 Weight bytes halve exactly. Activation traffic is the term that does not:
 `spec.activation_dtype` keeps activations at bf16 in an fp8 cell because vLLM's
 `fused_experts` asserts it and quantises them itself, so how much of that stream
@@ -816,10 +823,18 @@ class Ceilings:
     #: `roofline.reference_family(dtype)`, resolved by the one walk roofline
     #: owns. The two fields above are the bf16 family's, kept for the plan page
     #: and plan.json. A cell is levelled against `reference_for(dtype)`: on the
-    #: 2026-09-09 H200 calibration the bf16 GEMM ran at 1470 MHz and the fp8
-    #: GEMM at 1380, and 1380/1470 = 0.939 < LEVEL_FRACTION, so an fp8 cell at
+    #: 2026-09-09 H200 calibration (ab61e55) the bf16 GEMM ran at 1485 MHz and
+    #: the fp8 GEMM at 1395, both under-load medians read out of
+    #: `detail.gemm_clock` and `detail.fp8_gemm_clock`; the 1470/1380 pair once
+    #: quoted here belonged to the calibration that one superseded. 1395/1485 =
+    #: 0.939 < LEVEL_FRACTION, so an fp8 cell at
     #: its own GEMM's clock levelled against the bf16 number was LOW, the side
-    #: that excludes, V5 failed and the arm was INVALID on a sound measurement.
+    #: that EXCLUDED UNDER THE RULE THEN IN FORCE, V5 failed and the arm was
+    #: INVALID on a sound measurement. Since 2026-09-09 LEVEL excludes on
+    #: neither side and DRIFT is what excludes (R1, and see `cell_ms` and
+    #: `build_gates` in this file), so the same mismatch would now be recorded
+    #: in `clock_level_side` and scored; resolving the reference per family is
+    #: still what makes the recorded side mean anything.
     reference_clocks: dict[str, float | None] = field(default_factory=dict)
 
     def reference_for(self, dtype: str) -> float | None:
@@ -1340,6 +1355,15 @@ def plan_run_id(payload: dict, card: str) -> str:
     of one commit, and the commit is in the provenance block beside the id. The
     check below refuses any OTHER omission, because a knob added to the plan and
     forgotten here is exactly how two settings come to share a directory.
+
+    THAT EXEMPTION COVERS THE PLAN AND NOT THE CSV, and 2026-09-09 is why the
+    distinction is written down. The commit that re-scoped the arms also
+    renamed two clock columns and inserted four more, so one command derived
+    the SAME id across a schema change and landed on a results root that
+    outlives the pod. `Store.__init__` therefore checks the header on disk
+    against `CSV_COLUMNS` and refuses to append under a foreign one; the id
+    stays as it is because a schema bump is a code change with a commit behind
+    it, not a knob a reader would sweep.
     """
     short = {"1m": payload["models"], "2t": payload["tokens"],
              "3d": payload["dtypes"], "4rt": payload["routing"],
@@ -1494,6 +1518,14 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
         to; `warmup_ms` is MILLISECONDS of sustained load delivered before the
         trials, never a call count (`warmup_calls` on the `KernelTiming` is the
         count, and it is not a knob);
+      * `load_clock_first_mhz` and `load_clock_last_mhz` are NOT a median and
+        NOT an AND: they are the first and last under-load samples of the
+        single WORST-DRIFTING repeat, because the pair exists to show which
+        way the arm that carries the DRIFT verdict moved, and averaging two
+        repeats that drifted opposite ways would show neither;
+      * `clock_samples` is a MIN, for the same reason the flags are ANDed: the
+        row must not claim more samples behind its clock than the thinnest
+        repeat actually took;
       * `instrument` and `l2_flush` are constant across the repeats of one arm
         by construction, and a disagreement would be a bug, so the first is
         taken and the mismatch would show as a differing column between arms.
@@ -1599,6 +1631,27 @@ class Store:
                     except (KeyError, ValueError):
                         continue
                     self.done[key] = row
+        # THE HEADER ON DISK HAS TO BE THIS HEADER, AND UNTIL 2026-09-09
+        # NOTHING CHECKED. `plan_run_id` deliberately omits `arms`, so the same
+        # command derives the same run id across a change to the arm set, and
+        # the results root outlives the pod. That was safe while the arms moved
+        # and the columns did not. This commit moved both together: it renamed
+        # two clock columns and inserted four more after `sm_clock_load_mhz`.
+        # Appending wider rows under the old header shifts every field past the
+        # first difference, so `clock_level_ok` would read a clock and
+        # `l2_flush` a note, and `DictWriter` cannot see it: it writes the
+        # fieldnames it was given and never looks at the file.
+        if path.exists():
+            with path.open(newline="") as fh:
+                on_disk = next(csv.reader(fh), [])
+            if on_disk and tuple(on_disk) != CSV_COLUMNS:
+                raise ConfoundRefusal(
+                    f"{path} was written under a different schema "
+                    f"({len(on_disk)} columns against {len(CSV_COLUMNS)}); "
+                    "appending to it would shift every column after the first "
+                    "difference and nothing downstream could tell. Use --fresh "
+                    "to start the file again, or a new --run-id to leave it "
+                    "alone.")
         path.parent.mkdir(parents=True, exist_ok=True)
         new = not path.exists()
         self._fh = path.open("a", newline="")
@@ -2116,11 +2169,14 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                 store.write(result, cell, meta)
                 continue
             if arm_is_infeasible(cell, arm, dtype):
-                # DERIVED, not discovered by asking Triton. `--dry-run` refuses
-                # a grid whose matched arm cannot pair enough cells, so reaching
-                # here means the operator overrode that; the cell is recorded
-                # with its arithmetic and never compiled, because the compile is
-                # what leaked vLLM's override global on 2026-09-09.
+                # DERIVED, not discovered by asking Triton. `_main` refuses
+                # ANY matched arm that cannot compile its grid, on every
+                # invocation and before a cell is timed, and no flag overrides
+                # it, so this branch is defence in depth for a grid reached
+                # another way rather than the operator's override it once
+                # described. The cell is recorded with its arithmetic and never
+                # compiled, because the compile is what leaked vLLM's override
+                # global on 2026-09-09.
                 forced = arm_config(cell, arm, dtype)
                 result = ArmResult(cell.model, cell.num_tokens, arm, dtype,
                                    config=forced, config_origin="infeasible")
@@ -2898,6 +2954,47 @@ def percentile(values: list[float], q: float) -> float | None:
     return ordered[rank - 1]
 
 
+def band_consequence(predicted_band: list[float], *, band: float | None,
+                     spread: float | None) -> str:
+    """V5's consequence: the predicted band's WIDTH against the box's own.
+
+    THE WIDTH TEST HAS TO MOVE WITH THE NUMBER. The band was hardcoded as
+    "1.016 to 1.053" on every page from every grid until 2026-09-09, and the
+    sentence built around it said "the box cannot resolve a band that narrow,
+    and C3 cannot be read either way". That was true of a 4-point band and was
+    printed unchanged when the band became computed and the committed H200
+    calibration made it 0.938 to 1.099. That is 16 points wide against a p90
+    per-timing spread of 0.94% and a p90 placebo deviation of 0.02% on the same
+    gate line:
+    the observed clause and the consequence clause contradicted each other in
+    one gate. The comparison is made here instead, so a wide band reads as
+    readable and a narrow one still refuses.
+
+    THE BOX IS THE LARGER OF THE TWO NOISE READINGS, because either one alone
+    can swallow an effect: the placebo deviation is what an identical pair of
+    arms produced, and the per-timing spread is what one arm produced twice.
+    """
+    if not predicted_band:
+        return ("the model's predicted band over the matched arms is not "
+                "computable on this grid, so C3 cannot be read either way")
+    width = predicted_band[-1] - predicted_band[0]
+    head = (f"the model's predicted band over the matched arms is "
+            f"{predicted_band[0]:.3f} to {predicted_band[-1]:.3f}, "
+            f"{width * 100:.1f} points wide")
+    readings = [v for v in (band, spread) if v is not None]
+    if not readings:
+        return (head + ", and nothing was timed to compare that width against, "
+                "so C3 cannot be read either way")
+    box = max(readings)
+    against = (f" against a box of {box:.2%}, the larger of the p90 placebo "
+               "deviation and the p90 per-timing spread")
+    if width > box:
+        return (head + against + ", so the band is WIDER than the box and C3 "
+                "can be read where the arms land inside it")
+    return (head + against + ", so the box cannot resolve a band that narrow "
+            "and C3 cannot be read either way")
+
+
 def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
                 fp8_note: str, synthetic: bool = False) -> list[Gate]:
     """Six validity gates and four claim gates, in that order.
@@ -3059,14 +3156,7 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
         "no placebo pair was timed" if band is None
         else "; ".join(parts) + (f"; worst {analysis.placebo_worst}"
                                  if analysis.placebo_worst else ""),
-        # THE BAND IS COMPUTED, not typed. It read "1.016 to 1.053" on every
-        # page from every grid, while the 2026-09-09 H200 run printed
-        # 0.842-1.099 three lines above it.
-        "the model's predicted band over the matched arms is "
-        + (f"{predicted_band[0]:.3f} to {predicted_band[-1]:.3f}"
-           if predicted_band else "not computable on this grid")
-        + ", the box cannot resolve a band that narrow, and C3 cannot be read "
-          "either way"))
+        band_consequence(predicted_band, band=band, spread=spread)))
 
     # ---- CLAIM -------------------------------------------------------------
     differ, total = analysis.configs_differ
@@ -4412,7 +4502,19 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"override hook: {hooks[2]}.override_config"
               + ("" if hooks[1] else "   (no get_config in that module)"))
 
-        store = Store(csv_path, fresh=args.fresh, prov=prov)
+        # A CSV WHOSE HEADER IS NOT THIS SCHEMA IS A REFUSAL, NOT A CRASH.
+        # Nothing has been timed at this point, so the arm is not broken and
+        # the operator has a one-line fix; `main`'s blanket handler would
+        # print a traceback and exit ERROR, which is the retryable code and
+        # would send the driver back to the same directory.
+        try:
+            store = Store(csv_path, fresh=args.fresh, prov=prov)
+        except ConfoundRefusal as exc:
+            print("\n".join(["", "=" * 72,
+                             "REFUSED. Nothing was measured.",
+                             f"  {type(exc).__name__}: {exc}",
+                             "=" * 72]))
+            return EXIT_NOT_MEASURED
         results = {}
         started = time.time()
         try:

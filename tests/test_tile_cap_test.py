@@ -22,8 +22,10 @@ Everything here runs off GPU.
 """
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -868,3 +870,189 @@ def test_the_references_refusal_numbers_reach_the_page_and_report_json():
     # And the planted alpha comes back, which is the point of a qualified
     # reference: 24 of 24 treads at BLOCK_M=16 stand above the control's branch.
     assert abs(p["alpha_measured"] - 1.0) < 0.03
+
+
+def test_a_control_refused_on_shape_declines_with_the_number_that_failed():
+    """R7's "declines in ITS name" was implemented for two of three branches.
+
+    `compute_reference` names its ladder in `block_m` when it qualifies one and
+    in `refused_block_m` when the LEVEL checks throw one out. On the third
+    exit, a ladder refused on SHAPE, it names it in NEITHER, which is exactly
+    what the "no ladder had 3 treads" exit leaves behind too. The identity test
+    `control_tile in (ref.block_m, ref.refused_block_m)` therefore read a
+    control refused on its own shape as a control the walk never reached, threw
+    away "not proportional to its tile count (N% mean error)", and printed
+    "has 4 exactly-full tread(s) against the 3 a through-origin fit needs" to
+    the page and to report.json, which states a condition the control SATISFIES
+    as its failure and throws away the number that did fail.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    # Four aligned treads at the control, re-timed as a MEMORY branch A + B n:
+    # a real intercept, which a line through the origin cannot describe.
+    memory = [dataclasses.replace(c, ms_p50=1.2 + 0.80 * c.tiles_per_expert)
+              if c.block_m == 256 else c for c in ok]
+    assert len(SWEEP.ladder_points(memory, 256)) == 4
+
+    sibling = SWEEP.compute_reference(memory, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.block_m is None and sibling.refused_block_m is None, \
+        "the shape refusal still names its ladder in neither field"
+    assert 0 < sibling.mean_rel_err < math.inf
+
+    assert CAP.walk_reached(memory, TILES, sibling) == 256
+    ref = CAP.control_reference(memory, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.note == sibling.note, "the control's own refusal, unrewritten"
+    assert "not proportional to its tile count" in ref.note
+    assert f"{sibling.mean_rel_err:.1%}" in ref.note
+    assert "exactly-full tread(s)" not in ref.note, \
+        "a satisfied condition printed as the failure"
+
+    gate = CAP.gate_v2_control(ref, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.FAIL
+    assert "the control BLOCK_M=256 is NOT proportional" in gate.measured
+    assert f"{sibling.mean_rel_err:.1%}" in gate.measured
+    assert "reference is none" not in gate.measured
+
+
+def test_an_empty_walk_still_declines_on_the_controls_tread_count():
+    """The other both-None exit, and the wrapper must keep telling it apart.
+
+    "no ladder had the 3 treads" carries `math.inf`, so the tread count IS the
+    failure there and the wrapper's own note is the right one.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 688, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    two_treads = [c for c in cells
+                  if c.status == "ok" and c.ms_p50 > 0
+                  and (c.block_m == 256 or not c.aligned)]
+    assert len(SWEEP.ladder_points(two_treads, 256)) == 2
+    assert SWEEP.ladder_points(two_treads, 16) == []
+    sibling = SWEEP.compute_reference(two_treads, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.mean_rel_err == math.inf
+    assert CAP.walk_reached(two_treads, TILES, sibling) is None
+    ref = CAP.control_reference(two_treads, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert "2 exactly-full tread(s)" in ref.note
+    assert "cap tile and is not a candidate" not in ref.note, \
+        "nothing was reached, so nothing may be named as reached"
+
+
+def test_the_compute_reference_is_built_by_name_and_the_probe_watches_it():
+    """A dataclass built POSITIONALLY across a file boundary is worse than a
+    TypeError: a reorder of the first five same-typed fields would put wrong
+    values in the right slots, silently, and the sibling is edited on its own
+    branch."""
+    assert "ComputeReference" in CAP.REQUIRED_SWEEP_API
+    fields = CAP.REQUIRED_SWEEP_API["ComputeReference"]
+    assert fields == ("block_m", "overhead_ms", "slope_per_tile",
+                      "mean_rel_err", "note")
+    import inspect
+    params = inspect.signature(SWEEP.ComputeReference).parameters
+    assert all(name in params for name in fields)
+    CAP.require_sweep_api()
+
+
+# --------------------------------------------------------------------------
+# R2. Two rulers on every throughput, and only the fixed one is scored.
+#
+# A kernel's under-load SM clock on this card is set PER TILE by its own power
+# draw under the 700 W cap: the 2026-09-09 session's cap_test cells carry 34
+# distinct clocks from 1440 to 1980 MHz against a calibration GEMM that held
+# 1485. A fraction of the FIXED roof therefore mixes "how well this tile uses
+# the machine" with "what clock the governor gave it". The gates keep reading
+# the fixed roof, which is the only denominator any threshold is stated
+# against; the own-clock fraction is printed beside it as issue efficiency.
+# --------------------------------------------------------------------------
+
+def _clocked(cells, mhz: dict[int, float]):
+    """The same cells with a per-BLOCK_M under-load clock stamped on them."""
+    return [dataclasses.replace(c, sm_clock_load_mhz=mhz.get(c.block_m))
+            for c in cells]
+
+
+def test_the_own_clock_fraction_is_the_fixed_one_scaled_by_the_clock_ratio():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    fixed = dict(SWEEP._throughput_ladder(ok, 256, ROOF))
+    issue = CAP.issue_ladder(ok, 256, ROOF, 1485.0)
+    assert set(issue) == set(fixed)
+    for n, v in fixed.items():
+        assert issue[n] == pytest.approx(v * 1485.0 / 1650.0)
+    # The cap tile ran HIGHER than the roof's clock, so its fixed fraction was
+    # the inflated one and issue efficiency is the smaller number.
+    cap_issue = CAP.issue_ladder(ok, 16, ROOF, 1485.0)
+    cap_fixed = dict(SWEEP._throughput_ladder(ok, 16, ROOF))
+    assert all(cap_issue[n] < cap_fixed[n] for n in cap_fixed)
+
+
+def test_both_fractions_reach_every_ladder_line_and_every_gate_line():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    rep = CAP.analyse(
+        ok, MIXTRAL, cap_tile=16, control_tile=256, alpha=1.0, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b", dtype="bf16",
+        compiles={16: 1, 256: 1}, executed={16: 1, 256: 1}, sm_count=132,
+        sm_source="test", depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[], ridge_band=BAND,
+        reference_mhz=1485.0, reference_clock_source="planted for this test")
+    page = rep.text()
+    assert "FIXED ROOF / OWN-CLOCK ROOF" in page
+    assert "Reference clock 1485 MHz, planted for this test" in page
+    for gate in rep.gates:
+        for line in gate.lines:
+            if "throughput per tread" in line:
+                assert "own clock" in line
+                assert "/-" not in line, "every row here carries a clock"
+    scored = {g.tag: g.measured for g in rep.gates}
+    assert "own-clock" in scored["V3"] and "own-clock" in scored["C1"]
+    # AND IT IS NOT A GATE INPUT. The control ran 165 MHz above the roof's
+    # clock, so its own-clock fraction is 10% lower; V3's verdict is read off
+    # the fixed one and does not move with it.
+    p = rep.payload
+    assert p["peak_issue_efficiency"]["256"] == pytest.approx(
+        p["peak_roof_fraction"]["256"] * 1485.0 / 1650.0)
+    assert p["reference_clock_mhz"] == 1485.0
+    v3 = next(g for g in rep.gates if g.tag == "V3")
+    assert v3.verdict == CAP.PASS
+    assert f"{p['peak_roof_fraction']['256']:.3f}" in v3.measured
+
+
+def test_without_a_reference_clock_the_second_fraction_is_absent_not_zero():
+    """A missing number is printed as missing. Zero would read as a tile that
+    issued nothing, which is the opposite of "not known"."""
+    rep = _report(1.0)
+    page = rep.text()
+    assert "NOT AVAILABLE on this run" in page
+    assert "n=1:" in page and "n=1:0.000" not in page
+    ladder = [line for gate in rep.gates for line in gate.lines
+              if "throughput per tread" in line]
+    assert ladder and all(line.rstrip().endswith("-")
+                          or "/-," in line for line in ladder)
+    assert rep.payload["peak_issue_efficiency"] == {"16": None, "256": None}
+    assert rep.payload["reference_clock_mhz"] is None
+
+
+def test_a_self_test_reads_no_hardware_for_its_second_ruler(tmp_path, capsys):
+    """`--self-test` is a replay and must be identical on every machine, so it
+    resolves no reference clock even on a box that has a calibration."""
+    assert CAP.main(["--self-test", "0.558", "--plant-noise", "0",
+                     "--out", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PINNED for --self-test: no hardware is read" in out
+    payload = json.loads(next(tmp_path.rglob("report.json")).read_text())
+    assert payload["reference_clock_mhz"] is None

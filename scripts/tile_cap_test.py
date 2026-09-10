@@ -254,10 +254,18 @@ C1 failing says a decode-tuned tile DOES approach its compute roof, which
 retracts the ceiling this study put on it.
 
 THE DENOMINATOR, said once because it is the difference between a control and a
-tautology. Every roof fraction here is against `ridge x bandwidth`, never
+tautology. Every SCORED roof fraction here is against `ridge x bandwidth`, never
 against the run's own plateau. The plateau is the maximum over the same cells,
 so a control read against it scores 1.00 by construction and the check examines
 nothing.
+
+A SECOND FRACTION IS PRINTED BESIDE THE FIRST AND IS NEVER SCORED. On this card
+the under-load SM clock is set per tile by the kernel's own power draw under the
+700 W cap, so a fraction of the fixed roof mixes how well a tile uses the
+machine with what clock the governor gave it. `issue_ladder` divides instead by
+the roof at the tread's own clock, which separates the two; the pair is written
+`fixed/own-clock` on every throughput line and appended to V3's and C1's
+measured lines as `own-clock`. No threshold anywhere reads it.
 
 THE NUMERATOR HAS A RULER OF ITS OWN, AND `ridge x bandwidth` IS NOT IT. That
 product is the DENSE cuBLAS peak: one GEMM, no gate, no `moe_align_block_size`,
@@ -387,7 +395,7 @@ sys.path.insert(0, str(HERE))
 import block_m_crossing_sweep as SWEEP  # noqa: E402
 import replicate_noise_floor as NOISE  # noqa: E402
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import exit_codes, roofline  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
 
@@ -767,6 +775,13 @@ REQUIRED_SWEEP_API: dict[str, tuple[str, ...]] = {
     "observed_iters": (),
     "iters_line": (),
     "cap_overstatement": (),
+    # Added 2026-09-09 with the shape-refusal repair below. `control_reference`
+    # BUILDS one of these, and a dataclass built positionally is worse than a
+    # missing name: a reorder of the first five same-typed fields over there
+    # would land here as wrong values in the right slots, silently. Named
+    # fields plus this entry make a rename a refusal before the plan is printed.
+    "ComputeReference": ("block_m", "overhead_ms", "slope_per_tile",
+                         "mean_rel_err", "note"),
 }
 
 #: Module-level values read from the sibling. `FIXED` is the one that matters
@@ -1124,6 +1139,46 @@ def gate_v1_non_vacuity(cells, *, tiles, planned_cells: int,
         detail)
 
 
+#: Treads the sibling's walk needs before it will fit a ladder at all
+#: (`compute_reference`'s own `if len(pts) < 3: continue`). Named here because
+#: `walk_reached` has to reproduce which ladder that walk stopped at.
+SWEEP_MIN_TREADS = 3
+
+
+def walk_reached(cells, tiles: tuple[int, ...],
+                 ref: SWEEP.ComputeReference) -> int | None:
+    """Which ladder the sibling's walk actually stopped at, or None.
+
+    `ComputeReference` NAMES ITS LADDER IN TWO OF THE SIBLING'S FOUR EXITS AND
+    IN NEITHER OF THE OTHER TWO. A qualified reference carries `block_m`; a
+    LEVEL refusal carries `refused_block_m`; a ladder refused on SHAPE
+    (`c <= 0 or err > max_err`, block_m_crossing_sweep.py:1971) leaves BOTH at
+    None, which is exactly what the "no ladder had the 3 treads" exit leaves
+    behind too. The two are told apart by the fit error: the shape refusal
+    carries the error that failed, the empty walk carries `math.inf`. Which
+    ladder the shape refusal belongs to is then recoverable by walking the
+    tiles the way the sibling does, largest first, because that refusal happens
+    at the FIRST ladder with enough treads and does not fall through.
+
+    2026-09-09: `control_reference` tested `control_tile in (ref.block_m,
+    ref.refused_block_m)` instead, so a control refused on SHAPE looked like a
+    control the walk never reached, and the wrapper replaced "not proportional
+    to its tile count (32.7% mean error)" with "has 4 exactly-full tread(s)
+    against the 3 a through-origin fit needs", which states a condition the
+    control SATISFIES as its failure and throws away the number that did fail.
+    """
+    if ref.block_m is not None:
+        return ref.block_m
+    if ref.refused_block_m is not None:
+        return ref.refused_block_m
+    if ref.mean_rel_err == math.inf:
+        return None
+    for bm in sorted(tiles, reverse=True):
+        if len(SWEEP.ladder_points(cells, bm)) >= SWEEP_MIN_TREADS:
+            return bm
+    return None                                          # pragma: no cover
+
+
 def control_reference(cells, *, tiles: tuple[int, ...], control_tile: int, cfg,
                       ridge: float, bandwidth_gbps: float, b: int,
                       pinned: dict | None = None,
@@ -1154,23 +1209,31 @@ def control_reference(cells, *, tiles: tuple[int, ...], control_tile: int, cfg,
     ref = SWEEP.compute_reference(cells, tiles, cfg=cfg, ridge=ridge,
                                   bandwidth_gbps=bandwidth_gbps, b=b,
                                   pinned=pinned, capability=capability)
-    if control_tile in (ref.block_m, ref.refused_block_m):
+    reached = walk_reached(cells, tiles, ref)
+    if reached == control_tile:
+        # THE CONTROL'S OWN VERDICT, whichever of the three it is: qualified,
+        # refused on its LEVEL, or refused on its SHAPE. It is returned
+        # untouched because it already declines in the control's name and
+        # carries the number that failed. Restating a shape refusal as a tread
+        # count would print a condition the control SATISFIES as its failure.
         return ref
     treads = len(SWEEP.ladder_points(cells, control_tile))
-    fell_through = (f", and the sweep's own walk reached BLOCK_M="
-                    f"{ref.block_m or ref.refused_block_m} next, which is the "
-                    "cap tile and is not a candidate"
-                    if (ref.block_m or ref.refused_block_m) else "")
+    fell_through = (f", and the sweep's own walk reached BLOCK_M={reached} "
+                    "next, which is the cap tile and is not a candidate"
+                    if reached is not None else "")
     return SWEEP.ComputeReference(
-        None, 0.0, None, math.inf,
-        f"BLOCK_M={control_tile}, the control and the ONLY candidate, has "
-        f"{treads} exactly-full tread(s) against the 3 a through-origin fit "
-        f"needs{fell_through}. No compute branch was qualified: membership "
-        "falls back to a split search and NO alpha may decide a verdict")
+        block_m=None, overhead_ms=0.0, slope_per_tile=None,
+        mean_rel_err=math.inf,
+        note=f"BLOCK_M={control_tile}, the control and the ONLY candidate, has "
+             f"{treads} exactly-full tread(s) against the "
+             f"{SWEEP_MIN_TREADS} a through-origin fit needs{fell_through}. No "
+             "compute branch was qualified: membership falls back to a split "
+             "search and NO alpha may decide a verdict")
 
 
 def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
-                    control_tile: int, noise: float) -> CapGate:
+                    control_tile: int, noise: float,
+                    issue: dict[int, float] | None = None) -> CapGate:
     """Is the control's ladder SHAPED like a compute branch.
 
     Two readings, neither of which can be satisfied by the sweep's own maximum:
@@ -1198,9 +1261,22 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
     # bound and named nothing that had failed. Say which ladder the reference
     # is on every line, passing or failing.
     proportional = ref.block_m == control_tile
+    # THREE WAYS TO BE NOT-THE-CONTROL AND A NAME FOR EACH. The third arrived
+    # 2026-09-09 with `control_reference`'s repair: a ladder refused on SHAPE
+    # names itself in neither `block_m` nor `refused_block_m`, and until this
+    # branch existed it printed as "none", which read as a sweep that had
+    # qualified nothing when in fact it had refused the control by name.
+    # `control_reference` is the only producer of what arrives here, and it
+    # lets a both-None reference through ONLY when the control is the ladder
+    # that was refused on shape; its own decline carries `math.inf`.
     which = (f"BLOCK_M={ref.block_m}" if ref.block_m is not None
              else f"BLOCK_M={ref.refused_block_m}, REFUSED on its level"
-             if ref.refused_block_m is not None else "none")
+             if ref.refused_block_m is not None
+             else f"BLOCK_M={control_tile}, REFUSED on its SHAPE at "
+                  f"{ref.mean_rel_err:.1%} against a line through the origin"
+             if ref.mean_rel_err < math.inf else "none")
+    shape_refused = (ref.block_m is None and ref.refused_block_m is None
+                     and ref.mean_rel_err < math.inf)
     gain = (tp_control[-1][1] / tp_control[-2][1] - 1.0
             if len(tp_control) >= 2 and tp_control[-2][1] > 0 else None)
     # The gain is a ratio of two single cells and so carries `sqrt(2)` times the
@@ -1212,8 +1288,9 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
              f"BLOCK_M={control_tile}; the cap tile is the subject and may not "
              "classify itself)",
              f"  {ref.note}",
-             "throughput per tread against ridge x bandwidth: "
-             + ", ".join(f"n={n}:{v:.3f}" for n, v in tp_control)]
+             "throughput per tread against ridge x bandwidth, "
+             "fixed roof / the roof at the tread's own clock: "
+             + tread_points(tp_control, issue)]
     if gain is None:
         lines.append("fewer than two treads at the control, so there is no "
                      "gain to read and flatness cannot be tested")
@@ -1240,17 +1317,21 @@ def gate_v2_control(ref: SWEEP.ComputeReference, tp_control, *,
         f"the control BLOCK_M={control_tile} reached a compute roof in this grid",
         verdict,
         (f"proportional to {ref.mean_rel_err:.1%}" if proportional
-         else f"reference is {which}, not the control")
+         else f"the control BLOCK_M={control_tile} is NOT proportional: "
+              f"{ref.mean_rel_err:.1%} against a line through the origin"
+         if shape_refused else f"reference is {which}, not the control")
         + (f", last tread {gain:+.2%}" if gain is not None else ", no gain readable"),
         f"the reference IS BLOCK_M={control_tile}, its through-origin fit "
         f"within {PROPORTIONALITY_MAX_ERR:.0%}, and its last tread within "
         f"+/-{flat_gate:.2%}",
         "the compute branch every tread at the cap tile is classified against "
-        "is not one, so neither C1 nor C2 may be quoted. Either the control's "
-        "own level checks REFUSED it, and they name themselves in the lines "
-        "above, or its ladder is too short to qualify, which the plan now "
-        "refuses before the pod is rented; membership then falls back to a "
-        "split search, which invents an alpha rather than declining to",
+        "is not one, so neither C1 nor C2 may be quoted. Three ways in, and "
+        "the lines above say which: the control's own LEVEL checks refused it "
+        "and name themselves; its ladder is not proportional to its tile "
+        "count, and the fit error that failed is quoted; or it is too short to "
+        "qualify at all, which the plan now refuses before the pod is rented. "
+        "Membership then falls back to a split search, which invents an alpha "
+        "rather than declining to",
         lines)
 
 
@@ -1269,8 +1350,72 @@ def fused_layer_roof(roof_tflops: float) -> float:
     return FUSED_ROOF_FLOOR * roof_tflops
 
 
+def issue_ladder(cells, block_m: int, roof_tflops: float,
+                 reference_mhz: float | None) -> dict[int, float]:
+    """`{tiles: useful throughput / the roof AT THAT CELL'S OWN CLOCK}`.
+
+    R2'S SECOND NUMBER, AND NEVER A GATE INPUT. Every gate on this page scores
+    against the FIXED roof, `ridge x bandwidth`, which is the dense GEMM's
+    achieved figure at the clock the calibration measured it at. A cell that
+    ran at another clock issued at another rate, so its fraction of the fixed
+    roof mixes "how well this tile uses the machine" with "what clock the
+    governor gave this tile under the 700 W cap". Dividing instead by
+    `roof_at_clock` separates the two: the result is ISSUE EFFICIENCY, printed
+    beside the fixed fraction so a reader can see both, and the fixed one is
+    what any threshold is stated against.
+
+    EMPTY, never a substitute, when the run has no reference clock: `--ridge`
+    given on the command line is the operator's assertion and the calibration's
+    clock does not describe it, and a `--self-test` replay reads no hardware at
+    all. A tread whose row carried no under-load clock is simply absent from the
+    mapping, and the point line prints "-" for it, because a missing second
+    number is not a zero.
+    """
+    out: dict[int, float] = {}
+    if not reference_mhz or roof_tflops <= 0:
+        return out
+    for c in cells:
+        if c.block_m != block_m or not c.aligned or c.status != "ok":
+            continue
+        roof = roofline.roof_at_clock(roof_tflops, reference_mhz,
+                                      getattr(c, "sm_clock_load_mhz", None))
+        if roof:
+            out[c.tiles_per_expert] = c.useful_tflops / roof
+    return out
+
+
+def tread_points(tp, issue: dict[int, float] | None) -> str:
+    """`n=N:fixed/own` per tread, the FIXED fraction first.
+
+    One formatter for all three ladder lines, so the two fractions cannot end
+    up in a different order on different gates.
+    """
+    return ", ".join(
+        f"n={n}:{v:.3f}/"
+        + (f"{own:.3f}" if (own := (issue or {}).get(n)) is not None else "-")
+        for n, v in tp)
+
+
+def peak_pair(tp, issue: dict[int, float] | None) -> tuple[float, float | None]:
+    """The best FIXED fraction, and the own-clock fraction OF THAT SAME TREAD.
+
+    The same tread and not the best of each: the pair exists to say what one
+    cell did against two rulers, and taking two maxima over different cells
+    would print a ratio no cell ever had.
+    """
+    n, top = max(tp, key=lambda point: point[1])
+    return top, (issue or {}).get(n)
+
+
+def issue_suffix(own: float | None) -> str:
+    """`, own-clock 0.577` for a gate's measured line, or nothing. R2: printed
+    beside the fixed fraction, never scored against."""
+    return f", own-clock {own:.3f}" if own is not None else ""
+
+
 def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
-                         plateau: float, noise: float = 0.0) -> CapGate:
+                         plateau: float, noise: float = 0.0,
+                         issue: dict[int, float] | None = None) -> CapGate:
     """Did anything in this sweep reach a roof A FUSED LAYER CAN REACH.
 
     WHY THE DENSE PEAK IS THE WRONG RULER FOR A FUSED LAYER, which is what this
@@ -1357,7 +1502,7 @@ def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
             consequence,
             ["The control ran no aligned cell, so there is no throughput to "
              "compare with any roof."])
-    top = max(v for _, v in tp_control)
+    top, top_issue = peak_pair(tp_control, issue)
     lines = [
         f"the fused-layer roof is {FUSED_ROOF_FLOOR:.3f} x ridge x bandwidth = "
         f"{fused_roof:.0f} TFLOP/s. `ridge x bandwidth` = {roof_tflops:.0f} "
@@ -1365,21 +1510,28 @@ def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
         "alignment kernel, two GEMMs, a SiLU and a reduction with only the two "
         "GEMMs' FLOPs counted, so it is the wrong ruler for a control and is "
         "printed below as a diagnostic only",
-        f"DIAGNOSTIC, not the verdict: peak {top:.3f} of the dense peak, "
-        f"against the {FUSED_PLATEAU_BAND[0]:.3f}-{FUSED_PLATEAU_BAND[1]:.3f} "
+        f"DIAGNOSTIC, not the verdict: peak {top:.3f} of the dense peak"
+        + issue_suffix(top_issue) + ", "
+        + f"against the {FUSED_PLATEAU_BAND[0]:.3f}-{FUSED_PLATEAU_BAND[1]:.3f} "
         "band the 26 published fused-layer reports occupy and the "
         f"{COMPUTE_BOUND_FRACTION:.2f} the sibling calls dense-compute-bound",
         f"the sweep's best useful throughput is {plateau:.1f} TFLOP/s, "
         f"{plateau / roof_tflops:.1%} of the dense peak. Against that plateau "
         "the control would score 1.00 by construction, which is why neither "
         "side of this gate is read against it",
-        "throughput per tread against the dense peak: "
-        + ", ".join(f"n={n}:{v:.3f}" for n, v in tp_control)]
+        "throughput per tread against the dense peak, fixed roof / the roof "
+        "at the tread's own clock: " + tread_points(tp_control, issue),
+        "the second fraction is ISSUE EFFICIENCY and is not what this gate "
+        "reads: the fixed roof is the dense GEMM's achieved figure at the "
+        "clock the calibration measured it at, and it is the only denominator "
+        "any threshold on this page is stated against"]
     if top > ceiling:
         return CapGate(
             "V3", VALIDITY,
             f"the control BLOCK_M={control_tile} reached the fused-layer roof",
-            UNDECIDED, f"peak {top:.3f} of the dense peak", threshold,
+            UNDECIDED,
+            f"peak {top:.3f} of the dense peak" + issue_suffix(top_issue),
+            threshold,
             consequence,
             lines + [f"The control is ABOVE the dense peak by "
                      f"{top - FUSED_ROOF_CEILING:.1%}, which a fused layer "
@@ -1394,7 +1546,7 @@ def gate_v3_control_roof(tp_control, *, control_tile: int, roof_tflops: float,
         "V3", VALIDITY,
         f"the control BLOCK_M={control_tile} reached the fused-layer roof",
         verdict, f"peak {top:.3f} of the dense peak "
-                 f"({top * roof_tflops:.0f} TFLOP/s)",
+                 f"({top * roof_tflops:.0f} TFLOP/s)" + issue_suffix(top_issue),
         threshold, consequence, lines)
 
 
@@ -1432,7 +1584,8 @@ def gate_v4_depth(reached_tiles: int, depth: Depth, *, cap_tile: int,
 
 def gate_c1_roof_fraction(tp_cap, depth: Depth, *, cap_tile: int, alpha: float,
                           ridge: float, b: int, roof_tflops: float,
-                          discriminator: float) -> CapGate:
+                          discriminator: float,
+                          issue: dict[int, float] | None = None) -> CapGate:
     """THE CAP, read off the throughput with no fit in between.
 
     The highest fraction of `ridge x bandwidth` the cap tile ever reached.
@@ -1459,7 +1612,7 @@ def gate_c1_roof_fraction(tp_cap, depth: Depth, *, cap_tile: int, alpha: float,
             "throughput to take a roof fraction of, and 0.0 would read as "
             "'never got near the roof', which is the verdict this gate exists "
             "to earn")
-    top = max(v for _, v in tp_cap)
+    top, top_issue = peak_pair(tp_cap, issue)
     reached = max(n for n, _ in tp_cap)
     cap = SWEEP.ai_cap(cap_tile, alpha, b)
     cap_retracted = SWEEP.ai_cap(cap_tile, RETRACTED_ALPHA, b)
@@ -1479,9 +1632,12 @@ def gate_c1_roof_fraction(tp_cap, depth: Depth, *, cap_tile: int, alpha: float,
                  + ("LIVE" if (name, threshold) in live else "NOT TESTABLE")
                  for name, threshold in (("near-roof", ROOF_FRACTION),
                                          ("discriminating", discriminator))),
-             "throughput per tread against the roof: "
-             + ", ".join(f"n={n}:{v:.3f}" for n, v in tp_cap[-8:])
-             + (f"  (last 8 of {len(tp_cap)} treads)" if len(tp_cap) > 8 else "")]
+             "throughput per tread against the roof, fixed roof / the roof at "
+             "the tread's own clock: " + tread_points(tp_cap[-8:], issue)
+             + (f"  (last 8 of {len(tp_cap)} treads)" if len(tp_cap) > 8 else ""),
+             "the second fraction is ISSUE EFFICIENCY, printed beside the "
+             "first and never scored: both conditions above are stated "
+             "against the FIXED roof"]
     claim = f"BLOCK_M={cap_tile} never gets near the compute roof, at any batch"
     consequence = (f"BLOCK_M={cap_tile} DOES approach its compute roof, which "
                    "retracts the structural ceiling this study put on a "
@@ -1489,14 +1645,16 @@ def gate_c1_roof_fraction(tp_cap, depth: Depth, *, cap_tile: int, alpha: float,
                    "the other direction")
     if not live:
         return CapGate(
-            "C1", CLAIM, claim, UNDECIDED, f"peak {top:.3f} of the roof",
+            "C1", CLAIM, claim, UNDECIDED,
+            f"peak {top:.3f} of the roof" + issue_suffix(top_issue),
             "no condition is testable at this depth", consequence,
             lines + ["Neither threshold could have been tripped by the "
                      "retracted world at this depth, so a PASS would report "
                      "where the sweep stopped. Raise --r-max; V4 says to what."])
     verdict = PASS if all(top <= threshold for _, threshold in live) else FAIL
     return CapGate(
-        "C1", CLAIM, claim, verdict, f"peak {top:.3f} of the roof",
+        "C1", CLAIM, claim, verdict,
+        f"peak {top:.3f} of the roof" + issue_suffix(top_issue),
         " and ".join(f"<= {threshold:.3f} ({name})" for name, threshold in live),
         consequence, lines)
 
@@ -1996,7 +2154,9 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
             ridge_band: tuple[float, float] | None = None,
             ridge_source: str = "", band_source: str = "",
             card: str = NO_CARD_SLUG, ridge_device: str = "",
-            synthetic: bool = False, prov=None) -> Report:
+            synthetic: bool = False, prov=None,
+            reference_mhz: float | None = None,
+            reference_clock_source: str = "") -> Report:
     # `ridge_band` IS NOT DEFAULTED TO `RIDGE_BAND`, which is one machine's
     # 2026-08-26 calibration and is exactly how all 7 published A100 reports
     # came to carry a band belonging to neither card. Unstated gives this run's
@@ -2057,6 +2217,9 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
     # the kind of duplicate that agrees with the original until it does not.
     tp_cap = SWEEP._throughput_ladder(ok, cap_tile, roof_tflops)
     tp_control = SWEEP._throughput_ladder(ok, control_tile, roof_tflops)
+    # R2's second number, beside every fraction above and inside none of them.
+    issue_cap = issue_ladder(ok, cap_tile, roof_tflops, reference_mhz)
+    issue_control = issue_ladder(ok, control_tile, roof_tflops, reference_mhz)
 
     fit_cap = fits.get(cap_tile)
     corrected = None
@@ -2072,13 +2235,29 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
     lines.append(f"  compute plateau {plateau:.1f} TFLOP/s useful, which is "
                  f"{plateau / roof_tflops:.1%} of ridge x bandwidth "
                  f"({roof_tflops:.0f} TFLOP/s)")
-    lines.append("  every roof fraction below is against ridge x bandwidth and "
-                 "NOT against that plateau: the plateau is the maximum over the "
-                 "same cells, so a control read against it scores 1.00 by "
-                 "construction. Far below 100% means nothing in the sweep "
-                 "reached a roof, which is what V3 tests")
+    lines.append("  every SCORED roof fraction below is against ridge x "
+                 "bandwidth and NOT against that plateau: the plateau is the "
+                 "maximum over the same cells, so a control read against it "
+                 "scores 1.00 by construction. Far below 100% means nothing in "
+                 "the sweep reached a roof, which is what V3 tests. A second, "
+                 "UNSCORED fraction is printed beside it; the next line says "
+                 "what it is")
     lines.append(f"  per-cell timing spread, median {noise:.2%}; memory-branch "
                  f"margin raised to {margin:.2%}")
+    # R2: two rulers on every throughput line, and only the first is scored.
+    lines.append(
+        "  every throughput below is printed as FIXED ROOF / OWN-CLOCK ROOF. "
+        "The first is the fraction of `ridge x bandwidth`, the dense GEMM's "
+        "achieved figure at the clock the calibration measured it at, and it "
+        "is the ONLY one any gate reads. The second is the same throughput "
+        "over that roof scaled to the clock the tread itself ran at, which is "
+        "issue efficiency: on this card the under-load clock is set per tile "
+        "by the kernel's own power draw under the cap, so the two differ by "
+        "as much as the governor moved"
+        + (f". Reference clock {reference_mhz:.0f} MHz, {reference_clock_source}"
+           if reference_mhz else
+           ". NOT AVAILABLE on this run, so every second fraction reads '-': "
+           + (reference_clock_source or "no reference clock was resolved")))
     lines.append(f"  {sm_count} SMs ({sm_source})")
     # THE QUALIFICATION, AS NUMBERS AGAINST THRESHOLDS, whether it passed or
     # failed. The sibling sweep prints this block; before 2026-09-09 this file
@@ -2113,12 +2292,15 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
               "this page is evidence"),
         gate_v1_non_vacuity(cells, tiles=tiles, planned_cells=planned_cells),
         gate_v2_control(ref, tp_control, control_tile=control_tile,
+                        issue=issue_control,
                         noise=noise),
         gate_v3_control_roof(tp_control, control_tile=control_tile,
+                             issue=issue_control,
                              roof_tflops=roof_tflops, plateau=plateau,
                              noise=noise),
         gate_v4_depth(reached, depth, cap_tile=cap_tile, alpha=alpha),
         gate_c1_roof_fraction(tp_cap, depth, cap_tile=cap_tile, alpha=alpha,
+                              issue=issue_cap,
                               ridge=ridge, b=b, roof_tflops=roof_tflops,
                               discriminator=discriminator),
         gate_c2_measured_cap(fit_cap, corrected, cap_tile=cap_tile, ridge=ridge,
@@ -2197,7 +2379,9 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
         "model": model_name, "dtype": dtype, "fixed": pinned or SWEEP.FIXED,
         "plateau_tflops": plateau, "model_roof_tflops": roof_tflops,
         # THE TWO ROOFS, BOTH NAMED. `model_roof_tflops` is the DENSE peak and
-        # is what every printed roof fraction is a fraction of;
+        # is what every SCORED roof fraction is a fraction of (the unscored
+        # issue efficiency beside it divides by that peak scaled to the tread's
+        # own clock, and `reference_clock_mhz` below is what it scaled from);
         # `fused_layer_roof_tflops` is what V3 scores a control against, and the
         # band it comes from is beside it so a reader can see it is measured
         # rather than chosen. A report carrying one roof and calling it "the
@@ -2223,6 +2407,18 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
         "peak_roof_fraction": {str(bm): (max((v for _, v in tp), default=None))
                                for bm, tp in ((cap_tile, tp_cap),
                                               (control_tile, tp_control))},
+        # R2: the same peak against the roof AT THAT TREAD'S OWN CLOCK, the
+        # tread being the one that took the peak above and not a second
+        # maximum over other cells. None where the run has no reference clock
+        # (--ridge on the command line, a --self-test replay) or the peak
+        # tread's row carried no under-load clock. Never a gate input; the
+        # source string says where the number came from or why there is none.
+        "peak_issue_efficiency": {
+            str(bm): (peak_pair(tp, iss)[1] if tp else None)
+            for bm, tp, iss in ((cap_tile, tp_cap, issue_cap),
+                                (control_tile, tp_control, issue_control))},
+        "reference_clock_mhz": reference_mhz,
+        "reference_clock_source": reference_clock_source,
         # THE REFERENCE'S OWN QUALIFICATION, in the machine-readable artefact
         # and not only in the prose. `ref.note` alone said "its LEVEL is wrong"
         # on 2026-09-09 and report.json carried the same sentence, so which
@@ -2231,6 +2427,12 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
         "compute_reference_candidate": control_tile,
         "compute_reference_block_m": ref.block_m,
         "compute_reference_refused_block_m": ref.refused_block_m,
+        # The number that failed when the refusal was on SHAPE, where neither
+        # block_m field is set and `compute_reference_refusals` stays empty
+        # because `refusals` is the LEVEL checks' list. Without it the only
+        # machine-readable trace of a shape refusal was the prose note.
+        "compute_reference_mean_rel_err": (None if ref.mean_rel_err == math.inf
+                                           else ref.mean_rel_err),
         "compute_reference_refusals": list(ref.refusals),
         "compute_reference_roof_fraction": ref.roof_fraction,
         "compute_reference_vacuity_ratio": ref.vacuity_ratio,
@@ -2655,6 +2857,7 @@ def _main(argv=None) -> int:
             "PINNED for --self-test: the module's H200 band, so the replay is "
             "identical on every machine and belongs to no attached device")
         ridge_device = ""
+        ridge_kind = "pinned"
     else:
         try:
             rr = SWEEP.resolve_ridge(args, synthetic=synthetic or args.dry_run)
@@ -2663,6 +2866,39 @@ def _main(argv=None) -> int:
             return exit_codes.REFUSED
         ridge, ridge_band = rr.ridge, rr.band
         ridge_source, band_source, ridge_device = rr.source, rr.band_source, rr.device
+        ridge_kind = getattr(rr, "source_kind", "")
+
+    # R2's SECOND RULER, AND IT COMES OUT OF THE SAME FILE AS THE FIRST OR NOT
+    # AT ALL. The own-clock roof is `peak x load / reference`, so `reference`
+    # has to be the clock the peak in `ridge x bandwidth` was measured at.
+    # That holds for exactly one of the three ways this run can get a ridge:
+    # the attached device's own calibration. `--ridge` given on the command
+    # line is the operator's assertion about some other machine's peak and the
+    # calibration's clock does not describe it, and `--self-test` reads no
+    # hardware on purpose, so both print the fixed fraction alone and say why.
+    # `usable_for_roof` is the calibration's own grade: the idle scalar the
+    # older files carry has a 30% spread and scaling a roof by it would move
+    # every second fraction by up to that much under the name of a correction.
+    reference_mhz: float | None = None
+    if synthetic:
+        reference_clock_source = (
+            "PINNED for --self-test: no hardware is read, so there is no "
+            "clock to scale a roof by")
+    elif ridge_kind != "calibration":
+        reference_clock_source = (
+            f"the ridge came from elsewhere ({ridge_kind or 'unstated'}), so "
+            "this card's calibration clock does not describe the roof it "
+            "states")
+    else:
+        rc = roofline.reference_clock(
+            ridge_device or None, family=roofline.reference_family(args.dtype))
+        reference_clock_source = rc.source
+        if rc.usable_for_roof:
+            reference_mhz = rc.mhz
+        elif rc.mhz:
+            reference_clock_source += (
+                f" [grade {rc.grade!r}, not the under-load median, so it is "
+                "recorded and NOT used to scale a roof]")
 
     try:
         depth = required_depth(args.cap_tile, b=b, ridge_band=ridge_band)
@@ -2857,6 +3093,8 @@ def _main(argv=None) -> int:
                          ridge_source=ridge_src, band_source=band_source,
                          card=card, ridge_device=ridge_device,
                          synthetic=synthetic,
+                         reference_mhz=reference_mhz,
+                         reference_clock_source=reference_clock_source,
                          prov=SWEEP.observed_iters(prov, cells))
     except CapTestRefusal as exc:
         print(f"\nREFUSED: {exc}")

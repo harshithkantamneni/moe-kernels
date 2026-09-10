@@ -43,6 +43,7 @@ and the only thing the pod adds is the numbers.
 from __future__ import annotations
 
 import contextlib
+import csv
 import importlib.util
 import json
 import sys
@@ -2179,3 +2180,92 @@ def test_the_store_never_hands_back_an_errored_row_as_a_result(tmp_path,
         assert set(reopened.done) == {good.key, bad.key}
     finally:
         reopened.close()
+
+
+# --------------------------------------------------------------------------
+# 2026-09-09 repairs: the band's WIDTH, and a CSV header that has to be this
+# schema before a row is appended under it.
+# --------------------------------------------------------------------------
+
+def test_the_predicted_bands_width_is_compared_with_the_box_not_asserted():
+    """R9 computed the band and left the sentence built around the old one.
+
+    "1.016 to 1.053" was hardcoded on every page from every grid, and the tail
+    "the box cannot resolve a band that narrow, and C3 cannot be read either
+    way" was true of those 4 points. The band became computed; the tail did
+    not, so the committed H200 calibration printed a 16-point band and then
+    said the box could not resolve it, on the same gate line as a 0.94% p90
+    timing spread.
+    """
+    # The committed H200 numbers: a 16-point band and a 0.94% p90 timing
+    # spread, which the old tail called unresolvable in the same sentence that
+    # printed both.
+    wide = DTC.band_consequence([0.938, 1.099], band=0.0002, spread=0.0094)
+    assert "16.1 points wide" in wide
+    assert "cannot resolve" not in wide
+    assert "WIDER than the box" in wide
+    # THE BOX IS THE LARGER OF THE TWO READINGS: a quiet placebo cannot hide a
+    # noisy timing, and the printed number says which it took.
+    assert "0.94%" in wide
+
+    # A box that really is wider than the band, which is the branch the old
+    # sentence asserted unconditionally.
+    narrow = DTC.band_consequence([1.016, 1.053], band=0.05, spread=0.02)
+    assert "3.7 points wide" in narrow and "5.00%" in narrow
+    assert "cannot resolve a band that narrow" in narrow
+
+    # AND THE OLD BAND IS NOT AUTOMATICALLY THE NARROW ONE. Against the
+    # committed spread the hardcoded 1.016-1.053 clears the box by 4x, so the
+    # retired sentence was false of its own numbers too once the box moved.
+    assert "cannot resolve" not in DTC.band_consequence(
+        [1.016, 1.053], band=0.0002, spread=0.0094)
+
+    # Neither reading, and nothing may be concluded about the width at all.
+    blind = DTC.band_consequence([0.938, 1.099], band=None, spread=None)
+    assert "nothing was timed to compare that width against" in blind
+    assert DTC.band_consequence([], band=0.01, spread=0.01) == (
+        "the model's predicted band over the matched arms is not computable "
+        "on this grid, so C3 cannot be read either way")
+
+
+def test_v5_carries_the_computed_width_into_the_gate(planned, ceilings):
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    v5 = next(g for g in DTC.build_gates(analysis, ceilings, list(DTC.DTYPES),
+                                         "", synthetic=False)
+              if g.name.startswith("V5"))
+    assert "points wide" in v5.invalidates
+    assert "1.016 to 1.053" not in v5.invalidates
+
+
+def test_a_csv_written_under_another_schema_is_refused_not_appended_to(
+        tmp_path, planned):
+    """2026-09-09 renamed two clock columns and inserted four more, while
+    `plan_run_id` still omits `arms` and the results root outlives the pod. So
+    the same command lands in the same directory with a wider row, and
+    `DictWriter` writes the fieldnames it was given without ever reading the
+    file: every field after `sm_clock_load_mhz` would shift one column and
+    `clock_level_ok` would hold a clock.
+    """
+    path = tmp_path / "timings.csv"
+    old = list(DTC.CSV_COLUMNS)
+    old.remove("clock_samples")
+    with path.open("w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(old)
+        writer.writerow(["x"] * len(old))
+    with pytest.raises(DTC.ConfoundRefusal) as exc:
+        DTC.Store(path)
+    assert f"{len(old)} columns against {len(DTC.CSV_COLUMNS)}" in str(exc.value)
+    assert "--fresh" in str(exc.value)
+
+    # --fresh is the documented way out and it must actually work.
+    store = DTC.Store(path, fresh=True)
+    store.close()
+    header = path.read_text().splitlines()[0]
+    assert tuple(next(csv.reader([header]))) == DTC.CSV_COLUMNS
+
+    # And a file this schema wrote is still appended to, or every resume dies.
+    reopened = DTC.Store(path)
+    reopened.close()
