@@ -815,6 +815,16 @@ def test_the_payload_is_json_and_keeps_the_import_provenance():
 # uninformative as the gate it was written to protect.
 # --------------------------------------------------------------------------
 
+#: The subject heights every planted world below is generated over. IT IS THE
+#: SCRIPT'S OWN AND NOT A COPY: this helper pinned (32, 64, 128) until
+#: 2026-09-10, and on the day BLOCK_M=16 joined the sweep that would have left
+#: fourteen tests scoring a design the pod no longer runs while their docstrings
+#: still called it the design. The numbers they quote move with it, and the ones
+#: that are quoted are re-derived in the docstring that quotes them.
+PLANTED_SUBJECTS = BND.SUBJECT_BLOCK_M
+PLANTED_BLOCK_NS = BND.DEFAULT_BLOCK_N
+
+
 def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
                  extra=None, probe=True, plant_noise=None):
     """One planted world scored the way a real run is scored, probe and all."""
@@ -825,19 +835,19 @@ def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
     bw = BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho
     samples = BND.planted_samples(
         MIXTRAL, args, alpha_b=alpha_b, alpha_a=alpha_a, ridge=rho,
-        bandwidth_gbps=bw, b=2, block_ns=(32, 64, 128),
-        subjects=(32, 64, 128), extra=extra, noise=noise, seed=0)
+        bandwidth_gbps=bw, b=2, block_ns=PLANTED_BLOCK_NS,
+        subjects=PLANTED_SUBJECTS, extra=extra, noise=noise, seed=0)
     base = dict(SWEEP.FIXED, num_stages=args.num_stages,
                 num_warps=args.num_warps, GROUP_SIZE_M=group_m,
                 BLOCK_SIZE_K=args.block_k)
     base.pop("BLOCK_SIZE_N", None)
-    compiles = {(bn, bm): 1 for bn in (32, 64, 128)
-                for bm in (32, 64, 128, 256)}
+    compiles = {(bn, bm): 1 for bn in PLANTED_BLOCK_NS
+                for bm in (*PLANTED_SUBJECTS, BND.REFERENCE_BLOCK_M)}
     lines, gates, payload = BND.analyse_run(
         samples, MIXTRAL, args, ridge=rho, bandwidth_gbps=bw, b=2,
         ceiling_tflops=712.259, ceiling_source="planted", capability=(9, 0),
         base_pinned=base, compiles=compiles, executed=dict(compiles),
-        sm_count=132, block_ns=(32, 64, 128), subjects=(32, 64, 128),
+        sm_count=132, block_ns=PLANTED_BLOCK_NS, subjects=PLANTED_SUBJECTS,
         probe_c2_power=probe, plant_noise=plant_noise)
     return lines, {g.token: g for g in gates}, payload
 
@@ -845,10 +855,17 @@ def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
 def test_c2_reads_unknown_where_the_missing_term_world_would_pass():
     """A9, the blocking finding, in the world it was found in.
 
-    At GROUP_SIZE_M=1 the planted MISSING world comes back at chi2 1.78 against
-    the 4.0 ceiling -- a PASS, the same verdict TRUTH gets -- so a C2 PASS at
-    that swizzle could not have been a FAIL. The gate must say UNKNOWN and say
-    why, and UNKNOWN counts against it.
+    At GROUP_SIZE_M=1 the planted MISSING world PASSES C2, the same verdict
+    TRUTH gets, so a C2 PASS at that swizzle could not have been a FAIL. The
+    gate must say UNKNOWN and say why, and UNKNOWN counts against it.
+
+    THE CHI2 IS NOT QUOTED HERE ANY MORE. This docstring read "chi2 1.78" and
+    that number was the THREE-height design at these settings; the helper's
+    subject set became the script's own on 2026-09-10 and the same world now
+    comes back at 1.09. A number in a docstring that moves with a constant the
+    docstring does not name is the drift this file hunts, so the assertion below
+    reads the probe's own verdict and the figure lives in `c2_power` where it is
+    recomputed.
     """
     lines, gates, payload = _planted_run(1, noise=0.008)
     c2 = gates["C2"]

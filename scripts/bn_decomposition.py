@@ -226,9 +226,15 @@ AND AT G=1 IT DECIDES C2 AS WELL, WHICH IS WHY THAT GATE NOW HAS A POWER GUARD.
 The residual gate is the reason this experiment exists, and a gate is only a
 gate if both its outcomes can occur. They cannot at every pinning: planted at
 GROUP_SIZE_M=1 the MISSING world -- the same world `--self-test` uses to prove
-C2 discriminates -- comes back with chi2 1.78 against the 4.0 ceiling and PASSES,
-the identical verdict the TRUTH world gets, so a C2 PASS there would be reported
-as "the three terms are all of it" from a test that cannot say otherwise. The
+C2 discriminates -- comes back WELL UNDER the 4.0 ceiling and PASSES, the
+identical verdict the TRUTH world gets, so a C2 PASS there would be reported
+as "the three terms are all of it" from a test that cannot say otherwise. THE
+CHI2 IS NO LONGER WRITTEN DOWN HERE: three paragraphs in this file said "chi2
+1.78" and that was the figure of the THREE-height design at one --draws and one
+--plant-noise. The fourth height moved it to 1.09 at the settings the tests use
+and 2.70 at the CLI's defaults, and the verdict, which is what the sentence is
+about, did not move at all. The number is computed by `c2_power_probe` and
+printed with its settings beside it. The
 real run therefore plants that world ITSELF, at its own measured across-repeat
 spread and its own swizzle, BEFORE it scores C2 (`c2_power_probe`), and C2 reads
 UNKNOWN with the reason whenever the missing-term world would have passed. The
@@ -3332,8 +3338,8 @@ def gate_residual(fit: Decomposition, chi2: float | None, why: str,
 
     THE POWER GUARD, added 2026-09-02, and the reason it is here rather than in
     the caller. This gate can PASS at a pinning where it cannot FAIL: planted at
-    GROUP_SIZE_M=1 the missing-term world comes back at chi2 1.78 against the
-    4.0 ceiling, which is the same PASS the TRUTH world gets, and the session
+    GROUP_SIZE_M=1 the missing-term world comes back well under the 4.0
+    ceiling, which is the same PASS the TRUTH world gets, and the session
     driver schedules that arm unconditionally. `power` is the verdict of a
     planted MISSING world at THIS run's own swizzle and its own measured spread
     (`c2_power_probe`), and when it did not discriminate this gate reads UNKNOWN
@@ -4880,8 +4886,8 @@ class C2Power:
 
     THE GATE THIS RECORD GUARDS IS THE ONE THE EXPERIMENT EXISTS FOR. C2 says
     "the three terms are ALL of it", and at GROUP_SIZE_M=1 the audit found the
-    planted MISSING-term world coming back with chi2 1.78 against the 4.0
-    ceiling -- a PASS, the same verdict the TRUTH world gets. A C2 PASS there
+    planted MISSING-term world coming back well under the 4.0 ceiling: a
+    PASS, the same verdict the TRUTH world gets. A C2 PASS there
     would have been published as model completeness by a test that cannot say
     otherwise, and the driver schedules that arm unconditionally.
 
