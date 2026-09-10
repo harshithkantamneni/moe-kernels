@@ -1980,8 +1980,12 @@ session_bound() {
 # not read the previous rental's stamp; and pin_probe-n64-g1, because bn_g16 and
 # both counter cells pin BLOCK_N and GROUP_SIZE_M and are worth nothing if the
 # pin is not honoured.
+# AND counter_contrast CLOSES IT, at zero minutes, because a set that books the
+# pair and not the reading spends four pod-hours writing two payloads and leaves
+# the ratio between them to be computed by hand. That is the defect the pair was
+# added to fix, reappearing one level up in the booking.
 rerun_arms() {
-  echo "calibrate pin_probe-n64-g1 bn_g16 dtype counter_plan counter-n32-m64 counter-n128-m64"
+  echo "calibrate pin_probe-n64-g1 bn_g16 dtype counter_plan counter-n32-m64 counter-n128-m64 counter_contrast"
 }
 
 # WHAT EACH ONE IS EXPECTED TO REACH, in the ledger's own words, so that the
@@ -2000,6 +2004,7 @@ rerun_expectation() { case "$1" in
   dtype)       echo "DONE or CLAIM_FAIL on C3/C4, and it is the one arm in this set whose 2026-09-10 word cost nothing: REFUSED at 47 s with ConfoundRefusal, a 70-column timings.csv under a run id whose schema is now 74 columns, on a results volume that outlived the pod. A REFUSED row is re-attempted by every run because refusing is free. ON A FRESH VOLUME IT PLANS AND RUNS; on a re-used one it refuses again with the same line, and the fix it names is --fresh (which discards that file) or a new --run-id (which leaves it alone). It still buys the bf16 native curve, which has never been measured, and a real fp8 native curve. 8 min." ;;
   counter_plan) echo "DONE, about 10 s, and it is in the set to GATE the arm below rather than to be re-asked. On 2026-09-10 it read P1 PASS, route OPEN: ncu 2025.1.1.0 attached with no permission error, cap_eff 0xa80425fb, sys_admin False, the host module flag absent and it attached anyway. BLOCKED here retires BOTH counter arms for this whole session at a cost of ten seconds, which is the reason it runs first." ;;
   counter-n32-m64|counter-n128-m64) echo "DONE or CLAIM_FAIL, and either is the session's headline; NOT_PLANNED if scripts/dram_counter_route.py still defines no --run, which this driver checks before the pod spends an argparse exit 2 on it. What EITHER arm settles on its own: alpha_b as a traffic slope, (dR/dn - a_per_tile)/W, with no fitted level, no delta, no D and no assumed bandwidth: today the same six bn_g16 cells give 0.6087, 0.5930 and 0.5143 depending only on which rate is assumed. What only the PAIR settles, and it is why both are in this set: whether the term the session found in place of the activation re-read is TRAFFIC or TIME. At the BLOCK_M=64 both arms pin, the measured per-M-tile cost is 3.85 GB of weight-set-equivalent at BLOCK_N=32 against 2.06 GB at BLOCK_N=128, so a counter that reads those two figures 1.87x apart says traffic and one that reads the same bytes at both says time. READ THEM TOGETHER OR NOT AT ALL: one arm's bytes-per-M-tile is a number with nothing to be compared against, and a session that runs one of the two has not asked the question. 120 WALL min each, 240 for the pair, off a COST block the plan page prints identically at both BLOCK_N." ;;
+  counter_contrast) echo "PASS reading TRAFFIC, or PASS reading TIME, and the two words are the session's whole point; REFUSE if either payload is missing, which is a fact about the pair above and not about this arm. It has NO 2026-09-10 word because it did not exist then: that session booked both counter arms and nothing read the ratio between them. Zero minutes, off GPU, over the two JSON files the pair writes. WHAT EACH WORD MEANS. TRAFFIC: the measured dR/dn per M-tile lands about 1.871x apart across the two BLOCK_N, the missing term belongs inside a byte model, and alpha_b becomes a number. TIME: the two cells read the same bytes per M-tile within a few percent, the whole difference sits in gpu__time_duration.sum, and no byte model can hold the term at all. The gate scores the measured ratio at +/-5% of each rival, so the two rivals cannot both be within tolerance and an ambiguous reading is reported rather than resolved by choice. Proven off GPU on two synthetic payloads of the shape --run writes: VALIDITY X0 PASS, CLAIM XA-all PASS, ratio 1.871, reads as TRAFFIC." ;;
   *)           echo "" ;;
 esac; }
 

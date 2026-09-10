@@ -64,7 +64,7 @@ bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrat
 
   ```bash
   bash scripts/h200_gaps_session.sh --new \
-    --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64
+    --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
   ```
 
   ~300 priced / ~373 bounded minutes. THIS BLOCK CARRIED THE 2026-09-09 SET

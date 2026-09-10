@@ -284,7 +284,7 @@ identifiable. The next session is `--new`, ~300 priced minutes:
 
 ```bash
 bash scripts/h200_gaps_session.sh --new \
-  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64
+  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
 ```
 
 THE COUNTER IS TWO ARMS AND BOTH ARE BOOKED, which is what took that figure
