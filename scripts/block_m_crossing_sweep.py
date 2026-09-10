@@ -4318,7 +4318,7 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         # while this comment still named only the first: (1) no ladder was
         # eligible to source an alpha, which is the same condition that leaves
         # `alpha_measured` null; and (2) a sourcing ladder whose own `w` is
-        # blank, which `LadderFit._weight_streams` decides and names -- no
+        # blank, which `LadderFit._weight_streams` decides and names: no
         # memory branch, no model/dtype/rate on the fit, or a `WeightSetRefused`
         # for a geometry this repository will not guess. So `alpha_measured` can
         # carry a number where this key is null, which the one-condition wording
