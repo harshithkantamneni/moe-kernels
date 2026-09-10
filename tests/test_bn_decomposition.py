@@ -36,6 +36,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -1076,14 +1077,16 @@ def test_the_phantom_a100_slopes_are_no_longer_the_bands_basis(capsys):
     source still names them once, in the paragraph that says they are in no
     file, which is the history worth keeping.
 
-    SCOPED TO P1's OWN BLOCK ON 2026-09-10, and the reason is a false positive
-    this test produced on that date rather than a preference. It matched the
-    four strings against the WHOLE page, and the design-power line prints a
-    bootstrap spread: a planted realisation that came back at sd 0.1293
-    contained "0.129" and the test failed over a number that is not a slope, is
-    not a basis, and is recomputed on every run. The claim is unchanged and is
-    now aimed at the text that makes it: neither P1's block nor the band's own
-    provenance lines may contain any of the four.
+    THE WHOLE PAGE IS BACK IN SCOPE, WITH A BOUNDARY. On 2026-09-10 this test
+    was narrowed to P1's block because it had matched the four as bare
+    substrings against the WHOLE page and a planted bootstrap spread of 0.1293
+    contains "0.129": a real false positive, reproduced at that commit, and
+    printing five realisations instead of one made the collision five times
+    likelier. Narrowing threw away the coverage that mattered, since the whole
+    page is where a phantom would actually come back. The match is now on a
+    NUMBER and not on a substring, with no digit on either side, which costs
+    nothing and keeps the page. 0.1293 no longer matches 0.129; a quoted 0.129
+    still does.
     """
     BND.main(["--dry-run", "--capability", "9.0", "--power-draws", "20",
               "--plant-noise", "0.008"])
@@ -1092,6 +1095,8 @@ def test_the_phantom_a100_slopes_are_no_longer_the_bands_basis(capsys):
     p1_block = out[start:out.index("P2 ", start)]
     provenance = "\n".join(BND.band_provenance_lines())
     for phantom in ("0.106", "0.102", "0.129", "0.119"):
+        boundary = re.compile(r"(?<![\d.])" + re.escape(phantom) + r"(?![\d])")
+        assert not boundary.search(out), f"{phantom} is back on the plan page"
         assert phantom not in p1_block, f"{phantom} is back in P1's basis"
         assert phantom not in provenance, f"{phantom} is back in the band's basis"
     assert "d66ad3.report.json" in p1_block and "16cc16.report.json" in p1_block
@@ -2626,6 +2631,118 @@ def test_the_weight_stream_estimator_is_the_shared_one_the_day_it_lands():
     assert BND.WEIGHT_STREAM_SOURCE.startswith("LOCAL PROVISIONAL")
 
 
+def test_report_json_carries_the_weight_stream_denominator_and_its_estimator():
+    """THE SAME DEFECT FROM THE OTHER SIDE, found 2026-09-10: the page was
+    updated and `report.json` was not.
+
+    The file's own note said the provisional estimator "is used and SAYS SO on
+    the page and in report.json", and two columns were added "to the cell table
+    and to report.json". The page did say so; the payload contained no key with
+    "weight" or "stream" in it at all, so a reader working from the JSON alone
+    saw `weight_streams` as a bare ratio with no denominator and no estimator
+    identity, and could not tell the LOCAL PROVISIONAL copy from the shared one
+    the day it lands. `bootstrap.scope` is the discipline this file states for
+    exactly that case.
+    """
+    samples, payload = _committed_2026_09_10()
+    args = BND.build_parser().parse_args(
+        ["--group-m", "16", "--card", "nvidia_h200", "--draws", "50"])
+    _, _, out = BND.analyse_run(
+        samples, MIXTRAL, args, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], b=BND.dtype_bytes("bf16"),
+        ceiling_tflops=payload["ceiling_tflops"], ceiling_source="replay",
+        capability=(9, 0), base_pinned=payload["pinned"],
+        compiles={}, executed={}, sm_count=132,
+        block_ns=tuple(payload["block_ns"]),
+        subjects=tuple(payload["subjects"]), draws=50)
+    assert out["weight_stream_ms"] == pytest.approx(0.6443, abs=0.0002)
+    assert out["weight_stream_source"] == BND.WEIGHT_STREAM_SOURCE
+    # The whole payload still serialises, and every cell's w is that stream.
+    json.dumps(out)
+    for cell in out["cells"]:
+        if cell["weight_streams"] is not None:
+            assert cell["weight_streams"] == pytest.approx(
+                cell["slope_memory_ms"] / out["weight_stream_ms"], rel=1e-12)
+
+
+def test_the_plan_page_re_derives_the_committed_arms_yield(capsys):
+    """`committed_bn_cells` had no runtime call site.
+
+    `SESSION_2026_09_10`'s note said the numbers in the `SUBJECT_BLOCK_M`
+    paragraph are re-derived on every plan page by `committed_bn_cells` AND
+    `published_small_tile_branch`. Only the second was ever called: a
+    re-publish that changed which cells the bn arm yielded was caught by this
+    test file and NOT by the page the reader sees. Both are read there now.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    committed = BND.committed_bn_cells()
+    primary = [a for _, bm, a in committed if bm == BND.PRIMARY_BLOCK_M]
+    assert (f"yielded {sum(1 for a in primary if a is not None)} of "
+            f"{len(primary)} BLOCK_M={BND.PRIMARY_BLOCK_M} cells") in out
+    assert "was made over 2: [32, 64]" in out
+
+
+def test_the_under_occupied_cell_carries_a_registered_check_on_both_branches(
+        capsys):
+    """The warp bill scoped its warning to the COMPUTE branch and nothing
+    argued the memory branch was untouched.
+
+    Four of eight warps holding no output tile carries fewer outstanding loads
+    as well as fewer issue slots, which inflates B and therefore w and alpha at
+    the ONE cell the whole identification gain rests on: BLOCK_M=16 at BN=64
+    and 128 alone leaves corr(g1, 1/BN) at the two-height value, so the move is
+    the BN=32 cell. The corpus cannot settle it, so the run registers the check
+    it can make.
+    """
+    assert BND.under_occupied_cells(
+        dict(SWEEP.FIXED, num_warps=8), BND.SUBJECT_BLOCK_M,
+        BND.DEFAULT_BLOCK_N) == ((16, 32),)
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "NEITHER of its branches is comparable" in out
+    assert "B, and therefore w and alpha, are overstated" in out
+    assert ("REGISTERED CHECK, BM=16 x BN=32: read its w against the line "
+            "BM=32 and BM=64 set at the SAME BN=32") in out
+
+
+def test_the_registered_warp_check_reads_the_slope_it_was_registered_on():
+    """The check performed, on cells that do and do not carry the height.
+
+    On the committed arm, which never ran BLOCK_M=16, it has to say so rather
+    than print a number. On a grid where the peers are present it reports the
+    excess over the line those peers set at the same BLOCK_N, and the sign is
+    the whole content: above the line is the warp grid, not the tiling.
+    """
+    cells, _, _, payload = _replay((16, 32, 64, 128))
+    pinned = payload["pinned"]
+    said = BND.under_occupied_reading(cells, pinned, (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert said and "no w on this page" in said[0]
+
+    # The same reading with the height present, using the committed w values at
+    # BN=32 (1.254 at BM=32, 1.368 at BM=64) and a planted BLOCK_M=16 cell.
+    by_key = {(c.block_m, c.block_n): c for c in cells}
+    peer32, peer64 = by_key[(32, 32)], by_key[(64, 32)]
+    line = peer32.weight_streams + (
+        peer64.weight_streams - peer32.weight_streams) * (
+            math.log2(16) - math.log2(32)) / (math.log2(64) - math.log2(32))
+    hot = BND.AlphaCell(
+        block_n=32, block_m=16, alpha=None, alpha_upper=None,
+        alpha_corrected=None, memory_points=8, treads=8, spread=None,
+        basis="planted", weight_streams=line * 1.20, slope_memory_ms=1.0)
+    said = BND.under_occupied_reading([*cells, hot], pinned,
+                                      (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert len(said) == 1
+    assert f"against {line:.4f} on the BM=32/64 line at this BN, +20.0%" in \
+        said[0]
+
+
 def test_the_small_tile_evidence_is_read_from_the_corpus_not_quoted():
     """BLOCK_M=16 yields a branch, and the file that says so is committed."""
     branch = BND.published_small_tile_branch()
@@ -2769,6 +2886,57 @@ def test_the_design_power_verdict_is_no_longer_one_seed():
     said = "\n".join(power.lines())
     assert "MEDIAN over 4 planted realisations" in said
     assert "scored on the WORST" in said
+
+
+def test_one_seed_moves_the_world_and_the_resample_together():
+    """THE RECURRING DEFECT, at one of two call sites, found 2026-09-10.
+
+    `design_power` varies the PLANTED world's seed per realisation. The
+    bootstrap inside `analyse_run` went on resampling at `args.seed`, frozen
+    across every iteration, so the five figures the design-power line reported
+    were not the five seeds its own docstring and `--power-seeds`' help
+    describe, and `--seed k --power-seeds 1` did not reproduce the k-th of
+    them. Measured at that commit, `--dry-run --group-m 16 --power-seeds 5
+    --seed 0` gave 0.1774, 0.0836, 0.0801, 0.0252, 0.2684 while the five single
+    seeds gave 0.1774, 0.0831, 0.1136, 0.0696, 0.1734: only the base seed
+    agreed. This asserts the identity that failed, at every seed and not only
+    at the first.
+    """
+    common = dict(b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1,
+                  capability=(9, 0), block_ns=(32, 64, 128),
+                  subjects=BND.SUBJECT_BLOCK_M, sm_count=132, noise=0.008,
+                  noise_source="planted", draws=20)
+
+    def power(seed, n):
+        return BND.design_power(
+            MIXTRAL, args_for(capability="9.0", group_m=16, seed=seed,
+                              power_seeds=n), **common)
+
+    loop = power(0, 4)
+    assert len(loop.alpha_a_sds) == 4
+    for k, got in enumerate(loop.alpha_a_sds):
+        assert got == power(k, 1).alpha_a_sds[0], (
+            f"realisation {k} of the loop is not what --seed {k} produces")
+    # And a loop that starts elsewhere is the same realisations, shifted.
+    assert power(1, 3).alpha_a_sds == loop.alpha_a_sds[1:]
+
+
+def test_both_spreads_on_the_design_power_record_are_the_same_realisations():
+    """`alpha_a_sd` was the median over the loop and `alpha_b_sd` was whatever
+    the LAST iteration left behind: two statistics over different things on one
+    record. Both are medians over the realisations now."""
+    power = BND.design_power(
+        MIXTRAL, args_for(capability="9.0", group_m=16, power_seeds=4),
+        b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1, capability=(9, 0),
+        block_ns=(32, 64, 128), subjects=BND.SUBJECT_BLOCK_M, sm_count=132,
+        noise=0.008, noise_source="planted", draws=20)
+    assert len(power.alpha_b_sds) == len(power.alpha_a_sds) == 4
+    assert power.alpha_b_sd == pytest.approx(
+        statistics.median(power.alpha_b_sds))
+    assert power.alpha_a_sd == pytest.approx(
+        statistics.median(power.alpha_a_sds))
+    assert power.alpha_b_sd != power.alpha_b_sds[-1] or len(
+        set(power.alpha_b_sds)) == 1
 
 
 def test_the_four_height_self_test_still_separates_its_planted_worlds(capsys):

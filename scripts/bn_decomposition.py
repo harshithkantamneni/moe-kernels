@@ -225,8 +225,8 @@ setting that resolves it, and `--reps` buys the rest.
 AND AT G=1 IT DECIDES C2 AS WELL, WHICH IS WHY THAT GATE NOW HAS A POWER GUARD.
 The residual gate is the reason this experiment exists, and a gate is only a
 gate if both its outcomes can occur. They cannot at every pinning: planted at
-GROUP_SIZE_M=1 the MISSING world -- the same world `--self-test` uses to prove
-C2 discriminates -- comes back WELL UNDER the 4.0 ceiling and PASSES, the
+GROUP_SIZE_M=1 the MISSING world, the same world `--self-test` uses to prove
+C2 discriminates, comes back WELL UNDER the 4.0 ceiling and PASSES, the
 identical verdict the TRUTH world gets, so a C2 PASS there would be reported
 as "the three terms are all of it" from a test that cannot say otherwise. THE
 CHI2 IS NO LONGER WRITTEN DOWN HERE: three paragraphs in this file said "chi2
@@ -544,9 +544,28 @@ SUBJECT_BLOCK_M = (16, 32, 64, 128)
 #: this boundary have run: BLOCK_M=32 x BLOCK_N=32 in the committed bn arm
 #: (alpha 0.7927) and BLOCK_M=16 x BLOCK_N=64 in tile_cap. What the record buys
 #: is that the one cell BELOW it, BLOCK_M=16 x BLOCK_N=32 at 512 elements
-#: against 8 x 128, is named on the plan page as the cell whose COMPUTE branch
-#: is not comparable with the rest of the grid, so it is never promoted to a
-#: reference and its `B/C` is read as the memory-bound number it is.
+#: against 8 x 128, is named on the plan page before the pod runs it.
+#:
+#: THE RISK LANDS ON BOTH BRANCHES AND UNTIL 2026-09-10 THIS NOTE SAID
+#: OTHERWISE. It scoped the incomparability to the COMPUTE branch, and nothing
+#: argued the MEMORY branch was untouched. Four of eight warps holding no
+#: output tile cuts memory-level parallelism as well as issue: fewer
+#: independent `cp.async` streams in flight per CTA is fewer outstanding loads,
+#: which inflates `B` and therefore `w` and `alpha` at that cell. So the
+#: honest statement is that BOTH of this cell's branches are suspect, and it
+#: matters more than it would at any other cell: `design_collinearity` puts the
+#: whole 0.818 -> 0.663 identification gain on BLOCK_N=32, since BLOCK_M=16 at
+#: BN=64 and BN=128 alone leaves the correlation at 0.819, unmoved.
+#:
+#: THE CORPUS CANNOT SETTLE IT, so the run registers a check instead.
+#: BLOCK_M=32 x BLOCK_N=32 sits exactly ON the boundary and is "full", and
+#: nothing published is under-occupied, so there is no measured under-occupied
+#: ladder anywhere to compare against. `under_occupied_watch` states the check
+#: the run itself can make: (16, 32)'s `w` against the trend that (32, 32) and
+#: (64, 32) set at the SAME BLOCK_N, where the model and its `1/BN` rival both
+#: predict a `w` that is smooth in BLOCK_M. A (16, 32) sitting above that trend
+#: is the signature of the warp grid and not of the tiling, and it must be read
+#: before the cell is used to separate the two hypotheses.
 MMA_TILE_ELEMENTS = 16 * 8
 
 #: The compute reference. `C ~ BLOCK_M` with no free parameter, so one ladder
@@ -3704,7 +3723,13 @@ class WarpTile:
     memory and accumulator registers are hard limits and a setting that exceeds
     either does not run the tiling this sweep is about; a warp grid wider than
     the output tile runs it correctly and wastes warps. What this exists to stop
-    is the wasted warps being DISCOVERED, on a pod, in a cell's compute branch.
+    is the wasted warps being DISCOVERED, on a pod, in a cell's branches.
+
+    BOTH BRANCHES, not the compute one alone. This class was introduced saying
+    the under-occupied cell's COMPUTE branch is what is incomparable; idle warps
+    also carry fewer outstanding loads, so `B` and `w` are exposed too. The
+    scope was widened the same day the finding was made and the check the run
+    can make about it is `under_occupied_watch`.
     """
 
     block_m: int
@@ -3741,6 +3766,103 @@ def warp_tile_bill(pinned: dict, block_m: int) -> WarpTile:
     """One setting's warp-grid occupancy. Arithmetic on the pinned constants."""
     return WarpTile(block_m, int(pinned["BLOCK_SIZE_N"]),
                     int(pinned["num_warps"]))
+
+
+def under_occupied_cells(base_pinned: dict, subjects, block_ns
+                         ) -> tuple[tuple[int, int], ...]:
+    """Every swept `(BLOCK_M, BLOCK_N)` whose warp grid is wider than its tile."""
+    return tuple(
+        (bm, bn) for bn in block_ns for bm in subjects
+        if not warp_tile_bill(dict(base_pinned, BLOCK_SIZE_N=bn), bm).occupied)
+
+
+def _occupied_peers(base_pinned: dict, subjects, bm: int, bn: int
+                    ) -> list[int]:
+    """The swept heights at the SAME BLOCK_N whose warp grid is full."""
+    return sorted(
+        o for o in subjects if o != bm
+        and warp_tile_bill(dict(base_pinned, BLOCK_SIZE_N=bn), o).occupied)
+
+
+def under_occupied_watch(base_pinned: dict, subjects, block_ns) -> list[str]:
+    """The check registered against each under-occupied cell, before the run.
+
+    REGISTERED 2026-09-10, AND THE REASON IS A GAP IN THE THIRD BILL'S OWN
+    ARGUMENT. `MMA_TILE_ELEMENTS` scoped the incomparability of an
+    under-occupied cell to its COMPUTE branch, and nothing argued the memory
+    branch was untouched: idle warps carry fewer outstanding loads as well as
+    fewer issue slots, which inflates `B`, `w` and `alpha` at exactly the cell
+    the fourth height is being added for. The corpus cannot settle it, since
+    the two published cells that touch the boundary sit exactly ON it and are
+    full and nothing published is under-occupied, so the check is registered
+    here rather than argued, and `under_occupied_reading` performs it on the
+    cells the run returns.
+
+    The comparison is within one BLOCK_N on purpose. Both live hypotheses about
+    the BLOCK_N dependence, the model's `alpha_a g1` and the `1/BN` rival, are
+    smooth in BLOCK_M at fixed BLOCK_N, so a slope that jumps at the height
+    where the warp grid empties is the warp grid and not the tiling.
+    """
+    out: list[str] = []
+    for bm, bn in under_occupied_cells(base_pinned, subjects, block_ns):
+        peers = _occupied_peers(base_pinned, subjects, bm, bn)
+        if len(peers) < 2:
+            out.append(
+                f"REGISTERED CHECK, BM={bm} x BN={bn}: NOT AVAILABLE at this "
+                f"pinning. It needs two full-warp-grid heights at the same "
+                f"BLOCK_N to set a trend and this sweep has {len(peers)}, so "
+                "this cell's slope arrives with nothing to be read against.")
+            continue
+        out.append(
+            f"REGISTERED CHECK, BM={bm} x BN={bn}: read its w against the line "
+            f"BM={peers[0]} and BM={peers[1]} set at the SAME BN={bn}. Both "
+            "live hypotheses are smooth in")
+        out.append(
+            "  BLOCK_M there, so a w ABOVE that line is the warp grid and "
+            "not the tiling, and the cell must not be used to separate them "
+            "until the excess is read.")
+    return out or ["every swept cell fills its warp grid, so there is no "
+                   "under-occupied slope to watch"]
+
+
+def under_occupied_reading(cells, base_pinned: dict, subjects, block_ns
+                           ) -> list[str]:
+    """`under_occupied_watch`'s check, performed on the cells a run returned.
+
+    The trend is a straight line in `log2(BLOCK_M)` through the peers' `w`,
+    which is the coarsest form that uses both of them and introduces no
+    parameter of its own. Reported as an excess, never as a gate: what to do
+    about an inflated `B` is a decision for whoever reads the arm, and a bar
+    invented here would be a bar with no measurement behind it.
+    """
+    by_key = {(c.block_m, c.block_n): c for c in cells}
+    out: list[str] = []
+    for bm, bn in under_occupied_cells(base_pinned, subjects, block_ns):
+        cell = by_key.get((bm, bn))
+        if cell is None or cell.weight_streams is None:
+            out.append(f"  under-occupied BM={bm} x BN={bn}: no w on this "
+                       "page, so the registered warp-grid check cannot be "
+                       "read")
+            continue
+        peers = [(o, by_key[(o, bn)].weight_streams)
+                 for o in _occupied_peers(base_pinned, subjects, bm, bn)
+                 if (o, bn) in by_key
+                 and by_key[(o, bn)].weight_streams is not None]
+        if len(peers) < 2:
+            out.append(f"  under-occupied BM={bm} x BN={bn}: w = "
+                       f"{cell.weight_streams:.4f}, and fewer than two "
+                       "full-grid heights at this BN carry a w, so the "
+                       "registered check has nothing to read it against")
+            continue
+        (m0, w0), (m1, w1) = peers[0], peers[-1]
+        slope = (w1 - w0) / (math.log2(m1) - math.log2(m0))
+        expect = w0 + slope * (math.log2(bm) - math.log2(m0))
+        out.append(
+            f"  under-occupied BM={bm} x BN={bn}: w = {cell.weight_streams:.4f} "
+            f"against {expect:.4f} on the BM={m0}/{m1} line at this BN, "
+            f"{(cell.weight_streams / expect - 1):+.1%}. Above it is the warp "
+            "grid, not the tiling.")
+    return out
 
 
 @dataclass(frozen=True)
@@ -3842,6 +3964,29 @@ class Plan:
                 f"             without BLOCK_M={SMALL_TILE_BLOCK_M} the same "
                 f"number is {r_without:.3f} over {len(measured)} cells, which "
                 "is what the fourth height is worth.")
+        # THE PAGE RE-DERIVES THE MEASUREMENT IT RESTS ON, from 2026-09-10.
+        # `SESSION_2026_09_10`'s note said the numbers in the `SUBJECT_BLOCK_M`
+        # paragraph are re-derived by `committed_bn_cells` AND
+        # `published_small_tile_branch` on every plan page, and only the second
+        # of the two was ever called: `committed_bn_cells` had no runtime call
+        # site at all, so a re-publish that changed which cells the bn arm
+        # yielded was caught by the test suite and NOT by the page. Both are
+        # read here now, and both refuse out loud rather than leaving the
+        # paragraph standing.
+        try:
+            committed = committed_bn_cells()
+        except CorpusMissing as exc:
+            out.append(f"             COMMITTED-ARM EVIDENCE UNREADABLE: {exc}")
+        else:
+            primary = [a for _, bm, a in committed if bm == PRIMARY_BLOCK_M]
+            yielded = sorted({bm for _, bm, a in committed if a is not None})
+            out.append(
+                f"             the committed 2026-09-10 arm yielded "
+                f"{sum(1 for a in primary if a is not None)} of "
+                f"{len(primary)} BLOCK_M={PRIMARY_BLOCK_M} cells with an "
+                f"alpha, so the fit registered on "
+                f"{len({bm for _, bm, _ in committed})} heights was made over "
+                f"{len(yielded)}: {yielded}.")
         try:
             branch = published_small_tile_branch()
         except CorpusMissing as exc:
@@ -3860,15 +4005,22 @@ class Plan:
         """
         out = ["WARP-GRID BILL, one CTA. A RECORD, NOT A REFUSAL: an "
                "under-occupied warp grid computes the right",
-               "answer with warps to spare, so the cell is measured, but its "
-               "COMPUTE branch is not comparable with",
-               "the rest of the grid and it must never be promoted to a "
-               "reference."]
+               "answer with warps to spare, so the cell is measured, but "
+               "NEITHER of its branches is comparable with",
+               "the rest of the grid: idle warps cost issue slots on the "
+               "compute side and outstanding loads on the",
+               "memory side, so C is understated and B, and therefore w and "
+               "alpha, are overstated. It must never be",
+               "promoted to a reference, and its slope must be read against "
+               "the check below before it is used."]
         for bn in self.block_ns:
             pinned = dict(self.base_pinned, BLOCK_SIZE_N=bn)
             for bm in (*self.subjects, REFERENCE_BLOCK_M):
                 out.append(f"  BN={bn:4d}"
                            + warp_tile_bill(pinned, bm).render())
+        out += ["  " + line for line in
+                under_occupied_watch(self.base_pinned, self.subjects,
+                                     self.block_ns)]
         return out
 
     def power_lines(self) -> list[str]:
@@ -4334,6 +4486,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 probe_c2_power: bool = False,
                 plant_noise: float | None = None,
                 band_lines: list[str] | None = None,
+                bootstrap_seed: int | None = None,
                 ) -> tuple[list[str], list[Gate], dict]:
     """Everything read off the timings, as text, gates and a payload.
 
@@ -4351,6 +4504,16 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     `band_lines` is the alpha_a band's provenance, already re-derived by `_main`
     before any GPU time, handed down so C1 prints the band it was actually
     scored against. None means C1 reads the corpus itself; it never recites.
+
+    `bootstrap_seed` is the resampling seed, and it exists because until
+    2026-09-10 there was only `args.seed`. `design_power` varies the PLANTED
+    world's seed per realisation, so a caller that could not also move the
+    bootstrap got five worlds resampled with one frozen draw sequence: the fix
+    had been applied at one of its two call sites. Measured before the fix,
+    `--dry-run --group-m 16 --power-seeds 5 --seed 0` returned 0.1774, 0.0836,
+    0.0801, 0.0252, 0.2684 while `--seed k --power-seeds 1` for k=0..4 returned
+    0.1774, 0.0831, 0.1136, 0.0696, 0.1734, and only the base seed agreed. None
+    means use `args.seed`, so a real run is unchanged.
 
     `reference_clock_mhz` is the clock the FIXED roof was measured at, passed
     in the way `ceiling_tflops` is rather than resolved here, so a replay on a
@@ -4376,7 +4539,9 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                         f"BN={bn} BM={bm} tread {tread}: time falls {drop:.3%}"
                         + (f" at spread {sp:.3%}" if sp else " (spread unknown)"))
 
-    boot = run_bootstrap(samples, cfg, keys, draws=draws, seed=args.seed,
+    boot = run_bootstrap(samples, cfg, keys, draws=draws,
+                         seed=args.seed if bootstrap_seed is None
+                         else bootstrap_seed,
                          form="EXA", **kw)
     fit = decompose(cells, cfg, "EXA")
     fit_lin = decompose(cells, cfg, "LIN")
@@ -4449,6 +4614,11 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         "  alpha_upper is unphysical by arithmetic and not by measurement. In "
         "the committed 2026-09-10",
         "  arm that held in four of six cells and in no others."]
+    # THE WARP-GRID CHECK, READ. `under_occupied_watch` registers it on the
+    # plan page before the pod runs; this is the same check performed on the
+    # cells that came back. It is here and not in the gates because an inflated
+    # B at an under-occupied cell is a reading, not a verdict.
+    lines += under_occupied_reading(cells, base_pinned, subjects, block_ns)
     fitted = [c for c in sorted(cells, key=lambda c: (c.block_m, c.block_n))
               if c.slope_memory_ms is not None and c.intercept_ms is not None]
     if not fitted:
@@ -4570,6 +4740,15 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     ]
     payload = {
         "ridge": ridge, "bandwidth_gbps": bandwidth_gbps,
+        # THE SCOPE TRAVELS WITH THE NUMBER, and until 2026-09-10 it did not
+        # travel with this one: the cells carried `weight_streams` as a bare
+        # ratio while its denominator and the identity of the estimator that
+        # produced it were printed on the page and NOWHERE in report.json. A
+        # reader working from the JSON alone could not tell the LOCAL
+        # PROVISIONAL copy from the shared estimator the day it lands, which is
+        # exactly the distinction `WEIGHT_STREAM_CANDIDATES` exists to keep.
+        "weight_stream_ms": stream_ms,
+        "weight_stream_source": WEIGHT_STREAM_SOURCE,
         "ceiling_tflops": ceiling_tflops, "ceiling_source": ceiling_source,
         "pinned": base_pinned, "block_ns": list(block_ns),
         "subjects": list(subjects), "reference_block_m": REFERENCE_BLOCK_M,
@@ -4734,6 +4913,12 @@ def planted_world_gates(cfg, args, *, alpha_b: float, alpha_a: float, extra,
     planted at `PLANT_COMPUTE_FRACTION` of the ceiling, inside the 38-64% the
     published references reach, and the bandwidth follows from it.
 
+    ONE SEED MOVES BOTH HALVES OF THE REALISATION. `seed` reaches the planted
+    timings AND the bootstrap that resamples them, so realisation k here is
+    exactly what `--seed k --power-seeds 1` prints. Before 2026-09-10 it reached
+    only the timings and `design_power`'s five realisations shared one frozen
+    draw sequence.
+
     `probe_c2_power` is OFF for this call and that is the recursion guard:
     scoring a planted world must not itself plant a world to ask whether its own
     C2 had power, or the probe would never terminate.
@@ -4756,7 +4941,8 @@ def planted_world_gates(cfg, args, *, alpha_b: float, alpha_a: float, extra,
         ceiling_tflops=ceiling_tflops, ceiling_source="planted",
         capability=capability, base_pinned=base, compiles=compiles,
         executed=dict(compiles), sm_count=sm_count, block_ns=block_ns,
-        subjects=subjects, draws=draws, probe_c2_power=False)
+        subjects=subjects, draws=draws, probe_c2_power=False,
+        bootstrap_seed=args.seed if seed is None else seed)
     return {g.name.split()[0]: g for g in gates}, payload
 
 
@@ -4782,6 +4968,11 @@ class DesignPower:
     #: single-seed figure this record used to carry swings 19-fold between
     #: seeds, and it is the number that decides whether the arm is paid for.
     alpha_a_sds: tuple[float, ...] = ()
+    #: The same realisations for alpha_b. `alpha_b_sd` is their median, which is
+    #: what `alpha_a_sd` has always been; before 2026-09-10 it was the LAST
+    #: iteration's value, so the two fields on one record were computed over
+    #: different things.
+    alpha_b_sds: tuple[float, ...] = ()
 
     @property
     def worst_alpha_a_sd(self) -> float | None:
@@ -4860,10 +5051,21 @@ def design_power(cfg, args, *, b: int, ceiling_tflops: float, capability,
     same six seeds on the FOUR-height design give 0.1774, 0.0831, 0.1136,
     0.0696, 0.1734 and 0.0219: the same instability, over a narrower range.
     Both designs resolve alpha_a at 0.8% and neither is shown to at 1.8%.
+
+    A REALISATION IS THE WORLD AND THE RESAMPLE TOGETHER, SINCE 2026-09-10. The
+    loop's `seed` used to reach `planted_samples` only; the bootstrap inside
+    `analyse_run` went on resampling at `args.seed`, frozen across every
+    iteration. So the five realisations this line reported were not the five
+    the two sequences above name, and `--seed k --power-seeds 1` did not
+    reproduce the k-th of them: at `--group-m 16` the loop returned 0.1774,
+    0.0836, 0.0801, 0.0252, 0.2684 against a single-seed 0.1774, 0.0831,
+    0.1136, 0.0696, 0.1734, agreeing only at the base seed. `bootstrap_seed`
+    carries the loop's seed the rest of the way, and both sequences above are
+    now what `--power-seeds 6` prints, seed for seed.
     """
     sds: list[float] = []
+    b_sds: list[float] = []
     note = ""
-    boot: dict = {}
     for seed in range(args.seed, args.seed + max(1, args.power_seeds)):
         _, payload = planted_world_gates(
             cfg, args, alpha_b=planted_alpha_b(args.group_m), alpha_a=0.14,
@@ -4874,10 +5076,17 @@ def design_power(cfg, args, *, b: int, ceiling_tflops: float, capability,
         note = note or boot["note"]
         if boot["alpha_a_sd"] is not None:
             sds.append(float(boot["alpha_a_sd"]))
+        if boot.get("alpha_b_sd") is not None:
+            b_sds.append(float(boot["alpha_b_sd"]))
+    # BOTH FIELDS OVER THE SAME REALISATIONS. Until 2026-09-10 `alpha_a_sd` was
+    # the median over the loop while `alpha_b_sd` was whatever the LAST
+    # iteration happened to leave in `boot`, so one record carried two
+    # statistics computed over different things. Nothing printed alpha_b_sd, so
+    # nothing had read it wrong yet.
     return DesignPower(args.group_m, args.reps, noise, noise_source, draws,
                        statistics.median(sds) if sds else None,
-                       boot.get("alpha_b_sd"), note,
-                       alpha_a_sds=tuple(sds))
+                       statistics.median(b_sds) if b_sds else None, note,
+                       alpha_a_sds=tuple(sds), alpha_b_sds=tuple(b_sds))
 
 
 @dataclass(frozen=True)
