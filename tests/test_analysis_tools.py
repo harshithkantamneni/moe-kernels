@@ -726,10 +726,28 @@ WITHDRAWN_BAND = (160.3, 176.2)
 
 #: The per-card bands below are `alpha_refit.card_ridge_bands()` over the
 #: COMMITTED calibrations, so they move when a card is recalibrated. The H200's
-#: read [152.1, 165.6] around a ridge of 162.8 until its 2026-09-09 session
-#: sampled the dense GEMM's clock under load and put the ridge at 152.8; the
-#: A100's has not moved. What the test is about is that the two cards DISAGREE
-#: and that neither band is the withdrawn pair, which holds under both.
+#: has read [152.1, 165.6], [142.8, 155.4] and [145.8, 158.6] in nine days and
+#: three literals for it went red in turn, so NONE is written down here any
+#: more: every end is checked against that card's own `ridge_by_pattern`
+#: instead. What the test is about is that the two cards DISAGREE and that
+#: neither band is the withdrawn pair, which holds under all of them.
+
+
+def _pattern_ridges(slug: str) -> set[float]:
+    """Every per-pattern ridge a card's committed calibration publishes.
+
+    A band end has to BE one of these, which is a relation the card can be
+    recalibrated without breaking. Which patterns survive into the band is
+    `rescore_published_reports.ridge_band_from_detail`'s decision and is not
+    re-implemented here; this only says the ends came from the file.
+    """
+    import yaml
+
+    from moe.bench import roofline as RL
+
+    doc = yaml.safe_load((RL.HARDWARE_DIR / f"measured_{slug}.yaml").read_text())
+    return {round(float(v), 1)
+            for v in doc["detail"]["ridge_by_pattern"].values()}
 
 
 def test_each_card_gets_its_own_band_off_its_own_calibration():
@@ -744,10 +762,16 @@ def test_each_card_gets_its_own_band_off_its_own_calibration():
     harmless after all.
     """
     refit = _load("alpha_refit")
-    bands = dict((card, band) for card, _ridge, band in refit.card_ridge_bands())
-    assert bands["nvidia_h200"] == [142.8, 155.4]
-    assert bands["nvidia_a100_sxm4_80gb"] == [139.6, 149.3]
-    for band in bands.values():
+    rows = refit.card_ridge_bands()
+    bands = dict((card, band) for card, _ridge, band in rows)
+    ridges = dict((card, ridge) for card, ridge, _band in rows)
+    for card, band in bands.items():
+        # EVERY END COMES OFF THAT CARD'S OWN YAML. Three literals for the
+        # H200's band went red in nine days; the relation has not.
+        published = _pattern_ridges(card)
+        for end in band:
+            assert round(float(end), 1) in published, (card, end, published)
+        assert band[0] <= round(ridges[card], 1) <= band[1], (card, band)
         assert tuple(band) != WITHDRAWN_BAND
         assert band[0] < band[1], "a two-machine band was the only wide one"
     # The two cards disagree, which is the whole point: one band is not both.
@@ -772,6 +796,10 @@ def test_the_cap_verdict_has_all_three_branches_and_they_move_with_the_band():
     the property being pinned rather than any one pairing.)
     """
     refit = _load("alpha_refit")
+    # TWO PLANTED BANDS, not the cards' current ones. They are shaped like the
+    # two cards so the docstring reads, but they are arguments this test hands
+    # `cap_verdict` and every verdict below is arithmetic over them alone, so
+    # they are fixtures rather than a claim about any calibration.
     a100 = [139.6, 149.3]
     h200 = [142.8, 155.4]
     assert refit.cap_verdict(150.0, a100) == "crosses"
@@ -792,15 +820,22 @@ def test_the_adversarial_cap_table_names_its_cards_and_not_the_withdrawn_band(
     assert refit.main([*csvs, "--bootstrap", "5", "--adversarial"]) == 0
     out = capsys.readouterr().out
     section = out.split("### 4.")[1]
-    assert "vs nvidia_h200 142.8-155.4" in section
-    assert "vs nvidia_a100_sxm4_80gb 139.6-149.3" in section
+    # The header the reader sees quotes each card's CURRENT band, so the
+    # expected string is built from the same resolver rather than retyped.
+    for card, _ridge, band in refit.card_ridge_bands():
+        assert f"vs {card} {band[0]:.1f}-{band[1]:.1f}" in section
     quoting = [ln for ln in section.splitlines() if "160.3-176.2" in ln]
     assert not any(ln.strip().startswith("|") for ln in quoting), \
         "the withdrawn band may be named as history, never scored against"
     assert all("used to quote" in ln for ln in quoting)
     assert "vs ridge band 160.3-176.2" not in out
     assert "NEVER crosses" in section
-    assert "ridge of 142.8" in section, "C2's rows are H200 rows"
+    # C2's rows are H200 rows, so the ceiling paragraph quotes the H200's own
+    # band's low end. Read off the same resolver: it has been 152.1, 142.8 and
+    # 145.8 in nine days.
+    h200 = [row for row in refit.card_ridge_bands() if row[0] == "nvidia_h200"]
+    assert h200, "the H200's calibration is the input this paragraph needs"
+    assert f"ridge of {h200[0][2][0]}" in section, "C2's rows are H200 rows"
 
 
 def test_the_cap_table_refuses_rather_than_falling_back_to_the_constant(monkeypatch,
@@ -846,20 +881,28 @@ def test_the_crossing_report_docstring_no_longer_teaches_the_withdrawn_ridge():
     it suggested the figure that reached an A100 arm from an H200 calibration.
     """
     report = _load("crossing_report")
-    # The usage block continues with a backslash, so the literal joins into one
-    # line and the runnable command has to be matched as a substring.
-    # The card's own ridge, whatever the committed calibration says today:
-    # 162.8 until 2026-09-09, 152.8 since. A usage line that names a
-    # superseded ridge is the same defect as one that named the withdrawn
-    # 160.3, only slower to notice.
+    # THE USAGE LINE NAMES NO RIDGE AT ALL. It named 160.3, then 162.8, then
+    # 152.8, and each in turn became a recommendation to quote a superseded
+    # ruler; a test that checked the line against the current calibration only
+    # moved the defect into the docstring, where it went red on the next
+    # session anyway. It now shows the reader how to READ the card's ridge.
+    import re
+
     from moe.bench import roofline as RL
 
-    own = RL.load_hardware("measured_nvidia_h200").ridge_point("bf16")
-    assert f"--ridge {own:.1f} --impl vllm_fused_experts" in report.__doc__
-    assert "--ridge 160.3 --impl" not in report.__doc__
-    assert "used to read `--ridge 160.3`" in report.__doc__, \
+    doc = report.__doc__
+    usage = doc[doc.index("python scripts/crossing_report.py"):doc.index("THE USAGE")]
+    assert "measured_nvidia_h200" in usage and "ridge_point" in usage
+    assert not re.search(r"--ridge\s+[0-9]", usage), \
+        "a ridge typed into the usage line is stale within the week"
+    assert RL.load_hardware("measured_nvidia_h200").ridge_point("bf16") > 0
+    assert "--ridge 160.3 --impl" not in doc
+    assert "used to read\n`--ridge 160.3`" in doc or "used to read `--ridge 160.3`" in doc, \
         "the withdrawn figure is named as history, so a reader can follow it"
     staircase = report.print_staircase.__doc__
-    assert "142.8-155.4" in staircase
+    assert "160.3-176.2" in staircase, "the withdrawn pair stays, as history"
+    assert not re.search(r"\b1[45][0-9]\.[0-9]-1[56][0-9]\.[0-9]\b",
+                         staircase.replace("160.3-176.2", "")), \
+        "the card's own band moves; the docstring points at the file instead"
     assert "CV 21.2%" in staircase, "the measured spreads are unchanged"
     assert "against the measured ridge band" not in staircase

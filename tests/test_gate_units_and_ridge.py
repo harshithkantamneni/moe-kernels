@@ -346,18 +346,22 @@ def test_a_planning_run_may_assume_the_h200_band_and_must_say_so(monkeypatch):
 
 
 def test_the_device_calibration_is_what_a_run_on_that_device_gets(monkeypatch):
-    """THE FIX, on the two calibrations actually committed. The A100's own
-    ridge is 145.8 and the H200's is 152.8 since its 2026-09-09 recalibration
-    sampled the GEMM clock under load (it read 162.8 before), and 160.3 is
-    neither of them on either reading."""
-    for path, expected in ((A100_YAML, 145.8), (H200_YAML, 152.8)):
+    """THE FIX, on the two calibrations actually committed: whatever ridge each
+    card's own file resolves to is what a run on that card gets, and the
+    withdrawn 160.3 is neither of them under any reading. The expected ridge is
+    READ from the file rather than typed: the H200's has been 162.8, 152.8 and
+    155.9 in nine days and a literal here went red on each move."""
+    for path in (A100_YAML, H200_YAML):
         data = yaml.safe_load(path.read_text())
         hw = roofline.load_hardware(path.stem)
+        expected = hw.ridge_point("bf16")
         monkeypatch.setattr(roofline, "current_gpu_name",
                             lambda name=data["detail"]["gpu_name"]: name)
         monkeypatch.setattr(roofline, "load_measured", lambda *a, hw=hw, **k: hw)
         rr = BM.resolve_ridge(_Args(), synthetic=False)
         assert rr.ridge == pytest.approx(expected, abs=0.1)
+        assert rr.ridge != pytest.approx(BM.RIDGE_BAND[0], abs=1.0), \
+            "the withdrawn default is not any committed card's ridge"
         assert "measured on this device" in rr.source
         assert data["detail"]["gpu_name"].split()[1][:4].lower() in rr.device.lower()
         # WHICH calibration session, not merely which device. measured_*.yaml
@@ -370,17 +374,20 @@ def test_the_device_calibration_is_what_a_run_on_that_device_gets(monkeypatch):
 
 def test_the_module_constant_is_not_the_ridge_of_either_committed_card():
     """The reason the default was a defect and not a rounding difference: 160.3
-    is 9.9% above the A100's own ridge and, since the H200's 2026-09-09
-    recalibration, 4.9% above the H200's too. It was 1.5% BELOW the H200's on
-    the 2026-09-02 file, which is how a third machine-session's number passed
-    for a reasonable default on one card. It is a third machine-session's
-    number under either calibration."""
+    is 9.9% above the A100's own ridge, and it has sat 1.5% below, 4.9% above
+    and 2.8% above the H200's on the three calibrations of that card committed
+    in nine days. WHICH SIDE it falls on is therefore not the finding and is
+    not asserted; that it is a third machine-session's number belonging to
+    neither card is, and that holds under every one of the three.
+
+    The two cards' ridges are read, never typed. A literal for the H200's was
+    what turned this file red on each of those recalibrations."""
     a100 = roofline.load_hardware(A100_YAML.stem).ridge_point("bf16")
     h200 = roofline.load_hardware(H200_YAML.stem).ridge_point("bf16")
-    assert a100 == pytest.approx(145.81, abs=0.05)
-    assert h200 == pytest.approx(152.81, abs=0.05)
+    for ridge in (a100, h200):
+        assert ridge > 0
+        assert BM.RIDGE_BAND[0] != pytest.approx(ridge, abs=1.0)
     assert abs(BM.RIDGE_BAND[0] - a100) / a100 > 0.09
-    assert BM.RIDGE_BAND[0] != pytest.approx(h200, abs=1.0)
 
 
 def test_the_band_comes_from_the_devices_own_bandwidth_patterns():

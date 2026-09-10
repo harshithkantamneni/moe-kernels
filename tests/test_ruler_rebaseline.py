@@ -538,14 +538,24 @@ def test_the_registered_numbers_are_the_ones_in_the_committed_calibration():
     and `read_reduce` had to be looked up as the `read` it was renamed from.
     The fallback is kept and tried SECOND rather than first, so re-registering
     against an older file still resolves and the mapping is stated here rather
-    than hidden in a lookup that would quietly match nothing."""
+    than hidden in a lookup that would quietly match nothing.
+
+    SCORED AT THE PREDICTION'S OWN TOLERANCE, not at byte equality. These four
+    are a REGISTERED PREDICTION that a re-measurement reproduces them within
+    `GATE2_PATTERN_TOL_PCT`, so they are deliberately not re-typed from the
+    newest file: a registration that is rewritten whenever the tree moves
+    predicts nothing. `abs=0.1 GB/s` demanded byte equality of a prediction
+    and went red on a 0.08% recalibration, which is the prediction being
+    CONFIRMED reported as a failure.
+    """
     ruler = RB.read_ruler(REPO / "moe" / "bench" / "hardware"
                           / "measured_nvidia_h200.yaml")
     renamed_from = {"read_reduce": "read"}
     for name, expected in RB.H200_PATTERNS_GBPS.items():
         in_file = name if name in ruler.patterns else renamed_from.get(name, name)
         assert in_file in ruler.patterns, f"{name} has no counterpart in the file"
-        assert ruler.patterns[in_file] == pytest.approx(expected, abs=0.1), name
+        assert ruler.patterns[in_file] == pytest.approx(
+            expected, rel=RB.GATE2_PATTERN_TOL_PCT / 100.0), name
 
 
 @pytest.mark.parametrize("field_name,value", [

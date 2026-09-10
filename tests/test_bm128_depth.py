@@ -2653,16 +2653,27 @@ def test_an_early_refusal_is_printed_once(bm):
 
 def test_the_printed_predictions_carry_this_cards_committed_ridge(bm, capsys):
     """P2 IS PRINTED BY --dry-run AND --audit, and it named a ridge the card no
-    longer has: ab61e55 recalibrated the H200 to 152.8 Op/B on 2026-09-09 and
-    P2 went on saying 162.8. A prediction quoting a superseded ruler is a
-    prediction against a different machine."""
+    longer has: the H200 read 162.8 Op/B, then 152.8, then 155.9 in nine days
+    and P2 kept whichever figure had been typed into it. A prediction quoting a
+    superseded ruler is a prediction against a different machine.
+
+    FIXED BY DELETING THE PAIR, not by retyping it. P2 now interpolates
+    `calibrated_ridges_phrase()`, so the sentence an operator reads is built
+    from the same files the run scores against and cannot lag them. The
+    assertion is the same relation: what is printed IS what the two committed
+    calibrations say, and no superseded reading of either survives in the
+    text."""
     bm.main(["--dry-run"])
     text = capsys.readouterr().out
-    assert "145.8 (A100) and 152.8 (H200)" in text
-    assert "162.8 (H200)" not in text
-    hw = bm.load_hardware("measured_nvidia_h200")
-    ridge = hw.peak("bf16") / hw.bandwidth_bytes_s
-    assert round(ridge, 1) == 152.8, ridge
+    phrase = bm.calibrated_ridges_phrase()
+    assert phrase in text
+    for card, slug in bm.CALIBRATION_SLUGS.items():
+        hw = bm.load_hardware(slug)
+        ridge = hw.peak("bf16") / hw.bandwidth_bytes_s
+        assert f"{ridge:.1f} ({card.upper()})" in phrase
+    # No reading this card has retired may appear beside the current one.
+    for superseded in ("162.8 (H200)", "152.8 (H200)"):
+        assert superseded not in text or superseded in phrase
 
 
 def test_both_reference_level_call_sites_carry_both_clocks(bm):

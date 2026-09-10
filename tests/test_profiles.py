@@ -95,10 +95,11 @@ def test_the_band_is_each_committed_card_s_own_ridge_and_not_the_withdrawn_one()
     a100 = roofline.load_hardware("measured_nvidia_a100_sxm4_80gb").ridge_point("bf16")
     h200 = roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16")
     assert PR.CROSSING_RIDGE_BAND == (min(a100, h200), max(a100, h200))
-    # 145.81 / 152.81 on the calibrations committed today. The A100's end has
-    # not moved; the H200's was 162.81 until its 2026-09-09 recalibration
-    # sampled the GEMM clock under load and put the card's ridge at 152.81.
-    assert PR.CROSSING_RIDGE_BAND == pytest.approx((145.81, 152.81), abs=0.01)
+    # NO SECOND COPY OF THOSE TWO NUMBERS. The line that used to sit here
+    # asserted the pair as literals beside the relational assert above, and it
+    # went red on each of the H200's three recalibrations while the relation
+    # held through all of them. Two sites, one of them fixed, is this
+    # repository's recurring defect and it was committed inside the fix for it.
     for end in PR.CROSSING_RIDGE_BAND:
         for withdrawn in WITHDRAWN_BAND:
             assert abs(end - withdrawn) > 1.0

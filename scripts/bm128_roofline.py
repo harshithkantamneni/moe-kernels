@@ -644,18 +644,17 @@ UNKNOWN_CARD_SLUG = "nocard"
 #: nothing can be mislabelled. Every one of these is stamped HYPOTHESIS in the
 #: report and fails gate V0. A measured run REFUSES instead.
 #:
-#: RESTATED 2026-09-09. These were the 2026-09-02 calibration -- 712.259
-#: TFLOP/s, ridge 162.809, GEMM clock 1515 -- and ab61e55 recalibrated the same
-#: card to 668.484 / 152.812 / 1485 without moving them, so the fallback that
-#: fires when the yaml is absent was a different card's ruler labelled as this
-#: one's. They are now the committed yaml's own figures, and
-#: `tests/test_bm128_roofline.py` reads them off the file so the next
-#: recalibration cannot leave them behind again.
+#: THE TRANSCRIBED COPY IS GONE, 2026-09-10. Four constants used to sit here
+#: (roof TFLOP/s, ridge, bandwidth, GEMM clock) as a transcription of the
+#: committed yaml, for the case where the yaml is absent on a checkout. They
+#: were the 2026-09-02 figures, ab61e55 recalibrated the same card without
+#: moving them, and the next session moved it again: this card's compute term
+#: has read 712.3, 668.5 and 682.1 in nine days, so a transcription is a
+#: different card's ruler wearing this one's name within the week. There is now
+#: no fallback ruler at all. A checkout with no calibration file has no roof it
+#: is entitled to divide by, which is this script's own rule for an attached
+#: device and is no weaker off one.
 HYPOTHESIS_HARDWARE_STEM = "measured_nvidia_h200"
-HYPOTHESIS_ROOF_TFLOPS = 668.4838893839521
-HYPOTHESIS_RIDGE = 152.81206502298838
-HYPOTHESIS_BANDWIDTH_GBPS = 4374.549151491332
-HYPOTHESIS_ROOF_CLOCK_MHZ = 1485
 HYPOTHESIS_NOTE = ("HYPOTHESIS: the 2026-09-09 H200 calibration committed in "
                    "this repo. NO DEVICE IS ATTACHED, so this is a costing and "
                    "not a ceiling; gate V0 refuses to let it stand in a verdict")
@@ -922,25 +921,33 @@ class Roof:
 
 
 def _hypothesis_roof(note: str) -> Roof:
-    """The committed H200 calibration, for --dry-run and --self-test only."""
+    """The committed H200 calibration, for --dry-run and --self-test only.
+
+    REFUSES rather than falling back when the file is not there. It used to
+    return four transcribed constants under a label saying they were module
+    constants, and the label did not stop them going stale: the card was
+    recalibrated twice while they sat still. A costing against a ruler with no
+    file behind it is the exact failure this script refuses on an attached
+    device, and being off a device makes it no better.
+    """
+    from moe.bench.roofline import load_hardware
     try:
-        from moe.bench.roofline import load_hardware
         hw = load_hardware(HYPOTHESIS_HARDWARE_STEM, directory=HARDWARE_DIR)
         detail = (__import__("yaml").safe_load(
             (HARDWARE_DIR / f"{HYPOTHESIS_HARDWARE_STEM}.yaml").read_text())
             or {}).get("detail") or {}
-        return Roof(hw.peak("bf16") / 1e12, hw.ridge_point("bf16"),
-                    hw.bandwidth_bytes_s / 1e9,
-                    int(detail.get("gemm_clock_mhz") or 0), hw.name,
-                    f"{note} ({HYPOTHESIS_HARDWARE_STEM}.yaml)", attached=False)
-    except Exception:                                   # noqa: BLE001
-        # The committed file is not on this checkout. The constants below are
-        # that same calibration transcribed, and they are labelled twice over.
-        return Roof(HYPOTHESIS_ROOF_TFLOPS, HYPOTHESIS_RIDGE,
-                    HYPOTHESIS_BANDWIDTH_GBPS, HYPOTHESIS_ROOF_CLOCK_MHZ,
-                    "NVIDIA H200 (measured)",
-                    f"{note}; the yaml is absent on this checkout, so these are "
-                    "module constants", attached=False)
+    except Exception as exc:                            # noqa: BLE001
+        raise RoofUnavailable(
+            f"{HYPOTHESIS_HARDWARE_STEM}.yaml is not on this checkout, so even "
+            "the HYPOTHESIS roof has no file behind it. There is deliberately "
+            "no transcribed copy to fall back on: this card's compute term "
+            "read 712.3, 668.5 and 682.1 TFLOP/s in nine days, so a "
+            "transcription is another session's ruler wearing this one's name."
+        ) from exc
+    return Roof(hw.peak("bf16") / 1e12, hw.ridge_point("bf16"),
+                hw.bandwidth_bytes_s / 1e9,
+                int(detail.get("gemm_clock_mhz") or 0), hw.name,
+                f"{note} ({HYPOTHESIS_HARDWARE_STEM}.yaml)", attached=False)
 
 
 def resolve_roof(dtype: str, *, synthetic: bool) -> Roof:

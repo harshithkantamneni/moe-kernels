@@ -1391,20 +1391,26 @@ def test_the_prediction_says_how_many_arms_matched_and_over_what_span(rf, cfg,
                                                                      roof):
     """TWO arms match the headline configuration and only one is quoted.
 
-    Against the 2026-09-09 calibration (roof 668.5 TFLOP/s, ab61e55)
-    alpha-surface-s4 reads a gap of 0.062 and cross-card-s3 one of 0.021; the
-    same two arms read 0.058 and 0.019 against the 712.0 roof this test was
-    written under, and only the ruler moved. The line an operator uses to
-    decide the arm is not worth renting used to call the winner "the published
-    arm", which is a uniqueness claim, and the selection rule maximises the
-    subject peak, which is the SMALLEST gap when the controls sit close. Both
-    predict NOT_TILE today, so the bias costs nothing yet; the count and the
-    span are printed so a later corpus that disagrees cannot disagree silently.
+    THE TWO GAPS ARE FRACTIONS OF THE ROOF, so they move with every
+    recalibration of this card while nothing is re-timed: the same two arms
+    read 0.058/0.019 against a 712.0 roof, 0.062/0.021 against 668.5, and
+    0.061/0.020 against 682.1. Literals for them were asserted here and went
+    red twice. What is pinned is the RELATION: the span's low end is the
+    quoted arm's own gap, because the selection rule maximises the subject
+    peak, which is the SMALLEST gap when the controls sit close. The line an
+    operator uses to decide the arm is not worth renting used to call the
+    winner "the published arm", which is a uniqueness claim. Both predict
+    NOT_TILE today, so the bias costs nothing yet; the count and the span are
+    printed so a later corpus that disagrees cannot disagree silently.
     """
     arm, why = rf.published_prediction(cfg, roof, block_n=64, group_m=1,
                                        control_block_m=256)
     assert "2 matching" in why, why
-    assert "+0.021" in why and "+0.062" in why, why
+    span = why.split("(gaps ")[1].split(")")[0]
+    lo, hi = (float(part) for part in span.split(" to "))
+    assert lo == pytest.approx(arm.gap, abs=0.001), (span, arm.gap)
+    assert lo < hi, "two arms, two gaps, and the quoted one is the smaller"
+    assert hi < rf.CONTROL_SEPARATION, "both still predict NOT_TILE"
     assert "HIGHEST subject peak" in why and "SMALLEST gap" in why, why
     assert "the published arm at" not in why, \
         "one of two matching arms was described as the only one"
@@ -2450,25 +2456,37 @@ def test_the_c3_gap_at_own_clocks_is_the_number_this_script_prints(rf):
     assert source.count("-0.034 at own clock") == 2
 
 
-def test_the_hypothesis_ruler_is_this_cards_committed_calibration(rf):
-    """THE FALLBACK THAT FIRES WHEN THE YAML IS ABSENT MUST BE THE SAME CARD.
+def test_the_hypothesis_ruler_is_this_cards_committed_calibration(rf, tmp_path):
+    """THE HYPOTHESIS ROOF IS THE FILE, AND THERE IS NO COPY OF IT.
 
-    These constants were the 2026-09-02 figures -- 712.259 TFLOP/s, ridge
-    162.809, GEMM clock 1515 -- and ab61e55 recalibrated the same H200 to
-    668.484 / 152.812 / 1485 on 2026-09-09 without moving them, so `--dry-run`
-    and `--self-test` costed against a ruler the card no longer has while
-    `HYPOTHESIS_NOTE` called it "the calibration committed in this repo".
-    Asserted against the file rather than restated, so the next recalibration
-    cannot leave them behind again.
+    Four constants used to sit in the module transcribing the calibration, for
+    the case where the yaml is absent. They were the 2026-09-02 figures,
+    ab61e55 recalibrated the same H200 without moving them, and the next
+    session moved the compute term again: 712.3, then 668.5, then 682.1
+    TFLOP/s. A test that asserted the copy still matched the file was green
+    exactly as often as the copy was fresh, which is to say it went red on
+    every recalibration and taught nobody anything.
+
+    So the copy is deleted. What is pinned instead is the pair of relations
+    that cannot go stale: the roof IS the file's, field by field, and the
+    absent-file branch REFUSES rather than inventing one.
     """
     from moe.bench.roofline import load_hardware
     hw = load_hardware(rf.HYPOTHESIS_HARDWARE_STEM)
-    peak = hw.peak("bf16")
-    bandwidth = hw.bandwidth_bytes_s
-    assert rf.HYPOTHESIS_ROOF_TFLOPS == pytest.approx(peak / 1e12, rel=1e-9)
-    assert rf.HYPOTHESIS_BANDWIDTH_GBPS == pytest.approx(bandwidth / 1e9,
-                                                        rel=1e-9)
-    assert rf.HYPOTHESIS_RIDGE == pytest.approx(peak / bandwidth, rel=1e-9)
-    assert rf.HYPOTHESIS_ROOF_CLOCK_MHZ == int(
-        hw.reference_clocks["bf16"].mhz)
-    assert "2026-09-09" in rf.HYPOTHESIS_NOTE
+    roof = rf._hypothesis_roof("test")
+    assert roof.tflops == pytest.approx(hw.peak("bf16") / 1e12, rel=1e-9)
+    assert roof.bandwidth_gbps == pytest.approx(hw.bandwidth_bytes_s / 1e9,
+                                                rel=1e-9)
+    assert roof.ridge == pytest.approx(hw.ridge_point("bf16"), rel=1e-9)
+    assert roof.clock_mhz == int(hw.reference_clocks["bf16"].mhz)
+    assert roof.attached is False
+    assert rf.HYPOTHESIS_HARDWARE_STEM in roof.source
+    for gone in ("HYPOTHESIS_ROOF_TFLOPS", "HYPOTHESIS_RIDGE",
+                 "HYPOTHESIS_BANDWIDTH_GBPS", "HYPOTHESIS_ROOF_CLOCK_MHZ"):
+        assert not hasattr(rf, gone), f"{gone} is a transcribed calibration"
+    # THE ABSENT-FILE BRANCH: a refusal that names why there is no fallback.
+    import unittest.mock
+    with unittest.mock.patch.object(rf, "HARDWARE_DIR", tmp_path):
+        with pytest.raises(rf.RoofUnavailable) as caught:
+            rf._hypothesis_roof("test")
+    assert "no transcribed copy" in str(caught.value)

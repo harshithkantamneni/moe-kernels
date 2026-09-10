@@ -1202,11 +1202,15 @@ def test_the_reference_clock_comes_from_the_attached_card_s_own_calibration():
     `reference_clock_mhz()` has read it. Without a reference `clock_flags`
     leaves `clock_level_ok` None, so the LEVEL verdict could never fire on the
     path that wrote all 100,144 published rows -- and LEVEL is the entire reason
-    `TIMING_BASIS` left v1. The number is the 2026-09-09 calibration's
-    UNDER-LOAD median, 1485 MHz at 691 W, not the idle scalar the file used to
-    carry."""
+    `TIMING_BASIS` left v1. The number is the committed calibration's
+    UNDER-LOAD median, not the idle scalar the file used to carry, and it is
+    READ from that file: this card's has been 1515, 1485 and 1470 in nine
+    days, so what is pinned is the FIELD and not the MHz."""
     cfg = D.RunConfig(reference_clock_resolver=lambda: RF.reference_clock("NVIDIA H200"))
-    assert cfg.reference_clock_mhz == 1485.0
+    doc, why = RF.measured_doc("NVIDIA H200")
+    assert doc, why
+    assert cfg.reference_clock_mhz == float(
+        doc["detail"]["gemm_clock"]["median_mhz"])
     assert "gemm_clock" in cfg.reference_clock_source
     assert cfg.missing == {}
     # And it is the same number, from the same field, as the sweep resolves.
@@ -1840,10 +1844,14 @@ def test_the_fp8_reference_defaults_to_the_same_card_the_primary_came_from():
     cfg = D.RunConfig(reference_clock_resolver=clock_from(1515.0))
     assert cfg.family_references == {} and cfg.missing == {}
     fp8 = cfg.reference_for("fp8_e4m3")
-    # The fp8 family's reference is the fp8 GEMM's OWN under-load median, 1395
-    # MHz at 690 W on the committed calibration. It is a record of where that
-    # family runs; nothing is excluded on it.
-    assert fp8.mhz == 1395.0 and fp8.family == RF.FP8_FAMILY
+    # The fp8 family's reference is the fp8 GEMM's OWN under-load median on the
+    # committed calibration, read from that file rather than retyped. It is a
+    # record of where that family runs; nothing is excluded on it. The bf16
+    # 1515.0 above is a PLANTED primary, which is why it is a literal here.
+    doc, why = RF.measured_doc("NVIDIA H200")
+    assert doc, why
+    assert fp8.mhz == float(doc["detail"]["fp8_gemm_clock"]["median_mhz"])
+    assert fp8.family == RF.FP8_FAMILY
     assert fp8.grade == RF.REFERENCE_UNDER_LOAD
     assert cfg.missing == {}
     assert cfg.reference_for("fp8_e5m2") is fp8          # resolved once

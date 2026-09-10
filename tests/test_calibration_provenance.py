@@ -349,7 +349,7 @@ def test_a_calibration_missing_its_provenance_fields_is_read_not_rejected(tmp_pa
 # --- the ten arms actually published -----------------------------------------
 
 @published_only
-def test_the_fourteen_published_arms_have_these_verdicts():
+def test_every_published_arm_has_a_declared_verdict():
     """The state this check exists for, and the place a new one gets declared on
     purpose rather than discovered by md5-ing directories three days later.
 
@@ -385,13 +385,17 @@ def test_the_fourteen_published_arms_have_these_verdicts():
         "2026-09-01-nvidia_h200-alpha-surface-s4": UNKNOWN,
         "2026-09-01-nvidia_h200-cross-card-s3": UNKNOWN,
         "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3": UNKNOWN,
-        # Not an arm at all: the raw 2026-09-09 session, ledger and logs and
-        # the run directories its arms wrote, kept whole so every verdict it
-        # printed can be re-derived. It carries a KIND file saying `session`,
+        # Not arms at all: the raw session directories, ledger and logs and the
+        # run directories their arms wrote, kept whole so every verdict they
+        # printed can be re-derived. Each carries a KIND file saying `session`,
         # which is the marker this module's own docstring names in place of
-        # relaxing the gate, and it blocks nothing because it holds nothing
-        # anybody could quote as a calibrated arm.
+        # relaxing the gate, and they block nothing because they hold nothing
+        # anybody could quote as a calibrated arm. A second one landed on
+        # 2026-09-10 and is declared here, which is the point of declaring
+        # them: a new directory is a decision somebody makes, not a diff
+        # somebody discovers three days later.
         "2026-09-09-nvidia_h200-gaps-session": SESSION,
+        "2026-09-10-nvidia_h200-gaps-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}

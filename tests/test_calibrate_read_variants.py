@@ -247,12 +247,33 @@ def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys
     assert "planted: the allocator gave up halfway" in err
 
 
+def _committed_read_reduce() -> float:
+    """The H200's reduction read, walked out of its own committed yaml.
+
+    Never retyped: it has read 4469.6, 4471.4 and 4467.7 across three
+    calibrations of this card, and each literal for it went red in turn. What
+    the tests below are about is WHICH pattern the lookup finds, not what it
+    measures.
+    """
+    import yaml
+
+    from moe.bench import roofline as RF
+    doc = yaml.safe_load(
+        (RF.HARDWARE_DIR / "measured_nvidia_h200.yaml").read_text())
+    by_name = {p["pattern"]: float(p["gbps"])
+               for p in doc["detail"]["bandwidth_patterns"]}
+    for name in CRV.READ_REDUCE_NAMES:
+        if name in by_name:
+            return by_name[name]
+    raise AssertionError(f"no reduction read in the file: {sorted(by_name)}")
+
+
 def test_the_registered_read_figure_comes_from_the_committed_calibration():
     """Not from the 2026-08-26 constant, which the fixed reduction shape has
-    already moved: the H200's reduction read is 4471.4 GB/s in
-    `moe/bench/hardware/measured_nvidia_h200.yaml` against the 4389.4 the
-    anomaly was computed against. The sentence names the loop that measured it,
-    because the whole point of the term is that two loops are compared.
+    already moved: the H200's reduction read in
+    `moe/bench/hardware/measured_nvidia_h200.yaml` sits well above the 4389.4
+    the anomaly was computed against. The sentence names the loop that measured
+    it, because the whole point of the term is that two loops are compared.
 
     IT IS FOUND UNDER THE NAME THE FILE USES. `calibrate` renamed `read` to
     `read_reduce` on 2026-09-02 and this lookup matched only `read` until
@@ -261,7 +282,9 @@ def test_the_registered_read_figure_comes_from_the_committed_calibration():
     for a card whose file was in the tree. Both names resolve, and the source
     line says which one was read."""
     gbps, source = CRV.registered_read(H200)
-    assert gbps == pytest.approx(4471.4, abs=0.1)
+    assert gbps == pytest.approx(_committed_read_reduce())
+    assert gbps != pytest.approx(CRV.REGISTERED_READ_GBPS, abs=1.0), \
+        "the committed calibration is preferred over the 2026-08-26 constant"
     assert "read_reduce" in source and "no committed calibration" not in source
     assert "time_eager" in source
     fallback, why = CRV.registered_read("NVIDIA L4")
@@ -287,18 +310,21 @@ def test_the_total_is_scored_against_the_denominator_it_actually_carries():
     """THE MIXED-DENOMINATOR TRAP, and it only shows off the degenerate case.
 
     `formulation * instrument` telescopes to `best / registered_gbps`, and
-    `registered_gbps` is the committed calibration's 4471.4 on the H200, not the
-    4389.4 ANOMALY_MARGIN was built on. Printed against ANOMALY_MARGIN, the
-    2026-08-27 pod world read as 1.0013x "against the 1.0214 the anomaly needs"
-    -- 2.0 points short when it is 0.18 points short, an 11x misstatement of the
-    residual on a 2.14% margin, in a transcript that is this file's only
-    artefact. The threshold has to be recomputed against the same denominator.
+    `registered_gbps` is the committed calibration's reduction read on the
+    H200, not the 4389.4 ANOMALY_MARGIN was built on. Printed against
+    ANOMALY_MARGIN, the 2026-08-27 pod world read as 1.0013x "against the
+    1.0214 the anomaly needs" -- 2.0 points short when it is 0.18 points
+    short, an 11x misstatement of the residual on a 2.14% margin, in a
+    transcript that is this file's only artefact. The threshold has to be
+    recomputed against the same denominator, which is a RELATION between the
+    two denominators and not either one's value: `needed` moves with every
+    recalibration of this card and `ANOMALY_MARGIN` never does.
     """
     registered, _src = CRV.registered_read(H200)
-    assert registered == pytest.approx(4471.4, abs=0.1), "the premise moved"
+    assert registered == pytest.approx(_committed_read_reduce()), "the premise moved"
     terms = _terms(CRV.plant(4475.6 / 4463.0, "none"), registered)
     needed = CRV.ANOMALY_GBPS / registered
-    assert needed == pytest.approx(1.0027, abs=0.0001)
+    assert 1.0 < needed < CRV.ANOMALY_MARGIN, (needed, CRV.ANOMALY_MARGIN)
     assert f"{needed:.4f}" in terms["total"]
     assert f"{CRV.ANOMALY_MARGIN:.4f}" not in terms["total"]
     assert "4483.4" in terms["total"] and f"{registered:.1f}" in terms["total"]

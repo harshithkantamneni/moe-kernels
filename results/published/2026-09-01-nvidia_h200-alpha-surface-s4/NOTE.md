@@ -135,3 +135,43 @@ band around it was rewritten by
 which confines itself to the registered ridge fields and prints its own gates.
 The measured columns are untouched: nothing here was re-timed, and the ridge is
 the only thing that moved.
+
+## Rescored a third time on 2026-09-10, and that is the story now
+
+The card was recalibrated again. Its dense bf16 peak has now read 712.3, then
+668.5, then 682.1 TFLOP/s across three calibrations of ONE H200 in nine days,
+its GEMM clock 1515, 1485 and 1470 MHz, and its ridge
+
+    162.8, then 152.8, then 155.9 FLOP/byte
+
+with the band moving from `[152.1, 165.6]` to `[142.8, 155.4]` to
+`[145.8, 158.6]`. Nothing was re-timed on any of the three occasions. The
+bandwidth term reproduced to 0.02% throughout; every one of these moves is the
+compute term, and THAT NON-REPRODUCTION IS ITSELF A RESULT of this study rather
+than a defect in this arm.
+
+    .venv/bin/python scripts/rescore_published_reports.py --write
+
+rewrote the registered ridge fields in these reports once more, printed its four
+gates, and is a no-op on a second pass. This shift is 2.0%, INSIDE the tool's
+own 2.7% MDE, where the 2026-09-09 one was 6.1% and outside it.
+
+THE TABLE ABOVE IS THE FIRST RESCORING'S AND ITS `is` COLUMN IS SUPERSEDED. It
+is kept unedited because it is what this arm was rescored to on 2026-09-02, and
+history is dated rather than rewritten. Transcribing a derived column into prose
+is what made it go stale twice, so it is not transcribed a third time: what the
+reports carry today is
+
+| field | today |
+|---|---|
+| `ridge` | 155.9 |
+| `ridge_band` | [145.8, 158.6] |
+| `predictions[128].crossing_rows_ridge_lo` | 227.16 |
+| `predictions[128].crossing_rows_ridge_hi` | 247.10 |
+| `predictions[256].crossing_rows_ridge_lo` | 145.80 |
+| `predictions[256].crossing_rows_ridge_hi` | 158.60 |
+| `bracketing.horizon_rows` | 374.16 |
+
+and every report's own `rescored_from` block, not this file, is the record of
+what it was rescored off. Read this table as of its date; read the reports for
+what they say now.

@@ -1486,13 +1486,27 @@ VOID_RUN = {
 #: `moe/bench/hardware/measured_nvidia_h200.yaml`, `detail.bandwidth_patterns`,
 #: the largest valid READ entry, which `ROOF_PATTERNS` walks for.
 #:
-#: 4613.0 AND NOT 4469.6 SINCE ab61e55. The 2026-09-09 pod republished this
-#: card's calibration and the file it wrote carries `read_stream` and
-#: `read_reduce`, the names `calibrate.measure_bandwidth` moved to on
-#: 2026-09-02, with no `read` entry at all. This constant is the number the
-#: script's own `measured_card` reads out of the committed file, asserted
-#: against it below rather than remembered here.
-H200_READ_ROOF = 4613.006445392317e9
+#: NEVER A LITERAL. It has read 4469.6, then 4613.0, then 4612.3 in nine days
+#: as the card was recalibrated, and a retyped copy went red each time. It is
+#: READ from the same file the script reads; the test below checks the walk
+#: that produced it against the yaml's own pattern list, which is the part
+#: that can regress.
+H200_READ_ROOF = AB.measured_card("NVIDIA H200")["roof_bytes_s"]
+
+
+def _committed_gemm_mhz(card: str) -> float:
+    """A card's own bf16 GEMM clock, walked straight out of its yaml.
+
+    Not through `roofline.reference_clock`, so the resolver the script uses
+    still has an independent figure to be checked against, and not typed out,
+    because this card's has read 1515, 1485 and 1470 in nine days.
+    """
+    import yaml
+
+    from moe.bench import roofline as RF
+    doc = yaml.safe_load(
+        (RF.HARDWARE_DIR / f"{RF.measured_slug(card)}.yaml").read_text())
+    return float(doc["detail"]["gemm_clock"]["median_mhz"])
 
 
 def void_records(scale: float = 1.0):
@@ -1799,7 +1813,14 @@ def test_the_headroom_fail_detail_says_which_of_the_two_worlds_it_is():
     ratio = float(gate.detail.split("a ratio of ")[1].split()[0])
     assert 1.0 < ratio < AB.MIN_HEADROOM_RATIO, ratio
     assert "IS faster than DRAM and DRAM did bind" in gate.detail
-    assert f"r = 1/(h-1) = {1.0 / (ratio - 1.0):.3f}" in gate.detail
+    # h IS PRINTED AT THREE DECIMALS AND THE GATE DIVIDES THE FULL-PRECISION
+    # ONE, so re-deriving r from the parsed h and demanding the same three
+    # decimals is a test of where the roof rounds. It was green only while
+    # the roof happened to be 4613.0 GB/s and went red at 4612.3, which is a
+    # recalibration of 0.016%. Compare the two numbers, not their strings.
+    printed_r = float(gate.detail.split("r = 1/(h-1) = ")[1].split()[0])
+    assert printed_r == pytest.approx(1.0 / (ratio - 1.0), abs=0.005)
+    assert printed_r > AB.MAX_BRACKET_R, "this is the FAIL branch"
     assert "had slack" not in gate.detail
 
     # AND THE BELOW-1 WORLD, which is the 2026-09-01 run, keeps its own story.
@@ -1981,7 +2002,19 @@ def test_the_planted_ceilings_are_the_cards_own_and_not_a_remembered_number():
     assert a100["l2_bytes"] == 41943040 == 40 * 2 ** 20
     assert AB.SYNTHETIC_L2_BYTES == h200["l2_bytes"]
     assert AB.SYNTHETIC_ROOF_BYTES_S == h200["roof_bytes_s"]
-    assert abs(h200["roof_bytes_s"] - H200_READ_ROOF) < 1.0
+    # THE WALK, not the number: the roof has to be the largest READ pattern
+    # the committed yaml publishes, found without going through
+    # `measured_card` again.
+    import yaml
+
+    from moe.bench import roofline as RF
+    doc = yaml.safe_load(
+        (RF.HARDWARE_DIR / "measured_nvidia_h200.yaml").read_text())
+    reads = [p["gbps"] for p in doc["detail"]["bandwidth_patterns"]
+             if p["pattern"] in AB.ROOF_PATTERNS]
+    assert reads, "a card with no READ pattern has no roof for this arm"
+    assert h200["roof_bytes_s"] == pytest.approx(max(reads) * 1e9)
+    assert H200_READ_ROOF == h200["roof_bytes_s"]
     assert AB.SYNTHETIC_L2_BYTES != 50 * 2 ** 20
     # The control has to fit inside the SMALLER of the two, or it controls for
     # nothing on the A100.
@@ -2082,10 +2115,12 @@ def test_the_level_reference_reaches_both_of_this_arms_time_kernel_calls():
 def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_against():
     """THE CONSEQUENCE, replayed end to end through this file's own fold.
 
-    A card pegged at 1400 MHz while an H200 roof was measured at 1485 is 94.3%
-    of the ruler, under `LEVEL_FRACTION`. (1515 and 92% until ab61e55
-    re-measured the card; the assertion below moved to 1485 on 2026-09-09 and
-    this sentence did not.) Scored against the reference every pass
+    A card pegged below `LEVEL_FRACTION` of the reference its roof was
+    measured at. Both numbers are READ from the committed calibration and
+    derived from it: the reference has been 1515, 1485 and 1470 in nine days,
+    and a sag of 1400 MHz was 92% of the first, 94.3% of the second and
+    LEVEL against the third, so a fixed pair stops testing the thing within
+    the week. Scored against the reference every pass
     reads False and `_fold_flag` keeps the False; scored against nothing every
     pass reads None, the fold keeps None, and the rung reaches `cells.jsonl`
     carrying the column with no verdict in it. Both ladders would sag together
@@ -2096,12 +2131,10 @@ def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_agai
     below never moves, so `clock_drift_ok` is True in both worlds and the
     retired throttle check passes a card running at 92% of its roof's clock.
     """
-    # 1485 AND NOT 1515 SINCE ab61e55: the 2026-09-09 calibration measured the
-    # 8192^3 bf16 GEMM at 1485 MHz under a 700 W cap, and this is that number
-    # read back out of the committed file rather than a remembered one.
     reference = AB.reference_clock_for(AB.PLANT_CARD).mhz
-    assert reference == 1485.0
-    sagging = 1400.0
+    assert reference == _committed_gemm_mhz(AB.PLANT_CARD), \
+        "the reference is the card's committed bf16 GEMM clock, not a memory"
+    sagging = reference * (AB.timing.LEVEL_FRACTION - 0.03)
     assert sagging < AB.timing.LEVEL_FRACTION * reference
 
     blind = AB.fold_timings([_pass_timing(sagging, None) for _ in range(3)])
@@ -2131,7 +2164,8 @@ def test_a_card_with_no_level_reference_refuses_before_the_ladder_is_paid_for():
     translate into REFUSED (2), which is "nothing spent, nothing measured".
     """
     ok = AB.require_reference_clock(_fake_torch(AB.PLANT_CARD))
-    assert ok.mhz == 1485.0 and ok.card == AB.PLANT_CARD
+    assert ok.mhz == _committed_gemm_mhz(AB.PLANT_CARD)
+    assert ok.card == AB.PLANT_CARD
     # THE SAME READER THE DRIVER USES, an identity rather than two equal
     # numbers: a private copy of the three-field rule here is the defect the
     # driver's own pinning test exists to catch.
@@ -2965,11 +2999,13 @@ def test_the_remedy_named_is_the_lever_that_actually_moved():
 #: committed calibration holds under memory load for 30 s. Every rung of this
 #: ladder is memory-bound, so on a rental every rung is the HIGH row.
 #:
-#: 1485 SINCE ab61e55, measured at 691 W under the card's 700 W cap. The
-#: 2026-09-09 session then showed what that number is: not the middle of
-#: anything, but near the LOW end of what dense tensor work does on this card,
-#: which is why a +/-5% band around it excludes tiles rather than defects.
-H200_GEMM_REFERENCE_MHZ = 1485.0
+#: A PLANTED REFERENCE, deliberately a round number no calibration publishes.
+#: It read 1515, then 1485, under a comment calling it the card's own; both
+#: were the live figure of the day wearing that name, and both went stale. The
+#: three constants here are arguments the tests below hand to a pure fold, so
+#: what they exercise is the fold's arithmetic and not any card's clock. A
+#: test that needs the card's own reference calls `_committed_gemm_mhz`.
+H200_GEMM_REFERENCE_MHZ = 1500.0
 H200_MEMORY_LOAD_MHZ = 1980.0
 SAGGED_MHZ = 1400.0
 

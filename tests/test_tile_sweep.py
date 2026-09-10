@@ -48,15 +48,32 @@ import torch as real_torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import exit_codes, roofline, timing  # noqa: E402
 
 H200 = "NVIDIA H200"
 #: The clock `moe/bench/hardware/measured_nvidia_h200.yaml` publishes for its
 #: dense GEMM. Named here so a test that asserts the instrument was handed a
-#: reference asserts it was handed THE reference, not merely something. It was
-#: 1515.0 until the 2026-09-09 recalibration (ab61e55) measured 1485 under a
-#: 700 W cap and left this literal behind, red in two tests.
-H200_REFERENCE_MHZ = 1485.0
+#: reference asserts it was handed THE reference, not merely something.
+#:
+#: READ FROM THE FILE, NEVER RETYPED. This card's GEMM clock has read 1515,
+#: then 1485, then 1470 in nine days, and each time it moved a literal here
+#: went red. The yaml is walked directly rather than through
+#: `roofline.reference_clock`, so the resolver the script uses still has an
+#: independent figure to be checked against.
+H200_REFERENCE_MHZ = float(
+    roofline.measured_doc(H200)[0]["detail"]["gemm_clock"]["median_mhz"])
+
+
+def below_level(reference_mhz: float) -> float:
+    """A load clock the real `level_side` calls LOW against `reference_mhz`.
+
+    Derived from the reference it is scored against, because a fixed sag is
+    only a sag until the card is recalibrated: `SAGGED_MHZ` was 1400 against
+    a 1485 MHz card, which is 0.94x and low, and 0.95x and LEVEL against the
+    1470 the same card read a day later. A planted world keeps its own
+    constants; anything scored against a calibration is computed from it.
+    """
+    return reference_mhz * (timing.LEVEL_FRACTION - 0.03)
 #: No calibration names this, and none can: `measured_slug` would look for
 #: `measured_nvidia_not_a_card.yaml`.
 UNCALIBRATED = "NVIDIA NOT-A-CARD"
@@ -282,13 +299,14 @@ def test_the_reference_clock_is_the_cards_own_and_says_where_it_came_from():
 def test_a_sagging_card_now_reads_clock_level_ok_false_on_every_row(pod):
     """THE DEAD COLUMN, brought to life, and this is the FAIL branch of it.
 
-    1000 MHz against the card's 1485 MHz reference is below `LEVEL_FRACTION`,
-    so the real `clock_flags` returns False. Before the fix
+    A load clock below `LEVEL_FRACTION` of the card's own reference, so the
+    real `clock_flags` returns False. Before the fix
     `reference_clock_mhz` was never passed, `clock_flags` returned None, and
     this cell was EMPTY on every row the sweep has ever written while the
     branch below it could not run.
     """
-    pod.timing_result = lambda **kw: timing_at(1000.0, kw["reference_clock_mhz"])
+    pod.timing_result = lambda **kw: timing_at(
+        below_level(kw["reference_clock_mhz"]), kw["reference_clock_mhz"])
     assert run(pod) == exit_codes.DONE
 
     assert [kw["reference_clock_mhz"] for kw in pod.seen] == \
@@ -296,7 +314,8 @@ def test_a_sagging_card_now_reads_clock_level_ok_false_on_every_row(pod):
     rows = cells(pod)
     assert len(rows) == 2
     assert [r["clock_level_ok"] for r in rows] == ["0", "0"]
-    assert [r["reference_clock_mhz"] for r in rows] == ["1485", "1485"], (
+    assert [r["reference_clock_mhz"] for r in rows] == \
+        [f"{H200_REFERENCE_MHZ:.0f}"] * 2, (
         "the number LEVEL was scored AGAINST belongs on the row it scored; the "
         "tri-state alone cannot tell a row that passed from one with no "
         "reference at all, since both read empty")
@@ -395,9 +414,9 @@ def test_a_kernels_own_runtime_error_is_still_one_cells_error(pod):
 #: calibration until ab61e55 remeasured the card at 1485 MHz under the 700 W
 #: cap on 2026-09-09, so the constant was the superseded live number wearing
 #: the name of the current one, and the file that carried it also defines
-#: `H200_REFERENCE_MHZ = 1485.0` for the card's real figure. A planted world
-#: gets a planted number; a test that needs the card's own clock reads the
-#: committed calibration.
+#: `H200_REFERENCE_MHZ` off the committed yaml for the card's real figure. A
+#: planted world gets a planted number; a test that needs the card's own clock
+#: reads the committed calibration.
 PLANTED_REFERENCE_MHZ = 1500.0
 #: Well above `PLANTED_REFERENCE_MHZ * timing.LEVEL_HIGH_FRACTION`, the state
 #: of every memory-shaped tread the H200 gaps session measured (1950-1980).
@@ -555,7 +574,8 @@ def test_a_sagging_card_is_kept_and_says_low(pod, capsys):
     then this run counted two excluded-shaped rows, which on the H200 is what
     a BLOCK_M=128 tile at its own operating point under the power cap looks
     like."""
-    pod.timing_result = lambda **kw: timing_at(SAGGED_MHZ, kw["reference_clock_mhz"])
+    pod.timing_result = lambda **kw: timing_at(
+        below_level(kw["reference_clock_mhz"]), kw["reference_clock_mhz"])
     assert run(pod) == exit_codes.DONE
     rows = cells(pod)
     assert [r["clock_level_side"] for r in rows] == ["low", "low"]

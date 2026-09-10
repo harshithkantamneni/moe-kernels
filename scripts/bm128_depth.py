@@ -276,9 +276,11 @@ THE TWO ESCAPE ROUTES, and both are closed at BM=128 on this hardware.
 
       Maximised under the tolerance constraint, `n` clean treads need
       `rho >= (1 + tol (n - 1)) 2 BM / b`, which at n = 5 is 1.6 x 128 = 204.8
-      FLOP/byte against calibrated ridges of 145.8 (A100) and 152.8 (H200), the
-      figure ab61e55 recalibrated the H200 to on 2026-09-09 from 162.8. But
-      the same constraint has a form that needs NO CARD AT ALL:
+      FLOP/byte against the two cards' calibrated ridges, which
+      `calibrated_ridges_phrase()` reads off the committed yamls and this
+      sentence deliberately does not repeat: the H200's has read 162.8, 152.8
+      and 155.9 in nine days. But the same constraint has a form that needs
+      NO CARD AT ALL:
 
           alpha <= (1 - tol) / [(1 - tol) + n (tol + margin)] = 0.85 / 1.70 = 0.500
 
@@ -648,6 +650,25 @@ CALIBRATION_SLUGS = {"a100": "measured_nvidia_a100_sxm4_80gb",
                      "h200": "measured_nvidia_h200"}
 
 
+def calibrated_ridges_phrase(dtype: str = "bf16",
+                             directory: Path | None = None) -> str:
+    """"145.8 (A100) and 155.9 (H200)", off the committed calibrations.
+
+    A PHRASE AND NOT A CONSTANT, because these two ridges are the printed
+    predictions' only reference to a real card and one of them does not
+    reproduce: the H200's has read 162.8, 152.8 and 155.9 in nine days. The
+    text below quoted whichever pair was current when it was typed and went
+    stale twice, which is a prediction registered against a machine that no
+    longer exists. Built here so every sentence that names them names the
+    same file the run scores against.
+    """
+    parts = []
+    for key in ("a100", "h200"):
+        hw = load_hardware(CALIBRATION_SLUGS[key], directory=directory)
+        parts.append(f"{hw.ridge_point(dtype):.1f} ({key.upper()})")
+    return " and ".join(parts)
+
+
 # --------------------------------------------------------------------------
 # The depth law. Pure arithmetic: no torch, no GPU, no files.
 # --------------------------------------------------------------------------
@@ -684,8 +705,9 @@ def escape_down_rho(block_m: int, b: int, treads: int,
 
         rho >= (1 + tol (treads - 1)) 2 BM / b
 
-    which is 204.8 FLOP/byte for five treads at BLOCK_M=128, bf16. The two cards
-    in this study calibrate at 145.8 and 162.8.
+    which is 204.8 FLOP/byte for five treads at BLOCK_M=128, bf16. Both cards
+    in this study calibrate well below it, on every calibration either has
+    published; `calibrated_ridges_phrase()` prints today's pair.
     """
     return (1.0 + tol * (treads - 1)) * 2.0 * block_m / b
 
@@ -1499,6 +1521,7 @@ def predictions_text(b: int = 2, corpus: CorpusBC | None = None) -> str:
     """
     up = escape_up_alpha_rho(SUBJECT_BLOCK_M, b)
     down = escape_down_rho(SUBJECT_BLOCK_M, b, TARGET_TREADS)
+    ridges = calibrated_ridges_phrase()
     p1 = (corpus.line() if corpus is not None else
           "the published corpus is NOT RECOMPUTABLE on this checkout (no "
           "valid-reference BLOCK_M=128 ladder under results/published), so "
@@ -1521,7 +1544,7 @@ P2  C1 FAILS: fewer than {TARGET_TREADS} clean memory-bound treads.
     Escape up needs {up:.1f} and the corpus tops out at 150.4, on a ladder whose
     slope rises then falls. Escape down needs rho >= {down:.1f} and the highest
     achieved rho on any published ladder is 166.5, against calibrated ridges of
-    145.8 (A100) and 152.8 (H200). FAIL here is the good outcome and would mean
+    {ridges}. FAIL here is the good outcome and would mean
     the cap CAN be measured at the tile vLLM actually runs.
 P3  C2 FAILS: no BM=128 fit clears the tolerance by {MARGIN_SIGMA:.0f} sd.
 P4  EXPERT SIZE does not enter B/C. mixtral's per-expert weight is 6.4x qwen2's

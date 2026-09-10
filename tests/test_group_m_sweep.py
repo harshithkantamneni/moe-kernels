@@ -652,15 +652,20 @@ def test_the_reference_is_this_cards_own_calibration_and_names_its_field():
     from moe.bench import roofline
 
     ref = GM.reference_clock_for("NVIDIA H200")
-    # 1515 on the 2026-09-02 calibration, 1485 on the 2026-09-09 one, which
-    # sampled the dense GEMM's clock while it ran instead of after it. The
-    # field is what is pinned; the number is whatever that field holds. Which
-    # field also moved with that calibration: the 2026-09-02 file carried only
-    # the scalar `gemm_clock_mhz`, the 2026-09-09 one carries the whole
-    # under-load record, and the resolver prefers its median because that is
-    # the sample taken while the GEMM ran. Either field is named here, because
-    # the point of the assertion is that the source SAYS which one it read.
-    assert ref.mhz == 1485.0
+    # 1515, then 1485, then 1470 across three calibrations of this one card.
+    # THE FIELD IS WHAT IS PINNED; the number is whatever that field holds, so
+    # it is read back out of the yaml rather than typed. Which field also
+    # moved: the 2026-09-02 file carried only the scalar `gemm_clock_mhz`, the
+    # later ones carry the whole under-load record, and the resolver prefers
+    # its median because that is the sample taken while the GEMM ran. Either
+    # field is named here, because the point of the assertion is that the
+    # source SAYS which one it read.
+    doc, why = roofline.measured_doc("NVIDIA H200")
+    assert doc, why
+    detail = doc["detail"]
+    assert ref.mhz == float(
+        (detail.get("gemm_clock") or {}).get("median_mhz")
+        or detail["gemm_clock_mhz"])
     assert "gemm_clock.median_mhz" in ref.source or "gemm_clock_mhz" in ref.source
     assert ref.grade == "under-load"
     assert ref.card == "NVIDIA H200"

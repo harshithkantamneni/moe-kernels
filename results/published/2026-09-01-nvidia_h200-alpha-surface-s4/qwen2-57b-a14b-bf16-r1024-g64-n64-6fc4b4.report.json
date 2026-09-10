@@ -5,10 +5,10 @@
     0.588
   ],
   "retracted_alpha": 0.1,
-  "ridge": 152.8,
+  "ridge": 155.9,
   "ridge_band": [
-    142.8,
-    155.4
+    145.8,
+    158.6
   ],
   "dtype_bytes": 2,
   "model": "qwen2-57b-a14b",
@@ -49,14 +49,14 @@
     },
     "128": {
       "ai_cap": 229.3906810035842,
-      "crossing_rows_ridge_lo": 222.4824,
-      "crossing_rows_ridge_hi": 242.1132,
+      "crossing_rows_ridge_lo": 227.15640000000002,
+      "crossing_rows_ridge_hi": 247.0988,
       "first_compute_tread": 2
     },
     "256": {
       "ai_cap": 458.7813620071684,
-      "crossing_rows_ridge_lo": 142.8,
-      "crossing_rows_ridge_hi": 155.4,
+      "crossing_rows_ridge_lo": 145.8,
+      "crossing_rows_ridge_hi": 158.6,
       "first_compute_tread": 1
     }
   },
@@ -365,7 +365,7 @@
   "bracketing": {
     "reached_rows": 1024.0,
     "reached_tiles": 16,
-    "horizon_rows": 366.72,
+    "horizon_rows": 374.16,
     "positive_control": 256,
     "saturation": 0.9528281750266809,
     "last_gain": 0.005662363951302707
@@ -409,8 +409,8 @@
   ],
   "ridge_source": "measured_nvidia_h200.yaml",
   "ridge_band_source": "this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling",
-  "bandwidth_source": "measured_nvidia_h200.yaml, 4374.5 GB/s (triad pattern), the denominator of the ridge above",
-  "rescored_utc": "2026-09-10T01:02:37Z",
+  "bandwidth_source": "measured_nvidia_h200.yaml, 4374.3 GB/s (triad pattern), the denominator of the ridge above",
+  "rescored_utc": "2026-09-10T16:57:05Z",
   "rescored_from": {
     "ridge": 160.3,
     "ridge_band": [
