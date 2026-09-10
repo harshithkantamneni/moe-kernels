@@ -264,7 +264,7 @@
 #     prints "estimated wall time" and charges a compile per setting), while
 #     seven arms are booked at what their plans call "the model's own timings,
 #     excluding compiles and allocation": roofline-n64-g1 58 s, bm128_depth
-#     252 s, bn_g16 2142 s, occupancy 1342 s, cap_test 242 s, dtype 454 s and
+#     252 s, bn_g16 2754 s, occupancy 1342 s, cap_test 242 s, dtype 454 s and
 #     span_dense 1814 s. The paragraph under the table then said BOOK ABOVE THAT
 #     AND NEVER AT IT and gave no number to book above, leaving the mixed sum as
 #     the only figure on the page. Every row names its clock now, and the total
@@ -1002,7 +1002,8 @@ arm_script() { case "$1" in
   cap_test)                      echo scripts/tile_cap_test.py ;;
   dtype)                         echo scripts/dtype_tile_confound.py ;;
   span|span_dense)               echo scripts/span_extent_separation.py ;;
-  counter_plan|counter-*)        echo scripts/dram_counter_route.py ;;
+  counter_plan|counter_contrast|counter-*)
+                                 echo scripts/dram_counter_route.py ;;
   *)                             echo "" ;;
 esac; }
 
@@ -1791,6 +1792,7 @@ arm_minutes()  { case "$1" in
   dtype) echo 8 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
   counter_plan) echo 1 ;;
   counter-n32-m64) echo 120 ;;  counter-n128-m64) echo 120 ;;
+  counter_contrast) echo 0 ;;
 esac; }
 
 # WHERE THAT NUMBER CAME FROM, one line per arm, so no row in the cost table is
@@ -1816,7 +1818,8 @@ arm_basis() { case "$1" in
   span_dense) echo "span_extent_separation.py --dry-run --densify -> '84 cells x 9 arms = 756 timed arms. Estimated KERNEL time 1814 s'." ;;
   span)       echo "span_extent_separation.py --dry-run --no-densify -> 'AND THIS GRID WOULD REFUSE: grid too sparse for C2'. Zero minutes: it stops before it spends one, and that refusal is the extent comparison's honest answer on the published grid." ;;
   counter_plan) echo "dram_counter_route.py --probe returns in seconds and prints no cost line; 1 min is this file's allowance for it. THIS ROW QUOTED 'Budget 15 minutes of GPU time' UNTIL 2026-09-10 and the plan had stopped saying it: the page now reads 'Budget an hour of GPU time and two pod-hours end to end, not the fifteen minutes the one-launch recipe used to promise', because the profiled launch count is warmup + iters x trials rather than one. Neither figure is this arm's, because both price the MEASUREMENT, which is the counter arm below, but a row quoting a sentence its own plan no longer prints is how a booking goes stale without anyone reading it." ;;
-  counter-n32-m64|counter-n128-m64) echo "dram_counter_route.py --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32, and the same at --block-n 128 -> 'COST. 6 tile counts x 2 cache modes = 12 profiled invocations of at least 11 fused_experts calls each, about 660 profiled kernel launches plus 120 L2-flush launches ... Budget an hour of GPU time and two pod-hours end to end'. Two pod-hours is 120 WALL minutes and that is EACH arm's booking: the page charges ncu replay and its save/restore of the 2.8 GB weight buffers outright, at seconds per launch, so nothing here is left to a ratio. THE COST BLOCK IS BYTE-IDENTICAL AT THE TWO BLOCK_N, verified off GPU (md5 fabbeedc38cf2e784316e9e59f6b8f3c on both pages; the two plans differ in the run id, the pinned line, three corrected-cap rows and the two recipe lines, and nowhere else), so the contrast is TWO sets of 12 invocations and 240 WALL minutes for the pair, which is what this session books. UNTIL 2026-09-10 IT WAS ONE ARM AT 120 AND THE CONTRAST WAS LEFT TO THE OPERATOR while arm_closes said the arm ran it: that arm line passed no --block-n and no --block-m and took the script's own argparse defaults as they stood that day, BLOCK_N=64 and BLOCK_M=32, which is the single pinned cell the 2026-09-10 analysis named as the defect to fix before running. NO LINE NUMBER IS QUOTED HERE ON PURPOSE: dram_counter_route.py is a separate slice's file and the defaults are its to move, so this row records what the arm RAN and pins the flags on its own line rather than citing a line in a file it does not own. Both flags are on both arm lines now, and the pre-registered discriminator below is at the BLOCK_M they pass." ;;
+  counter_contrast) echo "scripts/dram_counter_route.py --contrast $SESSION/counter_run_n32.json $SESSION/counter_run_n128.json, over the two files the pair above writes. ZERO MINUTES AND NO FIGURE TO READ OFF A PLAN, because it reads two payloads already paid for and times nothing: --contrast is exclusive with --dry-run, so there is no plan page to quote and this row is the command instead. WHY IT IS AN ARM AND NOT A NOTE. Until 2026-09-10 the session paid for both payloads and never took the reading they exist for: grep for --contrast over this driver and the docs returned nothing, and the ratio that decides TRAFFIC from TIME was left to the operator to compute by hand off the printed predictions, which is the improvisation the pair was added to prevent. THE SCORER IS PROVEN OFF GPU on exactly two payloads of the shape --run writes, and its two RESULT lines are VALIDITY X0 and CLAIM XA-all: a traffic world reads as TRAFFIC at a ratio near 1.871 and a time world reads as TIME at 1.000, 87% apart and scored at +/-5% of each rival. IT IS SKIPPED, NEVER REFUSED, WHEN A PAYLOAD IS MISSING: a contrast over one cell is not a contrast, and a half-run pair must not be filed as a failed claim." ;;
+  counter-n32-m64|counter-n128-m64) echo "dram_counter_route.py --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32, and the same at --block-n 128 -> 'COST, of the plan as extended. 5 cells x 6 tile counts x 2 cache modes = 60 profiled invocations of at least 11 fused_experts calls each, about 3300 profiled kernel launches ... At 5 minutes per profiled invocation that is 5.0 GPU-hours for the whole extended plan, against 1.0 for the single cell the plan used to hold, and about half again in pod time ... DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone'. THAT PAGE PRICES FIVE CELLS AND THIS SESSION BOOKS TWO, so neither 5.0 nor 3.0 is this pair's figure and neither may be read as one. WHAT THE PAIR SPENDS, derived from the page's own 5 minutes per profiled invocation rather than transcribed from a sentence: one --run is one cell at one cache mode, which is 6 profiled invocations and 0.5 GPU-hour, so the pair is 12 invocations and 1.0 GPU-hour, exactly the figure the page itself names as '1.0 for the single cell the plan used to hold'. At the page's 'about half again in pod time' that is roughly 45 wall minutes an arm and 90 for the pair. EACH ARM IS BOOKED 120 AND THE PAIR 240, above that figure and never at it, because ncu replay's save and restore of the 2.8 GB weight buffers is the one term in it this repo has never timed. THE COST BLOCK IS BYTE-IDENTICAL AT EVERY BLOCK_N, verified off GPU (md5 c612a3e7a12ebbcd6c65c166316e1cfd at --block-n 32, 64 AND 128), BUT NOT FOR THE REASON THIS ROW USED TO GIVE: the block prices the five-cell extended plan, which does not depend on which single cell you run, so two identical pages no longer license the inference that each cell costs the same, and the 12-invocations-per-arm figure is re-derived above from the per-invocation rate instead of read off that identity. It read md5 fabbeedc38cf2e784316e9e59f6b8f3c until the plan was extended on 2026-09-10. The two plans differ in exactly seven lines: the run id, the pinned line, three corrected-cap rows, the recipe line and the schema's block_n. ONE OF THOSE ROWS DIFFERS IN KIND AND NOT IN VALUE: at BLOCK_N=32 the alpha_a=1 end of the corrected cap reads REFUSED, because alpha_fitted 0.6583 sits below the floor 0.6684 that alpha_b=0 gives, where at BLOCK_N=128 the same row reads 64.1. UNTIL 2026-09-10 IT WAS ONE ARM AT 120 AND THE CONTRAST WAS LEFT TO THE OPERATOR while arm_closes said the arm ran it: that arm line passed no --block-n and no --block-m and took the script's own argparse defaults as they stood that day, BLOCK_N=64 and BLOCK_M=32, which is the single pinned cell the 2026-09-10 analysis named as the defect to fix before running. NO LINE NUMBER IS QUOTED HERE ON PURPOSE: dram_counter_route.py is a separate slice's file and the defaults are its to move, so this row records what the arm RAN and pins the flags on its own line rather than citing a line in a file it does not own. Both flags are on both arm lines now, and the pre-registered discriminator below is at the BLOCK_M they pass." ;;
 esac; }
 
 # WHAT THE BOOKED FIGURE DOES NOT INCLUDE, in the arm's own words. Empty for an
@@ -2085,6 +2088,7 @@ arm_closes() { case "$1" in
   counter_plan) echo "Whether a DRAM counter is reachable here, and it now GATES arms 14 and 15, which are the counter pair. A counter is the only route to alpha_b as a number rather than an interval, and this records which way THIS pod fell. IT IS NOT A FOREGONE BLOCKED ANY MORE and this line said it was until 2026-09-10: the 2026-09-09 and 2026-09-10 RunPod H200s both read OPEN, ncu attaching with no permission error. READ ITS RESULT LINES, AND THE LEDGER WORD IS EARNED: since 2026-09-03 scripts/dram_counter_route.py --probe scores one gate per verdict, prints one RESULT line each, and exits through exit_codes.classify over the same gates, so OPEN and BLOCKED land as the words the table gives them and this driver's second opinion reads the page rather than finding it blank. (Until that day it exited 0 for OPEN and BLOCKED alike with no RESULT line, and before that 3 for everything but OPEN, which filed BLOCKED as INVALID; both halves are fixed.) BLOCKED is the ANSWER, not a broken instrument: a rented pod that cannot reach a DRAM counter is a fact about the pod, recorded so the next session does not spend the minute again." ;;
   counter-n32-m64)  echo "$(counter_closes 32)" ;;
   counter-n128-m64) echo "$(counter_closes 128)" ;;
+  counter_contrast) echo "THE READING THE PAIR IS PAID FOR, and until 2026-09-10 nothing took it. Both counter arms write a payload and the discriminator is a RATIO ACROSS them: dR/dn per M-tile at BLOCK_N=32 against BLOCK_N=128 at the same BLOCK_M. TRAFFIC predicts 1.871, TIME predicts 1.000, and the gate scores the measured ratio at +/-5% of each rival, so the two rivals cannot both be within tolerance. EITHER WORD IS A RESULT: TRAFFIC puts the missing term inside a byte model and makes alpha_b a number; TIME says the term is a schedule and no byte model can hold it, and the paper says so. It costs no GPU time, it is scored by the same exit-code table as every arm above, and a pair run half through is SKIPPED here rather than scored, because a claim gate over one cell would file a missing run as a refutation." ;;
 esac; }
 
 arm_offgpu_gates() { case "$1" in
@@ -2104,6 +2108,7 @@ arm_offgpu_gates() { case "$1" in
   pin_probe-n64-g1|pin_probe-n256-g16) echo "F1 and F2 need a vLLM span, which registers only on the GPU box" ;;
   counter_plan) echo "scripts/dram_counter_route.py --dry-run and --bracket  (the plan and the counter-free bound)" ;;
   counter-n32-m64|counter-n128-m64) echo "scripts/dram_counter_route.py --self-test  (the estimator, off GPU), then --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32 and the same at --block-n 128, for the cell, the four metrics and the pre-registered per-tile-count predictions. RUN IT AT BOTH BLOCK_N, WHICH IS THE FLAG THE ARM LINE PASSES: a gate advertised at the script's default cell while the arm runs a different one is this file's standing defect, and it is what the single 120-minute counter arm carried until 2026-09-10. THE ESTIMATOR IS THE POINT OF THE SELF-TEST: this arm's alpha_b is (dR/dn - a_per_tile)/W, a traffic slope with no fitted level, no delta and no D in it, so it is not the B/(A+B) that produced every unphysical alpha in the 2026-09-10 session and the self-test is what says so before the card is rented." ;;
+  counter_contrast) echo "scripts/dram_counter_route.py --self-test  (the estimator, the ncu parser AND the contrast scorer, off GPU: the self-test carries a THE CONTRAST SCORER section that plants a traffic world, a time world and one it must refuse). There is no --dry-run for this arm: --contrast is exclusive with it, and the predictions it is scored against are already registered on the counter pair's own plan pages, in section 2." ;;
   calibrate)  echo "none: it is a measurement and nothing else" ;;
 esac; }
 # <<< LIFTABLE
@@ -2123,7 +2128,7 @@ ARM_NAMES=(calibrate pin_probe-n64-g1 pin_probe-n256-g16
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy
            mma_switch ruler cap_test dtype span_dense span counter_plan
-           counter-n32-m64 counter-n128-m64)
+           counter-n32-m64 counter-n128-m64 counter_contrast)
 
 if (( LIST )); then
   say "ARMS, in the order their results are read"
@@ -3286,6 +3291,46 @@ counter_arm() {
 }
 counter_arm counter-n32-m64  32
 counter_arm counter-n128-m64 128
+
+# THE READING THE PAIR IS PAID FOR. Added 2026-09-10, when a build audit ran
+# `grep -rn -- --contrast scripts/h200_gaps_session.sh docs/*.md` and got
+# nothing: the session booked four pod-hours to write two payloads and then left
+# the ratio between them to the operator, off the printed predictions, by hand.
+# That is the same shape as an arm that measures and files no verdict, and it is
+# the one arithmetic step the whole pair exists to make possible.
+#
+# ZERO MINUTES, OFF GPU, AND AFTER BOTH. It reads two files already on disk and
+# times nothing, so it is booked FREE and placed last in the read order. Off a
+# GPU box neither payload exists, and `--contrast` is mutually exclusive with
+# `--dry-run` in the runner, so there is no plan page for this arm to print and
+# it is NOT_PLANNED there with the reason rather than PLAN_REFUSED: nothing
+# about the plan was refused, the inputs are simply not written yet.
+#
+# A HALF-RUN PAIR IS SKIPPED, NOT SCORED. `--contrast` over one payload REFUSES
+# by design, but a REFUSED row here would read as this session having asked the
+# question and been told no. It was never asked. The missing file is named
+# instead, which is the same discipline `skip_arm` exists for everywhere else.
+counter_contrast_arm() {
+  local name="$1" lo hi
+  local missing=()
+  lo="$SESSION/counter_run_n32.json"
+  hi="$SESSION/counter_run_n128.json"
+  if (( DRY )); then
+    skip_arm "$name" \
+      "off a GPU box neither payload exists: $lo and $hi are written by counter-n32-m64 and counter-n128-m64 on the card, and --contrast is exclusive with --dry-run so there is no plan page to print. The predictions this arm is scored against ARE registered off GPU, in section 2 of each counter arm's own plan. Its scorer is checked off GPU by scripts/dram_counter_route.py --self-test."
+    return 0
+  fi
+  [[ -f "$lo" ]] || missing+=("$lo")
+  [[ -f "$hi" ]] || missing+=("$hi")
+  if (( ${#missing[@]} )); then
+    skip_arm "$name" \
+      "the contrast is a RATIO ACROSS two cells and ${missing[*]} was not written, so there is one cell and --analyse is what scores one cell. Read the counter pair's rows above for why: counter_plan not DONE retires both, and a run that exited before writing its payload is in its own log. Nothing is spent here and nothing is claimed."
+    return 0
+  fi
+  arm "$name" "$PY_BASE" "$REPO/scripts/dram_counter_route.py" \
+      --contrast "$lo" "$hi" --card "$COUNTER_PLAN_CARD"
+}
+counter_contrast_arm counter_contrast
 
 # --------------------------------------------------------------------------
 # Every arm's verdict, together, against the item it closes. THE ONLY THING

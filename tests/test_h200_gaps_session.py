@@ -134,7 +134,8 @@ ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
         "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
-        "counter_plan", "counter-n32-m64", "counter-n128-m64")
+        "counter_plan", "counter-n32-m64", "counter-n128-m64",
+        "counter_contrast")
 
 #: The counter is TWO arms and the pair is the instrument: one BLOCK_N buys
 #: alpha_b as a traffic slope, the CONTRAST between two BLOCK_N at one BLOCK_M
@@ -143,6 +144,10 @@ ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
 #: script's defaults (BLOCK_N=64, BLOCK_M=32) while `arm_closes` said in the
 #: same file that it ran the contrast.
 COUNTER_ARMS = ("counter-n32-m64", "counter-n128-m64")
+#: The zero-minute arm that READS the pair, added 2026-09-10. Until then the
+#: session paid for both payloads and never took the ratio between them:
+#: `grep -rn -- --contrast` over the driver and the docs returned nothing.
+COUNTER_CONTRAST_ARM = "counter_contrast"
 COUNTER_BLOCK_M = 64
 COUNTER_BLOCK_NS = (32, 128)
 
@@ -896,10 +901,16 @@ def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
 
 def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
     """The end-to-end form of the four fixes above, on a box with no GPU: the
-    only arms without a PLANNED row are the two pin probes and the anchor
-    rescore, each of which is NOT_PLANNED with a reason. calibrate used to be a
-    fourth, skipped for a reason that was false, and dtype a fifth, landing
-    PLAN_REFUSED because it was given no card to name."""
+    only arms without a PLANNED row are the two pin probes, the anchor rescore
+    and the counter contrast, each of which is NOT_PLANNED with a reason.
+    calibrate used to be a fourth, skipped for a reason that was false, and
+    dtype a fifth, landing PLAN_REFUSED because it was given no card to name.
+
+    `counter_contrast` is the 2026-09-10 addition and it is NOT_PLANNED off GPU
+    for a reason no plan mode can remove: `--contrast` is mutually exclusive
+    with `--dry-run` in the runner, and the two payloads it reads are written by
+    the counter pair on the card. The predictions it is scored against are
+    registered off GPU all the same, in section 2 of each counter arm's plan."""
     got = run(["--dry-run"], session=tmp_path / "s")
     rows = dict(ln.split("\t")[:2] for ln in
                 (tmp_path / "s" / "ARMS-dryrun.tsv").read_text().splitlines()[1:])
@@ -909,7 +920,8 @@ def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
     # control fits at BLOCK_N=256 -- and not a defect in this driver.
     expected = dict.fromkeys(ARMS, "PLANNED")
     expected.update(dict.fromkeys(
-        ("pin_probe-n64-g1", "pin_probe-n256-g16", "anchor_rescore"),
+        ("pin_probe-n64-g1", "pin_probe-n256-g16", "anchor_rescore",
+         COUNTER_CONTRAST_ARM),
         "NOT_PLANNED"))
     expected.update(dict.fromkeys(
         ("roofline-n256-g16", "roofline-n256-g32"), "PLAN_REFUSED"))
@@ -4015,7 +4027,12 @@ def test_the_counter_arms_run_the_two_block_n_contrast_they_are_described_as_run
     for flag in ("--block-n", "--block-m"):
         assert re.search(rf'"{flag}", type=int, default=\d+', src), flag
     joined = re.sub(r"\\\n\s+", " ", CODE)
-    lines = [ln for ln in joined.splitlines()
+    # SCOPED TO `counter_arm`'S OWN BODY, which it was not until the zero-minute
+    # `counter_contrast` arm landed with an `arm "$name"` line of its own and
+    # made a file-wide count read 3 where this test means "this dispatcher's own
+    # two branches". A count over the whole file was never what was meant.
+    dispatcher = joined.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    lines = [ln for ln in dispatcher.splitlines()
              if re.match(r'\s*arm "\$name"\s', ln)]
     assert len(lines) == 2, lines          # one planning, one measuring
     planning = [ln for ln in lines if "--dry-run" in ln]
@@ -4085,37 +4102,89 @@ def test_the_counter_arms_refuse_by_name_when_the_runner_they_need_is_absent():
 
 
 def test_the_counter_arms_are_booked_at_the_figure_their_own_plan_prints():
-    """THE COST TABLE'S RULE, applied to the new rows: 120 minutes is not this
-    file's guess, it is the plan page's own "two pod-hours end to end" for the
-    twelve profiled invocations one arm makes. Re-derived here by running the
-    plan AT BOTH BLOCK_N the arms run, which is also the evidence for the
-    other half of the booking: the COST block is byte-identical at 32 and 128,
-    so the pair is two sets and 240 minutes, not one set stretched."""
+    """THE COST TABLE'S RULE, applied to the counter pair, and re-derived
+    rather than transcribed.
+
+    Until 2026-09-10 this test and `arm_basis` both quoted `'12 profiled
+    invocations'` and `'two pod-hours end to end'` off the plan page, and the
+    page stopped printing either when the plan was extended to five cells. A
+    booking whose only support is a sentence that no longer exists is the
+    defect this file was written to catch, so the derivation is done here from
+    the page's own per-invocation rate and from the runner's own defaults:
+
+      one `--run` is one cell at one cache mode, so it is len(DEFAULT_TILES)
+      profiled invocations; the pair is two of those, and the page prices an
+      invocation at 5 minutes.
+
+    The COST block being identical at every BLOCK_N is still true and is still
+    checked, but it no longer carries the booking: the block prices the
+    five-cell extended plan, so it is BLOCK_N-independent for a reason that
+    says nothing about what one cell costs. A BLOCK_N no arm runs is included
+    below to make exactly that point.
+    """
+    import scripts.dram_counter_route as dcr
+    per_run = len(dcr.DEFAULT_TILES)          # one cell, one cache mode
+    pair_invocations = per_run * len(COUNTER_ARMS)
+
     pages = {}
-    for bn in COUNTER_BLOCK_NS:
+    # 64 is on this list and is NOT an arm: it is the control that shows the
+    # COST block does not vary with the cell, which is why it cannot price one.
+    for bn in (*COUNTER_BLOCK_NS, 64):
         plan = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
              "--dry-run", "--card", "nvidia_h200",
              "--block-m", str(COUNTER_BLOCK_M), "--block-n", str(bn)],
             capture_output=True, text=True, timeout=300, cwd=str(ROOT))
         assert plan.returncode == 0, plan.stderr[-800:]
-        assert "12 profiled invocations" in plan.stdout, plan.stdout[-1500:]
-        assert "two pod-hours end to end" in plan.stdout, plan.stdout[-1500:]
+        # What the page prices, in its own words, and what it says the escape
+        # hatch is. Both are the extended plan's figures, not this pair's.
+        # Matched against the page with its wrapping collapsed, because a
+        # sentence that survives a re-wrap is the sentence, and a test that
+        # breaks on one is a test nobody keeps.
+        flat = " ".join(plan.stdout.split())
+        for said in (
+                "5 cells x 6 tile counts x 2 cache modes = 60 profiled invocations",
+                "5.0 GPU-hours for the whole extended plan",
+                "DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone"):
+            assert said in flat, (said, plan.stdout[-1500:])
         # The cell the plan registers is the cell the arm line pins.
         assert (f"GROUP_SIZE_M=16 BLOCK_SIZE_N={bn} "
                 f"BLOCK_SIZE_M={COUNTER_BLOCK_M}") in plan.stdout, plan.stdout[:900]
         pages[bn] = plan.stdout
-    cost = {bn: page.split("COST.", 1)[1].split("\n\n", 1)[0]
-            for bn, page in pages.items()}
-    assert cost[32] == cost[128], "the two plans no longer price the same"
+
+    def cost_block(page: str) -> str:
+        lines = page.splitlines()
+        i = next(k for k, ln in enumerate(lines) if ln.startswith("COST"))
+        j = i + 1
+        while lines[j].strip():
+            j += 1
+        return "\n".join(lines[i:j + 1]) + "\n"
+
+    blocks = {bn: cost_block(page) for bn, page in pages.items()}
+    assert len(set(blocks.values())) == 1, "the plans no longer price the same"
+    # The rate the derivation below rests on is read off that block, not typed.
+    minutes_each = int(re.search(r"At (\d+) minutes per profiled invocation",
+                                 " ".join(blocks[32].split())).group(1))
     # Two different run ids, so the two arms cannot land in one directory.
     ids = {bn: page.splitlines()[0] for bn, page in pages.items()}
     assert ids[32] != ids[128], ids
+    # The seven lines that differ, and nothing else: the run id, the pinned
+    # line, three corrected-cap rows, the recipe line and the schema's block_n.
+    differing = [a for a, b in zip(pages[32].splitlines(), pages[128].splitlines(),
+                                   strict=True)
+                 if a != b]
+    assert len(differing) == 7, differing
+    # One of the cap rows differs in KIND, not in value, and the driver says so.
+    assert any("REFUSED" in ln for ln in differing), differing
+
     total = 0
     for name in COUNTER_ARMS:
         booked = int(lift(f"arm_minutes {shlex.quote(name)}",
                           REPO=str(ROOT)).stdout.strip())
-        assert booked == 2 * 60, (name, booked)
+        # Booked ABOVE what the page prices an arm at, never below and never
+        # at it: ncu replay's save and restore of the weight buffers is the one
+        # term in the wall clock this repo has never timed.
+        assert booked >= per_run * minutes_each, (name, booked, per_run, minutes_each)
         total += booked
         # A WALL figure: the page charges ncu replay outright rather than
         # leaving it to a ratio, so nothing about these rows is unpriced.
@@ -4123,7 +4192,13 @@ def test_the_counter_arms_are_booked_at_the_figure_their_own_plan_prints():
                     REPO=str(ROOT)).stdout.strip() == "WALL"
         assert not lift(f"arm_unpriced {shlex.quote(name)}",
                         REPO=str(ROOT)).stdout.strip()
-    assert total == 240
+    assert total >= pair_invocations * minutes_each, total
+    # And the row an operator re-derives it from says the same thing.
+    basis = lift(f"arm_basis {shlex.quote(COUNTER_ARMS[0])}", REPO=str(ROOT)).stdout
+    assert f"{pair_invocations} invocations and 1.0 GPU-hour" in basis, basis
+    assert "THAT PAGE PRICES FIVE CELLS AND THIS SESSION BOOKS TWO" in basis, basis
+    for stale in ("12 profiled invocations", "two pod-hours end to end"):
+        assert stale not in "".join(pages.values()), stale
 
 
 def test_the_counter_route_card_is_resolved_once_and_reaches_every_call_site():
