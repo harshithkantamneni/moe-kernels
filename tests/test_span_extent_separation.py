@@ -970,8 +970,12 @@ def test_the_synthetic_world_is_hermetic_and_replays_identically():
 
 
 def test_the_self_test_report_says_nothing_was_measured(tmp_path, capsys):
-    SE.main(["--self-test", "kernel", "--models", "mixtral-8x7b",
-             "--out-dir", str(tmp_path)])
+    # THE FULL PUBLISHED GRID, not one model. A one-model grid gives the
+    # primary claim gate C2 only one reachable answer (planted-kernel KERNEL
+    # 0.755 against the 0.75 bar) and the script REFUSES it by design as
+    # "grid too sparse for C2", so a run restricted for speed never reaches
+    # the path under test. The gate is not the thing to move.
+    SE.main(["--self-test", "kernel", "--out-dir", str(tmp_path)])
     text = capsys.readouterr().out
     assert "SELF TEST" in text and "GENERATED" in text
     report = next(tmp_path.glob("*/report.md"))
@@ -983,8 +987,12 @@ def test_the_summary_names_the_corner_that_is_missing(tmp_path):
     that did not say so would let a reader treat the two factors as separable
     causes."""
     import json
-    SE.main(["--self-test", "kernel", "--models", "mixtral-8x7b",
-             "--out-dir", str(tmp_path)])
+    # THE FULL PUBLISHED GRID, not one model. A one-model grid gives the
+    # primary claim gate C2 only one reachable answer (planted-kernel KERNEL
+    # 0.755 against the 0.75 bar) and the script REFUSES it by design as
+    # "grid too sparse for C2", so a run restricted for speed never reaches
+    # the path under test. The gate is not the thing to move.
+    SE.main(["--self-test", "kernel", "--out-dir", str(tmp_path)])
     payload = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
     assert "five-launch" in payload["missing_corner"]
     assert "EXTENT * KERNEL == separation exactly" in payload["definition"]
@@ -1617,8 +1625,13 @@ def test_the_summary_carries_the_provenance_block_and_the_five_top_level_keys(
     rubber-stamping, so the values are checked too, where they can be known."""
     import json
 
-    SE.main(["--self-test", "kernel", "--fail-on-world", "--models",
-             "mixtral-8x7b", "--out-dir", str(tmp_path)])
+    # THE FULL PUBLISHED GRID, not one model. A one-model grid gives the
+    # primary claim gate C2 only one reachable answer (planted-kernel KERNEL
+    # 0.755 against the 0.75 bar) and the script REFUSES it by design as
+    # "grid too sparse for C2", so a run restricted for speed never reaches
+    # the path under test. The gate is not the thing to move.
+    SE.main(["--self-test", "kernel", "--fail-on-world",
+             "--out-dir", str(tmp_path)])
     payload = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
     for key in PV.TOP_LEVEL_KEYS:
         assert key in payload
@@ -1779,11 +1792,16 @@ def test_a_find_pieces_refusal_exits_REFUSED_and_not_INVALID(tmp_path, capsys,
 
 def test_the_missing_stack_refusal_exits_REFUSED_and_names_which_half(tmp_path,
                                                                       capsys):
-    """No CUDA here, so this is the real path rather than a planted one."""
-    code = SE.main(["--models", "mixtral-8x7b", "--out-dir", str(tmp_path)])
+    """No CUDA here, so this is the real path rather than a planted one.
+
+    The full published grid, for the reason above: restricted to one model the
+    script refuses earlier, for grid power, and never reaches the missing
+    stack this test is about."""
+    code = SE.main(["--out-dir", str(tmp_path)])
     text = capsys.readouterr().out
     assert code == exit_codes.REFUSED
     assert "REFUSED:" in text and "--self-test kernel" in text
+    assert "no CUDA device" in text
 
 
 def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys):
@@ -1901,8 +1919,13 @@ def test_a_card_s_own_calibration_is_what_a_run_on_that_card_prices_against(
 def test_the_dry_run_provenance_carries_the_hypothesis_label(tmp_path):
     import json
 
-    SE.main(["--self-test", "kernel", "--fail-on-world", "--models",
-             "mixtral-8x7b", "--out-dir", str(tmp_path)])
+    # THE FULL PUBLISHED GRID, not one model. A one-model grid gives the
+    # primary claim gate C2 only one reachable answer (planted-kernel KERNEL
+    # 0.755 against the 0.75 bar) and the script REFUSES it by design as
+    # "grid too sparse for C2", so a run restricted for speed never reaches
+    # the path under test. The gate is not the thing to move.
+    SE.main(["--self-test", "kernel", "--fail-on-world",
+             "--out-dir", str(tmp_path)])
     payload = json.loads(next(tmp_path.glob("*/summary.json")).read_text())
     assert "HYPOTHESIS" in payload["ridge_source"]
     assert "COST MODEL ONLY" in payload["ridge_source"]
