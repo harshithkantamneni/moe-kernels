@@ -99,8 +99,10 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   cells (`scripts/tile_cap_test.py`, demoted). What survives is narrower:
   production tiles do impose an AI ceiling, and shipped decode configurations
   sit nowhere near it.
-- **(j) The alias arm's plan and pod figure agree at 13.0 min.** Not quoted
-  in this file.
+- **(j) The alias arm's plan and pod figure agree at 12.8 min.** This entry
+  read 13.0 until 2026-09-09; 13 is the BOOKING, above the figure and never at
+  it, and 12.8 is what the page prints under both `--dot-fallback` settings.
+  Not quoted in this file.
 - **The C2 headline is at pooled routing.** The fp8/bf16 table below (bf16
   crossings 454 / 810 / 922 / 3240, 1.149 +/- 0.069) pools seven routing
   regimes, which C5 in this same file shows is invalid for a crossing.
@@ -183,11 +185,12 @@ of the KERNEL rather than of the card's health:
 
 | held fixed | median SM clock under load | cells |
 |---|---:|---|
-| BLOCK_M=128 (any BLOCK_N; the same 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 215 |
+| BLOCK_M=128 (any BLOCK_N; the same 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 196 |
 | BLOCK_M=256 | 1650 MHz | 311 |
-| BLOCK_M=32 (any GROUP_SIZE_M) | 1736 MHz | 68 |
-| BLOCK_M=64, GROUP_SIZE_M=1 | 1358 MHz | 16 |
-| BLOCK_M=256, BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 311 |
+| BLOCK_M=32, GROUP_SIZE_M=1 | 1474 MHz | 18 |
+| BLOCK_M=32, GROUP_SIZE_M>=8 | 1740 MHz | 50 |
+| BLOCK_M=64, GROUP_SIZE_M=1 (the anchor's own treads) | 1358 MHz | 16 |
+| BLOCK_M=256, BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 68 each |
 | memory-shaped cells (streaming, high flush duty) | 1950-1980 MHz | |
 | the calibration's own dense bf16 GEMM at 691 W | 1485 MHz | the reference |
 
@@ -275,7 +278,7 @@ six were reproduced off GPU, in-process, over the committed cells.
 | `bm128_depth` | 292 s | The pairing {128, 256} puts the arm's own non-vacuity floor at 0.838 of the roof; the BLOCK_M=256 reference measured 0.547 and no BLOCK_M=256 ladder in the corpus reaches 0.838 on either card. The arm was pre-registered to refuse its own reference, on any card and under any clock rule, and the refusal reasons were never printed. |
 | `bn_g16` | 364 s | The non-vacuity check scaled C to the smallest SWEPT block size, and both call sites passed only the reference, so it scaled to BLOCK_M=256 itself and demanded 1.675 AT the roof. With the swept set passed in, all three references qualify at 36.7 / 54.6 / 71.6% of the roof at BN=32/64/128 and the cross-BN spread is 1.95x raw (2.15x normalised to 1485 MHz). The arm then SKIPPED every subject while its warning said they were measured anyway. |
 | `alias_ablation` | 308 s | No sum-mode pinning cleared the read roof (best 5500 GB/s against a 6151 bar), the run fell to a dot ladder, and P1 was never asked: "not asked", alpha >= 0.229. Three of its four failing gates are apparatus, not physics: a folded row taking one pass of 27 below the band, a 28% placebo on a sub-L2 model whose D cannot grow, and a bracket threshold the probe's own headroom floor was allowed to admit. |
-| `cap_test` | 141 s | `r_max` defaulted to the depth requirement, 688 rows; 688 % 32 = 16, so the grid stopped at 672 and held two exactly-full BLOCK_M=256 stacks against V1's three. The arm was unsatisfiable from its plan page, which printed "BM=256:2" and continued. The counterfactual with the control qualified from its own two treads gives alpha 0.998 raw / 0.994 corrected and a cap of 16.1 Op/B = 0.105 of the ridge: a 10x refutation of the retracted 0.10, and it is NOT quoted as a result until the arm is re-run at `--r-max 1024`. |
+| `cap_test` | 141 s | `r_max` defaulted to the depth requirement, 688 rows; 688 % 32 = 16, so the grid stopped at 672 and held two exactly-full BLOCK_M=256 stacks against V1's three. The arm was unsatisfiable from its plan page, which printed "BM=256:2" and continued. The counterfactual with the control qualified from its own two treads gives alpha 0.998 raw / 0.994 corrected and a cap of 16.1 Op/B = 0.105 of the ridge: a 10x refutation of the retracted 0.10, and it is NOT quoted as a result until the arm is re-run at `--r-max 2112`. This row said `--r-max 1024` until 2026-09-09; that value is refused at plan time by the script's own V4 check, which wants a 132-tile BLOCK_M=16 stack where 1024 gives 66 and prints `raise --r-max to at least 2112`. |
 | `dtype` | 413 s | vLLM 0.27.1's `override_config` has no try/finally (verified from the tag). A Triton `OutOfResources` raised inside it at 22 of 28 cells left the fp8 config installed process-wide: all 28 bf16 native cells timed the leaked fp8 tile, 13 fp8 native cells timed the previous cell's tile, and one model's tuned files were never looked up. 41 arms were corrupted by one infeasible pairing, which shared-memory arithmetic refuses at plan time (SM90_SMEM_LIMIT 232448 against `num_stages x (BM*BK + BK*BN) x bytes`). |
 
 Two more arms are worth reading beside them. `roofline-n256-g16` and

@@ -401,7 +401,8 @@ def emit(line):
 # a throttle. The 750-cell H200 census that closed the first gaps session says
 # it is not one: under a 700 W cap the SM clock under load is set PER TILE by
 # that kernel's own power draw. BLOCK_M=128 holds a median 1395 MHz
-# over 215 cells, BLOCK_M=256 1650 over 311, BLOCK_M=32 1736 over 68, memory-shaped
+# over 196 cells, BLOCK_M=256 1650 over 311, BLOCK_M=32 1474 at GROUP_SIZE_M=1
+# over 18 and 1740 from GROUP_SIZE_M=8 up over 50, memory-shaped
 # cells 1950-1980, and the calibration GEMM itself 1485 at 691 W, which is near
 # the LOW end of what dense tensor work does on this card rather than the
 # middle of anything. So a +/-5% band around the GEMM's clock is a rule against
@@ -456,16 +457,26 @@ def sides_text(counter):
 
 
 flagged = [r for r in rows if row_bool(r, "throttled")]
-# EVERY LEVEL FAILURE IN THE FILE, flagged or not, because none of them is an
-# exclusion and all of them are a record. Counted over all rows and not over
-# the un-flagged ones, which is what this file did while LOW was a throttle.
+# EVERY LEVEL FAILURE IN THE FILE, SPLIT ON THE ONE RULE THAT EXCLUDES. A LEVEL
+# failure is a record and not an exclusion, so it is counted whether the row is
+# flagged or not: counting it over the un-flagged rows alone is what this file
+# did while LOW was a throttle. But a row that failed LEVEL and ALSO failed
+# DRIFT is excluded, on DRIFT, and until now it was counted here and printed
+# under "NONE of them is excluded for it". It is counted apart and reported on
+# its own line instead. It is not a hypothetical row: memory_branch_anchor's
+# 2026-09-09 cells carry 18 LOW and 12 DRIFT with 4 rows in both.
 level_sides = Counter()
+drifted_sides = Counter()
 for r in rows:
     try:
-        if has_kernel_timing(r) and timing_verdict(r, "clock_level_ok") == VERDICT_FAILED:
-            level_sides[side_of(r)] += 1
+        if not has_kernel_timing(r):
+            continue
+        if timing_verdict(r, "clock_level_ok") != VERDICT_FAILED:
+            continue
+        drifted = timing_verdict(r, "clock_drift_ok") == VERDICT_FAILED
     except TimingInstrumentUnrecorded:
         continue
+    (drifted_sides if drifted else level_sides)[side_of(r)] += 1
 if flagged:
     under_load, legacy, unreadable = [], [], []
     drift = no_drift = 0
@@ -511,6 +522,11 @@ if level_sides:
          f"boosting; what is wrong for both is the fixed-roof fraction "
          f"(pct_of_achieved_tflops), and pct_of_roof_at_cell_clock is the column to "
          f"read beside it")
+if drifted_sides:
+    emit(f"{sum(drifted_sides.values())} further rows failed LEVEL AND drifted "
+         f"(side {sides_text(drifted_sides)}): they are EXCLUDED, on DRIFT, and are "
+         f"not in the count above. A row whose warmup never reached one operating "
+         f"point has no steady clock for a side to describe")
 
 fails = [r for r in rows if not passed(r)]
 if fails:

@@ -921,8 +921,14 @@ def test_the_summary_names_drift_on_v5_rows_and_records_the_level_sides(tmp_path
     assert "2 rows carry throttled=True from the under-load clock check" in text, text
     assert "DRIFT failed on 2" in text, text
     assert "which is the whole rule since 2026-09-09" in text, text
-    assert "2 rows failed LEVEL" in text and "NONE of them is excluded for it" in text, text
-    assert "side low 2" in text, text
+    # ONE of the two LEVEL failures also drifted, so it is EXCLUDED and is not
+    # in the kept count: until now both were counted here and printed under
+    # "NONE of them is excluded for it", which said the opposite of the rule.
+    assert "1 rows failed LEVEL" in text and "NONE of them is excluded for it" in text, text
+    assert "side low 1, recorded" in text, text
+    assert ("1 further rows failed LEVEL AND drifted (side low 1): they are "
+            "EXCLUDED, on DRIFT, and are not in the count above") in text, text
+    assert "side low 2" not in text, "a drifted row is still counted as kept"
     assert "outside the band 95% to 105% of" in text, text
     assert "below 95%" not in text, "LEVEL described as one-sided"
     assert "retired pre-v5" not in text and "clocks dropped" not in text

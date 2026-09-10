@@ -92,13 +92,29 @@ the KERNEL, set per tile by that kernel's own power draw under the 700 W cap:
 
 | what is held fixed | median SM clock under load | cells |
 |---|---:|---|
-| BLOCK_M=128 (any BLOCK_N; 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 215 |
+| BLOCK_M=128 (any BLOCK_N; the same 1395 at BLOCK_N=64 alone, over 136) | 1395 MHz | 196 |
 | BLOCK_M=256 | 1650 MHz | 311 |
-| BLOCK_M=32 (any GROUP_SIZE_M) | 1736 MHz | 68 |
-| BLOCK_M=64, GROUP_SIZE_M=1 | 1358 MHz | 16 treads, 15 of them below the band |
+| BLOCK_M=32, GROUP_SIZE_M=1 | 1474 MHz | 18 |
+| BLOCK_M=32, GROUP_SIZE_M>=8 | 1740 MHz | 50 |
+| BLOCK_M=64, GROUP_SIZE_M=1 (the anchor's own treads) | 1358 MHz | 16 treads, 15 of them below the band |
 | memory-shaped cells (the calibration's own streaming load, cap_test's flush duty at T=56) | 1950-1980 MHz | |
 | the calibration's dense bf16 8192^3 GEMM, 691 W | 1485 MHz (samples 1470-1515) | the reference |
-| at fixed BLOCK_M=256: BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 311 |
+| at fixed BLOCK_M=256: BLOCK_N=32 / 64 / 128 | 1725 / 1620 / 1560 MHz | 68 each, all from bn_decomposition |
+
+Two of those rows were wrong when this table was first written on 2026-09-09,
+in the way this table exists to prevent. BLOCK_M=32 was one row reading "any
+GROUP_SIZE_M | 1736 MHz | 68", a pooled median over a bimodal set that names no
+operating point of either family: at GROUP_SIZE_M=1 the tile holds 1474 MHz and
+from GROUP_SIZE_M=8 up it holds 1740, 266 MHz apart, and the row asserted a
+swizzle invariance one row below the row that shows the swizzle moving
+BLOCK_M=64 by 100 MHz. The BLOCK_N split at BLOCK_M=256 was labelled 311, which
+is every BLOCK_M=256 cell in the session; the three medians are over 68 cells
+EACH and come from bn_decomposition alone, the other 107 BLOCK_M=256 cells
+(bm128_depth 56, tile_cap 36, bm128_roofline 15) carrying no BLOCK_N at all.
+The BLOCK_M=128 count read 215, which is neither the 196 cells that carry an
+under-load clock nor the 216 rows that name the tile. Every count here is now
+the count of the pool its own row names, taken over
+`results/published/2026-09-09-nvidia_h200-gaps-session/results/`.
 
 The reference is therefore not the middle of anything: 1485 MHz at 691 W sits
 near the LOW end of what dense tensor work does on this card, and a +/-5% band
@@ -145,10 +161,14 @@ or every hungry tile (the two-sided reading that landed two arms INVALID on
 side `low` are both KEPT and a planted DRIFT row is EXCLUDED.
 
 **What DRIFT is, and why it is the instrument's job and not the gate's.** All
-135 drifted cells of the 2026-09-09 session are the first cell of a rep after a
-workload change: the governor settling, on the shortest cell, in the direction
-the new tile's power draw demands (1875 to 1725, 1560 to 1650, 1560 to 1650,
-1620 to 1710 on the four with samples on disk). A gate cannot fix that, and
+135 drifted cells of the 2026-09-09 session sit at the first cell of a rep
+after a workload change: the governor settling, on the shortest cell, in the
+direction the new tile's power draw demands. FOUR OF THE 135 CARRY SAMPLES ON
+DISK and are read directly (1875 to 1725, 1560 to 1650, 1560 to 1650, 1620 to
+1710); the other 131 are inferred FROM THEIR POSITION IN THE REP, because the
+first and last under-load samples are all the schema kept before v7. The
+mechanism is therefore evidenced on four and consistent with 135, and it is
+stated that way here and in `docs/POD_RUNBOOK.md`. A gate cannot fix that, and
 widening it would only hide it. The instrument does: after `warmup_ms`,
 `warm_until` keeps warming until two consecutive NVML reads agree within one
 15 MHz step (capped at 3x `warmup_ms`), records `settle_ms` and the number of

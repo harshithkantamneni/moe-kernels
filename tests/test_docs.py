@@ -310,11 +310,30 @@ def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():
     # two lines is still the sentence.
     text = " ".join((ROOT / "docs" / "APPARATUS.md").read_text().split())
     assert "SINCE 2026-09-09 A CELL IS EXCLUDED IF AND ONLY IF" in text
-    for needle in ("1395 MHz", "1650 MHz", "1736 MHz", "1485 MHz", "700 W",
+    for needle in ("1395 MHz", "1650 MHz", "1485 MHz", "700 W",
                    "15 MHz step", "settle_ms", "power_w", "1469.9",
                    "15 of the roofline arm's 39 cells",
                    "110 of the depth arm's 168 treads"):
         assert needle in text, needle
+    # THE SWIZZLE SPLIT AT BLOCK_M=32. This table read "BLOCK_M=32 (any
+    # GROUP_SIZE_M) | 1736 MHz | 68" until 2026-09-09, which is a median over a
+    # bimodal set and names no operating point of either family: the corpus has
+    # 18 cells at GROUP_SIZE_M=1 with a median of 1474 MHz and 50 from
+    # GROUP_SIZE_M=8 up with a median of 1740, 266 MHz apart, and the row
+    # asserted a swizzle invariance one row above the row that shows the swizzle
+    # moving BLOCK_M=64 by 100 MHz. The pooled figure survives only where it is
+    # retracted.
+    assert "| BLOCK_M=32, GROUP_SIZE_M=1 | 1474 MHz | 18 |" in text
+    assert "| BLOCK_M=32, GROUP_SIZE_M>=8 | 1740 MHz | 50 |" in text
+    assert "(any GROUP_SIZE_M)" not in text
+    # The pooled figure survives only inside the paragraph that retracts it.
+    before, _, after = text.partition("Two of those rows were wrong")
+    assert "1736" not in before and "1736 MHz" in after
+    # AND THE BLOCK_N SPLIT IS COUNTED OVER ITS OWN POOL. The three medians at
+    # fixed BLOCK_M=256 are over 68 cells each, from bn_decomposition alone; the
+    # row was labelled 311, which is every BLOCK_M=256 cell in the session, 107
+    # of which carry no BLOCK_N at all.
+    assert "1725 / 1620 / 1560 MHz | 68 each" in text
     # The scoring half of the rule, which is the half a gate reads.
     assert "compute-bound CLAIM gates read the FIXED roof fraction" in text
     assert "issue efficiency" in text

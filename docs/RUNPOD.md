@@ -360,7 +360,7 @@ row and the LEVEL side is recorded and excludes nothing. Under a 700 W cap the
 clock under load is set per tile by the kernel's own power draw, so `high` is
 the expected state of a memory-bound cell on the H200 (the calibration's memory
 load holds 1980 MHz) and `low` is the expected state of a hungry tile
-(BLOCK_M=128 holds a median 1395 MHz over 215 cells against the 1485 MHz GEMM
+(BLOCK_M=128 holds a median 1395 MHz over 196 cells against the 1485 MHz GEMM
 reference); `docs/APPARATUS.md` section 1 has the per-tile table and the
 session that produced it. Neither side is an exclusion: what is wrong on both
 is the fixed-roof fraction, and `pct_of_roof_at_cell_clock` is the column to

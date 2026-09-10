@@ -1446,8 +1446,9 @@ PYEOF
 #: unrecorded) is carried on the row and excludes nothing. The reason is the
 #: 750-cell census that closed the first gaps session: under the H200's 700 W
 #: cap the SM clock under load is set PER TILE by the kernel's own power draw
-#: (BLOCK_M=128 median 1395 MHz over 215 cells, BLOCK_M=256 1650
-#: over 311, BLOCK_M=32 1736 over 68, memory-shaped cells 1950-1980), and the
+#: (BLOCK_M=128 median 1395 MHz over 196 cells, BLOCK_M=256 1650
+#: over 311, BLOCK_M=32 by swizzle 1474 at GROUP_SIZE_M=1 over 18 and 1740 from
+#: GROUP_SIZE_M=8 up over 50, memory-shaped cells 1950-1980), and the
 #: calibration GEMM's own 1485 MHz at 691 W sits near the LOW end of dense work
 #: rather than in the middle. A band around it is therefore a rule against a
 #: TILE: on 2026-09-09 it removed every multi-tile BLOCK_M=128 cell of the
@@ -1469,10 +1470,16 @@ PYEOF
 #: A v5 row (one-sided instrument, no high edge) that fails LEVEL is LOW by
 #: that instrument's definition rather than by this file's default.
 #:
+#: A ROW CAN FAIL BOTH, AND SUCH A ROW IS NOT KEPT. The side counts here are
+#: taken over the rows DRIFT kept; a row that failed LEVEL and drifted is
+#: counted in its own total and reported as excluded on DRIFT, because
+#: printing it under the word "kept" says the opposite of what the rule does.
+#:
 #: Outcomes, each planted by tests/test_pod_session.py: PASS on a low DRIFT
 #: rate (including sweeps where 60% of rows fail LEVEL high and where 20% fail
-#: LEVEL low, both kept), FAIL on a high DRIFT rate, and FAIL-as-refusal when
-#: any timed row carries no verdict or no row carries a determined one.
+#: LEVEL low, both kept), FAIL on a high DRIFT rate, FAIL with the both-failed
+#: rows counted apart from the kept sides, and FAIL-as-refusal when any timed
+#: row carries no verdict or no row carries a determined one.
 sweep_clock_gates() {
   local dir="$1" run_id="$2" planned="${3:-}"
   local sweepstat
@@ -1499,7 +1506,15 @@ bad = [r for r in rows if not passed(r)]
 # naming a side is counted as unsided and noted. A v5 row has no side column
 # because that instrument had no high edge, so its LEVEL failure is LOW by
 # definition rather than by default.
-no_verdict = low = high = unsided = drift = undetermined = flagged = 0
+#
+# THE SIDE COUNTS ARE TAKEN OVER THE ROWS DRIFT KEPT, and nothing else. Until
+# now they were taken over every timed row and then printed under the word
+# "kept", so a row that failed LEVEL low AND drifted was counted as kept on
+# three lines while the one rule that excludes had already excluded it. That
+# is not hypothetical in this corpus: memory_branch_anchor carries 18 LOW and
+# 12 DRIFT with 4 rows in both. A row in both is counted apart, in `both`, and
+# reported on its own line as excluded on DRIFT.
+no_verdict = low = high = unsided = drift = undetermined = flagged = both = 0
 for r in timed:
     try:
         if not has_kernel_timing(r):
@@ -1510,7 +1525,16 @@ for r in timed:
     except TimingInstrumentUnrecorded:
         no_verdict += 1
         continue
+    drifted = dr == VERDICT_FAILED
+    if drifted:
+        drift += 1
+        flagged += 1
+    elif VERDICT_UNDETERMINED in (lv, dr):
+        undetermined += 1
     if lv == VERDICT_FAILED:
+        if drifted:
+            both += 1
+            continue        # excluded on DRIFT: its side is on the row, not in a kept count
         side = str(r.get("clock_level_side") or "").strip()
         if side == UNRECORDED:
             side = ""
@@ -1526,18 +1550,13 @@ for r in timed:
             high += 1
         else:
             unsided += 1
-    if dr == VERDICT_FAILED:
-        drift += 1
-        flagged += 1
-    elif VERDICT_UNDETERMINED in (lv, dr):
-        undetermined += 1
 pct = (100.0 * flagged / len(timed)) if timed else 100.0
-print(f"{len(rows)} {len(timed)} {len(bad)} {no_verdict} {low} {high} {unsided} {drift} {undetermined} {pct:.1f}")
+print(f"{len(rows)} {len(timed)} {len(bad)} {no_verdict} {low} {high} {unsided} {drift} {undetermined} {both} {pct:.1f}")
 PYEOF
 )"
-  local nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag
-  read -r nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet pflag <<< "$sweepstat"
-  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $ndrift failed DRIFT (excluded), $nlow failed LEVEL low and $nhigh failed LEVEL high (both kept, side recorded), $nundet undetermined, $nunsided failed LEVEL with no side, $nnov carry no verdict"
+  local nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet nboth pflag
+  read -r nrows ntimed nbad nnov nlow nhigh nunsided ndrift nundet nboth pflag <<< "$sweepstat"
+  note "$nrows rows, $ntimed timed, $nbad correctness failures; clock under load: $ndrift failed DRIFT (excluded), $nlow failed LEVEL low and $nhigh failed LEVEL high among the rows DRIFT kept (side recorded, neither excludes), $nboth failed LEVEL AND drifted (excluded on DRIFT), $nundet undetermined, $nunsided failed LEVEL with no side, $nnov carry no verdict"
   [[ "${nbad:-1}" == "0" ]]; verdict S6c "correctness" $? \
     "${nbad:-?} failing rows" "== 0" fatal \
     "A correctness failure means the kernel computed the wrong layer, so every timing in this arm is a timing of the wrong thing. Do not publish it."
@@ -1555,10 +1574,13 @@ PYEOF
   else
     "$PY_BASE" -c "import sys; sys.exit(0 if float('${pflag:-100}') < 5.0 else 1)"
     verdict S6d "clock under load" $? \
-      "${pflag:-?}% of timed rows failed DRIFT ($ndrift drift; $nlow low and $nhigh high kept, $nundet undetermined)" "< 5%" soft \
+      "${pflag:-?}% of timed rows failed DRIFT ($ndrift drift; $nlow low and $nhigh high kept, $nboth LEVEL-and-drifted excluded on DRIFT, $nundet undetermined)" "< 5%" soft \
       "A row failing DRIFT carries throttled=True (moe/bench/driver.py sets the column from the DRIFT verdict and nothing else since 2026-09-09) and scripts/crossing_report.py drops it unless --include-throttled, so a high rate narrows the grid the detector can use. DRIFT failing means the warmup never reached one operating point: the governor was still settling when the first samples were taken, which is what every readable drift in the 2026-09-09 session was, on the first cell of a rep after a workload change. Fix it at the instrument (warm until two consecutive clock reads agree within one 15 MHz step), not by widening the gate. LEVEL IS NOT IN THIS RATE ON EITHER SIDE: under a 700 W cap the clock under load is set per tile by the kernel own draw, so a LOW cell is a hungry tile at its steady state and a HIGH one a memory-shaped cell boosting; both are kept, their fixed-roof fraction is what is not comparable, and pct_of_roof_at_cell_clock is the column to read for them."
     if [[ "${nhigh:-0}" != "0" || "${nlow:-0}" != "0" ]]; then
       note "S6d kept $nlow of $ntimed timed rows that failed LEVEL on the LOW side and $nhigh on the HIGH side. Neither side is an exclusion: the side is a record of the clock the tile held, their fixed-roof fraction (pct_of_achieved_tflops) is not comparable, and pct_of_roof_at_cell_clock is the one to quote."
+    fi
+    if [[ "${nboth:-0}" != "0" ]]; then
+      note "S6d found $nboth of $ntimed timed rows that failed LEVEL AND drifted. They are EXCLUDED, on DRIFT, and they are not in the kept counts above: the side is still written on the row, but a row whose warmup never reached one operating point has no steady clock for a side to describe."
     fi
     if [[ "${nunsided:-0}" != "0" ]]; then
       note "S6d found $nunsided of $ntimed timed rows failing LEVEL on a v6 row that names no side. Since 03df2d4 moe/bench/driver.py writes the side onto every row that fails LEVEL, so a v6 row without one was not written by that driver. It is recorded here rather than refused, because the side decides nothing: find what wrote the row before quoting its clock."

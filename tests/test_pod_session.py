@@ -173,7 +173,8 @@ def test_s6d_keeps_the_high_side_and_passes_on_sixty_percent_boosted_rows(tmp_pa
     assert ("S6d kept 0 of 10 timed rows that failed LEVEL on the LOW side "
             "and 6 on the HIGH side") in r.stdout
     assert "pct_of_roof_at_cell_clock" in r.stdout
-    assert "6 failed LEVEL high (both kept, side recorded)" in r.stdout
+    assert ("6 failed LEVEL high among the rows DRIFT kept (side recorded, "
+            "neither excludes)") in r.stdout
     assert r.returncode == 0, r.stdout + r.stderr
     # And the rows themselves carry the driver's rule: neither side is
     # throttled, so nothing downstream that drops `throttled` loses them.
@@ -227,6 +228,40 @@ def test_s6d_counts_both_sides_beside_the_drift_rate(tmp_path):
     assert "FAIL" in line, line
     assert "10.0% of timed rows failed DRIFT (1 drift; 2 low and 3 high kept" in line, line
     assert "LEVEL IS NOT IN THIS RATE ON EITHER SIDE" in r.stdout
+    assert r.returncode != 0
+
+
+def test_s6d_does_not_count_a_drifted_row_as_a_kept_level_row(tmp_path):
+    """THE ROW THAT FAILS BOTH, and the count that called it kept. Three of ten
+    rows here fail LEVEL on the LOW side AND fail DRIFT. DRIFT excludes them, so
+    they are not kept by anything; until now this gate counted the LEVEL sides
+    over EVERY timed row and then printed them under the word "kept", so the
+    note, the gate line and the S6d summary all described the same three
+    excluded rows as kept. Not hypothetical: memory_branch_anchor's 2026-09-09
+    cells carry 18 LOW and 12 DRIFT with 4 rows in both.
+
+    The kept counts are taken over the rows DRIFT kept, and the both-failed
+    rows are reported on their own line as excluded on DRIFT."""
+    results = tmp_path / "results"
+    results.mkdir()
+    _v5_rows(results / "run_aa1_base.csv",
+             [("failed", "failed", "low")] * 3 + [("failed", "ok", "low")] * 2
+             + [("ok", "ok")] * 5)
+    r = _gate(tmp_path, results)
+    line = line_for(r.stdout, "S6d")
+    assert "FAIL" in line, line
+    # 3 of 10 drifted: the rate is DRIFT's alone and the two undrifted LOW rows
+    # are the only ones counted kept.
+    assert ("30.0% of timed rows failed DRIFT (3 drift; 2 low and 0 high kept, "
+            "3 LEVEL-and-drifted excluded on DRIFT") in line, line
+    assert ("2 failed LEVEL low and 0 failed LEVEL high among the rows DRIFT "
+            "kept (side recorded, neither excludes), 3 failed LEVEL AND drifted "
+            "(excluded on DRIFT)") in r.stdout, r.stdout
+    assert ("S6d kept 2 of 10 timed rows that failed LEVEL on the LOW side "
+            "and 0 on the HIGH side") in r.stdout
+    assert ("S6d found 3 of 10 timed rows that failed LEVEL AND drifted. They "
+            "are EXCLUDED, on DRIFT") in r.stdout
+    assert "kept 3" not in r.stdout and "3 low and 0 high kept" not in r.stdout
     assert r.returncode != 0
 
 

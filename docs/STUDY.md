@@ -76,8 +76,9 @@ one-page summary of both.
   `moe_align_block_size` pads to, and on UNIFORM routing: BLOCK_M=128 runs
   multi-tile in 65 of 87 cells, up to 33-34 tiles per expert; BLOCK_M=16 in
   1 of 24 and BLOCK_M=64 in 5 of 112. Skewed routings were never counted.
-- **(j) The alias arm's plan and pod figure agree at 13.0 min**; the 11.6 the
-  plan used to print was the probe left off the plan page. Not quoted in this
+- **(j) The alias arm's plan and pod figure agree at 12.8 min**; the 11.6 the
+  plan used to print was the probe left off the plan page. This entry read 13.0
+  until 2026-09-09, which is the BOOKING and not the figure. Not quoted in this
   file.
 - **The C2 headline is at pooled routing.** The fp8/bf16 crossing table below
   (454 / 810 / 922 / 3240 bf16 tokens, 1.15 +/- 0.07) pools seven routing
@@ -145,8 +146,9 @@ working state.
 
 **The clock rule changed, and it is a finding rather than a setting.** Over 750
 cells the under-load SM clock is set PER TILE by the kernel's own power draw
-under the 700 W cap (BLOCK_M=128 median 1395 MHz over 215 cells, BLOCK_M=256 1650,
-BLOCK_M=32 1736, memory-shaped 1950-1980), and the calibration GEMM's 1485 MHz
+under the 700 W cap (BLOCK_M=128 median 1395 MHz over 196 cells, BLOCK_M=256 1650,
+BLOCK_M=32 1474 at GROUP_SIZE_M=1 and 1740 from GROUP_SIZE_M=8 up,
+memory-shaped 1950-1980), and the calibration GEMM's 1485 MHz
 at 691 W sits near the LOW end of dense work rather than in the middle. So the
 old +/-5% LEVEL band was a rule against a tile: it excluded the study's two
 primary tiles from measurability on this card while excluding nothing in the

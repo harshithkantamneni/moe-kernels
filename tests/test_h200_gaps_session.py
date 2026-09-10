@@ -117,35 +117,16 @@ from moe.bench import exit_codes  # noqa: E402
 # --self-test` exits 3 INVALID and the arm's own plan says C1 reads UNKNOWN
 # however the data fall, and no other pinning that self-test was checked at
 # passes either, so there was nowhere to re-pin it to.
-#: THE ONE CROSS-SLICE CONTRACT THIS BRANCH CARRIES, and it is written here
-#: rather than left to be discovered on a pod. On 2026-09-09 the depth arm was
-#: given `--partner-block-m 32`: with the pairing {128, 256} its own
-#: non-vacuity floor is 0.838 of the roof, no BLOCK_M=256 ladder in the corpus
-#: reaches it, and the arm refused its own reference and landed INVALID after
-#: 292 s. The partner is what makes the floor scale to a tile that is actually
-#: swept. This file's rule is that every knob setting a booking or a gate is
-#: NAMED on the line rather than left to a default in the sibling script, so
-#: the driver names it; `scripts/bm128_depth.py` defines it in the depth slice
-#: of the same integration and does not define it yet on this branch.
-#:
-#: While it is missing, that arm's `--dry-run` exits 2 (argparse) and plans
-#: nothing, so the three plan-reading tests below skip it BY NAME and the test
-#: at the end of this block FAILS the moment the flag lands. That failure is
-#: the instruction: delete this dict and its four uses, and the plan tests
-#: cover the arm again. It is the only arm allowed to be in this state.
-PENDING_SCRIPT_FLAGS = {
-    "bm128_depth": ("scripts/bm128_depth.py", "--partner-block-m"),
-}
-
-
-def pending_flag(arm_name):
-    """The flag `arm_name` is given that its script does not define yet, or
-    None. Asked of the SCRIPT, so the answer changes by itself."""
-    entry = PENDING_SCRIPT_FLAGS.get(arm_name)
-    if not entry:
-        return None
-    rel, flag = entry
-    return None if flag in (ROOT / rel).read_text() else flag
+#: NO ARM IS EXEMPT FROM THE PLAN-READING TESTS, and between 2026-09-09 and now
+#: one was. The depth arm was booked `--partner-block-m 32`, a flag no version
+#: of `scripts/bm128_depth.py` has ever defined, and a `PENDING_SCRIPT_FLAGS`
+#: dict here let three plan-reading tests skip that arm by name until it landed.
+#: It was never going to land: the BM=32 scaling partner is UNCONDITIONAL in the
+#: script (`SMALL_TILE_BLOCK_M`, carried in `BLOCK_SIZES` beside the subject and
+#: the reference), so the exemption would have stood for good while the
+#: measuring branch exited 2 on argparse and the ledger filed the one arm this
+#: session exists to rescue as REFUSED. The flag is gone from the driver, the
+#: dict is gone from here, and every arm is read off its own plan again.
 
 
 ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
@@ -427,8 +408,6 @@ def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
             assert "estimat" not in plan.lower(), (name, plan[-1500:])
             continue
         # Everything else is decided by the arm's own words, in its own plan.
-        if pending_flag(name):
-            continue        # PENDING_SCRIPT_FLAGS: no plan to read a clock off
         disclaims = ("excluding compiles and allocation" in plan
                      or "not the wall clock" in plan.lower())
         assert plan, f"{name} printed no plan to read the clock off"
@@ -866,36 +845,39 @@ def test_every_arm_that_has_a_plan_mode_plans_on_this_laptop(tmp_path):
         "NOT_PLANNED"))
     expected.update(dict.fromkeys(
         ("roofline-n256-g16", "roofline-n256-g32"), "PLAN_REFUSED"))
-    # PLAN_REFUSED for a third reason while a cross-slice flag is pending: the
-    # script exits 2 on the flag it does not define yet (PENDING_SCRIPT_FLAGS
-    # at the top of this file, with the date and the contract).
-    expected.update({n: "PLAN_REFUSED" for n in ARMS if pending_flag(n)})
     for name in ARMS:
         assert rows.get(name) == expected[name], (
             name, rows.get(name), got.stdout[-3000:])
 
 
-def test_the_pending_cross_slice_flag_is_still_pending():
-    """THIS TEST EXISTS TO FAIL ONCE, and its failure is the instruction.
+@pytest.mark.parametrize("arm_name", ARMS)
+def test_no_arm_is_given_a_flag_its_own_script_does_not_define(arm_name):
+    """WHAT THE PENDING-FLAG EXEMPTION WAS HIDING. On 2026-09-09 both depth arm
+    lines were written `--partner-block-m 32`, a flag no version of
+    `scripts/bm128_depth.py` defines: the measuring branch would have exited 2
+    on argparse and the arm this session exists to rescue would have been filed
+    REFUSED having spent nothing. `INVOKED` above did not catch it because it is
+    a hand-kept list of flags per script and that flag was simply not in it, so
+    it guards against a RENAMED flag and not against an INVENTED one.
 
-    `PENDING_SCRIPT_FLAGS` records the one flag this driver passes that its
-    sibling script does not define yet, so that three plan-reading tests can
-    skip that arm by name instead of the whole file going red on a contract
-    that is being landed in another slice of the same integration. A record
-    like that is exactly what this repository keeps finding stale, so it is
-    asserted rather than trusted: when `scripts/bm128_depth.py` gains
-    `--partner-block-m`, this test FAILS, and the fix is to delete
-    `PENDING_SCRIPT_FLAGS` and its four uses (this test, and the three
-    `pending_flag(...)` calls), after which the plan tests cover the arm
-    again."""
-    for arm, (rel, flag) in PENDING_SCRIPT_FLAGS.items():
-        assert (ROOT / rel).exists(), rel
-        assert flag not in (ROOT / rel).read_text(), (
-            f"{rel} now defines {flag}: the cross-slice contract for {arm} has "
-            "landed. Delete PENDING_SCRIPT_FLAGS and its four uses in this "
-            "file, and let the plan tests cover the arm again.")
-        # And the driver really is passing it, or the entry is a leftover.
-        assert flag in CODE, f"{arm} no longer passes {flag}; drop the entry"
+    This asks the question the other way round: every flag the driver actually
+    writes on an `arm` line has to appear in the file that line runs. Derived
+    from the driver's own text, so it cannot go stale against it."""
+    rel = lift(f"arm_script {shlex.quote(arm_name)}", REPO=str(ROOT)).stdout.strip()
+    if not rel or not (ROOT / rel).exists():
+        pytest.skip(f"{arm_name} runs no file under this repo")
+    source = (ROOT / rel).read_text()
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
+    assert lines, arm_name
+    flags = sorted({w for ln in lines for w in shlex.split(ln)
+                    if w.startswith("--")})
+    assert flags, (arm_name, lines)
+    for flag in flags:
+        assert flag in source, (
+            f"{arm_name} is given {flag}, which {rel} does not define: on the "
+            "pod that is an argparse exit 2 and an arm that measured nothing")
 
 
 def test_a_command_line_refusal_is_reported_as_one_and_not_as_a_blank_reason(tmp_path):
@@ -2725,8 +2707,9 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
 
     SINCE 2026-09-09 THE ARM IS BOOKED `--dot-fallback refuse`, and the two
     surfaces have to disclose THAT: the fourth state was reached on 2026-09-09
-    (308 s, P1 UNKNOWN at alpha >= 0.229, latched CLAIM_FAIL), the bound it
-    buys has been bought, and a probe miss now costs 1.3 min and exits 3. The
+    (308 s, P1 UNKNOWN at alpha >= 0.229, latched INVALID: the ledger reads
+    `alias_ablation INVALID 3 308` and four validity gates failed), the bound it
+    buys has been bought, and a probe miss now costs 1.2 min and exits 3. The
     state is still described, because an operator reading the page has to know
     what the flag is protecting them from; what may not stand is a surface
     saying the arm is booked at a flag it is not."""
@@ -2766,7 +2749,10 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
         flat = " ".join(surface.split())
         low = flat.lower()
         assert "--dot-fallback refuse" in flat, surface
-        assert "1.3 min" in flat, surface
+        # The PAGE's figure for the probe, not a rounding of it: the plan prints
+        # "PLUS 1.2 min charged outright for the probe". Both surfaces said 1.3
+        # while arm_basis said 1.2, off the same page.
+        assert "1.2 min" in flat, surface
         # The branch it replaced is named as history, not as the booking.
         assert "allow" in low, surface
         assert "unknown" in low and "not a refutation" in low, surface
@@ -3584,8 +3570,6 @@ def test_every_kernel_booking_is_the_ceiling_of_the_minutes_its_plan_prints(tmp_
     got = run(["--dry-run"], session=session)
     assert got.returncode == 0, got.stdout[-3000:]
     for name in KERNEL_ARMS:
-        if pending_flag(name):
-            continue        # PENDING_SCRIPT_FLAGS: no plan to read a figure off
         plan = (session / "logs" / f"{name}.log").read_text()
         hits = [m for pat in PLAN_SECONDS for m in re.finditer(pat, plan)]
         assert len(hits) == 1, (name, [h.group(0) for h in hits])
@@ -3702,27 +3686,35 @@ def test_the_cap_test_arm_carries_the_r_max_that_makes_its_own_v1_satisfiable():
     that is 688, 688 % 32 = 16 so the grid stops at 672, and the grid then holds
     two exactly-full BLOCK_M=256 stacks against V1's requirement of three
     aligned treads per tile. The 2026-09-09 run printed "BM=256:2" on its plan
-    page and spent 141 s to fail V1. Both branches carry --r-max 1024, because
-    r_max is in the grid, the cost and the run id."""
+    page and spent 141 s to fail V1.
+
+    Both branches carried --r-max 1024 from 2026-09-09 until now, and that is
+    the value the script's own plan-time V4 check REFUSES: it wants a 132-tile
+    BLOCK_M=16 stack, 1024 gives 66, and the plan prints "raise --r-max to at
+    least 2112" and no cost line at all. They carry 2112, the printed minimum,
+    because r_max is in the grid, the cost and the run id."""
     joined = re.sub(r"\\\n\s+", " ", CODE)
     lines = [ln for ln in joined.splitlines()
              if re.match(r"\s*arm cap_test\s", ln)]
     assert len(lines) == 2, lines
     for ln in lines:
-        assert "--r-max 1024" in ln, ln
+        assert "--r-max 2112" in ln, ln
     measuring = [ln for ln in lines if "--dry-run" not in ln]
     assert len(measuring) == 1 and "--fail-on-gate" in measuring[0], measuring
     # And the booking is the figure that plan prints, not the one it replaced.
-    assert lift("arm_minutes cap_test", REPO=str(ROOT)).stdout.strip() == "3"
+    assert lift("arm_minutes cap_test", REPO=str(ROOT)).stdout.strip() == "5"
     basis = lift("arm_basis cap_test", REPO=str(ROOT)).stdout
-    assert "--r-max 1024" in basis and "143 s" in basis, basis
+    assert "--r-max 2112" in basis and "242 s" in basis, basis
     assert "688" in basis, "the row does not say what the default did"
+    assert "143 s" in basis and "2026-09-09" in basis, (
+        "the row does not retract the 1024 booking it replaced")
 
 
 def test_the_alias_arm_refuses_at_the_probe_rather_than_buying_a_bound_twice():
     """--dot-fallback refuse on all three branches, and the dot lower bound
     named as the separate booking it is. The allow branch was bought on
-    2026-09-09: 308 s, P1 UNKNOWN at alpha >= 0.229, latched CLAIM_FAIL."""
+    2026-09-09: 308 s, P1 UNKNOWN at alpha >= 0.229, latched INVALID (rc 3,
+    four validity gates failed after measuring)."""
     joined = re.sub(r"\\\n\s+", " ", CODE)
     lines = [ln for ln in joined.splitlines()
              if re.match(r"\s*arm alias_ablation\s", ln)]
@@ -3735,25 +3727,30 @@ def test_the_alias_arm_refuses_at_the_probe_rather_than_buying_a_bound_twice():
         assert needle in closes, needle
 
 
-def test_the_depth_arm_carries_the_small_tile_partner_on_both_branches():
+def test_the_depth_arm_books_r_max_and_leaves_the_partner_to_the_script():
     """Without a small tile in the SWEPT set the arm's own non-vacuity floor is
     0.838 of the roof and no BLOCK_M=256 ladder in the corpus reaches it, so the
     arm refuses its own reference on every card and under every clock rule: it
-    is pre-registered INVALID, which is what 292 s bought on 2026-09-09. This
-    file's rule is that a knob setting a booking or a gate is named on the line
-    (PENDING_SCRIPT_FLAGS at the top of this file carries the cross-slice
-    contract while the script is landing it)."""
+    is pre-registered INVALID, which is what 292 s bought on 2026-09-09.
+
+    The partner that fixes that is UNCONDITIONAL in `scripts/bm128_depth.py`
+    (`SMALL_TILE_BLOCK_M`, in `BLOCK_SIZES`) and there is no flag for it. Both
+    arm lines carried `--partner-block-m 32` until now, which argparse rejects,
+    so this asserts the flag is gone from both and that the driver still says
+    where the partner actually lives. `--r-max` IS a flag and is still on both
+    lines, because it is in the grid, the cost and the run id."""
     joined = re.sub(r"\\\n\s+", " ", CODE)
     lines = [ln for ln in joined.splitlines()
              if re.match(r"\s*arm bm128_depth\s", ln)]
     assert len(lines) == 2, lines
     for ln in lines:
-        assert "--partner-block-m 32" in ln, ln
+        assert "--partner-block-m" not in ln, ln
         assert "--r-max 2048" in ln, ln
-    # The booking says the partner is not in its figure yet, rather than
-    # quietly pricing an arm that grew a ladder.
+    # And the reason is on the page rather than in a commit message.
+    assert "THE BM=32 PARTNER IS NOT A FLAG" in TEXT
     unpriced = lift("arm_unpriced bm128_depth", REPO=str(ROOT)).stdout
     assert "BM=32 scaling partner" in unpriced, unpriced
+    assert "is not a flag" in unpriced, unpriced
 
 
 def test_the_clock_probe_checks_what_it_says_and_survives_pipefail():
