@@ -102,7 +102,10 @@ WHAT IS BEING TESTED, IN ORDER OF WHAT IT WOULD COST TO BE WRONG.
      difference. Predicted 0.10 to 0.15.
   3. alpha_b, as the intercept, and it must be THE SAME at every BM. Nothing in
      the model lets a weight miss fraction depend on the tile height, so fitting
-     BM=32, 64 and 128 separately turns a parameter into a testable invariant.
+     BM=16, 32, 64 and 128 separately turns a parameter into a testable
+     invariant. On 2026-09-10 the 128 cells produced nothing at any BLOCK_N, so
+     the invariant was tested over two heights; 16 is swept from that date on,
+     and the reason is in the paragraph on BM=16 below.
   4. alpha_b against TEMPO (arXiv:2608.13057), which publishes b2/b = 0.311 and
      0.319 for the weight-side re-read and models NO activation-side re-read at
      all, so alpha_a has no counterpart in the closest prior work.
@@ -122,6 +125,29 @@ more than one tile, so 128 is the only block size where alpha_b is a production
 quantity rather than a curiosity.
 BM=64 and BM=32 are swept beside it because they are where alpha is ROBUSTLY
 identifiable, and because the invariance in (3) needs more than one BM.
+
+AND BM=16 IS SWEPT BECAUSE THE PRIMARY DID NOT SURVIVE. On 2026-09-10 this arm
+ran on an H200 at GROUP_SIZE_M=16 and BLOCK_M=128 produced NO alpha at ANY of
+the three BLOCK_N: its memory branch came within the parallel-branch tolerance
+of the compute branch at all three and was discarded. So a fit registered on
+three heights was made on TWO, over six cells, for two parameters, and at two
+heights the model's only BLOCK_N-dependent column, which is strictly
+proportional to BLOCK_M, is not separable from the `1/BN` column that fits the
+same six cells 3.1x better at equal parameter count. `design_collinearity`
+computes that: 0.818 over the two-height grid, 0.663 with BM=16 added at all
+three BN. A SMALLER subject tile is further from its compute branch and so the
+one least likely to lose it, and that is measured rather than assumed.
+`published_small_tile_branch` reads the same session's tile_cap arm, which ran
+BLOCK_M=16 at BLOCK_N=64 under the same num_warps and num_stages and found 56 of
+56 treads memory bound at B/C = 5.46, all nine of its gates passing.
+THE GAIN IS THE BN=32 CELL AND NOT THE HEIGHT AS SUCH: BM=16 at BN=64 and 128
+alone leaves the collinearity at 0.819, i.e. unchanged. That cell is also the
+one setting in the grid whose warp grid is wider than its output tile
+(512 elements against 8 warps times one 128-element m16n8k16 tile), which the
+plan page now prints as the third bill. It is a RECORD and not a refusal: the
+card holds the tile at 24 KiB of shared memory and 2 accumulator registers per
+thread, the kernel computes the right answer, and the two settings that sit
+exactly ON that boundary have both run and been published.
 
 THE PRECONDITION, AND IT KILLED THE LAST ATTEMPT AT THIS SWEEP. Every alpha here
 is a membership decision against a COMPUTE REFERENCE, and the previous BN sweep
@@ -172,10 +198,13 @@ each other are one line and a fit that reads a stretch of the compute branch as
 a memory branch reports that branch's slope as alpha. `B/C` is predictable per
 cell before the run, and it says the PRIMARY is the cell most likely to go: the
 measured median over the 22 published BLOCK_M=128 ladders is 0.991, which is
-INSIDE the tolerance. So BLOCK_M=128 is expected to yield 2 of 3 BN points and
-the pooled fit to carry the residual test, while BM=64 and BM=32 sit far outside
-the band at every BN. Those predictions are ANCHORED on that measured 0.991 and
-not on a calibrated ridge: `B/C` carries the kernel's OWN achieved
+INSIDE the tolerance. That prediction was registered as 2 of 3 BN points and the
+2026-09-10 H200 run returned ZERO of three, so the sentence that stood here
+until that date, "the pooled fit carries the residual test", described an arm
+that had not happened. What carries the residual test is the heights that do
+keep a branch: BM=64, BM=32 and, from 2026-09-10, BM=16, all of which sit far
+outside the band at every BN. Those predictions are ANCHORED on that measured
+0.991 and not on a calibrated ridge: `B/C` carries the kernel's OWN achieved
 FLOP-per-byte, which is not the card's ridge, and the calibrated form says the
 BLOCK_M=256 reference at BN=64 is memory bound when it is measurably the
 qualified compute reference in 22 of the 24 published arms.
@@ -196,10 +225,16 @@ setting that resolves it, and `--reps` buys the rest.
 AND AT G=1 IT DECIDES C2 AS WELL, WHICH IS WHY THAT GATE NOW HAS A POWER GUARD.
 The residual gate is the reason this experiment exists, and a gate is only a
 gate if both its outcomes can occur. They cannot at every pinning: planted at
-GROUP_SIZE_M=1 the MISSING world -- the same world `--self-test` uses to prove
-C2 discriminates -- comes back with chi2 1.78 against the 4.0 ceiling and PASSES,
-the identical verdict the TRUTH world gets, so a C2 PASS there would be reported
-as "the three terms are all of it" from a test that cannot say otherwise. The
+GROUP_SIZE_M=1 the MISSING world, the same world `--self-test` uses to prove
+C2 discriminates, comes back WELL UNDER the 4.0 ceiling and PASSES, the
+identical verdict the TRUTH world gets, so a C2 PASS there would be reported
+as "the three terms are all of it" from a test that cannot say otherwise. THE
+CHI2 IS NO LONGER WRITTEN DOWN HERE: three paragraphs in this file said "chi2
+1.78" and that was the figure of the THREE-height design at one --draws and one
+--plant-noise. The fourth height moved it to 1.09 at the settings the tests use
+and 2.70 at the CLI's defaults, and the verdict, which is what the sentence is
+about, did not move at all. The number is computed by `c2_power_probe` and
+printed with its settings beside it. The
 real run therefore plants that world ITSELF, at its own measured across-repeat
 spread and its own swizzle, BEFORE it scores C2 (`c2_power_probe`), and C2 reads
 UNKNOWN with the reason whenever the missing-term world would have passed. The
@@ -265,8 +300,52 @@ estimator's power is not that; see `gate_sharpness`. The failing gates are still
 on the page, still one RESULT line each, and `--fail-on-gate` still returns the
 1 for a caller that wants a claim shortfall to be an error.
 
-OFF GPU. `--dry-run` prints the plan, the resource bill, the per-cell
-predictions, the computed design power and its MDE, and the cost. `--self-test`
+AND WHAT EVERY CELL IS SCORED ON BESIDE ITS ALPHA, FROM 2026-09-10. Two columns
+were added to the cell table and to `report.json`, and neither is a new
+estimator of the same thing:
+
+  * `w = B / T_w`, the memory branch's slope in units of ONE COMPLETE STREAM of
+    this layer's expert weights at the card's own measured rate. There is no
+    fitted level in it, no intercept, no delta and no D, which is exactly what
+    is wrong with `alpha = B/(A+B)` and its D-corrected partner: those divide by
+    an extrapolation back to zero tiles over a lever arm of up to 44 treads on a
+    ladder that is not exactly affine. `w` is the statistic every clean result
+    in the 2026-09-10 analysis was expressed in. It is IMPORTED and not defined
+    here, see `WEIGHT_STREAM_CANDIDATES`, and while the shared one has not
+    landed the page says so on the line that prints it.
+  * the A-VERSUS-D label. `alpha_upper = B/(A + B - D)` exceeds 1 exactly when
+    `D > A`, which is arithmetic and not physics. In the committed 2026-09-10
+    arm that held in four of six cells and in NO others, and those are exactly
+    the four whose `alpha_upper` came back above 1. Every cell now carries `A`,
+    `B`, `D` and the label, so a reader can tell an unphysical measurement from
+    an unphysical subtraction without re-fitting anything.
+
+NEITHER C1's BAND NOR C6's BAR MOVED FOR THE FOURTH HEIGHT, and the arithmetic
+is why. `ALPHA_A_BAND` is derived by `alpha_a_band_from_published` from the ONE
+pair of committed arms that differ in BLOCK_SIZE_N and nothing else, at the two
+BLOCK_M that fit in both; `ALPHA_A_SD_CEILING` is the sharpest two-point slope
+in that same corpus, read back by `gate_sharpness`. Both are properties of what
+the corpus has ALREADY measured, and adding a height to a future sweep changes
+neither. Re-registering them here would have been a pre-registration moving
+because new information arrived, which is the one thing a pre-registration may
+not do. What the fourth height moves is what the run can RESOLVE, and that is
+the design-power line, computed and printed on every plan page.
+
+AND THAT LINE IS NO LONGER ONE SEED. `design_power` planted one world at
+`--seed` and printed the sd that came back. At the fallback spread, which is the
+worst published across-repeat spread and what a plan with no measurement of its
+own is scored at, that figure ran 0.0223, 0.0868, 0.3102, 0.0684, 0.3445 and
+0.4171 over six consecutive seeds of the THREE-height design, and seed 0 was the
+only one of the six that cleared the 0.025 bar. A number that decides whether a
+pod is rented may not be a property of the seed. Five realisations are planted,
+the median is printed with all five beside it, and the verdict is scored on the
+WORST. It is a pre-existing defect and not one the fourth height introduced: the
+same six seeds on the FOUR-height design give 0.1774, 0.0831, 0.1136, 0.0696,
+0.1734 and 0.0219.
+
+OFF GPU. `--dry-run` prints the plan, the identification line the fourth height
+was added for, the resource bill, the warp-grid bill, the per-cell predictions,
+the computed design power and its MDE, and the cost. `--self-test`
 plants four worlds -- the exact model, the model with a term missing, a world
 with no activation re-read at all, and a noise-only world -- and checks the gates
 come out DIFFERENT in each, which is the claim that they discriminate rather
@@ -418,8 +497,76 @@ PRIMARY_BLOCK_M = 128
 
 #: Swept beside it. 64 and 32 are where alpha is robustly identifiable -- their
 #: `B/C` sits far outside the parallel-branch band on both cards -- and the
-#: alpha_b invariance test needs more than one BM to be a test at all.
-SUBJECT_BLOCK_M = (32, 64, 128)
+#: alpha_b invariance test needs more than one BM to be a test at all. 16 joined
+#: them on 2026-09-10 for the same two reasons and one more, below.
+#:
+#: 16 WAS ADDED ON 2026-09-10 BECAUSE THE GRID THIS ARM RAN COULD NOT IDENTIFY
+#: ITS OWN MODEL. The 2026-09-10 H200 arm swept 32/64/128 against the 256
+#: reference and BLOCK_M=128 produced NO alpha at ANY BLOCK_N: its memory branch
+#: came within the parallel-branch tolerance of the compute branch at all three
+#: and was discarded, so the fit that was pre-registered on three heights was
+#: made on TWO, over six cells, for two parameters. `committed_bn_cells()`
+#: reads those nine cells back out of the committed run rather than quoting
+#: them. With two heights the model's activation column is not separable from
+#: its rivals: `design_collinearity()` computes the correlation between
+#: `g1(BM, BN)` and the `1/BN` column that fits the same data 3.1x better at
+#: equal parameter count, and over the two-height grid it is 0.818.
+#:
+#: WHY 16 AND NOT A SECOND LARGE TILE, argued from what ran rather than from
+#: preference. A smaller subject tile is further from its compute branch, so its
+#: memory branch is the one least likely to be discarded, and the corpus
+#: measures exactly that: `published_small_tile_branch()` reads the 2026-09-10
+#: tile_cap arm, which ran BLOCK_M=16 at BLOCK_N=64 with the same num_warps and
+#: num_stages this file pins, and found 56 of 56 treads memory bound at
+#: B/C = 5.46 against a discard band of |B/C - 1| <= 0.15. Every one of that
+#: arm's nine gates passed. Going the other way, to a fourth LARGE tile, adds a
+#: height on the side where the branch is already being discarded.
+#:
+#: WHAT IT BUYS, COMPUTED AND NOT ASSERTED. Adding 16 at all three BLOCK_N drops
+#: that collinearity from 0.818 to 0.663. THE GAIN IS ENTIRELY THE BN=32 CELL:
+#: at BN=64 and BN=128 alone it is 0.819, i.e. nothing. So BLOCK_M=16 x
+#: BLOCK_N=32 is not one cell of four, it is the cell the height is being added
+#: for, and `warp_tile_bill` prints the one thing about it that is not like the
+#: others rather than leaving it to be discovered on the pod.
+SUBJECT_BLOCK_M = (16, 32, 64, 128)
+
+#: The MMAv2 output tile, `m16n8k16`, in elements. It is what one warp holds
+#: when Triton cannot reach the Hopper warpgroup path, which is every setting
+#: here with BLOCK_M < 64: `block_m_crossing_sweep.FIXED` pins num_warps=8
+#: precisely because that satisfies `BLOCK_M % 64 == 0 AND num_warps % 4 == 0`
+#: "at every setting that can reach it", and 16 and 32 cannot.
+#:
+#: It is a RECORD AND NOT A REFUSAL, and the distinction is the point. The
+#: shared-memory and accumulator bills are refusals because a setting that
+#: exceeds either does not run the tiling this sweep is about at all: a
+#: spilled kernel still returns a time. An under-occupied warp grid runs the
+#: tiling correctly and merely wastes warps, and both cells that sit exactly ON
+#: this boundary have run: BLOCK_M=32 x BLOCK_N=32 in the committed bn arm
+#: (alpha 0.7927) and BLOCK_M=16 x BLOCK_N=64 in tile_cap. What the record buys
+#: is that the one cell BELOW it, BLOCK_M=16 x BLOCK_N=32 at 512 elements
+#: against 8 x 128, is named on the plan page before the pod runs it.
+#:
+#: THE RISK LANDS ON BOTH BRANCHES AND UNTIL 2026-09-10 THIS NOTE SAID
+#: OTHERWISE. It scoped the incomparability to the COMPUTE branch, and nothing
+#: argued the MEMORY branch was untouched. Four of eight warps holding no
+#: output tile cuts memory-level parallelism as well as issue: fewer
+#: independent `cp.async` streams in flight per CTA is fewer outstanding loads,
+#: which inflates `B` and therefore `w` and `alpha` at that cell. So the
+#: honest statement is that BOTH of this cell's branches are suspect, and it
+#: matters more than it would at any other cell: `design_collinearity` puts the
+#: whole 0.818 -> 0.663 identification gain on BLOCK_N=32, since BLOCK_M=16 at
+#: BN=64 and BN=128 alone leaves the correlation at 0.819, unmoved.
+#:
+#: THE CORPUS CANNOT SETTLE IT, so the run registers a check instead.
+#: BLOCK_M=32 x BLOCK_N=32 sits exactly ON the boundary and is "full", and
+#: nothing published is under-occupied, so there is no measured under-occupied
+#: ladder anywhere to compare against. `under_occupied_watch` states the check
+#: the run itself can make: (16, 32)'s `w` against the trend that (32, 32) and
+#: (64, 32) set at the SAME BLOCK_N, where the model and its `1/BN` rival both
+#: predict a `w` that is smooth in BLOCK_M. A (16, 32) sitting above that trend
+#: is the signature of the warp grid and not of the tiling, and it must be read
+#: before the cell is used to separate the two hypotheses.
+MMA_TILE_ELEMENTS = 16 * 8
 
 #: The compute reference. `C ~ BLOCK_M` with no free parameter, so one ladder
 #: that is compute bound throughout gives `C` at every block size, and 256 is
@@ -459,6 +606,29 @@ PUBLISHED_BN_PAIR = (
 #: the pre-registered band is widened by, which is pinned. `PUBLISHED_ALPHA_SD`
 #: below is the literal and the second of those is what checks it still is.
 NOISE_FLOOR_PATH = ROOT / "results" / "published" / "NOISE_FLOOR.json"
+
+#: The 2026-09-10 H200 session, which is this file's own test corpus: the arm it
+#: ran, and the tile_cap arm whose BLOCK_M=16 ladder is the evidence the fourth
+#: height rests on. Read on every plan page, never quoted: the numbers in the
+#: `SUBJECT_BLOCK_M` note above are re-derived from these two directories by
+#: `committed_bn_cells` and `published_small_tile_branch`, so a re-publish
+#: that changed them would refuse rather than leave the paragraph standing.
+SESSION_2026_09_10 = (ROOT / "results" / "published"
+                      / "2026-09-10-nvidia_h200-gaps-session" / "results")
+COMMITTED_BN_RUN = (
+    SESSION_2026_09_10 / "bn_decomposition"
+    / ("nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50"
+       "-k64-modelmixtral_8x7b-n32_64-b59b409f"))
+COMMITTED_SMALL_TILE_RUN = (
+    SESSION_2026_09_10 / "tile_cap"
+    / ("nvidia_h200-bm16-budget400.0-ctl256-dtypebf16-g1-iters50-l2flushtrue"
+       "-modelmixtral_8x7b-n64-plant-ce661a4a"))
+
+#: The tile height whose branch survival is the argument for the fourth subject,
+#: and the arm that measured it. Named rather than inlined so the reader of
+#: `published_small_tile_branch` sees which ladder is being read out of a report
+#: that also carries a BLOCK_M=256 control.
+SMALL_TILE_BLOCK_M = 16
 
 #: Predicted alpha_a, PRE-REGISTERED AS A LITERAL AND CHECKED AGAINST THE FILES
 #: IT CAME FROM. `alpha_a_band_from_published` re-derives it from
@@ -622,6 +792,16 @@ PLANT_NOISE_AUTO = "auto"
 #: and the probe runs twice on the pod path where each draw rebuilds every arm.
 POWER_PROBE_DRAWS = 200
 
+#: Planted realisations behind the design-power line. FIVE AND NOT ONE, from
+#: 2026-09-10: the single-seed figure this line used to carry swings 19-fold
+#: between seeds at the fallback spread, and it is the number an operator reads
+#: to decide whether to rent a pod. Five is the smallest odd count whose median
+#: is not one draw and whose maximum is a real worst case; it costs five times
+#: `--power-draws` of arithmetic and no GPU at all. The C2 power probe is NOT
+#: multiplied by it: that probe asks a different question, about the run that
+#: has already been paid for, at the spread that run measured.
+DESIGN_POWER_SEEDS = 5
+
 #: The card slug a run id carries when no device is attached: every --dry-run
 #: and every --self-test on a laptop. Visible rather than blank, so a laptop
 #: directory cannot be mistaken for the one a pod would write to.
@@ -684,6 +864,139 @@ class CorpusMissing(RuntimeError):
     band whose provenance cannot be checked, and this file already shipped one
     of those: four A100 slopes that no file ever contained.
     """
+
+
+def _read_report(path: Path, what: str) -> dict:
+    """One committed report.json, or a refusal that names the file and the use.
+
+    Every corpus reader in this file goes through here so that a moved or
+    re-published directory refuses on a laptop, in one sentence, rather than
+    raising a decode error thirty seconds into a metered pod session.
+    """
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise CorpusMissing(
+            f"{path} is not there, and it is what {what}. Nothing in this file "
+            "may quote that number from memory; re-point the constant at the "
+            "published directory or re-publish it.") from exc
+    except json.JSONDecodeError as exc:
+        raise CorpusMissing(
+            f"{path} is not readable JSON ({exc}), and it is what {what}.") from exc
+
+
+@dataclass(frozen=True)
+class SmallTileBranch:
+    """What the corpus measured at the tile height this file is adding.
+
+    `B/C` is the statistic the parallel-branch tolerance is applied to, so it is
+    the one that says whether a height yields a branch at all, and it is formed
+    here from the two slopes the tile_cap report publishes rather than from any
+    fit made here.
+    """
+
+    block_m: int
+    block_n: int
+    group_m: int
+    num_warps: int
+    num_stages: int
+    memory_points: int
+    treads: int
+    slope_memory: float
+    slope_compute: float
+    gates_passed: int
+    gates_total: int
+    source: str
+
+    @property
+    def branch_ratio(self) -> float:
+        """`B/C`. Discarded by `fit_ladder` when it lands within the tolerance."""
+        return self.slope_memory / self.slope_compute
+
+    def lines(self) -> list[str]:
+        return [
+            f"BLOCK_M={self.block_m} measured at BLOCK_N={self.block_n}, "
+            f"GROUP_SIZE_M={self.group_m}, num_warps={self.num_warps}, "
+            f"num_stages={self.num_stages}: {self.memory_points} of "
+            f"{self.treads} treads memory bound at B/C = "
+            f"{self.branch_ratio:.2f}, against the parallel-branch tolerance "
+            f"|B/C - 1| <= {TOLERANCE:.2f} that discarded every BLOCK_M="
+            f"{PRIMARY_BLOCK_M} cell in the committed bn arm. "
+            f"{self.gates_passed} of {self.gates_total} gates PASS.",
+            f"  source: {self.source}"]
+
+
+def published_small_tile_branch(path: Path | None = None) -> SmallTileBranch:
+    """The committed BLOCK_M=16 ladder, read out of tile_cap's own report.
+
+    THE REASON THE FOURTH HEIGHT IS NOT A GUESS. `SUBJECT_BLOCK_M`'s note claims
+    that a smaller subject tile is further from its compute branch and therefore
+    the one least likely to have its memory branch discarded. That claim is
+    checkable, and this is the check: the same card, the same num_warps and
+    num_stages, one BLOCK_N in common with this sweep, and the two slopes whose
+    ratio the discard rule is applied to.
+    """
+    path = path or (COMMITTED_SMALL_TILE_RUN / "report.json")
+    what = ("says whether BLOCK_M=16 yields a memory branch at all, which is "
+            "the whole argument for sweeping it")
+    payload = _read_report(path, what)
+    ladders = payload.get("ladder") or {}
+    ladder = ladders.get(str(SMALL_TILE_BLOCK_M))
+    if not ladder or ladder.get("slope_memory") is None:
+        raise CorpusMissing(
+            f"{path} carries no BLOCK_M={SMALL_TILE_BLOCK_M} ladder with a "
+            f"memory branch, and it is what {what}. Without it the fourth "
+            "subject height rests on nothing measured.")
+    fixed = payload.get("fixed") or {}
+    gates = payload.get("gates") or []
+    return SmallTileBranch(
+        block_m=SMALL_TILE_BLOCK_M,
+        block_n=int(fixed.get("BLOCK_SIZE_N", 0)),
+        group_m=int(fixed.get("GROUP_SIZE_M", 0)),
+        num_warps=int(fixed.get("num_warps", 0)),
+        num_stages=int(fixed.get("num_stages", 0)),
+        memory_points=int(ladder["memory_points"]),
+        treads=len(ladder.get("points") or ()),
+        slope_memory=float(ladder["slope_memory"]),
+        slope_compute=float(ladder["slope_compute"]),
+        gates_passed=sum(1 for g in gates if g.get("verdict") == "PASS"),
+        gates_total=len(gates),
+        source=str(path))
+
+
+def committed_bn_cells(path: Path | None = None
+                       ) -> list[tuple[int, int, float | None]]:
+    """`(BLOCK_N, BLOCK_M, alpha)` for every cell of the committed bn arm.
+
+    The arm this file ran on 2026-09-10, read back so that "BLOCK_M=128 produced
+    no alpha at any BLOCK_N" is a fact this run re-derives rather than a
+    sentence left over from the session it describes.
+    """
+    what = ("records which cells the committed BLOCK_N sweep actually yielded, "
+            "and so which heights the fit was really made over")
+    payload = _read_report(path or (COMMITTED_BN_RUN / "report.json"), what)
+    return [(int(c["block_n"]), int(c["block_m"]), c["alpha"])
+            for c in payload.get("cells", [])]
+
+
+def design_collinearity(cfg, cells) -> float | None:
+    """|corr| between the model's activation column and the `1/BN` rival.
+
+    THE NUMBER THAT SAYS WHETHER A HEIGHT WAS WORTH ADDING. The three-term
+    model's only BLOCK_N-dependent term is `alpha_a g1(BM, BN)`, which is
+    strictly proportional to BLOCK_M. The 2026-09-10 session refuted that on the
+    slope alone and named the replacement that fits 3.1x better at equal
+    parameter count: a cost going as `1/BN` and NOT with BLOCK_M. Over a grid
+    where those two columns are collinear the two hypotheses are one hypothesis,
+    and no amount of repeats separates them.
+
+    Returned as a magnitude, and computed from the DESIGN alone, the block
+    sizes and not any timing, so `--dry-run` prints it before the pod is rented.
+    """
+    g1 = [g1_term(cfg, bm, bn) for bm, bn in cells]
+    inv = [1.0 / bn for _, bn in cells]
+    r = pearson(g1, inv)
+    return None if r is None else abs(r)
 
 
 @dataclass(frozen=True)
@@ -1081,6 +1394,67 @@ def weight_elements(cfg) -> int:
     return 3 * cfg.intermediate_size * cfg.hidden_size
 
 
+#: Where the weight-stream slope lives once the slice that owns it lands, as
+#: `(module, ms-per-stream, streams-per-tile)`. PROBED BY NAME, NEVER FORKED:
+#: the whole point of the statistic is that one definition of it is used
+#: everywhere, and this file has already been the place where a second copy of
+#: an estimator went quietly out of step with the first.
+#:
+#: WHAT THE INTERFACE HAS TO BE, so that the slice that lands it and this file
+#: cannot disagree about what was meant:
+#:
+#:     weight_stream_ms(cfg, dtype_bytes, bandwidth_gbps) -> float
+#:         milliseconds to stream ALL experts' weights ONCE at that rate,
+#:         i.e. `num_experts x 3 F H x b / bandwidth`. No tiling in it.
+#:     weight_streams_per_tile(slope_ms_per_tile, stream_ms) -> float
+#:         that ladder's `B` divided by that, which is `w`.
+#:
+#: Until it lands, `_weight_stream_local` below is used and SAYS SO on the page
+#: and in report.json. The pair is resolved once, at import, and the source
+#: string travels with every number computed from it.
+WEIGHT_STREAM_CANDIDATES = (
+    ("moe.bench.weight_stream", "weight_stream_ms", "weight_streams_per_tile"),
+    ("moe.bench.ai_model", "weight_stream_ms", "weight_streams_per_tile"),
+)
+
+
+def _weight_stream_local(cfg, b: int, bandwidth_gbps: float) -> float:
+    """`E x 3 F H x b / bandwidth`, in milliseconds. PROVISIONAL, see above."""
+    if bandwidth_gbps <= 0:
+        raise ValueError("a weight stream needs a positive bandwidth")
+    return 1e3 * cfg.num_experts * weight_elements(cfg) * b / (
+        bandwidth_gbps * 1e9)
+
+
+def _streams_per_tile_local(slope_ms_per_tile: float, stream_ms: float
+                            ) -> float:
+    """`w = B / T_w`. PROVISIONAL, see above."""
+    return slope_ms_per_tile / stream_ms
+
+
+def _load_weight_stream():
+    """The shared weight-stream estimator, or the local one, and which it is."""
+    for module_name, ms_name, per_tile_name in WEIGHT_STREAM_CANDIDATES:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:                                      # noqa: BLE001
+            continue
+        ms = getattr(module, ms_name, None)
+        per_tile = getattr(module, per_tile_name, None)
+        if callable(ms) and callable(per_tile):
+            return ms, per_tile, f"{module_name}.{ms_name}"
+    return (_weight_stream_local, _streams_per_tile_local,
+            "LOCAL PROVISIONAL copy in bn_decomposition.py: none of "
+            + ", ".join(f"{m}.{f}" for m, f, _ in WEIGHT_STREAM_CANDIDATES)
+            + " is importable yet. It is the same arithmetic, E x 3 F H x b "
+              "over the card's measured rate, and it must be deleted the day "
+              "the shared one lands, not left beside it")
+
+
+WEIGHT_STREAM_MS, WEIGHT_STREAMS_PER_TILE, WEIGHT_STREAM_SOURCE = (
+    _load_weight_stream())
+
+
 def act_once_elements(cfg) -> int:
     """`2H + 3F` per row: x_perm, h_up, h_act, y_perm, each touched once.
 
@@ -1353,6 +1727,40 @@ class AlphaCell:
     #: Empty when this cell carries an alpha; otherwise the reason it does not,
     #: in the words of whichever refusal produced it.
     blank: str = ""
+    #: THE THREE MILLISECOND FIGURES EVERY ALPHA ON THIS PAGE IS BUILT FROM,
+    #: carried per cell from 2026-09-10 so that the estimator's arithmetic is
+    #: visible beside its output instead of being reconstructible only by
+    #: re-fitting. `B` is the memory branch's slope, `A` its intercept at zero
+    #: tiles, `D` the arm's compute reference's fitted fixed cost.
+    slope_memory_ms: float | None = None
+    intercept_ms: float | None = None
+    fixed_cost_ms: float | None = None
+    #: `w = B / T_w`: the slope in units of ONE COMPLETE STREAM of the layer's
+    #: expert weights at the card's own measured rate. No fitted level, no
+    #: intercept, no delta, no D, which is the whole reason it is here beside
+    #: `alpha`. See `WEIGHT_STREAM_CANDIDATES` for where the estimator lives.
+    weight_streams: float | None = None
+    #: THE A-VERSUS-D LABEL. `alpha_upper = B/(A + B - D)` exceeds 1 exactly
+    #: when `D > A`, which is arithmetic and not physics: the reference's
+    #: extrapolated fixed cost is larger than the ladder's own extrapolated
+    #: intercept, so the corrected level goes below `B`. In the committed
+    #: 2026-09-10 arm that held in four of six cells and in NO others, and those
+    #: four are exactly the four whose `alpha_upper` came back above 1. A cell
+    #: carrying True is a cell whose `alpha_upper` may not be read as a miss
+    #: fraction, whatever its value.
+    fixed_cost_exceeds_intercept: bool | None = None
+
+    @property
+    def unphysical_by_arithmetic(self) -> bool:
+        """`D > A`, i.e. this cell's `alpha_upper` is above 1 by construction."""
+        return self.fixed_cost_exceeds_intercept is True
+
+    @property
+    def ad_label(self) -> str:
+        """The A-versus-D label as it is printed: `D>A`, `D<A` or blank."""
+        if self.fixed_cost_exceeds_intercept is None:
+            return ""
+        return "D>A" if self.fixed_cost_exceeds_intercept else "D<A"
 
     @property
     def usable(self) -> bool:
@@ -2273,6 +2681,12 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
     """
     cells: list[AlphaCell] = []
     spreads: dict[int, float | None] = {}
+    # ONE COMPLETE WEIGHT STREAM, ONCE, for the whole arm: every cell's `w` is
+    # against the same denominator, so two cells' `w` differ only in their
+    # slopes. Zero bandwidth is a planted world with no rate, and it gives None
+    # rather than a division.
+    stream_ms = (WEIGHT_STREAM_MS(cfg, b, bandwidth_gbps)
+                 if bandwidth_gbps > 0 else None)
     # The operating point each arm's reference ladder held, read off the rows
     # once. A record on every verdict, printed beside the fixed-roof fraction,
     # and never a gate input; see `reference_load_clock`.
@@ -2373,11 +2787,24 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
             basis = fit.basis
             if verdict.imported:
                 basis = "IMPORTED branch; " + basis
+            # THE SLOPE IN WEIGHT-STREAM UNITS, AND THE A-VERSUS-D LABEL, both
+            # recorded whether or not the cell survives its blanks. `w` needs
+            # no fitted level and `D > A` is the arithmetic that put four of
+            # this arm's six `alpha_upper` values above 1, so both are worth
+            # having on a cell the alpha fit refused.
+            streams = None
+            if fit.slope_memory is not None and stream_ms:
+                streams = WEIGHT_STREAMS_PER_TILE(fit.slope_memory, stream_ms)
+            over = (None if fit.intercept is None
+                    else fit.overhead_ms > fit.intercept)
             cells.append(AlphaCell(
                 bn, bm, fit.alpha if not blank else None,
                 fit.alpha_upper if not blank else None,
                 corrected if not blank else None, fit.memory_points, len(pts),
-                spread, basis, blank=blank))
+                spread, basis, blank=blank,
+                slope_memory_ms=fit.slope_memory, intercept_ms=fit.intercept,
+                fixed_cost_ms=fit.overhead_ms, weight_streams=streams,
+                fixed_cost_exceeds_intercept=over))
     return cells, verdicts, spreads
 
 
@@ -2778,7 +3205,14 @@ def gate_identifiable(cells, primary: int) -> Gate:
                  "value(s). The parallel-branch tolerance is the predicted "
                  "reason for a shortfall there and it is not a defect in the "
                  "run: |B/C - 1| at 128 is predicted at 0.10 on the A100 "
-                 f"against a tolerance of {TOLERANCE:.2f}."])
+                 f"against a tolerance of {TOLERANCE:.2f}.",
+                 "IT IS NO LONGER ONLY A PREDICTION. On 2026-09-10 the primary "
+                 "carried ZERO BN values on the H200: every BLOCK_M=128 cell "
+                 "at every BLOCK_N had its memory branch discarded, so this "
+                 "gate's shortfall clause is the arm's normal state and not "
+                 f"its bad day. BLOCK_M={SMALL_TILE_BLOCK_M} is swept because "
+                 "a fit over the two heights that survived cannot separate the "
+                 "activation column from the 1/BN column that beats it."])
 
 
 def band_provenance_lines() -> list[str]:
@@ -2923,8 +3357,8 @@ def gate_residual(fit: Decomposition, chi2: float | None, why: str,
 
     THE POWER GUARD, added 2026-09-02, and the reason it is here rather than in
     the caller. This gate can PASS at a pinning where it cannot FAIL: planted at
-    GROUP_SIZE_M=1 the missing-term world comes back at chi2 1.78 against the
-    4.0 ceiling, which is the same PASS the TRUTH world gets, and the session
+    GROUP_SIZE_M=1 the missing-term world comes back well under the 4.0
+    ceiling, which is the same PASS the TRUTH world gets, and the session
     driver schedules that arm unconditionally. `power` is the verdict of a
     planted MISSING world at THIS run's own swizzle and its own measured spread
     (`c2_power_probe`), and when it did not discriminate this gate reads UNKNOWN
@@ -3216,12 +3650,21 @@ def predictions_text(cfg, b: int, ridge: float, ridge_source: str, block_ns,
         f"the anchor is {ANCHOR_RATIO:.3f}, inside the parallel-branch",
         f"    tolerance of {TOLERANCE:.2f}, and that is the measured median of "
         "22 published ladders rather than a guess.",
-        "    At BN=32 the primary is predicted to escape UP (every tread "
+        "    At BN=32 the primary was predicted to escape UP (every tread "
         "memory bound) and at BN=128 to keep a",
-        "    prefix, so it should contribute 2 of 3 points and the POOLED fit "
-        "carries the residual test. BM=64",
-        "    and BM=32 sit far outside the band at every BN, which is what "
-        "makes the sweep survive that.",
+        "    prefix, so it was registered to contribute 2 of 3 points. IT "
+        "CONTRIBUTED NONE. In the committed",
+        "    2026-09-10 H200 arm all three BLOCK_M=128 cells came back blank, "
+        "at all three BLOCK_N, and the",
+        "    pooled fit that was registered on three heights was made over "
+        "TWO. That is why a FOURTH height",
+        f"    is swept: BLOCK_M={SMALL_TILE_BLOCK_M} is the height furthest "
+        "from its compute branch and so the one",
+        "    least likely to lose it, and the identification line on the plan "
+        "page prints what it buys.",
+        "    BM=64, BM=32 and BM=16 sit far outside the parallel-branch band "
+        "at every BN, which is what makes",
+        "    the sweep survive the primary going missing a second time.",
         f"    THE BN=32 ARM IS THE ONE AT RISK: its BLOCK_M="
         f"{REFERENCE_BLOCK_M} reference is predicted compute bound in the "
         "LADDER",
@@ -3272,6 +3715,157 @@ def planted_ms(cfg, block_m: int, block_n: int, tiles: int, *, alpha_b: float,
 
 
 @dataclass(frozen=True)
+class WarpTile:
+    """How many of a CTA's warps hold an output tile of their own.
+
+    THE THIRD BILL, added 2026-09-10 with the fourth subject height, and it is a
+    RECORD where the other two are refusals. See `MMA_TILE_ELEMENTS`: shared
+    memory and accumulator registers are hard limits and a setting that exceeds
+    either does not run the tiling this sweep is about; a warp grid wider than
+    the output tile runs it correctly and wastes warps. What this exists to stop
+    is the wasted warps being DISCOVERED, on a pod, in a cell's branches.
+
+    BOTH BRANCHES, not the compute one alone. This class was introduced saying
+    the under-occupied cell's COMPUTE branch is what is incomparable; idle warps
+    also carry fewer outstanding loads, so `B` and `w` are exposed too. The
+    scope was widened the same day the finding was made and the check the run
+    can make about it is `under_occupied_watch`.
+    """
+
+    block_m: int
+    block_n: int
+    num_warps: int
+
+    @property
+    def elements(self) -> int:
+        return self.block_m * self.block_n
+
+    @property
+    def needed(self) -> int:
+        return self.num_warps * MMA_TILE_ELEMENTS
+
+    @property
+    def warps_with_a_tile(self) -> int:
+        return max(1, min(self.num_warps, self.elements // MMA_TILE_ELEMENTS))
+
+    @property
+    def occupied(self) -> bool:
+        return self.elements >= self.needed
+
+    def render(self) -> str:
+        return (f"  BLOCK_M={self.block_m:4d}  output {self.elements:6d} "
+                f"elements of {self.needed:6d} "
+                f"({self.num_warps} warps x one {MMA_TILE_ELEMENTS}-element "
+                "m16n8k16 tile)  "
+                + ("full" if self.occupied else
+                   f"UNDER-OCCUPIED: {self.warps_with_a_tile} of "
+                   f"{self.num_warps} warps hold a tile"))
+
+
+def warp_tile_bill(pinned: dict, block_m: int) -> WarpTile:
+    """One setting's warp-grid occupancy. Arithmetic on the pinned constants."""
+    return WarpTile(block_m, int(pinned["BLOCK_SIZE_N"]),
+                    int(pinned["num_warps"]))
+
+
+def under_occupied_cells(base_pinned: dict, subjects, block_ns
+                         ) -> tuple[tuple[int, int], ...]:
+    """Every swept `(BLOCK_M, BLOCK_N)` whose warp grid is wider than its tile."""
+    return tuple(
+        (bm, bn) for bn in block_ns for bm in subjects
+        if not warp_tile_bill(dict(base_pinned, BLOCK_SIZE_N=bn), bm).occupied)
+
+
+def _occupied_peers(base_pinned: dict, subjects, bm: int, bn: int
+                    ) -> list[int]:
+    """The swept heights at the SAME BLOCK_N whose warp grid is full."""
+    return sorted(
+        o for o in subjects if o != bm
+        and warp_tile_bill(dict(base_pinned, BLOCK_SIZE_N=bn), o).occupied)
+
+
+def under_occupied_watch(base_pinned: dict, subjects, block_ns) -> list[str]:
+    """The check registered against each under-occupied cell, before the run.
+
+    REGISTERED 2026-09-10, AND THE REASON IS A GAP IN THE THIRD BILL'S OWN
+    ARGUMENT. `MMA_TILE_ELEMENTS` scoped the incomparability of an
+    under-occupied cell to its COMPUTE branch, and nothing argued the memory
+    branch was untouched: idle warps carry fewer outstanding loads as well as
+    fewer issue slots, which inflates `B`, `w` and `alpha` at exactly the cell
+    the fourth height is being added for. The corpus cannot settle it, since
+    the two published cells that touch the boundary sit exactly ON it and are
+    full and nothing published is under-occupied, so the check is registered
+    here rather than argued, and `under_occupied_reading` performs it on the
+    cells the run returns.
+
+    The comparison is within one BLOCK_N on purpose. Both live hypotheses about
+    the BLOCK_N dependence, the model's `alpha_a g1` and the `1/BN` rival, are
+    smooth in BLOCK_M at fixed BLOCK_N, so a slope that jumps at the height
+    where the warp grid empties is the warp grid and not the tiling.
+    """
+    out: list[str] = []
+    for bm, bn in under_occupied_cells(base_pinned, subjects, block_ns):
+        peers = _occupied_peers(base_pinned, subjects, bm, bn)
+        if len(peers) < 2:
+            out.append(
+                f"REGISTERED CHECK, BM={bm} x BN={bn}: NOT AVAILABLE at this "
+                f"pinning. It needs two full-warp-grid heights at the same "
+                f"BLOCK_N to set a trend and this sweep has {len(peers)}, so "
+                "this cell's slope arrives with nothing to be read against.")
+            continue
+        out.append(
+            f"REGISTERED CHECK, BM={bm} x BN={bn}: read its w against the line "
+            f"BM={peers[0]} and BM={peers[1]} set at the SAME BN={bn}. Both "
+            "live hypotheses are smooth in")
+        out.append(
+            "  BLOCK_M there, so a w ABOVE that line is the warp grid and "
+            "not the tiling, and the cell must not be used to separate them "
+            "until the excess is read.")
+    return out or ["every swept cell fills its warp grid, so there is no "
+                   "under-occupied slope to watch"]
+
+
+def under_occupied_reading(cells, base_pinned: dict, subjects, block_ns
+                           ) -> list[str]:
+    """`under_occupied_watch`'s check, performed on the cells a run returned.
+
+    The trend is a straight line in `log2(BLOCK_M)` through the peers' `w`,
+    which is the coarsest form that uses both of them and introduces no
+    parameter of its own. Reported as an excess, never as a gate: what to do
+    about an inflated `B` is a decision for whoever reads the arm, and a bar
+    invented here would be a bar with no measurement behind it.
+    """
+    by_key = {(c.block_m, c.block_n): c for c in cells}
+    out: list[str] = []
+    for bm, bn in under_occupied_cells(base_pinned, subjects, block_ns):
+        cell = by_key.get((bm, bn))
+        if cell is None or cell.weight_streams is None:
+            out.append(f"  under-occupied BM={bm} x BN={bn}: no w on this "
+                       "page, so the registered warp-grid check cannot be "
+                       "read")
+            continue
+        peers = [(o, by_key[(o, bn)].weight_streams)
+                 for o in _occupied_peers(base_pinned, subjects, bm, bn)
+                 if (o, bn) in by_key
+                 and by_key[(o, bn)].weight_streams is not None]
+        if len(peers) < 2:
+            out.append(f"  under-occupied BM={bm} x BN={bn}: w = "
+                       f"{cell.weight_streams:.4f}, and fewer than two "
+                       "full-grid heights at this BN carry a w, so the "
+                       "registered check has nothing to read it against")
+            continue
+        (m0, w0), (m1, w1) = peers[0], peers[-1]
+        slope = (w1 - w0) / (math.log2(m1) - math.log2(m0))
+        expect = w0 + slope * (math.log2(bm) - math.log2(m0))
+        out.append(
+            f"  under-occupied BM={bm} x BN={bn}: w = {cell.weight_streams:.4f} "
+            f"against {expect:.4f} on the BM={m0}/{m1} line at this BN, "
+            f"{(cell.weight_streams / expect - 1):+.1%}. Above it is the warp "
+            "grid, not the tiling.")
+    return out
+
+
+@dataclass(frozen=True)
 class Plan:
     """Everything the pod run will do, computable on a laptop."""
 
@@ -3313,6 +3907,7 @@ class Plan:
             "until the others exist",
             f"repeats      {self.reps} round-robin passes per setting",
         ]
+        out += self.identification_lines(cfg)
         out += self.power_lines()
         out += [
             f"timing       {self.warmup_ms:.0f} ms of warmup under load, then "
@@ -3334,6 +3929,98 @@ class Plan:
                        f"{SWEEP.tokens_for_rows(cfg, rows[-1])}")
         for (bn, bm), why in sorted(self.refusals.items()):
             out.append(f"  REFUSED BN={bn} BM={bm}: {why}")
+        return out
+
+    def identification_lines(self, cfg) -> list[str]:
+        """Why THESE heights, and what the fourth one buys, both computed.
+
+        ADDED 2026-09-10 WITH THE FOURTH HEIGHT. The arm that ran on that date
+        swept three heights and fitted TWO, because every BLOCK_M=128 cell had
+        its memory branch discarded, and at two heights the model's activation
+        column and the `1/BN` column that beat it are collinear. A plan page
+        that prints four heights and does not say what the fourth is for is a
+        page a reader has to take on trust, and the number is cheap: it is a
+        property of the block sizes alone.
+        """
+        design = [(bm, bn) for bm in self.subjects for bn in self.block_ns]
+        out = []
+        r = design_collinearity(cfg, design)
+        if r is not None:
+            out.append(
+                f"identification  corr(g1, 1/BN) over this design's "
+                f"{len(design)} cells = {r:.3f}. g1 is the three-term model's "
+                "only BLOCK_N-dependent")
+            out.append(
+                "             column and is strictly proportional to BLOCK_M; "
+                "1/BN is the rival that fits the 2026-09-10 arm 3.1x")
+            out.append(
+                "             better at equal parameter count. Where the two "
+                "are collinear no repeat count separates them.")
+        measured = [(bm, bn) for bm in self.subjects if bm != SMALL_TILE_BLOCK_M
+                    for bn in self.block_ns]
+        r_without = design_collinearity(cfg, measured) if measured else None
+        if r is not None and r_without is not None and measured != design:
+            out.append(
+                f"             without BLOCK_M={SMALL_TILE_BLOCK_M} the same "
+                f"number is {r_without:.3f} over {len(measured)} cells, which "
+                "is what the fourth height is worth.")
+        # THE PAGE RE-DERIVES THE MEASUREMENT IT RESTS ON, from 2026-09-10.
+        # `SESSION_2026_09_10`'s note said the numbers in the `SUBJECT_BLOCK_M`
+        # paragraph are re-derived by `committed_bn_cells` AND
+        # `published_small_tile_branch` on every plan page, and only the second
+        # of the two was ever called: `committed_bn_cells` had no runtime call
+        # site at all, so a re-publish that changed which cells the bn arm
+        # yielded was caught by the test suite and NOT by the page. Both are
+        # read here now, and both refuse out loud rather than leaving the
+        # paragraph standing.
+        try:
+            committed = committed_bn_cells()
+        except CorpusMissing as exc:
+            out.append(f"             COMMITTED-ARM EVIDENCE UNREADABLE: {exc}")
+        else:
+            primary = [a for _, bm, a in committed if bm == PRIMARY_BLOCK_M]
+            yielded = sorted({bm for _, bm, a in committed if a is not None})
+            out.append(
+                f"             the committed 2026-09-10 arm yielded "
+                f"{sum(1 for a in primary if a is not None)} of "
+                f"{len(primary)} BLOCK_M={PRIMARY_BLOCK_M} cells with an "
+                f"alpha, so the fit registered on "
+                f"{len({bm for _, bm, _ in committed})} heights was made over "
+                f"{len(yielded)}: {yielded}.")
+        try:
+            branch = published_small_tile_branch()
+        except CorpusMissing as exc:
+            out.append(f"             SMALL-TILE EVIDENCE UNREADABLE: {exc}")
+        else:
+            out += ["             " + line for line in branch.lines()]
+        return out
+
+    def warp_lines(self) -> list[str]:
+        """The warp-grid bill, one line per swept setting. A record, not a gate.
+
+        The other two bills are printed by `block_m_crossing_sweep`'s own
+        `TileResources.render`, which knows about shared memory and accumulator
+        registers and nothing about how many warps hold a piece of the output.
+        At BLOCK_M >= 64 that never mattered. It matters at 16.
+        """
+        out = ["WARP-GRID BILL, one CTA. A RECORD, NOT A REFUSAL: an "
+               "under-occupied warp grid computes the right",
+               "answer with warps to spare, so the cell is measured, but "
+               "NEITHER of its branches is comparable with",
+               "the rest of the grid: idle warps cost issue slots on the "
+               "compute side and outstanding loads on the",
+               "memory side, so C is understated and B, and therefore w and "
+               "alpha, are overstated. It must never be",
+               "promoted to a reference, and its slope must be read against "
+               "the check below before it is used."]
+        for bn in self.block_ns:
+            pinned = dict(self.base_pinned, BLOCK_SIZE_N=bn)
+            for bm in (*self.subjects, REFERENCE_BLOCK_M):
+                out.append(f"  BN={bn:4d}"
+                           + warp_tile_bill(pinned, bm).render())
+        out += ["  " + line for line in
+                under_occupied_watch(self.base_pinned, self.subjects,
+                                     self.block_ns)]
         return out
 
     def power_lines(self) -> list[str]:
@@ -3799,6 +4486,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 probe_c2_power: bool = False,
                 plant_noise: float | None = None,
                 band_lines: list[str] | None = None,
+                bootstrap_seed: int | None = None,
                 ) -> tuple[list[str], list[Gate], dict]:
     """Everything read off the timings, as text, gates and a payload.
 
@@ -3816,6 +4504,16 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     `band_lines` is the alpha_a band's provenance, already re-derived by `_main`
     before any GPU time, handed down so C1 prints the band it was actually
     scored against. None means C1 reads the corpus itself; it never recites.
+
+    `bootstrap_seed` is the resampling seed, and it exists because until
+    2026-09-10 there was only `args.seed`. `design_power` varies the PLANTED
+    world's seed per realisation, so a caller that could not also move the
+    bootstrap got five worlds resampled with one frozen draw sequence: the fix
+    had been applied at one of its two call sites. Measured before the fix,
+    `--dry-run --group-m 16 --power-seeds 5 --seed 0` returned 0.1774, 0.0836,
+    0.0801, 0.0252, 0.2684 while `--seed k --power-seeds 1` for k=0..4 returned
+    0.1774, 0.0831, 0.1136, 0.0696, 0.1734, and only the base seed agreed. None
+    means use `args.seed`, so a real run is unchanged.
 
     `reference_clock_mhz` is the clock the FIXED roof was measured at, passed
     in the way `ceiling_tflops` is rather than resolved here, so a replay on a
@@ -3841,7 +4539,9 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                         f"BN={bn} BM={bm} tread {tread}: time falls {drop:.3%}"
                         + (f" at spread {sp:.3%}" if sp else " (spread unknown)"))
 
-    boot = run_bootstrap(samples, cfg, keys, draws=draws, seed=args.seed,
+    boot = run_bootstrap(samples, cfg, keys, draws=draws,
+                         seed=args.seed if bootstrap_seed is None
+                         else bootstrap_seed,
                          form="EXA", **kw)
     fit = decompose(cells, cfg, "EXA")
     fit_lin = decompose(cells, cfg, "LIN")
@@ -3869,9 +4569,19 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 "held different clocks under the power cap and the gate is "
                 "pre-registered on the raw rates")
 
+    # THE SLOPE IN WEIGHT-STREAM UNITS SITS BESIDE THE ALPHA, and the A-versus-D
+    # label sits beside both. Added 2026-09-10, when the session's own analysis
+    # showed that every unphysical number this study has argued about came out
+    # of `B/(A+B)` and its `D`-corrected partner rather than out of the data:
+    # `w` has no fitted level in it at all, and `D>A` marks the cells where
+    # `alpha_upper > 1` is arithmetic. Neither replaces `alpha`, which is what
+    # every gate here is still scored on; they are printed so a reader can see
+    # which of the three a given cell's oddity belongs to.
+    stream_ms = (WEIGHT_STREAM_MS(cfg, b, bandwidth_gbps)
+                 if bandwidth_gbps > 0 else None)
     lines += ["", "## The cells", "",
-              "   BN   BM   treads  mem   alpha    corrected   sigma  surv  "
-              "basis"]
+              "   BN   BM   treads  mem   alpha    corrected       w  A/D   "
+              "sigma  surv  basis"]
     for c in sorted(cells, key=lambda c: (c.block_m, c.block_n)):
         sd = boot.per_cell_sd.get((c.block_n, c.block_m))
         surv = boot.survival.get((c.block_n, c.block_m))
@@ -3880,9 +4590,45 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
             + (f"{c.alpha:7.4f}" if c.alpha is not None else "  BLANK")
             + ("  " + (f"{c.alpha_corrected:9.4f}"
                        if c.alpha_corrected is not None else "     n/a"))
+            + ("  " + (f"{c.weight_streams:6.4f}"
+                       if c.weight_streams is not None else "   n/a"))
+            + f"  {c.ad_label or '   ':3s}"
             + ("  " + (f"{sd:6.4f}" if sd else "   n/a"))
             + ("  " + (f"{surv:4.0%}" if surv is not None else " n/a"))
             + "  " + (c.blank or c.basis)[:64])
+    lines += [
+        "  w = B / T_w, the memory branch's slope in units of ONE COMPLETE "
+        "stream of this layer's expert weights",
+        "  at the card's own rate. "
+        + (f"T_w = {stream_ms:.4f} ms for {cfg.num_experts} x 3 F H x {b} B "
+           f"at {bandwidth_gbps:.1f} GB/s." if stream_ms
+           else "T_w UNAVAILABLE: no bandwidth to stream at.")
+        + " NO fitted level, no intercept,",
+        "  no delta and no D enter it, which is what makes it comparable "
+        "across arms that alpha is not.",
+        f"  estimator: {WEIGHT_STREAM_SOURCE}",
+        "  A/D = whether this arm's compute reference's fitted fixed cost D "
+        "exceeds this ladder's own",
+        "  intercept A. `alpha_upper = B/(A + B - D)` is above 1 EXACTLY when "
+        "D > A, so a D>A cell's",
+        "  alpha_upper is unphysical by arithmetic and not by measurement. In "
+        "the committed 2026-09-10",
+        "  arm that held in four of six cells and in no others."]
+    # THE WARP-GRID CHECK, READ. `under_occupied_watch` registers it on the
+    # plan page before the pod runs; this is the same check performed on the
+    # cells that came back. It is here and not in the gates because an inflated
+    # B at an under-occupied cell is a reading, not a verdict.
+    lines += under_occupied_reading(cells, base_pinned, subjects, block_ns)
+    fitted = [c for c in sorted(cells, key=lambda c: (c.block_m, c.block_n))
+              if c.slope_memory_ms is not None and c.intercept_ms is not None]
+    if not fitted:
+        lines.append("  no cell produced a memory branch, so there is no A, B "
+                     "or D on this page to read the labels against")
+    for c in fitted:
+        lines.append(
+            f"    BN={c.block_n:4d} BM={c.block_m:4d}  A={c.intercept_ms:8.5f} "
+            f"B={c.slope_memory_ms:8.5f} D={c.fixed_cost_ms:8.5f} ms  "
+            f"{c.ad_label}")
 
     lines += ["", "## The decomposition", ""]
     for name, f in (
@@ -3994,6 +4740,15 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     ]
     payload = {
         "ridge": ridge, "bandwidth_gbps": bandwidth_gbps,
+        # THE SCOPE TRAVELS WITH THE NUMBER, and until 2026-09-10 it did not
+        # travel with this one: the cells carried `weight_streams` as a bare
+        # ratio while its denominator and the identity of the estimator that
+        # produced it were printed on the page and NOWHERE in report.json. A
+        # reader working from the JSON alone could not tell the LOCAL
+        # PROVISIONAL copy from the shared estimator the day it lands, which is
+        # exactly the distinction `WEIGHT_STREAM_CANDIDATES` exists to keep.
+        "weight_stream_ms": stream_ms,
+        "weight_stream_source": WEIGHT_STREAM_SOURCE,
         "ceiling_tflops": ceiling_tflops, "ceiling_source": ceiling_source,
         "pinned": base_pinned, "block_ns": list(block_ns),
         "subjects": list(subjects), "reference_block_m": REFERENCE_BLOCK_M,
@@ -4158,6 +4913,12 @@ def planted_world_gates(cfg, args, *, alpha_b: float, alpha_a: float, extra,
     planted at `PLANT_COMPUTE_FRACTION` of the ceiling, inside the 38-64% the
     published references reach, and the bandwidth follows from it.
 
+    ONE SEED MOVES BOTH HALVES OF THE REALISATION. `seed` reaches the planted
+    timings AND the bootstrap that resamples them, so realisation k here is
+    exactly what `--seed k --power-seeds 1` prints. Before 2026-09-10 it reached
+    only the timings and `design_power`'s five realisations shared one frozen
+    draw sequence.
+
     `probe_c2_power` is OFF for this call and that is the recursion guard:
     scoring a planted world must not itself plant a world to ask whether its own
     C2 had power, or the probe would never terminate.
@@ -4180,7 +4941,8 @@ def planted_world_gates(cfg, args, *, alpha_b: float, alpha_a: float, extra,
         ceiling_tflops=ceiling_tflops, ceiling_source="planted",
         capability=capability, base_pinned=base, compiles=compiles,
         executed=dict(compiles), sm_count=sm_count, block_ns=block_ns,
-        subjects=subjects, draws=draws, probe_c2_power=False)
+        subjects=subjects, draws=draws, probe_c2_power=False,
+        bootstrap_seed=args.seed if seed is None else seed)
     return {g.name.split()[0]: g for g in gates}, payload
 
 
@@ -4202,13 +4964,35 @@ class DesignPower:
     alpha_a_sd: float | None
     alpha_b_sd: float | None
     note: str = ""
+    #: EVERY seed's sd, not one. See `design_power`: at the fallback spread the
+    #: single-seed figure this record used to carry swings 19-fold between
+    #: seeds, and it is the number that decides whether the arm is paid for.
+    alpha_a_sds: tuple[float, ...] = ()
+    #: The same realisations for alpha_b. `alpha_b_sd` is their median, which is
+    #: what `alpha_a_sd` has always been; before 2026-09-10 it was the LAST
+    #: iteration's value, so the two fields on one record were computed over
+    #: different things.
+    alpha_b_sds: tuple[float, ...] = ()
+
+    @property
+    def worst_alpha_a_sd(self) -> float | None:
+        """The widest spread any planted realisation gave. What `resolves` uses."""
+        return max(self.alpha_a_sds) if self.alpha_a_sds else self.alpha_a_sd
 
     @property
     def resolves(self) -> bool | None:
-        """True, False, or None for "no spread came back to judge"."""
-        if self.alpha_a_sd is None:
+        """True, False, or None for "no spread came back to judge".
+
+        SCORED ON THE WORST REALISATION AND NOT THE TYPICAL ONE, from
+        2026-09-10. It is a strictly harder bar than the single draw it
+        replaces: a design that resolves alpha_a on three seeds out of five has
+        not been shown to resolve it on the pod, and the seed a plan happens to
+        run with is the least interesting fact about the design.
+        """
+        worst = self.worst_alpha_a_sd
+        if worst is None:
             return None
-        return self.alpha_a_sd <= ALPHA_A_SD_CEILING
+        return worst <= ALPHA_A_SD_CEILING
 
     def lines(self) -> list[str]:
         if self.alpha_a_sd is None:
@@ -4220,6 +5004,16 @@ class DesignPower:
                f"{self.reps} reps, spread {self.noise:.2%} "
                f"({self.noise_source}): sd(alpha_a) = {self.alpha_a_sd:.4f} "
                f"against the {ALPHA_A_SD_CEILING:.3f} C1 needs -> {verdict}"]
+        if len(self.alpha_a_sds) > 1:
+            out.append(
+                f"that sd is the MEDIAN over {len(self.alpha_a_sds)} planted "
+                f"realisations, which ran "
+                + ", ".join(f"{v:.4f}" for v in sorted(self.alpha_a_sds))
+                + f"; the verdict is scored on the WORST of them "
+                  f"({max(self.alpha_a_sds):.4f}). One realisation is not a "
+                  "property of the design: at the worst published spread this "
+                  "figure swings by an order of magnitude between seeds, and "
+                  "it is what decides whether the arm is paid for.")
         if self.resolves is False:
             out.append("AT THIS PINNING C1 WILL READ UNKNOWN however the run "
                        "goes. --group-m 16 is the setting that resolves it; "
@@ -4241,15 +5035,58 @@ def design_power(cfg, args, *, b: int, ceiling_tflops: float, capability,
     Off GPU, before the pod, and printed by `--dry-run`: the whole point is that
     it is a property of the PINNING and of the pod's noise, not of the run, so
     it can be known before the run is paid for.
+
+    OVER SEVERAL PLANTED REALISATIONS SINCE 2026-09-10, AND THE REASON IS A
+    MEASUREMENT. This function planted ONE world at `--seed` and printed the sd
+    that came back. At `--plant-noise 0.008` that is stable to about 30% across
+    seeds; at the fallback 1.82%, which is the WORST published across-repeat
+    spread and the spread a plan with no measurement of its own is scored at,
+    the same figure ran 0.0223, 0.0868, 0.3102, 0.0684, 0.3445 and 0.4171 over
+    six consecutive seeds of the THREE-height design, a 19-fold swing, with
+    seed 0 the single value that clears the 0.025 bar. A design-power verdict
+    that is a property of the seed decided whether an arm was worth renting a
+    pod for. The median is now printed and the WORST is what `resolves` reads.
+
+    IT IS NOT A DEFECT OF THE FOURTH HEIGHT AND MUST NOT BE READ AS ONE. The
+    same six seeds on the FOUR-height design give 0.1774, 0.0831, 0.1136,
+    0.0696, 0.1734 and 0.0219: the same instability, over a narrower range.
+    Both designs resolve alpha_a at 0.8% and neither is shown to at 1.8%.
+
+    A REALISATION IS THE WORLD AND THE RESAMPLE TOGETHER, SINCE 2026-09-10. The
+    loop's `seed` used to reach `planted_samples` only; the bootstrap inside
+    `analyse_run` went on resampling at `args.seed`, frozen across every
+    iteration. So the five realisations this line reported were not the five
+    the two sequences above name, and `--seed k --power-seeds 1` did not
+    reproduce the k-th of them: at `--group-m 16` the loop returned 0.1774,
+    0.0836, 0.0801, 0.0252, 0.2684 against a single-seed 0.1774, 0.0831,
+    0.1136, 0.0696, 0.1734, agreeing only at the base seed. `bootstrap_seed`
+    carries the loop's seed the rest of the way, and both sequences above are
+    now what `--power-seeds 6` prints, seed for seed.
     """
-    gates, payload = planted_world_gates(
-        cfg, args, alpha_b=planted_alpha_b(args.group_m), alpha_a=0.14,
-        extra=None, noise=noise, b=b, ceiling_tflops=ceiling_tflops,
-        capability=capability, block_ns=block_ns, subjects=subjects,
-        sm_count=sm_count, draws=draws)
-    boot = payload["bootstrap"]
+    sds: list[float] = []
+    b_sds: list[float] = []
+    note = ""
+    for seed in range(args.seed, args.seed + max(1, args.power_seeds)):
+        _, payload = planted_world_gates(
+            cfg, args, alpha_b=planted_alpha_b(args.group_m), alpha_a=0.14,
+            extra=None, noise=noise, b=b, ceiling_tflops=ceiling_tflops,
+            capability=capability, block_ns=block_ns, subjects=subjects,
+            sm_count=sm_count, draws=draws, seed=seed)
+        boot = payload["bootstrap"]
+        note = note or boot["note"]
+        if boot["alpha_a_sd"] is not None:
+            sds.append(float(boot["alpha_a_sd"]))
+        if boot.get("alpha_b_sd") is not None:
+            b_sds.append(float(boot["alpha_b_sd"]))
+    # BOTH FIELDS OVER THE SAME REALISATIONS. Until 2026-09-10 `alpha_a_sd` was
+    # the median over the loop while `alpha_b_sd` was whatever the LAST
+    # iteration happened to leave in `boot`, so one record carried two
+    # statistics computed over different things. Nothing printed alpha_b_sd, so
+    # nothing had read it wrong yet.
     return DesignPower(args.group_m, args.reps, noise, noise_source, draws,
-                       boot["alpha_a_sd"], boot["alpha_b_sd"], boot["note"])
+                       statistics.median(sds) if sds else None,
+                       statistics.median(b_sds) if b_sds else None, note,
+                       alpha_a_sds=tuple(sds), alpha_b_sds=tuple(b_sds))
 
 
 @dataclass(frozen=True)
@@ -4258,8 +5095,8 @@ class C2Power:
 
     THE GATE THIS RECORD GUARDS IS THE ONE THE EXPERIMENT EXISTS FOR. C2 says
     "the three terms are ALL of it", and at GROUP_SIZE_M=1 the audit found the
-    planted MISSING-term world coming back with chi2 1.78 against the 4.0
-    ceiling -- a PASS, the same verdict the TRUTH world gets. A C2 PASS there
+    planted MISSING-term world coming back well under the 4.0 ceiling: a
+    PASS, the same verdict the TRUTH world gets. A C2 PASS there
     would have been published as model completeness by a test that cannot say
     otherwise, and the driver schedules that arm unconditionally.
 
@@ -4611,7 +5448,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "cells on the padded count; 16 and 64 fire in "
                          "isolated cells, 32 never); 64 and 32 are where alpha "
                          "is robustly identifiable and are what makes the "
-                         "alpha_b invariance a test")
+                         "alpha_b invariance a test; 16 was added on "
+                         "2026-09-10 because the 128 cells came back blank at "
+                         "every BLOCK_N and a two-height fit cannot separate "
+                         "the model's activation column from the 1/BN rival "
+                         "that beats it. The plan's identification line "
+                         "prints the correlation with and without it")
     ap.add_argument("--r-max", type=int, default=1024,
                     help="largest rows per expert. 1024 is 4 treads at "
                          "BLOCK_M=256, which is the reference's whole ladder")
@@ -4711,6 +5553,16 @@ def build_parser() -> argparse.ArgumentParser:
                          "0.015-0.020, so that default decided whether the "
                          "experiment looked worth paying for by describing a "
                          "pod quieter than half the corpus")
+    ap.add_argument("--power-seeds", type=int, default=DESIGN_POWER_SEEDS,
+                    help="planted realisations behind the design-power line, "
+                         "counted up from --seed. ONE IS NOT ENOUGH AND THAT "
+                         "IS MEASURED: at the fallback spread the sd this line "
+                         "reports ran 0.0223 to 0.4171 over six consecutive "
+                         "seeds of the three-height design, and seed 0 was the "
+                         "only one that cleared the bar. The median is printed "
+                         "and the WORST decides the verdict. It stays out of "
+                         "the run id for the same reason --power-draws does: "
+                         "it re-analyses a design rather than changing a timing")
     ap.add_argument("--power-draws", type=int, default=POWER_PROBE_DRAWS,
                     help="bootstrap draws behind the design-power line and the "
                          "C2 power probe, as distinct from --draws behind the "
@@ -4937,7 +5789,15 @@ def _main(argv=None) -> int:                                    # noqa: C901
             res = SWEEP.tile_resources(dict(base_pinned, BLOCK_SIZE_N=bn), bm,
                                        b, capability)
             lines.append(f"  BN={bn:4d}" + res.render())
+    lines += [""] + plan.warp_lines()
     lines += [
+        "",
+        "WEIGHT-STREAM SLOPE  " + WEIGHT_STREAM_SOURCE,
+        "             one complete stream of this layer's expert weights is "
+        + (f"{WEIGHT_STREAM_MS(cfg, b, bandwidth):.4f} ms at "
+           f"{bandwidth:.1f} GB/s" if bandwidth > 0 else "UNAVAILABLE: no "
+           "bandwidth to stream at")
+        + ". Every cell is scored on w = B / that, beside its alpha.",
         f"WRITES TO    {out_dir}",
         f"             {git_visibility(out_dir)}",
         "             cells.csv (one row per tread per repeat, flushed), CARD, "

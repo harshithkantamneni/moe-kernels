@@ -36,6 +36,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import re
+import statistics
 import sys
 from pathlib import Path
 
@@ -814,6 +816,16 @@ def test_the_payload_is_json_and_keeps_the_import_provenance():
 # uninformative as the gate it was written to protect.
 # --------------------------------------------------------------------------
 
+#: The subject heights every planted world below is generated over. IT IS THE
+#: SCRIPT'S OWN AND NOT A COPY: this helper pinned (32, 64, 128) until
+#: 2026-09-10, and on the day BLOCK_M=16 joined the sweep that would have left
+#: fourteen tests scoring a design the pod no longer runs while their docstrings
+#: still called it the design. The numbers they quote move with it, and the ones
+#: that are quoted are re-derived in the docstring that quotes them.
+PLANTED_SUBJECTS = BND.SUBJECT_BLOCK_M
+PLANTED_BLOCK_NS = BND.DEFAULT_BLOCK_N
+
+
 def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
                  extra=None, probe=True, plant_noise=None):
     """One planted world scored the way a real run is scored, probe and all."""
@@ -824,19 +836,19 @@ def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
     bw = BND.PLANT_COMPUTE_FRACTION * 712.259 * 1e3 / rho
     samples = BND.planted_samples(
         MIXTRAL, args, alpha_b=alpha_b, alpha_a=alpha_a, ridge=rho,
-        bandwidth_gbps=bw, b=2, block_ns=(32, 64, 128),
-        subjects=(32, 64, 128), extra=extra, noise=noise, seed=0)
+        bandwidth_gbps=bw, b=2, block_ns=PLANTED_BLOCK_NS,
+        subjects=PLANTED_SUBJECTS, extra=extra, noise=noise, seed=0)
     base = dict(SWEEP.FIXED, num_stages=args.num_stages,
                 num_warps=args.num_warps, GROUP_SIZE_M=group_m,
                 BLOCK_SIZE_K=args.block_k)
     base.pop("BLOCK_SIZE_N", None)
-    compiles = {(bn, bm): 1 for bn in (32, 64, 128)
-                for bm in (32, 64, 128, 256)}
+    compiles = {(bn, bm): 1 for bn in PLANTED_BLOCK_NS
+                for bm in (*PLANTED_SUBJECTS, BND.REFERENCE_BLOCK_M)}
     lines, gates, payload = BND.analyse_run(
         samples, MIXTRAL, args, ridge=rho, bandwidth_gbps=bw, b=2,
         ceiling_tflops=712.259, ceiling_source="planted", capability=(9, 0),
         base_pinned=base, compiles=compiles, executed=dict(compiles),
-        sm_count=132, block_ns=(32, 64, 128), subjects=(32, 64, 128),
+        sm_count=132, block_ns=PLANTED_BLOCK_NS, subjects=PLANTED_SUBJECTS,
         probe_c2_power=probe, plant_noise=plant_noise)
     return lines, {g.token: g for g in gates}, payload
 
@@ -844,10 +856,17 @@ def _planted_run(group_m, *, noise, reps=9, draws=40, alpha_a=0.14,
 def test_c2_reads_unknown_where_the_missing_term_world_would_pass():
     """A9, the blocking finding, in the world it was found in.
 
-    At GROUP_SIZE_M=1 the planted MISSING world comes back at chi2 1.78 against
-    the 4.0 ceiling -- a PASS, the same verdict TRUTH gets -- so a C2 PASS at
-    that swizzle could not have been a FAIL. The gate must say UNKNOWN and say
-    why, and UNKNOWN counts against it.
+    At GROUP_SIZE_M=1 the planted MISSING world PASSES C2, the same verdict
+    TRUTH gets, so a C2 PASS at that swizzle could not have been a FAIL. The
+    gate must say UNKNOWN and say why, and UNKNOWN counts against it.
+
+    THE CHI2 IS NOT QUOTED HERE ANY MORE. This docstring read "chi2 1.78" and
+    that number was the THREE-height design at these settings; the helper's
+    subject set became the script's own on 2026-09-10 and the same world now
+    comes back at 1.09. A number in a docstring that moves with a constant the
+    docstring does not name is the drift this file hunts, so the assertion below
+    reads the probe's own verdict and the figure lives in `c2_power` where it is
+    recomputed.
     """
     lines, gates, payload = _planted_run(1, noise=0.008)
     c2 = gates["C2"]
@@ -1053,17 +1072,34 @@ def test_an_mde_needs_a_spread_and_says_so_when_there_is_none():
 def test_the_phantom_a100_slopes_are_no_longer_the_bands_basis(capsys):
     """0.106, 0.102, 0.129, 0.119 -- four numbers no committed file contains.
 
-    They were P1's whole stated basis. The plan must now cite the two committed
-    reports instead, and none of the four may appear in what it prints. The
+    They were P1's whole stated basis. P1 must now cite the two committed
+    reports instead, and none of the four may appear in the basis it prints. The
     source still names them once, in the paragraph that says they are in no
     file, which is the history worth keeping.
+
+    THE WHOLE PAGE IS BACK IN SCOPE, WITH A BOUNDARY. On 2026-09-10 this test
+    was narrowed to P1's block because it had matched the four as bare
+    substrings against the WHOLE page and a planted bootstrap spread of 0.1293
+    contains "0.129": a real false positive, reproduced at that commit, and
+    printing five realisations instead of one made the collision five times
+    likelier. Narrowing threw away the coverage that mattered, since the whole
+    page is where a phantom would actually come back. The match is now on a
+    NUMBER and not on a substring, with no digit on either side, which costs
+    nothing and keeps the page. 0.1293 no longer matches 0.129; a quoted 0.129
+    still does.
     """
     BND.main(["--dry-run", "--capability", "9.0", "--power-draws", "20",
               "--plant-noise", "0.008"])
     out = capsys.readouterr().out
+    start = out.index("P1  alpha_a")
+    p1_block = out[start:out.index("P2 ", start)]
+    provenance = "\n".join(BND.band_provenance_lines())
     for phantom in ("0.106", "0.102", "0.129", "0.119"):
-        assert phantom not in out, f"{phantom} is back in the band's basis"
-    assert "d66ad3.report.json" in out and "16cc16.report.json" in out
+        boundary = re.compile(r"(?<![\d.])" + re.escape(phantom) + r"(?![\d])")
+        assert not boundary.search(out), f"{phantom} is back on the plan page"
+        assert phantom not in p1_block, f"{phantom} is back in P1's basis"
+        assert phantom not in provenance, f"{phantom} is back in the band's basis"
+    assert "d66ad3.report.json" in p1_block and "16cc16.report.json" in p1_block
 
 
 def test_the_band_is_what_the_committed_bn_pair_actually_says():
@@ -2416,3 +2452,508 @@ def test_report_json_carries_both_roofs_for_every_arm():
         assert arms[bn]["ceiling_tflops"] == SESSION_CEILING
     assert payload["clock_state"]["excluded_shaped"] == 8
     assert payload["clock_state"]["rule"].startswith("DRIFT excludes")
+
+
+# --------------------------------------------------------------------------
+# THE FOURTH TILE HEIGHT (2026-09-10). The arm swept BLOCK_M 32/64/128 against
+# a 256 reference and BLOCK_M=128 produced NO alpha at ANY BLOCK_N, so a fit
+# registered on three heights was made over TWO, and at two heights the model's
+# activation column is not separable from the `1/BN` column that beats it.
+# BLOCK_M=16 is added because it is the height furthest from its compute branch
+# and therefore the one least likely to lose it, which the same session's
+# tile_cap arm measured.
+#
+# EVERY NUMBER BELOW IS REPRODUCED FROM THE COMMITTED CELLS, not asserted: the
+# run's own calibration is read out of its report rather than pinned, because a
+# test that pins a ridge is stale the next time the card is calibrated.
+# --------------------------------------------------------------------------
+
+GAPS_2026_09_10 = BND.COMMITTED_BN_RUN
+
+
+def _committed_2026_09_10():
+    """The committed arm's rows, its report, and the calibration it ran at."""
+    report = GAPS_2026_09_10 / "report.json"
+    cells_csv = GAPS_2026_09_10 / "cells.csv"
+    if not (report.exists() and cells_csv.exists()):
+        pytest.skip(f"the 2026-09-10 session rows are not here: {GAPS_2026_09_10}")
+    payload = json.loads(report.read_text())
+    _, samples = BND.read_samples(cells_csv)
+    return samples, payload
+
+
+def _replay(subjects=None):
+    """`arm_alphas` over the committed rows, at a given subject set.
+
+    `None` means the set the committed arm actually ran, read out of its own
+    report: a replay that pinned the subject list would stop being a replay the
+    moment this file's default moved, which is exactly what happened here.
+    """
+    samples, payload = _committed_2026_09_10()
+    subjects = tuple(payload["subjects"]) if subjects is None else subjects
+    cells, verdicts, spreads = BND.arm_alphas(
+        samples, MIXTRAL, block_ns=tuple(payload["block_ns"]),
+        subjects=subjects, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], b=BND.dtype_bytes("bf16"),
+        base_pinned=payload["pinned"], capability=(9, 0),
+        ceiling_tflops=payload["ceiling_tflops"], sm_count=132)
+    return cells, verdicts, spreads, payload
+
+
+def test_the_committed_arm_replays_cell_for_cell():
+    """THE ACCEPTANCE FOR THE FOURTH HEIGHT: the change is ADDITIVE.
+
+    Every one of the nine committed cells has to come back bit for bit through
+    this file's own `arm_alphas`, or the replay everything below rests on is a
+    replay of something else. Exact equality, not a tolerance: the same code
+    over the same rows is deterministic, and a tolerance here would hide the
+    membership decision flipping.
+    """
+    cells, _, _, payload = _replay()
+    want = {(c["block_n"], c["block_m"]): c for c in payload["cells"]}
+    assert len(cells) == len(want) == 9
+    for c in cells:
+        w = want[(c.block_n, c.block_m)]
+        assert c.alpha == w["alpha"]
+        assert c.alpha_upper == w["alpha_upper"]
+        assert c.alpha_corrected == w["alpha_corrected"]
+        assert c.memory_points == w["memory_points"]
+        assert c.blank == w["blank"]
+
+
+def test_adding_the_fourth_height_leaves_the_committed_cells_untouched():
+    """The same replay with BLOCK_M=16 in the subject set: same nine cells.
+
+    IT IS NOT OBVIOUS AND IT IS THE THING THAT COULD HAVE GONE WRONG. `subjects`
+    reaches `qualify_reference`, whose non-vacuity check scales the compute
+    branch to the SMALLEST SWEPT block size, so adding a smaller height moves
+    that bound. It moves it DOWN, which is the easy direction, and this asserts
+    it rather than reasoning about it.
+    """
+    before = {(c.block_n, c.block_m): (c.alpha, c.alpha_upper, c.blank)
+              for c in _replay((32, 64, 128))[0]}
+    after = {(c.block_n, c.block_m): (c.alpha, c.alpha_upper, c.blank)
+             for c in _replay((16, 32, 64, 128))[0]
+             if c.block_m != BND.SMALL_TILE_BLOCK_M}
+    assert before == after
+    # And the fourth height contributes nothing to a corpus that never ran it,
+    # which is what makes this a replay of the SAME arm and not a new one.
+    assert not [c for c in _replay((16, 32, 64, 128))[0]
+                if c.block_m == BND.SMALL_TILE_BLOCK_M]
+
+
+def test_the_primary_produced_no_alpha_at_any_block_n():
+    """The measurement the fourth height exists because of.
+
+    P5 registered "2 of 3 BN points" for BLOCK_M=128. It returned zero of three,
+    at all three BLOCK_N, every one of them by the parallel-branch rule.
+    """
+    committed = BND.committed_bn_cells()
+    primary = [(bn, alpha) for bn, bm, alpha in committed
+               if bm == BND.PRIMARY_BLOCK_M]
+    assert sorted(bn for bn, _ in primary) == [32, 64, 128]
+    assert all(alpha is None for _, alpha in primary)
+    heights = {bm for _, bm, alpha in committed if alpha is not None}
+    assert heights == {32, 64}, "the fit was made over two heights, not three"
+
+
+def test_the_a_versus_d_label_is_the_whole_story_of_alpha_upper_above_one():
+    """`alpha_upper > 1` EXACTLY when `D > A`, on the committed cells.
+
+    Four of six, and no others. This is the arithmetic the 2026-09-10 analysis
+    identified behind every unphysical number the study has argued about, and it
+    is reproduced here from the rows rather than quoted from the analysis.
+    """
+    cells = [c for c in _replay((16, 32, 64, 128))[0] if c.usable]
+    assert len(cells) == 6
+    above = {(c.block_n, c.block_m) for c in cells if c.alpha_upper > 1.0}
+    flagged = {(c.block_n, c.block_m) for c in cells
+               if c.unphysical_by_arithmetic}
+    assert above == flagged
+    assert len(above) == 4
+    assert above == {(32, 32), (32, 64), (64, 32), (64, 64)}
+    for c in cells:
+        assert c.ad_label == ("D>A" if c.fixed_cost_exceeds_intercept
+                             else "D<A")
+        # The label is the comparison and not a proxy for it.
+        assert (c.fixed_cost_ms > c.intercept_ms) is c.fixed_cost_exceeds_intercept
+
+
+def test_the_weight_stream_slope_reproduces_the_sessions_own_currency():
+    """`w = B / T_w` on the committed cells, against the figures the analysis
+    of this session published from the same rows.
+
+    The denominator is the card's own measured rate as the run recorded it, so
+    the test does not pin a bandwidth: 2.8186 GB of mixtral bf16 expert weights
+    over the rate in the report is one stream, and every cell's `w` is its
+    memory-branch slope divided by that.
+    """
+    cells, _, _, payload = _replay((16, 32, 64, 128))
+    stream = BND.WEIGHT_STREAM_MS(MIXTRAL, BND.dtype_bytes("bf16"),
+                                  payload["bandwidth_gbps"])
+    assert stream == pytest.approx(0.6443, abs=0.0002)
+    got = {(c.block_n, c.block_m): c.weight_streams
+           for c in _replay((16, 32, 64, 128))[0] if c.usable}
+    for key, want in (((32, 32), 1.254), ((32, 64), 1.368),
+                      ((64, 32), 0.863), ((64, 64), 0.897),
+                      ((128, 32), 0.683), ((128, 64), 0.731)):
+        assert got[key] == pytest.approx(want, abs=0.001), key
+    # And it really is B over the stream, with no level anywhere in it.
+    for c in cells:
+        if c.weight_streams is not None:
+            assert c.weight_streams == pytest.approx(
+                c.slope_memory_ms / stream, rel=1e-12)
+
+
+def test_the_weight_stream_estimator_is_the_shared_one_the_day_it_lands():
+    """The recurring defect, guarded from the other side.
+
+    This file carries a PROVISIONAL local copy of an estimator another slice
+    owns. The failure mode is not that the copy is wrong, it is that the shared
+    one lands and the copy stays beside it. The moment any candidate module
+    exports the pair, this asserts that it is what got used.
+    """
+    for module_name, ms_name, per_tile_name in BND.WEIGHT_STREAM_CANDIDATES:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:                                      # noqa: BLE001
+            continue
+        if callable(getattr(module, ms_name, None)) and callable(
+                getattr(module, per_tile_name, None)):
+            assert BND.WEIGHT_STREAM_MS is getattr(module, ms_name), (
+                f"{module_name}.{ms_name} exists and this file is still using "
+                "its own copy")
+            assert BND.WEIGHT_STREAMS_PER_TILE is getattr(module, per_tile_name)
+            assert "LOCAL PROVISIONAL" not in BND.WEIGHT_STREAM_SOURCE
+            return
+    # Nothing has landed yet, and the page has to SAY so rather than print a
+    # number that looks like everyone else's.
+    assert BND.WEIGHT_STREAM_SOURCE.startswith("LOCAL PROVISIONAL")
+
+
+def test_report_json_carries_the_weight_stream_denominator_and_its_estimator():
+    """THE SAME DEFECT FROM THE OTHER SIDE, found 2026-09-10: the page was
+    updated and `report.json` was not.
+
+    The file's own note said the provisional estimator "is used and SAYS SO on
+    the page and in report.json", and two columns were added "to the cell table
+    and to report.json". The page did say so; the payload contained no key with
+    "weight" or "stream" in it at all, so a reader working from the JSON alone
+    saw `weight_streams` as a bare ratio with no denominator and no estimator
+    identity, and could not tell the LOCAL PROVISIONAL copy from the shared one
+    the day it lands. `bootstrap.scope` is the discipline this file states for
+    exactly that case.
+    """
+    samples, payload = _committed_2026_09_10()
+    args = BND.build_parser().parse_args(
+        ["--group-m", "16", "--card", "nvidia_h200", "--draws", "50"])
+    _, _, out = BND.analyse_run(
+        samples, MIXTRAL, args, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], b=BND.dtype_bytes("bf16"),
+        ceiling_tflops=payload["ceiling_tflops"], ceiling_source="replay",
+        capability=(9, 0), base_pinned=payload["pinned"],
+        compiles={}, executed={}, sm_count=132,
+        block_ns=tuple(payload["block_ns"]),
+        subjects=tuple(payload["subjects"]), draws=50)
+    assert out["weight_stream_ms"] == pytest.approx(0.6443, abs=0.0002)
+    assert out["weight_stream_source"] == BND.WEIGHT_STREAM_SOURCE
+    # The whole payload still serialises, and every cell's w is that stream.
+    json.dumps(out)
+    for cell in out["cells"]:
+        if cell["weight_streams"] is not None:
+            assert cell["weight_streams"] == pytest.approx(
+                cell["slope_memory_ms"] / out["weight_stream_ms"], rel=1e-12)
+
+
+def test_the_plan_page_re_derives_the_committed_arms_yield(capsys):
+    """`committed_bn_cells` had no runtime call site.
+
+    `SESSION_2026_09_10`'s note said the numbers in the `SUBJECT_BLOCK_M`
+    paragraph are re-derived on every plan page by `committed_bn_cells` AND
+    `published_small_tile_branch`. Only the second was ever called: a
+    re-publish that changed which cells the bn arm yielded was caught by this
+    test file and NOT by the page the reader sees. Both are read there now.
+    """
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    committed = BND.committed_bn_cells()
+    primary = [a for _, bm, a in committed if bm == BND.PRIMARY_BLOCK_M]
+    assert (f"yielded {sum(1 for a in primary if a is not None)} of "
+            f"{len(primary)} BLOCK_M={BND.PRIMARY_BLOCK_M} cells") in out
+    assert "was made over 2: [32, 64]" in out
+
+
+def test_the_under_occupied_cell_carries_a_registered_check_on_both_branches(
+        capsys):
+    """The warp bill scoped its warning to the COMPUTE branch and nothing
+    argued the memory branch was untouched.
+
+    Four of eight warps holding no output tile carries fewer outstanding loads
+    as well as fewer issue slots, which inflates B and therefore w and alpha at
+    the ONE cell the whole identification gain rests on: BLOCK_M=16 at BN=64
+    and 128 alone leaves corr(g1, 1/BN) at the two-height value, so the move is
+    the BN=32 cell. The corpus cannot settle it, so the run registers the check
+    it can make.
+    """
+    assert BND.under_occupied_cells(
+        dict(SWEEP.FIXED, num_warps=8), BND.SUBJECT_BLOCK_M,
+        BND.DEFAULT_BLOCK_N) == ((16, 32),)
+    BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+              "--power-draws", "20", "--power-seeds", "1",
+              "--plant-noise", "0.008"])
+    out = capsys.readouterr().out
+    assert "NEITHER of its branches is comparable" in out
+    assert "B, and therefore w and alpha, are overstated" in out
+    assert ("REGISTERED CHECK, BM=16 x BN=32: read its w against the line "
+            "BM=32 and BM=64 set at the SAME BN=32") in out
+
+
+def test_the_registered_warp_check_reads_the_slope_it_was_registered_on():
+    """The check performed, on cells that do and do not carry the height.
+
+    On the committed arm, which never ran BLOCK_M=16, it has to say so rather
+    than print a number. On a grid where the peers are present it reports the
+    excess over the line those peers set at the same BLOCK_N, and the sign is
+    the whole content: above the line is the warp grid, not the tiling.
+    """
+    cells, _, _, payload = _replay((16, 32, 64, 128))
+    pinned = payload["pinned"]
+    said = BND.under_occupied_reading(cells, pinned, (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert said and "no w on this page" in said[0]
+
+    # The same reading with the height present, using the committed w values at
+    # BN=32 (1.254 at BM=32, 1.368 at BM=64) and a planted BLOCK_M=16 cell.
+    by_key = {(c.block_m, c.block_n): c for c in cells}
+    peer32, peer64 = by_key[(32, 32)], by_key[(64, 32)]
+    line = peer32.weight_streams + (
+        peer64.weight_streams - peer32.weight_streams) * (
+            math.log2(16) - math.log2(32)) / (math.log2(64) - math.log2(32))
+    hot = BND.AlphaCell(
+        block_n=32, block_m=16, alpha=None, alpha_upper=None,
+        alpha_corrected=None, memory_points=8, treads=8, spread=None,
+        basis="planted", weight_streams=line * 1.20, slope_memory_ms=1.0)
+    said = BND.under_occupied_reading([*cells, hot], pinned,
+                                      (16, 32, 64, 128),
+                                      tuple(payload["block_ns"]))
+    assert len(said) == 1
+    assert f"against {line:.4f} on the BM=32/64 line at this BN, +20.0%" in \
+        said[0]
+
+
+def test_the_small_tile_evidence_is_read_from_the_corpus_not_quoted():
+    """BLOCK_M=16 yields a branch, and the file that says so is committed."""
+    branch = BND.published_small_tile_branch()
+    assert branch.block_m == 16
+    assert branch.memory_points == 56
+    assert branch.branch_ratio == pytest.approx(5.46, abs=0.01)
+    # Far outside the band that discarded every BLOCK_M=128 cell.
+    assert abs(branch.branch_ratio - 1.0) > BND.TOLERANCE
+    # Same pinned constants as this sweep, which is what makes it evidence.
+    assert (branch.num_warps, branch.num_stages) == (
+        BND.SWEEP.FIXED["num_warps"], BND.SWEEP.FIXED["num_stages"])
+    assert branch.gates_passed == branch.gates_total == 9
+
+
+def test_a_missing_small_tile_report_refuses_rather_than_defaulting(tmp_path):
+    """A fourth height whose evidence cannot be read is a fourth height on
+    nothing, and this file has shipped a paragraph citing numbers no file
+    contained once already."""
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_small_tile_branch(tmp_path / "gone.json")
+    (tmp_path / "empty.json").write_text(json.dumps({"ladder": {}}))
+    with pytest.raises(BND.CorpusMissing):
+        BND.published_small_tile_branch(tmp_path / "empty.json")
+
+
+def test_the_fourth_height_is_what_separates_the_two_rival_columns():
+    """WHY 16, computed. The model's only BN-dependent column is proportional
+    to BLOCK_M; the rival that fits this session 3.1x better goes as 1/BN and
+    NOT with BLOCK_M. Over the two heights that survived they are collinear.
+
+    AND THE GAIN IS THE BN=32 CELL. BLOCK_M=16 at BN=64 and 128 alone buys
+    nothing, which is why that cell is the one the plan page annotates.
+    """
+    bns = (32, 64, 128)
+    two = BND.design_collinearity(
+        MIXTRAL, [(bm, bn) for bm in (32, 64) for bn in bns])
+    three = BND.design_collinearity(
+        MIXTRAL, [(bm, bn) for bm in (16, 32, 64) for bn in bns])
+    without_bn32 = BND.design_collinearity(
+        MIXTRAL, [(16, 64), (16, 128)]
+        + [(bm, bn) for bm in (32, 64) for bn in bns])
+    assert two == pytest.approx(0.818, abs=0.002)
+    assert three == pytest.approx(0.663, abs=0.002)
+    assert three < two - 0.1
+    assert without_bn32 == pytest.approx(two, abs=0.005)
+
+
+def test_the_plan_prints_four_heights_with_their_bills_and_the_new_cost(capsys):
+    """The acceptance for the plan page, asserted on what it prints."""
+    assert BND.main(["--dry-run", "--capability", "9.0", "--group-m", "16",
+                     "--sm-count", "132", "--ridge", "155.93",
+                     "--bandwidth-gbps", "4374.3", "--power-draws", "20",
+                     "--power-seeds", "2",
+                     "--plant-noise", "0.008"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "subjects     [16, 32, 64, 128]" in out
+    for bm in (16, 32, 64, 128, 256):
+        assert f"BLOCK_M={bm:4d}  smem" in out
+        assert f"BLOCK_M={bm:4d}  output" in out
+    # Every height the card can hold is priced, and the fourth adds treads.
+    assert "BN=  32 BM=  16  treads  8  rows 16..128" in out
+    assert "timings      1836 (108 treads x 17 reps)" in out
+    assert "estimate     2754 s of GPU" in out
+    # The one under-occupied cell is named where it is chosen.
+    assert ("BN=  32  BLOCK_M=  16  output    512 elements of   1024"
+            in out)
+    assert "UNDER-OCCUPIED: 4 of 8 warps hold a tile" in out
+    # And the identification line says what the height was added for.
+    assert "corr(g1, 1/BN) over this design's 12 cells = 0.552" in out
+    assert "without BLOCK_M=16 the same number is 0.663" in out
+    assert "56 of 56 treads memory bound at B/C = 5.46" in out
+
+
+def test_no_height_the_card_cannot_hold_survives_the_bill():
+    """The refusals still bite at the fourth height. BLOCK_M=16 passes both
+    hard bills on an H200 and on an A100; the warp bill is a record and refuses
+    nothing, which is stated here so the two cannot be confused."""
+    for capability in ((9, 0), (8, 0)):
+        pinned = dict(SWEEP.FIXED, BLOCK_SIZE_N=32, num_stages=4, num_warps=8,
+                      BLOCK_SIZE_K=64)
+        res = SWEEP.tile_resources(pinned, 16, 2, capability)
+        assert res.refusal == ""
+        assert res.smem_bytes == 4 * (16 * 64 + 64 * 32) * 2
+        assert res.acc_registers_per_thread == 16 * 32 / (32 * 8)
+    bill = BND.warp_tile_bill(dict(SWEEP.FIXED, BLOCK_SIZE_N=32, num_warps=8),
+                              16)
+    assert bill.occupied is False and bill.warps_with_a_tile == 4
+    assert not hasattr(bill, "refusal")
+    # The two settings that sit exactly ON the boundary have both been run.
+    for bm, bn in ((32, 32), (16, 64)):
+        on_edge = BND.warp_tile_bill(
+            dict(SWEEP.FIXED, BLOCK_SIZE_N=bn, num_warps=8), bm)
+        assert on_edge.elements == on_edge.needed
+        assert on_edge.occupied is True
+
+
+def test_neither_the_band_nor_the_sharpness_bar_moves_with_the_subject_set():
+    """C1's band and C6's bar are properties of the CORPUS, not of the design.
+
+    Both were re-checked against the fourth height on 2026-09-10 and neither
+    needed to move: the band is derived from the one committed pair of arms that
+    differ in BLOCK_SIZE_N, and the bar is the sharpest two-point slope in that
+    same pair. A pre-registration that moved because a future sweep grew a
+    height would not be one.
+    """
+    points = BND.published_two_point_alpha_a()
+    assert BND.alpha_a_band_from_published(points) == BND.ALPHA_A_BAND
+    assert {p.block_m for p in points} == {32, 64}
+    sharpest, _ = BND.sharpest_two_point_sd()
+    assert sharpest == pytest.approx(min(p.sd for p in points))
+    assert BND.ALPHA_A_SD_CEILING < sharpest
+    # And the constants do not read the subject set at all.
+    source = Path(BND.__file__).read_text()
+    band = source[source.index("ALPHA_A_BAND = "):]
+    assert "SUBJECT_BLOCK_M" not in band.split("\n")[0]
+
+
+def test_the_design_power_verdict_is_no_longer_one_seed():
+    """A number that decides whether a pod is rented may not be a property of
+    the seed.
+
+    At the fallback spread the single-seed figure ran 0.0223 to 0.4171 over six
+    consecutive seeds of the THREE-height design, and seed 0 was the only one
+    that cleared the 0.025 bar. The median is reported over several planted
+    realisations and the verdict is scored on the WORST of them.
+    """
+    common = dict(b=2, ceiling_tflops=712.259, capability=(9, 0),
+                  block_ns=(32, 64, 128), subjects=(16, 32, 64, 128),
+                  sm_count=132, noise=0.004, noise_source="planted", draws=40)
+    power = BND.design_power(
+        MIXTRAL, args_for(capability="9.0", group_m=16, reps=9, draws=40,
+                          power_seeds=4), **common)
+    assert len(power.alpha_a_sds) == 4
+    assert power.alpha_a_sd == pytest.approx(
+        statistics.median(power.alpha_a_sds))
+    assert power.worst_alpha_a_sd == max(power.alpha_a_sds)
+    # The verdict is the WORST one's, which is a strictly harder bar than the
+    # single draw it replaces.
+    assert power.resolves is (max(power.alpha_a_sds)
+                              <= BND.ALPHA_A_SD_CEILING)
+    said = "\n".join(power.lines())
+    assert "MEDIAN over 4 planted realisations" in said
+    assert "scored on the WORST" in said
+
+
+def test_one_seed_moves_the_world_and_the_resample_together():
+    """THE RECURRING DEFECT, at one of two call sites, found 2026-09-10.
+
+    `design_power` varies the PLANTED world's seed per realisation. The
+    bootstrap inside `analyse_run` went on resampling at `args.seed`, frozen
+    across every iteration, so the five figures the design-power line reported
+    were not the five seeds its own docstring and `--power-seeds`' help
+    describe, and `--seed k --power-seeds 1` did not reproduce the k-th of
+    them. Measured at that commit, `--dry-run --group-m 16 --power-seeds 5
+    --seed 0` gave 0.1774, 0.0836, 0.0801, 0.0252, 0.2684 while the five single
+    seeds gave 0.1774, 0.0831, 0.1136, 0.0696, 0.1734: only the base seed
+    agreed. This asserts the identity that failed, at every seed and not only
+    at the first.
+    """
+    common = dict(b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1,
+                  capability=(9, 0), block_ns=(32, 64, 128),
+                  subjects=BND.SUBJECT_BLOCK_M, sm_count=132, noise=0.008,
+                  noise_source="planted", draws=20)
+
+    def power(seed, n):
+        return BND.design_power(
+            MIXTRAL, args_for(capability="9.0", group_m=16, seed=seed,
+                              power_seeds=n), **common)
+
+    loop = power(0, 4)
+    assert len(loop.alpha_a_sds) == 4
+    for k, got in enumerate(loop.alpha_a_sds):
+        assert got == power(k, 1).alpha_a_sds[0], (
+            f"realisation {k} of the loop is not what --seed {k} produces")
+    # And a loop that starts elsewhere is the same realisations, shifted.
+    assert power(1, 3).alpha_a_sds == loop.alpha_a_sds[1:]
+
+
+def test_both_spreads_on_the_design_power_record_are_the_same_realisations():
+    """`alpha_a_sd` was the median over the loop and `alpha_b_sd` was whatever
+    the LAST iteration left behind: two statistics over different things on one
+    record. Both are medians over the realisations now."""
+    power = BND.design_power(
+        MIXTRAL, args_for(capability="9.0", group_m=16, power_seeds=4),
+        b=BND.dtype_bytes("bf16"), ceiling_tflops=682.1, capability=(9, 0),
+        block_ns=(32, 64, 128), subjects=BND.SUBJECT_BLOCK_M, sm_count=132,
+        noise=0.008, noise_source="planted", draws=20)
+    assert len(power.alpha_b_sds) == len(power.alpha_a_sds) == 4
+    assert power.alpha_b_sd == pytest.approx(
+        statistics.median(power.alpha_b_sds))
+    assert power.alpha_a_sd == pytest.approx(
+        statistics.median(power.alpha_a_sds))
+    assert power.alpha_b_sd != power.alpha_b_sds[-1] or len(
+        set(power.alpha_b_sds)) == 1
+
+
+def test_the_four_height_self_test_still_separates_its_planted_worlds(capsys):
+    """The design self-test, at the pinning the arm runs and at four heights.
+
+    The claim is unchanged: C2 PASSES in TRUTH and in NO-A and FAILS in the two
+    worlds with a term the model does not contain. Run through `main`, so the
+    subject default is what a pod would get.
+    """
+    assert BND.main(["--self-test", "--capability", "9.0", "--group-m", "16",
+                     "--reps", "17", "--plant-noise", "0.008",
+                     "--sm-count", "132", "--ridge", "155.93",
+                     "--bandwidth-gbps", "4374.3",
+                     "--draws", "200", "--power-seeds", "2"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "RESULT: VALIDITY S2 PASS" in out
+    assert "TRUTH: C2=True, MISSING: C2=False" in out
+    assert "NO-A: C2=True, BN-DRIFT: C2=False" in out
+    # Four heights are in the planted grid, not three.
+    assert "subjects     [16, 32, 64, 128]" in out
