@@ -22,12 +22,16 @@ from pathlib import Path
 import pytest
 import yaml
 
+import scripts.dram_counter_route as DCR
 from moe.bench import exit_codes
 from moe.bench import provenance as PV
 from moe.spec import MODEL_CONFIGS
 from scripts.dram_counter_route import (
     A100_REPORT,
+    C1_TOLERANCE,
     CALL_MARKER,
+    CONTRAST_INSTRUMENT,
+    CONTRAST_TOLERANCE,
     COUNTER_ROW_KEYS,
     COUNTER_SCHEMA_TEXT,
     COUNTER_TOP_KEYS,
@@ -52,21 +56,28 @@ from scripts.dram_counter_route import (
     bracket_directory,
     build_counter_payload,
     build_parser,
+    c1_registration,
     canned_ncu_csv,
     cap_from_counter,
     card_key,
+    contrast_pairs,
     contrast_plan,
+    contrast_rows,
+    corpus_knobs,
     corpus_slope,
     discrimination,
     git_visibility,
     main,
     measured_bandwidth_gbps,
+    measured_dr_dn,
     measured_ridge,
     normalise_per_call,
+    occupancy_block_n,
     ols,
     one_run_dir,
     parse_ncu_csv,
     physical_bracket,
+    plan_id,
     predicted_read_bytes,
     probe_capabilities,
     route_verdict,
@@ -74,6 +85,7 @@ from scripts.dram_counter_route import (
     score_counter_run,
     stamped,
     sweep_argv,
+    synthetic_counter_payload,
     weight_bytes_total,
     weight_stream_ms,
 )
@@ -870,10 +882,11 @@ def test_every_out_write_site_reports_its_git_visibility():
     the visibility line before the function returns.
     """
     text = (REPO / "scripts" / "dram_counter_route.py").read_text()
-    # Three since 2026-09-10: --bracket, --probe and now --run, which is the
-    # mode that writes the file every other mode only talks about.
-    assert text.count("out.write_text(") == 3
-    assert text.count("git_visibility(out)") == 3
+    # Four since the 2026-09-10 repair: --bracket, --probe, --run (the mode that
+    # writes the file every other mode only talks about) and --contrast (the
+    # mode that scores the ratio across those files).
+    assert text.count("out.write_text(") == 4
+    assert text.count("git_visibility(out)") == 4
 
 
 # --------------------------------------------------------------------------
@@ -1016,10 +1029,18 @@ def test_the_self_test_mode_exercises_the_parser_and_reports_both_refusals(capsy
     tested nothing that will happen on a pod."""
     assert main(["--self-test"]) == exit_codes.DONE
     out = capsys.readouterr().out
-    assert "THE RUNNER'S PARSER AND ITS PER-CALL DIVISION" in out
-    assert "planted MISSING metric on one launch" in out
-    assert "planted WRONG call count, 8 against a floor of 10" in out
-    assert out.count("REFUSED as required") == 3
+    # The parser's own section, counted inside its own section rather than over
+    # the whole log: --self-test grew a contrast section on 2026-09-10 whose
+    # mislabelled-payload row also refuses, and a whole-log count of refusals
+    # would have been satisfied by the wrong three.
+    parser = out.split("THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[1]
+    assert "planted MISSING metric on one launch" in parser
+    assert "planted WRONG call count, 8 against a floor of 10" in parser
+    assert "planted profile with no marker kernel at all" in parser
+    assert parser.count("REFUSED as required") == 3
+    contrast = out.split("THE CONTRAST SCORER")[1].split(
+        "THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[0]
+    assert contrast.count("REFUSED as required") == 1
     assert "FAIL" not in out and "SELF TEST PASS" in out
 
 
@@ -1268,3 +1289,418 @@ def test_the_stamped_contrast_matches_the_cell_on_its_pipeline_depth_too(
     assert hinge.num_stages != occ.num_stages
     assert hinge.slope_ms != occ.slope_ms
     del tmp_path, monkeypatch
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-10 REPAIR. Four defects found by review of the commit that built
+# the runner, each one a gate or a parser that would have produced a wrong
+# reading on the metered box rather than a crash.
+# --------------------------------------------------------------------------
+
+def _h200_payload(alpha_name: str, *, block_m: int = 64, anchors=None) -> dict:
+    """A counter payload for the cell the plan registers, planted ON an anchor.
+
+    The point of planting exactly on an anchor is that this is what a SUCCESSFUL
+    run looks like: the ladder and the counter agree. Anything the gates say
+    about it, they say about a measurement that worked.
+    """
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, block_m)
+    registered = anchors if anchors is not None else anc.as_dict()
+    alpha = registered[alpha_name]
+    ridge, _src = measured_ridge("nvidia_h200")
+    lo, hi = physical_bracket(anc.slope, anc.t1_ms, weight_bytes_total(MIXTRAL),
+                              activation_bytes_per_tile(MIXTRAL, block_m),
+                              DATASHEET_PEAK_GBPS["nvidia_h200"])
+    return {"device": "nvidia_h200", "model": "mixtral-8x7b", "dtype": "bf16",
+            "group_m": 16, "block_n": 64, "block_k": 64, "num_warps": 8,
+            "num_stages": 4, "block_m": block_m, "cache_control": "all",
+            "ridge": ridge, "anchors": registered, "bracket": [lo, hi],
+            "rows": [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                      "dram_bytes_read": predicted_read_bytes(MIXTRAL, block_m, n, alpha),
+                      "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                      "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                     for n in (1, 2, 3, 4, 6, 8)]}
+
+
+def test_c1_cannot_be_asked_for_one_survivor_on_the_cell_the_plan_registers():
+    """The blocking defect: C1 was pre-determined to FAIL on this cell.
+
+    The H200 anchors span 0.0393 end to end, narrower than C1's own 0.05
+    survival window, so a measurement landing ON an anchor leaves all three
+    standing. The gate asked for exactly one and returned FAIL with the
+    diagnosis "the cell was badly chosen", which was true and was known before
+    the run: --dry-run's own text says the anchors agree to 0.04. The
+    registration now decides which question the cell carries.
+    """
+    payload = _h200_payload("n3")
+    spread = max(payload["anchors"].values()) - min(payload["anchors"].values())
+    assert spread < C1_TOLERANCE, "this test is about a cluster narrower than the window"
+    gates, summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert summary["c1_mode"] == "clustered"
+    assert len(summary["survivors"]) == 3, "the old rule's FAIL, still visible"
+    assert c1.verdict == PASS
+    assert "cannot separate" in c1.claim
+    assert any("NOT DISCRIMINATING" in line for line in c1.lines)
+
+
+def test_a_successful_measurement_of_that_cell_exits_done(tmp_path, capsys):
+    """The consequence the operator would have read on the pod: exit 1.
+
+    Scored end to end through --analyse, because the exit code is what the
+    session driver files the arm under and CLAIM_FAIL is "measured, the world
+    disagreed". The world did not disagree; the gate could not pass.
+    """
+    path = tmp_path / "h200.json"
+    path.write_text(json.dumps(_h200_payload("n3")))
+    assert main(["--analyse", str(path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "PASS"
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_the_a100_cell_keeps_the_question_it_can_answer(tmp_path, capsys):
+    """And the repair is not a loosening: on a cell whose anchors ARE separated,
+    C1 still demands exactly one survivor, and two survivors still FAIL."""
+    a100 = {"published": 0.6473, "t1": 0.4522, "n3": 0.7047}
+    reg = c1_registration(a100)
+    assert reg.separating and reg.min_gap > C1_TOLERANCE
+    assert reg.verdict(["t1"]) == PASS
+    assert reg.verdict(["t1", "n3"]) == FAIL
+    assert reg.verdict([]) == FAIL
+    # ...and a clustered cell's FAIL is every anchor refuted, which is a result
+    # and not an instrument failure, so C1 stays a CLAIM gate in both modes.
+    payload = _h200_payload("n3")
+    payload["rows"] = [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                        "dram_bytes_read": predicted_read_bytes(MIXTRAL, 64, n, 0.05),
+                        "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                        "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                       for n in (1, 2, 3, 4, 6, 8)]
+    path = tmp_path / "refuted.json"
+    path.write_text(json.dumps(payload))
+    assert main(["--analyse", str(path)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "FAIL"
+    del capsys
+
+
+def test_c1_refuses_a_payload_that_registered_no_anchor_at_all():
+    """A gate with nothing to compare against examined nothing. It used to score
+    FAIL with "survivors none", which reads as three refuted anchors."""
+    payload = _h200_payload("n3")
+    payload.pop("anchors")
+    gates, _summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert c1.verdict == REFUSE
+    assert c1.scored()[2] == exit_codes.UNKNOWN
+
+
+def test_the_plan_registers_c1_before_anything_runs(capsys):
+    """Said at registration time, on the cell the plan actually holds, so the
+    operator does not discover it from a gate on a rented box."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "C1, REGISTERED" in out
+    assert "NOT DISCRIMINATING" in out
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, 64)
+    reg = c1_registration(anc.as_dict())
+    assert f"{reg.min_gap:.4f}" in out and f"{C1_TOLERANCE:.2f}" in out
+
+
+def test_the_parser_requires_the_unit_column_the_way_it_requires_the_id():
+    """The parser's one defence against ncu's per-launch rescaling was optional.
+
+    `Metric Unit` was picked up `if name in header`, so a CSV without the column
+    left `unit` empty, and the byte tables mapped "" to 1.0. A file whose bytes
+    ncu had already rescaled to Mbyte read as bytes: a factor of 1e6 low, still
+    perfectly affine in n, and therefore invisible to V3, V4 and every gate but
+    the n=1 one.
+    """
+    head = '"ID","Kernel Name","Metric Name","Metric Value"'
+    rows = [head]
+    for launch in range(1, 12):
+        kernel = CALL_MARKER if launch % 4 == 1 else "fused_moe_kernel"
+        for metric in NCU_METRICS:
+            rows.append(f'"{launch}","{kernel}","{metric}","2840.0"')
+    with pytest.raises(CounterRunRefused, match="Metric Unit"):
+        parse_ncu_csv("\n".join(rows))
+    # and a blank unit CELL, on a header that does carry the column, refuses too
+    blank = ['"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"',
+             f'"1","{CALL_MARKER}","dram__bytes_read.sum","","2840.0"']
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv("\n".join(blank))
+    assert all("" not in units for _canon, units in DCR.NCU_METRIC_UNITS.values())
+
+
+def test_the_schedule_pairs_knobs_are_read_off_the_committed_rows():
+    """Two call sites, one estimator: the BLOCK_N cells read their knobs from
+    their arm's report and the schedule pair typed theirs from the setting
+    string. The typed values were right, and nothing would have said so if a
+    republish had moved a pipeline depth."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    for setting, group_m in (("s3w8g1", 1), ("s3w8g16", 16)):
+        knobs = corpus_knobs(run / "cells.csv", {"setting": setting, "block_m": 64},
+                             ("group_m", "num_stages", "num_warps"))
+        cell = next(c for c in contrast_plan(64) if c.name == f"{setting}-m64")
+        assert (cell.group_m, cell.num_stages, cell.num_warps) == (
+            knobs["group_m"], knobs["num_stages"], knobs["num_warps"])
+        assert knobs["group_m"] == group_m
+        assert "cells.csv" in cell.knob_source
+    # a column the rows do not carry, and a selection spanning two values of
+    # one, both refuse rather than picking whichever sorted first.
+    with pytest.raises(CorpusMissing, match="no column"):
+        corpus_knobs(run / "cells.csv", {"setting": "s3w8g1"}, ("block_n",))
+    with pytest.raises(CorpusMissing, match="that is two cells"):
+        corpus_knobs(run / "cells.csv", {"block_m": 64}, ("group_m",))
+
+
+def test_the_occupancy_arms_block_n_is_read_and_its_source_named():
+    """The arm records its BLOCK_SIZE_N inside the text of the gate that checks
+    it and nowhere as a field, so the reader says which of the two it used."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    report = json.loads((run / "report.json").read_text())
+    block_n, source = occupancy_block_n(report)
+    assert block_n == 64 and "report.json" in source
+    fallback, source = occupancy_block_n({"no": "pin here"})
+    assert fallback == 64 and "FIXED" in source
+
+
+def test_the_plan_id_separates_two_cards():
+    """`--card` became a first-class knob and was not in the id, so the same
+    cell planned for the A100 and for the H200 produced one string while every
+    prediction under it differed."""
+    h200 = build_parser().parse_args([])
+    a100 = build_parser().parse_args(["--card", "nvidia_a100_sxm4_80gb"])
+    assert plan_id(h200) != plan_id(a100)
+    assert plan_id(h200).startswith("nvidia_h200-")
+    assert plan_id(h200) == plan_id(build_parser().parse_args([]))
+
+
+# --------------------------------------------------------------------------
+# --contrast. The reading the extended plan exists to take, which no single
+# payload contains and which nothing scored until this repair.
+# --------------------------------------------------------------------------
+
+def _pair_payloads(tmp_path, *, lo_dr=None, hi_dr=None, lo_cache="all",
+                   hi_cache="all", stamped_cell=None) -> tuple[Path, Path]:
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    lo_dr = pair.lo.traffic_bytes_per_tile(stream, W) if lo_dr is None else lo_dr
+    hi_dr = pair.hi.traffic_bytes_per_tile(stream, W) if hi_dr is None else hi_dr
+    lo = tmp_path / "lo.json"
+    hi = tmp_path / "hi.json"
+    lo.write_text(json.dumps(synthetic_counter_payload(
+        pair.lo, lo_dr, cache_control=lo_cache, stamped_cell=stamped_cell)))
+    hi.write_text(json.dumps(synthetic_counter_payload(
+        pair.hi, hi_dr, cache_control=hi_cache)))
+    return lo, hi
+
+
+def test_the_contrast_is_scored_across_two_payloads_and_names_the_rival(tmp_path, capsys):
+    """Acceptance for the mode: a TRAFFIC world reads as TRAFFIC.
+
+    Until this repair `--analyse` scored ONE payload and the discriminator was a
+    ratio ACROSS two, so the operator came off the pod with five scored cells
+    and section 2's arithmetic to do by hand against the printed predictions.
+    """
+    lo, hi = _pair_payloads(tmp_path)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    names = [ln.name for ln in exit_codes.parse_result_lines(out)]
+    assert names == ["X0", "XA-all"]
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TRAFFIC" in line.detail
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert f"{pair.traffic_ratio:.3f}" in out
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_a_time_world_reads_as_time_and_not_as_a_failed_traffic_prediction(
+        tmp_path, capsys):
+    """The other rival is an ANSWER, not a failure: identical reads at both
+    BLOCK_N mean the missing term is time and no byte model can hold it."""
+    _lo, hi = _pair_payloads(tmp_path)
+    same = json.loads(hi.read_text())["rows"][1]["dram_bytes_read"]
+    del same
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TIME" in line.detail
+
+
+def test_a_ratio_between_the_two_rivals_refutes_both_as_stated(tmp_path, capsys):
+    """Anything in between is reported as the split it is, not rounded to the
+    nearer rival."""
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr * 1.4, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "FAIL" and "neither" in line.detail
+
+
+def test_a_pair_nobody_ran_is_refused_and_never_scored_unknown(tmp_path, capsys):
+    """The C1 defect's own shape, not repeated here: a gate for a contrast that
+    has no payloads would be UNKNOWN, which counts against the run, so a plan
+    run half through would report CLAIM_FAIL for the half it never took."""
+    cells = contrast_plan(64)
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    paths = []
+    for name in ("bn32-g16-m64", "s3w8g1-m64"):
+        cell = next(c for c in cells if c.name == name)
+        p = tmp_path / f"{name}.json"
+        p.write_text(json.dumps(synthetic_counter_payload(
+            cell, cell.traffic_bytes_per_tile(stream, W))))
+        paths.append(p)
+    assert main(["--contrast", *[str(p) for p in paths]]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert exit_codes.parse_result_lines(out) == []
+    assert "no registered pair is complete" in out
+    # and one file is not a contrast at all
+    assert main(["--contrast", str(paths[0])]) == exit_codes.REFUSED
+
+
+def test_pairs_are_matched_inside_one_cache_mode(tmp_path, capsys):
+    """ncu's --cache-control sets the cache state, so a ratio taken across two
+    cache modes is a ratio between two apparatuses."""
+    lo, hi = _pair_payloads(tmp_path, lo_cache="all", hi_cache="none")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.REFUSED
+    assert "no registered pair is complete" in capsys.readouterr().out
+
+
+def test_the_stamped_cell_name_is_read_back_rather_than_trusted(tmp_path, capsys):
+    """`build_counter_payload` stamped `contrast` into every payload and nothing
+    ever read it back. A payload whose stamp and whose knobs disagree is one of
+    the two, and the ratio may not be taken under either name."""
+    lo, hi = _pair_payloads(tmp_path, stamped_cell="bn128-g16-m64")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "stamped contrast says" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.kind == "VALIDITY" and line.verdict == "FAIL"
+
+
+def test_a_ratio_over_a_payload_whose_own_gates_failed_is_invalid(tmp_path, capsys):
+    """Validity voids the claims above it, ACROSS files as well as inside one."""
+    lo, hi = _pair_payloads(tmp_path)
+    payload = json.loads(lo.read_text())
+    payload["rows"][2]["dram_bytes_read"] = payload["rows"][0]["dram_bytes_read"]
+    lo.write_text(json.dumps(payload))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
+    assert "V3" in out
+
+
+def test_two_payloads_for_one_cell_and_cache_mode_are_a_collision(tmp_path):
+    """Argument order would otherwise choose which of two measurements the ratio
+    was taken over."""
+    lo, hi = _pair_payloads(tmp_path)
+    twin = tmp_path / "lo-again.json"
+    twin.write_text(lo.read_text())
+    args = build_parser().parse_args(
+        ["--contrast", str(lo), str(twin), str(hi)])
+    rows, _cells = contrast_rows([lo, twin, hi])
+    assert len(rows) == 3
+    assert DCR.do_contrast(args) == exit_codes.INVALID
+
+
+def test_the_measured_slope_is_the_ratio_and_carries_no_bandwidth(tmp_path):
+    """The discriminator is two measured slopes divided: no byte model, no
+    weight total, no card rate, so a recalibration cannot move it."""
+    lo, hi = _pair_payloads(tmp_path)
+    dr_lo, resid = measured_dr_dn(json.loads(lo.read_text()))
+    dr_hi, _resid = measured_dr_dn(json.loads(hi.read_text()))
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert resid < 1e-9
+    assert dr_lo / dr_hi == pytest.approx(pair.traffic_ratio, rel=1e-9)
+    assert dr_lo / dr_hi == pytest.approx(pair.lo.slope_ms / pair.hi.slope_ms, rel=1e-9)
+    # a payload with fewer than three tile counts has no slope and says so
+    thin = json.loads(lo.read_text())
+    thin["rows"] = thin["rows"][:2]
+    with pytest.raises(CounterRunRefused, match="a slope needs three"):
+        measured_dr_dn(thin)
+
+
+def test_the_pairs_the_plan_prints_are_the_pairs_the_scorer_reads(capsys):
+    """One registration, two readers. The plan printed CONTRAST A and B out of
+    inline literals and the scorer would have had its own copy."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    for pair in contrast_pairs(contrast_plan(64)):
+        assert f"CONTRAST {pair.label}" in out
+        assert f"{pair.traffic_ratio:.3f}" in out
+        assert pair.separates(CONTRAST_TOLERANCE)
+        assert "SEPARATING" in out
+    assert "--contrast" in out, "the recipe must name the mode that scores it"
+
+
+def test_a_pair_whose_rivals_overlap_is_registered_not_failed():
+    """The C1 fix applied at the second call site. A pair whose two predictions
+    both fit inside the scoring window cannot decide, and `separates` is the
+    check that says so before a box is rented."""
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    assert pair.separates(0.05)
+    # widen the window to 60% and the two acceptance bands overlap, so there
+    # are ratios no reading can attribute
+    assert not pair.separates(0.60)
+    verdict, which = pair.read(1.5, 0.60)
+    assert verdict == REFUSE and "does not separate" in which
+    # and at the registered window the same ratio attributes to neither, which
+    # is a FAIL and a result rather than an undecidable gate
+    assert pair.read(1.5, CONTRAST_TOLERANCE)[0] == FAIL
+
+
+def test_the_contrast_json_carries_provenance_and_its_own_instrument(tmp_path):
+    """Every JSON this script writes goes through `stamped`, the fourth write
+    site included."""
+    lo, hi = _pair_payloads(tmp_path)
+    out = tmp_path / "contrast.json"
+    assert main(["--contrast", str(lo), str(hi), "--out", str(out)]) == exit_codes.DONE
+    doc = json.loads(out.read_text())
+    for key in ("git_sha", "gpu_name", "instrument", "provenance", "run_id"):
+        assert key in doc
+    assert doc["instrument"] == CONTRAST_INSTRUMENT
+    assert "no-kernel-timed" in CONTRAST_INSTRUMENT
+    assert doc["tolerance"] == CONTRAST_TOLERANCE
+    assert doc["run_id"].startswith(NO_CARD.replace("-", "_")[:4]) or doc["run_id"]
+    one = build_parser().parse_args(["--contrast", str(lo), str(hi)])
+    two = build_parser().parse_args(["--contrast", str(lo)])
+    assert run_id_for("contrast", one, NO_CARD) != run_id_for("contrast", two, NO_CARD)
+
+
+def test_contrast_is_one_mode_among_the_seven(capsys):
+    """Two modes at once still refuses, and the refusal names the new one."""
+    assert main(["--contrast", "a.json", "--bracket"]) == exit_codes.REFUSED
+    assert "--contrast" in capsys.readouterr().out
+
+
+def test_a_ratio_across_two_cards_is_not_a_contrast(tmp_path, capsys):
+    """The pair varies one knob; a payload from another card varies the card
+    too, and the ratio would carry that difference silently."""
+    lo, hi = _pair_payloads(tmp_path)
+    other = json.loads(hi.read_text())
+    other["device"] = "nvidia_a100_sxm4_80gb"
+    hi.write_text(json.dumps(other))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "values of device" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
