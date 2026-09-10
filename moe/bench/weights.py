@@ -23,9 +23,20 @@ own slope `B`, which is the one number in the fit that no extrapolation
 touches. The denominator is a byte count from `moe.spec` divided by a rate the
 CALLER supplies, so the number always names the rate it was divided by. On
 mixtral bf16 the expert weight set is 2.8186 GB and one stream is 0.6443 ms at
-this H200's calibrated triad rate of 4374.3 GB/s. Measured that way over 23
-ladders of the session, w runs 0.68 to 1.37 with a per-repeat sd of 0.002 to
-0.005 over 17 repeats.
+this H200's calibrated triad rate of 4374.3 GB/s. Measured that way over the 23
+ladders of the 2026-09-10 session, w runs 0.683 to 4.424 with a median of
+1.168 and a per-repeat sd of 0.002 to 0.005 over 17 repeats.
+
+THAT RANGE USED TO READ 0.68 TO 1.37 HERE, AND THAT IS TWO SUBSETS. 0.683 to
+1.368 is the range over the SIXTEEN of those ladders at BLOCK_M <= 64, which is
+the set every settled figure in the session is quoted from; the remaining seven
+are the BLOCK_M=128 and 256 reference ladders, which run 1.145 to 4.424. Quoting
+the subject range for all 23 understated the top by 3.2x in the module that
+defines the statistic, and the reason the wide range is not a contradiction is
+the sentence below: `w` is per M-TILE, so a tile four or sixteen times taller
+costs more streams and the number is comparable across BLOCK_N and across
+schedules at fixed BLOCK_M, never across BLOCK_M.
+`tests/test_ai_model.py` recomputes both ranges from the committed cells.
 
 THIS ADDS A STATISTIC, IT DOES NOT REPLACE ONE. The 100,144 published rows
 were all scored on B/(A+B) and stay readable exactly as they were. `w` is

@@ -38,6 +38,7 @@ from pathlib import Path
 import pytest
 
 from moe.bench import ai_model as ai_model_module
+from moe.bench import weights
 from moe.bench.ai_model import (
     AIModelRefused,
     alpha_b_from_fitted,
@@ -752,6 +753,20 @@ def _corpus_rows(arm: str):
     return rows, float(rows[0]["prov_bandwidth"])
 
 
+def _arm_cells(arm: str):
+    """The ok rows of one arm of the published session, without its rate.
+
+    `_corpus_rows` reads `prov_bandwidth` off the row, which only the arms that
+    write a provenance block carry. `occupancy_vs_swizzle` and `bm128_depth`
+    do not, and their ladders are still part of the session's 23."""
+    runs = sorted((SESSION / "results" / arm).glob("*/cells.csv"))
+    assert len(runs) == 1, f"{arm}: expected one published run, found {runs}"
+    with open(runs[0], newline="") as fh:
+        rows = [r for r in csv.DictReader(fh) if r["status"] == "ok"]
+    assert rows, f"{arm}: no ok cells"
+    return rows
+
+
 def _ols(xs, ys):
     """The same ordinary least squares the sweep's `_line` and
     `analysis/synth/s8_common_currency.py` both fit. Returns (intercept, slope)."""
@@ -1051,6 +1066,115 @@ def test_replay_cap_test_bm16_g1_ladder_is_one_full_weight_stream_per_tile():
     assert w.streams == pytest.approx(1.0514, abs=5e-5)
     assert w.streams > 1.0
     assert "triad, published cells" in w.render()
+
+
+def _session_ladders():
+    """The 23 ladders of the 2026-09-10 session, and what each one's `w` is.
+
+    THE SET ITSELF WAS UNDOCUMENTED IN THIS TREE, which is how a range over two
+    of its subsets came to be quoted for the whole of it. `analysis/synth/
+    s8_common_currency.py` is the script the synthesis ran and it is not
+    committed here, so "over 23 ladders" was a claim nothing in the repository
+    could check. It is defined here instead, off the committed cells:
+
+      * `bn_g16`, every BLOCK_N x BLOCK_M cell it swept, which is 12;
+      * `occupancy`, its nine pinnings at the SUBJECT height BLOCK_M=64 (each
+        pinning also carries a BLOCK_M=256 reference ladder, which is that
+        arm's reference and not one of the 23);
+      * `cap_test`'s BLOCK_M=16, G=1 ladder under its own filters, exactly-full
+        treads from n = 3;
+      * `bm128_depth`'s BLOCK_M=128 subject ladder.
+
+    Returns `{name: (block_m, w)}`. Three independent facts the docs already
+    state fall out of it and are checked below, which is what says the
+    reconstruction is the synthesis's own set and not a set that happens to
+    number 23.
+    """
+    out = {}
+    bn_rows, bw = _corpus_rows("bn_decomposition")
+    stream = weight_stream_ms("mixtral-8x7b", "bf16", bw)
+    for key in sorted({(int(r["block_n"]), int(r["block_m"])) for r in bn_rows}):
+        n, m = key
+        slope = _ladder_slope_ms(
+            bn_rows, "tiles",
+            lambda r, n=n, m=m: (int(r["block_n"]) == n
+                                 and int(r["block_m"]) == m))
+        out[f"bn_g16 BN={n} BM={m}"] = (m, slope / stream)
+    # `occupancy` and `bm128_depth` write no `prov_bandwidth` column, so the
+    # rate cannot be re-read off their own rows the way it can off the other
+    # two. They ran in the same session against the same calibration, and the
+    # arms that DO carry the column are checked against each other below and by
+    # `test_the_published_session_ran_at_the_2026_09_10_calibration`.
+    occ_rows = _arm_cells("occupancy_vs_swizzle")
+    for setting in sorted({r["setting"] for r in occ_rows}):
+        slope = _ladder_slope_ms(
+            occ_rows, "tiles",
+            lambda r, st=setting: (r["setting"] == st
+                                   and int(r["block_m"]) == 64))
+        out[f"occupancy {setting} BM=64"] = (64, slope / stream)
+    cap_rows, cap_bw = _corpus_rows("tile_cap")
+    assert cap_bw == bw, "the two arms ran against different calibrations"
+    out["cap_test BM=16 G=1"] = (16, _ladder_slope_ms(
+        cap_rows, "tiles_per_expert",
+        lambda r: (int(float(r["block_m"])) == 16
+                   and float(r["tile_eff"]) >= 1.0
+                   and int(float(r["tiles_per_expert"])) >= 3)) / stream)
+    depth_rows = _arm_cells("bm128_depth")
+    out["bm128_depth BM=128"] = (128, _ladder_slope_ms(
+        depth_rows, "tiles", lambda r: int(r["block_m"]) == 128) / stream)
+    return out
+
+
+def test_the_w_range_is_two_subsets_and_the_module_says_which():
+    """`moe/bench/weights.py` said "over 23 ladders ... w runs 0.68 to 1.37",
+    and that is the range over SIXTEEN of them.
+
+    0.683 to 1.368 is the subject set, BLOCK_M <= 64. Over all 23 the top is
+    4.424, on the BLOCK_M=256 reference ladder at BLOCK_N=32, because `w` is
+    per M-TILE and a tile eight times taller costs more streams. The module
+    that DEFINES the statistic understated its own top by 3.2x, which is the
+    one place a reader would go to find out what the statistic ranges over.
+
+    Recomputed here rather than pinned: the ladders come off the committed
+    cells and the rate comes off the same cells, so a re-calibration moves the
+    test and the docstring together instead of leaving one of them behind.
+    """
+    ladders = _session_ladders()
+    assert len(ladders) == 23, sorted(ladders)
+    ws = [w for _m, w in ladders.values()]
+    subject = [w for m, w in ladders.values() if m <= 64]
+    reference = [w for m, w in ladders.values() if m > 64]
+    assert len(subject) == 16 and len(reference) == 7
+
+    # The two ranges the module now states, and the median beside them.
+    assert min(ws) == pytest.approx(0.683, abs=5e-4)
+    assert max(ws) == pytest.approx(4.424, abs=5e-4)
+    assert statistics.median(ws) == pytest.approx(1.168, abs=5e-4)
+    assert min(subject) == pytest.approx(0.683, abs=5e-4)
+    assert max(subject) == pytest.approx(1.368, abs=5e-4)
+    assert min(reference) == pytest.approx(1.145, abs=5e-4)
+    assert max(reference) == pytest.approx(4.424, abs=5e-4)
+
+    # THE MODULE'S OWN PROSE, checked against what was just measured, since a
+    # docstring that states a range is a claim like any other.
+    doc = weights.__doc__
+    flat = " ".join(doc.split())
+    assert "w runs 0.683 to 4.424 with a median of 1.168" in flat, flat
+    assert "0.683 to 1.368 is the range over the SIXTEEN" in flat, flat
+    assert "BLOCK_M <= 64" in flat and "run 1.145 to 4.424" in flat, flat
+
+    # THREE FACTS THE DOCS ALREADY STATE, which is what says this is the
+    # synthesis's own set of 23 and not a different set of the same size.
+    # `docs/FINDINGS.md`: "Sixteen of the 23 ladders exceed one full stream at
+    # triad", and "The BLOCK_M=128 and 256 reference ladders read 1.15 to
+    # 4.42"; `docs/STUDY.md`: the subject range at "BLOCK_M 16 to 64".
+    assert sum(1 for w in ws if w > 1.0) == 16
+    findings = (ROOT / "docs" / "FINDINGS.md").read_text()
+    assert "Sixteen of the 23 ladders exceed one full stream at triad" in findings
+    assert "read 1.15 to 4.42 on the same statistic" in findings
+    # And the six figures the synthesis publishes are in it, unchanged.
+    for (n, m), want in BN_G16_W_AT_TRIAD.items():
+        assert ladders[f"bn_g16 BN={n} BM={m}"][1] == pytest.approx(want, abs=5e-4)
 
 
 def test_the_published_session_ran_at_the_2026_09_10_calibration():
