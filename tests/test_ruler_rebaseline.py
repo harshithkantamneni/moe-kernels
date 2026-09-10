@@ -533,15 +533,17 @@ def test_the_registered_numbers_are_the_ones_in_the_committed_calibration():
     """A prediction quoting a figure that is not in the tree is not checkable.
 
     The registered names are the POST-rename ones, because they are what a fresh
-    calibration will emit and what gate 2 will look up. The committed file
-    predates the rename, so `read_reduce` is compared against the `read` it was
-    renamed from -- the same measurement, and the mapping is stated here rather
+    calibration emits and what gate 2 looks up. The committed file carried them
+    under their own names from 2026-09-09; before that it predated the rename
+    and `read_reduce` had to be looked up as the `read` it was renamed from.
+    The fallback is kept and tried SECOND rather than first, so re-registering
+    against an older file still resolves and the mapping is stated here rather
     than hidden in a lookup that would quietly match nothing."""
     ruler = RB.read_ruler(REPO / "moe" / "bench" / "hardware"
                           / "measured_nvidia_h200.yaml")
     renamed_from = {"read_reduce": "read"}
     for name, expected in RB.H200_PATTERNS_GBPS.items():
-        in_file = renamed_from.get(name, name)
+        in_file = name if name in ruler.patterns else renamed_from.get(name, name)
         assert in_file in ruler.patterns, f"{name} has no counterpart in the file"
         assert ruler.patterns[in_file] == pytest.approx(expected, abs=0.1), name
 
@@ -632,13 +634,17 @@ def measured_h200() -> Calibration:
     Hermetic: every field is a literal, nothing here reads the attached device,
     and the assertions below are the same on a laptop and on the H200. A replay
     that consulted the hardware would not be a replay, and this project has
-    already shipped one that did.
+    already shipped one that did. The four pattern rates are the ones
+    `H200_PATTERNS_GBPS` registers, re-transcribed on 2026-09-09 when that
+    table was re-registered against the session's own calibration; gate 2
+    compares a fresh run against the table, so a fixture that plants the
+    previous session's figures would fail a gate for having reproduced.
     """
     return calibration(
-        [bw("read_stream", 4560.0, "Triton, one store per program"),
-         bw("read_reduce", 4469.6, "ATen reduction"),
-         bw("copy", 4300.7), bw("triad", 4374.8, "canonical STREAM"),
-         bw("write", 4682.4)],
+        [bw("read_stream", 4560.8, "Triton, one store per program"),
+         bw("read_reduce", 4471.4, "ATen reduction"),
+         bw("copy", 4300.8), bw("triad", 4374.5, "canonical STREAM"),
+         bw("write", 4680.2)],
         gemm_clock_mhz=1500,
         gemm_clock=clock(1500, spread=1.2, idle=1935),
         fp8_gemm_clock=clock(1470, spread=0.8, idle=1905),
@@ -666,7 +672,7 @@ def test_the_three_measured_gates_read_the_planted_calibration():
     assert one.verdict == RB.PASS and "22" in one.measured
     # P2: the patterns are the committed figures, so nothing moved.
     assert two.verdict == RB.PASS
-    # P3: 4560 over 4469.6 is +2.0%, above zero and below the pin rate.
+    # P3: 4560.8 over 4471.4 is +2.0%, above zero and below the pin rate.
     assert three.verdict == RB.PASS and "+2.0" in three.measured
 
 

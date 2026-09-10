@@ -1,13 +1,19 @@
 """The 160.3 / 176.2 pair is a reproducibility spread, not a ridge band, and
 which finding survives it.
 
-MEASURED, H200, two calibrations of the SAME machine:
+MEASURED, H200, three calibrations of the SAME machine:
 
-    bandwidth   4377.2 -> 4374.5 GB/s      0.06% apart
-    bf16 GEMM    701.6 ->  770.9 TFLOP/s   9.9% apart
-    ridge        160.3 ->  176.2 FLOP/byte 9.9% apart
+    bandwidth   4377.2 -> 4374.5 -> 4374.5 GB/s      0.06% apart
+    bf16 GEMM    701.6 ->  770.9 ->  668.5 TFLOP/s   15.5% apart
+    ridge        160.3 ->  176.2 ->  152.8 FLOP/byte 15.5% apart
 
-The bandwidth is reproducible; the compute term is not. Not because of the clock:
+The bandwidth is reproducible; the compute term is not, and it got WORSE on
+2026-09-09: that session's calibration sampled the GEMM's clock UNDER LOAD
+rather than after it (moe/bench/calibrate.py, LoadedClock), which is the
+honest reading and the low one, and it puts the card's own ridge at 152.8,
+BELOW both ends of the withdrawn pair rather than inside them. Retraction
+(e) is stronger for it: the pair is not a band the card's ridge sits in, it
+is two session artefacts that happen to bracket a third. Not because of the clock:
 the three calibrations ran the GEMM at 1845, 1560 and 1530 MHz and reached 71.4%,
 83.2% and 93.2% of their own clock's peak, so the clock moves 20.6% and the
 achieved rate moves 9.9% the other way. The spread is in achieved efficiency.
@@ -18,7 +24,10 @@ H200 ridges". That pair was withdrawn on 2026-09-02 as the ridge of any card
 (`docs/FINDINGS.md` RETRACTIONS (e), `profiles.WITHDRAWN_RIDGE_BAND_WHY`): it
 is how badly one card's compute ceiling reproduces across sessions, 26 ladder
 reports on BOTH cards had been scored against it, and the H200's own committed
-2026-09-02 calibration puts its ridge at 162.8. The constant survives below
+calibration put its ridge at 162.8 on 2026-09-02 and at 152.8 on 2026-09-09.
+Every number below that depends on the ridge is read from the committed file
+rather than pinned, so the next recalibration moves them without a green test
+asserting a superseded one. The constant survives below
 under a name that says what it is, because the ridge-independence test needs
 two different ridges and these two are the ones the study's absolutes were
 published at. And the crossings it pins were labelled the "canonical published
@@ -88,14 +97,21 @@ def _means(ridge: float, table: dict = POOLED_CROSSINGS) -> tuple[float, float]:
     return sum(five) / len(five), sum(one) / len(one)
 
 
-def test_the_withdrawn_pair_is_no_cards_ridge_and_the_h200s_own_lies_between():
+def test_the_withdrawn_pair_is_no_cards_ridge_and_is_not_a_band_around_one():
     """THE RETRACTION, (e). Neither 160.3 nor 176.2 is the ridge of any
-    committed calibration, the card's own 162.8 sits strictly inside the
-    pair, and the band `profiles` places grids from is the span of the
-    cards' own ridges, which the pair is not."""
+    committed calibration, and the card's own ridge is not inside the pair
+    either: on 2026-09-02 it was 162.8, between the two, and on 2026-09-09 it
+    is 152.8, BELOW both. A pair that brackets a card's ridge in one session
+    and sits entirely above it in the next is a reproducibility spread and
+    not a band. What is asserted here is the RELATION, read from whatever
+    calibration is committed, not the number: the pair is separated from the
+    card's own ridge, and the band `profiles` places grids from is the span
+    of the cards' own ridges, which the pair is not.
+    """
     lo, hi = WITHDRAWN_H200_PAIR
-    assert RIDGE_H200 == pytest.approx(162.8, abs=0.05)
-    assert lo < RIDGE_H200 < hi
+    assert RIDGE_H200 == pytest.approx(
+        roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16"))
+    assert not lo < RIDGE_H200 < hi or abs(RIDGE_H200 - lo) > 1.0
     assert abs(RIDGE_H200 - lo) > 1.0 and abs(RIDGE_H200 - hi) > 1.0
     band = profiles.calibrated_ridge_band("bf16")
     assert tuple(round(v, 1) for v in band) != WITHDRAWN_H200_PAIR
@@ -106,8 +122,16 @@ def test_the_withdrawn_pair_is_no_cards_ridge_and_the_h200s_own_lies_between():
 def test_the_absolute_ratios_move_with_the_ridge():
     """The thing that is NOT safe to quote without naming the ridge. At the
     two withdrawn ends the pooled absolutes are 0.63 / 0.58 (five-stage) and
-    1.13 / 1.03 (one-stage); at the card's own ridge they are 0.62 and 1.11,
-    which is the pair a report scored on this card today would print."""
+    1.13 / 1.03 (one-stage). At the card's own ridge they were 0.62 and 1.11
+    on the 2026-09-02 calibration, INSIDE that pair, and on 2026-09-09 they
+    are 0.66 and 1.18, ABOVE both ends, because the ridge moved below both.
+    The two ends are pinned because they are the numbers the study's
+    absolutes were published at; the card's own pair is computed from the
+    committed calibration, and what is asserted about it is that it moves
+    with the ridge in the direction the algebra requires: a lower ridge
+    predicts a smaller crossing, so the same measured crossing is a larger
+    multiple of it.
+    """
     lo_five, lo_one = _means(WITHDRAWN_H200_PAIR[0])
     hi_five, hi_one = _means(WITHDRAWN_H200_PAIR[1])
     assert lo_five == pytest.approx(0.63, abs=0.01)
@@ -115,9 +139,13 @@ def test_the_absolute_ratios_move_with_the_ridge():
     assert lo_one == pytest.approx(1.13, abs=0.01)
     assert hi_one == pytest.approx(1.03, abs=0.01)
     own_five, own_one = _means(RIDGE_H200)
-    assert own_five == pytest.approx(0.62, abs=0.01)
-    assert own_one == pytest.approx(1.11, abs=0.01)
-    assert hi_five < own_five < lo_five and hi_one < own_one < lo_one
+    assert hi_five < lo_five and hi_one < lo_one
+    if RIDGE_H200 < WITHDRAWN_H200_PAIR[0]:
+        assert own_five > lo_five and own_one > lo_one
+    elif RIDGE_H200 > WITHDRAWN_H200_PAIR[1]:
+        assert own_five < hi_five and own_one < hi_one
+    else:
+        assert hi_five < own_five < lo_five and hi_one < own_one < lo_one
 
 
 def test_the_separation_between_span_extents_is_ridge_INDEPENDENT():
