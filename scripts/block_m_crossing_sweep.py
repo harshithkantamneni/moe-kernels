@@ -200,14 +200,27 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from moe.bench import ai_model, exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
-from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+from moe.bench.weights import (  # noqa: E402
+    WeightSetRefused,
+    WeightStreamSlope,
+    routed_expert_weight_bytes,
+    weight_stream_ms,
+    weight_streams_per_tile,
+)
+from moe.spec import MODEL_CONFIGS, MoEConfig, dtype_bytes  # noqa: E402
+
+#: The five names above are imported INDIVIDUALLY and not as the
+#: `moe.bench.weights` module, because `weights` is already a local in
+#: `model_ms` (a byte count) and in `run_sweep` (a pair of expert tensors); a
+#: module bound to that name at file scope would be shadowed inside both.
 
 #: `moe.bench.timing` is imported LAZILY, everywhere, and this comment is the
 #: reason. That module imports torch at module scope; this one is documented to
 #: run `--dry-run` and `--self-test` on a laptop with no torch at all, and an
 #: import here would turn that documented path into an ImportError before
-#: argparse ever ran. `exit_codes`, `provenance` and `ai_model` import nothing
-#: heavier than the standard library, so they are imported normally above.
+#: argparse ever ran. `exit_codes`, `provenance`, `ai_model` and
+#: `weights` import nothing heavier than the standard library, so they are
+#: imported normally above.
 
 
 def timing_basis() -> str | None:
@@ -1325,6 +1338,28 @@ class LadderFit:
     #: above them; see `memory_branch_members` for why that is allowed and why
     #: the n=1 tread is the one it usually happens to.
     branch_start: int = 0
+    #: The model and dtype whose expert weight set `weight_streams` divides by,
+    #: and the rate it divides at. All four default to absent, which makes
+    #: `weight_streams` None: the four sibling scripts build a `LadderFit`
+    #: through `fit_ladder` without naming them, and a w computed against a
+    #: guessed model or a guessed bandwidth would be worse than no w at all.
+    #:
+    #: A `MoEConfig` OR ITS NAME, and callers that hold the config should pass
+    #: the config. Called `model_name` and typed `str` until 2026-09-10, when
+    #: `analyse` was found handing the string down while every other number in
+    #: the same report came off the `cfg` object beside it: a caller whose two
+    #: disagreed got a w divided by one geometry and a roof computed from
+    #: another, silently, which is the drift `moe/bench/weights.py` exists to
+    #: prevent. A name is still accepted and is resolved through
+    #: `MODEL_CONFIGS`; a config is used exactly as handed in.
+    model: str | MoEConfig = ""
+    dtype: str = ""
+    #: The rate `w` names. Required to have come from a measurement; see
+    #: `moe.bench.weights._check_bandwidth` for why there is no default.
+    bandwidth_gbps: float | None = None
+    #: Where that rate came from, in the caller's words, so the printed w says
+    #: which bandwidth it is a fraction of.
+    bandwidth_source: str = ""
 
     @property
     def undecided(self) -> bool:
@@ -1390,6 +1425,14 @@ class LadderFit:
         is of the order of the cap-to-ridge gap the cap was being used to
         decide. The report prints the bracket beside every cap it derives from
         this number (`cap_overstatement`).
+
+        AND SINCE 2026-09-10 IT IS NOT THE ONLY STATISTIC ON THIS FIT.
+        `weight_streams` divides the SAME slope `B` by a measured stream time
+        instead of by this fitted level, so it carries no intercept, no fixed
+        cost and no extrapolation to n = 0. Both are printed and persisted on
+        every row. This one is kept, unchanged, because the 100,144 published
+        rows were scored on it and have to stay readable; it is not, and was
+        never, a weight miss fraction.
         """
         load = self.load_ms
         if load is None or load <= 0 or self.slope_memory is None:
@@ -1403,12 +1446,160 @@ class LadderFit:
         The high end of the range. Reported and never gated on, because `D` is
         an extrapolation to zero tiles and a 4-tread ladder under 1% timing
         spread extrapolates it to anywhere between 0.03 and 0.16 ms.
+
+        IT EXCEEDS 1 EXACTLY WHEN `D > A`, which is arithmetic between two
+        fitted numbers and not a statement about traffic:
+        `B > A + B - D` is `D > A`. `fixed_cost_above_intercept` is that
+        condition, computed and printed and written to the report so the state
+        is named rather than left for a reader to infer from an out-of-range
+        value here. On the 2026-09-10 H200 session it held in four of
+        bn_decomposition's six cells and in no others, and those four drove its
+        pooled alpha_a to -0.8143.
         """
         load = self.load_ms
         if load is None or self.slope_memory is None:
             return None
         net = load - self.overhead_ms
         return self.slope_memory / net if net > 0 else None
+
+    @property
+    def weight_streams(self) -> WeightStreamSlope | None:
+        """`w = B / (ms to stream the expert weight set once)`, or None.
+
+        THE SECOND ESTIMATOR, BESIDE `alpha` AND NEVER INSTEAD OF IT. `alpha`
+        divides the slope `B` by a fitted LEVEL, which is the ladder
+        extrapolated back to zero tiles across up to 44 treads; this divides
+        the same `B` by a MEASURED time, the layer's expert weight set over a
+        bandwidth the caller supplies. No intercept, no delta, no D, and no
+        part of the fit but the slope. On the 2026-09-10 H200 session the two
+        say different things about the same ladders and only one of them ever
+        returned a value above 1.0 for a quantity bounded by 1.
+
+        Returns a `moe.bench.weights.WeightStreamSlope`, which carries the rate
+        and its source alongside the number, because w scales 1:1 in the rate:
+        halve the assumed bandwidth and every w halves with it, since the
+        stream it counts then takes twice as long. None in THREE cases, all of
+        them named on the line by `w_note`: this ladder has no memory branch to
+        take a slope from; the caller did not name a model, a dtype and a rate
+        (`fit_ladder` leaves all four empty by default, so the sibling scripts
+        that do not pass them get None rather than a w against a guessed card);
+        or `weights` REFUSED the denominator, for a geometry that is not
+        `verified`, an unknown dtype or a rate that is not a rate. The third
+        case reached this property on 2026-09-10, when the refusal was found
+        travelling out of `analyse` and killing the whole report over one
+        supplementary column. `_weight_streams` is where all three are decided,
+        once, for every reader of this property.
+
+        WHAT IT IS NOT. Not alpha_b. Under the three-term model this is
+        `alpha_b + phi` (`ai_model.slope_weight_streams`), so at the rate the
+        weights really stream at it is an UPPER BOUND on the weight miss
+        fraction, and phi is the gap: one M-tile's activation and output
+        traffic, a function of the unmeasured alpha_a. At any OTHER rate it is
+        an upper bound on nothing, and the two rates a card publishes are not
+        close: on the H200 of 2026-09-10 the `read_stream` pattern is 5.4%
+        above the triad ceiling these reports divide by, and a weight stream is
+        a pure read. The report legend carries that condition since 2026-09-10;
+        before then the one line a reader actually saw asserted the bound
+        flatly, which is the recurring defect on the docstrings around it.
+        """
+        return self._weight_streams()[0]
+
+    def _weight_streams(self) -> tuple[WeightStreamSlope | None, str]:
+        """`(w, reason it is absent)`. Exactly one of the two is filled.
+
+        A REFUSAL IS A BLANK COLUMN, NOT A DEAD REPORT, and one place decides
+        which. `weights.weight_streams_per_tile` raises `WeightSetRefused` for
+        a model this repository holds no verified geometry for, for an unknown
+        dtype and for a rate that is not a rate. Those are the right refusals
+        at that layer: its whole contract is that it never guesses a
+        denominator. But `w` is a SUPPLEMENTARY column on a report whose other
+        forty numbers do not depend on it, and until 2026-09-10 the exception
+        travelled all the way out of `analyse`, so a `MoEConfig` added to this
+        repository with `verified` still at its default False would have made
+        the sweep time every cell on the pod and then die instead of writing
+        report.txt and report.json.
+
+        Caught HERE and not at the print sites, because `weight_streams` has
+        five reader sites in this file -- the ladder table's w column, three
+        per-row payload keys, and the report-level `weight_streams_measured` --
+        and `w_note` prints it on three more lines. A fix applied to the two or
+        three that were easy to find is this repository's recurring defect. The
+        one reader that still needs a catch of its own is the report's legend
+        line, which calls `weight_stream_ms` and `routed_expert_weight_bytes`
+        directly rather than through a fit, and it has one. The reason string is
+        the refusal's own words, so the report says WHY the column is blank
+        rather than leaving a reader to guess whether the ladder had no slope or
+        the model had no geometry.
+        """
+        if self.slope_memory is None:
+            return None, "no memory branch, so no slope to divide"
+        if not self.model or not self.dtype or self.bandwidth_gbps is None:
+            return None, ("the caller named no model, dtype and measured "
+                          "bandwidth, and there is no default rate")
+        try:
+            return weight_streams_per_tile(
+                self.slope_memory, self.model, self.dtype,
+                self.bandwidth_gbps,
+                bandwidth_source=self.bandwidth_source), ""
+        except WeightSetRefused as exc:
+            return None, str(exc)
+
+    @property
+    def fixed_cost_above_intercept(self) -> bool | None:
+        """`D > A`: the reference fixed cost stands above this ladder's own
+        fitted intercept. None when either is missing.
+
+        THE DIAGNOSTIC THAT EXPLAINS EVERY alpha_upper ABOVE 1. `alpha_upper`
+        is `B / (A + B - D)`, so `alpha_upper > 1` is exactly `B > A + B - D`,
+        which is exactly `D > A`. It is an inequality between two fitted
+        numbers, not a statement about traffic: on the 2026-09-10 H200 session
+        it held in four of bn_decomposition's six cells and in no others, and
+        those four are precisely the cells whose alpha_upper exceeded 1 and
+        drove the pooled alpha_a to -0.8143.
+
+        LABELLED, NOT REFUSED. Dropping a ladder in this state would delete
+        four of the six cells the BLOCK_N decomposition was fitted over and
+        leave two cells for two parameters. The ladder's milliseconds are
+        measurements either way; what is not a miss fraction is what
+        `alpha_upper` reads on them, and `weight_streams` is the statistic that
+        does not depend on either A or D at all.
+        """
+        if self.intercept is None:
+            return None
+        return self.overhead_ms > self.intercept
+
+    def w_note(self) -> str:
+        """One clause naming `w` and its rate, or naming why there is none.
+
+        ONE RENDERING, THREE CALL SITES. Gate 3's per-BLOCK_M list prints it on
+        both of its branches (alpha identified and not) and the line naming the
+        alpha gate 3 is scored on prints it a third time; the ladder table
+        prints the same fit's `weight_streams` as its own column. A w added at
+        one of those and not the rest is this repository's recurring defect
+        (eighteen instances) reappearing on the statistic written to fix an
+        estimator. This docstring said TWO until 2026-09-10, which is the same
+        defect in miniature: a count that stopped matching the file.
+
+        THE D > A CLAUSE IS STATED ON THE SIDE OF THE GUARD IT IS TRUE ON.
+        `alpha_upper > 1` is `D > A`, but only where `alpha_upper` exists at
+        all: `alpha_upper` returns None when `D >= A + B`, so a ladder with a
+        near-zero or negative fitted intercept and a large reference fixed cost
+        prints alpha-hi as "n/a" while `fixed_cost_above_intercept` is True.
+        Until 2026-09-10 this note said "alpha-hi is above 1" on exactly those
+        rows, describing a number the table did not print. The session produced
+        three negative intercepts, so the state is reachable in published data.
+        """
+        w, reason = self._weight_streams()
+        if w is None:
+            return f"w n/a: {reason}"
+        if not self.fixed_cost_above_intercept:
+            flag = ""
+        elif self.alpha_upper is None:
+            flag = ("; D > A, and D exceeds the whole level A + B, so alpha-hi "
+                    "is not defined at all")
+        else:
+            flag = "; D > A, so alpha-hi is above 1 by arithmetic"
+        return f"w {w.render()}{flag}"
 
     @property
     def compute_slope(self) -> float | None:
@@ -2317,7 +2508,12 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                margin: float = MEMORY_BRANCH_MARGIN,
                excluded_drifted: int = 0,
                kept_high_clock: int = 0,
-               kept_low_clock: int = 0) -> LadderFit:
+               kept_low_clock: int = 0,
+               *,
+               model: str | MoEConfig = "",
+               dtype: str = "",
+               bandwidth_gbps: float | None = None,
+               bandwidth_source: str = "") -> LadderFit:
     """Split the ladder into a memory branch and a compute branch.
 
     Membership comes from the reference compute branch when there is one, by the
@@ -2350,6 +2546,28 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
     carried onto the fit so the ladder row can say how many of its treads sat
     off the band and in which direction; neither changes an outcome, because a
     steady clock off the band is a tread.
+
+    `model`, `dtype`, `bandwidth_gbps` and `bandwidth_source` are KEYWORD-ONLY
+    and all four default to absent. Together they are the denominator of
+    `LadderFit.weight_streams`, the slope in units of one complete stream of
+    the layer's ROUTED expert weight set. Absent, that property is None, which
+    is the right answer for a caller that did not say which model's weights or
+    which measured rate: w scales 1:1 in the bandwidth, so a w against a
+    guessed card is a number with no meaning. None of the four touches the fit,
+    the branch membership or any outcome.
+
+    `model` TAKES THE CONFIG YOU ALREADY HOLD, or its name. It was called
+    `model_name` and typed `str` until 2026-09-10; a caller that has a
+    `MoEConfig` in scope should pass the object, so that the w and the rest of
+    its report divide by one geometry rather than by whatever `MODEL_CONFIGS`
+    returns for a string beside it.
+
+    THAT RENAME IS THE ONE NARROWING THIS SIGNATURE HAS TAKEN, and it is called
+    out because the paragraph above promises the opposite. `model_name=` is no
+    longer accepted. Nothing outside this file passed it: the four sibling arms
+    build their fits positionally as `SWEEP.fit_ladder(points, bm, ref[,
+    margin])` and get no w at all, which is the open item this rename is meant
+    to make easy for them to close.
     """
     overhead = ref.overhead_ms if ref else 0.0
     pts = [(n, ms) for n, ms in points if ms > 0]
@@ -2365,7 +2583,10 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                                 else "")),
                          excluded_drifted=excluded_drifted,
                          kept_high_clock=kept_high_clock,
-                         kept_low_clock=kept_low_clock)
+                         kept_low_clock=kept_low_clock,
+                         model=model, dtype=dtype,
+                         bandwidth_gbps=bandwidth_gbps,
+                         bandwidth_source=bandwidth_source)
     xs = [float(n) for n, _ in pts]
     ys = [ms for _, ms in pts]
     c_ref = ref.slope_for(block_m) if ref else None
@@ -2444,7 +2665,10 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                      excluded_drifted=excluded_drifted,
                      kept_high_clock=kept_high_clock,
                      kept_low_clock=kept_low_clock,
-                     branch_start=start if k else 0)
+                     branch_start=start if k else 0,
+                     model=model, dtype=dtype,
+                     bandwidth_gbps=bandwidth_gbps,
+                     bandwidth_source=bandwidth_source)
     if outcome:
         return made
     outcome, reason = _ladder_outcome(made, ref, excluded_drifted)
@@ -2453,7 +2677,10 @@ def fit_ladder(points, block_m: int, ref: ComputeReference | None = None,
                      excluded_drifted=excluded_drifted,
                      kept_high_clock=kept_high_clock,
                      kept_low_clock=kept_low_clock,
-                     branch_start=start if k else 0)
+                     branch_start=start if k else 0,
+                     model=model, dtype=dtype,
+                     bandwidth_gbps=bandwidth_gbps,
+                     bandwidth_source=bandwidth_source)
 
 
 def _ladder_outcome(fit: LadderFit, ref, excluded: int) -> tuple[str, str]:
@@ -2742,8 +2969,18 @@ class Gate:
     #: OBSERVED / DERIVED / IMPORTED, for the number in `measured`.
     basis: str = OBSERVED
     #: Machine-readable provenance, serialized beside the verdict. Anything a
-    #: reader would need to tell an observation from a restatement goes here,
-    #: because the printed detail lines do not survive into report.json.
+    #: reader would need to tell an observation from a restatement goes here.
+    #:
+    #: The reason given here used to be that the printed detail lines do not
+    #: survive into report.json. They have since 2026-09-02 (5a49285): `payload`
+    #: serializes `"detail": list(g.lines)` on every gate, and says so in a
+    #: comment beside it. The description outlived the behaviour, which is this
+    #: repository's recurring defect, and it is load-bearing in both directions
+    #: in this one file now that a test reads a w out of those detail lines.
+    #: The standing reason is the other half: `lines` is PROSE, written for a
+    #: reader, and a driver that had to regex a float out of a sentence would
+    #: break the first time the sentence was reworded. This dict is the shape a
+    #: program reads.
     provenance: dict = field(default_factory=dict)
 
     @property
@@ -3209,15 +3446,21 @@ def gate_3_alpha_discriminates(fits, preds_lo, preds_hi, cfg, *, lo: int,
         f"the retracted alpha={RETRACTED_ALPHA} would put that ratio at "
         + (f"{retracted_ratio:.3f}x" if retracted_ratio else "no crossing"),
         provenance_line]
+    # BOTH ESTIMATORS ON EVERY ROW HERE TOO. This is the second place in the
+    # file that prints a per-BLOCK_M alpha; the ladder table is the first. A
+    # statistic added to one of two print sites is this repository's recurring
+    # defect, so both take their w from `LadderFit.w_note` and there is one
+    # rendering of it.
     for bm, fit in sorted(fits.items()):
         if fit.alpha is not None:
             lines.append(f"  BLOCK_M={bm:3d}  alpha {fit.alpha:.3f} from "
                          f"{fit.memory_points} memory-bound treads, fit error "
-                         f"{fit.mean_rel_err:.2%}")
+                         f"{fit.mean_rel_err:.2%}; {fit.w_note()}")
         else:
             lines.append(f"  BLOCK_M={bm:3d}  alpha not identifiable "
                          f"({fit.memory_points} memory-bound tread(s)): "
-                         f"{fit.outcome_reason or fit.outcome}")
+                         f"{fit.outcome_reason or fit.outcome}; "
+                         f"{fit.w_note()}")
     # `measured` stays the bare fitted alpha, which is the correction the
     # retired ratio gate already received and what a reader compares across
     # reports. The INTERVAL and the DIRECTION go in `threshold`, so the one
@@ -3601,7 +3844,24 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     only wants the analysis) get a report whose provenance says "not supplied
     by caller" for those fields, which is the honest record rather than a
     fabricated one.
+
+    `cfg` AND `model_name` MUST NAME THE SAME MODEL, and since 2026-09-10 that
+    is checked rather than assumed. Every computed number in the report comes
+    off `cfg`; `model_name` is only the label the header and the payload's
+    "model" key carry. While the weight-stream denominator was resolved from
+    the STRING the two could disagree and produce a w against one geometry
+    inside a report built from another. The denominator now comes off `cfg`, so
+    the only thing a disagreement could still do is mislabel the report, and a
+    mislabelled report is the thing this repository spends its time undoing.
+    Every caller in the tree passes `cfg.name`, so this refuses nothing that
+    exists; it refuses the next caller that gets it wrong.
     """
+    if model_name and cfg.name and model_name != cfg.name:
+        raise ValueError(
+            f"model_name={model_name!r} but cfg.name={cfg.name!r}: the report's "
+            "label and the geometry every number in it is computed from would "
+            "name two different models. Pass the config you want measured and "
+            "its own name")
     if ridge_band is None:
         ridge_band = (ridge, ridge)
     ridge_band = (min(ridge_band), max(ridge_band))
@@ -3650,9 +3910,26 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # lost nothing.
     treads = {bm: ladder_treads(timed, bm) for bm in block_sizes}
     off_band = {bm: off_band_treads(timed, bm) for bm in block_sizes}
+    # `cfg`, `dtype` and the bandwidth go in here so that every fit carries the
+    # denominator of its own weight-stream slope. The rate is this run's own
+    # `bandwidth_gbps` with the caller's `bandwidth_source` string attached, so
+    # a w printed below says which measured rate it is a fraction of rather
+    # than leaving a reader to assume the card's datasheet.
+    #
+    # `cfg` AND NOT `model_name`, since 2026-09-10. This function takes both,
+    # and every other number in the report -- the roof, the predictions, the
+    # activation slope, the reference -- is computed from the `cfg` OBJECT.
+    # Handing the STRING down made the weight set be re-resolved through
+    # `MODEL_CONFIGS`, so a caller whose two arguments disagreed got a w
+    # divided by one geometry inside a report built from another, with nothing
+    # on the page to say so. It also made an unregistered or unverified name
+    # abort the whole report; a config that is already in hand cannot.
     fits = {bm: fit_ladder(pts, bm, ref, margin, excluded_drifted=dropped,
                            kept_low_clock=off_band[bm][0],
-                           kept_high_clock=off_band[bm][1])
+                           kept_high_clock=off_band[bm][1],
+                           model=cfg, dtype=dtype,
+                           bandwidth_gbps=bandwidth_gbps,
+                           bandwidth_source=bandwidth_source)
             for bm, (pts, dropped) in treads.items()}
     fits = {bm: f for bm, f in fits.items() if f.points}
     excluded_total = sum(dropped for _, dropped in treads.values())
@@ -3773,6 +4050,64 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     lines.append("  alpha here is B/(A+B), which is (alpha_b+phi)/(1+phi+delta) "
                  "and NOT a weight miss fraction: see moe/bench/ai_model.py "
                  "and LadderFit.alpha")
+    # THE SECOND ESTIMATOR, BESIDE THE FIRST. Every alpha column above divides
+    # B by a fitted LEVEL, which is the ladder extrapolated back to n=0; `w`
+    # divides the same B by a MEASURED time. Both are printed on every row, the
+    # way both roof fractions are, because the 100,144 published rows were
+    # scored on B/(A+B) and stay readable exactly as they are.
+    #
+    # THE RATE CONDITION IS ON THIS LINE, since 2026-09-10. `w` is
+    # `alpha_b + phi` in units of one weight read only AT THE RATE THE MEMORY
+    # BRANCH ACHIEVED, and this line divides by whatever `bandwidth_gbps` the
+    # run resolved -- on the H200 session the calibrated TRIAD figure, 4374.30
+    # GB/s, while the same card's committed `read_stream` pattern is 4612.25,
+    # 5.4% faster, and a weight stream is a pure read. Divided by the faster
+    # rate, tile_cap's BM=16 ladder reads 1.1085 where this line prints 1.0514,
+    # so calling the printed number an upper bound on alpha_b can be FALSE by
+    # more than the gap it is bounding. `weights.py`, `ai_model.py` and
+    # `LadderFit.weight_streams` all carried the clause; the one place a reader
+    # actually sees did not, which is the recurring defect.
+    #
+    # ROUTED ONLY, AND SAID SO. `--model` accepts qwen2-57b-a14b and the three
+    # deepseek entries, whose layers also carry a shared expert.
+    # `weights.layer_weight_bytes` REFUSES those models outright rather than
+    # return the routed set under a whole-layer name; this line printed the
+    # routed set under the unqualified name "the expert weight set", the same
+    # distinction with the opposite care, two files apart.
+    try:
+        stream = weight_stream_ms(cfg, dtype, bandwidth_gbps)
+        gb = routed_expert_weight_bytes(cfg, dtype) / 1e9
+        denominator = (f"{gb:.4f} GB in {stream:.4f} ms at "
+                       f"{bandwidth_gbps:.1f} GB/s "
+                       f"({bandwidth_source or 'rate NOT STATED by the caller'})")
+    except WeightSetRefused as exc:
+        # The same rule the ladder rows follow: a weight set this repository
+        # will not guess blanks the w column, it does not kill the report.
+        denominator = f"NOT AVAILABLE: {exc}"
+    lines.append(
+        f"  w is B divided by one full stream of the ROUTED expert weight set "
+        f"(the set the fused grouped GEMM streams; a shared expert, where the "
+        f"model has one, is a different kernel and is not in this count): "
+        f"{denominator}. No fitted level, no intercept, no fixed cost. It "
+        "scales 1:1 in that rate, and under the three-term model it is "
+        "alpha_b + phi AT THIS RATE, so it bounds the weight miss fraction "
+        "from above only if the memory branch achieved this bandwidth, which "
+        "this run did not measure. A weight stream is a pure read and the rate "
+        "above is whichever pattern the source names, so read the card's own "
+        "bandwidth_patterns before treating any w below as a bound: on the "
+        "H200 of 2026-09-10 read_stream is 5.4% above the triad figure these "
+        "reports divide by, and every w rises by that much against it.")
+    lines.append(
+        "  D>A marks a ladder whose reference fixed cost stands above its own "
+        "fitted intercept. alpha-hi = B/(A+B-D) exceeds 1 exactly when D>A and "
+        "the column has a value at all; where D also exceeds the whole level "
+        "A+B the alpha-hi column reads n/a, because B/(A+B-D) is then a "
+        "division by a level that is zero or negative and is not reported. "
+        "Either way those "
+        "rows are arithmetic about an extrapolation and not a miss fraction. "
+        "Such a ladder is LABELLED and kept: refusing it would have deleted "
+        "four of bn_decomposition's six cells on 2026-09-10. w does not depend "
+        "on A or D at all.")
     if excluded_total or excluded_from_gates:
         lines.append(
             f"  {excluded_from_gates} cell(s) excluded for a DRIFTING clock: "
@@ -3818,7 +4153,7 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                      "of memory-bound treads. Withdraw this arm; do not table "
                      "it beside arms whose reference qualified.")
     lines.append("  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  "
-                 "alpha-hi  B ms/tile  C ms/tile  fit err")
+                 "alpha-hi  w streams/tile  D>A  B ms/tile  C ms/tile  fit err")
     alpha_hat, alpha_source, alpha_source_bm = None, "", None
     alpha_corrected: dict[int, float] = {}
     for bm in sorted(fits):
@@ -3829,11 +4164,16 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                     / f.load_ms)
             alpha_corrected[bm] = corr
         hi = f.alpha_upper
+        w = f.weight_streams
         lines.append(
             f"  {bm:7d}  {len(f.points):6d}  {f.memory_points:12d}  "
             + (f"{f.alpha:5.3f}" if f.alpha is not None else "  n/a")
             + "   " + (f"{corr:13.3f}" if corr is not None else "          n/a")
             + "  " + (f"{hi:8.3f}" if hi is not None else "     n/a")
+            + "  " + (f"{w.streams:13.4f}" if w is not None else "          n/a")
+            + "  " + ("yes" if f.fixed_cost_above_intercept
+                      else ("  ." if f.fixed_cost_above_intercept is False
+                            else "n/a"))
             + "  " + (f"{f.slope_memory:9.4f}" if f.slope_memory is not None else "      n/a")
             + "  " + (f"{f.slope_compute:9.4f}" if f.slope_compute is not None else "      n/a")
             + f"  {f.mean_rel_err:6.2%}"
@@ -3867,6 +4207,13 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                 if alpha_source_bm is not None else None)
     if interval is not None:
         lines.append(f"  alpha scored by gate 3: {interval.render()}")
+        # THE THIRD PLACE THIS FILE PRINTS THE SOURCE LADDER'S alpha, and the
+        # gate is scored on it. `gate.measured` itself is left alone: it is the
+        # greppable RESULT token that 22 published reports carry and that
+        # `exit_codes` parses, so w goes on the line beside it rather than
+        # inside it.
+        lines.append(f"  the same ladder in weight-stream units: "
+                     f"{fits[alpha_source_bm].w_note()}")
 
     consistency = _compute_slope_consistency(fits)
     if consistency:
@@ -3962,6 +4309,17 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         # comparison is between two cards.
         "card": card,
         "alpha_measured": alpha_hat, "alpha_source": alpha_source,
+        # The same ladder's slope in weight-stream units, beside the alpha the
+        # gates are scored on, with the rate named. Null when no ladder was
+        # eligible to source an alpha, which is the same condition that leaves
+        # `alpha_measured` null.
+        "weight_streams_measured": (
+            None if alpha_source_bm is None
+            or fits[alpha_source_bm].weight_streams is None
+            else fits[alpha_source_bm].weight_streams.streams),
+        "weight_streams_bandwidth_gbps": bandwidth_gbps,
+        "weight_streams_bandwidth_source": (
+            bandwidth_source or "NOT STATED by the caller"),
         # "NEVER CROSSES AT THIS ALPHA" IS AN EXPLICIT OUTCOME HERE. `crosses`
         # is a bool and never absent, `crossing_rows` is null when there is no
         # crossing, and `no_crossing_reason` says in words that the cap sits at
@@ -3988,6 +4346,36 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              "alpha": f.alpha,
                              "alpha_corrected": alpha_corrected.get(bm),
                              "alpha_upper": f.alpha_upper,
+                             # THE SECOND ESTIMATOR, PERSISTED BESIDE THE
+                             # FIRST, never in place of it: every published row
+                             # was scored on B/(A+B) and stays readable. `w` is
+                             # the same slope over a MEASURED stream time
+                             # rather than over a fitted level, and the four
+                             # fields beside it are the denominator, so a
+                             # reader of the file alone can check the division
+                             # and can see which rate it is a fraction of.
+                             "weight_streams_per_tile": (
+                                 None if f.weight_streams is None
+                                 else f.weight_streams.streams),
+                             "weight_stream_ms": (
+                                 None if f.weight_streams is None
+                                 else f.weight_streams.stream_ms),
+                             "weight_set_bytes": (
+                                 None if f.weight_streams is None
+                                 else f.weight_streams.weight_bytes),
+                             "weight_stream_bandwidth_gbps": f.bandwidth_gbps,
+                             "weight_stream_bandwidth_source": (
+                                 f.bandwidth_source),
+                             # THE DIAGNOSTIC. `alpha_upper > 1` is exactly
+                             # `D > A`, and this says which rows are in that
+                             # state instead of leaving a reader to rediscover
+                             # it from an out-of-range alpha_upper. Labelled,
+                             # not refused: the four bn_decomposition cells in
+                             # this state on 2026-09-10 are four of its six.
+                             "fixed_cost_above_intercept": (
+                                 f.fixed_cost_above_intercept),
+                             "intercept": f.intercept,
+                             "overhead_ms": f.overhead_ms,
                              "slope_memory": f.slope_memory,
                              "slope_compute": f.slope_compute,
                              "slope_compute_ref": f.slope_compute_ref,
