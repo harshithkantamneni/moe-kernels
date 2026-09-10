@@ -274,16 +274,26 @@ sweep manufactures a plateau. Every cell therefore carries the SM clock sampled
 UNDER LOAD by `moe.bench.timing.time_kernel`, and the two verdicts that clock
 supports: LEVEL (the loaded clock is inside the band 95% to 105% of the clock
 the ROOF was measured at, and `clock_level_side` says which way it left it) and
-DRIFT (the first and last under-load samples agree within 5%). A cell that
-DRIFTED or that failed LEVEL on the LOW side is EXCLUDED from every gate and
-printed with an x on the plot. A cell that failed LEVEL on the HIGH side is
-KEPT: on the H200 that is the normal state of a memory-shaped cell, 1980 MHz
-under memory load against the 1515 MHz bf16 GEMM the roof was measured at, its
-milliseconds are a measurement, and what the fixed roof does not describe is
-its FRACTION of that roof, so every point also carries the fraction of the roof
-at its own clock (`roofline.roof_at_clock`) and V3 is scored on that. The
-exclusions are counted, and a run that excluded so much that the doubling chain
-no longer spans the required distance says so instead of scoring.
+DRIFT (the first and last under-load samples agree within 5%). SINCE 2026-09-09
+A CELL IS EXCLUDED IFF IT DRIFTED: the clock MOVED while the cell was timed, so
+its median is a blend of two operating points and the time belongs to neither,
+which no rescaling repairs. An excluded cell is printed with an x on the plot.
+NEITHER LEVEL SIDE EXCLUDES ANYTHING. On a 700 W-capped card the under-load
+clock is set PER TILE by the kernel's own power draw: the 2026-09-09 H200
+session holds BM=128/BN=64 at a median 1395 MHz and BM=256 at 1650 against a
+1485 MHz calibration GEMM, and a memory-shaped cell sits at 1950-1980. The old
+rule failed LEVEL-LOW out of every gate, and on this card that removed every
+multi-tile BLOCK_M=128 cell of this arm -- the study's own subject, five of
+them low by 0.75 MHz, half of one NVML step. Both sides are now KEPT and their
+side is RECORDED on the row and counted, and EVERY CLAIM GATE READS THE FIXED
+ROOF: the calibration GEMM and every cell here ran under the same power cap, so
+delivered throughput against one roof is the comparison that cap makes fair.
+The fraction of the roof at a cell's OWN clock (`roofline.roof_at_clock`) is
+carried on every point and PRINTED BESIDE the fixed one, on point lines and on
+gate lines, as the ISSUE EFFICIENCY -- what the tile did with the clock it got
+-- and it is never a gate input. The drift exclusions are counted, and a run
+that excluded so much that the doubling chain no longer spans the required
+distance says so instead of scoring.
 
 WHY UNDER LOAD, AND WHY AGAINST THE ROOF'S CLOCK. Until 2026-09-02 this file
 sampled the clock with `ClockState.sample()` immediately after a synchronise --
@@ -553,25 +563,42 @@ THROTTLE_DRIFT_PCT = 5.0
 #: excludes nothing, which is exactly the session whose fractions are wrong. The
 #: verdict is the instrument's `clock_level_ok`, and since 2026-09-03 it is
 #: TWO-SIDED: the band has a ceiling too, below, and the instrument's
-#: `clock_level_side` says which edge a failing cell crossed. Only the floor
-#: excludes.
+#: `clock_level_side` says which edge a failing cell crossed.
+#:
+#: NEITHER EDGE EXCLUDES SINCE 2026-09-09. This is a RECORDING band: it says
+#: which way a cell's fixed-roof fraction is off and by how much, and DRIFT is
+#: the only exclusion. The floor excluded until that date, and on the H200 what
+#: it excluded was every multi-tile BLOCK_M=128 cell of this arm at 1380-1410
+#: MHz -- the study's own subject -- because on a 700 W-capped card the
+#: under-load clock is set per tile by the kernel's own power draw and a dense
+#: BM=128/BN=64 tile holds 1395 MHz against a 1485 MHz calibration GEMM. Five
+#: of those cells were low by 0.75 MHz, half of one 15 MHz NVML step.
 CLOCK_FLOOR_FRACTION = 0.95
 
 #: How far ABOVE the roof's clock a cell may sit before its fixed-roof fraction
 #: is flagged as inflated. Mirrored from `moe.bench.timing.LEVEL_HIGH_FRACTION`
 #: for the same reason as the floor. A cell over this edge is `Timing.boosted`:
-#: it is KEPT in every gate, because its time is a measurement, and it is
-#: scored against the roof at its own clock (`roofline.roof_at_clock`), because
-#: the fixed roof is not the roof it ran under. On the H200 a memory-shaped
-#: cell at 1980 MHz against a 1515 MHz reference is 1.31x over this edge and
+#: it is KEPT in every gate, because its time is a measurement, and its
+#: fraction of the roof at its own clock (`roofline.roof_at_clock`) is printed
+#: beside the fixed one as the issue efficiency. THE GATES STILL READ THE FIXED
+#: ROOF: the calibration GEMM and every cell here ran under the same 700 W cap,
+#: so delivered throughput against one roof is the comparison that cap makes
+#: fair, and the rescaled column answers the other question rather than
+#: replacing the first. On the H200 a memory-shaped cell at 1980 MHz against
+#: the committed calibration's 1485 MHz GEMM clock is 1.33x over this edge and
 #: is the NORMAL state; a file that mirrored only the floor could not say so.
 CLOCK_CEILING_FRACTION = 1.05
 
-#: Fraction of this session's cells that may throttle before the session itself
-#: is unreadable. A single sagging cell is EXCLUDED and the run goes on -- that
-#: is what the exclusion machinery is for, and killing a 39-cell run over one of
-#: them would be a gate that fails on weather. A tenth of them sagging is a box
-#: whose surviving medians are not trustworthy either, and that is a refusal.
+#: Fraction of this session's cells whose clock may MOVE mid-measurement before
+#: the session itself is unreadable. A single drifted cell is EXCLUDED and the
+#: run goes on -- that is what the exclusion machinery is for, and killing a
+#: 39-cell run over one of them would be a gate that fails on weather. A tenth
+#: of them drifting is not weather: it is a warmup that starts timing before
+#: the governor has settled, so the surviving medians were taken by the same
+#: loop and are not trustworthy either. That is a refusal, and it points at the
+#: instrument. UNCHANGED AT 0.10 on 2026-09-09 when the LEVEL sides came out of
+#: the share: the 2026-09-09 arm sits at 4 of 39 = 10.3% and still FAILS here,
+#: which is the honest reading of a pre-v4 instrument and not a bar to move.
 THROTTLED_CELL_FRACTION = 0.10
 
 #: The alphas this study has actually fitted with GROUP_SIZE_M=1, as a band.
@@ -616,12 +643,20 @@ UNKNOWN_CARD_SLUG = "nocard"
 #: Used ONLY by --dry-run and --self-test, where nothing is measured and so
 #: nothing can be mislabelled. Every one of these is stamped HYPOTHESIS in the
 #: report and fails gate V0. A measured run REFUSES instead.
+#:
+#: RESTATED 2026-09-09. These were the 2026-09-02 calibration -- 712.259
+#: TFLOP/s, ridge 162.809, GEMM clock 1515 -- and ab61e55 recalibrated the same
+#: card to 668.484 / 152.812 / 1485 without moving them, so the fallback that
+#: fires when the yaml is absent was a different card's ruler labelled as this
+#: one's. They are now the committed yaml's own figures, and
+#: `tests/test_bm128_roofline.py` reads them off the file so the next
+#: recalibration cannot leave them behind again.
 HYPOTHESIS_HARDWARE_STEM = "measured_nvidia_h200"
-HYPOTHESIS_ROOF_TFLOPS = 712.259
-HYPOTHESIS_RIDGE = 162.809
-HYPOTHESIS_BANDWIDTH_GBPS = 4374.763
-HYPOTHESIS_ROOF_CLOCK_MHZ = 1515
-HYPOTHESIS_NOTE = ("HYPOTHESIS: the 2026-09-02 H200 calibration committed in "
+HYPOTHESIS_ROOF_TFLOPS = 668.4838893839521
+HYPOTHESIS_RIDGE = 152.81206502298838
+HYPOTHESIS_BANDWIDTH_GBPS = 4374.549151491332
+HYPOTHESIS_ROOF_CLOCK_MHZ = 1485
+HYPOTHESIS_NOTE = ("HYPOTHESIS: the 2026-09-09 H200 calibration committed in "
                    "this repo. NO DEVICE IS ATTACHED, so this is a costing and "
                    "not a ceiling; gate V0 refuses to let it stand in a verdict")
 
@@ -1250,10 +1285,12 @@ class Timing:
     sample and a replayed CSV all produce None, and a filter that read None as
     True would re-admit exactly the rows these columns exist to keep out.
 
-    AND A FAILED LEVEL HAS A SIDE. `clock_level_side` is "low", "high" or ""
-    (passed, or not determined), the instrument's own word. `cold` is the LOW
-    side and is the exclusion; `boosted` is the HIGH side and is kept, with the
-    row's fixed-roof fraction flagged as not comparable. `SWEEP.check_level_side`
+    AND A FAILED LEVEL HAS A SIDE, WHICH IS RECORDED AND EXCLUDES NOTHING.
+    `clock_level_side` is "low", "high" or "" (passed, or not determined), the
+    instrument's own word. `cold` is the LOW side and `boosted` the HIGH side;
+    since 2026-09-09 both are KEPT, with the row's fixed-roof fraction flagged
+    as off by the clock ratio in the named direction, and `throttled` (DRIFT)
+    is the only exclusion. `SWEEP.check_level_side`
     refuses, at construction, a side on a verdict that did not fail AND a
     failed verdict with no side: the instrument derives the verdict from the
     side, so the second shape is a caller that dropped the side, and reading
@@ -1276,6 +1313,20 @@ class Timing:
     #: First and last under-load samples, which is what DRIFT is computed over.
     sm_clock_start_mhz: float | None = None
     sm_clock_end_mhz: float | None = None
+    #: EVERY under-load sample, space separated, or "" when the instrument
+    #: reported none. The first and last decide DRIFT and this is the shape
+    #: they came from: without it a drifted row cannot say whether the clock
+    #: ramped once and settled (the governor after a workload change, which the
+    #: warmup can absorb) or oscillated throughout (which it cannot). Written
+    #: as one column rather than parsed into a list, because a CSV cell holds
+    #: text and a reader that has to trust a parser is a reader who cannot
+    #: check. Empty on every row written before the instrument kept the list.
+    clock_samples_mhz: str = ""
+    #: Milliseconds the warmup spent WAITING FOR THE CLOCK TO SETTLE beyond
+    #: `warmup_ms`, and how many extra warm calls that cost. None on a basis
+    #: before `SETTLED_CLOCK_BASIS_VERSION`, which does not wait.
+    settle_ms: float | None = None
+    settle_calls: int | None = None
     #: `timing.clock_flags`: loaded clock inside [CLOCK_FLOOR_FRACTION,
     #: CLOCK_CEILING_FRACTION] of the clock the ROOF was measured at, and
     #: first-to-last agreement within THROTTLE_DRIFT_PCT.
@@ -1323,23 +1374,40 @@ class Timing:
     @property
     def cold(self) -> bool:
         """Did this cell run BELOW the band around the clock the ROOF was
-        measured at: LEVEL failed on the LOW side. This is the exclusion. Until
-        2026-09-08 it was `clock_level_ok is False`, which after the flag went
-        two-sided also caught every boosted cell. The side alone decides, since
-        `SWEEP.check_level_side` refused at construction every row on which the
-        side and the verdict could disagree."""
+        measured at: LEVEL failed on the LOW side.
+
+        KEPT since 2026-09-09, and this is the rule change that half this
+        file's 2026-09-09 session turned on. Until that date `cold` was the
+        exclusion, and on the H200 the 15 cells it excluded were every
+        multi-tile BLOCK_M=128 subject cell of the arm, at 1380-1410 MHz
+        against a 1410.75 MHz floor -- five of them low by 0.75 MHz, half of
+        one NVML step. Across 750 cells of that session the under-load clock is
+        an outcome of the CELL, set per tile by the kernel's own power draw
+        under the 700 W cap: BM=128/BN=64 holds a median 1395 MHz, BM=256
+        boosts to 1650, memory-shaped cells to 1950-1980, and the 8192^3
+        calibration GEMM sits at 1485 MHz at 691 W, near the LOW end of what
+        dense tensor work does on this card. So LEVEL-LOW was a rule against a
+        TILE, and under it this arm's subject could not be measured on this
+        card on any rerun. The side stays on the row, is counted by V3, and
+        says which way `roof_fraction` is off; `roof_fraction_at_clock` is the
+        rescaled number printed beside it."""
         return self.clock_level_side == SWEEP.LEVEL_LOW
 
     @property
     def boosted(self) -> bool:
         """Did this cell run ABOVE the band: LEVEL failed on the HIGH side.
         Kept; its fixed-roof fraction is inflated by the clock ratio and
-        `Point.roof_fraction_at_clock` is the comparable number."""
+        `Point.roof_fraction_at_clock` is the rescaled number printed beside
+        it."""
         return self.clock_level_side == SWEEP.LEVEL_HIGH
 
     @property
     def excluded(self) -> bool:
-        return self.throttled or self.cold
+        """The ONE clock state no rescaling repairs: the clock MOVED across
+        this cell's own trials, so its median is a blend of two operating
+        points and the time belongs to neither. A steady clock on either side
+        of the band is a measurement at a known clock and is kept."""
+        return self.throttled
 
 
 TIMING_FIELDS = list(Timing.__dataclass_fields__)
@@ -1356,6 +1424,23 @@ PROVENANCE_COLUMNS = sorted(PV.Provenance().as_columns())
 def _opt_float(text) -> float | None:
     """A CSV cell back to a float, or None for the empty one None was written as."""
     return None if text in (None, "", "None") else float(text)
+
+
+def _samples_text(t) -> str:
+    """`KernelTiming`'s under-load sample list as one CSV cell, or "".
+
+    THROUGH getattr, on purpose. `moe.bench.timing.time_kernel` keeps only the
+    COUNT of usable samples today and gains the list itself with the
+    settle-on-clock warmup; this writer must persist it the moment it exists
+    and must keep running until then, because every committed row of the
+    2026-09-09 session was written by the basis that has no list. A missing
+    list is written blank, which reads back as "not reported" and never as an
+    empty measurement.
+    """
+    samples = getattr(t, "clock_samples_mhz", None)
+    if not samples:
+        return ""
+    return " ".join(f"{float(v):.0f}" for v in samples)
 
 
 def _opt_bool(text) -> bool | None:
@@ -1409,6 +1494,10 @@ def read_timings(path: Path) -> tuple[set[tuple[int, int, int]], list[Timing]]:
                 sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
                 sm_clock_start_mhz=_opt_float(row.get("sm_clock_start_mhz")),
                 sm_clock_end_mhz=_opt_float(row.get("sm_clock_end_mhz")),
+                clock_samples_mhz=(row.get("clock_samples_mhz") or "").strip(),
+                settle_ms=_opt_float(row.get("settle_ms")),
+                settle_calls=(None if row.get("settle_calls") in (None, "", "None")
+                              else int(float(row["settle_calls"]))),
                 clock_level_ok=_opt_bool(row.get("clock_level_ok")),
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
                 # Blank on every row written before the column existed, and
@@ -1465,6 +1554,11 @@ class Point:
     #: Repeats that failed LEVEL on the HIGH side and were KEPT. Counted so the
     #: table can say a point stands on boosted repeats.
     boosted_reps: int = 0
+    #: Repeats that failed LEVEL on the LOW side and were KEPT since
+    #: 2026-09-09. Counted for the same reason as `boosted_reps`: on a
+    #: power-capped card a steady-low clock is a dense tile's own operating
+    #: point, so it is kept, and what it moves is the fixed-roof fraction.
+    cold_reps: int = 0
     #: `useful_tflops` over the roof AT THIS POINT'S OWN CLOCK
     #: (`roofline.roof_at_clock`), the number a boosted cell is comparable on.
     #: None when the point carries no clock or the roof carries none; never the
@@ -1474,6 +1568,51 @@ class Point:
     @property
     def aligned(self) -> bool:
         return self.rows_per_expert % self.block_m == 0
+
+
+#: The first `moe.bench.timing.TIMING_BASIS` version whose warmup keeps warming
+#: until two consecutive NVML clock reads agree within one 15 MHz step, instead
+#: of delivering a fixed duration of load and then starting the poller.
+#:
+#: WHY A NUMBER AND NOT A STRING. The basis is written per ROW, so a resumed
+#: cells.csv can hold rows from two instruments, and this gate has to be able to
+#: say which side of the fix each drifted cell came from. Matching the exact v4
+#: string would make this file break the moment the instrument renames anything
+#: else in the basis; the trailing `/vN` is the part that carries the contract.
+SETTLED_CLOCK_BASIS_VERSION = 4
+
+
+def instrument_settles_clock(instrument: str) -> bool | None:
+    """Did the loop that wrote this row wait for the clock to settle.
+
+    None when the row names no instrument or names one with no version, which
+    is not a yes: a planted row and a pre-2026-09-02 row both land there and
+    neither settled anything.
+    """
+    tail = (instrument or "").rsplit("/", 1)[-1]
+    if not tail.startswith("v") or not tail[1:].isdigit():
+        return None
+    return int(tail[1:]) >= SETTLED_CLOCK_BASIS_VERSION
+
+
+def per_tile_clocks(timings: list[Timing]) -> dict[int, int]:
+    """Median under-load clock per BLOCK_M, which is the clock that exists.
+
+    THE NUMBER THAT REPLACED `modal_clock` IN THE GATE TEXT. On the 2026-09-09
+    H200 session `modal_clock` returned 1590 MHz: the median of a BIMODAL set,
+    18 subject cells at 1380-1425 and 21 control and small cells at 1575-1785,
+    and the cell sitting at that median is a single BM=128 r=64 repeat between
+    the two modes. "+7.1% against the roof's clock" described no operating
+    point the card ever ran at. Per tile the same cells read 1410 (BM=128) and
+    1665 (BM=256), which are two states the card really held.
+    """
+    out: dict[int, int] = {}
+    for bm in sorted({t.block_m for t in timings
+                      if t.status == "ok" and t.clock_seen}):
+        seen = [t.sm_clock_load_mhz for t in timings
+                if t.block_m == bm and t.status == "ok" and t.clock_seen]
+        out[bm] = int(statistics.median(seen))
+    return out
 
 
 def modal_clock(timings: list[Timing]) -> int:
@@ -1490,6 +1629,13 @@ def modal_clock(timings: list[Timing]) -> int:
     landed in.
 
     0 when nothing was sampled, which V3 reads as UNKNOWN rather than as a pass.
+
+    NO LONGER THE NUMBER V3 PRINTS. It is a session-wide median, and when a
+    session runs two tiles at two operating points -- which on a power-capped
+    card is the normal case, not the exception -- the median is a value neither
+    tile held. `per_tile_clocks` is what the gate prints; this stays on the
+    payload as `clock_ref_mhz` because it is what `build_points` carries onto
+    every point and what earlier reports quoted.
     """
     seen = [t.sm_clock_load_mhz for t in timings
             if t.status == "ok" and t.clock_seen]
@@ -1509,17 +1655,18 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
     the point, because a point standing on one of five repeats is not the same
     measurement as one standing on five.
 
-    THE EXCLUSION RULE IS THE INSTRUMENT'S, not a comparison recomputed here:
-    `clock_drift_ok is False` (the clock moved across the cell's own trials) or
-    `Timing.cold` (LEVEL failed on the LOW side: the cell ran below the band
-    around the clock the ROOF was measured at). `Timing.boosted` (the HIGH
-    side) is NOT excluded: the repeat is kept, counted on the point as
+    THE EXCLUSION RULE IS THE INSTRUMENT'S, not a comparison recomputed here,
+    and since 2026-09-09 it is ONE flag: `clock_drift_ok is False`, the clock
+    moved across the cell's own trials, so its median is a blend of two
+    operating points. NEITHER LEVEL SIDE EXCLUDES. `Timing.cold` and
+    `Timing.boosted` are recorded, counted on the point as `cold_reps` and
     `boosted_reps`, and the point carries `roof_fraction_at_clock`, its
     throughput over the roof rescaled to the clock it ran at, which is the
-    fraction a boosted cell is comparable on. `clock_ref` is the session's own
-    under-load modal clock; it is carried onto the point and printed, and it
-    is deliberately NOT the reference the exclusion uses, because a session
-    that ran uniformly cold has a cold modal clock and would exclude nothing.
+    issue efficiency printed beside the fixed-roof fraction. `clock_ref` is the
+    session's own under-load modal clock; it is carried onto the point and
+    printed, and on this arm it is the median of a BIMODAL set (BM=128 at 1410,
+    BM=256 at 1665) and names no operating point, which is why V3 prints per
+    tile.
     """
     by: dict[int, list[Timing]] = {}
     for t in timings:
@@ -1554,12 +1701,10 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
         why = ""
         if not good:
             n_drift = sum(1 for t in group if t.throttled)
-            n_cold = sum(1 for t in group if t.cold)
             why = (f"every one of {len(group)} repeats was excluded: "
                    f"{n_drift} drifted more than {THROTTLE_DRIFT_PCT:.0f}% "
-                   f"across their own trials, {n_cold} ran below "
-                   f"{CLOCK_FLOOR_FRACTION:.0%} of the clock the roof was "
-                   "measured at")
+                   "across their own trials, so each median blends two "
+                   "operating points")
         # THE ROOF AT THIS POINT'S OWN CLOCK. `roof_at_clock` refuses (None)
         # without a clock on the point or on the roof; the fixed fraction is
         # never written into this column in its place.
@@ -1580,6 +1725,7 @@ def build_points(timings: list[Timing], cfg, block_m: int, roof: Roof,
             clock_drift_ok=state.clock_drift_ok,
             clock_level_side=state.clock_level_side,
             boosted_reps=sum(1 for t in used if t.boosted),
+            cold_reps=sum(1 for t in used if t.cold),
             roof_fraction_at_clock=(cell.useful_tflops / own_roof
                                     if own_roof else None)))
     return out
@@ -1589,6 +1735,29 @@ def multi_tile(points: list[Point]) -> list[Point]:
     """Retained, exactly-full, more than one tile per expert. The gated set."""
     return [p for p in points
             if p.retained and p.aligned and p.regime == "multi-tile"]
+
+
+def own_clock_text(p: Point) -> str:
+    """This point's fraction of the roof AT ITS OWN CLOCK, as a printable.
+
+    THE COLUMN THAT GOES BESIDE EVERY GATED FRACTION, never instead of it. The
+    CLAIM gates read `Point.roof_fraction`, the FIXED roof, because the
+    calibration GEMM and every cell here ran under the same 700 W cap and the
+    delivered-throughput comparison is the fair one: a tile that spends its
+    power budget on a clock it cannot hold has delivered less, and that is the
+    result. The rescaled fraction is the ISSUE EFFICIENCY -- what the tile did
+    with the clock it actually got -- and it is a different question, so it is
+    printed and never scored.
+
+    NEITHER NUMBER MAY STAND ALONE ON THIS ARM. On the 2026-09-09 H200 session
+    the control ran at 1605-1725 MHz and the subject at 1380-1425, so the two
+    fractions disagree by 10-12% in OPPOSITE directions and the sign of C3
+    flips between them: +0.053 of the roof fixed, -0.034 at own clock. A report
+    printing one of them without the other lets a reader take a gate's verdict
+    for a fact about the tile.
+    """
+    return ("own clock n/a" if p.roof_fraction_at_clock is None
+            else f"own clock {p.roof_fraction_at_clock:.3f}")
 
 
 # --------------------------------------------------------------------------
@@ -1650,7 +1819,7 @@ def plateau_of(points: list[Point], *, doublings: float,
     A suffix rather than the whole curve, because the question is whether it has
     flattened by the largest batch measured, not whether it was ever flat. The
     span is measured in log2 of the TILE COUNT and not in grid positions, so a
-    point excluded for a sagging clock shortens the chain honestly instead of
+    point excluded for a DRIFTING clock shortens the chain honestly instead of
     letting two non-adjacent points pass as one doubling.
 
     RESOLUTION IS PART OF THE ANSWER. The gain is a ratio of two per-tread
@@ -1758,7 +1927,7 @@ def ascii_plot(series: list[Series], roof: Roof, *, height: int = 18,
     out.append(("    T   " + "".join(f"{t:^{col}d}" for t in cols)).rstrip())
     out.append("        " + "  ".join(
         f"{s.marker} BLOCK_M={s.points[0].block_m}" for s in series if s.points)
-        + "   x excluded (drifted or LEVEL-low)   * both")
+        + "   x excluded (clock DRIFTED mid-cell)   * both")
     return out
 
 
@@ -1766,25 +1935,32 @@ def point_table(series: list[Series]) -> list[str]:
     """The numbers behind the picture, because 18 rows of characters lose them."""
     out = [f"{'BM':>4s} {'T':>7s} {'rows':>6s} {'n':>4s} {'regime':>10s} "
            f"{'tile_eff':>8s} {'ms':>10s} {'TFLOP/s':>9s} {'of roof':>8s} "
-           f"{'MHz':>5s} {'reps':>4s}  note".rstrip()]
+           f"{'@own clk':>8s} {'MHz':>5s} {'reps':>4s}  note".rstrip(),
+           "        of roof = the FIXED roof, which is what every CLAIM gate "
+           "reads; @own clk = the same throughput over the roof at this "
+           "point's own clock, the issue efficiency, scored by nothing"]
     for s in series:
         for p in s.points:
             note = p.excluded_why or ("" if p.retained else "excluded")
             if p.throttled_reps and p.retained:
-                note = f"{p.throttled_reps} repeat(s) excluded"
-            if p.boosted_reps and p.retained:
-                # Kept, and said: a boosted point's `of roof` column is the
-                # fixed-roof fraction and is HIGH by the clock ratio.
-                at = (f"{p.roof_fraction_at_clock:.3f}"
-                      if p.roof_fraction_at_clock is not None else "n/a")
-                note = (note + "; " if note else "") + (
-                    f"{p.boosted_reps} repeat(s) LEVEL-high, kept; of roof "
-                    f"at own clock {at}")
+                note = f"{p.throttled_reps} repeat(s) excluded for DRIFT"
+            # Kept, and said, on BOTH sides: an off-band point's `of roof`
+            # column is the fixed-roof fraction and is off by the clock ratio
+            # in the named direction. The rescaled number is its own column, so
+            # it is on every row and not only on the ones with a note.
+            for n, side, way in ((p.boosted_reps, "high", "over"),
+                                 (p.cold_reps, "low", "under")):
+                if n and p.retained:
+                    note = (note + "; " if note else "") + (
+                        f"{n} repeat(s) LEVEL-{side}, kept; fixed-roof "
+                        f"fraction {way}stated by the clock ratio")
+            at = ("       -" if p.roof_fraction_at_clock is None
+                  else f"{p.roof_fraction_at_clock:8.3f}")
             out.append(
                 f"{p.block_m:4d} {p.tokens:7d} {p.rows_per_expert:6d} "
                 f"{p.tiles:4d} {p.regime:>10s} {p.tile_eff:8.3f} "
                 f"{p.ms_p50:10.4f} {p.useful_tflops:9.1f} "
-                f"{p.roof_fraction:8.3f} {p.sm_clock_mhz:5d} "
+                f"{p.roof_fraction:8.3f} {at} {p.sm_clock_mhz:5d} "
                 f"{p.reps:4d}  {note}".rstrip())
     return out
 
@@ -1966,8 +2142,8 @@ def gate_v2_non_vacuity(subject: list[Point], control: list[Point] | None,
          "which is where the second M-tile per expert appears."])
 
 
-def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
-                   clock_ref: int) -> Gate:
+def gate_v3_clocks(timings: list[Timing], points: list[Point],
+                   roof: Roof) -> Gate:
     """Was this measured at one operating point, and is every retained point
     scored against the roof at the clock it ran.
 
@@ -1976,14 +2152,18 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
     clock is wrong AND looks exactly like the flattening this script is trying
     to detect.
 
-    EVERY NUMBER HERE IS SAMPLED UNDER LOAD. `clock_ref` is the median of the
-    per-cell under-load medians and `roof.clock_mhz` is the clock the
-    calibration's own dense GEMM ran at, so the comparison printed at the end
-    is between two measurements of the same kind. The audit's finding was that
-    it was not: the session number was a median of post-synchronise idle
-    instants, which on an H200 reads 1980 MHz against a roof measured at 1515,
-    and the 10% gate then turned on which of the card's two operating points
-    the sample happened to catch rather than on anything about this run.
+    EVERY NUMBER HERE IS SAMPLED UNDER LOAD. `per_tile_clocks` gives the median
+    of the per-cell under-load medians WITHIN EACH TILE and `roof.clock_mhz` is
+    the clock the calibration's own dense GEMM ran at, so the comparison
+    printed at the end is between two measurements of the same kind. The
+    audit's finding was that it was not: the session number was a median of
+    post-synchronise idle instants, which on an H200 reads 1980 MHz against a
+    roof measured at 1515, and the 10% gate then turned on which of the card's
+    two operating points the sample happened to catch rather than on anything
+    about this run. A `clock_ref` argument survived that fix until 2026-09-09,
+    unread in the body after the session-median line became `per_tile_clocks`;
+    it is gone, because a parameter a docstring explains and no line reads is a
+    description of behaviour that is no longer there.
 
     AND THE SESSION IS NOT FAILED FOR RUNNING HIGH. Until 2026-09-08 this gate
     also required the session median within 10% of the roof's clock in EITHER
@@ -1997,12 +2177,30 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
     clock ratio; the correction is the roof at the cell's own clock
     (`roofline.roof_at_clock`, the driver's `roof_at_cell_clock_tflops`), and
     `build_points` writes it on every point as `roof_fraction_at_clock`. So
-    this gate scores PER CELL. It FAILS when more than `THROTTLED_CELL_FRACTION`
-    of the clocked cells DRIFTED or ran LOW, the two states no rescaling can
-    repair; it PASSES a session that ran uniformly high and prints the
-    rescaled fraction beside the fixed one for every retained point. A LOW
-    session is caught by the same rule and not by a second one: a session
-    median 10% under the roof's clock puts every cell under the 95% floor.
+    this gate scores PER CELL.
+
+    AND SINCE 2026-09-09 IT IS NOT FAILED FOR RUNNING LOW EITHER, which is the
+    other half of the same fix. The share used to count DRIFT and LEVEL-LOW; on
+    the 2026-09-09 H200 session the LOW cells were all 15 multi-tile
+    BLOCK_M=128 subject cells, at 1380-1410 MHz against a 1410.75 MHz floor
+    (five of them low by 0.75 MHz, half of one NVML step), and the same
+    session's 750 cells show the under-load clock is set PER TILE by the
+    kernel's own power draw under the 700 W cap: BM=128/BN=64 a median 1395
+    MHz, BM=256 1650, memory-shaped 1950-1980, against a calibration GEMM
+    holding 1485 MHz at 691 W. Failing on that side is failing the arm for
+    measuring its own subject. The share now counts DRIFT alone -- the one
+    state no rescaling repairs, because the median blends two operating points
+    -- and both LEVEL sides are kept, counted, and printed with their rescaled
+    fraction beside the fixed one.
+
+    WHAT A FAILING SHARE NOW POINTS AT. Every readable DRIFT in that session is
+    the governor settling on the FIRST cell of a repeat after a workload
+    change, which is a property of a warmup that delivers a fixed duration and
+    then starts timing. That is an INSTRUMENT fault and the fix is in the
+    instrument: warm until two consecutive clock reads agree within one NVML
+    step. The gate says so in its lines and names the instrument the drifted
+    cells were timed by, so a FAIL sends a reader to the warmup rather than to
+    the card.
 
     REFUSES (UNKNOWN) without a clock on any cell, or without the roof's
     clock: the first is a check that examined nothing, the second can form
@@ -2013,10 +2211,11 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
     claim = ("every cell was timed at one clock, and every retained point is "
              "scored against the roof at the clock it ran")
     rule = (f"<= {THROTTLED_CELL_FRACTION:.0%} of clocked cells drifting past "
-            f"{THROTTLE_DRIFT_PCT:.0f}% or LEVEL-low (under "
-            f"{CLOCK_FLOOR_FRACTION:.0%} of the roof's clock); LEVEL-high "
-            f"cells (over {CLOCK_CEILING_FRACTION:.0%}) are kept and scored "
-            "against the roof at their own clock")
+            f"{THROTTLE_DRIFT_PCT:.0f}% across their own trials. A STEADY "
+            f"clock on either side of the band (under "
+            f"{CLOCK_FLOOR_FRACTION:.0%} or over {CLOCK_CEILING_FRACTION:.0%} "
+            "of the roof's clock) is KEPT, its side recorded, and its fraction "
+            "of the roof at its own clock printed beside the fixed one")
     if not with_clock:
         return Gate(
             VALIDITY, "V3 clocks", claim, rule, None,
@@ -2030,15 +2229,27 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
     drifted = [t for t in with_clock if t.throttled]
     low = [t for t in with_clock if t.cold]
     high = [t for t in with_clock if t.boosted]
+    # KEPT, not merely off-band. A cell that both drifted and sat off the band
+    # is EXCLUDED, so counting it as "kept" is the defect this split closes:
+    # the 2026-09-09 line read "21 high and kept" over 17 kept and 4 excluded.
+    low_kept = [t for t in low if not t.excluded]
+    high_kept = [t for t in high if not t.excluded]
     dropped = [p for p in points if not p.retained]
+    per_tile = per_tile_clocks(ok_rows)
     lines = [f"{len(with_clock)} of {len(ok_rows)} cells carry an under-load "
-             f"clock; session median of those {clock_ref} MHz",
+             "clock; MEDIAN PER TILE, which is the clock a cell of that tile "
+             "actually held: "
+             + ", ".join(f"BM={bm} {mhz} MHz" for bm, mhz in per_tile.items())
+             + ". No session median is quoted: on this arm the two tiles sit "
+             "at two operating points and a median over both names neither.",
              f"{len(drifted)} cells drifted past {THROTTLE_DRIFT_PCT:.0f}% "
-             "between their first and last under-load sample; "
-             f"{len(low)} ran LOW, under {CLOCK_FLOOR_FRACTION:.0%} of the "
-             f"roof's clock; {len(high)} ran HIGH, over "
-             f"{CLOCK_CEILING_FRACTION:.0%} of it, and are KEPT; "
-             f"{len(dropped)} points lost every repeat and are excluded"]
+             "between their first and last under-load sample and are the only "
+             f"exclusion; {len(low_kept)} of {len(low)} steady-LOW (under "
+             f"{CLOCK_FLOOR_FRACTION:.0%} of the roof's clock) and "
+             f"{len(high_kept)} of {len(high)} steady-HIGH (over "
+             f"{CLOCK_CEILING_FRACTION:.0%} of it) were KEPT, the rest of each "
+             f"having also drifted; {len(dropped)} points lost every repeat "
+             "and are excluded"]
     if not roof.clock_mhz:
         return Gate(
             VALIDITY, "V3 clocks", claim, rule, None,
@@ -2049,42 +2260,94 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
             "a fraction below 1 cannot be told from a card running slower now "
             "than it did when it was calibrated, and no per-cell roof can be "
             "formed", lines)
-    rel = clock_ref / roof.clock_mhz - 1.0
+    parts = []
     if high:
         ratio = max(t.sm_clock_load_mhz / roof.clock_mhz for t in high)
+        parts.append(
+            f"a steady-HIGH cell's fraction of the FIXED roof is OVERSTATED by "
+            f"its clock ratio, up to {ratio:.2f}x here")
+    if low:
+        ratio = min(t.sm_clock_load_mhz / roof.clock_mhz for t in low)
+        parts.append(
+            f"a steady-LOW cell's fraction of the FIXED roof is UNDERSTATED by "
+            f"its clock ratio, down to {ratio:.2f}x here")
+    if parts:
         direction = (
-            f"Direction: a LEVEL-high cell's fraction of the FIXED roof is "
-            f"OVERSTATED by its clock ratio, up to {ratio:.2f}x here. Read "
-            "`of roof at own clock`, which divides by "
-            "roofline.roof_at_clock(roof, roof clock, cell clock); a "
-            "memory-bound cell does not follow the SM clock, so that rescaled "
-            "fraction is the comparable one and the fixed one is not.")
-    elif low:
-        direction = (
-            "Direction, to the extent this layer's rate follows the clock: a "
-            "LEVEL-low cell's fraction is UNDERSTATED, so a plateau found on "
-            "cells below the roof's clock could be the clocks rather than the "
-            "tile. Those cells are excluded; their count is the gate.")
+            "Direction: " + "; and ".join(parts) + ". Both are KEPT and both "
+            "are SCORED against the fixed roof, because the calibration GEMM "
+            "and every cell here ran under the same power cap and delivered "
+            "throughput is the comparison that cap makes fair. `of roof at own "
+            "clock`, which divides by roofline.roof_at_clock(roof, roof clock, "
+            "cell clock), is printed beside every one of them as the ISSUE "
+            "EFFICIENCY -- what the tile did with the clock it got -- and it "
+            "is never a gate input.")
     else:
         direction = ("every clocked cell sat inside the band, so the fixed "
                      "roof is the roof these cells ran under and the two "
                      "fraction columns agree to the rescale's rounding.")
     lines.append(
-        f"this session's median ran {rel:+.1%} against the {roof.clock_mhz} "
-        f"MHz the roof was measured at. {direction}")
-    # The share counts the two faults no rescaling repairs: a drifting clock
-    # (the median is a blend of two operating points) and a steadily LOW one
-    # (the cell sat below the roof's clock and its throughput is not this
-    # card's). Either at a tenth of the cells is a box whose surviving
-    # medians are not trustworthy either. The HIGH side is NOT in the share.
+        "per tile against the "
+        f"{roof.clock_mhz} MHz the roof was measured at: "
+        + ", ".join(f"BM={bm} {mhz / roof.clock_mhz - 1.0:+.1%}"
+                    for bm, mhz in per_tile.items())
+        + f". {direction}")
+    # THE SHARE COUNTS ONE FAULT: a clock that MOVED while the cell was timed,
+    # so the median is a blend of two operating points and the time belongs to
+    # neither. NEITHER LEVEL SIDE IS IN THE SHARE since 2026-09-09: on a
+    # power-capped card a steady clock off the band is the tile's own operating
+    # point, the side is recorded, and the rescaled fraction is printed beside
+    # the fixed one.
     excluded = [t for t in with_clock if t.excluded]
     share = len(excluded) / len(with_clock)
     ok = share <= THROTTLED_CELL_FRACTION
+    # WHICH INSTRUMENT THE DRIFTED CELLS CAME FROM, named, because the fix for
+    # a settling governor is in the warmup and not on the card. A basis before
+    # `SETTLED_CLOCK_BASIS_VERSION` delivers a fixed duration of load and then
+    # starts the poller, so the first cell of a repeat after a workload change
+    # is timed while the governor is still moving -- which is where all 4 of
+    # the 2026-09-09 drifts on this arm sit.
+    if drifted:
+        # THE DIRECTION EACH DRIFT WENT, from the two under-load samples the
+        # verdict was formed on. Settling UPWARD after a workload change is the
+        # governor catching up and is what a warmup that waits for the clock
+        # absorbs; dropping is a card giving up power; and a row carrying
+        # neither sample cannot say, which is its own finding about the writer.
+        ways: dict[str, int] = {}
+        for row in drifted:
+            first, last = row.sm_clock_start_mhz, row.sm_clock_end_mhz
+            if first is None or last is None:
+                ways["direction not recorded"] = \
+                    ways.get("direction not recorded", 0) + 1
+            else:
+                way = ("settling upward" if last > first
+                       else "dropping" if last < first else "unchanged ends")
+                ways[way] = ways.get(way, 0) + 1
+        lines.append(
+            "drift direction, first under-load sample to last: "
+            + ", ".join(f"{n} {way}" for way, n in sorted(ways.items())))
+        bases = sorted({t.instrument or "<unnamed>" for t in drifted})
+        unsettled = [t for t in drifted
+                     if instrument_settles_clock(t.instrument) is not True]
+        lines.append(
+            f"the {len(drifted)} drifted cell(s) were timed by: "
+            + ", ".join(bases)
+            + (f". {len(unsettled)} of them by a basis BEFORE "
+               f"v{SETTLED_CLOCK_BASIS_VERSION}, the first that keeps warming "
+               "until two consecutive NVML reads agree within one 15 MHz step. "
+               "A pre-v4 loop delivers a fixed warmup duration and then starts "
+               "timing, so the first cell of a repeat after a workload change "
+               "is measured while the governor is still settling: that is an "
+               "INSTRUMENT fault, it is where every readable drift in the "
+               "2026-09-09 session sits, and re-running on the same instrument "
+               "reproduces it." if unsettled else
+               ". Every one settles the clock before timing, so a drift here "
+               "is the card and not the warmup."))
     rescored = [p for p in points
                 if p.retained and p.roof_fraction_at_clock is not None]
     if rescored:
         lines.append(
-            "fraction of roof, fixed -> at the point's own clock, per "
+            "fraction of roof, FIXED (what every CLAIM gate reads) -> at the "
+            "point's own clock (issue efficiency, scored by nothing), per "
             "retained point: "
             + ", ".join(f"BM={p.block_m} r={p.rows_per_expert} "
                         f"{p.roof_fraction:.3f}->{p.roof_fraction_at_clock:.3f}"
@@ -2097,11 +2360,14 @@ def gate_v3_clocks(timings: list[Timing], points: list[Point], roof: Roof,
             "span too short rather than as a plateau.")
     return Gate(
         VALIDITY, "V3 clocks", claim, rule, ok,
-        f"{len(excluded)} of {len(with_clock)} cells excluded ({share:.1%}): "
-        f"{len(drifted)} drifted, {len(low)} low; {len(high)} high and kept; "
-        f"session {clock_ref} MHz, {rel:+.1%} against the roof's",
-        "the fractions, in the direction stated below. Individual sagging cells "
-        "are already excluded; a box that sags this often is not something an "
+        f"{len(excluded)} of {len(with_clock)} cells excluded ({share:.1%}), "
+        f"all for DRIFT; {len(low_kept)} steady-low and {len(high_kept)} "
+        "steady-high kept, side recorded, scored against the fixed roof with "
+        "the own-clock fraction printed beside; per-tile medians "
+        + ", ".join(f"BM={bm} {mhz} MHz" for bm, mhz in per_tile.items()),
+        "the fractions, in the direction stated below. A cell whose clock moved "
+        "mid-measurement is already excluded; a session that drifts this often "
+        "was timed by a warmup that does not wait for the clock, which no "
         "exclusion can fix", lines)
 
 
@@ -2149,9 +2415,22 @@ def gate_c1_roof(subject: list[Point], plateau: Plateau, roof: Roof,
             ["Nothing was measured above the onset, so there is no regime here "
              "to be below the roof in."])
     peak = max(p.roof_fraction for p in deep)
+    # THE GATE READS THE FIXED ROOF; the own-clock fraction is printed beside
+    # it and scored by nothing. The calibration GEMM and every cell here ran
+    # under the same 700 W cap, so delivered throughput against a fixed roof is
+    # the comparison that cap makes fair: a tile that spends its power budget
+    # on a clock it cannot hold has delivered less, and that IS the result. The
+    # rescaled fraction answers a different question -- what the tile did with
+    # the clock it got -- and on this arm the two disagree by 10-12% in
+    # opposite directions between subject and control.
+    best_fixed = max(deep, key=lambda p: p.roof_fraction)
     last = max(deep, key=lambda p: p.tiles)
     rising = plateau.plateaued is not True
     lines = [
+        f"issue efficiency beside it: the peak point (BM={best_fixed.block_m} "
+        f"n={best_fixed.tiles}) reads {own_clock_text(best_fixed)} at "
+        f"{best_fixed.sm_clock_mhz} MHz, and the deepest ({last.tiles} tiles) "
+        f"{own_clock_text(last)} at {last.sm_clock_mhz} MHz. NOT A GATE INPUT.",
         f"predicted plateau band, from the study's own alpha at BLOCK_M=128 "
         f"(GROUP_SIZE_M=1): {predicted[0]:.3f} to {predicted[1]:.3f} of the "
         f"roof, i.e. {predicted[0] * roof.tflops:.0f} to "
@@ -2159,8 +2438,9 @@ def gate_c1_roof(subject: list[Point], plateau: Plateau, roof: Roof,
         "AGAINST NOTHING: a band that wide is a statement about the fit, not "
         "about the hardware.",
         f"the deepest point measured is n={last.tiles} M-tiles per expert at "
-        f"T={last.tokens}, reaching {last.roof_fraction:.3f} of the roof "
-        f"({last.useful_tflops:.1f} of {roof.tflops:.1f} TFLOP/s), and it was "
+        f"T={last.tokens}, reaching {last.roof_fraction:.3f} of the fixed "
+        f"roof ({last.useful_tflops:.1f} of {roof.tflops:.1f} TFLOP/s, "
+        f"{own_clock_text(last)}), and it was "
         + ("STILL RISING there." if rising else "flat there."),
         "the fraction UNDERSTATES the GEMM's own efficiency: the numerator "
         "counts GEMM flops and the denominator is a dense GEMM, while the timed "
@@ -2172,7 +2452,8 @@ def gate_c1_roof(subject: list[Point], plateau: Plateau, roof: Roof,
             f"BLOCK_M={SUBJECT_BLOCK_M} stays below the compute roof in the "
             "multi-tile regime",
             f"peak roof fraction < {ROOF_REACHED:.2f}", False,
-            f"peak {peak:.3f} of the roof at n={last.tiles} M-tiles", "",
+            f"peak {peak:.3f} of the fixed roof at n={best_fixed.tiles} "
+            f"M-tiles ({own_clock_text(best_fixed)})", "",
             [f"BLOCK_M={SUBJECT_BLOCK_M} REACHED the roof. The AI ceiling is "
              "not binding in the regime production runs, and the study's "
              "central claim is about a regime that does not occur."] + lines)
@@ -2181,7 +2462,8 @@ def gate_c1_roof(subject: list[Point], plateau: Plateau, roof: Roof,
         f"BLOCK_M={SUBJECT_BLOCK_M} stays below the compute roof in the "
         "multi-tile regime",
         f"peak roof fraction < {ROOF_REACHED:.2f}", True,
-        f"peak {peak:.3f} of the roof at n={last.tiles} M-tiles", "", lines)
+        f"peak {peak:.3f} of the fixed roof at n={best_fixed.tiles} M-tiles "
+        f"({own_clock_text(best_fixed)})", "", lines)
 
 
 def gate_c2_plateau(plateau: Plateau, subject: list[Point]) -> Gate:
@@ -2197,7 +2479,8 @@ def gate_c2_plateau(plateau: Plateau, subject: list[Point]) -> Gate:
         lines.append(plateau.reason)
     if last is not None:
         lines.append(
-            f"the last point reached {last.roof_fraction:.3f} of the roof and "
+            f"the last point reached {last.roof_fraction:.3f} of the fixed "
+            f"roof ({own_clock_text(last)} at {last.sm_clock_mhz} MHz) and "
             + ("was still rising there." if plateau.plateaued is False else
                "was flat there." if plateau.plateaued else
                "cannot be called either way."))
@@ -2246,14 +2529,41 @@ def gate_c3_attribution(subject: list[Point], control: list[Point],
             f"control peak - subject peak >= {CONTROL_SEPARATION:.2f} of the roof",
             None, "the two tiles share no multi-tile token count", "",
             ["Nothing cancels when nothing is paired."])
-    peak_s = max(p.roof_fraction for p in deep_s if p.tokens in shared)
-    peak_c = max(p.roof_fraction for p in deep_c if p.tokens in shared)
+    # THE GATE READS THE FIXED ROOF, and on this arm that choice has a SIGN.
+    # The control ran at 1605-1725 MHz and the subject at 1380-1425, so the two
+    # fractions disagree by 10-12% in opposite directions: over the 2026-09-09
+    # session's 4 shared token counts the gap is +0.053 of the fixed roof and
+    # -0.034 at own clock. The fixed roof is the gate input because both tiles
+    # and the calibration GEMM ran under the same 700 W cap and delivered
+    # throughput is what that cap makes comparable; the own-clock pair is
+    # printed under it so a reader can see the sign flip rather than inherit
+    # it. Neither number is the whole answer on its own.
+    subj = [p for p in deep_s if p.tokens in shared]
+    ctl = [p for p in deep_c if p.tokens in shared]
+    best_s = max(subj, key=lambda p: p.roof_fraction)
+    best_c = max(ctl, key=lambda p: p.roof_fraction)
+    peak_s, peak_c = best_s.roof_fraction, best_c.roof_fraction
     gap = peak_c - peak_s
+    own_s = best_s.roof_fraction_at_clock
+    own_c = best_c.roof_fraction_at_clock
     lines = [
         f"over the {len(shared)} shared token counts {shared[:6]}: "
-        f"BLOCK_M={SUBJECT_BLOCK_M} peaks at {peak_s:.3f} of the roof, "
+        f"BLOCK_M={SUBJECT_BLOCK_M} peaks at {peak_s:.3f} of the FIXED roof, "
         f"BLOCK_M={control_block_m} at {peak_c:.3f}, a gap of {gap:+.3f} "
         f"({gap * roof.tflops:+.0f} TFLOP/s)",
+        "issue efficiency beside it, scored by nothing: at those same two "
+        f"points BLOCK_M={SUBJECT_BLOCK_M} reads "
+        + (f"{own_s:.3f}" if own_s is not None else "n/a")
+        + f" at {best_s.sm_clock_mhz} MHz and BLOCK_M={control_block_m} "
+        + (f"{own_c:.3f}" if own_c is not None else "n/a")
+        + f" at {best_c.sm_clock_mhz} MHz, "
+        + ("a gap of "
+           f"{own_c - own_s:+.3f}. THE TWO GAPS CAN DISAGREE IN SIGN, and "
+           "when they do neither may be quoted without the other: one says "
+           "which tile delivered more under the cap, the other which tile used "
+           "its own clock better."
+           if own_s is not None and own_c is not None else
+           "so no own-clock gap can be formed."),
         f"the control's own derivative: {control_plateau.line()}",
     ]
     if peak_c >= ROOF_REACHED:
@@ -2288,7 +2598,11 @@ def gate_c3_attribution(subject: list[Point], control: list[Point],
         f"the shortfall belongs to BLOCK_M={SUBJECT_BLOCK_M}, not to the fused "
         "layer both tiles run inside",
         f"control peak - subject peak >= {CONTROL_SEPARATION:.2f} of the roof",
-        gap >= CONTROL_SEPARATION, f"gap {gap:+.3f} of the roof", "", lines)
+        gap >= CONTROL_SEPARATION,
+        f"gap {gap:+.3f} of the fixed roof"
+        + ("" if own_s is None or own_c is None
+           else f" ({own_c - own_s:+.3f} at own clocks, not a gate input)"),
+        "", lines)
 
 
 def gate_c4_ceiling_located(control: list[Point], control_block_m: int,
@@ -2325,12 +2639,15 @@ def gate_c4_ceiling_located(control: list[Point], control_block_m: int,
             "no retained full-stack multi-tile control points", "",
             ["Nothing reached anything, so nothing located the ceiling. V4 says "
              "whether the control ran at all."])
+    # THE FIXED ROOF, as in C1 and C3: same cap, same GEMM, delivered
+    # throughput. The own-clock fraction is printed beside and gates nothing.
     peak = max(p.roof_fraction for p in deep)
     best = max(deep, key=lambda p: p.roof_fraction)
     lines = [
         f"the control's best point is n={best.tiles} M-tiles per expert at "
         f"T={best.tokens}: {best.useful_tflops:.1f} of {roof.tflops:.1f} "
-        f"TFLOP/s, {peak:.3f} of the roof.",
+        f"TFLOP/s, {peak:.3f} of the fixed roof, {own_clock_text(best)} at "
+        f"{best.sm_clock_mhz} MHz (issue efficiency, scored by nothing).",
         "the fraction UNDERSTATES the GEMM's efficiency by whatever the fused "
         "layer spends outside its GEMMs, so a control below the roof is not "
         "proof that no tile can reach it -- it is a failure to DEMONSTRATE "
@@ -2349,7 +2666,9 @@ def gate_c4_ceiling_located(control: list[Point], control_block_m: int,
         f"the control BLOCK_M={control_block_m} reaches this card's roof, so "
         "the roof is somewhere this instrument can see a tile arrive",
         f"control peak roof fraction >= {ROOF_REACHED:.2f}",
-        peak >= ROOF_REACHED, f"control peak {peak:.3f} of the roof", "", lines)
+        peak >= ROOF_REACHED,
+        f"control peak {peak:.3f} of the fixed roof ({own_clock_text(best)})",
+        "", lines)
 
 
 #: The one CLAIM gate an uncontrolled arm scores, and the name the driver greps.
@@ -3435,6 +3754,16 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                              sm_clock_load_mhz=t.sm_clock_load_mhz,
                              sm_clock_start_mhz=t.sm_clock_start_mhz,
                              sm_clock_end_mhz=t.sm_clock_end_mhz,
+                             # THE SAMPLE LIST AND THE SETTLE COST TRAVEL TOO,
+                             # read through getattr because the instrument gains
+                             # them in its own tree: a writer that referenced
+                             # them directly would refuse to run against the
+                             # basis that produced every committed row. Absent
+                             # is written as blank, which reads back as "the
+                             # instrument did not report this", never as zero.
+                             clock_samples_mhz=_samples_text(t),
+                             settle_ms=getattr(t, "settle_ms", None),
+                             settle_calls=getattr(t, "settle_calls", None),
                              clock_level_ok=t.clock_level_ok,
                              clock_drift_ok=t.clock_drift_ok,
                              # THE SIDE TRAVELS WITH THE VERDICT: a failed
@@ -3468,10 +3797,20 @@ def measure_setting(args, cfg, block_m: int, rows: list[int], csv_path: Path,
                     else f"{row.sm_clock_load_mhz:5.0f} MHz")
             print(f"  BM={block_m:3d} r={r:5d} n={tiles:3d} T={tokens:7d} "
                   f"rep={rep:2d}  {row.ms_p50:9.4f} ms  {load} under load"
-                  + ("  DRIFTED" if row.throttled else "")
-                  + ("  BELOW THE ROOF'S CLOCK" if row.cold else "")
-                  + ("  ABOVE THE ROOF'S CLOCK (kept; fixed-roof fraction "
-                     "not comparable)" if row.boosted else ""))
+                  # BOTH SIDES READ THE SAME WAY, and the way is KEPT. Until
+                  # 2026-09-09 the low side printed bare, next to a high side
+                  # that said "kept", so an operator watching the pod read a
+                  # cold cell exactly as the retired rule had it: excluded.
+                  # Neither is; the fixed-roof fraction is what each is off in,
+                  # and only DRIFT drops a cell.
+                  + ("  DRIFTED (EXCLUDED: the clock moved mid-cell)"
+                     if row.throttled else "")
+                  + ("  BELOW THE ROOF'S CLOCK (kept and scored on the fixed "
+                     "roof; that fraction is UNDERSTATED by the clock ratio)"
+                     if row.cold else "")
+                  + ("  ABOVE THE ROOF'S CLOCK (kept and scored on the fixed "
+                     "roof; that fraction is OVERSTATED by the clock ratio)"
+                     if row.boosted else ""))
     return compiles, executed
 
 
@@ -3509,6 +3848,7 @@ def figure_rows(series: list[Series], roof: Roof, card: str) -> list[dict]:
                 "clock_drift_ok": p.clock_drift_ok,
                 "clock_level_side": p.clock_level_side,
                 "boosted_reps": p.boosted_reps,
+                "cold_reps": p.cold_reps,
                 "roof_fraction_at_clock": (
                     "" if p.roof_fraction_at_clock is None
                     else f"{p.roof_fraction_at_clock:.6f}"),
@@ -3526,7 +3866,8 @@ FIGURE_FIELDS = ["card", "roof_tflops", "roof_source", "roof_clock_mhz",
                  "roof_fraction", "sm_clock_mhz", "throttled_reps", "retained",
                  "excluded_why", "instrument", "warmup_ms", "iters", "trials",
                  "l2_flush", "clock_level_ok", "clock_drift_ok",
-                 "clock_level_side", "boosted_reps", "roof_fraction_at_clock"]
+                 "clock_level_side", "boosted_reps", "cold_reps",
+                 "roof_fraction_at_clock"]
 
 
 def write_figure_csv(path: Path, rows: list[dict]) -> None:
@@ -3598,7 +3939,7 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *,
                             None if control_block_m is None else control,
                             planned_multi_tile,
                             onset_tokens_value=onset_tokens(cfg, SUBJECT_BLOCK_M)),
-        gate_v3_clocks(timings, subject + control, roof, clock_ref),
+        gate_v3_clocks(timings, subject + control, roof),
     ]
     if control_block_m is not None:
         gates.append(gate_v4_control_ran(control, subject, control_block_m))
@@ -3630,6 +3971,10 @@ def analyse(timings: list[Timing], cfg, roof: Roof, *,
         "verdict_why": why,
         "roof": asdict(roof),
         "clock_ref_mhz": clock_ref,
+        # THE NUMBER THE GATE PRINTS, beside the session median it replaced.
+        # A consumer reading `clock_ref_mhz` alone on a two-tile arm reads a
+        # median of a bimodal set; these are the operating points that exist.
+        "clock_per_tile_mhz": per_tile_clocks(timings),
         "predicted_plateau_band": list(predicted),
         "predicted_band_is_scored_against":
             "nothing. It is the study's own arithmetic, pre-registered so the "
@@ -3872,11 +4217,11 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         "the self test itself: if a hypothesis roof could produce a verdict, "
         "every --dry-run and --self-test on a laptop would be quotable"))
 
-    # And the exclusion machinery, which no world above exercises, once for each
-    # of the instrument's TWO clock verdicts. They are different faults -- a
-    # clock that moved during the trials, and a clock that sat steadily below
-    # the one the roof was measured at -- and a run can have either without the
-    # other, so both branches are planted rather than one standing in for both.
+    # And the clock machinery, which no world above exercises: ONE exclusion
+    # and TWO kept states, planted separately because a run can have any of
+    # them without the others. A clock that MOVED during the trials is the
+    # exclusion; a clock that sat steadily off the band, on either side, is a
+    # measurement at a known clock and is kept with its side recorded.
     timings = planted_timings(cfg, roof, b, grid, alpha=1.0, overhead_ms=0.05,
                               reps=1, noise=0.0, seed=seed,
                               throttle=(SUBJECT_BLOCK_M, r_max))
@@ -3895,11 +4240,13 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
         "the self test itself: an exclusion path never exercised is an "
         "exclusion path that does not work"))
 
-    # The LEVEL branch, LOW side. The instrument sets `clock_level_ok` False
-    # with the side "low" on a cell it timed below the roof's clock; here that
-    # flag is planted directly, because what is being tested is that this file
-    # EXCLUDES on it, not that `timing.clock_flags` computes it (which
-    # `tests/test_timing.py` owns).
+    # The LEVEL branch, LOW side, and since 2026-09-09 it must be KEPT. The
+    # instrument sets `clock_level_ok` False with the side "low" on a cell it
+    # timed below the roof's clock; here that flag is planted directly, because
+    # what is being tested is that this file KEEPS it and rescales it, not that
+    # `timing.clock_flags` computes it (which `tests/test_timing.py` owns). It
+    # was an exclusion until that date, and on the H200 the cells it excluded
+    # were every multi-tile BLOCK_M=128 cell of the real arm.
     steady_cold = planted_timings(cfg, roof, b, {SUBJECT_BLOCK_M: [r_max]},
                                   alpha=1.0, overhead_ms=0.05, reps=1,
                                   noise=0.0, seed=seed)
@@ -3909,19 +4256,31 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
                                sm_count=SWEEP.DEFAULT_SM_COUNT,
                                block_n=SWEEP.FIXED["BLOCK_SIZE_N"],
                                clock_ref=modal_clock(cold_rows))
-    cold_dropped = [p for p in cold_points if not p.retained]
-    steady = all(t.clock_drift_ok is not False for t in cold_rows)
+    cold_kept = [p for p in cold_points if p.retained]
+    cold_rescaled_ok = bool(cold_kept) and all(
+        p.roof_fraction_at_clock is not None and roof.clock_mhz
+        and abs(p.roof_fraction_at_clock / p.roof_fraction
+                - roof.clock_mhz / cold_rows[0].sm_clock_load_mhz) < 1e-9
+        for p in cold_kept)
     gates.append(Gate(
-        VALIDITY, "S level exclusion",
-        "a cell timed below the roof's clock leaves the gated set even though "
-        "its clock never moved",
-        "the planted cold point is excluded, and it is not excluded for drift",
-        len(cold_dropped) == 1 and steady,
-        f"{len(cold_dropped)} of {len(cold_points)} excluded; drift verdicts "
-        f"{sorted({t.clock_drift_ok for t in cold_rows})}",
-        "the self test itself: a steady low clock is the failure a drift-only "
-        "check reports as no failure at all, which is what the pre-2026-09-02 "
-        "flag did"))
+        VALIDITY, "S low side kept",
+        "a cell timed steadily below the roof's clock stays in the gated set, "
+        "and its fraction is rescaled to the clock it ran at",
+        "the planted cold point is retained with no excluded repeat, it is "
+        "counted as a LEVEL-low repeat, and its of-roof-at-own-clock is the "
+        "fixed fraction over the clock ratio",
+        len(cold_kept) == len(cold_points) == 1
+        and cold_kept[0].throttled_reps == 0 and cold_kept[0].cold_reps == 1
+        and cold_rescaled_ok,
+        f"{len(cold_kept)} of {len(cold_points)} retained; LEVEL-low repeats "
+        f"{[p.cold_reps for p in cold_points]}; fixed -> own-clock fraction "
+        + ", ".join(f"{p.roof_fraction:.3f}->"
+                    + (f"{p.roof_fraction_at_clock:.3f}"
+                       if p.roof_fraction_at_clock is not None else "n/a")
+                    for p in cold_points),
+        "the self test itself: this path EXCLUDED until 2026-09-09, and under "
+        "that rule the arm's own BLOCK_M=128 subject could not be measured on "
+        "a 700 W-capped H200 at all"))
 
     # The LEVEL branch, HIGH side, and it must be KEPT. The same cell, planted
     # at `H200_BOOST_RATIO` times its clock with the side "high": the boosted
@@ -4474,8 +4833,11 @@ def _main(argv=None) -> int:
     print("\nreference clock: "
           + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
              else f"NOT RESOLVED ({clock_source}); every cell's clock LEVEL "
-                  "verdict will be None, no cell can be excluded for running "
-                  "cold, and V3 will say so"))
+                  "verdict and every roof-at-own-clock fraction will be None, "
+                  "so no row can say which way its fixed-roof fraction is off. "
+                  "The EXCLUSION does not change: DRIFT is decided by "
+                  "comparing a cell with itself and needs no reference. V3 "
+                  "will say so"))
 
     # THE PROVENANCE BLOCK, built once and written onto every cells.csv row and
     # into report.json. It NEVER raises: what it could not determine is None and
