@@ -26,7 +26,7 @@ the right statistic, since every expert is the mean.
 
 Under skewed routing it stops being. Arithmetic intensity works out to
 rows-per-expert, so on this H200 an expert crosses the roofline ridge at about
-163 rows (162.8 FLOP/byte on the card's 2026-09-02 calibration), and a skewed
+156 rows (155.9 FLOP/byte on the card's 2026-09-10 calibration), and a skewed
 launch contains experts on both sides of it at once: at
 `zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
 rows while 221 are memory-bound. That is one draw, and a typical one: over 40
@@ -43,8 +43,13 @@ and a later one quoted a band of 160 to 176 rows as if it were the card's
 uncertainty about its own ridge (retracted 2026-09-02: that band is two
 sessions' compute ceilings failing to reproduce, no card's own ridge, and every
 published ladder report scored against it has been rescored to the attached
-card's own calibration, H200 162.8 and A100 145.8 FLOP/byte). The number to
-quote is the ridge of the calibration a row was measured against, and
+card's own calibration, H200 162.8 and A100 145.8 FLOP/byte). The H200's own
+ridge has since moved again, to 155.9 on the 2026-09-10 calibration, because
+that session sampled the dense GEMM's clock while it ran rather than after it.
+Three calibrations of one card now read 162.8, 152.8 and 155.9, which is the
+same non-reproducing compute term the paragraph above describes and is why the
+band was withdrawn rather than widened. The number to quote is the ridge of the
+calibration a row was measured against, and
 `results/published/CALIBRATION_PROVENANCE.md` says which that is for every arm.
 
 So: measure on real routing, on the hardware, and see where it actually breaks.
@@ -220,16 +225,68 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 4139 tests collected off-GPU (`pytest --collect-only -q`;
-`tests/test_docs.py` fails when this line goes stale). 15 published arms in
+Harness complete; TESTCOUNT tests collected off-GPU (`pytest --collect-only -q`;
+`tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
-arms carrying 26 `*.report.json` files and no CSV. Five claims: C1 and C2
-established, C3 established and rescoped three times, C4 confirmed and closed,
-C5 NOT established (three uncontrolled variables). The tile-corrected roofline
-is proposed and not validated, and its BLOCK_M = 128 row is retracted in the
-form it was published (see the RETRACTIONS section of
-[docs/FINDINGS.md](docs/FINDINGS.md)). Kernels not written, and the padding-tax
-premise that motivated them is dead. Read FINDINGS before quoting any number
-from this repository: several published figures have been retracted, and that
-file says which, when, and where the corrected number lives.
+arms carrying 26 `*.report.json` files and no CSV. Two further directories
+there are whole H200 sessions, kept so every verdict they printed can be
+re-derived and marked with a `KIND` file so the provenance census reads them as
+sessions rather than arms.
+
+**What the 2026-09-10 session measured.** Twenty arms, 150 minutes, 2,328
+clocked cells. Three results need no fitted model: the cost of one extra M-tile
+is 0.68 to 1.37 complete streams of the layer's expert weights across 23
+ladders; at `BLOCK_M=16` and `GROUP_SIZE_M=1`, 95.4% of the kernel's wall clock
+is accounted for by one full weight re-read per tile (89.158 ms measured
+against 85.054 ms of streaming); and `BLOCK_M=16` peaks at 0.099 of the card's
+dense compute roof at every batch size reachable, against 0.537 for a
+`BLOCK_M=256` control on the same layer.
+
+**Where the model failed, and it is not where the residual test said.** The
+three-term traffic model has exactly one term that depends on `BLOCK_SIZE_N`,
+and that term is proportional to `BLOCK_M`, so the measured width dependence
+must double when the height doubles. It does not move: the ratios are 1.115,
+1.203 and 0.923 where the model requires 2.000, at z of -303, -121 and -89,
+measured on the slope alone with no fitted intercept anywhere in the path. The
+mechanism the model was written to express survives; that particular
+parameterisation of it does not. The replacement the data supports is a cost
+going as `1/BLOCK_SIZE_N` and *not* with `BLOCK_M`, which fits 3.1x better at
+equal parameter count, but whether it is traffic or time this grid cannot say.
+
+**The re-read is a property of the schedule.** `GROUP_SIZE_M` from 1 to 16
+moves the per-tile cost by 24% while compiling byte-identical shared memory, an
+identical PTX instruction census and identical occupancy. The model has no slot
+for a schedule.
+
+**Two results that stand on their own.** Of 56 power-of-two tiles, the 17 whose
+arithmetic-intensity ceiling clears this card's ridge all need an accumulator of
+at least the entire 65,536-register per-block file, on every NVIDIA
+architecture from sm_70 to sm_100: the register file runs out exactly where the
+arithmetic would have become sufficient, so no positive control exists at
+vLLM's shipped `BLOCK_SIZE_N`. And under a 700 W cap held to within 2% across
+2,328 cells, the achieved SM clock spans 1,275 to 1,935 MHz as a function of
+the tile alone, so any tile comparison scored against a roof measured at one
+clock is comparing two machines.
+
+**Claims.** C1 and C2 established, C3 established and rescoped three times, C4
+confirmed and closed, C5 not established and now shown unresolvable: the
+cross-card difference is +0.0117 against a detection limit of 0.0908, and
+changing one compiler scheduling flag on a single card moves the same quantity
+by +0.0101.
+
+**Do not quote these.** `alpha_b = 0.9794 +/- 0.0113` is not a measurement: it
+comes from a fit whose partner parameter is -0.8143, a value `moe/bench/ai_model.py`
+refuses as impossible, its honest interval is nearer +/-0.048, and a quarter of
+the bootstrap draws fall outside `[0, 1]` entirely. The 207% contradiction of
+TEMPO compares a bound with a number. The `cap/ridge = 0.080` headline is
+computed from an alpha the same module refuses to invert. For `BLOCK_M <= 64`
+the ceiling binds under every value this study has ever held; at
+`BLOCK_M = 128`, the tile vLLM actually ships, the verdict flips across the
+candidate range (0.81 of the ridge at 0.9794 against 1.31 at 0.5977) and is
+therefore not established either way.
+
+Kernels not written, and the padding-tax premise that motivated them is dead.
+Read FINDINGS before quoting any number from this repository: several published
+figures have been retracted, and that file says which, when, and where the
+corrected number lives.
