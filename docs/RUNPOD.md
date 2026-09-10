@@ -355,12 +355,18 @@ cell's trials run and records two verdicts per row: LEVEL, the loaded clock is
 inside the band 0.95 to 1.05 of the clock this card's roof was measured at
 (`clock_level_ok`, with `clock_level_side` naming `low` or `high` on a
 failure), and DRIFT, the first and last under-load samples agree within 5% in
-either direction (`clock_drift_ok`). Only LOW or DRIFT excludes a row. HIGH is
+either direction (`clock_drift_ok`). SINCE 2026-09-09, DRIFT alone excludes a
+row and the LEVEL side is recorded and excludes nothing. Under a 700 W cap the
+clock under load is set per tile by the kernel's own power draw, so `high` is
 the expected state of a memory-bound cell on the H200 (the calibration's memory
-load holds 1980 MHz against the 1515 MHz GEMM reference; `docs/APPARATUS.md`
-section 1 states the bracket) and is not an exclusion: it means the fixed-roof
-fraction is not comparable, and `pct_of_roof_at_cell_clock` is the column to
-read. LEVEL needs the reference clock from this card's
+load holds 1980 MHz) and `low` is the expected state of a hungry tile
+(BLOCK_M=128 holds a median 1395 MHz over 196 cells against the 1485 MHz GEMM
+reference); `docs/APPARATUS.md` section 1 has the per-tile table and the
+session that produced it. Neither side is an exclusion: what is wrong on both
+is the fixed-roof fraction, and `pct_of_roof_at_cell_clock` is the column to
+read beside it. Until 2026-09-09 this section said "Only LOW or DRIFT excludes
+a row", which excluded the study's two primary tiles from measurability on this
+card. LEVEL needs the reference clock from this card's
 published calibration, which is the second reason `--publish` above is not
 optional. Until 2026-09-02 this section said the harness sampled the clock
 "before and after every cell" and flagged a drift over 5% (retracted: that

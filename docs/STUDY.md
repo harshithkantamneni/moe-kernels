@@ -52,8 +52,10 @@ one-page summary of both.
 - **(e) The ridge "band" 160.3-176.2.** Withdrawn 2026-09-02 as a ridge of
   any card. It is this one H200's compute ceiling failing to reproduce across
   sessions (`docs/INSTRUMENTATION.md` entry 6), and 26 ladder reports on BOTH
-  cards had been scored against it. The committed calibrations give H200 162.8
-  and A100 145.8 FLOP/byte; every report has been rescored to the attached
+  cards had been scored against it. The committed calibrations gave H200 162.8
+  and A100 145.8 FLOP/byte when this entry was written; the H200's was
+  re-measured to 152.8 on 2026-09-09, which is that ceiling failing to
+  reproduce once more and rescores nothing. Every report has been rescored to the attached
   card's own figure with `rescored_from` keeping the withdrawn one, and each
   ladder arm's `NOTE.md` says so. Where this file quotes 160.3 or 176.2 it
   names one calibration of one card, and is marked where it called that a
@@ -74,8 +76,9 @@ one-page summary of both.
   `moe_align_block_size` pads to, and on UNIFORM routing: BLOCK_M=128 runs
   multi-tile in 65 of 87 cells, up to 33-34 tiles per expert; BLOCK_M=16 in
   1 of 24 and BLOCK_M=64 in 5 of 112. Skewed routings were never counted.
-- **(j) The alias arm's plan and pod figure agree at 13.0 min**; the 11.6 the
-  plan used to print was the probe left off the plan page. Not quoted in this
+- **(j) The alias arm's plan and pod figure agree at 12.8 min**; the 11.6 the
+  plan used to print was the probe left off the plan page. This entry read 13.0
+  until 2026-09-09, which is the BOOKING and not the figure. Not quoted in this
   file.
 - **The C2 headline is at pooled routing.** The fp8/bf16 crossing table below
   (454 / 810 / 922 / 3240 bf16 tokens, 1.15 +/- 0.07) pools seven routing
@@ -92,6 +95,89 @@ one-page summary of both.
   rewrote on 2026-08-31 (wrong target, invalid routing pool, two cards on
   different kernels; the "monotonic in expert count" pattern is a pooling
   artefact). Marked; FINDINGS C5 is current.
+
+## What the 2026-09-09 H200 session settled, and what it left
+
+Added 2026-09-09, after the first run of `scripts/h200_gaps_session.sh` on a
+rented H200: sixteen arms, 33 minutes of wall clock against a three-hour
+booking, everything committed under
+`results/published/2026-09-09-nvidia_h200-gaps-session/`. `docs/FINDINGS.md`
+has the numbers and the per-arm table; this is what it means for the study's
+working state.
+
+**Settled.**
+
+- **STUDY item 3's loose end is CLOSED.** `check_mma_path.sh` at fixed T=256
+  and num_warps=4, two arms differing only in BLOCK_M: wgmma (m64n64k16)
+  appears exactly where `BLOCK_M % 64 == 0` and nowhere else, BLOCK_M=16 emits
+  `mma.sync` only, and the two arms compiled distinct PTX checksums. The
+  instruction is selected by the tile height, not the batch or the warp count.
+  4 of 4 gates. Item 3 below is struck through accordingly.
+- **The anchor is measured, for every published ladder.** The BLOCK_M=32
+  anchor rate is 76.2-77.9% of the 4814.3 GB/s pin rate, swizzle-invariant to
+  2.28%, and the fitted slope is anchor-independent to 0.31%. The evaluation's
+  "weakest link" (an extrapolated memory-branch level) now has a measured n=1
+  tread behind it.
+- **The DRAM counter route is OPEN on a rented pod**, for the first time: ncu
+  2025.1.1 attaches with no permission error (nsys absent). `alpha_b` as a
+  NUMBER rather than an interval is now bookable, at 15 minutes over the
+  alpha-surface cell. This is the highest-value open experiment in the study
+  and it should be booked next.
+
+**Retracted or re-qualified, which is most of what the session bought.**
+
+- **No alpha in this repository may be quoted as a point.** The corpus rescore
+  found 4 of 40 published alphas implying more than the card's pin rate, 12 of
+  40 outside their own anchor bracket, and a median re-anchoring shift of
+  0.094 against the 0.05 those numbers are quoted to. Quote the anchor
+  interval. `SURFACE.txt`'s "0 of 12 fits within 0.05 of the pooled 0.558" is
+  WITHDRAWN: 4 of 40 brackets contain 0.558. The `BLOCK_M <= 64` cap SURVIVES
+  at the bracket's most generous alpha, worst 0.678 of the ridge, which is the
+  one load-bearing claim the rescore leaves standing.
+- **A crossing inside the ridge band is a band.** The ruler arm reproduces the
+  bandwidth patterns to 0.05% across sessions and shows the compute term moves
+  5.0x more than the denominator choice, but the 2.2% denominator swing flips
+  90 of 53,188 classified rows, all within 6% of the ridge. Crossings inside
+  144.9-152.8 FLOP/byte inherit the ruler's bias.
+- **The paper's headline configuration still has no confirming arm on sm_90.**
+  Both BLOCK_N=256 rooflines REFUSED from register-file arithmetic before
+  spending GPU time: the BLOCK_M=256 control needs 65536 of 65536 registers per
+  block at every warp and stage count.
+
+**The clock rule changed, and it is a finding rather than a setting.** Over 750
+cells the under-load SM clock is set PER TILE by the kernel's own power draw
+under the 700 W cap (BLOCK_M=128 median 1395 MHz over 196 cells, BLOCK_M=256 1650,
+BLOCK_M=32 1474 at GROUP_SIZE_M=1 and 1740 from GROUP_SIZE_M=8 up,
+memory-shaped 1950-1980), and the calibration GEMM's 1485 MHz
+at 691 W sits near the LOW end of dense work rather than in the middle. So the
+old +/-5% LEVEL band was a rule against a tile: it excluded the study's two
+primary tiles from measurability on this card while excluding nothing in the
+arms whose tiles happen to sit near the GEMM. From 2026-09-09 a cell is
+excluded if and only if its DRIFT verdict failed; the LEVEL side is recorded on
+every row and excludes nothing; compute-bound CLAIM gates read the FIXED roof
+fraction and print the own-clock fraction beside it as issue efficiency
+(`docs/APPARATUS.md` section 1). For the paper, the per-tile clock is itself a
+result about power-capped MoE kernels.
+
+**Left open, and what it costs.** Six arms landed INVALID and each named an
+apparatus defect rather than a fact about the card: the clock rule
+(roofline), a reference the arm could never qualify at its own pairing
+(bm128_depth), a vacuity check scaling to the reference instead of the swept
+set (bn_g16), a probe that cleared no pinning so P1 was never asked
+(alias_ablation), an `r_max` default that made V1 unsatisfiable from the plan
+page (cap_test), and a vLLM `override_config` with no try/finally that leaked
+one arm's Triton config into 41 others (dtype). `docs/FINDINGS.md` has the
+per-arm table. The next session re-runs them with `--new` (an INVALID row is
+latched and no resume re-runs it), ~71 priced minutes:
+
+```bash
+bash scripts/h200_gaps_session.sh --new \
+  --only calibrate,pin_probe-n64-g1,roofline-n64-g1,cap_test,bn_g16,dtype,bm128_depth,alias_ablation
+```
+
+`roofline-n64-g1` is expected to reach CLAIM_FAIL, and that is its result: on
+the committed cells C3 reads +0.053 against a 0.10 gate and C4 reads 0.552
+against a 0.95 gate.
 
 ## What changed
 
@@ -628,8 +714,13 @@ work is already done and unused.
    though it reaches WGMMA, 128 is 27-30% slower. Padded arithmetic hides while
    it is ~20% of the memory time and costs above 40%. Occupancy confound not
    separated, and it does not need to be: the hypothesis was that bigger would
-   help. Loose end: confirm the instruction actually switched by re-running
-   check_mma_path.sh under the override.
+   help. ~~Loose end: confirm the instruction actually switched by re-running
+   check_mma_path.sh under the override.~~ CLOSED 2026-09-09 by the
+   `mma_switch` arm of the H200 gaps session, which ran exactly that command at
+   two BLOCK_M values with T, warps, stages and BLOCK_N held: wgmma
+   (m64n64k16) appears exactly where `BLOCK_M % 64 == 0` and nowhere else,
+   BLOCK_M=16 emits `mma.sync` only, distinct PTX checksums per arm, 4 of 4
+   gates.
 4. The ablation, using the GPU MODE method: alias B by taking the tile offset
    modulo so every iteration reloads the same tile (loads execute, L2 hits, no
    HBM traffic, nothing folds since values are runtime); `acc += tl.sum(b) +

@@ -337,12 +337,20 @@ def test_check_fails_on_the_drift_that_is_actually_committed(tmp_path):
     assert "note  torch==2.13.0 carries no local tag" in r.stdout
 
 
-def test_the_committed_base_set_is_the_stale_one_the_audit_found():
-    """Against the repo's own files, so the finding stays visible until it is
-    fixed on a pod with `--fresh`."""
+def test_the_committed_base_set_agrees_with_its_input():
+    """Against the repo's own files. This asserted the OPPOSITE until
+    2026-09-09: `resolved-base.txt` recorded transformers 5.15.1 against the
+    `<4.54` cap and predated nvidia-ml-py, and the test kept that finding
+    visible "until it is fixed on a pod with --fresh". Commit 981a42f is that
+    pod re-resolve, so the assertion had to move with the tree; the planted
+    drift above still covers the failing direction, and this covers the state
+    the repository is actually in."""
     r = sh(SETUP, "--check", "base")
-    assert r.returncode == 1, r.stdout
-    assert "transformers" in r.stdout
+    assert r.returncode == 0, r.stdout
+    assert "resolved-base.txt agrees with base.txt" in r.stdout
+    # The one thing --check still cannot settle off a pod, stated as a note
+    # rather than as a refusal.
+    assert "note  torch==2.13.0 carries no local tag" in r.stdout
 
 
 # --------------------------------------------------------------------------
@@ -846,10 +854,14 @@ def _legacy_run(results: Path, run_id: str, flagged: int, total: int) -> Path:
     return path
 
 
-#: The committed H200 calibration's two operating points: the bf16 GEMM
-#: reference (1515 MHz) and the clock the card holds under memory load for the
-#: whole settle (1980 MHz). 1980/1515 = 1.307 against a 1.05 band, so a
-#: memory-bound cell fails LEVEL HIGH as its normal state.
+#: Three operating points this card really runs at, planted as rows: the bf16
+#: GEMM reference (1515 MHz on the 2026-09-02 calibration, 1485 on the
+#: 2026-09-09 one; the ratio is what matters here), the clock it holds under
+#: memory load for the whole settle (1980 MHz), and the clock a hungry
+#: BLOCK_M=128 tile settles at under the 700 W cap (1400). 1980/1515 = 1.307
+#: against a 1.05 band, so a memory-bound cell fails LEVEL HIGH as its normal
+#: state and a BLOCK_M=128 cell fails it LOW; since 2026-09-09 neither is an
+#: exclusion.
 REFERENCE_MHZ = 1515
 BOOSTED_MHZ = 1980
 COLD_MHZ = 1400
@@ -859,8 +871,8 @@ def _v5_run(results: Path, run_id: str, verdicts) -> Path:
     """Rows on the under-load instrument. A verdict is (LEVEL, DRIFT) or
     (LEVEL, DRIFT, side); a LEVEL failure with no side is written as the
     driver writes it, LOW with a cold clock. `throttled` follows
-    moe/bench/driver.py: DRIFT failed, or LEVEL failed on the LOW side; the
-    HIGH side is never throttled."""
+    moe/bench/driver.py, which since 2026-09-09 is the DRIFT verdict and
+    nothing else: neither side of a LEVEL failure is throttled."""
     from moe.bench.schema import COLUMNS, SCHEMA_VERSION
     from moe.bench.timing import TIMING_BASIS
     path = results / f"run_{run_id}_base.csv"
@@ -881,8 +893,7 @@ def _v5_run(results: Path, run_id: str, verdicts) -> Path:
                        clock_level_ok=level, clock_drift_ok=drift, host_bound_ok="ok",
                        clock_level_side=side, sm_clock_load_mhz=load,
                        reference_clock_mhz=REFERENCE_MHZ,
-                       throttled=str(drift == "failed"
-                                     or (level == "failed" and side != "high")))
+                       throttled=str(drift == "failed"))
             w.writerow(row)
     return path
 
@@ -899,7 +910,7 @@ def test_the_summary_names_the_retired_flag_on_pre_v5_rows(tmp_path):
     assert "clocks dropped" not in text
 
 
-def test_the_summary_names_level_and_drift_on_v5_rows(tmp_path):
+def test_the_summary_names_drift_on_v5_rows_and_records_the_level_sides(tmp_path):
     results, published = tmp_path / "results", tmp_path / "published"
     results.mkdir()
     _v5_run(results, "aa1", [("failed", "ok"), ("ok", "failed"), ("failed", "failed"),
@@ -907,45 +918,57 @@ def test_the_summary_names_level_and_drift_on_v5_rows(tmp_path):
     r = _publish(results, published, "--label", "v5")
     assert r.returncode == 0, r.stdout + r.stderr
     text = next(iter(sorted(published.glob("*/SUMMARY.md")))).read_text()
-    assert "3 rows carry throttled=True from the under-load clock check" in text, text
-    assert "LEVEL failed on 2" in text and "DRIFT failed on 2" in text
-    assert "side: low 2" in text, text
+    assert "2 rows carry throttled=True from the under-load clock check" in text, text
+    assert "DRIFT failed on 2" in text, text
+    assert "which is the whole rule since 2026-09-09" in text, text
+    # ONE of the two LEVEL failures also drifted, so it is EXCLUDED and is not
+    # in the kept count: until now both were counted here and printed under
+    # "NONE of them is excluded for it", which said the opposite of the rule.
+    assert "1 rows failed LEVEL" in text and "NONE of them is excluded for it" in text, text
+    assert "side low 1, recorded" in text, text
+    assert ("1 further rows failed LEVEL AND drifted (side low 1): they are "
+            "EXCLUDED, on DRIFT, and are not in the count above") in text, text
+    assert "side low 2" not in text, "a drifted row is still counted as kept"
     assert "outside the band 95% to 105% of" in text, text
     assert "below 95%" not in text, "LEVEL described as one-sided"
     assert "retired pre-v5" not in text and "clocks dropped" not in text
 
 
-def test_the_summary_keeps_the_high_side_and_counts_only_the_low_side(tmp_path):
-    """THE PLANTED HIGH-SIDE ROW, fifteenth instance of the two-call-site
-    defect. A memory-bound cell at 1980 MHz against the 1515 MHz reference
-    fails LEVEL with side "high"; the driver does not write it into
-    `throttled`, and until 2026-09-08 this generator described LEVEL as
-    "below 95% of" the reference, a one-sided flag that has been a band since
-    03df2d4. The HIGH row must be KEPT and reported as kept with the column
-    to read it by; the LOW row beside it is the one that counts."""
+def test_the_summary_keeps_both_level_sides_and_counts_only_drift(tmp_path):
+    """THE PLANTED SIDES. A memory-bound cell at 1980 MHz against the 1515 MHz
+    reference fails LEVEL high; a BLOCK_M=128 cell at 1400 fails it low. Until
+    2026-09-08 this generator described LEVEL as "below 95% of" and counted
+    both; until 2026-09-09 it counted the LOW one as a throttle, which on this
+    card is a rule against a tile rather than a measurement. Both sides are
+    KEPT and reported now, with the column to read them by, and only the DRIFT
+    row is flagged."""
     results, published = tmp_path / "results", tmp_path / "published"
     results.mkdir()
     _v5_run(results, "aa1", [("failed", "ok", "high"), ("failed", "ok", "high"),
-                             ("failed", "ok", "low"), ("ok", "ok")])
+                             ("failed", "ok", "low"), ("ok", "failed")])
     r = _publish(results, published, "--label", "sides")
     assert r.returncode == 0, r.stdout + r.stderr
     text = next(iter(sorted(published.glob("*/SUMMARY.md")))).read_text()
     assert "1 rows carry throttled=True from the under-load clock check" in text, text
-    assert "LEVEL failed on 1" in text and "side: low 1" in text, text
-    assert ("2 rows failed LEVEL on the HIGH side (SM clock under load boosted above "
-            "the band) and are NOT throttled: KEPT") in text, text
-    assert "pct_of_roof_at_cell_clock is the column to read for them" in text
-    assert "on a side other than" not in text, "an honest file was called defective"
+    assert "DRIFT failed on 1" in text, text
+    assert ("3 rows failed LEVEL (SM clock under load outside the band 95% to 105% of "
+            "the clock the calibration GEMM ran at) and NONE of them is excluded for "
+            "it: side high 2, low 1, recorded") in text, text
+    assert "pct_of_roof_at_cell_clock is the column to read beside it" in text
+    assert "with DRIFT not failed" not in text, "an honest file was called defective"
     # And a file whose flag disagrees with the driver's rule is named as such
-    # rather than read as a throttle: a HIGH row carrying throttled=True.
-    _v5_run(results, "bb2", [("failed", "ok", "high")])
+    # rather than read as a throttle: a LEVEL-low row carrying throttled=True,
+    # which is exactly what every row written between 03df2d4 and 2026-09-09
+    # carries and may not be pooled with rows scored under the current rule.
+    _v5_run(results, "bb2", [("failed", "ok", "low")])
     path = results / "run_bb2_base.csv"
     path.write_text(path.read_text().replace(",False", ",True"))
     r = _publish(results, published, "--label", "odd", "--run-id", "bb2") \
         if "--run-id" in PUBLISH.read_text() else _publish(results, published, "--label", "odd")
     assert r.returncode == 0, r.stdout + r.stderr
     text = "\n".join(p.read_text() for p in published.glob("*/SUMMARY.md"))
-    assert "still carry throttled=True, which moe/bench/driver.py never writes" in text, text
+    assert ("carry throttled=True with DRIFT not failed, which moe/bench/driver.py "
+            "never writes") in text, text
 
 
 def test_the_summary_says_when_the_instrument_cannot_be_read(tmp_path):
@@ -975,50 +998,56 @@ def test_run_all_summary_names_the_flag_the_same_way(tmp_path):
     results = tmp_path / "results"
     results.mkdir()
     _legacy_run(results, "aa1", flagged=3, total=4)
-    _v5_run(results, "bb2", [("failed", "ok")])
+    _v5_run(results, "bb2", [("ok", "failed")])
     r = sh(RUN_ALL, "--summary-only", str(results))
     assert r.returncode == 0, r.stdout + r.stderr
     assert ("CLOCK FLAG      3 rows carry throttled=True from the retired pre-v5 "
             "drift flag") in r.stdout, r.stdout
     assert ("CLOCK FLAG      1 rows carry throttled=True from the under-load clock "
-            "check: LEVEL failed on 1") in r.stdout
-    assert "side: low 1" in r.stdout and "outside the band" in r.stdout, r.stdout
+            "check: DRIFT failed on 1") in r.stdout
+    assert "which is the whole rule since 2026-09-09" in r.stdout, r.stdout
     assert "below 95%" not in r.stdout
     assert "clocks dropped" not in r.stdout
     assert "THROTTLED ROWS" not in r.stdout
 
 
-def test_run_all_summary_keeps_the_high_side_too(tmp_path):
+def test_run_all_summary_records_both_level_sides_too(tmp_path):
     """The second call site of the side, exercised the same way: a HIGH row
-    is kept and reported, a LOW row is the one that counts."""
+    and a LOW row are both kept and both reported, and neither is in the
+    flagged count."""
     results = tmp_path / "results"
     results.mkdir()
     _v5_run(results, "cc3", [("failed", "ok", "high"), ("failed", "ok", "low"),
-                             ("ok", "ok"), ("ok", "ok")])
+                             ("ok", "failed"), ("ok", "ok")])
     r = sh(RUN_ALL, "--summary-only", str(results))
     assert r.returncode == 0, r.stdout + r.stderr
     assert ("CLOCK FLAG      1 rows carry throttled=True from the under-load clock "
-            "check: LEVEL failed on 1") in r.stdout, r.stdout
-    assert ("CLOCK FLAG      1 rows failed LEVEL on the HIGH side (SM clock under load "
-            "boosted above the band) and are NOT throttled: KEPT") in r.stdout, r.stdout
-    assert "on a side other than" not in r.stdout
+            "check: DRIFT failed on 1") in r.stdout, r.stdout
+    assert ("CLOCK FLAG      2 rows failed LEVEL (SM clock under load outside the band "
+            "95% to 105% of the clock the calibration GEMM ran at) and NONE of them is "
+            "excluded for it: side high 1, low 1, recorded") in r.stdout, r.stdout
+    assert "with DRIFT not failed" not in r.stdout
 
 
-def test_neither_generator_describes_level_as_one_sided():
-    """The prose half of the defect: both generators' comments said the driver
-    sets `throttled` when "the LEVEL or DRIFT verdict ... failed", which has
-    been false for the HIGH side since driver.py excluded it, and their printed
-    line said "below 95% of". The band and the side are named now, and the
-    old sentence survives only where it is retracted."""
+def test_neither_generator_describes_level_as_an_exclusion():
+    """The prose half of the defect, in its 2026-09-09 form. Both generators'
+    comments said the driver sets `throttled` when "the LEVEL or DRIFT verdict
+    ... failed", which was false for the HIGH side from the day driver.py
+    excluded it and is false for both sides now; their printed line said
+    "below 95% of". The band, the side and the DRIFT-only rule are named now,
+    and the old sentences survive only where they are retracted."""
     for script in (PUBLISH, RUN_ALL):
         text = script.read_text()
-        assert "LEVEL IS A BAND" in text, script.name
+        assert "DRIFT IS THE WHOLE EXCLUSION RULE" in text, script.name
         assert "LEVEL_HIGH_FRACTION" in text, script.name
         assert "clock_level_side" in text, script.name
         for ln in text.splitlines():
             if "LEVEL or DRIFT verdict" in ln or 'f"below {LEVEL_FRACTION' in ln:
                 assert "Until 2026-09-08" in ln or ln.lstrip().startswith("#"), (script.name, ln)
         assert 'below {LEVEL_FRACTION:.0%} of' not in text, script.name
+        # The rule the driver applies, stated in the words the driver applies
+        # it in, so a reader of either generator meets the same sentence.
+        assert "it excludes nothing on either side" in text, script.name
 
 
 def test_neither_generator_types_the_old_parenthetical():
@@ -1181,18 +1210,21 @@ def test_the_four_shell_consumers_read_the_side():
 def test_no_new_reader_of_the_level_flag_is_blind_to_its_side():
     """Every script that reads `clock_level_ok` either reads `clock_level_side`
     or is on the dated ledger above. A new one is the sixteenth instance and
-    fails here with the rule to install: LOW or DRIFT excludes, HIGH is kept and
-    quoted by `pct_of_roof_at_cell_clock`. Ledger entries that have since been
-    fixed are named so the ledger can be pruned; they do not fail."""
+    fails here with the rule to install: DRIFT alone excludes, BOTH sides of a
+    LEVEL failure are kept and recorded, and `pct_of_roof_at_cell_clock` is
+    what either side is quoted by. Ledger entries that have since been fixed
+    are named so the ledger can be pruned; they do not fail."""
     blind = side_blind_readers(REPO / "scripts")
     new = [n for n in blind if n not in SIDE_BLIND_READERS]
     assert not new, (
         f"{new} read {LEVEL_FLAG} and never {LEVEL_SIDE}. A LEVEL failure is "
-        "two-sided since 03df2d4: LOW or DRIFT excludes, HIGH is NOT an "
-        "exclusion, it means the fixed-roof fraction is not comparable and "
-        "roofline.pct_of_roof_at_cell_clock is the column to quote. Read the "
-        "side, plant a HIGH row (1980 against 1515) that is kept and a LOW row "
-        "that is excluded, then decide whether the ledger is the place for it")
+        "two-sided since 03df2d4 and, since 2026-09-09, NEITHER side is an "
+        "exclusion: DRIFT alone excludes, the side records the clock that tile "
+        "held under the card's power cap, and "
+        "roofline.pct_of_roof_at_cell_clock is the column either side is "
+        "quoted by. Read the side, plant a HIGH row (1980 against 1485) and a "
+        "LOW row (1395 against 1485) that are both KEPT and a DRIFT row that "
+        "is excluded, then decide whether the ledger is the place for it")
     fixed = sorted(set(SIDE_BLIND_READERS) - set(blind))
     if fixed:
         print(f"\nledger entries that now name the side; prune them: {fixed}")

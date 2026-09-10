@@ -269,8 +269,9 @@ without saying so.
 the CSV unread. 13,565 matched pairs (same cell, same L2 mode, both timed,
 neither throttled; "throttled" here and everywhere in this file is the RETIRED
 drop-only flag on two idle-instant samples, which `moe/bench/timing.py`
-replaced with LEVEL and DRIFT under load on 2026-09-02, see
-`docs/APPARATUS.md`), median `ms_p50(graph) / ms_p50(eager)`:
+replaced with LEVEL and DRIFT under load on 2026-09-02, and of which only
+DRIFT excludes a row since 2026-09-09, see `docs/APPARATUS.md`), median
+`ms_p50(graph) / ms_p50(eager)`:
 
 | implementation | T=1 | 2 | 8 | 32 | 256 | 4096 |
 |---|---:|---:|---:|---:|---:|---:|
