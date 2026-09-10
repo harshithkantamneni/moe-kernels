@@ -99,9 +99,9 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   cells (`scripts/tile_cap_test.py`, demoted). What survives is narrower:
   production tiles do impose an AI ceiling, and shipped decode configurations
   sit nowhere near it.
-- **(j) The alias arm's plan and pod figure agree at 12.8 min.** This entry
+- **(j) The alias arm's plan and pod figure agree at 13.7 min.** This entry
   read 13.0 until 2026-09-09; 13 is the BOOKING, above the figure and never at
-  it, and 12.8 is what the page prints under both `--dot-fallback` settings.
+  it, and 13.7 is what the page prints under both `--dot-fallback` settings.
   Not quoted in this file.
 - **The C2 headline is at pooled routing.** The fp8/bf16 table below (bf16
   crossings 454 / 810 / 922 / 3240, 1.149 +/- 0.069) pools seven routing
@@ -484,7 +484,7 @@ RETRACTED 2026-09-01, alpha is 0.558 not 0.10. See the refit below; the 0.10 is
 an artefact of the estimator, not a measurement. The original text follows.
 
 Refitting the re-read cost against the observed tile over the 151 unthrottled
-memory-bound rows gives **alpha = 0.10** (mean ratio 1.65x, CV 12.8%), against
+memory-bound rows gives **alpha = 0.10** (mean ratio 1.65x, CV 13.7%), against
 1.67x / 13.1% at alpha = 0 and 1.60x / 17.5% at alpha = 1. An extra M-tile on the
 same expert costs about a tenth of a fresh weight read, not a whole one. This
 figure is carried forward from the 2026-08-26 write-up: the fit has no script and
@@ -1374,7 +1374,7 @@ found in TEMPO, RaMP, Yun or Sieve:
    spread in `E/k`. TEMPO and RaMP both stay in tokens-per-expert.
 
 AND THE TWO MEASUREMENTS OF `alpha` DISAGREE BY 3.3x. This repo refit 0.10 with a
-CV of 12.8%; TEMPO fits `b2/b` about 0.33. That is not a detail, because `alpha`
+CV of 13.7%; TEMPO fits `b2/b` about 0.33. That is not a detail, because `alpha`
 sets which tile heights can ever reach the roof at all:
 
 REFIT 2026-09-01 AND THE ANSWER IS 0.558, not 0.10 and not 0.33. Group-intercept

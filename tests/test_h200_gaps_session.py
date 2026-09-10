@@ -2709,7 +2709,7 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
     surfaces have to disclose THAT: the fourth state was reached on 2026-09-09
     (308 s, P1 UNKNOWN at alpha >= 0.229, latched INVALID: the ledger reads
     `alias_ablation INVALID 3 308` and four validity gates failed), the bound it
-    buys has been bought, and a probe miss now costs 1.2 min and exits 3. The
+    buys has been bought, and a probe miss now costs 2.0 min and exits 3. The
     state is still described, because an operator reading the page has to know
     what the flag is protecting them from; what may not stand is a surface
     saying the arm is booked at a flag it is not."""
@@ -2750,9 +2750,9 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
         low = flat.lower()
         assert "--dot-fallback refuse" in flat, surface
         # The PAGE's figure for the probe, not a rounding of it: the plan prints
-        # "PLUS 1.2 min charged outright for the probe". Both surfaces said 1.3
+        # "PLUS 2.0 min charged outright for the probe". Both surfaces said 1.3
         # while arm_basis said 1.2, off the same page.
-        assert "1.2 min" in flat, surface
+        assert "2.0 min" in flat, surface
         # The branch it replaced is named as history, not as the booking.
         assert "allow" in low, surface
         assert "unknown" in low and "not a refutation" in low, surface

@@ -3358,10 +3358,21 @@ def _throughput_ladder(cells, block_m: int, denominator: float):
     caller that passes the run's own plateau gets an ARM-RELATIVE number whose
     denominator moved 145.7-198.4 TFLOP/s inside one A100 session, which is not
     a quantity any threshold can be stated against.
+
+    A DRIFTED CELL IS EXCLUDED HERE FOR THE REASON `ladder_treads` EXCLUDES IT.
+    The two builders disagreed for one commit on 2026-09-09: this one kept
+    every cell that ran, `ladder_treads` dropped the drifted ones, and
+    `tile_cap_test.analyse` reads BOTH on one page, so its V2 flatness figure
+    came off a BLOCK_M=256 cell whose `clock_drift_ok` is False while the
+    reference fit on the same page refused that exact cell. Neither pool was
+    wrong; having two of them silently was. A clock that moved across a cell's
+    own trials makes its median a blend of two operating points, and no
+    denominator repairs that.
     """
     out = []
     for c in sorted((c for c in cells
-                     if c.block_m == block_m and c.aligned and c.status == "ok"),
+                     if c.block_m == block_m and c.aligned and c.status == "ok"
+                     and not c.clock_excluded),
                     key=lambda c: c.tiles_per_expert):
         if denominator > 0:
             out.append((c.tiles_per_expert, c.useful_tflops / denominator))

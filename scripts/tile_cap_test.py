@@ -1109,17 +1109,30 @@ def gate_v1_non_vacuity(cells, *, tiles, planned_cells: int,
     earlier session stays in `cells.csv` forever and is retried, so after a
     successful retry the file holds two rows for it and a raw row count would
     read as more work than happened.
+
+    THE TREADS COUNTED HERE ARE THE TREADS THE LADDERS BELOW WILL HOLD, which
+    means `SWEEP.ladder_treads` counts them and not a second walk over the raw
+    cells. Until 2026-09-09 this gate counted every aligned cell that ran and
+    reported 24 and 2 on the committed corpus while the ladders held 21 and 1:
+    it over-reported by exactly the cells a drifting clock excludes, which is
+    the one thing a gate whose stated job is "a check that examined nothing
+    reports no failures" must not do. The excluded count is named on its own
+    detail line, because this page printed the word `drift` nowhere at all
+    while silently dropping 8 of 72 cells from every fit on it.
     """
     ok = {(c.block_m, c.tokens) for c in cells if c.status == "ok" and c.ms_p50 > 0}
     failed = [c for c in cells
               if c.status != "ok" and (c.block_m, c.tokens) not in ok]
-    aligned = {bm: len({c.tokens for c in cells
-                        if c.block_m == bm and c.aligned and c.status == "ok"
-                        and c.ms_p50 > 0})
-               for bm in tiles}
+    treads = {bm: SWEEP.ladder_treads(cells, bm) for bm in tiles}
+    aligned = {bm: len(points) for bm, (points, _drifted) in treads.items()}
+    drifted = {bm: n for bm, (_points, n) in treads.items()}
     detail = [f"{len(ok)} of {planned_cells} planned cells measured",
               "exactly-full tile stacks per setting: "
               + ", ".join(f"BM={bm}:{aligned[bm]}" for bm in tiles),
+              "cells excluded because the clock DRIFTED across their own "
+              "trials, and so absent from every ladder above: "
+              + ", ".join(f"BM={bm}:{drifted[bm]}" for bm in tiles)
+              + (" (none)" if not sum(drifted.values()) else ""),
               f"{len(failed)} cell(s) failed and were not recovered"]
     for c in failed[:5]:
         detail.append(f"  BM={c.block_m} T={c.tokens}: {c.detail}")

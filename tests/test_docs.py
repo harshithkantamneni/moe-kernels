@@ -137,10 +137,9 @@ STALE_LEVEL_PHRASES = (
     "only arm that can confirm",
 )
 
-#: The LOW-excludes wording, retired 2026-09-09. Checked over `docs/` only:
-#: README.md is the integrator's file and its sentence is landed once, with the
-#: test count, in the same integration. When it lands, fold these into
-#: STALE_LEVEL_PHRASES above and delete this tuple.
+#: The LOW-excludes wording, retired 2026-09-09 and landed in README.md with
+#: the test count in the 2026-09-10 integration, so these are checked over
+#: README.md as well as `docs/` and are folded in below.
 RETIRED_LOW_EXCLUDES_PHRASES = (
     "LOW or DRIFT excludes",
     "Only LOW or DRIFT excludes",
@@ -210,19 +209,16 @@ def test_the_level_prose_checker_fires_on_a_planted_stale_row_and_not_on_a_clean
 
 
 def test_every_doc_describes_the_clock_rule_as_drift_only_with_the_side_recorded():
-    """No doc or the README may describe a retired one-sided LEVEL or call the
-    n256 arm confirmable; no doc under `docs/` may say the LOW side excludes;
-    and each doc that describes the rule states the band, the side, the
-    exclusion (DRIFT alone) and `pct_of_roof_at_cell_clock` as the column to
-    read.
+    """No doc or the README may describe a retired one-sided LEVEL, say the
+    LOW side excludes, or call the n256 arm confirmable; and each doc that
+    describes the rule states the band, the side, the exclusion (DRIFT alone)
+    and `pct_of_roof_at_cell_clock` as the column to read.
 
-    README.md is checked for the retired ONE-SIDED wording only. Its
-    LOW-excludes sentence is the integrator's to land, in the same pass that
-    sets the test count; the exact edit is in that slice's report. When it
-    lands, fold RETIRED_LOW_EXCLUDES_PHRASES into STALE_LEVEL_PHRASES and this
-    exemption disappears."""
-    assert _level_prose_defects((ROOT / "README.md").read_text()) == []
-    for path in sorted((ROOT / "docs").glob("*.md")):
+    README.md was exempt from the LOW-excludes phrases while its sentence was
+    the integrator's to land. It landed on 2026-09-10 in the same pass that
+    set the test count, so the exemption is gone and the README is checked
+    against the same list as every doc."""
+    for path in [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]:
         defects = _level_prose_defects(path.read_text(),
                                        RETIRED_LOW_EXCLUDES_PHRASES)
         assert defects == [], f"{path.relative_to(ROOT)} still says {defects}"

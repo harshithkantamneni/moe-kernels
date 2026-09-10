@@ -76,7 +76,7 @@ one-page summary of both.
   `moe_align_block_size` pads to, and on UNIFORM routing: BLOCK_M=128 runs
   multi-tile in 65 of 87 cells, up to 33-34 tiles per expert; BLOCK_M=16 in
   1 of 24 and BLOCK_M=64 in 5 of 112. Skewed routings were never counted.
-- **(j) The alias arm's plan and pod figure agree at 12.8 min**; the 11.6 the
+- **(j) The alias arm's plan and pod figure agree at 13.7 min**; the 11.6 the
   plan used to print was the probe left off the plan page. This entry read 13.0
   until 2026-09-09, which is the BOOKING and not the figure. Not quoted in this
   file.

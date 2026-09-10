@@ -131,11 +131,20 @@ numbers omit them and are therefore not comparable to each other:
 - **Clock under load, flagged on LEVEL and DRIFT.** `moe/bench/timing.py`
   polls the SM clock from a background thread WHILE the trials run and sets
   two verdicts per cell: LEVEL, the loaded clock is inside a 0.95 to 1.05 band
-  around the clock the roof was measured at, with the side named on a failure
-  (LOW or DRIFT excludes a row; HIGH is the expected state of a memory-bound
-  cell on the H200 and is not an exclusion: read `pct_of_roof_at_cell_clock`,
-  the roof rescaled to the cell's own clock), and DRIFT, the first and last
-  under-load samples agree within 5% in either direction. An earlier version
+  around the clock the roof was measured at, with the side named on a failure,
+  and DRIFT, the first and last under-load samples agree within 5% in either
+  direction. **DRIFT is the only exclusion.** A clock that moved across a
+  cell's own trials makes its median a blend of two operating points and the
+  time belongs to neither, which no rescaling repairs. NEITHER LEVEL SIDE
+  EXCLUDES ANYTHING: under a 700 W cap the clock is set per tile by the
+  kernel's own draw, so a LOW cell is a hungry tile at its steady state and a
+  HIGH one a memory-shaped cell boosting. Both are kept, the side is recorded
+  on the row, every compute-bound gate reads the fixed roof, and
+  `pct_of_roof_at_cell_clock`, the roof rescaled to the cell's own clock, is
+  printed beside it as issue efficiency and is never a gate input. Until
+  2026-09-09 a LOW cell was excluded, which made the study's two primary tiles
+  unmeasurable on the H200: BLOCK_M=128 at BN=64 holds 1395 MHz against a
+  calibration GEMM at 1485. An earlier version
   of this line said the clock was "sampled around every cell and flagged"
   (retracted 2026-09-02:
   that flag compared two idle-instant samples and fired on a drop, so it
@@ -211,8 +220,8 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 3973 tests collected off-GPU (`pytest --collect-only -q`;
-`tests/test_docs.py` fails when this line goes stale). 14 published arms in
+Harness complete; 4139 tests collected off-GPU (`pytest --collect-only -q`;
+`tests/test_docs.py` fails when this line goes stale). 15 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder
 arms carrying 26 `*.report.json` files and no CSV. Five claims: C1 and C2
