@@ -17,11 +17,14 @@ the first reads that expert's weight block in full and each later one costs
 
 That bound is why alpha is not a nuisance parameter. Read as `2 BM / (alpha b)`
 at 0.558 it puts BLOCK_M 16, 32 and 64 at 57, 115 and 229 FLOP/byte, and the
-first two sit below EITHER card's own ridge (H200 162.8, A100 145.8, each off
-its own calibration); vLLM runs BLOCK_M=16 through the whole decode range, so a
-decode-configured MoE kernel can never reach its compute roof. That reading is
-an UPPER BOUND on the cap and not the cap: a ladder-fitted alpha carries the
-first tread's activation and fixed cost in its denominator, so the exact cap is
+first two sit below EITHER card's own ridge (H200 152.8, A100 145.8, each off
+its own calibration; the H200 figure was 162.8 in this paragraph until ab61e55
+re-measured the card on 2026-09-09 and the file, which is what every gate here
+reads and prints, now says 668.5 TFLOP/s bf16 over 4374.5 GB/s triad = 152.8).
+vLLM runs BLOCK_M=16 through the whole decode range, so a decode-configured MoE
+kernel can never reach its compute roof. That reading is an UPPER BOUND on the
+cap and not the cap: a ladder-fitted alpha carries the first tread's activation
+and fixed cost in its denominator, so the exact cap is
 lower by (1 + phi + delta) (`moe/bench/ai_model.py`, retraction (a)), and with
 alpha_a unmeasured the factor is a bracket, 1.02 to 3.0 at BM=128. Lowering the
 cap only strengthens the "never" for the small tiles. The whole tile-corrected
@@ -221,7 +224,7 @@ AND THE BIAS IS BOUNDED WHILE THE 2026-09-01 CEILING IS NOT. That reduction is
 a full 64x128 tree per K iteration on the CUDA cores, and the run it produced
 sat at 0.61 of the card's read roof on every geometry. `dot` moves the same
 work onto the tensor cores at an arithmetic intensity of `BLOCK_M` FLOP/byte,
-16 against a ridge of 162.8, so its compute cost is at most a tenth of its
+16 against a ridge of 152.8, so its compute cost is at most a tenth of its
 memory cost and is IDENTICAL in both arms. That is why `--probe` is allowed to
 consider `dot`: a bounded tenth-of-memory bias in a design that can see DRAM
 beats an unbiased design that cannot. The probe prints which mode it chose and
@@ -398,7 +401,7 @@ DEFAULT_MODELS = ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite",
 #: the multi-tile and memory-bound windows overlap generously: multi-tile needs
 #: rows per expert above BLOCK_M, memory bound needs rows per expert below the
 #: ridge, and at BLOCK_M=16 the whole ladder (16, 32, 64, 128 rows per expert)
-#: sits below both cards' own ridges (H200 162.8, A100 145.8).
+#: sits below both cards' own ridges (H200 152.8 since ab61e55, A100 145.8).
 DEFAULT_BLOCK_M = 16
 
 #: Everything else about the tile, held fixed so the ONLY thing that varies
@@ -624,10 +627,16 @@ MIN_SIGNAL_FRACTION = 0.25
 #: now derived from this one as well as from `MIN_SIGNAL_FRACTION`.
 MAX_BRACKET_R = 0.9
 
-#: The aliased ladder's achieved request bandwidth, over the card's read roof.
-#: Below 1.0 the shared non-DRAM path is SLOWER than DRAM, DRAM has slack in
-#: the normal arm, and no ablation of DRAM can move the clock however large
-#: alpha is. The 2026-09-01 run measured 0.607 to 0.616 on five geometries.
+#: The smallest aliased request bandwidth, over the card's read roof, that this
+#: arm will run a ladder at. Call it `h`.
+#:
+#: BELOW 1.0 IS THE FLOOR CASE AND NOT THE BAR. There the shared non-DRAM path
+#: is SLOWER than DRAM, DRAM has slack in the normal arm, and no ablation of
+#: DRAM can move the clock however large alpha is; the 2026-09-01 run measured
+#: 0.607 to 0.616 on five geometries and that is what it was. But clearing 1.0
+#: only says DRAM bound, not that the run can be read: the two derivations below
+#: put the bar at 2.111, and this paragraph led with the 1.0 story until
+#: 2026-09-09, when the bar moved out from under it.
 #:
 #: IT IS DERIVED FROM `MIN_SIGNAL_FRACTION` AND NOT CHOSEN BESIDE IT, because
 #: two thresholds over the same physical quantity is this repository's recurring
@@ -2148,7 +2157,9 @@ def reference_clock_for(gpu_name: str):
     the three-field rule. `block_m_crossing_sweep`, `dtype_tile_confound` and
     `memory_branch_anchor` each read those fields their own way, and copies of
     one rule are how the driver came to believe no committed calibration
-    recorded a clock while the sweep read 1515 MHz out of the same yaml.
+    recorded a clock while the sweep read 1515 MHz out of the same yaml. That
+    1515 is the figure of the day it happened; ab61e55 re-measured this card on
+    2026-09-09 and the same field now reads 1485.
 
     Returns the `ReferenceClock`, whose one `source` string says where the
     number came from when there is one and why there is none when there is not,
@@ -2427,7 +2438,7 @@ def measure_rung(kernel, rung: Rung, design: Design, args,
 #:   compute       `dot` moves the reduction onto the tensor cores. It is BIASED
 #:                 (see the header) and `prediction_gate` still refuses to
 #:                 answer P1 from it, but the bias is bounded at BLOCK_M/ridge =
-#:                 16/162.8 and is identical in both arms, while a shared
+#:                 16/152.8 and is identical in both arms, while a shared
 #:                 ceiling below the DRAM roof is not a bias at all: it is the
 #:                 absence of a measurement. `choose_pinning` prefers `sum`
 #:                 whenever a `sum` pinning clears, and says so.
@@ -2444,10 +2455,13 @@ PROBE_PINNINGS = (
     # the load path, and the tree gets cheaper with fewer lanes to fold. So the
     # search continues DOWN: 4 warps at the two BLOCK_K, and 2 warps, which is
     # the smallest a Triton program can be here. The bar those readings must
-    # clear is MIN_HEADROOM_RATIO x roof = 9736 GB/s on this card; the best dot
-    # pinning managed 9047, so sum has to beat every dot reading of 2026-09-09
-    # to take the ladder, and if it cannot, --dot-fallback refuse stops the arm
-    # having spent only the probe.
+    # clear is MIN_HEADROOM_RATIO x roof = 9739 GB/s on this card; the best dot
+    # pinning managed 9047, so at this bar NOTHING in the 2026-09-09 grid
+    # clears, sum or dot. --dot-fallback is not what stops the arm then: with
+    # no clearing pinning of either kind `choose_pinning` takes the "no pinning
+    # cleared" branch under allow as well as under refuse, and the arm stops at
+    # the probe either way. The flag only decides who gets the ladder once at
+    # least one dot pinning has reached the bar.
     {"num_warps": 4, "num_stages": 4, "block_k": 64, "compute": "sum"},
     {"num_warps": 4, "num_stages": 6, "block_k": 128, "compute": "sum"},
     {"num_warps": 2, "num_stages": 4, "block_k": 128, "compute": "sum"},
@@ -2521,15 +2535,36 @@ def choose_pinning(readings: list[dict], roof_bytes_s: float | None,
     clearing = [(ratio, r) for ratio, r in scored if ratio >= MIN_HEADROOM_RATIO]
     if not clearing:
         best_ratio, best = max(scored, key=lambda pair: pair[0])
+        below = sum(1 for ratio, _ in scored if ratio < 1.0)
+        # WHICH REFUSAL THIS IS, TOLD FROM THE NUMBER RATHER THAN ASSUMED.
+        # Until 2026-09-09 this branch printed the h < 1 story unconditionally
+        # ("limited by a shared non-DRAM path SLOWER than DRAM"), which was
+        # true of every reading while the bar was 1.333 and stopped being true
+        # the moment the bar became 2.111: the 2026-09-09 grid's best was 1.961
+        # of the roof and five of its six readings were ABOVE the roof. A
+        # refusal that names the wrong physics is the message the pod rerun
+        # gets, so the two worlds are separated here.
+        if best_ratio > 1.0:
+            why = (
+                f"the shared path IS faster than DRAM there, but not by "
+                f"enough: at h = {best_ratio:.3f} the bracket estimator sits "
+                f"at r = 1/(h-1) = {1.0 / (best_ratio - 1.0):.3f}, above "
+                f"MAX_BRACKET_R {MAX_BRACKET_R}, so `bracket` is bound to void "
+                "the page any ladder run here would pay for"
+                + (f" ({below} of {len(scored)} did not reach the roof at all)"
+                   if below else ""))
+        else:
+            why = (
+                f"all {len(scored)} are limited by a shared non-DRAM path "
+                "SLOWER than DRAM, so in the normal arm DRAM has slack and "
+                "removing it cannot move the clock")
         return None, (
-            f"no pinning cleared the roof. The best of {len(scored)} was "
+            f"no pinning reached {MIN_HEADROOM_RATIO:.3f} x the roof, the bar "
+            f"`bracket` needs. The best of {len(scored)} was "
             f"{best['pinning']} at {best['aliased_bytes_s'] / 1e9:.0f} GB/s, "
             f"{best_ratio:.3f} of the measured read roof of "
-            f"{roof_bytes_s / 1e9:.0f} GB/s, against a limit of "
-            f"{MIN_HEADROOM_RATIO:.3f}. Every one of them is limited by a shared "
-            "non-DRAM path SLOWER than DRAM, so in the normal arm DRAM has "
-            "slack and removing it cannot move the clock. No ladder run at any "
-            "of these pinnings could have measured alpha, so none was run")
+            f"{roof_bytes_s / 1e9:.0f} GB/s: {why}. No ladder run at any of "
+            "these pinnings could have measured alpha, so none was run")
     sums = [pair for pair in clearing if pair[1]["pinning"]["compute"] == "sum"]
     if not sums and not dot_fallback:
         best_ratio, best = max(clearing, key=lambda pair: pair[0])
@@ -2684,12 +2719,16 @@ def report_probe(say, readings: list[dict], roof_bytes_s: float | None,
     say()
     say("  Every pinning below is timed on the SMALLEST model at "
         f"{PROBE_TILES} tiles. The number that")
-    say("  decides is the ALIASED ladder's achieved request bandwidth: while it "
-        "is BELOW the")
-    say("  card's DRAM roof, the shared non-DRAM path is the slower one, DRAM "
-        "has slack in the")
-    say("  normal arm, and no ablation of DRAM can move the clock however "
-        "large alpha is.")
+    say("  decides is the ALIASED ladder's achieved request bandwidth over the "
+        "card's DRAM roof,")
+    say("  h. Below 1 the shared non-DRAM path is the slower one, DRAM has "
+        "slack in the normal")
+    say("  arm, and no ablation of DRAM can move the clock however large alpha "
+        "is. Above 1 DRAM")
+    say("  binds, but binding is not enough to fit: r = 1/(h-1), so the bar is "
+        "the one printed")
+    say("  under the table and a pinning below it runs a ladder `bracket` is "
+        "bound to void.")
     say()
     say("  warps  stages  BLOCK_K  compute      aliased GB/s   of roof   note")
     for reading in readings:
@@ -2711,12 +2750,30 @@ def report_probe(say, readings: list[dict], roof_bytes_s: float | None,
             "a pinning below it runs a ladder `bracket` is bound to void.")
     say(f"  ADOPTED: {why}" if chosen else f"  NONE ADOPTED: {why}")
     if not chosen:
+        # WHICH REFUSAL, AGAIN, BECAUSE THERE ARE NOW TWO. This paragraph named
+        # 2026-09-01 on every refusal, and 2026-09-01 was a shared ceiling at
+        # 0.61 of the roof. A grid whose best reading is ABOVE the roof and
+        # short of 2.111 is refused for a different reason and `alias-blind`
+        # does not plant it, so saying so would send a reader to rehearse the
+        # wrong world.
+        rates = [r["aliased_bytes_s"] for r in readings
+                 if r.get("aliased_bytes_s")]
+        best_ratio = max(rates) / roof_bytes_s if rates and roof_bytes_s else 0.0
         say()
-        say("  This is the 2026-09-01 result restated in the units that name "
-            "its cause, and it")
-        say("  is rehearsable off-GPU: --synthetic "
-            f"{SYNTHETIC_ALIAS_LAWS[1]} plants exactly this world and "
-            f"--synthetic {SYNTHETIC_ALIAS_LAWS[0]} plants its opposite.")
+        if best_ratio > 1.0:
+            say("  This is NOT the 2026-09-01 world: the shared path here beat "
+                "DRAM and the refusal")
+            say("  is `bracket`'s, not headroom's below-1 case. What "
+                f"--synthetic {SYNTHETIC_ALIAS_LAWS[1]} rehearses is")
+            say("  the 0.61-of-roof ceiling, and "
+                f"--synthetic {SYNTHETIC_ALIAS_LAWS[0]} its opposite; neither "
+                "plants this one.")
+        else:
+            say("  This is the 2026-09-01 result restated in the units that "
+                "name its cause, and it")
+            say("  is rehearsable off-GPU: --synthetic "
+                f"{SYNTHETIC_ALIAS_LAWS[1]} plants exactly this world and "
+                f"--synthetic {SYNTHETIC_ALIAS_LAWS[0]} plants its opposite.")
 
 
 # --------------------------------------------------------------------------
@@ -2790,6 +2847,19 @@ def estimated_kernel_ms(design: Design, args, roof_bytes_s: float | None
 #: bound is worth an hour of a rented card is the operator's decision and it
 #: cannot be made from a page that prices only the design in front of it.
 #:
+#: IT FORCES THE DOT PATH RATHER THAN FALLING DOWN IT, ADDED 2026-09-09 WITH THE
+#: BAR. The knobs below used to be the whole invocation, run under the default
+#: `--probe` and `--dot-fallback allow`, which was the route the 2026-09-09 run
+#: itself took to dot mode. Raising `MIN_HEADROOM_RATIO` to 2.111 closed it: the
+#: best reading in that probe grid was 1.961 of the roof, `choose_pinning`
+#: returns None for BOTH `allow` and `refuse` on it, and the run would stop at
+#: the probe INVALID having bought no bound at all. So the booking names the
+#: pinning instead of hoping the probe hands it over: `--no-probe`, `--compute
+#: dot`, and the 8-warp / 4-stage / BLOCK_K 128 dot pinning that read 9047 GB/s
+#: on 2026-09-09, which is the fastest thing that grid found. A page that books
+#: 34 minutes for an outcome its own commit made unreachable is worse than a
+#: page with no booking on it.
+#:
 #: WHY THESE KNOBS. 200 ms per trial rather than 50 puts ~600 ms of timed region
 #: against a governor that moves on the 0.1-1 s scale, which is the cause the
 #: 2026-09-09 placebo failure had: 28.0% on deepseek-v2-lite|t4, four times the
@@ -2805,10 +2875,11 @@ DOT_BOUND_FALLBACK = {
     "cell_budget_ms": 200.0,
     "replicates": 18,
     "models": ("mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v3"),
+    "pinning": {"num_warps": 8, "num_stages": 4, "block_k": 128},
 }
 
 
-def fallback_booking(roof_bytes_s: float | None, probing: bool = True):
+def fallback_booking(roof_bytes_s: float | None):
     """(kernel_min, wall_min, argv) for `DOT_BOUND_FALLBACK`, or None.
 
     Priced through `estimated_kernel_ms` and this module's own constants, so it
@@ -2816,15 +2887,28 @@ def fallback_booking(roof_bytes_s: float | None, probing: bool = True):
     2026-09-09 it read 33.4 wall minutes, and widening the sum half of
     `PROBE_PINNINGS` from three entries to seven added four compiles to the
     probe and moved it up.
+
+    PRICED OFF ITS OWN ARGV AND NOT OFF THE CALLER'S FLAG. This took `probing`
+    from `report_cost` until 2026-09-09 and the argv it printed never carried
+    `--no-probe`, so the same command was priced at 34.3 wall minutes under
+    `--probe` and 32.1 under `--no-probe`: one of the two was a duration
+    printed against a command it was not the price of. The argv is now the
+    single source, `parse_args` reads the probe flag back out of it, and the
+    two cannot separate again.
     """
+    pin = DOT_BOUND_FALLBACK["pinning"]
     argv = ["--cell-budget-ms", f"{DOT_BOUND_FALLBACK['cell_budget_ms']:.0f}",
             "--replicates", str(DOT_BOUND_FALLBACK["replicates"]),
-            "--models", ",".join(DOT_BOUND_FALLBACK["models"])]
+            "--models", ",".join(DOT_BOUND_FALLBACK["models"]),
+            "--no-probe", "--compute", "dot",
+            "--num-warps", str(pin["num_warps"]),
+            "--num-stages", str(pin["num_stages"]),
+            "--block-k", str(pin["block_k"])]
     args = parse_args(argv)
     kernel_ms = estimated_kernel_ms(build_design(args), args, roof_bytes_s)
     if kernel_ms is None:
         return None
-    kernel_min, wall_min = _wall_from_kernel(kernel_ms, probing)
+    kernel_min, wall_min = _wall_from_kernel(kernel_ms, args.probe)
     return kernel_min, wall_min, argv
 
 
@@ -2944,28 +3028,33 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
     # priced here because this is the only function in this file that names a
     # duration and a session is booked off the page, not off a memo.
     sums = [pin for pin in PROBE_PINNINGS if pin["compute"] == "sum"]
-    probe_only_min = _wall_from_kernel(0.0, probing)[1] if probing else 0.0
-    say()
-    say(f"  PROBE   {probe_only_min:5.1f} min   `--dot-fallback refuse`: the "
-        f"widened sum grid, {len(sums)} sum")
-    say("                        pinning(s) of "
-        f"{len(PROBE_PINNINGS)}, stops the arm at the probe when none of them "
-        "clears")
-    say(f"                        {MIN_HEADROOM_RATIO:.3f} x the roof"
-        + (f" ({MIN_HEADROOM_RATIO * roof_bytes_s / 1e9:.0f} GB/s here)"
-           if roof_bytes_s else "")
-        + ". That is INVALID and it is the")
-    say("                        cheapest question this arm can ask. The sum "
-        "half widened DOWN in")
-    say("                        warps on 2026-09-09 because 8 -> 4 warps was "
-        "the only knob that")
-    say("                        moved the rate (2869 -> 5500 GB/s); it was "
-        "1.3 min at three sum")
-    say("                        pinnings before those four were added:")
-    for pin in sums:
-        say(f"                          {pin['num_warps']:2d} warps  "
-            f"{pin['num_stages']} stages  BLOCK_K {pin['block_k']}")
-    booking = fallback_booking(roof_bytes_s, probing)
+    # THE PROBE BOOKING ONLY EXISTS UNDER --probe. It printed unconditionally
+    # until 2026-09-09, so a --no-probe page booked "PROBE 0.0 min" and then
+    # listed the seven sum pinnings that run will never time, which reads as
+    # "the probe is free" rather than "there is no probe".
+    if probing:
+        probe_only_min = _wall_from_kernel(0.0, probing)[1]
+        say()
+        say(f"  PROBE   {probe_only_min:5.1f} min   `--dot-fallback refuse`: "
+            f"the widened sum grid, {len(sums)} sum")
+        say("                        pinning(s) of "
+            f"{len(PROBE_PINNINGS)}, stops the arm at the probe when none of "
+            "them clears")
+        say(f"                        {MIN_HEADROOM_RATIO:.3f} x the roof"
+            + (f" ({MIN_HEADROOM_RATIO * roof_bytes_s / 1e9:.0f} GB/s here)"
+               if roof_bytes_s else "")
+            + ". That is INVALID and it is the")
+        say("                        cheapest question this arm can ask. The "
+            "sum half widened DOWN in")
+        say("                        warps on 2026-09-09 because 8 -> 4 warps "
+            "was the only knob that")
+        say("                        moved the rate (2869 -> 5500 GB/s); it "
+            "was 1.3 min at three sum")
+        say("                        pinnings before those four were added:")
+        for pin in sums:
+            say(f"                          {pin['num_warps']:2d} warps  "
+                f"{pin['num_stages']} stages  BLOCK_K {pin['block_k']}")
+    booking = fallback_booking(roof_bytes_s)
     if booking is not None:
         fb_kernel, fb_wall, fb_argv = booking
         say()
@@ -2982,9 +3071,15 @@ def report_cost(say, design: Design, args, roof_bytes_s: float | None,
         say("                        the 28% placebo, and the sub-L2 model "
             "that failed placebo, form")
         say("                        and bracket is dropped. It read 33.4 min "
-            "on 2026-09-09, before")
-        say("                        the sum half of PROBE_PINNINGS widened "
-            "and added four compiles.")
+            "on 2026-09-09, when it")
+        say("                        ran under the probe and reached dot mode "
+            "by falling down the")
+        say(f"                        fallback; at "
+            f"{MIN_HEADROOM_RATIO:.3f} x the roof nothing in that grid clears, "
+            "so it now")
+        say("                        names the dot pinning and skips the probe "
+            "rather than booking")
+        say("                        an outcome no probe can reach.")
 
 
 def measurement_order(design: Design) -> tuple[Rung, ...]:
@@ -3859,8 +3954,29 @@ def _aliased_slope_bytes_s(row_group: list[dict]) -> float | None:
     return weight_bytes / (line[1] * 1e-3)
 
 
+#: The HEADROOM gate's name, in one place because the tests, the RESULT token
+#: and `report_probe`'s preamble all have to name the same rule. It slugs to 49
+#: characters; `Gate.token` slugs the WHOLE name and truncates at 56, so a
+#: longer sentence here ships a RESULT token that stops mid word.
+#:
+#: RENAMED ON 2026-09-09 WHEN THE BAR MOVED, and the old name is the point. It
+#: read "headroom: the shared path is faster than DRAM, so DRAM could bind",
+#: which was a fair name while the limit was the 1.333 inverted out of
+#: `MIN_SIGNAL_FRACTION`: nothing that had been measured sat between 1 and
+#: 1.333. The limit is now the larger of that and `bracket`'s
+#: 1 + 1/MAX_BRACKET_R = 2.111, so the gate FAILS runs whose shared
+#: path IS faster than DRAM: the 2026-09-09 H200 records read 1.964 and now
+#: fail under a name asserting the sufficient condition they met. A gate named
+#: after a retired rule is this repository's recurring defect, and this is the
+#: shape it always has: `LEVEL_GATE` was renamed for exactly this reason in the
+#: commit that moved the rules, its own comment says why, and the two sibling
+#: gates changed by the SAME commit, this one and `PROBE_GATE`, were left
+#: standing. Fixed at one site, left at the others.
+HEADROOM_GATE = "headroom: DRAM binds by enough for `bracket` to hold"
+
+
 def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
-    """Was DRAM the binding resource at all? The 2026-09-01 run's real defect.
+    """Was DRAM the binding resource, by enough to fit? 2026-09-01's real defect.
 
     THE ABLATION CAN ONLY SEE A RESOURCE THAT BINDS. Both arms issue the same
     loads and both pay the same non-DRAM cost of getting them from L2 into the
@@ -3879,11 +3995,22 @@ def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
     that the per-tile cost is not DRAM. It was evidence that the apparatus
     could not have seen DRAM.
 
+    THE BAR IS NOT 1.0 AND HAS NOT BEEN SINCE 2026-09-09. h above 1 says DRAM
+    binds; it does not say the estimators bracket anything. With the fixed cost
+    near zero r = 1/(h - 1) exactly, so `MAX_BRACKET_R` 0.9 needs h >= 2.111,
+    and `MIN_HEADROOM_RATIO` is now the larger of that and the 1.333 inverted
+    out of `MIN_SIGNAL_FRACTION`. The 2026-09-09 H200 run is what the gap cost:
+    the probe read h = 1.961 on deepseek-v2-lite, this gate PASSed it at 1.964
+    against 1.333, the 12.8-minute ladder ran, and `bracket` voided the page on
+    that same model at r = 1.004. So a run can fail here with a shared path
+    comfortably FASTER than DRAM, and the detail below says which of the two
+    worlds it is rather than printing the h < 1 story at every ratio.
+
     UNKNOWN, NOT PASS, WITHOUT A ROOF. This is a VALIDITY gate, so UNKNOWN is
     INVALID and nothing is quotable: a card with no committed calibration has
     no ceiling to compare against and this gate will not invent one.
     """
-    name = "headroom: the shared path is faster than DRAM, so DRAM could bind"
+    name = HEADROOM_GATE
     if not roof_bytes_s:
         return Gate(name, None,
                     "no committed calibration for this card, so there is no "
@@ -3903,6 +4030,20 @@ def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
     if not ratios:
         return Gate(name, None, "no model produced an aliased ladder slope")
     ratio, model, achieved = min(ratios)
+    # WHICH SIDE OF 1 THE NUMBER IS ON DECIDES WHICH SENTENCE IS TRUE. The h < 1
+    # story used to be printed at every ratio, and once the bar moved to 2.111
+    # the 2026-09-09 records got it at 1.964: a page stating that DRAM had slack
+    # while its own number said DRAM bound.
+    if ratio > 1.0:
+        because = (f"Above 1 the shared path IS faster than DRAM and DRAM did "
+                   f"bind, but the bar is not 1: r = 1/(h-1) = "
+                   f"{1.0 / (ratio - 1.0):.3f} here, above MAX_BRACKET_R "
+                   f"{MAX_BRACKET_R}, so the two estimators do not bracket "
+                   "alpha and `bracket` voids the page this ladder paid for")
+    else:
+        because = ("At or below 1 the shared non-DRAM path is slower than "
+                   "DRAM, so DRAM had slack in the normal arm and no ablation "
+                   "of it can move the clock however large alpha is")
     return Gate(name, ratio >= MIN_HEADROOM_RATIO,
                 f"weakest model {model}: the aliased ladder delivers "
                 f"{achieved / 1e9:.0f} GB/s of weight requests against a "
@@ -3911,10 +4052,7 @@ def headroom_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
                 f"1/(1-{MIN_SIGNAL_FRACTION}) = "
                 f"{1 / (1 - MIN_SIGNAL_FRACTION):.3f} from `signal` and "
                 f"1+1/{MAX_BRACKET_R} = {1 + 1 / MAX_BRACKET_R:.3f} from "
-                "`bracket`, which scores the same h as r = 1/(h-1)). Below 1 "
-                "the shared non-DRAM path is slower than DRAM, so DRAM had "
-                "slack in the normal arm and no ablation of it can move the "
-                "clock however large alpha is")
+                f"`bracket`, which scores the same h as r = 1/(h-1)). {because}")
 
 
 def attribution_gate(records: list[dict], roof_bytes_s: float | None) -> Gate:
@@ -3995,6 +4133,19 @@ def bracket_gate(results: list[ModelResult]) -> Gate:
                 "side of alpha, and the printed interval is not a bracket")
 
 
+#: The PROBE gate's name, beside the two it is the third of. It slugs to 47.
+#:
+#: RENAMED ON 2026-09-09 WITH `HEADROOM_GATE`, AND FOR THE SAME REASON. It read
+#: "probe: some pinning delivers requests faster than DRAM", which was the
+#: adoption rule while `MIN_HEADROOM_RATIO` was 1.333 and is not the rule the
+#: same commit installed: `choose_pinning` now refuses a grid whose best pinning
+#: delivers 1.961 times DRAM, because at that h `bracket` is bound to void the
+#: ladder. Leaving the name would have shipped the RESULT line of a STOPPED arm
+#: asserting the condition the arm met, which is the worst place in the file for
+#: a description of retired behaviour: it is the only line such a run prints.
+PROBE_GATE = "probe: some pinning clears the bar `bracket` needs"
+
+
 def probe_gate(readings: list[dict], chosen: dict | None, why: str) -> Gate:
     """The probe's verdict, as the one RESULT line a stopped run prints.
 
@@ -4008,8 +4159,7 @@ def probe_gate(readings: list[dict], chosen: dict | None, why: str) -> Gate:
     carry no RESULT line at all, which is the REFUSED shape, and the driver
     would read a spent arm as a free one.
     """
-    return Gate("probe: some pinning delivers requests faster than DRAM",
-                chosen is not None,
+    return Gate(PROBE_GATE, chosen is not None,
                 f"{len(readings)} pinning(s) timed. {why}",
                 kind=exit_codes.VALIDITY)
 
@@ -4040,12 +4190,6 @@ def correctness_gate(records: list[dict], compute: str) -> Gate:
                 not bad, detail)
 
 
-#: The LEVEL gate's name, in one place because the tests, the RESULT token and
-#: the paragraph above the table all have to name the same gate. Short on
-#: purpose: `Gate.token` slugs the WHOLE name and then truncates at 56
-#: characters, so a longer sentence here ships a RESULT token that stops mid
-#: word with a trailing hyphen, and a driver keying on the token would be
-#: keying on where the sentence happened to fall.
 #: How many ids fit on one printed line before it is wrapped. The lists this
 #: page prints were truncated to `[:3]` until 2026-09-09, so a reader told that
 #: 16 of 20 rungs drifted could not learn WHICH 16 from the page, the report.md
@@ -4080,6 +4224,17 @@ def _named_rungs(records: list[dict], ids) -> str:
     return _wrapped_ids(named)
 
 
+#: The LEVEL gate's name, in one place because the tests, the RESULT token and
+#: the paragraph above the table all have to name the same gate. Short on
+#: purpose: `Gate.token` slugs the WHOLE name and then truncates at 56
+#: characters, so a longer sentence here ships a RESULT token that stops mid
+#: word with a trailing hyphen, and a driver keying on the token would be
+#: keying on where the sentence happened to fall. The name below slugs to 44.
+#: (This paragraph was written for this constant and then separated from it on
+#: 2026-09-09 when `IDS_PER_LINE` was inserted between the two, which left the
+#: 56-character constraint documenting a line width and the name it constrains
+#: with nothing above it.)
+#:
 #: RENAMED ON 2026-09-09 WHEN THE RULE CHANGED, and the old name is the point.
 #: It read "level: every rung ran at the roof's measured clock", which is what
 #: the gate DEMANDED until the clock memo and is not what it does now: the
@@ -4087,8 +4242,10 @@ def _named_rungs(records: list[dict], ids) -> str:
 #: gate carries the recorded side into the log. A gate that PASSes a rung at
 #: 1980 MHz under a name asserting it ran at 1485 is a description of the old
 #: behaviour left standing after the behaviour changed, which is this
-#: repository's other recurring defect. The RESULT token moves with the name,
-#: which is why the rename is in the same commit as the rule.
+#: repository's other recurring defect. `HEADROOM_GATE` and `PROBE_GATE` carried
+#: the same fault and were missed when this one was fixed; both are renamed now.
+#: The RESULT token moves with the name, which is why a rename belongs in the
+#: commit that moves the rule.
 LEVEL_GATE = "level: the clock each rung ran at is recorded"
 
 
@@ -5353,8 +5510,13 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
                 "at one clock and alpha is a")
             say("  ratio of such times. Kept. What is not comparable is a "
                 "fixed-roof fraction, which this")
-            say("  arm never forms; a reader who needs one reads "
-                "roof_at_cell_clock.")
+            say("  arm never forms. This arm writes no fixed-roof column at "
+                "all: a reader who needs")
+            say("  one takes the rung's own load clock, printed beside each id "
+                "below, against the")
+            say("  reference clock on the row. (It said 'reads "
+                "roof_at_cell_clock' until 2026-09-09,")
+            say("  naming a field these cells.jsonl rows have never had.)")
             say(f"  {_named_rungs(timed, boosted)}")
         if (sagged or boosted) and not drift_drop.per_pass:
             say("  THE SIDES ABOVE ARE FOLDED OVER EVERY PASS, DRIFTED ONES "
@@ -5406,13 +5568,20 @@ def _analyse(say, design: Design, records: list[dict], args, out_dir: Path,
     # These two say, in the card's own units, that DRAM was never on the
     # critical path, which is a statement about the apparatus.
     #
-    # LEVEL IS THE FIRST GATE AND IT IS SCORED, NOT NARRATED. It was a
+    # LEVEL IS THE FIRST GATE AND IT IS A LINE, NOT A PARAGRAPH. It was a
     # paragraph, and `pod_session.sh` grades this arm on the exit code and on
-    # the count of `[PASS]`/`[FAIL]` lines, so a paragraph let a sagged hour
-    # exit 0 DONE. It runs first for the same reason headroom precedes signal:
-    # whether the card was at the clock its roof was measured at is a statement
-    # about the apparatus, and it is upstream of every number below it. Scored
-    # only on a measured run, because planted rows carry no clock.
+    # the count of `[PASS]`/`[FAIL]` lines, so a paragraph put the clock where
+    # the grader could not see it. Being a gate is what carries the recorded
+    # sides into that count. It is NOT what stops a sagged hour any more: since
+    # 2026-09-09 `level_gate` returns True or None and never False, because the
+    # under-load clock is an outcome of the cell and a band around one kernel's
+    # operating point excludes a tile rather than a defect. A sagged hour now
+    # exits 0 DONE by design, with every rung's side and clock printed on the
+    # line; DRIFT is what excludes, and it excludes the pass. This comment said
+    # the opposite until the rule moved under it. It still runs first for the
+    # reason headroom precedes signal: what clock the card ran at is a statement
+    # about the apparatus and is upstream of every number below it. Scored only
+    # on a measured run, because planted rows carry no clock.
     gates = [
         *([level_gate(timed)] if not synthetic else []),
         isa_gate(timed),

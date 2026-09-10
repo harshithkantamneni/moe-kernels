@@ -1579,7 +1579,7 @@ def test_the_void_runs_d1_is_below_the_floor_for_the_bytes_it_names():
     assert AB.MIN_HEADROOM_RATIO >= 1.0 / (1.0 - AB.MIN_SIGNAL_FRACTION)
 
 
-def test_the_same_two_gates_pass_once_the_shared_path_is_faster_than_dram():
+def test_the_same_two_gates_pass_once_dram_binds_by_enough_to_fit():
     """The FAIL branch above is only a gate if this branch exists.
 
     One factor on the aliased arm, nothing else changed. At a fifth of its
@@ -1587,8 +1587,17 @@ def test_the_same_two_gates_pass_once_the_shared_path_is_faster_than_dram():
     DRAM becomes the binding resource in the normal arm, and D(1) reaches its
     floor. Both gates flip, which is what makes the pair a discriminator rather
     than a threshold that happens to sit above the one run there has been.
+
+    THREE TIMES AND NOT MERELY ABOVE ONE. This test was named "once the shared
+    path is faster than DRAM" until 2026-09-09, which was the gate's sufficient
+    condition while the limit was 1.333 and stopped being it at 2.111: the
+    2026-09-09 records are faster than DRAM at 1.964 and FAIL. The name stated
+    a retired rule, which is the defect the same commit renamed two gates for.
     """
     rows = void_records(scale=0.2)
+    ratios = [AB._aliased_slope_bytes_s([r for r in rows if r["model"] == m])
+              / H200_READ_ROOF for m in VOID_RUN]
+    assert min(ratios) > AB.MIN_HEADROOM_RATIO, ratios
     assert AB.headroom_gate(rows, H200_READ_ROOF).ok is True
     assert AB.attribution_gate(rows, H200_READ_ROOF).ok is True
 
@@ -1704,6 +1713,142 @@ def _reading(warps, stages, block_k, compute, gbps):
     return {"pinning": {"num_warps": warps, "num_stages": stages,
                         "block_k": block_k, "compute": compute},
             "aliased_bytes_s": gbps * 1e9 if gbps else None, "note": ""}
+
+
+#: The six readings the 2026-09-09 probe printed, verbatim from
+#: session/logs/alias_ablation.log lines 111-117. Five of the six are ABOVE the
+#: 4613 GB/s read roof and the best is 1.961 of it, which is the regime the
+#: 2.111 bar created and nothing in this file covered.
+POD_PROBE_READINGS = [
+    _reading(8, 3, 64, "sum", 2641),
+    _reading(8, 4, 128, "sum", 2869),
+    _reading(4, 5, 128, "sum", 5500),
+    _reading(8, 4, 128, "dot", 9047),
+    _reading(8, 3, 64, "dot", 8815),
+    _reading(16, 4, 128, "dot", 6100),
+]
+
+
+def test_the_refusal_names_the_condition_that_was_missed_not_the_other_one():
+    """The message the pod rerun gets has to be the reason it was refused.
+
+    This branch printed one sentence at every ratio: "Every one of them is
+    limited by a shared non-DRAM path SLOWER than DRAM, so in the normal arm
+    DRAM has slack". That was true of every reading while the bar was 1.333,
+    because nothing below 1.333 of the roof had been seen above 1. Raising the
+    bar to 2.111 on 2026-09-09 created a regime between 1 and 2.111 where the
+    sentence is false, and the 2026-09-09 grid lands in it: five of its six
+    readings are ABOVE the roof, the best is 1.961, and the refusal explained
+    them with the physics of the world they are not in.
+    """
+    chosen, why = AB.choose_pinning(POD_PROBE_READINGS, H200_READ_ROOF)
+    assert chosen is None
+    assert f"no pinning reached {AB.MIN_HEADROOM_RATIO:.3f} x the roof" in why
+    assert "`bracket` needs" in why
+    # THE CONDITION IT ACTUALLY MISSED, in the units bracket scores.
+    assert "faster than DRAM" in why and "not by enough" in why
+    r_at_best = 1.0 / (9047e9 / H200_READ_ROOF - 1.0)
+    assert f"r = 1/(h-1) = {r_at_best:.3f}" in why, why
+    assert r_at_best > AB.MAX_BRACKET_R
+    # THE WORLD IT IS NOT IN IS NOT DESCRIBED AS IF IT WERE.
+    assert "SLOWER than DRAM" not in why
+    assert "DRAM has slack" not in why
+    # Two of the six really were below the roof and the count is on the line.
+    assert "2 of 6 did not reach the roof at all" in why
+
+    # THE BELOW-1 WORLD STILL GETS THE BELOW-1 STORY. 2026-09-01 measured it.
+    blind = [_reading(8, 3, 64, "sum", 2800), _reading(8, 4, 128, "dot", 2700)]
+    _, blind_why = AB.choose_pinning(blind, H200_READ_ROOF)
+    assert "SLOWER than DRAM" in blind_why and "DRAM has slack" in blind_why
+    assert "not by enough" not in blind_why
+
+    # AND THE PARAGRAPH UNDER THE TABLE, which named 2026-09-01 on BOTH. That
+    # run was a shared ceiling at 0.61 of the roof, so pointing a reader at
+    # `--synthetic alias-blind` to rehearse a 1.961 refusal rehearses the wrong
+    # world.
+    def page(rows):
+        lines: list[str] = []
+        chosen, why = AB.choose_pinning(rows, H200_READ_ROOF)
+        AB.report_probe(_collect(lines), rows, H200_READ_ROOF, chosen, why)
+        return "\n".join(lines)
+
+    above = page(POD_PROBE_READINGS)
+    assert "NOT the 2026-09-01 world" in above
+    assert "neither plants this one." in above
+    below = page(blind)
+    assert "This is the 2026-09-01 result restated" in below
+    assert "plants exactly this world" in below
+    # Both preambles name the two-sided rule the bar now is.
+    for text in (above, below):
+        assert "Below 1 the shared non-DRAM path is the slower one" in text
+        assert "Above 1 DRAM" in text and "binding is not enough to fit" in text
+
+
+def test_the_headroom_fail_detail_says_which_of_the_two_worlds_it_is():
+    """The same wrong sentence, on the gate line, already printed on the corpus.
+
+    At 1.964 the page read "Below 1 the shared non-DRAM path is slower than
+    DRAM, so DRAM had slack in the normal arm": a physical claim its own number
+    contradicts. This is NEW at 2.111. At the 1.333 bar the same records PASSed
+    and the below-1 clause was never printed against a 1.96 datum, which is why
+    the FAIL detail in the 1-to-2.111 regime had no test.
+    """
+    rows = pod_rungs()
+    gate = AB.headroom_gate(rows, H200_READ_ROOF)
+    assert gate.ok is False
+    ratio = float(gate.detail.split("a ratio of ")[1].split()[0])
+    assert 1.0 < ratio < AB.MIN_HEADROOM_RATIO, ratio
+    assert "IS faster than DRAM and DRAM did bind" in gate.detail
+    assert f"r = 1/(h-1) = {1.0 / (ratio - 1.0):.3f}" in gate.detail
+    assert "had slack" not in gate.detail
+
+    # AND THE BELOW-1 WORLD, which is the 2026-09-01 run, keeps its own story.
+    blind = AB.headroom_gate(void_records(), H200_READ_ROOF)
+    assert blind.ok is False
+    assert "slower than DRAM" in blind.detail and "had slack" in blind.detail
+    assert "did bind" not in blind.detail
+
+
+def test_no_renamed_gate_states_a_rule_it_no_longer_applies():
+    """A gate named after a retired rule is this repository's recurring defect.
+
+    THREE GATES CARRIED THE SAME RETIRED SUFFICIENT CONDITION, which is the
+    defect's own shape: fixed at one site and left at the others. LEVEL was
+    "every rung ran at the roof's measured clock" and now records the side
+    instead of demanding one. HEADROOM was "the shared path is faster than
+    DRAM, so DRAM could bind" and now FAILs runs whose shared path is faster
+    than DRAM, at 1.964 on the acceptance corpus. PROBE was "some pinning
+    delivers requests faster than DRAM", and it is the ONE RESULT line a
+    stopped arm prints, so it is the worst of the three places to leave it: the
+    2026-09-09 grid's best pinning delivers 1.961 times DRAM and is refused.
+    All three names have to survive `Gate.token`.
+    """
+    names = (AB.LEVEL_GATE, AB.HEADROOM_GATE, AB.PROBE_GATE)
+    for name in names:
+        token = AB.Gate(name, True, "").token
+        assert len(token) < 56, (name, len(token))
+        assert not token.endswith("-"), token
+    assert "every rung ran at" not in AB.LEVEL_GATE
+    assert "faster than DRAM" not in AB.HEADROOM_GATE
+    assert "faster than DRAM" not in AB.PROBE_GATE
+    # The gate functions and the page use the constants, never a second
+    # spelling. The retired names survive ONCE each, inside the `#:` block that
+    # says they were retired and why; that is the record, not a spelling.
+    source = (ROOT / "scripts" / "alias_ablation.py").read_text()
+    for name in names:
+        assert source.count(f'"{name}"') == 1, name
+    for retired in ("level: every rung ran at the roof's measured clock",
+                    "headroom: the shared path is faster than DRAM, so DRAM "
+                    "could bind",
+                    "probe: some pinning delivers requests faster than DRAM"):
+        hits = [ln for ln in source.splitlines() if retired in ln]
+        assert len(hits) == 1 and hits[0].lstrip().startswith("#:"), retired
+    assert AB.probe_gate(POD_PROBE_READINGS, None, "x").name == AB.PROBE_GATE
+    assert AB.headroom_gate(pod_rungs(), H200_READ_ROOF).name == AB.HEADROOM_GATE
+    assert AB.headroom_gate(pod_rungs(), None).name == AB.HEADROOM_GATE
+    # A STOPPED ARM'S ONE LINE, recomputed from the log the way the driver does.
+    stopped = AB.probe_gate(POD_PROBE_READINGS, None, "nothing cleared")
+    assert exit_codes.classify_text(stopped.result_line()) == exit_codes.INVALID
 
 
 def test_the_probe_prefers_the_unbiased_pinning_over_a_faster_biased_one():
@@ -1937,8 +2082,10 @@ def test_the_level_reference_reaches_both_of_this_arms_time_kernel_calls():
 def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_against():
     """THE CONSEQUENCE, replayed end to end through this file's own fold.
 
-    A card pegged at 1400 MHz while an H200 roof was measured at 1515 is 92% of
-    the ruler, under `LEVEL_FRACTION`. Scored against the reference every pass
+    A card pegged at 1400 MHz while an H200 roof was measured at 1485 is 94.3%
+    of the ruler, under `LEVEL_FRACTION`. (1515 and 92% until ab61e55
+    re-measured the card; the assertion below moved to 1485 on 2026-09-09 and
+    this sentence did not.) Scored against the reference every pass
     reads False and `_fold_flag` keeps the False; scored against nothing every
     pass reads None, the fold keeps None, and the rung reaches `cells.jsonl`
     carrying the column with no verdict in it. Both ladders would sag together
@@ -2845,8 +2992,11 @@ def _sided(*sides) -> list[dict]:
 
 def test_a_boosted_rung_folds_to_high_and_a_sagged_one_to_low():
     """Through this file's own fold, from records scored the way `time_kernel`
-    scores them: 1980 against 1515 fails LEVEL on the HIGH side, 1400 on the
-    LOW side, and one LOW pass dominates a rung however many boosted."""
+    scores them: 1980 against 1485 fails LEVEL on the HIGH side, 1400 on the
+    LOW side, and one LOW pass dominates a rung however many boosted.
+
+    1485 AND NOT 1515: `H200_GEMM_REFERENCE_MHZ` moved with ab61e55 on
+    2026-09-09 and this sentence was left behind naming the superseded ruler."""
     ref = H200_GEMM_REFERENCE_MHZ
     high = AB.fold_timings([_pass_timing(H200_MEMORY_LOAD_MHZ, ref)] * 3)
     assert high["clock_level_ok"] is False
@@ -3204,7 +3354,7 @@ def test_r_and_h_are_one_quantity_so_the_probe_refuses_what_bracket_voids():
     assert 9047e9 / 4613.006445392317e9 < AB.MIN_HEADROOM_RATIO
     chosen, why = AB.choose_pinning(
         [_reading(8, 4, 128, "dot", 9047)], 4613.006445392317e9)
-    assert chosen is None and "no pinning cleared" in why
+    assert chosen is None and "no pinning reached" in why
 
 
 def test_the_form_gate_passes_a_flat_ladder_and_still_refuses_a_bent_one():
@@ -3403,7 +3553,7 @@ def test_the_probe_writes_its_readings_on_the_adopted_path_too(tmp_path):
     # RE-DRIVABLE FROM THE FILE ALONE, which is the whole reason to write it.
     again, why = AB.choose_pinning(saved["readings"], saved["roof_bytes_s"],
                                    saved["dot_fallback"] == "allow")
-    assert again is None and "no pinning cleared" in why
+    assert again is None and "no pinning reached" in why
 
 
 def test_the_sum_half_of_the_probe_grid_widened_downward_in_warps():
@@ -3446,7 +3596,7 @@ def test_report_cost_prints_the_probe_only_plan_and_the_dot_bound_fallback():
     assert f"{len([p for p in AB.PROBE_PINNINGS if p['compute'] == 'sum'])} sum" \
         in text
     assert "1.3 min at three sum" in text, "the figure before the widening"
-    booking = AB.fallback_booking(H200_READ_ROOF, probing=True)
+    booking = AB.fallback_booking(H200_READ_ROOF)
     kernel_min, wall_min, argv = booking
     assert f"FALLBACK{wall_min:6.1f} min" in text
     assert " ".join(argv) in text
@@ -3454,9 +3604,66 @@ def test_report_cost_prints_the_probe_only_plan_and_the_dot_bound_fallback():
     assert "deepseek-v2-lite" not in " ".join(argv), (
         "the sub-L2 model that failed placebo, form and bracket is dropped")
     # THE FIGURE THAT MOVED, and the page says which one it was. 33.4 wall
-    # minutes on 2026-09-09, before four compiles joined the probe.
+    # minutes on 2026-09-09, when the run reached dot mode through the probe.
     assert "33.4 min on 2026-09-09" in text
-    assert 33.0 < wall_min < 36.0, wall_min
+    assert 30.0 < wall_min < 36.0, wall_min
+
+
+def test_the_dot_bound_fallback_reaches_dot_mode_instead_of_hoping_to_fall():
+    """The booking must buy the outcome it is priced for.
+
+    Until 2026-09-09 the printed invocation carried only the three knobs and ran
+    under the default `--probe` and `--dot-fallback allow`, which is the route
+    the 2026-09-09 run itself took to dot mode. The same commit raised
+    `MIN_HEADROOM_RATIO` to 2.111 and closed that route: the best reading in
+    that probe grid was 9047 GB/s, 1.961 of the roof, so `choose_pinning`
+    returns None under `allow` as well as under `refuse` and the run stops at
+    the probe having bought no bound. The page booked 34.3 wall minutes for an
+    unreachable outcome. It now names the pinning and skips the probe.
+    """
+    _, _, argv = AB.fallback_booking(H200_READ_ROOF)
+    args = AB.parse_args(argv)
+    assert args.compute == "dot", argv
+    assert args.probe is False, argv
+    pin = AB.DOT_BOUND_FALLBACK["pinning"]
+    assert (args.num_warps, args.num_stages, args.block_k) == (
+        pin["num_warps"], pin["num_stages"], pin["block_k"])
+    # AND IT IS THE FASTEST THING THE 2026-09-09 GRID FOUND, not an invention.
+    best = max((r for r in POD_PROBE_READINGS
+                if r["pinning"]["compute"] == "dot"),
+               key=lambda r: r["aliased_bytes_s"])
+    assert {k: best["pinning"][k] for k in pin} == pin, best["pinning"]
+    # THE ROUTE IT REPLACES IS CLOSED, which is why this test exists.
+    for fallback in (True, False):
+        chosen, _ = AB.choose_pinning(POD_PROBE_READINGS, H200_READ_ROOF,
+                                      dot_fallback=fallback)
+        assert chosen is None, fallback
+
+
+def test_the_fallback_is_priced_off_its_own_argv_and_not_the_callers_flag():
+    """One command, one duration.
+
+    `fallback_booking` took `probing` from `report_cost` and the argv it printed
+    never carried `--no-probe`, so on 2026-09-09 the identical command was
+    printed at FALLBACK 34.3 min from a `--probe` page and 32.1 min from a
+    `--no-probe` one. One of the two was a number printed against a command it
+    was not the price of. The argv is now the only input.
+    """
+    import inspect
+    assert "probing" not in inspect.signature(AB.fallback_booking).parameters
+    priced = set()
+    for probing in (True, False):
+        lines: list[str] = []
+        args = AB.parse_args([])
+        AB.report_cost(_collect(lines), AB.build_design(args), args,
+                       H200_READ_ROOF, probing=probing)
+        text = "\n".join(lines)
+        priced.add(next(ln for ln in text.splitlines()
+                        if ln.strip().startswith("FALLBACK")).strip())
+        # AND THE PROBE BOOKING GOES WITH THE PROBE. A --no-probe page used to
+        # print "PROBE 0.0 min" over the seven sum pinnings it will not time.
+        assert ("PROBE" in text) is probing, probing
+    assert len(priced) == 1, priced
 
 
 def test_the_id_lists_on_the_page_are_never_truncated():
