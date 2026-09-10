@@ -119,14 +119,16 @@ def scored(model: str, table: dict = UNIFORM_TOKENS, target: float = TARGET) -> 
 
 def test_the_ridges_are_the_cards_own_and_the_withdrawn_pair_is_neither():
     """THE RETRACTION, (e). Neither end of the old "band" is any committed
-    calibration's ridge; the H200's own sits strictly between them; and the
-    span of committed ridges `profiles.calibrated_ridge_band` returns is the
-    two cards', not the pair. A future edit that puts 160.3 or 176.2 back as
-    a card's ridge fails here by name."""
+    calibration's ridge, and the span of committed ridges
+    `profiles.calibrated_ridge_band` returns is the two cards', not the pair.
+    The H200's own ridge sat strictly between the two ends while it read
+    162.8; its 2026-09-09 recalibration puts it at 152.8, BELOW both, so what
+    is asserted is separation from each end rather than containment. A future
+    edit that puts 160.3 or 176.2 back as a card's ridge fails here by name."""
     lo, hi = WHOLE_LAYER_ARM_RULERS_WITHDRAWN_AS_BAND
-    assert RIDGE_H200 == pytest.approx(162.8, abs=0.05)
+    assert RIDGE_H200 == pytest.approx(
+        roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16"))
     assert RIDGE_A100 == pytest.approx(145.8, abs=0.05)
-    assert lo < RIDGE_H200 < hi
     for end in (lo, hi):
         assert abs(RIDGE_H200 - end) > 1.0 and abs(RIDGE_A100 - end) > 1.0
     band = profiles.calibrated_ridge_band("bf16")
@@ -137,8 +139,14 @@ def test_the_ridges_are_the_cards_own_and_the_withdrawn_pair_is_neither():
 
 
 def test_the_target_is_the_ridge_ratio_and_it_is_not_one():
-    """The whole point. 0.896 against the cards' own ridges, never 1.00."""
-    assert TARGET == pytest.approx(0.896, abs=0.003)
+    """The whole point: a ratio of the two cards' own ridges, never 1.00. It
+    read 0.896 while the H200's ridge was 162.8 and reads 0.954 since its
+    2026-09-09 recalibration put that ridge at 152.8. The target is a
+    property of the two committed calibrations, so it moves with them, and
+    the only thing that must hold under every calibration is that it is not
+    the no-scaling null."""
+    assert TARGET == pytest.approx(RIDGE_A100 / RIDGE_H200)
+    assert TARGET == pytest.approx(0.954, abs=0.003)
     assert TARGET < 1.0, "a target of 1.00 is the no-scaling null"
 
 
@@ -151,7 +159,14 @@ def test_the_arm_bracket_is_the_whole_layer_arms_two_rulers_not_the_cards_band()
     targets = sorted(RIDGE_A100_ARM / r for r in (lo, hi))
     assert targets[0] == pytest.approx(0.827, abs=0.005)
     assert targets[1] == pytest.approx(0.909, abs=0.005)
-    assert targets[0] < TARGET < targets[1]
+    # The card's own target lay INSIDE that bracket at 0.896 and lies ABOVE
+    # it at 0.954, because the 2026-09-09 recalibration lowered the H200's
+    # ridge and so raised the A100-over-H200 ratio. The published 0.83-0.91
+    # band is one arm's calibration ambiguity and never was a claim about
+    # either card, which is exactly why the card's own target is free to
+    # leave it: what is pinned is that the two are different quantities.
+    assert not targets[0] < TARGET < targets[1]
+    assert TARGET > targets[1]
 
 
 def test_pooling_routings_moves_every_model_and_moves_them_different_ways():
@@ -169,18 +184,22 @@ def test_pooling_routings_moves_every_model_and_moves_them_different_ways():
 
 
 def test_scored_against_the_cards_own_target_the_points_move_and_the_verdict_does_not():
-    """The corrected scores: 0.81 / 1.05 / 1.09 / 1.06. Two of four now sit
-    within 6% of the target where the old 0.83 target had none, and that is
-    exactly why the score alone was never the verdict: every interval in C5
+    """The scores against the cards' own target: 0.76 / 0.99 / 1.02 / 0.99 on
+    the 2026-09-09 calibrations, where they read 0.81 / 1.05 / 1.09 / 1.06
+    against the 0.896 target and 0.88 / 1.14 / 1.18 / 1.14 against the old
+    0.827 one. THREE of four now sit within 2% of the target. That is not a
+    confirmation and it is the clearest statement of why the score alone was
+    never the verdict: the points did not move, the ruler did, and a score
+    that swings this far on a recalibration of one card decides nothing.
+    What does not move is the discrimination test: every interval in C5
     Defect 2 (mixtral 0.64-0.80, qwen2 0.73-1.23, v2-lite 0.89-1.08, v3
     0.88-1.02, on the ratio) either contains both the target and the null or
-    excludes both, under either target. Pinned against the old target too, so
-    the size of the move (7.7%) is on record and cannot drift back."""
+    excludes both, under all three targets."""
     values = {m: scored(m) for m in UNIFORM_TOKENS}
-    assert values["mixtral-8x7b"] == pytest.approx(0.81, abs=0.01)
-    assert values["qwen2-57b-a14b"] == pytest.approx(1.05, abs=0.01)
-    assert values["deepseek-v2-lite"] == pytest.approx(1.09, abs=0.01)
-    assert values["deepseek-v3"] == pytest.approx(1.06, abs=0.01)
+    assert values["mixtral-8x7b"] == pytest.approx(0.76, abs=0.01)
+    assert values["qwen2-57b-a14b"] == pytest.approx(0.99, abs=0.01)
+    assert values["deepseek-v2-lite"] == pytest.approx(1.02, abs=0.01)
+    assert values["deepseek-v3"] == pytest.approx(0.99, abs=0.01)
     old = {m: scored(m, target=RIDGE_A100_ARM / 176.2) for m in UNIFORM_TOKENS}
     assert old == pytest.approx({"mixtral-8x7b": 0.88, "qwen2-57b-a14b": 1.14,
                                  "deepseek-v2-lite": 1.18, "deepseek-v3": 1.14},
@@ -196,21 +215,34 @@ def test_scored_against_the_cards_own_target_the_points_move_and_the_verdict_doe
 
 
 def test_deepseek_v3_cannot_tell_the_null_from_C5():
-    """Its pooled 1.01 was read as a 1% confirmation of C5 when 1.00 IS the null.
-    Uniform moves it to 0.946, which sits 0.050 from the card's-own target and
-    0.054 from the null: equidistant to within the third decimal, and its
-    5th-95th interval (0.88-1.02) contains both. Against the old 0.827 target
-    it read as "nearer the null"; against the corrected one that sentence
-    reverses by 0.004, which is the measure of how little either reading was
-    worth. What is pinned is that the point discriminates nothing."""
+    """Its pooled 1.01 was read as a 1% confirmation of C5 when 1.00 IS the
+    null. Uniform moves it to 0.946, and where that sits depends entirely on
+    which calibration the target came from: 0.054 from the null throughout,
+    but 0.119 from the old 0.827 target, 0.050 from the 0.896 one, and 0.008
+    from the 0.954 the cards read today. So the same measured ratio has been
+    "nearer the null", "equidistant to the third decimal", and "almost exactly
+    on the target" without a single kernel being re-timed. The reading is the
+    ruler's, not the card's.
+
+    WHAT IS PINNED IS THAT THE POINT DISCRIMINATES NOTHING, and it is pinned
+    on the interval rather than on the distance: v3's 5th-95th interval
+    (0.88-1.02) contains the null and every target this study has quoted, so
+    no reading of the point separates them. A distance that reverses on a
+    recalibration is not evidence in either direction."""
     assert ratio("deepseek-v3") == pytest.approx(0.946, abs=0.005)
-    assert scored("deepseek-v3") == pytest.approx(1.056, abs=0.01)
-    to_target = abs(ratio("deepseek-v3") - TARGET)
+    assert scored("deepseek-v3") == pytest.approx(0.992, abs=0.01)
     to_null = abs(ratio("deepseek-v3") - 1.0)
-    assert to_target == pytest.approx(0.050, abs=0.002)
     assert to_null == pytest.approx(0.054, abs=0.002)
-    assert abs(to_target - to_null) < 0.01, "neither reading is supported"
-    assert 0.88 <= TARGET <= 1.02 and 0.88 <= 1.0 <= 1.02
+    lo, hi = 0.88, 1.02
+    assert lo <= 1.0 <= hi, "the null"
+    assert lo <= 145.8 / 162.8 <= hi, "the 2026-09-02 target"
+    assert lo <= TARGET <= hi, "the target the cards read today"
+    # The whole-layer arm's own 0.827 is the one target that falls OUTSIDE
+    # this interval, which is what made it look discriminating in 2026-09-01
+    # and is the reading FINDINGS withdrew.
+    assert not lo <= RIDGE_A100_ARM / 176.2 <= hi
+    assert abs(ratio("deepseek-v3") - TARGET) < to_null, \
+        "today's ruler puts it nearer the target, and that is the point"
 
 
 def test_the_deviation_is_NOT_monotonic_in_expert_count():
@@ -225,15 +257,17 @@ def test_the_deviation_is_NOT_monotonic_in_expert_count():
 
     AND A SECOND SENTENCE FALLS WITH THE TARGET. "mixtral moves from the worst
     point in the pooled set to the best in the uniform one" held only against
-    0.827: against the cards' own 0.896 the nearest point is qwen2 (1.05) and
-    mixtral, 19% under, is the worst point in BOTH sets. Pinned so the
-    target-dependence of that sentence is on record."""
+    0.827: against the cards' own target the nearest point is qwen2 and
+    mixtral is the worst point in BOTH sets. That holds at the 0.896 the
+    cards read on 2026-09-02 and at the 0.954 they read after the H200's
+    2026-09-09 recalibration; only the sizes move, which is the
+    target-dependence being put on record."""
     order = sorted(UNIFORM_TOKENS, key=lambda m: (MODEL_CONFIGS[m].num_experts,
                                                   ratio(m)))
     assert order[0] == "mixtral-8x7b" and order[-1] == "deepseek-v3"
     values = [scored(m) for m in order]
     assert values != sorted(values), f"monotonic in E again: {values}"
-    assert values == pytest.approx([0.81, 1.05, 1.09, 1.06], abs=0.01)
+    assert values == pytest.approx([0.76, 0.99, 1.02, 0.99], abs=0.01)
 
     pooled = [scored(m, POOLED_TOKENS) for m in order]
     assert pooled == sorted(pooled), "the pooled set is where the pattern came from"
@@ -242,18 +276,31 @@ def test_the_deviation_is_NOT_monotonic_in_expert_count():
     worst_uniform = max(UNIFORM_TOKENS, key=lambda m: abs(scored(m) - 1.0))
     best_uniform = min(UNIFORM_TOKENS, key=lambda m: abs(scored(m) - 1.0))
     assert worst_pooled == worst_uniform == "mixtral-8x7b"
-    assert best_uniform == "qwen2-57b-a14b"
+    # WHICH point is nearest the null is not a finding: qwen2 and deepseek-v3
+    # sit 0.012 and 0.008 from it on today's calibration and 0.05 and 0.06 on
+    # the 2026-09-02 one, so the two swap places on a recalibration that
+    # re-timed nothing. What survives is that the nearest point is not the
+    # one the withdrawn 0.827 target named, which is the sentence being
+    # retired here.
+    assert best_uniform in ("qwen2-57b-a14b", "deepseek-v3")
+    assert best_uniform != "mixtral-8x7b"
+    nearest_two = sorted(abs(scored(m) - 1.0) for m in UNIFORM_TOKENS)[:2]
+    assert nearest_two[1] - nearest_two[0] < 0.02, \
+        "the two nearest points are within noise of each other"
     old_best = min(UNIFORM_TOKENS,
                    key=lambda m: abs(scored(m, target=RIDGE_A100_ARM / 176.2) - 1.0))
     assert old_best == "mixtral-8x7b", "the worst-to-best sentence was the old target's"
 
 
 def test_none_refutes_by_an_order_of_magnitude_and_the_spread_is_the_shape():
-    """The shape of the whole result: four points, none off by more than 20%
-    on either side, spanning 0.28 between best and worst. C5 fails for lack
+    """The shape of the whole result: four points, none off by more than 25%
+    on either side, spanning 0.26 between best and worst. C5 fails for lack
     of resolution (Defect 2) and a matched quantity (the staircase), not
     because the ridge is irrelevant, which is why docs/FINDINGS.md asks for
-    error bars and a same-session calibration rather than abandoning it."""
+    error bars and a SAME-SESSION calibration rather than abandoning it. The
+    2026-09-09 recalibration is that request answered in the negative: the
+    spread between best and worst barely moved (0.28 to 0.26) while every
+    point slid 6%, because the target moved and the measurements did not."""
     values = {m: scored(m) for m in UNIFORM_TOKENS}
-    assert all(0.8 < v < 1.25 for v in values.values()), values
-    assert max(values.values()) - min(values.values()) == pytest.approx(0.28, abs=0.02)
+    assert all(0.75 < v < 1.25 for v in values.values()), values
+    assert max(values.values()) - min(values.values()) == pytest.approx(0.26, abs=0.02)
