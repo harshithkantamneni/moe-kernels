@@ -20,40 +20,74 @@ import math
 from pathlib import Path
 
 import pytest
+import yaml
 
+import scripts.dram_counter_route as DCR
 from moe.bench import exit_codes
 from moe.bench import provenance as PV
 from moe.spec import MODEL_CONFIGS
 from scripts.dram_counter_route import (
+    A100_REPORT,
+    C1_TOLERANCE,
+    CALL_MARKER,
+    CONTRAST_INSTRUMENT,
+    CONTRAST_TOLERANCE,
+    COUNTER_ROW_KEYS,
+    COUNTER_SCHEMA_TEXT,
+    COUNTER_TOP_KEYS,
     DATASHEET_PEAK_GBPS,
     DEFAULT_REPORT,
     FAIL,
+    GAPS_SESSION,
     INSTRUMENT,
+    NCU_METRICS,
     NO_CARD,
     PASS,
     PROBE_INSTRUMENT,
     REFUSE,
+    RUN_INSTRUMENT,
     Anchors,
+    CorpusMissing,
+    CounterRunRefused,
     activation_bytes_per_tile,
     alpha_from_counters,
     anchor_cap_bracket,
     anchors_from_points,
     bracket_directory,
+    build_counter_payload,
     build_parser,
+    c1_registration,
+    canned_ncu_csv,
     cap_from_counter,
     card_key,
+    contrast_pairs,
+    contrast_plan,
+    contrast_rows,
+    corpus_knobs,
+    corpus_slope,
     discrimination,
     git_visibility,
     main,
+    measured_bandwidth_gbps,
+    measured_dr_dn,
+    measured_ridge,
+    normalise_per_call,
+    occupancy_block_n,
     ols,
+    one_run_dir,
+    parse_ncu_csv,
     physical_bracket,
+    plan_id,
     predicted_read_bytes,
     probe_capabilities,
     route_verdict,
     run_id_for,
     score_counter_run,
     stamped,
+    sweep_argv,
+    synthetic_counter_payload,
     weight_bytes_total,
+    weight_stream_ms,
 )
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
@@ -417,14 +451,17 @@ def test_route_verdict_distinguishes_the_four_failures():
 # End to end, on the repository's own published data.
 # --------------------------------------------------------------------------
 
-def test_default_report_exists_and_reproduces_the_three_anchors():
-    """The plan's default cell must still be the cell the evaluation named.
+def test_the_a100_cell_still_reproduces_the_three_anchors():
+    """The cell the plan used to register, and the one docs/COUNTERS.md still does.
 
     0.452 / 0.647 / 0.705 are the numbers the brief quotes. If a republish moves
-    them this test says so before docs/COUNTERS.md is quoted at anyone.
+    them this test says so before docs/COUNTERS.md is quoted at anyone. It is no
+    longer the plan's cell: no counter route has ever been open on an A100 this
+    study can rent, so the plan moved to the H200 twin on 2026-09-10 and this
+    constant stayed behind to keep the page honest.
     """
-    assert DEFAULT_REPORT.exists(), f"{DEFAULT_REPORT} is gone; the plan has no cell"
-    rep = json.loads(DEFAULT_REPORT.read_text())
+    assert A100_REPORT.exists(), f"{A100_REPORT} is gone; the page has no cell"
+    rep = json.loads(A100_REPORT.read_text())
     ladder = rep["ladder"]["32"]
     anc = anchors_from_points(ladder["points"], ladder["memory_points"])
     assert anc.t1 == pytest.approx(0.452, abs=0.002)
@@ -433,6 +470,49 @@ def test_default_report_exists_and_reproduces_the_three_anchors():
     # And the refit must reproduce the published slope, which is what makes the
     # published line the line under test rather than a different one.
     assert anc.slope == pytest.approx(ladder["slope_memory"], rel=1e-9)
+
+
+def test_the_plan_is_registered_on_the_card_whose_route_is_open():
+    """The default cell is the H200 twin, and the H200 is where --probe said OPEN.
+
+    Registering a plan on a card that cannot run it is how this arm spent two
+    weeks: `counter_plan` returned P1 PASS on the H200 while the cell it printed
+    named nvidia_a100_sxm4_80gb. The default card, the default report and the
+    calibration the ridge comes from must now be one card.
+    """
+    ap = build_parser()
+    defaults = ap.parse_args([])
+    assert defaults.card == "nvidia_h200"
+    assert Path(defaults.report) == DEFAULT_REPORT
+    assert "nvidia_h200" in DEFAULT_REPORT.name or "h200" in str(DEFAULT_REPORT)
+    assert DEFAULT_REPORT.exists()
+    rep = json.loads(DEFAULT_REPORT.read_text())
+    assert rep["model"] == "mixtral-8x7b"
+    assert rep["fixed"]["GROUP_SIZE_M"] == 16 and rep["fixed"]["BLOCK_SIZE_N"] == 64
+    ladder = rep["ladder"][str(defaults.block_m)]
+    assert ladder["memory_points"] >= 3, "the default BLOCK_M has no memory branch here"
+
+
+def test_every_prediction_reads_this_card_s_own_2026_09_10_calibration():
+    """The recalibration moved the ridge and the peak; nothing here may be typed.
+
+    `measured_nvidia_h200.yaml` was rewritten on 2026-09-10 (ridge 152.8 ->
+    155.93, bf16 peak 668.5 -> 682.09, GEMM clock 1485 -> 1470). A test that
+    pins the old figures instead of reading the file is stale by construction,
+    so this reads the file and asserts the code returns what the file says.
+    """
+    cal = yaml.safe_load(
+        (REPO / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml").read_text())
+    ridge, src = measured_ridge("nvidia_h200")
+    assert ridge == pytest.approx(
+        cal["compute_dense_tflops"]["bf16"] / cal["memory"]["bandwidth_tb_s"], rel=1e-12)
+    assert "measured_nvidia_h200.yaml" in src
+    gbps, bsrc = measured_bandwidth_gbps("nvidia_h200")
+    assert gbps == pytest.approx(cal["memory"]["bandwidth_tb_s"] * 1000.0, rel=1e-12)
+    assert cal["detail"]["ceiling_pattern"] in bsrc
+    # And the published report this plan registers against carries the STALE
+    # ridge, which is exactly why the plan reads the yaml and not the report.
+    assert json.loads(DEFAULT_REPORT.read_text())["ridge"] != pytest.approx(ridge, rel=1e-6)
 
 
 def test_bracket_over_published_data_is_non_vacuous_and_finds_the_a100_violations():
@@ -479,11 +559,13 @@ def test_dry_run_prints_predictions_and_a_cost(capsys):
     assert main(["--dry-run"]) == exit_codes.DONE
     out = capsys.readouterr().out
     assert "PREDICTIONS, registered here" in out
-    assert "COST." in out
+    assert "COST, of the plan as extended." in out
     assert "dram__bytes_read.sum" in out
-    # The plan must name this card's own ridge, never the stale 160.3 default.
-    assert "ridge 145.81 FLOP/byte" in out
-    assert "ridge 160.3" not in out
+    # The plan must name THIS card's own ridge, computed from the 2026-09-10
+    # calibration in the tree, and never the 152.8 the published reports carry.
+    ridge, _ = measured_ridge("nvidia_h200")
+    assert f"ridge {ridge:.2f} FLOP/byte" in out
+    assert "ridge 152.8 " not in out and "ridge 160.3" not in out
     # THE RECIPE RUNS ON THE CURRENT INSTRUMENT. `timing.warm_until` refuses
     # `warmup_ms <= 0` and `--iters` is retired, so the "--warmup 0 --iters 1"
     # recipe this printed until 2026-09-03 could not run; the launch count is
@@ -492,13 +574,64 @@ def test_dry_run_prints_predictions_and_a_cost(capsys):
     commands = [line for line in out.splitlines() if line.strip().startswith("--")]
     assert commands and not any("--iters" in line or "--warmup 0" in line
                                 for line in commands)
-    assert "--warmup 1 --trials 1 --cell-budget-ms 1" in out
-    assert "warmup_calls + iters x trials" in out
-    assert "Never divide" in out and '"calls": 11' in out
+    assert "warmup + iters x trials" in out
+    assert '"calls": 11' in out and "never by" in out
     # C3 is registered as a bracket per anchor, through cap_from_fitted.
     assert "C3, REGISTERED" in out
     assert out.count("at alpha_a=1") == 3 and "delta = 0" in out
-    assert "BM/ridge - a/W = 0.2102" in out
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    bm = build_parser().parse_args([]).block_m
+    thresh = bm / ridge - activation_bytes_per_tile(cfg, bm) / weight_bytes_total(cfg)
+    assert f"BM/ridge - a/W = {thresh:.4f}" in out
+
+
+def test_dry_run_prices_the_extended_plan_and_names_its_run_commands(capsys):
+    """The plan is five cells now, not one, and the cost line says five.
+
+    It priced one cell over two cache modes and called that the experiment. The
+    contrast that decides section 2 needs BLOCK_N=32 and BLOCK_N=128 at one
+    BLOCK_M, and statement (3) needs a GROUP_SIZE_M=1 cell, so the invocation
+    count and the hours are five times what they were and the line must say so
+    rather than quietly costing the old plan.
+    """
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    tiles = build_parser().parse_args([]).tiles
+    assert f"5 cells x {len(tiles)} tile counts x 2 cache modes = {5 * len(tiles) * 2}" in out
+    # One --run command per cell, each carrying the cell's own knobs.
+    runs = [ln for ln in out.splitlines() if "--run --card" in ln]
+    assert len(runs) == 5
+    assert "--block-n 32" in out and "--block-n 128" in out
+    assert "--group-m 1 --num-stages 3" in out
+    # The flush launches are gone from the cost because --run turns the flush
+    # off; pricing them while letting their traffic into the answer was the bug.
+    assert "L2-flush launches" not in out
+
+
+def test_dry_run_registers_both_rivals_and_says_which_outcome_means_which(capsys):
+    """The separation, and the reading rule, both printed before anything runs.
+
+    The two rivals are 3.86 GB against 2.06 GB per M-tile at BLOCK_M=64 under
+    TRAFFIC and identical under TIME. Both numbers are re-derived from the
+    committed session ladders, so this asserts the printed figures equal the
+    figures `contrast_plan` computes rather than a pair of constants.
+    """
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "THE CONTRAST, registered." in out
+    assert "CONTRAST A" in out and "CONTRAST B" in out
+    cells = {c.name: c for c in contrast_plan(64)}
+    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    W = weight_bytes_total(MIXTRAL)
+    stream = weight_stream_ms(W, gbps)
+    lo = cells["bn32-g16-m64"].traffic_bytes_per_tile(stream, W)
+    hi = cells["bn128-g16-m64"].traffic_bytes_per_tile(stream, W)
+    assert f"{lo / 1e9:.2f} GB against {hi / 1e9:.2f} GB per M-tile" in out
+    assert lo / 1e9 == pytest.approx(3.86, abs=0.01)
+    assert hi / 1e9 == pytest.approx(2.06, abs=0.01)
+    assert "TIME    predicts the ratio 1.000" in out
+    assert "a ratio near 1.000 means it is time" in out
+    assert "belongs in the byte model" in out
 
 
 def test_self_test_mode_passes(capsys):
@@ -573,6 +706,13 @@ def test_the_instrument_is_never_the_timing_basis(tmp_path):
     assert INSTRUMENT != timing.TIMING_BASIS
     assert PROBE_INSTRUMENT != timing.TIMING_BASIS
     assert "no-kernel-timed" in INSTRUMENT and "nothing-timed" in PROBE_INSTRUMENT
+    # `--run` DOES touch the device, and it still is not the timing basis: under
+    # --replay-mode kernel every launch is replayed, so the durations it records
+    # are replay time and joining them to the unprofiled ladder's wall clock
+    # would compare two apparatuses. The string has to say so.
+    assert RUN_INSTRUMENT != timing.TIMING_BASIS
+    assert "replay-mode-kernel" in RUN_INSTRUMENT
+    assert "NOT timing.TIMING_BASIS" in RUN_INSTRUMENT
 
 
 def test_the_run_id_separates_the_knobs_each_mode_actually_reads():
@@ -705,8 +845,12 @@ def test_counters_doc_quotes_the_numbers_the_code_computes():
     assert f"{activation_bytes_per_tile(MIXTRAL, 32):,}" in doc  # 26,214,400 B
     # This card's own ridge, and the stale H200 default the page tells you not to use.
     assert "145.81" in doc and "160.3" in doc
-    # The bracket the plan registers against.
-    rep = json.loads(DEFAULT_REPORT.read_text())["ladder"]["32"]
+    # The bracket the page registers against. It is the A100 cell, which this
+    # module no longer defaults to: the page still describes the A100
+    # registration and updating it is a docs/COUNTERS.md edit, filed rather than
+    # made here because that file is not this slice's to touch.
+    assert "A100-SXM4-80GB" in doc
+    rep = json.loads(A100_REPORT.read_text())["ladder"]["32"]
     anc = anchors_from_points(rep["points"], rep["memory_points"])
     lo, hi = physical_bracket(anc.slope, anc.t1_ms, weight_bytes_total(MIXTRAL),
                               activation_bytes_per_tile(MIXTRAL, 32),
@@ -738,5 +882,825 @@ def test_every_out_write_site_reports_its_git_visibility():
     the visibility line before the function returns.
     """
     text = (REPO / "scripts" / "dram_counter_route.py").read_text()
-    assert text.count("out.write_text(") == 2
-    assert text.count("git_visibility(out)") == 2
+    # Four since the 2026-09-10 repair: --bracket, --probe, --run (the mode that
+    # writes the file every other mode only talks about) and --contrast (the
+    # mode that scores the ratio across those files).
+    assert text.count("out.write_text(") == 4
+    assert text.count("git_visibility(out)") == 4
+
+
+# --------------------------------------------------------------------------
+# --run's parser. Every one of these is a wrong NUMBER if it is not caught,
+# never a crash, which is why the parser is exercised off the GPU and before a
+# pod is rented rather than for the first time on a metered box.
+# --------------------------------------------------------------------------
+
+PLANTED = {"calls": 11, "read_per_call": 2.84e9, "write_per_call": 1.1e8,
+           "hit_pct": 4.2, "ns_per_call": 1.95e6}
+
+
+def test_parser_reads_a_canned_profile_launch_by_launch():
+    launches = parse_ncu_csv(canned_ncu_csv(**PLANTED))
+    assert len(launches) == PLANTED["calls"] * 4          # marker + 2 GEMM + reduction
+    assert len({ln.launch_id for ln in launches}) == len(launches)
+    assert all(set(ln.metrics) == set(NCU_METRICS) for ln in launches)
+
+
+def test_parser_converts_the_units_ncu_rescaled_rather_than_adding_them():
+    """ncu prints whatever unit keeps a number readable, and the prefixes are
+    decimal. Adding an Mbyte row to a byte row lands a factor of a million out,
+    which fits an affine line as happily as the truth."""
+    raw = parse_ncu_csv(canned_ncu_csv(**PLANTED, read_unit="Mbyte"))
+    plain = parse_ncu_csv(canned_ncu_csv(**PLANTED, read_unit="byte"))
+    a = sum(ln.metrics["dram__bytes_read.sum"] for ln in raw)
+    b = sum(ln.metrics["dram__bytes_read.sum"] for ln in plain)
+    assert a == pytest.approx(b, rel=1e-12)
+    assert b == pytest.approx(PLANTED["read_per_call"] * PLANTED["calls"], rel=1e-12)
+
+
+def test_parser_refuses_a_unit_it_has_never_been_shown():
+    csv_text = canned_ncu_csv(**PLANTED).replace('"byte"', '"kibibyte"', 1)
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv(csv_text)
+
+
+def test_parser_refuses_a_metric_ncu_returned_as_not_available():
+    text = canned_ncu_csv(**PLANTED)
+    line = [ln for ln in text.splitlines() if "dram__bytes_read.sum" in ln][0]
+    text = text.replace(line, line.rsplit(",", 1)[0] + ',"n/a"', 1)
+    with pytest.raises(CounterRunRefused, match="never defaulted to 0.0"):
+        parse_ncu_csv(text)
+
+
+def test_parser_refuses_output_with_no_header_and_output_with_no_launch_id():
+    with pytest.raises(CounterRunRefused, match="no ncu CSV header"):
+        parse_ncu_csv("==PROF== Connected to process 1\nnothing here is a table\n")
+    with pytest.raises(CounterRunRefused, match="no 'ID' column"):
+        parse_ncu_csv(canned_ncu_csv(**PLANTED).replace('"ID"', '"Index"', 1))
+
+
+def test_parser_refuses_a_launch_id_that_is_not_unique():
+    """Two launches merged into one halves the traffic the count then divides."""
+    text = canned_ncu_csv(**PLANTED).splitlines()
+    doubled = "\n".join(text + [text[3]])
+    with pytest.raises(CounterRunRefused, match="twice"):
+        parse_ncu_csv(doubled + "\n")
+
+
+def test_parser_ignores_metrics_nobody_registered():
+    extra = '"1","1","python","k","sm__cycles_elapsed.sum","cycle","5"'
+    launches = parse_ncu_csv(canned_ncu_csv(**PLANTED) + extra + "\n")
+    assert all("sm__cycles_elapsed.sum" not in ln.metrics for ln in launches)
+
+
+# --------------------------------------------------------------------------
+# The per-call normalisation, which is the whole reason --run is a mode.
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("calls", [11, 22, 57, 200])
+def test_bytes_are_divided_by_the_call_count_counted_from_the_profile(calls):
+    """A synthetic profile with a KNOWN call count, at four counts.
+
+    Every field is per call, so the SAME per-call traffic profiled over 11 calls
+    and over 200 must reduce to the same number. Dividing by an assumed 1 would
+    scale with `calls` and still be monotone, still be affine, and still pass
+    every gate but the n=1 one.
+    """
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": calls})),
+                             calls_floor=10)
+    assert row["calls"] == calls
+    assert row["launches"] == calls * 4
+    assert row["dram_bytes_read"] == pytest.approx(PLANTED["read_per_call"], rel=1e-12)
+    assert row["dram_bytes_write"] == pytest.approx(PLANTED["write_per_call"], rel=1e-12)
+    assert row["gpu_time_ns"] == pytest.approx(PLANTED["ns_per_call"], rel=1e-12)
+    assert row["gemm_launches_per_call"] == 2.0
+    assert sum(row["by_kernel"].values()) == pytest.approx(PLANTED["read_per_call"],
+                                                           rel=1e-12)
+
+
+def test_the_call_count_is_counted_and_not_taken_from_the_caller():
+    """The count comes from the launch list, so a profile with more calls in it
+    than the caller expected still reduces correctly."""
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 41})),
+                             calls_floor=10)
+    assert row["calls"] == 41 and row["calls_floor"] == 10
+
+
+def test_a_missing_metric_refuses_and_never_becomes_zero():
+    with pytest.raises(CounterRunRefused, match="never taken as 0.0"):
+        normalise_per_call(
+            parse_ncu_csv(canned_ncu_csv(**PLANTED,
+                                         drop_metric="dram__bytes_write.sum")),
+            calls_floor=10)
+
+
+def test_a_call_count_at_or_below_the_cells_own_floor_refuses():
+    """The instrument runs warmup calls on top of iters x trials, so a count that
+    does not EXCEED the floor means the marker is not one-per-call."""
+    with pytest.raises(CounterRunRefused, match="must EXCEED the floor"):
+        normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 8})),
+                           calls_floor=10)
+    with pytest.raises(CounterRunRefused, match="must EXCEED the floor"):
+        normalise_per_call(parse_ncu_csv(canned_ncu_csv(**{**PLANTED, "calls": 10})),
+                           calls_floor=10)
+
+
+def test_a_profile_with_no_marker_kernel_refuses_and_prints_what_it_saw():
+    with pytest.raises(CounterRunRefused) as exc:
+        normalise_per_call(
+            parse_ncu_csv(canned_ncu_csv(**PLANTED, marker="something_else")),
+            calls_floor=10)
+    assert CALL_MARKER in str(exc.value)
+    assert "something_else" in str(exc.value)     # the names it DID contain
+
+
+def test_the_l2_hit_rate_is_labelled_as_the_weighted_mean_it_is():
+    """A rate cannot be summed and this one is not sector weighted, because the
+    sector counts are not among the four registered metrics. Say so in the row."""
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    assert row["l2_read_hit_pct"] == pytest.approx(PLANTED["hit_pct"])
+    assert row["l2_read_hit_pct_range"] == [PLANTED["hit_pct"], PLANTED["hit_pct"]]
+    assert "NOT a sector-weighted rate" in row["l2_read_hit_pct_basis"]
+
+
+def test_the_self_test_mode_exercises_the_parser_and_reports_both_refusals(capsys):
+    """Acceptance: --self-test drives the parser end to end and the two planted
+    faults REFUSE. A self-test that only ever feeds the parser good input has
+    tested nothing that will happen on a pod."""
+    assert main(["--self-test"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    # The parser's own section, counted inside its own section rather than over
+    # the whole log: --self-test grew a contrast section on 2026-09-10 whose
+    # mislabelled-payload row also refuses, and a whole-log count of refusals
+    # would have been satisfied by the wrong three.
+    parser = out.split("THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[1]
+    assert "planted MISSING metric on one launch" in parser
+    assert "planted WRONG call count, 8 against a floor of 10" in parser
+    assert "planted profile with no marker kernel at all" in parser
+    assert parser.count("REFUSED as required") == 3
+    contrast = out.split("THE CONTRAST SCORER")[1].split(
+        "THE RUNNER'S PARSER AND ITS PER-CALL DIVISION")[0]
+    assert contrast.count("REFUSED as required") == 1
+    assert "FAIL" not in out and "SELF TEST PASS" in out
+
+
+# --------------------------------------------------------------------------
+# What --run would write, and the recipe it would run.
+# --------------------------------------------------------------------------
+
+def test_the_schema_block_and_the_writer_name_the_same_keys():
+    """The page and the code, bound in both directions.
+
+    A key in the block and not in the writer is a page describing a file nobody
+    writes; a key in the writer and not in the block is a field no reader was
+    told about. This module had the first defect already: the block said
+    num_stages 3 while the sweep's FIXED said 4.
+    """
+    for key in COUNTER_TOP_KEYS + COUNTER_ROW_KEYS:
+        assert f'"{key}":' in COUNTER_SCHEMA_TEXT, f"{key} is not in the schema block"
+    # and the reader's own required set is a subset of what the writer produces
+    assert {"device", "model", "block_m", "cache_control", "rows"} <= set(COUNTER_TOP_KEYS)
+
+
+def test_the_writer_produces_every_key_the_reader_refuses_to_default(tmp_path):
+    args = build_parser().parse_args([])
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    row["n"] = 1
+    payload = build_counter_payload(
+        args, ridge=155.93, ridge_source="measured_nvidia_h200.yaml",
+        anchors={"published": 0.66}, bracket=(0.62, 0.98), contrast=None, rows=[row])
+    assert set(COUNTER_TOP_KEYS) <= set(payload)
+    # and --analyse consumes it without raising on a partial run
+    gates, _summary = score_counter_run(payload)
+    assert [g.number for g in gates][:1] == ["V1"]
+    del tmp_path
+
+
+def test_the_writer_refuses_a_row_the_schema_says_must_carry_a_field():
+    args = build_parser().parse_args([])
+    row = normalise_per_call(parse_ncu_csv(canned_ncu_csv(**PLANTED)), calls_floor=10)
+    row["n"] = 1
+    row.pop("l2_read_hit_pct")
+    with pytest.raises(CounterRunRefused, match="never written as 0.0"):
+        build_counter_payload(args, ridge=155.93, ridge_source="x",
+                              anchors={"published": 0.66}, bracket=(0.6, 0.9),
+                              contrast=None, rows=[row])
+
+
+def test_the_wrapped_sweep_turns_the_software_flush_off():
+    """The instrument's L2 flush is a 240 MB read and a profiler counts it.
+
+    `moe.bench.timing.L2Flusher` reads four times this card's L2 once per timed
+    iteration. Under ncu that is a launch like any other and its DRAM reads land
+    in the same total as the kernel under test: at ten iterations, 2.4 GB against
+    a 2.82 GB weight read. It is CONSTANT in n, so the slope gate, the
+    monotonicity gate and the residual gate all pass and only the n=1 byte-model
+    gate would notice, which would be read as the byte model being wrong. ncu's
+    own --cache-control sets the cache state under the profiler, which is why
+    that is the swept parameter and the software flush is not a second one.
+    """
+    args = build_parser().parse_args(["--block-m", "64", "--num-stages", "3"])
+    argv = sweep_argv(args, 4, Path("/tmp/out"))
+    assert "--no-l2-flush" in argv
+    assert argv[argv.index("--num-stages") + 1] == "3"
+    assert argv[argv.index("--tiles") + 1] == "64"          # exactly one tile height
+    assert argv[argv.index("--r-max") + 1] == "256"         # 4 tiles x 64 rows
+    assert argv[argv.index("--row-step") + 1] == "256"      # one cell, not a ladder
+    assert argv[argv.index("--step-probes") + 1] == "0"
+
+
+def test_the_run_id_separates_a_cache_mode_and_a_call_marker():
+    """Two runs that differ only in the cache mode or the marker are two
+    different measurements and must not overwrite each other in silence."""
+    base = build_parser().parse_args([])
+    other = build_parser().parse_args(["--cache-control", "none"])
+    marker = build_parser().parse_args(["--call-marker", "sgl_moe_align_block_size"])
+    ids = {run_id_for("run", a, "NVIDIA H200") for a in (base, other, marker)}
+    assert len(ids) == 3
+
+
+def test_run_refuses_before_touching_the_gpu(capsys):
+    assert main(["--run"]) == exit_codes.REFUSED
+    assert "needs --out" in capsys.readouterr().out
+    assert main(["--run", "--out", "/tmp/nothing-will-be-written.json"]) == \
+        exit_codes.REFUSED
+    assert "no open counter route" in capsys.readouterr().out
+    assert not Path("/tmp/nothing-will-be-written.json").exists()
+
+
+def test_run_is_one_mode_among_the_six(capsys):
+    assert main(["--run", "--dry-run"]) == exit_codes.REFUSED
+    assert "--run" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# The contrast, re-derived from the committed 2026-09-10 corpus.
+# --------------------------------------------------------------------------
+
+def test_contrast_reproduces_the_analysis_separation_from_the_committed_cells():
+    """3.86 GB against 2.06 GB per M-tile at BLOCK_M=64, re-fitted here.
+
+    These are the figures the 2026-09-10 analysis pre-registers the contrast
+    on. Nothing is transcribed: the slopes come out of
+    results/published/2026-09-10-.../bn_decomposition/*/cells.csv with the
+    synthesis's own estimator (median per tread, OLS on the medians) and the
+    denominator out of this card's calibration.
+    """
+    cells = {c.name: c for c in contrast_plan(64)}
+    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    W = weight_bytes_total(MIXTRAL)
+    stream = weight_stream_ms(W, gbps)
+    assert stream == pytest.approx(0.6443, abs=5e-4)
+    lo, hi = cells["bn32-g16-m64"], cells["bn128-g16-m64"]
+    assert lo.w(stream) == pytest.approx(1.368, abs=0.002)
+    assert hi.w(stream) == pytest.approx(0.731, abs=0.002)
+    assert lo.traffic_bytes_per_tile(stream, W) / 1e9 == pytest.approx(3.86, abs=0.01)
+    assert hi.traffic_bytes_per_tile(stream, W) / 1e9 == pytest.approx(2.06, abs=0.01)
+    # The discriminator is a RATIO of two measured slopes and carries no
+    # bandwidth at all, which is why it survives a recalibration.
+    assert lo.slope_ms / hi.slope_ms == pytest.approx(1.870, abs=0.005)
+
+
+def test_the_contrast_carries_a_group_size_m_1_cell_and_a_matched_partner():
+    """Statement (3): the per-M-tile cost is a function of the schedule, so the
+    plan cannot be all-G=16. The pair must be matched on everything else."""
+    cells = {c.name: c for c in contrast_plan(64)}
+    g1, g16 = cells["s3w8g1-m64"], cells["s3w8g16-m64"]
+    assert g1.group_m == 1 and g16.group_m == 16
+    assert (g1.block_m, g1.block_n, g1.num_stages, g1.num_warps) == \
+           (g16.block_m, g16.block_n, g16.num_stages, g16.num_warps)
+    assert g1.arm == g16.arm == "occupancy_vs_swizzle"
+    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    assert g1.w(stream) == pytest.approx(1.204, abs=0.002)
+    assert g16.w(stream) == pytest.approx(0.918, abs=0.002)
+
+
+def test_the_bn_contrast_is_read_at_the_block_m_it_is_asked_for():
+    """Not pinned to 64: the same two rivals exist at BLOCK_M=32 and the plan
+    must re-derive them rather than reprint the BLOCK_M=64 pair."""
+    at64 = {c.name: c for c in contrast_plan(64)}
+    at32 = {c.name: c for c in contrast_plan(32)}
+    assert "bn32-g16-m32" in at32 and "bn32-g16-m64" in at64
+    assert at32["bn32-g16-m32"].slope_ms != at64["bn32-g16-m64"].slope_ms
+    # the schedule pair is BLOCK_M=64 at both, because the occupancy arm ran
+    # only that tile height, and it says so by carrying block_m 64.
+    assert at32["s3w8g1-m64"].block_m == 64
+
+
+def test_corpus_slope_refuses_a_ladder_it_cannot_fit():
+    run = one_run_dir(GAPS_SESSION / "bn_decomposition")
+    with pytest.raises(CorpusMissing, match="a slope needs three"):
+        corpus_slope(run / "cells.csv", {"block_n": 999, "block_m": 64})
+    with pytest.raises(CorpusMissing, match="no column"):
+        corpus_slope(run / "cells.csv", {"not_a_column": 1})
+    with pytest.raises(CorpusMissing, match="not in this tree"):
+        corpus_slope(run / "nope.csv", {"block_n": 32})
+
+
+def test_one_run_dir_refuses_an_arm_that_is_not_here(tmp_path):
+    with pytest.raises(CorpusMissing, match="has no corpus"):
+        one_run_dir(tmp_path / "absent_arm")
+    (tmp_path / "two" / "a").mkdir(parents=True)
+    (tmp_path / "two" / "b").mkdir(parents=True)
+    with pytest.raises(CorpusMissing, match="refusing to pick one"):
+        one_run_dir(tmp_path / "two")
+
+
+def test_one_profiled_tile_count_reduces_to_one_schema_row(tmp_path, monkeypatch):
+    """The whole of `--run`'s per-cell path, with ncu and the sweep stubbed.
+
+    This is the code that would otherwise execute for the first time on a
+    metered box: build the two command lines, read the log ncu wrote, read the
+    row the sweep wrote, take the call floor out of it, and reduce. The stub
+    writes a canned profile with 11 marker launches and a cells.csv claiming
+    iters 10 and trials 1, so the floor is 10 and the count clears it by the one
+    warmup call the instrument always makes.
+    """
+    import scripts.dram_counter_route as DCR
+
+    def fake_run(argv, timeout=60):
+        assert argv[0] == "ncu-stub"
+        log = Path(argv[argv.index("--log-file") + 1])
+        out_dir = Path(argv[argv.index("--out") + 1])
+        assert "--no-l2-flush" in argv
+        log.write_text(canned_ncu_csv(**PLANTED))
+        run = out_dir / "block_m_crossing" / "someid"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "cells.csv").write_text(
+            "block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+            "64,4,0.94,10,1,ok\n")
+        del timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    args = build_parser().parse_args(["--block-m", "64"])
+    row = DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+    assert row["n"] == 4 and row["rows_per_expert"] == 256
+    assert row["calls"] == 11 and row["calls_floor"] == 10
+    assert row["dram_bytes_read"] == pytest.approx(PLANTED["read_per_call"], rel=1e-12)
+    assert row["sweep_iters"] == 10 and row["sweep_trials"] == 1
+    assert set(COUNTER_ROW_KEYS) <= set(row)
+
+
+def test_a_profile_spanning_two_cells_refuses_rather_than_averaging_them(
+        tmp_path, monkeypatch):
+    """Two ok rows under one profile means the byte total spans two geometries
+    and the tile count the row claims is not the only one in it."""
+    import scripts.dram_counter_route as DCR
+
+    def fake_run(argv, timeout=60):
+        Path(argv[argv.index("--log-file") + 1]).write_text(canned_ncu_csv(**PLANTED))
+        run = Path(argv[argv.index("--out") + 1]) / "block_m_crossing" / "id"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "cells.csv").write_text(
+            "block_m,tiles_per_expert,ms_p50,iters,trials,status\n"
+            "64,4,0.94,10,1,ok\n64,8,1.88,10,1,ok\n")
+        del timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    args = build_parser().parse_args(["--block-m", "64"])
+    with pytest.raises(CounterRunRefused, match="spans two geometries"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def test_an_ncu_that_wrote_no_log_refuses_with_its_own_stderr(tmp_path, monkeypatch):
+    import scripts.dram_counter_route as DCR
+    monkeypatch.setattr(DCR, "_run",
+                        lambda argv, timeout=60: (1, "", "ERR_NVGPUCTRPERM"))
+    args = build_parser().parse_args(["--block-m", "64"])
+    with pytest.raises(CounterRunRefused, match="ERR_NVGPUCTRPERM"):
+        DCR.profile_one_tile_count(args, 4, "ncu-stub", tmp_path)
+
+
+def test_the_stamped_contrast_matches_the_cell_on_its_pipeline_depth_too(
+        tmp_path, monkeypatch):
+    """The hinge and the schedule pair's G=16 cell are one geometry at two
+    depths, so a match on geometry alone stamps one arm's prediction on the
+    other arm's cell. Checked by asking for depth 3 and depth 4 at the same
+    BLOCK_M, BLOCK_N and GROUP_SIZE_M and requiring two different predictions.
+    """
+    cells = contrast_plan(64)
+    hinge = next(c for c in cells if c.name == "bn64-g16-m64")
+    occ = next(c for c in cells if c.name == "s3w8g16-m64")
+    assert (hinge.block_m, hinge.block_n, hinge.group_m) == \
+           (occ.block_m, occ.block_n, occ.group_m)
+    assert hinge.num_stages != occ.num_stages
+    assert hinge.slope_ms != occ.slope_ms
+    del tmp_path, monkeypatch
+
+
+# --------------------------------------------------------------------------
+# THE 2026-09-10 REPAIR. Four defects found by review of the commit that built
+# the runner, each one a gate or a parser that would have produced a wrong
+# reading on the metered box rather than a crash.
+# --------------------------------------------------------------------------
+
+def _h200_payload(alpha_name: str, *, block_m: int = 64, anchors=None) -> dict:
+    """A counter payload for the cell the plan registers, planted ON an anchor.
+
+    The point of planting exactly on an anchor is that this is what a SUCCESSFUL
+    run looks like: the ladder and the counter agree. Anything the gates say
+    about it, they say about a measurement that worked.
+    """
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, block_m)
+    registered = anchors if anchors is not None else anc.as_dict()
+    alpha = registered[alpha_name]
+    ridge, _src = measured_ridge("nvidia_h200")
+    lo, hi = physical_bracket(anc.slope, anc.t1_ms, weight_bytes_total(MIXTRAL),
+                              activation_bytes_per_tile(MIXTRAL, block_m),
+                              DATASHEET_PEAK_GBPS["nvidia_h200"])
+    return {"device": "nvidia_h200", "model": "mixtral-8x7b", "dtype": "bf16",
+            "group_m": 16, "block_n": 64, "block_k": 64, "num_warps": 8,
+            "num_stages": 4, "block_m": block_m, "cache_control": "all",
+            "ridge": ridge, "anchors": registered, "bracket": [lo, hi],
+            "rows": [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                      "dram_bytes_read": predicted_read_bytes(MIXTRAL, block_m, n, alpha),
+                      "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                      "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                     for n in (1, 2, 3, 4, 6, 8)]}
+
+
+def test_c1_cannot_be_asked_for_one_survivor_on_the_cell_the_plan_registers():
+    """The blocking defect: C1 was pre-determined to FAIL on this cell.
+
+    The H200 anchors span 0.0393 end to end, narrower than C1's own 0.05
+    survival window, so a measurement landing ON an anchor leaves all three
+    standing. The gate asked for exactly one and returned FAIL with the
+    diagnosis "the cell was badly chosen", which was true and was known before
+    the run: --dry-run's own text says the anchors agree to 0.04. The
+    registration now decides which question the cell carries.
+    """
+    payload = _h200_payload("n3")
+    spread = max(payload["anchors"].values()) - min(payload["anchors"].values())
+    assert spread < C1_TOLERANCE, "this test is about a cluster narrower than the window"
+    gates, summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert summary["c1_mode"] == "clustered"
+    assert len(summary["survivors"]) == 3, "the old rule's FAIL, still visible"
+    assert c1.verdict == PASS
+    assert "cannot separate" in c1.claim
+    assert any("NOT DISCRIMINATING" in line for line in c1.lines)
+
+
+def test_a_successful_measurement_of_that_cell_exits_done(tmp_path, capsys):
+    """The consequence the operator would have read on the pod: exit 1.
+
+    Scored end to end through --analyse, because the exit code is what the
+    session driver files the arm under and CLAIM_FAIL is "measured, the world
+    disagreed". The world did not disagree; the gate could not pass.
+    """
+    path = tmp_path / "h200.json"
+    path.write_text(json.dumps(_h200_payload("n3")))
+    assert main(["--analyse", str(path)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "PASS"
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_the_a100_cell_keeps_the_question_it_can_answer(tmp_path, capsys):
+    """And the repair is not a loosening: on a cell whose anchors ARE separated,
+    C1 still demands exactly one survivor, and two survivors still FAIL."""
+    a100 = {"published": 0.6473, "t1": 0.4522, "n3": 0.7047}
+    reg = c1_registration(a100)
+    assert reg.separating and reg.min_gap > C1_TOLERANCE
+    assert reg.verdict(["t1"]) == PASS
+    assert reg.verdict(["t1", "n3"]) == FAIL
+    assert reg.verdict([]) == FAIL
+    # ...and a clustered cell's FAIL is every anchor refuted, which is a result
+    # and not an instrument failure, so C1 stays a CLAIM gate in both modes.
+    payload = _h200_payload("n3")
+    payload["rows"] = [{"n": n, "calls": 11, "calls_floor": 10, "launches": 44,
+                        "dram_bytes_read": predicted_read_bytes(MIXTRAL, 64, n, 0.05),
+                        "dram_bytes_write": 1.1e8, "l2_read_hit_pct": 4.2,
+                        "gpu_time_ns": 1.95e6, "by_kernel": {}}
+                       for n in (1, 2, 3, 4, 6, 8)]
+    path = tmp_path / "refuted.json"
+    path.write_text(json.dumps(payload))
+    assert main(["--analyse", str(path)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "C1")
+    assert line.verdict == "FAIL"
+    del capsys
+
+
+def test_c1_refuses_a_payload_that_registered_no_anchor_at_all():
+    """A gate with nothing to compare against examined nothing. It used to score
+    FAIL with "survivors none", which reads as three refuted anchors."""
+    payload = _h200_payload("n3")
+    payload.pop("anchors")
+    gates, _summary = score_counter_run(payload)
+    c1 = next(g for g in gates if g.number == "C1")
+    assert c1.verdict == REFUSE
+    assert c1.scored()[2] == exit_codes.UNKNOWN
+
+
+def test_the_plan_registers_c1_before_anything_runs(capsys):
+    """Said at registration time, on the cell the plan actually holds, so the
+    operator does not discover it from a gate on a rented box."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    assert "C1, REGISTERED" in out
+    assert "NOT DISCRIMINATING" in out
+    anc, _rep = DCR.anchors_from_report(DEFAULT_REPORT, 64)
+    reg = c1_registration(anc.as_dict())
+    assert f"{reg.min_gap:.4f}" in out and f"{C1_TOLERANCE:.2f}" in out
+
+
+def test_the_parser_requires_the_unit_column_the_way_it_requires_the_id():
+    """The parser's one defence against ncu's per-launch rescaling was optional.
+
+    `Metric Unit` was picked up `if name in header`, so a CSV without the column
+    left `unit` empty, and the byte tables mapped "" to 1.0. A file whose bytes
+    ncu had already rescaled to Mbyte read as bytes: a factor of 1e6 low, still
+    perfectly affine in n, and therefore invisible to V3, V4 and every gate but
+    the n=1 one.
+    """
+    head = '"ID","Kernel Name","Metric Name","Metric Value"'
+    rows = [head]
+    for launch in range(1, 12):
+        kernel = CALL_MARKER if launch % 4 == 1 else "fused_moe_kernel"
+        for metric in NCU_METRICS:
+            rows.append(f'"{launch}","{kernel}","{metric}","2840.0"')
+    with pytest.raises(CounterRunRefused, match="Metric Unit"):
+        parse_ncu_csv("\n".join(rows))
+    # and a blank unit CELL, on a header that does carry the column, refuses too
+    blank = ['"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"',
+             f'"1","{CALL_MARKER}","dram__bytes_read.sum","","2840.0"']
+    with pytest.raises(CounterRunRefused, match="never been shown"):
+        parse_ncu_csv("\n".join(blank))
+    assert all("" not in units for _canon, units in DCR.NCU_METRIC_UNITS.values())
+
+
+def test_the_schedule_pairs_knobs_are_read_off_the_committed_rows():
+    """Two call sites, one estimator: the BLOCK_N cells read their knobs from
+    their arm's report and the schedule pair typed theirs from the setting
+    string. The typed values were right, and nothing would have said so if a
+    republish had moved a pipeline depth."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    for setting, group_m in (("s3w8g1", 1), ("s3w8g16", 16)):
+        knobs = corpus_knobs(run / "cells.csv", {"setting": setting, "block_m": 64},
+                             ("group_m", "num_stages", "num_warps"))
+        cell = next(c for c in contrast_plan(64) if c.name == f"{setting}-m64")
+        assert (cell.group_m, cell.num_stages, cell.num_warps) == (
+            knobs["group_m"], knobs["num_stages"], knobs["num_warps"])
+        assert knobs["group_m"] == group_m
+        assert "cells.csv" in cell.knob_source
+    # a column the rows do not carry, and a selection spanning two values of
+    # one, both refuse rather than picking whichever sorted first.
+    with pytest.raises(CorpusMissing, match="no column"):
+        corpus_knobs(run / "cells.csv", {"setting": "s3w8g1"}, ("block_n",))
+    with pytest.raises(CorpusMissing, match="that is two cells"):
+        corpus_knobs(run / "cells.csv", {"block_m": 64}, ("group_m",))
+
+
+def test_the_occupancy_arms_block_n_is_read_and_its_source_named():
+    """The arm records its BLOCK_SIZE_N inside the text of the gate that checks
+    it and nowhere as a field, so the reader says which of the two it used."""
+    run = one_run_dir(GAPS_SESSION / "occupancy_vs_swizzle")
+    report = json.loads((run / "report.json").read_text())
+    block_n, source = occupancy_block_n(report)
+    assert block_n == 64 and "report.json" in source
+    fallback, source = occupancy_block_n({"no": "pin here"})
+    assert fallback == 64 and "FIXED" in source
+
+
+def test_the_plan_id_separates_two_cards():
+    """`--card` became a first-class knob and was not in the id, so the same
+    cell planned for the A100 and for the H200 produced one string while every
+    prediction under it differed."""
+    h200 = build_parser().parse_args([])
+    a100 = build_parser().parse_args(["--card", "nvidia_a100_sxm4_80gb"])
+    assert plan_id(h200) != plan_id(a100)
+    assert plan_id(h200).startswith("nvidia_h200-")
+    assert plan_id(h200) == plan_id(build_parser().parse_args([]))
+
+
+# --------------------------------------------------------------------------
+# --contrast. The reading the extended plan exists to take, which no single
+# payload contains and which nothing scored until this repair.
+# --------------------------------------------------------------------------
+
+def _pair_payloads(tmp_path, *, lo_dr=None, hi_dr=None, lo_cache="all",
+                   hi_cache="all", stamped_cell=None) -> tuple[Path, Path]:
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    lo_dr = pair.lo.traffic_bytes_per_tile(stream, W) if lo_dr is None else lo_dr
+    hi_dr = pair.hi.traffic_bytes_per_tile(stream, W) if hi_dr is None else hi_dr
+    lo = tmp_path / "lo.json"
+    hi = tmp_path / "hi.json"
+    lo.write_text(json.dumps(synthetic_counter_payload(
+        pair.lo, lo_dr, cache_control=lo_cache, stamped_cell=stamped_cell)))
+    hi.write_text(json.dumps(synthetic_counter_payload(
+        pair.hi, hi_dr, cache_control=hi_cache)))
+    return lo, hi
+
+
+def test_the_contrast_is_scored_across_two_payloads_and_names_the_rival(tmp_path, capsys):
+    """Acceptance for the mode: a TRAFFIC world reads as TRAFFIC.
+
+    Until this repair `--analyse` scored ONE payload and the discriminator was a
+    ratio ACROSS two, so the operator came off the pod with five scored cells
+    and section 2's arithmetic to do by hand against the printed predictions.
+    """
+    lo, hi = _pair_payloads(tmp_path)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    names = [ln.name for ln in exit_codes.parse_result_lines(out)]
+    assert names == ["X0", "XA-all"]
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TRAFFIC" in line.detail
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert f"{pair.traffic_ratio:.3f}" in out
+    assert exit_codes.classify_text(out) == exit_codes.DONE
+
+
+def test_a_time_world_reads_as_time_and_not_as_a_failed_traffic_prediction(
+        tmp_path, capsys):
+    """The other rival is an ANSWER, not a failure: identical reads at both
+    BLOCK_N mean the missing term is time and no byte model can hold it."""
+    _lo, hi = _pair_payloads(tmp_path)
+    same = json.loads(hi.read_text())["rows"][1]["dram_bytes_read"]
+    del same
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "PASS" and "TIME" in line.detail
+
+
+def test_a_ratio_between_the_two_rivals_refutes_both_as_stated(tmp_path, capsys):
+    """Anything in between is reported as the split it is, not rounded to the
+    nearer rival."""
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    pair = contrast_pairs(contrast_plan(64))[0]
+    dr = pair.hi.traffic_bytes_per_tile(stream, weight_bytes_total(MIXTRAL))
+    lo, hi = _pair_payloads(tmp_path, lo_dr=dr * 1.4, hi_dr=dr)
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.CLAIM_FAIL
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "XA-all")
+    assert line.verdict == "FAIL" and "neither" in line.detail
+
+
+def test_a_pair_nobody_ran_is_refused_and_never_scored_unknown(tmp_path, capsys):
+    """The C1 defect's own shape, not repeated here: a gate for a contrast that
+    has no payloads would be UNKNOWN, which counts against the run, so a plan
+    run half through would report CLAIM_FAIL for the half it never took."""
+    cells = contrast_plan(64)
+    gbps, _src = measured_bandwidth_gbps("nvidia_h200")
+    stream = weight_stream_ms(weight_bytes_total(MIXTRAL), gbps)
+    W = weight_bytes_total(MIXTRAL)
+    paths = []
+    for name in ("bn32-g16-m64", "s3w8g1-m64"):
+        cell = next(c for c in cells if c.name == name)
+        p = tmp_path / f"{name}.json"
+        p.write_text(json.dumps(synthetic_counter_payload(
+            cell, cell.traffic_bytes_per_tile(stream, W))))
+        paths.append(p)
+    assert main(["--contrast", *[str(p) for p in paths]]) == exit_codes.REFUSED
+    out = capsys.readouterr().out
+    assert exit_codes.parse_result_lines(out) == []
+    assert "no registered pair is complete" in out
+    # and one file is not a contrast at all
+    assert main(["--contrast", str(paths[0])]) == exit_codes.REFUSED
+
+
+def test_pairs_are_matched_inside_one_cache_mode(tmp_path, capsys):
+    """ncu's --cache-control sets the cache state, so a ratio taken across two
+    cache modes is a ratio between two apparatuses."""
+    lo, hi = _pair_payloads(tmp_path, lo_cache="all", hi_cache="none")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.REFUSED
+    assert "no registered pair is complete" in capsys.readouterr().out
+
+
+def test_the_stamped_cell_name_is_read_back_rather_than_trusted(tmp_path, capsys):
+    """`build_counter_payload` stamped `contrast` into every payload and nothing
+    ever read it back. A payload whose stamp and whose knobs disagree is one of
+    the two, and the ratio may not be taken under either name."""
+    lo, hi = _pair_payloads(tmp_path, stamped_cell="bn128-g16-m64")
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "stamped contrast says" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.kind == "VALIDITY" and line.verdict == "FAIL"
+
+
+def test_a_ratio_over_a_payload_whose_own_gates_failed_is_invalid(tmp_path, capsys):
+    """Validity voids the claims above it, ACROSS files as well as inside one."""
+    lo, hi = _pair_payloads(tmp_path)
+    payload = json.loads(lo.read_text())
+    payload["rows"][2]["dram_bytes_read"] = payload["rows"][0]["dram_bytes_read"]
+    lo.write_text(json.dumps(payload))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
+    assert "V3" in out
+
+
+def test_two_payloads_for_one_cell_and_cache_mode_are_a_collision(tmp_path):
+    """Argument order would otherwise choose which of two measurements the ratio
+    was taken over."""
+    lo, hi = _pair_payloads(tmp_path)
+    twin = tmp_path / "lo-again.json"
+    twin.write_text(lo.read_text())
+    args = build_parser().parse_args(
+        ["--contrast", str(lo), str(twin), str(hi)])
+    rows, _cells = contrast_rows([lo, twin, hi])
+    assert len(rows) == 3
+    assert DCR.do_contrast(args) == exit_codes.INVALID
+
+
+def test_the_measured_slope_is_the_ratio_and_carries_no_bandwidth(tmp_path):
+    """The discriminator is two measured slopes divided: no byte model, no
+    weight total, no card rate, so a recalibration cannot move it."""
+    lo, hi = _pair_payloads(tmp_path)
+    dr_lo, resid = measured_dr_dn(json.loads(lo.read_text()))
+    dr_hi, _resid = measured_dr_dn(json.loads(hi.read_text()))
+    pair = contrast_pairs(contrast_plan(64))[0]
+    assert resid < 1e-9
+    assert dr_lo / dr_hi == pytest.approx(pair.traffic_ratio, rel=1e-9)
+    assert dr_lo / dr_hi == pytest.approx(pair.lo.slope_ms / pair.hi.slope_ms, rel=1e-9)
+    # a payload with fewer than three tile counts has no slope and says so
+    thin = json.loads(lo.read_text())
+    thin["rows"] = thin["rows"][:2]
+    with pytest.raises(CounterRunRefused, match="a slope needs three"):
+        measured_dr_dn(thin)
+
+
+def test_the_pairs_the_plan_prints_are_the_pairs_the_scorer_reads(capsys):
+    """One registration, two readers. The plan printed CONTRAST A and B out of
+    inline literals and the scorer would have had its own copy."""
+    assert main(["--dry-run"]) == exit_codes.DONE
+    out = capsys.readouterr().out
+    for pair in contrast_pairs(contrast_plan(64)):
+        assert f"CONTRAST {pair.label}" in out
+        assert f"{pair.traffic_ratio:.3f}" in out
+        assert pair.separates(CONTRAST_TOLERANCE)
+        assert "SEPARATING" in out
+    assert "--contrast" in out, "the recipe must name the mode that scores it"
+
+
+def test_a_pair_whose_rivals_overlap_is_registered_not_failed():
+    """The C1 fix applied at the second call site. A pair whose two predictions
+    both fit inside the scoring window cannot decide, and `separates` is the
+    check that says so before a box is rented."""
+    cells = contrast_plan(64)
+    pair = contrast_pairs(cells)[0]
+    assert pair.separates(0.05)
+    # widen the window to 60% and the two acceptance bands overlap, so there
+    # are ratios no reading can attribute
+    assert not pair.separates(0.60)
+    verdict, which = pair.read(1.5, 0.60)
+    assert verdict == REFUSE and "does not separate" in which
+    # and at the registered window the same ratio attributes to neither, which
+    # is a FAIL and a result rather than an undecidable gate
+    assert pair.read(1.5, CONTRAST_TOLERANCE)[0] == FAIL
+
+
+def test_the_contrast_json_carries_provenance_and_its_own_instrument(tmp_path):
+    """Every JSON this script writes goes through `stamped`, the fourth write
+    site included."""
+    lo, hi = _pair_payloads(tmp_path)
+    out = tmp_path / "contrast.json"
+    assert main(["--contrast", str(lo), str(hi), "--out", str(out)]) == exit_codes.DONE
+    doc = json.loads(out.read_text())
+    for key in ("git_sha", "gpu_name", "instrument", "provenance", "run_id"):
+        assert key in doc
+    assert doc["instrument"] == CONTRAST_INSTRUMENT
+    assert "no-kernel-timed" in CONTRAST_INSTRUMENT
+    assert doc["tolerance"] == CONTRAST_TOLERANCE
+    assert doc["run_id"].startswith(NO_CARD.replace("-", "_")[:4]) or doc["run_id"]
+    one = build_parser().parse_args(["--contrast", str(lo), str(hi)])
+    two = build_parser().parse_args(["--contrast", str(lo)])
+    assert run_id_for("contrast", one, NO_CARD) != run_id_for("contrast", two, NO_CARD)
+
+
+def test_contrast_is_one_mode_among_the_seven(capsys):
+    """Two modes at once still refuses, and the refusal names the new one."""
+    assert main(["--contrast", "a.json", "--bracket"]) == exit_codes.REFUSED
+    assert "--contrast" in capsys.readouterr().out
+
+
+def test_a_ratio_across_two_cards_is_not_a_contrast(tmp_path, capsys):
+    """The pair varies one knob; a payload from another card varies the card
+    too, and the ratio would carry that difference silently."""
+    lo, hi = _pair_payloads(tmp_path)
+    other = json.loads(hi.read_text())
+    other["device"] = "nvidia_a100_sxm4_80gb"
+    hi.write_text(json.dumps(other))
+    assert main(["--contrast", str(lo), str(hi)]) == exit_codes.INVALID
+    out = capsys.readouterr().out
+    assert "values of device" in out
+    line = next(ln for ln in exit_codes.parse_result_lines(out) if ln.name == "X0")
+    assert line.verdict == "FAIL"
