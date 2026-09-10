@@ -230,9 +230,15 @@ network volume, which outlives the pod), else `<repo>/results`:
 
 `cells.csv` is appended and flushed per timing and a re-run resumes it. Each row
 carries the `KernelTiming` columns the instrument produced (instrument,
-warmup_ms, iters, trials, sm_clock_load_mhz, clock_level_ok, clock_level_side,
-clock_drift_ok, l2_flush) and the run's `provenance` columns, so a row can be attributed to a
-commit, a card and a ruler without the report beside it. The run id is built by
+warmup_ms, iters, trials, sm_clock_load_mhz, sm_clock_start_mhz,
+sm_clock_end_mhz, clock_samples_mhz, power_w, clock_level_ok,
+clock_level_side, clock_drift_ok, l2_flush) and the run's `provenance`
+columns, so a row can be attributed to a commit, a card and a ruler without the
+report beside it. The four clock-evidence columns were added on 2026-09-09
+with the settle-on-clock warmup and this list was one writer behind them until
+the same day: a drifted row that cannot say WHICH WAY its clock went is the
+defect they exist to close, so a description that omits them describes the
+artefact before the fix. The run id is built by
 `moe.bench.provenance.run_id` from EVERY swept knob AND the card, because the
 results root is a network volume shared between pods and this repo has already
 had one card silently report another's timings twice.
@@ -1567,12 +1573,20 @@ class Sample:
 
     `clock_level_side` SAYS WHICH WAY A LEVEL FAILURE WENT: `timing.LEVEL_LOW`,
     `timing.LEVEL_HIGH`, or "" for level or undetermined. LEVEL has been
-    two-sided since 03df2d4 (2026-09-03), and on the H200 a memory-shaped
-    tread boosts to 1980 MHz against the 1515 MHz bf16-GEMM reference and
-    fails HIGH. That is not a cold tread: `clock_excluded` is the one reader of
-    the verdicts and it excludes on LOW or DRIFT only. A row that carries
-    `clock_level_ok` False and no side was written before this column
-    existed, when LEVEL was one-sided and False meant below.
+    two-sided since 03df2d4 (2026-09-03), and SINCE 2026-09-09 NEITHER SIDE
+    EXCLUDES: the under-load clock is set per tile by the kernel's own power
+    draw under the cap, so a memory-shaped tread boosting to 1980 MHz and a
+    BLOCK_M=128 tread holding 1395 are both at their own operating point.
+    `clock_excluded` is the one reader of the verdicts and it excludes on
+    DRIFT alone; the side is a record. A row that carries `clock_level_ok`
+    False and no side was written before this column existed, when LEVEL was
+    one-sided and False meant below.
+
+    `sm_clock_start_mhz`, `sm_clock_end_mhz`, `clock_samples_mhz` and
+    `power_w` are the evidence a DRIFT verdict rests on. Until 2026-09-09 six
+    of the seven writers in this repo kept only the median, so the 135 drifted
+    rows of the H200 gaps session say a clock moved and cannot say which way
+    or how far, and no rerun can tell a settling warmup from a throttle.
     """
 
     block_n: int
@@ -1592,6 +1606,14 @@ class Sample:
     trials: int = 0
     l2_flush: bool = False
     sm_clock_load_mhz: float | None = None
+    #: The first and last under-load sample, the whole sample list (space-
+    #: joined MHz) and the draw at the same NVML call. Persisted since
+    #: 2026-09-09 so a DRIFT row says which way the clock went and a LEVEL
+    #: side can be told apart as a hungry tile from a throttled card.
+    sm_clock_start_mhz: float | None = None
+    sm_clock_end_mhz: float | None = None
+    clock_samples_mhz: str = ""
+    power_w: float | None = None
     clock_level_ok: bool | None = None
     clock_drift_ok: bool | None = None
     host_bound: bool | None = None
@@ -1609,7 +1631,15 @@ def clock_side_of(t) -> str:
     LEVEL and carries no side (a fake built before the field existed on
     2026-09-03) has it derived from its own load and reference, the rule
     `moe.bench.driver` applies to the same records; one with neither answers
-    "", which `clock_excluded` reads as the one-sided era's False, below.
+    "", which is "no side recorded" and not "level".
+
+    SINCE 2026-09-09 THE SIDE IS A RECORD AND NOT A FILTER. `clock_excluded`
+    below reads DRIFT alone; the side is written on the row and printed in the
+    clock-state block. It is NOT what this file's own-clock roof is computed
+    from: `RefVerdict.own_clock_tflops` rescales the fixed roof by the median
+    under-load clock of the whole reference ladder, one number per arm, and no
+    per-row side enters it. This sentence claimed the side was scored from
+    until 2026-09-09.
     """
     from moe.bench import timing
 
@@ -1620,33 +1650,66 @@ def clock_side_of(t) -> str:
     return side
 
 
+def clock_samples_of(t) -> dict:
+    """The under-load clock evidence a DRIFT verdict rests on, as row columns.
+
+    THE FIRST AND LAST SAMPLE WERE COMPUTED AND THROWN AWAY. `time_kernel` has
+    put `sm_clock_start_mhz` and `sm_clock_end_mhz` on every `KernelTiming`
+    since the clock-under-load instrument landed, and six of the seven writers
+    in this repo kept only the median. The 2026-09-09 H200 session therefore
+    ended with 135 rows that say DRIFT and cannot say which way the clock went:
+    "the governor was still settling after a workload change" had to be argued
+    from where the drifted cells sat in each rep rather than from the cells.
+    Persisted from here on so the next session can be read off its own rows.
+
+    Every field is fetched with `getattr` because the instrument gained
+    `clock_samples_mhz` and `power_w` after these rows first existed: a record
+    without them writes the column EMPTY, which is NOT DETERMINED and never
+    zero. The sample list is space-joined integers, one representation that
+    serves a CSV cell and a JSON value alike.
+    """
+    samples = getattr(t, "clock_samples_mhz", None) or ()
+    return {
+        "sm_clock_start_mhz": getattr(t, "sm_clock_start_mhz", None),
+        "sm_clock_end_mhz": getattr(t, "sm_clock_end_mhz", None),
+        "clock_samples_mhz": " ".join(f"{c:.0f}" for c in samples),
+        "power_w": getattr(t, "power_w", None),
+    }
+
+
 def clock_excluded(level_ok: bool | None, side: str,
                    drift_ok: bool | None) -> bool:
-    """Do a tread's clock verdicts exclude it. LOW or DRIFT do; HIGH does not.
+    """Do a tread's clock verdicts exclude it. DRIFT does; no LEVEL side does.
 
-    THE FIFTEENTH INSTANCE OF A FIX LANDING AT ONE OF TWO CALL SITES. Commit
-    03df2d4 made `timing.clock_flags` two-sided at the producer, so a tread
-    boosted to 1980 MHz against the 1515 MHz bf16-GEMM reference now fails
-    LEVEL with `clock_level_side == "high"`. Until 2026-09-08 this file read
-    `clock_level_ok is False` alone, the one-sided era's test, which takes
-    that tread for one that ran cold. On the H200 the HIGH side is the NORMAL
-    state of a memory-shaped tread: the committed calibration holds 1980 MHz
-    under memory load for 30 s against a 1515 MHz GEMM plateau, so the old
-    test flagged exactly the small-T end the memory branch is made of.
+    THE RULE CHANGED ON 2026-09-09. Until then this file excluded a tread
+    whose LEVEL failed LOW, and before 2026-09-08 one whose LEVEL failed at
+    all, which took a memory-shaped tread boosted to 1980 MHz for one that had
+    run cold. The 750-cell census of the H200 gaps session settled what the LOW
+    side is. Under the 700 W cap the under-load clock is an OUTCOME of the
+    tread, set per tile by the kernel's own power draw: BLOCK_M=128 at
+    BLOCK_N=64 sat at 1380-1410 MHz in every rep and every tread, BLOCK_M=256
+    at 1620-1755, memory-shaped treads at 1950-1980, against a calibration
+    GEMM that itself held 1485 MHz at 691 W, near the LOW end of what dense
+    work does on this card. A band around that GEMM's operating point therefore
+    excludes a TILE and not a defect: it dropped 148 treads session-wide,
+    every one of them the steady state of one of the two tile families this
+    study is about, and it would drop the same ones on every rerun.
 
-    HIGH means the fixed-roof fraction is not comparable and the per-row
-    `roof_at_cell_clock` is the number to read. The time itself is a time at
-    one clock and stays. This is the `throttled` rule `moe.bench.driver`
-    writes on its own rows, restated because the rows this file writes carry
-    the verdicts and not that column. A False with no side is the one-sided
-    era's meaning, below, and stays excluded. None is not determined, and an
-    exclusion has to be positively established.
+    DRIFT survives, because it says something else: the clock MOVED while the
+    tread was timed, so the median load is a blend of two clocks and the time
+    is not a time at one operating point. All 135 drifts in that session were
+    the governor settling on the first tread of a rep after a workload change,
+    which is an instrument problem and is fixed at the instrument.
+
+    `level_ok` and `side` are still taken and still written on the row. The
+    side is a RECORD of where the tread ran and it excludes nothing. It is not
+    an input to any roof: this file's own-clock roof is per ARM, from the
+    reference ladder's median clock (`RefVerdict.own_clock_tflops`), and until
+    2026-09-09 this sentence said the side was what it was scored from. None
+    is not determined and an exclusion has to be positively established, so
+    only a False DRIFT excludes.
     """
-    from moe.bench import timing
-
-    if drift_ok is False:
-        return True
-    return level_ok is False and side != timing.LEVEL_HIGH
+    return drift_ok is False
 
 
 def clock_state(samples: list[Sample]) -> dict:
@@ -1655,51 +1718,96 @@ def clock_state(samples: list[Sample]) -> dict:
     Counts and never a verdict: this file drops no tread for its clock (the
     fit reads `status == "ok"`), so the block is what a reader of report.json
     has to decide whether the ladders were timed at the clock the roof was.
-    `low` and `drift` are the excluded-shaped states `clock_excluded` names;
-    `high` is kept and counted apart from them because on the H200 it is the
-    ordinary state of a memory-bound tread and a report that folded it in with
-    "cold" would say the memory branch was mostly unusable. `unknown` is the
-    treads whose LEVEL was not determined, counted separately because a run
-    that could not read its clocks and a run whose clocks were fine are not
-    the same state.
+
+    THE FIVE COUNTS PARTITION THE TIMED TREADS AND DO NOT OVERLAP. Until
+    2026-09-09 `level`, `low`, `high` and `unknown` filtered on the LEVEL
+    verdict alone, so a tread that both drifted and sat level was counted in
+    `level` AND in `drift`, and the printed line called the same tread kept
+    and excluded-shaped in one sentence: on this session's own bn_decomposition
+    ladders it read "43 level, 161 steady HIGH, 8 DRIFT failed" over 204 timed
+    treads, and 43 + 161 already was 204. The four LEVEL counts now take the
+    steady treads only, `drift` takes the rest, and the five sum to `timed`.
+    The drifted treads keep their own LEVEL breakdown in `drift_level`,
+    `drift_low`, `drift_high` and `drift_unknown`, because "which way was the
+    clock when it moved" is still a fact about the run, just not a fact about
+    a kept tread.
+
+    `drift` is the excluded state `clock_excluded` names. `low` and `high` are
+    both KEPT since 2026-09-09 and counted apart because the side is the
+    record of the operating point the tread ran at. `unknown` is the treads
+    whose LEVEL was not determined, counted separately because a run that
+    could not read its clocks and a run whose clocks were fine are not the
+    same state.
     """
     from moe.bench import timing
 
     timed = [s for s in samples if s.status == "ok"]
-    low = sum(1 for s in timed if s.clock_level_ok is False
-              and s.clock_level_side != timing.LEVEL_HIGH)
-    high = sum(1 for s in timed if s.clock_level_ok is False
-               and s.clock_level_side == timing.LEVEL_HIGH)
+    drifted = [s for s in timed if s.clock_drift_ok is False]
+    steady = [s for s in timed if s.clock_drift_ok is not False]
+
+    def sides(rows: list[Sample]) -> dict:
+        return {
+            "level": sum(1 for s in rows if s.clock_level_ok is True),
+            "low": sum(1 for s in rows if s.clock_level_ok is False
+                       and s.clock_level_side != timing.LEVEL_HIGH),
+            "high": sum(1 for s in rows if s.clock_level_ok is False
+                        and s.clock_level_side == timing.LEVEL_HIGH),
+            "unknown": sum(1 for s in rows if s.clock_level_ok is None),
+        }
+
+    kept = sides(steady)
+    moved = sides(drifted)
     return {
         "timed": len(timed),
-        "level": sum(1 for s in timed if s.clock_level_ok is True),
-        "low": low,
-        "high": high,
-        "drift": sum(1 for s in timed if s.clock_drift_ok is False),
-        "unknown": sum(1 for s in timed if s.clock_level_ok is None),
+        "level": kept["level"],
+        "low": kept["low"],
+        "high": kept["high"],
+        "drift": len(drifted),
+        "unknown": kept["unknown"],
+        "drift_level": moved["level"],
+        "drift_low": moved["low"],
+        "drift_high": moved["high"],
+        "drift_unknown": moved["unknown"],
         "excluded_shaped": sum(
             1 for s in timed
             if clock_excluded(s.clock_level_ok, s.clock_level_side,
                               s.clock_drift_ok)),
-        "rule": "LOW or DRIFT excludes; HIGH is kept, its fixed-roof fraction "
-                "is not comparable and roof_at_cell_clock is the number to "
-                "read; this fit drops no tread for its clock",
+        "rule": "DRIFT excludes; BOTH LEVEL sides are kept with the side "
+                "recorded, because the under-load clock is set per tile by the "
+                "kernel's own power draw under the cap; the fixed roof is what "
+                "the compute-bound gates score against; the four LEVEL counts "
+                "are over the STEADY treads only and the five counts partition "
+                "the timed treads; this fit drops no tread for its clock",
     }
 
 
 def clock_state_lines(state: dict) -> list[str]:
-    """The printed form of `clock_state`, saying which side each count is."""
-    return [
-        f"  {state['timed']} timed treads: {state['level']} level, "
-        f"{state['low']} LOW (below the band, excluded-shaped), "
-        f"{state['high']} HIGH (boosted above the band, kept: the fixed-roof "
-        "fraction is not comparable, read roof_at_cell_clock), "
-        f"{state['drift']} DRIFT failed (excluded-shaped), "
-        f"{state['unknown']} with LEVEL not determined",
-        "  this fit drops no tread for its clock; the counts are for a reader "
-        "deciding whether to believe it, and None means NOT DETERMINED, never "
-        "fine",
+    """The printed form of `clock_state`, saying which side each count is.
+
+    Two lines since 2026-09-09: the first is the steady treads by LEVEL side,
+    the second the drifted ones by LEVEL side. Before that the LEVEL counts
+    included the drifted treads and the line named one tread as kept and as
+    excluded-shaped at once.
+    """
+    lines = [
+        f"  {state['timed']} timed treads: {state['level']} steady level, "
+        f"{state['low']} steady LOW (kept, side recorded), "
+        f"{state['high']} steady HIGH (kept, side recorded), "
+        f"{state['drift']} DRIFT failed (excluded, and not in the three "
+        f"counts before it), "
+        f"{state['unknown']} steady with LEVEL not determined",
     ]
+    if state["drift"]:
+        lines.append(
+            f"  the {state['drift']} drifted treads by side: "
+            f"{state['drift_level']} level, {state['drift_low']} LOW, "
+            f"{state['drift_high']} HIGH, {state['drift_unknown']} with LEVEL "
+            "not determined; a tread whose clock moved is not steady at any "
+            "side, so none of them is counted as kept")
+    lines.append(
+        "  scored against the fixed roof; this fit drops no tread for its "
+        "clock, and None means NOT DETERMINED, never fine")
+    return lines
 
 
 def ladder_rows(cfg, block_m: int, r_max: int, max_treads: int) -> list[int]:
@@ -1806,10 +1914,57 @@ class RefVerdict:
     basis: str = "OWN"
     #: What the import assumed, in words, when it is one.
     import_note: str = ""
+    #: The median under-load SM clock of the ladder this reference was fitted
+    #: from, and the clock the FIXED roof was measured at. Both records, both
+    #: on the row since 2026-09-09: the achieved rate is scored against the
+    #: fixed roof (the GEMM and every cell ran under the same 700 W cap, so
+    #: that is the fair delivered-throughput comparison) and the own-clock
+    #: fraction is printed beside it as ISSUE EFFICIENCY, never as a gate
+    #: input. On an IMPORTED basis this stays the BORROWER's clock while the
+    #: rate is the lenders', so `own_clock_fraction` is None there and only
+    #: the roof is printed; see that property.
+    load_clock_mhz: float | None = None
+    reference_clock_mhz: float | None = None
 
     @property
     def ok(self) -> bool:
         return not self.refusals and self.block_m is not None
+
+    @property
+    def own_clock_tflops(self) -> float | None:
+        """The compute roof at the clock THIS ladder ran at, not at the GEMM's.
+
+        The fixed roof assumed the calibration GEMM's issue rate. A ladder that
+        held 1725 MHz had 1725/1485 of that issue rate available to it, so its
+        fraction of the fixed roof is inflated by the ratio and its fraction of
+        THIS number is what the kernel got out of the machine it actually ran
+        on. None when either clock is missing: an unknown is not a 1.0.
+        """
+        if not (self.load_clock_mhz and self.reference_clock_mhz):
+            return None
+        return self.ceiling_tflops * self.load_clock_mhz / self.reference_clock_mhz
+
+    @property
+    def own_clock_fraction(self) -> float | None:
+        """Issue efficiency: the implied rate over the roof at its own clock.
+
+        NONE FOR AN IMPORTED BASIS, since 2026-09-09. `import_reference` builds
+        the borrower's `implied_tflops` from the LENDERS' median slope, fitted
+        on the lenders' ladders at the lenders' clocks, while `load_clock_mhz`
+        stays the borrower's own measured operating point. The ratio of the two
+        is therefore a rate measured at one clock over a roof rescaled to a
+        different one, and it is not this arm's issue efficiency however it is
+        labelled. It did not bite the 2026-09-09 corpus (all three arms
+        qualified OWN and nothing was imported) and would have bitten the first
+        rerun in which an arm borrowed a branch, which is the case
+        `import_reference` exists for. `own_clock_tflops` stays, because a roof
+        at a measured clock is still a fact about this arm; only the fraction
+        mixes two ladders.
+        """
+        roof = self.own_clock_tflops
+        if self.imported or roof is None or not roof or self.implied_tflops is None:
+            return None
+        return self.implied_tflops / roof
 
     @property
     def imported(self) -> bool:
@@ -1825,6 +1980,28 @@ class RefVerdict:
                 f"{self.fraction:6.1%} of {self.ceiling_tflops:.1f}   gate "
                 f"[{REFERENCE_LEVEL_FLOOR:.0%}, "
                 f"{REFERENCE_LEVEL_CEILING:.0%}]")
+            # BOTH ROOFS ON EVERY POINT LINE. The gate reads the fixed one;
+            # this line says what the kernel got out of the clock it actually
+            # held, which on the H200 moves 1560-1725 MHz across this grid.
+            own = self.own_clock_fraction
+            if own is not None:
+                out.append(
+                    f"            issue efficiency {own:6.1%} of "
+                    f"{self.own_clock_tflops:.1f} TFLOP/s, the roof at this "
+                    f"ladder's own {self.load_clock_mhz:.0f} MHz (record, "
+                    "never a gate input)")
+            elif self.imported and self.own_clock_tflops is not None:
+                # NO ISSUE EFFICIENCY ON A BORROWED BRANCH. The rate above was
+                # fitted on the lenders' ladders at the lenders' clocks; the
+                # roof beside it is rescaled to THIS arm's clock. Dividing them
+                # was what this line did until 2026-09-09 and the sentence it
+                # printed ("this ladder's own N MHz") described neither half.
+                out.append(
+                    f"            no issue efficiency: the rate above is the "
+                    f"lenders' (IMPORTED slope), this arm's own "
+                    f"{self.load_clock_mhz:.0f} MHz puts its roof at "
+                    f"{self.own_clock_tflops:.1f} TFLOP/s, and a rate measured "
+                    "at one clock over a roof at another is not an efficiency")
         for why in self.refusals:
             out.append(f"            REFUSED: {why}")
         return out
@@ -1847,7 +2024,9 @@ def implied_tflops(cfg, block_m: int, slope_ms_per_tile: float) -> float:
 def qualify_reference(cells, block_sizes, block_n: int, *, cfg, ridge: float,
                       bandwidth_gbps: float, b: int, pinned: dict,
                       capability, ceiling_tflops: float,
-                      subjects=SUBJECT_BLOCK_M) -> RefVerdict:
+                      subjects=SUBJECT_BLOCK_M,
+                      load_clock_mhz: float | None = None,
+                      reference_clock_mhz: float | None = None) -> RefVerdict:
     """Qualify one BN arm's compute reference, on SHAPE then on LEVEL.
 
     Four refusals, in the order they became necessary:
@@ -1868,6 +2047,16 @@ def qualify_reference(cells, block_sizes, block_n: int, *, cfg, ridge: float,
          5.724 and passed at 0.2%.
       4. AND, IN `cross_bn_refusal` BELOW, ACROSS BN -- the check only a sweep
          holding every BN on one card in one session can make.
+
+    `block_sizes` IS THE SWEPT DESIGN AND NOT THE LADDERS MEASURED SO FAR.
+    Refusal 1's non-vacuity bound scales the compute branch to the smallest
+    size in this tuple, so passing only the reference's own size makes the
+    bound 1.675 of one full weight read at the roof on the H200 and refuses
+    every kernel there is. Both call sites in this file pass the subjects.
+
+    `load_clock_mhz` and `reference_clock_mhz` are RECORDS carried onto the
+    verdict. The level gate reads the fixed-roof fraction; the own-clock
+    fraction is printed beside it.
     """
     ref = SWEEP.compute_reference(
         cells, block_sizes, cfg=cfg, ridge=ridge,
@@ -1876,7 +2065,9 @@ def qualify_reference(cells, block_sizes, block_n: int, *, cfg, ridge: float,
     why: list[str] = list(ref.refusals)
     if ref.block_m is None:
         return RefVerdict(block_n, None, None, 0.0, None, ceiling_tflops, None,
-                          tuple(why) or (ref.note,), ref.note, ref)
+                          tuple(why) or (ref.note,), ref.note, ref,
+                          load_clock_mhz=load_clock_mhz,
+                          reference_clock_mhz=reference_clock_mhz)
     biggest = max(subjects)
     if ref.block_m <= biggest:
         why.append(
@@ -1901,7 +2092,68 @@ def qualify_reference(cells, block_sizes, block_n: int, *, cfg, ridge: float,
             "machine or the FLOP count is wrong")
     return RefVerdict(block_n, ref.block_m, ref.slope_per_tile,
                       ref.overhead_ms, rate, ceiling_tflops, frac, tuple(why),
-                      ref.note, ref)
+                      ref.note, ref, load_clock_mhz=load_clock_mhz,
+                      reference_clock_mhz=reference_clock_mhz)
+
+
+def reference_load_clock(samples, block_n: int) -> float | None:
+    """The median under-load SM clock of one arm's REFERENCE ladder.
+
+    The reference ladder only, never the arm's subjects: the number is the
+    operating point the qualified compute branch was measured at, and the
+    subjects run other tiles at other draws. Drifted rows are left out because
+    their median load is a blend of two clocks, which is the one thing the
+    DRIFT verdict says. Rows with no clock contribute nothing; None when there
+    are none, and None is NOT DETERMINED rather than "the reference clock".
+
+    On 2026-09-09 this reads 1725 / 1620 / 1560 MHz at BLOCK_N=32 / 64 / 128
+    against a 1485 MHz calibration GEMM: the reference tile got 4-16% more
+    issue rate than the fixed roof assumed, which is why the fraction printed
+    beside the fixed one is a different number and not a rounding.
+    """
+    clocks = [s.sm_clock_load_mhz for s in samples
+              if s.block_n == block_n and s.block_m == REFERENCE_BLOCK_M
+              and s.status == "ok" and s.clock_drift_ok is not False
+              and s.sm_clock_load_mhz]
+    return statistics.median(clocks) if clocks else None
+
+
+def cross_bn_normalised_spread(verdicts: list[RefVerdict]) -> float | None:
+    """The cross-BN spread with every rate rescaled to the reference clock.
+
+    V3's gate reads the RAW spread, because the fixed roof is the fair
+    delivered-throughput comparison: the calibration GEMM and every cell in
+    this arm ran under the same 700 W cap, and what the study compares across
+    BN is what the kernel delivered. This is the same spread with each arm's
+    rate divided by its own clock's share of the reference clock, i.e. what
+    the arms would have spread by had they all been issued at 1485 MHz. It is
+    printed BESIDE the gate number and never gates: on 2026-09-09 the raw
+    spread is 1.95x, under the 2.0x bar, and the normalised one is 2.15x, over
+    it, so which number gates is the whole of the arm's verdict and it is
+    pre-registered rather than chosen after the fact.
+
+    None when fewer than two arms carry both a rate and a clock, AND None when
+    the arms that carry a clock are not the same arms `cross_bn_refusal` scored.
+    The gate reads every verdict with a finite rate; this one additionally needs
+    both clocks, so one arm with an unreadable reference clock would silently
+    compute the two spreads over two different sets of arms while the page
+    prints them as "the same spread with each arm rescaled to its own clock".
+    On 2026-09-09 all three arms carried a clock (1725 / 1620 / 1560 MHz), so
+    raw 1.95x and normalised 2.15x are the same comparison and the guard costs
+    nothing there; it costs the whole line on the first run where a clock is
+    missing, which is the correct price for a comparison that is not the one
+    the sentence claims.
+    """
+    scored = [v for v in verdicts
+              if v.implied_tflops and math.isfinite(v.implied_tflops)]
+    usable = [v for v in scored if v.load_clock_mhz and v.reference_clock_mhz]
+    if len(usable) != len(scored):
+        return None
+    rates = [v.implied_tflops * v.reference_clock_mhz / v.load_clock_mhz
+             for v in usable]
+    if len(rates) < 2 or min(rates) <= 0:
+        return None
+    return max(rates) / min(rates)
 
 
 def cross_bn_refusal(verdicts: list[RefVerdict]) -> tuple[str, float | None]:
@@ -1993,7 +2245,11 @@ def import_reference(target: RefVerdict, sources: list[RefVerdict], cfg,
     return RefVerdict(
         target.block_n, block_m, slope, overhead, rate, target.ceiling_tflops,
         rate / target.ceiling_tflops if target.ceiling_tflops > 0 else None,
-        (), ref.note, ref, basis="IMPORTED",
+        (), ref.note, ref,
+        # THE BORROWER'S OWN CLOCK, not the lender's: the slope is borrowed,
+        # the operating point this arm ran at is measured and stays its own.
+        load_clock_mhz=target.load_clock_mhz,
+        reference_clock_mhz=target.reference_clock_mhz, basis="IMPORTED",
         import_note=(
             "this arm qualified NO compute branch of its own ("
             + (target.refusals[0][:90] if target.refusals else "no candidate")
@@ -2004,7 +2260,8 @@ def import_reference(target: RefVerdict, sources: list[RefVerdict], cfg,
 
 def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
                bandwidth_gbps: float, b: int, base_pinned: dict, capability,
-               ceiling_tflops: float, sm_count: int, rng=None
+               ceiling_tflops: float, sm_count: int, rng=None,
+               reference_clock_mhz: float | None = None
                ) -> tuple[list[AlphaCell], list[RefVerdict], dict[int, float | None]]:
     """Every arm's cells, from the raw timings, through the study's own fit.
 
@@ -2016,6 +2273,10 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
     """
     cells: list[AlphaCell] = []
     spreads: dict[int, float | None] = {}
+    # The operating point each arm's reference ladder held, read off the rows
+    # once. A record on every verdict, printed beside the fixed-roof fraction,
+    # and never a gate input; see `reference_load_clock`.
+    load_clock_by_bn = {bn: reference_load_clock(samples, bn) for bn in block_ns}
     ladders_by_bn: dict[int, dict[int, list[tuple[int, float]]]] = {}
     cells_by_bn: dict[int, list] = {}
     verdict_by_bn: dict[int, RefVerdict] = {}
@@ -2041,11 +2302,27 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
         cells_by_bn[bn] = [
             SWEEP.make_cell(cfg, n * bm, bm, ms, sm_count=sm_count, block_n=bn)
             for bm, pts in ladders.items() for n, ms in pts]
+        # THE BLOCK SIZES ARE THE DESIGN, NOT THE LADDERS ON DISK. The
+        # sweep's NON-VACUITY check scales the compute branch to the SMALLEST
+        # SWEPT block size (`block_m_crossing_sweep._level_checks`). Until
+        # 2026-09-09 this passed `tuple(sorted(ladders))`, which collapses to
+        # (256,) whenever no subject ladder has been measured yet, and the
+        # references are measured first by design, so it was ALWAYS (256,).
+        # Scaled to BLOCK_M=256 itself the ratio is 1.675 AT THE ROOF on the
+        # H200 with mixtral against a gate of < 1.0: unpassable by a kernel at
+        # 100% of peak. On 2026-09-09 it refused all three references at
+        # 4.559 / 3.068 / 2.339, the run skipped every subject, and 344 s of
+        # measured references produced no page. With the swept sizes the same
+        # three qualify at 0.570 / 0.383 / 0.292.
         verdict_by_bn[bn] = qualify_reference(
-            cells_by_bn[bn], tuple(sorted(ladders)), bn, cfg=cfg, ridge=ridge,
+            cells_by_bn[bn],
+            tuple(sorted(set(ladders) | set(subjects) | {REFERENCE_BLOCK_M})),
+            bn, cfg=cfg, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned,
             capability=capability, ceiling_tflops=ceiling_tflops,
-            subjects=subjects)
+            subjects=subjects,
+            load_clock_mhz=load_clock_by_bn.get(bn),
+            reference_clock_mhz=reference_clock_mhz)
 
     # PASS TWO: lend a branch to the arms that have none, then fit.
     qualified = [v for v in verdict_by_bn.values() if v.ok]
@@ -2379,6 +2656,25 @@ def gate_reference_level(verdicts: list[RefVerdict]) -> Gate:
                               else "no reference")
         + (" (IMPORTED)" if v.imported else "")
         for v in verdicts)
+    # THE GATE READS THE FIXED-ROOF FRACTION ABOVE; the same rates against the
+    # roof at each arm's own clock go on the line beside it, because on this
+    # card the three reference ladders held 1725 / 1620 / 1560 MHz and the two
+    # readings differ by 3-5 points. Printed, never scored.
+    own = "; ".join(
+        f"BN={v.block_n} {v.own_clock_fraction:.1%} at "
+        f"{v.load_clock_mhz:.0f} MHz"
+        for v in verdicts if v.own_clock_fraction is not None)
+    if own:
+        obs += f" | issue efficiency (record, not the gate input): {own}"
+    # An IMPORTED arm contributes no issue efficiency and says so rather than
+    # going silently missing from the list: see `own_clock_fraction`.
+    no_own = [v.block_n for v in verdicts
+              if v.imported and v.own_clock_fraction is None]
+    if no_own:
+        obs += ("; no issue efficiency for BN="
+                + ",".join(str(n) for n in no_own)
+                + " (IMPORTED slope, so the rate is the lenders' and the "
+                  "clock is this arm's)")
     return Gate(VALIDITY, "V2 reference level",
                 "each arm's compute reference runs at a plausible rate",
                 f"implied TFLOP/s in [{REFERENCE_LEVEL_FLOOR:.0%}, "
@@ -2399,14 +2695,32 @@ def gate_reference_level(verdicts: list[RefVerdict]) -> Gate:
                    "stands behind it."])
 
 
-def gate_cross_bn(refusal: str, spread: float | None) -> Gate:
+def gate_cross_bn(refusal: str, spread: float | None,
+                  normalised: float | None = None) -> Gate:
+    """V3, scored on the RAW rates with the clock-normalised spread beside it.
+
+    THE GATE INPUT IS THE RAW, FIXED-ROOF SPREAD and the bar stays at
+    REFERENCE_CROSS_BN_SPREAD. The GEMM that set the roof and every cell in
+    this arm ran under the same 700 W cap, so delivered throughput is the
+    comparable quantity across BN. The normalised spread (every arm's rate
+    rescaled to the reference clock, so it answers "how far apart would these
+    be at one issue rate") is PRINTED, because on 2026-09-09 the two land on
+    opposite sides of the bar (raw 1.95x, normalised 2.15x) and a page that
+    showed only the passing one would be choosing its verdict after the fact.
+    """
+    both = (f"{spread:.2f}x raw (fixed roof, the gate input)"
+            if spread is not None else
+            "fewer than two arms produced a reference")
+    if normalised is not None:
+        both += (f"; {normalised:.2f}x normalised to each arm's own clock "
+                 "(record, not the gate input)")
     return Gate(VALIDITY, "V3 references agree across BN",
                 "the arms' compute references describe one machine",
                 f"max/min implied TFLOP/s across BN <= "
-                f"{REFERENCE_CROSS_BN_SPREAD:.1f}x",
+                f"{REFERENCE_CROSS_BN_SPREAD:.1f}x, on the RAW rates against "
+                "the fixed roof",
                 None if spread is None else not refusal,
-                (f"{spread:.2f}x" if spread is not None else
-                 "fewer than two arms produced a reference"),
+                both,
                 "the comparison BETWEEN arms, which is the entire experiment: "
                 "alpha_a is a difference across BN and cannot survive the "
                 "references moving 40x between them",
@@ -3132,11 +3446,33 @@ def append_sample(path: Path, sample: Sample, prov=None) -> None:
     session scripts wrote a git sha or a card into one: a file of milliseconds
     with no commit behind it is an anecdote. The block is built ONCE per run and
     passed in, so a mid-run `git commit` cannot give two rows two shas.
+
+    APPENDING TO A FILE WITH A DIFFERENT HEADER REFUSES, since 2026-09-09. The
+    header is written once, when the file is new, and every later row is
+    written positionally under it. Four clock-evidence columns were added to
+    the row on 2026-09-09, so a resume into a cells.csv written before that day
+    would have appended rows with four extra fields in a different order under
+    the old header and silently misaligned the file. The runbook says --new for
+    the booked rerun and `read_samples` reads by header name, so no committed
+    file is affected; this is the check that makes the next added column say so
+    instead of corrupting a directory.
     """
     new = not path.exists()
     row = asdict(sample)
     if prov is not None:
         row.update(prov.as_columns())
+    if not new:
+        with path.open(newline="") as fh:
+            header = next(csv.reader(fh), None)
+        if header is not None and header != list(row):
+            added = [c for c in row if c not in header]
+            gone = [c for c in header if c not in row]
+            raise SystemExit(
+                f"cells.csv at {path} was written with a different set of "
+                f"columns than this run writes (added: {added or 'none'}; "
+                f"missing: {gone or 'none'}). Appending would put the new "
+                "fields under the old header and misalign every row from here "
+                "on. Re-run into a NEW directory rather than resuming this one")
     with path.open("a", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(row))
         if new:
@@ -3190,12 +3526,16 @@ def read_samples(path: Path) -> tuple[set[tuple[int, int, int, int]], list[Sampl
                 trials=int(row.get("trials") or 0),
                 l2_flush=bool(_opt_bool(row.get("l2_flush"))),
                 sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz")),
+                sm_clock_start_mhz=_opt_float(row.get("sm_clock_start_mhz")),
+                sm_clock_end_mhz=_opt_float(row.get("sm_clock_end_mhz")),
+                clock_samples_mhz=row.get("clock_samples_mhz", "") or "",
+                power_w=_opt_float(row.get("power_w")),
                 clock_level_ok=_opt_bool(row.get("clock_level_ok")),
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok")),
                 host_bound=_opt_bool(row.get("host_bound")),
                 # Tri-state, and "" on a row from before 2026-09-08 is the
-                # one-sided era's "no side recorded", which `clock_excluded`
-                # reads as below when the verdict is False.
+                # one-sided era's "no side recorded". Since 2026-09-09 the
+                # side is a record either way and excludes nothing.
                 clock_level_side=row.get("clock_level_side", "") or ""))
     return ({(s.block_n, s.block_m, s.tiles, s.rep)
              for s in out if s.status == "ok"}, out)
@@ -3412,17 +3752,19 @@ def measure_setting(args, cfg, block_n: int, block_m: int, rows: list[int],
                     sm_clock_load_mhz=t.sm_clock_load_mhz,
                     clock_level_ok=t.clock_level_ok,
                     clock_drift_ok=t.clock_drift_ok, host_bound=t.host_bound,
-                    clock_level_side=clock_side_of(t))
-                # THE SIDE IS READ HERE, NOT ONLY THE VERDICT. `clock_level_ok
-                # is False` alone was the one-sided era's test and on the H200
-                # it fires on every memory-shaped tread, which boosts to 1980
-                # MHz against the 1515 MHz reference. LOW, DRIFT and host-bound
-                # get the exclusion-shaped marker; HIGH is named as kept.
+                    clock_level_side=clock_side_of(t), **clock_samples_of(t))
+                # THE SIDE IS RECORDED HERE AND EXCLUDES NOTHING. Since
+                # 2026-09-09 `clock_excluded` reads DRIFT alone, so DRIFT and
+                # host-bound get the exclusion-shaped marker and BOTH LEVEL
+                # sides are named as kept: on this card a steady LOW is a
+                # hungry tile and a steady HIGH is a memory-shaped one, and
+                # each is an operating point the row records.
                 if (clock_excluded(t.clock_level_ok, sample.clock_level_side,
                                    t.clock_drift_ok) or t.host_bound):
                     print(f"  ^ {t.clock_note or ''} {t.host_note or ''}".rstrip())
-                elif sample.clock_level_side == timing.LEVEL_HIGH:
-                    print(f"  ^ kept (LEVEL high is not an exclusion): "
+                elif sample.clock_level_side:
+                    print(f"  ^ kept (LEVEL {sample.clock_level_side} is "
+                          f"recorded, not excluded): "
                           f"{t.clock_note or ''}".rstrip())
             except timing.TimingRefused:
                 raise
@@ -3453,6 +3795,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
                 b: int, ceiling_tflops: float, ceiling_source: str, capability,
                 base_pinned: dict, compiles: dict, executed: dict,
                 sm_count: int, block_ns, subjects, draws: int | None = None,
+                reference_clock_mhz: float | None = None,
                 probe_c2_power: bool = False,
                 plant_noise: float | None = None,
                 band_lines: list[str] | None = None,
@@ -3473,11 +3816,17 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     `band_lines` is the alpha_a band's provenance, already re-derived by `_main`
     before any GPU time, handed down so C1 prints the band it was actually
     scored against. None means C1 reads the corpus itself; it never recites.
+
+    `reference_clock_mhz` is the clock the FIXED roof was measured at, passed
+    in the way `ceiling_tflops` is rather than resolved here, so a replay on a
+    machine with no card scores the session's own numbers. It gates nothing:
+    it is the denominator of the issue-efficiency figure printed beside every
+    fixed-roof fraction, and of V3's normalised spread.
     """
     kw = dict(block_ns=block_ns, subjects=subjects, ridge=ridge,
               bandwidth_gbps=bandwidth_gbps, b=b, base_pinned=base_pinned,
               capability=capability, ceiling_tflops=ceiling_tflops,
-              sm_count=sm_count)
+              sm_count=sm_count, reference_clock_mhz=reference_clock_mhz)
     draws = args.draws if draws is None else draws
     cells, verdicts, spreads = arm_alphas(samples, cfg, **kw)
     keys = [(c.block_n, c.block_m) for c in cells if c.usable]
@@ -3504,13 +3853,21 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     chi2, why = chi_square(fit, cells, boot, cfg)
     struct = structure_of(fit, cells, cfg, chi2)
     cross_why, cross_spread = cross_bn_refusal(verdicts)
+    cross_normalised = cross_bn_normalised_spread(verdicts)
 
     lines = ["", "## The arms", ""]
     for v in verdicts:
         lines += v.render()
     if cross_spread is not None:
         lines.append(f"  across BN, implied rates span {cross_spread:.2f}x "
-                     f"(gate <= {REFERENCE_CROSS_BN_SPREAD:.1f}x)")
+                     f"(gate <= {REFERENCE_CROSS_BN_SPREAD:.1f}x, on the raw "
+                     "rates against the fixed roof)")
+        if cross_normalised is not None:
+            lines.append(
+                f"  the same spread with each arm rescaled to its own clock "
+                f"is {cross_normalised:.2f}x, printed as a record: the arms "
+                "held different clocks under the power cap and the gate is "
+                "pre-registered on the raw rates")
 
     lines += ["", "## The cells", "",
               "   BN   BM   treads  mem   alpha    corrected   sigma  surv  "
@@ -3625,7 +3982,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         gate_non_vacuity(counts),
         gate_override(compiles, executed),
         gate_reference_level(verdicts),
-        gate_cross_bn(cross_why, cross_spread),
+        gate_cross_bn(cross_why, cross_spread, cross_normalised),
         gate_ladders(spreads, inversion_rows, boot.survival),
         gate_identifiable(cells, PRIMARY_BLOCK_M),
         gate_sharpness(boot),
@@ -3641,14 +3998,24 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         "pinned": base_pinned, "block_ns": list(block_ns),
         "subjects": list(subjects), "reference_block_m": REFERENCE_BLOCK_M,
         # Rebuilt WITHOUT `ref`, which holds the sweep's own dataclass and is
-        # not JSON. Every other field is carried, `basis` and `import_note`
-        # included: a cell resting on another arm's ruler has to be
-        # distinguishable in the file and not only in the printout.
-        "arms": [{k: v for k, v in asdict(
+        # not JSON. EVERY OTHER FIELD IS CARRIED, and this rebuild is a second
+        # call site of the record: `basis` and `import_note` are here because
+        # a cell resting on another arm's ruler has to be distinguishable in
+        # the file and not only in the printout, and the two clocks are here
+        # because the same is true of the operating point it ran at. The two
+        # own-clock numbers are properties and are written out by hand, so
+        # report.json carries the figure the page printed rather than the
+        # ingredients for it.
+        "arms": [dict({k: v for k, v in asdict(
             RefVerdict(v.block_n, v.block_m, v.slope_per_tile, v.overhead_ms,
                        v.implied_tflops, v.ceiling_tflops, v.fraction,
                        v.refusals, v.note, basis=v.basis,
-                       import_note=v.import_note)).items() if k != "ref"}
+                       import_note=v.import_note,
+                       load_clock_mhz=v.load_clock_mhz,
+                       reference_clock_mhz=v.reference_clock_mhz)).items()
+            if k != "ref"},
+            roof_at_cell_clock_tflops=v.own_clock_tflops,
+            own_clock_fraction=v.own_clock_fraction)
             for v in verdicts],
         "cells": [asdict(c) for c in cells],
         "cell_sigma": {f"{k[0]}:{k[1]}": v for k, v in boot.per_cell_sd.items()},
@@ -4717,10 +5084,16 @@ def _main(argv=None) -> int:                                    # noqa: C901
                                        REFERENCE_BLOCK_M, ms,
                                        sm_count=sm_count, block_n=bn)
                        for n, ms in pts]
+        # THE SWEPT BLOCK SIZES, THE SECOND CALL SITE OF THE SAME RULE.
+        # `(REFERENCE_BLOCK_M,)` here scaled the non-vacuity check to
+        # BLOCK_M=256 itself, which no kernel can pass; see `arm_alphas`.
         early[bn] = qualify_reference(
-            early_cells, (REFERENCE_BLOCK_M,), bn, cfg=cfg, ridge=rr.ridge,
+            early_cells, (*subjects, REFERENCE_BLOCK_M), bn, cfg=cfg,
+            ridge=rr.ridge,
             bandwidth_gbps=bandwidth, b=b, pinned=pinned,
-            capability=capability, ceiling_tflops=ceiling, subjects=subjects)
+            capability=capability, ceiling_tflops=ceiling, subjects=subjects,
+            load_clock_mhz=reference_load_clock(samples, bn),
+            reference_clock_mhz=reference_clock)
         for line in early[bn].render():
             print(line)
 
@@ -4734,12 +5107,17 @@ def _main(argv=None) -> int:                                    # noqa: C901
                                     "no branch of its own and none to import"))
     usable_ns = [bn for bn in block_ns if early[bn].ok]
     if len(usable_ns) < MIN_BN_POINTS:
+        # THE TEXT SAID THE OPPOSITE OF THE LOOP BELOW UNTIL 2026-09-09.
+        # It read "the subjects are measured anyway" while the next statement
+        # skipped every arm without a branch, and the 2026-09-09 log printed
+        # both three lines apart.
         print(f"\nWARNING: only {len(usable_ns)} of {len(block_ns)} arms have "
               f"a compute branch, against the {MIN_BN_POINTS} V5 needs. The "
-              "subjects are measured anyway -- the timings are the expensive "
-              "part and they are worth having on disk -- but alpha_a will be "
-              "UNIDENTIFIED and every claim gate will read UNKNOWN. This is "
-              "the outcome P5 registered as possible.")
+              "subjects of the arms WITHOUT one are SKIPPED below (an alpha "
+              "against no reference is a blank that looks like a measurement), "
+              "so alpha_a will be UNIDENTIFIED, V5 will FAIL and every claim "
+              "gate will read UNKNOWN. This is the outcome P5 registered as "
+              "possible.")
 
     for bn in block_ns:
         pinned = dict(base_pinned, BLOCK_SIZE_N=bn)
@@ -4768,7 +5146,7 @@ def _main(argv=None) -> int:                                    # noqa: C901
         capability=capability, base_pinned=base_pinned, compiles=compiles,
         executed=executed, sm_count=sm_count, block_ns=block_ns,
         subjects=subjects, probe_c2_power=True, plant_noise=args.plant_noise,
-        band_lines=band_lines)
+        band_lines=band_lines, reference_clock_mhz=reference_clock)
     payload["gpu"] = torch.cuda.get_device_name(0)
     payload["run_id"] = run_id
     payload["ridge_source"] = rr.source
