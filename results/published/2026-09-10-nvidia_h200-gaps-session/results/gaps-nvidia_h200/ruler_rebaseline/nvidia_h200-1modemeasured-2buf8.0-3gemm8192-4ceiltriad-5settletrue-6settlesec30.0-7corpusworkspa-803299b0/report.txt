@@ -1,0 +1,221 @@
+experiment  ruler_rebaseline / nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0
+corpus      /workspace/moe-kernels/results/published
+hardware    /workspace/moe-kernels/moe/bench/hardware
+mode        measure + price
+ruler       named triad, matched read_stream (fallbacks: read_stream, read_reduce)
+WRITES TO   /workspace/results/gaps-nvidia_h200/ruler_rebaseline/nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0
+
+REGISTERED PREDICTIONS. Printed before anything is measured, and not rewritten afterwards.
+
+  P1  the GEMM clock was sampled in the wrong state
+        predicts  the under-load median lands in 1455-1515 MHz (the compute settle plateau), and differs from the same run's post-hoc idle sample by >5% on at least one of the two GEMMs
+        a FAIL    the post-hoc sample was not the artefact. The 87.4%-versus-68.4% efficiency swing on one card is then unexplained, and no efficiency-at-clock figure in the study may be quoted.
+
+  P2  the bandwidth side is already settled and re-measuring changes it by nothing
+        predicts  read_reduce 4469.6, copy 4300.7, triad 4374.8, write 4682.4 GB/s, each within 0.5%; every pattern at 1980 -> 1980 MHz
+        a FAIL    the memory settle does not hold, and every published GB/s is unstable at the size of the disagreement. The 2026-08-27 settle fix would then need re-opening, not just re-reporting.
+
+  P3  the reduction shape still costs something
+        predicts  read_stream > read_reduce (4469.6) and < the 4814.3 GB/s pin rate; the 2026-08-27 shape change was worth 1.7%, so 0-5%
+        a FAIL    above the pin rate, the probe is broken -- dead-code elimination or a byte count -- and nothing from it may be used. Below read_reduce, ATen was not the limit and read_reduce stands as the read ruler.
+
+  P4  the denominator question is the smaller half of the ruler problem
+        predicts  the compute term's spread across sessions is >= 3.0x the triad-to-read denominator swing (9.9% against 2.2% in the committed files)
+        a FAIL    the ruler CHOICE dominates its own instability, the re-baseline is about the denominator after all, and adopting the matched ruler is urgent rather than optional.
+
+  P5  swinging the denominator changes no published row's bound
+        predicts  0 rows of the canonical pool change memory/compute classification when the ceiling moves from triad to the matched read pattern (calibrate.py's own docstring: no cell changes anywhere in 4252.8-4656.9 GB/s)
+        a FAIL    the 2.2% matters at row level. Every crossing in docs/FINDINGS.md is then quoted against a ruler that decides its own answer, and the re-baseline must be adopted before any of them is quoted again.
+
+MDE. What a fresh calibration on this design could actually resolve.
+  noise assumption: run-to-run timing spread MEASURED over the 26 published reports,
+                    median 0.77%, worst 1.82%; 3 trials per pattern, both sides measured.
+  effects under test: gate 2's reproduction tolerance 0.50%, gate 3's read-shape gain 1.70%.
+  at the median spread 0.77%: MDE 1.76% against gate 2's 0.50%  CANNOT resolve it
+  at the median spread 0.77%: MDE 1.76% against gate 3's 1.70%  CANNOT resolve it
+  at the worst  spread 1.82%: MDE 4.16% against gate 2's 0.50%  CANNOT resolve it
+  at the worst  spread 1.82%: MDE 4.16% against gate 3's 1.70%  CANNOT resolve it
+  An MDE above the effect does not make a PASS wrong; it makes a FAIL uninformative.
+  The spread is imported from KERNEL arms, which is the only measured one this repository
+  has; a bandwidth pattern's own is plausibly tighter, so these are upper bounds and a
+  design that clears them clears its own. Nobody has measured the pattern's spread, and
+  until somebody does, gate 2's 0.5% tolerance is not known to be above this run's noise.
+  Gates 4 and 5 are arithmetic over committed rows and have no timing noise to clear.
+
+==============================================================================
+
+THE NEW RULER
+  device            NVIDIA H200
+  ceiling           triad 4374.6 GB/s
+  achieved bf16     670.9 TFLOP/s at 1455 MHz under load
+  ridge band        145.4 to 153.4 FLOP/byte (5.5% wide)
+  clock established True
+
+  settle compute    reached at 1455 MHz   governs the bf16 and fp8 GEMMs
+                  history [1500, 1425, 1455, 1440, 1455]
+  settle memory     reached at 1980 MHz   governs the four bandwidth patterns
+                  history [1980, 1980, 1980]
+
+  pattern             GB/s  clk start  clk end   note
+  read_stream       4613.1       1980     1980   Triton, one store per program, no cross-CTA combine; stores 
+  read_reduce       4469.6       1980     1980   ATen reduction along the contiguous axis; a LOWER BOUND on t
+  copy              4300.4       1980     1980   
+  triad             4374.6       1980     1980   canonical STREAM metric; the default ceiling
+  write             4679.7       1980     1980   1N proven (2N would exceed the pin rate by 94%); unflushed s
+
+LEVER 1  DENOMINATOR: this arm's triad -> this arm's read pattern, nothing else moved
+  arm                                                       old      new   shift  flips    rows
+  2026-08-22-first-smoke                                 4375.2   4390.7  +0.35%      0      16
+                                                      ridge bf16       179.5 ->   178.9  -0.35%
+                                                      ridge fp16       179.5 ->   178.9  -0.35%
+  2026-08-22-standard-sweep                              4375.6   4390.3  +0.34%      0     840
+                                                      ridge bf16       166.8 ->   166.3  -0.34%
+                                                      ridge fp16       166.8 ->   166.3  -0.34%
+  2026-08-26-nvidia_h200-full-three-way-recalibrated     4377.0   4389.3  +0.28%      0   17640
+                                                      ridge bf16       162.8 ->   162.3  -0.28%
+                                                      ridge fp16       162.8 ->   162.3  -0.28%
+  2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card      REFUSED: no usable read pattern in this arm's own calibration (its read was disowned as consumer-limited)
+  2026-08-28-nvidia_h200-h200-fp8-refixed                4374.5   4469.8  +2.18%      4    9408
+                                                      ridge bf16       176.2 ->   172.5  -2.13%
+                                                      ridge fp16       176.2 ->   172.5  -2.13%
+                                                      ridge fp8_e4m3   322.1 ->   315.3  -2.13%
+                                                      ridge fp8_e5m2   322.1 ->   315.3  -2.13%
+  2026-08-28-nvidia_h200-h200-fp8-three-kernel           4377.2   4470.7  +2.14%      0       0
+                                                      ridge bf16       160.3 ->   156.9  -2.09%
+                                                      ridge fp16       160.3 ->   156.9  -2.09%
+  2026-08-28-nvidia_h200-h200-v2lite                     4377.2   4470.7  +2.14%      0    5880
+                                                      ridge bf16       160.3 ->   156.9  -2.09%
+                                                      ridge fp16       160.3 ->   156.9  -2.09%
+  2026-08-28-nvidia_h200-h200-whole-layer                4374.5   4469.8  +2.18%      0    9408
+                                                      ridge bf16       176.2 ->   172.5  -2.13%
+                                                      ridge fp16       176.2 ->   172.5  -2.13%
+                                                      ridge fp8_e4m3   322.1 ->   315.3  -2.13%
+                                                      ridge fp8_e5m2   322.1 ->   315.3  -2.13%
+  2026-08-28-nvidia_h200-ridge-resolution                4377.0   4389.3  +0.28%     72    6300
+                                                      ridge bf16       162.8 ->   162.3  -0.28%
+                                                      ridge fp16       162.8 ->   162.3  -0.28%
+  2026-09-01-nvidia_h200-alpha-0558                      4373.9   4468.6  +2.17%     14    3696
+                                                      ridge bf16       163.7 ->   160.2  -2.12%
+                                                      ridge fp16       163.7 ->   160.2  -2.12%
+                                                      ridge fp8_e4m3   330.0 ->   323.0  -2.12%
+                                                      ridge fp8_e5m2   330.0 ->   323.0  -2.12%
+
+LEVER 2  SESSION: this arm's whole calibration -> the current one for its device
+  Both terms move here. NOT pooled with lever 1: averaging a 2% denominator
+  question with a 10% numerator one produces a number about nothing.
+  arm                                                   bw shift  flips    rows
+  2026-08-22-first-smoke                                  -0.02%      0      16
+                                                      ridge bf16       179.5 ->   155.9  -13.14%
+                                                      ridge fp16       179.5 ->   155.9  -13.14%
+  2026-08-22-standard-sweep                               -0.03%      0     840
+                                                      ridge bf16       166.8 ->   155.9  -6.53%
+                                                      ridge fp16       166.8 ->   155.9  -6.53%
+  2026-08-26-nvidia_h200-full-three-way-recalibrated      -0.06%      0   17640
+                                                      ridge bf16       162.8 ->   155.9  -4.19%
+                                                      ridge fp16       162.8 ->   155.9  -4.19%
+  2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card        +0.05%      4    9408
+                                                      ridge bf16       145.7 ->   145.8  +0.08%
+                                                      ridge fp16       145.7 ->   145.8  +0.08%
+  2026-08-28-nvidia_h200-h200-fp8-refixed                 -0.00%      4    9408
+                                                      ridge bf16       176.2 ->   155.9  -11.52%
+                                                      ridge fp16       176.2 ->   155.9  -11.52%
+                                                      ridge fp8_e4m3   322.1 ->   332.3  +3.16%
+                                                      ridge fp8_e5m2   322.1 ->   332.3  +3.16%
+  2026-08-28-nvidia_h200-h200-fp8-three-kernel            -0.07%      0       0
+                                                      ridge bf16       160.3 ->   155.9  -2.72%
+                                                      ridge fp16       160.3 ->   155.9  -2.72%
+  2026-08-28-nvidia_h200-h200-v2lite                      -0.07%     72    5880
+                                                      ridge bf16       160.3 ->   155.9  -2.72%
+                                                      ridge fp16       160.3 ->   155.9  -2.72%
+  2026-08-28-nvidia_h200-h200-whole-layer                 -0.00%      0    9408
+                                                      ridge bf16       176.2 ->   155.9  -11.52%
+                                                      ridge fp16       176.2 ->   155.9  -11.52%
+                                                      ridge fp8_e4m3   322.1 ->   332.3  +3.16%
+                                                      ridge fp8_e5m2   322.1 ->   332.3  +3.16%
+  2026-08-28-nvidia_h200-ridge-resolution                 -0.06%    892    6300
+                                                      ridge bf16       162.8 ->   155.9  -4.19%
+                                                      ridge fp16       162.8 ->   155.9  -4.19%
+  2026-09-01-nvidia_h200-alpha-0558                       +0.01%     35    3696
+                                                      ridge bf16       163.7 ->   155.9  -4.75%
+                                                      ridge fp16       163.7 ->   155.9  -4.75%
+                                                      ridge fp8_e4m3   330.0 ->   332.3  +0.69%
+                                                      ridge fp8_e5m2   330.0 ->   332.3  +0.69%
+
+DISTINCT RULERS IN THE CORPUS, grouped by device because two cards are not
+two measurements of one ruler  (bandwidth GB/s, bf16 TFLOP/s)
+  NVIDIA A100-SXM4-80GB        1798.5    262.1   2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card
+  NVIDIA H200                  4373.9    716.0   2026-09-01-nvidia_h200-alpha-0558
+  NVIDIA H200                  4374.5    770.9   2026-08-28-nvidia_h200-h200-fp8-refixed, 2026-08-28-nvidia_h200-h200-whole-layer
+  NVIDIA H200                  4375.2    785.5   2026-08-22-first-smoke
+  NVIDIA H200                  4375.6    730.0   2026-08-22-standard-sweep
+  NVIDIA H200                  4377.0    712.4   2026-08-26-nvidia_h200-full-three-way-recalibrated, 2026-08-28-nvidia_h200-ridge-resolution
+  NVIDIA H200                  4377.2    701.6   2026-08-28-nvidia_h200-h200-fp8-three-kernel, 2026-08-28-nvidia_h200-h200-v2lite
+
+DROPPED as superseded: 2026-08-26-nvidia_h200-full-three-way
+
+TRIMMED (arm kept, named implementations retired):
+  2026-08-28-nvidia_h200-h200-fp8-three-kernel: dropped 9744 rows from superseded impls ['torch_scaled_grouped_mm_down', 'torch_scaled_grouped_mm_up']
+
+REFUSED (named, not skipped):
+  2026-09-01-nvidia_h200-alpha-surface-s4: no measured.yaml
+  2026-09-01-nvidia_h200-cross-card-s3: no measured.yaml
+  2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3: no measured.yaml
+  2026-09-09-nvidia_h200-gaps-session: no measured.yaml
+
+==============================================================================
+GATES
+RESULT: VALIDITY V1 PASS the survey examined real rows: measured 10 arms, 72760 rows, 9 priced on the denominator lever
+VALIDITY 1  PASS      the survey examined real rows
+           measured 10 arms, 72760 rows, 9 priced on the denominator lever   gate >= 5 arms and 10000 rows
+RESULT: VALIDITY V2 PASS every arm's rows were stamped from its own calibration: measured 1 arms disagree, 0 of them undeclared
+VALIDITY 2  PASS      every arm's rows were stamped from its own calibration
+           measured 1 arms disagree, 0 of them undeclared   gate 0 undeclared
+           2026-08-28-nvidia_h200-h200-whole-layer: 6808 of 6808 rows carry a ceiling that is not this file's (provenance: ceilings_disagree)
+RESULT: VALIDITY V3 PASS no output lands where .gitignore drops it: measured 2 paths checked, 0 would be dropped, 0 unverifiable
+VALIDITY 3  PASS      no output lands where .gitignore drops it
+           measured 2 paths checked, 0 would be dropped, 0 unverifiable   gate 0 dropped that are meant to be kept, and every one of them checkable
+           report.txt: /workspace/results/gaps-nvidia_h200/ruler_rebaseline/nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0/report.txt  UNVERIFIED  (raw output, ignored by design)
+           report.json: /workspace/results/gaps-nvidia_h200/ruler_rebaseline/nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0/report.json  UNVERIFIED  (raw output, ignored by design)
+RESULT: CLAIM C1 FAIL the GEMM clock was sampled in the wrong state: measured largest post-hoc-vs-under-load delta 2.2%
+CLAIM 1  FAIL      the GEMM clock was sampled in the wrong state
+           measured largest post-hoc-vs-under-load delta 2.2%   gate > 5%
+           bf16 GEMM: under load 1455 MHz (spread 2.0%, samples [1455, 1470, 1440, 1470, 1455]), post-hoc idle 1455 MHz, delta 0.0%
+           fp8 GEMM: under load 1365 MHz (spread 3.3%, samples [1380, 1350, 1365, 1365, 1335]), post-hoc idle 1335 MHz, delta 2.2%  OUTSIDE the 1455-1515 settle band
+RESULT: CLAIM C2 PASS the bandwidth patterns reproduce and did not ramp: measured worst pattern read_reduce 0.04%, clock_ramped=False
+CLAIM 2  PASS      the bandwidth patterns reproduce and did not ramp
+           measured worst pattern read_reduce 0.04%, clock_ramped=False   gate <= 0.5% and not ramped
+           read_reduce: 4469.6 against 4471.4 committed, +0.04%   clocks 1980 -> 1980 MHz
+           copy: 4300.4 against 4300.8 committed, +0.01%   clocks 1980 -> 1980 MHz
+           triad: 4374.6 against 4374.5 committed, +0.00%   clocks 1980 -> 1980 MHz
+           write: 4679.7 against 4680.2 committed, +0.01%   clocks 1980 -> 1980 MHz
+RESULT: CLAIM C3 PASS the reduction shape still costs something: measured read_stream over read_reduce +3.21%
+CLAIM 3  PASS      the reduction shape still costs something
+           measured read_stream over read_reduce +3.21%   gate > 0% and < 4814.3 GB/s, this card's pin rate
+           read_stream 4613.1, read_reduce 4469.6, gain +3.21%
+           pin rate 4814.3 GB/s (NVIDIA H200); 95.8% of it
+RESULT: CLAIM C4 PASS the compute term moves more than the denominator choice: measured worst device nvidiah200 at 5.0x
+CLAIM 4  PASS      the compute term moves more than the denominator choice
+           measured worst device nvidiah200 at 5.0x   gate >= 3x on every device with two calibrations
+           nvidiaa100sxm480gb: 1 calibration(s), 0 priced -- not enough to compare, NOT pooled into another device's answer
+           nvidiah200: compute term 10.7% over 6 calibrations, bandwidth 0.08%, denominator swing 2.14% (median of 9), ratio 5.0x
+           A FAIL is the interesting answer: it would mean the ruler CHOICE dominates its own instability and the read ruler must be adopted now.
+RESULT: CLAIM C5 FAIL the denominator swing flips no published row: measured 90 flips in 53188 classified rows
+CLAIM 5  FAIL      the denominator swing flips no published row
+           measured 90 flips in 53188 classified rows   gate <= 0
+           53188 rows classified, 10164 unclassifiable (no peak for their dtype in the calibration beside them)
+           2026-08-28-nvidia_h200-h200-fp8-refixed: 4 of 9408
+               deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute
+               deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute
+               deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute
+           2026-08-28-nvidia_h200-ridge-resolution: 72 of 6300
+               qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute
+               qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute
+               qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute
+           2026-09-01-nvidia_h200-alpha-0558: 14 of 3696
+               qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute
+               qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute
+               qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute
+           A FAIL is the result: the 2.2% decides the answer for these rows, so the crossings computed from them inherit the ruler's bias.
+
+READING IT. Validity holds. Claim gates failed: ['1', '5']; undecided: none.
+A failed CLAIM gate is a result, not a broken run: each one says above what it costs.

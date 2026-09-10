@@ -1,0 +1,377 @@
+{
+  "predictions": "## Predictions, registered before anything is measured\n\nTHE LAW (arithmetic, not a prediction; check it, do not test it)\n  B/C = alpha b rho / (2 BM) = ridge / ai_cap, and E, F, H cancel exactly.\n  escape UP   needs alpha x rho >= 147.2 FLOP/byte  -> every tread memory bound\n  escape DOWN needs rho        >= 204.8 FLOP/byte  -> 5 treads below the crossing\n    equivalently alpha <= 0.500, a bound needing no card\n  in between, |B/C - 1| <= 0.15, the fit discards the memory branch entirely.\n\nP1  A NEW BM=128 ladder lands at B/C in [0.94, 1.10].\n    22 published ladders with a valid reference: 0.795 to 1.175, median 0.991, sd 0.084 (population sd, computed from the corpus when this page was printed).\n    FAIL means B/C at 128 is not stationary across arms and the\n    feasibility argument below rests on a quantity that moves.\nP2  C1 FAILS: fewer than 5 clean memory-bound treads.\n    Escape up needs 147.2 and the corpus tops out at 150.4, on a ladder whose\n    slope rises then falls. Escape down needs rho >= 204.8 and the highest\n    achieved rho on any published ladder is 166.5, against calibrated ridges of\n    145.8 (A100) and 152.8 (H200). FAIL here is the good outcome and would mean\n    the cap CAN be measured at the tile vLLM actually runs.\nP3  C2 FAILS: no BM=128 fit clears the tolerance by 3 sd.\nP4  EXPERT SIZE does not enter B/C. mixtral's per-expert weight is 6.4x qwen2's\n    (3 F H = 176.2 M elements against 27.5 M), so a \"bigger weights to re-read\"\n    mechanism predicts B/C scaling like 6.4. The identity predicts NO size term\n    at all: the model can still move B/C, but only by moving alpha or rho, which\n    it does by tens of percent and not by factors. Gate: at matched card,\n    GROUP_SIZE_M and BLOCK_N, |B/C(mixtral) / B/C(qwen2) - 1| < 0.20 in the\n    median. FAIL at 6.4 means the identity is wrong and the feasibility argument\n    goes with it; FAIL at 0.3 means alpha differs by more between models than\n    this bound allows and the bound was too tight.\nP5  --r-max does not move the memory-tread COUNT in the prefix regime: n* has no\n    r_max in it. Sweeping deeper adds treads to measure, not treads that qualify.\n    UNKNOWN in --audit unless the corpus holds two depths at one setting.\nP6  V2 FAILS on exactly one published ladder -- A100 qwen2-57b-a14b at\n    GROUP_SIZE_M=64, whose tread 8 is 1.237% below tread 7 at a 0.482% spread\n    (2.6 sigma) -- and PASSES on the other 21.\nP7  Of the ladders that HAVE a compute reference, the level bar fails on exactly\n    the two BLOCK_N=256 arms -- 1.4% (A100) and 12.3% (H200) of their cards'\n    calibrated ceilings -- and passes on the other 22 at 38.2% to 63.7%. Two\n    further ladders have no reference at all to level-check and are counted\n    separately, because \"the reference is corrupt\" and \"there is no reference\"\n    are different states and only the first is what this bar is for.\nP8  Of the two published BM=128 fits the study quotes, ZERO survive V1+V2+V3+C2.\n    FAIL means one of them is admissible and the 128 row of the alpha surface\n    stands.\nP9  No alpha this study has measured, at ANY block size, is at or below\n    0.500. The lowest is 0.596 (H200\n    deepseek-v2-lite, BLOCK_M=32, activation-corrected). FAIL means the\n    escape-down route is open on hardware the study already owns and the pod run\n    should be aimed at whichever arm produced it.",
+  "run": {
+    "subject_block_m": 128,
+    "reference": {
+      "block_m": 256,
+      "slope_per_tile": 1.974439049468321,
+      "overhead_ms": 0.0006132211003979648,
+      "note": "BLOCK_M=256 ladder, 8 treads, proportional to 0.5%: compute branch 1.9744 ms per tile, fixed cost 0.0006 ms",
+      "level_fraction": 0.5357797551118275
+    },
+    "subject_points": [
+      [
+        1,
+        1.1318080425262451
+      ],
+      [
+        2,
+        2.202687978744507
+      ],
+      [
+        3,
+        3.283743977546692
+      ],
+      [
+        4,
+        4.359600067138672
+      ],
+      [
+        5,
+        5.47323203086853
+      ],
+      [
+        6,
+        6.567455768585205
+      ],
+      [
+        7,
+        7.6461920738220215
+      ],
+      [
+        8,
+        8.72825574874878
+      ],
+      [
+        9,
+        9.751008033752441
+      ],
+      [
+        10,
+        10.834735870361328
+      ],
+      [
+        11,
+        11.904064178466797
+      ],
+      [
+        12,
+        12.990383625030518
+      ],
+      [
+        13,
+        14.119695663452148
+      ],
+      [
+        14,
+        15.259584426879883
+      ],
+      [
+        15,
+        16.380863189697266
+      ],
+      [
+        16,
+        17.550031661987305
+      ]
+    ],
+    "scored_points": [
+      [
+        1,
+        1.1318080425262451
+      ],
+      [
+        2,
+        2.202687978744507
+      ],
+      [
+        3,
+        3.283743977546692
+      ],
+      [
+        4,
+        4.359600067138672
+      ],
+      [
+        5,
+        5.47323203086853
+      ],
+      [
+        6,
+        6.567455768585205
+      ],
+      [
+        7,
+        7.6461920738220215
+      ],
+      [
+        8,
+        8.72825574874878
+      ],
+      [
+        9,
+        9.751008033752441
+      ],
+      [
+        10,
+        10.834735870361328
+      ],
+      [
+        11,
+        11.904064178466797
+      ],
+      [
+        12,
+        12.990383625030518
+      ],
+      [
+        13,
+        14.119695663452148
+      ],
+      [
+        14,
+        15.259584426879883
+      ],
+      [
+        15,
+        16.380863189697266
+      ],
+      [
+        16,
+        17.550031661987305
+      ]
+    ],
+    "subject_spread": 0.0026326448893713955,
+    "scored_spread": 0.0026326448893713955,
+    "memory_points": 0,
+    "ladder_outcome": "undecided_parallel_branch",
+    "ladder_undecided": true,
+    "excluded_drifted": 0,
+    "kept_high_clock": 0,
+    "kept_low_clock": 16,
+    "kept_high_clock_reference": 8,
+    "kept_low_clock_reference": 0,
+    "partner_block_m": 32,
+    "partner_treads": 4,
+    "reference_vacuity_ratio": 0.2052198668920382,
+    "reference_vacuity_floor": 0.2052198668920382,
+    "reference_vacuity_basis": "fused",
+    "reference_roof_fraction": 0.5357797551118275,
+    "reference_level_fraction_at_clock": 0.4866256491382654,
+    "reference_ladder_clock_mhz": 1635.0,
+    "reference_roof_clock_mhz": 1485.0,
+    "subject_roof_fractions": [
+      {
+        "tiles": 1,
+        "roof_fraction": 0.4673338722908201,
+        "roof_fraction_at_clock": 0.49219205698714025,
+        "sm_clock_load_mhz": 1410.0
+      },
+      {
+        "tiles": 2,
+        "roof_fraction": 0.48026069993369225,
+        "roof_fraction_at_clock": 0.5058064818450588,
+        "sm_clock_load_mhz": 1410.0
+      },
+      {
+        "tiles": 3,
+        "roof_fraction": 0.48322789975744607,
+        "roof_fraction_at_clock": 0.5171844548755369,
+        "sm_clock_load_mhz": 1387.5
+      },
+      {
+        "tiles": 4,
+        "roof_fraction": 0.48530344715847884,
+        "roof_fraction_at_clock": 0.5166133469751549,
+        "sm_clock_load_mhz": 1395.0
+      },
+      {
+        "tiles": 5,
+        "roof_fraction": 0.48319917027138043,
+        "roof_fraction_at_clock": 0.5143733102888889,
+        "sm_clock_load_mhz": 1395.0
+      },
+      {
+        "tiles": 6,
+        "roof_fraction": 0.483230268013784,
+        "roof_fraction_at_clock": 0.5199977884061371,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 7,
+        "roof_fraction": 0.4842313154938888,
+        "roof_fraction_at_clock": 0.5154720455257527,
+        "sm_clock_load_mhz": 1395.0
+      },
+      {
+        "tiles": 8,
+        "roof_fraction": 0.4847999421002367,
+        "roof_fraction_at_clock": 0.5160773577196068,
+        "sm_clock_load_mhz": 1395.0
+      },
+      {
+        "tiles": 9,
+        "roof_fraction": 0.48819466668014094,
+        "roof_fraction_at_clock": 0.5253399130579777,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 10,
+        "roof_fraction": 0.4881819377347166,
+        "roof_fraction_at_clock": 0.5253262156058363,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 11,
+        "roof_fraction": 0.48876203118638495,
+        "roof_fraction_at_clock": 0.5259504466027403,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 12,
+        "roof_fraction": 0.4886065728046803,
+        "roof_fraction_at_clock": 0.525783159865906,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 13,
+        "roof_fraction": 0.4869877667013914,
+        "roof_fraction_at_clock": 0.5240411837330189,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 14,
+        "roof_fraction": 0.4852721467176726,
+        "roof_fraction_at_clock": 0.5221950274461912,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 15,
+        "roof_fraction": 0.48434465486808553,
+        "roof_fraction_at_clock": 0.5211969655645703,
+        "sm_clock_load_mhz": 1380.0
+      },
+      {
+        "tiles": 16,
+        "roof_fraction": 0.4822165524401465,
+        "roof_fraction_at_clock": 0.5189069422997228,
+        "sm_clock_load_mhz": 1380.0
+      }
+    ],
+    "reference_refusals": [],
+    "reference_skipped": [],
+    "reference_clock_mhz": 1485.0,
+    "scored_treads_without_reference": 0,
+    "alpha": null,
+    "alpha_upper": null,
+    "slope_memory": null,
+    "slope_compute_ref": 0.9872195247341605,
+    "ratio": 1.1024072655951611,
+    "margin": -0.04759273440483888,
+    "margin_sd": 0.003501973320321086,
+    "margin_sigma": -13.590261847133444,
+    "margin_basis": "replicates (7+ per tread)",
+    "inversions": [],
+    "slope_drops": [],
+    "gates": [
+      {
+        "kind": "VALIDITY",
+        "name": "V0 non-vacuity",
+        "verdict": "PASS",
+        "observed": "bootstrap resamples=2000, reference treads=8, repeats per tread=7, scored treads=16, settings that executed=1, subject treads=16, timings=196"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V4 override took effect",
+        "verdict": "PASS",
+        "observed": "BM=32:17, BM=128:0, BM=256:0"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V1 reference level",
+        "verdict": "PASS",
+        "observed": "BLOCK_M=256 reference 1.9744 ms/tile implies   365.4 TFLOP/s =  53.6% of 682.1 (NVIDIA H200 (measured)); 48.7% of the 751.0 at its own 1635 MHz (issue efficiency, not a gate input)"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V2 monotone ladder",
+        "verdict": "PASS",
+        "observed": "15 tread boundaries examined, 0 inversions, 0 beyond 2 sigma (spread 0.263%)"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V3 max-affine shape",
+        "verdict": "PASS",
+        "observed": "15 per-tread slopes at spread 0.263%, 0 drops clearing both bars: 1.071 1.081 1.076 1.114 1.094 1.079 1.082 1.023 1.084 1.069 1.086 1.129 1.140 1.121 1.169"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V5 replication",
+        "verdict": "PASS",
+        "observed": "7 repeats on the thinnest tread, median across-repeat spread 0.263%"
+      },
+      {
+        "kind": "CLAIM",
+        "name": "C1 depth",
+        "verdict": "UNKNOWN",
+        "observed": "UNDECIDED (undecided_parallel_branch): the fit LOOKED and declined to name a memory branch, so the 0 treads it reports of 16 are not a depth"
+      },
+      {
+        "kind": "CLAIM",
+        "name": "C2 tolerance margin",
+        "verdict": "FAIL",
+        "observed": "B/C 1.102407  |B/C - 1| 0.102407  tolerance 0.15  margin -0.047593 (-31.73% of the tolerance, -13.59 sigma)"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V6 fit self-consistency",
+        "verdict": "PASS",
+        "observed": "VACUOUS: the ladder fit is undecided_parallel_branch, so it declined to name an alpha rather than failing to find treads"
+      }
+    ]
+  },
+  "gpu": "NVIDIA H200",
+  "mde": [
+    "",
+    "## Minimum detectable effect, from ONE stated assumption",
+    "",
+    "  assumed per-tread relative spread 1.82% (--plant-noise; the published H200 ladders run 0.76-1.82% on one pass and the A100 ones 0.48-0.61%, so the default 1.82% is the top of the H200 range, which is the end a gate has to survive)",
+    "  V2 inversions   a per-tread median over 7 repeats carries 0.973%; at 2 sigma this run can see an inversion of 1.95% or more. The published A100 ladder's 1.24% inversion is INSIDE that and would be called noise here",
+    "  C2 margin       the slope's relative sd over 16 treads is 0.099% (equally spaced OLS), so B/C carries at least that and the 3-sigma bar needs the margin to clear 0.296% of B/C on top of the 15% tolerance. The published A100 fit clears the tolerance by 0.007%, which is inside this before the bootstrap is run",
+    "  C1 depth        a COUNT, not an effect: 5 treads either stand above the compute branch or they do not, so it has no MDE. What noise buys it is membership churn at the boundary, which is why the membership margin is max(2%, 3 x the measured spread) rather than a constant"
+  ],
+  "mde_not_stateable": null,
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "calibration: NVIDIA H200 (measured)",
+  "bandwidth_source": "calibration: NVIDIA H200 (measured)",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T04:14:09+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 155.9303223641331,
+    "ridge_source": "calibration: NVIDIA H200 (measured)",
+    "bandwidth": 4374.299702465323,
+    "bandwidth_source": "calibration: NVIDIA H200 (measured)",
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 400.0,
+    "missing": {
+      "iters": "supplied as None",
+      "sglang": "package not installed"
+    }
+  }
+}
