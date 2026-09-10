@@ -54,6 +54,7 @@ import json
 import math
 import random
 import re
+import statistics
 import sys
 from pathlib import Path
 
@@ -175,7 +176,11 @@ def test_an_l2_step_law_is_recovered_per_model_even_though_the_pool_hides_it(
     pools of shapes, and exactly why the pooled number is not the finding.
     """
     _, out = run_report(["--synthetic", "l2-step"], tmp_path, monkeypatch, capsys)
-    block = out.split("## P2")[1]
+    # BOUNDED AT THE NEXT HEADING. Splitting on "## P2" alone took the rest of
+    # the page with it, and on 2026-09-09 `form`'s own detail started saying
+    # "which P2 predicts below L2", a fourth "below L2" line, in the gates,
+    # counted as a fourth model.
+    block = out.split("## P2")[1].split("\n## ")[0]
     above = [line for line in block.splitlines() if "above L2" in line]
     below = [line for line in block.splitlines() if "below L2" in line]
     # ONE ABOVE AND THREE BELOW, and that is the H200 and not a rounding. The
@@ -1479,9 +1484,15 @@ VOID_RUN = {
 }
 
 #: `moe/bench/hardware/measured_nvidia_h200.yaml`, `detail.bandwidth_patterns`,
-#: the `read` entry. The file's own note calls it "closest analogue to streaming
-#: expert weights".
-H200_READ_ROOF = 4469.60368208941e9
+#: the largest valid READ entry, which `ROOF_PATTERNS` walks for.
+#:
+#: 4613.0 AND NOT 4469.6 SINCE ab61e55. The 2026-09-09 pod republished this
+#: card's calibration and the file it wrote carries `read_stream` and
+#: `read_reduce`, the names `calibrate.measure_bandwidth` moved to on
+#: 2026-09-02, with no `read` entry at all. This constant is the number the
+#: script's own `measured_card` reads out of the committed file, asserted
+#: against it below rather than remembered here.
+H200_READ_ROOF = 4613.006445392317e9
 
 
 def void_records(scale: float = 1.0):
@@ -1507,7 +1518,7 @@ def void_records(scale: float = 1.0):
 
 
 def test_the_void_run_fails_headroom_with_its_own_published_numbers():
-    """The 2026-09-01 aliased ladder ran at 0.61 of the card's read roof.
+    """The 2026-09-01 aliased ladder ran at 0.59 of the card's read roof.
 
     That single number is the whole diagnosis. Both arms issue the same loads
     and share the cost of getting them from L2 into the SM; only the normal arm
@@ -1515,6 +1526,14 @@ def test_the_void_run_fails_headroom_with_its_own_published_numbers():
     two, so DRAM had 39% slack in the normal arm, and ablating a resource with
     slack moves the clock by the un-overlapped residue and by nothing else. The
     residue is the 5 to 8% the run reported and voided itself over.
+
+    0.59 AND NOT 0.61: the ratios below are the same measured ladder against a
+    republished roof. `read` 4469.6 GB/s was the 2026-09-02 calibration's
+    largest valid read pattern; the 2026-09-09 pod published `read_stream` at
+    4613.0 and the same times are a smaller fraction of the bigger ruler. The
+    diagnosis does not move, because a shared path at 0.59 of DRAM is still
+    the slower of the two, and the header's "0.607 to 0.616" is the figure the
+    run itself printed against the ruler it had.
 
     The ratio is checked to two decimals on the worst model rather than merely
     asserted to be below the limit, because "below a threshold" would also be
@@ -1527,8 +1546,8 @@ def test_the_void_run_fails_headroom_with_its_own_published_numbers():
     for model in VOID_RUN:
         rows = [r for r in void_records() if r["model"] == model]
         ratios.append(AB._aliased_slope_bytes_s(rows) / H200_READ_ROOF)
-    assert 0.60 < min(ratios) <= max(ratios) < 0.62, ratios
-    assert "0.61" in gate.detail or "0.60" in gate.detail
+    assert 0.59 < min(ratios) <= max(ratios) < 0.60, ratios
+    assert "0.59" in gate.detail
 
 
 def test_the_void_runs_d1_is_below_the_floor_for_the_bytes_it_names():
@@ -1557,10 +1576,10 @@ def test_the_void_runs_d1_is_below_the_floor_for_the_bytes_it_names():
     # threshold cannot license a page the other three cannot support.
     assert min(worst) < AB.MIN_ATTRIBUTION_RATIO <= max(worst)
     assert AB.MIN_ATTRIBUTION_RATIO == AB.MIN_SIGNAL_FRACTION
-    assert AB.MIN_HEADROOM_RATIO == 1.0 / (1.0 - AB.MIN_SIGNAL_FRACTION)
+    assert AB.MIN_HEADROOM_RATIO >= 1.0 / (1.0 - AB.MIN_SIGNAL_FRACTION)
 
 
-def test_the_same_two_gates_pass_once_the_shared_path_is_faster_than_dram():
+def test_the_same_two_gates_pass_once_dram_binds_by_enough_to_fit():
     """The FAIL branch above is only a gate if this branch exists.
 
     One factor on the aliased arm, nothing else changed. At a fifth of its
@@ -1568,8 +1587,17 @@ def test_the_same_two_gates_pass_once_the_shared_path_is_faster_than_dram():
     DRAM becomes the binding resource in the normal arm, and D(1) reaches its
     floor. Both gates flip, which is what makes the pair a discriminator rather
     than a threshold that happens to sit above the one run there has been.
+
+    THREE TIMES AND NOT MERELY ABOVE ONE. This test was named "once the shared
+    path is faster than DRAM" until 2026-09-09, which was the gate's sufficient
+    condition while the limit was 1.333 and stopped being it at 2.111: the
+    2026-09-09 records are faster than DRAM at 1.964 and FAIL. The name stated
+    a retired rule, which is the defect the same commit renamed two gates for.
     """
     rows = void_records(scale=0.2)
+    ratios = [AB._aliased_slope_bytes_s([r for r in rows if r["model"] == m])
+              / H200_READ_ROOF for m in VOID_RUN]
+    assert min(ratios) > AB.MIN_HEADROOM_RATIO, ratios
     assert AB.headroom_gate(rows, H200_READ_ROOF).ok is True
     assert AB.attribution_gate(rows, H200_READ_ROOF).ok is True
 
@@ -1687,6 +1715,142 @@ def _reading(warps, stages, block_k, compute, gbps):
             "aliased_bytes_s": gbps * 1e9 if gbps else None, "note": ""}
 
 
+#: The six readings the 2026-09-09 probe printed, verbatim from
+#: session/logs/alias_ablation.log lines 111-117. Five of the six are ABOVE the
+#: 4613 GB/s read roof and the best is 1.961 of it, which is the regime the
+#: 2.111 bar created and nothing in this file covered.
+POD_PROBE_READINGS = [
+    _reading(8, 3, 64, "sum", 2641),
+    _reading(8, 4, 128, "sum", 2869),
+    _reading(4, 5, 128, "sum", 5500),
+    _reading(8, 4, 128, "dot", 9047),
+    _reading(8, 3, 64, "dot", 8815),
+    _reading(16, 4, 128, "dot", 6100),
+]
+
+
+def test_the_refusal_names_the_condition_that_was_missed_not_the_other_one():
+    """The message the pod rerun gets has to be the reason it was refused.
+
+    This branch printed one sentence at every ratio: "Every one of them is
+    limited by a shared non-DRAM path SLOWER than DRAM, so in the normal arm
+    DRAM has slack". That was true of every reading while the bar was 1.333,
+    because nothing below 1.333 of the roof had been seen above 1. Raising the
+    bar to 2.111 on 2026-09-09 created a regime between 1 and 2.111 where the
+    sentence is false, and the 2026-09-09 grid lands in it: five of its six
+    readings are ABOVE the roof, the best is 1.961, and the refusal explained
+    them with the physics of the world they are not in.
+    """
+    chosen, why = AB.choose_pinning(POD_PROBE_READINGS, H200_READ_ROOF)
+    assert chosen is None
+    assert f"no pinning reached {AB.MIN_HEADROOM_RATIO:.3f} x the roof" in why
+    assert "`bracket` needs" in why
+    # THE CONDITION IT ACTUALLY MISSED, in the units bracket scores.
+    assert "faster than DRAM" in why and "not by enough" in why
+    r_at_best = 1.0 / (9047e9 / H200_READ_ROOF - 1.0)
+    assert f"r = 1/(h-1) = {r_at_best:.3f}" in why, why
+    assert r_at_best > AB.MAX_BRACKET_R
+    # THE WORLD IT IS NOT IN IS NOT DESCRIBED AS IF IT WERE.
+    assert "SLOWER than DRAM" not in why
+    assert "DRAM has slack" not in why
+    # Two of the six really were below the roof and the count is on the line.
+    assert "2 of 6 did not reach the roof at all" in why
+
+    # THE BELOW-1 WORLD STILL GETS THE BELOW-1 STORY. 2026-09-01 measured it.
+    blind = [_reading(8, 3, 64, "sum", 2800), _reading(8, 4, 128, "dot", 2700)]
+    _, blind_why = AB.choose_pinning(blind, H200_READ_ROOF)
+    assert "SLOWER than DRAM" in blind_why and "DRAM has slack" in blind_why
+    assert "not by enough" not in blind_why
+
+    # AND THE PARAGRAPH UNDER THE TABLE, which named 2026-09-01 on BOTH. That
+    # run was a shared ceiling at 0.61 of the roof, so pointing a reader at
+    # `--synthetic alias-blind` to rehearse a 1.961 refusal rehearses the wrong
+    # world.
+    def page(rows):
+        lines: list[str] = []
+        chosen, why = AB.choose_pinning(rows, H200_READ_ROOF)
+        AB.report_probe(_collect(lines), rows, H200_READ_ROOF, chosen, why)
+        return "\n".join(lines)
+
+    above = page(POD_PROBE_READINGS)
+    assert "NOT the 2026-09-01 world" in above
+    assert "neither plants this one." in above
+    below = page(blind)
+    assert "This is the 2026-09-01 result restated" in below
+    assert "plants exactly this world" in below
+    # Both preambles name the two-sided rule the bar now is.
+    for text in (above, below):
+        assert "Below 1 the shared non-DRAM path is the slower one" in text
+        assert "Above 1 DRAM" in text and "binding is not enough to fit" in text
+
+
+def test_the_headroom_fail_detail_says_which_of_the_two_worlds_it_is():
+    """The same wrong sentence, on the gate line, already printed on the corpus.
+
+    At 1.964 the page read "Below 1 the shared non-DRAM path is slower than
+    DRAM, so DRAM had slack in the normal arm": a physical claim its own number
+    contradicts. This is NEW at 2.111. At the 1.333 bar the same records PASSed
+    and the below-1 clause was never printed against a 1.96 datum, which is why
+    the FAIL detail in the 1-to-2.111 regime had no test.
+    """
+    rows = pod_rungs()
+    gate = AB.headroom_gate(rows, H200_READ_ROOF)
+    assert gate.ok is False
+    ratio = float(gate.detail.split("a ratio of ")[1].split()[0])
+    assert 1.0 < ratio < AB.MIN_HEADROOM_RATIO, ratio
+    assert "IS faster than DRAM and DRAM did bind" in gate.detail
+    assert f"r = 1/(h-1) = {1.0 / (ratio - 1.0):.3f}" in gate.detail
+    assert "had slack" not in gate.detail
+
+    # AND THE BELOW-1 WORLD, which is the 2026-09-01 run, keeps its own story.
+    blind = AB.headroom_gate(void_records(), H200_READ_ROOF)
+    assert blind.ok is False
+    assert "slower than DRAM" in blind.detail and "had slack" in blind.detail
+    assert "did bind" not in blind.detail
+
+
+def test_no_renamed_gate_states_a_rule_it_no_longer_applies():
+    """A gate named after a retired rule is this repository's recurring defect.
+
+    THREE GATES CARRIED THE SAME RETIRED SUFFICIENT CONDITION, which is the
+    defect's own shape: fixed at one site and left at the others. LEVEL was
+    "every rung ran at the roof's measured clock" and now records the side
+    instead of demanding one. HEADROOM was "the shared path is faster than
+    DRAM, so DRAM could bind" and now FAILs runs whose shared path is faster
+    than DRAM, at 1.964 on the acceptance corpus. PROBE was "some pinning
+    delivers requests faster than DRAM", and it is the ONE RESULT line a
+    stopped arm prints, so it is the worst of the three places to leave it: the
+    2026-09-09 grid's best pinning delivers 1.961 times DRAM and is refused.
+    All three names have to survive `Gate.token`.
+    """
+    names = (AB.LEVEL_GATE, AB.HEADROOM_GATE, AB.PROBE_GATE)
+    for name in names:
+        token = AB.Gate(name, True, "").token
+        assert len(token) < 56, (name, len(token))
+        assert not token.endswith("-"), token
+    assert "every rung ran at" not in AB.LEVEL_GATE
+    assert "faster than DRAM" not in AB.HEADROOM_GATE
+    assert "faster than DRAM" not in AB.PROBE_GATE
+    # The gate functions and the page use the constants, never a second
+    # spelling. The retired names survive ONCE each, inside the `#:` block that
+    # says they were retired and why; that is the record, not a spelling.
+    source = (ROOT / "scripts" / "alias_ablation.py").read_text()
+    for name in names:
+        assert source.count(f'"{name}"') == 1, name
+    for retired in ("level: every rung ran at the roof's measured clock",
+                    "headroom: the shared path is faster than DRAM, so DRAM "
+                    "could bind",
+                    "probe: some pinning delivers requests faster than DRAM"):
+        hits = [ln for ln in source.splitlines() if retired in ln]
+        assert len(hits) == 1 and hits[0].lstrip().startswith("#:"), retired
+    assert AB.probe_gate(POD_PROBE_READINGS, None, "x").name == AB.PROBE_GATE
+    assert AB.headroom_gate(pod_rungs(), H200_READ_ROOF).name == AB.HEADROOM_GATE
+    assert AB.headroom_gate(pod_rungs(), None).name == AB.HEADROOM_GATE
+    # A STOPPED ARM'S ONE LINE, recomputed from the log the way the driver does.
+    stopped = AB.probe_gate(POD_PROBE_READINGS, None, "nothing cleared")
+    assert exit_codes.classify_text(stopped.result_line()) == exit_codes.INVALID
+
+
 def test_the_probe_prefers_the_unbiased_pinning_over_a_faster_biased_one():
     """Headroom is the objective; speed is only how headroom is reached.
 
@@ -1695,17 +1859,22 @@ def test_the_probe_prefers_the_unbiased_pinning_over_a_faster_biased_one():
     answer P1 from it at all. A dot pinning that is 40% faster and cannot answer
     the question loses to a sum pinning that can.
     """
-    readings = [_reading(8, 3, 64, "sum", 2700),      # the shipped one: fails
-                _reading(8, 4, 128, "sum", 6500),
-                _reading(16, 4, 128, "dot", 9000)]
+    # THE RATES ARE PLANTED AGAINST `MIN_HEADROOM_RATIO`, not against a number
+    # typed once: the bar rose from 1.333 to 2.111 of the roof on 2026-09-09
+    # and a fixed 6500 GB/s that used to clear stopped clearing.
+    bar = AB.MIN_HEADROOM_RATIO * H200_READ_ROOF / 1e9
+    readings = [_reading(8, 3, 64, "sum", 0.6 * bar),  # the shipped one: fails
+                _reading(8, 4, 128, "sum", 1.05 * bar),
+                _reading(16, 4, 128, "dot", 1.4 * bar)]
     chosen, why = AB.choose_pinning(readings, H200_READ_ROOF)
     assert chosen["compute"] == "sum" and chosen["num_stages"] == 4
     assert "sum-mode" in why
 
 
 def test_the_probe_falls_to_dot_only_when_no_sum_pinning_clears():
-    readings = [_reading(8, 3, 64, "sum", 2700),
-                _reading(16, 4, 128, "dot", 9000)]
+    bar = AB.MIN_HEADROOM_RATIO * H200_READ_ROOF / 1e9
+    readings = [_reading(8, 3, 64, "sum", 0.6 * bar),
+                _reading(16, 4, 128, "dot", 1.4 * bar)]
     chosen, why = AB.choose_pinning(readings, H200_READ_ROOF)
     assert chosen["compute"] == "dot"
     assert "LOWER BOUND" in why
@@ -1753,7 +1922,10 @@ def test_the_probe_refuses_when_nothing_clears_and_names_the_best_it_saw():
     readings = [_reading(8, 3, 64, "sum", 2700), _reading(8, 4, 128, "dot", 2800)]
     chosen, why = AB.choose_pinning(readings, H200_READ_ROOF)
     assert chosen is None
-    assert "0.626" in why or "0.627" in why, why
+    # The best reading as a FRACTION of the roof it was scored against, which
+    # moved from 4469.6 to 4613.0 GB/s when the 2026-09-09 pod republished this
+    # card's calibration under the pattern names calibrate now writes.
+    assert f"{2800e9 / H200_READ_ROOF:.3f}" in why, why
     assert "2800 GB/s" in why
     assert "no ladder run" in why.lower() or "No ladder run" in why
 
@@ -1910,8 +2082,10 @@ def test_the_level_reference_reaches_both_of_this_arms_time_kernel_calls():
 def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_against():
     """THE CONSEQUENCE, replayed end to end through this file's own fold.
 
-    A card pegged at 1400 MHz while an H200 roof was measured at 1515 is 92% of
-    the ruler, under `LEVEL_FRACTION`. Scored against the reference every pass
+    A card pegged at 1400 MHz while an H200 roof was measured at 1485 is 94.3%
+    of the ruler, under `LEVEL_FRACTION`. (1515 and 92% until ab61e55
+    re-measured the card; the assertion below moved to 1485 on 2026-09-09 and
+    this sentence did not.) Scored against the reference every pass
     reads False and `_fold_flag` keeps the False; scored against nothing every
     pass reads None, the fold keeps None, and the rung reaches `cells.jsonl`
     carrying the column with no verdict in it. Both ladders would sag together
@@ -1922,8 +2096,11 @@ def test_a_sagging_card_is_only_visible_once_there_is_something_to_be_level_agai
     below never moves, so `clock_drift_ok` is True in both worlds and the
     retired throttle check passes a card running at 92% of its roof's clock.
     """
+    # 1485 AND NOT 1515 SINCE ab61e55: the 2026-09-09 calibration measured the
+    # 8192^3 bf16 GEMM at 1485 MHz under a 700 W cap, and this is that number
+    # read back out of the committed file rather than a remembered one.
     reference = AB.reference_clock_for(AB.PLANT_CARD).mhz
-    assert reference == 1515.0
+    assert reference == 1485.0
     sagging = 1400.0
     assert sagging < AB.timing.LEVEL_FRACTION * reference
 
@@ -1954,7 +2131,7 @@ def test_a_card_with_no_level_reference_refuses_before_the_ladder_is_paid_for():
     translate into REFUSED (2), which is "nothing spent, nothing measured".
     """
     ok = AB.require_reference_clock(_fake_torch(AB.PLANT_CARD))
-    assert ok.mhz == 1515.0 and ok.card == AB.PLANT_CARD
+    assert ok.mhz == 1485.0 and ok.card == AB.PLANT_CARD
     # THE SAME READER THE DRIVER USES, an identity rather than two equal
     # numbers: a private copy of the three-field rule here is the defect the
     # driver's own pinning test exists to catch.
@@ -2041,12 +2218,30 @@ def test_a_sagged_rung_and_a_blind_one_are_two_findings_not_one(
     assert f"LEVEL: 3 of {len(rows)} rungs ran below" in out
     # The order is load bearing, not cosmetic: the apparatus statement first.
     assert out.index("LEVEL: UNDETERMINED") < out.index(f"LEVEL: 3 of {len(rows)}")
-    # THE PLANTED FAIL BRANCH. Narrating a sag moved neither of the two things
-    # `pod_session.sh` grades, so this directory used to exit 0 DONE with every
-    # gate PASS and a warning nobody's grader read.
-    assert f"[FAIL] {AB.LEVEL_GATE}" in out
+    # THE UNKNOWN BRANCH, AND IT IS THE BLIND RUNGS THAT PRODUCE IT, not the
+    # sagged ones. Since 2026-09-09 a steady LOW is a recorded side and excludes
+    # nothing; a rung with NO reference clock still cannot be scored at all, and
+    # an unknown VALIDITY gate is INVALID. Both counts are still printed, which
+    # is why they are two findings and not one.
+    assert f"[NOT TESTABLE] {AB.LEVEL_GATE}" in out
     assert code == exit_codes.INVALID
     assert exit_codes.classify_text(out) == code
+
+    # The LOW rungs alone, with a reference on every row: PASS, both counts on
+    # the page, nothing dropped.
+    for row in rows:
+        row["clock_level_ok"] = row.get("clock_level_ok", True)
+        row.setdefault("clock_level_side", "")
+    for row in rows[:3]:
+        row["clock_level_ok"] = False
+        row["clock_level_side"] = "low"
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert f"LEVEL: 3 of {len(rows)} rungs ran below" in out
+    assert "KEPT, side recorded" in out
+    assert code == exit_codes.DONE
 
 
 def _levelled(*oks) -> list[dict]:
@@ -2057,9 +2252,9 @@ def _levelled(*oks) -> list[dict]:
             for i, ok in enumerate(oks)]
 
 
-def test_the_level_gate_passes_fails_and_refuses_to_guess():
-    """A sag FAILS, a full ladder PASSES, and a rung with no reference is NOT
-    TESTABLE rather than PASS.
+def test_the_level_gate_records_a_side_and_refuses_to_guess():
+    """A recorded side PASSES, and a rung with no reference is NOT TESTABLE
+    rather than PASS.
 
     THE LAST BRANCH IS THE ONE WORTH HAVING. `classify` turns an unknown
     VALIDITY gate into INVALID, so a ladder that carries no reference clock
@@ -2069,15 +2264,22 @@ def test_the_level_gate_passes_fails_and_refuses_to_guess():
     cannot pass either.
     """
     assert AB.level_gate(_levelled(True, True, True)).ok is True
-    assert AB.level_gate(_levelled(True, False, True)).ok is False
+    # A FAILED LEVEL VERDICT NO LONGER FAILS THE GATE, on either side. The
+    # under-load clock is an outcome of the cell and both sides are recorded;
+    # only DRIFT excludes, and it excludes the pass. This assertion read
+    # `is False` until 2026-09-09.
+    assert AB.level_gate(_levelled(True, False, True)).ok is True
     assert AB.level_gate(_levelled(None, None)).ok is None
     assert AB.level_gate(_levelled(True, None, True)).ok is None
-    # A sag outranks a blind rung: FAIL is the more informative of the two, and
-    # the detail still names how many could not be examined at all.
+    # A BLIND RUNG OUTRANKS A RECORDED SIDE, which is the reverse of the order
+    # this gate used until 2026-09-09. Then a sag was the finding and an absent
+    # reference was the footnote; now the side is a record that excludes
+    # nothing, and the only thing left that can void the page is a rung whose
+    # clock could not be scored at all.
     mixed = AB.level_gate(_levelled(False, None, None))
-    assert mixed.ok is False
-    assert "a further 2 carry no reference" in mixed.detail
-    # VALIDITY, not CLAIM: a card held below its roof's clock is a broken
+    assert mixed.ok is None
+    assert "carry no reference clock" in mixed.detail
+    # VALIDITY, not CLAIM: what clock the card ran at is a statement about the
     # apparatus, not the world disagreeing with a pre-registered prediction.
     assert AB.level_gate(_levelled(False)).kind == exit_codes.VALIDITY
 
@@ -2110,9 +2312,32 @@ def test_only_one_function_decides_which_rungs_sagged():
                 or "get('clock_level_side')" in body
                 or "['clock_level_side']" in body):
             readers.add(node.name)
-    assert readers == {"level_split"}, (
-        f"{sorted(readers - {'level_split'})} decide for themselves which "
-        "rungs sagged or boosted; route them through level_split")
+    # `drop_drifted_passes` reads the column off a PASS entry, not off a rung,
+    # and it is a WRITER of the rung's: it re-folds the undrifted passes back
+    # onto the row so the side the page prints is the side of the passes the fit
+    # used. What it must not do is DECIDE the partition, and the assertion below
+    # is what holds that line.
+    assert readers == {"level_split", "drop_drifted_passes"}, (
+        f"{sorted(readers - {'level_split', 'drop_drifted_passes'})} decide "
+        "for themselves which rungs sagged or boosted; route them through "
+        "level_split")
+
+    # THE PARTITION ITSELF, which is a COMPARISON against timing.LEVEL_LOW /
+    # timing.LEVEL_HIGH, happens in exactly two places: `_fold_side`, which
+    # reduces a list of sides to one with LOW dominating, and `level_split`,
+    # which splits the rungs. A third comparison is a third opinion.
+    deciders = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        body = "\n".join(ast.unparse(stmt) for stmt in node.body
+                          if not (isinstance(stmt, ast.Expr)
+                                  and isinstance(stmt.value, ast.Constant)))
+        # WORD-BOUNDED, or `timing.LEVEL_HIGH_FRACTION`, the band edge every
+        # report line prints as a percentage, reads as a side comparison.
+        if re.search(r"timing\.LEVEL_(LOW|HIGH)\b", body):
+            deciders.add(node.name)
+    assert deciders == {"_fold_side", "level_split"}, sorted(deciders)
 
 
 def test_the_level_gate_is_scored_on_measured_runs_and_not_on_planted_ones(
@@ -2143,7 +2368,13 @@ def test_the_level_gate_is_scored_on_measured_runs_and_not_on_planted_ones(
     # scored before a rung was timed.)
     tokens = [ln.split()[2] for ln in out.splitlines()
               if ln.startswith("RESULT: ")]
-    assert tokens.index("level-every-rung-ran-at-the-roof-s-measured-clock") \
+    # THE TOKEN IS DERIVED FROM THE NAME, so it moves when the gate is renamed
+    # and a driver keying on a remembered slug finds nothing. It was
+    # "level-every-rung-ran-at-the-roof-s-measured-clock" until 2026-09-09,
+    # when the gate stopped demanding that and started recording it.
+    level_token = AB.Gate(AB.LEVEL_GATE, True, "").token
+    assert level_token == "level-the-clock-each-rung-ran-at-is-recorded"
+    assert tokens.index(level_token) \
         < tokens.index("ISA-the-aliased-kernel-issued-the-same-global-loads")
 
 
@@ -2342,7 +2573,13 @@ def test_the_header_quotes_no_duration_of_its_own():
                       + len(AB.PROBE_PINNINGS)
                       * AB.PROBE_FIXED_S_PER_PINNING / 60.0)
     share = probe_wall_min / figures["WALL"]
-    assert 0.05 <= share <= 0.15, (share, probe_wall_min, figures)
+    # 0.20 AND NOT 0.15 SINCE 2026-09-09: the sum half of `PROBE_PINNINGS`
+    # widened from three entries to seven, which is four more compiles at
+    # `PROBE_FIXED_S_PER_PINNING`, and the share went 13% -> 16%. The wall this
+    # test builds is that the probe stays a MINORITY of the arm it protects,
+    # which is what makes "spend the tenth to protect the rest" true; it is not
+    # a claim about a result and the grid is expected to move.
+    assert 0.05 <= share <= 0.20, (share, probe_wall_min, figures)
     # The table prints that share itself, so a reader never has to compute it.
     assert f"{share * 100:.0f}% is the probe" in text
 
@@ -2436,15 +2673,27 @@ def test_the_headroom_and_signal_limits_are_one_number_and_cannot_disagree():
     saying the two limits were inconsistent rather than the kernel wrong. At
     1.15, which is what this file shipped for an afternoon, that band runs from
     1.15 to 1.333 and every run inside it reads as a failed experiment.
+
+    AND `bracket` IS THE THIRD READER OF THE SAME `h`, WHICH COST THE 2026-09-09
+    ARM ITS PAGE. With the fixed cost near zero, r = 1/(h - 1), so MAX_BRACKET_R
+    0.9 needs h >= 2.111 while the inversion above admits 1.333. The probe read
+    h = 1.961 on deepseek-v2-lite, admitted it, spent the ladder, and `bracket`
+    voided the page on that same model at r = 1.004. The limit is now the LARGER
+    of the two derivations and this test scores BOTH bands: no admitted h may be
+    voided by `signal` OR by `bracket`.
     """
     h = AB.MIN_HEADROOM_RATIO
-    assert abs((1.0 - 1.0 / h) - AB.MIN_SIGNAL_FRACTION) < 1e-12
-    for ratio in (1.0, 1.2, 1.3):
-        assert 1.0 - 1.0 / ratio < AB.MIN_SIGNAL_FRACTION, ratio
+    assert h == max(1.0 / (1.0 - AB.MIN_SIGNAL_FRACTION),
+                    1.0 + 1.0 / AB.MAX_BRACKET_R)
+    # Nothing this limit admits can be voided by either downstream gate.
+    for ratio in (h, h + 0.1, 4.0, 8.0):
+        assert 1.0 - 1.0 / ratio >= AB.MIN_SIGNAL_FRACTION - 1e-12, ratio
+        assert 1.0 / (ratio - 1.0) <= AB.MAX_BRACKET_R + 1e-12, ratio
+    # And every ratio the OLD limit admitted and `bracket` then voided is now
+    # refused at the probe, which is the whole 12.8 minutes the defect cost.
+    for ratio in (1.0, 1.2, 1.3, 1.5, 1.961, 2.0, 2.1):
         assert ratio < h, ratio
-    for ratio in (1.4, 2.0, 8.0):
-        assert 1.0 - 1.0 / ratio > AB.MIN_SIGNAL_FRACTION, ratio
-        assert ratio > h, ratio
+    assert 1.0 / (1.961 - 1.0) > AB.MAX_BRACKET_R
 
 
 def test_out_refuses_to_resume_into_another_designs_directory(tmp_path,
@@ -2715,7 +2964,12 @@ def test_the_remedy_named_is_the_lever_that_actually_moved():
 #: the bf16-GEMM reference the roof was measured at, and the clock the
 #: committed calibration holds under memory load for 30 s. Every rung of this
 #: ladder is memory-bound, so on a rental every rung is the HIGH row.
-H200_GEMM_REFERENCE_MHZ = 1515.0
+#:
+#: 1485 SINCE ab61e55, measured at 691 W under the card's 700 W cap. The
+#: 2026-09-09 session then showed what that number is: not the middle of
+#: anything, but near the LOW end of what dense tensor work does on this card,
+#: which is why a +/-5% band around it excludes tiles rather than defects.
+H200_GEMM_REFERENCE_MHZ = 1485.0
 H200_MEMORY_LOAD_MHZ = 1980.0
 SAGGED_MHZ = 1400.0
 
@@ -2738,8 +2992,11 @@ def _sided(*sides) -> list[dict]:
 
 def test_a_boosted_rung_folds_to_high_and_a_sagged_one_to_low():
     """Through this file's own fold, from records scored the way `time_kernel`
-    scores them: 1980 against 1515 fails LEVEL on the HIGH side, 1400 on the
-    LOW side, and one LOW pass dominates a rung however many boosted."""
+    scores them: 1980 against 1485 fails LEVEL on the HIGH side, 1400 on the
+    LOW side, and one LOW pass dominates a rung however many boosted.
+
+    1485 AND NOT 1515: `H200_GEMM_REFERENCE_MHZ` moved with ab61e55 on
+    2026-09-09 and this sentence was left behind naming the superseded ruler."""
     ref = H200_GEMM_REFERENCE_MHZ
     high = AB.fold_timings([_pass_timing(H200_MEMORY_LOAD_MHZ, ref)] * 3)
     assert high["clock_level_ok"] is False
@@ -2772,41 +3029,50 @@ def test_level_split_files_a_boosted_rung_apart_from_a_sagged_one():
     assert sagged == ["old"] and boosted == []
 
 
-def test_the_level_gate_passes_a_high_side_rung_fails_a_low_one_and_says_which():
-    """THE VALIDITY GATE THAT WOULD HAVE VOIDED THE ARM. On the H200 every
-    memory-bound rung boosts to 1980 MHz against the 1515 MHz reference and
-    fails LEVEL on the HIGH side; until 2026-09-08 `level_gate` read that as a
-    sag and returned FAIL, exit 3 INVALID, latched by the session driver so no
-    resume re-ran the 13-minute arm. HIGH passes, LOW fails, and the detail
-    names the side it saw either way."""
+def test_the_level_gate_records_both_sides_and_excludes_on_neither():
+    """THE VALIDITY GATE THAT WOULD HAVE VOIDED THE ARM, on both sides now.
+
+    HIGH stopped failing on 2026-09-08: on the H200 every memory-bound rung
+    boosts to 1980 MHz against a 1485 MHz reference, so reading the verdict
+    without the side voided the arm on every rental. LOW stopped failing on
+    2026-09-09, when 750 cells of one session showed the under-load clock is set
+    PER TILE by the kernel's own power draw under the card's 700 W cap: BM=128
+    with BN=64 sits at 1395, BM=256 at 1650, a memory-shaped cell at 1950-1980,
+    and the GEMM the roof was measured on holds 1485 near the LOW end of dense
+    work. A 74 MHz band around that excludes a tile, not a defect. Both sides
+    are now KEPT and RECORDED, and the exclusion is DRIFT, per pass."""
     from moe.bench import exit_codes
     high = AB.level_gate(_sided("high", "high", "high"))
     assert high.ok is True, high.detail
     assert "LEVEL high" in high.detail and "r0" in high.detail
-    assert "kept" in high.detail
+    assert "KEPT" in high.detail
     low = AB.level_gate(_sided("low", "", ""))
-    assert low.ok is False
+    assert low.ok is True
     assert "LEVEL low" in low.detail and "r0" in low.detail
+    assert "KEPT" in low.detail
     assert low.kind == exit_codes.VALIDITY
-    # LOW outranks HIGH: one sag fails the ladder however many boosted, and the
-    # detail still names the boosted rungs so the reader sees both states.
+    # A ladder with rungs on both sides names both counts and still passes.
     mixed = AB.level_gate(_sided("high", "low", "high"))
-    assert mixed.ok is False
-    assert "LEVEL low" in mixed.detail and "r1" in mixed.detail
-    assert "2 rung(s) ran ABOVE" in mixed.detail
-    # A boosted ladder with a blind rung is still NOT TESTABLE, never PASS.
+    assert mixed.ok is True
+    assert "LEVEL low, first r1" in mixed.detail
+    assert "2 ran ABOVE" in mixed.detail
+    # A blind rung is NOT TESTABLE whatever the sides beside it say, and it
+    # OUTRANKS them: a clock that could not be scored is the only thing left
+    # that voids this page.
     assert AB.level_gate(_sided("high", None)).ok is None
+    assert AB.level_gate(_sided("low", None)).ok is None
     # And the all-level ladder names both edges of the band it passed inside.
     level = AB.level_gate(_sided("", "", ""))
     assert level.ok is True and "95% to 105%" in level.detail
 
 
-def test_a_high_world_passes_the_level_gate_end_to_end_and_excludes_nothing(
+def test_both_clock_sides_pass_end_to_end_and_exclude_nothing(
         tmp_path, monkeypatch, capsys):
-    """THE HIGH WORLD, through `_analyse`: a measured directory whose every
-    rung carries the boosted verdict. The gate PASSES, the page says ABOVE and
-    kept, every rung reaches the fit, and the run exits DONE. The LOW twin is
-    the FAIL branch: INVALID, and the page says below."""
+    """BOTH WORLDS, through `_analyse`: a measured directory whose every rung
+    carries the boosted verdict, and its sagged twin. The gate PASSES on each,
+    the page says ABOVE or below and KEPT, every rung reaches the fit, and both
+    exit DONE. The LOW twin was the FAIL branch until 2026-09-09; keeping it
+    green is what stops a tile family becoming unmeasurable on this card."""
     from moe.bench import exit_codes
     out_dir = tmp_path / "boosted"
     run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
@@ -2835,9 +3101,11 @@ def test_a_high_world_passes_the_level_gate_end_to_end_and_excludes_nothing(
     assert exit_codes.classify_text(out) == code
 
     code, out = replay("low")
-    assert f"[FAIL] {AB.LEVEL_GATE}" in out
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
     assert f"LEVEL: {len(rows)} of {len(rows)} rungs ran below 95%" in out
-    assert code == exit_codes.INVALID
+    assert "KEPT, side recorded" in out
+    assert code == exit_codes.DONE, out
+    assert exit_codes.classify_text(out) == code
 
 
 def test_the_retired_idle_instant_check_is_labelled_as_what_it_detects(
@@ -2860,11 +3128,20 @@ def test_the_retired_idle_instant_check_is_labelled_as_what_it_detects(
         row["clock_drift_ok"] = i != 3
     cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
     _, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch, capsys)
-    assert "2 rungs moved more than 5% between the two idle-instant SM clock" in out
+    assert f"2 of {len(rows)} rungs moved more than 5% between the two " \
+           "idle-instant SM clock" in out
     assert "RETIRED check" in out
     assert "not throttling" in out
     assert "drifted more than" not in out
-    assert f"DRIFT: 1 of {len(rows)} rungs had their under-load clock move" in out
+    # THE RENAME. The idle pair is one character from `KernelTiming`'s
+    # under-load pair, and a reader took a 1980 MHz idle boost for a kernel.
+    assert "sm_clock_idle_before_mhz" in out
+    # THE DRIFT PARAGRAPH IS AN ACCOUNT OF AN EXCLUSION, and on rows carrying
+    # only the rung-level fold the exclusion cannot be applied at all: the fold
+    # is refused as a basis for it and the rungs are KEPT, named, and counted.
+    assert f"DRIFT: NOT RESOLVABLE on {len(rows)} of {len(rows)} rungs, " \
+           "1 of them FLAGGED" in out
+    assert "REFUSED as a" in out
     # The source no longer binds the idle-instant pair to the word throttled.
     import ast
     tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
@@ -2918,3 +3195,592 @@ def test_the_read_roof_is_looked_up_by_the_calibrations_own_pattern_names(tmp_pa
     assert facts["roof_bytes_s"] == pytest.approx(4469.6e9) and facts["roof_pattern"] == "read"
     write([{"pattern": "copy", "gbps": 4200.0}])
     assert AB.measured_card("NVIDIA H200")["roof_bytes_s"] is None
+
+
+# --------------------------------------------------------------------------
+# 2026-09-09: the H200 session, and the four things it found
+# --------------------------------------------------------------------------
+
+#: The arm's own output directory in the committed session. Every number in
+#: this section is read out of it rather than transcribed, because the point of
+#: publishing the cells is that the regression is the measurement.
+POD_SESSION = (ROOT / "results" / "published"
+               / "2026-09-09-nvidia_h200-gaps-session" / "results"
+               / "alias_ablation")
+POD_DOT_RUN = ("nvidia_h200-1modedot-2bm16-3designc50891ca51-4seed0-5flushtrue"
+               "-6warmup300.0-7budget50.0-8trials3-f98327f2")
+
+
+def pod_rungs() -> list[dict]:
+    """The 20 rungs of the 2026-09-09 dot-mode run, off disk."""
+    cells = POD_SESSION / POD_DOT_RUN / "cells.jsonl"
+    if not cells.exists():
+        pytest.skip("no results/published on this checkout")
+    return [json.loads(line) for line in cells.read_text().splitlines() if line]
+
+
+def pod_replay(tmp_path, monkeypatch, capsys):
+    """`--replay` over a COPY of the committed run, so the tree is untouched."""
+    rows = pod_rungs()
+    out_dir = tmp_path / "pod"
+    out_dir.mkdir()
+    (out_dir / "cells.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    src = POD_SESSION / POD_DOT_RUN / "plan.json"
+    (out_dir / "plan.json").write_text(src.read_text())
+    return run_report(["--replay", str(out_dir)], tmp_path, monkeypatch, capsys)
+
+
+def test_the_pod_run_is_20_rungs_of_folds_with_no_pass_records():
+    """The shape the four defects were found in, asserted before they are.
+
+    A rung is `3 * replicates` `time_kernel` calls and the row carries ONE of
+    each clock column, folded with the bad value dominating. 16 of 20 rungs read
+    `clock_drift_ok` False because at least one of 27 passes moved, one reads
+    LOW because one pass did, and none of the 540 passes is on disk.
+    """
+    rows = pod_rungs()
+    assert len(rows) == 20
+    assert {r["model"] for r in rows} == {
+        "mixtral-8x7b", "qwen2-57b-a14b", "deepseek-v2-lite", "deepseek-v3",
+        "control-l2-resident"}
+    assert all("passes" not in r for r in rows), (
+        "these rows predate PASS_COLUMNS; a checkout where they carry passes "
+        "is a checkout where this section's premise is gone")
+    drifted = [r["id"] for r in rows if r.get("clock_drift_ok") is False]
+    assert len(drifted) == 16
+    sagged, blind, boosted = AB.level_split(rows)
+    assert sagged == ["qwen2-57b-a14b|t4|bm16"] and not blind
+    assert len(boosted) == 19
+    # THE FOLD IS NOT INVERTIBLE, and this is the proof that it is not: the
+    # row's own fields, scored by the same `clock_flags` that wrote them,
+    # disagree with the row's own flags. The LOW rung's folded load is 1530 MHz,
+    # INSIDE the band, because the pass that sagged left no clock behind.
+    low = next(r for r in rows if r["id"] == "qwen2-57b-a14b|t4|bm16")
+    assert low["sm_clock_load_mhz"] == 1530.0
+    assert (AB.timing.LEVEL_FRACTION * low["reference_clock_mhz"]
+            < low["sm_clock_load_mhz"]
+            < AB.timing.LEVEL_HIGH_FRACTION * low["reference_clock_mhz"])
+    # These rows also predate the idle pair's rename, so they carry it under
+    # `sm_clock_start` / `sm_clock_end`: one character from the under-load pair
+    # `KernelTiming` writes, which is why the names moved.
+    assert "sm_clock_start" in rows[0] and "sm_clock_start_mhz" not in rows[0]
+    disagreed = 0
+    for row in rows:
+        level, drift = AB.timing.clock_flags(
+            row["sm_clock_load_mhz"], row["sm_clock_start"],
+            row["sm_clock_end"], row["reference_clock_mhz"])
+        if (level, drift) != (row["clock_level_ok"], row["clock_drift_ok"]):
+            disagreed += 1
+    assert disagreed == 8, disagreed
+
+
+def test_the_pod_run_replays_with_level_recorded_form_passing_and_p1_unasked(
+        tmp_path, monkeypatch, capsys):
+    """THE WHOLE 2026-09-09 PAGE, under the rules of that evening's memo.
+
+    Four gates failed on the night: `level` on one LOW rung, `placebo` at 28%,
+    `form` at R^2 0.1356 and `bracket` at r 1.004. Two of those were the gates
+    being wrong rather than the run: LOW is a recorded side and R^2 cannot pass
+    a true alpha of zero. Two are the run: the placebo is genuine governor noise
+    and the bracket is genuine, and `headroom` now joins them because it is the
+    same `h` the bracket scores and it was reading a limit 0.78 too low.
+    """
+    code, out = pod_replay(tmp_path, monkeypatch, capsys)
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert "1 of 20 rungs ran below 95%" in out and "KEPT, side recorded" in out
+    assert "[PASS] form: D(n) is affine" in out
+    assert "residual RMS 8.9% of W (limit 10%)" in out
+    # `headroom` FAILS now and PASSED on the night, at the same 1.964: the
+    # probe let a ladder run that `bracket` was bound to void.
+    assert "[FAIL] headroom" in out
+    assert "a ratio of 1.964 (limit 2.111" in out
+    assert "[FAIL] bracket" in out and "worst r is 1.004" in out
+    assert "[FAIL] placebo" in out and "28.0% (limit 10%)" in out
+    # P1 IS UNKNOWN AND THE PAGE SAYS WHY IN WORDS. dot mode cannot ask it.
+    assert "[NOT TESTABLE] P1: the ablation agrees with the refit" in out
+    assert "NOT A REFUTATION" in out
+    assert "READ THIS RUN AS A LOWER BOUND, NOT AS A REFUTATION." in out
+    assert code == exit_codes.INVALID
+    assert exit_codes.classify_text(out) == code
+
+
+def test_the_pod_runs_drift_fold_is_refused_as_lossy_and_named_on_the_page(
+        tmp_path, monkeypatch, capsys):
+    """DRIFT excludes the pass, and these rows have no passes to exclude.
+
+    Applied at the rung level, which is all the fold allows, DRIFT-only
+    exclusion keeps 4 of the 20 rungs, leaves no model with a ladder and turns
+    every fit into "fewer than two rungs". The page says the fold is refused as
+    a basis for exclusion, names the flagged rungs with the clock each carries,
+    and keeps them; it does not quietly pass them off as clean.
+    """
+    _, out = pod_replay(tmp_path, monkeypatch, capsys)
+    assert "DRIFT: NOT RESOLVABLE on 20 of 20 rungs, 16 of them FLAGGED" in out
+    assert "REFUSED as a" in out
+    assert "cannot be inverted" in out
+    # EVERY id, not the first three. A reader told 16 rungs drifted and shown
+    # three of them cannot check the claim against anything.
+    for rid in (r["id"] for r in pod_rungs() if r.get("clock_drift_ok") is False):
+        assert rid in out, rid
+    # And the clock is beside the id, because the id alone misled: five of the
+    # nineteen HIGH rungs have a folded median INSIDE the band.
+    assert "qwen2-57b-a14b|t4|bm16@1530MHz" in out
+    assert "THE SIDES ABOVE ARE FOLDED OVER EVERY PASS, DRIFTED ONES INCLUDED" in out
+
+
+def test_r_and_h_are_one_quantity_so_the_probe_refuses_what_bracket_voids():
+    """The seventeenth instance, in the arithmetic that produced it.
+
+    With the fixed cost near zero the aliased ladder's per-tile cost is
+    T_aliased(1) and W is T_normal(1) - T_aliased(1), so r = 1/(h - 1). The
+    2026-09-09 run's four models sit either side of the line: three at h ~ 2.18
+    and r ~ 0.84, and deepseek-v2-lite at h = 2.017, r 0.983 fitted 1.004.
+    """
+    rows = pod_rungs()
+    ones = {r["model"]: r["ms"] for r in rows if r["tiles"] == 1}
+    for model, ms in ones.items():
+        h = statistics.median(ms["normal"]) / statistics.median(ms["aliased"])
+        r_from_h = 1.0 / (h - 1.0)
+        if model == "deepseek-v2-lite":
+            assert 2.01 < h < 2.02, (model, h)
+            assert r_from_h > AB.MAX_BRACKET_R, (model, r_from_h)
+            assert h < AB.MIN_HEADROOM_RATIO, (model, h)
+        else:
+            assert h > 2.0, (model, h)
+    # THE PROBE'S OWN READING, from session/logs/alias_ablation.log: the dot
+    # pinning it adopted delivered 9047 GB/s against a 4613 read roof, h =
+    # 1.961, which the old 1.333 admitted and the new limit refuses.
+    assert 9047e9 / 4613.006445392317e9 < AB.MIN_HEADROOM_RATIO
+    chosen, why = AB.choose_pinning(
+        [_reading(8, 4, 128, "dot", 9047)], 4613.006445392317e9)
+    assert chosen is None and "no pinning reached" in why
+
+
+def test_the_form_gate_passes_a_flat_ladder_and_still_refuses_a_bent_one():
+    """R^2 and resid/W are an OR, and each half has to be able to fail alone.
+
+    deepseek-v2-lite's D(n) is 0.0912, 0.0711, 0.0738, 0.0768 ms: slope -0.0011
+    ms per tile, R^2 0.1356, residual RMS 8.9% of W. That is alpha near zero on
+    an 11 MiB expert under a 60 MiB L2, which is P2's own prediction, and the
+    gate that voided the page for it was measuring the wrong thing.
+    """
+    # THE MODEL'S OWN TIMINGS, not the four-decimal D the page printed: the
+    # page rounds to 0.0912 / 0.0711 / 0.0738 / 0.0768 and refitting those
+    # rounded numbers gives R^2 0.1333, not the 0.1356 the gate voided on.
+    rows = [r for r in pod_rungs() if r["model"] == "deepseek-v2-lite"]
+    samples = {r["tiles"]: r["ms"] for r in rows}
+    flat = AB.fit_alpha(AB.differences(samples))
+    assert abs(flat.r2 - 0.1356) < 5e-5, flat.r2
+    assert abs(flat.resid_over_w - 0.0888) < 5e-5, flat.resid_over_w
+    assert flat.r2 < AB.MIN_LINEARITY_R2
+    assert AB.form_is_affine(flat)
+    # A BENT LADDER STILL FAILS BOTH. Same intercept, a quadratic in (n-1).
+    bent = AB.fit_alpha({1: 0.0912, 2: 0.30, 4: 0.10, 8: 0.50})
+    assert bent.r2 < AB.MIN_LINEARITY_R2
+    assert bent.resid_over_w > AB.MAX_FORM_RESIDUAL_OVER_W
+    assert not AB.form_is_affine(bent)
+    # And a clean sloped ladder passes on R^2 alone, which is the first half
+    # still doing its job: mixtral's own numbers, R^2 1.0000, resid/W 1.4%.
+    mix = {r["tiles"]: r["ms"] for r in pod_rungs()
+           if r["model"] == "mixtral-8x7b"}
+    straight = AB.fit_alpha(AB.differences(mix))
+    assert straight.r2 > AB.MIN_LINEARITY_R2
+    assert straight.resid_over_w < 0.02
+    assert AB.form_is_affine(straight)
+
+
+def _pod_shaped_passes(load_mhz=1980.0, reference=1485.0, replicates=9,
+                       drift_at=()):
+    """27 pass records in the pod's shape: 9 replicates x normal/aliased/placebo.
+
+    `drift_at` names (replicate, pass) pairs whose clock moved, which is what
+    `drop_drifted_passes` is for. The undrifted passes carry a clean p50 and the
+    drifted ones a p50 that is 30% off, so a fold that keeps them is visible in
+    the fitted number rather than only in a flag.
+    """
+    out = []
+    for rep in range(replicates):
+        for name in ("normal", "aliased", "placebo"):
+            drifted = (rep, name) in set(drift_at)
+            base = {"normal": 1.0, "aliased": 0.4, "placebo": 1.0}[name]
+            timing_row = _pass_timing(load_mhz, reference)
+            record = AB.pass_record(rep, name, timing_row)
+            record["ms_p50"] = base * (1.30 if drifted else 1.0)
+            record["clock_drift_ok"] = not drifted
+            out.append(record)
+    return out
+
+
+def test_drift_excludes_the_pass_and_the_rung_survives_it():
+    """The unit the rule is about, in the shape the pod writes.
+
+    16 of 20 rungs of the 2026-09-09 run were flagged because at least one of
+    27 passes moved, so ~5.8% of the 540 passes drifted and the rung-level fold
+    turned that into an 80% exclusion. Dropping the pass keeps the rung, keeps
+    the ladder, and takes the drifted timing out of the median.
+    """
+    rows = [{"id": "m|t1|bm16", "model": "m", "tiles": 1,
+             "clock_drift_ok": False, "clock_level_ok": True,
+             "clock_level_side": "", "sm_clock_load_mhz": 1980.0,
+             "ms": {"normal": [1.3], "aliased": [0.4], "placebo": [1.0]},
+             "passes": _pod_shaped_passes(drift_at=[(0, "normal")])}]
+    kept, drop = AB.drop_drifted_passes(rows)
+    assert drop.per_pass and drop.lossy == ()
+    assert drop.dropped == ("m|t1|bm16/normal#0",)
+    assert kept[0]["passes_kept"] == 26 and kept[0]["passes_dropped"] == 1
+    # The rung SURVIVES: the fold said drop it, the pass rule says drop one of
+    # 27, and the ladder still has its rung.
+    assert not kept[0].get("skipped")
+    assert kept[0]["clock_drift_ok"] is True
+    assert len(kept[0]["ms"]["normal"]) == 8
+    assert max(kept[0]["ms"]["normal"]) == 1.0, "the 30% excursion is out"
+
+
+def test_a_rung_thinned_below_three_undrifted_replicates_is_skipped_and_named():
+    """A median of two is a mean of two: it has no middle and moves with either
+    draw. Below `MIN_REPLICATES_AFTER_DRIFT` the rung is skipped and NAMED, not
+    quietly re-fitted from fewer replicates than its neighbours."""
+    thin = [(rep, "aliased") for rep in range(7)]
+    rows = [{"id": "m|t2|bm16", "model": "m", "tiles": 2,
+             "clock_drift_ok": False, "ms": {"normal": [1.0]},
+             "passes": _pod_shaped_passes(drift_at=thin)}]
+    kept, drop = AB.drop_drifted_passes(rows)
+    assert kept[0]["skipped"] is True
+    assert len(drop.skipped) == 1
+    rid, why = drop.skipped[0]
+    assert rid == "m|t2|bm16"
+    assert f"fewer than {AB.MIN_REPLICATES_AFTER_DRIFT}" in why
+    assert "aliased" in why
+
+
+def test_the_side_is_refolded_over_the_passes_the_fit_actually_uses():
+    """"N high and kept" must not count a rung that is HIGH only in a pass the
+    fit no longer has. On the pod page five of the nineteen HIGH rungs had a
+    folded median INSIDE the band because one of 27 passes was outside it."""
+    passes = _pod_shaped_passes(load_mhz=1500.0, drift_at=[(0, "normal")])
+    # One drifted pass, and it is the only one that was HIGH.
+    passes[0]["clock_level_ok"] = False
+    passes[0]["clock_level_side"] = AB.timing.LEVEL_HIGH
+    passes[0]["sm_clock_load_mhz"] = 1980.0
+    rows = [{"id": "m|t1|bm16", "model": "m", "tiles": 1, "ms": {"normal": [1.0]},
+             "clock_level_ok": False, "clock_level_side": AB.timing.LEVEL_HIGH,
+             "clock_drift_ok": False, "sm_clock_load_mhz": 1500.0,
+             "passes": passes}]
+    assert AB.level_split(rows)[2] == ["m|t1|bm16"], "HIGH before the drop"
+    kept, _ = AB.drop_drifted_passes(rows)
+    sagged, blind, boosted = AB.level_split(kept)
+    assert (sagged, blind, boosted) == ([], [], []), (
+        "the only HIGH pass was the drifted one; the rung the fit uses is level")
+    assert kept[0]["sm_clock_load_mhz"] == 1500.0
+
+
+def test_rows_with_no_pass_records_are_kept_and_the_fold_is_called_lossy():
+    """A row with a drift verdict and no passes cannot be resolved to a pass.
+
+    Reading its fold as a per-rung exclusion voids 80% of the published run on
+    the wrong unit; reading it as clean is silence read as evidence. It is KEPT
+    and it is NAMED, and a row with no clock verdict at all, a planted world,
+    is neither, because there was never a verdict to resolve.
+    """
+    rows = [{"id": "old|t1|bm16", "clock_drift_ok": False, "ms": {"normal": [1.0]}},
+            {"id": "clean|t1|bm16", "clock_drift_ok": True, "ms": {"normal": [1.0]}},
+            {"id": "planted|t1|bm16", "ms": {"normal": [1.0]}}]
+    kept, drop = AB.drop_drifted_passes(rows)
+    assert len(kept) == 3 and not any(r.get("skipped") for r in kept)
+    assert drop.dropped == () and drop.per_pass is False
+    assert drop.lossy == ("old|t1|bm16", "clean|t1|bm16")
+    assert "planted|t1|bm16" not in drop.lossy
+
+
+def test_every_pass_reaches_the_row_and_the_idle_pair_is_not_the_load_pair():
+    """`measure_rung` writes `passes`, and the retired idle instants are under
+    names a reader cannot mistake for the under-load pair.
+
+    The row carried `sm_clock_start` / `sm_clock_end`, one character from
+    `KernelTiming.sm_clock_start_mhz` / `sm_clock_end_mhz`, and those two pairs
+    are measured in different states: idle around the whole rung against under
+    load inside one pass. `dtype_tile_confound` wrote its idle pair under the
+    under-load names outright and produced rows with start 1980, end 1860 and
+    drift_ok true, which no under-load pair can be.
+    """
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+              and n.name == "measure_rung")
+    body = ast.unparse(fn)
+    assert "pass_rows.append(pass_record(replicate, name, measured))" in body
+    assert "'passes': pass_rows" in body
+    assert "'sm_clock_idle_before_mhz': clock_start.sm_clock_mhz" in body
+    assert "'sm_clock_start'" not in body and "'sm_clock_end'" not in body
+    # And the under-load pair reaches the row through the fold, so both pairs
+    # are on it under names that say which is which.
+    timings = [_pass_timing(1980.0, 1485.0) for _ in range(3)]
+    folded = AB.fold_timings(timings)
+    assert folded["sm_clock_start_mhz"] == 1980.0
+    assert folded["sm_clock_end_mhz"] == 1980.0
+    assert set(AB.TIMING_COLUMNS) <= set(folded)
+    # A pass carries its own samples, its power and its settle time, whether or
+    # not the instrument installed here supplies them.
+    record = AB.pass_record(0, "normal", timings[0])
+    assert set(AB.PASS_COLUMNS) == set(record)
+    assert record["clock_samples_mhz"] == []
+
+
+def test_the_probe_writes_its_readings_on_the_adopted_path_too(tmp_path):
+    """probe.json was written only where nothing cleared.
+
+    On the adopted path the six readings survived as a table in a log, so the
+    2026-09-09 dot directory has no probe.json and the decision that chose the
+    kernel the ladder ran on could not be re-driven from it. One writer, both
+    outcomes.
+    """
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "alias_ablation.py").read_text())
+    writers = {n.name for n in ast.walk(tree)
+               if isinstance(n, ast.FunctionDef)
+               and "probe.json" in ast.unparse(n)}
+    assert writers == {"_write_probe_json"}, sorted(writers)
+    calls = ast.unparse(tree).count("_write_probe_json(")
+    assert calls == 3, "one definition and two call sites, adopted and refused"
+
+    readings = [_reading(8, 4, 128, "dot", 9047)]
+    AB._write_probe_json(tmp_path, None, readings, readings[0]["pinning"],
+                         "adopted", "NVIDIA H200", 4613.006445392317e9, "allow")
+    saved = json.loads((tmp_path / "probe.json").read_text())
+    assert saved["chosen"]["compute"] == "dot"
+    assert saved["min_headroom_ratio"] == AB.MIN_HEADROOM_RATIO
+    # RE-DRIVABLE FROM THE FILE ALONE, which is the whole reason to write it.
+    again, why = AB.choose_pinning(saved["readings"], saved["roof_bytes_s"],
+                                   saved["dot_fallback"] == "allow")
+    assert again is None and "no pinning reached" in why
+
+
+def test_the_sum_half_of_the_probe_grid_widened_downward_in_warps():
+    """8 -> 4 warps nearly doubled the sum rate on the H200 (2869 -> 5500 GB/s)
+    while stages and BLOCK_K moved it by a few percent, which is the signature
+    of the cross-lane `tl.sum` tree being the limiter. The search continues
+    down: 4 warps at both BLOCK_K, and 2, the smallest a program can be here."""
+    sums = [p for p in AB.PROBE_PINNINGS if p["compute"] == "sum"]
+    assert len(sums) == 7
+    assert {p["num_warps"] for p in sums} == {2, 4, 8}
+    for pin in sums:
+        assert pin["block_k"] in (64, 128)
+        assert pin["num_stages"] in (3, 4, 5, 6)
+    # The three that ran on 2026-09-09 are still in the grid: a widened search
+    # that drops its own baseline cannot be compared with the run it followed.
+    for old in ({"num_warps": 8, "num_stages": 3, "block_k": 64},
+                {"num_warps": 8, "num_stages": 4, "block_k": 128},
+                {"num_warps": 4, "num_stages": 5, "block_k": 128}):
+        assert any(all(p[k] == v for k, v in old.items()) for p in sums), old
+    # Nothing in the sum half can clear the bar at the rates that were measured:
+    # the best was 5500 GB/s and the bar is 2.111 x 4613.
+    assert 5500e9 < AB.MIN_HEADROOM_RATIO * 4613.006445392317e9
+
+
+def test_report_cost_prints_the_probe_only_plan_and_the_dot_bound_fallback():
+    """The two bookings an operator chooses between after 2026-09-09.
+
+    The cheap one is the widened sum grid with `--dot-fallback refuse`, which
+    stops the arm at the probe. The expensive one buys a LOWER BOUND in dot
+    mode at a longer trial and doubled replicates, aimed at the governor
+    oscillation that produced the 28% placebo. Both are priced through
+    `estimated_kernel_ms` so neither can drift from the table above it.
+    """
+    args = AB.parse_args([])
+    lines: list[str] = []
+    AB.report_cost(_collect(lines), AB.build_design(args), args, H200_READ_ROOF,
+                   probing=True)
+    text = "\n".join(lines)
+    assert "PROBE" in text and "--dot-fallback refuse" in text
+    assert f"{len([p for p in AB.PROBE_PINNINGS if p['compute'] == 'sum'])} sum" \
+        in text
+    assert "1.3 min at three sum" in text, "the figure before the widening"
+    booking = AB.fallback_booking(H200_READ_ROOF)
+    kernel_min, wall_min, argv = booking
+    assert f"FALLBACK{wall_min:6.1f} min" in text
+    assert " ".join(argv) in text
+    assert "--replicates 18" in text and "--cell-budget-ms 200" in text
+    assert "deepseek-v2-lite" not in " ".join(argv), (
+        "the sub-L2 model that failed placebo, form and bracket is dropped")
+    # THE FIGURE THAT MOVED, and the page says which one it was. 33.4 wall
+    # minutes on 2026-09-09, when the run reached dot mode through the probe.
+    assert "33.4 min on 2026-09-09" in text
+    assert 30.0 < wall_min < 36.0, wall_min
+
+
+def test_the_dot_bound_fallback_reaches_dot_mode_instead_of_hoping_to_fall():
+    """The booking must buy the outcome it is priced for.
+
+    Until 2026-09-09 the printed invocation carried only the three knobs and ran
+    under the default `--probe` and `--dot-fallback allow`, which is the route
+    the 2026-09-09 run itself took to dot mode. The same commit raised
+    `MIN_HEADROOM_RATIO` to 2.111 and closed that route: the best reading in
+    that probe grid was 9047 GB/s, 1.961 of the roof, so `choose_pinning`
+    returns None under `allow` as well as under `refuse` and the run stops at
+    the probe having bought no bound. The page booked 34.3 wall minutes for an
+    unreachable outcome. It now names the pinning and skips the probe.
+    """
+    _, _, argv = AB.fallback_booking(H200_READ_ROOF)
+    args = AB.parse_args(argv)
+    assert args.compute == "dot", argv
+    assert args.probe is False, argv
+    pin = AB.DOT_BOUND_FALLBACK["pinning"]
+    assert (args.num_warps, args.num_stages, args.block_k) == (
+        pin["num_warps"], pin["num_stages"], pin["block_k"])
+    # AND IT IS THE FASTEST THING THE 2026-09-09 GRID FOUND, not an invention.
+    best = max((r for r in POD_PROBE_READINGS
+                if r["pinning"]["compute"] == "dot"),
+               key=lambda r: r["aliased_bytes_s"])
+    assert {k: best["pinning"][k] for k in pin} == pin, best["pinning"]
+    # THE ROUTE IT REPLACES IS CLOSED, which is why this test exists.
+    for fallback in (True, False):
+        chosen, _ = AB.choose_pinning(POD_PROBE_READINGS, H200_READ_ROOF,
+                                      dot_fallback=fallback)
+        assert chosen is None, fallback
+
+
+def test_the_fallback_is_priced_off_its_own_argv_and_not_the_callers_flag():
+    """One command, one duration.
+
+    `fallback_booking` took `probing` from `report_cost` and the argv it printed
+    never carried `--no-probe`, so on 2026-09-09 the identical command was
+    printed at FALLBACK 34.3 min from a `--probe` page and 32.1 min from a
+    `--no-probe` one. One of the two was a number printed against a command it
+    was not the price of. The argv is now the only input.
+    """
+    import inspect
+    assert "probing" not in inspect.signature(AB.fallback_booking).parameters
+    priced = set()
+    for probing in (True, False):
+        lines: list[str] = []
+        args = AB.parse_args([])
+        AB.report_cost(_collect(lines), AB.build_design(args), args,
+                       H200_READ_ROOF, probing=probing)
+        text = "\n".join(lines)
+        priced.add(next(ln for ln in text.splitlines()
+                        if ln.strip().startswith("FALLBACK")).strip())
+        # AND THE PROBE BOOKING GOES WITH THE PROBE. A --no-probe page used to
+        # print "PROBE 0.0 min" over the seven sum pinnings it will not time.
+        assert ("PROBE" in text) is probing, probing
+    assert len(priced) == 1, priced
+
+
+def test_the_id_lists_on_the_page_are_never_truncated():
+    """"DRIFT: 16 of 20 rungs ... ['a', 'b', 'c']" told a reader the count and
+    then showed the first three in file order. Twenty ids are two lines."""
+    ids = [f"m{i}|t1|bm16" for i in range(20)]
+    text = AB._wrapped_ids(ids)
+    for rid in ids:
+        assert rid in text, rid
+    assert text.count("\n") == (20 // AB.IDS_PER_LINE) - 1
+    assert AB._wrapped_ids([]) == "none"
+    rows = [{"id": "a|t1|bm16", "sm_clock_load_mhz": 1980.0},
+            {"id": "b|t1|bm16", "sm_clock_load_mhz": None}]
+    named = AB._named_rungs(rows, ["a|t1|bm16", "b|t1|bm16"])
+    assert "a|t1|bm16@1980MHz" in named and "b|t1|bm16@no-clock" in named
+
+
+def _attach_passes(row: dict, reference=1485.0, load_mhz=1980.0, drift_at=()):
+    """Give a planted row the per-pass records `measure_rung` now writes.
+
+    The pass timings ARE the row's own `ms`, one per replicate per variant, so
+    attaching them changes no number: the only thing the passes add is the
+    verdict per pass, which is what `drop_drifted_passes` reads.
+    """
+    passes = []
+    for name, values in row["ms"].items():
+        for rep, ms in enumerate(values):
+            record = AB.pass_record(rep, name, _pass_timing(load_mhz, reference))
+            record["ms_p50"] = ms
+            record["clock_drift_ok"] = (rep, name) not in set(drift_at)
+            passes.append(record)
+    row["passes"] = passes
+    row["provenance"] = "measured"
+    row["reference_clock_mhz"] = reference
+    row["sm_clock_load_mhz"] = load_mhz
+    row["clock_level_ok"] = AB._fold_flag([p["clock_level_ok"] for p in passes])
+    row["clock_level_side"] = AB._fold_side([p["clock_level_side"] for p in passes])
+    row["clock_drift_ok"] = AB._fold_flag([p["clock_drift_ok"] for p in passes])
+    return row
+
+
+def test_per_pass_records_turn_a_voided_ladder_into_a_scored_one(
+        tmp_path, monkeypatch, capsys):
+    """END TO END, and it is the difference the passes make that is the test.
+
+    One drifted pass in twenty-seven drifts the RUNG, and on the 2026-09-09 run
+    that arithmetic flagged 16 of 20 rungs. Excluding on it at the rung level
+    leaves four rungs, no model with a ladder and six UNKNOWN gates. With the
+    passes on the row the same drift excludes twenty-odd passes out of five
+    hundred, every rung keeps its ladder, and the page says which passes went.
+    """
+    out_dir = tmp_path / "passes"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    # One drifted pass in each rung, exactly the shape the pod wrote: enough to
+    # flag every rung and nowhere near enough to thin one.
+    for i, row in enumerate(rows):
+        _attach_passes(row, drift_at=[(i % 9, "placebo")])
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch,
+                           capsys)
+    assert all(r["clock_drift_ok"] is False for r in rows), (
+        "every rung is FLAGGED, which is what voided the pod run")
+    assert f"DRIFT: {len(rows)} passes EXCLUDED across {len(rows)} rungs" in out
+    assert "NOT RESOLVABLE" not in out
+    assert "excluded if and" in out
+    # THE LADDERS SURVIVE and the page is scored, which the rung-level rule
+    # could not deliver on this shape.
+    assert "fewer than two rungs" not in out
+    assert f"[PASS] {AB.LEVEL_GATE}" in out
+    assert code == exit_codes.DONE, out
+    assert exit_codes.classify_text(out) == code
+
+
+def test_a_rung_the_drift_rule_thins_is_skipped_on_the_page_and_not_fitted(
+        tmp_path, monkeypatch, capsys):
+    """The other branch: when the drift really did eat a rung, it is named."""
+    out_dir = tmp_path / "thinned"
+    run_report(["--synthetic", "refit", "--out", str(out_dir)], tmp_path,
+               monkeypatch, capsys)
+    cells = out_dir / "cells.jsonl"
+    rows = [json.loads(line) for line in cells.read_text().splitlines() if line]
+    for row in rows:
+        _attach_passes(row)
+    _attach_passes(rows[0], drift_at=[(rep, "aliased") for rep in range(7)])
+    cells.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    _, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch, capsys)
+    assert f"SKIPPED {rows[0]['id']}" in out
+    assert "Its ladder is not fitted." in out
+    assert f"fewer than {AB.MIN_REPLICATES_AFTER_DRIFT}" in out
+
+
+def test_the_stray_sum_directory_beside_the_session_is_labelled():
+    """A plan-only page from another pod sat inside the session's own results
+    tree and read as the sum-mode half of the 2026-09-09 arm.
+
+    Its `provenance.json` says git 1833c29, host be9a8c80d0d5 and 03:17 UTC
+    against the session's 981a42f, 238b79f71e94 and 16:47, its ridge_source
+    names a roof this card no longer has, and its report.md ends "Nothing was
+    measured". The arm wrote no sum directory at all: the probe re-pinned to dot
+    and `main` moved `out_dir` before anything was saved.
+    """
+    if not POD_SESSION.exists():
+        pytest.skip("no results/published on this checkout")
+    strays = [d for d in POD_SESSION.iterdir()
+              if d.is_dir() and d.name != POD_DOT_RUN]
+    assert len(strays) == 1 and "1modesum" in strays[0].name
+    label = strays[0] / "NOT-THIS-SESSION.md"
+    assert label.exists(), (
+        f"{strays[0].name} carries no label and reads as this session's "
+        "sum-mode output")
+    text = label.read_text()
+    prov = json.loads((strays[0] / "provenance.json").read_text())
+    assert prov["provenance"]["git_sha"].startswith("1833c29")
+    assert prov["provenance"]["hostname"] in text
+    assert prov["provenance"]["git_sha"][:7] in text
+    assert "Nothing was measured" in (strays[0] / "report.md").read_text()
+    assert not (strays[0] / "cells.jsonl").exists()
