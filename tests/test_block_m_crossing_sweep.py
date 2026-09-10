@@ -2499,6 +2499,69 @@ def test_the_printed_w_line_carries_the_rate_condition_and_says_routed_only():
     assert "it is alpha_b + phi, so it is an UPPER bound" not in line
 
 
+def test_the_w_legend_reads_the_attached_cards_own_bandwidth_patterns():
+    """THE LINE THAT TELLS THE READER TO CONSULT THE CARD TYPED ONE CARD'S GAP.
+
+    It ended "on the H200 of 2026-09-10 read_stream is 5.4% above the triad
+    figure these reports divide by, and every w rises by that much against it",
+    in a sentence whose own instruction is to read the card's
+    `bandwidth_patterns`. The clause scoped it to the H200 so it was not false,
+    but the study has run one other card and there the gap goes the OTHER way:
+    the committed A100 profile measures `read` at 1744.3 GB/s against a triad of
+    1799.4, so w FALLS at the read rate and the triad figure stays an upper
+    bound. The guidance pointed backwards in every A100 report.
+
+    Both cards' profiles are committed, so the direction is read off them here
+    rather than typed: the two sentences must disagree in sign, and each must
+    match its own file.
+    """
+    import yaml
+
+    from moe.bench.roofline import HARDWARE_DIR
+
+    def card_patterns(stem):
+        doc = yaml.safe_load((HARDWARE_DIR / f"{stem}.yaml").read_text())
+        return {p["pattern"]: p["gbps"] for p in doc["detail"]["bandwidth_patterns"]}
+
+    def legend(card, stem):
+        pats = card_patterns(stem)
+        triad = pats["triad"]
+        report = BM.analyse(
+            cells_at(REFIT), MIXTRAL, block_sizes=TILES, alpha=REFIT,
+            ridge=RIDGE, bandwidth_gbps=triad, b=2, model_name=MIXTRAL.name,
+            dtype="bf16", compiles={bm: 1 for bm in TILES},
+            executed={bm: 1 for bm in TILES}, sm_count=132, sm_source="test",
+            ridge_band=(RIDGE, RIDGE), ridge_source="stated by the test",
+            ridge_band_source="stated by the test", card=card)
+        line = next(ln for ln in report.text().splitlines()
+                    if ln.lstrip().startswith("w is B divided by"))
+        read = next(pats[n] for n in ("read_stream", "read") if n in pats)
+        return line, read, triad
+
+    h200, h_read, h_triad = legend("nvidia_h200", "measured_nvidia_h200")
+    a100, a_read, a_triad = legend("nvidia_a100_sxm4_80gb",
+                                   "measured_nvidia_a100_sxm4_80gb")
+    # The two cards disagree in SIGN, which is the whole finding.
+    assert h_read > h_triad and a_read < a_triad
+    assert "ABOVE" in h200 and "not an upper bound there" in h200
+    assert "BELOW" in a100 and "stays above it" in a100
+    # And each line quotes its own card's file, to the percent.
+    assert f"{(h_read / h_triad - 1) * 100:.2f}% ABOVE" in h200, h200
+    assert f"{(1 - a_read / a_triad) * 100:.2f}% BELOW" in a100, a100
+    assert f"{h_read:.1f} GB/s" in h200 and f"{a_read:.1f} GB/s" in a100
+    # The retired sentence is gone, not merely joined by a second one.
+    for line in (h200, a100):
+        assert "on the H200 of 2026-09-10" not in line, line
+
+    # A run with no card profile SAYS so on the line rather than quoting a card
+    # it does not have, and the w column is unaffected.
+    nocard = next(ln for ln in analyse(cells_at(REFIT), alpha=REFIT)
+                  .text().splitlines()
+                  if ln.lstrip().startswith("w is B divided by"))
+    assert "no measured bandwidth_patterns" in nocard, nocard
+    assert "calibrate_hardware.py" in nocard
+
+
 def test_the_D_greater_than_A_note_is_stated_on_the_side_of_the_guard_it_holds():
     """`alpha_upper = B/(A+B-D)` exceeds 1 exactly when D > A **and the column
     has a value**. `alpha_upper` returns None when `D >= A+B` (the `net > 0`

@@ -4061,7 +4061,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # BRANCH ACHIEVED, and this line divides by whatever `bandwidth_gbps` the
     # run resolved -- on the H200 session the calibrated TRIAD figure, 4374.30
     # GB/s, while the same card's committed `read_stream` pattern is 4612.25,
-    # 5.4% faster, and a weight stream is a pure read. Divided by the faster
+    # 5.4% faster, and a weight stream is a pure read. THE PRINTED LINE READS
+    # THAT GAP OFF THE ATTACHED CARD (`read_versus_denominator`) instead of
+    # carrying this paragraph's H200 figure into every report: on the committed
+    # A100 profile the read pattern is 3.06% BELOW its triad, so the typed
+    # guidance pointed backwards there. Divided by the faster
     # rate, tile_cap's BM=16 ladder reads 1.1085 where this line prints 1.0514,
     # so calling the printed number an upper bound on alpha_b can be FALSE by
     # more than the gap it is bounding. `weights.py`, `ai_model.py` and
@@ -4093,10 +4097,9 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         "alpha_b + phi AT THIS RATE, so it bounds the weight miss fraction "
         "from above only if the memory branch achieved this bandwidth, which "
         "this run did not measure. A weight stream is a pure read and the rate "
-        "above is whichever pattern the source names, so read the card's own "
-        "bandwidth_patterns before treating any w below as a bound: on the "
-        "H200 of 2026-09-10 read_stream is 5.4% above the triad figure these "
-        "reports divide by, and every w rises by that much against it.")
+        "above is whichever pattern the source names, so this line reads the "
+        "card's own bandwidth_patterns rather than quoting one card's gap: "
+        + read_versus_denominator(card, bandwidth_gbps) + ".")
     lines.append(
         "  D>A marks a ladder whose reference fixed cost stands above its own "
         "fitted intercept. alpha-hi = B/(A+B-D) exceeds 1 exactly when D>A and "
@@ -4310,9 +4313,18 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
         "card": card,
         "alpha_measured": alpha_hat, "alpha_source": alpha_source,
         # The same ladder's slope in weight-stream units, beside the alpha the
-        # gates are scored on, with the rate named. Null when no ladder was
+        # gates are scored on, with the rate named. TWO NULL CONDITIONS, not
+        # one, and the second was added by the refusal catch on 2026-09-10
+        # while this comment still named only the first: (1) no ladder was
         # eligible to source an alpha, which is the same condition that leaves
-        # `alpha_measured` null.
+        # `alpha_measured` null; and (2) a sourcing ladder whose own `w` is
+        # blank, which `LadderFit._weight_streams` decides and names -- no
+        # memory branch, no model/dtype/rate on the fit, or a `WeightSetRefused`
+        # for a geometry this repository will not guess. So `alpha_measured` can
+        # carry a number where this key is null, which the one-condition wording
+        # said could not happen. `LadderFit.w_note` is where the reason for (2)
+        # is written, in the refusal's own words, and it is what the ladder
+        # table's "w n/a: ..." line prints.
         "weight_streams_measured": (
             None if alpha_source_bm is None
             or fits[alpha_source_bm].weight_streams is None
@@ -4354,6 +4366,15 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              # fields beside it are the denominator, so a
                              # reader of the file alone can check the division
                              # and can see which rate it is a fraction of.
+                             # NULL FOR MORE THAN A MISSING BRANCH, and since
+                             # the refusal catch landed on 2026-09-10 that is
+                             # three states, not one: no memory branch to take
+                             # a slope from, no model/dtype/rate on the fit, or
+                             # a `WeightSetRefused` for a geometry this
+                             # repository holds no verified shape for.
+                             # `LadderFit._weight_streams` decides all three in
+                             # one place and returns the reason in the refusal's
+                             # own words.
                              "weight_streams_per_tile": (
                                  None if f.weight_streams is None
                                  else f.weight_streams.streams),
@@ -5706,6 +5727,63 @@ def ridge_band_from_detail(detail: dict, ridge: float
         "disowned by the calibration" if disowned else
         f"this device's own bandwidth patterns ({names}), carried as a ratio "
         f"against the {ceiling} ceiling")
+
+
+#: The pattern names a calibration may use for a PURE READ, in the order this
+#: file will accept them. The H200 profile writes `read_stream`; the A100
+#: profile, written by an older calibration, writes `read`. A weight stream is
+#: a pure read, so this is the pattern a `w` would be divided by if the memory
+#: branch achieved the read rate rather than the ceiling the report divides by.
+READ_PATTERN_NAMES = ("read_stream", "read")
+
+
+def read_versus_denominator(card: str, bandwidth_gbps: float) -> str:
+    """This card's own pure-read pattern against the rate `w` divides by.
+
+    THE SENTENCE THAT TOLD THE READER TO CONSULT THE CARD TYPED ONE CARD'S
+    NUMBER. Until 2026-09-10 the `w` legend ended "on the H200 of 2026-09-10
+    read_stream is 5.4% above the triad figure these reports divide by, and
+    every w rises by that much against it", in the same breath as telling the
+    reader to read the card's own `bandwidth_patterns`. The clause scoped it to
+    the H200, so the sentence was not false; on the committed A100 profile the
+    read pattern is 1744.3 GB/s against a triad of 1799.4, 3.06% BELOW, so w
+    FALLS at the read rate there and stays an upper bound. The guidance pointed
+    backwards on the only other card this study has run.
+
+    The run already holds the profile the sentence sends the reader to, so it
+    is read here. The denominator is the run's OWN resolved bandwidth rather
+    than the file's triad entry, because that is the number every `w` on the
+    page was actually divided by; a run given `--bandwidth` on the command line
+    is compared against what it was told, not against what the card measured.
+
+    Returns a clause for the legend, never a refusal: a card this tree holds no
+    profile for is a reason to say so on the line, not to blank the `w`
+    column.
+    """
+    if not bandwidth_gbps or bandwidth_gbps <= 0:
+        return ("this run resolved no bandwidth, so there is no denominator to "
+                "compare a read rate against")
+    data = _measured_yaml(card) if card and card != NO_CARD_SLUG else {}
+    patterns = {p.get("pattern"): p.get("gbps")
+                for p in ((data.get("detail") or {}).get("bandwidth_patterns") or [])
+                if p.get("gbps")}
+    name = next((n for n in READ_PATTERN_NAMES if patterns.get(n)), "")
+    if not name:
+        return (f"this tree holds no measured bandwidth_patterns for "
+                f"card={card or NO_CARD_SLUG}, so the read-versus-ceiling gap "
+                "cannot be read here; run scripts/calibrate_hardware.py on the "
+                "box, or read detail.bandwidth_patterns in that card's own file")
+    read = float(patterns[name])
+    gap = read / bandwidth_gbps - 1.0
+    if gap >= 0:
+        return (f"on card={card} the measured {name} pattern is {read:.1f} GB/s, "
+                f"{gap * 100:.2f}% ABOVE the {bandwidth_gbps:.1f} GB/s this "
+                f"report divides by, so every w below RISES by that much at the "
+                "read rate and the printed number is not an upper bound there")
+    return (f"on card={card} the measured {name} pattern is {read:.1f} GB/s, "
+            f"{-gap * 100:.2f}% BELOW the {bandwidth_gbps:.1f} GB/s this report "
+            f"divides by, so every w below FALLS by that much at the read rate "
+            "and the printed number stays above it")
 
 
 def resolve_ridge(args, *, synthetic: bool) -> ResolvedRidge:
