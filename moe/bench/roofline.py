@@ -334,21 +334,26 @@ REFERENCE_SETTLE_PLATEAU = "settle-plateau"
 #: `scripts/dtype_tile_confound.py:_reference_clock` is a THIRD copy, and
 #: since the reference went per family it is a divergent one: it walks the
 #: bf16 fields only and hands that clock to the fp8 cells the arm exists to
-#: time, so on the committed H200 an fp8 cell at the fp8 GEMM's own 1905 MHz
-#: is level under the driver and LEVEL-failed HIGH under that script. A
+#: time, so on the committed H200 an fp8 cell at the fp8 GEMM's own 1395 MHz
+#: is level under the driver and LEVEL-failed LOW under that script (1395
+#: against the bf16 GEMM's 1485 is 0.939, under the band's snapped 1410 edge).
+#: Before ab61e55 the same divergence ran the other way, HIGH, on the idle
+#: scalars that file then carried: 1905 against 1515. A
 #: script with a private walk should call `reference_clock_from_doc(raw,
 #: name, reference_family(dtype))` per cell; `tests/test_roofline.py` pins
 #: that call's contract on the committed file so the replacement is a swap.
 #: THE REFERENCE IS PER GEMM, AND A CALIBRATION RUNS TWO. `calibrate.py`
 #: measures a dense bf16 GEMM and, on silicon that has the format, a dense fp8
 #: GEMM, and records the clock each ran at: the committed H200 file carries
-#: `gemm_clock_mhz: 1515` beside `fp8_gemm_clock_mhz: 1905`. Those are two
-#: roofs at two clocks, and a row's reference is the clock of the roof ITS
-#: dtype is scored against. Until 2026-09-08 every row was levelled against
-#: the bf16 number, so an fp8 cell running at the fp8 roof's own 1905 MHz was
-#: filed LEVEL-failed HIGH, and `roof_at_clock(1447.7, 1515, 1905)` would have
-#: rescaled the fp8 roof to 1820 TFLOP/s, 26% above the figure the calibration
-#: measured at that very clock. Two families, named by the GEMM: "bf16" is the
+#: `gemm_clock_mhz: 1485` beside `fp8_gemm_clock_mhz: 1395`, the under-load
+#: medians of ab61e55. Those are two roofs at two clocks, and a row's
+#: reference is the clock of the roof ITS dtype is scored against. Until
+#: 2026-09-08 every row was levelled against the bf16 number, and against the
+#: idle scalars that file carried then (1515 and 1905) an fp8 cell running at
+#: the fp8 roof's own 1905 MHz was filed LEVEL-failed HIGH, while
+#: `roof_at_clock(1447.7, 1515, 1905)` would have rescaled the fp8 roof to
+#: 1820 TFLOP/s, 26% above the figure the calibration measured at that very
+#: clock. Two families, named by the GEMM: "bf16" is the
 #: dense bf16 GEMM, the roof for bf16 and for fp16 (the yaml publishes one
 #: number for both) and the only compute reference anything else has; "fp8"
 #: is the fp8 GEMM, for the `spec.FP8_WEIGHT_DTYPES`.
@@ -461,13 +466,16 @@ def roof_scale_refusal(load_mhz: float | None, reference_mhz: float | None,
     Three refusals, each named so `roof_note` says which: no under-load clock
     on the row (the retired seam writes none; an NVML-less container polls
     none), no reference resolved for the row's dtype family, or a reference
-    whose grade is not the under-load median. The third is the one that fires
-    against both committed calibrations today: they carry only the post-hoc
-    idle scalars `calibrate.py` records a 30% spread for, and scaling a roof
-    by `load / reference` against one would move every fraction by up to that
-    much under the name of a correction. REFUSED rather than defaulted to the
-    fixed roof: the fixed-roof figure is still on the row under its own name,
-    with its bias stated, and this column stays 0.0 with the reason.
+    whose grade is not the under-load median. The third fired against BOTH
+    committed calibrations until 2026-09-09; since ab61e55 the H200 file
+    records the under-load medians its own pod measured (bf16 1485 MHz, fp8
+    1395) and its rows score, and the A100 file alone still carries the
+    post-hoc idle scalar (1335 MHz) `calibrate.py` records a 30% spread for.
+    Scaling a roof by `load / reference` against that scalar would move every
+    fraction by up to that much under the name of a correction. REFUSED rather
+    than defaulted to the fixed roof: the fixed-roof figure is still on the
+    row under its own name, with its bias stated, and this column stays 0.0
+    with the reason.
     """
     if not load_mhz or load_mhz <= 0:
         return ("no under-load clock on this row (retired seam, or no NVML "
@@ -502,7 +510,8 @@ ROOF_NOTE_SCORED = (
     "scored: pct_of_achieved_tflops (fixed roof) is the compute-bound gate "
     "input, since every cell and the calibration GEMM ran under one power cap; "
     "pct_of_roof_at_cell_clock is issue efficiency at this row's own clock, "
-    "printed beside it and never a gate input")
+    "printed beside it; it is not the compute-bound gate input, and "
+    "memory-shaped and cross-card work read it labelled as issue efficiency")
 
 
 def cell_clock_roof(peak_tflops: float, load_mhz: float | None,

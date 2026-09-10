@@ -370,13 +370,16 @@ def test_an_instrument_row_leaves_the_retired_clock_QUANTITIES_alone(tmp_path):
 ])
 def test_the_throttled_verdict_is_written_and_can_fail(tmp_path, level, drift,
                                                        throttled):
-    """THE GATE THAT COULD NOT FAIL, AND WHAT IT NOW FAILS ON. Four consumers
-    read `throttled` as the one bool for "this row's clock misbehaved, do not
-    pool it": `scripts/pod_session.sh` gate S6d, `run_all.sh`,
-    `publish_results.sh` and `scripts/efficiency_report.py`. Leaving it at its
-    default on every v5 row made S6d compare 0.0% against "< 5%" on every card
-    at every temperature, which is "a check that examined nothing reports zero
-    failures", the shape the whole instrument exists to remove.
+    """THE GATE THAT COULD NOT FAIL, AND WHAT IT NOW FAILS ON. Three
+    consumers branch on `throttled` as the one bool for "this row's clock
+    misbehaved, do not pool it": `run_all.sh`, `publish_results.sh` and
+    `scripts/efficiency_report.py`. `scripts/pod_session.sh` gate S6d was a
+    fourth and re-derives the rule from LEVEL and DRIFT itself since
+    2026-09-08, so it does not follow this column. Leaving it at its default
+    on every v5 row made S6d, back when it did read the column, compare 0.0%
+    against "< 5%" on every card at every temperature, which is "a check that
+    examined nothing reports zero failures", the shape the whole instrument
+    exists to remove.
 
     Since 2026-09-09 the answer is DRIFT alone. The second row is that change:
     a LEVEL failure with a steady clock is a tile sitting at its own operating
@@ -401,7 +404,7 @@ def test_host_bound_is_not_a_thermal_event(tmp_path):
     """`host_bound_ok` says the CALLER could not keep the queue deep, which
     makes `ms_*` an upper bound rather than a hot box. Folding it into
     `throttled` would report a Python launcher as a thermal failure, and the
-    four consumers above would drop every T=1 eager row in the study."""
+    three consumers above would drop every T=1 eager row in the study."""
     cfg = cfg_for(tmp_path, timer=partial(fake_timer, host_bound=True))
     D.run_sweep([(spec(), names_with("t_counting_up_gemm"),
                   "t_counting_up_gemm")], cfg, routing=lambda s: None,
@@ -1222,9 +1225,10 @@ def test_a_low_clock_row_off_that_config_reports_LEVEL_failed(tmp_path):
     Until 2026-09-09 the LOW verdict set it; the H200 session then showed the
     LOW side is a tile's steady state under the 700 W cap, so the verdict is
     recorded and the row is kept. `throttled` says DRIFT, and the drift row
-    beside these two is where the four consumers that read it (pod_session.sh
-    S6d, run_all.sh, publish_results.sh, efficiency_report.py) see a True on
-    a real sweep."""
+    beside these two is where the three consumers that read it (run_all.sh,
+    publish_results.sh, efficiency_report.py) see a True on a real sweep.
+    pod_session.sh gate S6d re-derives the rule instead of reading the
+    column, so it has to be moved by hand when the rule moves."""
     seen = {}
     for load, expected, flagged in ((1400.0, SC.VERDICT_FAILED, "False"),
                                     (1500.0, SC.VERDICT_OK, "False")):
@@ -1539,14 +1543,16 @@ def test_the_clock_cannot_come_out_of_a_file_the_roof_was_refused_from(tmp_path)
 
 
 def test_a_calibration_resolves_a_reference_its_own_plateau_can_clear(tmp_path):
-    """WHAT TURNING THE FLAG ON COSTS IF THE REFERENCE IS A BOOST CLOCK. LEVEL
-    excludes a cell whose loaded clock is under `LEVEL_FRACTION` of the
-    reference, and until 2026-09-03 no row could be excluded because no
-    reference existed. Now one does, so a calibration that publishes an IDLE
-    BOOST as its GEMM clock would fail every cell of the arm it was measured
-    for -- the S6d gate, `alpha_refit`'s clock gate and `efficiency_report` all
-    at once -- and the exclusions would read as a hot card rather than as a
-    bad ruler.
+    """WHAT A BOOST CLOCK AS THE REFERENCE COSTS. LEVEL files a cell whose
+    loaded clock is under `LEVEL_FRACTION` of the reference on the LOW side,
+    and until 2026-09-03 nothing could be filed at all because no reference
+    existed. Since 2026-09-09 the LOW side excludes nothing at the driver, but
+    a calibration that publishes an IDLE BOOST as its GEMM clock still files
+    every cell of the arm it was measured for as LEVEL-failed LOW, and the
+    consumers that still re-derive an exclusion from LOW act on it:
+    `scripts/pod_session.sh` gate S6d and `scripts/alpha_refit.py`'s
+    `clock_gate`. Those verdicts would read as a hot card rather than as the
+    bad ruler they are.
 
     The check is the calibration's own settle PLATEAU against the reference
     resolved out of the same file. The plateau and not the settle history: the

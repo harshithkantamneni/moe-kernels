@@ -199,7 +199,10 @@ TIMING_VERDICTS: frozenset[str] = frozenset({
 
 #: The columns that speak it. LEVEL and DRIFT are `timing.clock_flags`; the
 #: third is `timing.host_bound_verdict` INVERTED, so all three read the same way
-#: round: "ok" is the state a row may be quoted in.
+#: round. Since 2026-09-09 "ok" is the state a row may be quoted in for DRIFT
+#: and HOST, the two a consumer filters on; LEVEL says where under the power
+#: cap the cell sat and excludes nothing, so a LEVEL failure on either side is
+#: still quotable.
 TIMING_VERDICT_COLUMNS: tuple[str, ...] = (
     "clock_level_ok", "clock_drift_ok", "host_bound_ok")
 
@@ -453,9 +456,12 @@ class Row:
     # 91% of vLLM rows above T=4096 while flagged and unflagged replicates of
     # the same cell timed at ratio 0.998 with identical end clocks. On a v5 row
     # `driver._apply_kernel_timing` writes the instrument's answer to the same
-    # question, because four consumers read this one column as "do not pool
-    # this row", and a column that is False by construction turns all of them
-    # into checks that cannot fail.
+    # question, because run_all.sh, publish_results.sh and
+    # scripts/efficiency_report.py branch on this one column as "do not pool
+    # this row", and a column that is False by construction turns all three
+    # into checks that cannot fail. pod_session.sh gate S6d used to be a
+    # fourth and re-derives the rule from LEVEL and DRIFT since 2026-09-08, so
+    # it does not move when this column's meaning does.
     #
     # SINCE 2026-09-09 THE ANSWER IS DRIFT ALONE. Neither side of LEVEL sets
     # it. The HIGH side never did: a cell that boosted above the roof's clock
@@ -561,7 +567,8 @@ class Row:
     #: is the fair delivered-throughput comparison) and the own-clock fraction
     #: as issue efficiency. On an unscored row it is the refusal: no under-load
     #: clock on the row, no reference, or a reference whose grade is not
-    #: under-load (the committed calibrations' idle scalar).
+    #: under-load (the committed A100 file's idle scalar; the H200 file has
+    #: carried under-load medians since 2026-09-09).
     roof_note: str = ""
 
     # --- the under-load clock trace, power, and the settle (v7) -----------
@@ -598,7 +605,8 @@ class Row:
     #: `timing.SETTLE_CAP_MULTIPLE` cap stopped the loop first, "undetermined"
     #: when there was no reader. A word from TIMING_VERDICTS, but NOT one of
     #: `TIMING_VERDICT_COLUMNS`: it is a fact about the warmup, not one of the
-    #: three under-load checks a gate filters on.
+    #: two under-load checks a consumer filters on (DRIFT and HOST). LEVEL is
+    #: in that tuple beside them as a record and filters nothing.
     warmup_clock_settled: str = VERDICT_UNDETERMINED
 
     notes: str = ""
@@ -915,8 +923,9 @@ def has_cell_clock_roof(row: dict) -> bool:
     or `pct_of_roof_at_cell_clock`. False for every pre-v6 row (the columns did
     not exist), false for a v6 row the driver could not score: no under-load
     clock on the row (the retired seam, a container that forbids NVML), no
-    reference, or a reference the calibration disowns (the idle scalar both
-    committed calibrations carry). `roof_note` says which. Keyed on the roof
+    reference, or a reference the calibration disowns (the idle scalar the
+    committed A100 file still carries; the H200 file has recorded under-load
+    medians since 2026-09-09). `roof_note` says which. Keyed on the roof
     being positive, because a roof of zero does not exist and 0.0 is the
     driver's "not scored".
     """

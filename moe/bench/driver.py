@@ -385,7 +385,9 @@ class RunConfig:
     #: this card's own calibration in `__post_init__`, not left at None: the
     #: comment that stood here until 2026-09-03 said "no committed calibration
     #: records it yet", and `moe/bench/hardware/measured_nvidia_h200.yaml` has
-    #: carried `detail.gemm_clock_mhz: 1515` since 2026-09-02. What is true is
+    #: carried a `detail.gemm_clock_mhz` since 2026-09-02: 1515, the idle
+    #: scalar, until the pod's own calibration replaced it with the under-load
+    #: median 1485 at ab61e55 on 2026-09-09. What is true is
     #: only the parenthetical: `roofline.Hardware` carried bandwidth and peaks
     #: and DROPPED everything under `detail` (it carries the reference clocks
     #: since 2026-09-08, for the recompute mirror; the driver still resolves
@@ -420,14 +422,16 @@ class RunConfig:
     #: HOW that number was taken, `roofline.ReferenceClock.grade`: one of the
     #: `roofline.REFERENCE_*` constants, "caller" for an explicit number, ""
     #: for none. The per-row roof (`_apply_cost`) is rescaled only against
-    #: `REFERENCE_UNDER_LOAD`; against the idle scalar both committed
-    #: calibrations carry it is REFUSED with the reason in `roof_note`, because
-    #: scaling by `load / reference` puts the reference into every number and
-    #: that scalar moved 30% across one card's calibrations. LEVEL is still
-    #: scored against a disowned reference, and every row carries the source
-    #: so the verdict can be discounted; the alternative, refusing the sweep,
-    #: would refuse every sweep against the committed yamls until a
-    #: recalibration, and the pod runbook recalibrates at step 1 anyway.
+    #: `REFERENCE_UNDER_LOAD`; against an idle scalar it is REFUSED with the
+    #: reason in `roof_note`, because scaling by `load / reference` puts the
+    #: reference into every number and that scalar moved 30% across one card's
+    #: calibrations. Both committed files carried one until 2026-09-09; since
+    #: ab61e55 the H200 file records its pod's under-load medians and scores,
+    #: and the A100 file is the one left on a scalar. LEVEL is still scored
+    #: against a disowned reference, and every row carries the source so the
+    #: verdict can be discounted; the alternative, refusing the sweep, would
+    #: refuse every A100 sweep until a recalibration, and the pod runbook
+    #: recalibrates at step 1 anyway.
     reference_clock_grade: str = ""
     #: The attached card the resolution saw, "" for none, and SET ON EVERY PATH
     #: that ends without a clock. The refusal turns on it together with the
@@ -537,11 +541,12 @@ class RunConfig:
         """The reference clock a cell of `dtype` is levelled and roofed against.
 
         WHY PER DTYPE. The calibration measures two GEMMs at two clocks (the
-        committed H200 file: bf16 at 1515 MHz, fp8 at 1905), and a row's roof
-        is its dtype's GEMM. One reference per run levelled every fp8 cell
-        against the bf16 clock, which files a cell at its own roof's clock as
-        LEVEL-failed HIGH and, once an under-load fp8 reference exists, would
-        rescale the fp8 roof by 1905/1515 on top of a peak already measured
+        committed H200 file: bf16 at 1485 MHz, fp8 at 1395 since ab61e55; the
+        idle scalars it carried before that read 1515 and 1905), and a row's
+        roof is its dtype's GEMM. One reference per run levelled every fp8
+        cell against the bf16 clock, which files a cell at its own roof's
+        clock as LEVEL-failed HIGH and, on that earlier pair, would have
+        rescaled the fp8 roof by 1905/1515 on top of a peak already measured
         at 1905. The family is `roofline.reference_family(dtype)`.
 
         The bf16 family IS the run's primary, returned from the fields
@@ -1040,16 +1045,21 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
 
     `throttled` IS WRITTEN, and that is the correction this docstring used to
     argue against. It is not a quantity, it is the VERDICT "this row's clock
-    misbehaved, do not pool it", and four consumers read it as one:
-    `scripts/pod_session.sh` gate S6d, `scripts/run_all.sh`,
-    `scripts/publish_results.sh` and `scripts/efficiency_report.py`. Leaving it
-    False on every v5 row did not make those
-    checks conservative, it made them vacuous: S6d "thermal stability" compared
-    0.0% against "< 5%" and could no longer FAIL for any reason, on any card, at
-    any temperature. A check that examined nothing reporting zero failures is
-    this project's documented failure shape and the one the instrument exists to
-    remove, so the verdict column carries the instrument's answer to the
-    question it was always asking.
+    misbehaved, do not pool it", and three consumers BRANCH ON THIS COLUMN:
+    `scripts/run_all.sh`, `scripts/publish_results.sh` and
+    `scripts/efficiency_report.py`. A fourth read it when v5 landed and no
+    longer does: `scripts/pod_session.sh` gate S6d RE-DERIVES the rule from
+    the two verdicts instead (`dr == VERDICT_FAILED or side == LEVEL_LOW`,
+    pod_session.sh:1523, the word `throttled` appearing only in its prose), so
+    a change to what this column means does not reach S6d and S6d has to be
+    moved by hand beside it. Leaving it False on every v5 row did not make
+    those checks conservative, it made them vacuous: back when S6d read the
+    column, "thermal stability" compared 0.0% against "< 5%" and could no
+    longer FAIL for any reason, on any card, at any temperature. A check that
+    examined nothing reporting zero failures is this project's documented
+    failure shape and the one the instrument exists to remove, so the verdict
+    column carries the instrument's answer to the question it was always
+    asking.
 
     FROM THE TWO CLOCK VERDICTS AND NOT THE THIRD. `host_bound_ok` is a fact
     about the CALLER (the host could not enqueue fast enough to keep the queue

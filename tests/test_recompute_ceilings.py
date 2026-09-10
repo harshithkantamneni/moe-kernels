@@ -15,8 +15,9 @@ cells. It requires re-deriving those columns. The timings were never wrong.
 THE v6 COLUMNS WERE THE SECOND CALL SITE. The per-row roof was added to the
 driver and not to this mirror, so a recompute under a new peak rewrote the
 fixed roof and left the per-row roof at the old peak's value beside it. The
-last section of this file plants v6 rows (HIGH side kept, LOW side excluded,
-an fp8 row against the fp8 GEMM's clock) and checks the mirror on them.
+last section of this file plants v6 rows (both LEVEL sides kept and only a
+drifted row excluded, since 2026-09-09, plus an fp8 row against the fp8 GEMM's
+clock) and checks the mirror on them.
 
 The test that this is faithful is an identity: recomputing with the SAME
 calibration a row was measured against must reproduce that row exactly. If it

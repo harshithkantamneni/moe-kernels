@@ -168,15 +168,23 @@ TIMING_BASIS = "queue-deep/l2-flush/settled-warmup/clock-under-load/v4"
 RETIRED_TIMER_BASIS = "time_eager+time_graph/count-warmup/isolated-iters/no-clock"
 
 #: The SM clock's quantum on this hardware. NVML reports Hopper SM clocks on a
-#: 15 MHz grid: every raw reading in the H200 session's 750 cells is a multiple
-#: of it, and the 23 distinct off-grid values in that corpus are all half
-#: steps, medians of an even number of readings. So a threshold that lands
-#: between two grid points is a threshold no reading can sit on: 0.95 x 1485 =
-#: 1410.75 put a 1410 cell outside the band and a 1425 cell inside it for
-#: timings 0.1% apart, and 23 of the session's 148 LOW verdicts sat in that one
-#: step. Every band edge is snapped to this grid (`snap_to_clock_step`), and it
-#: is also the agreement two consecutive warmup reads must reach before the
-#: clock counts as settled.
+#: 15 MHz grid: every raw SAMPLE in the H200 session's corpus is a multiple of
+#: it. Re-counted over the committed session on 2026-09-09: every
+#: `sm_clock_start_mhz` and `sm_clock_end_mhz` sits on the grid, and all 66
+#: off-grid values are FOLDS of several samples rather than samples. 47 of
+#: them are half steps, medians of an even number of readings; the other 19
+#: are half steps their writer printed as an integer, and the two writers
+#: round opposite ways. `scripts/dtype_tile_confound.py` formats through
+#: "%.0f", which rounds half to even, so 1387.5 lands as 1388 and 1432.5 as
+#: 1432; `scripts/bm128_roofline.py` truncates with int(), so 1402.5 lands as
+#: 1402.
+#:
+#: So a threshold that lands between two grid points is one no reading sits on:
+#: 0.95 x 1485 = 1410.75 put a 1410 cell outside the band and a 1425 cell
+#: inside it for timings 0.1% apart, and 23 of the session's 148 LOW verdicts
+#: sat in that one step. Every band edge is snapped to this grid
+#: (`snap_to_clock_step`), and it is also the agreement two consecutive warmup
+#: reads must reach before the clock counts as settled.
 CLOCK_STEP_MHZ = 15.0
 
 #: LEVEL flag, LOW edge: the SM clock sampled under load must be at least this
@@ -209,10 +217,16 @@ DRIFT_FRACTION = 0.05
 #: How much delivered warmup the settle loop may add, as a multiple of
 #: `warmup_ms`. The loop keeps running the trials' own work until two
 #: consecutive clock reads agree within `CLOCK_STEP_MHZ`; the cap is what stops
-#: a genuinely oscillating card from warming forever, and 3x of a 300 ms warmup
-#: is 900 ms, which is under a second per cell against the 33-minute session
-#: the DRIFTs came from. Reaching the cap is recorded, not silently accepted:
-#: `WarmupReport.settled` is False and the note says so.
+#: a genuinely oscillating card from warming forever. It caps TOTAL delivered
+#: warmup, so the settle's own share is at most (3 - 1) x `warmup_ms`: at the
+#: session's 300 ms that is 600 ms per cell added in the worst case, which
+#: over a 750-cell session is up to 7.5 minutes and NOT the typical cost. The
+#: typical cost is one or two batches, since a cell that has already had 300
+#: ms of its own load is usually at its operating point already. A 33-minute
+#: session inside a 3-hour booking absorbs the worst case, so this is a number
+#: to book against rather than a risk to the run. Reaching the cap is
+#: recorded, not silently accepted: `WarmupReport.settled` is False and the
+#: note says so.
 SETTLE_CAP_MULTIPLE = 3.0
 
 #: Target duration of one warmup batch between synchronises. Short enough that
@@ -977,6 +991,14 @@ class WarmupReport:
     `settle_reads` is every clock the loop read, in order, so a cell that hit
     the cap shows what it was doing; `settle_note` says why the loop stopped
     when it did not settle.
+
+    `settled` IS NOT A PREDICTION THAT DRIFT WILL PASS. The settle's reads are
+    taken between batches, just after a `synchronize`, so they come from the
+    same idle-instant population as the retired `sm_clock_start_mhz` pair,
+    while DRIFT is computed from the background poller's samples taken WHILE
+    the trials ran. Two consecutive settle reads agreeing says the governor
+    had stopped moving between batches; it does not say the under-load samples
+    will agree.
     """
 
     delivered_ms: float
@@ -1033,6 +1055,15 @@ def warm_until(fn: Callable[[], None], warmup_ms: float, events,
     it converged. Without one (off-GPU, or a host with no NVML) there is no
     settle loop and `settled` is None: the fix is at the instrument, so a host
     that cannot read the clock does not get it and the record says so.
+
+    THE SETTLE READS AT IDLE INSTANTS, AND THAT IS A DIFFERENT POPULATION FROM
+    DRIFT'S. Each read is taken at the top of an iteration, immediately after
+    the previous batch's `synchronize`, which is the reading class this module
+    retired for `sm_clock_start_mhz`. The criterion is self-consistent (both
+    reads come from the same population, microseconds after a sync), so the
+    loop converges on the governor's between-batch state. But DRIFT is scored
+    on the background poller's UNDER-LOAD samples, so `settled=True` is not a
+    promise that DRIFT will pass, and no consumer should read it as one.
 
     THEN A PROBE, to size `iters`. `probe_calls` iterations (or one batch's
     worth, whichever is fewer) through `_timed_trials` with the same flush,
