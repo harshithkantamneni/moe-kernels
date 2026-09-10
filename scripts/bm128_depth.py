@@ -3088,9 +3088,22 @@ def _missing_partner_line(samples, b: int, ridge: float, ref) -> str:
 def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str,
                 compiles: dict[int, int], executed: dict[int, int], *,
                 ridge: float, bandwidth_gbps: float, pinned: dict | None = None,
-                seed: int = 0, draws: int = BOOTSTRAP_DRAWS
+                seed: int = 0, draws: int = BOOTSTRAP_DRAWS,
+                dtype: str = "", bandwidth_source: str = ""
                 ) -> tuple[list[str], list[Gate], dict]:
-    """The measured run's gates. Same diagnostics the audit runs on the corpus."""
+    """The measured run's gates. Same diagnostics the audit runs on the corpus.
+
+    `dtype` and `bandwidth_source` ARE THE W'S DENOMINATOR, keyword-only and
+    both defaulting to absent, the way `SWEEP.fit_ladder` takes them. Together
+    with `cfg` and `bandwidth_gbps` they let the ladder line print `w`, the
+    slope in units of one complete stream of the layer's routed expert weight
+    set. Until 2026-09-10 this function passed neither to `fit_ladder`, so
+    every ladder row read "w n/a: the caller named no model, dtype and measured
+    bandwidth" on the arm whose BLOCK_M=128 w is part of the session's
+    headline. Absent, `w` stays absent and SAYS so, which is the right answer
+    for a caller that did not name a rate: w scales 1:1 in the bandwidth. None
+    of the two touches the fit, the branch membership or any outcome.
+    """
     out: list[str] = []
     ref_points, _, ref_spread = collapse(samples, REFERENCE_BLOCK_M)
     sub_points, sub_reps, sub_spread = collapse(samples, SUBJECT_BLOCK_M)
@@ -3199,7 +3212,10 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
     fit = SWEEP.fit_ladder(fit_points, SUBJECT_BLOCK_M, ref, margin=margin_band,
                            excluded_drifted=excluded,
                            kept_high_clock=kept_high,
-                           kept_low_clock=kept_low)
+                           kept_low_clock=kept_low,
+                           model=cfg, dtype=dtype,
+                           bandwidth_gbps=bandwidth_gbps,
+                           bandwidth_source=bandwidth_source)
     c_ref = ref.slope_for(SUBJECT_BLOCK_M)
     k = fit.memory_points if fit.memory_points >= 2 else len(fit_points)
     margin = margin_of(fit_points, k, c_ref=c_ref, overhead=ref.overhead_ms,
@@ -3248,6 +3264,13 @@ def analyse_run(samples, cfg, b: int, ceiling_tflops: float, ceiling_source: str
             + (f"{fit.alpha:.4f}" if fit.alpha is not None
                else ("DECLINED, see the outcome above" if fit.undecided
                      else "NOT IDENTIFIABLE")),
+            # THE SECOND ESTIMATOR, BESIDE THE FIRST, and it is printed even
+            # when the alpha above is not identifiable: `w` has no fitted
+            # level, no intercept and no D in it, so a ladder that cannot
+            # divide by a level can still be divided by a measured stream time.
+            # `w_note` is the one rendering of it in the tree and names its own
+            # absence rather than printing n/a.
+            f"             {fit.w_note()}",
             f"             {margin.line()}",
             (f"             {excluded} tread(s) EXCLUDED: DRIFT, the clock "
              "moved more than 5% across the tread's own trials, so its median "
@@ -3942,6 +3965,11 @@ class SelfTestRefused(RuntimeError):
 #: level check has something physical to accept or refuse.
 SELF_TEST_BANDWIDTH = 1799.4
 
+#: The dtype every planted world is generated at, and the one `b=2` means. The
+#: worlds are planted at two bytes per element, so naming any other dtype here
+#: would divide the ladder's slope by a weight set the world does not have.
+SELF_TEST_DTYPE = "bf16"
+
 
 #: The worlds, the verdicts the REAL gates must return in each, and the exit
 #: code the driver would read.
@@ -4165,7 +4193,8 @@ def self_test(b: int = 2, *, noise: float = 0.0, seed: int = 0, draws: int = 400
             compiles={SUBJECT_BLOCK_M: 1, REFERENCE_BLOCK_M: 1},
             executed={SUBJECT_BLOCK_M: len(samples), REFERENCE_BLOCK_M: len(samples)},
             ridge=world.rho, bandwidth_gbps=SELF_TEST_BANDWIDTH, seed=seed,
-            draws=draws)
+            draws=draws, dtype=SELF_TEST_DTYPE,
+            bandwidth_source="the planted world's own rate")
         law = depth_verdict(SUBJECT_BLOCK_M, b, world.alpha, world.rho)
         bad = world.check(world_gates, payload)
         rc = exit_codes.classify(g.scored() for g in world_gates)
@@ -4950,7 +4979,8 @@ def _run(argv=None) -> int:
     more, g, pay = analyse_run(samples, cfg, b, ceiling, hw.name, compiles,
                                executed, ridge=ridge, bandwidth_gbps=bandwidth,
                                pinned=plan.pinned, seed=args.seed,
-                               draws=args.draws)
+                               draws=args.draws, dtype=args.dtype,
+                               bandwidth_source=f"calibration: {hw.name}")
     gates += g
     payload["run"] = pay
     payload["gpu"] = torch.cuda.get_device_name(0)

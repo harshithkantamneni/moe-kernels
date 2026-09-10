@@ -1796,6 +1796,14 @@ class SettingResult:
     reference_block_m: int | None
     reference_refused: bool
     basis: str
+    #: `LadderFit.w_note()` for this setting's fit: the slope in units of one
+    #: complete stream of the layer's routed expert weight set, WITH the rate
+    #: it was divided by, or the reason there is none. Defaulted so nothing
+    #: that builds a result by hand has to know about it, and empty prints
+    #: nothing. Added 2026-09-10: this arm's nine ladders are where the
+    #: session's 0.918 to 1.246 comes from and no page this script writes
+    #: carried one of them.
+    w_note: str = ""
 
     @property
     def usable(self) -> bool:
@@ -1829,7 +1837,8 @@ def _alpha_of(fit, cfg, bandwidth_gbps: float) -> tuple[float | None,
 
 
 def _per_rep_alphas(samples, key: str, ref, cfg, block_n: int,
-                    bandwidth_gbps: float) -> list[float]:
+                    bandwidth_gbps: float, dtype: str = "",
+                    bandwidth_source: str = "") -> list[float]:
     """One alpha per repeat, against the SETTING'S POOLED reference.
 
     The spread of these is the only honest uncertainty this design has on
@@ -1847,7 +1856,9 @@ def _per_rep_alphas(samples, key: str, ref, cfg, block_n: int,
                      and s.rep == rep and s.status == "ok" and s.ms_p50 > 0)
         if len(pts) < MIN_MEMORY_TREADS:
             continue
-        fit = SWEEP.fit_ladder(pts, SUBJECT_BLOCK_M, ref)
+        fit = SWEEP.fit_ladder(pts, SUBJECT_BLOCK_M, ref, model=cfg,
+                               dtype=dtype, bandwidth_gbps=bandwidth_gbps,
+                               bandwidth_source=bandwidth_source)
         _, corr = _alpha_of(fit, cfg, bandwidth_gbps)
         if corr is not None and fit.memory_points >= MIN_MEMORY_TREADS:
             out.append(corr)
@@ -1855,7 +1866,8 @@ def _per_rep_alphas(samples, key: str, ref, cfg, block_n: int,
 
 
 def analyse_settings(samples, cfg, plan: Plan, reg: Registered, b: int, *,
-                     ridge: float, bandwidth_gbps: float) -> list[SettingResult]:
+                     ridge: float, bandwidth_gbps: float,
+                     bandwidth_source: str = "") -> list[SettingResult]:
     """Fit every setting, each against ITS OWN measured compute reference."""
     out: list[SettingResult] = []
     for st in plan.settings:
@@ -1868,10 +1880,18 @@ def analyse_settings(samples, cfg, plan: Plan, reg: Registered, b: int, *,
             cells, (SUBJECT_BLOCK_M, REFERENCE_BLOCK_M), cfg=cfg, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, b=b, pinned=pinned,
             capability=reg.limits.capability)
-        fit = SWEEP.fit_ladder(sub, SUBJECT_BLOCK_M, ref)
+        # THE FOUR KEYWORDS ARE THE W'S DENOMINATOR, and this call site passed
+        # none of them until 2026-09-10. `plan.dtype` is the run's own dtype,
+        # so the weight set is this arm's and not a default. They touch no fit,
+        # no branch membership and no outcome.
+        fit = SWEEP.fit_ladder(sub, SUBJECT_BLOCK_M, ref, model=cfg,
+                               dtype=plan.dtype,
+                               bandwidth_gbps=bandwidth_gbps,
+                               bandwidth_source=bandwidth_source)
         alpha, corrected = _alpha_of(fit, cfg, bandwidth_gbps)
         per_rep = _per_rep_alphas(samples, st.key, ref, cfg, plan.block_n,
-                                  bandwidth_gbps)
+                                  bandwidth_gbps, dtype=plan.dtype,
+                                  bandwidth_source=bandwidth_source)
         sigma = statistics.pstdev(per_rep) if len(per_rep) > 1 else None
         out.append(SettingResult(
             setting=st, residency=reg.residency_by_setting[st.key],
@@ -1882,7 +1902,8 @@ def analyse_settings(samples, cfg, plan: Plan, reg: Registered, b: int, *,
             alpha_corrected=corrected, alpha_sigma=sigma, per_rep_alpha=per_rep,
             spread=spread, mean_rel_err=fit.mean_rel_err,
             reference_note=ref.note, reference_block_m=ref.block_m,
-            reference_refused=ref.refused, basis=fit.basis))
+            reference_refused=ref.refused, basis=fit.basis,
+            w_note=fit.w_note()))
     return out
 
 
@@ -2678,11 +2699,19 @@ VERDICT_NOTE = {
 def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
             bandwidth_gbps: float, compiles: dict[str, int],
             executed: dict[str, int], l2_source: str, measured: bool,
-            probe: dict[str, dict] | None = None, probe_note: str = ""
+            probe: dict[str, dict] | None = None, probe_note: str = "",
+            bandwidth_source: str = ""
             ) -> tuple[list[str], list[Gate], dict]:
-    """Every fit, every contrast, every gate, and the verdict."""
+    """Every fit, every contrast, every gate, and the verdict.
+
+    `bandwidth_source` names where the rate every `w` below was divided by came
+    from. Optional and empty by default, the way `SWEEP.fit_ladder` takes it: a
+    caller that does not say gets `rate NOT STATED by the caller` on the line
+    rather than a rate that looks provenanced and is not.
+    """
     results = analyse_settings(samples, cfg, plan, reg, b, ridge=ridge,
-                               bandwidth_gbps=bandwidth_gbps)
+                               bandwidth_gbps=bandwidth_gbps,
+                               bandwidth_source=bandwidth_source)
     occ = occupancy_contrast(results)
     swz = swizzle_contrast(results)
     wrp = warp_contrast(results)
@@ -2709,6 +2738,15 @@ def analyse(samples, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
             + (f"{r.spread:7.2%}" if r.spread is not None else "    n/a")
             + "  " + (f"BM={r.reference_block_m}"
                       if r.reference_block_m else "REFUSED"))
+    # THE SECOND ESTIMATOR, BESIDE THE FIRST, one line per setting under the
+    # table because each carries the rate it was divided by and a w without its
+    # rate is not a measurement. Printed for every setting, usable or not: `w`
+    # has no fitted level, no intercept and no D in it, so a setting whose
+    # alpha the table shows as n/a can still have one.
+    for r in sorted(results, key=lambda r: (r.residency.resident_blocks,
+                                            r.setting.key)):
+        if r.w_note:
+            lines.append(f"  {r.setting.key:12s} {r.w_note}")
     for r in results:
         if not r.usable:
             lines.append(f"  {r.setting.key} unusable: {r.basis}"
@@ -3288,7 +3326,8 @@ def self_test(args, cfg, plan: Plan, reg: Registered, b: int, *, ridge: float,
         _, world_gates, payload = analyse(
             samples, cfg, w_plan, w_reg, b, ridge=ridge,
             bandwidth_gbps=bandwidth_gbps, compiles=compiles,
-            executed=executed, l2_source=w_reg.l2_source, measured=False)
+            executed=executed, l2_source=w_reg.l2_source, measured=False,
+            bandwidth_source="the planted world's own rate")
         got = payload["verdict"]
         occ = payload["contrasts"]["occupancy"]["swing"]
         swz = payload["contrasts"]["swizzle"]["ratio"]
@@ -3881,7 +3920,8 @@ def _main(argv=None) -> int:
                                executed=counts, l2_source=l2_source,
                                measured=True,
                                probe=stored.get("compiled_smem") or {},
-                               probe_note=stored.get("compiled_smem_note", ""))
+                               probe_note=stored.get("compiled_smem_note", ""),
+                               bandwidth_source=roof_source)
         lines += more
         gates += g
         payload["run"] = pay
@@ -3970,7 +4010,8 @@ def _main(argv=None) -> int:
                            bandwidth_gbps=bandwidth, compiles=compiles,
                            executed=executed, l2_source=l2_source,
                            measured=True, probe=probe.by_setting,
-                           probe_note=probe.note)
+                           probe_note=probe.note,
+                           bandwidth_source=roof_source)
     gates += g
     payload["run"] = pay
     payload["gpu"] = torch.cuda.get_device_name(0)

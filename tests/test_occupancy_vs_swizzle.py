@@ -1605,3 +1605,43 @@ def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
     assert (back[0].sm_clock_start_mhz, back[0].sm_clock_end_mhz) == (
         PLANTED_REFERENCE_MHZ, 1300.0)
     assert back[0].power_w is None and back[0].clock_samples_mhz == ""
+
+
+def test_every_setting_prints_its_slope_in_weight_streams_with_the_rate():
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm.
+
+    `analyse_settings` built its fits as `SWEEP.fit_ladder(sub,
+    SUBJECT_BLOCK_M, ref)` and passed none of the four keywords that are the
+    weight-stream denominator, so every `LadderFit` here carried
+    `weight_streams is None` and its `w_note` read "w n/a: the caller named no
+    model, dtype and measured bandwidth". This arm's nine ladders are where the
+    session's 0.918 to 1.246 comes from, and no page this script writes carried
+    one of them.
+
+    The rate is on the line with the number, because w scales 1:1 in it: a w
+    quoted without its rate is not a measurement.
+    """
+    _, cfg, b, plan, reg, _ = _plan_and_reg()
+    samples = OVS.planted_samples(
+        cfg, plan, lambda st: reg.concurrency_alpha[st.key], ridge=162.8,
+        bandwidth_gbps=4374.5, b=b, noise=0.002, seed=5)
+    lines, _, _ = OVS.analyse(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        compiles={s.key: 1 for s in plan.settings},
+        executed={s.key: plan.reps for s in plan.settings},
+        l2_source="test", measured=False,
+        bandwidth_source="stated by the test")
+    text = "\n".join(lines)
+    assert "the caller named no model, dtype and measured bandwidth" not in text
+    printed = [ln for ln in lines if "weight-streams/M-tile" in ln]
+    assert len(printed) == len(plan.settings), printed
+    for ln in printed:
+        assert "4374.5 GB/s" in ln, ln
+        assert "stated by the test" in ln, ln
+        assert f"{cfg.name} {plan.dtype}" in ln, ln
+    # And the results themselves carry it, so a reader of the objects sees it
+    # too and not only a reader of the text.
+    results = OVS.analyse_settings(
+        samples, cfg, plan, reg, b, ridge=162.8, bandwidth_gbps=4374.5,
+        bandwidth_source="stated by the test")
+    assert all("weight-streams/M-tile" in r.w_note for r in results)

@@ -3043,3 +3043,50 @@ def test_the_four_height_self_test_still_separates_its_planted_worlds(capsys):
     assert "NO-A: C2=True, BN-DRIFT: C2=False" in out
     # Four heights are in the planted grid, not three.
     assert "subjects     [16, 32, 64, 128]" in out
+
+
+def test_the_fit_carries_the_same_w_the_cell_does():
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm, and the
+    de-duplication guard that comes with fixing it.
+
+    `arm_alphas` built its fits as `SWEEP.fit_ladder(pts, bm, verdict.ref,
+    margin)` and passed none of the four keywords that are the weight-stream
+    denominator, so every `LadderFit` here carried `weight_streams is None` and
+    its `w_note` read "w n/a: the caller named no model, dtype and measured
+    bandwidth" on the arm whose w values ARE the session's headline. The cells
+    carried a w all along, computed a second way in this file.
+
+    Both routes are now live, so they are checked against each other: the fit's
+    `weight_streams.streams` and the cell's `weight_streams` are the same slope
+    over the same stream time and must agree to the last bit. Two routes that
+    are allowed to differ is how this study got two of everything.
+    """
+    samples, payload = _committed_2026_09_10()
+    subjects = tuple(payload["subjects"])
+    cells, verdicts, _ = BND.arm_alphas(
+        samples, MIXTRAL, block_ns=tuple(payload["block_ns"]),
+        subjects=subjects, ridge=payload["ridge"],
+        bandwidth_gbps=payload["bandwidth_gbps"], dtype="bf16",
+        base_pinned=payload["pinned"], capability=(9, 0),
+        ceiling_tflops=payload["ceiling_tflops"], sm_count=132)
+    by_bn = {v.block_n: v for v in verdicts}
+    checked = 0
+    for c in cells:
+        verdict = by_bn.get(c.block_n)
+        if verdict is None or not verdict.ok or c.weight_streams is None:
+            continue
+        pts, _ = BND.collapse(samples, c.block_n, c.block_m)
+        margin = max(BND.SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * (c.spread or 0.0))
+        fit = BND.SWEEP.fit_ladder(
+            pts, c.block_m, verdict.ref, margin, model=MIXTRAL, dtype="bf16",
+            bandwidth_gbps=payload["bandwidth_gbps"],
+            bandwidth_source="the run's own calibrated rate")
+        assert fit.weight_streams is not None, (c.block_n, c.block_m)
+        assert fit.weight_streams.streams == pytest.approx(
+            c.weight_streams, rel=1e-12), (c.block_n, c.block_m)
+        # And the rendering carries the rate, which is what makes it a
+        # measurement rather than a ratio.
+        assert "weight-streams/M-tile" in fit.w_note()
+        assert "the run's own calibrated rate" in fit.w_note()
+        checked += 1
+    assert checked >= 6, checked

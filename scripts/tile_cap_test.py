@@ -2166,6 +2166,7 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
             capability: tuple[int, int] | None = None,
             ridge_band: tuple[float, float] | None = None,
             ridge_source: str = "", band_source: str = "",
+            bandwidth_source: str = "",
             card: str = NO_CARD_SLUG, ridge_device: str = "",
             synthetic: bool = False, prov=None,
             reference_mhz: float | None = None,
@@ -2216,7 +2217,15 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
     # spread too, and a compute branch estimated 2% low makes every
     # compute-bound tread look memory bound.
     margin = max(SWEEP.MEMORY_BRANCH_MARGIN, 3.0 * noise)
-    fits = {bm: SWEEP.fit_ladder(SWEEP.ladder_points(ok, bm), bm, ref, margin)
+    # THE FOUR KEYWORDS ARE THE W'S DENOMINATOR. This call site passed none of
+    # them until 2026-09-10, so every ladder row printed "w n/a: the caller
+    # named no model, dtype and measured bandwidth" while this arm's BLOCK_M=16
+    # ladder is where the session's 1.0514 comes from. They touch no fit, no
+    # branch membership and no outcome.
+    fits = {bm: SWEEP.fit_ladder(
+                SWEEP.ladder_points(ok, bm), bm, ref, margin,
+                model=cfg, dtype=dtype, bandwidth_gbps=bandwidth_gbps,
+                bandwidth_source=bandwidth_source)
             for bm in tiles}
     # THE DENOMINATOR IS `ridge x bandwidth`, NOT THE PLATEAU. Against the
     # sweep's own maximum some block size always scores 1.00 -- the plateau IS
@@ -2293,6 +2302,14 @@ def analyse(cells, cfg, *, cap_tile: int, control_tile: int, alpha: float,
             + "  " + (f"{f.slope_memory:9.4f}" if f.slope_memory is not None else "      n/a")
             + "  " + (f"{f.compute_slope:9.4f}" if f.compute_slope else "      n/a")
             + f"  {f.mean_rel_err:6.2%}  {f.basis}")
+        # THE SECOND ESTIMATOR, BESIDE THE FIRST, on its own line under the
+        # row because it carries the rate it was divided by and a w without
+        # its rate is not a measurement. Printed even where alpha reads n/a:
+        # `w` has no fitted level in it, so a ladder that cannot be divided by
+        # a level can still be divided by a measured stream time. This arm's
+        # BLOCK_M=16 ladder is where the session's 1.0514 comes from and it
+        # was on no page this script prints until 2026-09-10.
+        lines.append(f"           {f.w_note()}")
 
     reached = max((n for n, _ in tp_cap), default=0)
     discriminator = cap_discriminator(cap_tile, ridge, b)
@@ -3104,6 +3121,7 @@ def _main(argv=None) -> int:
                          planned_cells=planned, header=header, pinned=pinned,
                          capability=capability, ridge_band=ridge_band,
                          ridge_source=ridge_src, band_source=band_source,
+                         bandwidth_source=bw_source,
                          card=card, ridge_device=ridge_device,
                          synthetic=synthetic,
                          reference_mhz=reference_mhz,

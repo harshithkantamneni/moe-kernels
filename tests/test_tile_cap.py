@@ -98,6 +98,9 @@ def cells_at(alpha: float, *, r_max: int = 2112, noise: float = 0.0,
 
 def report_at(alpha: float, **kw):
     tiles = kw.pop("tiles", TILES)
+    # Keywords `analyse` takes and `cells_at` does not, forwarded rather than
+    # planted: `bandwidth_source` names the rate every w on the page is against.
+    passthrough = {k: kw.pop(k) for k in ("bandwidth_source",) if k in kw}
     grid, cells = cells_at(alpha, tiles=tiles, **kw)
     depth = CAP.required_depth(tiles[0], b=2, ridge_band=BAND)
     return CAP.analyse(
@@ -105,7 +108,8 @@ def report_at(alpha: float, **kw):
         ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b",
         dtype="bf16", compiles={bm: 1 for bm in tiles},
         executed={bm: 1 for bm in tiles}, sm_count=132, sm_source="test",
-        depth=depth, planned_cells=len(grid) * len(tiles), header=[])
+        depth=depth, planned_cells=len(grid) * len(tiles), header=[],
+        **passthrough)
 
 
 def verdicts(report) -> dict[str, str]:
@@ -1091,3 +1095,31 @@ def test_an_unstated_band_is_degenerate_and_never_the_module_constant():
     assert report.payload["ridge_band"] == [145.8, 145.8]
     assert CAP.RIDGE_BAND[1] not in report.payload["ridge_band"]
 
+
+
+def test_the_ladder_table_prints_each_slope_in_weight_streams_with_its_rate():
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm.
+
+    `analyse` built its fits as `SWEEP.fit_ladder(points, bm, ref, margin)` and
+    passed none of the four keywords that are the weight-stream denominator, so
+    every ladder here carried `weight_streams is None`. This arm's BLOCK_M=16,
+    G=1 ladder is where the session's 1.0514 comes from, the one figure in the
+    whole study that goes through no fitted level, no intercept and no D, and
+    no page this script writes carried it.
+
+    The rate travels on the line with the number, because w scales 1:1 in it.
+    """
+    report = report_at(REFIT, bandwidth_source="stated by the test")
+    text = report.text()
+    assert "the caller named no model, dtype and measured bandwidth" not in text
+    printed = [ln for ln in text.splitlines() if "weight-streams/M-tile" in ln]
+    assert printed, text[-3000:]
+    for ln in printed:
+        assert f"{BANDWIDTH:.1f} GB/s" in ln, ln
+        assert "stated by the test" in ln, ln
+        assert "mixtral-8x7b bf16" in ln, ln
+    # A ladder with no memory branch says WHY it has no w, in the refusal's own
+    # words, rather than printing a bare n/a beside the ones that do.
+    for ln in text.splitlines():
+        if "w n/a" in ln:
+            assert ": " in ln.split("w n/a")[1], ln

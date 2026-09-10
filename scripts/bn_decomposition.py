@@ -2783,7 +2783,15 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
                     "no qualified compute reference in this arm",
                     blank="reference_refused"))
                 continue
-            fit = SWEEP.fit_ladder(pts, bm, verdict.ref, margin)
+            # THE FOUR KEYWORDS ARE THE W'S DENOMINATOR, and this call site
+            # passed none of them until 2026-09-10, so `LadderFit.w_note`
+            # printed "w n/a: the caller named no model, dtype and measured
+            # bandwidth" on an arm whose w values ARE the session's headline.
+            # They touch no fit, no branch membership and no outcome.
+            fit = SWEEP.fit_ladder(
+                pts, bm, verdict.ref, margin, model=cfg, dtype=dtype,
+                bandwidth_gbps=bandwidth_gbps,
+                bandwidth_source="the run's own calibrated rate")
             act = SWEEP.activation_slope_ms(cfg, bm, bandwidth_gbps)
             corrected = None
             if fit.slope_memory is not None and fit.load_ms:

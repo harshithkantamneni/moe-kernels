@@ -2701,3 +2701,43 @@ def test_both_reference_level_call_sites_carry_both_clocks(bm):
     assert bare.fraction_at_clock is None
     assert "UNKNOWN" in bare.line()
     assert bare.passes is True, "the FIXED fraction still gates"
+
+
+def test_the_measured_ladder_prints_its_slope_in_weight_streams(bm):
+    """DEFECT (E) OF THE 2026-09-10 BUILD AUDIT, on this arm.
+
+    `analyse_run` built its fit as `SWEEP.fit_ladder(fit_points,
+    SUBJECT_BLOCK_M, ref, margin=...)` and passed none of the four keywords
+    that are the weight-stream denominator, so the fit carried
+    `weight_streams is None` and the ladder section printed no `w` at all.
+    This is the BLOCK_M=128 arm, and its w is part of the 2026-09-10 headline.
+
+    A caller that names no dtype still gets an answer, and the answer is the
+    refusal's own words rather than a bare n/a: w scales 1:1 in the rate, so a
+    w against a rate nobody stated would be a number with no meaning.
+    """
+    from moe.spec import MODEL_CONFIGS
+    cfg = MODEL_CONFIGS["mixtral-8x7b"]
+    w = bm.SELF_TEST_WORLDS[0]
+    samples = bm.planted_samples(
+        cfg, alpha=w.alpha, rho=w.rho, bandwidth_gbps=bm.SELF_TEST_BANDWIDTH,
+        noise=bm.PUBLISHED_LADDER_SPREAD)
+    common = dict(
+        ceiling_tflops=w.rho * bm.SELF_TEST_BANDWIDTH * 1e9 / 1e12,
+        ceiling_source="test", compiles={128: 1, 256: 1},
+        executed={128: 40, 256: 20}, ridge=w.rho,
+        bandwidth_gbps=bm.SELF_TEST_BANDWIDTH, draws=50)
+
+    named, _, _ = bm.analyse_run(
+        samples, cfg, 2, dtype=bm.SELF_TEST_DTYPE,
+        bandwidth_source="the planted world's own rate", **common)
+    line = next(ln for ln in named if "weight-streams/M-tile" in ln)
+    assert f"{bm.SELF_TEST_BANDWIDTH:.1f} GB/s" in line, line
+    assert "the planted world's own rate" in line, line
+    assert "mixtral-8x7b bf16" in line, line
+
+    # The caller that says nothing gets the reason, not an n/a.
+    silent, _, _ = bm.analyse_run(samples, cfg, 2, **common)
+    quiet = next(ln for ln in silent if "w n/a" in ln)
+    assert "named no model, dtype and measured bandwidth" in quiet, quiet
+    assert not any("weight-streams/M-tile" in ln for ln in silent)
