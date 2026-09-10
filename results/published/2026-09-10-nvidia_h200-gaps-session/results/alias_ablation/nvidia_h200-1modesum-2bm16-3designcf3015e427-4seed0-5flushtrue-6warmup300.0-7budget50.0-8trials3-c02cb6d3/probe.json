@@ -1,0 +1,212 @@
+{
+  "readings": [
+    {
+      "pinning": {
+        "num_warps": 8,
+        "num_stages": 3,
+        "block_k": 64,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 2636720777245.8115,
+      "aliased_ms": {
+        "1": 0.30140799283981323,
+        "2": 0.5813760161399841
+      },
+      "normal_ms_t1": 0.34174400568008423,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 8,
+        "num_stages": 4,
+        "block_k": 128,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 2872990175098.143,
+      "aliased_ms": {
+        "1": 0.2667520046234131,
+        "2": 0.5236959755420685
+      },
+      "normal_ms_t1": 0.2906560003757477,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 4,
+        "num_stages": 5,
+        "block_k": 128,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 5511569177468.964,
+      "aliased_ms": {
+        "1": 0.1939999982714653,
+        "2": 0.32793599367141724
+      },
+      "normal_ms_t1": 0.24420800060033798,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 4,
+        "num_stages": 4,
+        "block_k": 64,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 4235115265156.8354,
+      "aliased_ms": {
+        "1": 0.16787199676036835,
+        "2": 0.34217599034309387
+      },
+      "normal_ms_t1": 0.24113599956035614,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 4,
+        "num_stages": 6,
+        "block_k": 128,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 5502366725745.816,
+      "aliased_ms": {
+        "1": 0.19430400431156158,
+        "2": 0.32846400141716003
+      },
+      "normal_ms_t1": 0.24355200678110123,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 2,
+        "num_stages": 4,
+        "block_k": 128,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 8934420279365.309,
+      "aliased_ms": {
+        "1": 0.1027199998497963,
+        "2": 0.18534399569034576
+      },
+      "normal_ms_t1": 0.1842239946126938,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 2,
+        "num_stages": 5,
+        "block_k": 64,
+        "compute": "sum"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 10655275974990.54,
+      "aliased_ms": {
+        "1": 0.12624000012874603,
+        "2": 0.19551999866962433
+      },
+      "normal_ms_t1": 0.21608000248670578,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 8,
+        "num_stages": 4,
+        "block_k": 128,
+        "compute": "dot"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 9011199408078.232,
+      "aliased_ms": {
+        "1": 0.09001599997282028,
+        "2": 0.1719360053539276
+      },
+      "normal_ms_t1": 0.1810240000486374,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 8,
+        "num_stages": 3,
+        "block_k": 64,
+        "compute": "dot"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 8761363363633.2295,
+      "aliased_ms": {
+        "1": 0.091839998960495,
+        "2": 0.17609600722789764
+      },
+      "normal_ms_t1": 0.18777599930763245,
+      "note": ""
+    },
+    {
+      "pinning": {
+        "num_warps": 16,
+        "num_stages": 4,
+        "block_k": 128,
+        "compute": "dot"
+      },
+      "model": "deepseek-v2-lite",
+      "aliased_bytes_s": 6170569035495.131,
+      "aliased_ms": {
+        "1": 0.12886400520801544,
+        "2": 0.24849600344896317
+      },
+      "normal_ms_t1": 0.18289600312709808,
+      "note": ""
+    }
+  ],
+  "chosen": {
+    "num_warps": 2,
+    "num_stages": 5,
+    "block_k": 64,
+    "compute": "sum"
+  },
+  "why": "{'num_warps': 2, 'num_stages': 5, 'block_k': 64, 'compute': 'sum'} at 10655 GB/s, 2.310 of the roof: the fastest sum-mode pinning that clears",
+  "card": "NVIDIA H200",
+  "roof_bytes_s": 4612253362489.001,
+  "dot_fallback": "refuse",
+  "min_headroom_ratio": 2.111111111111111,
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "measured_nvidia_h200.yaml: 682.1 TFLOP/s bf16 over 4374.3 GB/s = 155.9 FLOP/byte",
+  "bandwidth_source": null,
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T04:15:15+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 155.9303223641331,
+    "ridge_source": "measured_nvidia_h200.yaml: 682.1 TFLOP/s bf16 over 4374.3 GB/s = 155.9 FLOP/byte",
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

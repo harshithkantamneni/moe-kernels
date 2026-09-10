@@ -1,0 +1,1063 @@
+{
+  "run_id": "nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0",
+  "card": "NVIDIA H200",
+  "predictions": [
+    {
+      "number": 1,
+      "claim": "the GEMM clock was sampled in the wrong state",
+      "numbers": "the under-load median lands in 1455-1515 MHz (the compute settle plateau), and differs from the same run's post-hoc idle sample by >5% on at least one of the two GEMMs",
+      "fail": "the post-hoc sample was not the artefact. The 87.4%-versus-68.4% efficiency swing on one card is then unexplained, and no efficiency-at-clock figure in the study may be quoted."
+    },
+    {
+      "number": 2,
+      "claim": "the bandwidth side is already settled and re-measuring changes it by nothing",
+      "numbers": "read_reduce 4469.6, copy 4300.7, triad 4374.8, write 4682.4 GB/s, each within 0.5%; every pattern at 1980 -> 1980 MHz",
+      "fail": "the memory settle does not hold, and every published GB/s is unstable at the size of the disagreement. The 2026-08-27 settle fix would then need re-opening, not just re-reporting."
+    },
+    {
+      "number": 3,
+      "claim": "the reduction shape still costs something",
+      "numbers": "read_stream > read_reduce (4469.6) and < the 4814.3 GB/s pin rate; the 2026-08-27 shape change was worth 1.7%, so 0-5%",
+      "fail": "above the pin rate, the probe is broken -- dead-code elimination or a byte count -- and nothing from it may be used. Below read_reduce, ATen was not the limit and read_reduce stands as the read ruler."
+    },
+    {
+      "number": 4,
+      "claim": "the denominator question is the smaller half of the ruler problem",
+      "numbers": "the compute term's spread across sessions is >= 3.0x the triad-to-read denominator swing (9.9% against 2.2% in the committed files)",
+      "fail": "the ruler CHOICE dominates its own instability, the re-baseline is about the denominator after all, and adopting the matched ruler is urgent rather than optional."
+    },
+    {
+      "number": 5,
+      "claim": "swinging the denominator changes no published row's bound",
+      "numbers": "0 rows of the canonical pool change memory/compute classification when the ceiling moves from triad to the matched read pattern (calibrate.py's own docstring: no cell changes anywhere in 4252.8-4656.9 GB/s)",
+      "fail": "the 2.2% matters at row level. Every crossing in docs/FINDINGS.md is then quoted against a ruler that decides its own answer, and the re-baseline must be adopted before any of them is quoted again."
+    }
+  ],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "number": "1",
+      "claim": "the survey examined real rows",
+      "verdict": "PASS",
+      "measured": "10 arms, 72760 rows, 9 priced on the denominator lever",
+      "threshold": ">= 5 arms and 10000 rows",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "2",
+      "claim": "every arm's rows were stamped from its own calibration",
+      "verdict": "PASS",
+      "measured": "1 arms disagree, 0 of them undeclared",
+      "threshold": "0 undeclared",
+      "lines": [
+        "2026-08-28-nvidia_h200-h200-whole-layer: 6808 of 6808 rows carry a ceiling that is not this file's (provenance: ceilings_disagree)"
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "number": "3",
+      "claim": "no output lands where .gitignore drops it",
+      "verdict": "PASS",
+      "measured": "2 paths checked, 0 would be dropped, 0 unverifiable",
+      "threshold": "0 dropped that are meant to be kept, and every one of them checkable",
+      "lines": [
+        "report.txt: /workspace/results/gaps-nvidia_h200/ruler_rebaseline/nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0/report.txt  UNVERIFIED  (raw output, ignored by design)",
+        "report.json: /workspace/results/gaps-nvidia_h200/ruler_rebaseline/nvidia_h200-1modemeasured-2buf8.0-3gemm8192-4ceiltriad-5settletrue-6settlesec30.0-7corpusworkspa-803299b0/report.json  UNVERIFIED  (raw output, ignored by design)"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "1",
+      "claim": "the GEMM clock was sampled in the wrong state",
+      "verdict": "FAIL",
+      "measured": "largest post-hoc-vs-under-load delta 2.2%",
+      "threshold": "> 5%",
+      "lines": [
+        "bf16 GEMM: under load 1455 MHz (spread 2.0%, samples [1455, 1470, 1440, 1470, 1455]), post-hoc idle 1455 MHz, delta 0.0%",
+        "fp8 GEMM: under load 1365 MHz (spread 3.3%, samples [1380, 1350, 1365, 1365, 1335]), post-hoc idle 1335 MHz, delta 2.2%  OUTSIDE the 1455-1515 settle band"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "2",
+      "claim": "the bandwidth patterns reproduce and did not ramp",
+      "verdict": "PASS",
+      "measured": "worst pattern read_reduce 0.04%, clock_ramped=False",
+      "threshold": "<= 0.5% and not ramped",
+      "lines": [
+        "read_reduce: 4469.6 against 4471.4 committed, +0.04%   clocks 1980 -> 1980 MHz",
+        "copy: 4300.4 against 4300.8 committed, +0.01%   clocks 1980 -> 1980 MHz",
+        "triad: 4374.6 against 4374.5 committed, +0.00%   clocks 1980 -> 1980 MHz",
+        "write: 4679.7 against 4680.2 committed, +0.01%   clocks 1980 -> 1980 MHz"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "3",
+      "claim": "the reduction shape still costs something",
+      "verdict": "PASS",
+      "measured": "read_stream over read_reduce +3.21%",
+      "threshold": "> 0% and < 4814.3 GB/s, this card's pin rate",
+      "lines": [
+        "read_stream 4613.1, read_reduce 4469.6, gain +3.21%",
+        "pin rate 4814.3 GB/s (NVIDIA H200); 95.8% of it"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "4",
+      "claim": "the compute term moves more than the denominator choice",
+      "verdict": "PASS",
+      "measured": "worst device nvidiah200 at 5.0x",
+      "threshold": ">= 3x on every device with two calibrations",
+      "lines": [
+        "nvidiaa100sxm480gb: 1 calibration(s), 0 priced -- not enough to compare, NOT pooled into another device's answer",
+        "nvidiah200: compute term 10.7% over 6 calibrations, bandwidth 0.08%, denominator swing 2.14% (median of 9), ratio 5.0x",
+        "A FAIL is the interesting answer: it would mean the ruler CHOICE dominates its own instability and the read ruler must be adopted now."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "number": "5",
+      "claim": "the denominator swing flips no published row",
+      "verdict": "FAIL",
+      "measured": "90 flips in 53188 classified rows",
+      "threshold": "<= 0",
+      "lines": [
+        "53188 rows classified, 10164 unclassifiable (no peak for their dtype in the calibration beside them)",
+        "2026-08-28-nvidia_h200-h200-fp8-refixed: 4 of 9408",
+        "    deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute",
+        "    deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute",
+        "    deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute",
+        "2026-08-28-nvidia_h200-ridge-resolution: 72 of 6300",
+        "    qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute",
+        "    qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute",
+        "    qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute",
+        "2026-09-01-nvidia_h200-alpha-0558: 14 of 3696",
+        "    qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+        "    qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+        "    qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+        "A FAIL is the result: the 2.2% decides the answer for these rows, so the crossings computed from them inherit the ruler's bias."
+      ]
+    }
+  ],
+  "corpus": {
+    "arms": [
+      "2026-08-22-first-smoke",
+      "2026-08-22-standard-sweep",
+      "2026-08-26-nvidia_h200-full-three-way-recalibrated",
+      "2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card",
+      "2026-08-28-nvidia_h200-h200-fp8-refixed",
+      "2026-08-28-nvidia_h200-h200-fp8-three-kernel",
+      "2026-08-28-nvidia_h200-h200-v2lite",
+      "2026-08-28-nvidia_h200-h200-whole-layer",
+      "2026-08-28-nvidia_h200-ridge-resolution",
+      "2026-09-01-nvidia_h200-alpha-0558"
+    ],
+    "rows": 72760,
+    "dropped": [
+      "2026-08-26-nvidia_h200-full-three-way"
+    ],
+    "refused": [
+      "2026-09-01-nvidia_h200-alpha-surface-s4: no measured.yaml",
+      "2026-09-01-nvidia_h200-cross-card-s3: no measured.yaml",
+      "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3: no measured.yaml",
+      "2026-09-09-nvidia_h200-gaps-session: no measured.yaml"
+    ],
+    "identity_bad": [
+      "2026-08-28-nvidia_h200-h200-whole-layer: 6808 of 6808 rows carry a ceiling that is not this file's (provenance: ceilings_disagree)"
+    ],
+    "trimmed": [
+      "2026-08-28-nvidia_h200-h200-fp8-three-kernel: dropped 9744 rows from superseded impls ['torch_scaled_grouped_mm_down', 'torch_scaled_grouped_mm_up']"
+    ],
+    "rulers": {
+      "nvidiah200|4375.20|785.47": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4375.2,
+        "bf16_tflops": 785.47,
+        "arms": [
+          "2026-08-22-first-smoke"
+        ]
+      },
+      "nvidiah200|4375.57|729.99": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4375.57,
+        "bf16_tflops": 729.99,
+        "arms": [
+          "2026-08-22-standard-sweep"
+        ]
+      },
+      "nvidiah200|4376.97|712.36": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4376.97,
+        "bf16_tflops": 712.36,
+        "arms": [
+          "2026-08-26-nvidia_h200-full-three-way-recalibrated",
+          "2026-08-28-nvidia_h200-ridge-resolution"
+        ]
+      },
+      "nvidiaa100sxm480gb|1798.49|262.05": {
+        "device": "nvidiaa100sxm480gb",
+        "gpu_name": "NVIDIA A100-SXM4-80GB",
+        "bandwidth_gbps": 1798.49,
+        "bf16_tflops": 262.05,
+        "arms": [
+          "2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card"
+        ]
+      },
+      "nvidiah200|4374.49|770.92": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4374.49,
+        "bf16_tflops": 770.92,
+        "arms": [
+          "2026-08-28-nvidia_h200-h200-fp8-refixed",
+          "2026-08-28-nvidia_h200-h200-whole-layer"
+        ]
+      },
+      "nvidiah200|4377.21|701.61": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4377.21,
+        "bf16_tflops": 701.61,
+        "arms": [
+          "2026-08-28-nvidia_h200-h200-fp8-three-kernel",
+          "2026-08-28-nvidia_h200-h200-v2lite"
+        ]
+      },
+      "nvidiah200|4373.88|716.00": {
+        "device": "nvidiah200",
+        "gpu_name": "NVIDIA H200",
+        "bandwidth_gbps": 4373.88,
+        "bf16_tflops": 716.0,
+        "arms": [
+          "2026-09-01-nvidia_h200-alpha-0558"
+        ]
+      }
+    },
+    "denominator": [
+      {
+        "arm": "2026-08-22-first-smoke",
+        "lever": "denominator",
+        "rows": 16,
+        "classified": 16,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4375.202563053733,
+        "new_bw_gbps": 4390.720113288014,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            179.5,
+            178.9,
+            -0.35
+          ],
+          "fp16": [
+            179.5,
+            178.9,
+            -0.35
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-22-standard-sweep",
+        "lever": "denominator",
+        "rows": 840,
+        "classified": 840,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4375.571144931653,
+        "new_bw_gbps": 4390.289279393236,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            166.8,
+            166.3,
+            -0.34
+          ],
+          "fp16": [
+            166.8,
+            166.3,
+            -0.34
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-26-nvidia_h200-full-three-way-recalibrated",
+        "lever": "denominator",
+        "rows": 17640,
+        "classified": 17640,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4376.974307768541,
+        "new_bw_gbps": 4389.284150791377,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            162.8,
+            162.3,
+            -0.28
+          ],
+          "fp16": [
+            162.8,
+            162.3,
+            -0.28
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card",
+        "lever": "denominator",
+        "rows": 9408,
+        "classified": 0,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 1798.4902071091922,
+        "new_bw_gbps": 0.0,
+        "old_ceiling": "triad",
+        "new_ceiling": "",
+        "ridges": {},
+        "refusal": "no usable read pattern in this arm's own calibration (its read was disowned as consumer-limited)"
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-fp8-refixed",
+        "lever": "denominator",
+        "rows": 9408,
+        "classified": 9408,
+        "unclassifiable": 0,
+        "flips": 4,
+        "flip_examples": [
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute",
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute",
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=320.3  memory -> compute"
+        ],
+        "old_bw_gbps": 4374.48966354773,
+        "new_bw_gbps": 4469.827011294099,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            176.2,
+            172.5,
+            -2.13
+          ],
+          "fp16": [
+            176.2,
+            172.5,
+            -2.13
+          ],
+          "fp8_e4m3": [
+            322.1,
+            315.3,
+            -2.13
+          ],
+          "fp8_e5m2": [
+            322.1,
+            315.3,
+            -2.13
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-fp8-three-kernel",
+        "lever": "denominator",
+        "rows": 10164,
+        "classified": 0,
+        "unclassifiable": 10164,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4377.212185121149,
+        "new_bw_gbps": 4470.7201352656975,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            160.3,
+            156.9,
+            -2.09
+          ],
+          "fp16": [
+            160.3,
+            156.9,
+            -2.09
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-v2lite",
+        "lever": "denominator",
+        "rows": 5880,
+        "classified": 5880,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4377.212185121149,
+        "new_bw_gbps": 4470.7201352656975,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            160.3,
+            156.9,
+            -2.09
+          ],
+          "fp16": [
+            160.3,
+            156.9,
+            -2.09
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-whole-layer",
+        "lever": "denominator",
+        "rows": 9408,
+        "classified": 9408,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4374.48966354773,
+        "new_bw_gbps": 4469.827011294099,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            176.2,
+            172.5,
+            -2.13
+          ],
+          "fp16": [
+            176.2,
+            172.5,
+            -2.13
+          ],
+          "fp8_e4m3": [
+            322.1,
+            315.3,
+            -2.13
+          ],
+          "fp8_e5m2": [
+            322.1,
+            315.3,
+            -2.13
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-ridge-resolution",
+        "lever": "denominator",
+        "rows": 6300,
+        "classified": 6300,
+        "unclassifiable": 0,
+        "flips": 72,
+        "flip_examples": [
+          "qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_up T=1408 bf16 AI=162.4  memory -> compute"
+        ],
+        "old_bw_gbps": 4376.974307768541,
+        "new_bw_gbps": 4389.284150791377,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            162.8,
+            162.3,
+            -0.28
+          ],
+          "fp16": [
+            162.8,
+            162.3,
+            -0.28
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-09-01-nvidia_h200-alpha-0558",
+        "lever": "denominator",
+        "rows": 3696,
+        "classified": 3696,
+        "unclassifiable": 0,
+        "flips": 14,
+        "flip_examples": [
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute"
+        ],
+        "old_bw_gbps": 4373.8838993043155,
+        "new_bw_gbps": 4468.636318589428,
+        "old_ceiling": "triad",
+        "new_ceiling": "read",
+        "ridges": {
+          "bf16": [
+            163.7,
+            160.2,
+            -2.12
+          ],
+          "fp16": [
+            163.7,
+            160.2,
+            -2.12
+          ],
+          "fp8_e4m3": [
+            330.0,
+            323.0,
+            -2.12
+          ],
+          "fp8_e5m2": [
+            330.0,
+            323.0,
+            -2.12
+          ]
+        },
+        "refusal": ""
+      }
+    ],
+    "session": [
+      {
+        "arm": "2026-08-22-first-smoke",
+        "lever": "session",
+        "rows": 16,
+        "classified": 16,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4375.202563053733,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            179.5,
+            155.9,
+            -13.14
+          ],
+          "fp16": [
+            179.5,
+            155.9,
+            -13.14
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-22-standard-sweep",
+        "lever": "session",
+        "rows": 840,
+        "classified": 840,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4375.571144931653,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            166.8,
+            155.9,
+            -6.53
+          ],
+          "fp16": [
+            166.8,
+            155.9,
+            -6.53
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-26-nvidia_h200-full-three-way-recalibrated",
+        "lever": "session",
+        "rows": 17640,
+        "classified": 17640,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4376.974307768541,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            162.8,
+            155.9,
+            -4.19
+          ],
+          "fp16": [
+            162.8,
+            155.9,
+            -4.19
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_a100_sxm4_80gb-a100-cross-card",
+        "lever": "session",
+        "rows": 9408,
+        "classified": 9408,
+        "unclassifiable": 0,
+        "flips": 4,
+        "flip_examples": [
+          "mixtral-8x7b vllm_fused_experts T=512 bf16 AI=145.8  compute -> memory",
+          "mixtral-8x7b vllm_fused_experts T=512 bf16 AI=145.8  compute -> memory",
+          "mixtral-8x7b vllm_fused_experts T=512 bf16 AI=145.8  compute -> memory"
+        ],
+        "old_bw_gbps": 1798.4902071091922,
+        "new_bw_gbps": 1799.3642842463203,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            145.7,
+            145.8,
+            0.08
+          ],
+          "fp16": [
+            145.7,
+            145.8,
+            0.08
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-fp8-refixed",
+        "lever": "session",
+        "rows": 9408,
+        "classified": 9408,
+        "unclassifiable": 0,
+        "flips": 4,
+        "flip_examples": [
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=324.5  compute -> memory",
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=324.5  compute -> memory",
+          "deepseek-v2-lite torch_scaled_grouped_mm_up T=2048 fp8_e4m3 AI=324.5  compute -> memory"
+        ],
+        "old_bw_gbps": 4374.48966354773,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            176.2,
+            155.9,
+            -11.52
+          ],
+          "fp16": [
+            176.2,
+            155.9,
+            -11.52
+          ],
+          "fp8_e4m3": [
+            322.1,
+            332.3,
+            3.16
+          ],
+          "fp8_e5m2": [
+            322.1,
+            332.3,
+            3.16
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-fp8-three-kernel",
+        "lever": "session",
+        "rows": 10164,
+        "classified": 0,
+        "unclassifiable": 10164,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4377.212185121149,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            160.3,
+            155.9,
+            -2.72
+          ],
+          "fp16": [
+            160.3,
+            155.9,
+            -2.72
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-v2lite",
+        "lever": "session",
+        "rows": 5880,
+        "classified": 5880,
+        "unclassifiable": 0,
+        "flips": 72,
+        "flip_examples": [
+          "deepseek-v2-lite torch_grouped_mm_down T=2048 bf16 AI=156.1  memory -> compute",
+          "deepseek-v2-lite torch_grouped_mm_down T=2048 bf16 AI=156.1  memory -> compute",
+          "deepseek-v2-lite torch_grouped_mm_down T=2048 bf16 AI=156.1  memory -> compute"
+        ],
+        "old_bw_gbps": 4377.212185121149,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            160.3,
+            155.9,
+            -2.72
+          ],
+          "fp16": [
+            160.3,
+            155.9,
+            -2.72
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-h200-whole-layer",
+        "lever": "session",
+        "rows": 9408,
+        "classified": 9408,
+        "unclassifiable": 0,
+        "flips": 0,
+        "flip_examples": [],
+        "old_bw_gbps": 4374.48966354773,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            176.2,
+            155.9,
+            -11.52
+          ],
+          "fp16": [
+            176.2,
+            155.9,
+            -11.52
+          ],
+          "fp8_e4m3": [
+            322.1,
+            332.3,
+            3.16
+          ],
+          "fp8_e5m2": [
+            322.1,
+            332.3,
+            3.16
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-08-28-nvidia_h200-ridge-resolution",
+        "lever": "session",
+        "rows": 6300,
+        "classified": 6300,
+        "unclassifiable": 0,
+        "flips": 892,
+        "flip_examples": [
+          "mixtral-8x7b __pipeline__ T=704 bf16 AI=158.8  memory -> compute",
+          "mixtral-8x7b __pipeline__ T=704 bf16 AI=158.8  memory -> compute",
+          "mixtral-8x7b __pipeline__ T=704 bf16 AI=158.8  memory -> compute"
+        ],
+        "old_bw_gbps": 4376.974307768541,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            162.8,
+            155.9,
+            -4.19
+          ],
+          "fp16": [
+            162.8,
+            155.9,
+            -4.19
+          ]
+        },
+        "refusal": ""
+      },
+      {
+        "arm": "2026-09-01-nvidia_h200-alpha-0558",
+        "lever": "session",
+        "rows": 3696,
+        "classified": 3696,
+        "unclassifiable": 0,
+        "flips": 35,
+        "flip_examples": [
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute",
+          "qwen2-57b-a14b torch_grouped_mm_down T=1448 bf16 AI=161.4  memory -> compute"
+        ],
+        "old_bw_gbps": 4373.8838993043155,
+        "new_bw_gbps": 4374.299702465323,
+        "old_ceiling": "triad",
+        "new_ceiling": "triad",
+        "ridges": {
+          "bf16": [
+            163.7,
+            155.9,
+            -4.75
+          ],
+          "fp16": [
+            163.7,
+            155.9,
+            -4.75
+          ],
+          "fp8_e4m3": [
+            330.0,
+            332.3,
+            0.69
+          ],
+          "fp8_e5m2": [
+            330.0,
+            332.3,
+            0.69
+          ]
+        },
+        "refusal": ""
+      }
+    ]
+  },
+  "calibration": {
+    "gpu_name": "NVIDIA H200",
+    "achieved_bandwidth_gbps": 4374.572876301085,
+    "ceiling_pattern": "triad",
+    "achieved_bf16_tflops": 670.8593407961655,
+    "bandwidth_patterns": [
+      {
+        "pattern": "read_stream",
+        "bytes_moved": 8589934592,
+        "ms_p50": 1.8620799779891968,
+        "ms_min": 1.8598400354385376,
+        "gbps": 4613.085739354766,
+        "gbps_peak_min": 4618.641618807045,
+        "note": "Triton, one store per program, no cross-CTA combine; stores are 0.012% of traffic and are not counted",
+        "sm_clock_start_mhz": 1980,
+        "sm_clock_end_mhz": 1980
+      },
+      {
+        "pattern": "read_reduce",
+        "bytes_moved": 8589934592,
+        "ms_p50": 1.9218720197677612,
+        "ms_min": 1.9177600145339966,
+        "gbps": 4469.566393415731,
+        "gbps_peak_min": 4479.149907652705,
+        "note": "ATen reduction along the contiguous axis; a LOWER BOUND on the DRAM read rate, not the read rate",
+        "sm_clock_start_mhz": 1980,
+        "sm_clock_end_mhz": 1980
+      },
+      {
+        "pattern": "copy",
+        "bytes_moved": 17179869184,
+        "ms_p50": 3.994928002357483,
+        "ms_min": 3.9921278953552246,
+        "gbps": 4300.420226312422,
+        "gbps_peak_min": 4303.436571756254,
+        "note": "",
+        "sm_clock_start_mhz": 1980,
+        "sm_clock_end_mhz": 1980
+      },
+      {
+        "pattern": "triad",
+        "bytes_moved": 25769803776,
+        "ms_p50": 5.89081597328186,
+        "ms_min": 5.883711814880371,
+        "gbps": 4374.572876301085,
+        "gbps_peak_min": 4379.854858089095,
+        "note": "canonical STREAM metric; the default ceiling",
+        "sm_clock_start_mhz": 1980,
+        "sm_clock_end_mhz": 1980
+      },
+      {
+        "pattern": "write",
+        "bytes_moved": 8589934592,
+        "ms_p50": 1.835584044456482,
+        "ms_min": 1.8325120210647583,
+        "gbps": 4679.673817138396,
+        "gbps_peak_min": 4687.518822937339,
+        "note": "1N proven (2N would exceed the pin rate by 94%); unflushed so the timed window cannot shed writeback",
+        "sm_clock_start_mhz": 1980,
+        "sm_clock_end_mhz": 1980
+      }
+    ],
+    "gemm_shape": [
+      8192,
+      8192,
+      8192
+    ],
+    "gemm_clock_mhz": 1455,
+    "achieved_fp8_tflops": 1442.232146438557,
+    "fp8_gemm_clock_mhz": 1365,
+    "buffer_bytes": 8589934592,
+    "clocks": {
+      "sm_start_mhz": 1455,
+      "sm_end_mhz": 1980,
+      "temp_start_c": 60,
+      "temp_end_c": 53,
+      "drift_pct": -36.08,
+      "throttled": false
+    },
+    "settle": {
+      "settled": true,
+      "clock_history_mhz": [
+        1500,
+        1425,
+        1455,
+        1440,
+        1455
+      ],
+      "final_mhz": 1455,
+      "max_seconds": 30.0,
+      "load": "compute",
+      "clock_source": "nvml",
+      "bandwidth_settle": {
+        "settled": true,
+        "clock_history_mhz": [
+          1980,
+          1980,
+          1980
+        ],
+        "final_mhz": 1980,
+        "max_seconds": 30.0,
+        "load": "memory",
+        "clock_source": "nvml"
+      }
+    },
+    "warmup_pass": {
+      "read_stream": 4612.6,
+      "read_reduce": 4468.0,
+      "copy": 4300.7,
+      "triad": 4374.3,
+      "write": 4684.7
+    },
+    "gemm_clock": {
+      "label": "bf16 GEMM",
+      "samples": [
+        1455,
+        1470,
+        1440,
+        1470,
+        1455
+      ],
+      "median_mhz": 1455,
+      "spread_pct": 2.04,
+      "after_idle_mhz": 1455,
+      "temp_c": 60,
+      "power_w": 690.7,
+      "source": "nvml",
+      "sm_clock_load_mhz": 1455,
+      "sm_clock_start_mhz": 1455,
+      "sm_clock_end_mhz": 1455,
+      "clock_level_ok": null,
+      "clock_drift_ok": true
+    },
+    "fp8_gemm_clock": {
+      "label": "fp8 GEMM",
+      "samples": [
+        1380,
+        1350,
+        1365,
+        1365,
+        1335
+      ],
+      "median_mhz": 1365,
+      "spread_pct": 3.26,
+      "after_idle_mhz": 1335,
+      "temp_c": 61,
+      "power_w": 692.3,
+      "source": "nvml",
+      "sm_clock_load_mhz": 1365,
+      "sm_clock_start_mhz": 1380,
+      "sm_clock_end_mhz": 1335,
+      "clock_level_ok": null,
+      "clock_drift_ok": true
+    },
+    "refusals": [],
+    "sustained_peak_tflops": 786.7,
+    "gemm_efficiency_pct": 85.3,
+    "sustained_peak_fp8_tflops": 1476.0,
+    "fp8_over_bf16_achieved": 2.15,
+    "ridge_by_pattern": {
+      "read_stream": 145.4,
+      "read_reduce": 150.1,
+      "copy": 156.0,
+      "triad": 153.4,
+      "write": 143.4
+    },
+    "ridge_band": [
+      145.4,
+      153.4
+    ],
+    "matched_ceiling_pattern": "read_stream",
+    "matched_ceiling_gbps": 4613.1,
+    "clock_established": true,
+    "clock_ramped": false
+  },
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": null,
+  "bandwidth_source": null,
+  "instrument": "moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events, L2 flush between iterations); NOT timing.TIMING_BASIS",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T06:34:53+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": null,
+    "sglang": null,
+    "instrument": "moe.bench.calibrate via timing.time_eager (queue-deep, pre-primed events, L2 flush between iterations); NOT timing.TIMING_BASIS",
+    "ridge": null,
+    "ridge_source": null,
+    "bandwidth": null,
+    "bandwidth_source": null,
+    "warmup_ms": null,
+    "iters": null,
+    "target_ms": null,
+    "missing": {
+      "bandwidth": "not supplied by caller",
+      "bandwidth_source": "not supplied by caller",
+      "iters": "not supplied by caller",
+      "ridge": "not supplied by caller",
+      "ridge_source": "not supplied by caller",
+      "sglang": "package not installed",
+      "target_ms": "not supplied by caller",
+      "vllm": "package not installed",
+      "warmup_ms": "not supplied by caller"
+    }
+  }
+}

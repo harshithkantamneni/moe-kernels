@@ -1,0 +1,157 @@
+experiment  bm128_depth: can BLOCK_M=128 show 5 clean memory-bound treads?
+
+## Predictions, registered before anything is measured
+
+THE LAW (arithmetic, not a prediction; check it, do not test it)
+  B/C = alpha b rho / (2 BM) = ridge / ai_cap, and E, F, H cancel exactly.
+  escape UP   needs alpha x rho >= 147.2 FLOP/byte  -> every tread memory bound
+  escape DOWN needs rho        >= 204.8 FLOP/byte  -> 5 treads below the crossing
+    equivalently alpha <= 0.500, a bound needing no card
+  in between, |B/C - 1| <= 0.15, the fit discards the memory branch entirely.
+
+P1  A NEW BM=128 ladder lands at B/C in [0.94, 1.10].
+    22 published ladders with a valid reference: 0.795 to 1.175, median 0.991, sd 0.084 (population sd, computed from the corpus when this page was printed).
+    FAIL means B/C at 128 is not stationary across arms and the
+    feasibility argument below rests on a quantity that moves.
+P2  C1 FAILS: fewer than 5 clean memory-bound treads.
+    Escape up needs 147.2 and the corpus tops out at 150.4, on a ladder whose
+    slope rises then falls. Escape down needs rho >= 204.8 and the highest
+    achieved rho on any published ladder is 166.5, against calibrated ridges of
+    145.8 (A100) and 152.8 (H200). FAIL here is the good outcome and would mean
+    the cap CAN be measured at the tile vLLM actually runs.
+P3  C2 FAILS: no BM=128 fit clears the tolerance by 3 sd.
+P4  EXPERT SIZE does not enter B/C. mixtral's per-expert weight is 6.4x qwen2's
+    (3 F H = 176.2 M elements against 27.5 M), so a "bigger weights to re-read"
+    mechanism predicts B/C scaling like 6.4. The identity predicts NO size term
+    at all: the model can still move B/C, but only by moving alpha or rho, which
+    it does by tens of percent and not by factors. Gate: at matched card,
+    GROUP_SIZE_M and BLOCK_N, |B/C(mixtral) / B/C(qwen2) - 1| < 0.20 in the
+    median. FAIL at 6.4 means the identity is wrong and the feasibility argument
+    goes with it; FAIL at 0.3 means alpha differs by more between models than
+    this bound allows and the bound was too tight.
+P5  --r-max does not move the memory-tread COUNT in the prefix regime: n* has no
+    r_max in it. Sweeping deeper adds treads to measure, not treads that qualify.
+    UNKNOWN in --audit unless the corpus holds two depths at one setting.
+P6  V2 FAILS on exactly one published ladder -- A100 qwen2-57b-a14b at
+    GROUP_SIZE_M=64, whose tread 8 is 1.237% below tread 7 at a 0.482% spread
+    (2.6 sigma) -- and PASSES on the other 21.
+P7  Of the ladders that HAVE a compute reference, the level bar fails on exactly
+    the two BLOCK_N=256 arms -- 1.4% (A100) and 12.3% (H200) of their cards'
+    calibrated ceilings -- and passes on the other 22 at 38.2% to 63.7%. Two
+    further ladders have no reference at all to level-check and are counted
+    separately, because "the reference is corrupt" and "there is no reference"
+    are different states and only the first is what this bar is for.
+P8  Of the two published BM=128 fits the study quotes, ZERO survive V1+V2+V3+C2.
+    FAIL means one of them is admissible and the 128 row of the alpha surface
+    stands.
+P9  No alpha this study has measured, at ANY block size, is at or below
+    0.500. The lowest is 0.596 (H200
+    deepseek-v2-lite, BLOCK_M=32, activation-corrected). FAIL means the
+    escape-down route is open on hardware the study already owns and the pod run
+    should be aimed at whichever arm produced it.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_N': 64, 'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 1, 'num_warps': 8, 'num_stages': 4}
+reference    BLOCK_M=256 at rows [256, 512, 768, 1024, 1280, 1536, 1792, 2048] -- MEASURED FIRST, and its level checked before the subject costs anything
+partner      BLOCK_M=32 at rows [32, 64, 96, 128] -- the smallest tile the sweep runs, which is what the non-vacuity floor is taken over; not a candidate reference
+subject      BLOCK_M=128 at rows [128, 256, 384, 512, 640, 768, 896, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048]
+repeats      7 round-robin passes per setting, so an inversion can be told from noise
+timing       moe.bench.timing.time_kernel: 300 ms of delivered warmup load, then 3 queue-deep trials of 400 ms each, L2 flushed between iterations, SM clock sampled under load
+             --iters 50 is RETIRED as a timing knob and is kept only in the run id; the instrument sizes each cell's iteration count from --cell-budget-ms and records it per row
+cells        196 timings (28 treads x 7 reps)
+estimate     294 s of GPU at the model's own timings, excluding compiles and allocation
+costing      ridge 155.930 (this machine's calibration (NVIDIA H200 (measured))); bandwidth 4374.3 GB/s (this machine's calibration (NVIDIA H200 (measured)))
+card         nvidia_h200
+WRITES TO    /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0
+             git check-ignore exited 128; path unverified (fatal: /workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0: '/workspace/results/gaps-nvidia_h200/bm128_depth/nvidia_h200-budget400.0-dtypebf16-g1-iters50-k64-l2flushtrue-modelmixtral_8x7b-n64-r2048-referen-3c34b7a0' is outside repository at '/workspace/moe-kernels')
+             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/
+
+## The measured ladder
+
+reference    BLOCK_M=256 ladder, 8 treads, proportional to 0.5%: compute branch 1.9744 ms per tile, fixed cost 0.0006 ms
+             LEVEL roof fraction      0.536   gate <= 1.10 of ridge x bandwidth (a compute branch cannot beat the roof)
+             LEVEL non-vacuity        0.205   gate <  1.00 of one full weight read, on the fused layer's own roof, scaled to the smallest block size (at or above, NO tread anywhere can be memory bound and every alpha is unidentifiable by construction)
+             floor                 0.205   of the roof, = 2 BM_min / (b x ridge): the smallest swept tile's own AI cap at alpha=1, over the ridge
+             footing            FUSED. The compute branch and the memory branch are both measured through the same fused layer, so the comparison is made on that layer's own roof, 0.536 x ridge x bandwidth (the CONTROL'S MEASURED PLATEAU), and not on the dense GEMM roof. That plateau has to land in [0.465, 1.050]: the floor is the lowest fused plateau in this study's 26 published reports, the ceiling is the dense peak plus the tolerance a run generated AT the roof needs, and a plateau above it says the ruler belongs to another machine. A reference outside the band is refused here. The 26 published plateaus themselves run 0.465 to 0.756, well inside it; the band is what may be ADMITTED and not where they sit.
+             LEVEL vs smaller BM      0.918   gate <= 1.25 at matched exactly-full rows, over 8 comparison(s)
+             BLOCK_M=256 reference 1.9744 ms/tile implies   365.4 TFLOP/s =  53.6% of 682.1 (NVIDIA H200 (measured)); 48.7% of the 751.0 at its own 1635 MHz (issue efficiency, not a gate input)
+partner      BLOCK_M=32 scaling partner: 4 tread(s) measured. It is not a candidate reference; it is the smallest tile the sweep PLANS, which is what the non-vacuity floor 2 BM_min / (b x ridge) is taken over.
+subject      16 treads (16 scored after 0 excluded for a drifting clock; scored against 1485 MHz), across-repeat spread 0.263% over the scored treads
+             membership margin 2.000% (floor 2%, 3x the measured spread)
+             drift first->last repeat +0.043%
+             membership from the compute branch scaled off BLOCK_M=256; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line
+             ladder outcome: undecided_parallel_branch  (UNDECIDED: the fit declined to name a branch, which is not the same as finding none)
+             memory treads 0, alpha DECLINED, see the outcome above
+             B/C 1.102407  |B/C - 1| 0.102407  tolerance 0.15  margin -0.047593 (-31.73% of the tolerance, -13.59 sigma)
+             no tread was excluded for a drifting clock
+             0 tread(s) KEPT with LEVEL failed HIGH and 16 KEPT with LEVEL failed LOW: timed steadily outside the band around the roof's clock. On a power-capped card that is where a tile lives, not a fault: the H200 session of 2026-09-09 holds BM=128/BN=64 at a median 1395 MHz and BM=256 at 1650 against a 1485 MHz calibration GEMM, all under one 700 W cap. Their times are in the fit; their fraction of the FIXED roof is off by the clock ratio, OVERSTATED on the high side and UNDERSTATED on the low. The `@own clk` column in the table below is that fraction taken on the roof at each tread's own clock (the driver's roof_at_cell_clock_tflops), printed on every row beside the fixed one as the issue efficiency and read by no gate. The reference ladder has 8 high and 0 low such tread(s), so its level against the fixed ceiling is off by its own ratio too.
+
+  n   rows         ms     slope  reps   spread  of roof @own clk  scored
+             of roof = this tread's own throughput over the FIXED 682.1 TFLOP/s ceiling, which is what every gate here reads; @own clk = the same throughput over the roof at the clock this tread held, the issue efficiency, scored by nothing
+  1    128     1.1318         -     7   0.944%    0.467    0.492  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  2    256     2.2027    1.0709     7   0.055%    0.480    0.506  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  3    384     3.2837    1.0811     7   0.324%    0.483    0.517  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  4    512     4.3596    1.0759     7   0.183%    0.485    0.517  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  5    640     5.4732    1.1136     7   0.331%    0.483    0.514  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  6    768     6.5675    1.0942     7   0.183%    0.483    0.520  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  7    896     7.6462    1.0787     7   0.205%    0.484    0.515  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  8   1024     8.7283    1.0821     7   0.276%    0.485    0.516  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+  9   1152     9.7510    1.0228     7   0.251%    0.488    0.525  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 10   1280    10.8347    1.0837     7   0.109%    0.488    0.525  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 11   1408    11.9041    1.0693     7   0.297%    0.489    0.526  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 12   1536    12.9904    1.0863     7   0.395%    0.489    0.526  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 13   1664    14.1197    1.1293     7   0.063%    0.487    0.524  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 14   1792    15.2596    1.1399     7   0.451%    0.485    0.522  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 15   1920    16.3809    1.1213     7   0.292%    0.484    0.521  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+ 16   2048    17.5500    1.1692     7   0.233%    0.482    0.519  yes  (LEVEL low, kept; fixed-roof fraction understated by the clock ratio)
+
+## Gates
+
+RESULT: VALIDITY V0 PASS [VALIDITY] this report examined real work | saw bootstrap resamples=2000, reference treads=8, repeats per tread=7, scored treads=16, settings that executed=1, subject treads=16, timings=196 | gate every one of the report's own input counts is above zero
+[PASS] VALIDITY V0 non-vacuity  this report examined real work
+         gate: every one of the report's own input counts is above zero
+         saw:  bootstrap resamples=2000, reference treads=8, repeats per tread=7, scored treads=16, settings that executed=1, subject treads=16, timings=196
+RESULT: VALIDITY V4 PASS [VALIDITY] each setting compiled its own kernel | saw BM=32:17, BM=128:0, BM=256:0 | gate >= 1 fresh Triton artefact per setting that ran
+[PASS] VALIDITY V4 override took effect  each setting compiled its own kernel
+         gate: >= 1 fresh Triton artefact per setting that ran
+         saw:  BM=32:17, BM=128:0, BM=256:0
+RESULT: VALIDITY V1 PASS [VALIDITY] the compute reference runs at a plausible rate | saw BLOCK_M=256 reference 1.9744 ms/tile implies 365.4 TFLOP/s = 53.6% of 682.1 (NVIDIA H200 (measured)); 48.7% of the 751.0 at its own 1635 MHz (issue efficiency, not a gate input) | gate implied TFLOP/s in [25%, 100%] of the card's calibrated bf16 ceiling
+[PASS] VALIDITY V1 reference level  the compute reference runs at a plausible rate
+         gate: implied TFLOP/s in [25%, 100%] of the card's calibrated bf16 ceiling
+         saw:  BLOCK_M=256 reference 1.9744 ms/tile implies   365.4 TFLOP/s =  53.6% of 682.1 (NVIDIA H200 (measured)); 48.7% of the 751.0 at its own 1635 MHz (issue efficiency, not a gate input)
+         `compute_reference` tests PROPORTIONALITY and never LEVEL; a line 43.6x too steep is still perfectly proportional.
+RESULT: VALIDITY V2 PASS [VALIDITY] time rises with every extra M-tile | saw 15 tread boundaries examined, 0 inversions, 0 beyond 2 sigma (spread 0.263%) | gate zero inversions beyond 2 sigma
+[PASS] VALIDITY V2 monotone ladder  time rises with every extra M-tile
+         gate: zero inversions beyond 2 sigma
+         saw:  15 tread boundaries examined, 0 inversions, 0 beyond 2 sigma (spread 0.263%)
+RESULT: VALIDITY V3 PASS [VALIDITY] the per-tread slope never rises and then falls | saw 15 per-tread slopes at spread 0.263%, 0 drops clearing both bars: 1.071 1.081 1.076 1.114 1.094 1.079 1.082 1.023 1.084 1.069 1.086 1.129 1.140 1.121 1.169 | gate zero slope drops over 5% and 3 sigma
+[PASS] VALIDITY V3 max-affine shape  the per-tread slope never rises and then falls
+         gate: zero slope drops over 5% and 3 sigma
+         saw:  15 per-tread slopes at spread 0.263%, 0 drops clearing both bars: 1.071 1.081 1.076 1.114 1.094 1.079 1.082 1.023 1.084 1.069 1.086 1.129 1.140 1.121 1.169
+RESULT: VALIDITY V5 PASS [VALIDITY] the ladder was measured often enough to weigh an inversion | saw 7 repeats on the thinnest tread, median across-repeat spread 0.263% | gate >= 2 repeats per tread and spread <= 2%
+[PASS] VALIDITY V5 replication  the ladder was measured often enough to weigh an inversion
+         gate: >= 2 repeats per tread and spread <= 2%
+         saw:  7 repeats on the thinnest tread, median across-repeat spread 0.263%
+RESULT: CLAIM C1 UNKNOWN [CLAIM] at least 5 clean memory-bound treads at BLOCK_M=128 | saw UNDECIDED (undecided_parallel_branch): the fit LOOKED and declined to name a memory branch, so the 0 treads it reports of 16 are not a depth | gate >= 5 treads standing above the compute branch
+[UNKNOWN] CLAIM    C1 depth  at least 5 clean memory-bound treads at BLOCK_M=128
+         gate: >= 5 treads standing above the compute branch
+         saw:  UNDECIDED (undecided_parallel_branch): the fit LOOKED and declined to name a memory branch, so the 0 treads it reports of 16 are not a depth
+         A FAIL is the registered expectation and is a result: see the escape thresholds above.
+         ladder outcome: undecided_parallel_branch
+         This is NOT the same as a shallow ladder, and reading it as one is how a fit that refused to answer becomes a published 'no'. `undecided_parallel_branch` says the cap sits ON the ridge, which the roofline arm can settle and this one cannot; `undecided_drifting_clock` says the clock moved mid-measurement and the run should be repeated on an instrument that warms until it settles.
+RESULT: CLAIM C2 FAIL [CLAIM] the memory branch is not the compute branch again | saw B/C 1.102407 |B/C - 1| 0.102407 tolerance 0.15 margin -0.047593 (-31.73% of the tolerance, -13.59 sigma) | gate |B/C - 1| - 0.15 >= 3 sd
+[FAIL] CLAIM    C2 tolerance margin  the memory branch is not the compute branch again
+         gate: |B/C - 1| - 0.15 >= 3 sd
+         saw:  B/C 1.102407  |B/C - 1| 0.102407  tolerance 0.15  margin -0.047593 (-31.73% of the tolerance, -13.59 sigma)
+         noise model: replicates (7+ per tread), 2000 resamples, sd 0.003502
+         clearing the tolerance is not enough: the published A100 fit clears by 0.000101, which is 0.07% of the tolerance and 0.02 sd, and a 0.010% change in ONE tread reverses it.
+RESULT: VALIDITY V6 PASS [VALIDITY] the observed tread count matches n* from the fitted (alpha, B/C) | saw VACUOUS: the ladder fit is undecided_parallel_branch, so it declined to name an alpha rather than failing to find treads | gate within 1 tread, or vacuous when the report carries no alpha
+[PASS] VALIDITY V6 fit self-consistency  the observed tread count matches n* from the fitted (alpha, B/C)
+         gate: within 1 tread, or vacuous when the report carries no alpha
+         saw:  VACUOUS: the ladder fit is undecided_parallel_branch, so it declined to name an alpha rather than failing to find treads
+         This gate is a check on the FIT and not a prediction about the world; see its docstring.
+         A PASS here is NOT a statement that the ladder is two lines. It is a statement that the report publishes no alpha, so no alpha can be mis-quoted out of it.
+
+7 PASS, 1 FAIL, 1 UNKNOWN

@@ -1,0 +1,2149 @@
+{
+  "predictions": "## Predictions, registered before anything is measured\n\nTHE GRID, and the residency it computes to on the attached card:\n    sm_90  228 KiB smem/SM  2048 threads/SM  32 blocks/SM  132 SMs  63 MB L2   [read off NVIDIA H200]\n    L2 provenance: read off NVIDIA H200 (L2_cache_size)\n    one CTA streams 1.31 MiB over its K loop, weighted over both GEMMs\n\n    s2w4g1       warp                        32 KiB/CTA   6 blk/SM (smem   )      1040 MiB in flight  alpha_conc 0.942\n    s2w8g1       occ/warp                    32 KiB/CTA   6 blk/SM (smem   )      1040 MiB in flight  alpha_conc 0.942\n    s3w4g1       warp                        48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913\n    s3w8g1       occ/swz/warp                48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913\n    s3w8g8       swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913\n    s3w8g16      swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913\n    s3w8g64      swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913\n    s4w8g1       occ                         64 KiB/CTA   3 blk/SM (smem   )       520 MiB in flight  alpha_conc 0.885\n    s5w8g1       occ                         80 KiB/CTA   2 blk/SM (smem   )       346 MiB in flight  alpha_conc 0.827\n\nP1  CONCURRENCY. alpha rises with resident blocks per SM. The LRU\n    caricature predicts a swing of +0.115 in alpha between the top and\n    bottom rungs of the residency ladder above. The gate takes half of\n    that, 0.058, floored at 3 sigma of the fitted alpha's own\n    replicate spread, which is measured and not assumed. A FAIL means\n    concurrency does not set alpha and the cross-card null was not\n    saturation.\nP2  PROGRAM ORDER. Reuse distance predicts alpha(G=64) / alpha(G=1) = 1/min(G, 8.5 tiles\n    per expert) = 0.118; uncapped it would be 0.0156. The gate gives the\n    predictor a factor of 2 and passes at 0.235. The published corpus\n    sits at 0.69-0.78, so this is expected to FAIL, and a FAIL here is\n    the interesting outcome: it says the standard predictor does not\n    transfer to this regime.\nP3  THE CONTROL. num_warps changes resident WARPS at fixed resident\n    BLOCKS, so the concurrent data footprint is unchanged and P1's\n    mechanism predicts NO movement. The gate is that the warp contrast\n    is smaller than the occupancy contrast. A FAIL says the residency\n    reading is confounded by something num_warps changes -- latency\n    hiding, register pressure, scheduling -- and P1 cannot be read as\n    a footprint effect.\nP6  THE OTHER CONTROL, and the one this design usually cannot run.\n    num_stages sets residency AND software-pipeline prefetch depth, so\n    P1's axis carries two mechanisms. They come apart ONLY where two\n    num_stages compute the SAME resident-block count, and after the\n    BLOCK_M=256 reference prunes the ladder neither real card has such\n    a pair: the H200 runs 2/3/4/5 stages at 6/4/3/2 blocks and the A100\n    runs 2/3/4 at 4/3/2. So P6 is expected to report UNKNOWN on a pod,\n    which counts AGAINST the run and is the honest accounting: the\n    concurrency reading is not established, and CONCURRENCY may not be\n    quoted without that clause. The self-test plants P6's PASS and FAIL\n    branches on a card that does not exist and says so.\nP4  THE NULL IS A RESULT. If P1 and P2 both FAIL the verdict is\n    NEITHER (null), printed as such and not forced into a branch.\n    It would retire both models at once and point at DRAM scheduling,\n    the replacement policy or sector granularity instead.\nP2b WHAT THIS DESIGN CAN READ AT ALL, checked against P2 before the run.\n    The memory prefix runs n* = k(1-alpha)/(1-k alpha) treads with k = b ridge / 2BM = 2.436, so:\n      floor      alpha < 0.128 leaves fewer than 3 treads above the compute branch\n                 and the setting reports nothing;\n      dead band  alpha in [0.349, 0.472] is DISCARDED by the fit, because the two\n                 branches are then within 15% of each other and are one line.\n    Taking a published alpha(1) near 0.93, P2's own prediction lands at 0.109,\n    which is UNDER the floor, so a reuse-distance world shows up here as a collapse and not as a ratio.\n    ROUTE TWO covers the case where a setting does fall in the dead band or under the\n    floor: wide-G settings losing their memory branch while G=1 keeps its is scored as\n    a PASS for P2, and the report says which route it took.\nP5  THE LEVEL IS NOT PREDICTED, only the differences, and the differences are ATTENUATED.\n    A B/(A+B) ladder fit returns alpha_fitted = (alpha_b + phi) / (1 + phi + delta) (EXA), and\n    this grid pins BM, BN and K, so phi is common to every setting and a contrast reads\n    (alpha_b(1) - alpha_b(2)) / (1 + phi + delta): the cache term's difference scaled, not the\n    difference itself. The scaling is a BRACKET, 0.50 to 0.98 here at alpha_a = 1 to 0\n    (alpha_a is unmeasured; delta only lowers it), and delta is per-setting, so a level\n    difference alone can move a fitted alpha. The geometric terms do NOT cancel exactly; the\n    sign and order of every contrast above survive the scaling and their magnitude is a lower\n    bound on the alpha_b difference. No gate here is scored on an absolute alpha.",
+  "plan": {
+    "model": "mixtral-8x7b",
+    "dtype": "bf16",
+    "settings": [
+      "s2w4g1",
+      "s2w8g1",
+      "s3w4g1",
+      "s3w8g1",
+      "s3w8g8",
+      "s3w8g16",
+      "s3w8g64",
+      "s4w8g1",
+      "s5w8g1"
+    ],
+    "subject_rows": [
+      64,
+      128,
+      192,
+      256,
+      320,
+      384,
+      448,
+      512,
+      576,
+      640,
+      704,
+      768,
+      832,
+      896,
+      960,
+      1024
+    ],
+    "reference_rows": [
+      256,
+      512,
+      768,
+      1024
+    ],
+    "refused": {},
+    "cells": 900,
+    "warmup_ms": 300.0,
+    "trials": 3,
+    "l2_flush": true,
+    "cell_budget_ms": 400.0,
+    "estimated_seconds": 1342.5624900809303
+  },
+  "run_id": "nvidia_h200-dtypebf16-g1_8_16_64-modelmixtral_8x7b-n64-s2_3_4_5-settingsblock_k64_capabilityfrom-753c188f",
+  "card": "nvidia_h200",
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "measured on this device: NVIDIA H200 (measured)",
+  "bandwidth_source": "measured on this device: NVIDIA H200 (measured)",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T06:07:38+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 155.9303223641331,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured)",
+    "bandwidth": 4374.299702465323,
+    "bandwidth_source": "measured on this device: NVIDIA H200 (measured)",
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 400.0,
+    "missing": {
+      "iters": "supplied as None",
+      "sglang": "package not installed"
+    }
+  },
+  "run": {
+    "verdict": "NEITHER (null)",
+    "settings": [
+      {
+        "key": "s2w4g1",
+        "arms": [
+          "warp-control"
+        ],
+        "num_stages": 2,
+        "num_warps": 4,
+        "group_m": 1,
+        "resident_blocks": 6,
+        "residency_binding": "smem",
+        "smem_per_block": 32768,
+        "footprint_bytes": 1089994752.0,
+        "predicted_alpha": 0.9422799422799423,
+        "alpha": 0.8567697234858774,
+        "alpha_corrected": 0.8415284410680963,
+        "alpha_sigma": 0.02556705564983934,
+        "per_rep_alpha": [
+          0.8085251353855162,
+          0.8364694195260103,
+          0.8868906939172517,
+          0.854448482210161,
+          0.8403474379097153
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.0062740984620825915,
+        "mean_rel_err": 0.026250136162809225,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 1.4%: compute branch 2.2625 ms per tile, fixed cost 0.1353 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.8668319880962372
+          ],
+          [
+            2,
+            1.5570560097694397
+          ],
+          [
+            3,
+            2.070496082305908
+          ],
+          [
+            4,
+            2.812831997871399
+          ],
+          [
+            5,
+            3.4916160106658936
+          ],
+          [
+            6,
+            4.106304168701172
+          ],
+          [
+            7,
+            4.587456226348877
+          ],
+          [
+            8,
+            5.458400011062622
+          ],
+          [
+            9,
+            5.946368217468262
+          ],
+          [
+            10,
+            6.962687969207764
+          ],
+          [
+            11,
+            7.544928073883057
+          ],
+          [
+            12,
+            8.521023750305176
+          ],
+          [
+            13,
+            9.142687797546387
+          ],
+          [
+            14,
+            9.56113576889038
+          ],
+          [
+            15,
+            10.015135765075684
+          ],
+          [
+            16,
+            10.788303852081299
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s2w8g1",
+        "arms": [
+          "occupancy",
+          "warp-control"
+        ],
+        "num_stages": 2,
+        "num_warps": 8,
+        "group_m": 1,
+        "resident_blocks": 6,
+        "residency_binding": "smem",
+        "smem_per_block": 32768,
+        "footprint_bytes": 1089994752.0,
+        "predicted_alpha": 0.9422799422799423,
+        "alpha": 0.9417398426834961,
+        "alpha_corrected": 0.9276850935195925,
+        "alpha_sigma": 0.025680555014851118,
+        "per_rep_alpha": [
+          0.8918357443951553,
+          0.9437261304860122,
+          0.9716107155907439,
+          0.9392678895719643,
+          0.9401397769540678
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.008020477102559317,
+        "mean_rel_err": 0.009430736197531252,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 1.8%: compute branch 2.1210 ms per tile, fixed cost 0.1605 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.9074719846248627
+          ],
+          [
+            2,
+            1.6620000004768372
+          ],
+          [
+            3,
+            2.4720319509506226
+          ],
+          [
+            4,
+            3.3039679527282715
+          ],
+          [
+            5,
+            4.013984203338623
+          ],
+          [
+            6,
+            4.834320068359375
+          ],
+          [
+            7,
+            5.644351959228516
+          ],
+          [
+            8,
+            6.492800235748291
+          ],
+          [
+            9,
+            7.289535999298096
+          ],
+          [
+            10,
+            8.049536228179932
+          ],
+          [
+            11,
+            8.805695533752441
+          ],
+          [
+            12,
+            9.708735942840576
+          ],
+          [
+            13,
+            10.420191764831543
+          ],
+          [
+            14,
+            11.337311744689941
+          ],
+          [
+            15,
+            12.04419231414795
+          ],
+          [
+            16,
+            13.030303955078125
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s3w4g1",
+        "arms": [
+          "warp-control"
+        ],
+        "num_stages": 3,
+        "num_warps": 4,
+        "group_m": 1,
+        "resident_blocks": 4,
+        "residency_binding": "smem",
+        "smem_per_block": 49152,
+        "footprint_bytes": 726663168.0,
+        "predicted_alpha": 0.9134199134199135,
+        "alpha": 1.107504497518139,
+        "alpha_corrected": 1.0898366019270056,
+        "alpha_sigma": 0.030241339311356044,
+        "per_rep_alpha": [
+          1.0818309496845357,
+          1.093659980843284,
+          1.1489098349404838,
+          1.157238577447912,
+          1.136229193342091
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.007594862311899099,
+        "mean_rel_err": 0.01414463781846056,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 0.4%: compute branch 2.1063 ms per tile, fixed cost 0.0386 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.7828159928321838
+          ],
+          [
+            2,
+            1.4623839855194092
+          ],
+          [
+            3,
+            2.176032066345215
+          ],
+          [
+            4,
+            2.9062719345092773
+          ],
+          [
+            5,
+            3.633824110031128
+          ],
+          [
+            6,
+            4.404288053512573
+          ],
+          [
+            7,
+            5.131103992462158
+          ],
+          [
+            8,
+            5.903728008270264
+          ],
+          [
+            9,
+            6.696367979049683
+          ],
+          [
+            10,
+            7.408528089523315
+          ],
+          [
+            11,
+            8.176400184631348
+          ],
+          [
+            12,
+            8.966511726379395
+          ],
+          [
+            13,
+            9.674976348876953
+          ],
+          [
+            14,
+            10.492143630981445
+          ],
+          [
+            15,
+            11.255647659301758
+          ],
+          [
+            16,
+            11.940943717956543
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s3w8g1",
+        "arms": [
+          "occupancy",
+          "swizzle",
+          "warp-control"
+        ],
+        "num_stages": 3,
+        "num_warps": 8,
+        "group_m": 1,
+        "resident_blocks": 4,
+        "residency_binding": "smem",
+        "smem_per_block": 49152,
+        "footprint_bytes": 726663168.0,
+        "predicted_alpha": 0.9134199134199135,
+        "alpha": 1.0980546055974074,
+        "alpha_corrected": 1.0810840108041577,
+        "alpha_sigma": 0.034644093954192524,
+        "per_rep_alpha": [
+          1.0407476797515982,
+          1.026886671715697,
+          1.1220245070261092,
+          1.0941579091043965,
+          1.0713022920779105
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.0072243039666355525,
+        "mean_rel_err": 0.012767228030409609,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 0.8%: compute branch 2.0253 ms per tile, fixed cost 0.0497 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.7993919849395752
+          ],
+          [
+            2,
+            1.5005120038986206
+          ],
+          [
+            3,
+            2.2534079551696777
+          ],
+          [
+            4,
+            3.0076799392700195
+          ],
+          [
+            5,
+            3.7532479763031006
+          ],
+          [
+            6,
+            4.6020801067352295
+          ],
+          [
+            7,
+            5.322496175765991
+          ],
+          [
+            8,
+            6.121088027954102
+          ],
+          [
+            9,
+            6.821343898773193
+          ],
+          [
+            10,
+            7.685088157653809
+          ],
+          [
+            11,
+            8.490431785583496
+          ],
+          [
+            12,
+            9.263327598571777
+          ],
+          [
+            13,
+            10.042495727539062
+          ],
+          [
+            14,
+            10.713695526123047
+          ],
+          [
+            15,
+            11.55510425567627
+          ],
+          [
+            16,
+            12.430144309997559
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s3w8g8",
+        "arms": [
+          "swizzle"
+        ],
+        "num_stages": 3,
+        "num_warps": 8,
+        "group_m": 8,
+        "resident_blocks": 4,
+        "residency_binding": "smem",
+        "smem_per_block": 49152,
+        "footprint_bytes": 726663168.0,
+        "predicted_alpha": 0.9134199134199135,
+        "alpha": 0.8106189122182572,
+        "alpha_corrected": 0.7944840428275527,
+        "alpha_sigma": 0.01789643428051999,
+        "per_rep_alpha": [
+          0.7793435106372535,
+          0.8008324859272087,
+          0.8326344286798449,
+          0.8042323774122065,
+          0.8185664486763161
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.007739493502561671,
+        "mean_rel_err": 0.01404821460937373,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 3.5%: compute branch 1.9462 ms per tile, fixed cost 0.2992 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.8069760203361511
+          ],
+          [
+            2,
+            1.3214080333709717
+          ],
+          [
+            3,
+            1.9500800371170044
+          ],
+          [
+            4,
+            2.484384059906006
+          ],
+          [
+            5,
+            3.184191942214966
+          ],
+          [
+            6,
+            3.7812479734420776
+          ],
+          [
+            7,
+            4.437280178070068
+          ],
+          [
+            8,
+            4.694975852966309
+          ],
+          [
+            9,
+            5.6348960399627686
+          ],
+          [
+            10,
+            6.144160032272339
+          ],
+          [
+            11,
+            6.765279769897461
+          ],
+          [
+            12,
+            7.342688083648682
+          ],
+          [
+            13,
+            8.091023921966553
+          ],
+          [
+            14,
+            8.609024047851562
+          ],
+          [
+            15,
+            9.25169563293457
+          ],
+          [
+            16,
+            9.645472049713135
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s3w8g16",
+        "arms": [
+          "swizzle"
+        ],
+        "num_stages": 3,
+        "num_warps": 8,
+        "group_m": 16,
+        "resident_blocks": 4,
+        "residency_binding": "smem",
+        "smem_per_block": 49152,
+        "footprint_bytes": 726663168.0,
+        "predicted_alpha": 0.9134199134199135,
+        "alpha": 0.763097226000308,
+        "alpha_corrected": 0.7476363839940753,
+        "alpha_sigma": 0.019284133238617933,
+        "per_rep_alpha": [
+          0.7246613316977573,
+          0.7391665424436814,
+          0.7831359559219673,
+          0.7509872496555597,
+          0.747882956193371
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.007212979470553908,
+        "mean_rel_err": 0.0147737665733598,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 2.7%: compute branch 1.9800 ms per tile, fixed cost 0.2318 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.8038719892501831
+          ],
+          [
+            2,
+            1.3429759740829468
+          ],
+          [
+            3,
+            1.9589760303497314
+          ],
+          [
+            4,
+            2.5013920068740845
+          ],
+          [
+            5,
+            3.168992042541504
+          ],
+          [
+            6,
+            3.7363200187683105
+          ],
+          [
+            7,
+            4.369503974914551
+          ],
+          [
+            8,
+            4.744383811950684
+          ],
+          [
+            9,
+            5.567327976226807
+          ],
+          [
+            10,
+            6.031551837921143
+          ],
+          [
+            11,
+            6.775167942047119
+          ],
+          [
+            12,
+            7.307072162628174
+          ],
+          [
+            13,
+            7.929759979248047
+          ],
+          [
+            14,
+            8.608287811279297
+          ],
+          [
+            15,
+            9.191360473632812
+          ],
+          [
+            16,
+            9.35539197921753
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s3w8g64",
+        "arms": [
+          "swizzle"
+        ],
+        "num_stages": 3,
+        "num_warps": 8,
+        "group_m": 64,
+        "resident_blocks": 4,
+        "residency_binding": "smem",
+        "smem_per_block": 49152,
+        "footprint_bytes": 726663168.0,
+        "predicted_alpha": 0.9134199134199135,
+        "alpha": 0.8552361153003908,
+        "alpha_corrected": 0.838935445349749,
+        "alpha_sigma": 0.013136033441647018,
+        "per_rep_alpha": [
+          0.8218972589760796,
+          0.8419317057269481,
+          0.8570842959893701,
+          0.8503186295882699,
+          0.8284671345937531
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.005326779003953319,
+        "mean_rel_err": 0.013020178722294187,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 1.4%: compute branch 2.0467 ms per tile, fixed cost 0.0351 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.805184006690979
+          ],
+          [
+            2,
+            1.359231948852539
+          ],
+          [
+            3,
+            1.9707839488983154
+          ],
+          [
+            4,
+            2.5703840255737305
+          ],
+          [
+            5,
+            3.2216639518737793
+          ],
+          [
+            6,
+            3.863647937774658
+          ],
+          [
+            7,
+            4.568447828292847
+          ],
+          [
+            8,
+            5.137311935424805
+          ],
+          [
+            9,
+            5.847455978393555
+          ],
+          [
+            10,
+            6.371167898178101
+          ],
+          [
+            11,
+            6.95088005065918
+          ],
+          [
+            12,
+            7.601743936538696
+          ],
+          [
+            13,
+            8.217791557312012
+          ],
+          [
+            14,
+            8.955647945404053
+          ],
+          [
+            15,
+            9.639744281768799
+          ],
+          [
+            16,
+            10.144591808319092
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s4w8g1",
+        "arms": [
+          "occupancy"
+        ],
+        "num_stages": 4,
+        "num_warps": 8,
+        "group_m": 1,
+        "resident_blocks": 3,
+        "residency_binding": "smem",
+        "smem_per_block": 65536,
+        "footprint_bytes": 544997376.0,
+        "predicted_alpha": 0.8845598845598845,
+        "alpha": 1.0291554170751456,
+        "alpha_corrected": 1.0130850511137641,
+        "alpha_sigma": 0.025856606474819042,
+        "per_rep_alpha": [
+          1.0069446472503432,
+          1.0581903850894703,
+          1.0414932343258294,
+          0.9955711439804108,
+          0.994357945191076
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.006370731138260987,
+        "mean_rel_err": 0.008683845259604115,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 0.6%: compute branch 1.9545 ms per tile, fixed cost 0.0523 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.8171839714050293
+          ],
+          [
+            2,
+            1.5020159482955933
+          ],
+          [
+            3,
+            2.264224052429199
+          ],
+          [
+            4,
+            3.066848039627075
+          ],
+          [
+            5,
+            3.8108479976654053
+          ],
+          [
+            6,
+            4.566720008850098
+          ],
+          [
+            7,
+            5.32755184173584
+          ],
+          [
+            8,
+            6.081632137298584
+          ],
+          [
+            9,
+            6.891919851303101
+          ],
+          [
+            10,
+            7.618048191070557
+          ],
+          [
+            11,
+            8.414848327636719
+          ],
+          [
+            12,
+            9.199295997619629
+          ],
+          [
+            13,
+            9.940160274505615
+          ],
+          [
+            14,
+            10.72163200378418
+          ],
+          [
+            15,
+            11.539007663726807
+          ],
+          [
+            16,
+            12.279327869415283
+          ]
+        ],
+        "usable": true
+      },
+      {
+        "key": "s5w8g1",
+        "arms": [
+          "occupancy"
+        ],
+        "num_stages": 5,
+        "num_warps": 8,
+        "group_m": 1,
+        "resident_blocks": 2,
+        "residency_binding": "smem",
+        "smem_per_block": 81920,
+        "footprint_bytes": 363331584.0,
+        "predicted_alpha": 0.8268398268398268,
+        "alpha": 0.9678246412594477,
+        "alpha_corrected": 0.9524171525063848,
+        "alpha_sigma": 0.02700584766752888,
+        "per_rep_alpha": [
+          0.9368586420233401,
+          0.9480066981516898,
+          1.0150465009179184,
+          0.9724531506089136,
+          0.9606841355030198
+        ],
+        "memory_points": 16,
+        "treads": 16,
+        "spread": 0.006916399160434614,
+        "mean_rel_err": 0.005809453865477989,
+        "reference_block_m": 256,
+        "reference_refused": false,
+        "reference_note": "BLOCK_M=256 ladder, 4 treads, proportional to 0.1%: compute branch 1.9749 ms per tile, fixed cost 0.0000 ms",
+        "basis": "membership from the compute branch scaled off BLOCK_M=256",
+        "points": [
+          [
+            1,
+            0.8033919930458069
+          ],
+          [
+            2,
+            1.5174720287322998
+          ],
+          [
+            3,
+            2.2820799350738525
+          ],
+          [
+            4,
+            3.010240077972412
+          ],
+          [
+            5,
+            3.7972159385681152
+          ],
+          [
+            6,
+            4.583904027938843
+          ],
+          [
+            7,
+            5.2881598472595215
+          ],
+          [
+            8,
+            6.065887928009033
+          ],
+          [
+            9,
+            6.810655832290649
+          ],
+          [
+            10,
+            7.537631988525391
+          ],
+          [
+            11,
+            8.296576023101807
+          ],
+          [
+            12,
+            9.028128147125244
+          ],
+          [
+            13,
+            9.711935997009277
+          ],
+          [
+            14,
+            10.586688041687012
+          ],
+          [
+            15,
+            11.343135833740234
+          ],
+          [
+            16,
+            12.129152297973633
+          ]
+        ],
+        "usable": true
+      }
+    ],
+    "contrasts": {
+      "occupancy": {
+        "lo": "2 blocks/SM",
+        "hi": "6 blocks/SM",
+        "lo_alpha": 0.9524171525063848,
+        "hi_alpha": 0.9276850935195925,
+        "swing": -0.024732058986792316,
+        "ratio": 0.9740323250986112,
+        "sigma": 0.02829677577784789,
+        "levels": 4
+      },
+      "swizzle": {
+        "lo": "G=1",
+        "hi": "G=64",
+        "lo_alpha": 1.0810840108041577,
+        "hi_alpha": 0.838935445349749,
+        "swing": -0.24214856545440877,
+        "ratio": 0.7760131839575649,
+        "sigma": 0.021240173728744365,
+        "levels": 4
+      },
+      "warp-control": {
+        "lo": "s2 w4",
+        "hi": "s2 w8",
+        "lo_alpha": 0.8415284410680963,
+        "hi_alpha": 0.9276850935195925,
+        "swing": 0.08615665245149617,
+        "ratio": 1.1023811534428274,
+        "sigma": 0.029033260982559757,
+        "levels": 2
+      },
+      "depth-control": {
+        "lo": "",
+        "hi": "",
+        "lo_alpha": null,
+        "hi_alpha": null,
+        "swing": null,
+        "ratio": null,
+        "sigma": null,
+        "levels": 0
+      }
+    },
+    "residency_levels": {
+      "2": [
+        5
+      ],
+      "3": [
+        4
+      ],
+      "4": [
+        3
+      ],
+      "6": [
+        2
+      ]
+    },
+    "depth_control_formable": false,
+    "timing": {
+      "instruments": [
+        "queue-deep/l2-flush/settled-warmup/clock-under-load/v4"
+      ],
+      "expected_instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+      "rows_timed": 900,
+      "warmup_ms": [
+        326.03676891326904,
+        329.680287361145,
+        329.8778247833252,
+        330.91705894470215,
+        333.9555835723877,
+        334.33437061309814,
+        334.87952041625977,
+        335.0557427406311,
+        335.2505578994751,
+        335.280704498291,
+        336.03228855133057,
+        336.6076488494873,
+        336.6800637245178,
+        336.81564712524414,
+        336.84185886383057,
+        337.0597448348999,
+        337.0697612762451,
+        337.14732599258423,
+        337.4959993362427,
+        337.5767345428467,
+        337.68419075012207,
+        337.9227509498596,
+        338.11126613616943,
+        338.1351704597473,
+        338.5444507598877,
+        338.7039051055908,
+        339.055869102478,
+        339.1825256347656,
+        339.2474250793457,
+        339.3655996322632,
+        339.3791379928589,
+        339.429536819458,
+        339.7185277938843,
+        340.34006214141846,
+        340.3757462501526,
+        340.40227222442627,
+        340.52396869659424,
+        340.5635509490967,
+        340.79027462005615,
+        340.90880060195923,
+        340.99487495422363,
+        341.01744270324707,
+        341.07804775238037,
+        341.16736030578613,
+        341.21638441085815,
+        341.36946964263916,
+        341.3952970504761,
+        341.5288019180298,
+        341.61042881011963,
+        341.9638423919678,
+        341.97884464263916,
+        342.00310230255127,
+        342.0686378479004,
+        342.310622215271,
+        342.44902515411377,
+        342.49392318725586,
+        342.54797077178955,
+        342.6941394805908,
+        342.7928628921509,
+        342.81670665740967,
+        342.91173934936523,
+        342.92204427719116,
+        342.94931411743164,
+        342.9980869293213,
+        343.0068826675415,
+        343.04991912841797,
+        343.0957088470459,
+        343.33545303344727,
+        343.3878393173218,
+        343.50060653686523,
+        343.6697301864624,
+        343.68777656555176,
+        343.70396900177,
+        343.8413095474243,
+        343.887647151947,
+        343.9005117416382,
+        343.90857791900635,
+        343.96569442749023,
+        344.1631398200989,
+        344.3004426956177,
+        344.321249961853,
+        344.33177614212036,
+        344.3927698135376,
+        344.4200315475464,
+        344.46979236602783,
+        344.51494789123535,
+        344.5415322780609,
+        344.5605745315552,
+        344.71382331848145,
+        344.7199697494507,
+        344.7486753463745,
+        344.7662377357483,
+        344.77545738220215,
+        344.81721591949463,
+        344.8253812789917,
+        344.89798736572266,
+        344.93657636642456,
+        344.97309017181396,
+        345.08147048950195,
+        345.3203821182251,
+        345.48307156562805,
+        345.538369178772,
+        345.54537200927734,
+        345.55046367645264,
+        345.5948495864868,
+        345.647554397583,
+        345.67308473587036,
+        345.673282623291,
+        345.8996858596802,
+        346.05122900009155,
+        346.06479954719543,
+        346.0963821411133,
+        346.1074848175049,
+        346.1710476875305,
+        346.23033714294434,
+        346.2420151233673,
+        346.25792026519775,
+        346.2619848251343,
+        346.53241539001465,
+        346.58198070526123,
+        346.6525764465332,
+        346.7005157470703,
+        346.7387800216675,
+        346.8284764289856,
+        346.994176864624,
+        347.0125102996826,
+        347.045823097229,
+        347.05542373657227,
+        347.0578866004944,
+        347.08182406425476,
+        347.12637090682983,
+        347.14483308792114,
+        347.17308926582336,
+        347.1914882659912,
+        347.2152614593506,
+        347.2490568161011,
+        347.2674570083618,
+        347.27936458587646,
+        347.28150510787964,
+        347.30838680267334,
+        347.40384221076965,
+        347.4084177017212,
+        347.46233558654785,
+        347.5050582885742,
+        347.57993602752686,
+        347.59760093688965,
+        347.62035369873047,
+        347.65183687210083,
+        347.66825580596924,
+        347.6762857437134,
+        347.69497632980347,
+        347.71014308929443,
+        347.726779460907,
+        347.7432007789612,
+        347.81321239471436,
+        347.8334755897522,
+        347.8872985839844,
+        347.9137649536133,
+        347.9691162109375,
+        347.9699192047119,
+        347.9871973991394,
+        348.05247831344604,
+        348.0540819168091,
+        348.10461044311523,
+        348.16035175323486,
+        348.3947505950928,
+        348.4026894569397,
+        348.4273614883423,
+        348.4707250595093,
+        348.4980504512787,
+        348.4991340637207,
+        348.5299196243286,
+        348.54643058776855,
+        348.5521926879883,
+        348.6349792480469,
+        348.6601905822754,
+        348.68195366859436,
+        348.73481464385986,
+        348.7425956726074,
+        348.7721891403198,
+        348.7779850959778,
+        348.8157768249512,
+        348.8711967468262,
+        348.92512011528015,
+        348.965407371521,
+        348.98604583740234,
+        349.0136966705322,
+        349.03590202331543,
+        349.03855895996094,
+        349.04761266708374,
+        349.0637788772583,
+        349.08102226257324,
+        349.08710289001465,
+        349.1191363334656,
+        349.1483850479126,
+        349.18444657325745,
+        349.1977252960205,
+        349.2319688796997,
+        349.2766089439392,
+        349.4007992744446,
+        349.4244441986084,
+        349.43309140205383,
+        349.4362564086914,
+        349.4480621814728,
+        349.453408241272,
+        349.47545623779297,
+        349.48415994644165,
+        349.48460721969604,
+        349.5180492401123,
+        349.5755846500397,
+        349.6123514175415,
+        349.63603472709656,
+        349.67225408554077,
+        349.68963146209717,
+        349.71811389923096,
+        349.7642574310303,
+        349.8254098892212,
+        349.83427238464355,
+        349.8727331161499,
+        349.8897304534912,
+        349.9126763343811,
+        349.98124623298645,
+        350.0045747756958,
+        350.006178855896,
+        350.0109438896179,
+        350.02598452568054,
+        350.0381107330322,
+        350.08947014808655,
+        350.1347191333771,
+        350.1873254776001,
+        350.20265674591064,
+        350.21613073349,
+        350.2313904762268,
+        350.274112701416,
+        350.2885420322418,
+        350.30796670913696,
+        350.3130898475647,
+        350.3363518714905,
+        350.34297704696655,
+        350.3646101951599,
+        350.40540981292725,
+        350.44108724594116,
+        350.4445128440857,
+        350.4954905509949,
+        350.5171546936035,
+        350.5395212173462,
+        350.54147243499756,
+        350.5489282608032,
+        350.5781126022339,
+        350.67107105255127,
+        350.6954245567322,
+        350.69888257980347,
+        350.72428584098816,
+        350.738911151886,
+        350.7596764564514,
+        350.79833984375,
+        350.8262691497803,
+        350.84322929382324,
+        350.95693016052246,
+        350.9640305042267,
+        351.00112318992615,
+        351.009473323822,
+        351.1337888240814,
+        351.13750410079956,
+        351.15046286582947,
+        351.1522264480591,
+        351.16268587112427,
+        351.1692123413086,
+        351.1869764328003,
+        351.1948137283325,
+        351.19647884368896,
+        351.29798460006714,
+        351.3277130126953,
+        351.39741039276123,
+        351.4864001274109,
+        351.4969959259033,
+        351.51321268081665,
+        351.5256621837616,
+        351.53036403656006,
+        351.56732749938965,
+        351.61027336120605,
+        351.6338896751404,
+        351.6872010231018,
+        351.7505249977112,
+        351.96639752388,
+        352.0277416706085,
+        352.07212805747986,
+        352.11622524261475,
+        352.12435245513916,
+        352.14448070526123,
+        352.1672329902649,
+        352.2245464324951,
+        352.2461133003235,
+        352.26707649230957,
+        352.2816333770752,
+        352.34598684310913,
+        352.3523530960083,
+        352.37091159820557,
+        352.3720335960388,
+        352.38371229171753,
+        352.3847336769104,
+        352.4132742881775,
+        352.4836196899414,
+        352.50979137420654,
+        352.54780650138855,
+        352.5985908508301,
+        352.67785835266113,
+        352.69171476364136,
+        352.70662355422974,
+        352.72419142723083,
+        352.80338954925537,
+        352.8297863006592,
+        352.89638328552246,
+        352.898398399353,
+        352.9132785797119,
+        352.94451427459717,
+        353.03193378448486,
+        353.11215686798096,
+        353.1472964286804,
+        353.14733123779297,
+        353.1524794101715,
+        353.18201637268066,
+        353.18643045425415,
+        353.18700551986694,
+        353.20332384109497,
+        353.2278079986572,
+        353.25683403015137,
+        353.26508951187134,
+        353.3447389602661,
+        353.39869117736816,
+        353.3999366760254,
+        353.4122586250305,
+        353.42809307575226,
+        353.4463346004486,
+        353.4619174003601,
+        353.48748445510864,
+        353.4953291416168,
+        353.50060844421387,
+        353.51167392730713,
+        353.51359844207764,
+        353.5877103805542,
+        353.62784004211426,
+        353.65056133270264,
+        353.66528034210205,
+        353.67177391052246,
+        353.7303047180176,
+        353.74048137664795,
+        353.75056076049805,
+        353.7930223941803,
+        353.8017911911011,
+        353.85408067703247,
+        353.88019251823425,
+        353.9015693664551,
+        353.91152143478394,
+        353.9172179698944,
+        353.97862339019775,
+        354.0368962287903,
+        354.0577268600464,
+        354.09132528305054,
+        354.1183671951294,
+        354.2158114910126,
+        354.25932812690735,
+        354.331294298172,
+        354.37871980667114,
+        354.3882281780243,
+        354.42224168777466,
+        354.4296946525574,
+        354.4353275299072,
+        354.4694449901581,
+        354.54150390625,
+        354.54512071609497,
+        354.59148836135864,
+        354.6910734176636,
+        354.69721949100494,
+        354.7237424850464,
+        354.7688682079315,
+        354.7696633338928,
+        354.7722878456116,
+        354.78870582580566,
+        354.80589056015015,
+        354.94761896133423,
+        354.9481906890869,
+        354.9537253379822,
+        355.00393438339233,
+        355.0216941833496,
+        355.05021142959595,
+        355.0816628932953,
+        355.0939836502075,
+        355.10834980010986,
+        355.13292503356934,
+        355.139422416687,
+        355.2104640007019,
+        355.21392583847046,
+        355.24515104293823,
+        355.25673723220825,
+        355.2690591812134,
+        355.3074269294739,
+        355.32877135276794,
+        355.3591351509094,
+        355.3605136871338,
+        355.3868176937103,
+        355.40006160736084,
+        355.43129301071167,
+        355.5075521469116,
+        355.51497507095337,
+        355.5588445663452,
+        355.5609278678894,
+        355.5632348060608,
+        355.575234413147,
+        355.58054304122925,
+        355.5856966972351,
+        355.6010580062866,
+        355.60630321502686,
+        355.63520097732544,
+        355.6640977859497,
+        355.7101745605469,
+        355.7833240032196,
+        355.83264446258545,
+        355.9138240814209,
+        355.94441652297974,
+        356.0696008205414,
+        356.0850839614868,
+        356.1018543243408,
+        356.11974143981934,
+        356.130078792572,
+        356.2055983543396,
+        356.35673332214355,
+        356.36272406578064,
+        356.3888649940491,
+        356.39344000816345,
+        356.42941093444824,
+        356.48445320129395,
+        356.5063042640686,
+        356.5067529678345,
+        356.6448013782501,
+        356.6563813686371,
+        356.6756172180176,
+        356.68156814575195,
+        356.71069049835205,
+        356.7340831756592,
+        356.78675174713135,
+        356.7983033657074,
+        356.8245458602905,
+        356.87014079093933,
+        356.89926052093506,
+        356.91222190856934,
+        356.9540497660637,
+        356.9664034843445,
+        357.00489616394043,
+        357.01017570495605,
+        357.028160572052,
+        357.0507844090462,
+        357.09420824050903,
+        357.12076818943024,
+        357.1804151535034,
+        357.2215995788574,
+        357.32908391952515,
+        357.34156560897827,
+        357.3512644767761,
+        357.3552026748657,
+        357.3658905029297,
+        357.39952087402344,
+        357.41315269470215,
+        357.4213743209839,
+        357.4581117630005,
+        357.4591419696808,
+        357.5274260044098,
+        357.5454716682434,
+        357.57228565216064,
+        357.58585584163666,
+        357.5934109687805,
+        357.6028161048889,
+        357.60921573638916,
+        357.6179552078247,
+        357.70096015930176,
+        357.7174708843231,
+        357.77478790283203,
+        357.7826871871948,
+        357.7891802787781,
+        357.79497718811035,
+        357.80611062049866,
+        357.88115549087524,
+        357.88236808776855,
+        357.89827156066895,
+        357.9211883544922,
+        357.9301462173462,
+        358.05971455574036,
+        358.0629439353943,
+        358.1154248714447,
+        358.1412124633789,
+        358.1414713859558,
+        358.1427528858185,
+        358.1561299562454,
+        358.15763330459595,
+        358.16489362716675,
+        358.19008207321167,
+        358.2100167274475,
+        358.25647926330566,
+        358.2777919769287,
+        358.29292941093445,
+        358.3091530799866,
+        358.3266558647156,
+        358.3340473175049,
+        358.338978767395,
+        358.3828167915344,
+        358.5055661201477,
+        358.510498046875,
+        358.61062455177307,
+        358.62422466278076,
+        358.6622440814972,
+        358.6910743713379,
+        358.700514793396,
+        358.75004839897156,
+        358.75388956069946,
+        358.7802200317383,
+        358.800030708313,
+        358.85004472732544,
+        358.85410928726196,
+        358.94607639312744,
+        358.9650583267212,
+        358.98144340515137,
+        358.9976628422737,
+        359.01043701171875,
+        359.01510429382324,
+        359.0165151357651,
+        359.046434879303,
+        359.1026201248169,
+        359.1053104400635,
+        359.1068158149719,
+        359.11744117736816,
+        359.14165925979614,
+        359.30956649780273,
+        359.32706904411316,
+        359.3341135978699,
+        359.3907527923584,
+        359.40553200244904,
+        359.42460536956787,
+        359.4439969062805,
+        359.47510528564453,
+        359.47728061676025,
+        359.47740745544434,
+        359.48511934280396,
+        359.5253448486328,
+        359.5385298728943,
+        359.5761938095093,
+        359.6324138045311,
+        359.7170901298523,
+        359.7261745929718,
+        359.7683563232422,
+        359.7951707839966,
+        359.79968070983887,
+        359.80694031715393,
+        359.8280301094055,
+        359.82941007614136,
+        359.84627199172974,
+        359.89468717575073,
+        359.9205468893051,
+        359.94588923454285,
+        359.9762544631958,
+        360.0336637496948,
+        360.06899523735046,
+        360.07529497146606,
+        360.0852108001709,
+        360.1795809864998,
+        360.1916809082031,
+        360.19260931015015,
+        360.31302547454834,
+        360.31718254089355,
+        360.31894731521606,
+        360.3296329975128,
+        360.34972977638245,
+        360.40128326416016,
+        360.4027843475342,
+        360.404257774353,
+        360.42563104629517,
+        360.4843211174011,
+        360.51516675949097,
+        360.6421718597412,
+        360.7520316839218,
+        360.806367456913,
+        360.8137307167053,
+        360.83212995529175,
+        360.8506889343262,
+        360.8670356273651,
+        360.8768014907837,
+        360.9101414680481,
+        360.92710530757904,
+        360.92940747737885,
+        360.9387195110321,
+        360.941123008728,
+        360.9488010406494,
+        360.97155117988586,
+        360.97519969940186,
+        360.9876456260681,
+        360.9992341995239,
+        361.0638108253479,
+        361.190113902092,
+        361.22688007354736,
+        361.2702386379242,
+        361.2921290397644,
+        361.29267251491547,
+        361.29347562789917,
+        361.386271238327,
+        361.427042722702,
+        361.4973783493042,
+        361.51055812835693,
+        361.5570584535599,
+        361.6205759048462,
+        361.6245768070221,
+        361.6311025619507,
+        361.65398240089417,
+        361.73705530166626,
+        361.75532829761505,
+        361.7658567428589,
+        361.80348920822144,
+        361.8496923446655,
+        361.9205434322357,
+        361.99823808670044,
+        362.00073623657227,
+        362.0141394138336,
+        362.06169605255127,
+        362.0976285934448,
+        362.10371577739716,
+        362.1102409362793,
+        362.1180146932602,
+        362.1457939147949,
+        362.1540787220001,
+        362.1624296307564,
+        362.1635866165161,
+        362.19090938568115,
+        362.33449721336365,
+        362.3931841850281,
+        362.4122222661972,
+        362.41747188568115,
+        362.4419846534729,
+        362.45759987831116,
+        362.50953340530396,
+        362.56719732284546,
+        362.5749461054802,
+        362.575900554657,
+        362.58128023147583,
+        362.6637477874756,
+        362.67570972442627,
+        362.7212815284729,
+        362.72131633758545,
+        362.82380843162537,
+        362.84764862060547,
+        362.88207817077637,
+        362.90473556518555,
+        362.90560007095337,
+        362.9496660232544,
+        362.96124482154846,
+        362.98067235946655,
+        363.0415655374527,
+        363.07657516002655,
+        363.0989751815796,
+        363.1245126724243,
+        363.1574077606201,
+        363.1636779308319,
+        363.1733750104904,
+        363.24854612350464,
+        363.2516794204712,
+        363.2550730705261,
+        363.25507497787476,
+        363.2752022743225,
+        363.30726289749146,
+        363.34873819351196,
+        363.37993144989014,
+        363.4009921550751,
+        363.45507192611694,
+        363.54313415288925,
+        363.5486088991165,
+        363.5518102645874,
+        363.5690896511078,
+        363.5752636194229,
+        363.5793913602829,
+        363.5850252509117,
+        363.6301760673523,
+        363.64707374572754,
+        363.6673296689987,
+        363.744992017746,
+        363.77897596359253,
+        363.81081533432007,
+        363.87772929668427,
+        363.887357711792,
+        363.8907207250595,
+        363.9637453556061,
+        363.97926235198975,
+        364.03366285562515,
+        364.04159688949585,
+        364.11996841430664,
+        364.1662106513977,
+        364.17196559906006,
+        364.172926902771,
+        364.1805740594864,
+        364.20054626464844,
+        364.22204315662384,
+        364.2330551147461,
+        364.27206587791443,
+        364.33231687545776,
+        364.3406404852867,
+        364.3734407424927,
+        364.3744320869446,
+        364.41702085733414,
+        364.4418852329254,
+        364.52454662323,
+        364.57654362916946,
+        364.58748376369476,
+        364.59017872810364,
+        364.624289393425,
+        364.6243534088135,
+        364.64342308044434,
+        364.65670669078827,
+        364.8003237247467,
+        364.8461765050888,
+        364.92771142721176,
+        364.9356789588928,
+        364.9603519439697,
+        364.98985481262207,
+        364.99199962615967,
+        365.0240364074707,
+        365.041020154953,
+        365.10601675510406,
+        365.11142444610596,
+        365.14134311676025,
+        365.17817783355713,
+        365.2520956993103,
+        365.32688331604004,
+        365.34947395324707,
+        365.35382199287415,
+        365.36419200897217,
+        365.3655695915222,
+        365.38057696819305,
+        365.43056297302246,
+        365.4610257744789,
+        365.5416314005852,
+        365.64962816238403,
+        365.6626206636429,
+        365.6695656776428,
+        365.731556892395,
+        365.78396701812744,
+        365.8954873085022,
+        365.89596939086914,
+        365.9080023765564,
+        365.97849559783936,
+        365.98991680145264,
+        365.992835521698,
+        366.0202569961548,
+        366.03961992263794,
+        366.0920607447624,
+        366.12845039367676,
+        366.142306804657,
+        366.19391989707947,
+        366.1971859931946,
+        366.2484164237976,
+        366.3321270942688,
+        366.38735723495483,
+        366.42038559913635,
+        366.4627842903137,
+        366.47891330718994,
+        366.5139203071594,
+        366.5589438676834,
+        366.56272315979004,
+        366.5651831626892,
+        366.6417896747589,
+        366.6747522354126,
+        366.73532581329346,
+        366.7354874610901,
+        366.8421440124512,
+        366.85087394714355,
+        366.90345454216003,
+        366.9357752799988,
+        366.99657344818115,
+        367.03913593292236,
+        367.08272111415863,
+        367.0853123664856,
+        367.08921670913696,
+        367.0903387069702,
+        367.09161376953125,
+        367.1419212818146,
+        367.1643843650818,
+        367.1767635345459,
+        367.18211007118225,
+        367.2487382888794,
+        367.3788146972656,
+        367.4339191913605,
+        367.4799346923828,
+        367.53974199295044,
+        367.63481855392456,
+        367.6678409576416,
+        367.7367683649063,
+        367.7917113304138,
+        367.822913646698,
+        367.9070084095001,
+        367.94175988435745,
+        367.9990110397339,
+        368.0103667974472,
+        368.037540435791,
+        368.0664016008377,
+        368.1700174808502,
+        368.19926404953003,
+        368.21699142456055,
+        368.27465534210205,
+        368.35580682754517,
+        368.3644176721573,
+        368.4377613067627,
+        368.45312309265137,
+        368.4665288925171,
+        368.5065920352936,
+        368.5193920135498,
+        368.5240650177002,
+        368.52748560905457,
+        368.6322889328003,
+        368.6663678884506,
+        368.72473526000977,
+        368.7811508178711,
+        368.8208303451538,
+        368.955454826355,
+        369.07631969451904,
+        369.30066680908203,
+        369.41862201690674,
+        369.45571303367615,
+        369.48230266571045,
+        369.5245113372803,
+        369.5471658706665,
+        369.547456741333,
+        369.7067165374756,
+        369.70739364624023,
+        369.72185468673706,
+        369.72345638275146,
+        369.7372827529907,
+        369.76169872283936,
+        369.7695698738098,
+        369.8522229194641,
+        370.01187002658844,
+        370.01900696754456,
+        370.0824604034424,
+        370.1518430709839,
+        370.2515516281128,
+        370.41168212890625,
+        370.7104969024658,
+        371.05558013916016,
+        371.1133460998535,
+        371.1506242752075,
+        371.45808362960815,
+        371.48540592193604,
+        371.66118240356445,
+        371.7756471633911,
+        371.9892797470093,
+        372.0479040145874,
+        372.0810880661011,
+        372.4837474822998,
+        372.5032653808594,
+        373.02700877189636,
+        373.03714895248413,
+        373.17206287384033,
+        373.28332710266113,
+        373.3466262817383,
+        373.5756821632385,
+        374.3856010437012,
+        374.60710620880127,
+        374.6732473373413,
+        376.57257604599,
+        376.5799674987793,
+        378.09420680999756,
+        378.3145270347595,
+        378.64477038383484,
+        379.48527812957764,
+        379.5512011051178,
+        379.5737953186035,
+        379.8584017753601,
+        380.14246559143066,
+        380.5963864326477,
+        380.7161626815796,
+        381.173565864563,
+        381.5345621109009,
+        381.8570884466171,
+        381.8750047683716,
+        381.89379024505615,
+        382.1119694709778,
+        382.7096671462059,
+        383.5834274291992,
+        383.7729592323303,
+        384.7844455242157,
+        384.9653433561325,
+        386.45238411426544,
+        386.6425943374634,
+        387.2101779580116,
+        387.261726975441,
+        387.660765171051,
+        388.19859570264816,
+        388.60509073734283,
+        389.16224068403244,
+        390.1362910270691,
+        390.79622173309326,
+        390.831134557724,
+        390.9835214614868,
+        391.4209280014038,
+        392.4081611633301,
+        397.12473487854004
+      ],
+      "trials": [
+        3
+      ],
+      "l2_flush": [
+        true
+      ],
+      "iters_median": 68.0,
+      "sm_clock_load_mhz_median": 1440.0,
+      "sm_clock_load_mhz_median_by_setting": {
+        "s2w4g1": 1425.0,
+        "s2w8g1": 1455.0,
+        "s3w4g1": 1395.0,
+        "s3w8g1": 1380.0,
+        "s3w8g16": 1485.0,
+        "s3w8g64": 1455.0,
+        "s3w8g8": 1481.25,
+        "s4w8g1": 1365.0,
+        "s5w8g1": 1395.0
+      },
+      "clock_level_ok": 489,
+      "clock_level_low": 179,
+      "clock_level_high": 174,
+      "clock_level_unknown": 0,
+      "clock_drift_flagged": 58,
+      "clock_level_ok_drifted": 25,
+      "clock_level_low_drifted": 20,
+      "clock_level_high_drifted": 13,
+      "clock_level_unknown_drifted": 0,
+      "clock_excluded_shaped": 58,
+      "clock_rule": "DRIFT excludes; BOTH LEVEL sides are kept with the side recorded, because the under-load clock is set per tile by the kernel's own power draw under the cap; the fixed roof is what the compute-bound gates score against; the four LEVEL counts are over the STEADY rows only and with the drift count they partition the timed rows; this file drops no row for its clock"
+    },
+    "rising_steps": [
+      2,
+      3
+    ],
+    "compiled_smem": {},
+    "compiled_smem_note": "vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read",
+    "registered": {
+      "occupancy_swing": 0.11544011544011545,
+      "occupancy_threshold": 0.05772005772005773,
+      "order_ratio": 0.11764705882352941,
+      "order_gate": 0.23529411764705882,
+      "order_cap": 8.5,
+      "l2_bytes": 62914560,
+      "l2_source": "read off NVIDIA H200 (L2_cache_size)",
+      "limits": {
+        "capability": [
+          9,
+          0
+        ],
+        "smem_per_sm": 233472,
+        "max_threads_per_sm": 2048,
+        "max_blocks_per_sm": 32,
+        "sm_count": 132,
+        "l2_bytes": 62914560,
+        "source": "read off NVIDIA H200"
+      }
+    },
+    "gates": [
+      {
+        "kind": "VALIDITY",
+        "name": "V1 card provenance",
+        "token": "V1_card_provenance",
+        "prediction": "the residency ladder and the L2 come from the ATTACHED card",
+        "rule": "no HYPOTHESIS value reaches a measured run",
+        "verdict": "PASS",
+        "observed": "limits: read off NVIDIA H200; L2: read off NVIDIA H200 (L2_cache_size)",
+        "invalidates": "every rung of the residency ladder and the whole of P1's predicted swing: a per-SM shared memory or an L2 borrowed from another part puts the x axis and the threshold on a machine that was not measured"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V2 residency swept",
+        "token": "V2_residency_swept",
+        "prediction": "the occupancy arm actually moved resident blocks per SM",
+        "rule": ">= 3 distinct levels spanning >= 2.0x",
+        "verdict": "PASS",
+        "observed": "levels [2, 3, 4, 6], span 3.00x",
+        "invalidates": "P1 entirely, and P3 with it: a grid that computes one residency at every setting has swept nothing, and its flat alpha would read as evidence for program order when it is evidence of nothing"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V3 geometry pinned",
+        "token": "V3_geometry_pinned",
+        "prediction": "BLOCK_M, BLOCK_SIZE_N and BLOCK_SIZE_K are the same at every setting",
+        "rule": "block sizes measured are exactly {64, 256} at BLOCK_SIZE_N=64, BLOCK_SIZE_K=64",
+        "verdict": "PASS",
+        "observed": "block sizes in the CSV: [64, 256]",
+        "invalidates": "P5, hence every contrast: alpha_fitted is (alpha_b + phi) / (1 + phi + delta), and phi is common to both sides of a difference only while BM, BN and K are identical on both sides of it; with them pinned a contrast is the alpha_b difference scaled by 1/(1 + phi + delta), and with them not pinned it is nothing"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V4 compute reference",
+        "token": "V4_compute_reference",
+        "prediction": "every setting qualified its own BLOCK_M=256 ladder as a compute branch",
+        "rule": "no refusals and no missing references",
+        "verdict": "PASS",
+        "observed": "refused: none; absent: none",
+        "invalidates": "the membership decision at every setting whose reference is missing or refused, hence that setting's alpha and every contrast it enters. A reference that is proportional but at the wrong level classifies every tread against a branch 40x too steep and prints blanks"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V5 alpha identifiable",
+        "token": "V5_alpha_identifiable",
+        "prediction": "enough settings measured alpha over enough memory-bound treads",
+        "rule": ">= 3 settings with >= 3 memory-bound treads and a fitted alpha",
+        "verdict": "PASS",
+        "observed": "9 of 9 settings usable: s2w4g1:16, s2w8g1:16, s3w4g1:16, s3w8g1:16, s3w8g8:16, s3w8g16:16, s3w8g64:16, s4w8g1:16, s5w8g1:16",
+        "invalidates": "every claim gate: a contrast between two settings needs both of them"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V6 replication",
+        "token": "V6_replication",
+        "prediction": "a setting's treads reproduce between repeats",
+        "rule": "worst per-setting median relative spread <= 2.0%",
+        "verdict": "PASS",
+        "observed": "worst 0.80% over 9 settings",
+        "invalidates": "every claim gate's noise floor, which is measured from these repeats and not assumed"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V7 override applied",
+        "token": "V7_override_applied",
+        "prediction": "every setting recompiled, so num_stages, num_warps and GROUP_SIZE_M reached the kernel",
+        "rule": ">= 1 fresh Triton artefact per setting and > 0 timings executed",
+        "verdict": "PASS",
+        "observed": "900 timings; artefacts s2w4g1:32, s2w8g1:32, s3w4g1:32, s3w8g1:32, s3w8g16:32, s3w8g64:32, s3w8g8:32, s4w8g1:33, s5w8g1:32",
+        "invalidates": "everything. All three knobs are compile-time constants of the Triton kernel, so a setting that compiled nothing measured the previous setting again and its 'effect' is zero by construction"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V8 non-vacuity",
+        "token": "V8_non-vacuity",
+        "prediction": "this report examined real treads and formed real contrasts",
+        "rule": "> 0 treads, > 0 per-repeat fits, and >= 2 of the 3 contrasts formed",
+        "verdict": "PASS",
+        "observed": "144 treads, 45 per-repeat alphas, contrasts formed: ['occupancy', 'swizzle', 'warp-control']",
+        "invalidates": "the entire report. A check that examined nothing also reports zero failures, which is the shape this study has already published once"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V9 compiled shared memory",
+        "token": "V9_compiled_shared_memory",
+        "prediction": "Triton allocated the shared memory the residency model assumed",
+        "rule": "every setting within 10% of num_stages (BM BK + BK BN) b, and zero register spills",
+        "verdict": "UNKNOWN",
+        "observed": "not probed: vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read",
+        "invalidates": "nothing on its own, but it leaves the residency column a COMPUTED UPPER BOUND rather than a checked one: the register limit is not modelled and can only lower residency, so a report under a not-probed V9 may quote the ladder's ORDER and not its values"
+      },
+      {
+        "kind": "VALIDITY",
+        "name": "V10 one instrument",
+        "token": "V10_one_instrument",
+        "prediction": "every cell was timed by the instrument the roof was measured with",
+        "rule": "every row stamps instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'",
+        "verdict": "PASS",
+        "observed": "instruments seen: 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'",
+        "invalidates": "every alpha in this report and every comparison of one with the study's roof: two timing loops measure two different things and a row with no instrument is a row from before the instrument had a name"
+      },
+      {
+        "kind": "CLAIM",
+        "name": "P1 occupancy",
+        "token": "P1_occupancy",
+        "prediction": "alpha rises with resident blocks per SM",
+        "rule": "swing >= 0.085 in alpha between 2 blocks/SM and 6 blocks/SM, and every step rising",
+        "verdict": "FAIL",
+        "observed": "alpha 0.952 -> 0.928, swing -0.025",
+        "invalidates": ""
+      },
+      {
+        "kind": "CLAIM",
+        "name": "P2 program order",
+        "token": "P2_program_order",
+        "prediction": "alpha falls as 1/GROUP_SIZE_M",
+        "rule": "alpha(G=64) / alpha(G=1) <= 0.235, which is 2x the prediction",
+        "verdict": "FAIL",
+        "observed": "alpha 1.081 -> 0.839, ratio 0.776",
+        "invalidates": ""
+      },
+      {
+        "kind": "CLAIM",
+        "name": "P3 warp control",
+        "token": "P3_warp_control",
+        "prediction": "alpha tracks resident BLOCKS, not resident WARPS",
+        "rule": "|warp swing| < |occupancy swing|, and only where the occupancy swing cleared its own threshold of 0.085",
+        "verdict": "UNKNOWN",
+        "observed": "occupancy swing -0.025 did not clear 0.085, so the warp swing +0.086 has nothing to be smaller than: two noise measurements compared would pass half the time",
+        "invalidates": ""
+      },
+      {
+        "kind": "CLAIM",
+        "name": "P6 depth control",
+        "token": "P6_depth_control",
+        "prediction": "alpha tracks resident BLOCKS, not pipeline DEPTH",
+        "rule": "the pure num_stages contrast at fixed residency is smaller than the occupancy contrast",
+        "verdict": "UNKNOWN",
+        "observed": "no two num_stages settings computed the same resident-block count, so the pure pipeline-depth effect was not measured and the confound in P1 is UNREMOVED on this card",
+        "invalidates": "P1's reading as a footprint effect: alpha moving with the ladder is equally consistent with latency hiding, and this run cannot say which"
+      }
+    ]
+  },
+  "gpu": "NVIDIA H200"
+}

@@ -1,0 +1,829 @@
+{
+  "run_id": "nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810",
+  "models": [
+    "mixtral-8x7b",
+    "qwen2-57b-a14b"
+  ],
+  "tokens": [
+    32,
+    64,
+    128,
+    256,
+    384,
+    512,
+    768,
+    1024,
+    1536,
+    2048,
+    3072,
+    4096,
+    6144,
+    8192
+  ],
+  "dtypes": [
+    "bf16",
+    "fp8_e4m3"
+  ],
+  "arms": [
+    "native",
+    "cfg_bf16",
+    "tile_fp8"
+  ],
+  "reps": 3,
+  "iters": 15,
+  "warmup": 300.0,
+  "budget": 200.0,
+  "trials": 3,
+  "flush": true,
+  "seed": 0,
+  "routing": "uniform",
+  "lookup_gpu": "NVIDIA H200",
+  "calibration": "measured_nvidia_h200",
+  "vllm_tag": "v0.27.1",
+  "self_test": "None",
+  "self_test_alpha": "None",
+  "self_test_noise": "0.0",
+  "self_test_overhead_ms": "0.0",
+  "self_test_fp8_activations": false,
+  "ceilings": {
+    "path": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "measured_on": "2026-09-10",
+    "bandwidth_bytes_s": 4374299702465.3228,
+    "peak_flops": {
+      "bf16": 682085962722749.2,
+      "fp16": 682085962722749.2,
+      "fp8_e4m3": 1453580619641919.5,
+      "fp8_e5m2": 1453580619641919.5
+    },
+    "reference_clock_mhz": 1470.0,
+    "reference_clocks": {
+      "bf16": 1470.0,
+      "fp8": 1380.0
+    },
+    "clock_source": "NVIDIA H200 (measured): detail.gemm_clock.median_mhz = 1470 MHz, the median of the samples taken while the calibration's dense GEMM ran (bf16 GEMM)"
+  },
+  "estimated_timed_seconds": 453.6,
+  "distinct_compiles": 32,
+  "cells": [
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 32,
+      "rows_per_expert": 8.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 5
+      },
+      "block_m_agrees": false,
+      "differing_keys": [
+        "BLOCK_SIZE_M",
+        "BLOCK_SIZE_N",
+        "GROUP_SIZE_M",
+        "num_warps",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 64,
+      "rows_per_expert": 16.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 32,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 64,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": false,
+      "differing_keys": [
+        "BLOCK_SIZE_M",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 128,
+      "rows_per_expert": 32.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "num_warps",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 256,
+      "rows_per_expert": 64.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 384,
+      "rows_per_expert": 96.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 512,
+      "rows_per_expert": 128.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 768,
+      "rows_per_expert": 192.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 1024,
+      "rows_per_expert": 256.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 1536,
+      "rows_per_expert": 384.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 2048,
+      "rows_per_expert": 512.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 3072,
+      "rows_per_expert": 768.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 4096,
+      "rows_per_expert": 1024.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 6144,
+      "rows_per_expert": 1536.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "mixtral-8x7b",
+      "num_tokens": 8192,
+      "rows_per_expert": 2048.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "num_stages"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 32,
+      "rows_per_expert": 4.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 5
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 5
+      },
+      "block_m_agrees": false,
+      "differing_keys": [
+        "BLOCK_SIZE_M",
+        "BLOCK_SIZE_N"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 64,
+      "rows_per_expert": 8.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": false,
+      "differing_keys": [
+        "BLOCK_SIZE_M",
+        "num_warps"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 128,
+      "rows_per_expert": 16.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 32,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": false,
+      "differing_keys": [
+        "BLOCK_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 256,
+      "rows_per_expert": 32.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_N",
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 384,
+      "rows_per_expert": 48.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_N",
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 512,
+      "rows_per_expert": 64.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 768,
+      "rows_per_expert": 96.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 1024,
+      "rows_per_expert": 128.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 1536,
+      "rows_per_expert": 192.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 2048,
+      "rows_per_expert": 256.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 3072,
+      "rows_per_expert": 384.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 4096,
+      "rows_per_expert": 512.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 6144,
+      "rows_per_expert": 768.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    },
+    {
+      "model": "qwen2-57b-a14b",
+      "num_tokens": 8192,
+      "rows_per_expert": 1024.0,
+      "config_bf16": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "config_fp8": {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4
+      },
+      "block_m_agrees": true,
+      "differing_keys": [
+        "BLOCK_SIZE_K",
+        "GROUP_SIZE_M"
+      ]
+    }
+  ],
+  "dropped": [],
+  "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "c0644beadd3dfe2fde7045520d6dee61b7655971",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-10T06:40:38+00:00",
+    "hostname": "eec145fd46b6",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 155.9303223641331,
+    "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "bandwidth": 4374299702465.3228,
+    "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 200.0,
+    "missing": {
+      "iters": "not supplied by caller",
+      "sglang": "package not installed"
+    }
+  }
+}

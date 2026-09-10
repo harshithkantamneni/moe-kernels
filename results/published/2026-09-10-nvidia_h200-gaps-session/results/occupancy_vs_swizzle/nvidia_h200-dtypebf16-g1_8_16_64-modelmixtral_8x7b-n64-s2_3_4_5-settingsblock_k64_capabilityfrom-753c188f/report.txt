@@ -1,0 +1,219 @@
+experiment  occupancy_vs_swizzle: is alpha set by CONCURRENCY or by PROGRAM ORDER?
+
+## Predictions, registered before anything is measured
+
+THE GRID, and the residency it computes to on the attached card:
+    sm_90  228 KiB smem/SM  2048 threads/SM  32 blocks/SM  132 SMs  63 MB L2   [read off NVIDIA H200]
+    L2 provenance: read off NVIDIA H200 (L2_cache_size)
+    one CTA streams 1.31 MiB over its K loop, weighted over both GEMMs
+
+    s2w4g1       warp                        32 KiB/CTA   6 blk/SM (smem   )      1040 MiB in flight  alpha_conc 0.942
+    s2w8g1       occ/warp                    32 KiB/CTA   6 blk/SM (smem   )      1040 MiB in flight  alpha_conc 0.942
+    s3w4g1       warp                        48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913
+    s3w8g1       occ/swz/warp                48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913
+    s3w8g8       swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913
+    s3w8g16      swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913
+    s3w8g64      swz                         48 KiB/CTA   4 blk/SM (smem   )       693 MiB in flight  alpha_conc 0.913
+    s4w8g1       occ                         64 KiB/CTA   3 blk/SM (smem   )       520 MiB in flight  alpha_conc 0.885
+    s5w8g1       occ                         80 KiB/CTA   2 blk/SM (smem   )       346 MiB in flight  alpha_conc 0.827
+
+P1  CONCURRENCY. alpha rises with resident blocks per SM. The LRU
+    caricature predicts a swing of +0.115 in alpha between the top and
+    bottom rungs of the residency ladder above. The gate takes half of
+    that, 0.058, floored at 3 sigma of the fitted alpha's own
+    replicate spread, which is measured and not assumed. A FAIL means
+    concurrency does not set alpha and the cross-card null was not
+    saturation.
+P2  PROGRAM ORDER. Reuse distance predicts alpha(G=64) / alpha(G=1) = 1/min(G, 8.5 tiles
+    per expert) = 0.118; uncapped it would be 0.0156. The gate gives the
+    predictor a factor of 2 and passes at 0.235. The published corpus
+    sits at 0.69-0.78, so this is expected to FAIL, and a FAIL here is
+    the interesting outcome: it says the standard predictor does not
+    transfer to this regime.
+P3  THE CONTROL. num_warps changes resident WARPS at fixed resident
+    BLOCKS, so the concurrent data footprint is unchanged and P1's
+    mechanism predicts NO movement. The gate is that the warp contrast
+    is smaller than the occupancy contrast. A FAIL says the residency
+    reading is confounded by something num_warps changes -- latency
+    hiding, register pressure, scheduling -- and P1 cannot be read as
+    a footprint effect.
+P6  THE OTHER CONTROL, and the one this design usually cannot run.
+    num_stages sets residency AND software-pipeline prefetch depth, so
+    P1's axis carries two mechanisms. They come apart ONLY where two
+    num_stages compute the SAME resident-block count, and after the
+    BLOCK_M=256 reference prunes the ladder neither real card has such
+    a pair: the H200 runs 2/3/4/5 stages at 6/4/3/2 blocks and the A100
+    runs 2/3/4 at 4/3/2. So P6 is expected to report UNKNOWN on a pod,
+    which counts AGAINST the run and is the honest accounting: the
+    concurrency reading is not established, and CONCURRENCY may not be
+    quoted without that clause. The self-test plants P6's PASS and FAIL
+    branches on a card that does not exist and says so.
+P4  THE NULL IS A RESULT. If P1 and P2 both FAIL the verdict is
+    NEITHER (null), printed as such and not forced into a branch.
+    It would retire both models at once and point at DRAM scheduling,
+    the replacement policy or sector granularity instead.
+P2b WHAT THIS DESIGN CAN READ AT ALL, checked against P2 before the run.
+    The memory prefix runs n* = k(1-alpha)/(1-k alpha) treads with k = b ridge / 2BM = 2.436, so:
+      floor      alpha < 0.128 leaves fewer than 3 treads above the compute branch
+                 and the setting reports nothing;
+      dead band  alpha in [0.349, 0.472] is DISCARDED by the fit, because the two
+                 branches are then within 15% of each other and are one line.
+    Taking a published alpha(1) near 0.93, P2's own prediction lands at 0.109,
+    which is UNDER the floor, so a reuse-distance world shows up here as a collapse and not as a ratio.
+    ROUTE TWO covers the case where a setting does fall in the dead band or under the
+    floor: wide-G settings losing their memory branch while G=1 keeps its is scored as
+    a PASS for P2, and the report says which route it took.
+P5  THE LEVEL IS NOT PREDICTED, only the differences, and the differences are ATTENUATED.
+    A B/(A+B) ladder fit returns alpha_fitted = (alpha_b + phi) / (1 + phi + delta) (EXA), and
+    this grid pins BM, BN and K, so phi is common to every setting and a contrast reads
+    (alpha_b(1) - alpha_b(2)) / (1 + phi + delta): the cache term's difference scaled, not the
+    difference itself. The scaling is a BRACKET, 0.50 to 0.98 here at alpha_a = 1 to 0
+    (alpha_a is unmeasured; delta only lowers it), and delta is per-setting, so a level
+    difference alone can move a fitted alpha. The geometric terms do NOT cancel exactly; the
+    sign and order of every contrast above survive the scaling and their magnitude is a lower
+    bound on the alpha_b difference. No gate here is scored on an absolute alpha.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       BLOCK_SIZE_N=64 BLOCK_SIZE_K=64; BLOCK_SIZE_M is 64 (subject) and 256 (reference)
+subject      BLOCK_M=64 at rows 64..1024 (16 treads)
+reference    BLOCK_M=256 at rows 256..1024 (4 treads), MEASURED PER SETTING because C depends on the achieved compute rate and both knobs move it
+settings     9: s2w4g1, s2w8g1, s3w4g1, s3w8g1, s3w8g8, s3w8g16, s3w8g64, s4w8g1, s5w8g1
+repeats      5 passes, settings shuffled inside each token count on the same tensors, so every contrast is paired
+timing       moe.bench.timing.time_kernel [queue-deep/l2-flush/settled-warmup/clock-under-load/v4]: 300 ms of delivered warmup, 3 queue-deep trials of 400 ms each, L2 flush on, SM clock sampled under load
+cells        900 timings
+estimate     1343 s of GPU at the model's own timings, excluding compiles and allocation
+roofline     ridge 155.930 Op/B, bandwidth 4374.3 GB/s (measured on this device: NVIDIA H200 (measured))
+card         nvidia_h200
+WRITES TO    /workspace/results/gaps-nvidia_h200/occupancy_vs_swizzle/nvidia_h200-dtypebf16-g1_8_16_64-modelmixtral_8x7b-n64-s2_3_4_5-settingsblock_k64_capabilityfrom-753c188f
+             git check-ignore exited 128; path unverified (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/occupancy_vs_swizzle': No such file or directory)
+             cells.csv (one row per timing, flushed), CARD, inputs.json, report.txt, report.json, triton-cache/
+
+MDE          0.0405 in alpha between two settings at 5 repeats each, two-sided 5% at 80% power
+             assumed sigma 0.0228: s3-vs-s4 paired sd 0.0323 of alpha over 11 matched cells / sqrt(2); CONFOUNDS num_stages with rerun noise and both arms ran in one pod hour, so it is an upper bound on same-session rerun noise only
+             P1's registered threshold is 0.058 (half the model's predicted swing of +0.115), which is ABOVE the MDE, so the design can see the effect it gates on.
+             the sigma is ASSUMED and not measured here. scripts/replicate_noise_floor.py measures the real between-replicate spread; until it has run on a card every threshold on this page rests on an upper bound from another session.
+
+## What each setting measured
+
+setting      arms                      blk/SM  MiB flight   pred  treads  mem   alpha    corr   sigma  spread  reference
+s5w8g1       occ                            2         346  0.827      16   16   0.968  0.952 0.0270  0.69%  BM=256
+s4w8g1       occ                            3         520  0.885      16   16   1.029  1.013 0.0259  0.64%  BM=256
+s3w4g1       warp                           4         693  0.913      16   16   1.108  1.090 0.0302  0.76%  BM=256
+s3w8g1       occ/swz/warp                   4         693  0.913      16   16   1.098  1.081 0.0346  0.72%  BM=256
+s3w8g16      swz                            4         693  0.913      16   16   0.763  0.748 0.0193  0.72%  BM=256
+s3w8g64      swz                            4         693  0.913      16   16   0.855  0.839 0.0131  0.53%  BM=256
+s3w8g8       swz                            4         693  0.913      16   16   0.811  0.794 0.0179  0.77%  BM=256
+s2w4g1       warp                           6        1040  0.942      16   16   0.857  0.842 0.0256  0.63%  BM=256
+s2w8g1       occ/warp                       6        1040  0.942      16   16   0.942  0.928 0.0257  0.80%  BM=256
+
+## The four contrasts
+
+  occupancy      2 blocks/SM    0.952  ->  6 blocks/SM    0.928   swing -0.025   ratio 0.974
+  swizzle        G=1            1.081  ->  G=64           0.839   swing -0.242   ratio 0.776
+  warp-control   s2 w4          0.842  ->  s2 w8          0.928   swing +0.086   ratio 1.102
+  depth-control  NOT FORMED (0 usable levels)
+
+  residency ladder, blocks/SM -> the num_stages that reach it: 2: [5], 3: [4], 4: [3], 6: [2]
+  the depth-control contrast is the ONLY place pipeline depth comes apart from residency, and it needs one of those rows to hold two num_stages.
+  it does not on this card, so P1's residency reading carries an unremoved latency-hiding confound.
+
+## Verdict
+
+  NEITHER (null)
+
+  a null, and it is a result. Neither concurrency nor program order moves
+  the re-read fraction by more than this design can resolve, which retires
+  both models at once and points at DRAM scheduling, the replacement policy
+  or sector granularity instead. The design's resolution is V6's spread and
+  P1's applied threshold; quote both whenever this verdict is quoted. A null
+  here retires the FOOTPRINT and the ORDER models; it does not retire
+  pipeline depth, which this design never varied on its own. READ P6 BEFORE
+  QUOTING THIS. num_stages moves resident blocks AND software-pipeline
+  prefetch depth together, so the residency axis carries a latency-hiding
+  mechanism as well as a footprint one. P6 separates them only where two
+  num_stages compute the same residency, which is an A100 property and not
+  an H200 one; where P6 is UNKNOWN the separation was not made and this
+  verdict must be quoted with that clause attached.
+
+  NOT CHECKED: V9 compiled shared memory returned UNKNOWN, which is weaker than a PASS and is not a FAIL. Each says what a reader may still quote.
+
+## Gates
+
+RESULT: VALIDITY V1_card_provenance PASS [VALIDITY] the residency ladder and the L2 come from the ATTACHED card | gate no HYPOTHESIS value reaches a measured run | saw limits: read off NVIDIA H200; L2: read off NVIDIA H200 (L2_cache_size)
+[PASS] VALIDITY V1 card provenance  the residency ladder and the L2 come from the ATTACHED card
+         gate: no HYPOTHESIS value reaches a measured run
+         saw:  limits: read off NVIDIA H200; L2: read off NVIDIA H200 (L2_cache_size)
+         A hardcoded band from another machine has reached seven published reports in this repo once already.
+RESULT: VALIDITY V2_residency_swept PASS [VALIDITY] the occupancy arm actually moved resident blocks per SM | gate >= 3 distinct levels spanning >= 2.0x | saw levels [2, 3, 4, 6], span 3.00x
+[PASS] VALIDITY V2 residency swept  the occupancy arm actually moved resident blocks per SM
+         gate: >= 3 distinct levels spanning >= 2.0x
+         saw:  levels [2, 3, 4, 6], span 3.00x
+         per-CTA shared memory across the arm: s2w8g1 32 KiB, s3w8g1 48 KiB, s4w8g1 64 KiB, s5w8g1 80 KiB
+         the L2 they are compared against is 63 MB (read off NVIDIA H200 (L2_cache_size))
+RESULT: VALIDITY V3_geometry_pinned PASS [VALIDITY] BLOCK_M, BLOCK_SIZE_N and BLOCK_SIZE_K are the same at every setting | gate block sizes measured are exactly {64, 256} at BLOCK_SIZE_N=64, BLOCK_SIZE_K=64 | saw block sizes in the CSV: [64, 256]
+[PASS] VALIDITY V3 geometry pinned  BLOCK_M, BLOCK_SIZE_N and BLOCK_SIZE_K are the same at every setting
+         gate: block sizes measured are exactly {64, 256} at BLOCK_SIZE_N=64, BLOCK_SIZE_K=64
+         saw:  block sizes in the CSV: [64, 256]
+RESULT: VALIDITY V4_compute_reference PASS [VALIDITY] every setting qualified its own BLOCK_M=256 ladder as a compute branch | gate no refusals and no missing references | saw refused: none; absent: none
+[PASS] VALIDITY V4 compute reference  every setting qualified its own BLOCK_M=256 ladder as a compute branch
+         gate: no refusals and no missing references
+         saw:  refused: none; absent: none
+RESULT: VALIDITY V5_alpha_identifiable PASS [VALIDITY] enough settings measured alpha over enough memory-bound treads | gate >= 3 settings with >= 3 memory-bound treads and a fitted alpha | saw 9 of 9 settings usable: s2w4g1:16, s2w8g1:16, s3w4g1:16, s3w8g1:16, s3w8g8:16, s3w8g16:16, s3w8g64:16, s4w8g1:16, s5w8g1:16
+[PASS] VALIDITY V5 alpha identifiable  enough settings measured alpha over enough memory-bound treads
+         gate: >= 3 settings with >= 3 memory-bound treads and a fitted alpha
+         saw:  9 of 9 settings usable: s2w4g1:16, s2w8g1:16, s3w4g1:16, s3w8g1:16, s3w8g8:16, s3w8g16:16, s3w8g64:16, s4w8g1:16, s5w8g1:16
+RESULT: VALIDITY V6_replication PASS [VALIDITY] a setting's treads reproduce between repeats | gate worst per-setting median relative spread <= 2.0% | saw worst 0.80% over 9 settings
+[PASS] VALIDITY V6 replication  a setting's treads reproduce between repeats
+         gate: worst per-setting median relative spread <= 2.0%
+         saw:  worst 0.80% over 9 settings
+RESULT: VALIDITY V7_override_applied PASS [VALIDITY] every setting recompiled, so num_stages, num_warps and GROUP_SIZE_M reached the kernel | gate >= 1 fresh Triton artefact per setting and > 0 timings executed | saw 900 timings; artefacts s2w4g1:32, s2w8g1:32, s3w4g1:32, s3w8g1:32, s3w8g16:32, s3w8g64:32, s3w8g8:32, s4w8g1:33, s5w8g1:32
+[PASS] VALIDITY V7 override applied  every setting recompiled, so num_stages, num_warps and GROUP_SIZE_M reached the kernel
+         gate: >= 1 fresh Triton artefact per setting and > 0 timings executed
+         saw:  900 timings; artefacts s2w4g1:32, s2w8g1:32, s3w4g1:32, s3w8g1:32, s3w8g16:32, s3w8g64:32, s3w8g8:32, s4w8g1:33, s5w8g1:32
+RESULT: VALIDITY V8_non-vacuity PASS [VALIDITY] this report examined real treads and formed real contrasts | gate > 0 treads, > 0 per-repeat fits, and >= 2 of the 3 contrasts formed | saw 144 treads, 45 per-repeat alphas, contrasts formed: ['occupancy', 'swizzle', 'warp-control']
+[PASS] VALIDITY V8 non-vacuity  this report examined real treads and formed real contrasts
+         gate: > 0 treads, > 0 per-repeat fits, and >= 2 of the 3 contrasts formed
+         saw:  144 treads, 45 per-repeat alphas, contrasts formed: ['occupancy', 'swizzle', 'warp-control']
+RESULT: VALIDITY V9_compiled_shared_memory UNKNOWN [VALIDITY] Triton allocated the shared memory the residency model assumed | gate every setting within 10% of num_stages (BM BK + BK BN) b, and zero register spills | saw not probed: vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read
+[UNKNOWN] VALIDITY V9 compiled shared memory  Triton allocated the shared memory the residency model assumed
+         gate: every setting within 10% of num_stages (BM BK + BK BN) b, and zero register spills
+         saw:  not probed: vLLM exposes no fused_moe_kernel with a Triton cache under either known path, so the compiled shared memory could not be read
+         a FAIL here invalidates: nothing on its own, but it leaves the residency column a COMPUTED UPPER BOUND rather than a checked one: the register limit is not modelled and can only lower residency, so a report under a not-probed V9 may quote the ladder's ORDER and not its values
+RESULT: VALIDITY V10_one_instrument PASS [VALIDITY] every cell was timed by the instrument the roof was measured with | gate every row stamps instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4' | saw instruments seen: 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+[PASS] VALIDITY V10 one instrument  every cell was timed by the instrument the roof was measured with
+         gate: every row stamps instrument == 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+         saw:  instruments seen: 'queue-deep/l2-flush/settled-warmup/clock-under-load/v4'
+         900 timed rows; 489 steady at the roof's clock, 179 steady below it (LEVEL low, kept, side recorded), 174 steady above it (LEVEL high, kept, side recorded), all scored against the fixed roof; 58 drifting within a cell (excluded, and not in the counts before it); 0 steady with no clock determined at all
+         the 58 drifted rows by side: 25 level, 20 LOW, 13 HIGH, 0 with LEVEL not determined; a row whose clock moved is not steady at any side
+         clock_level_ok is None means NOT DETERMINED and never 'fine'; a filter that read it as True would re-admit the rows this column exists to flag
+RESULT: CLAIM P1_occupancy FAIL [CLAIM] alpha rises with resident blocks per SM | gate swing >= 0.085 in alpha between 2 blocks/SM and 6 blocks/SM, and every step rising | saw alpha 0.952 -> 0.928, swing -0.025
+[FAIL] CLAIM    P1 occupancy  alpha rises with resident blocks per SM
+         gate: swing >= 0.085 in alpha between 2 blocks/SM and 6 blocks/SM, and every step rising
+         saw:  alpha 0.952 -> 0.928, swing -0.025
+         model predicted +0.115 across this ladder; registered gate was half of it, 0.058
+         noise floor 3 x 0.0283 -> threshold applied 0.085
+         direction: 2 of 3 steps rise with residency
+RESULT: CLAIM P2_program_order FAIL [CLAIM] alpha falls as 1/GROUP_SIZE_M | gate alpha(G=64) / alpha(G=1) <= 0.235, which is 2x the prediction | saw alpha 1.081 -> 0.839, ratio 0.776
+[FAIL] CLAIM    P2 program order  alpha falls as 1/GROUP_SIZE_M
+         gate: alpha(G=64) / alpha(G=1) <= 0.235, which is 2x the prediction
+         saw:  alpha 1.081 -> 0.839, ratio 0.776
+         reuse distance predicts 0.118 with the tiles-per-expert cap (8.5 tiles, a median over the ladder and not a threshold)
+         uncapped it predicts 0.0156, which is the 40x gap this experiment starts from
+         route two: this design reads alpha only above 0.128 and outside [0.349, 0.472], so a collapse at wide G is the same claim
+RESULT: CLAIM P3_warp_control UNKNOWN [CLAIM] alpha tracks resident BLOCKS, not resident WARPS | gate |warp swing| < |occupancy swing|, and only where the occupancy swing cleared its own threshold of 0.085 | saw occupancy swing -0.025 did not clear 0.085, so the warp swing +0.086 has nothing to be smaller than: two noise measurements compared would pass half the time
+[UNKNOWN] CLAIM    P3 warp control  alpha tracks resident BLOCKS, not resident WARPS
+         gate: |warp swing| < |occupancy swing|, and only where the occupancy swing cleared its own threshold of 0.085
+         saw:  occupancy swing -0.025 did not clear 0.085, so the warp swing +0.086 has nothing to be smaller than: two noise measurements compared would pass half the time
+         This gate is a CONTROL on P1 and is only readable when P1 moved.
+RESULT: CLAIM P6_depth_control UNKNOWN [CLAIM] alpha tracks resident BLOCKS, not pipeline DEPTH | gate the pure num_stages contrast at fixed residency is smaller than the occupancy contrast | saw no two num_stages settings computed the same resident-block count, so the pure pipeline-depth effect was not measured and the confound in P1 is UNREMOVED on this card
+[UNKNOWN] CLAIM    P6 depth control  alpha tracks resident BLOCKS, not pipeline DEPTH
+         gate: the pure num_stages contrast at fixed residency is smaller than the occupancy contrast
+         saw:  no two num_stages settings computed the same resident-block count, so the pure pipeline-depth effect was not measured and the confound in P1 is UNREMOVED on this card
+         a FAIL here invalidates: P1's reading as a footprint effect: alpha moving with the ladder is equally consistent with latency hiding, and this run cannot say which
+         residency ladder (blocks/SM -> num_stages that reach it): 2: [5], 3: [4], 4: [3], 6: [2]
+         num_stages moves residency AND software-pipeline prefetch depth. This gate is the only place they come apart, and it needs two stage settings at ONE resident-block count.
+         Not formable on an H200 with the default ladder (6/4/3/2 blocks at 2/3/4/5 stages); formable on an A100, where 4 and 5 stages both give 2. Extending the ladder cannot help: at 6 stages the BLOCK_M=256 reference exceeds both cards' per-CTA shared memory.
+
+9 PASS, 2 FAIL, 3 UNKNOWN

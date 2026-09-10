@@ -1,0 +1,261 @@
+# Span extent or kernel quality? Decomposing the 0.563 separation
+
+run id nvidia_h200-armsall-casemeasured_noise0-densifytrue-dtypebf16-flushfalse-modelspublished4-reps3-2f8d144a
+card   NVIDIA H200
+dtype bf16   routing uniform   seed 0
+reps 3, round-robin over 9 arms
+
+EVERYTHING IS SAVED TO  /workspace/results/gaps-nvidia_h200/span_extent_separation/nvidia_h200-armsall-casemeasured_noise0-densifytrue-dtypebf16-flushfalse-modelspublished4-reps3-2f8d144a
+  rows   /workspace/results/gaps-nvidia_h200/span_extent_separation/nvidia_h200-armsall-casemeasured_noise0-densifytrue-dtypebf16-flushfalse-modelspublished4-reps3-2f8d144a/timings.csv
+  report /workspace/results/gaps-nvidia_h200/span_extent_separation/nvidia_h200-armsall-casemeasured_noise0-densifytrue-dtypebf16-flushfalse-modelspublished4-reps3-2f8d144a/report.md
+  not gitignored
+Re-run the same command to resume; completed (card, model, tokens, arm) rows are skipped.
+RESUME: 0 row(s) on disk for this card, 0 errored row(s) that will be retried
+
+## Provenance
+
+  provenance_version   1
+  git_sha              c0644beadd3dfe2fde7045520d6dee61b7655971
+  git_dirty            True
+  git_dirty_files      1
+  utc                  2026-09-10T06:41:19+00:00
+  hostname             eec145fd46b6
+  gpu_name             NVIDIA H200
+  driver_version       580.159.04
+  cuda_version         13.0
+  python               3.12.3
+  torch                2.13.0
+  triton               3.7.1
+  vllm                 0.27.1
+  sglang               --   (package not installed)
+  instrument           queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+  ridge                155.9303223641331
+  ridge_source         COST MODEL ONLY: measured on this device: NVIDIA H200 (measured); bf16 ridge 155.9 FLOP/byte = peak over bandwidth. No ratio on this page touches it; the predicted crossing cancels out of every one
+  bandwidth            4374.299702465323
+  bandwidth_source     COST MODEL ONLY: measured on this device: NVIDIA H200 (measured); 4374.3 GB/s
+  warmup_ms            200.0
+  iters                --   (not supplied by caller)
+  target_ms            200.0
+
+## The two routes, and which one this script takes
+
+ROUTE B -- fuse the harness's own spans -- IS NOT REACHABLE. `moe/kernels/` holds
+`.gitkeep` and `TEMPLATE.md`; the harness owns no fused kernel. Its own spans are
+the `ref_*` torch stages and `torch_grouped_mm_*`, one canonical stage each. A
+five-stage PIPELINE of them can be built today and would not answer the question:
+it is five launches with every intermediate materialised, scored at 12.43x its
+compulsory bytes against the fused span's 1.16x, so it differs from the fused
+span in implementation QUALITY -- the very thing being controlled for. Writing the
+fused kernel is the study's own open work.
+
+ROUTE A -- run a fused implementation at a single-stage extent -- IS REACHABLE,
+because vLLM's `fused_experts` is five launches and one of them is the Triton
+grouped GEMM on its own:
+
+    moe_align_block_size      the sort and the per-expert BLOCK_M padding
+    invoke_fused_moe_kernel   the UP grouped GEMM, gather fused in       <- GEMM
+    silu_and_mul              SwiGLU over the [gate | up] halves
+    invoke_fused_moe_kernel   the DOWN grouped GEMM, combine applied     <- GEMM
+    moe_sum                   the top-k reduction back to [T, H]
+
+The one-launch arms hand `invoke_fused_moe_kernel` the config the fused call
+RESOLVED and the alignment metadata built in an untimed prologue, so the kernel,
+the tile and the data are all held fixed and only the extent moves.
+
+## The 2x2, three corners of which exist
+
+                    | Triton fused_moe_kernel  | CUTLASS grouped_mm
+    five-launch     | `fused`      (published) | MISSING -- needs route B
+    one GEMM launch | `gemm_*`     (NEW, here) | `cutlass_*` (published)
+
+    separation = five_Triton / one_CUTLASS
+               = (five_Triton / one_Triton) * (one_Triton / one_CUTLASS)
+               =        EXTENT              *          KERNEL
+
+Exact: the middle term cancels. The INTERPRETATION assumes no interaction --
+that extent would cost CUTLASS what it costs Triton -- and that assumption is
+exactly the missing corner. It is not measured here and is not claimed.
+
+The predicted crossing cancels too. `ridge.crossing_batch_full` takes a MODEL,
+not a span, so per model one prediction sits in both numerator and denominator.
+Every ratio below is a ratio of two MEASURED crossings: no ridge, no byte model,
+no calibration. Published separation to decompose: 0.563 (first-crossing 0.5602, last-crossing 0.8889).
+
+## The plan
+
+| arm | what it times |
+|---|---|
+| `fused` | vLLM fused_experts, five stages, one call -- the published span |
+| `align` | moe_align_block_size alone: the sort and the BLOCK_M padding |
+| `gemm_up` | invoke_fused_moe_kernel on w1 -- the SAME Triton kernel, one GEMM |
+| `act` | silu_and_mul alone: SwiGLU over the [gate | up] halves |
+| `gemm_down` | invoke_fused_moe_kernel on w2 -- the SAME Triton kernel, one GEMM |
+| `sum` | moe_sum alone: the top-k reduction back to [T, H] |
+| `cutlass_up` | torch grouped_mm on w1 -- CUTLASS, one GEMM, dense ragged M |
+| `cutlass_down` | torch grouped_mm on w2 -- CUTLASS, one GEMM, dense ragged M |
+| `fused_replica` | fused_experts again, at the far end of the repeat: the placebo |
+
+| model | T | rows/expert | ladder BLOCK_M | padded rows | p (lower bound) |
+|---|---:|---:|---:|---:|---:|
+| mixtral-8x7b | 1 | 0.2 | 16 | 128 | 64.00 |
+| mixtral-8x7b | 2 | 0.5 | 16 | 128 | 32.00 |
+| mixtral-8x7b | 4 | 1.0 | 16 | 128 | 16.00 |
+| mixtral-8x7b | 8 | 2.0 | 16 | 128 | 8.00 |
+| mixtral-8x7b | 16 | 4.0 | 16 | 128 | 4.00 |
+| mixtral-8x7b | 32 | 8.0 | 16 | 128 | 2.00 |
+| mixtral-8x7b | 64 | 16.0 | 32 | 256 | 2.00 |
+| mixtral-8x7b | 128 | 32.0 | 64 | 512 | 2.00 |
+| mixtral-8x7b | 160 | 40.0 | 64 | 512 | 1.60 |
+| mixtral-8x7b | 224 | 56.0 | 64 | 512 | 1.14 |
+| mixtral-8x7b | 256 | 64.0 | 64 | 512 | 1.00 |
+| mixtral-8x7b | 316 | 79.0 | 64 | 1024 | 1.62 |
+| mixtral-8x7b | 444 | 111.0 | 64 | 1024 | 1.15 |
+| mixtral-8x7b | 512 | 128.0 | 64 | 1024 | 1.00 |
+| mixtral-8x7b | 632 | 158.0 | 128 | 2048 | 1.62 |
+| mixtral-8x7b | 896 | 224.0 | 128 | 2048 | 1.14 |
+| mixtral-8x7b | 1024 | 256.0 | 128 | 2048 | 1.00 |
+| mixtral-8x7b | 1264 | 316.0 | 128 | 3072 | 1.22 |
+| mixtral-8x7b | 2048 | 512.0 | 128 | 4096 | 1.00 |
+| mixtral-8x7b | 4096 | 1024.0 | 128 | 8192 | 1.00 |
+| mixtral-8x7b | 8192 | 2048.0 | 128 | 16384 | 1.00 |
+| qwen2-57b-a14b | 1 | 0.1 | 16 | 1024 | 128.00 |
+| qwen2-57b-a14b | 2 | 0.2 | 16 | 1024 | 64.00 |
+| qwen2-57b-a14b | 4 | 0.5 | 16 | 1024 | 32.00 |
+| qwen2-57b-a14b | 8 | 1.0 | 16 | 1024 | 16.00 |
+| qwen2-57b-a14b | 16 | 2.0 | 16 | 1024 | 8.00 |
+| qwen2-57b-a14b | 32 | 4.0 | 16 | 1024 | 4.00 |
+| qwen2-57b-a14b | 64 | 8.0 | 32 | 2048 | 4.00 |
+| qwen2-57b-a14b | 128 | 16.0 | 64 | 4096 | 4.00 |
+| qwen2-57b-a14b | 256 | 32.0 | 64 | 4096 | 2.00 |
+| qwen2-57b-a14b | 392 | 49.0 | 64 | 4096 | 1.31 |
+| qwen2-57b-a14b | 512 | 64.0 | 64 | 4096 | 1.00 |
+| qwen2-57b-a14b | 560 | 70.0 | 128 | 8192 | 1.83 |
+| qwen2-57b-a14b | 784 | 98.0 | 128 | 8192 | 1.31 |
+| qwen2-57b-a14b | 1024 | 128.0 | 128 | 8192 | 1.00 |
+| qwen2-57b-a14b | 1112 | 139.0 | 128 | 16384 | 1.84 |
+| qwen2-57b-a14b | 1576 | 197.0 | 128 | 16384 | 1.30 |
+| qwen2-57b-a14b | 2048 | 256.0 | 128 | 16384 | 1.00 |
+| qwen2-57b-a14b | 2224 | 278.0 | 128 | 24576 | 1.38 |
+| qwen2-57b-a14b | 3152 | 394.0 | 128 | 32768 | 1.30 |
+| qwen2-57b-a14b | 4096 | 512.0 | 128 | 32768 | 1.00 |
+| qwen2-57b-a14b | 8192 | 1024.0 | 128 | 65536 | 1.00 |
+| deepseek-v2-lite | 1 | 0.1 | 16 | 1024 | 170.67 |
+| deepseek-v2-lite | 2 | 0.2 | 16 | 1024 | 85.33 |
+| deepseek-v2-lite | 4 | 0.4 | 16 | 1024 | 42.67 |
+| deepseek-v2-lite | 8 | 0.8 | 16 | 1024 | 21.33 |
+| deepseek-v2-lite | 16 | 1.5 | 16 | 1024 | 10.67 |
+| deepseek-v2-lite | 32 | 3.0 | 16 | 1024 | 5.33 |
+| deepseek-v2-lite | 64 | 6.0 | 32 | 2048 | 5.33 |
+| deepseek-v2-lite | 128 | 12.0 | 64 | 4096 | 5.33 |
+| deepseek-v2-lite | 256 | 24.0 | 64 | 4096 | 2.67 |
+| deepseek-v2-lite | 480 | 45.0 | 64 | 4096 | 1.42 |
+| deepseek-v2-lite | 512 | 48.0 | 64 | 4096 | 1.33 |
+| deepseek-v2-lite | 672 | 63.0 | 128 | 8192 | 2.03 |
+| deepseek-v2-lite | 928 | 87.0 | 128 | 8192 | 1.47 |
+| deepseek-v2-lite | 1024 | 96.0 | 128 | 8192 | 1.33 |
+| deepseek-v2-lite | 1312 | 123.0 | 128 | 8192 | 1.04 |
+| deepseek-v2-lite | 1856 | 174.0 | 128 | 16384 | 1.47 |
+| deepseek-v2-lite | 2048 | 192.0 | 128 | 16384 | 1.33 |
+| deepseek-v2-lite | 2624 | 246.0 | 128 | 16384 | 1.04 |
+| deepseek-v2-lite | 3712 | 348.0 | 128 | 24576 | 1.10 |
+| deepseek-v2-lite | 4096 | 384.0 | 128 | 24576 | 1.00 |
+| deepseek-v2-lite | 8192 | 768.0 | 128 | 49152 | 1.00 |
+| deepseek-v3 | 1 | 0.0 | 16 | 4096 | 512.00 |
+| deepseek-v3 | 2 | 0.1 | 16 | 4096 | 256.00 |
+| deepseek-v3 | 4 | 0.1 | 16 | 4096 | 128.00 |
+| deepseek-v3 | 8 | 0.2 | 16 | 4096 | 64.00 |
+| deepseek-v3 | 16 | 0.5 | 16 | 4096 | 32.00 |
+| deepseek-v3 | 32 | 1.0 | 16 | 4096 | 16.00 |
+| deepseek-v3 | 64 | 2.0 | 32 | 8192 | 16.00 |
+| deepseek-v3 | 128 | 4.0 | 64 | 16384 | 16.00 |
+| deepseek-v3 | 256 | 8.0 | 64 | 16384 | 8.00 |
+| deepseek-v3 | 512 | 16.0 | 64 | 16384 | 4.00 |
+| deepseek-v3 | 1024 | 32.0 | 128 | 32768 | 4.00 |
+| deepseek-v3 | 1504 | 47.0 | 128 | 32768 | 2.72 |
+| deepseek-v3 | 2048 | 64.0 | 128 | 32768 | 2.00 |
+| deepseek-v3 | 2144 | 67.0 | 128 | 32768 | 1.91 |
+| deepseek-v3 | 3008 | 94.0 | 128 | 32768 | 1.36 |
+| deepseek-v3 | 4096 | 128.0 | 128 | 32768 | 1.00 |
+| deepseek-v3 | 4256 | 133.0 | 128 | 65536 | 1.92 |
+| deepseek-v3 | 6016 | 188.0 | 128 | 65536 | 1.36 |
+| deepseek-v3 | 8192 | 256.0 | 128 | 65536 | 1.00 |
+| deepseek-v3 | 8512 | 266.0 | 128 | 98304 | 1.44 |
+| deepseek-v3 | 12032 | 376.0 | 128 | 98304 | 1.02 |
+
+84 cells x 9 arms = 756 timed arms.
+BLOCK_M and p above are DERIVED from vLLM's fallback ladder for the plan only; on the box both are OBSERVED, the block size out of the fused call and p out of the real routing histogram, and the CSV records which through `padding_source`.
+p above is a LOWER BOUND twice over. It assumes every expert holds exactly `T k / E` rows, and under sampled uniform routing the counts scatter, so `sum_e ceil(n_e/BM) BM` exceeds `E ceil(r/BM) BM`. And on a powers-of-two grid r is a power of two and BM is too, so p reads exactly 1.00 wherever r >= BM -- the crossings sit BETWEEN those points, at r near 80-100, which is why C3 evaluates p at the interpolated crossing rather than at a grid cell.
+Estimated KERNEL time 1814 s at the byte model's own timings. That is a PREDICTION from arithmetic, not a measurement, and it is NOT the wall clock.
+
+WALL CLOCK IS NOT THAT NUMBER. On top of it: up to 21 distinct Triton specialisations to compile across 4 models (a fused_moe compile is tens of seconds, and the ladder changes the config four times over this token grid), and one weight build per model, the largest being deepseek-v3 at 22.5 GB. Budget for those, not for the timings.
+
+C3's POWER ON THIS GRID, before anything runs. The mechanism is only visible where the padding factor is materially above 1 on the COMPUTE-BOUND side, and the null it is tested against is p = 1.00 inside a 15% band:
+  mixtral-8x7b: first compute-bound cell T=632, BLOCK_M 128, p >= 1.620 -- has power
+  qwen2-57b-a14b: first compute-bound cell T=1576, BLOCK_M 128, p >= 1.299 -- has power
+  deepseek-v2-lite: first compute-bound cell T=2048, BLOCK_M 128, p >= 1.333 -- has power
+  deepseek-v3: first compute-bound cell T=8192, BLOCK_M 128, p >= 1.000 -- NO POWER at the balanced lower bound; the routing scatter may still supply some, and --densify supplies more
+
+
+INSTRUMENT: queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+  warmup 200 ms of delivered load per arm per repeat, then 3 trial(s) of about 200 ms each, iters sized by the instrument from the warmup's own queue-deep per-call time
+  L2 flush OFF -- see `time_arm` for why this arm, alone in the study, does not flush: V2 compares an isolated launch against the same launch inside a five-launch sequence
+  iters clamp [10, 2000], read off `timing.iters_for` itself, so a trial holds 200 ms of kernel time only for an arm between 0.100 and 20.0 ms per call
+  no arm is modelled slower than 200 ms / 10, so no trial should overrun the budget
+  261 of 756 arm(s) are modelled faster than 200 ms / 2000, the instrument's maximum of 2000 calls per trial, so their trials UNDERRUN the budget -- the fastest at 0.006 ms delivers about 12.0 ms of kernel time per trial, not 200, and the cost estimate above OVER-charges them: mixtral-8x7b T=1 align ~0.006 ms; mixtral-8x7b T=1 act ~0.006 ms; mixtral-8x7b T=1 sum ~0.006 ms; mixtral-8x7b T=2 align ~0.006 ms; and 257 more
+
+MDE, BEFORE ANYTHING RUNS. Every gate below is a threshold on a median log ratio over models, so the design has a smallest resolvable effect and it is stated here rather than discovered after the fact:
+  noise assumption  per-arm replicate sd 0.0228 in log ms (scripts/replicate_noise_floor.py PRIOR_SD: the s3-vs-s4 paired sd over 11 cells / sqrt(2), an UPPER bound, and not this script's own arms)
+  MDE               0.0452 in log terms, a factor of 1.046, at 5% two-sided and 80% power over 4 models
+  C1 margin         0.1655 in log terms (the EXTENT band's upper edge 1.18) -- resolvable
+  C2 margin         0.2877 in log terms (the KERNEL gate 0.75) -- resolvable
+  C5 margin         0.2852 in log terms (the C5 band's half width) -- resolvable
+  Read this as an upper bound on the design's power: the median is treated as a mean, the per-arm sd is propagated through a crossing estimator that can amplify it, and four fixed architectures are treated as four independent draws. `mde_log_ratio` names all three.
+
+## Predictions, registered before the run
+
+THE CLAIM: the separation is the KERNEL, not the EXTENT.
+
+MECHANISM, with its arithmetic. `moe_align_block_size` pads every expert to a
+multiple of BLOCK_SIZE_M and the Triton kernel COMPUTES the padded rows;
+`grouped_mm` takes ragged M and computes none. Padding inflates the compute side
+by `p` and leaves weight traffic alone, so the crossing moves to `1/p` of its
+predicted batch. At the published five-stage crossings:
+
+    mixtral   T=316  r=79.0  -> 128 padded rows   p=1.62   1/p=0.62
+    qwen2     T=787  r=98.4  -> 128               p=1.30   1/p=0.77
+    v2-lite   T=931  r=87.3  -> 128               p=1.47   1/p=0.68
+    dsv3      T=3010 r=94.1  -> 128               p=1.36   1/p=0.74
+                                            mean  p=1.44   1/p=0.70
+
+against a measured five-stage 0.63 and one-stage 1.13. The magnitude lands; the per-model ORDERING does
+not, and C3 accepts the first without claiming the second.
+
+The competing explanation is priced and found small. At mixtral's crossing the
+permute, activation and combine traffic is ~62 MB against 2.8 GB of weights
+(2.2%); at deepseek-v3's, ~1.07 GB against 22.5 GB (4.8%). Three extra launches
+are flat in T, and a flat term FLATTENS a slope, pushing a crossing LATER.
+
+VALIDITY -- a FAIL means no number on the page may be quoted.
+  V0  the five launches recompute fused_experts' output   rel err <= 0.02
+  V1  the tile was READ OUT of the fused call             zero refusals
+  V2  the launch times sum to the fused time              in (0.85, 1.2)
+  V3  the placebo band is small                           p90 < 3%
+  V4  real work happened                                  cells/samples/compiles > 0
+  V5  this session reproduces the published crossing      in (0.6, 1.6)x
+  V6  up and down one-launch crossings agree              <= 2.0x
+
+CLAIM -- a FAIL is a result, not a broken run.
+  C1  extent does NOT move the crossing    EXTENT in (0.85, 1.18)
+  C2  the kernel carries the separation    KERNEL <= 0.75
+  C3  the mechanism is padding             |KERNEL - 1/p| <= 15% of 1/p
+  C4  the extra stages are cheap in time   non-GEMM share < 20%
+  C5  it is the published number           separation in [0.422, 0.749]
+
+EVERY CROSSING IS REPORTED AT BOTH ENDS OF THE STAIRCASE. The measured curve
+crosses 0.5 more than once on half the canonical cells, and taking the last
+instead of the first moves the published separation from 0.560 to 0.889. A
+single number here would be a choice this script is not entitled to make.
+
+GRID POWER: C2 PASS in the planted kernel world: planted-kernel world gives KERNEL 0.662 against the gate's 0.75
+
+NOT A RESULT: vLLM exposes no invoke_fused_moe_kernel in any of ('vllm.model_executor.layers.fused_moe.fused_moe',). Without it the fused path cannot be taken apart, and a stand-in would time a different kernel. Run scripts/probe_baseline_api.py in this venv and say what it prints.
