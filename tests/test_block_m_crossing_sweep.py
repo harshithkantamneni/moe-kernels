@@ -2113,11 +2113,18 @@ def test_the_fused_footing_moves_the_non_vacuity_floor_off_the_dense_roof():
     assert "footing            DENSE" in "\n".join(dense.render())
 
 
-def test_the_fused_footing_refuses_a_plateau_outside_the_corpus_band():
+def test_the_fused_footing_refuses_a_plateau_outside_the_admitted_band():
     """The A100 BLOCK_N=256 reference implied 3.6 TFLOP/s, 1.4% of the card.
     On the dense footing it was caught by a bound no sound reference meets
     either; on the fused footing the band is what catches it, with two orders
-    of magnitude to spare, and the refusal says which number missed."""
+    of magnitude to spare, and the refusal says which number missed.
+
+    AND THE REFUSAL NO LONGER CALLS THE BAND A CORPUS FIGURE. It read "outside
+    the [0.465, 1.050] a fused layer occupies in this study's 26 published
+    reports"; the corpus interval is `tile_cap_test.FUSED_PLATEAU_BAND` =
+    (0.465, 0.756) and 1.050 is V3's dense-peak sanity ceiling, which this file
+    itself says at two other places. A published sentence stated a bound the
+    corpus does not have."""
     cells = _ladder_cells(0.558, tiles=(128, 256))
     slow = [BM.make_cell(MIXTRAL, c.rows_per_expert, c.block_m,
                          c.ms_p50 * 40.0, sm_count=132, block_n=64)
@@ -2129,3 +2136,62 @@ def test_the_fused_footing_refuses_a_plateau_outside_the_corpus_band():
     assert ref.roof_fraction < 0.05
     assert any("outside the [0.465, 1.050]" in why for why in ref.refusals)
     assert any("REFUSED" in line for line in ref.render())
+    why = next(w for w in ref.refusals if "outside the [0.465, 1.050]" in w)
+    assert "a fused layer occupies in this study" not in why
+    assert "this arm admits for a fused layer's roof" in why
+    assert "lowest of the 26 published fused plateaus" in why
+    assert "dense peak plus its tolerance" in why
+
+
+# --------------------------------------------------------------------------
+# The retired rule, hunted out of the two halves of one --help page.
+# --------------------------------------------------------------------------
+
+def test_the_help_page_states_one_rule_and_it_is_the_one_the_code_applies():
+    """THE FIX-AT-ONE-OF-TWO-PLACES SHAPE, INSIDE A SINGLE DOCSTRING.
+
+    The 2026-09-09 commit rewrote this docstring's `--self-test-world`
+    paragraph ("four worlds ... a drifting-clock tread ... which must be
+    excluded") and left the ONE INSTRUMENT paragraph above it saying that a
+    cell whose loaded clock came in BELOW the band "is EXCLUDED from the ladder
+    fit and counted". `Cell.clock_excluded` and `ladder_treads` read
+    `clock_drift_ok is False` only, so the two halves of one `--help` page
+    stated opposite rules.
+    """
+    doc = BM.__doc__
+    assert "is EXCLUDED from the ladder\nfit" not in doc
+    assert "EXCLUDED IFF `clock_drift_ok` IS FALSE" in doc
+    assert "NEITHER LEVEL SIDE\nEXCLUDES ANYTHING" in doc
+    # And it is really the page: `main` builds its parser from `__doc__`.
+    parser = BM.build_parser() if hasattr(BM, "build_parser") else None
+    if parser is not None:
+        assert parser.description is doc
+    # The code the page describes.
+    cold = BM.make_cell(MIXTRAL, 128, 128, 1.0, sm_count=132, block_n=64,
+                        clock_level_ok=False, clock_level_side="low",
+                        clock_drift_ok=True)
+    moved = BM.make_cell(MIXTRAL, 128, 128, 1.0, sm_count=132, block_n=64,
+                         clock_drift_ok=False)
+    assert cold.clock_excluded is False and cold.clock_sagged is True
+    assert moved.clock_excluded is True
+
+
+def test_the_vacuity_label_names_the_footing_the_number_stands_on():
+    """ONE OF TWO PLACES. `_level_checks` appends ", on the fused layer's own
+    roof," to the REFUSAL text on the fused footing; the label `render()`
+    prints -- which is what a PASSING reference shows, and so what most readers
+    meet -- carried the dense-footing wording at both footings. On the fused
+    footing 0.209 is `2 BM_min / (b x ridge)` with the reference's own level
+    divided out, and not a fraction of one full weight read on the dense
+    footing."""
+    cells = _ladder_cells(0.558, tiles=(128, 256))
+    kw = dict(cfg=MIXTRAL, ridge=RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    dense = BM.compute_reference(cells, (128, 256), candidates=(256,), **kw)
+    fused = BM.compute_reference(cells, (128, 256), candidates=(256,),
+                                 fused_roof_band=(0.465, 1.05), **kw)
+    dense_label = next(ln for ln in dense.render() if "non-vacuity" in ln)
+    fused_label = next(ln for ln in fused.render() if "non-vacuity" in ln)
+    assert "on the fused layer's own roof," not in dense_label
+    assert "one full weight read, scaled to the smallest" in dense_label
+    assert "one full weight read, on the fused layer's own roof, scaled to " \
+        "the smallest" in fused_label

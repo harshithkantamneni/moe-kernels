@@ -56,6 +56,7 @@ import dataclasses
 import importlib.util
 import json
 import math
+import re
 import sys
 import types
 from pathlib import Path
@@ -422,7 +423,8 @@ def test_the_card_is_a_swept_knob_and_is_visible_in_the_run_id(bm):
 
     Every verdict in this file -- B/C, alpha x rho, both escape thresholds -- is
     scored against a per-card calibrated ridge: 145.8 Op/B on the A100 against
-    162.8 on the H200. `$MOE_RESULTS_DIR` is a RunPod network volume shared
+    152.8 on the H200 (162.8 until ab61e55 recalibrated the card on 2026-09-09,
+    which is the point). `$MOE_RESULTS_DIR` is a RunPod network volume shared
     between pods, so without the card in the id the second card resumes into the
     first's directory, finds every tread present and reports them against its
     own ridge. That is a hybrid of two machines, which is the defect that put a
@@ -818,16 +820,24 @@ def test_v6_passes_vacuously_when_the_report_publishes_no_alpha(bm):
 
 
 def test_v6_still_withholds_an_alpha_it_could_not_certify(bm):
-    """`undecided_low_clock` leaves a fit over the treads that survived, and
-    `payload["alpha"]` carries it. Certifying that number would publish exactly
-    what the exclusion exists to withhold, so the gate returns UNKNOWN and the
-    page is INVALID."""
-    gate = bm._gate_law(_Fit(0.89, "undecided_low_clock", True,
-                             memory_points=2),
+    """`undecided_drifting_clock` leaves a fit over the treads that survived,
+    and `payload["alpha"]` carries it. Certifying that number would publish
+    exactly what the exclusion exists to withhold, so the gate returns UNKNOWN
+    and the page is INVALID.
+
+    THE TOKEN PLANTED HERE WAS `undecided_low_clock` UNTIL 2026-09-09, and it
+    stayed after `LADDER_OUTCOMES` dropped that name: the test then exercised
+    an outcome the code cannot emit and would have kept passing if `_gate_law`
+    stopped handling the real one. The plant is asserted to be a real outcome
+    so it cannot go stale silently again."""
+    outcome = bm.SWEEP.UNDECIDED_DRIFTING_CLOCK
+    assert outcome in bm.SWEEP.LADDER_OUTCOMES
+    gate = bm._gate_law(_Fit(0.89, outcome, True, memory_points=2),
                         _Margin(1.36), 1.4, 0.05, 0.02)
     assert gate.passed is None
     assert "0.8900" in gate.observed
-    assert "undecided_low_clock" in gate.observed
+    assert outcome in gate.observed
+    assert not hasattr(bm.SWEEP, "UNDECIDED_LOW_CLOCK")
 
 
 def test_v6_is_unknown_when_there_is_an_alpha_but_no_compute_slope(bm):
@@ -1364,7 +1374,7 @@ def test_the_pod_analysis_runs_end_to_end_on_a_planted_escape_up_world(bm):
     verdict on data shaped like a real run.
     """
     # rho = 175 needs a card whose achieved ridge is 175 Op/B. NEITHER CARD IN
-    # THIS STUDY HAS ONE -- the A100 calibrates at 145.8 and the H200 at 162.8 --
+    # THIS STUDY HAS ONE -- the A100 calibrates at 145.8 and the H200 at 152.8 --
     # which is the finding, stated here as a fixture: to plant a world where the
     # depth claim is reachable, hardware has to be invented.
     cfg, samples, ceiling = _planted_samples(bm, alpha=0.95, rho=175.0,
@@ -1939,12 +1949,14 @@ def test_the_row_carries_the_clock_its_level_verdict_was_scored_against(bm, pod)
 
     `clock_flags` returns None for LEVEL when it is handed no reference, and
     None is also what a container without NVML produces on a run that HAD one.
-    Both are an empty cell, `Sample.clock_excluded` is False for both, and the
-    report then prints `0 excluded for clock level` over a ladder in which no
-    tread could have been excluded. The number LEVEL was scored AGAINST is the
-    only thing that separates them, and it has to be on the row rather than in
-    the session, because `read_samples` resumes a `cells.csv` a later pod wrote
-    nothing else into.
+    Both are an empty cell, and the report then prints `no tread was excluded
+    for a drifting clock` over a ladder that carries no clock evidence at all.
+    Since 2026-09-09 the EXCLUSION does not turn on the reference -- DRIFT
+    compares a row with itself -- so what a missing reference costs is the
+    recorded side and every rescaled roof fraction. The number LEVEL was scored
+    AGAINST is the only thing that separates the two states, and it has to be on
+    the row rather than in the session, because `read_samples` resumes a
+    `cells.csv` a later pod wrote nothing else into.
     """
     pod.timing_result = _timing_at(1515.0, None)
     args = types.SimpleNamespace(reps=1, dtype="bf16", seed=0, warmup=300.0,
@@ -2397,7 +2409,7 @@ def test_the_committed_h200_session_qualifies_its_reference_and_scores_16_treads
     assert payload["reference_vacuity_ratio"] == pytest.approx(
         payload["reference_vacuity_floor"])
     assert payload["reference_roof_fraction"] == pytest.approx(0.547, abs=5e-4)
-    lo, hi = bm.FUSED_PLATEAU_BAND
+    lo, hi = bm.FUSED_ROOF_BAND
     assert lo <= payload["reference_roof_fraction"] <= hi
 
     assert len(payload["scored_points"]) == 16
@@ -2449,7 +2461,7 @@ def test_the_session_replay_prints_the_vacuity_derivation_and_the_partner(bm):
     assert "2 BM_min / (b x ridge)" in text
     assert "footing            FUSED" in text
     assert "CONTROL'S MEASURED PLATEAU" in text
-    assert f"[{bm.FUSED_PLATEAU_BAND[0]:.3f}, {bm.FUSED_PLATEAU_BAND[1]:.3f}]" \
+    assert f"[{bm.FUSED_ROOF_BAND[0]:.3f}, {bm.FUSED_ROOF_BAND[1]:.3f}]" \
         in text
     assert payload["partner_treads"] == 0
     assert payload["partner_block_m"] == bm.SMALL_TILE_BLOCK_M
@@ -2475,7 +2487,7 @@ def test_the_reference_is_never_qualified_from_the_subject_ladder(bm):
         cells, bm.BLOCK_SIZES, cfg=cfg, ridge=SESSION_RIDGE,
         bandwidth_gbps=SESSION_BANDWIDTH, b=2, pinned=SESSION_PINNED,
         candidates=(bm.REFERENCE_BLOCK_M,),
-        fused_roof_band=bm.FUSED_PLATEAU_BAND)
+        fused_roof_band=bm.FUSED_ROOF_BAND)
     assert ref.block_m is None
     assert ref.refused_block_m is None
     assert "no candidate ladder (BLOCK_M=256)" in ref.note
@@ -2507,18 +2519,174 @@ def test_both_qualification_call_sites_pass_the_same_block_sizes(bm):
                    "cells, BLOCK_SIZES, cfg=cfg, ridge=ridge"):
         assert anchor in body, anchor
     assert body.count("candidates=(REFERENCE_BLOCK_M,)") == 2
-    assert body.count("fused_roof_band=FUSED_PLATEAU_BAND") == 2
+    assert body.count("fused_roof_band=FUSED_ROOF_BAND") == 2
     assert bm.BLOCK_SIZES == (bm.SMALL_TILE_BLOCK_M, bm.SUBJECT_BLOCK_M,
                               bm.REFERENCE_BLOCK_M)
 
 
-def test_the_fused_plateau_band_mirrors_the_sibling_that_registered_it(bm):
-    """`tile_cap_test` registers the interval a fused layer's plateau occupies
-    and V3 scores against it; this file mirrors it rather than importing,
-    because that script imports a GPU stack at module scope. A mirror that can
-    drift is a mirror nobody can trust, so it is asserted against the source."""
+def test_the_fused_roof_band_mirrors_the_sibling_that_registered_it(bm):
+    """`tile_cap_test` registers what its V3 ADMITS for a fused layer's roof,
+    and this file mirrors it rather than importing, because that script imports
+    a GPU stack at module scope. A mirror that can drift is a mirror nobody can
+    trust, so it is asserted against the source.
+
+    AND IT IS NOT THE SIBLING'S `FUSED_PLATEAU_BAND`, WHICH IS WHAT IT WAS
+    CALLED HERE UNTIL 2026-09-09. That constant is (0.465, 0.756), the interval
+    the 26 published fused plateaus occupy; this one runs to the dense peak
+    plus the tolerance a world generated AT the roof needs, 1.05, which is a
+    ruler-sanity bound and no corpus figure. Two module-level constants under
+    one name six values apart at the top is a collision a reader resolves by
+    reading whichever file is open, and the report page said "[0.465, 1.050],
+    which is where the 26 published fused layers sit" over a corpus that stops
+    at 0.756. Both edges are pinned here, and so is the fact that the two names
+    now differ."""
     text = (ROOT / "scripts" / "tile_cap_test.py").read_text()
-    floor = float(text.split("FUSED_PLATEAU_BAND = (")[1].split(",")[0])
+    floor = float(text.split("FUSED_ROOF_FLOOR = FUSED_PLATEAU_BAND[0]")[0]
+                  .split("FUSED_PLATEAU_BAND = (")[1].split(",")[0])
+    corpus_top = float(text.split("FUSED_PLATEAU_BAND = (")[1]
+                       .split(",")[1].split(")")[0])
     ceiling = float(text.split("FUSED_ROOF_CEILING = ")[1].split("\n")[0])
     tol = float(text.split("FUSED_ROOF_CEILING_TOLERANCE = ")[1].split("\n")[0])
-    assert bm.FUSED_PLATEAU_BAND == (floor, ceiling * (1 + tol))
+    assert bm.FUSED_ROOF_BAND == (floor, ceiling * (1 + tol))
+    assert not hasattr(bm, "FUSED_PLATEAU_BAND"), (
+        "the name belongs to the sibling's corpus interval; this band admits "
+        "a wider set and must not answer to it")
+    assert bm.FUSED_ROOF_BAND[1] > corpus_top, (
+        "if these ever coincide the sentence about where the corpus sits and "
+        "the sentence about what is admitted stop being two sentences")
+
+
+# --------------------------------------------------------------------------
+# R2 on this arm: the own-clock fraction beside the gated one, as a NUMBER.
+# --------------------------------------------------------------------------
+
+@needs_session
+def test_v1_prints_the_issue_efficiency_beside_the_fraction_it_gates_on(bm):
+    """R2 WAS IMPLEMENTED IN ONE OF THE STUDY'S TWO LADDER ARMS.
+
+    `bm128_roofline` got a `@own clk` column, `Point.roof_fraction_at_clock`
+    and the companion number on C1/C2/C3/C4. This file got a SENTENCE: the
+    2026-09-09 report page said the roof at a tread's own clock "is the issue
+    efficiency to read beside it" and nothing computed one, so the V1 line
+    published "54.7% of 668.5" for a reference whose own rows sit at 1635 MHz
+    against a 1485 MHz roof and the number a reader was told to read beside it
+    existed nowhere.
+
+    THE GATE STILL READS THE FIXED FRACTION. `RefLevel.passes` is 54.7% against
+    [25%, 100%]; the companion is printed and scored by nothing.
+    """
+    _, _, (lines, gates, payload) = _replay_session(bm)
+    v1 = next(g for g in gates if g.tag == "V1")
+    assert v1.passed is True
+    assert "54.7% of 668.5" in v1.observed
+    assert "49.7% of the 736.0 at its own 1635 MHz" in v1.observed
+    assert "issue efficiency, not a gate input" in v1.observed
+    # The same line is on the report page, not only in the gate.
+    assert "at its own 1635 MHz" in "\n".join(lines)
+    # And in the payload, beside the fixed fraction and never instead of it.
+    assert payload["reference_roof_fraction"] == pytest.approx(0.547, abs=5e-4)
+    assert payload["reference_level_fraction_at_clock"] == pytest.approx(
+        0.497, abs=5e-4)
+    assert payload["reference_ladder_clock_mhz"] == 1635.0
+    assert payload["reference_roof_clock_mhz"] == 1485.0
+    # The rescale is exactly the driver's roof_at_cell_clock_tflops.
+    assert payload["reference_level_fraction_at_clock"] == pytest.approx(
+        payload["reference_roof_fraction"] * 1485.0 / 1635.0, rel=1e-9)
+
+
+@needs_session
+def test_every_subject_tread_row_carries_both_fractions(bm):
+    """"LEVEL low, kept; fixed-roof fraction understated by the clock ratio" on
+    sixteen rows, and no rescaled value on any of them, is a report telling a
+    reader to correct a number it declines to correct. Both are columns now."""
+    _, _, (lines, _, payload) = _replay_session(bm)
+    text = "\n".join(lines)
+    assert "of roof @own clk" in text
+    rows = payload["subject_roof_fractions"]
+    assert len(rows) == 16
+    for row in rows:
+        assert 0.4 < row["roof_fraction"] < 0.6
+        # Every subject tread ran LOW, so its issue efficiency is HIGHER than
+        # its fixed-roof fraction: that is the direction the prose claims.
+        assert row["roof_fraction_at_clock"] > row["roof_fraction"]
+        assert row["sm_clock_load_mhz"] is not None
+        assert row["roof_fraction_at_clock"] == pytest.approx(
+            row["roof_fraction"] * 1485.0 / row["sm_clock_load_mhz"], rel=1e-9)
+    # And the printed table shows them: six numeric columns before "yes".
+    body = [ln for ln in text.splitlines()
+            if re.match(r"^\s{0,3}\d+\s+\d+\s+\d+\.\d+", ln)]
+    assert len(body) == 16, body
+    for ln in body:
+        assert "yes" in ln
+        # n rows ms slope reps spread of-roof @own-clk, then the verdict.
+        assert len(ln.split()) >= 9, ln
+
+
+def test_a_tread_with_no_clock_prints_n_a_rather_than_a_fabricated_rescale(bm):
+    """None means NOT DETERMINED. A replay of a cells.csv written before the
+    clock was a column, or a container with no NVML, must print no second
+    fraction rather than one taken against the fixed roof twice."""
+    from moe.spec import MODEL_CONFIGS as CFGS
+    cfg = CFGS["mixtral-8x7b"]
+    points = [(1, 1.0), (2, 2.0)]
+    out = bm.tread_fractions(points, 128, cfg, 668.5,
+                             {1: (None, None, None, ""),
+                              2: (None, None, 1400.0, "")},
+                             {1: None, 2: None})
+    assert out[1][1] is None and out[1][2] is None
+    # A clock with no reference to rescale against is equally undetermined.
+    assert out[2][1] is None and out[2][2] == 1400.0
+    assert out[1][0] > 0 and out[2][0] > 0
+
+
+def test_an_early_refusal_is_printed_once(bm):
+    """`ComputeReference.render` already emits "REFUSED: {why}" for every
+    refusal. `_run` looped over `early.refusals` again under a second label,
+    so the one text R4 added that call site to guarantee gets seen was printed
+    twice on every refusal."""
+    source = (ROOT / "scripts" / "bm128_depth.py").read_text()
+    assert source.count('print(f"    REFUSAL: {why}")') == 0
+    assert source.count('print("\\n".join(early.render()))') == 1
+    sweep = (ROOT / "scripts" / "block_m_crossing_sweep.py").read_text()
+    assert sweep.count('out.append(f"    REFUSED: {why}")') == 1
+
+
+def test_the_printed_predictions_carry_this_cards_committed_ridge(bm, capsys):
+    """P2 IS PRINTED BY --dry-run AND --audit, and it named a ridge the card no
+    longer has: ab61e55 recalibrated the H200 to 152.8 Op/B on 2026-09-09 and
+    P2 went on saying 162.8. A prediction quoting a superseded ruler is a
+    prediction against a different machine."""
+    bm.main(["--dry-run"])
+    text = capsys.readouterr().out
+    assert "145.8 (A100) and 152.8 (H200)" in text
+    assert "162.8 (H200)" not in text
+    hw = bm.load_hardware("measured_nvidia_h200")
+    ridge = hw.peak("bf16") / hw.bandwidth_bytes_s
+    assert round(ridge, 1) == 152.8, ridge
+
+
+def test_both_reference_level_call_sites_carry_both_clocks(bm):
+    """THE RECURRING DEFECT, on this round's own change. `analyse_run` builds
+    its RefLevel with the ladder's own median under-load clock and the roof's,
+    so V1 prints the issue efficiency beside the fraction it gates on. `_run`'s
+    EARLY qualification prints the same line on the pod before the expensive
+    half of the run, and it is the one an operator reads live: a companion
+    number on one of two call sites is exactly the shape this repository keeps
+    finding.
+
+    The third site, `audit_record`, reads PUBLISHED report rows that carry no
+    clock at all, and its RefLevel says so rather than rescaling by a number it
+    does not have."""
+    source = (ROOT / "scripts" / "bm128_depth.py").read_text()
+    calls = [ln for ln in source.splitlines() if "reference_level(" in ln
+             and "def " not in ln and "gate_" not in ln]
+    assert len(calls) == 3, calls
+    assert source.count("clock_mhz=ladder_clock(samples, early.block_m)") == 1
+    assert source.count("roof_clock_mhz=reference_clock)") == 1
+    assert source.count("roof_clock_mhz=ref_roof_clock)") == 1
+    # A ladder with no clock says UNKNOWN and rescales nothing.
+    from moe.spec import MODEL_CONFIGS as CFGS
+    bare = bm.reference_level(CFGS["mixtral-8x7b"], 256, 1.9744, 668.5, "x")
+    assert bare.fraction_at_clock is None
+    assert "UNKNOWN" in bare.line()
+    assert bare.passes is True, "the FIXED fraction still gates"

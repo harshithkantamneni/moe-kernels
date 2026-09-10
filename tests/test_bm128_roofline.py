@@ -454,7 +454,7 @@ def test_the_clock_gate_refuses_when_no_clock_was_ever_read(rf, cfg, roof):
     timings = [_timing(rf, rep=r, clocks=False) for r in (1, 2, 3)]
     points = rf.build_points(timings, cfg, 128, roof, sm_count=132, block_n=64,
                              clock_ref=rf.modal_clock(timings))
-    gate = rf.gate_v3_clocks(timings, points, roof, rf.modal_clock(timings))
+    gate = rf.gate_v3_clocks(timings, points, roof)
     assert gate.passed is None, "zero throttled cells over zero clocks is not a PASS"
     assert "no under-load clock sample landed" in gate.observed
 
@@ -466,7 +466,7 @@ def test_the_throttle_gate_refuses_when_the_roof_has_no_clock(rf, cfg, roof):
     timings = [_timing(rf, rep=r) for r in (1, 2, 3)]
     points = rf.build_points(timings, cfg, 128, clockless, sm_count=132,
                              block_n=64, clock_ref=1500)
-    gate = rf.gate_v3_clocks(timings, points, clockless, 1500)
+    gate = rf.gate_v3_clocks(timings, points, clockless)
     assert gate.passed is None
     assert "records no GEMM clock" in gate.observed
 
@@ -484,7 +484,7 @@ def test_one_sagging_cell_does_not_kill_a_run_but_a_tenth_of_them_does(rf, cfg,
                  for r in range(bad)]
         points = rf.build_points(rows, cfg, 128, roof, sm_count=132,
                                  block_n=64, clock_ref=1500)
-        return rf.gate_v3_clocks(rows, points, roof, 1500)
+        return rf.gate_v3_clocks(rows, points, roof)
 
     assert session(1).passed is True
     assert session(2).passed is True, "the threshold is inclusive at 10%"
@@ -508,7 +508,7 @@ def test_the_session_clock_gate_counts_drift_alone_and_reports_both_sides(
     rows = clean + cold
     points = rf.build_points(rows, cfg, 128, roof, sm_count=132, block_n=64,
                              clock_ref=1500)
-    gate = rf.gate_v3_clocks(rows, points, roof, 1500)
+    gate = rf.gate_v3_clocks(rows, points, roof)
     assert gate.passed is True
     assert "0 of 20 cells excluded (0.0%)" in gate.observed
     assert "3 steady-low" in gate.observed
@@ -516,7 +516,7 @@ def test_the_session_clock_gate_counts_drift_alone_and_reports_both_sides(
     moved = clean + [replace(c, clock_drift_ok=False) for c in cold]
     drift_points = rf.build_points(moved, cfg, 128, roof, sm_count=132,
                                    block_n=64, clock_ref=1500)
-    drift_gate = rf.gate_v3_clocks(moved, drift_points, roof, 1500)
+    drift_gate = rf.gate_v3_clocks(moved, drift_points, roof)
     assert drift_gate.passed is False
     assert "15.0%" in drift_gate.observed
     assert "all for DRIFT" in drift_gate.observed
@@ -1545,14 +1545,14 @@ def test_v3_passes_a_session_off_the_band_on_either_side_and_fails_a_drifting_on
     rows = [_timing(rf, rows=256, rep=r, load=ref) for r in range(1, 6)]
     points = rf.build_points(rows, cfg, 128, roof, sm_count=132, block_n=64,
                              clock_ref=int(ref))
-    assert rf.gate_v3_clocks(rows, points, roof, int(ref)).passed is True
+    assert rf.gate_v3_clocks(rows, points, roof).passed is True
 
     high = [_timing(rf, rows=256, rep=r, load=1980.0, level=False)
             for r in range(1, 6)]
     assert all(t.clock_level_side == "high" for t in high)
     high_points = rf.build_points(high, cfg, 128, roof, sm_count=132,
                                   block_n=64, clock_ref=1980)
-    gate = rf.gate_v3_clocks(high, high_points, roof, 1980)
+    gate = rf.gate_v3_clocks(high, high_points, roof)
     assert gate.passed is True, gate.observed
     assert "5 steady-high kept" in gate.observed
     assert high_points[0].retained is True
@@ -1568,7 +1568,7 @@ def test_v3_passes_a_session_off_the_band_on_either_side_and_fails_a_drifting_on
     assert all(t.clock_level_side == "low" for t in low)
     low_points = rf.build_points(low, cfg, 128, roof, sm_count=132,
                                  block_n=64, clock_ref=1200)
-    gate = rf.gate_v3_clocks(low, low_points, roof, 1200)
+    gate = rf.gate_v3_clocks(low, low_points, roof)
     assert gate.passed is True, gate.observed
     assert "5 steady-low" in gate.observed and "0 steady-high" in gate.observed
     assert low_points[0].retained is True
@@ -1580,7 +1580,7 @@ def test_v3_passes_a_session_off_the_band_on_either_side_and_fails_a_drifting_on
                for r in range(1, 6)]
     drifted_points = rf.build_points(drifted, cfg, 128, roof, sm_count=132,
                                      block_n=64, clock_ref=int(ref))
-    drift_gate = rf.gate_v3_clocks(drifted, drifted_points, roof, int(ref))
+    drift_gate = rf.gate_v3_clocks(drifted, drifted_points, roof)
     assert drift_gate.passed is False
     assert "all for DRIFT" in drift_gate.observed
     # And the gate names the instrument, because a settling governor is fixed
@@ -2380,3 +2380,95 @@ def test_the_sign_of_c3_flips_between_the_two_roofs_and_both_are_printed(
     assert f"{fixed_gap:+.3f} of the fixed roof" in c3.observed
     assert f"{own_gap:+.3f} at own clocks" in c3.observed
     assert "THE TWO GAPS CAN DISAGREE IN SIGN" in " ".join(c3.lines)
+
+
+# --------------------------------------------------------------------------
+# The retired rule, hunted out of every string an operator can read.
+# --------------------------------------------------------------------------
+
+def test_the_help_page_states_the_rule_the_code_applies(rf):
+    """THE MODULE DOCSTRING IS THE ARM'S OPERATOR-FACING DESCRIPTION: `main`
+    builds its parser with `description=__doc__`, so `--help` prints it.
+
+    The 2026-09-09 commit rewrote the constants, the properties, V3, C1, C3, C4
+    and the self test, and left the 552-line docstring above them untouched. It
+    went on saying "A cell that DRIFTED or that failed LEVEL on the LOW side is
+    EXCLUDED from every gate" and "V3 is scored on that" of the own-clock
+    fraction: the two decisions this arm was changed to reverse, printed
+    verbatim by `--help`.
+    """
+    doc = rf.__doc__
+    assert "failed LEVEL on the LOW side is EXCLUDED" not in doc
+    assert "V3 is scored on that" not in doc
+    assert "EXCLUDED IFF IT DRIFTED" in doc
+    assert "NEITHER LEVEL SIDE EXCLUDES ANYTHING" in doc
+    assert "EVERY CLAIM GATE READS THE FIXED" in doc
+    assert "never a gate input" in doc
+    # The parser really does print it, so this is not a test of a string that
+    # nothing reads.
+    assert rf.build_parser().description is doc
+
+
+def test_no_printed_string_calls_a_steady_low_clock_an_exclusion(rf, cfg,
+                                                                 roof):
+    """THREE STRINGS OUTLIVED THE RULE. The plot legend on every report page
+    said "x excluded (drifted or LEVEL-low)" while `retained` had turned on
+    DRIFT alone; the live per-cell line printed a bare "BELOW THE ROOF'S CLOCK"
+    beside a high side that said "kept"; and the pod banner said that without a
+    reference clock "no cell can be excluded for running cold", which says a
+    resolved one could.
+    """
+    rows = [_timing(rf, rows=256, rep=r, load=float(roof.clock_mhz))
+            for r in range(1, 4)]
+    points = rf.build_points(rows, cfg, 128, roof, sm_count=132, block_n=64,
+                             clock_ref=int(roof.clock_mhz))
+    legend = rf.ascii_plot([rf.Series("BM=128", "o", points)], roof)[-1]
+    assert "LEVEL-low" not in legend
+    assert "x excluded (clock DRIFTED mid-cell)" in legend
+
+    source = (ROOT / "scripts" / "bm128_roofline.py").read_text()
+    # The live per-cell line: both sides say KEPT, and each says which way its
+    # fixed-roof fraction is off. Neither is bare and neither says "not
+    # comparable", which was the pre-R2 reading of the high side.
+    assert '"  BELOW THE ROOF\'S CLOCK"' not in source
+    assert "that fraction is UNDERSTATED by the clock ratio" in source
+    assert "that fraction is OVERSTATED by the clock ratio" in source
+    assert 'not comparable)" if row.boosted' not in source
+    # The pod banner: what a missing reference clock costs is the RECORD, not
+    # the exclusion, because DRIFT compares a cell with itself.
+    assert "no cell can be excluded for running" not in source
+    assert "DRIFT is decided by" in source
+
+
+def test_the_c3_gap_at_own_clocks_is_the_number_this_script_prints(rf):
+    """A NUMBER STATED AGAINST THE SCRIPT'S OWN OUTPUT. `own_clock_text` and
+    `gate_c3_attribution` both carried the judge memo's -0.032 for the
+    2026-09-09 own-clock gap; replaying the committed cells prints -0.034, the
+    commit message says -0.034, and the acceptance test asserts -0.034."""
+    source = (ROOT / "scripts" / "bm128_roofline.py").read_text()
+    assert "-0.032" not in source
+    assert source.count("-0.034 at own clock") == 2
+
+
+def test_the_hypothesis_ruler_is_this_cards_committed_calibration(rf):
+    """THE FALLBACK THAT FIRES WHEN THE YAML IS ABSENT MUST BE THE SAME CARD.
+
+    These constants were the 2026-09-02 figures -- 712.259 TFLOP/s, ridge
+    162.809, GEMM clock 1515 -- and ab61e55 recalibrated the same H200 to
+    668.484 / 152.812 / 1485 on 2026-09-09 without moving them, so `--dry-run`
+    and `--self-test` costed against a ruler the card no longer has while
+    `HYPOTHESIS_NOTE` called it "the calibration committed in this repo".
+    Asserted against the file rather than restated, so the next recalibration
+    cannot leave them behind again.
+    """
+    from moe.bench.roofline import load_hardware
+    hw = load_hardware(rf.HYPOTHESIS_HARDWARE_STEM)
+    peak = hw.peak("bf16")
+    bandwidth = hw.bandwidth_bytes_s
+    assert rf.HYPOTHESIS_ROOF_TFLOPS == pytest.approx(peak / 1e12, rel=1e-9)
+    assert rf.HYPOTHESIS_BANDWIDTH_GBPS == pytest.approx(bandwidth / 1e9,
+                                                        rel=1e-9)
+    assert rf.HYPOTHESIS_RIDGE == pytest.approx(peak / bandwidth, rel=1e-9)
+    assert rf.HYPOTHESIS_ROOF_CLOCK_MHZ == int(
+        hw.reference_clocks["bf16"].mhz)
+    assert "2026-09-09" in rf.HYPOTHESIS_NOTE

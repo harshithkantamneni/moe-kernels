@@ -126,18 +126,24 @@ which is the same size as the cross-card effect this study registered. Every
 cell is now timed by `moe.bench.timing.time_kernel` under `TIMING_BASIS`, and
 the instrument name, the warmup duration, the iteration and trial counts, the
 SM clock sampled UNDER LOAD, its two verdicts and the flush state are columns on
-every row. LEVEL is two-sided since 2026-09-03 and the SIDE is a column too. A
-cell whose loaded clock came in BELOW the band around the clock the roof was
-measured at (`clock_level_side` "low") is EXCLUDED from the ladder fit and
-counted, because a tread timed on a throttled card is a tread at a different
-compute branch. A cell that came in ABOVE the band ("high") is KEPT and counted
-separately: on the H200 that is the normal state of a memory-shaped cell, 1980
-MHz under memory load against the 1515 MHz bf16 GEMM the roof was measured at,
-its milliseconds are a measurement, and only its fraction of the FIXED roof is
-not comparable (the driver's `roof_at_cell_clock_tflops` is the roof it should
-be read against). Until this tree every consumer read `clock_level_ok is
-False` as "ran cold" and would have dropped every boosted tread from the fit
-whose purpose is to find the memory branch.
+every row. LEVEL is two-sided since 2026-09-03 and the SIDE is a column too.
+SINCE 2026-09-09 A CELL IS EXCLUDED IFF `clock_drift_ok` IS FALSE: the clock
+MOVED inside the timed region, so the median is a blend of two operating points
+and the time belongs to neither, which no rescaling repairs. NEITHER LEVEL SIDE
+EXCLUDES ANYTHING. Both are KEPT, counted on their side, and printed with the
+direction they move the fixed-roof fraction in, because on a 700 W-capped card
+the under-load clock is an outcome of the CELL, set per tile by the kernel's
+own power draw: the 2026-09-09 H200 session holds BM=128/BN=64 at a median 1395
+MHz and BM=256 at 1650 against a 1485 MHz calibration GEMM, and a memory-shaped
+cell sits at 1950-1980. The old rule excluded the LOW side, and on that card it
+removed bm128_depth's entire BM=128 subject and every multi-tile BM=128 cell of
+the roofline arm, five of them low by 0.75 MHz -- half of one NVML step. What
+an off-band steady clock costs is not the measurement but its fraction of the
+FIXED roof, which is off by the clock ratio; the driver's
+`roof_at_cell_clock_tflops` is the roof to read that beside. Until this tree
+every consumer read `clock_level_ok is False` as "ran cold" and would have
+dropped every boosted tread from the fit whose purpose is to find the memory
+branch.
 
 EXIT CODES AND THE ONE GREPPABLE LINE. `moe.bench.exit_codes` owns both. Every
 scored gate prints exactly one `RESULT: KIND NAME VERDICT detail` line, the
@@ -1852,11 +1858,21 @@ class ComputeReference:
                 f"gate <= {REFERENCE_ROOF_CEILING:.2f} of ridge x bandwidth "
                 f"(a compute branch cannot beat the roof)")
         if self.vacuity_ratio is not None:
+            # THE LABEL SAYS WHICH FOOTING THE RATIO STANDS ON. `_level_checks`
+            # appends ", on the fused layer's own roof," to the refusal text
+            # when `fused_roof_band` is in force, and until 2026-09-09 this
+            # line -- the one a PASSING reference prints, and so the one most
+            # readers meet -- carried the dense-footing wording at both
+            # footings. On the fused footing the number is not a fraction of
+            # one full weight read taken against the dense GEMM roof.
+            footing = (", on the fused layer's own roof,"
+                       if self.vacuity_basis == "fused" else ",")
             out.append(
                 f"    LEVEL non-vacuity     {self.vacuity_ratio:8.3f}   "
-                "gate <  1.00 of one full weight read, scaled to the smallest "
-                "block size (at or above, NO tread anywhere can be memory "
-                "bound and every alpha is unidentifiable by construction)")
+                f"gate <  1.00 of one full weight read{footing} scaled to the "
+                "smallest block size (at or above, NO tread anywhere can be "
+                "memory bound and every alpha is unidentifiable by "
+                "construction)")
             out += self.vacuity_derivation()
         if self.level_comparisons:
             out.append(
@@ -1902,8 +1918,14 @@ class ComputeReference:
                 + (f"{frac:.3f}" if frac is not None else "unknown")
                 + " x ridge x bandwidth (the CONTROL'S MEASURED PLATEAU), and "
                 f"not on the dense GEMM roof. That plateau has to land in "
-                f"[{lo:.3f}, {hi:.3f}], which is where the 26 published fused "
-                "layers sit; a reference outside it is refused here.")
+                f"[{lo:.3f}, {hi:.3f}]: the floor is the lowest fused plateau "
+                "in this study's 26 published reports, the ceiling is the "
+                "dense peak plus the tolerance a run generated AT the roof "
+                "needs, and a plateau above it says the ruler belongs to "
+                "another machine. A reference outside the band is refused "
+                "here. The 26 published plateaus themselves run 0.465 to "
+                "0.756, well inside it; the band is what may be ADMITTED and "
+                "not where they sit.")
         elif self.vacuity_basis == "dense":
             out.append(
                 "      footing            DENSE. The memory branch is compared "
@@ -2036,10 +2058,12 @@ def _level_checks(cells, block_sizes, bm: int, c: float, *, cfg, ridge: float,
             elif not lo <= plateau <= hi:
                 why.append(
                     f"BLOCK_M={bm}'s measured plateau is {plateau:.3f} of "
-                    f"ridge x bandwidth, outside the [{lo:.3f}, {hi:.3f}] a "
-                    "fused layer occupies in this study's 26 published "
-                    "reports. Below the floor nothing here reached any roof, "
-                    "fused or dense, and above the ceiling the ridge, the "
+                    f"ridge x bandwidth, outside the [{lo:.3f}, {hi:.3f}] this "
+                    "arm admits for a fused layer's roof: the floor is the "
+                    "lowest of the 26 published fused plateaus and the ceiling "
+                    "is the dense peak plus its tolerance. Below the floor "
+                    "nothing here reached any roof, fused or dense, and above "
+                    "the ceiling the ridge, the "
                     "bandwidth or the FLOP count belongs to another machine; "
                     "either way this ladder cannot be the compute branch every "
                     "other one is classified against")
@@ -3971,9 +3995,11 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
                              # THE NAMED OUTCOME, beside the older reason
                              # token. `undecided` is True only where the sweep
                              # LOOKED and could not say -- a branch parallel to
-                             # the ridge, or treads lost to clock level -- which
-                             # is a different report from "too few treads" and
-                             # points at a different next experiment.
+                             # the ridge, or treads lost to a DRIFTING clock,
+                             # which is what `undecided_drifting_clock` names
+                             # since 2026-09-09 -- which is a different report
+                             # from "too few treads" and points at a different
+                             # next experiment.
                              "outcome": f.outcome,
                              "outcome_reason": f.outcome_reason,
                              "undecided": f.undecided,
@@ -4804,8 +4830,11 @@ LOW_CLOCK_WORLD = "low-clock"
 #: roof's clock, at `H200_BOOST_RATIO` times the reference: the boosted
 #: memory-shaped state. It must be KEPT by `ladder_treads`, counted on the
 #: ladder row as kept, and the ladder must come out exactly as the clean
-#: world's does. This is the world the 2026-09-08 fix is for: the same cells
-#: through the pre-fix rule land `UNDECIDED_DRIFTING_CLOCK`.
+#: world's does. This is the world the 2026-09-08 fix is for: before it,
+#: `clock_level_ok is False` was read as "ran cold" whatever the side said, so
+#: these boosted treads were excluded and the same cells landed on the token
+#: that rule produced, `UNDECIDED_LOW_CLOCK`. That token no longer exists and
+#: no LEVEL verdict can produce an exclusion outcome at all.
 HIGH_CLOCK_WORLD = "high-clock"
 #: One tread of the null tile's ladder is planted with `clock_drift_ok` False:
 #: the clock MOVED across its own trials, so its median is a blend of two
