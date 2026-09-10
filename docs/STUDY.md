@@ -133,10 +133,16 @@ working state.
   NUMBER rather than an interval is now bookable over the alpha-surface cell.
   This is the highest-value open experiment in the study and it should be
   booked next. **This bullet read "at 15 minutes" until 2026-09-10**: that
-  figure priced a one-launch recipe the instrument does not run, and the plan
-  page now budgets an hour of GPU and two pod-hours end to end for twelve
-  profiled invocations. That is the price of ONE BLOCK_N; the traffic-versus-
-  time contrast is two of them, so the driver books two arms and 240 minutes.
+  figure priced a one-launch recipe the instrument does not run, because the
+  profiled launch count is warmup + iters x trials rather than one. The plan
+  page prices the whole five-cell extended plan now, at `5 cells x 6 tile
+  counts x 2 cache modes = 60 profiled invocations` and `5.0 GPU-hours`, which
+  is not this pair's figure. What the pair spends comes off the page's own 5
+  minutes per profiled invocation: one `--run` is one cell at one cache mode,
+  6 invocations, half a GPU-hour, so the two arms are 12 invocations and 1.0
+  GPU-hour, which the page names as "1.0 for the single cell the plan used to
+  hold". The driver books two arms and 240 WALL minutes, above that and never
+  at it.
 
 **Retracted or re-qualified, which is most of what the session bought.**
 

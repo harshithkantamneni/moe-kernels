@@ -290,12 +290,16 @@ over the alpha-surface cell can be booked, which is the only route to
 `alpha_b` as a number rather than as an interval. Every previous rented pod
 refused the counter. **This paragraph said "the 15-minute plan" until
 2026-09-10** and the plan had stopped saying it: the profiled launch count is
-warmup + iters x trials rather than one, so the page now budgets an hour of
-GPU time and two pod-hours end to end for twelve profiled invocations. The
+warmup + iters x trials rather than one. The page prices the five-cell extended
+plan now, at `5 cells x 6 tile counts x 2 cache modes = 60 profiled
+invocations` and `5.0 GPU-hours`, and neither is this pair's figure. The
 `counter-n32-m64` and `counter-n128-m64` arms of
-`scripts/h200_gaps_session.sh` book that figure once each: the plan's COST
-block is byte-identical at the two BLOCK_N, so the contrast is two sets of
-twelve invocations and 240 WALL minutes. **It was ONE arm until 2026-09-10**
+`scripts/h200_gaps_session.sh` are 12 invocations and 1.0 GPU-hour between
+them, derived from the page's own 5 minutes per profiled invocation: one
+`--run` is one cell at one cache mode, so it is 6 of them. The COST block IS
+byte-identical at the two BLOCK_N and that is no longer the reason, because it
+prices five cells rather than one; the driver books 240 WALL minutes, well
+above the roughly 90 the page's "about half again in pod time" implies. **It was ONE arm until 2026-09-10**
 and that arm passed neither `--block-n` nor `--block-m`, so it ran the
 script's default BLOCK_N=64 BLOCK_M=32 cell while three places in the driver
 and one in the runbook said it ran the two-BLOCK_N contrast.
