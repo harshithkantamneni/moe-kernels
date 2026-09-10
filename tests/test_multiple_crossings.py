@@ -75,7 +75,17 @@ ONE_STAGE = ("torch_grouped_mm_down", "torch_grouped_mm_up")
 #: kernel measurement, and its crossing is not one of the sixteen.
 CANONICAL_IMPLS = FIVE_STAGE + ONE_STAGE
 
-#: The H200 ridge that every ratio in docs/FINDINGS.md is scored against.
+#: The constant every ratio in docs/FINDINGS.md was scored against, and NOT
+#: this card's ridge. 160.3 is the low end of the WITHDRAWN band (calibration
+#: md5 4d84542b) that `block_m_crossing_sweep.RIDGE_BAND` keeps by name as
+#: history: two compute calibrations of one card disagreeing by 10%, so it
+#: belongs to no card and never did. It survives here only because every
+#: quantity built on it is a RATIO in which it cancels algebraically, which
+#: `separation` says at the place the cancellation happens. Nothing in this
+#: file may compare it to a measured ridge; the one test that needs the card's
+#: real ridge reads it out of `measured_nvidia_h200.yaml` instead, which is why
+#: that test survived both recalibrations.
+#: Called "the H200 ridge" here until 2026-09-10.
 RIDGE = 160.3
 
 needs_published = pytest.mark.skipif(
@@ -250,17 +260,21 @@ def test_two_models_go_from_a_half_to_agreement_on_the_last_crossing(model, firs
 def test_rows_per_expert_at_the_last_crossing_lands_near_the_card_s_own_ridge():
     """Why the ambiguity is worth resolving rather than averaging over. `2R/b`
     at bf16 puts the crossing at `rows_per_expert = ridge`, and the H200's own
-    ridge is 152.8 (`measured_nvidia_h200.yaml`, recalibrated 2026-09-09 at
-    ab61e55; 162.8 before that, and the 160.3-176.2 band this test scored
-    against before 2026-09-02 was two compute calibrations disagreeing).
+    ridge is 155.9 (`measured_nvidia_h200.yaml`, recalibrated 2026-09-10 at
+    c0644be; 152.8 from 2026-09-09 at ab61e55, 162.8 before that, and the
+    160.3-176.2 band this test scored against before 2026-09-02 was two
+    compute calibrations disagreeing).
 
-    RESTATED 2026-09-09 BECAUSE THE RULER MOVED. Against the 162.8 ridge the
-    last crossings sat 8% above it and the first 24% below, and the bound
-    written here was `first_mean < 0.8 x ridge`. Against the recalibrated 152.8
-    the same corpus reads 15.0% above and 19.3% below, and that bound fails by
-    1% of the ridge -- a threshold outliving the number it was chosen against,
-    which is the failure this repository keeps finding. What the corpus
-    actually supports is the ORDERING and not a distance: the first crossings
+    RESTATED 2026-09-09 BECAUSE THE RULER MOVED, AND THE RULER HAS MOVED AGAIN
+    SINCE. Against the 162.8 ridge the last crossings sat 8% above it and the
+    first 24% below, and the bound written here was `first_mean < 0.8 x ridge`.
+    Against the 152.8 recalibration the same corpus read 15.0% above and 19.3%
+    below and that bound failed by 1% of the ridge; against the 155.9 of
+    2026-09-10 it reads 12.7% above and 20.9% below and the same bound would
+    PASS again. A threshold that fails and then passes while the corpus never
+    changed is a threshold measuring the calibration and not the kernels, which
+    is the failure this repository keeps finding. What the corpus actually
+    supports is the ORDERING and not a distance: the first crossings
     (mean 123.4, CV 40.0%) sit BELOW the card's ridge, the last (mean 175.8, CV
     21.2%) sit ABOVE it, and the last are the closer of the two. Both means are
     inside their own scatter of the ridge, so neither is separated from it, and

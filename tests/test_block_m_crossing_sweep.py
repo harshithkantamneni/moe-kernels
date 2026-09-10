@@ -142,10 +142,16 @@ def cells_at(alpha: float, *, noise: float = 0.0, tiles=TILES, seed: int = 0,
                               drifting=drifting)
 
 
-def analyse(cells, *, alpha: float, tiles=TILES, **kw):
+def analyse(cells, *, alpha: float, tiles=TILES, cfg=MIXTRAL,
+            model_name: str | None = None, **kw):
+    """`BM.analyse` on the default card and model. `cfg` and `model_name`
+    default to the SAME model, which is what every caller in the tree does and
+    what `BM.analyse` now refuses to let drift apart; the two are separate
+    parameters here only so a test can plant the disagreement."""
     return BM.analyse(
-        cells, MIXTRAL, block_sizes=tiles, alpha=alpha, ridge=RIDGE,
-        bandwidth_gbps=BANDWIDTH, b=2, model_name=MIXTRAL.name, dtype="bf16",
+        cells, cfg, block_sizes=tiles, alpha=alpha, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2,
+        model_name=cfg.name if model_name is None else model_name, dtype="bf16",
         compiles={bm: 1 for bm in tiles}, executed={bm: 1 for bm in tiles},
         sm_count=132, sm_source="test", ridge_band=(RIDGE, RIDGE),
         ridge_source="stated by the test", ridge_band_source="stated by the test",
@@ -2220,7 +2226,7 @@ def test_the_vacuity_label_names_the_footing_the_number_stands_on():
 
 def _fit_with_rate(points, block_m=64, ref=None, **kw):
     return BM.fit_ladder(points, block_m, ref if ref is not None else planted_reference(),
-                         model_name=MIXTRAL.name, dtype="bf16",
+                         model=MIXTRAL, dtype="bf16",
                          bandwidth_gbps=BANDWIDTH,
                          bandwidth_source="stated by the test", **kw)
 
@@ -2256,7 +2262,7 @@ def test_a_fit_with_no_named_model_or_rate_has_no_w_rather_than_a_guessed_one():
     assert fit.alpha is not None            # the old estimator is unaffected
     # Naming only some of the three is still not naming a denominator.
     assert BM.fit_ladder(pts, 64, planted_reference(),
-                         model_name=MIXTRAL.name).weight_streams is None
+                         model=MIXTRAL).weight_streams is None
     assert BM.fit_ladder(pts, 64, planted_reference(), dtype="bf16",
                          bandwidth_gbps=BANDWIDTH).weight_streams is None
 
@@ -2281,7 +2287,7 @@ def test_alpha_upper_above_one_is_exactly_D_greater_than_A_and_is_labelled():
     for intercept, overhead in ((0.50, 0.05), (0.30, 0.40), (0.10, 0.40)):
         pts = [(n, intercept + slope * n) for n in range(1, 9)]
         ref = BM.ComputeReference(256, overhead, 1.0, 0.0, "planted")
-        fit = BM.fit_ladder(pts, 64, ref, model_name=MIXTRAL.name, dtype="bf16",
+        fit = BM.fit_ladder(pts, 64, ref, model=MIXTRAL, dtype="bf16",
                             bandwidth_gbps=BANDWIDTH)
         a = fit.intercept
         assert a == pytest.approx(intercept, abs=1e-9)
@@ -2300,7 +2306,7 @@ def test_the_D_greater_than_A_label_is_carried_on_the_fit():
     slope = 0.6443482339382172
     pts = [(n, 0.10 + slope * n) for n in range(1, 9)]
     ref = BM.ComputeReference(256, 0.40, 1.0, 0.0, "planted")
-    fit = BM.fit_ladder(pts, 64, ref, model_name=MIXTRAL.name, dtype="bf16",
+    fit = BM.fit_ladder(pts, 64, ref, model=MIXTRAL, dtype="bf16",
                         bandwidth_gbps=BANDWIDTH)
     assert fit.fixed_cost_above_intercept
     assert fit.alpha_upper > 1.0
@@ -2308,7 +2314,7 @@ def test_the_D_greater_than_A_label_is_carried_on_the_fit():
     # And a fit that is NOT in that state does not carry the label.
     ok = BM.fit_ladder([(n, 0.50 + slope * n) for n in range(1, 9)], 64,
                        BM.ComputeReference(256, 0.05, 1.0, 0.0, "planted"),
-                       model_name=MIXTRAL.name, dtype="bf16",
+                       model=MIXTRAL, dtype="bf16",
                        bandwidth_gbps=BANDWIDTH)
     assert ok.fixed_cost_above_intercept is False
     assert "D > A" not in ok.w_note()
@@ -2399,3 +2405,162 @@ def test_the_sweeps_own_per_expert_byte_count_agrees_with_the_weight_set():
         cfg = MODEL_CONFIGS[name]
         assert (BM.weight_bytes_per_expert(cfg, b) * cfg.num_experts
                 == routed_expert_weight_bytes(name, dtype))
+
+
+# --------------------------------------------------------------------------
+# R9b. THE REPAIRS OF 2026-09-10. Four defects the first version of the
+# weight-stream column shipped with: a refusal that killed the whole report
+# instead of blanking one column, a printed sentence that dropped the rate
+# condition its three docstrings carry, a D>A note that described a number the
+# table did not print, and a string re-resolved through MODEL_CONFIGS beside
+# the config every other number came off.
+# --------------------------------------------------------------------------
+
+def _unverified_config(name="newmodel"):
+    """A config shaped exactly like mixtral whose geometry has not been checked
+    against an upstream config.json. `MoEConfig.verified` DEFAULTS to False, so
+    this is the shape of the next model config anyone adds to the repository."""
+    return replace(MIXTRAL, name=name, verified=False)
+
+
+def test_a_weight_set_this_repo_will_not_guess_blanks_the_column_not_the_report():
+    """A SUPPLEMENTARY COLUMN MAY NOT KILL FORTY NUMBERS. `weights` refuses a
+    model whose geometry is not `verified`, which is right at that layer: its
+    whole contract is that it never guesses a denominator. But `analyse` called
+    it unconditionally, so the refusal travelled out of the report builder and
+    the next `MoEConfig` added with `verified` at its default False would have
+    made the sweep time every cell on the pod and then die instead of writing
+    report.txt and report.json.
+
+    Reproduced before the fix as `WeightSetRefused: newmodel: geometry is not
+    verified ...` raised out of `analyse` with no report produced."""
+    cfg = _unverified_config()
+    report = analyse(cells_at(REFIT), alpha=REFIT, cfg=cfg,
+                     model_name=cfg.name)
+    text = report.text()
+    # The report exists, its gates are scored, and alpha is untouched.
+    assert report.gates and all(g.verdict for g in report.gates)
+    assert report.payload["ladder"]["64"]["alpha"] is not None
+    # Only the w column is blank, and it says why in the refusal's own words.
+    assert report.payload["ladder"]["64"]["weight_streams_per_tile"] is None
+    assert "not `verified`" in text
+    assert "w n/a" in text
+
+
+def test_the_blank_w_column_reaches_every_reader_not_only_the_easy_ones():
+    """THE RECURRING DEFECT ON THE REFUSAL PATH. `LadderFit.weight_streams` has
+    five reader sites in the sweep (the ladder table's w column, three per-row
+    payload keys, the report-level `weight_streams_measured`) and `w_note`
+    prints it on three more lines; the legend line reaches the module functions
+    without a fit at all. The catch is in `LadderFit._weight_streams`, one
+    place, plus one at the legend, so none of them can raise. This asserts
+    every one of them rather than the two that were easiest to reach."""
+    cfg = _unverified_config()
+    report = analyse(cells_at(REFIT), alpha=REFIT, cfg=cfg, model_name=cfg.name)
+    payload = report.payload
+    for row in payload["ladder"].values():
+        for key in ("weight_streams_per_tile", "weight_stream_ms",
+                    "weight_set_bytes"):
+            assert row[key] is None, key
+    assert payload["weight_streams_measured"] is None
+    detail = [line for g in payload["gates"] for line in g["detail"]]
+    per_bm = [line for line in detail if re.search(r"BLOCK_M=\s*\d+\s+alpha", line)]
+    assert per_bm
+    for line in per_bm:
+        assert "w n/a" in line, line
+    # The legend line too: it calls the module functions directly rather than
+    # going through the fit, so it is a ninth reader and needed its own catch.
+    assert any("NOT AVAILABLE" in line for line in report.text().splitlines())
+
+
+def test_the_printed_w_line_carries_the_rate_condition_and_says_routed_only():
+    """THE SENTENCE A READER ACTUALLY SEES. `weights.py`, `ai_model.py` and
+    `LadderFit.weight_streams` all say w bounds alpha_b from above AT THE RATE
+    THE WEIGHTS REALLY STREAM AT. The report line said it flatly, against a
+    denominator built from the card's TRIAD calibration, while a weight stream
+    is a pure read and this card's own read_stream pattern is 5.4% faster: the
+    published tile_cap ladder reads 1.0514 at triad and 1.1085 at read_stream,
+    so the unqualified sentence can be false.
+
+    And the denominator is the ROUTED expert set. `weights.layer_weight_bytes`
+    goes to the trouble of REFUSING qwen2-57b-a14b and the deepseek entries
+    rather than return the routed set under a whole-layer name; this line
+    printed the routed set under the unqualified name "the expert weight set",
+    the same distinction with the opposite care, two files apart."""
+    line = next(ln for ln in analyse(cells_at(REFIT), alpha=REFIT).text().splitlines()
+                if ln.lstrip().startswith("w is B divided by"))
+    assert "AT THIS RATE" in line
+    assert "only if the memory branch achieved this bandwidth" in line
+    assert "did not measure" in line
+    assert "ROUTED expert weight set" in line
+    assert "shared expert" in line and "different kernel" in line
+    # The flat claim is gone, not merely joined by a caveat.
+    assert "UPPER\nbound" not in line
+    assert "it is alpha_b + phi, so it is an UPPER bound" not in line
+
+
+def test_the_D_greater_than_A_note_is_stated_on_the_side_of_the_guard_it_holds():
+    """`alpha_upper = B/(A+B-D)` exceeds 1 exactly when D > A **and the column
+    has a value**. `alpha_upper` returns None when `D >= A+B` (the `net > 0`
+    guard), so a ladder with a small fitted intercept and a large reference
+    fixed cost printed alpha-hi as n/a while the note beside it claimed
+    alpha-hi was above 1 by arithmetic: a description of a number the table did
+    not print. The session produced three negative intercepts, so the state is
+    reachable in published data.
+
+    Planted at A=0.1000, B=0.6443, D=1.20, which reproduced the wrong note."""
+    slope = 0.6443482339382172
+    pts = [(n, 0.10 + slope * n) for n in range(1, 9)]
+    beyond = BM.fit_ladder(pts, 64, BM.ComputeReference(256, 1.20, 1.0, 0.0, "planted"),
+                           model=MIXTRAL, dtype="bf16", bandwidth_gbps=BANDWIDTH)
+    assert beyond.fixed_cost_above_intercept is True
+    assert beyond.alpha_upper is None, "D exceeds the whole level A + B"
+    note = beyond.w_note()
+    assert "D > A" in note
+    assert "not defined at all" in note
+    assert "above 1 by arithmetic" not in note
+    # And the ordinary D > A case, where alpha-hi IS printed, still says so.
+    inside = BM.fit_ladder(pts, 64, BM.ComputeReference(256, 0.40, 1.0, 0.0, "planted"),
+                           model=MIXTRAL, dtype="bf16", bandwidth_gbps=BANDWIDTH)
+    assert inside.alpha_upper > 1.0
+    assert "above 1 by arithmetic" in inside.w_note()
+    # w is the same in both: it depends on neither A nor D.
+    assert beyond.weight_streams.streams == pytest.approx(
+        inside.weight_streams.streams, rel=1e-12)
+
+
+def test_the_legend_describes_both_sides_of_that_guard_too():
+    """The same statement, at the other print site. The legend said
+    "alpha-hi = B/(A+B-D) exceeds 1 exactly when D>A" with no mention of the
+    rows where the column reads n/a instead."""
+    legend = next(ln for ln in analyse(cells_at(REFIT), alpha=REFIT).text().splitlines()
+                  if ln.lstrip().startswith("D>A marks a ladder"))
+    assert "the column has a value at all" in legend
+    assert "reads n/a" in legend
+
+
+def test_the_weight_set_comes_off_the_config_not_off_a_name_beside_it():
+    """`analyse` holds `cfg`, the exact MoEConfig every other number in the
+    report is computed from, and passed the STRING `model_name` to the
+    weight-set functions, which re-resolved it through MODEL_CONFIGS. A caller
+    whose two disagreed got a w divided by one geometry inside a report built
+    from another, silently. It now divides by `cfg`.
+
+    Proved on a config that is NOT in MODEL_CONFIGS at all: resolving by name
+    could only refuse it, so a w that comes out at all came off the object."""
+    bespoke = replace(MIXTRAL, name="mixtral-8x7b",
+                      intermediate_size=7168, verified=True)
+    assert bespoke is not MODEL_CONFIGS["mixtral-8x7b"]
+    report = analyse(cells_at(REFIT), alpha=REFIT, cfg=bespoke)
+    row = report.payload["ladder"]["64"]
+    assert row["weight_set_bytes"] == bespoke.weight_bytes("bf16")
+    assert row["weight_set_bytes"] != MIXTRAL.weight_bytes("bf16")
+
+
+def test_a_label_and_a_geometry_that_name_two_models_are_refused():
+    """The other half of the same defect: `analyse` takes both a `cfg` and a
+    `model_name`, and the label is what the header and the payload's "model"
+    key carry. Every caller in the tree passes `cfg.name`, so this refuses
+    nothing that exists; it refuses the next caller that gets it wrong."""
+    with pytest.raises(ValueError, match="name two different models"):
+        analyse(cells_at(REFIT), alpha=REFIT, model_name="qwen2-57b-a14b")

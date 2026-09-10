@@ -37,6 +37,7 @@ from pathlib import Path
 
 import pytest
 
+from moe.bench import ai_model as ai_model_module
 from moe.bench.ai_model import (
     AIModelRefused,
     alpha_b_from_fitted,
@@ -789,6 +790,34 @@ def test_the_mixtral_bf16_weight_set_is_the_2_8186_gb_every_w_is_quoted_against(
     assert got == 3 * MIX.intermediate_size * MIX.hidden_size * MIX.num_experts * 2
 
 
+def test_the_byte_count_is_moe_specs_and_not_a_second_copy_of_the_arithmetic():
+    """ONE MULTIPLICATION, EVERY MODEL. `routed_expert_weight_bytes` says in
+    its own docstring that it is "the documented name for it, not a second copy
+    of the arithmetic: two copies of one byte count is how the two halves of a
+    study end up dividing by different denominators", and until 2026-09-10 the
+    body under that sentence recomputed `E*2F*H + E*H*F` inline instead of
+    calling `MoEConfig.weight_bytes`, where the multiplication already lived.
+    All nine configs agreed on the day it was found, so the defect was latent
+    and a rename of a slab dimension is what would have surfaced it.
+
+    Checked over EVERY entry in `MODEL_CONFIGS` and every dtype, not over the
+    one mixtral bf16 pair pinned above: a single pair is exactly what let the
+    two copies agree by luck for as long as no geometry changed."""
+    seen = 0
+    for name, cfg in sorted(MODEL_CONFIGS.items()):
+        for dtype in ("bf16", "fp16", "fp8_e4m3", "fp32"):
+            try:
+                got = routed_expert_weight_bytes(name, dtype)
+            except WeightSetRefused:
+                continue                      # unverified geometry, tested below
+            assert got == cfg.weight_bytes(dtype), (name, dtype)
+            # And by the config OBJECT as well as by its name, since the sweep
+            # now hands the object down.
+            assert routed_expert_weight_bytes(cfg, dtype) == got
+            seen += 1
+    assert seen >= 4 * len(MODEL_CONFIGS), "the sweep over models did not run"
+
+
 def test_the_weight_set_scales_with_the_dtype_and_nothing_else():
     """Per dtype, as the function's contract says. fp8 halves it, fp32 doubles
     it, and the geometry is untouched."""
@@ -914,7 +943,7 @@ def test_the_model_says_w_is_alpha_b_plus_phi_in_this_gemms_own_weight_unit():
 
 
 def test_exact_cap_takes_its_denominator_from_slope_weight_streams():
-    """One definition of `alpha_b + phi`, two readers. The cap and the
+    """One definition of `alpha_b + phi`, three readers. The cap and the
     weight-stream statistic cannot come to describe two different slopes."""
     for bm, bn, ab, aa in ((64, 64, 0.31, 0.14), (128, 256, 0.9, 0.5)):
         slope = slope_weight_streams(N, K, block_m=bm, block_n=bn,
@@ -922,6 +951,51 @@ def test_exact_cap_takes_its_denominator_from_slope_weight_streams():
         assert exact_cap(N, K, block_m=bm, block_n=bn, alpha_b=ab,
                          alpha_a=aa) == pytest.approx(2.0 * bm / (2 * slope),
                                                       rel=1e-12)
+
+
+def test_all_three_readers_of_the_slope_divide_through_one_function():
+    """THE RECURRING DEFECT, ON THE FIX ITSELF. `exact_cap` was changed to take
+    its denominator from `slope_weight_streams` under a comment reading "one
+    definition of alpha_b + phi, two readers", while `cap_from_fitted` went on
+    writing `2*BM / (b*(alpha_b + phi))` out by hand underneath: three readers,
+    one of them keeping its own copy. `cap_from_fitted` cannot call
+    `slope_weight_streams` -- it is handed a fitted alpha and a scalar phi and
+    has no N or K to rebuild phi from -- so what the two share is the division,
+    `cap_from_slope`, and this checks that both actually route through it."""
+    calls = []
+    real = ai_model_module.cap_from_slope
+
+    def spy(slope, **kw):
+        calls.append((slope, kw))
+        return real(slope, **kw)
+
+    bm, bn, ab, aa = 128, 64, 0.40, 0.20
+    p = phi(N, K, block_m=bm, block_n=bn, alpha_a=aa)
+    fitted = fitted_alpha(N, K, block_m=bm, block_n=bn, alpha_b=ab,
+                          alpha_a=aa, fixed_bytes=0.0)
+    original = ai_model_module.cap_from_slope
+    ai_model_module.cap_from_slope = spy
+    try:
+        exact = exact_cap(N, K, block_m=bm, block_n=bn, alpha_b=ab, alpha_a=aa)
+        from_fit = cap_from_fitted(fitted, block_m=bm, b=2, phi=p, delta=0.0)
+    finally:
+        ai_model_module.cap_from_slope = original
+    assert len(calls) == 2, "a caller still divides on its own"
+    # Both handed it the SAME slope, which is the point of sharing it: the
+    # fitted route recovers alpha_b and adds the same phi the geometry route
+    # computes, so a cap from a ladder and a cap from the shapes agree.
+    assert calls[0][0] == pytest.approx(calls[1][0], rel=1e-9)
+    assert exact == pytest.approx(from_fit, rel=1e-9)
+
+
+def test_cap_from_slope_refuses_a_slope_no_ladder_could_have():
+    """A zero per-tile cost implies no cap and a NaN is a degenerate fit; both
+    used to divide straight through and hand back inf or NaN."""
+    from moe.bench.ai_model import cap_from_slope
+    assert cap_from_slope(0.5, block_m=64, b=2) == pytest.approx(128.0)
+    for bad in (0.0, -0.1, float("nan"), math.inf):
+        with pytest.raises(AIModelRefused):
+            cap_from_slope(bad, block_m=64, b=2)
 
 
 # --- the replay over the published session ------------------------------
@@ -987,3 +1061,57 @@ def test_the_published_session_ran_at_the_2026_09_10_calibration():
     _, bn_bw = _corpus_rows("bn_decomposition")
     _, cap_bw = _corpus_rows("tile_cap")
     assert bn_bw == cap_bw == pytest.approx(4374.299702465323, rel=1e-12)
+
+
+def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
+    """THE CONDITION THE REPORT LINE DROPPED. `w` is `alpha_b + phi` in weight
+    reads only AT THE RATE THE MEMORY BRANCH ACHIEVED. Every docstring in this
+    change carried that clause; the one line a reader of report.txt actually
+    sees said flatly that w "is an UPPER bound on the weight miss fraction",
+    against a denominator built from the card's TRIAD calibration.
+
+    A weight stream is a pure READ, and this card's own committed `read_stream`
+    pattern is faster than its triad ceiling. Divided by the read rate the same
+    published tile_cap ladder reads HIGHER than the number the report calls a
+    bound, by more than the width of the gap being bounded, so the unqualified
+    sentence can be false. Both rates come out of the committed calibration
+    file rather than being typed here, because a test that pins a rate is stale
+    the next time the card is calibrated."""
+    import yaml
+
+    from moe.bench.roofline import HARDWARE_DIR
+    card = yaml.safe_load((HARDWARE_DIR / "measured_nvidia_h200.yaml").read_text())
+    read_rate = next(p["gbps"] for p in card["detail"]["bandwidth_patterns"]
+                     if p["pattern"] == "read_stream")
+
+    rows, triad = _corpus_rows("tile_cap")
+    slope = _ladder_slope_ms(
+        rows, "tiles_per_expert",
+        lambda r: (int(float(r["block_m"])) == 16
+                   and float(r["tile_eff"]) >= 1.0
+                   and int(float(r["tiles_per_expert"])) >= 3))
+    at_triad = weight_streams_per_tile(slope, MIX, "bf16", triad).streams
+    at_read = weight_streams_per_tile(slope, MIX, "bf16", read_rate).streams
+
+    assert read_rate > triad, "a pure read is not slower than the triad ceiling"
+    assert at_triad == pytest.approx(1.0514, abs=5e-5)
+    assert at_read == pytest.approx(1.1085, abs=5e-5)
+    # 1:1 in the rate, in the direction a denominator implies: a FASTER rate
+    # makes one stream take less time, so the same slope is MORE streams.
+    assert at_read / at_triad == pytest.approx(read_rate / triad, rel=1e-12)
+    # THE OVERCLAIM, AS THE ARITHMETIC THAT MAKES IT ONE. w exceeds alpha_b by
+    # phi, so the gap the bound allows for is the whole phi bracket over the
+    # unmeasured alpha_a. In LAYER units at BM=16 that bracket is 3.7e-4 (no
+    # activation re-read) to 2.1e-2 (a full one) -- and the choice of rate
+    # moves w by 5.7e-2, more than the widest end of it. So alpha_b can sit
+    # above the number the report prints as its upper bound, whatever alpha_a
+    # turns out to be, and only the rate decides.
+    per_gemm_read = (K * N * 2) / routed_expert_weight_bytes(MIX, "bf16")
+    lo = phi(N, K, block_m=16, block_n=64, alpha_a=0.0) * per_gemm_read
+    hi = phi(N, K, block_m=16, block_n=64, alpha_a=1.0) * per_gemm_read
+    assert lo == pytest.approx(3.72e-4, rel=1e-2)
+    assert hi == pytest.approx(2.116e-2, rel=1e-2)
+    assert at_read - at_triad == pytest.approx(5.71e-2, rel=1e-2)
+    assert at_read - at_triad > hi > lo, (
+        "the rate ambiguity is wider than the whole phi bracket, so a w quoted "
+        "without its rate is not a bound on alpha_b")

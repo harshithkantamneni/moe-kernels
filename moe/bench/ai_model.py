@@ -385,12 +385,46 @@ def exact_cap(N: int, K: int, *, block_m: int, block_n: int,
 
     ITS DENOMINATOR IS `slope_weight_streams`, taken from there rather than
     rewritten here, so the cap and the weight-stream statistic can never come
-    to describe two different slopes: one definition of `alpha_b + phi`, two
-    readers.
+    to describe two different slopes: one definition of `alpha_b + phi`.
+
+    THERE ARE THREE READERS OF THAT SLOPE, NOT TWO, and this comment said two
+    until 2026-09-10 while `cap_from_fitted` kept its own copy of the division
+    underneath. `cap_from_fitted` cannot call `slope_weight_streams`, because
+    its caller has a FITTED alpha and a scalar phi and no N or K to rebuild phi
+    from; what it can share is the division itself, and both now reach it
+    through `cap_from_slope`.
     """
     slope = slope_weight_streams(N, K, block_m=block_m, block_n=block_n,
                                  alpha_b=alpha_b, alpha_a=alpha_a, b=b)
-    return 2.0 * block_m / (b * slope)
+    return cap_from_slope(slope, block_m=block_m, b=b)
+
+
+def cap_from_slope(slope_streams: float, *, block_m: int, b: int) -> float:
+    """`2*BM / (b * slope)`: the cap implied by a per-M-tile slope already in
+    weight-read units.
+
+    ONE DIVISION, EVERY CALLER. `slope_streams` is `alpha_b + phi` in units of
+    one full read of this GEMM's B operand, whichever route the caller reached
+    it by: `slope_weight_streams` builds it from the geometry, and
+    `cap_from_fitted` recovers it from a fitted B/(A+B) reading and a scalar
+    phi. Written out at both sites until 2026-09-10, which is this
+    repository's recurring defect on a two-line formula: a change to the factor
+    of two or to the dtype width would have had to be made twice.
+
+    NOT THE SAME UNIT AS `weights.weight_streams_per_tile`. That one divides a
+    measured slope by the fused LAYER's routed expert set, `E * 3FH * b`; this
+    one is per full read of `K*N*b`, and on mixtral's up-projection the layer
+    set is 1.5E = 12 times larger. `slope_weight_streams` carries the
+    conversion in its docstring and a test pins the factor.
+    """
+    _check_positive(block_m=block_m, b=b)
+    if not math.isfinite(slope_streams) or slope_streams <= 0.0:
+        raise AIModelRefused(
+            f"slope_streams={slope_streams} is not a per-tile cost this can be "
+            "divided by: it must be finite and positive. A zero slope is a "
+            "tile that costs nothing and implies no cap; a NaN is a degenerate "
+            "ladder fit")
+    return 2.0 * block_m / (b * slope_streams)
 
 
 def _delta(fixed_bytes: float, N: int, K: int, b: int) -> float:
@@ -691,7 +725,11 @@ def cap_from_fitted(alpha_fitted: float, *, block_m: int, b: int,
     which is `exact_cap()` at the recovered alpha_b, and the study's
     2*BM/(alpha_fitted*b) divided by `lin_overstatement`. Refuses, through
     `alpha_b_from_fitted`, whenever the recovered miss fraction is not one.
+
+    THE THIRD READER OF `alpha_b + phi`, and until 2026-09-10 the one that
+    wrote the division out again. It cannot call `slope_weight_streams`: it is
+    handed a fitted alpha and a scalar phi, and has no N or K to rebuild phi
+    from. It CAN share the division, and does, through `cap_from_slope`.
     """
-    _check_positive(block_m=block_m, b=b)
     alpha_b = alpha_b_from_fitted(alpha_fitted, phi=phi, delta=delta)
-    return 2.0 * block_m / (b * (alpha_b + phi))
+    return cap_from_slope(alpha_b + phi, block_m=block_m, b=b)

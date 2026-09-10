@@ -103,11 +103,22 @@ def routed_expert_weight_bytes(model: str | MoEConfig, dtype: str) -> int:
     divides every ladder slope by and the one every w in the 2026-09-10
     synthesis is quoted against. It agrees term for term with
     `bn_decomposition.weight_elements(cfg) * cfg.num_experts * bytes`, which is
-    that script's own route to the same number, and with
-    `moe.spec.MoEConfig.weight_bytes`, which is where the multiplication
-    actually lives. This function is the documented name for it, not a second
-    copy of the arithmetic: two copies of one byte count is how the two halves
-    of a study end up dividing by different denominators.
+    that script's own route to the same number.
+
+    IT DELEGATES, AND UNTIL 2026-09-10 IT ONLY SAID SO. This function is the
+    documented NAME for a byte count whose multiplication lives in
+    `moe.spec.MoEConfig.weight_bytes`, reached through `w1_shape` and
+    `w2_shape`. The first version of this docstring said "not a second copy of
+    the arithmetic: two copies of one byte count is how the two halves of a
+    study end up dividing by different denominators" while the body underneath
+    it recomputed `E*2F*H + E*H*F` inline, which is exactly a second copy, in
+    the module written to stop denominators drifting. It now calls
+    `cfg.weight_bytes(dtype)` and keeps only the dtype refusal of its own, so
+    there is one multiplication and a rename of a slab dimension moves both
+    halves of the study together or neither. `tests/test_ai_model.py` checks
+    the equality over EVERY entry in `MODEL_CONFIGS` rather than over the one
+    pair it used to, because a single pinned pair is what let the two agree by
+    luck for as long as no geometry changed.
 
     ROUTED ONLY, AND SAID SO. A shared expert is a dense FFN outside the
     grouped GEMM, its width is not `intermediate_size` (qwen2-57b-a14b's is
@@ -117,10 +128,11 @@ def routed_expert_weight_bytes(model: str | MoEConfig, dtype: str) -> int:
     the whole layer on such a model.
     """
     cfg = _resolve(model)
-    b = _dtype_bytes(dtype)
-    w1 = cfg.num_experts * 2 * cfg.intermediate_size * cfg.hidden_size
-    w2 = cfg.num_experts * cfg.hidden_size * cfg.intermediate_size
-    return (w1 + w2) * b
+    # `_dtype_bytes` first, and only for the refusal: `cfg.weight_bytes` raises
+    # a bare ValueError on an unknown dtype, and this module's callers catch
+    # `WeightSetRefused`. The byte count itself comes from `cfg`.
+    _dtype_bytes(dtype)
+    return cfg.weight_bytes(dtype)
 
 
 def layer_weight_bytes(model: str | MoEConfig, dtype: str) -> int:
