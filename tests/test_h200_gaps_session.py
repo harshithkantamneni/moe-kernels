@@ -286,9 +286,13 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     # to discover what a ten-second probe answers. This assertion read
     # `order[-1] == "counter_plan"` until 2026-09-10, when the probe stopped
     # being the last thing in the session, and `order[-1] == "counter"` until
-    # the counter became the pair it always claimed to be.
-    assert order[-3] == "counter_plan"
-    assert (order[-2], order[-1]) == COUNTER_ARMS
+    # the counter became the pair it always claimed to be. The zero-minute
+    # contrast then went on the end, after the two payloads it reads, so the
+    # tail is indexed from the probe forwards rather than from the end
+    # backwards: the reading is always last and the pair is always between.
+    assert order[-4] == "counter_plan"
+    assert (order[-3], order[-2]) == COUNTER_ARMS
+    assert order[-1] == COUNTER_CONTRAST_ARM
 
 
 def test_the_dense_span_grid_runs_before_the_sparse_one():
@@ -1502,17 +1506,25 @@ def test_the_retracted_cap_identity_is_not_asserted_anywhere():
 def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
     """THE G=1 DECOMPOSITION ARM WAS, and this is the check that ran too late.
     `bn_decomposition.py --self-test --capability 9.0 --group-m 1 --reps 17
-    --plant-noise 0.008` exits 3 INVALID: S4 sees sd(alpha_a) 0.1759 against a
-    gate of 0.025, and S5 sees the planted MISSING world PASS C2 at chi2 1.78
+    --plant-noise 0.008` exits 3 INVALID: S4 sees sd(alpha_a) 0.1562 against a
+    gate of 0.025, and S5 sees the planted MISSING world PASS C2 at chi2 2.70
     against a ceiling of 4.0, so neither of that arm's two readouts can be
     resolved at the pinning it was booked at. The same command at --group-m 16
-    exits 0. The arm was dropped rather than re-pinned because the self-test
-    also fails at 2, 4, 8, 32 and 64, so GROUP_SIZE_M=16 -- the arm already
-    scheduled -- is the only pinning left.
+    exits 0 at sd 0.0075. The arm was dropped rather than re-pinned because the
+    self-test also fails at 2, 4, 8, 32 and 64, so GROUP_SIZE_M=16 -- the arm
+    already scheduled -- is the only pinning left.
+
+    THE FIGURES ARE NOT PINNED HERE AS LITERALS, they are re-measured: the two
+    runs below print S4's own `saw sd`, and the driver's paragraphs are checked
+    against what came back. Eight sites carried 0.1759 and chi2 1.78 until
+    2026-09-10, which are neither the current figure nor the one the design
+    line prints (0.1507 at G=1), and no verdict moved when they were
+    corrected.
 
     This runs the gate at the pinning the surviving arm ACTUALLY runs, which is
     the substitution the whole finding is about: the driver used to advertise
     the G=16 self-test as the off-GPU check for a G=1 arm."""
+    _THIS_DOC = test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid.__doc__
     names = re.search(r"^ARM_NAMES=\(([^)]*)\)", TEXT, re.M).group(1).split()
     assert "bn_g1" not in names and "bn_g16" in names
     assert not re.search(r"^  bn_g1\s", run(["--list"]).stdout, re.M)
@@ -1531,6 +1543,7 @@ def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
     body = CODE.split("alpha_a and alpha_b separated", 1)[1].split("\nsay ", 1)[0]
     assert "--group-m 16" in body
     assert "--group-m 1 " not in body
+    runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
     for pinning, want in ((["--group-m", "1"], 3), (["--group-m", "16"], 0)):
         done = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
@@ -1539,6 +1552,33 @@ def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
         assert done.returncode == want, (pinning, done.returncode, done.stdout[-2000:])
         assert exit_codes.classify_text(done.stdout) == want, pinning
+        # AND THE PROSE IS CHECKED AGAINST WHAT CAME BACK. Eight sites in this
+        # tree quoted sd 0.1759 and chi2 1.78, figures the self-test had
+        # stopped printing; nothing checked them, so they aged in place through
+        # a whole session's worth of edits. S4's own `saw sd` is the number S4
+        # is scored on, so it is the one the pages must carry.
+        sd = re.search(r"S4 \w+ .*?saw sd = ([\d.]+)", done.stdout)
+        assert sd, done.stdout[-2000:]
+        assert sd.group(1) in TEXT, (pinning, sd.group(1))
+        if pinning[1] == "1":
+            assert sd.group(1) in runbook, sd.group(1)
+            assert sd.group(1) in _THIS_DOC, sd.group(1)
+            # The chi2 the MISSING world passes C2 at, from the same page.
+            row = re.search(r"^\s*MISSING\s+\S+\s+\S+\s+\S+\s+([\d.]+)",
+                            done.stdout, re.M)
+            assert row, done.stdout[-2000:]
+            assert row.group(1) in TEXT, row.group(1)
+            assert row.group(1) in _THIS_DOC, row.group(1)
+    # AND THE RETIRED FIGURES ARE GONE, not merely joined by the current ones.
+    # Presence of the right number somewhere on a page is not the check that
+    # was missing: every one of the eight sites carried a figure, and a page
+    # can hold both. These six are the 2026-09-10 re-measurement's casualties,
+    # and outside this file they survive nowhere.
+    for retired in ("0.1759", "0.4864", "0.0635", "0.1021", "0.0902",
+                    "chi2 1.78"):
+        assert retired not in TEXT, retired
+        assert retired not in runbook, retired
+        assert retired not in (ROOT / "docs" / "APPARATUS.md").read_text(), retired
 
 
 # --------------------------------------------------------------------------
@@ -4228,14 +4268,16 @@ def test_the_counter_route_card_is_resolved_once_and_reaches_every_call_site():
     # And an operator override wins, when it is a card the script lists.
     assert resolve("nocard", "nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
     # EVERY call site reads the one value, and there is exactly one assignment.
-    # FOUR LINES, SIX INVOCATIONS since 2026-09-10: arm 13's two branches, and
-    # `counter_arm`'s two, which each run for both counter arms. The count is
-    # of LINES, because `counter_arm` is the thing that stops a card from
+    # FIVE LINES, SEVEN INVOCATIONS since 2026-09-10: arm 13's two branches,
+    # `counter_arm`'s two, which each run for both counter arms, and the
+    # zero-minute contrast, which scores the two payloads they wrote and needs
+    # the same card to read the rate its bandwidth column is against. The count
+    # is of LINES, because `counter_arm` is the thing that stops a card from
     # reaching one arm and not the other.
     joined = re.sub(r"\\\n\s+", " ", CODE)
     users = [ln for ln in joined.splitlines() if "COUNTER_PLAN_CARD" in ln]
     assert sum(1 for ln in users if 'COUNTER_PLAN_CARD="$(counter_route_card)"' in ln) == 1, users
-    assert sum(1 for ln in users if '--card "$COUNTER_PLAN_CARD"' in ln) == 4, users
+    assert sum(1 for ln in users if '--card "$COUNTER_PLAN_CARD"' in ln) == 5, users
     # And NO invocation of that script is left carrying the hard A100 default.
     # `--probe` takes no card and prints no cell, so it is the one exemption;
     # the runner guard greps the file rather than running it.

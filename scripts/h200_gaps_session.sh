@@ -203,13 +203,13 @@
 #   * ONE ARM WAS SCHEDULED AT A PINNING ITS OWN DESIGN GATE CALLS INVALID.
 #     bn_g1 ran GROUP_SIZE_M=1, where `bn_decomposition.py --self-test
 #     --capability 9.0 --group-m 1 --reps 17 --plant-noise 0.008` exits 3
-#     INVALID: S4 sees sd(alpha_a) 0.1759 against a gate of 0.025, and S5 sees
-#     the planted MISSING world pass C2 at chi2 1.78 against a ceiling of 4.0,
+#     INVALID: S4 sees sd(alpha_a) 0.1562 against a gate of 0.025, and S5 sees
+#     the planted MISSING world pass C2 at chi2 2.70 against a ceiling of 4.0,
 #     so neither alpha_a nor C2 can be resolved there however the data fall. The
 #     arm is DROPPED, and the reason is that no re-pinning exists: the same
 #     self-test fails at every GROUP_SIZE_M this instrument was checked at
-#     except 16 (1, 2, 4, 8, 32 and 64 all exit 3; sd(alpha_a) 0.1759, 0.1759,
-#     0.1759, 0.4864, 0.1759, 0.0635), and 16 is the arm already scheduled. Its
+#     except 16 (1, 2, 4, 8, 32 and 64 all exit 3; sd(alpha_a) 0.1562, 0.1562,
+#     0.1562, 0.2681, 0.1562, 0.0453), and 16 is the arm already scheduled. Its
 #     36 priced minutes go back to the session. What it was reframed to carry --
 #     alpha_b, C3 and C5 at the swizzle every published arm swept -- had no
 #     registered detection limit at that pinning either: S1 checks alpha_b's
@@ -583,9 +583,9 @@
 #                    straight line in BM/BN, and structure in the residual names
 #                    the missing one. THE G=1 PARTNER IS GONE, not demoted: at
 #                    GROUP_SIZE_M=1 that script's own design self-test exits 3
-#                    INVALID, alpha_a's spread is 0.1759 against a gate of
+#                    INVALID, alpha_a's spread is 0.1562 against a gate of
 #                    0.025, and the planted MISSING world passes C2 at chi2
-#                    1.78 against a ceiling of 4.0, so neither of the arm's two
+#                    2.70 against a ceiling of 4.0, so neither of the arm's two
 #                    readouts can be resolved there however the data fall. The
 #                    same self-test fails at every other pinning it was checked
 #                    at except 16, so there is nowhere to re-pin it TO.
@@ -1818,7 +1818,7 @@ arm_basis() { case "$1" in
   span_dense) echo "span_extent_separation.py --dry-run --densify -> '84 cells x 9 arms = 756 timed arms. Estimated KERNEL time 1814 s'." ;;
   span)       echo "span_extent_separation.py --dry-run --no-densify -> 'AND THIS GRID WOULD REFUSE: grid too sparse for C2'. Zero minutes: it stops before it spends one, and that refusal is the extent comparison's honest answer on the published grid." ;;
   counter_plan) echo "dram_counter_route.py --probe returns in seconds and prints no cost line; 1 min is this file's allowance for it. THIS ROW QUOTED 'Budget 15 minutes of GPU time' UNTIL 2026-09-10 and the plan had stopped saying it: the page now reads 'Budget an hour of GPU time and two pod-hours end to end, not the fifteen minutes the one-launch recipe used to promise', because the profiled launch count is warmup + iters x trials rather than one. Neither figure is this arm's, because both price the MEASUREMENT, which is the counter arm below, but a row quoting a sentence its own plan no longer prints is how a booking goes stale without anyone reading it." ;;
-  counter_contrast) echo "scripts/dram_counter_route.py --contrast $SESSION/counter_run_n32.json $SESSION/counter_run_n128.json, over the two files the pair above writes. ZERO MINUTES AND NO FIGURE TO READ OFF A PLAN, because it reads two payloads already paid for and times nothing: --contrast is exclusive with --dry-run, so there is no plan page to quote and this row is the command instead. WHY IT IS AN ARM AND NOT A NOTE. Until 2026-09-10 the session paid for both payloads and never took the reading they exist for: grep for --contrast over this driver and the docs returned nothing, and the ratio that decides TRAFFIC from TIME was left to the operator to compute by hand off the printed predictions, which is the improvisation the pair was added to prevent. THE SCORER IS PROVEN OFF GPU on exactly two payloads of the shape --run writes, and its two RESULT lines are VALIDITY X0 and CLAIM XA-all: a traffic world reads as TRAFFIC at a ratio near 1.871 and a time world reads as TIME at 1.000, 87% apart and scored at +/-5% of each rival. IT IS SKIPPED, NEVER REFUSED, WHEN A PAYLOAD IS MISSING: a contrast over one cell is not a contrast, and a half-run pair must not be filed as a failed claim." ;;
+  counter_contrast) echo "scripts/dram_counter_route.py --contrast counter_run_n32.json counter_run_n128.json, the two files the pair above writes under this session's own directory. ZERO MINUTES AND NO FIGURE TO READ OFF A PLAN, because it reads two payloads already paid for and times nothing: --contrast is exclusive with --dry-run, so there is no plan page to quote and this row is the command instead. WHY IT IS AN ARM AND NOT A NOTE. Until 2026-09-10 the session paid for both payloads and never took the reading they exist for: grep for --contrast over this driver and the docs returned nothing, and the ratio that decides TRAFFIC from TIME was left to the operator to compute by hand off the printed predictions, which is the improvisation the pair was added to prevent. THE SCORER IS PROVEN OFF GPU on exactly two payloads of the shape --run writes, and its two RESULT lines are VALIDITY X0 and CLAIM XA-all: a traffic world reads as TRAFFIC at a ratio near 1.871 and a time world reads as TIME at 1.000, 87% apart and scored at +/-5% of each rival. IT IS SKIPPED, NEVER REFUSED, WHEN A PAYLOAD IS MISSING: a contrast over one cell is not a contrast, and a half-run pair must not be filed as a failed claim." ;;
   counter-n32-m64|counter-n128-m64) echo "dram_counter_route.py --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32, and the same at --block-n 128 -> 'COST, of the plan as extended. 5 cells x 6 tile counts x 2 cache modes = 60 profiled invocations of at least 11 fused_experts calls each, about 3300 profiled kernel launches ... At 5 minutes per profiled invocation that is 5.0 GPU-hours for the whole extended plan, against 1.0 for the single cell the plan used to hold, and about half again in pod time ... DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone'. THAT PAGE PRICES FIVE CELLS AND THIS SESSION BOOKS TWO, so neither 5.0 nor 3.0 is this pair's figure and neither may be read as one. WHAT THE PAIR SPENDS, derived from the page's own 5 minutes per profiled invocation rather than transcribed from a sentence: one --run is one cell at one cache mode, which is 6 profiled invocations and 0.5 GPU-hour, so the pair is 12 invocations and 1.0 GPU-hour, exactly the figure the page itself names as '1.0 for the single cell the plan used to hold'. At the page's 'about half again in pod time' that is roughly 45 wall minutes an arm and 90 for the pair. EACH ARM IS BOOKED 120 AND THE PAIR 240, above that figure and never at it, because ncu replay's save and restore of the 2.8 GB weight buffers is the one term in it this repo has never timed. THE COST BLOCK IS BYTE-IDENTICAL AT EVERY BLOCK_N, verified off GPU (md5 c612a3e7a12ebbcd6c65c166316e1cfd at --block-n 32, 64 AND 128), BUT NOT FOR THE REASON THIS ROW USED TO GIVE: the block prices the five-cell extended plan, which does not depend on which single cell you run, so two identical pages no longer license the inference that each cell costs the same, and the 12-invocations-per-arm figure is re-derived above from the per-invocation rate instead of read off that identity. It read md5 fabbeedc38cf2e784316e9e59f6b8f3c until the plan was extended on 2026-09-10. The two plans differ in exactly seven lines: the run id, the pinned line, three corrected-cap rows, the recipe line and the schema's block_n. ONE OF THOSE ROWS DIFFERS IN KIND AND NOT IN VALUE: at BLOCK_N=32 the alpha_a=1 end of the corrected cap reads REFUSED, because alpha_fitted 0.6583 sits below the floor 0.6684 that alpha_b=0 gives, where at BLOCK_N=128 the same row reads 64.1. UNTIL 2026-09-10 IT WAS ONE ARM AT 120 AND THE CONTRAST WAS LEFT TO THE OPERATOR while arm_closes said the arm ran it: that arm line passed no --block-n and no --block-m and took the script's own argparse defaults as they stood that day, BLOCK_N=64 and BLOCK_M=32, which is the single pinned cell the 2026-09-10 analysis named as the defect to fix before running. NO LINE NUMBER IS QUOTED HERE ON PURPOSE: dram_counter_route.py is a separate slice's file and the defaults are its to move, so this row records what the arm RAN and pins the flags on its own line rather than citing a line in a file it does not own. Both flags are on both arm lines now, and the pre-registered discriminator below is at the BLOCK_M they pass." ;;
 esac; }
 
@@ -2939,8 +2939,8 @@ say "5. alpha_a and alpha_b separated, and whether the three-term model is compl
 #
 #   bn_decomposition.py --self-test --capability 9.0 --group-m 1 --reps 17 \
 #       --plant-noise 0.008        -> exit 3 INVALID
-#     S4 FAIL  sd(alpha_a) = 0.1759 at GROUP_SIZE_M=1 against a gate of 0.025
-#     S5 FAIL  the planted MISSING world PASSES C2 at chi2 1.78 against 4.0,
+#     S4 FAIL  sd(alpha_a) = 0.1562 at GROUP_SIZE_M=1 against a gate of 0.025
+#     S5 FAIL  the planted MISSING world PASSES C2 at chi2 2.70 against 4.0,
 #              so C2 cannot fail there however the card behaves
 #     S2 FAIL  which is the same fact read from the other side
 #
@@ -2953,9 +2953,16 @@ say "5. alpha_a and alpha_b separated, and whether the three-term model is compl
 #
 # RE-PINNING WAS THE OTHER OPTION AND THERE IS NOWHERE TO RE-PIN IT TO. The same
 # self-test at --group-m 2, 4, 8, 32 and 64 also exits 3, with sd(alpha_a)
-# 0.1759, 0.1759, 0.4864, 0.1759 and 0.0635 against the same 0.025, and --reps
-# does not buy it either: 65 reps reaches 0.1021 and 129 reaches 0.0902, four
-# times the gate for eight times the minutes. GROUP_SIZE_M=16 is the one setting
+# 0.1562, 0.1562, 0.2681, 0.1562 and 0.0453 against the same 0.025, and --reps
+# does not buy it either: 65 reps reaches 0.0822 and 129 reaches 0.0717, three
+# times the gate for eight times the minutes.
+#
+# EVERY FIGURE IN THE THREE PARAGRAPHS ABOVE WAS RE-MEASURED ON 2026-09-10 and
+# every one had drifted; not one verdict moved with them. They are the S4 RESULT
+# line's `saw sd = ...`, which is the number S4 is scored on, and NOT the design
+# line's own `sd(alpha_a) = ...` printed higher up the same page: the two differ
+# (0.1562 against 0.1507 at G=1) and a list built by grepping the first match on
+# the page is a list of the other statistic. GROUP_SIZE_M=16 is the one setting
 # that passes, and it is the arm below. So the minutes go back to the session
 # rather than to a second arm at a pinning its own design gate refuses.
 # A THIRD SUBJECT TILE SINCE 2026-09-10, AND IT IS THE ARM'S WHOLE POINT NOW.

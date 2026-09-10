@@ -390,6 +390,33 @@ answers the ladder rather than a different question. It is also the cell the
 adversarial evaluation named: the widest anchor disagreement anywhere on the
 surface.
 
+THE REGISTERED CARD IS THE H200, and this section carried the A100 for a day
+after the script stopped defaulting to it. `dram_counter_route.py` resolves
+`--card` from the attached device and the session driver passes what
+`counter_route_card` resolved, so the plan an operator reads on the box prints
+the H200's own ridge of **155.93** (682.086 TFLOP/s over 4.37430 TB/s) and not
+the A100's 145.81. The A100 row is kept below and labelled RETIRED because it
+is the registration the 2026-09-02 analysis was written against and
+`tests/test_dram_counter_route.py` still asserts its figures; it is not the
+cell any session books.
+
+**The registered cell**, printed by
+`dram_counter_route.py --dry-run --card nvidia_h200 --block-m 64 --block-n 32`:
+
+| | |
+|---|---|
+| card | nvidia_h200. Ridge **155.93** FLOP/byte from `measured_nvidia_h200.yaml` (682.086 TFLOP/s over 4.37430 TB/s) |
+| model | `mixtral-8x7b`, bf16, `E=8 k=2 H=4096 F=14336` |
+| pinned | `GROUP_SIZE_M=16`, `BLOCK_SIZE_M=64`, `BLOCK_SIZE_N` **32 and 128**, one arm each, `BLOCK_SIZE_K=64`, `num_warps=8`, `num_stages=4` |
+| swept | tiles per expert `n = 1, 2, 3, 4, 6, 8` (rows per expert 64..512), and `--cache-control` in `{all, none}` |
+| `W` | 2,818,572,288 B = **2.81857 GB** (`E x 3 F H x 2`) |
+| `a` | **52.429 MB** per M-tile at `BM=64` (`E x BM x (2H+3F) x 2`) |
+| the reading | the RATIO across the two `BLOCK_N`, scored by `--contrast`. One `BLOCK_N` settles nothing about a `BLOCK_N` dependence |
+
+**RETIRED, the A100 registration** (2026-09-02). Kept for provenance and because
+the tests assert its arithmetic; not bookable, and not what the script defaults
+to.
+
 | | |
 |---|---|
 | card | A100-SXM4-80GB. Ridge **145.81** FLOP/byte from `measured_nvidia_a100_sxm4_80gb.yaml` (262.371 TFLOP/s over 1.79936 TB/s), **never the 160.3 the reports carry** |
@@ -474,7 +501,9 @@ decided. Each states what its own failure invalidates.
 | V2 | validity | `R(1)` is one compulsory weight read | `\|R(1)/(W+a) - 1\| <= 0.10` | **the units of `alpha` itself**. If `R(1)` is not one weight read then `B/L` is not a re-read fraction and every published alpha on every card is uninterpretable rather than merely uncertain. This gate has never been run |
 | V3 | validity | read traffic increases with tile count | strictly increasing | the affine model; a non-monotone ladder means the launches are not all the same kernel |
 | V4 | validity | the traffic ladder is affine in `n` | max residual `<= 3%` | the single-slope reading; a curved ladder means no scalar `alpha` describes it |
-| C1 | claim | exactly one anchor matches | 1 anchor within 0.05 | zero survivors means all three anchors are wrong and the branch model needs replacing, not re-anchoring; more than one means the cell was badly chosen |
+| C1 | claim | **the question the cell can answer, decided from the anchors before the run.** `c1_registration` prints SEPARATING or NOT DISCRIMINATING; on a SEPARATING cell the claim is that exactly one anchor matches, on a NOT DISCRIMINATING one it is that the counter lands INSIDE the cluster | SEPARATING: 1 anchor within 0.05. NOT DISCRIMINATING: at least one | SEPARATING: zero survivors means all three anchors are wrong and the branch model needs replacing, not re-anchoring; more than one means the cell was badly chosen. NOT DISCRIMINATING: a FAIL is every registered anchor refuted at once, and no published alpha on that card survives it |
+
+**The registered H200 cell is NOT DISCRIMINATING and the row above used to say the opposite.** Its anchors are 0.6202 / 0.6583 / 0.6595, a closest pair of 0.0011 against a window of 0.05, so a measurement agreeing with one agrees with its neighbour. Under the retired row a reader would score a successful clustered run, which is the outcome this cell can produce, as a refutation. The A100 cell IS separating (closest pair 0.0574) and it is where the retired wording came from. The claim the H200 cell does carry is the `BLOCK_N` contrast, whose two rivals are 87% apart.
 | C2 | claim | the counter lands inside the counter-free bracket | `0.4522 <= alpha <= 0.6313` | one of the two measurements; the bracket uses only measured time and the pin rate, so a counter outside it means timing or counter is wrong and the run cannot say which |
 | C3 | claim | this `BLOCK_M` still cannot reach the compute roof | `alpha > BM/ridge`, exact for a COUNTER alpha; a ladder alpha must go through `ai_model.cap_from_fitted` first (retracted 2026-09-02: the bare identity is high by `(1 + phi + delta)` on a fit) | **the one result the 2026-09 evaluation did not kill.** A counter alpha below the threshold means the tile height *can* reach the roof and the cap claim must be withdrawn |
 
@@ -543,11 +572,23 @@ measured is the failure this whole file exists to avoid.
 
 ### 4.7 Cost
 
-12 profiled invocations (6 tile counts x 2 cache modes), about 60 profiled
-launches, per `BLOCK_M`. The largest cell is 256 rows per expert, which the timed
-sweep measures in single-digit milliseconds; `ncu` replay and its save/restore of
-the 2.8 GB weight buffers dominate. Budget 15 minutes of GPU time and one
-pod-hour end to end, which is the smallest unit any of these providers bills.
+Read the plan page, not this paragraph: `--dry-run` prices what it will run and
+this section says what shape the figure is. As of 2026-09-10 the plan is five
+cells and prints `5 cells x 6 tile counts x 2 cache modes = 60 profiled
+invocations`, about 3300 profiled kernel launches, and `at 5 minutes per
+profiled invocation that is 5.0 GPU-hours for the whole extended plan, against
+1.0 for the single cell the plan used to hold`. It also prints the escape:
+`DROP TO 36 INVOCATIONS (3.0 GPU-hours) by running contrast A alone`.
+
+This section said `Budget 15 minutes of GPU time and one pod-hour end to end`
+until 2026-09-10, which is 20x under the plan it documents. The fifteen minutes
+was a one-launch recipe; the profiled launch count is warmup + iters x trials,
+never one.
+
+One `--run` is ONE cell at ONE cache mode, so it is 6 profiled invocations and
+half a GPU-hour. The largest cell is 512 rows per expert, which the timed sweep
+measures in single-digit milliseconds; `ncu` replay and its save/restore of the
+2.8 GB weight buffers dominate, at seconds per launch.
 
 **The cost of this experiment has never been the money.** It has been one Linux
 capability.
@@ -585,9 +626,16 @@ check and a test that asserts it.
 
 * `docs/COUNTERS.md` (this file)
 * `scripts/dram_counter_route.py` -- `--dry-run`, `--bracket`, `--probe`,
-  `--self-test`, `--analyse`
-* `tests/test_dram_counter_route.py` -- 46 tests, all off GPU (the count is
-  checked by `tests/test_docs.py`)
+  `--self-test`, `--run`, `--analyse`, `--contrast`. `--run` is the ncu loop
+  itself and `--contrast` scores the RATIO across two payloads it wrote; both
+  landed on 2026-09-10 and this list named neither, so the page described a
+  planner where the file also measures and compares. Exactly one mode per
+  invocation: the parser refuses two, because interleaving a plan with a result
+  is what this study has been burned by
+* `tests/test_dram_counter_route.py` -- 108 tests, all off GPU. The count is
+  NOT checked by `tests/test_docs.py` and the claim that it was is retired: it
+  read 46 while the file collected 108, which is what an unchecked count that
+  says it is checked looks like. Re-derive it with the command below
 
 ```bash
 .venv/bin/python -m pytest tests/test_dram_counter_route.py -q
