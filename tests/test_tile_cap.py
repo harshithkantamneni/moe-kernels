@@ -607,10 +607,28 @@ def test_exit_codes_separate_a_void_run_from_a_falsified_claim(tmp_path):
     # published as a negative result; confusing the last two is how a free
     # refusal gets queued for a second pod.
     assert CAP.main(["--self-test", "0.10", "--out", str(tmp_path / "b")]) == 1
-    assert CAP.main(["--self-test", "0.10", "--r-max", "512",
+    # INVALID, AND IT HAD TO MOVE OFF `--r-max 512` ON 2026-09-09. That grid
+    # gave the control two exactly-full stacks, which `grid_refusal` now
+    # REFUSES at plan time under R7, so it stopped being an example of "a
+    # validity gate did not pass after measuring" and became an example of
+    # "nothing was measured". The case is kept as a three-way separation with
+    # a grid that passes V1 and V4 at plan time and is measured in full: a 5%
+    # planted spread widens V2's flatness gate past the 10% at which the gate
+    # stops answering, so V2 comes back UNDECIDED after every cell is timed.
+    # The control is 128 so that the alpha=0.1 registration, which is for the
+    # (16, 256) pair, does not apply: a self-test whose planted world comes out
+    # other than registered exits ERROR (4), which is a broken apparatus and
+    # not a gate verdict, and would hide the code this line is about.
+    assert CAP.main(["--self-test", "0.10", "--control", "128",
+                     "--plant-noise", "0.05",
                      "--out", str(tmp_path / "c")]) == 3
     assert CAP.main(["--cap-tile", "8", "--dry-run",
                      "--out", str(tmp_path / "d")]) == 2
+    # The old INVALID grid, now REFUSED before a cell is timed. Both codes are
+    # pinned here so a later change that lets the short grid run again fails
+    # this test rather than quietly publishing a voided page.
+    assert CAP.main(["--self-test", "0.10", "--r-max", "512",
+                     "--out", str(tmp_path / "e")]) == 2
 
 
 class MovedSibling:

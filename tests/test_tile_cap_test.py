@@ -22,8 +22,10 @@ Everything here runs off GPU.
 """
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -611,9 +613,13 @@ OFF_GPU_MODES = [
       "--capability", "9.0"], exit_codes.REFUSED),
     (["--self-test", "0.558"], exit_codes.DONE),
     (["--self-test", "0.10"], exit_codes.CLAIM_FAIL),
-    # A world swept too shallow to decide: a VALIDITY gate does not pass AFTER
-    # the cells exist, so the page is void rather than the claim refuted.
-    (["--self-test", "0.10", "--r-max", "512"], exit_codes.INVALID),
+    # A GRID SWEPT TOO SHALLOW TO DECIDE, and since 2026-09-09 that is answered
+    # BEFORE the cells exist rather than after. This row used to expect INVALID:
+    # 512 rows gives the control two exactly-full stacks and the cap tile 32
+    # tiles against the 132 the horizon needs, so V1 and V4 were decided by the
+    # grid and the run measured 66 cells to say so. `grid_refusal` now states it
+    # at plan time and the mode is REFUSED.
+    (["--self-test", "0.10", "--r-max", "512"], exit_codes.REFUSED),
 ]
 
 
@@ -675,3 +681,378 @@ def test_an_unplanned_crash_exits_ERROR_and_never_CLAIM_FAIL(monkeypatch, capsys
     assert "planted: the allocator gave up halfway" in err, \
         "the traceback was swallowed"
     assert "RuntimeError" in err
+
+
+# --------------------------------------------------------------------------
+# R7. The grid the plan lets through, and which ladder may be the reference.
+#
+# 2026-09-09, H200. `r_max = depth.rows` was 688 on that card's own ridge band,
+# `build_grid` stopped at 672, and two multiples of the 256 control landed on
+# the grid. V1 wanted three per tile and V4 wanted 43 tiles at BLOCK_M=16
+# against the 42 the grid held: both were decided before a cell was timed, the
+# plan printed "BM=256:2" beside a WARNING, and 72 measured cells produced
+# nothing quotable. `compute_reference` then skipped the two-tread control and
+# fell through to BLOCK_M=16, the SUBJECT, refusing it on non-vacuity 1.044,
+# so the report read "BLOCK_M=16 ... its LEVEL is wrong" for the very ladder the
+# experiment exists to measure, and the 1.044 was never printed.
+# --------------------------------------------------------------------------
+
+#: The 2026-09-09 H200 calibration's ridge band, which is what made `depth.rows`
+#: 688. The module's own pinned band gives 2112 and hid this for a year.
+H200_BAND = (142.8112754272431, 155.4122703178822)
+H200_RIDGE = 152.8120650229884
+
+
+def test_the_h200_band_depth_alone_cannot_carry_v1_and_v4_and_the_floor_can():
+    """688 rows is the cap tile's horizon and nothing else: it knows nothing
+    about the control and is not a multiple of --row-step."""
+    depth = CAP.required_depth(16, b=2, ridge_band=H200_BAND)
+    assert depth.rows == 688 and depth.tiles == 43
+    grid = SWEEP.build_grid(MIXTRAL, TILES, depth.rows, 32, 6)
+    assert sum(1 for r in grid if r % 256 == 0) == 2 < CAP.V1_ALIGNED_NEEDED
+    assert CAP.grid_depth(grid, 16) == 42 < depth.tiles
+    assert CAP.grid_refusal(grid, tiles=TILES, depth=depth, row_step=32)
+
+    floor = max(depth.rows, CAP.CONTROL_STACKS_FLOOR * 256)
+    floor += (-floor) % 32
+    assert floor == 1024
+    grid = SWEEP.build_grid(MIXTRAL, TILES, floor, 32, 6)
+    assert sum(1 for r in grid if r % 256 == 0) >= CAP.CONTROL_STACKS_FLOOR
+    assert CAP.grid_depth(grid, 16) >= depth.tiles
+    assert CAP.grid_refusal(grid, tiles=TILES, depth=depth, row_step=32) == ""
+
+
+def test_the_plan_refuses_the_short_grid_and_prints_the_stack_counts(tmp_path,
+                                                                     capsys):
+    """Exit REFUSED before the pod is billed, naming every count that is short.
+
+    A refusal a reader cannot act on is a crash with better manners, so the
+    line has to carry the counts, the gates that wanted them, and the --r-max
+    that would satisfy both.
+    """
+    rc = CAP.main(["--self-test", "1.0", "--plant-noise", "0.01",
+                   "--r-max", "688", "--ridge", str(H200_RIDGE),
+                   "--ridge-band", f"{H200_BAND[0]},{H200_BAND[1]}",
+                   "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED
+    assert "BLOCK_M=256 has 2 exactly-full stack(s) against the 3 V1 requires" in out
+    assert "deepest BLOCK_M=16 stack is 42 tiles against the 43 V4 requires" in out
+    assert "raise --r-max to at least 1024" in out
+    assert "RESULT:" not in out, "a refused plan scores no gate"
+    assert "WARNING" not in out, \
+        "the short grid was a WARNING that ran anyway until 2026-09-09"
+
+
+@pytest.mark.parametrize("alpha", [1.0, 0.558])
+def test_the_floored_grid_passes_v1_v2_and_c2_on_both_planted_worlds(
+        alpha, tmp_path, capsys):
+    """The booking the refusal above points at: --r-max 1024, H200 band."""
+    rc = CAP.main(["--self-test", str(alpha), "--plant-noise", "0.01",
+                   "--r-max", "1024", "--ridge", str(H200_RIDGE),
+                   "--ridge-band", f"{H200_BAND[0]},{H200_BAND[1]}",
+                   "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.DONE, out[-2000:]
+    verdicts = {line.name: line.verdict
+                for line in exit_codes.parse_result_lines(out)}
+    assert verdicts["V1"] == "PASS" and verdicts["V2"] == "PASS"
+    assert verdicts["C2"] == "PASS"
+
+
+def test_the_default_r_max_is_floored_at_the_controls_stacks():
+    """The H200 default moves 688 -> 1024; the module band's 2112 is unchanged
+    because 2112 already carries 8 control stacks."""
+    for band, expected in ((H200_BAND, 1024), (BAND, 2112)):
+        depth = CAP.required_depth(16, b=2, ridge_band=band)
+        floor = max(depth.rows, CAP.CONTROL_STACKS_FLOOR * 256)
+        floor += (-floor) % 32
+        assert floor == expected
+
+
+def test_only_the_control_may_be_the_compute_reference():
+    """A two-tread control must decline in ITS OWN name.
+
+    Before the fix the sibling's walk fell through to the cap tile, fitted the
+    SUBJECT's ladder and refused it on non-vacuity, and the report blamed
+    BLOCK_M=16's level for a hole the control's tread count had made.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 688, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    assert len(SWEEP.ladder_points(ok, 256)) == 2
+
+    fell_through = SWEEP.compute_reference(
+        ok, TILES, cfg=MIXTRAL, ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert fell_through.refused_block_m == 16, "the sibling walk still falls through"
+
+    ref = CAP.control_reference(ok, tiles=TILES, control_tile=256, cfg=MIXTRAL,
+                                ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.block_m is None and ref.refused_block_m is None
+    assert "BLOCK_M=256, the control and the ONLY candidate" in ref.note
+    assert "2 exactly-full tread(s)" in ref.note
+    assert "cap tile and is not a candidate" in ref.note
+
+
+def test_the_level_checks_still_see_every_swept_ladder():
+    """Candidacy is restricted, the comparison set is not.
+
+    Telling `_level_checks` that 256 is the smallest tile on the grid scales
+    non-vacuity to 256 instead of 16 and moves the H200 control's ratio from
+    0.106 to 1.690, which REFUSES the very ladder that has to be the reference.
+    That is why `control_reference` passes both tiles and filters afterwards.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    ref = CAP.control_reference(ok, tiles=TILES, control_tile=256, cfg=MIXTRAL,
+                                ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.block_m == 256, ref.note
+    assert ref.vacuity_ratio < 0.2
+    assert ref.level_comparisons >= 3
+
+    narrowed = SWEEP.compute_reference(ok, (256,), cfg=MIXTRAL, ridge=H200_RIDGE,
+                                       bandwidth_gbps=BANDWIDTH, b=2)
+    assert narrowed.refused_block_m == 256 and narrowed.vacuity_ratio > 1.0
+
+
+def test_v2_names_the_ladder_the_reference_is_on():
+    """The failing condition is an IDENTITY and it was never printed: the FAIL
+    line carried the cap tile's own 0.7% against a 5% bound and named nothing.
+    """
+    good = SWEEP.ComputeReference(256, 0.0, 1.99, 0.010, "BLOCK_M=256 ladder")
+    gate = CAP.gate_v2_control(good, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.PASS
+    assert "BLOCK_M=256" in "\n".join(gate.lines)
+
+    wrong = SWEEP.ComputeReference(None, 0.0, None, 0.007, "refused",
+                                   refused_block_m=16, refusals=("level",))
+    gate = CAP.gate_v2_control(wrong, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.FAIL
+    assert "reference is BLOCK_M=16, REFUSED on its level, not the control" \
+        in gate.measured
+    assert "0.7%" not in gate.measured, \
+        "the refused ladder's own fit error read as if it were the control's"
+    assert "the reference IS BLOCK_M=256" in gate.threshold
+
+
+def test_the_references_refusal_numbers_reach_the_page_and_report_json():
+    """"its LEVEL is wrong" with no number beside it was the whole of what the
+    H200 page and its report.json said about the failing check."""
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.01, seed=0)
+    rep = CAP.analyse(
+        cells, MIXTRAL, cap_tile=16, control_tile=256, alpha=0.558,
+        ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH, b=2,
+        model_name="mixtral-8x7b", dtype="bf16", compiles={16: 1, 256: 1},
+        executed={16: 1, 256: 1}, sm_count=132, sm_source="test",
+        depth=CAP.required_depth(16, b=2, ridge_band=H200_BAND),
+        planned_cells=len(grid) * 2, header=[], ridge_band=H200_BAND)
+    page = "\n".join(rep.lines)
+    assert "LEVEL roof fraction" in page
+    assert "LEVEL non-vacuity" in page
+    assert "LEVEL vs smaller BM" in page
+    p = rep.payload
+    assert p["compute_reference_candidate"] == 256
+    assert p["compute_reference_block_m"] == 256
+    assert p["compute_reference_refusals"] == []
+    assert 0 < p["compute_reference_vacuity_ratio"] < 1.0
+    assert p["compute_reference_roof_fraction"] is not None
+    assert p["compute_reference_level_comparisons"] >= 3
+    # And the planted alpha comes back, which is the point of a qualified
+    # reference: 24 of 24 treads at BLOCK_M=16 stand above the control's branch.
+    assert abs(p["alpha_measured"] - 1.0) < 0.03
+
+
+def test_a_control_refused_on_shape_declines_with_the_number_that_failed():
+    """R7's "declines in ITS name" was implemented for two of three branches.
+
+    `compute_reference` names its ladder in `block_m` when it qualifies one and
+    in `refused_block_m` when the LEVEL checks throw one out. On the third
+    exit, a ladder refused on SHAPE, it names it in NEITHER, which is exactly
+    what the "no ladder had 3 treads" exit leaves behind too. The identity test
+    `control_tile in (ref.block_m, ref.refused_block_m)` therefore read a
+    control refused on its own shape as a control the walk never reached, threw
+    away "not proportional to its tile count (N% mean error)", and printed
+    "has 4 exactly-full tread(s) against the 3 a through-origin fit needs" to
+    the page and to report.json, which states a condition the control SATISFIES
+    as its failure and throws away the number that did fail.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 1024, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    ok = [c for c in cells if c.status == "ok" and c.ms_p50 > 0]
+    # Four aligned treads at the control, re-timed as a MEMORY branch A + B n:
+    # a real intercept, which a line through the origin cannot describe.
+    memory = [dataclasses.replace(c, ms_p50=1.2 + 0.80 * c.tiles_per_expert)
+              if c.block_m == 256 else c for c in ok]
+    assert len(SWEEP.ladder_points(memory, 256)) == 4
+
+    sibling = SWEEP.compute_reference(memory, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.block_m is None and sibling.refused_block_m is None, \
+        "the shape refusal still names its ladder in neither field"
+    assert 0 < sibling.mean_rel_err < math.inf
+
+    assert CAP.walk_reached(memory, TILES, sibling) == 256
+    ref = CAP.control_reference(memory, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert ref.note == sibling.note, "the control's own refusal, unrewritten"
+    assert "not proportional to its tile count" in ref.note
+    assert f"{sibling.mean_rel_err:.1%}" in ref.note
+    assert "exactly-full tread(s)" not in ref.note, \
+        "a satisfied condition printed as the failure"
+
+    gate = CAP.gate_v2_control(ref, _tp(0.5, treads=4), control_tile=256,
+                               noise=0.01)
+    assert gate.verdict == CAP.FAIL
+    assert "the control BLOCK_M=256 is NOT proportional" in gate.measured
+    assert f"{sibling.mean_rel_err:.1%}" in gate.measured
+    assert "reference is none" not in gate.measured
+
+
+def test_an_empty_walk_still_declines_on_the_controls_tread_count():
+    """The other both-None exit, and the wrapper must keep telling it apart.
+
+    "no ladder had the 3 treads" carries `math.inf`, so the tread count IS the
+    failure there and the wrapper's own note is the right one.
+    """
+    grid = SWEEP.build_grid(MIXTRAL, TILES, 688, 32, 6)
+    cells = SWEEP.synthetic_cells(MIXTRAL, grid, TILES, alpha=1.0,
+                                  ridge=H200_RIDGE, bandwidth_gbps=BANDWIDTH,
+                                  b=2, sm_count=132, noise=0.0, seed=0)
+    two_treads = [c for c in cells
+                  if c.status == "ok" and c.ms_p50 > 0
+                  and (c.block_m == 256 or not c.aligned)]
+    assert len(SWEEP.ladder_points(two_treads, 256)) == 2
+    assert SWEEP.ladder_points(two_treads, 16) == []
+    sibling = SWEEP.compute_reference(two_treads, TILES, cfg=MIXTRAL,
+                                      ridge=H200_RIDGE,
+                                      bandwidth_gbps=BANDWIDTH, b=2)
+    assert sibling.mean_rel_err == math.inf
+    assert CAP.walk_reached(two_treads, TILES, sibling) is None
+    ref = CAP.control_reference(two_treads, tiles=TILES, control_tile=256,
+                                cfg=MIXTRAL, ridge=H200_RIDGE,
+                                bandwidth_gbps=BANDWIDTH, b=2)
+    assert "2 exactly-full tread(s)" in ref.note
+    assert "cap tile and is not a candidate" not in ref.note, \
+        "nothing was reached, so nothing may be named as reached"
+
+
+def test_the_compute_reference_is_built_by_name_and_the_probe_watches_it():
+    """A dataclass built POSITIONALLY across a file boundary is worse than a
+    TypeError: a reorder of the first five same-typed fields would put wrong
+    values in the right slots, silently, and the sibling is edited on its own
+    branch."""
+    assert "ComputeReference" in CAP.REQUIRED_SWEEP_API
+    fields = CAP.REQUIRED_SWEEP_API["ComputeReference"]
+    assert fields == ("block_m", "overhead_ms", "slope_per_tile",
+                      "mean_rel_err", "note")
+    import inspect
+    params = inspect.signature(SWEEP.ComputeReference).parameters
+    assert all(name in params for name in fields)
+    CAP.require_sweep_api()
+
+
+# --------------------------------------------------------------------------
+# R2. Two rulers on every throughput, and only the fixed one is scored.
+#
+# A kernel's under-load SM clock on this card is set PER TILE by its own power
+# draw under the 700 W cap: the 2026-09-09 session's cap_test cells carry 34
+# distinct clocks from 1440 to 1980 MHz against a calibration GEMM that held
+# 1485. A fraction of the FIXED roof therefore mixes "how well this tile uses
+# the machine" with "what clock the governor gave it". The gates keep reading
+# the fixed roof, which is the only denominator any threshold is stated
+# against; the own-clock fraction is printed beside it as issue efficiency.
+# --------------------------------------------------------------------------
+
+def _clocked(cells, mhz: dict[int, float]):
+    """The same cells with a per-BLOCK_M under-load clock stamped on them."""
+    return [dataclasses.replace(c, sm_clock_load_mhz=mhz.get(c.block_m))
+            for c in cells]
+
+
+def test_the_own_clock_fraction_is_the_fixed_one_scaled_by_the_clock_ratio():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    fixed = dict(SWEEP._throughput_ladder(ok, 256, ROOF))
+    issue = CAP.issue_ladder(ok, 256, ROOF, 1485.0)
+    assert set(issue) == set(fixed)
+    for n, v in fixed.items():
+        assert issue[n] == pytest.approx(v * 1485.0 / 1650.0)
+    # The cap tile ran HIGHER than the roof's clock, so its fixed fraction was
+    # the inflated one and issue efficiency is the smaller number.
+    cap_issue = CAP.issue_ladder(ok, 16, ROOF, 1485.0)
+    cap_fixed = dict(SWEEP._throughput_ladder(ok, 16, ROOF))
+    assert all(cap_issue[n] < cap_fixed[n] for n in cap_fixed)
+
+
+def test_both_fractions_reach_every_ladder_line_and_every_gate_line():
+    grid, cells = _cells(1.0)
+    ok = _clocked([c for c in cells if c.status == "ok" and c.ms_p50 > 0],
+                  {16: 1980.0, 256: 1650.0})
+    rep = CAP.analyse(
+        ok, MIXTRAL, cap_tile=16, control_tile=256, alpha=1.0, ridge=RIDGE,
+        bandwidth_gbps=BANDWIDTH, b=2, model_name="mixtral-8x7b", dtype="bf16",
+        compiles={16: 1, 256: 1}, executed={16: 1, 256: 1}, sm_count=132,
+        sm_source="test", depth=CAP.required_depth(16, b=2, ridge_band=BAND),
+        planned_cells=len(grid) * len(TILES), header=[], ridge_band=BAND,
+        reference_mhz=1485.0, reference_clock_source="planted for this test")
+    page = rep.text()
+    assert "FIXED ROOF / OWN-CLOCK ROOF" in page
+    assert "Reference clock 1485 MHz, planted for this test" in page
+    for gate in rep.gates:
+        for line in gate.lines:
+            if "throughput per tread" in line:
+                assert "own clock" in line
+                assert "/-" not in line, "every row here carries a clock"
+    scored = {g.tag: g.measured for g in rep.gates}
+    assert "own-clock" in scored["V3"] and "own-clock" in scored["C1"]
+    # AND IT IS NOT A GATE INPUT. The control ran 165 MHz above the roof's
+    # clock, so its own-clock fraction is 10% lower; V3's verdict is read off
+    # the fixed one and does not move with it.
+    p = rep.payload
+    assert p["peak_issue_efficiency"]["256"] == pytest.approx(
+        p["peak_roof_fraction"]["256"] * 1485.0 / 1650.0)
+    assert p["reference_clock_mhz"] == 1485.0
+    v3 = next(g for g in rep.gates if g.tag == "V3")
+    assert v3.verdict == CAP.PASS
+    assert f"{p['peak_roof_fraction']['256']:.3f}" in v3.measured
+
+
+def test_without_a_reference_clock_the_second_fraction_is_absent_not_zero():
+    """A missing number is printed as missing. Zero would read as a tile that
+    issued nothing, which is the opposite of "not known"."""
+    rep = _report(1.0)
+    page = rep.text()
+    assert "NOT AVAILABLE on this run" in page
+    assert "n=1:" in page and "n=1:0.000" not in page
+    ladder = [line for gate in rep.gates for line in gate.lines
+              if "throughput per tread" in line]
+    assert ladder and all(line.rstrip().endswith("-")
+                          or "/-," in line for line in ladder)
+    assert rep.payload["peak_issue_efficiency"] == {"16": None, "256": None}
+    assert rep.payload["reference_clock_mhz"] is None
+
+
+def test_a_self_test_reads_no_hardware_for_its_second_ruler(tmp_path, capsys):
+    """`--self-test` is a replay and must be identical on every machine, so it
+    resolves no reference clock even on a box that has a calibration."""
+    assert CAP.main(["--self-test", "0.558", "--plant-noise", "0",
+                     "--out", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "PINNED for --self-test: no hardware is read" in out
+    payload = json.loads(next(tmp_path.rglob("report.json")).read_text())
+    assert payload["reference_clock_mhz"] is None

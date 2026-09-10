@@ -81,7 +81,26 @@ Per (model, token count) three arms are timed IN EACH DTYPE:
     native     no override; vLLM resolves its own config per dtype.
                The CONFOUNDED arm, and the one a deployment runs.
     cfg_bf16   the config vLLM natively picks for BF16 here, FORCED on both.
-    cfg_fp8    the config vLLM natively picks for FP8 here, FORCED on both.
+               A full transplant, and it fits: the bf16 tuned tiles need
+               24576-98304 B of pipeline shared memory at fp8's 1 byte per
+               element, against the sm_90 limit of 232448.
+    tile_fp8   BLOCK_SIZE_M and GROUP_SIZE_M from the config vLLM natively
+               picks for FP8 here, forced on both; BLOCK_SIZE_N, BLOCK_SIZE_K,
+               num_warps and num_stages stay each width's own.
+
+RE-SCOPED 2026-09-09, and the full fp8 transplant it replaces is INFEASIBLE, not
+merely expensive. Triton asks for `num_stages x (BM*BK + BK*BN) x element bytes`
+of pipeline shared memory. Every fp8 tuned entry vLLM picks above T=128
+(mixtral) or T=384 (qwen2) is N=256 K=128 at 3 to 5 stages, which at bf16's 2
+bytes per element needs 294912 to 409600 B against the sm_90 limit of 232448: 22
+of the 28 cells on the default grid cannot compile it at all, leaving 6 pairs,
+below the 6-per-model floor `RegimeNotResolved` needs. On 2026-09-09 the arm was
+run anyway; the OutOfResources it raised inside vLLM's `override_config` (which
+has no try/finally) leaked the fp8 config process-wide and corrupted 41 further
+arms. The BLOCK_SIZE_M and GROUP_SIZE_M transplant carries the two keys the
+study is about, is feasible at 28 of 28 cells (49152-196608 B), and the full
+transplant is still derived, printed and marked INFEASIBLE with its byte count
+so the reader sees what was not run and why.
 
 Two matched arms rather than one, because "pin the tile" leaves open WHICH tile,
 and a dtype effect that only exists under one config is not a dtype effect. Both
@@ -89,8 +108,9 @@ are reported and the gate reads the pair.
 
 Two placebos fall out for free and cost no extra arm: `native` and `cfg_bf16`
 are the SAME config in bf16 (one resolved, one forced), as are `native` and
-`cfg_fp8` in fp8. Their ratio is the noise floor, and it is also the only check
-that `override_config` forces what `resolve_tile` derived.
+`tile_fp8` in fp8 (transplanting fp8's own BLOCK_SIZE_M and GROUP_SIZE_M into
+fp8's own config is the identity). Their ratio is the noise floor, and it is
+also the only check that `override_config` forces what `resolve_tile` derived.
 
 THE ESTIMAND IS NOT A CROSSING, and that is deliberate. A crossing read off
 `d(log ms)/d(log T)` is a staircase reader: `all_crossings_from_points`
@@ -151,15 +171,22 @@ ratio that assumed otherwise was reading tile steps. That is the same fact that
 retracted C5.
 
 WHAT THE MODEL PREDICTS, from THIS card's own same-session calibration.
-`moe/bench/hardware/measured_nvidia_h200.yaml` (measured 2026-09-02, commit
-63de5b9) now carries an fp8_e4m3 ceiling next to the bf16 one -- FINDINGS calls
-that "a precondition for publishing this" and it is why this run is possible
-now. Read from that file at run time, not transcribed:
+`moe/bench/hardware/measured_nvidia_h200.yaml` (measured 2026-09-09, written by
+the recalibration at ab61e55) carries an fp8_e4m3 ceiling next to the bf16 one:
+FINDINGS calls that "a precondition for publishing this" and it is why this run
+is possible now. Read from that file at run time, not transcribed, and the
+transcription below is what it holds today:
 
-    bandwidth 4374.8 GB/s   bf16 712.3 TFLOP/s   fp8_e4m3 1447.7 TFLOP/s
-    ridge_bf16 162.8        ridge_fp8 330.9      achieved fp8/bf16 2.033
+    bandwidth 4374.5 GB/s   bf16 668.5 TFLOP/s   fp8_e4m3 1469.9 TFLOP/s
+    ridge_bf16 152.8        ridge_fp8 336.0      achieved fp8/bf16 2.199
 
-Compute time therefore scales by 1/2.033 = 0.492, not by the datasheet's 0.500.
+THOSE SIX NUMBERS ARE THE RECALIBRATION'S. Until 2026-09-09 this block read
+4374.8 / 712.3 / 1447.7, ridge 162.8 / 330.9 and a ratio of 2.033, from the
+2026-09-02 calibration at 63de5b9, and it stayed there after ab61e55 replaced
+the file, so the paragraph below already quoted 2.199 and 152.8 while the table
+above it still said 2.033 and 162.8.
+
+Compute time therefore scales by 1/2.199 = 0.455, not by the datasheet's 0.500.
 Weight bytes halve exactly. Activation traffic is the term that does not:
 `spec.activation_dtype` keeps activations at bf16 in an fp8 cell because vLLM's
 `fused_experts` asserts it and quantises them itself, so how much of that stream
@@ -167,11 +194,18 @@ is actually 8-bit inside the kernel is not something this harness sets. Both
 ends are computed and the prediction is a BAND. Run `--dry-run` for the table;
 over the two default models and the two matched arms it is
 
-    matched config, activations quantised      tilt 1.000 to 1.016
-    matched config, activations stay bf16      tilt 0.928 to 1.005
+    matched config, activations quantised      tilt 1.000 to 1.099
+    matched config, activations stay bf16      tilt 0.938 to 1.071
 
-against a published, CONFOUNDED figure of 1.149. That gap is what C3 tests, and
-the two ends of the band differ by less than the gap does.
+against a published, CONFOUNDED figure of 1.131. That gap is what C3 tests, and
+the two ends of the band differ by less than the gap does. THOSE FOUR NUMBERS
+MOVED ON 2026-09-09 and were 1.000-1.016 and 0.928-1.005: the H200
+recalibration at ab61e55 puts the ridge at 152.8 rather than 163 and the fp8
+FLOP ratio at 2.199 rather than 2.033, so the compute term now binds on
+mixtral's GROUP_SIZE_M=16 cells. Read `PURE_DTYPE_SHIFT_HI` with that: the
+registered window still ends at 1.08 and the quantised band now reaches 1.099,
+so on this calibration the model can predict a tilt C3 would FAIL. Moving a
+registered threshold is not a maintenance edit and it has not been moved here.
 
 WHAT THE MODEL CANNOT PREDICT, and why the run is necessary rather than
 decorative. `predicted_ms` reads BLOCK_SIZE_M and GROUP_SIZE_M and nothing else.
@@ -318,22 +352,30 @@ DEFAULT_MODELS: tuple[str, ...] = ("mixtral-8x7b", "qwen2-57b-a14b")
 DEFAULT_TOKENS: tuple[int, ...] = (32, 64, 128, 256, 384, 512, 768, 1024,
                                    1536, 2048, 3072, 4096, 6144, 8192)
 
-#: The three arms, in the order they are timed inside one repeat.
-ARMS: tuple[str, ...] = ("native", "cfg_bf16", "cfg_fp8")
+#: The three arms, in the order they are timed inside one repeat. `tile_fp8` was
+#: `cfg_fp8`, the full fp8 config forced on both widths, until 2026-09-09; see
+#: `MATCHED_ARM_SCOPE` and the module docstring.
+ARMS: tuple[str, ...] = ("native", "cfg_bf16", "tile_fp8")
 
 #: The arm that forces nothing.
 NATIVE_ARM = "native"
 
-#: The two arms that force ONE config on both dtypes. Two rather than one,
-#: because "pin the tile" leaves open WHICH tile, and a dtype effect that only
-#: exists under one config is not a dtype effect. They are reported separately
-#: and never averaged into a single "matched" number without saying so.
-MATCHED_ARMS: tuple[str, ...] = ("cfg_bf16", "cfg_fp8")
+#: The two arms that pin a tile across both dtypes. Two rather than one, because
+#: "pin the tile" leaves open WHICH tile, and a dtype effect that only exists
+#: under one config is not a dtype effect. They are reported separately and
+#: never averaged into a single "matched" number without saying so.
+MATCHED_ARMS: tuple[str, ...] = ("cfg_bf16", "tile_fp8")
 
-#: Which arm forces the config each dtype would have chosen anyway. `native` and
+#: Which arm pins the tile each dtype would have chosen anyway. `native` and
 #: this arm are the same kernel in that dtype, so their ratio is a placebo AND a
-#: check that override_config forced what resolve_tile derived.
-PLACEBO_PARTNER: dict[str, str] = {BF16: "cfg_bf16", FP8: "cfg_fp8"}
+#: check that override_config forced what resolve_tile derived. `tile_fp8` at
+#: fp8 transplants fp8's own two keys into fp8's own config, which is the
+#: identity, so it is still exactly the placebo `cfg_fp8` was.
+PLACEBO_PARTNER: dict[str, str] = {BF16: "cfg_bf16", FP8: "tile_fp8"}
+
+#: Triton's dynamic shared-memory ceiling on sm_90 (H100/H200), and the number
+#: the 2026-09-09 OutOfResources messages printed as "Hardware limit: 232448".
+SM90_SMEM_LIMIT = 232448
 
 #: Where this machine's ceilings come from. A NAME, resolved through
 #: `moe.bench.roofline.load_hardware`, so both numbers carry the file they were
@@ -501,14 +543,23 @@ BLOCK_M_AGREEMENT_MIN = 0.90
 #: between them.
 CROSSING_BRACKET = 2.0
 
-#: C3. The pure-dtype tilt, two sided, and the numbers are set from the model's
-#: own band on the default grid rather than by taste. Run `--dry-run`: over the
-#: two default models and the two matched arms the model predicts 0.928 to 1.016,
-#: the two ends being the two answers to how much of the activation stream is
-#: 8-bit inside the kernel. This window adds about six points of slack on each
+#: C3. The pure-dtype tilt, two sided, and the numbers were set from the model's
+#: own band on the default grid rather than by taste: over the two default
+#: models and the two matched arms the model then predicted 0.928 to 1.016, the
+#: two ends being the two answers to how much of the activation stream is 8-bit
+#: inside the kernel, and this window added about six points of slack on each
 #: side for the per-call fixed cost FINDINGS already measured in the fp8 path.
 #:
-#: The published CONFOUNDED figure is 1.149 and sits clearly outside it, which is
+#: THE BAND MOVED UNDER THIS WINDOW ON 2026-09-09 and the window did not follow.
+#: The H200 recalibration at ab61e55 puts the ridge at 152.8 and the fp8 FLOP
+#: ratio at 2.199, and `--dry-run` now prints 0.938 to 1.099: the upper end is
+#: 1.9 points ABOVE this 1.08, so on this calibration the model itself can
+#: predict a tilt the gate would FAIL. Moving a registered threshold is the
+#: owner's decision and a dated re-registration, not a maintenance edit, so it
+#: is recorded here and left alone. Read any C3 FAIL near the top of the window
+#: against the band `--dry-run` prints in the same run.
+#:
+#: The published CONFOUNDED figure is 1.131 and sits outside the window, which is
 #: what makes this gate a test rather than a formality. A tilt above the window
 #: says the format itself moves the crossing and the config was never the
 #: explanation; below it says fp8 is not getting the FLOP ratio the calibration
@@ -555,7 +606,9 @@ EXIT_INVALID = exit_codes.INVALID
 #: The columns `timing.KernelTiming` contributes to every measured row. Named
 #: as a group so the CSV header and `timing_columns` cannot drift apart.
 TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
-                      "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
+                      "sm_clock_load_mhz", "load_clock_first_mhz",
+                      "load_clock_last_mhz", "clock_samples", "clock_note",
+                      "clock_level_ok", "clock_level_side",
                       "clock_drift_ok", "l2_flush", "host_bound")
 
 CSV_COLUMNS = (
@@ -567,7 +620,7 @@ CSV_COLUMNS = (
     "observed_config", "override_verified", "weight_torch_dtype",
     "quant_config_kind", "correctness_rel_err", "correctness_budget",
     "ms_median", "ms_mean", "ms_stdev", "ms_min", "n_samples",
-    "sm_clock_start_mhz", "sm_clock_end_mhz",
+    "idle_clock_before_mhz", "idle_clock_after_mhz",
     *TIMING_CSV_COLUMNS,
     # One provenance column per field, under `prov_`, so a row read on its own
     # names the commit, the card and the instrument that made it. The 26
@@ -579,6 +632,13 @@ CSV_COLUMNS = (
 
 CONFIG_KEYS = ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M",
                "num_warps", "num_stages")
+
+#: WHAT EACH MATCHED ARM TRANSPLANTS, so no line has to say "the config" and
+#: leave the reader to find out that one arm moves six keys and the other two.
+MATCHED_ARM_SCOPE: dict[str, tuple[str, ...]] = {
+    "cfg_bf16": CONFIG_KEYS,
+    "tile_fp8": ("BLOCK_SIZE_M", "GROUP_SIZE_M"),
+}
 
 
 # --------------------------------------------------------------------------
@@ -618,6 +678,24 @@ class RegimeNotResolved(ConfoundRefusal):
 
     `shift = rm / rc` is only the crossing ratio if `rm` really is the flat
     branch and `rc` really is the linear one. Two cells and a hope is not that.
+    """
+
+
+class OverrideLeaked(ConfoundRefusal):
+    """vLLM's override_config is still installed outside any forced arm.
+
+    `vllm/model_executor/layers/fused_moe/__init__.py` (v0.27.1, lines 52-58)
+    is `old_config = _config; _config = config; yield; _config = old_config`
+    with NO try/finally: an exception raised inside `with override_config(x)`
+    never resumes the generator, so `_config` stays `x` for the rest of the
+    process. 2026-09-09, H200: the cfg_fp8 arm raised OutOfResources at 22
+    cells, all 28 bf16 `native` arms then compiled the leaked fp8 tile and
+    errored, 13 fp8 `native` arms timed the previous cell's tile, and V4 read
+    the leak as a derivation error in this script.
+
+    A native arm under a leaked override is the previous arm's kernel wearing
+    this arm's label, which is a corrupted measurement and not a noisy one, so
+    the cell is refused rather than timed.
     """
 
 
@@ -745,10 +823,18 @@ class Ceilings:
     #: `roofline.reference_family(dtype)`, resolved by the one walk roofline
     #: owns. The two fields above are the bf16 family's, kept for the plan page
     #: and plan.json. A cell is levelled against `reference_for(dtype)`: on the
-    #: 2026-09-09 H200 calibration the bf16 GEMM ran at 1470 MHz and the fp8
-    #: GEMM at 1380, and 1380/1470 = 0.939 < LEVEL_FRACTION, so an fp8 cell at
+    #: 2026-09-09 H200 calibration (ab61e55) the bf16 GEMM ran at 1485 MHz and
+    #: the fp8 GEMM at 1395, both under-load medians read out of
+    #: `detail.gemm_clock` and `detail.fp8_gemm_clock`; the 1470/1380 pair once
+    #: quoted here belonged to the calibration that one superseded. 1395/1485 =
+    #: 0.939 < LEVEL_FRACTION, so an fp8 cell at
     #: its own GEMM's clock levelled against the bf16 number was LOW, the side
-    #: that excludes, V5 failed and the arm was INVALID on a sound measurement.
+    #: that EXCLUDED UNDER THE RULE THEN IN FORCE, V5 failed and the arm was
+    #: INVALID on a sound measurement. Since 2026-09-09 LEVEL excludes on
+    #: neither side and DRIFT is what excludes (R1, and see `cell_ms` and
+    #: `build_gates` in this file), so the same mismatch would now be recorded
+    #: in `clock_level_side` and scored; resolving the reference per family is
+    #: still what makes the recorded side mean anything.
     reference_clocks: dict[str, float | None] = field(default_factory=dict)
 
     def reference_for(self, dtype: str) -> float | None:
@@ -893,33 +979,94 @@ class Cell:
         return bool(self.differing_keys)
 
 
-def arm_config(cell: Cell, arm: str) -> dict[str, int] | None:
-    """The config an arm forces, or None where it forces nothing.
+def smem_footprint(config: dict[str, int], elt_bytes: int) -> int:
+    """Bytes of pipeline shared memory the fused_moe kernel asks Triton for.
+
+    `num_stages x (BM*BK + BK*BN) x element bytes`. Reproduces the 409600,
+    393216 and 294912 the 2026-09-09 H200 run printed as `Required:` in its
+    OutOfResources messages, to the byte, which is what makes this arithmetic
+    and not a guess: the run itself is the calibration for it.
+    """
+    return config["num_stages"] * (
+        config["BLOCK_SIZE_M"] * config["BLOCK_SIZE_K"]
+        + config["BLOCK_SIZE_K"] * config["BLOCK_SIZE_N"]) * elt_bytes
+
+
+def full_transplant(cell: Cell, source_dtype: str) -> dict[str, int]:
+    """The WHOLE config `source_dtype` resolved, which is what `cfg_fp8` forced.
+
+    Kept as a function even though only `cfg_bf16` still uses it as an arm: the
+    plan prints the fp8 full transplant beside its byte count and marks it
+    INFEASIBLE, so what was withdrawn on 2026-09-09 stays visible.
+    """
+    return dict(cell.configs[source_dtype])
+
+
+def tile_transplant(cell: Cell, source_dtype: str,
+                    target_dtype: str) -> dict[str, int]:
+    """`source_dtype`'s BLOCK_SIZE_M and GROUP_SIZE_M inside `target_dtype`'s
+    own config.
+
+    The two keys this study is about, and the only two that can be moved across
+    the widths on sm_90: BLOCK_SIZE_N, BLOCK_SIZE_K and num_stages are what put
+    the fp8 tuned tiles 27-76% over the shared-memory limit at bf16's 2 bytes
+    per element. At `source_dtype == target_dtype` this is the identity, which
+    is what keeps the placebo a placebo.
+    """
+    out = dict(cell.configs[target_dtype])
+    for key in MATCHED_ARM_SCOPE["tile_fp8"]:
+        out[key] = cell.configs[source_dtype][key]
+    return out
+
+
+def arm_config(cell: Cell, arm: str, dtype: str) -> dict[str, int] | None:
+    """The config an arm forces at this width, or None where it forces nothing.
 
     `native` returns None because it must go through vLLM's own resolution: an
     arm that FORCED the native config would still be a valid baseline but would
     no longer be what a deployment runs, and the confounded number this script
     is decomposing is a deployment number.
+
+    TAKES THE DTYPE SINCE 2026-09-09. `cfg_bf16` ignores it, since one config
+    on both widths is the whole point of that arm, but `tile_fp8` transplants
+    two keys INTO the target width's own config, so what it forces at bf16 and
+    at fp8 are different dicts. A dtype-free signature could not say that, and
+    the arm it replaces is infeasible at 22 of 28 cells at bf16.
     """
     if arm == NATIVE_ARM:
         return None
     if arm == "cfg_bf16":
-        return dict(cell.configs[BF16])
-    if arm == "cfg_fp8":
-        return dict(cell.configs[FP8])
+        return full_transplant(cell, BF16)
+    if arm == "tile_fp8":
+        return tile_transplant(cell, FP8, dtype)
     raise KeyError(f"unknown arm {arm!r}; known arms are {ARMS}")
+
+
+def arm_is_infeasible(cell: Cell, arm: str, dtype: str,
+                      limit: int = SM90_SMEM_LIMIT) -> bool:
+    """Would forcing this arm at this width exceed Triton's shared memory?
+
+    Decided OFF GPU so --dry-run can price what each matched arm can actually
+    pair, and so the run never asks Triton to compile a tile it cannot fit --
+    which on 2026-09-09 was also what broke vLLM's override global and took 41
+    further arms with it.
+    """
+    forced = arm_config(cell, arm, dtype)
+    return (forced is not None
+            and smem_footprint(forced, dtype_bytes(dtype)) > limit)
 
 
 def arm_is_redundant(cell: Cell, arm: str) -> bool:
     """Would this arm compile the very same kernel as `cfg_bf16`?
 
-    True for `cfg_fp8` when the two dtypes resolved identical configs. Such an
-    arm is not timed: its contribution is zero BY CONSTRUCTION, and paying a
-    Triton compile for it would buy a third placebo rather than a measurement.
-    Recorded rather than skipped silently, because "the configs agreed here" is
-    the finding at every cell above the crossing.
+    True for `tile_fp8` when the two dtypes resolved identical configs: the
+    transplant is then the identity at both widths and `cfg_bf16` already forces
+    the same dict. Such an arm is not timed: its contribution is zero BY
+    CONSTRUCTION, and paying a Triton compile for it would buy a third placebo
+    rather than a measurement. Recorded rather than skipped silently, because
+    "the configs agreed here" is the finding at every cell above the crossing.
     """
-    return arm == "cfg_fp8" and not cell.configs_differ
+    return arm == "tile_fp8" and not cell.configs_differ
 
 
 def tile_config(tile: DerivedTile) -> dict[str, int]:
@@ -1208,6 +1355,15 @@ def plan_run_id(payload: dict, card: str) -> str:
     of one commit, and the commit is in the provenance block beside the id. The
     check below refuses any OTHER omission, because a knob added to the plan and
     forgotten here is exactly how two settings come to share a directory.
+
+    THAT EXEMPTION COVERS THE PLAN AND NOT THE CSV, and 2026-09-09 is why the
+    distinction is written down. The commit that re-scoped the arms also
+    renamed two clock columns and inserted four more, so one command derived
+    the SAME id across a schema change and landed on a results root that
+    outlives the pod. `Store.__init__` therefore checks the header on disk
+    against `CSV_COLUMNS` and refuses to append under a foreign one; the id
+    stays as it is because a schema bump is a code change with a commit behind
+    it, not a knob a reader would sweep.
     """
     short = {"1m": payload["models"], "2t": payload["tokens"],
              "3d": payload["dtypes"], "4rt": payload["routing"],
@@ -1268,8 +1424,22 @@ class ArmResult:
     quant_config_kind: str = ""
     correctness_rel_err: float | None = None
     correctness_budget: float | None = None
-    sm_clock_start_mhz: int = 0
-    sm_clock_end_mhz: int = 0
+    #: The IDLE clock either side of the cell, sampled between loads. RENAMED
+    #: 2026-09-09: these were `sm_clock_start_mhz` / `sm_clock_end_mhz`, the
+    #: same names `timing.KernelTiming` uses for the first and last UNDER-LOAD
+    #: samples that `clock_drift_ok` is a verdict on, and this file wrote the
+    #: idle instants into them. So the CSV's only clock pair described the boost
+    #: between cells (1980 MHz wherever a new specialisation had just compiled)
+    #: while 80 of 118 arms carried DRIFT and nothing on disk could say
+    #: whether the governor was rising or falling inside the timed region.
+    idle_clock_before_mhz: int = 0
+    idle_clock_after_mhz: int = 0
+    #: The first and last UNDER-LOAD samples of the worst-drifting repeat, and
+    #: `time_kernel`'s note. These are the two numbers DRIFT is computed from.
+    load_clock_first_mhz: float | None = None
+    load_clock_last_mhz: float | None = None
+    clock_samples: int = 0
+    clock_note: str = ""
     #: The state the number was measured in, from `timing.KernelTiming`. A row
     #: without `instrument` is a row from before 2026-09-02 and is not
     #: comparable with the roof; the three flags are tri-state and None means
@@ -1285,12 +1455,15 @@ class ArmResult:
     #: `timing.LEVEL_LOW`, `timing.LEVEL_HIGH`, or "" when LEVEL passed, was
     #: not determined, or the record predates the side (before 03df2d4 the
     #: band had no upper edge, so a failure could only be low, and "" on a
-    #: failed flag is read as LOW). LOW or DRIFT excludes an arm from V5; HIGH
-    #: does not: the card boosted above the band the roof was measured at,
-    #: which is the normal state of a memory-bound cell on an H200, and the
-    #: only thing it invalidates is the fraction of the FIXED roof. Folded so
-    #: LOW dominates HIGH, because an arm with a repeat on each side of the
-    #: band sat at two operating points and belongs with the excluded.
+    #: failed flag is read as LOW).
+    #:
+    #: A RECORD, AND NOT AN EXCLUSION, on either side since 2026-09-09. The
+    #: 750-cell H200 census showed the under-load clock is set per tile by the
+    #: kernel's own power draw under the 700 W cap, so a steady LOW is one tile
+    #: family's operating point and a steady HIGH is a memory-bound cell
+    #: boosting; excluding on either is a rule against a tile. DRIFT is what
+    #: excludes, in `cell_ms` and in V5. Folded LOW-dominant so a row never
+    #: reports a higher clock state than its slowest repeat sat at.
     clock_level_side: str = ""
     clock_drift_ok: bool | None = None
     l2_flush: bool | None = None
@@ -1345,6 +1518,14 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
         to; `warmup_ms` is MILLISECONDS of sustained load delivered before the
         trials, never a call count (`warmup_calls` on the `KernelTiming` is the
         count, and it is not a knob);
+      * `load_clock_first_mhz` and `load_clock_last_mhz` are NOT a median and
+        NOT an AND: they are the first and last under-load samples of the
+        single WORST-DRIFTING repeat, because the pair exists to show which
+        way the arm that carries the DRIFT verdict moved, and averaging two
+        repeats that drifted opposite ways would show neither;
+      * `clock_samples` is a MIN, for the same reason the flags are ANDed: the
+        row must not claim more samples behind its clock than the thinnest
+        repeat actually took;
       * `instrument` and `l2_flush` are constant across the repeats of one arm
         by construction, and a disagreement would be a bug, so the first is
         taken and the mismatch would show as a differing column between arms.
@@ -1362,21 +1543,36 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
     result.clock_level_side = _fold_side(
         [getattr(t, "clock_level_side", "") for t in timings])
     result.clock_drift_ok = _fold_flag([t.clock_drift_ok for t in timings])
+    # THE TWO NUMBERS DRIFT IS A VERDICT ON, from the repeat that moved most.
+    # A drifted arm whose direction is unknowable is what the 2026-09-09 CSV
+    # left behind: it stored the verdict and dropped the samples.
+    paired = [t for t in timings
+              if t.sm_clock_start_mhz and t.sm_clock_end_mhz]
+    if paired:
+        worst = max(paired, key=lambda t: abs(t.sm_clock_end_mhz
+                                              - t.sm_clock_start_mhz)
+                    / t.sm_clock_start_mhz)
+        result.load_clock_first_mhz = worst.sm_clock_start_mhz
+        result.load_clock_last_mhz = worst.sm_clock_end_mhz
+    result.clock_samples = min(t.clock_samples for t in timings)
+    result.clock_note = " | ".join(t.clock_note for t in timings if t.clock_note)
     result.host_bound = _fold_flag([t.host_bound for t in timings], bad=True)
     return result
 
 
 def _fold_side(values: list[str]) -> str:
-    """Fold the LEVEL side over repeats so the EXCLUDING side wins.
+    """Fold the LEVEL side over repeats, lower state first.
 
     `timing.LEVEL_LOW` if any repeat sat below the band, else
-    `timing.LEVEL_HIGH` if any sat above it, else "". The order is the rule
-    consumers apply: LOW excludes, HIGH is kept, so a mixed arm is LOW. A word
-    the instrument never writes is REFUSED rather than read as "": a side no
-    filter matches would keep the arm while looking like a pass, which is the
-    accident the flag/side pair was introduced to end. A record without the
-    attribute (a pre-side `KernelTiming`) folds as "", the same reading
-    `Store.restore` gives a CSV written before the column existed.
+    `timing.LEVEL_HIGH` if any sat above it, else "". Neither side excludes
+    anything since 2026-09-09, so this order is no longer "the excluding side
+    wins": it is so that an arm with a repeat on each side of the band reports
+    the LOWER of the two clock states it actually ran at, rather than the one
+    that flatters it. A word the instrument never writes is REFUSED rather than
+    read as "": a side no filter matches would keep the arm while looking like
+    a pass, which is the accident the flag/side pair was introduced to end. A
+    record without the attribute (a pre-side `KernelTiming`) folds as "", the
+    same reading `Store.restore` gives a CSV written before the column existed.
     """
     sides = {str(v or "") for v in values}
     unknown = sides - {"", timing.LEVEL_LOW, timing.LEVEL_HIGH}
@@ -1435,6 +1631,27 @@ class Store:
                     except (KeyError, ValueError):
                         continue
                     self.done[key] = row
+        # THE HEADER ON DISK HAS TO BE THIS HEADER, AND UNTIL 2026-09-09
+        # NOTHING CHECKED. `plan_run_id` deliberately omits `arms`, so the same
+        # command derives the same run id across a change to the arm set, and
+        # the results root outlives the pod. That was safe while the arms moved
+        # and the columns did not. This commit moved both together: it renamed
+        # two clock columns and inserted four more after `sm_clock_load_mhz`.
+        # Appending wider rows under the old header shifts every field past the
+        # first difference, so `clock_level_ok` would read a clock and
+        # `l2_flush` a note, and `DictWriter` cannot see it: it writes the
+        # fieldnames it was given and never looks at the file.
+        if path.exists():
+            with path.open(newline="") as fh:
+                on_disk = next(csv.reader(fh), [])
+            if on_disk and tuple(on_disk) != CSV_COLUMNS:
+                raise ConfoundRefusal(
+                    f"{path} was written under a different schema "
+                    f"({len(on_disk)} columns against {len(CSV_COLUMNS)}); "
+                    "appending to it would shift every column after the first "
+                    "difference and nothing downstream could tell. Use --fresh "
+                    "to start the file again, or a new --run-id to leave it "
+                    "alone.")
         path.parent.mkdir(parents=True, exist_ok=True)
         new = not path.exists()
         self._fh = path.open("a", newline="")
@@ -1444,9 +1661,34 @@ class Store:
             self._writer.writeheader()
             self._fh.flush()
 
-    def restore(self, key: tuple[str, int, str, str]) -> ArmResult | None:
+    @property
+    def finished(self) -> set[tuple[str, int, str, str]]:
+        """The keys this CSV holds a RESULT for. An errored row is not one.
+
+        2026-09-09: 50 arms errored on a leaked override, and every check that
+        asked "is this model done" read `set(self.done)`, which counts them.
+        The model's weights were then not rebuilt and the errors were restored
+        as though they were times.
+        """
+        return {key for key, row in self.done.items()
+                if not str(row.get("error", ""))}
+
+    def restore(self, key: tuple[str, int, str, str], *,
+                include_errors: bool = False) -> ArmResult | None:
+        """The stored result for `key`, or None when there is nothing to resume.
+
+        AN ERRORED ROW IS NOT A FINISHED ONE and is None here by default: the
+        run id is a hash of the plan, so re-running the same command resumes
+        this same directory, and restoring an error as a result means a rerun
+        of a broken session can never repair itself without --fresh (which
+        deletes the CSV) or a hand-picked --run-id. `include_errors=True` is
+        for a replay that is reconstructing what the run PRINTED, where the
+        failures are half the page.
+        """
         row = self.done.get(key)
         if row is None:
+            return None
+        if not include_errors and str(row.get("error", "")):
             return None
 
         def num(name, cast=float):
@@ -1474,8 +1716,12 @@ class Store:
             quant_config_kind=row.get("quant_config_kind", ""),
             correctness_rel_err=num("correctness_rel_err"),
             correctness_budget=num("correctness_budget"),
-            sm_clock_start_mhz=num("sm_clock_start_mhz", int) or 0,
-            sm_clock_end_mhz=num("sm_clock_end_mhz", int) or 0,
+            idle_clock_before_mhz=num("idle_clock_before_mhz", int) or 0,
+            idle_clock_after_mhz=num("idle_clock_after_mhz", int) or 0,
+            load_clock_first_mhz=num("load_clock_first_mhz"),
+            load_clock_last_mhz=num("load_clock_last_mhz"),
+            clock_samples=num("clock_samples", int) or 0,
+            clock_note=row.get("clock_note", ""),
             # A CSV written before 2026-09-02 has none of these columns, and an
             # absent instrument is the marker that says so. Restored as ""/None
             # rather than defaulted, so a resumed run cannot claim the current
@@ -1520,8 +1766,14 @@ class Store:
             "ms_stdev": "" if result.ms_stdev is None else f"{result.ms_stdev:.6f}",
             "ms_min": "" if result.ms_min is None else f"{result.ms_min:.6f}",
             "n_samples": result.n_samples,
-            "sm_clock_start_mhz": result.sm_clock_start_mhz,
-            "sm_clock_end_mhz": result.sm_clock_end_mhz,
+            "idle_clock_before_mhz": result.idle_clock_before_mhz,
+            "idle_clock_after_mhz": result.idle_clock_after_mhz,
+            "load_clock_first_mhz": ("" if result.load_clock_first_mhz is None
+                                     else f"{result.load_clock_first_mhz:.0f}"),
+            "load_clock_last_mhz": ("" if result.load_clock_last_mhz is None
+                                    else f"{result.load_clock_last_mhz:.0f}"),
+            "clock_samples": result.clock_samples,
+            "clock_note": result.clock_note,
             "instrument": result.instrument,
             "warmup_ms": ("" if result.warmup_ms is None
                           else f"{result.warmup_ms:.1f}"),
@@ -1709,6 +1961,55 @@ def balanced_ids(cfg, tokens: int, device: str):
 #: one instrument now, and `timing.TIMING_BASIS` travels in every row.
 
 
+@contextlib.contextmanager
+def override_context(hooks, cell: Cell, arm: str, dtype: str):
+    """vLLM's override, with the try/finally vLLM does not have.
+
+    v0.27.1's `vllm/model_executor/layers/fused_moe/__init__.py` lines 52-58
+    are `old_config = _config; _config = config; yield; _config = old_config`.
+    There is no try/finally, so an exception inside the body never resumes the
+    generator and the override stays installed for the rest of the process.
+    On 2026-09-09 that happened at 22 cells and the leaked fp8 config was then
+    what all 28 bf16 `native` arms compiled and what 13 fp8 `native` arms
+    timed; V4 read it as a derivation error in this script.
+
+    Two guards, both of which that run needed and neither of which it had:
+
+      * REFUSE a cell whose global is already dirty outside a forced arm. A
+        native arm under a leaked override is the previous arm's kernel wearing
+        this arm's label, which is a corrupted measurement and not a noisy one;
+      * clear the global in `finally` whatever happened inside, so one broken
+        generator cannot reach the next arm.
+
+    Module level rather than a closure inside `measure_cell` so both guards are
+    exercisable without a GPU: the failure they exist for is a property of the
+    context manager and of nothing else.
+    """
+    override_config, get_config, hook_module_name = hooks
+    forced = arm_config(cell, arm, dtype)
+    live = get_config() if get_config is not None else None
+    if live and forced is None:
+        raise OverrideLeaked(
+            f"{cell.model} T={cell.num_tokens} {arm} {dtype}: get_config() is "
+            f"{format_config(live)} outside any forced arm, so a previous "
+            "forced arm raised inside override_config and vLLM did not restore "
+            "its global. Every arm from here on would time that leaked tile "
+            "under this arm's label")
+    if forced is None:
+        yield
+        return
+    try:
+        with override_config(forced):
+            yield
+    finally:
+        # Only reachable as a repair: on the normal path override_config has
+        # already restored `old`, which is None here because the guard above
+        # refuses any cell that starts dirty.
+        if get_config is not None and get_config():
+            import importlib
+            importlib.import_module(hook_module_name)._config = None
+
+
 def timing_columns(t) -> dict:
     """The `KernelTiming` fields that have to reach `timings.csv`.
 
@@ -1721,6 +2022,14 @@ def timing_columns(t) -> dict:
             "iters": t.iters, "trials": t.trials,
             "sm_clock_load_mhz": ("" if t.sm_clock_load_mhz is None
                                   else f"{t.sm_clock_load_mhz:.0f}"),
+            # The first and last UNDER-LOAD samples, the pair `clock_drift_ok`
+            # is a verdict on. Dropped by every writer until 2026-09-09.
+            "load_clock_first_mhz": ("" if t.sm_clock_start_mhz is None
+                                     else f"{t.sm_clock_start_mhz:.0f}"),
+            "load_clock_last_mhz": ("" if t.sm_clock_end_mhz is None
+                                    else f"{t.sm_clock_end_mhz:.0f}"),
+            "clock_samples": t.clock_samples,
+            "clock_note": t.clock_note,
             "clock_level_ok": _flag(t.clock_level_ok),
             "clock_level_side": t.clock_level_side,
             "clock_drift_ok": _flag(t.clock_drift_ok),
@@ -1789,7 +2098,7 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
     from moe.reference.torch_ref import golden_forward, weights_for_forced_ids
     from moe.spec import BenchSpec, RoutingSpec
 
-    override_config, get_config, _ = hooks
+    _, get_config, _ = hooks
     cfg = MODEL_CONFIGS[cell.model]
 
     # ONE x for both dtypes. `activation_dtype` is bf16 for bf16 AND for
@@ -1842,6 +2151,9 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
     for arm in ARMS:
         for dtype in dtypes:
             key = (cell.model, cell.num_tokens, arm, dtype)
+            # `Store.restore` returns None for an errored row, so a rerun of
+            # the same command re-times the 50 arms a leaked override broke on
+            # 2026-09-09 instead of restoring their errors as results.
             restored = None if args.fresh else store.restore(key)
             if restored is not None:
                 results[(arm, dtype)] = restored
@@ -1851,23 +2163,42 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                 # construction. Recorded, not timed: a Triton compile here would
                 # buy a third placebo rather than a measurement.
                 result = ArmResult(cell.model, cell.num_tokens, arm, dtype,
-                                   config=arm_config(cell, arm),
+                                   config=arm_config(cell, arm, dtype),
                                    config_origin="redundant", redundant=True)
+                results[(arm, dtype)] = result
+                store.write(result, cell, meta)
+                continue
+            if arm_is_infeasible(cell, arm, dtype):
+                # DERIVED, not discovered by asking Triton. `_main` refuses
+                # ANY matched arm that cannot compile its grid, on every
+                # invocation and before a cell is timed, and no flag overrides
+                # it, so this branch is defence in depth for a grid reached
+                # another way rather than the operator's override it once
+                # described. The cell is recorded with its arithmetic and never
+                # compiled, because the compile is what leaked vLLM's override
+                # global on 2026-09-09.
+                forced = arm_config(cell, arm, dtype)
+                result = ArmResult(cell.model, cell.num_tokens, arm, dtype,
+                                   config=forced, config_origin="infeasible")
+                result.error = (
+                    f"INFEASIBLE by derivation: {format_config(forced)} needs "
+                    f"{smem_footprint(forced, dtype_bytes(dtype))} B of pipeline "
+                    f"shared memory at {dtype} ({dtype_bytes(dtype)} B per "
+                    f"element); the sm_90 limit is {SM90_SMEM_LIMIT} B")
                 results[(arm, dtype)] = result
                 store.write(result, cell, meta)
                 continue
             pending.append((arm, dtype))
 
-    def context(arm: str):
-        forced = arm_config(cell, arm)
-        return contextlib.nullcontext() if forced is None else override_config(forced)
+    def context(arm: str, dtype: str):
+        return override_context(hooks, cell, arm, dtype)
 
     # Untimed prologue: what config did vLLM really use, what dtype did the
     # kernel really see, and did it compute the right layer. All three are about
     # the FIRST call, and the recorder deep-copies a dict per call, so none of it
     # can land inside a timed region.
     for arm, dtype in pending:
-        forced = arm_config(cell, arm)
+        forced = arm_config(cell, arm, dtype)
         result = ArmResult(cell.model, cell.num_tokens, arm, dtype,
                            config=forced,
                            config_origin="forced" if forced else "observed",
@@ -1875,9 +2206,15 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                            quant_config_kind=quant_kinds[dtype])
         capture = TileCapture()
         try:
-            with context(arm), recording_tile_config(capture):
+            with context(arm, dtype), recording_tile_config(capture):
                 out = calls[dtype]()
             torch.cuda.synchronize()
+        except (OverrideLeaked, KeyboardInterrupt):
+            # NOT ONE OF THE ARM'S OUTCOMES. A leaked override means every
+            # remaining arm in the process would time the wrong kernel under
+            # its own label, which is not something a per-arm error row can
+            # describe, so it goes past the broad handler to `main`.
+            raise
         except Exception as exc:  # noqa: BLE001
             # Broad on purpose: one dtype's config forced on the other can name a
             # tile whose shared-memory footprint that path refuses, and one arm
@@ -1896,7 +2233,7 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                 # would do that -- so ask the hook directly. Weaker evidence,
                 # since it proves the override is SET rather than that the kernel
                 # read it, but it is the difference between UNKNOWN and a check.
-                with context(arm):
+                with context(arm, dtype):
                     live = get_config()
                 result.override_verified = bool(live) and all(
                     live.get(k) == v for k, v in forced.items())
@@ -1924,7 +2261,7 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                 if key not in samples:
                     continue
                 try:
-                    with context(arm):
+                    with context(arm, dtype):
                         # ONE INSTRUMENT (A7). This loop used to call a private
                         # `time_calls` that created its events inside the loop
                         # and synchronised every iteration, while the roof every
@@ -1939,6 +2276,8 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
                                 reference_family(dtype)))
                     samples[key].append(t.ms_p50)
                     records[key].append(t)
+                except (OverrideLeaked, KeyboardInterrupt):
+                    raise
                 except Exception as exc:  # noqa: BLE001
                     results[key].error = f"{type(exc).__name__}: {exc}"[:300]
                     samples.pop(key, None)
@@ -1950,8 +2289,8 @@ def measure_cell(cell: Cell, weights_by_dtype: dict, dtypes: list[str], args,
         if got:
             summarise_samples(results[key], got)
             summarise_timings(results[key], records.get(key) or [])
-        results[key].sm_clock_start_mhz = clocks_start.sm_clock_mhz
-        results[key].sm_clock_end_mhz = clocks_end.sm_clock_mhz
+        results[key].idle_clock_before_mhz = clocks_start.sm_clock_mhz
+        results[key].idle_clock_after_mhz = clocks_end.sm_clock_mhz
         store.write(results[key], cell, meta)
     del x, ids, topk_w, logits, calls
     return results
@@ -2000,7 +2339,7 @@ def synthetic_results(cells: list[Cell], dtypes: list[str], ceilings: Ceilings,
         per_cell: dict[tuple[str, str], ArmResult] = {}
         for arm in ARMS:
             for dtype in dtypes:
-                forced = arm_config(cell, arm)
+                forced = arm_config(cell, arm, dtype)
                 config = forced or cell.configs[dtype]
                 # NOTHING THAT A VALIDITY GATE READS IS FILLED IN HERE. An
                 # earlier version set observed_config, override_verified and a
@@ -2180,15 +2519,28 @@ def cell_ms(results: dict[tuple[str, str], ArmResult], arm: str, dtype: str,
             cell: Cell) -> float | None:
     """One arm's median time, resolving the redundant arm to its twin.
 
-    A `cfg_fp8` arm that was never timed because it is identical to `cfg_bf16`
+    A `tile_fp8` arm that was never timed because it is identical to `cfg_bf16`
     is not missing data: it is the same kernel, and reading its twin's time is
     exact rather than an approximation. Anything else -- a compile failure, an
     absent row -- returns None and is excluded from every median.
+
+    A DRIFTED ARM IS EXCLUDED HERE, which is the one place a time is read, so
+    the tilts, the placebo deviations and the crossings all obey the same rule
+    and V5's sentence about it is true. `clock_drift_ok is False` means the
+    under-load clock moved between the first and last sample of a repeat, so
+    the median is a blend of two clock states and the time belongs to neither.
+    A STEADY clock on either side of the band is a measurement at a known
+    clock: `clock_level_side` records the side and excludes nothing. Until
+    2026-09-09 V5 said "flagged LOW or DRIFT (excluded)" while this function
+    read no flag at all, so 80 of 118 drifted arms were in every ratio on a
+    page that said they were not.
     """
     result = results.get((arm, dtype))
-    if result is not None and result.redundant and arm == "cfg_fp8":
+    if result is not None and result.redundant and arm == "tile_fp8":
         result = results.get(("cfg_bf16", dtype))
     if result is None or result.error or not result.ms_median:
+        return None
+    if result.clock_drift_ok is False:
         return None
     if result.num_tokens != cell.num_tokens or result.model != cell.model:
         # The dict is keyed by (arm, dtype) within one cell, so this can only
@@ -2245,10 +2597,16 @@ def predicted_shift(model: str, cells: list[Cell], ceilings: Ceilings,
     for cell in cells:
         if cell.model != model:
             continue
-        forced = arm_config(cell, arm)
-        bf16 = predicted_ms(cfg, cell.num_tokens, forced or cell.configs[BF16],
+        # PER WIDTH. `tile_fp8` transplants two keys into each width's own
+        # config, so its bf16 arm and its fp8 arm are different dicts and a
+        # single `forced` would predict one of them twice.
+        forced_bf16 = arm_config(cell, arm, BF16)
+        forced_fp8 = arm_config(cell, arm, FP8)
+        bf16 = predicted_ms(cfg, cell.num_tokens,
+                            forced_bf16 or cell.configs[BF16],
                             BF16, ceilings=ceilings, act_bytes=2)
-        fp8 = predicted_ms(cfg, cell.num_tokens, forced or cell.configs[FP8],
+        fp8 = predicted_ms(cfg, cell.num_tokens,
+                           forced_fp8 or cell.configs[FP8],
                            FP8, ceilings=ceilings, act_bytes=act_bytes_fp8)
         series.append((cell.num_tokens, bf16, fp8))
     try:
@@ -2293,21 +2651,27 @@ class Analysis:
     #: scored: see `MAX_CLOCK_DRIFT_PCT`.
     clock_drift_pct: float | None = None
     #: The under-load verdicts, folded over every timed arm. `clock_throttled`
-    #: is True when ANY arm's DRIFT flag is False or its LEVEL flag is False on
-    #: the LOW side; `clock_flagged_arms` and `clock_determined_arms` are the
-    #: counts behind it, and zero determined arms means the clock state of this
-    #: run is NOT DETERMINED, which V5 reports as UNKNOWN rather than as a pass.
-    #: `clock_high_side_arms` counts arms whose LEVEL failed HIGH: boosted above
-    #: the band around the reference the roof was measured at. They are KEPT.
-    #: Until 2026-09-08 this census excluded them, which on an H200 (1980 MHz
-    #: under memory load against the 1515 MHz bf16-GEMM reference) failed V5
-    #: on every memory-shaped dtype arm: the fifteenth instance of a two-sided
-    #: producer (moe/bench/timing.py, 03df2d4) with a one-sided consumer. A run
-    #: scored on the between-load movement alone was the old single drop-only
-    #: flag under another name.
+    #: is True when ANY arm's DRIFT flag is False; `clock_flagged_arms` and
+    #: `clock_determined_arms` are the counts behind it, and zero determined
+    #: arms means the clock state of this run is NOT DETERMINED, which V5
+    #: reports as UNKNOWN rather than as a pass.
+    #:
+    #: ONLY DRIFT EXCLUDES, since 2026-09-09. LEVEL is recorded on both sides
+    #: and excludes on neither: `clock_high_side_arms` and `clock_low_side_arms`
+    #: count the steady arms that sat above and below the band around the
+    #: reference the roof was measured at. The H200 session established that
+    #: the under-load clock is set PER TILE by the kernel's own power draw under
+    #: the 700 W cap (BLOCK_M=128/N=64 median 1395 MHz, BLOCK_M=256 1650,
+    #: memory-shaped 1950-1980, the calibration GEMM 1485 at 691 W), so a LOW
+    #: side is a steady operating point of one tile family and not a throttled
+    #: card. Excluding on it is a rule against a tile. Until 2026-09-08 the
+    #: census also excluded the HIGH side, which failed V5 on every
+    #: memory-shaped dtype arm: the fifteenth instance of a two-sided producer
+    #: (moe/bench/timing.py, 03df2d4) with a one-sided consumer.
     clock_throttled: bool = False
     clock_flagged_arms: int = 0
     clock_high_side_arms: int = 0
+    clock_low_side_arms: int = 0
     clock_determined_arms: int = 0
     timed_arms: int = 0
     failed_arms: list[str] = field(default_factory=list)
@@ -2466,23 +2830,25 @@ def analyse(cells: list[Cell], results, ceilings: Ceilings, dtypes: list[str]
     # version of this function scored `clock_throttled` on them, which is the
     # idle-boost catch the study's old throttle flag turned out to be
     # (retraction f) carried into this script under another name.
-    drifts = [(r.sm_clock_start_mhz - r.sm_clock_end_mhz)
-              / r.sm_clock_start_mhz * 100.0
+    drifts = [(r.idle_clock_before_mhz - r.idle_clock_after_mhz)
+              / r.idle_clock_before_mhz * 100.0
               for per in results.values() for r in per.values()
-              if r.sm_clock_start_mhz > 0 and r.sm_clock_end_mhz > 0]
+              if r.idle_clock_before_mhz > 0 and r.idle_clock_after_mhz > 0]
     if drifts:
         analysis.clock_drift_pct = max(drifts, key=abs)
-    # WHAT IS SCORED: the under-load LEVEL and DRIFT verdicts `time_kernel` put
-    # on every repeat, folded per arm by `summarise_timings` (False if any
-    # repeat was False, the side LOW-dominant). An arm with neither flag
-    # determined contributes nothing, and a run with no determined arm has an
-    # undetermined clock state, which V5 prints as UNKNOWN: an absent NVML is
-    # not a steady clock. LEVEL is TWO-SIDED (moe/bench/timing.py, 03df2d4)
-    # and only the LOW side excludes: a LEVEL failure on the HIGH side means
-    # the card boosted above the band the roof was measured at, the normal
-    # state of every memory-bound cell on an H200, and what it invalidates is
-    # the fraction of the FIXED roof, not the timing. A failed LEVEL with no
-    # side is a pre-side record, whose band had no upper edge, and is LOW.
+    # WHAT IS SCORED: the under-load DRIFT verdict `time_kernel` put on every
+    # repeat, folded per arm by `summarise_timings` (False if any repeat was
+    # False). An arm with neither flag determined contributes nothing, and a run
+    # with no determined arm has an undetermined clock state, which V5 prints as
+    # UNKNOWN: an absent NVML is not a steady clock.
+    #
+    # ONLY DRIFT EXCLUDES. A drifted arm's median spans two clock states and is
+    # dropped by `cell_ms` from every ratio on the page. LEVEL is TWO-SIDED
+    # (moe/bench/timing.py, 03df2d4) and BOTH sides are kept: a steady clock
+    # above or below the band is a measurement at a known clock, the side is
+    # recorded per row in `clock_level_side`, and on this card the side is set
+    # by the tile's own power draw rather than by a throttling card. Counted
+    # here so the page can say how many arms sat on each side.
     for per in results.values():
         for r in per.values():
             if r.error or r.redundant:
@@ -2491,13 +2857,14 @@ def analyse(cells: list[Cell], results, ceilings: Ceilings, dtypes: list[str]
             if all(f is None for f in flags):
                 continue
             analysis.clock_determined_arms += 1
-            side = _fold_side([r.clock_level_side])
-            level_high = r.clock_level_ok is False and side == timing.LEVEL_HIGH
-            if r.clock_drift_ok is False or (r.clock_level_ok is False
-                                             and not level_high):
+            if r.clock_drift_ok is False:
                 analysis.clock_flagged_arms += 1
-            elif level_high:
+                continue
+            side = _fold_side([r.clock_level_side])
+            if side == timing.LEVEL_HIGH:
                 analysis.clock_high_side_arms += 1
+            elif side == timing.LEVEL_LOW:
+                analysis.clock_low_side_arms += 1
     analysis.clock_throttled = analysis.clock_flagged_arms > 0
     return analysis
 
@@ -2585,6 +2952,47 @@ def percentile(values: list[float], q: float) -> float | None:
     ordered = sorted(values)
     rank = max(1, min(len(ordered), int(round(q * len(ordered) + 0.5))))
     return ordered[rank - 1]
+
+
+def band_consequence(predicted_band: list[float], *, band: float | None,
+                     spread: float | None) -> str:
+    """V5's consequence: the predicted band's WIDTH against the box's own.
+
+    THE WIDTH TEST HAS TO MOVE WITH THE NUMBER. The band was hardcoded as
+    "1.016 to 1.053" on every page from every grid until 2026-09-09, and the
+    sentence built around it said "the box cannot resolve a band that narrow,
+    and C3 cannot be read either way". That was true of a 4-point band and was
+    printed unchanged when the band became computed and the committed H200
+    calibration made it 0.938 to 1.099. That is 16 points wide against a p90
+    per-timing spread of 0.94% and a p90 placebo deviation of 0.02% on the same
+    gate line:
+    the observed clause and the consequence clause contradicted each other in
+    one gate. The comparison is made here instead, so a wide band reads as
+    readable and a narrow one still refuses.
+
+    THE BOX IS THE LARGER OF THE TWO NOISE READINGS, because either one alone
+    can swallow an effect: the placebo deviation is what an identical pair of
+    arms produced, and the per-timing spread is what one arm produced twice.
+    """
+    if not predicted_band:
+        return ("the model's predicted band over the matched arms is not "
+                "computable on this grid, so C3 cannot be read either way")
+    width = predicted_band[-1] - predicted_band[0]
+    head = (f"the model's predicted band over the matched arms is "
+            f"{predicted_band[0]:.3f} to {predicted_band[-1]:.3f}, "
+            f"{width * 100:.1f} points wide")
+    readings = [v for v in (band, spread) if v is not None]
+    if not readings:
+        return (head + ", and nothing was timed to compare that width against, "
+                "so C3 cannot be read either way")
+    box = max(readings)
+    against = (f" against a box of {box:.2%}, the larger of the p90 placebo "
+               "deviation and the p90 per-timing spread")
+    if width > box:
+        return (head + against + ", so the band is WIDER than the box and C3 "
+                "can be read where the arms land inside it")
+    return (head + against + ", so the box cannot resolve a band that narrow "
+            "and C3 cannot be read either way")
 
 
 def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
@@ -2695,6 +3103,11 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
 
     band = percentile(analysis.placebo_deviations, 0.90)
     spread = percentile(analysis.spreads, 0.90)
+    # The same band C3 registers, read here so V5's consequence quotes THIS
+    # run's prediction rather than a pair of numbers typed into the source.
+    predicted_band = sorted(got.tilt
+                            for (_, arm, _), got in analysis.predicted.items()
+                            if arm in MATCHED_ARMS)
     drift = analysis.clock_drift_pct
     noise_ok = None
     parts = []
@@ -2704,12 +3117,13 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
     if spread is not None:
         parts.append(f"p90 per-timing spread {spread:.2%}")
     if analysis.clock_determined_arms:
-        parts.append(f"under-load LEVEL/DRIFT flags: {analysis.clock_flagged_arms} "
-                     f"of {analysis.clock_determined_arms} determined arms "
-                     "flagged LOW or DRIFT (excluded); "
-                     f"{analysis.clock_high_side_arms} boosted above the band "
-                     "(LEVEL HIGH: kept, its fixed-roof fraction is not "
-                     "comparable, read the roof at the cell's clock)")
+        parts.append(f"under-load clock: {analysis.clock_flagged_arms} of "
+                     f"{analysis.clock_determined_arms} determined arms DRIFTED "
+                     "and are excluded from every ratio on this page; the "
+                     "steady arms are kept and their side recorded per row in "
+                     f"clock_level_side ({analysis.clock_low_side_arms} below "
+                     f"the band, {analysis.clock_high_side_arms} above it, "
+                     "both scored)")
     else:
         parts.append("under-load LEVEL/DRIFT flags: NOT DETERMINED on any arm "
                      "(no clock reference or no NVML), so the clock state is "
@@ -2735,14 +3149,14 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
         "the box can resolve an effect the size of the one being measured",
         f"p90 |placebo - 1| < {PLACEBO_BAND:.0%}, p90 timing spread < "
         f"{MAX_TIMING_SPREAD:.0%}, and no timed arm carries a False "
-        "under-load DRIFT flag or a LOW-side LEVEL flag from time_kernel "
-        "(a HIGH-side LEVEL flag is not an exclusion)",
+        "under-load DRIFT flag from time_kernel (LEVEL is recorded on BOTH "
+        "sides and excludes on neither: on this card the under-load clock is "
+        "set per tile by the kernel's own power draw)",
         _verdict(noise_ok),
         "no placebo pair was timed" if band is None
         else "; ".join(parts) + (f"; worst {analysis.placebo_worst}"
                                  if analysis.placebo_worst else ""),
-        "the model's predicted band is 1.016 to 1.053, about 4 points wide, and "
-        "the box cannot see 4 points, so C3 cannot be read either way"))
+        band_consequence(predicted_band, band=band, spread=spread)))
 
     # ---- CLAIM -------------------------------------------------------------
     differ, total = analysis.configs_differ
@@ -2781,12 +3195,21 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
     interval = bootstrap_interval(matched_values)
     pure_ok = (None if pure is None
                else PURE_DTYPE_SHIFT_LO <= pure <= PURE_DTYPE_SHIFT_HI)
-    band = sorted(got.tilt for (_, arm, _), got in analysis.predicted.items()
-                  if arm in MATCHED_ARMS)
+    band = predicted_band          # ONE computation; V5's consequence quotes it too
     gates.append(Gate(
         "C3 pure dtype", "CLAIM",
-        "at a MATCHED config the format barely tilts the fp8/bf16 ratio",
-        f"median matched tilt in [{PURE_DTYPE_SHIFT_LO}, {PURE_DTYPE_SHIFT_HI}]; "
+        "at a MATCHED tile the format barely tilts the fp8/bf16 ratio",
+        # RE-REGISTERED 2026-09-09 for the arms as they are now scoped:
+        # cfg_bf16 pins all six config keys, tile_fp8 pins BLOCK_SIZE_M and
+        # GROUP_SIZE_M and leaves each width its own BLOCK_SIZE_N,
+        # BLOCK_SIZE_K, num_warps and num_stages. The full fp8 transplant this
+        # replaces is infeasible at 22 of 28 cells (see MATCHED_ARM_SCOPE), so
+        # the threshold below is registered against a pair of arms that can
+        # actually run, and the median is over the two of them.
+        f"median matched tilt in [{PURE_DTYPE_SHIFT_LO}, {PURE_DTYPE_SHIFT_HI}] "
+        "over the matched arms as re-scoped on 2026-09-09 ("
+        + "; ".join(f"{arm} pins {', '.join(MATCHED_ARM_SCOPE[arm])}"
+                    for arm in MATCHED_ARMS) + "); "
         + (f"the model at the MEASURED alpha predicts [{band[0]:.3f}, "
            f"{band[-1]:.3f}] over the same cells"
            if band else "the model produced no band on this grid"),
@@ -2817,8 +3240,12 @@ def build_gates(analysis: Analysis, ceilings: Ceilings, dtypes: list[str],
     gates.append(Gate(
         "C4 config share", "CLAIM",
         "the config carries the majority of the confounded arm's excess",
+        # RE-REGISTERED 2026-09-09 with C3 and for the same reason: "the
+        # config" here is what the matched arms actually pin, which for
+        # tile_fp8 is the M tile and the swizzle and not the whole config.
         f"median (tilt_native - tilt_matched) / (tilt_native - 1) >= "
-        f"{CONFIG_SHARE_MIN:.0%}",
+        f"{CONFIG_SHARE_MIN:.0%} over the matched arms as re-scoped on "
+        "2026-09-09",
         _verdict(None if share_median is None
                  else share_median >= CONFIG_SHARE_MIN),
         "the native arm showed no excess over 1.0 to apportion, so there is "
@@ -2923,6 +3350,70 @@ def render_derivation(cells: list[Cell], notes: list[str], models: list[str]) ->
             f"cells and {sum(1 for c in rows if c.block_m_agrees)}/{len(rows)} "
             f"over the whole grid; the configs differ somewhere in "
             f"{sum(1 for c in rows if c.configs_differ)}/{len(rows)}")
+    return "\n".join(lines)
+
+
+def pairing_counts(cells: list[Cell], dtypes: list[str]) -> dict[str, int]:
+    """Cells each matched arm can pair, i.e. can compile at BOTH widths.
+
+    A matched arm's whole output is a ratio at matched levels, so a cell it can
+    run at one width and not the other contributes nothing. Counted off the
+    shared-memory arithmetic before the pod is rented: on 2026-09-09 the plan
+    priced 168 arms including 22 that could never compile, and finding that out
+    at run time is what broke vLLM's override global.
+    """
+    return {arm: sum(1 for cell in cells
+                     if not any(arm_is_infeasible(cell, arm, dtype)
+                                for dtype in dtypes))
+            for arm in MATCHED_ARMS}
+
+
+def render_pairing(cells: list[Cell], dtypes: list[str]) -> str:
+    """What each matched arm pins, what it can pair, and what was withdrawn.
+
+    THE WITHDRAWN ARM IS PRINTED, NOT DELETED. `cfg_fp8` forced the whole fp8
+    config on both widths until 2026-09-09; the arithmetic that killed it is
+    per cell and is on this page so a reader can check it rather than take the
+    re-scoping on trust.
+    """
+    lines = ["## The matched arms, and the shared-memory arithmetic behind them",
+             "",
+             f"Triton asks for `num_stages x (BM*BK + BK*BN) x element bytes` "
+             f"of pipeline shared memory; the sm_90 limit is {SM90_SMEM_LIMIT} "
+             "B. Every number below is derived, and the 2026-09-09 H200 run's "
+             "own `Required:` bytes reproduce it exactly.",
+             ""]
+    pairs = pairing_counts(cells, dtypes)
+    for arm in MATCHED_ARMS:
+        lines.append(f"  {arm}: pins {', '.join(MATCHED_ARM_SCOPE[arm])}; "
+                     f"pairs at {pairs[arm]} of {len(cells)} cells")
+    lines += ["",
+              "| model | T | full fp8 config | at bf16 | tile_fp8 at bf16 | "
+              "at fp8 | cfg_bf16 at fp8 |",
+              "|---|---:|---|---:|---:|---:|---:|"]
+    infeasible_full = 0
+    for cell in cells:
+        full = full_transplant(cell, FP8)
+        full_b = smem_footprint(full, dtype_bytes(BF16))
+        over = full_b > SM90_SMEM_LIMIT
+        infeasible_full += over
+        row = [f"| {cell.model} | {cell.num_tokens} | "
+               f"`{format_config(full)}` | "
+               f"{full_b} {'INFEASIBLE' if over else 'fits'} |"]
+        for arm, dtype in (("tile_fp8", BF16), ("tile_fp8", FP8),
+                           ("cfg_bf16", FP8)):
+            forced = arm_config(cell, arm, dtype)
+            need = smem_footprint(forced, dtype_bytes(dtype))
+            row.append(f" {need} "
+                       f"{'INFEASIBLE' if need > SM90_SMEM_LIMIT else 'fits'} |")
+        lines.append("".join(row))
+    lines += ["",
+              f"The full fp8 transplant is INFEASIBLE at {infeasible_full} of "
+              f"{len(cells)} cells at bf16's {dtype_bytes(BF16)} bytes per "
+              "element and is NOT an arm of this run. It was one on 2026-09-09: "
+              "it raised OutOfResources inside vLLM's `override_config`, which "
+              "has no try/finally, and the leaked fp8 config then took 41 "
+              "further arms."]
     return "\n".join(lines)
 
 
@@ -3230,7 +3721,7 @@ def render_decomposition(analysis: Analysis) -> str:
     """
     lines = ["## Decomposition: how much of the confounded tilt is the config",
              "",
-             "| model | tilt(native) | tilt(cfg_bf16) | tilt(cfg_fp8) | "
+             "| model | tilt(native) | tilt(cfg_bf16) | tilt(tile_fp8) | "
              "config effect | config share |",
              "|---|---:|---:|---:|---:|---:|"]
     for model in analysis.models:
@@ -3408,7 +3899,7 @@ def estimated_seconds(cells: list[Cell], dtypes: list[str], ceilings: Ceilings,
             if arm_is_redundant(cell, arm):
                 continue
             for dtype in dtypes:
-                config = arm_config(cell, arm) or cell.configs[dtype]
+                config = arm_config(cell, arm, dtype) or cell.configs[dtype]
                 one_call = predicted_ms(cfg, cell.num_tokens, config, dtype,
                                         ceilings=ceilings, act_bytes=2)
                 total_ms += reps * (warmup_ms + trials * max(budget_ms, one_call))
@@ -3428,7 +3919,7 @@ def distinct_compiles(cells: list[Cell], dtypes: list[str]) -> int:
             if arm_is_redundant(cell, arm):
                 continue
             for dtype in dtypes:
-                config = arm_config(cell, arm) or cell.configs[dtype]
+                config = arm_config(cell, arm, dtype) or cell.configs[dtype]
                 seen.add((dtype, tuple(sorted(config.items()))))
     return len(seen)
 
@@ -3801,6 +4292,8 @@ def _main(argv: list[str] | None = None) -> int:
         f"{args.cell_budget_ms:.0f} ms budget, one call)) per (cell, arm, "
         "dtype), excluding compiles and allocation.",
         "",
+        render_pairing(cells, dtypes),
+        "",
         SIGN_BANNER,
         "",
         render_derivation(cells, notes, models),
@@ -3814,6 +4307,42 @@ def _main(argv: list[str] | None = None) -> int:
             header_lines += ["", warning]
     header = "\n".join(header_lines)
     print(header)
+
+    # AN ARM THAT CANNOT COMPILE IS REFUSED BEFORE THE POD IS RENTED, with the
+    # arithmetic that says so. 2026-09-09: the fp8 config forced at bf16 width
+    # was infeasible at 22 of 28 cells by derivation, the plan priced all 168
+    # arms as though it were not, and the OutOfResources it raised at run time
+    # leaked vLLM's override global and took 41 further arms with it. Every
+    # cell an arm is asked to run has to be one it can run at BOTH widths, or
+    # the ratio it exists to produce has a hole where the pairing should be.
+    unpairable = {arm: [(cell, dtype) for cell in cells for dtype in dtypes
+                        if arm_is_infeasible(cell, arm, dtype)]
+                  for arm in MATCHED_ARMS}
+    if any(unpairable.values()):
+        print("\nREFUSED: a matched arm cannot compile the grid it is planned "
+              "on, so its ratio would be taken over a subset of the cells the "
+              "other arms use.")
+        for arm, bad in sorted(unpairable.items()):
+            if not bad:
+                continue
+            pairs = pairing_counts(cells, dtypes)[arm]
+            print(f"  {arm} pins {', '.join(MATCHED_ARM_SCOPE[arm])} and pairs "
+                  f"at {pairs} of {len(cells)} cells; {len(bad)} (cell, dtype) "
+                  "arms exceed shared memory:")
+            for cell, dtype in bad[:5]:
+                forced = arm_config(cell, arm, dtype)
+                print(f"    {cell.model} T={cell.num_tokens} {dtype}: "
+                      f"{format_config(forced)} needs "
+                      f"{smem_footprint(forced, dtype_bytes(dtype))} B at "
+                      f"{dtype_bytes(dtype)} B per element, against the sm_90 "
+                      f"limit {SM90_SMEM_LIMIT} B")
+            if len(bad) > 5:
+                print(f"    ... and {len(bad) - 5} more")
+        print("  Narrow what the arm transplants, or drop the token counts "
+              "whose tuned entries do not fit. Do NOT run it and let Triton "
+              "find out: an OutOfResources inside vLLM's override_config "
+              "leaves the override installed for the rest of the process.")
+        return exit_codes.REFUSED
 
     prov = PV.provenance_block(
         instrument=timing.TIMING_BASIS,
@@ -3973,7 +4502,19 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"override hook: {hooks[2]}.override_config"
               + ("" if hooks[1] else "   (no get_config in that module)"))
 
-        store = Store(csv_path, fresh=args.fresh, prov=prov)
+        # A CSV WHOSE HEADER IS NOT THIS SCHEMA IS A REFUSAL, NOT A CRASH.
+        # Nothing has been timed at this point, so the arm is not broken and
+        # the operator has a one-line fix; `main`'s blanket handler would
+        # print a traceback and exit ERROR, which is the retryable code and
+        # would send the driver back to the same directory.
+        try:
+            store = Store(csv_path, fresh=args.fresh, prov=prov)
+        except ConfoundRefusal as exc:
+            print("\n".join(["", "=" * 72,
+                             "REFUSED. Nothing was measured.",
+                             f"  {type(exc).__name__}: {exc}",
+                             "=" * 72]))
+            return EXIT_NOT_MEASURED
         results = {}
         started = time.time()
         try:
@@ -3987,7 +4528,7 @@ def _main(argv: list[str] | None = None) -> int:
                 wanted = {(c.model, c.num_tokens, arm, dtype)
                           for c in model_cells for arm in ARMS
                           for dtype in dtypes}
-                if not args.fresh and wanted <= set(store.done):
+                if not args.fresh and wanted <= store.finished:
                     print(f"\n== {model}: every (cell, arm, dtype) is already in "
                           f"{csv_path.name}; not redrawing its weights ==",
                           flush=True)

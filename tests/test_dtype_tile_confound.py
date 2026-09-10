@@ -42,6 +42,8 @@ and the only thing the pod adds is the numbers.
 """
 from __future__ import annotations
 
+import contextlib
+import csv
 import importlib.util
 import json
 import sys
@@ -87,6 +89,11 @@ def ceilings():
     measured in ONE session on this machine.
     """
     return DTC.load_ceilings(DTC.DEFAULT_CALIBRATION)
+
+
+@pytest.fixture
+def dtypes():
+    return list(DTC.DTYPES)
 
 
 @pytest.fixture(scope="module")
@@ -171,7 +178,7 @@ def test_v3_fails_when_a_forced_arm_ran_a_config_it_was_not_given(planned,
     cells, _ = planned
     results = synth(cells, ceilings)
     victim = cells[0]
-    arm = results[victim.key][("cfg_fp8", DTC.FP8)]
+    arm = results[victim.key][("tile_fp8", DTC.FP8)]
     arm.config = dict(victim.configs[DTC.FP8])
     arm.observed_config = dict(victim.configs[DTC.BF16], BLOCK_SIZE_M=999)
     arm.override_verified = False
@@ -280,24 +287,39 @@ def test_c3_discriminates_between_planted_worlds(planned, ceilings, ratio,
     assert verdicts(gates)["C3"] == expected
 
 
-def test_at_the_measured_alpha_the_planted_flop_ratio_moves_nothing(planned,
-                                                                    ceilings):
+def test_at_the_measured_alpha_the_planted_flop_ratio_moves_one_model_only(
+        planned, ceilings):
     """The finding that forced `--self-test-alpha` to exist, pinned as a fact.
 
     `2 BM / (alpha b)` is 152 FLOP/byte at BLOCK_SIZE_M=128 and the measured
-    alpha of 0.84, against a ridge of 163. The compute term never binds, so the
-    generated times are pure byte counts and two very different worlds produce
-    numerically IDENTICAL reports. A self test run only at the measured alpha
-    would therefore have exercised nothing, and C3 would have passed in every
-    world.
+    alpha of 0.84. Where that sits below the ridge the compute term never
+    binds, the generated times are pure byte counts, and two very different
+    planted FLOP ratios produce numerically IDENTICAL reports: a self test run
+    only at the measured alpha would have exercised nothing and C3 would have
+    passed in every world. THAT IS WHY THE KNOB EXISTS.
+
+    RE-STATED 2026-09-09 AND THE CALIBRATION IS WHY. The ridge this test used
+    to quote was 163; the H200 recalibration committed at ab61e55 puts it at
+    152.8, and 152.4 is now BELOW it by 0.3%. So mixtral, whose bf16 tuned
+    config takes GROUP_SIZE_M=16 above M=448 where the ceiling rises to 188,
+    has cells where the compute term binds and its tilt moves with the planted
+    ratio (1.024 at 2.033, 1.071 at 2.400); qwen2, whose high-batch cells take
+    GROUP_SIZE_M=1, is still pure bytes and does not move at all. Asserting
+    both is what keeps the knob's justification a measurement rather than a
+    remembered sentence.
     """
     cells, _ = planned
     a = DTC.analyse(cells, synth(cells, ceilings, ratio=2.033), ceilings,
                     list(DTC.DTYPES))
     b = DTC.analyse(cells, synth(cells, ceilings, ratio=2.400), ceilings,
                     list(DTC.DTYPES))
-    for key, shift in a.shifts.items():
-        assert shift.tilt == pytest.approx(b.shifts[key].tilt), key
+    moved = {model for (model, _), shift in a.shifts.items()
+             if abs(shift.tilt - b.shifts[(model, _)].tilt) > 1e-9}
+    assert moved == {"mixtral-8x7b"}, moved
+    for (model, arm), shift in a.shifts.items():
+        if model == "qwen2-57b-a14b":
+            assert shift.tilt == pytest.approx(b.shifts[(model, arm)].tilt), \
+                (model, arm)
 
 
 def test_matched_config_and_quantised_activations_pin_the_tilt_to_a_two_number_band(
@@ -306,29 +328,41 @@ def test_matched_config_and_quantised_activations_pin_the_tilt_to_a_two_number_b
 
     With the same config on both sides and the activation stream quantised too,
     the memory branch scales by exactly 0.500 and the compute branch by exactly
-    `1 / 2.033`, the MEASURED fp8-over-bf16 FLOP ratio. So the tilt can only be
+    `1 / fp8_over_bf16`, the MEASURED FLOP ratio. So the tilt can only be
 
         1.000   where the compute term never binds, and the ratio is pure bytes
-        1.016   where it binds at the top of the grid, `0.500 / (1 / 2.033)`
+        high    where it binds at the top of the grid, `0.5 x fp8_over_bf16`
 
-    and nothing in between is reachable by any other route. Both ends occur on
-    the default grid, which is the useful part: mixtral's bf16 tuned config takes
-    GROUP_SIZE_M=16 above M=448, where `2 BM / (alpha b)` is 188 against a ridge
-    of 163 and the compute branch is reachable; several of qwen2's high-batch
-    cells take GROUP_SIZE_M=1, where the ceiling is 152 and it is not. A
-    mis-thirded grid, a ratio taken the wrong way round, or an unmatched cell
-    would put the answer outside the band at one end or the other.
+    and nothing in between is reachable by any other route. A mis-thirded grid,
+    a ratio taken the wrong way round, or an unmatched cell would put the
+    answer outside that band at one end or the other, which is what this pins.
+
+    THE ENDS ARE READ OFF THE CALIBRATION, NOT TYPED. The band used to be
+    "1.000 to 1.016" from a 2.033 FLOP ratio and a ridge of 163; the H200
+    recalibration at ab61e55 makes the ratio 2.199 and the ridge 152.8, so the
+    band is 1.000 to 1.099 and BOTH ends no longer occur on the default grid.
+    mixtral's bf16 tuned config takes GROUP_SIZE_M=16 above M=448, where
+    `2 BM / (alpha b)` is 188 against the ridge and the compute branch is
+    reachable, so it sits exactly at the top; qwen2's high-batch cells take
+    GROUP_SIZE_M=1, where the ceiling is 152.4 against a ridge of 152.8, and it
+    lands inside at 1.027 rather than on the pure-bytes floor. Which model
+    attains which end is a property of vLLM's shipped configs crossed with this
+    card's calibration; that the tilt cannot leave the band is a property of
+    the reduction, and only the second is asserted as an equality.
     """
     cells, _ = planned
     high = 0.5 * ceilings.fp8_over_bf16
-    seen = []
+    seen = {}
     for model in DTC.DEFAULT_MODELS:
         got = DTC.predicted_shift(model, cells, ceilings, 1, "cfg_bf16")
         assert got is not None
         assert 1.0 - 1e-9 <= got.tilt <= high + 1e-9, (model, got.tilt)
-        seen.append(got.tilt)
-    assert min(seen) == pytest.approx(1.0, abs=1e-9)
-    assert max(seen) == pytest.approx(high, abs=1e-6)
+        seen[model] = got.tilt
+    assert seen["mixtral-8x7b"] == pytest.approx(high, abs=1e-6), \
+        "the compute branch binds at the top of mixtral's grid, so its tilt IS "\
+        "the band's upper end"
+    assert 1.0 < seen["qwen2-57b-a14b"] < high, \
+        "qwen2 is nearly pure bytes at this ridge and must land strictly inside"
 
 
 # --------------------------------------------------------------------------
@@ -753,28 +787,41 @@ def test_a_redundant_arm_is_recorded_and_resolved_to_its_twin(planned,
                                            "GROUP_SIZE_M": 1, "num_warps": 4,
                                            "num_stages": 3} for d in DTC.DTYPES})
     assert not same.configs_differ
-    assert DTC.arm_is_redundant(same, "cfg_fp8")
+    assert DTC.arm_is_redundant(same, "tile_fp8")
     assert not DTC.arm_is_redundant(same, "cfg_bf16")
     twin = DTC.ArmResult(same.model, same.num_tokens, "cfg_bf16", DTC.BF16)
     DTC.summarise_samples(twin, [2.0])
-    redundant = DTC.ArmResult(same.model, same.num_tokens, "cfg_fp8", DTC.BF16,
+    redundant = DTC.ArmResult(same.model, same.num_tokens, "tile_fp8", DTC.BF16,
                               redundant=True)
-    per_cell = {("cfg_bf16", DTC.BF16): twin, ("cfg_fp8", DTC.BF16): redundant}
-    assert DTC.cell_ms(per_cell, "cfg_fp8", DTC.BF16, same) == pytest.approx(2.0)
+    per_cell = {("cfg_bf16", DTC.BF16): twin, ("tile_fp8", DTC.BF16): redundant}
+    assert DTC.cell_ms(per_cell, "tile_fp8", DTC.BF16, same) == pytest.approx(2.0)
     assert cfg.num_experts == 8          # the fixture is the model it claims
 
 
-def test_arm_config_forces_the_full_config_never_a_subset(planned):
-    """Reporting BLOCK_SIZE_M alone is what made this confound invisible."""
+def test_arm_config_forces_a_full_config_never_a_subset(planned):
+    """Reporting BLOCK_SIZE_M alone is what made this confound invisible.
+
+    Both arms force a COMPLETE config; they differ in where its keys come
+    from, which `MATCHED_ARM_SCOPE` names. `tile_fp8` takes two of them from
+    the fp8 lookup and the other four from the width it is running at, so at
+    fp8 it is the identity and is still the placebo.
+    """
     cells, _ = planned
     cell = cells[0]
-    assert DTC.arm_config(cell, DTC.NATIVE_ARM) is None
-    for arm, dtype in (("cfg_bf16", DTC.BF16), ("cfg_fp8", DTC.FP8)):
-        forced = DTC.arm_config(cell, arm)
-        assert forced == cell.configs[dtype]
-        assert set(forced) == set(DTC.CONFIG_KEYS)
+    for dtype in DTC.DTYPES:
+        assert DTC.arm_config(cell, DTC.NATIVE_ARM, dtype) is None
+        for arm in DTC.MATCHED_ARMS:
+            forced = DTC.arm_config(cell, arm, dtype)
+            assert set(forced) == set(DTC.CONFIG_KEYS)
+    assert DTC.arm_config(cell, "cfg_bf16", DTC.FP8) == cell.configs[DTC.BF16]
+    assert DTC.arm_config(cell, "cfg_bf16", DTC.BF16) == cell.configs[DTC.BF16]
+    assert DTC.arm_config(cell, "tile_fp8", DTC.FP8) == cell.configs[DTC.FP8]
+    at_bf16 = DTC.arm_config(cell, "tile_fp8", DTC.BF16)
+    for key in DTC.CONFIG_KEYS:
+        source = DTC.FP8 if key in DTC.MATCHED_ARM_SCOPE["tile_fp8"] else DTC.BF16
+        assert at_bf16[key] == cell.configs[source][key], key
     with pytest.raises(KeyError):
-        DTC.arm_config(cell, "nonesuch")
+        DTC.arm_config(cell, "nonesuch", DTC.BF16)
 
 
 def test_format_config_prints_every_knob():
@@ -995,9 +1042,9 @@ def test_clock_drift_is_per_cell_so_a_resumed_csv_cannot_invent_one(planned,
     results = synth(cells, ceilings)
     keys = list(results)
     for arm in results[keys[0]].values():         # an old session, high clocks
-        arm.sm_clock_start_mhz, arm.sm_clock_end_mhz = 1980, 1975
+        arm.idle_clock_before_mhz, arm.idle_clock_after_mhz = 1980, 1975
     for arm in results[keys[-1]].values():        # a later one, lower clocks
-        arm.sm_clock_start_mhz, arm.sm_clock_end_mhz = 1500, 1495
+        arm.idle_clock_before_mhz, arm.idle_clock_after_mhz = 1500, 1495
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert abs(analysis.clock_drift_pct) < 1.0
     assert not analysis.clock_throttled
@@ -1010,19 +1057,32 @@ def _flag_every_arm(results, *, level=True, drift=True):
             arm.clock_level_ok, arm.clock_drift_ok = level, drift
 
 
-def test_v5_fails_on_a_throttled_clock(planned, ceilings):
+def test_v5_fails_on_a_drifting_clock_and_not_on_a_level_flag(planned, ceilings):
     """The FAIL branch, planted through the flag `time_kernel` actually sets.
 
     The first version of this test planted a 1980 -> 1400 MHz drop between
     the two BETWEEN-LOAD samples and V5 failed on that, which is the idle-boost
-    catch retraction (f) withdrew, carried into this script under another
-    name. The scored quantity is the under-load LEVEL flag on the arm.
+    catch retraction (f) withdrew, carried into this script under another name.
+    The second scored the under-load LEVEL flag. Since 2026-09-09 only DRIFT
+    excludes: LEVEL is recorded on both sides and excludes on neither, because
+    on this card the under-load clock is set per tile by the kernel's own power
+    draw and a LOW side is a steady operating point rather than a throttle.
     """
     cells, _ = planned
     results = synth(cells, ceilings)
     _flag_every_arm(results)
     for arm in results[list(results)[2]].values():
-        arm.clock_level_ok = False
+        arm.clock_level_ok, arm.clock_level_side = False, DTC.timing.LEVEL_LOW
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    assert not analysis.clock_throttled, "a steady LOW clock is not a throttle"
+    assert analysis.clock_flagged_arms == 0
+    assert analysis.clock_low_side_arms == len(results[list(results)[2]])
+    got = verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                                   synthetic=False))
+    assert got["V5"] == DTC.PASS
+
+    for arm in results[list(results)[2]].values():
+        arm.clock_drift_ok = False
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert analysis.clock_throttled
     assert analysis.clock_flagged_arms > 0
@@ -1057,7 +1117,7 @@ def test_v5_passes_when_every_arm_carries_a_good_under_load_verdict(planned,
                             synthetic=False)
     v5 = next(g for g in gates if g.name.startswith("V5"))
     assert v5.verdict == DTC.PASS
-    assert "0 of" in v5.observed and "determined arms flagged" in v5.observed
+    assert "0 of" in v5.observed and "determined arms DRIFTED" in v5.observed
 
 
 def test_between_load_clock_movement_is_printed_as_context_and_never_scored(
@@ -1069,7 +1129,7 @@ def test_between_load_clock_movement_is_printed_as_context_and_never_scored(
     results = synth(cells, ceilings)
     _flag_every_arm(results)
     for arm in results[list(results)[2]].values():
-        arm.sm_clock_start_mhz, arm.sm_clock_end_mhz = 1980, 1400
+        arm.idle_clock_before_mhz, arm.idle_clock_after_mhz = 1980, 1400
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert analysis.clock_drift_pct == pytest.approx(29.3, abs=0.1)
     assert not analysis.clock_throttled
@@ -1585,11 +1645,15 @@ def test_one_bad_repeat_makes_the_whole_arm_say_so():
     """`summarise_timings` folds the repeats so a filter cannot be more
     permissive than the repeats it summarises."""
     class T:
-        def __init__(self, level, drift, host):
+        def __init__(self, level, drift, host, first=1500.0, last=1500.0):
             self.instrument = DTC.timing.TIMING_BASIS
             self.l2_flush = True
             self.iters, self.trials, self.warmup_ms = 100, 3, 300.0
             self.sm_clock_load_mhz = 1500.0
+            # The first and last UNDER-LOAD samples the DRIFT verdict is
+            # computed from, which the row carries since 2026-09-09.
+            self.sm_clock_start_mhz, self.sm_clock_end_mhz = first, last
+            self.clock_samples, self.clock_note = 20, ""
             self.clock_level_ok, self.clock_drift_ok = level, drift
             self.host_bound = host
 
@@ -1606,6 +1670,17 @@ def test_one_bad_repeat_makes_the_whole_arm_say_so():
     assert unknown.clock_level_ok is None
     assert unknown.host_bound is None
 
+    # The under-load pair comes from the repeat that MOVED MOST, so a row
+    # cannot look steadier than its worst repeat. The 2026-09-09 CSV kept the
+    # DRIFT verdict and dropped these two numbers, and 80 of 118 drifted arms
+    # could not be read as a rising governor or a falling throttle.
+    moved = DTC.ArmResult("m", 1, "native", DTC.BF16)
+    DTC.summarise_timings(moved, [T(True, True, False, 1500.0, 1495.0),
+                                  T(True, False, False, 1500.0, 1380.0)])
+    assert (moved.load_clock_first_mhz, moved.load_clock_last_mhz) == (1500.0, 1380.0)
+    assert moved.clock_drift_ok is False
+    assert moved.clock_samples == 20
+
 
 def _record(level_ok, side, load_mhz):
     """A `KernelTiming` the way `time_kernel` writes it against a 1515 MHz
@@ -1621,16 +1696,21 @@ def _record(level_ok, side, load_mhz):
                         reference_clock_mhz=1515.0)
 
 
-def test_v5_keeps_a_high_side_arm_and_excludes_a_low_side_one(planned, ceilings):
+def test_v5_keeps_both_level_sides_and_excludes_only_a_drifted_arm(planned,
+                                                                   ceilings):
     """The planted pair, both folded from real `KernelTiming` records.
 
     HIGH: a memory-shaped dtype arm boosted to 1980 MHz against the 1515 MHz
     reference. `time_kernel` fails LEVEL on it with side "high" (03df2d4), and
-    on an H200 that is the normal state of a memory-bound cell. It must be
-    KEPT: V5 PASS, counted under `clock_high_side_arms`, not flagged. Until
-    2026-09-08 this census read the flag without the side and failed V5 on it.
-    LOW: the same arm at 1400 MHz, the throttle the flag was built for, must
-    still fail V5. A failed LEVEL with no side (a pre-side record) is LOW.
+    on an H200 that is the normal state of a memory-bound cell.
+    LOW: the same arm at 1400 MHz. Until 2026-09-08 the census excluded the
+    HIGH side; until 2026-09-09 it excluded the LOW side. It now excludes
+    NEITHER: the 750-cell H200 census established that the under-load clock is
+    set per tile by the kernel's own power draw under the 700 W cap
+    (BLOCK_M=128/N=64 median 1395 MHz, BLOCK_M=256 1650, memory-shaped
+    1950-1980, the calibration GEMM 1485 at 691 W), so both sides are steady
+    operating points of a tile family and excluding on one is a rule against a
+    tile. Both are counted, both are kept, and DRIFT is what excludes.
     """
     cells, _ = planned
     results = synth(cells, ceilings)
@@ -1639,26 +1719,29 @@ def test_v5_keeps_a_high_side_arm_and_excludes_a_low_side_one(planned, ceilings)
     high = arms[0]
     DTC.summarise_timings(high, [_record(False, DTC.timing.LEVEL_HIGH, 1980.0)] * 2)
     assert high.clock_level_ok is False and high.clock_level_side == DTC.timing.LEVEL_HIGH
+    low = arms[1]
+    DTC.summarise_timings(low, [_record(False, DTC.timing.LEVEL_LOW, 1400.0)] * 2)
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert not analysis.clock_throttled
     assert analysis.clock_flagged_arms == 0
     assert analysis.clock_high_side_arms == 1
+    assert analysis.clock_low_side_arms == 1
     gates = DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "", synthetic=False)
     assert verdicts(gates)["V5"] == DTC.PASS
     v5 = next(g for g in gates if g.name.startswith("V5"))
-    assert "1 boosted above the band" in v5.observed and "kept" in v5.observed
+    assert "1 below the band, 1 above it, both scored" in v5.observed
+    assert "excluded" not in v5.observed.split("; ")[2].split("DRIFTED")[0]
 
-    low = arms[1]
-    DTC.summarise_timings(low, [_record(False, DTC.timing.LEVEL_LOW, 1400.0)] * 2)
-    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
-    assert analysis.clock_throttled
-    assert analysis.clock_flagged_arms == 1 and analysis.clock_high_side_arms == 1
-    assert verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
-                                   synthetic=False))["V5"] == DTC.FAIL
-
-    low.clock_level_side = ""                    # a pre-side record: LOW
+    # A DRIFTED arm is the one exclusion, and it is dropped from the ratios as
+    # well as failing the gate, which is what "excluded" on that line means.
+    drifted = arms[2]
+    drifted.clock_drift_ok = False
     analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
     assert analysis.clock_throttled and analysis.clock_flagged_arms == 1
+    assert verdicts(DTC.build_gates(analysis, ceilings, list(DTC.DTYPES), "",
+                                    synthetic=False))["V5"] == DTC.FAIL
+    assert DTC.cell_ms({("native", DTC.BF16): drifted}, "native", DTC.BF16,
+                       cells[0]) is None or drifted.arm != "native"
 
 
 def test_the_level_side_folds_low_dominant_and_refuses_a_foreign_word():
@@ -1896,3 +1979,293 @@ def test_an_fp8_arm_is_levelled_against_the_fp8_gemm_clock_not_the_bf16_one(tmp_
     assert ceil.reference_for(DTC.FP8) == 1380.0
     assert T.level_side(1380.0, ceil.reference_for(DTC.FP8)) == ""
     assert T.level_side(1380.0, ceil.reference_for(DTC.BF16)) == T.LEVEL_LOW
+
+
+# --------------------------------------------------------------------------
+# 8. THE 2026-09-09 H200 SESSION. Four defects, each reproduced here off GPU.
+#
+#    The cfg_fp8 arm forced the whole fp8 config on bf16 weights. At 22 of the
+#    28 default cells that tile needs 294912-409600 B of pipeline shared memory
+#    against sm_90's 232448, so it raised OutOfResources inside vLLM's
+#    `override_config`, which has no try/finally, and the fp8 config stayed
+#    installed process-wide. All 28 bf16 `native` arms then compiled the leaked
+#    tile and errored, 13 fp8 `native` arms timed the previous cell's tile, and
+#    V4 read the leak as a derivation error in this script. The rerun could not
+#    have repaired itself either: the run id is a hash of the plan, so the same
+#    command resumes the same directory, and `Store.restore` handed the 50
+#    errored rows back as though they were results.
+# --------------------------------------------------------------------------
+
+class LeakyOverride:
+    """vLLM v0.27.1's `override_config`, verbatim in its semantics.
+
+    `old_config = _config; _config = config; yield; _config = old_config`
+    (vllm/model_executor/layers/fused_moe/__init__.py:52-58). No try/finally,
+    so an exception inside the body never resumes the generator.
+    """
+
+    def __init__(self):
+        self._config = None
+
+    def get_config(self):
+        return self._config
+
+    @contextlib.contextmanager
+    def override_config(self, config):
+        old = self._config
+        self._config = config
+        yield
+        self._config = old            # never reached if the body raises
+
+    def hooks(self, module_name="tests.leaky_vllm"):
+        sys.modules[module_name] = self
+        return (self.override_config, self.get_config, module_name)
+
+
+def test_the_override_leak_is_reproduced_and_then_refused(planned):
+    """The chain that cost 41 arms, planted with vLLM's own semantics."""
+    cells, _ = planned
+    cell = cells[0]
+
+    # 1. THE LEAK, with no guard: an exception inside the body leaves the
+    #    override installed, exactly as the pod's log shows.
+    leaky = LeakyOverride()
+    forced = DTC.full_transplant(cell, DTC.FP8)
+    with pytest.raises(RuntimeError, match="OutOfResources"):
+        with leaky.override_config(forced):
+            raise RuntimeError("OutOfResources: shared memory")
+    assert leaky.get_config() == forced, \
+        "vLLM restores its global in a plain yield; this is the defect"
+
+    # 2. THE GUARD. A native arm asks for no override, so a dirty global means
+    #    the previous arm broke and this cell would time its kernel.
+    with pytest.raises(DTC.OverrideLeaked) as caught:
+        with DTC.override_context(leaky.hooks(), cell, DTC.NATIVE_ARM, DTC.BF16):
+            pass
+    assert "outside any forced arm" in str(caught.value)
+    assert DTC.format_config(forced) in str(caught.value)
+
+    # 3. THE REPAIR. A forced arm that raises leaves the global CLEAN, so the
+    #    leak cannot reach the next arm at all.
+    clean = LeakyOverride()
+    hooks = clean.hooks("tests.leaky_vllm_clean")
+    with pytest.raises(RuntimeError):
+        with DTC.override_context(hooks, cell, "cfg_bf16", DTC.BF16):
+            raise RuntimeError("OutOfResources: shared memory")
+    assert clean.get_config() is None
+    # And the next arm runs, which is the whole point of the finally.
+    with DTC.override_context(hooks, cell, DTC.NATIVE_ARM, DTC.BF16):
+        assert clean.get_config() is None
+
+
+def test_the_shared_memory_arithmetic_reproduces_the_pods_required_bytes():
+    """`num_stages x (BM*BK + BK*BN) x element bytes`, against the three
+    `Required:` counts the 2026-09-09 OutOfResources messages printed."""
+    for stages, bn, want in ((5, 256, 409600), (4, 256, 393216), (3, 256, 294912)):
+        cfg = {"BLOCK_SIZE_M": 64 if stages == 5 else 128, "BLOCK_SIZE_N": bn,
+               "BLOCK_SIZE_K": 128, "GROUP_SIZE_M": 32, "num_warps": 8,
+               "num_stages": stages}
+        assert DTC.smem_footprint(cfg, 2) == want
+        assert want > DTC.SM90_SMEM_LIMIT
+        # The same tile at fp8's one byte fits, which is why only the bf16 half
+        # of the transplant was ever infeasible.
+        assert DTC.smem_footprint(cfg, 1) <= DTC.SM90_SMEM_LIMIT or want > 2 * DTC.SM90_SMEM_LIMIT
+
+
+def test_the_full_fp8_transplant_is_infeasible_at_22_of_28_cells(planned, dtypes):
+    """The number that re-scoped the arm, derived off GPU."""
+    cells, _ = planned
+    over = [c for c in cells
+            if DTC.smem_footprint(DTC.full_transplant(c, DTC.FP8), 2)
+            > DTC.SM90_SMEM_LIMIT]
+    assert (len(over), len(cells)) == (22, 28)
+    # The re-scoped arm moves the two keys the study is about and fits at both
+    # widths at every cell, which is what makes it runnable at all.
+    assert DTC.MATCHED_ARM_SCOPE["tile_fp8"] == ("BLOCK_SIZE_M", "GROUP_SIZE_M")
+    assert DTC.pairing_counts(cells, dtypes) == {"cfg_bf16": 28, "tile_fp8": 28}
+    for cell in cells:
+        for arm in DTC.MATCHED_ARMS:
+            for dtype in dtypes:
+                assert not DTC.arm_is_infeasible(cell, arm, dtype), (cell.key, arm)
+
+
+def test_the_plan_page_marks_every_infeasible_cell_with_its_byte_count(planned,
+                                                                       dtypes):
+    """What was withdrawn is PRINTED, not deleted: a reader checks the
+    arithmetic rather than taking the re-scoping on trust."""
+    cells, _ = planned
+    page = DTC.render_pairing(cells, dtypes)
+    rows = [line for line in page.splitlines() if line.startswith("| mixtral")
+            or line.startswith("| qwen2")]
+    assert len(rows) == 28
+    assert sum("INFEASIBLE" in row for row in rows) == 22
+    assert "INFEASIBLE at 22 of 28 cells" in page
+    assert "409600 INFEASIBLE" in page and "294912 INFEASIBLE" in page
+    assert str(DTC.SM90_SMEM_LIMIT) in page
+    assert "tile_fp8: pins BLOCK_SIZE_M, GROUP_SIZE_M; pairs at 28 of 28 cells" in page
+    assert "cfg_bf16: pins BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, " \
+           "GROUP_SIZE_M, num_warps, num_stages; pairs at 28 of 28 cells" in page
+
+
+def test_an_infeasible_arm_is_recorded_with_its_arithmetic_and_never_compiled(
+        planned):
+    """Belt and braces below the plan-time refusal: if an infeasible arm ever
+    reaches the measuring loop it is written as a derivation, not handed to
+    Triton, because the compile is what broke vLLM's global."""
+    cells, _ = planned
+    cell = next(c for c in cells
+                if DTC.smem_footprint(DTC.full_transplant(c, DTC.FP8), 2)
+                > DTC.SM90_SMEM_LIMIT)
+
+    # `cfg_fp8` as it was until 2026-09-09: the WHOLE fp8 config, both widths.
+    original = DTC.arm_config
+    try:
+        DTC.arm_config = lambda c, arm, dtype: (
+            DTC.full_transplant(c, DTC.FP8) if arm == "tile_fp8"
+            else original(c, arm, dtype))
+        assert DTC.arm_is_infeasible(cell, "tile_fp8", DTC.BF16)
+        assert not DTC.arm_is_infeasible(cell, "tile_fp8", DTC.FP8)
+    finally:
+        DTC.arm_config = original
+
+
+def test_c3_and_c4_are_registered_against_the_arms_as_re_scoped(planned,
+                                                                ceilings):
+    """A pre-registration that moved has to say so on the page it is printed
+    on, with the date. The threshold did not change; what the arms pin did."""
+    cells, _ = planned
+    gates = DTC.build_gates(DTC.analyse(cells, synth(cells, ceilings), ceilings,
+                                        list(DTC.DTYPES)),
+                            ceilings, list(DTC.DTYPES), "", synthetic=False)
+    c3 = next(g for g in gates if g.name.startswith("C3"))
+    c4 = next(g for g in gates if g.name.startswith("C4"))
+    for gate in (c3, c4):
+        assert "re-scoped on 2026-09-09" in gate.rule
+    assert "tile_fp8 pins BLOCK_SIZE_M, GROUP_SIZE_M" in c3.rule
+    assert "cfg_bf16 pins BLOCK_SIZE_M, BLOCK_SIZE_N" in c3.rule
+
+
+def test_the_store_never_hands_back_an_errored_row_as_a_result(tmp_path,
+                                                               planned):
+    """The rerun could not repair itself: the run id is a hash of the plan, so
+    the same command resumes this directory and the 50 errored arms came back
+    as finished."""
+    cells, _ = planned
+    cell = cells[0]
+    meta = {"run_id": "r", "gpu_name": "NVIDIA H200", "torch_version": "t",
+            "vllm_version": "v", "routing": "uniform", "seed": 0,
+            "provenance": PV.provenance_block(
+                instrument=TIMING_BASIS, ridge=1.0, ridge_source="test",
+                bandwidth=1.0, bandwidth_source="test", warmup_ms=1.0,
+                target_ms=1.0)}
+    store = DTC.Store(tmp_path / "timings.csv")
+    good = DTC.ArmResult(cell.model, cell.num_tokens, "cfg_bf16", DTC.BF16,
+                         config=DTC.arm_config(cell, "cfg_bf16", DTC.BF16))
+    DTC.summarise_samples(good, [1.0])
+    bad = DTC.ArmResult(cell.model, cell.num_tokens, DTC.NATIVE_ARM, DTC.BF16)
+    bad.error = "OutOfResources: out of resource: shared memory, Required: 409600"
+    store.write(good, cell, meta)
+    store.write(bad, cell, meta)
+    store.close()
+
+    reopened = DTC.Store(tmp_path / "timings.csv")
+    try:
+        assert reopened.restore(good.key) is not None
+        assert reopened.restore(bad.key) is None, \
+            "an errored arm is not a finished one and must be re-timed"
+        # The error itself is still readable, for a replay rebuilding the page.
+        kept = reopened.restore(bad.key, include_errors=True)
+        assert kept is not None and "409600" in kept.error
+        assert reopened.finished == {good.key}
+        assert set(reopened.done) == {good.key, bad.key}
+    finally:
+        reopened.close()
+
+
+# --------------------------------------------------------------------------
+# 2026-09-09 repairs: the band's WIDTH, and a CSV header that has to be this
+# schema before a row is appended under it.
+# --------------------------------------------------------------------------
+
+def test_the_predicted_bands_width_is_compared_with_the_box_not_asserted():
+    """R9 computed the band and left the sentence built around the old one.
+
+    "1.016 to 1.053" was hardcoded on every page from every grid, and the tail
+    "the box cannot resolve a band that narrow, and C3 cannot be read either
+    way" was true of those 4 points. The band became computed; the tail did
+    not, so the committed H200 calibration printed a 16-point band and then
+    said the box could not resolve it, on the same gate line as a 0.94% p90
+    timing spread.
+    """
+    # The committed H200 numbers: a 16-point band and a 0.94% p90 timing
+    # spread, which the old tail called unresolvable in the same sentence that
+    # printed both.
+    wide = DTC.band_consequence([0.938, 1.099], band=0.0002, spread=0.0094)
+    assert "16.1 points wide" in wide
+    assert "cannot resolve" not in wide
+    assert "WIDER than the box" in wide
+    # THE BOX IS THE LARGER OF THE TWO READINGS: a quiet placebo cannot hide a
+    # noisy timing, and the printed number says which it took.
+    assert "0.94%" in wide
+
+    # A box that really is wider than the band, which is the branch the old
+    # sentence asserted unconditionally.
+    narrow = DTC.band_consequence([1.016, 1.053], band=0.05, spread=0.02)
+    assert "3.7 points wide" in narrow and "5.00%" in narrow
+    assert "cannot resolve a band that narrow" in narrow
+
+    # AND THE OLD BAND IS NOT AUTOMATICALLY THE NARROW ONE. Against the
+    # committed spread the hardcoded 1.016-1.053 clears the box by 4x, so the
+    # retired sentence was false of its own numbers too once the box moved.
+    assert "cannot resolve" not in DTC.band_consequence(
+        [1.016, 1.053], band=0.0002, spread=0.0094)
+
+    # Neither reading, and nothing may be concluded about the width at all.
+    blind = DTC.band_consequence([0.938, 1.099], band=None, spread=None)
+    assert "nothing was timed to compare that width against" in blind
+    assert DTC.band_consequence([], band=0.01, spread=0.01) == (
+        "the model's predicted band over the matched arms is not computable "
+        "on this grid, so C3 cannot be read either way")
+
+
+def test_v5_carries_the_computed_width_into_the_gate(planned, ceilings):
+    cells, _ = planned
+    results = synth(cells, ceilings)
+    analysis = DTC.analyse(cells, results, ceilings, list(DTC.DTYPES))
+    v5 = next(g for g in DTC.build_gates(analysis, ceilings, list(DTC.DTYPES),
+                                         "", synthetic=False)
+              if g.name.startswith("V5"))
+    assert "points wide" in v5.invalidates
+    assert "1.016 to 1.053" not in v5.invalidates
+
+
+def test_a_csv_written_under_another_schema_is_refused_not_appended_to(
+        tmp_path, planned):
+    """2026-09-09 renamed two clock columns and inserted four more, while
+    `plan_run_id` still omits `arms` and the results root outlives the pod. So
+    the same command lands in the same directory with a wider row, and
+    `DictWriter` writes the fieldnames it was given without ever reading the
+    file: every field after `sm_clock_load_mhz` would shift one column and
+    `clock_level_ok` would hold a clock.
+    """
+    path = tmp_path / "timings.csv"
+    old = list(DTC.CSV_COLUMNS)
+    old.remove("clock_samples")
+    with path.open("w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(old)
+        writer.writerow(["x"] * len(old))
+    with pytest.raises(DTC.ConfoundRefusal) as exc:
+        DTC.Store(path)
+    assert f"{len(old)} columns against {len(DTC.CSV_COLUMNS)}" in str(exc.value)
+    assert "--fresh" in str(exc.value)
+
+    # --fresh is the documented way out and it must actually work.
+    store = DTC.Store(path, fresh=True)
+    store.close()
+    header = path.read_text().splitlines()[0]
+    assert tuple(next(csv.reader([header]))) == DTC.CSV_COLUMNS
+
+    # And a file this schema wrote is still appended to, or every resume dies.
+    reopened = DTC.Store(path)
+    reopened.close()
