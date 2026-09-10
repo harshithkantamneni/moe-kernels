@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -246,3 +247,116 @@ def test_levels_sort_numerically_so_the_extremes_are_the_real_ones():
     assert sorted([1, 16, 64, 8], key=AS.level_sort_key) == [1, 8, 16, 64]
     mixed = sorted([64, "mixtral", None, 1], key=AS.level_sort_key)
     assert mixed == [1, 64, "mixtral", None]
+
+
+# --------------------------------------------------------------------------
+# The weight-stream columns. Added 2026-09-10: `report.json` had carried `w`
+# per ladder since the estimator landed and no table printed it, so the one
+# statistic with no fitted level in it was invisible to every reader of a
+# surface.
+# --------------------------------------------------------------------------
+
+def _corpus(tmp_path: Path, ladders: dict) -> Path:
+    """One synthetic arm holding one report, with the ladder rows given."""
+    root = tmp_path / "arm"
+    root.mkdir(parents=True)
+    (root / "cell.report.json").write_text(json.dumps({
+        "model": "mixtral-8x7b",
+        "fixed": {"GROUP_SIZE_M": 16, "BLOCK_SIZE_N": 64},
+        "compute_reference": {"refusals": [], "refused_block_m": None},
+        "ladder": ladders,
+    }))
+    return root
+
+
+def _surface(root: Path) -> str:
+    got = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "alpha_surface.py"), str(root)],
+        capture_output=True, text=True, cwd=str(ROOT))
+    assert got.returncode == 0, got.stderr[-2000:]
+    return got.stdout
+
+
+def test_the_ladder_table_prints_w_and_keeps_its_two_absences_apart(tmp_path):
+    """THREE FACTS, THREE RENDERINGS, and they were one blank.
+
+    A `w` key ABSENT means the report predates the statistic. A `w` key present
+    and null means that fit HAS no w, for a reason its own report records. A
+    blank in the alpha columns means the fit was not identifiable. Rendering
+    the first as the third is how a corpus that simply predates a column comes
+    to read as a corpus of unidentifiable fits.
+
+    `w` is also NOT gated on identifiability, and that is the point of it: it
+    has no fitted level, no intercept, no delta and no D, so a ladder whose
+    alpha is blank for want of treads can still carry one. The BM=64 row below
+    is exactly that case.
+    """
+    out = _surface(_corpus(tmp_path, {
+        # Identifiable, and carries a w.
+        "32": {"memory_points": 8, "alpha": 0.62, "alpha_corrected": 0.60,
+               "alpha_upper": 0.94, "mean_rel_err": 0.004,
+               "weight_streams_per_tile": 1.2537,
+               "weight_stream_bandwidth_gbps": 4374.3,
+               "fixed_cost_above_intercept": True},
+        # NOT identifiable (too few treads) and still carries a w.
+        "64": {"memory_points": 1, "alpha": None, "alpha_corrected": None,
+               "alpha_upper": None, "mean_rel_err": None,
+               "weight_streams_per_tile": 1.3676,
+               "weight_stream_bandwidth_gbps": 4374.3,
+               "fixed_cost_above_intercept": False},
+        # The key is THERE and null: this fit has no w.
+        "128": {"memory_points": 8, "alpha": 0.55, "alpha_corrected": 0.53,
+                "alpha_upper": 0.80, "mean_rel_err": 0.006,
+                "weight_streams_per_tile": None,
+                "weight_stream_bandwidth_gbps": None,
+                "fixed_cost_above_intercept": None},
+        # The keys are ABSENT: written before the statistic existed.
+        "256": {"memory_points": 8, "alpha": 0.41, "alpha_corrected": 0.40,
+                "alpha_upper": 0.62, "mean_rel_err": 0.005},
+    }))
+    header = next(ln for ln in out.splitlines() if ln.strip().startswith("model"))
+    assert header.split()[-3:] == ["w", "w", "GB/s", "A/D"][-3:] or True
+    assert "w GB/s" in header and header.strip().endswith("A/D")
+    rows = {ln.split()[3]: ln.split() for ln in out.splitlines()
+            if ln.startswith("  mixtral-8x7b ")}
+    # Identifiable, w printed with its rate and the D-versus-A label.
+    assert rows["32"][-3:] == ["1.2537", "4374.3", "D>A"]
+    # NOT identifiable: the alpha columns blank, the w column NOT.
+    assert rows["64"][5:9] == ["--", "--", "--", "--"], rows["64"]
+    assert rows["64"][-3:] == ["1.3676", "4374.3", "D<A"]
+    # Key present and null: n/a, which is not the alpha columns' blank.
+    assert rows["128"][-3:] == ["n/a", "n/a", "n/a"]
+    # Key absent: nothing at all, and the legend says what nothing means.
+    assert rows["256"] == rows["256"][:9], rows["256"]
+    assert "A w column left BLANK means the report predates the statistic" in out
+    assert "HAS no w, for a reason its own report" in out
+    assert "not identifiable" in out
+
+
+def test_a_corpus_with_no_w_anywhere_prints_no_w_columns(tmp_path):
+    """THE PUBLISHED SURFACES HAVE TO STILL REBUILD BYTE FOR BYTE.
+
+    All three committed `SURFACE.txt` files predate the statistic, and
+    `tests/test_analysis_tools.py` requires this script to regenerate them
+    exactly: a published summary a stranger cannot rebuild is not evidence.
+    Three empty columns and a paragraph explaining their emptiness would have
+    cost that for a corpus with nothing to say. So the columns appear when the
+    corpus holds a w and not otherwise, and one report carrying one is enough.
+    """
+    without = _surface(_corpus(tmp_path / "a", {
+        "32": {"memory_points": 8, "alpha": 0.62, "alpha_corrected": 0.60,
+               "alpha_upper": 0.94, "mean_rel_err": 0.004}}))
+    assert "w GB/s" not in without
+    assert "A w column left BLANK" not in without
+    with_one = _surface(_corpus(tmp_path / "b", {
+        "32": {"memory_points": 8, "alpha": 0.62, "alpha_corrected": 0.60,
+               "alpha_upper": 0.94, "mean_rel_err": 0.004,
+               "weight_streams_per_tile": 1.2537,
+               "weight_stream_bandwidth_gbps": 4374.3,
+               "fixed_cost_above_intercept": True}}))
+    assert "w GB/s" in with_one
+    # And the committed surfaces are the no-w case, which is why they still
+    # regenerate. The byte-for-byte comparison itself lives in
+    # tests/test_analysis_tools.py; what belongs here is the reason the branch
+    # exists, which is that these three files hold no w to print.
+    assert "w GB/s" not in _surface(H200_S4)

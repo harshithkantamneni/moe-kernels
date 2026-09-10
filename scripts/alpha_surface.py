@@ -155,6 +155,52 @@ def level_sort_key(value):
         return (1, 0.0, str(value))
 
 
+#: The report.json key was ABSENT, i.e. this report was written before the
+#: weight-stream statistic existed. Distinct from a key present and null, which
+#: is a fit that HAS no w for a reason its own report records, and distinct
+#: again from the alpha columns' blank, which means not identifiable. Three
+#: facts, three renderings: conflating them is what put a "not identifiable"
+#: reading on a corpus that simply predates a column.
+SENTINEL = object()
+
+#: How each of the two absences renders in the w columns.
+EMPTY_COLUMN = ""
+NO_VALUE = "n/a"
+
+
+def _print_w_legend() -> None:
+    """What the three weight-stream columns are, and what each absence means."""
+    print("w is the same slope divided by a MEASURED time instead of a fitted")
+    print("level: milliseconds per extra M-tile over milliseconds to stream this")
+    print("layer's expert weight set once at the rate in the w GB/s column. It has")
+    print("no intercept, no delta and no D in it, so a row whose alpha is blank or")
+    print(f"{REFUSED} can still carry a w, and does. It is per M-TILE, comparable")
+    print("across BLOCK_N and across schedules at fixed BLOCK_M and never across")
+    print("BLOCK_M. A/D says whether that arm's compute reference's fitted fixed")
+    print("cost D stands above this ladder's own intercept A, which is exactly")
+    print("when the upper column exceeds 1 by arithmetic rather than by")
+    print("measurement.")
+    print()
+    print("A w column left BLANK means the report predates the statistic and was")
+    print("never rewritten, which is neither a measurement nor a refusal; every")
+    print("report published before 2026-09-10 reads that way. " + NO_VALUE + " is the")
+    print("other absence and means that fit HAS no w, for a reason its own report")
+    print("records: no memory branch to take a slope from, no model, dtype or rate")
+    print("on the fit, or a weight set this repository will not guess. Neither is")
+    print("'not identifiable', which is what a blank in the alpha columns means,")
+    print("and none of the three may be read as either of the others.")
+    print()
+
+
+def _w_cell(value, fmt: str) -> str:
+    """One w-column cell: the number, or which kind of absence it is."""
+    if value is SENTINEL:
+        return EMPTY_COLUMN
+    if value is None:
+        return NO_VALUE
+    return fmt.format(value)
+
+
 def reports(root: Path):
     for p in report_paths(root):
         try:
@@ -279,6 +325,17 @@ def main() -> int:
                 "corr": lad.get("alpha_corrected"),
                 "hi": lad.get("alpha_upper"),
                 "err": lad.get("mean_rel_err"),
+                # THE SECOND ESTIMATOR, BESIDE THE FIRST, and it was in the
+                # report.json and in no table. `w` is the same slope over a
+                # MEASURED stream time rather than over a fitted level, so it
+                # is the one column here that survives a refused reference and
+                # an unidentifiable alpha: it has no level in it. `SENTINEL`
+                # distinguishes "this report was written before w existed"
+                # from "this fit has no w", which are not the same fact and
+                # would otherwise both render blank.
+                "w": lad.get("weight_streams_per_tile", SENTINEL),
+                "w_gbps": lad.get("weight_stream_bandwidth_gbps", SENTINEL),
+                "d_over_a": lad.get("fixed_cost_above_intercept", SENTINEL),
                 "refused": refused,
                 "refused_bm": cref.get("refused_block_m"),
                 "checked": "refusals" in cref,
@@ -298,10 +355,27 @@ def main() -> int:
     print("reference was refused on its level, so nothing in it could be")
     print("classified at all. Those rows are WITHDRAWN, not uninformative.")
     print()
+    # THE W COLUMNS APPEAR WHEN THERE IS A W IN THE CORPUS, and are absent
+    # otherwise, which is not a style choice. Three SURFACE.txt files under
+    # results/published/ are published evidence and
+    # `tests/test_analysis_tools.py` requires this script to rebuild them BYTE
+    # FOR BYTE: a summary a stranger cannot regenerate is not evidence. Every
+    # one of them was written before the weight-stream statistic existed, so
+    # for those corpora there is no w to show and three empty columns plus a
+    # paragraph explaining their emptiness would cost the whole corpus its
+    # reproducibility to say nothing. The moment ONE report carries the key the
+    # columns are printed for every row, and the rows that predate it render
+    # blank, which is the distinction this block exists to keep.
+    has_w = any(x["w"] is not SENTINEL or x["w_gbps"] is not SENTINEL
+                or x["d_over_a"] is not SENTINEL for x in rows)
+    if has_w:
+        _print_w_legend()
     print(f"  {'model':<18} {'G':>4} {'BN':>4} {'BM':>4} {'treads':>7} "
-          f"{'alpha':>7} {'corrected':>10} {'upper':>7} {'fit err':>8}")
+          f"{'alpha':>7} {'corrected':>10} {'upper':>7} {'fit err':>8}"
+          + (f" {'w':>7} {'w GB/s':>8} {'A/D':>4}" if has_w else ""))
     print(f"  {'-'*18} {'-'*4} {'-'*4} {'-'*4} {'-'*7} {'-'*7} {'-'*10} "
-          f"{'-'*7} {'-'*8}")
+          f"{'-'*7} {'-'*8}"
+          + (f" {'-'*7} {'-'*8} {'-'*4}" if has_w else ""))
     for x in rows:
         # A refused reference outranks every other reason a cell is blank: it
         # is not that this BLOCK_M was uninformative, it is that nothing in the
@@ -313,8 +387,19 @@ def main() -> int:
         c = f"{x['corr']:.3f}" if ident and x["corr"] is not None else blank
         h = f"{x['hi']:.3f}" if ident and x["hi"] is not None else blank
         e = f"{x['err']*100:.2f}%" if ident and x["err"] is not None else blank
+        # NOT GATED ON `ident`, and that is the point of the statistic: w needs
+        # no fitted level, so it is readable on a cell whose alpha is not, and
+        # blanking it beside a blank alpha would hide the one number that
+        # survived. Its own two absences are rendered apart from each other and
+        # apart from the alpha columns' blank.
+        w = _w_cell(x["w"], "{:.4f}")
+        wg = _w_cell(x["w_gbps"], "{:.1f}")
+        ad = (EMPTY_COLUMN if x["d_over_a"] is SENTINEL
+              else NO_VALUE if x["d_over_a"] is None
+              else "D>A" if x["d_over_a"] else "D<A")
         print(f"  {x['model']:<18} {str(x['g']):>4} {str(x['bn']):>4} "
-              f"{x['bm']:>4} {x['treads']:>7} {a:>7} {c:>10} {h:>7} {e:>8}")
+              f"{x['bm']:>4} {x['treads']:>7} {a:>7} {c:>10} {h:>7} {e:>8}"
+              + (f" {w:>7} {wg:>8} {ad:>4}" if has_w else ""))
 
     ident = [x for x in rows if not x["refused"]
              and (x["treads"] or 0) >= MIN_TREADS and x["alpha"] is not None]
