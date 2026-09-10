@@ -315,8 +315,7 @@ def test_the_ladder_table_prints_w_and_keeps_its_two_absences_apart(tmp_path):
                 "alpha_upper": 0.62, "mean_rel_err": 0.005},
     }))
     header = next(ln for ln in out.splitlines() if ln.strip().startswith("model"))
-    assert header.split()[-3:] == ["w", "w", "GB/s", "A/D"][-3:] or True
-    assert "w GB/s" in header and header.strip().endswith("A/D")
+    assert "w GB/s" in header and header.strip().endswith("A/D"), header
     rows = {ln.split()[3]: ln.split() for ln in out.splitlines()
             if ln.startswith("  mixtral-8x7b ")}
     # Identifiable, w printed with its rate and the D-versus-A label.
