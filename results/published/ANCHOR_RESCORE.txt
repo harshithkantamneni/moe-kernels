@@ -53,7 +53,7 @@ REGISTERED GATE THRESHOLDS, constants in this file, printed before the table
 
 CARD CALIBRATIONS USED (the bracket's upper end, and the ridge for C3)
   NVIDIA A100-SXM4-80GB (measured): ceiling 1879.1 GB/s (write), pin 2039.0, ridge 145.81 FLOP/byte, measured 2026-09-02 @ 63de5b9f  [copy 1758, read 1744, triad 1799, write 1879]
-  NVIDIA H200 (measured): ceiling 4680.2 GB/s (write), pin 4814.3, ridge 152.81 FLOP/byte, measured 2026-09-09 @ 981a42f6  [copy 4301, read_reduce 4471, read_stream 4613, triad 4375, write 4680]
+  NVIDIA H200 (measured): ceiling 4679.4 GB/s (write), pin 4814.3, ridge 155.93 FLOP/byte, measured 2026-09-10 @ c0644bea  [copy 4301, read_reduce 4468, read_stream 4612, triad 4374, write 4679]
 
   RIDGE PROVENANCE, because C3 is scored against it. Counted from the report files
   themselves on this run, not asserted: a sentence about them went stale once already.
@@ -63,8 +63,8 @@ CARD CALIBRATIONS USED (the bracket's upper end, and the ridge for C3)
     `scripts/rescore_published_reports.py` replaced on this branch).
     nvidia_a100_sxm4_80gb    calibration 145.81 FLOP/byte (dense 262.37 TFLOP/s over its own triad bandwidth,
                              measured 2026-09-02); 7 report(s) stamp 145.80
-    nvidia_h200              calibration 152.81 FLOP/byte (dense 668.48 TFLOP/s over its own triad bandwidth,
-                             measured 2026-09-09); 19 report(s) stamp 152.80
+    nvidia_h200              calibration 155.93 FLOP/byte (dense 682.09 TFLOP/s over its own triad bandwidth,
+                             measured 2026-09-10); 19 report(s) stamp 155.90
     No report carries the swept ridge, a stranger ridge, or an unattributable card.
   C3 uses each card's OWN contemporaneous calibration and never a report's stamp.
 
@@ -74,7 +74,7 @@ REFUSED, 4 fit(s) -- listed, never defaulted to a number
   2026-09-01-nvidia_h200-alpha-s deepseek-v2-li G=16 BN= 64 BM=128
       no n=1 tread in this ladder (lowest is n=3); the anchor is a MEASURED single-tile time and there is nothing to substitute for it
   2026-09-01-nvidia_h200-cross-c qwen2-57b-a14b G= 1 BN=256 BM= -1
-      compute reference at BLOCK_M=256 implies 87.7 TFLOP/s, 13.1% of this card's measured 668; it classified every tread in this report and cannot be trusted to have found a memory branch. 0 identifiable ladder(s) in this report are excluded, and its 'not identifiable' verdicts are not evidence about the tile
+      compute reference at BLOCK_M=256 implies 87.7 TFLOP/s, 12.9% of this card's measured 682; it classified every tread in this report and cannot be trusted to have found a memory branch. 0 identifiable ladder(s) in this report are excluded, and its 'not identifiable' verdicts are not evidence about the tile
   2026-09-02-nvidia_a100_sxm4_80 qwen2-57b-a14b G= 1 BN=256 BM= -1
       compute reference at BLOCK_M=256 implies 3.6 TFLOP/s, 1.4% of this card's measured 262; it classified every tread in this report and cannot be trusted to have found a memory branch. 0 identifiable ladder(s) in this report are excluded, and its 'not identifiable' verdicts are not evidence about the tile
 
@@ -99,34 +99,34 @@ cap/ridge is 2BM/(b (alpha_lo + phi)) over the card's own ridge; lin/ridge is th
   a100_s qwen2-57b-  16   64   3   64  0.720  0.613  0.860   0.937  +17.2%    1662   1360   in     0.678     0.716
   a100_s qwen2-57b-  64   64   3   32  0.659  0.422  0.585   0.636  +36.8%    2184   1370  OUT     0.500     0.520  !bus ~0.558
   a100_s qwen2-57b-  64   64   3  128  0.851  0.864  1.000   1.000   +1.7%     937    913  OUT     0.941     1.016  clip
-  h200   mixtral-8x   1  256   4   32  0.900  0.699  0.978   1.000  +23.0%    4363   3358   in     0.296     0.300
-  h200   mixtral-8x   1   64   4   32  1.007  0.861  1.000   1.000  +15.2%    3990   3384  OUT     0.241     0.243  clip
-  h200   mixtral-8x   1  256   4   64  0.823  0.761  1.000   1.000   +9.1%    3760   3407   in     0.537     0.550  clip
-  h200   mixtral-8x   1   64   4   64  0.933  0.842  1.000   1.000  +11.2%    3540   3140   in     0.487     0.498  clip
-  h200   mixtral-8x   8   64   4   32  0.710  0.661  0.927   0.954   +7.6%    3637   3350   in     0.313     0.317
-  h200   mixtral-8x   8   64   4   64  0.685  0.638  0.975   1.000   +8.1%    3394   3095   in     0.637     0.656
-  h200   mixtral-8x  16   64   4   32  0.622  0.645  0.905   0.931   -3.1%    3266   3351  OUT     0.320     0.325
-  h200   mixtral-8x  16   64   4   64  0.646  0.615  0.953   0.981   +6.0%    3276   3052   in     0.661     0.681
-  h200   mixtral-8x  64   64   4   32  0.639  0.650  0.910   0.936   -1.2%    3337   3360  OUT     0.317     0.322
-  h200   mixtral-8x  64   64   4   64  0.731  0.676  1.000   1.000   +8.7%    3420   3102   in     0.603     0.619  clip
-  h200   qwen2-57b-   1   64   4   32  0.706  0.680  0.922   0.949   +4.9%    3677   3474   in     0.300     0.308
-  h200   qwen2-57b-   1   64   4   64  0.687  0.702  0.968   0.997   +0.2%    3490   3437  OUT     0.569     0.597
-  h200   qwen2-57b-   8   64   4   32  0.751  0.672  0.917   0.944  +11.7%    3927   3451   in     0.304     0.312
-  h200   qwen2-57b-   8   64   4   64  0.714  0.694  0.970   0.999   +5.2%    3621   3393   in     0.575     0.603
-  h200   qwen2-57b-  16   64   4   32  0.685  0.653  0.895   0.921   +5.7%    3676   3441   in     0.312     0.320
-  h200   qwen2-57b-  16   64   4   64  0.664  0.669  0.942   0.970   +1.6%    3479   3372  OUT     0.596     0.626
-  h200   qwen2-57b-  64   64   4   32  0.654  0.622  0.878   0.904   +5.9%    3585   3344   in     0.327     0.336
-  h200   mixtral-8x   1   64   3   32  0.998  0.862  1.000   1.000  +14.3%    3954   3390   in     0.240     0.243  clip
-  h200   mixtral-8x   1   64   3   64  0.916  0.904  1.000   1.000   +2.8%    3481   3381   in     0.454     0.463  clip
-  h200   mixtral-8x  16   64   3   32  0.657  0.649  0.903   0.929   +1.7%    3454   3378   in     0.318     0.323
-  h200   mixtral-8x  16   64   3   64  0.735  0.693  0.977   1.000   +7.1%    3624   3345   in     0.589     0.605
-  h200   qwen2-57b-   1   64   3   32  0.709  0.687  0.918   0.945   +4.4%    3707   3522   in     0.297     0.305
-  h200   qwen2-57b-   1   64   3   64  0.692  0.704  0.968   0.996   +0.6%    3517   3451  OUT     0.567     0.595
-  h200   qwen2-57b-   8   64   3   32  0.712  0.675  0.904   0.930   +6.4%    3780   3516   in     0.303     0.310
-  h200   qwen2-57b-   8   64   3   64  0.723  0.688  0.970   0.999   +7.2%    3668   3366   in     0.580     0.609
-  h200   qwen2-57b-  16   64   3   32  0.703  0.660  0.892   0.918   +7.3%    3786   3487   in     0.309     0.317
-  h200   qwen2-57b-  16   64   3   64  0.675  0.666  0.946   0.974   +3.5%    3518   3347   in     0.598     0.629
-  h200   qwen2-57b-  64   64   3   32  0.661  0.638  0.873   0.899   +4.7%    3641   3443   in     0.320     0.328
+  h200   mixtral-8x   1  256   4   32  0.900  0.699  0.978   1.000  +23.0%    4363   3358   in     0.290     0.294
+  h200   mixtral-8x   1   64   4   32  1.007  0.861  1.000   1.000  +15.2%    3990   3384  OUT     0.236     0.238  clip
+  h200   mixtral-8x   1  256   4   64  0.823  0.761  1.000   1.000   +9.1%    3760   3407   in     0.526     0.539  clip
+  h200   mixtral-8x   1   64   4   64  0.933  0.842  1.000   1.000  +11.2%    3540   3140   in     0.477     0.488  clip
+  h200   mixtral-8x   8   64   4   32  0.710  0.661  0.927   0.954   +7.6%    3637   3350   in     0.306     0.311
+  h200   mixtral-8x   8   64   4   64  0.685  0.638  0.975   1.000   +8.1%    3394   3095   in     0.625     0.643
+  h200   mixtral-8x  16   64   4   32  0.622  0.645  0.904   0.931   -3.1%    3266   3351  OUT     0.314     0.318
+  h200   mixtral-8x  16   64   4   64  0.646  0.615  0.953   0.981   +6.0%    3276   3052   in     0.648     0.668
+  h200   mixtral-8x  64   64   4   32  0.639  0.650  0.910   0.936   -1.2%    3337   3360  OUT     0.311     0.316
+  h200   mixtral-8x  64   64   4   64  0.731  0.676  1.000   1.000   +8.7%    3420   3102   in     0.591     0.607  clip
+  h200   qwen2-57b-   1   64   4   32  0.706  0.680  0.922   0.949   +4.9%    3677   3474   in     0.294     0.302
+  h200   qwen2-57b-   1   64   4   64  0.687  0.702  0.968   0.997   +0.2%    3490   3437  OUT     0.557     0.585
+  h200   qwen2-57b-   8   64   4   32  0.751  0.672  0.917   0.944  +11.7%    3927   3451   in     0.298     0.306
+  h200   qwen2-57b-   8   64   4   64  0.714  0.694  0.970   0.999   +5.2%    3621   3393   in     0.563     0.591
+  h200   qwen2-57b-  16   64   4   32  0.685  0.653  0.895   0.921   +5.7%    3676   3441   in     0.306     0.314
+  h200   qwen2-57b-  16   64   4   64  0.664  0.669  0.941   0.970   +1.6%    3479   3372  OUT     0.584     0.614
+  h200   qwen2-57b-  64   64   4   32  0.654  0.622  0.878   0.904   +5.9%    3585   3344   in     0.321     0.330
+  h200   mixtral-8x   1   64   3   32  0.998  0.862  1.000   1.000  +14.3%    3954   3390   in     0.235     0.238  clip
+  h200   mixtral-8x   1   64   3   64  0.916  0.904  1.000   1.000   +2.8%    3481   3381   in     0.445     0.454  clip
+  h200   mixtral-8x  16   64   3   32  0.657  0.649  0.903   0.929   +1.7%    3454   3378   in     0.312     0.316
+  h200   mixtral-8x  16   64   3   64  0.735  0.693  0.977   1.000   +7.1%    3624   3345   in     0.577     0.592
+  h200   qwen2-57b-   1   64   3   32  0.709  0.687  0.918   0.945   +4.4%    3707   3522   in     0.292     0.299
+  h200   qwen2-57b-   1   64   3   64  0.692  0.704  0.968   0.996   +0.6%    3517   3451  OUT     0.555     0.583
+  h200   qwen2-57b-   8   64   3   32  0.712  0.675  0.904   0.930   +6.4%    3780   3516   in     0.297     0.304
+  h200   qwen2-57b-   8   64   3   64  0.723  0.688  0.970   0.999   +7.2%    3668   3366   in     0.568     0.597
+  h200   qwen2-57b-  16   64   3   32  0.703  0.660  0.892   0.918   +7.3%    3786   3487   in     0.303     0.311
+  h200   qwen2-57b-  16   64   3   64  0.675  0.666  0.945   0.974   +3.5%    3518   3347   in     0.586     0.616
+  h200   qwen2-57b-  64   64   3   32  0.661  0.638  0.873   0.899   +4.7%    3641   3443   in     0.313     0.322
 
 SUMMARY
   nvidia_a100_sxm4_80gb  (12 fits)
@@ -140,7 +140,7 @@ SUMMARY
     bracket width                    0.096 to 0.338 in alpha (median 0.257)
     shift from the published point   median 0.095, max 0.153
     published anchor above the bus   0 of 28
-    what sets the width              the anchor reaches 3362 GB/s and the ceiling is 4680, a 39% window in BW and so in alpha
+    what sets the width              the anchor reaches 3362 GB/s and the ceiling is 4679, a 39% window in BW and so in alpha
 
   READ THE WIDTH AS THE ANSWER, not as a failure of the method. It is the
   gap between what the kernel achieved at n=1 and what the card can do,
@@ -186,10 +186,10 @@ RESULT: CLAIM containment FAIL every published alpha lies inside its own anchor 
 GATE C2  CLAIM    FAIL    every published alpha lies inside its own anchor bracket
                         measured 12 of 40 published alpha-corrected values fall outside   gate 0 outside
                           2026-09-01-nvidia_h200-alp mixtral-8x7b   G= 1 BM= 32  published 1.007 vs bracket [0.861, 1.000]  ABOVE ROOF: alpha > 1 is not a fraction of a weight read
-                          2026-09-01-nvidia_h200-alp mixtral-8x7b   G=16 BM= 32  published 0.622 vs bracket [0.645, 0.905]  BELOW alpha_lo by 0.023 in alpha; the anchor sits -1.73 spreads BELOW its own branch, within noise of lying ON it, so ASSUMPTION A is strained and alpha_lo is inflated -- the interval being tight rather than the published point being wrong
+                          2026-09-01-nvidia_h200-alp mixtral-8x7b   G=16 BM= 32  published 0.622 vs bracket [0.645, 0.904]  BELOW alpha_lo by 0.023 in alpha; the anchor sits -1.73 spreads BELOW its own branch, within noise of lying ON it, so ASSUMPTION A is strained and alpha_lo is inflated -- the interval being tight rather than the published point being wrong
                           2026-09-01-nvidia_h200-alp mixtral-8x7b   G=64 BM= 32  published 0.639 vs bracket [0.650, 0.910]  BELOW alpha_lo by 0.011 in alpha; the anchor sits -0.70 spreads BELOW its own branch, within noise of lying ON it, so ASSUMPTION A is strained and alpha_lo is inflated -- the interval being tight rather than the published point being wrong
                           2026-09-01-nvidia_h200-alp qwen2-57b-a14b G= 1 BM= 64  published 0.687 vs bracket [0.702, 0.968]  BELOW alpha_lo by 0.015 in alpha; the anchor sits +0.21 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
-                          2026-09-01-nvidia_h200-alp qwen2-57b-a14b G=16 BM= 64  published 0.664 vs bracket [0.669, 0.942]  BELOW alpha_lo by 0.004 in alpha; the anchor sits +1.85 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
+                          2026-09-01-nvidia_h200-alp qwen2-57b-a14b G=16 BM= 64  published 0.664 vs bracket [0.669, 0.941]  BELOW alpha_lo by 0.004 in alpha; the anchor sits +1.85 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
                           2026-09-01-nvidia_h200-cro qwen2-57b-a14b G= 1 BM= 64  published 0.692 vs bracket [0.704, 0.968]  BELOW alpha_lo by 0.012 in alpha; the anchor sits +0.80 spreads ABOVE its own branch, so ASSUMPTION A holds and the lower end stands: the published point really is under its own bound
                           2026-09-02-nvidia_a100_sxm mixtral-8x7b   G= 1 BM= 32  published 1.009 vs bracket [0.872, 1.000]  ABOVE ROOF: alpha > 1 is not a fraction of a weight read
                           2026-09-02-nvidia_a100_sxm mixtral-8x7b   G=16 BM= 32  published 0.637 vs bracket [0.449, 0.580]  ABOVE: the fitted level is too small for the card's bandwidth
@@ -201,8 +201,8 @@ GATE C2  CLAIM    FAIL    every published alpha lies inside its own anchor brack
 RESULT: CLAIM tile_cap PASS at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge | measured worst 0.678 of the ridge at 2026-09-02-nvidia_a100_sxm/qwen2-57b-a14b G=16 BM=64 | gate < 1.000 for every BLOCK_M <= 64 fit
 GATE C3  CLAIM    PASS    at the bracket's LOWEST alpha, BLOCK_M <= 64 still caps below the ridge
                         measured worst 0.678 of the ridge at 2026-09-02-nvidia_a100_sxm/qwen2-57b-a14b G=16 BM=64   gate < 1.000 for every BLOCK_M <= 64 fit
-                          BM= 32  cap/ridge in [0.240, 0.500] over 21 fits; the RETRACTED 2BM/(b alpha) reads [0.243, 0.520]
-                          BM= 64  cap/ridge in [0.454, 0.678] over 18 fits; the RETRACTED 2BM/(b alpha) reads [0.463, 0.716]
+                          BM= 32  cap/ridge in [0.235, 0.500] over 21 fits; the RETRACTED 2BM/(b alpha) reads [0.238, 0.520]
+                          BM= 64  cap/ridge in [0.445, 0.678] over 18 fits; the RETRACTED 2BM/(b alpha) reads [0.454, 0.716]
 RESULT: CLAIM pooled_alpha_excluded FAIL no anchor bracket admits the pooled alpha 0.558 | measured 4 of 40 brackets contain 0.558 | gate 0 brackets
 GATE C4  CLAIM    FAIL    no anchor bracket admits the pooled alpha 0.558
                         measured 4 of 40 brackets contain 0.558   gate 0 brackets
