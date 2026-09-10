@@ -724,6 +724,13 @@ def test_cell_bands_have_nothing_to_band_on_a_curve_with_no_crossing():
 
 WITHDRAWN_BAND = (160.3, 176.2)
 
+#: The per-card bands below are `alpha_refit.card_ridge_bands()` over the
+#: COMMITTED calibrations, so they move when a card is recalibrated. The H200's
+#: read [152.1, 165.6] around a ridge of 162.8 until its 2026-09-09 session
+#: sampled the dense GEMM's clock under load and put the ridge at 152.8; the
+#: A100's has not moved. What the test is about is that the two cards DISAGREE
+#: and that neither band is the withdrawn pair, which holds under both.
+
 
 def test_each_card_gets_its_own_band_off_its_own_calibration():
     """The replacement for `RIDGE_BAND` in the cap table.
@@ -738,30 +745,42 @@ def test_each_card_gets_its_own_band_off_its_own_calibration():
     """
     refit = _load("alpha_refit")
     bands = dict((card, band) for card, _ridge, band in refit.card_ridge_bands())
-    assert bands["nvidia_h200"] == [152.1, 165.6]
+    assert bands["nvidia_h200"] == [142.8, 155.4]
     assert bands["nvidia_a100_sxm4_80gb"] == [139.6, 149.3]
     for band in bands.values():
         assert tuple(band) != WITHDRAWN_BAND
         assert band[0] < band[1], "a two-machine band was the only wide one"
-    assert bands["nvidia_h200"][0] > bands["nvidia_a100_sxm4_80gb"][1]
+    # The two cards disagree, which is the whole point: one band is not both.
+    # They were DISJOINT while the H200's ridge was 162.8 and they OVERLAP now
+    # that its 2026-09-09 recalibration puts it at 152.8, so what is asserted
+    # is that the bands differ, not that they are separated: a recalibration
+    # may narrow the gap between two cards without making one band serve both.
+    assert bands["nvidia_h200"] != bands["nvidia_a100_sxm4_80gb"]
+    assert bands["nvidia_h200"][1] > bands["nvidia_a100_sxm4_80gb"][1]
+    assert bands["nvidia_h200"][0] > bands["nvidia_a100_sxm4_80gb"][0]
 
 
 def test_the_cap_verdict_has_all_three_branches_and_they_move_with_the_band():
     """Every branch, including the one the withdrawn band used to get wrong.
 
-    A cap of 150 rows per expert crosses on the A100 and never crosses on the
-    H200, and against 160.3-176.2 it would have been called "NEVER crosses" for
-    both. The verdict is a claim about a device, and this is the arithmetic
-    that makes it one.
+    A cap of 150 rows per expert crosses on the A100 and is undecided on the
+    H200, and against 160.3-176.2 it would have been called "NEVER crosses"
+    for both. The verdict is a claim about a device, and this is the
+    arithmetic that makes it one. (On the 2026-09-02 calibration, where the
+    H200's band was 152.1-165.6, that same cap read "NEVER crosses" there;
+    the branch a cap lands in moves with the card's own calibration, which is
+    the property being pinned rather than any one pairing.)
     """
     refit = _load("alpha_refit")
     a100 = [139.6, 149.3]
-    h200 = [152.1, 165.6]
+    h200 = [142.8, 155.4]
     assert refit.cap_verdict(150.0, a100) == "crosses"
-    assert refit.cap_verdict(150.0, h200) == "NEVER crosses"
+    assert refit.cap_verdict(150.0, h200) == "inside the band"
     assert refit.cap_verdict(145.0, a100) == "inside the band"
-    assert refit.cap_verdict(160.0, h200) == "inside the band"
+    assert refit.cap_verdict(160.0, h200) == "crosses"
     assert refit.cap_verdict(0.0, a100) == "NEVER crosses"
+    assert refit.cap_verdict(0.0, h200) == "NEVER crosses"
+    assert refit.cap_verdict(150.0, a100) != refit.cap_verdict(150.0, h200)
 
 
 def test_the_adversarial_cap_table_names_its_cards_and_not_the_withdrawn_band(
@@ -773,7 +792,7 @@ def test_the_adversarial_cap_table_names_its_cards_and_not_the_withdrawn_band(
     assert refit.main([*csvs, "--bootstrap", "5", "--adversarial"]) == 0
     out = capsys.readouterr().out
     section = out.split("### 4.")[1]
-    assert "vs nvidia_h200 152.1-165.6" in section
+    assert "vs nvidia_h200 142.8-155.4" in section
     assert "vs nvidia_a100_sxm4_80gb 139.6-149.3" in section
     quoting = [ln for ln in section.splitlines() if "160.3-176.2" in ln]
     assert not any(ln.strip().startswith("|") for ln in quoting), \
@@ -781,7 +800,7 @@ def test_the_adversarial_cap_table_names_its_cards_and_not_the_withdrawn_band(
     assert all("used to quote" in ln for ln in quoting)
     assert "vs ridge band 160.3-176.2" not in out
     assert "NEVER crosses" in section
-    assert "ridge of 152.1" in section, "C2's rows are H200 rows"
+    assert "ridge of 142.8" in section, "C2's rows are H200 rows"
 
 
 def test_the_cap_table_refuses_rather_than_falling_back_to_the_constant(monkeypatch,
@@ -829,11 +848,18 @@ def test_the_crossing_report_docstring_no_longer_teaches_the_withdrawn_ridge():
     report = _load("crossing_report")
     # The usage block continues with a backslash, so the literal joins into one
     # line and the runnable command has to be matched as a substring.
-    assert "--ridge 162.8 --impl vllm_fused_experts" in report.__doc__
+    # The card's own ridge, whatever the committed calibration says today:
+    # 162.8 until 2026-09-09, 152.8 since. A usage line that names a
+    # superseded ridge is the same defect as one that named the withdrawn
+    # 160.3, only slower to notice.
+    from moe.bench import roofline as RL
+
+    own = RL.load_hardware("measured_nvidia_h200").ridge_point("bf16")
+    assert f"--ridge {own:.1f} --impl vllm_fused_experts" in report.__doc__
     assert "--ridge 160.3 --impl" not in report.__doc__
     assert "used to read `--ridge 160.3`" in report.__doc__, \
         "the withdrawn figure is named as history, so a reader can follow it"
     staircase = report.print_staircase.__doc__
-    assert "152.1-165.6" in staircase
+    assert "142.8-155.4" in staircase
     assert "CV 21.2%" in staircase, "the measured spreads are unchanged"
     assert "against the measured ridge band" not in staircase
