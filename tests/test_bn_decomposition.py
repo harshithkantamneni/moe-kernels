@@ -231,7 +231,7 @@ def planted_cells(alpha_b, alpha_a, *, group_m=16, bns=(32, 64, 128),
     base.pop("BLOCK_SIZE_N", None)
     cells, verdicts, spreads = BND.arm_alphas(
         samples, MIXTRAL, block_ns=bns, subjects=subjects, ridge=rho,
-        bandwidth_gbps=bw, b=2, base_pinned=base, capability=(9, 0),
+        bandwidth_gbps=bw, dtype="bf16", base_pinned=base, capability=(9, 0),
         ceiling_tflops=ceiling, sm_count=132)
     return cells, verdicts, spreads
 
@@ -2494,7 +2494,7 @@ def _replay(subjects=None):
     cells, verdicts, spreads = BND.arm_alphas(
         samples, MIXTRAL, block_ns=tuple(payload["block_ns"]),
         subjects=subjects, ridge=payload["ridge"],
-        bandwidth_gbps=payload["bandwidth_gbps"], b=BND.dtype_bytes("bf16"),
+        bandwidth_gbps=payload["bandwidth_gbps"], dtype="bf16",
         base_pinned=payload["pinned"], capability=(9, 0),
         ceiling_tflops=payload["ceiling_tflops"], sm_count=132)
     return cells, verdicts, spreads, payload
@@ -2589,8 +2589,7 @@ def test_the_weight_stream_slope_reproduces_the_sessions_own_currency():
     memory-branch slope divided by that.
     """
     cells, _, _, payload = _replay((16, 32, 64, 128))
-    stream = BND.WEIGHT_STREAM_MS(MIXTRAL, BND.dtype_bytes("bf16"),
-                                  payload["bandwidth_gbps"])
+    stream = BND.WEIGHT_STREAM_MS(MIXTRAL, "bf16", payload["bandwidth_gbps"])
     assert stream == pytest.approx(0.6443, abs=0.0002)
     got = {(c.block_n, c.block_m): c.weight_streams
            for c in _replay((16, 32, 64, 128))[0] if c.usable}
@@ -2606,29 +2605,63 @@ def test_the_weight_stream_slope_reproduces_the_sessions_own_currency():
 
 
 def test_the_weight_stream_estimator_is_the_shared_one_the_day_it_lands():
-    """The recurring defect, guarded from the other side.
+    """The recurring defect, guarded from the side it actually failed on.
 
-    This file carries a PROVISIONAL local copy of an estimator another slice
-    owns. The failure mode is not that the copy is wrong, it is that the shared
-    one lands and the copy stays beside it. The moment any candidate module
-    exports the pair, this asserts that it is what got used.
+    This test used to loop over `WEIGHT_STREAM_CANDIDATES`, and if no module in
+    it exported the pair it accepted a `LOCAL PROVISIONAL` source string and
+    passed. That is the same list-of-names dependence the defect itself has:
+    `moe.bench.weights` landed on 2026-09-10 with the shared pair in it, the
+    tuple named `moe.bench.weight_stream` and `moe.bench.ai_model`, nothing
+    resolved, the local copy stayed in service, and this test went green over
+    two estimators of one statistic running side by side.
+
+    So it no longer asks the tuple what to check. It asks the FILE whether it
+    still defines the arithmetic, and it asks the numbers whether they came
+    from the shared module.
     """
-    for module_name, ms_name, per_tile_name in BND.WEIGHT_STREAM_CANDIDATES:
-        try:
-            module = importlib.import_module(module_name)
-        except Exception:                                      # noqa: BLE001
-            continue
-        if callable(getattr(module, ms_name, None)) and callable(
-                getattr(module, per_tile_name, None)):
-            assert BND.WEIGHT_STREAM_MS is getattr(module, ms_name), (
-                f"{module_name}.{ms_name} exists and this file is still using "
-                "its own copy")
-            assert BND.WEIGHT_STREAMS_PER_TILE is getattr(module, per_tile_name)
-            assert "LOCAL PROVISIONAL" not in BND.WEIGHT_STREAM_SOURCE
-            return
-    # Nothing has landed yet, and the page has to SAY so rather than print a
-    # number that looks like everyone else's.
-    assert BND.WEIGHT_STREAM_SOURCE.startswith("LOCAL PROVISIONAL")
+    import moe.bench.weights as W
+
+    # 1. THE ARITHMETIC IS NOT HERE. Any local `E x 3 F H x b / bandwidth` in
+    #    this script is a second estimator whatever it is named, so the check
+    #    is on the source text and not on one retired pair of names.
+    source = (ROOT / "scripts" / "bn_decomposition.py").read_text()
+    for banned in ("_weight_stream_local", "_streams_per_tile_local"):
+        assert banned not in source, (
+            f"{banned} is back in bn_decomposition.py: the local copy of the "
+            "weight-stream estimator is exactly what moe.bench.weights exists "
+            "to replace")
+    assert "LOCAL PROVISIONAL" not in BND.WEIGHT_STREAM_SOURCE
+    assert not hasattr(BND, "_weight_stream_local")
+    assert not hasattr(BND, "_streams_per_tile_local")
+
+    # 2. THE NAMES THIS FILE USES ARE THE SHARED FUNCTIONS THEMSELVES, not
+    #    wrappers around a private copy: identity, not agreement.
+    assert BND.WEIGHT_STREAM_MS is W.weight_stream_ms
+    assert BND.WEIGHT_STREAMS_PER_TILE is W.weight_streams_per_tile
+    assert BND.WEIGHT_STREAM_SOURCE == "moe.bench.weights.weight_stream_ms"
+
+    # 3. AND THE REGISTRATION POINTS AT THE MODULE THAT SHIPPED IT, so the
+    #    resolver cannot silently miss again.
+    assert any(m == "moe.bench.weights" for m, _, _ in
+               BND.WEIGHT_STREAM_CANDIDATES), BND.WEIGHT_STREAM_CANDIDATES
+
+    # 4. THERE IS NO FALLBACK LEFT TO FALL BACK TO. A resolver that finds
+    #    nothing must raise rather than hand back a copy with a label on it.
+    saved = BND.WEIGHT_STREAM_CANDIDATES
+    try:
+        BND.WEIGHT_STREAM_CANDIDATES = (
+            ("moe.bench.no_such_module_at_all", "weight_stream_ms",
+             "weight_streams_per_tile"),)
+        with pytest.raises(ImportError):
+            BND._load_weight_stream()
+    finally:
+        BND.WEIGHT_STREAM_CANDIDATES = saved
+
+    # 5. And the number is the shared module's, to the last bit, on the pair
+    #    the 2026-09-10 synthesis quotes.
+    rate = 4374.299702465323
+    assert (BND.WEIGHT_STREAM_MS(MIXTRAL, "bf16", rate)
+            == W.weight_stream_ms(MIXTRAL, "bf16", rate))
 
 
 def test_report_json_carries_the_weight_stream_denominator_and_its_estimator():
@@ -2741,6 +2774,59 @@ def test_the_registered_warp_check_reads_the_slope_it_was_registered_on():
     assert len(said) == 1
     assert f"against {line:.4f} on the BM=32/64 line at this BN, +20.0%" in \
         said[0]
+
+
+def test_the_warp_check_is_registered_against_the_peers_it_is_read_against():
+    """THE RECURRING DEFECT, on the one cell the identification gain rests on.
+
+    `under_occupied_watch` registered the check against `peers[0], peers[1]`
+    and `under_occupied_reading` performed it against `peers[0], peers[-1]`.
+    At the default subjects those are BM=32/64 registered and BM=32/128
+    performed, which is a threefold difference in the excess reported at
+    BM=16 x BN=32.
+
+    THE CORPUS CANNOT SEE IT, which is why it survived: every BLOCK_M=128 cell
+    of the committed arm carries `weight_streams is None`, so the reading's own
+    filter leaves two peers and the two expressions agree. This test therefore
+    builds the case the round exists to produce, a THIRD full-grid height
+    carrying a w, and asserts the two name the same pair there.
+    """
+    pinned = dict(SWEEP.FIXED, num_stages=4, num_warps=8, GROUP_SIZE_M=16,
+                  BLOCK_SIZE_K=64)
+    pinned.pop("BLOCK_SIZE_N", None)
+    subjects, bns = (16, 32, 64, 128), (32,)
+    assert BND.under_occupied_cells(pinned, subjects, bns) == ((16, 32),)
+    # Three full-grid peers at this BN, all carrying a w, which the committed
+    # arm does not have and the pod run is expected to.
+    ws = {32: 1.254, 64: 1.368, 128: 1.900}
+    cells = [BND.AlphaCell(block_n=32, block_m=bm, alpha=None,
+                           alpha_upper=None, alpha_corrected=None,
+                           memory_points=8, treads=8, spread=None,
+                           basis="planted", weight_streams=w,
+                           slope_memory_ms=1.0)
+             for bm, w in ws.items()]
+    cells.append(BND.AlphaCell(
+        block_n=32, block_m=16, alpha=None, alpha_upper=None,
+        alpha_corrected=None, memory_points=8, treads=8, spread=None,
+        basis="planted", weight_streams=2.0, slope_memory_ms=1.0))
+
+    registered = "\n".join(BND.under_occupied_watch(pinned, subjects, bns))
+    performed = "\n".join(BND.under_occupied_reading(cells, pinned, subjects,
+                                                     bns))
+    reg = re.search(r"read its w against the line BM=(\d+) and BM=(\d+)",
+                    registered)
+    perf = re.search(r"on the BM=(\d+)/(\d+) line", performed)
+    assert reg and perf, (registered, performed)
+    assert reg.groups() == perf.groups(), (reg.groups(), perf.groups())
+    # And the pair really is a CHOICE here: there are three peers to pick from,
+    # so this is not two expressions agreeing because only one pair exists.
+    assert len(BND._occupied_peers(pinned, subjects, 16, 32)) == 3
+
+    # The excess is read off the pair both of them name, and no other.
+    m0, m1 = (int(g) for g in reg.groups())
+    expect = ws[m0] + (ws[m1] - ws[m0]) * (
+        math.log2(16) - math.log2(m0)) / (math.log2(m1) - math.log2(m0))
+    assert f"against {expect:.4f} on the BM={m0}/{m1} line" in performed
 
 
 def test_the_small_tile_evidence_is_read_from_the_corpus_not_quoted():

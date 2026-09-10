@@ -311,8 +311,10 @@ estimator of the same thing:
     an extrapolation back to zero tiles over a lever arm of up to 44 treads on a
     ladder that is not exactly affine. `w` is the statistic every clean result
     in the 2026-09-10 analysis was expressed in. It is IMPORTED and not defined
-    here, see `WEIGHT_STREAM_CANDIDATES`, and while the shared one has not
-    landed the page says so on the line that prints it.
+    here, from `moe.bench.weights` and by name, see
+    `WEIGHT_STREAM_CANDIDATES`; this file keeps no copy of that arithmetic to
+    fall back to, and the page names the module every number on it was
+    divided by.
   * the A-VERSUS-D label. `alpha_upper = B/(A + B - D)` exceeds 1 exactly when
     `D > A`, which is arithmetic and not physics. In the committed 2026-09-10
     arm that held in four of six cells and in NO others, and those are exactly
@@ -1394,47 +1396,55 @@ def weight_elements(cfg) -> int:
     return 3 * cfg.intermediate_size * cfg.hidden_size
 
 
-#: Where the weight-stream slope lives once the slice that owns it lands, as
-#: `(module, ms-per-stream, streams-per-tile)`. PROBED BY NAME, NEVER FORKED:
-#: the whole point of the statistic is that one definition of it is used
-#: everywhere, and this file has already been the place where a second copy of
-#: an estimator went quietly out of step with the first.
+#: Where the weight-stream slope lives, as `(module, ms-per-stream,
+#: streams-per-tile)`. PROBED BY NAME, NEVER FORKED: the whole point of the
+#: statistic is that one definition of it is used everywhere, and this file has
+#: already been the place where a second copy of an estimator went quietly out
+#: of step with the first.
 #:
-#: WHAT THE INTERFACE HAS TO BE, so that the slice that lands it and this file
-#: cannot disagree about what was meant:
+#: IT LANDED ON 2026-09-10 AND THIS TUPLE DID NOT FOLLOW IT. The pair shipped in
+#: `moe.bench.weights`, and this tuple named `moe.bench.weight_stream` and
+#: `moe.bench.ai_model`, neither of which exports it. So nothing resolved, the
+#: local provisional copy stayed in service, two estimators of one statistic ran
+#: side by side, and the guard test written to catch exactly that passed: it
+#: only fires on a module this tuple names. Both copies happened to agree to
+#: every digit (0.6443482339382172 ms on mixtral bf16 at 4374.2997 GB/s), which
+#: is what a silent fork looks like on the day it lands and not a defence.
 #:
-#:     weight_stream_ms(cfg, dtype_bytes, bandwidth_gbps) -> float
-#:         milliseconds to stream ALL experts' weights ONCE at that rate,
-#:         i.e. `num_experts x 3 F H x b / bandwidth`. No tiling in it.
-#:     weight_streams_per_tile(slope_ms_per_tile, stream_ms) -> float
-#:         that ladder's `B` divided by that, which is `w`.
+#: THE INTERFACE IS THE SHIPPED ONE, not the one this note used to register.
+#: The registration said `weight_stream_ms(cfg, dtype_bytes, bandwidth_gbps)`
+#: and `weight_streams_per_tile(slope_ms_per_tile, stream_ms) -> float`; what
+#: `moe.bench.weights` ships, and what every call site here now passes, is:
 #:
-#: Until it lands, `_weight_stream_local` below is used and SAYS SO on the page
-#: and in report.json. The pair is resolved once, at import, and the source
-#: string travels with every number computed from it.
+#:     weight_stream_ms(model, dtype: str, bandwidth_gbps) -> float
+#:         milliseconds to stream the ROUTED expert weight set ONCE at that
+#:         rate, i.e. `num_experts x 3 F H x bytes(dtype) / bandwidth`. The
+#:         dtype is a NAME and not a byte count, because two dtypes share a
+#:         width and a weight set is not a guess.
+#:     weight_streams_per_tile(slope_ms, model, dtype, bandwidth_gbps, *,
+#:                             bandwidth_source="") -> WeightStreamSlope
+#:         that ladder's `B` divided by the stream, carried with the rate it
+#:         was divided by. `.streams` is `w`; the object exists so the number
+#:         and its denominator cannot drift apart in the prose.
+#:
+#: The pair is resolved once, at import, and the source string travels with
+#: every number computed from it, onto the page and into report.json.
 WEIGHT_STREAM_CANDIDATES = (
-    ("moe.bench.weight_stream", "weight_stream_ms", "weight_streams_per_tile"),
-    ("moe.bench.ai_model", "weight_stream_ms", "weight_streams_per_tile"),
+    ("moe.bench.weights", "weight_stream_ms", "weight_streams_per_tile"),
 )
 
 
-def _weight_stream_local(cfg, b: int, bandwidth_gbps: float) -> float:
-    """`E x 3 F H x b / bandwidth`, in milliseconds. PROVISIONAL, see above."""
-    if bandwidth_gbps <= 0:
-        raise ValueError("a weight stream needs a positive bandwidth")
-    return 1e3 * cfg.num_experts * weight_elements(cfg) * b / (
-        bandwidth_gbps * 1e9)
-
-
-def _streams_per_tile_local(slope_ms_per_tile: float, stream_ms: float
-                            ) -> float:
-    """`w = B / T_w`. PROVISIONAL, see above."""
-    return slope_ms_per_tile / stream_ms
-
-
 def _load_weight_stream():
-    """The shared weight-stream estimator, or the local one, and which it is."""
+    """The shared weight-stream estimator, and where it came from.
+
+    THERE IS NO LOCAL FALLBACK, and its absence is the fix. A fallback is what
+    let this file run its own copy for a day after the shared one landed, so a
+    module that cannot be imported is now an ImportError at import time rather
+    than a second estimator with a label on it.
+    """
+    tried = []
     for module_name, ms_name, per_tile_name in WEIGHT_STREAM_CANDIDATES:
+        tried.append(module_name)
         try:
             module = importlib.import_module(module_name)
         except Exception:                                      # noqa: BLE001
@@ -1443,12 +1453,12 @@ def _load_weight_stream():
         per_tile = getattr(module, per_tile_name, None)
         if callable(ms) and callable(per_tile):
             return ms, per_tile, f"{module_name}.{ms_name}"
-    return (_weight_stream_local, _streams_per_tile_local,
-            "LOCAL PROVISIONAL copy in bn_decomposition.py: none of "
-            + ", ".join(f"{m}.{f}" for m, f, _ in WEIGHT_STREAM_CANDIDATES)
-            + " is importable yet. It is the same arithmetic, E x 3 F H x b "
-              "over the card's measured rate, and it must be deleted the day "
-              "the shared one lands, not left beside it")
+    raise ImportError(
+        "no weight-stream estimator: none of " + ", ".join(tried)
+        + " exports weight_stream_ms and weight_streams_per_tile. This file "
+          "deliberately keeps no copy of that arithmetic to fall back to, "
+          "because keeping one is how it came to run its own for a day after "
+          "the shared estimator landed")
 
 
 WEIGHT_STREAM_MS, WEIGHT_STREAMS_PER_TILE, WEIGHT_STREAM_SOURCE = (
@@ -2667,7 +2677,7 @@ def import_reference(target: RefVerdict, sources: list[RefVerdict], cfg,
 
 
 def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
-               bandwidth_gbps: float, b: int, base_pinned: dict, capability,
+               bandwidth_gbps: float, dtype: str, base_pinned: dict, capability,
                ceiling_tflops: float, sm_count: int, rng=None,
                reference_clock_mhz: float | None = None
                ) -> tuple[list[AlphaCell], list[RefVerdict], dict[int, float | None]]:
@@ -2681,11 +2691,16 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
     """
     cells: list[AlphaCell] = []
     spreads: dict[int, float | None] = {}
+    # THE DTYPE TRAVELS AS A NAME, and the byte width is derived from it here.
+    # `moe.bench.weights` takes a name because two dtypes share a width and a
+    # weight set derived from a width alone is a guess; the tile-resource bill
+    # below takes the width, so the one conversion is done once, here.
+    b = dtype_bytes(dtype)
     # ONE COMPLETE WEIGHT STREAM, ONCE, for the whole arm: every cell's `w` is
     # against the same denominator, so two cells' `w` differ only in their
     # slopes. Zero bandwidth is a planted world with no rate, and it gives None
     # rather than a division.
-    stream_ms = (WEIGHT_STREAM_MS(cfg, b, bandwidth_gbps)
+    stream_ms = (WEIGHT_STREAM_MS(cfg, dtype, bandwidth_gbps)
                  if bandwidth_gbps > 0 else None)
     # The operating point each arm's reference ladder held, read off the rows
     # once. A record on every verdict, printed beside the fixed-roof fraction,
@@ -2793,8 +2808,18 @@ def arm_alphas(samples, cfg, *, block_ns, subjects, ridge: float,
             # this arm's six `alpha_upper` values above 1, so both are worth
             # having on a cell the alpha fit refused.
             streams = None
-            if fit.slope_memory is not None and stream_ms:
-                streams = WEIGHT_STREAMS_PER_TILE(fit.slope_memory, stream_ms)
+            if (fit.slope_memory is not None and stream_ms
+                    and math.isfinite(fit.slope_memory)):
+                # The shared estimator returns a `WeightStreamSlope` carrying
+                # the rate it divided by; the cell keeps the scalar, and the
+                # rate is on the page and in report.json beside it as
+                # `weight_stream_ms`. A NON-FINITE slope is not offered to it:
+                # a degenerate branch fit produces one and the estimator
+                # refuses it by design, and a refusal here would take down an
+                # arm over a cell that measured nothing.
+                streams = WEIGHT_STREAMS_PER_TILE(
+                    fit.slope_memory, cfg, dtype, bandwidth_gbps,
+                    bandwidth_source="the run's own calibrated rate").streams
             over = (None if fit.intercept is None
                     else fit.overhead_ms > fit.intercept)
             cells.append(AlphaCell(
@@ -3784,6 +3809,35 @@ def _occupied_peers(base_pinned: dict, subjects, bm: int, bn: int
         and warp_tile_bill(dict(base_pinned, BLOCK_SIZE_N=bn), o).occupied)
 
 
+def _trend_pair(peers):
+    """The two full-warp-grid heights the trend line is drawn through.
+
+    ONE EXPRESSION, READ BY THE REGISTRATION AND BY THE READING, and it was two.
+    Until 2026-09-10 `under_occupied_watch` REGISTERED the check against
+    `peers[0], peers[1]` and `under_occupied_reading` PERFORMED it against
+    `peers[0], peers[-1]`. At the default subjects that is BM=32/64 registered
+    against BM=32/128 performed, a threefold difference in the excess reported
+    at the one cell the whole identification gain rests on. The corpus hid it:
+    every BLOCK_M=128 cell of the committed arm carries no `w`, so the reading's
+    own filter left exactly two peers and the two expressions agreed by
+    accident. It fires the moment a third height carries a `w`, which is the
+    outcome this round exists to produce.
+
+    THE TWO LOWEST, and the reason is not symmetry. The line is EXTRAPOLATED
+    DOWN to a height below every peer, so the shortest extrapolation, off the
+    nearest peers, is the least model-dependent one available; and the highest
+    swept height is BLOCK_M=128, whose branch membership is the least reliable
+    in the sweep, since it produced no alpha at any BLOCK_N in the committed
+    arm. It is also what was REGISTERED before the run, and moving the
+    performed check onto the registration is the only direction of this repair
+    that leaves a pre-registration pre-registered.
+
+    Takes anything indexable: the watch passes heights, the reading passes
+    `(height, w)` pairs, and both get the same two elements of the same list.
+    """
+    return peers[0], peers[1]
+
+
 def under_occupied_watch(base_pinned: dict, subjects, block_ns) -> list[str]:
     """The check registered against each under-occupied cell, before the run.
 
@@ -3813,9 +3867,10 @@ def under_occupied_watch(base_pinned: dict, subjects, block_ns) -> list[str]:
                 f"BLOCK_N to set a trend and this sweep has {len(peers)}, so "
                 "this cell's slope arrives with nothing to be read against.")
             continue
+        lo, hi = _trend_pair(peers)
         out.append(
             f"REGISTERED CHECK, BM={bm} x BN={bn}: read its w against the line "
-            f"BM={peers[0]} and BM={peers[1]} set at the SAME BN={bn}. Both "
+            f"BM={lo} and BM={hi} set at the SAME BN={bn}. Both "
             "live hypotheses are smooth in")
         out.append(
             "  BLOCK_M there, so a w ABOVE that line is the warp grid and "
@@ -3829,11 +3884,13 @@ def under_occupied_reading(cells, base_pinned: dict, subjects, block_ns
                            ) -> list[str]:
     """`under_occupied_watch`'s check, performed on the cells a run returned.
 
-    The trend is a straight line in `log2(BLOCK_M)` through the peers' `w`,
-    which is the coarsest form that uses both of them and introduces no
-    parameter of its own. Reported as an excess, never as a gate: what to do
-    about an inflated `B` is a decision for whoever reads the arm, and a bar
-    invented here would be a bar with no measurement behind it.
+    The trend is a straight line in `log2(BLOCK_M)` through two peers' `w`,
+    which is the coarsest form that uses two of them and introduces no
+    parameter of its own. WHICH TWO IS `_trend_pair`, and it is the same
+    expression the registration reads, which until 2026-09-10 it was not.
+    Reported as an excess, never as a gate: what to do about an inflated `B` is
+    a decision for whoever reads the arm, and a bar invented here would be a
+    bar with no measurement behind it.
     """
     by_key = {(c.block_m, c.block_n): c for c in cells}
     out: list[str] = []
@@ -3854,7 +3911,7 @@ def under_occupied_reading(cells, base_pinned: dict, subjects, block_ns
                        "full-grid heights at this BN carry a w, so the "
                        "registered check has nothing to read it against")
             continue
-        (m0, w0), (m1, w1) = peers[0], peers[-1]
+        (m0, w0), (m1, w1) = _trend_pair(peers)
         slope = (w1 - w0) / (math.log2(m1) - math.log2(m0))
         expect = w0 + slope * (math.log2(bm) - math.log2(m0))
         out.append(
@@ -4521,8 +4578,22 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     it is the denominator of the issue-efficiency figure printed beside every
     fixed-roof fraction, and of V3's normalised spread.
     """
+    # ONE DTYPE, TWO REPRESENTATIONS, RECONCILED HERE. `b` is the byte WIDTH
+    # the tile-resource bill needs; `args.dtype` is the NAME the weight-set byte
+    # count needs, because two dtypes can share a width and a weight set
+    # derived from a width alone is a guess. In a real run both come from
+    # `dtype_bytes(args.dtype)` at one line in main; a caller that hands in a
+    # `b` from some other dtype is describing two experiments, and says so here
+    # rather than silently scoring the alphas at one width and every `w` at
+    # another.
+    if b != dtype_bytes(args.dtype):
+        raise ValueError(
+            f"b={b} is not the width of --dtype {args.dtype} "
+            f"({dtype_bytes(args.dtype)}): the tile-resource bill and the "
+            "weight-stream denominator would be computed for two dtypes")
     kw = dict(block_ns=block_ns, subjects=subjects, ridge=ridge,
-              bandwidth_gbps=bandwidth_gbps, b=b, base_pinned=base_pinned,
+              bandwidth_gbps=bandwidth_gbps, dtype=args.dtype,
+              base_pinned=base_pinned,
               capability=capability, ceiling_tflops=ceiling_tflops,
               sm_count=sm_count, reference_clock_mhz=reference_clock_mhz)
     draws = args.draws if draws is None else draws
@@ -4577,7 +4648,7 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
     # `alpha_upper > 1` is arithmetic. Neither replaces `alpha`, which is what
     # every gate here is still scored on; they are printed so a reader can see
     # which of the three a given cell's oddity belongs to.
-    stream_ms = (WEIGHT_STREAM_MS(cfg, b, bandwidth_gbps)
+    stream_ms = (WEIGHT_STREAM_MS(cfg, args.dtype, bandwidth_gbps)
                  if bandwidth_gbps > 0 else None)
     lines += ["", "## The cells", "",
               "   BN   BM   treads  mem   alpha    corrected       w  A/D   "
@@ -4744,9 +4815,10 @@ def analyse_run(samples, cfg, args, *, ridge: float, bandwidth_gbps: float,
         # travel with this one: the cells carried `weight_streams` as a bare
         # ratio while its denominator and the identity of the estimator that
         # produced it were printed on the page and NOWHERE in report.json. A
-        # reader working from the JSON alone could not tell the LOCAL
-        # PROVISIONAL copy from the shared estimator the day it lands, which is
-        # exactly the distinction `WEIGHT_STREAM_CANDIDATES` exists to keep.
+        # reader working from the JSON alone could not tell this file's own
+        # copy from the shared estimator, which is exactly the distinction
+        # `WEIGHT_STREAM_CANDIDATES` exists to keep, and on 2026-09-10 the copy
+        # was the one that ran.
         "weight_stream_ms": stream_ms,
         "weight_stream_source": WEIGHT_STREAM_SOURCE,
         "ceiling_tflops": ceiling_tflops, "ceiling_source": ceiling_source,
@@ -5726,7 +5798,8 @@ def _main(argv=None) -> int:                                    # noqa: C901
     _, _, prior_spreads = arm_alphas(
         prior_samples, cfg, block_ns=tuple(int(v) for v in
                                            args.block_n_list.split(",")),
-        subjects=subjects, ridge=rr.ridge, bandwidth_gbps=bandwidth, b=b,
+        subjects=subjects, ridge=rr.ridge, bandwidth_gbps=bandwidth,
+        dtype=args.dtype,
         base_pinned=dict(SWEEP.FIXED, num_stages=args.num_stages,
                          num_warps=args.num_warps, GROUP_SIZE_M=args.group_m,
                          BLOCK_SIZE_K=args.block_k),
@@ -5794,7 +5867,7 @@ def _main(argv=None) -> int:                                    # noqa: C901
         "",
         "WEIGHT-STREAM SLOPE  " + WEIGHT_STREAM_SOURCE,
         "             one complete stream of this layer's expert weights is "
-        + (f"{WEIGHT_STREAM_MS(cfg, b, bandwidth):.4f} ms at "
+        + (f"{WEIGHT_STREAM_MS(cfg, args.dtype, bandwidth):.4f} ms at "
            f"{bandwidth:.1f} GB/s" if bandwidth > 0 else "UNAVAILABLE: no "
            "bandwidth to stream at")
         + ". Every cell is scored on w = B / that, beside its alpha.",
