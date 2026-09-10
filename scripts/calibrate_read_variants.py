@@ -103,6 +103,7 @@ sys.path.insert(0, str(HERE))
 import block_m_crossing_sweep as SWEEP  # noqa: E402
 import torch  # noqa: E402
 
+from moe.bench import calibrate as CAL  # noqa: E402
 from moe.bench import exit_codes as EX  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.bench import timing  # noqa: E402
@@ -118,6 +119,11 @@ ANOMALY_GBPS = 4483.4
 #: the attached card is preferred over it when there is one, and the report
 #: names which was used.
 REGISTERED_READ_GBPS = 4389.4
+
+#: The reduction read's names in a committed calibration, current first.
+#: `calibrate.measure_bandwidth` renamed `read` to `read_reduce` on 2026-09-02;
+#: the legacy name is kept so an older file still resolves.
+READ_REDUCE_NAMES = ("read_reduce", "read")
 
 #: The margin C4 is asked to explain: 4483.4 / 4389.4. A formulation that buys
 #: less than this does not dissolve the anomaly on its own.
@@ -224,13 +230,23 @@ def registered_read(gpu_name: str) -> tuple[float, str]:
 
     The committed calibration for the attached card first, because that is the
     denominator the published efficiency columns actually use today, and it has
-    moved: the H200's `read` reads 4469.6 GB/s in
-    `moe/bench/hardware/measured_nvidia_h200.yaml` since the reduction shape was
-    fixed, against the 4389.4 the anomaly was computed against. Falls back to
-    that historical constant, named as historical, when the card has no
-    calibration here. Either way the figure was measured by `time_eager` and the
-    sentence says so, because the whole point of the term is that two loops are
-    being compared.
+    moved twice: the H200's reduction read was 4469.6 GB/s once the reduction
+    shape was fixed and is 4471.4 on the 2026-09-09 calibration, against the
+    4389.4 the anomaly was computed against. Falls back to that historical
+    constant, named as historical, when the card has no calibration here.
+    Either way the figure was measured by `time_eager` and the sentence says
+    so, because the whole point of the term is that two loops are compared.
+
+    THE PATTERN IS LOOKED UP UNDER BOTH ITS NAMES. `calibrate.measure_bandwidth`
+    renamed `read` to `read_reduce` on 2026-09-02, and every file published
+    since carries the new name and no `read`. This function matched the single
+    name `read` until 2026-09-09, so against the session's own calibration it
+    found nothing, fell through to the historical constant, and said "no
+    committed calibration for this card" over a file that was right there: the
+    denominator was 1.9% low and the sentence naming it was false. `read_stream`
+    is NOT a counterpart and is not walked: it is the Triton one-store-per-
+    program loop, and this term exists to compare the ATen reduction loop
+    against the instrument's own.
 
     Reads through `block_m_crossing_sweep._measured_detail`, private and
     borrowed on purpose: it is the same candidate order `roofline.load_measured`
@@ -239,10 +255,14 @@ def registered_read(gpu_name: str) -> tuple[float, str]:
     second answer to one question.
     """
     detail = SWEEP._measured_detail(gpu_name) if gpu_name else {}
-    for row in detail.get("bandwidth_patterns") or []:
-        if row.get("pattern") == "read" and row.get("gbps"):
+    by_name = {row.get("pattern"): row
+               for row in detail.get("bandwidth_patterns") or []
+               if isinstance(row, dict)}
+    for name in READ_REDUCE_NAMES:
+        row = by_name.get(name)
+        if row and row.get("gbps") and CAL.DISOWNED not in str(row.get("note") or ""):
             return float(row["gbps"]), (
-                f"{gpu_name}: the committed calibration's `read` pattern, "
+                f"{gpu_name}: the committed calibration's `{name}` pattern, "
                 "measured by moe.bench.calibrate via timing.time_eager")
     return REGISTERED_READ_GBPS, (
         "the 2026-08-26 session's `read` figure, the one the anomaly was "
