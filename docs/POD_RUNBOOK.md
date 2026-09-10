@@ -55,23 +55,30 @@ bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrat
   from the ledger to force a latched arm to run again.
 - **A RESUME RE-RUNS NO INVALID ROW.** That is the latch, and it means a
   session whose arms landed INVALID resumes into nothing however many defects
-  have been fixed since. The 2026-09-09 session landed six. The next session
-  for those arms is `--new`, which opens a fresh ledger deliberately; the
-  driver prints the exact command and the state each arm is expected to reach
-  under the heading THE NEXT SESSION, AND WHY IT IS `--new`:
+  have been fixed since. The 2026-09-09 session landed six INVALID rows and the
+  2026-09-10 one landed four. So the next session is `--new`, which opens a
+  fresh ledger deliberately, and it re-runs an INVALID arm only where the
+  defect behind it has actually been fixed. The driver prints the exact
+  command and the state each arm is expected to reach under the heading THE
+  NEXT SESSION, AND WHY IT IS `--new`:
 
   ```bash
   bash scripts/h200_gaps_session.sh --new \
-    --only calibrate,pin_probe-n64-g1,roofline-n64-g1,cap_test,bn_g16,dtype,bm128_depth,alias_ablation
+    --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter
   ```
 
-  ~71 priced / ~143 bounded minutes. `roofline-n64-g1` is expected to reach
-  CLAIM_FAIL and that is its result (C3 at +0.053 against a 0.10 gate, C4 at
-  0.552 against 0.95); `alias_ablation` is expected either to ask P1 or to stop
-  at its probe for 2.0 min and exit 3; the other five are expected DONE or
-  CLAIM_FAIL, and an INVALID among them means that arm's fix did not land.
-  Editing rows out of a ledger by hand is the other way back and it rewrites
-  the record of what was spent.
+  ~180 priced / ~253 bounded minutes. THIS BLOCK CARRIED THE 2026-09-09 SET
+  UNTIL 2026-09-10 (calibrate, pin_probe-n64-g1, roofline-n64-g1, cap_test,
+  bn_g16, dtype, bm128_depth, alias_ablation at ~71 priced minutes) and all
+  eight of those have since been spent, so it was re-booking arms that already
+  hold a result. `bn_g16` is expected to reach CLAIM_FAIL again and that is
+  its result; `counter` is expected DONE or CLAIM_FAIL and either is the
+  session's headline. THREE ARMS ARE DELIBERATELY OUT of the set:
+  `roofline-n64-g1`, `alias_ablation` and `noise_floor` each hold an INVALID
+  whose cause is a gate or an instrument rather than a flag, so re-running them
+  buys the same word for the same minutes; the driver names them where it
+  prints the booking. Editing rows out of a ledger by hand is the other way
+  back and it rewrites the record of what was spent.
 - The session's own start is read from the UTC stamp at the END of the
   session directory's name, so a resume into the default directory still
   counts the calibration its first pass published. An operator-supplied
@@ -127,7 +134,7 @@ against `--list` by `tests/test_docs.py`.
 | `bm128_depth` | 5 | KERNEL | five clean memory-bound treads at the production tile, `--r-max 2048`; the whole 128 row currently rests on two fits | KEEP, and the BM=32 scaling partner is not optional: at the pairing {128, 256} the non-vacuity floor is 0.838 of the roof, no BLOCK_M=256 ladder in the corpus reaches it, and the arm refused its own reference and landed INVALID after 292 s on 2026-09-09. THE PARTNER IS NOT A FLAG and this row named one (`--partner-block-m 32`) until now: it is unconditional in `scripts/bm128_depth.py` (`SMALL_TILE_BLOCK_M`, in `BLOCK_SIZES`), so it is in the plan and in the run id without either branch asking for it, and the 5 min books whatever that plan prices (252 s without the partner, 294 s with it) |
 | `alias_ablation` | 14 | WALL | THE FIRST INFERENTIAL LINK: is the per-tile slope DRAM traffic at all, measured with no byte model, bandwidth, ridge or intercept | ADDED on the verdict's finding that nothing scheduled it; read its P1 RESULT line's WORD, not its exit code. BOOKED `--dot-fallback refuse` SINCE 2026-09-09: under `allow` the 2026-09-09 run fell to dot mode, spent 308 s and latched INVALID with P1 UNKNOWN at alpha >= 0.229 (ARMS.tsv, rc 3: level, placebo, form and bracket all FAILed after measuring). A probe miss now costs 2.0 min and exits 3; the sum grid it probes was widened downward in warps |
 | `noise_floor` | 120 | WALL | a real between-replicate sd, `--replicates 3`, four arms, `--publish` into `results/published/NOISE_FLOOR.json`; until it exists every MDE line says ASSUMED | KEEP only bounded and published, which it now is; the verdict's other precondition (children read on CLAIM_FAIL) is that script's own fix |
-| `bn_g16` | 36 | KERNEL | `alpha_a` as a fitted slope and the residual that says whether the three-term model is complete; the arm that decides the BLOCK_M=128 row (it lives only if `alpha_a < 0.17`) | KEEP, booked 36 not 11 |
+| `bn_g16` | 46 | KERNEL | `alpha_a` as a fitted slope and the residual that says whether the three-term model is complete. THE "IT LIVES ONLY IF `alpha_a < 0.17`" READING OF THE BLOCK_M=128 ROW IS GONE SINCE 2026-09-10, and this cell carried it until then: the term `alpha_a` is the coefficient of was refuted on the ladder slope alone (its BLOCK_N dependence must double with BLOCK_M and measures 1.115 +/- 0.003 against 2.000), so the BLOCK_M=128 row now turns on `alpha_b` instead, at a threshold of 0.784, and the counter arm is what measures it | KEEP, and booked 46 since 2026-09-10, not 36. The swept set gained a THIRD subject tile: `--tiles 16,32,64,128`. At {32, 64, 128} on 2026-09-10 the BLOCK_M=128 branch was discarded (its memory branch came within 15% of its compute branch) and six cells over TWO heights were left to fit two parameters, at which every candidate extra term correlates +0.72 to +0.98 with the activation column. BLOCK_M=16 is the added height because its ladder is memory-bound end to end on this card. The plan goes from 1428 timings and 2142 s to 1836 and 2754 |
 | `anchor_measure` | 5 | WALL | the memory-branch level measured at matched reuse rather than extrapolated | KEEP |
 | `anchor_rescore` | 0 | FREE | every committed report re-scored under the fresh anchor, written under the session directory, never into `results/published` | KEEP |
 | `occupancy` | 23 | KERNEL | does alpha track residency or program order; P2 is EXPECTED to fail and that FAIL is the finding | not in the verdict's KEEP table; booked with `--fail-on-gate` so the failing claim reaches the ledger as one |
@@ -137,7 +144,8 @@ against `--list` by `tests/test_docs.py`.
 | `dtype` | 8 | KERNEL | how much of the 1.15 fp8/bf16 crossing is the config vLLM resolved per dtype | CUT in the verdict until its C3 window is re-derived (at the corrected spread the window has no discriminating power); still booked. RE-SCOPED 2026-09-09: the cross-config arm transplants BLOCK_SIZE_M and GROUP_SIZE_M only, because the full fp8-config-at-bf16-width transplant is infeasible on sm_90 at 22 of 28 cells and, when it was run, vLLM 0.27.1's `override_config` (no try/finally) leaked the fp8 config process-wide and corrupted 41 arms |
 | `span_dense` | 31 | KERNEL | the 0.563 extent-versus-kernel split on the dense grid, run WHOLE: `--max-minutes` was removed because it scored a truncated grid as complete | CUT in the verdict until truncation is a refusal; the driver books the honest time instead |
 | `span` | 0 | FREE | the same on the published grid, `--no-densify`; refuses on `c2_grid_power` before spending a minute | CUT: booked zero, the refusal is the answer |
-| `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is the ANSWER on a rented pod, and that script files it as INVALID (its own fix) | keep the plan, do not act on its printed ncu recipe (`docs/COUNTERS.md` 4.6) |
+| `counter_plan` | 1 | WALL | whether a DRAM counter route is open on this box; BLOCKED is the ANSWER on a rented pod, not a broken instrument | KEEP, and it now GATES the arm below. TWO THINGS IN THIS ROW WERE STALE UNTIL 2026-09-10. It said the script files BLOCKED as INVALID: since 2026-09-03 `dram_counter_route.py --probe` scores one gate per verdict and exits through `exit_codes.classify`, so OPEN is DONE and BLOCKED is CLAIM_FAIL. And it said do not act on the printed ncu recipe, which was the right instruction while every rented pod refused the counter; on 2026-09-10 the probe read OPEN (ncu 2025.1.1.0 attached, no permission error, `cap_eff 0xa80425fb`, no `sys_admin`), so acting on it is what the `counter` arm is |
+| `counter` | 120 | WALL | THE COUNTER RUN, added 2026-09-10: DRAM traffic at two BLOCK_N values at fixed BLOCK_M. It is the only instrument in the study that reads BYTES, and `alpha_b = (dR/dn - a_per_tile)/W` from it has no fitted level, no `delta`, no `D` and no assumed bandwidth: today the same six `bn_g16` cells give 0.6087, 0.5930 or 0.5143 depending only on which rate is assumed. The BLOCK_N contrast is what decides whether the term that replaces the refuted activation re-read is TRAFFIC or TIME: 3.85 GB against 2.06 GB of weight-set-equivalent per M-tile at BLOCK_M=64, or the same bytes at both | RUN IT ONLY WHEN `counter_plan` READ OPEN; a BLOCKED probe retires it for the whole session in ten seconds. 120 WALL min is the plan page's own "two pod-hours end to end" for ONE BLOCK_N set of 12 profiled invocations; a second BLOCK_N is a second set. The driver checks that `dram_counter_route.py` defines `--run` and `skip_arm`s this row by name if it does not, rather than spending an argparse exit 2 on the card |
 
 `bn_g1` was DROPPED, not demoted: at GROUP_SIZE_M=1 that script's own design
 self-test exits INVALID (sd of `alpha_a` 0.1759 against a gate of 0.025) and
@@ -448,8 +456,8 @@ re-measured.
 |---|---|---|
 | bandwidth, triad | 4374-4377 GB/s | reproduces to 0.06% across sessions |
 | dense bf16 | 701-771 TFLOP/s | the term that does NOT reproduce: 9.9% spread |
-| bf16 ridge | about 152.8 FLOP/byte | the card's 2026-09-09 calibration, 668.5 TFLOP/s over 4374.5 GB/s; the 2026-09-02 one gave 162.8 and this row said so until 2026-09-09, and the three before that spanned 160.3-176.2, which this row called "the band every absolute figure carries" until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, no card's own band, `docs/FINDINGS.md` RETRACTIONS (e)). The 6.1% move between the last two rentals is the same effect and is the largest single uncertainty in any roof fraction quoted here |
-| fp8_e4m3 | about 1409 TFLOP/s | 1.83x the bf16 figure |
+| bf16 ridge | about 155.9 FLOP/byte, band 147.9-155.9 | the card's 2026-09-10 calibration, 682.1 TFLOP/s over 4374.3 GB/s. This row said 152.8 from the 2026-09-09 calibration until 2026-09-10, 162.8 from the 2026-09-02 one until 2026-09-09, and before that a "band every absolute figure carries" of 160.3-176.2 until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, not any card's own band, `docs/FINDINGS.md` RETRACTIONS (e)). Read the committed `moe/bench/hardware/measured_<card>.yaml` rather than this row: four rentals have moved it and the between-rental spread in the compute ceiling is the largest single uncertainty in any roof fraction quoted here |
+| fp8_e4m3 | about 1454 TFLOP/s | 2.13x the bf16 figure, measured at 1380 MHz against bf16's 1470 on 2026-09-10 |
 
 **The gates.**
 
@@ -989,7 +997,7 @@ crashed run.
 | "Using ..." config line missing | vLLM logs it once per `(E,N,dtype,device)` via `info_once` | make sure the cell is the first `fused_experts` call in the process, and that info-level logging is on |
 | every efficiency column is empty | no calibration resolved for this device | `python scripts/calibrate_hardware.py`; the file resolves by device NAME |
 | sweep says the calibration is foreign | `measured_<device>.yaml` was overwritten between sweep and publish | restore `$SESSION/calibration/`, then publish |
-| `ncu` says ERR_NVGPUCTRPERM | expected; performance counters need a host module flag a container tenant cannot set | use `nsys`, the measured ceilings, and the L2 flush axis. See `docs/RUNPOD.md`. |
+| `ncu` says ERR_NVGPUCTRPERM | the host module flag is not set, which a container tenant cannot set for itself. IT IS NOT UNIVERSAL and this row said "expected" until 2026-09-10: on the 2026-09-10 RunPod H200 `dram_counter_route.py --probe` read OPEN, with ncu 2025.1.1.0 attaching and no permission error, `cap_eff 0xa80425fb` and no `sys_admin`, and the host flag absent | run `python scripts/dram_counter_route.py --probe` FIRST: it distinguishes the four failures that look identical from a log and it costs ten seconds. If it reads BLOCKED, use `nsys`, the measured ceilings and the L2 flush axis (`docs/RUNPOD.md`); if it reads OPEN, the `counter` arm is bookable. |
 | override_config appears to do nothing | the hook moved between vLLM versions | P4 catches this. `try_get_optimal_moe_config` reads it via `get_config()`, so it exists under some name |
 | a step crashed on `--out` / `--out-dir` | a step script renamed a flag | P11b catches this. Fix the invocation in `scripts/pod_session.sh` |
 | the whole script is a bash syntax error | an apostrophe inside a heredoc that sits inside `$( )` | bash 3.2 tracks quotes through it, and reports the error hundreds of lines away. No apostrophes in those blocks. |

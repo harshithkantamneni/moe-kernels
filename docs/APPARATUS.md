@@ -116,6 +116,18 @@ under-load clock nor the 216 rows that name the tile. Every count here is now
 the count of the pool its own row names, taken over
 `results/published/2026-09-09-nvidia_h200-gaps-session/results/`.
 
+A SECOND CENSUS, 2026-09-10, says the same thing on three times the cells and
+moves the reference. Over 2328 cells carrying both a clock and a power reading
+(`results/published/2026-09-10-nvidia_h200-gaps-session/`), power is a constant
+and clock is not: power median 693.4 W with 95% of cells within 2% of the cap,
+against an SM clock spanning 1275 to 1935 MHz, a 1.52x range. Its per-tile
+medians are 1732 / 1440 / 1500 / 1665 MHz at BLOCK_M 32 / 64 / 128 / 256, and
+its calibration GEMM held 1470 MHz rather than 1485. The table above is the
+2026-09-09 census and is left at its own figures, because a census is a
+measurement of one rental and a band drawn around another rental's GEMM is the
+error this whole section is about. READ THE COMMITTED CALIBRATION for the
+reference clock, never this page.
+
 The reference is therefore not the middle of anything: 1485 MHz at 691 W sits
 near the LOW end of what dense tensor work does on this card, and a +/-5% band
 around it is 74 MHz where the session spans 660. Under the rule in force until
@@ -390,6 +402,57 @@ three-term cap, so the published caps stand" (commit f732035); the BLOCK_M =
 to TEMPO's `b2/b`, which was a unit artefact of reading through (LIN). All
 three are listed with their corrected numbers in `docs/FINDINGS.md` and
 `docs/STUDY.md`.
+
+### The estimator changed on 2026-09-10, and both are printed
+
+**What `B/(A+B)` does wrong.** `LadderFit.alpha` is a slope over a FITTED
+LEVEL: `A` is the value of the ladder's straight line at `n = 0`, a place no
+tread was ever measured. The ladders it is read off are affine to within 2-7%
+of their own time and no better, and they are extrapolated back from treads
+that reach `n = 16` on the occupancy arm and `n = 132` on `cap_test`'s
+BLOCK_M=16 ladder, so `A` carries the whole misfit of the ladder and the
+statistic divides by it. What that produced, over the 23 ladders the
+2026-09-10 session fitted: FIVE have a NEGATIVE intercept, and FIVE return
+`B/(A+B)` above 1.0 on a quantity that is a fraction of one weight read and
+cannot exceed it. The variant `alpha_upper = B/(A+B-D)`, which subtracts a
+reference arm's fixed cost `D`, exceeds 1 exactly when `D > A`. That is
+arithmetic, not physics, and it held in four of `bn_g16`'s six cells and in no
+others. The partner it returns is unphysical for the same reason: `bn_g16`'s
+`alpha_a = -0.8143` has a sign that lies entirely inside `D`'s own
+leave-one-tread-out error, and `ai_model.alpha_b_from_fitted` REFUSES the pair.
+
+**The weight-stream slope, which has no level in it.** Define
+
+    w = (ms per extra M-tile) / (ms to stream the layer's entire expert
+                                 weight set once at the card's measured rate)
+
+No fitted level, no intercept, no `delta`, no `D`, and no `alpha_a`. The
+numerator is the ladder's slope `B`, which the same fit already returns and
+which is the best-determined thing on the page (over the occupancy arm's nine
+settings the median replicate CV of the slope is 0.72%, against 23.35% for the
+intercept it would otherwise be divided by). The denominator is a measurement:
+on mixtral-8x7b bf16 the weight set is 2.8186 GB and one stream is **0.6443 ms**
+at the H200's calibrated triad rate of 4374.3 GB/s, or 0.6111 ms at its
+measured `read_stream` rate of 4612.3. Across the 2026-09-10 session's 23
+ladders, `w` runs **0.68 to 1.37** at the subject heights BLOCK_M 16 to 64,
+with a per-repeat sd of 0.002 to 0.005 over 17 repeats. The BLOCK_M=128 and
+256 reference ladders run 1.15 to 4.42 on the same statistic, which is what a
+tile four or sixteen times taller should cost: `w` is per M-TILE, so it is
+comparable across BLOCK_N and across schedules at fixed BLOCK_M and never
+across BLOCK_M.
+
+**Both are printed, and neither replaces the other.** The contract, from
+2026-09-10, is that a ladder report carries the fit and the weight-stream
+slope side by side, and that only the second may be quoted. The fit is what
+every published alpha in this repository was computed with, so removing it
+would make the corpus unreadable against its own history; the slope is what
+may be QUOTED, because it is the statistic that produced every clean result
+in the 2026-09-10 analysis and the only one whose value does not move when the
+extrapolation does. `w` is not `alpha_b`: converting it needs the memory
+branch's achieved bandwidth, and that confound is 1:1 (the same six `bn_g16`
+cells return `alpha_b` = 0.6087, 0.5930 or 0.5143 at the triad rate, the
+measured weight-buffer read rate and the anchor arm's measured branch rate).
+That is what the DRAM counter arm of `scripts/h200_gaps_session.sh` is for.
 
 ---
 

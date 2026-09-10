@@ -333,3 +333,123 @@ def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():
     # The scoring half of the rule, which is the half a gate reads.
     assert "compute-bound CLAIM gates read the FIXED roof fraction" in text
     assert "issue efficiency" in text
+
+
+# --------------------------------------------------------------------------
+# the 2026-09-10 H200 session, and the three retractions that are its product
+# --------------------------------------------------------------------------
+
+#: What FINDINGS has to carry from that session, as (needle, why) pairs. Every
+#: number is either off a `RESULT:` line in
+#: `results/published/2026-09-10-nvidia_h200-gaps-session/session/logs/`, off
+#: the committed calibration, or recomputed from that directory's cells by the
+#: synthesis scripts named beside it. INTERVALS, NOT POINTS: where the quantity
+#: has a spread the pinned string is the spread, because the session's own
+#: lesson is that this study's headline numbers were points printed by an
+#: estimator whose spread nobody had propagated.
+SESSION_2026_09_10 = (
+    ("682.1", "the measured dense bf16 rate, up from 668.5 on 2026-09-09"),
+    ("1470 MHz", "the GEMM's own clock under load on this rental"),
+    ("155.9", "this card's ridge; the 2026-09-09 one was 152.8"),
+    ("147.9-155.9", "the ridge band a crossing inside it must be quoted as"),
+    ("2.8186 GB", "mixtral bf16's whole expert weight set"),
+    ("0.6443 ms", "one full stream of it at the card's measured triad rate"),
+    ("0.68 to 1.37", "the per-M-tile cost in weight streams, over 23 ladders"),
+    ("89.158 ms", "cap_test's measured time at n = 132 M-tiles"),
+    ("85.054 ms", "132 full weight streams at triad, the model-free comparison"),
+    ("95.4%", "the fraction of BLOCK_M=16's wall clock that is one re-read"),
+    ("1.115 +/- 0.003", "the BN-scaling ratio where the model requires 2.000"),
+    ("z = -303", "how far that sits from the model"),
+    ("0.0218", "the 1/BLOCK_N rival's rms"),
+    ("0.0675", "the published form's rms, 3.1x worse at equal parameters"),
+    ("-23.7%", "what GROUP_SIZE_M 1 -> 16 does to the per-M-tile cost"),
+    ("0.099", "BLOCK_M=16's peak fraction of the dense roof"),
+    ("0.537", "the BLOCK_M=256 control's, on the same layer"),
+    ("65536", "the accumulator and the per-block register file, coinciding"),
+    ("1275 to 1935 MHz", "the clock range at a power held at the cap"),
+    ("2328 cells", "the census the clock result is over"),
+    ("0.013380", "the pooled same-session replicate floor"),
+    ("[0.0100, 0.0204]", "its 95% interval, which excludes the assumed 0.0229"),
+    ("+/- 0.048", "alpha_b's honest interval, not the bootstrap's +/- 0.0113"),
+    ("30.5%", "the D-propagated draws that put alpha_b outside [0, 1]"),
+    ("0.807", "BLOCK_M=128 cap/ridge at alpha_b = 0.9794, capped"),
+    ("1.293", "the same at LIN's 0.5977, NOT capped: the verdict flips"),
+    ("0.784", "the alpha_b at which BLOCK_M=128 stops being capped"),
+    ("3.85 GB", "the traffic reading the counter would see at BLOCK_N=32"),
+    ("2.06 GB", "and at BLOCK_N=128; the same bytes at both means time"),
+)
+
+
+@pytest.mark.parametrize("needle,why", SESSION_2026_09_10,
+                         ids=[n for n, _ in SESSION_2026_09_10])
+def test_findings_carries_the_2026_09_10_session_numbers(needle, why):
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    assert "## The 2026-09-10 H200 session" in text, "the dated section is gone"
+    assert needle in text, f"FINDINGS no longer states {needle!r}: {why}"
+
+
+def test_findings_retracts_the_three_numbers_the_session_retired():
+    """THE RETRACTIONS ARE THE POINT OF THAT SECTION, so they are pinned in
+    words and not only in numbers.
+
+    (1) alpha_b = 0.9794 +/- 0.0113 is a fit whose partner ai_model refuses;
+    (2) the 207% TEMPO contradiction compares a bound with a number;
+    (3) cap/ridge = 0.080 is computed from an alpha ai_model refuses to invert,
+        and at BLOCK_M=128, the tile vLLM ships, the verdict flips across
+        the candidate range rather than binding.
+    A reader who finds any of the three quoted as a measurement elsewhere has
+    to find the retraction here."""
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    section = text.split("## The 2026-09-10 H200 session")[1].split("\n## ")[0]
+    assert "THE RETRACTIONS" in section
+    for needle in ("0.9794", "-0.8143", "207%", "0.080", "1.28982"):
+        assert needle in section, needle
+    # Flattened from here: this file wraps at 78 columns and a sentence that
+    # straddles two lines is still the sentence.
+    flat = " ".join(section.split())
+    # Each one says, in words, what it is being retracted FOR.
+    assert "must NOT be quoted as a measurement" in flat
+    assert "compares a BOUND with a number" in flat
+    assert "refuses to invert" in flat
+    # And the half that survives is stated as plainly as the half that does not.
+    assert "the cap binds under every reading this study has ever held" in flat
+    assert "the verdict FLIPS across the candidate range" in flat
+    assert "NOT ESTABLISHED" in flat
+    # The reachability caveat, which is what stops the surviving half from
+    # being read as a statement about production.
+    assert "exactly ONE M-tile per expert" in flat
+
+
+def test_study_records_what_the_2026_09_10_session_settled_and_what_it_left():
+    text = (ROOT / "docs" / "STUDY.md").read_text()
+    assert "## What the 2026-09-10 H200 session settled" in text
+    section = text.split("## What the 2026-09-10 H200 session settled")[1]
+    section = section.split("\n## ")[0]
+    for needle in ("0.6443 ms", "0.68 to 1.37", "95.4%", "z = -303",
+                   "65536", "1275-1935 MHz", "+/- 0.048", "30.5%",
+                   "1.293", "0.784", "one M-tile per expert",
+                   "Never quote the 207% TEMPO", "--new"):
+        assert needle in section, needle
+    # The next session is a command a reader can run, with the arms named.
+    assert "--only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter" in section
+
+
+def test_apparatus_states_the_estimator_change_and_prints_both():
+    """R1-R3 for the estimator, on the page that is the vocabulary: what
+    B/(A+B) does wrong, what replaces it, and that both are printed. A page
+    that names only the replacement leaves every published alpha unreadable
+    against its own history; a page that names only the fit teaches the next
+    reader to quote it."""
+    text = " ".join((ROOT / "docs" / "APPARATUS.md").read_text().split())
+    assert "The estimator changed on 2026-09-10, and both are printed" in text
+    # What is wrong with it, with the arithmetic that makes it wrong.
+    assert "value of the ladder's straight line at `n = 0`" in text
+    assert "exceeds 1 exactly when `D > A`" in text
+    assert "-0.8143" in text and "REFUSES the pair" in text
+    # What replaces it, with the measurement in its denominator.
+    assert "2.8186 GB" in text and "0.6443 ms" in text
+    assert "0.68 to 1.37" in text
+    # And that it is not alpha_b, which is the mistake the change invites.
+    assert "`w` is not `alpha_b`" in text
+    for rate in ("0.6087", "0.5930", "0.5143"):
+        assert rate in text, rate

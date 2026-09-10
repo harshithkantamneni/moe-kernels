@@ -136,6 +136,30 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   swing flips 90 of 53,188 classified rows, every one of them within 6% of the
   ridge. Crossings that land inside the ridge band inherit the ruler's bias and
   must be quoted as a band.
+- **(m) `alpha_b = 0.9794 +/- 0.0113` is not a measurement.** Withdrawn
+  2026-09-10 from the second H200 gaps session. It is a fit on `alpha_upper`,
+  four of whose six values exceed 1.0, and its partner `alpha_a = -0.8143` is
+  one `moe/bench/ai_model.py` REFUSES. The +/- 0.0113 is a within-process
+  bootstrap: leave-one-tread-out over the whole chain gives +/- 0.048, and
+  propagating the reference fixed cost's own error puts 30.5% of draws outside
+  [0, 1]. Corrected reading in the 2026-09-10 section below: the per-M-tile
+  cost in weight streams, 0.68 to 1.37, which has no fitted level in it. The
+  207% TEMPO contradiction that `bn_g16`'s C4 prints goes with it, because
+  it compares a bound with a number.
+- **(n) The `cap/ridge = 0.080` headline.** Withdrawn 2026-09-10. `cap_test`'s
+  C2 computes it from `alpha_measured = 1.28982`, a value above 1.0 that
+  `ai_model` refuses to invert. What stands is stated in the 2026-09-10
+  section: for BLOCK_M <= 64 the cap binds under every reading this study has
+  held, and at BLOCK_M = 128, the tile vLLM ships, the verdict FLIPS across
+  the candidate range (0.807 of the ridge at 0.9794 against 1.293 at 0.5977,
+  threshold 0.784) and is NOT ESTABLISHED.
+- **(o) The three-term model's activation re-read term.** Refuted 2026-09-10,
+  model-free, on the ladder slope alone: that term is the model's only
+  BLOCK_N-dependent one and is strictly proportional to BLOCK_M, so the
+  measured BLOCK_N dependence must double when BLOCK_M doubles, and it is
+  1.115 +/- 0.003 against a required 2.000. Every table below that reads
+  `alpha_a` out of a BLOCK_N contrast is reading a coefficient of a term the
+  data reject.
 
 ---
 
@@ -260,10 +284,14 @@ override").
 ### The DRAM counter route is OPEN on this box
 
 `dram_counter_route.py --probe`, DONE: ncu 2025.1.1 attached with no permission
-error on this RunPod H200 (nsys is absent). The 15-minute
-`dram__bytes_read.sum` plan over the alpha-surface cell can be booked, which is
-the only route to `alpha_b` as a number rather than as an interval. Every
-previous rented pod refused the counter.
+error on this RunPod H200 (nsys is absent). The `dram__bytes_read.sum` plan
+over the alpha-surface cell can be booked, which is the only route to
+`alpha_b` as a number rather than as an interval. Every previous rented pod
+refused the counter. **This paragraph said "the 15-minute plan" until
+2026-09-10** and the plan had stopped saying it: the profiled launch count is
+warmup + iters x trials rather than one, so the page now budgets an hour of
+GPU time and two pod-hours end to end for twelve profiled invocations. The
+`counter` arm of `scripts/h200_gaps_session.sh` books that figure.
 
 ### The six INVALID arms, as apparatus findings
 
@@ -290,6 +318,264 @@ confirming arm on sm_90 at any BLOCK_SIZE_N. That refusal is the finding.
 
 ---
 
+## The 2026-09-10 H200 session: what it settled, and what it retracts
+
+Added 2026-09-10. A second rented H200, the same driver, twenty arms.
+Everything below is from
+`results/published/2026-09-10-nvidia_h200-gaps-session/`: the ledger is
+`session/ARMS.tsv` (6 DONE, 5 REFUSED, 5 CLAIM_FAIL, 4 INVALID), each arm's
+page is `session/logs/<arm>.log`, and the cells are under
+`results/<script>/<run id>/`. Every number in this section was recomputed from
+those cells rather than read off a summary, and where the re-derivation
+disagreed with an arm's own report the disagreement is stated here and the
+arm's figure is not quoted.
+
+**Intervals, not points.** This section carries ranges wherever the quantity
+has one. The session's own lesson is that this study's headline numbers were
+points printed by an estimator whose spread nobody had propagated, and three
+of them are retracted below for exactly that.
+
+### The ruler this session ran on
+
+`scripts/calibrate_hardware.py --publish`, 29 s, 6 of 6 gates:
+
+> Dense bf16 8192^3 delivers **682.1 TFLOP/s at 1470 MHz** under the 700 W cap,
+> 85.8% of the 794.8 the silicon can do at that clock and 68.9% of the 989.5
+> datasheet figure; fp8 delivers 1453.6 TFLOP/s at 1380 MHz. Triad is
+> **4374.3 GB/s**, read_stream 4612.3, write 4679.4, against a derived pin rate
+> of **4814.3 GB/s** from a 3201 MHz memory clock on a 6016-bit bus. Ridge
+> **155.9 FLOP/byte, band 147.9-155.9**.
+
+**The ruler moved again and nothing older is rescored to it.** The 2026-09-09
+calibration put this card at 668.5 TFLOP/s, a 1485 MHz GEMM clock and a ridge
+of 152.8; this one puts it at 682.1, 1470 MHz and 155.9. Bandwidth reproduces
+(4374.3 against 4374.5, 0.005%); the compute ceiling is what moves. Every
+table in this file is scored against the ridge its own arm was entitled to,
+which is RETRACTIONS (e)'s rule, and a crossing quoted inside 147.9-155.9 is a
+band and not a number.
+
+### The per-M-tile cost, in units of one full weight stream
+
+This is the session's central measurement and it has no fitted level in it.
+Define `w` = (ms per extra M-tile) / (ms to stream the layer's entire expert
+weight set once at the card's own measured rate). On mixtral-8x7b bf16 the
+weight set is **2.8186 GB** and one stream is **0.6443 ms** at triad (0.6111 ms
+at the measured `read_stream` rate). Over the **23 ladders** this session
+fitted, at the subject tile heights BLOCK_M 16 to 64:
+
+| ladder | `w` at triad |
+|---|---:|
+| `cap_test` BLOCK_M=16, G=1, BN=64 | 1.051 |
+| `occupancy` BLOCK_M=64, G=1, six pinnings | 1.046 - 1.246 |
+| `occupancy` BLOCK_M=64, G=8 / 16 / 64 | 0.935 / 0.918 / 0.976 |
+| `bn_g16` BLOCK_M=32 / 64, G=16, BN=32 | 1.254 / 1.368 |
+| `bn_g16` BLOCK_M=32 / 64, G=16, BN=64 | 0.863 / 0.897 |
+| `bn_g16` BLOCK_M=32 / 64, G=16, BN=128 | 0.683 / 0.731 |
+
+**The range is 0.68 to 1.37 full weight streams per extra M-tile**, with a
+per-repeat sd of 0.002 to 0.005 over 17 repeats. The BLOCK_M=128 and 256
+reference ladders read 1.15 to 4.42 on the same statistic, which is what a
+tile four or sixteen times taller should cost: `w` is per M-TILE, so it
+compares across BLOCK_N and across schedules at fixed BLOCK_M and never across
+BLOCK_M. Sixteen of the 23 ladders exceed one full stream at triad.
+(`s8_common_currency.py` over the committed cells; `docs/APPARATUS.md`
+section 4 has the estimator.)
+
+### 95.4% of BLOCK_M=16's wall clock at G=1 is one full re-read per tile
+
+A total-time-over-total-bytes check with no fit in it, on `cap_test`'s deepest
+tread. At n = **132 M-tiles** the measured time is **89.158 ms**; 132 complete
+copies of the 2.8186 GB weight set at the card's measured triad rate is
+**85.054 ms**. The ratio is 1.048, so **95.4%** of the kernel's wall clock is
+accounted for by a full per-M-tile weight re-read at the rate the card was
+measured streaming. Nothing here is extrapolated, fitted, or anchored.
+
+### The activation re-read term is refuted, model-free, at 89 to 303 sigma
+
+The three-term model's ONLY BLOCK_N-dependent term is `alpha_a g1(BM, BN)`,
+which is strictly proportional to BLOCK_M. So the BLOCK_N dependence of `w`
+must DOUBLE when BLOCK_M doubles. Measured over `bn_g16`'s 17 repeats:
+
+| BLOCK_N pair | drop at BM=32 | drop at BM=64 | ratio (model requires 2.000) |
+|---|---:|---:|---:|
+| 32 -> 128 | 0.5707 +/- 0.0013 | 0.6365 +/- 0.0008 | **1.115 +/- 0.003** (z = -303) |
+| 32 -> 64 | 0.3910 +/- 0.0018 | 0.4705 +/- 0.0014 | **1.203 +/- 0.007** (z = -121) |
+| 64 -> 128 | 0.1797 +/- 0.0018 | 0.1659 +/- 0.0014 | **0.923 +/- 0.012** (z = -89) |
+
+The BLOCK_N dependence is essentially INDEPENDENT of BLOCK_M. Read the other
+way, the four adjacent-BN pairs imply `alpha_a` = 0.782, 0.719, 0.471 and
+0.332 where the model needs one number. This uses no bootstrap, no reference
+ladder, no `D` extrapolation and no chi2 convention.
+
+What fits better, at equal parameter count, is a cost going as `1/BLOCK_N`
+with no BLOCK_M in it, per N-TILE rather than per activation byte: rms
+**0.0218** against the published form's **0.0675**, a 3.1x improvement. Both
+still fail against this run's own repeat noise, so neither is complete. And
+this grid cannot say whether that cost is TRAFFIC or TIME, which is the
+distinction that decides whether a traffic model can contain it at all. At
+BLOCK_M=64 the two candidates are 3.85 GB and 2.06 GB of weight-set-equivalent
+per M-tile at BLOCK_N=32 and 128; a DRAM counter separates them 1.87x apart,
+and the route is OPEN on this box.
+
+### GROUP_SIZE_M moves the per-M-tile cost 24% at an identical geometry
+
+At matched pinning (num_stages 3, num_warps 8, BLOCK_M=64, BLOCK_N=64,
+BLOCK_K=64), GROUP_SIZE_M 1 -> 16 moves `w` from **1.204 to 0.918**, which is
+**-23.7%**, which is the same ladder slope `B` read in milliseconds,
+0.7755 to 0.5916 ms per M-tile. Nothing in the machine changed with it:
+`occupancy`'s V3 confirms the block sizes measured in the CSV are exactly the pinned set, V7 confirms every
+setting recompiled its own kernel (32 to 33 fresh Triton artefacts each), and
+all four GROUP_SIZE_M settings sit at the same modelled **49152 B** of shared
+memory per block, so the residency is the same at every G. It replicates
+across PROCESSES: the `noise_floor` arm's own C3 line measures the same
+G=1 -> G=16 swing over 12 fresh processes at **-0.2351 at BLOCK_M=32 and
+-0.2555 at BLOCK_M=64** in `alpha_corrected`, against two-sample MDEs of 0.0407
+and 0.0357. The minimum is at G=16 and it is not monotone: G=64 sits above
+G=16 on every statistic (`w` 0.976 against 0.918).
+
+**Two caveats the corpus itself carries.** The G=1 settings ran at 1374 MHz
+against 1454-1471 for G > 1, which by the per-tile clock result below is worth
+roughly a fifth of the effect. And the COMPILED shared memory could not be read
+on this card at all. `occupancy`'s V9 reads UNKNOWN, "vLLM exposes no
+fused_moe_kernel with a Triton cache under either known path", which is why
+that arm is INVALID and why "identical shared memory" here is a statement about
+the residency model and the pinned tile, not a measurement of the binary.
+
+Consequence: `alpha_b` is not a constant of the geometry. It is a function of
+the SCHEDULE, and the three-term model has no slot for a schedule.
+
+### BLOCK_M=16 peaks at 0.099 of the roof, against 0.537 for a 256 control
+
+`tile_cap_test.py`, DONE, 9 of 9 gates, 162 of 162 cells, swept to 132 M-tiles
+at `--r-max 2112`:
+
+> BLOCK_M=16 peaks at **0.099** of the dense roof at any batch size the grid
+> reaches (own-clock 0.099); the BLOCK_M=256 control reaches **0.537**
+> (own-clock 0.477). Time falls **5.434x** with tile height at 2048
+> exactly-full rows per expert, and time steps at tile boundaries by a median
+> **+23.16%** against a +11.44% bar over the bracketed boundaries.
+
+**Two caveats, both from the arm's own page.** The 5.434x is a
+tile-quantisation sawtooth, flat at 5.30-5.52 from 512 rows on, not a monotone
+climb: the gate (>= 1.50x) is safe, the characterisation is not. And this is
+NOT a production claim: vLLM ran BLOCK_M=16 multi-tile in 1 of 24 observed
+cells on the padded row count and 0 of 24 on mean rows, so the arm tests the
+cap FORMULA at this tile height, not a shipped regime.
+
+### The register file runs out exactly where arithmetic intensity would suffice
+
+Both BLOCK_N=256 roofline arms REFUSED before spending GPU time, from register
+arithmetic alone, and the refusal is the finding. Over **56 power-of-two tiles
+up to 2048x1024, 17 clear this card's ridge of 155.93 Op/B at alpha 0.558, and
+the smallest accumulator among them is 65536 fp32 registers against a per-block
+file of 65536**, the file every NVIDIA architecture from sm_70 to sm_100 has.
+`num_warps` divides that total across threads, it does not shrink it;
+`num_stages` and `BLOCK_SIZE_K` do not touch it. So at vLLM's shipped
+BLOCK_SIZE_N=256 no positive control exists on any card this study can reach,
+the two limits coincide, and "just run a bigger control" is retired as a review
+objection rather than deferred. This is publishable on its own: it explains,
+with no appeal to any alpha, why a Triton fused-MoE kernel cannot be tuned out
+of the memory-bound regime by tile height on current hardware.
+
+### The clock is set per tile, under a power cap held within 2%
+
+Over **2328 cells** carrying both a clock and a power reading, power is a
+constant and clock is not: power median **693.4 W**, with **95% of cells within
+2% of the 700 W cap**, while the achieved SM clock spans **1275 to 1935 MHz, a
+1.52x range**. By tile: BLOCK_M=32 -> 1732 MHz, BLOCK_M=64 -> 1440,
+BLOCK_M=128 -> 1500, BLOCK_M=256 -> 1665. Within one arm, at one power,
+BLOCK_M=32 and BLOCK_M=64 differ by 19%.
+
+This is a methodological result with teeth: any study that scores throughput
+against a roof measured at one clock is comparing two different machines by up
+to that factor, and the error is systematic in exactly the axis such studies
+sweep. It also explains the one anomaly the session could not otherwise place.
+The single `noise_floor` cell with an eightfold-tighter replicate spread is
+the only cell in a low-clock regime (110 of 171 low-side samples at 1365 MHz,
+against 0 of 171 at 1455-1822 MHz everywhere else), because a clock pinned at
+the floor removes the DVFS component of run-to-run variance. The rule that
+follows: log and gate achieved clock per cell, and refuse any contrast whose
+two arms sat in different clock regimes.
+
+### The same-session replicate floor
+
+`replicate_noise_floor.py` landed INVALID on V5 (max cell sd / min cell sd =
+11.18x against a 3x bar), and the V5 verdict is not evidence of
+heterogeneity: at this design (8 cells, n = 3) that gate rejects data drawn
+from ONE sigma 87.5% of the time, the observed 11.18 sits at p = 0.15, and
+Bartlett's test gives p = 0.25. The pooled floor over the arm's own cells is
+**sd = 0.013380 on 16 df, 95% CI [0.0100, 0.0204]** on `alpha_corrected`. The
+0.0228625 the whole study is sized against lies OUTSIDE that interval, on the
+high side: the study has been assuming a floor 1.71x wider than the one it
+measured. The arm is INVALID, so this is recorded as an apparatus finding and
+not published as the floor.
+
+### THE RETRACTIONS, and they are the point of this section
+
+**(1) `alpha_b = 0.9794 +/- 0.0113` must NOT be quoted as a measurement.** It
+is a fit on `alpha_upper`, a column four of whose six values exceed 1.0, a
+region the model structurally cannot reach, and its partner is
+`alpha_a = -0.8143`, which `moe/bench/ai_model.py` REFUSES to invert. The
++/- 0.0113 is a within-process bootstrap and it is not the honest interval:
+leave-one-tread-out over the whole chain moves `alpha_b` across
+**0.9636 to 1.0183**, a jackknife SE of **+/- 0.048**, four times the quoted
+one; and propagating `D`'s own jackknife error together with the repeat noise
+through 20,000 draws gives sd **0.0298** with a 90% interval of
+**[0.945, 1.040]** and **30.5% of draws above 1.0**, outside the range the
+quantity is defined on. (`s3_alphab_interval.py`, seed 7; the synthesis first
+quoted 24.6% for that last figure from an earlier draw, and 30.5% is what the
+seeded script reproduces.) What may be said instead: **the per-M-tile cost at
+GROUP_SIZE_M=1 is indistinguishable from one full weight stream (1.046 to
+1.246 over six pinnings, 1.051 at BLOCK_M=16), at G=16 it runs 0.68 to 1.37
+depending on BLOCK_N, and a value for `alpha_b` requires a bandwidth
+measurement this study does not have**. The same six cells give 0.6087,
+0.5930 or 0.5143 depending only on which rate is assumed.
+
+**(2) The 207% TEMPO contradiction is WITHDRAWN.** `bn_g16`'s C4 reads
+"alpha_b = 0.9794, nearest TEMPO value off by 207.0%". That compares a BOUND
+with a number: TEMPO's 0.311/0.319 is a pure byte ratio, while 0.9794 is a fit
+on a composite whose own partner is out of model, and the two are not on one
+axis. No two of the eleven independent alpha estimates in this study can be
+placed on one axis without a quantity this session did not measure: they
+differ in estimand, in schedule, and by a 1:1 bandwidth confound. The gate's
+FAIL is a fact about the gate's inputs and must not be reported as a
+disagreement with TEMPO.
+
+**(3) The `cap/ridge = 0.080` headline is WITHDRAWN as stated.** `cap_test`'s
+C2 reads "cap/ridge = 12.5/155.9 = 0.080", and 0.080 is computed from
+`alpha_measured = 1.28982`, a value above 1.0 that `ai_model` refuses to
+invert. What survives, and it is the load-bearing half:
+
+- **For BLOCK_M <= 64 the cap binds under every reading this study has ever
+  held.** On mixtral bf16 the cap reaches the ridge only above `alpha_b` =
+  0.098 at BLOCK_M=16, 0.196 at 32 and 0.392 at 64, and every value this study
+  has held (the corpus refit's 0.558, LIN's 0.5977, the slope-only 0.593,
+  EXA's 0.9794, the alias arm's 1.014 and 1.280) clears all three. Those rows
+  do not turn on which alpha is right. The one value that does not clear all
+  three is TEMPO's PUBLISHED 0.311, which caps BLOCK_M=16 and 32 and leaves
+  BLOCK_M=64 uncapped at 1.245 of the ridge; that is the single place where the
+  BLOCK_M <= 64 statement depends on reading this card rather than the
+  literature.
+- **At BLOCK_M=128, the tile vLLM actually ships, the verdict FLIPS across the
+  candidate range and is therefore NOT ESTABLISHED.** On mixtral bf16 at
+  BLOCK_N=256, cap/ridge is **0.807 at `alpha_b` = 0.9794** (capped) against
+  **1.293 at 0.5977** and 1.379 at 0.558 (not capped). The threshold is
+  `alpha_b` = 0.784. This study has not measured which side of 0.784 the card
+  is on.
+- **The reachability caveat, which the arm already makes.** Under balanced
+  routing every shipped bucket running BLOCK_M <= 64 sits at exactly ONE M-tile
+  per expert, so a per-extra-M-tile cost has nothing to be paid on there. The
+  rows the cap binds are the rows production does not run multi-tile, and the
+  row production does run multi-tile is the one the verdict flips on.
+
+**What is NOT retracted.** The SHAPE of the model, a fixed cost plus a
+per-M-tile cost, holds: every ladder in the session is affine to within 2-7%
+of its own time with no slope inversions. The weight re-read term is real and
+dominant, and the two model-free results above (95.4% of the wall clock, and
+0.68-1.37 streams per tile) say so without it.
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are
@@ -297,12 +583,14 @@ superseded and are kept for provenance, not for analysis. Three further arms
 carry ladder reports (26 `*.report.json`) and no CSV. Every count in this
 section is asserted against the tree by `tests/test_docs.py`.
 
-A fifteenth published directory,
-`2026-09-09-nvidia_h200-gaps-session`, is in neither shape and is not in the
-table below: it is a SESSION rather than an arm, holding a ledger, sixteen arm
-logs and each arm's own run directory, and its numbers are read in "The
-2026-09-09 H200 session" above. It contributes no row to the pools any
-crossing here is computed from.
+TWO published directories are in neither shape and are not in the table below:
+`2026-09-09-nvidia_h200-gaps-session` and
+`2026-09-10-nvidia_h200-gaps-session`. Each is a SESSION rather than an arm, holding a ledger, one log per arm
+(sixteen and twenty) and each arm's own run directory, and their numbers are
+read in the two dated sections above. Neither contributes a row to the pools
+any crossing here is computed from. This paragraph named ONE such directory as
+"a fifteenth" until 2026-09-10, when the second session was committed and the
+tree went to sixteen published directories.
 
 | arm | rows | current | what it is for |
 |---|---:|---:|---|

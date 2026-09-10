@@ -134,7 +134,7 @@ ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
         "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
-        "counter_plan")
+        "counter_plan", "counter")
 
 
 def run(args, cwd=None, session=None, env_extra=None):
@@ -265,7 +265,14 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     # A measurement precedes the free re-scoring that reads it.
     assert order.index("anchor_measure") < order.index("anchor_rescore")
     assert order.index("roofline-n64-g1") < order.index("cap_test")
-    assert order[-1] == "counter_plan"
+    # THE PROBE IMMEDIATELY BEFORE THE RUN IT GATES. counter_plan is ten
+    # seconds and its BLOCKED verdict retires the 120-minute counter arm for
+    # the whole session, so running the counter first would spend two pod-hours
+    # to discover what a ten-second probe answers. This assertion read
+    # `order[-1] == "counter_plan"` until 2026-09-10, when the probe stopped
+    # being the last thing in the session.
+    assert order[-2] == "counter_plan"
+    assert order[-1] == "counter"
 
 
 def test_the_dense_span_grid_runs_before_the_sparse_one():
@@ -488,8 +495,17 @@ INVOKED = {
                                   "--dry-run", "--fail-on-gate"),
     "scripts/bm128_depth.py": ("--dry-run", "--r-max", "--fail-on-gate"),
     "scripts/bn_decomposition.py": ("--dry-run", "--group-m", "--reps",
-                                    "--capability", "--fail-on-gate"),
+                                    "--capability", "--fail-on-gate", "--tiles"),
     "scripts/occupancy_vs_swizzle.py": ("--dry-run", "--run", "--fail-on-gate"),
+    # --run IS D3'S AND IS NOT HERE YET. The counter arm's measuring branch
+    # runs `dram_counter_route.py --run`; the file it runs currently plans,
+    # probes, brackets and analyses, and its ncu loop is still the shell recipe
+    # its own plan page prints. The driver checks for the flag and skip_arms
+    # the arm by name rather than letting the pod discover it as an argparse
+    # exit 2, which is the shape of the 2026-09-09 --partner-block-m defect.
+    # This row and the test below are what turn red until that runner lands.
+    "scripts/dram_counter_route.py": ("--dry-run", "--probe", "--card",
+                                      "--out", "--analyse", "--run"),
     "scripts/replicate_noise_floor.py": ("--dry-run", "--replicates", "--arms",
                                          "--publish"),
     "scripts/memory_branch_anchor.py": ("--rescore", "--out-dir", "--dry-run",
@@ -2258,19 +2274,30 @@ def test_a_calibration_that_cannot_say_when_it_was_measured_is_not_this_ones(tmp
     block; the 2026-09-09 calibration carries `provenance.utc`, so that
     assertion became a statement about a file that had been replaced. A
     yaml with no provenance is planted instead, and the committed one is
-    asserted to be what a yaml that CAN say when it was measured looks
-    like."""
+    asserted to be what a yaml that CAN say when it was measured looks like.
+
+    THE TWO PROBE STAMPS ARE READ OFF THAT FILE AND ARE NOT TYPED HERE. Until
+    2026-09-10 they were the literals 20260909000000 and 20260910000000,
+    written when the committed ruler was the 2026-09-09 one; the 2026-09-10
+    calibration replaced it at 04:12:29 UTC, so the second literal stopped
+    straddling the file's own date and the STALE branch asserted PUBLISHED. A
+    test that pins a calibration's date instead of reading it is stale the day
+    the card is re-calibrated, which on this study is every rental."""
     undated = tmp_path / "undated.yaml"
     undated.write_text("name: testcard (measured)\nmemory:\n  bandwidth_tb_s: 4.0\n")
     got = lift(f'calibration_state {undated} 20260902134501', REPO=str(ROOT))
     assert got.stdout.strip() == "UNDATED", got.stdout
-    # And the committed ruler is dated, so it is decided on its date and not
-    # on "cannot say": measured 2026-09-09, so a session started before that
-    # sees it as this rental's and one started after sees it as STALE.
+    # And the committed ruler is dated, so it is decided on its date and not on
+    # "cannot say": a session started one second before the stamp the FILE
+    # carries sees it as this rental's, and one started a second after sees the
+    # previous rental's ruler.
     h200 = f"{ROOT}/moe/bench/hardware/measured_nvidia_h200.yaml"
-    assert lift(f'calibration_state {h200} 20260909000000',
+    stamp = lift(f'calibration_stamp {h200}', REPO=str(ROOT)).stdout.strip()
+    assert re.fullmatch(r"\d{14}", stamp), (
+        f"the committed H200 ruler carries no readable provenance.utc: {stamp!r}")
+    assert lift(f'calibration_state {h200} {int(stamp) - 1}',
                 REPO=str(ROOT)).stdout.strip() == "PUBLISHED"
-    assert lift(f'calibration_state {h200} 20260910000000',
+    assert lift(f'calibration_state {h200} {int(stamp) + 1}',
                 REPO=str(ROOT)).stdout.strip() == "STALE"
     gone = lift(f'calibration_state {tmp_path}/nothing.yaml 20260902134501',
                 REPO=str(ROOT))
@@ -3789,14 +3816,21 @@ def test_the_clock_probe_checks_what_it_says_and_survives_pipefail():
 
 def test_the_next_session_booking_names_new_and_a_state_per_arm():
     """AN INVALID ROW IS LATCHED AND NO RESUME RE-RUNS IT, so a session that
-    landed six INVALID arms resumes into nothing. The closing summary prints
-    the --new command and what each arm is expected to reach, priced through
-    the same `arm_minutes` and `arm_clock` as the cost table so a re-booked arm
-    moves it by itself."""
+    landed INVALID arms resumes into nothing. The closing summary prints the
+    --new command and what each arm is expected to reach, priced through the
+    same `arm_minutes` and `arm_clock` as the cost table so a re-booked arm
+    moves it by itself.
+
+    THE ARM LIST IS READ OFF `rerun_arms` AND IS NOT COPIED HERE. Until
+    2026-09-10 it was the literal 2026-09-09 set, so this test failed the day
+    the booking was updated for the session that had actually run, which is a
+    second copy of the driver's list kept in the test file and is the defect
+    this repository keeps meeting. WHICH arms belong in the set is asserted on
+    the 2026-09-10 ledger's own evidence in
+    `test_the_next_session_books_the_arms_the_2026_09_10_ledger_left`; this
+    test asserts the SHAPE of the block."""
     arms = lift("rerun_arms", REPO=str(ROOT)).stdout.split()
-    assert arms == ["calibrate", "pin_probe-n64-g1", "roofline-n64-g1",
-                    "cap_test", "bn_g16", "dtype", "bm128_depth",
-                    "alias_ablation"], arms
+    assert arms, "the rerun set is empty"
     out = lift("next_session_booking", REPO=str(ROOT)).stdout
     assert "--new" in out and "--only " + ",".join(arms) in out, out
     priced, bound = lift(f"session_bound {' '.join(arms)}",
@@ -3807,8 +3841,8 @@ def test_the_next_session_booking_names_new_and_a_state_per_arm():
                            REPO=str(ROOT)).stdout.strip()
         assert expectation, arm
         assert expectation in " ".join(out.split()), arm
-    # The one arm expected to exit 1 is named as a RESULT, not as a failure.
-    assert "CLAIM_FAIL, and that is the arm's result" in out
+    # An arm expected to exit 1 is named as a RESULT, not as a failure.
+    assert "CLAIM_FAIL" in out and "is a RESULT" in out
     assert "re-runs no INVALID and no CLAIM_FAIL row" in out
 
 
@@ -3837,3 +3871,198 @@ def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
     flat = " ".join(got.stdout.split())
     assert "A RESUME RE-RUNS NO INVALID ROW AND NO CLAIM_FAIL ROW" in flat, flat[-3000:]
     assert "The next session for those arms is --new" in flat
+
+
+# --------------------------------------------------------------------------
+# 9. the counter arm, and the next session it is booked into
+# --------------------------------------------------------------------------
+
+def test_the_counter_arm_is_gated_on_the_probe_that_costs_ten_seconds():
+    """A BLOCKED probe retires a 120-minute arm. `counter_plan` is ten seconds
+    and answers exactly one question, does ncu attach on this box, so
+    running the counter ahead of it would spend two pod-hours to discover what
+    the probe already knows. The order is asserted in
+    `test_the_arms_whose_result_changes_a_later_reading_come_first`; this is
+    the rest of the contract: both arms run the same file, the counter is the
+    session's largest single arm after the noise floor, and the arm's own
+    `closes` text names both verdicts so an operator reading the ledger knows
+    which one licenses the spend."""
+    for name in ("counter_plan", "counter"):
+        assert lift(f"arm_script {name}", REPO=str(ROOT)).stdout.strip() == \
+            "scripts/dram_counter_route.py", name
+    closes = lift("arm_closes counter", REPO=str(ROOT)).stdout
+    assert "OPEN" in closes and "BLOCKED" in closes, closes[:200]
+    # And what each verdict MEANS, not just the words.
+    assert "attaching to this pod with no permission error" in closes
+    assert "FACT ABOUT THE POD" in closes
+    # The contrast that decides traffic versus time, with both readings named.
+    assert "TRAFFIC" in closes and "TIME" in closes
+    assert "3.85 GB" in closes and "2.06 GB" in closes
+    # THE GATE IS CODE, NOT ADVICE. The measuring branch reads THIS session's
+    # counter_plan row and skips the 120-minute arm unless it says DONE. It
+    # reads the ledger rather than the log or a remembered verdict, because a
+    # counter route is a property of the pod and the pod changes between
+    # rentals.
+    block = CODE.split('say "14. the DRAM counter, run"', 1)[1].split("\nsay ", 1)[0]
+    assert 'ledger_arm_state counter_plan' in block, block[:2000]
+    assert 'skip_arm counter' in block
+    # And the three verdicts are translated where the operator reads the skip,
+    # so a BLOCKED pod does not read as a broken arm.
+    assert "CLAIM_FAIL is BLOCKED" in block and "REFUSED is no ncu on PATH" in block
+
+
+def test_the_counter_arm_is_booked_at_the_figure_its_own_plan_prints():
+    """THE COST TABLE'S RULE, applied to the new row: 120 minutes is not this
+    file's guess, it is the plan page's own "two pod-hours end to end" for the
+    twelve profiled invocations the arm makes. Re-derived here by running the
+    plan rather than by trusting the basis string."""
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+         "--dry-run", "--card", "nvidia_h200"],
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert plan.returncode == 0, plan.stderr[-800:]
+    assert "12 profiled invocations" in plan.stdout, plan.stdout[-1500:]
+    assert "two pod-hours end to end" in plan.stdout, plan.stdout[-1500:]
+    booked = int(lift("arm_minutes counter", REPO=str(ROOT)).stdout.strip())
+    assert booked == 2 * 60, booked
+    # A WALL figure: the page charges ncu replay outright rather than leaving
+    # it to a ratio, so nothing about this row is unpriced.
+    assert lift("arm_clock counter", REPO=str(ROOT)).stdout.strip() == "WALL"
+    assert not lift("arm_unpriced counter", REPO=str(ROOT)).stdout.strip()
+
+
+def test_the_counter_arm_refuses_by_name_when_the_runner_it_needs_is_absent():
+    """THE 2026-09-09 --partner-block-m DEFECT, not repeated. That flag was
+    written on two `arm` lines of a file that never defined it, so the pod
+    would have spent an argparse exit 2 and filed the arm REFUSED having
+    measured nothing. `dram_counter_route.py` gains `--run` in a separate
+    slice; until it lands, the driver asks the FILE and names the absence
+    instead of discovering it on a rented card.
+
+    `test_no_arm_is_given_a_flag_its_own_script_does_not_define` is the gate
+    that fails while the runner is absent, and it is deliberately not
+    exempted here: this test asserts the driver degrades safely, not that the
+    forward reference is acceptable."""
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r"\s*arm counter\s", ln)]
+    measuring = [ln for ln in lines if "--dry-run" not in ln]
+    assert len(measuring) == 1, lines
+    assert "--run" in shlex.split(measuring[0]), measuring[0]
+    # The guard greps the very file `arm_script counter` names, for the
+    # argparse spelling of the flag, and skips the arm by name with a reason.
+    rel = lift("arm_script counter", REPO=str(ROOT)).stdout.strip()
+    guard = [ln for ln in joined.splitlines()
+             if "grep -q" in ln and rel in ln and '"--run"' in ln]
+    assert len(guard) == 1, joined[joined.index("14. the DRAM counter"):][:1200]
+    assert "skip_arm counter" in joined
+    # And the dry branch asks for a PLAN, so a --dry-run reviews the arm
+    # whether or not the runner exists yet.
+    planning = [ln for ln in lines if "--dry-run" in ln]
+    assert len(planning) == 1 and "--card" in planning[0], lines
+
+
+def test_the_counter_route_card_is_resolved_once_and_reaches_both_call_sites():
+    """THE RECURRING DEFECT, IN THE FORM IT TOOK ON 2026-09-10.
+    `dram_counter_route.py` takes `--card` from a hard default of
+    `nvidia_a100_sxm4_80gb` and never from the attached device, so the probe
+    reported OPEN on an H200 and the plan printed underneath it named an A100
+    and an A100 ridge of 145.81: one page, two machines. The fix is one
+    resolver read by both arms, not a flag added to whichever call site was
+    noticed.
+
+    It also has to REFUSE to pass a card the script does not list, because that
+    argument is a closed set and an unlisted slug is an argparse exit 2 on a
+    rented pod."""
+    src = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    def resolve(card, override=""):
+        return lift("counter_route_card", REPO=str(ROOT), CARD=card,
+                    COUNTER_ROUTE_CARD=override).stdout.strip()
+    # The attached card, where the script names it.
+    assert resolve("nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
+    assert resolve("nvidia_h200") == "nvidia_h200"
+    # A card it does not list falls back to the labelled hypothetical rather
+    # than being passed through into an argparse failure.
+    assert '"nvidia_b200"' not in src, "update this test: the script now lists b200"
+    assert resolve("nvidia_b200") == "nvidia_h200"
+    assert resolve("nocard") == "nvidia_h200"
+    # And an operator override wins, when it is a card the script lists.
+    assert resolve("nocard", "nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
+    # EVERY call site reads the one value, and there is exactly one assignment:
+    # arm 13's printed plan, and both branches of arm 14.
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    users = [ln for ln in joined.splitlines() if "COUNTER_PLAN_CARD" in ln]
+    assert sum(1 for ln in users if 'COUNTER_PLAN_CARD="$(counter_route_card)"' in ln) == 1, users
+    assert sum(1 for ln in users if '--card "$COUNTER_PLAN_CARD"' in ln) == 4, users
+    # And NO invocation of that script is left carrying the hard A100 default.
+    # `--probe` takes no card and prints no cell, so it is the one exemption;
+    # the runner guard greps the file rather than running it.
+    bare = [ln for ln in joined.splitlines()
+            if '"$REPO/scripts/dram_counter_route.py"' in ln
+            and "--card" not in ln and "--probe" not in ln
+            and not ln.lstrip().startswith(("elif ", "if ", "#"))]
+    assert bare == [], bare
+
+
+def test_the_next_session_books_the_arms_the_2026_09_10_ledger_left():
+    """THE BLOCK IS A BOOKING, NOT A WISH. Every arm in it is an arm this
+    driver knows, every one has a stated expectation, and the priced and
+    bounded figures come through the same `session_bound` the cost table uses
+    rather than being typed into the prose. The set it replaced was the
+    2026-09-09 one; eight of those eight arms have since been spent, and a
+    rerun list that outlives its session re-books arms that already hold a
+    result."""
+    listed = lift("rerun_arms", REPO=str(ROOT)).stdout.split()
+    assert listed, "the rerun set is empty"
+    for name in listed:
+        assert name in ARMS, name
+        exp = lift(f"rerun_expectation {shlex.quote(name)}",
+                   REPO=str(ROOT)).stdout.strip()
+        assert exp, f"{name} is booked with no expected state"
+    # The two arms this round exists for are in it, and the probe is ahead of
+    # the run it gates.
+    assert "bn_g16" in listed and "counter" in listed
+    assert listed.index("counter_plan") < listed.index("counter")
+    # Nothing that already holds a RESULT is re-booked. cap_test and
+    # mma_switch read DONE on 2026-09-10 and bm128_depth, anchor_measure,
+    # anchor_rescore and ruler read CLAIM_FAIL.
+    for done in ("cap_test", "mma_switch", "bm128_depth", "anchor_measure",
+                 "anchor_rescore", "ruler"):
+        assert done not in listed, done
+    printed = lift("next_session_booking", REPO=str(ROOT)).stdout
+    assert f"--only {','.join(listed)}" in printed, printed[:1200]
+    priced, bound = lift(f"session_bound {' '.join(listed)}",
+                         REPO=str(ROOT)).stdout.split()
+    assert f"~{priced} priced / ~{bound} bounded minutes" in printed
+    for name in listed:
+        assert re.search(rf"^    {re.escape(name)}\s+\S", printed, re.M), name
+    # The three arms left OUT are named with the reason, because an absent arm
+    # in a booking reads as an oversight and here it is the decision.
+    for out in ("roofline-n64-g1", "alias_ablation", "noise_floor"):
+        assert out in printed, out
+
+
+def test_bn_g16_is_booked_at_the_plan_its_own_arm_line_prints():
+    """THE THIRD SUBJECT TILE, PRICED BY RE-DERIVATION. The arm went from 36
+    to 46 booked minutes when `--tiles 16,32,64,128` reached both branches,
+    and this runs that exact plan and checks the booking against the seconds
+    it prints. The flag has to be on BOTH branches: a dry branch that previews
+    a different swept set from the one the pod runs prices the wrong arm, and
+    the plan is where the cost table reads its figure."""
+    lines = [ln for ln in re.sub(r"\\\n\s+", " ", CODE).splitlines()
+             if re.match(r"\s*arm bn_g16\s", ln)]
+    assert len(lines) == 2, lines
+    for ln in lines:
+        assert "--tiles 16,32,64,128" in ln, ln
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
+         "--dry-run", "--capability", "9.0", "--group-m", "16", "--reps", "17",
+         "--tiles", "16,32,64,128"],
+        capture_output=True, text=True, timeout=900, cwd=str(ROOT))
+    assert plan.returncode == 0, plan.stderr[-800:]
+    seconds = re.search(r"estimate\s+(\d+) s of GPU", plan.stdout)
+    assert seconds, plan.stdout[-1500:]
+    booked = int(lift("arm_minutes bn_g16", REPO=str(ROOT)).stdout.strip())
+    assert booked == -(-int(seconds.group(1)) // 60), (booked, seconds.group(1))
+    # And the swept set really did gain a height that was not there before.
+    assert re.search(r"^  BN=\s*32 BM=\s*16\s", plan.stdout, re.M), plan.stdout[-2000:]
