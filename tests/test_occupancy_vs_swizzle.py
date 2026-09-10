@@ -1280,11 +1280,26 @@ def test_p5_states_the_exa_attenuation_as_a_bracket_not_a_cancellation():
 # LEVEL is two-sided since 03df2d4, and this consumer reads the side
 # --------------------------------------------------------------------------
 
-#: The H200 shape the fifteenth instance of the recurring defect was found on:
-#: the bf16-GEMM reference the roof was measured at, and the clock the
-#: committed calibration holds under memory load for 30 s.
-H200_GEMM_REFERENCE_MHZ = 1515.0
+#: A PLANTED WORLD, not a card. These three numbers are the shape the
+#: fifteenth instance of the recurring defect was found on (a memory-shaped
+#: cell boosting above the roof's clock, a hungry one sagging below it), and
+#: the tests below pass all three sides of every ratio, so what they test is
+#: the consumer's arithmetic and not any card's figures.
+#:
+#: THE REFERENCE IS DELIBERATELY A ROUND NUMBER NO CARD PUBLISHES. It read
+#: 1515.0 until 2026-09-09, under a comment calling it "the bf16-GEMM
+#: reference the roof was measured at": that was the H200's committed
+#: calibration until ab61e55 remeasured the card at 1485 MHz under the 700 W
+#: cap on 2026-09-09, so the constant was the superseded live number wearing
+#: the name of the current one, and the file that carried it also defines
+#: `H200_REFERENCE_MHZ = 1485.0` for the card's real figure. A planted world
+#: gets a planted number; a test that needs the card's own clock reads the
+#: committed calibration.
+PLANTED_REFERENCE_MHZ = 1500.0
+#: Well above `PLANTED_REFERENCE_MHZ * timing.LEVEL_HIGH_FRACTION`, the state
+#: of every memory-shaped tread the H200 gaps session measured (1950-1980).
 H200_MEMORY_LOAD_MHZ = 1980.0
+#: Well below `PLANTED_REFERENCE_MHZ * timing.LEVEL_FRACTION`.
 SAGGED_MHZ = 1400.0
 
 
@@ -1355,8 +1370,8 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
     the only thing that tells them apart."""
     from moe.bench import timing
-    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
-    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
     assert high.clock_level_ok is False and low.clock_level_ok is False
     assert OVS.clock_side_of(high) == timing.LEVEL_HIGH
     assert OVS.clock_side_of(low) == timing.LEVEL_LOW
@@ -1379,9 +1394,23 @@ def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
     """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
     rule and the counting block is a reader that has not learned the side, and
     that is how the fifteenth instance happened: one producer fixed, thirteen
-    consumers left on the old meaning."""
+    consumers left on the old meaning.
+
+    A NESTED HELPER IS ITS OUTERMOST FUNCTION, since 2026-09-09. The walk
+    attributed a def to its own name whatever it was nested in, so a reader
+    written as a closure inside a disallowed function passed under a name that
+    was not on the list, and a helper factored out of an allowed one failed
+    while doing exactly what the allowed one did. Attributing by ancestor
+    makes the list about the block the code lives in, which is what the rule
+    is about."""
     import ast
     tree = ast.parse((ROOT / "scripts" / "occupancy_vs_swizzle.py").read_text())
+    owner = {}
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if isinstance(node, ast.FunctionDef):
+                    owner[node] = top.name
     readers = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -1390,7 +1419,7 @@ def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
                              if not (isinstance(s, ast.Expr)
                                      and isinstance(s.value, ast.Constant)))
             if "clock_level_ok is False" in body:
-                readers.add(node.name)
+                readers.add(owner.get(node, node.name))
     allowed = {"clock_excluded", "timing_summary"}
     assert readers <= allowed, (
         f"{sorted(readers - allowed)} test the LEVEL verdict "
@@ -1407,38 +1436,102 @@ def _sample_from(t, n, setting="s3w8g1"):
                       clock_level_side=OVS.clock_side_of(t))
 
 
+def test_appending_under_a_different_header_refuses(tmp_path):
+    """A cells.csv written before a column existed cannot be resumed into.
+
+    The header goes down once, when the file is new, and every later row is
+    written positionally under it. `SAMPLE_FIELDS` gained four clock-evidence
+    columns on 2026-09-09, so a resume into an older directory would have
+    appended rows with four extra fields under the old header and silently
+    misaligned the file. R9's runbook says --new for the booked rerun, so no
+    committed directory is affected; this is what makes the NEXT added column
+    say so."""
+    import csv as _csv
+    t = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    path = tmp_path / "cells.csv"
+    OVS.append_sample(path, _sample_from(t, 1))
+    OVS.append_sample(path, _sample_from(t, 2))
+    assert len(path.read_text().splitlines()) == 3
+    dropped = ("sm_clock_start_mhz", "sm_clock_end_mhz", "clock_samples_mhz",
+               "power_w")
+    stale = tmp_path / "stale.csv"
+    with path.open(newline="") as fh:
+        rows = list(_csv.DictReader(fh))
+    keep = [c for c in rows[0] if c not in dropped]
+    with stale.open("w", newline="") as fh:
+        w = _csv.DictWriter(fh, fieldnames=keep)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r[k] for k in keep})
+    with pytest.raises(SystemExit) as caught:
+        OVS.append_sample(stale, _sample_from(t, 3))
+    said = str(caught.value)
+    assert "different set of columns" in said
+    assert "sm_clock_start_mhz" in said
+    assert "Re-run into a NEW directory" in said
+    assert len(stale.read_text().splitlines()) == 3
+
+
 def test_both_level_sides_travel_through_the_csv_and_are_counted_as_kept(tmp_path):
     """THE PLANTED HIGH ROW AND THE PLANTED LOW ROW, BOTH KEPT AND BOTH
     RECORDED, through this file's own row, CSV and timing summary.
     `clock_level_below` used to count both as "below the roof's clock"; then
     the LOW side was an exclusion; since 2026-09-09 DRIFT is the exclusion and
-    each side is a record of the clock the swizzle's draw produced."""
+    each side is a record of the clock the swizzle's draw produced.
+
+    THE FOURTH ROW IS THE OVERLAPPING ONE: LEVEL false on the HIGH side AND
+    DRIFT false. No planted world in this file had one until 2026-09-09, so
+    the side counters could filter on the LEVEL verdict alone, count that row
+    as a kept HIGH and again as a DRIFT, and stay green while the V10 line
+    named it kept and excluded-shaped in one sentence."""
     from moe.bench import timing
-    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
-    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
-    level = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ)
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    level = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ)
+    high_and_drifting = _kernel_timing_at(H200_MEMORY_LOAD_MHZ,
+                                          PLANTED_REFERENCE_MHZ,
+                                          drift_to=1700.0)
+    assert high_and_drifting.clock_level_ok is False
+    assert high_and_drifting.clock_drift_ok is False
     path = tmp_path / "cells.csv"
-    for n, t in enumerate((high, low, level), start=1):
+    for n, t in enumerate((high, low, level, high_and_drifting), start=1):
         OVS.append_sample(path, _sample_from(t, n))
     _, back = OVS.read_samples(path)
-    assert [s.clock_level_side for s in back] == [timing.LEVEL_HIGH,
-                                                 timing.LEVEL_LOW, ""]
+    assert [s.clock_level_side for s in back] == [
+        timing.LEVEL_HIGH, timing.LEVEL_LOW, "", timing.LEVEL_HIGH]
     summary = OVS.timing_summary(back)
+    assert summary["clock_level_ok"] == 1
     assert summary["clock_level_high"] == 1
     assert summary["clock_level_low"] == 1
     assert summary["clock_level_unknown"] == 0
-    assert summary["clock_excluded_shaped"] == 0, "neither side excludes"
+    assert summary["clock_drift_flagged"] == 1
+    assert (summary["clock_level_ok"] + summary["clock_level_low"]
+            + summary["clock_level_high"] + summary["clock_level_unknown"]
+            + summary["clock_drift_flagged"]) == summary["rows_timed"]
+    assert summary["clock_level_high_drifted"] == 1
+    assert summary["clock_level_low_drifted"] == 0
+    assert summary["clock_level_ok_drifted"] == 0
+    assert summary["clock_excluded_shaped"] == 1, "the drift, and neither side"
     assert "clock_level_below" not in summary, "the one-sided count is gone"
+    # PER-SETTING MEDIANS, because this sweep moves the clock by moving the
+    # swizzle: one median over the whole sweep is the bimodal number R9 bans.
+    assert summary["sm_clock_load_mhz_median_by_setting"].keys() == {"s3w8g1"}
     gate = OVS.gate_one_instrument(back)
     said = "\n".join(gate.lines)
-    assert "1 steady below the roof's clock (LEVEL low, kept, side recorded)" in said
+    assert "1 steady below it (LEVEL low, kept, side recorded)" in said
     assert "1 steady above it (LEVEL high, kept, side recorded)" in said
-    # A drifting row IS excluded-shaped, through the same CSV round trip.
+    assert "1 drifting within a cell (excluded, and not in the counts before it)" in said
+    assert "the 1 drifted rows by side: 0 level, 0 LOW, 1 HIGH" in said
+    # THE LINE MUST NOT NAME A COLUMN THIS SCRIPT DOES NOT WRITE. It said
+    # "scored against the fixed roof with roof_at_cell_clock printed beside"
+    # until 2026-09-09 and this file computes no such column.
+    assert "roof_at_cell_clock" not in said
+    # A second drifting row IS excluded-shaped, through the same CSV round trip.
     drifting = _sample_from(_kernel_timing_at(
-        H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ, drift_to=1300.0), 4)
+        PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ, drift_to=1300.0), 5)
     OVS.append_sample(path, drifting)
     _, again = OVS.read_samples(path)
-    assert OVS.timing_summary(again)["clock_excluded_shaped"] == 1
+    assert OVS.timing_summary(again)["clock_excluded_shaped"] == 2
 
 
 def test_neither_a_high_world_nor_a_low_world_excludes_anything():
@@ -1446,10 +1539,10 @@ def test_neither_a_high_world_nor_a_low_world_excludes_anything():
     memory-bound tread on a rental: zero excluded-shaped. Every row at the
     clock a hungry tile holds under the power cap: also zero, since
     2026-09-09. Every row drifting: all of them."""
-    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
-    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
-    drifting = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ,
-                                 H200_GEMM_REFERENCE_MHZ, drift_to=1300.0)
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
+    drifting = _kernel_timing_at(PLANTED_REFERENCE_MHZ,
+                                 PLANTED_REFERENCE_MHZ, drift_to=1300.0)
     high_world = OVS.timing_summary([_sample_from(high, n) for n in range(1, 7)])
     assert (high_world["clock_level_high"], high_world["clock_excluded_shaped"]) == (6, 0)
     low_world = OVS.timing_summary([_sample_from(low, n) for n in range(1, 7)])
@@ -1489,10 +1582,10 @@ def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
     """R3's evidence columns. `time_kernel` computed the first and last
     under-load sample and this writer dropped them, so every drifted row this
     sweep has written says a clock moved and cannot say which way."""
-    t = _kernel_timing_at(H200_GEMM_REFERENCE_MHZ, H200_GEMM_REFERENCE_MHZ,
+    t = _kernel_timing_at(PLANTED_REFERENCE_MHZ, PLANTED_REFERENCE_MHZ,
                           drift_to=1300.0)
     columns = OVS.clock_samples_of(t)
-    assert columns["sm_clock_start_mhz"] == H200_GEMM_REFERENCE_MHZ
+    assert columns["sm_clock_start_mhz"] == PLANTED_REFERENCE_MHZ
     assert columns["sm_clock_end_mhz"] == 1300.0
     # An instrument without the sample list or the draw writes them EMPTY,
     # which is NOT DETERMINED and never zero.
@@ -1510,5 +1603,5 @@ def test_the_new_clock_columns_round_trip_through_the_csv(tmp_path):
         assert column in header, column
     _, back = OVS.read_samples(path)
     assert (back[0].sm_clock_start_mhz, back[0].sm_clock_end_mhz) == (
-        H200_GEMM_REFERENCE_MHZ, 1300.0)
+        PLANTED_REFERENCE_MHZ, 1300.0)
     assert back[0].power_w is None and back[0].clock_samples_mhz == ""

@@ -1304,8 +1304,11 @@ def clock_side_of(t) -> str:
     "", which is "no side recorded" and not "level".
 
     SINCE 2026-09-09 THE SIDE IS A RECORD AND NOT A FILTER. `clock_excluded`
-    below reads DRIFT alone; the side is written on the row, printed beside the
-    fixed-roof fraction, and is what `roof_at_cell_clock` is scored from.
+    below reads DRIFT alone; the side is written on the row and counted in the
+    clock-state block. THIS SCRIPT COMPUTES NO `roof_at_cell_clock`: that is a
+    driver-row column (`moe/bench/recompute.py`) and this file is a standalone
+    writer that never produces one. This sentence named it until 2026-09-09,
+    which pointed a reader at a column that is not in the artefact.
     """
     from moe.bench import timing
 
@@ -1368,10 +1371,11 @@ def clock_excluded(level_ok: bool | None, side: str,
     which is an instrument problem and is fixed at the instrument.
 
     `level_ok` and `side` are still taken and still written on the row. The
-    side is a RECORD of where the cell ran, printed beside the fixed-roof
-    fraction and used for `roof_at_cell_clock`, and it excludes nothing. None
-    is not determined and an exclusion has to be positively established, so
-    only a False DRIFT excludes.
+    side is a RECORD of where the cell ran and it excludes nothing. It feeds
+    no roof here: this file writes no `roof_at_cell_clock` column, and until
+    2026-09-09 this sentence said the side was used for one. None is not
+    determined and an exclusion has to be positively established, so only a
+    False DRIFT excludes.
     """
     return drift_ok is False
 
@@ -1394,8 +1398,31 @@ def _opt_bool(text: str | None) -> bool | None:
 
 
 def append_sample(path: Path, sample: Sample) -> None:
-    """One row, flushed. An abort costs the timing in flight and nothing else."""
+    """One row, flushed. An abort costs the timing in flight and nothing else.
+
+    APPENDING TO A FILE WITH A DIFFERENT HEADER REFUSES, since 2026-09-09. The
+    header goes down once, when the file is new, and every later row is written
+    positionally under it. `SAMPLE_FIELDS` gained four clock-evidence columns
+    on 2026-09-09, so a resume into a cells.csv written before that day would
+    have appended rows carrying four extra fields under the old header and
+    silently misaligned the file. The runbook says --new for the booked rerun
+    and `read_samples` reads by header name, so no committed file is affected;
+    this check is what makes the next added column say so rather than corrupt a
+    directory.
+    """
     new = not path.exists()
+    if not new:
+        with path.open(newline="") as fh:
+            header = next(csv.reader(fh), None)
+        if header is not None and header != list(SAMPLE_FIELDS):
+            added = [c for c in SAMPLE_FIELDS if c not in header]
+            gone = [c for c in header if c not in SAMPLE_FIELDS]
+            raise SystemExit(
+                f"cells.csv at {path} was written with a different set of "
+                f"columns than this run writes (added: {added or 'none'}; "
+                f"missing: {gone or 'none'}). Appending would put the new "
+                "fields under the old header and misalign every row from here "
+                "on. Re-run into a NEW directory rather than resuming this one")
     with path.open("a", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=SAMPLE_FIELDS)
         if new:
@@ -2183,11 +2210,50 @@ def timing_summary(samples) -> dict:
     `clock_excluded_shaped` applies `clock_excluded`, which since 2026-09-09
     is DRIFT alone; this file drops none of them, the number is for the
     reader.
+
+    THE FOUR LEVEL COUNTS ARE OVER THE STEADY ROWS ONLY, since 2026-09-09.
+    They filtered on the LEVEL verdict alone until then, so a drifted row was
+    counted once as its LEVEL side and again in `clock_drift_flagged`, and the
+    V10 line that reads them called the same row kept and excluded in one
+    sentence. `clock_level_*_drifted` carries the drifted rows' own LEVEL
+    breakdown, because which way a clock sat while it moved is still a fact
+    about the run and is not a fact about a kept row. The four steady counts
+    plus `clock_drift_flagged` sum to `rows_timed`.
+
+    `sm_clock_load_mhz_median` IS ONE MEDIAN OVER A SWEEP THAT MOVES THE
+    CLOCK, which is what R9 bans on a RESULT line and what this field was
+    until 2026-09-09: the 2026-09-09 census measured BLOCK_M=64 at
+    GROUP_SIZE_M=1 holding 1358 MHz against ~1455 at GROUP_SIZE_M>=8, so the
+    single number is the midpoint of a bimodal distribution and describes no
+    setting. It is kept for continuity with the reports already written
+    against it and `sm_clock_load_mhz_median_by_setting` is the honest form,
+    one median per swept setting, which is the grain the swizzle moves at.
     """
     from moe.bench import timing
 
     timed = [s for s in samples if s.status == "ok"]
     clocks = [s.sm_clock_load_mhz for s in timed if s.sm_clock_load_mhz]
+    by_setting: dict[str, list[float]] = {}
+    for s in timed:
+        if s.sm_clock_load_mhz:
+            by_setting.setdefault(s.setting, []).append(s.sm_clock_load_mhz)
+    drifted = [s for s in timed if s.clock_drift_ok is False]
+    steady = [s for s in timed if s.clock_drift_ok is not False]
+
+    def low(rows):
+        return sum(1 for s in rows if s.clock_level_ok is False
+                   and s.clock_level_side != timing.LEVEL_HIGH)
+
+    def high(rows):
+        return sum(1 for s in rows if s.clock_level_ok is False
+                   and s.clock_level_side == timing.LEVEL_HIGH)
+
+    def level(rows):
+        return sum(1 for s in rows if s.clock_level_ok is True)
+
+    def unknown(rows):
+        return sum(1 for s in rows if s.clock_level_ok is None)
+
     return {
         "instruments": sorted({s.instrument for s in timed}),
         "expected_instrument": timing_basis(),
@@ -2198,12 +2264,17 @@ def timing_summary(samples) -> dict:
         "iters_median": statistics.median([s.iters for s in timed]) if timed
                         else None,
         "sm_clock_load_mhz_median": statistics.median(clocks) if clocks else None,
-        "clock_level_low": sum(1 for s in timed if s.clock_level_ok is False
-                               and s.clock_level_side != timing.LEVEL_HIGH),
-        "clock_level_high": sum(1 for s in timed if s.clock_level_ok is False
-                                and s.clock_level_side == timing.LEVEL_HIGH),
-        "clock_level_unknown": sum(1 for s in timed if s.clock_level_ok is None),
-        "clock_drift_flagged": sum(1 for s in timed if s.clock_drift_ok is False),
+        "sm_clock_load_mhz_median_by_setting": {
+            name: statistics.median(v) for name, v in sorted(by_setting.items())},
+        "clock_level_ok": level(steady),
+        "clock_level_low": low(steady),
+        "clock_level_high": high(steady),
+        "clock_level_unknown": unknown(steady),
+        "clock_drift_flagged": len(drifted),
+        "clock_level_ok_drifted": level(drifted),
+        "clock_level_low_drifted": low(drifted),
+        "clock_level_high_drifted": high(drifted),
+        "clock_level_unknown_drifted": unknown(drifted),
         "clock_excluded_shaped": sum(
             1 for s in timed
             if clock_excluded(s.clock_level_ok, s.clock_level_side,
@@ -2212,8 +2283,9 @@ def timing_summary(samples) -> dict:
                       "side recorded, because the under-load clock is set per "
                       "tile by the kernel's own power draw under the cap; the "
                       "fixed roof is what the compute-bound gates score "
-                      "against and roof_at_cell_clock is printed beside it; "
-                      "this file drops no row for its clock",
+                      "against; the four LEVEL counts are over the STEADY "
+                      "rows only and with the drift count they partition the "
+                      "timed rows; this file drops no row for its clock",
     }
 
 
@@ -2249,6 +2321,14 @@ def gate_one_instrument(samples, measured: bool = True) -> Gate:
     container that forbids it, a trial too short for the poller) and is
     counted separately, because a run that determined nothing about its
     clocks and a run whose clocks were fine must not print the same number.
+
+    THE SIDE COUNTS ARE OVER THE STEADY ROWS ONLY, since 2026-09-09. They took
+    every row with that LEVEL side until then, drifted rows included, so this
+    line called the same row kept and excluded-shaped in one sentence and the
+    sides plus the drift count came to more than the timed rows. The drifted
+    rows now get their own sentence with their own side breakdown. The line
+    also told the reader to read `roof_at_cell_clock` beside the fixed-roof
+    fraction; this script computes no such column, so that pointer is gone.
     """
     timed = [s for s in samples if s.status == "ok"]
     stamps = {s.instrument for s in timed}
@@ -2258,15 +2338,25 @@ def gate_one_instrument(samples, measured: bool = True) -> Gate:
     unknown_clock = state["clock_level_unknown"]
     drifted = state["clock_drift_flagged"]
     basis = timing_basis()
-    lines = [f"{len(timed)} timed rows; {below} steady below the roof's clock "
+    lines = [f"{len(timed)} timed rows; {state['clock_level_ok']} steady at "
+             f"the roof's clock, {below} steady below it "
              f"(LEVEL low, kept, side recorded), {above} steady above it "
-             "(LEVEL high, kept, side recorded), scored against the fixed "
-             "roof with roof_at_cell_clock printed beside; "
-             f"{drifted} drifting within a cell (excluded-shaped), "
-             f"{unknown_clock} with no clock determined at all",
-             "clock_level_ok is None means NOT DETERMINED and never 'fine'; a "
-             "filter that read it as True would re-admit the rows this column "
-             "exists to flag"]
+             "(LEVEL high, kept, side recorded), all scored against the fixed "
+             f"roof; {drifted} drifting within a cell (excluded, and not in "
+             f"the counts before it); {unknown_clock} steady with no clock "
+             "determined at all"]
+    if drifted:
+        lines.append(
+            f"the {drifted} drifted rows by side: "
+            f"{state['clock_level_ok_drifted']} level, "
+            f"{state['clock_level_low_drifted']} LOW, "
+            f"{state['clock_level_high_drifted']} HIGH, "
+            f"{state['clock_level_unknown_drifted']} with LEVEL not "
+            "determined; a row whose clock moved is not steady at any side")
+    lines.append(
+        "clock_level_ok is None means NOT DETERMINED and never 'fine'; a "
+        "filter that read it as True would re-admit the rows this column "
+        "exists to flag")
     if not measured:
         return Gate(
             VALIDITY, "V10 one instrument",

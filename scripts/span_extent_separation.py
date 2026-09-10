@@ -272,8 +272,11 @@ def clock_side_of(t) -> str:
     "", which is "no side recorded" and not "level".
 
     SINCE 2026-09-09 THE SIDE IS A RECORD AND NOT A FILTER. `clock_excluded`
-    below reads DRIFT alone; the side is written on the row, printed beside the
-    fixed-roof fraction, and is what `roof_at_cell_clock` is scored from.
+    below reads DRIFT alone; the side is written on the row and counted in the
+    clock-state block. THIS SCRIPT COMPUTES NO `roof_at_cell_clock`: that is a
+    driver-row column (`moe/bench/recompute.py`) and this file is a standalone
+    writer that never produces one. This sentence named it until 2026-09-09,
+    which pointed a reader at a column that is not in the artefact.
     """
     from moe.bench import timing
 
@@ -336,10 +339,11 @@ def clock_excluded(level_ok: bool | None, side: str,
     which is an instrument problem and is fixed at the instrument.
 
     `level_ok` and `side` are still taken and still written on the row. The
-    side is a RECORD of where the cell ran, printed beside the fixed-roof
-    fraction and used for `roof_at_cell_clock`, and it excludes nothing. None
-    is not determined and an exclusion has to be positively established, so
-    only a False DRIFT excludes.
+    side is a RECORD of where the cell ran and it excludes nothing. It feeds
+    no roof here: this file writes no `roof_at_cell_clock` column, and until
+    2026-09-09 this sentence said the side was used for one. None is not
+    determined and an exclusion has to be positively established, so only a
+    False DRIFT excludes.
     """
     return drift_ok is False
 
@@ -1820,21 +1824,35 @@ class Analysis:
     #: two rows are divisible by each other. `arm_ruler` says why the flush has
     #: to be in it.
     rulers: dict[str, int]
-    #: Timed arms whose LEVEL verdict was False on the LOW side, or False with
-    #: no side recorded (the one-sided era's meaning). Counted rather than
-    #: gated, and since 2026-09-09 not excluded anywhere: a steady LOW is the
-    #: operating point a hungry tile holds under the power cap. Every ratio
-    #: here is between two arms of the SAME round-robin repeat, so a card that
-    #: sat low all session moves neither, and what the counts are for is a
-    #: reader deciding whether to believe a 5% effect.
+    #: STEADY timed arms whose LEVEL verdict was False on the LOW side, or
+    #: False with no side recorded (the one-sided era's meaning). Counted
+    #: rather than gated, and since 2026-09-09 not excluded anywhere: a steady
+    #: LOW is the operating point a hungry tile holds under the power cap.
+    #: Every ratio here is between two arms of the SAME round-robin repeat, so
+    #: a card that sat low all session moves neither, and what the counts are
+    #: for is a reader deciding whether to believe a 5% effect.
     clock_level_bad: int
-    #: Timed arms whose LEVEL verdict was False on the HIGH side: boosted
-    #: above the band, 1980 MHz against the H200's 1515 MHz reference, the
-    #: ordinary state of a memory-bound arm. KEPT, and counted apart from
-    #: `clock_level_bad` because until 2026-09-08 the two were one number
-    #: that read as "the card sat low" and would have on every memory arm.
+    #: STEADY timed arms whose LEVEL verdict was False on the HIGH side:
+    #: boosted above the band, 1950-1980 MHz against the 1485 MHz this card's
+    #: own calibration measured its bf16 GEMM holding under the 700 W cap (the
+    #: committed figure was 1515 until ab61e55 recalibrated it on 2026-09-09).
+    #: That is the ordinary state of a memory-bound arm. KEPT, exactly as the
+    #: LOW side is kept: this pair described two different rules until
+    #: 2026-09-09, when `clock_level_bad` above was updated and this one was
+    #: not. Counted apart from `clock_level_bad` because until 2026-09-08 the
+    #: two were one number that read as "the card sat low" and would have on
+    #: every memory arm.
     clock_level_high: int
+    #: Timed arms whose clock MOVED while the arm was timed. The one excluded
+    #: state, and the reason the two counts above take the steady arms only:
+    #: an arm counted as a kept side and as a drift at once was named kept and
+    #: excluded in one printed sentence, which is what they did until
+    #: 2026-09-09. `clock_level_*_drifted` below carries the drifted arms'
+    #: own LEVEL breakdown.
     clock_drift_bad: int
+    clock_level_bad_drifted: int
+    clock_level_high_drifted: int
+    clock_level_ok_drifted: int
     #: Timed arms whose queue had drained before the host finished enqueueing,
     #: so their intervals include host time and bound the kernel from above.
     #: At T=1 a `moe_sum` over 8 rows is host-bound by construction, which is
@@ -1972,6 +1990,8 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
     instruments: dict[str, int] = {}
     rulers: dict[str, int] = {}
     clock_level_bad = clock_level_high = clock_drift_bad = host_bound_arms = 0
+    clock_level_bad_drifted = clock_level_high_drifted = 0
+    clock_level_ok_drifted = 0
     sample_counts: list[int] = []
     fused_config: dict[tuple[str, int], dict] = {}
     for cell in cells:
@@ -2006,12 +2026,26 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
                 # counted apart. Each names an operating point the tile held
                 # under the power cap, and this page reports rather than gates
                 # on it: every ratio is between two arms of one repeat.
+                #
+                # A DRIFTED ARM IS COUNTED AS DRIFTED AND NOWHERE ELSE, since
+                # 2026-09-09. Both branches took every arm with that side until
+                # then, so an arm that both drifted and sat HIGH landed in
+                # `clock_level_high` (printed as kept) and in `clock_drift_bad`
+                # (printed as excluded-shaped) from one row.
+                moved = arm.clock_drift_ok is False
                 if arm.clock_level_ok is False:
                     if arm.clock_level_side == LEVEL_HIGH:
-                        clock_level_high += 1
+                        if moved:
+                            clock_level_high_drifted += 1
+                        else:
+                            clock_level_high += 1
+                    elif moved:
+                        clock_level_bad_drifted += 1
                     else:
                         clock_level_bad += 1
-                clock_drift_bad += arm.clock_drift_ok is False
+                elif moved and arm.clock_level_ok is True:
+                    clock_level_ok_drifted += 1
+                clock_drift_bad += moved
                 host_bound_arms += arm.host_bound is True
             artifacts += arm.triton_artifacts
             if arm.rel_err_vs_fused is not None:
@@ -2073,7 +2107,11 @@ def analyse(cells: list[Cell], results: Results) -> Analysis:
         incomplete_configs=incomplete, instruments=instruments,
         rulers=rulers,
         clock_level_bad=clock_level_bad, clock_level_high=clock_level_high,
-        clock_drift_bad=clock_drift_bad, host_bound_arms=host_bound_arms)
+        clock_drift_bad=clock_drift_bad,
+        clock_level_bad_drifted=clock_level_bad_drifted,
+        clock_level_high_drifted=clock_level_high_drifted,
+        clock_level_ok_drifted=clock_level_ok_drifted,
+        host_bound_arms=host_bound_arms)
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -2413,8 +2451,12 @@ def build_gates(analysis: Analysis) -> list[Gate]:
                + (f"; clock LEVEL low on {analysis.clock_level_bad} "
                   f"(steady, kept, side recorded), LEVEL high on "
                   f"{analysis.clock_level_high} (steady, kept, side "
-                  f"recorded), DRIFT bad "
-                  f"on {analysis.clock_drift_bad}, host-bound on "
+                  f"recorded), DRIFT bad on {analysis.clock_drift_bad} "
+                  f"(excluded, and not in the two side counts before it: "
+                  f"{analysis.clock_level_ok_drifted} of them were level, "
+                  f"{analysis.clock_level_bad_drifted} LOW, "
+                  f"{analysis.clock_level_high_drifted} HIGH while they "
+                  f"moved), host-bound on "
                   f"{analysis.host_bound_arms} of {analysis.arms_timed} timed "
                   f"arms (reported, not gated: every ratio here is between two "
                   f"arms of one round-robin repeat)"))),
@@ -3447,11 +3489,27 @@ def representative_timing(timings: list):
 
     Two rules, and they pull in opposite directions on purpose.
 
-    The instrument columns -- `iters`, `warmup_ms`, `trials`, `l2_flush`, the
-    clock the card actually ran at -- come from the repeat whose p50 is the
+    The instrument columns (`iters`, `warmup_ms`, `trials`, `l2_flush`, the
+    clock the card actually ran at) come from the repeat whose p50 is the
     median, so the numbers describing the measurement describe the SAME
     measurement the row's `ms_median` came from. Averaging `iters` across
     repeats would put a count on the row that no trial ran.
+
+    THE FOUR CLOCK-EVIDENCE COLUMNS FOLLOW THE DRIFT VERDICT, NOT THE MEDIAN
+    REPEAT. `sm_clock_start_mhz`, `sm_clock_end_mhz`, `clock_samples_mhz` and
+    `power_w` exist to say WHICH WAY a drifted row's clock went. They arrived
+    on 2026-09-09 riding in on `dataclasses.replace(chosen, ...)`, i.e. from
+    the median-p50 repeat, while `clock_drift_ok` folded with `worst` over
+    every repeat. A row could therefore read clock_drift_ok=0 beside a start
+    and an end taken from a repeat that did NOT drift, which is exactly the
+    defect the columns were added to close: it would print equal start and end
+    under a drift verdict and no reader could tell the fold from a bug. When
+    the folded verdict is a DRIFT the four columns now come from the first
+    repeat that actually drifted; otherwise they stay the chosen repeat's.
+    This paragraph is also the list the docstring above owes the reader: the
+    line above named `iters`, `warmup_ms`, `trials`, `l2_flush` and the clock
+    and said nothing about which side of the fold the four new columns were
+    on.
 
     The three verdict flags are the worst across every repeat instead, and
     "worst" is spelled out per flag because the polarities differ:
@@ -3469,7 +3527,10 @@ def representative_timing(timings: list):
     of its repeats sat at; an arm whose failures were all HIGH keeps that
     word; a level or undetermined repeat contributes "". Folding it as "the
     chosen repeat's side" would let the median repeat's boost hide a
-    sibling's sag, and the sag is what `roof_at_cell_clock` is scored from.
+    sibling's sag, and the sag is the operating point a reader of this page
+    has to see. It is not an input to any roof: this script writes no
+    `roof_at_cell_clock` column, and this sentence said the sag was scored
+    into one until 2026-09-09.
     """
     if not timings:
         raise ValueError("representative_timing needs at least one repeat")
@@ -3485,9 +3546,27 @@ def representative_timing(timings: list):
     sides = [clock_side_of(t) for t in timings]
     side = (LEVEL_LOW if LEVEL_LOW in sides
             else LEVEL_HIGH if LEVEL_HIGH in sides else "")
+    drift = worst("clock_drift_ok", False)
+    # THE EVIDENCE COMES FROM THE REPEAT THE DRIFT VERDICT CAME FROM. See the
+    # docstring: taken from `chosen` it described a repeat that did not drift.
+    # Written field by field over the record's OWN fields, because
+    # `clock_samples_mhz` and `power_w` are not fields of `KernelTiming` at all
+    # (`clock_samples_of` reads every one of the four with `getattr` and writes
+    # an absent one as empty), and `dataclasses.replace` refuses a name the
+    # record does not declare.
+    evidence = chosen
+    if drift is False:
+        evidence = next(t for t in timings if t.clock_drift_ok is False)
+    carried = {}
+    if evidence is not chosen:
+        declared = {f.name for f in dataclasses.fields(chosen)}
+        carried = {name: getattr(evidence, name)
+                   for name in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                                "clock_samples_mhz", "power_w")
+                   if name in declared}
     return dataclasses.replace(
         chosen, clock_level_ok=worst("clock_level_ok", False),
-        clock_drift_ok=worst("clock_drift_ok", False),
+        clock_drift_ok=drift, **carried,
         host_bound=worst("host_bound", True), clock_level_side=side)
 
 
@@ -4707,6 +4786,12 @@ def _main(argv: list[str] | None = None) -> int:
         "clock_level_bad_arms": analysis.clock_level_bad,
         "clock_level_high_arms": analysis.clock_level_high,
         "clock_drift_bad_arms": analysis.clock_drift_bad,
+        # The drifted arms' own LEVEL breakdown. The three counts above take
+        # the STEADY arms only since 2026-09-09, so these are the rest of the
+        # partition and not a second view of the same arms.
+        "clock_level_ok_drifted_arms": analysis.clock_level_ok_drifted,
+        "clock_level_bad_drifted_arms": analysis.clock_level_bad_drifted,
+        "clock_level_high_drifted_arms": analysis.clock_level_high_drifted,
         "host_bound_arms": analysis.host_bound_arms,
         "extent_time_median": analysis.extent_time_median,
         "kernel_time_median": analysis.kernel_time_median,

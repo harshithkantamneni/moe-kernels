@@ -2851,8 +2851,11 @@ def clock_side_of(t) -> str:
     "", which is "no side recorded" and not "level".
 
     SINCE 2026-09-09 THE SIDE IS A RECORD AND NOT A FILTER. `clock_excluded`
-    below reads DRIFT alone; the side is written on the row, printed beside the
-    fixed-roof fraction, and is what `roof_at_cell_clock` is scored from.
+    below reads DRIFT alone; the side is written on the row and counted in the
+    clock-state block. THIS SCRIPT COMPUTES NO `roof_at_cell_clock`: that is a
+    driver-row column (`moe/bench/recompute.py`) and this file is a standalone
+    writer that never produces one. This sentence named it until 2026-09-09,
+    which pointed a reader at a column that is not in the artefact.
     """
     from moe.bench import timing
 
@@ -2915,10 +2918,11 @@ def clock_excluded(level_ok: bool | None, side: str,
     which is an instrument problem and is fixed at the instrument.
 
     `level_ok` and `side` are still taken and still written on the row. The
-    side is a RECORD of where the cell ran, printed beside the fixed-roof
-    fraction and used for `roof_at_cell_clock`, and it excludes nothing. None
-    is not determined and an exclusion has to be positively established, so
-    only a False DRIFT excludes.
+    side is a RECORD of where the cell ran and it excludes nothing. It feeds
+    no roof here: this file writes no `roof_at_cell_clock` column, and until
+    2026-09-09 this sentence said the side was used for one. None is not
+    determined and an exclusion has to be positively established, so only a
+    False DRIFT excludes.
     """
     return drift_ok is False
 
@@ -2929,28 +2933,58 @@ def clock_state(rows: list[dict]) -> dict:
     Counts and never a verdict: this arm drops no cell for its clock (the
     scorer reads `status == "ok"`), so the block is what a reader of the
     payload has to decide whether the ladders were timed at the clock the
-    roof was. `drift` is the excluded-shaped state `clock_excluded` names;
-    `low` and `high` are both KEPT since 2026-09-09 and counted apart because
-    the side is the record of the operating point the cell ran at. This arm's
-    every tread past the anchor is memory-shaped and boosts; the 18 LOW cells
-    of the 2026-09-09 session were BLOCK_M=64 at GROUP_SIZE_M=1, the hungriest
-    tile of the session, and this arm dropped none of them. `unknown` is the
-    cells whose LEVEL was not determined, separate because a run that could
-    not read its clocks and a run whose clocks were fine are not the same
-    state.
+    roof was.
+
+    THE FIVE COUNTS PARTITION THE TIMED CELLS AND DO NOT OVERLAP. Until
+    2026-09-09 the four LEVEL counts filtered on the LEVEL verdict alone, so a
+    drifted cell was counted once as its LEVEL side and again in `drift`, and
+    the printed line called it kept and excluded in one sentence. On the
+    2026-09-09 measured directory it read "62 level, 18 steady LOW (kept), 48
+    steady HIGH (kept), 12 DRIFT failed" over 128 timed cells, where 62 + 18 +
+    48 was already 128 and 3 / 4 / 5 of those were among the 12 drifted. The
+    four LEVEL counts now take the STEADY cells only (59 / 14 / 43), `drift`
+    takes the rest, and the five sum to `timed`. The drifted cells keep their
+    own LEVEL breakdown in `drift_level`, `drift_low`, `drift_high` and
+    `drift_unknown`.
+
+    `drift` is the excluded state `clock_excluded` names. `low` and `high` are
+    both KEPT since 2026-09-09 and counted apart because the side is the record
+    of the operating point the cell ran at. This arm's every tread past the
+    anchor is memory-shaped and boosts; the LOW cells of the 2026-09-09 session
+    were BLOCK_M=64 at GROUP_SIZE_M=1, the hungriest tile of the session, and
+    this arm dropped none of them for their side. `unknown` is the cells whose
+    LEVEL was not determined, separate because a run that could not read its
+    clocks and a run whose clocks were fine are not the same state.
     """
     from moe.bench import timing
 
     timed = [r for r in rows if r.get("status") == "ok"]
+    drifted = [r for r in timed if r.get("clock_drift_ok") is False]
+    steady = [r for r in timed if r.get("clock_drift_ok") is not False]
+
+    def sides(part: list[dict]) -> dict:
+        return {
+            "level": sum(1 for r in part if r.get("clock_level_ok") is True),
+            "low": sum(1 for r in part if r.get("clock_level_ok") is False
+                       and r.get("clock_level_side") != timing.LEVEL_HIGH),
+            "high": sum(1 for r in part if r.get("clock_level_ok") is False
+                        and r.get("clock_level_side") == timing.LEVEL_HIGH),
+            "unknown": sum(1 for r in part if r.get("clock_level_ok") is None),
+        }
+
+    kept = sides(steady)
+    moved = sides(drifted)
     return {
         "timed": len(timed),
-        "level": sum(1 for r in timed if r.get("clock_level_ok") is True),
-        "low": sum(1 for r in timed if r.get("clock_level_ok") is False
-                   and r.get("clock_level_side") != timing.LEVEL_HIGH),
-        "high": sum(1 for r in timed if r.get("clock_level_ok") is False
-                    and r.get("clock_level_side") == timing.LEVEL_HIGH),
-        "drift": sum(1 for r in timed if r.get("clock_drift_ok") is False),
-        "unknown": sum(1 for r in timed if r.get("clock_level_ok") is None),
+        "level": kept["level"],
+        "low": kept["low"],
+        "high": kept["high"],
+        "drift": len(drifted),
+        "unknown": kept["unknown"],
+        "drift_level": moved["level"],
+        "drift_low": moved["low"],
+        "drift_high": moved["high"],
+        "drift_unknown": moved["unknown"],
         "excluded_shaped": sum(
             1 for r in timed
             if clock_excluded(r.get("clock_level_ok"),
@@ -2959,23 +2993,42 @@ def clock_state(rows: list[dict]) -> dict:
         "rule": "DRIFT excludes; BOTH LEVEL sides are kept with the side "
                 "recorded, because the under-load clock is set per tile by the "
                 "kernel's own power draw under the cap; the fixed roof is what "
-                "the compute-bound gates score against and roof_at_cell_clock "
-                "is printed beside it; this arm drops no cell for its clock",
+                "the compute-bound gates score against; the four LEVEL counts "
+                "are over the STEADY cells only and the five counts partition "
+                "the timed cells; this arm drops no cell for its clock",
     }
 
 
 def clock_state_lines(state: dict) -> list[str]:
-    """The printed form of `clock_state`, saying which side each count is."""
-    return [
-        f"clock state: {state['timed']} timed cells: {state['level']} level, "
-        f"{state['low']} steady LOW (kept, side recorded), "
+    """The printed form of `clock_state`, saying which side each count is.
+
+    Two lines since 2026-09-09: the steady cells by LEVEL side, then the
+    drifted ones by LEVEL side. Before that the LEVEL counts included the
+    drifted cells and the line named one cell as kept and as excluded at once.
+
+    IT DOES NOT NAME `roof_at_cell_clock`. This script computes no such column
+    and never has: it is a driver-row column (`moe/bench/recompute.py`), and
+    this page is a standalone writer. Until 2026-09-09 the second line told the
+    reader to read a number that is not on the page.
+    """
+    lines = [
+        f"clock state: {state['timed']} timed cells: {state['level']} steady "
+        f"level, {state['low']} steady LOW (kept, side recorded), "
         f"{state['high']} steady HIGH (kept, side recorded), "
-        f"{state['drift']} DRIFT failed (excluded-shaped), "
-        f"{state['unknown']} with LEVEL not determined",
-        "  scored against the fixed roof, with roof_at_cell_clock printed "
-        "beside it as issue efficiency; this arm drops no cell for its clock, "
-        "and None means NOT DETERMINED, never fine",
+        f"{state['drift']} DRIFT failed (excluded, and not in the three counts "
+        f"before it), {state['unknown']} steady with LEVEL not determined",
     ]
+    if state["drift"]:
+        lines.append(
+            f"  the {state['drift']} drifted cells by side: "
+            f"{state['drift_level']} level, {state['drift_low']} LOW, "
+            f"{state['drift_high']} HIGH, {state['drift_unknown']} with LEVEL "
+            "not determined; a cell whose clock moved is not steady at any "
+            "side, so none of them is counted as kept")
+    lines.append(
+        "  scored against the fixed roof; this arm drops no cell for its "
+        "clock, and None means NOT DETERMINED, never fine")
+    return lines
 
 
 def timing_columns(t) -> dict:

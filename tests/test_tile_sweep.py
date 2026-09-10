@@ -383,11 +383,26 @@ def test_a_kernels_own_runtime_error_is_still_one_cells_error(pod):
 # LEVEL is two-sided since 03df2d4, and this consumer reads the side
 # --------------------------------------------------------------------------
 
-#: The H200 shape the fifteenth instance of the recurring defect was found on:
-#: the bf16-GEMM reference the roof was measured at, and the clock the
-#: committed calibration holds under memory load for 30 s.
-H200_GEMM_REFERENCE_MHZ = 1515.0
+#: A PLANTED WORLD, not a card. These three numbers are the shape the
+#: fifteenth instance of the recurring defect was found on (a memory-shaped
+#: cell boosting above the roof's clock, a hungry one sagging below it), and
+#: the tests below pass all three sides of every ratio, so what they test is
+#: the consumer's arithmetic and not any card's figures.
+#:
+#: THE REFERENCE IS DELIBERATELY A ROUND NUMBER NO CARD PUBLISHES. It read
+#: 1515.0 until 2026-09-09, under a comment calling it "the bf16-GEMM
+#: reference the roof was measured at": that was the H200's committed
+#: calibration until ab61e55 remeasured the card at 1485 MHz under the 700 W
+#: cap on 2026-09-09, so the constant was the superseded live number wearing
+#: the name of the current one, and the file that carried it also defines
+#: `H200_REFERENCE_MHZ = 1485.0` for the card's real figure. A planted world
+#: gets a planted number; a test that needs the card's own clock reads the
+#: committed calibration.
+PLANTED_REFERENCE_MHZ = 1500.0
+#: Well above `PLANTED_REFERENCE_MHZ * timing.LEVEL_HIGH_FRACTION`, the state
+#: of every memory-shaped tread the H200 gaps session measured (1950-1980).
 H200_MEMORY_LOAD_MHZ = 1980.0
+#: Well below `PLANTED_REFERENCE_MHZ * timing.LEVEL_FRACTION`.
 SAGGED_MHZ = 1400.0
 
 
@@ -458,8 +473,8 @@ def test_a_boosted_record_reads_high_and_a_sagged_one_reads_low():
     1515 is 0.92x, below `LEVEL_FRACTION`. Both fail LEVEL, and the side is
     the only thing that tells them apart."""
     from moe.bench import timing
-    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, H200_GEMM_REFERENCE_MHZ)
-    low = _kernel_timing_at(SAGGED_MHZ, H200_GEMM_REFERENCE_MHZ)
+    high = _kernel_timing_at(H200_MEMORY_LOAD_MHZ, PLANTED_REFERENCE_MHZ)
+    low = _kernel_timing_at(SAGGED_MHZ, PLANTED_REFERENCE_MHZ)
     assert high.clock_level_ok is False and low.clock_level_ok is False
     assert TILE.clock_side_of(high) == timing.LEVEL_HIGH
     assert TILE.clock_side_of(low) == timing.LEVEL_LOW
@@ -482,9 +497,23 @@ def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
     """THE SECOND CALL SITE, GUARDED. A `clock_level_ok is False` outside the
     rule and the counting block is a reader that has not learned the side, and
     that is how the fifteenth instance happened: one producer fixed, thirteen
-    consumers left on the old meaning."""
+    consumers left on the old meaning.
+
+    A NESTED HELPER IS ITS OUTERMOST FUNCTION, since 2026-09-09. The walk
+    attributed a def to its own name whatever it was nested in, so a reader
+    written as a closure inside a disallowed function passed under a name that
+    was not on the list, and a helper factored out of an allowed one failed
+    while doing exactly what the allowed one did. Attributing by ancestor
+    makes the list about the block the code lives in, which is what the rule
+    is about."""
     import ast
     tree = ast.parse((ROOT / "scripts" / "tile_sweep.py").read_text())
+    owner = {}
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if isinstance(node, ast.FunctionDef):
+                    owner[node] = top.name
     readers = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
@@ -493,7 +522,7 @@ def test_only_the_rule_and_the_summary_compare_the_level_verdict_bare():
                              if not (isinstance(s, ast.Expr)
                                      and isinstance(s.value, ast.Constant)))
             if "clock_level_ok is False" in body:
-                readers.add(node.name)
+                readers.add(owner.get(node, node.name))
     allowed = {"clock_excluded"}
     assert readers <= allowed, (
         f"{sorted(readers - allowed)} test the LEVEL verdict "
@@ -551,23 +580,61 @@ def test_a_level_card_carries_an_empty_side(pod):
 def test_clock_state_reads_the_csv_cells_it_wrote():
     """The block reads the string cells `timing_columns` wrote, so a replay of
     cells.csv and the live run count the same rows the same way, and an empty
-    flag is NOT DETERMINED rather than a pass or a fail."""
+    flag is NOT DETERMINED rather than a pass or a fail.
+
+    THE SIXTH ROW IS THE OVERLAPPING ONE: LEVEL false on the HIGH side AND
+    DRIFT false. No planted world here had one until 2026-09-09, so the
+    counters could filter on the LEVEL verdict alone, count that row as a kept
+    HIGH and again as a DRIFT, and stay green while the printed line named it
+    kept and excluded at once."""
     rows = [
         {"clock_level_ok": "0", "clock_level_side": "high", "clock_drift_ok": "1"},
         {"clock_level_ok": "0", "clock_level_side": "low", "clock_drift_ok": "1"},
         {"clock_level_ok": "0", "clock_level_side": "", "clock_drift_ok": "1"},
         {"clock_level_ok": "1", "clock_level_side": "", "clock_drift_ok": "0"},
         {"clock_level_ok": "", "clock_level_side": "", "clock_drift_ok": ""},
+        {"clock_level_ok": "0", "clock_level_side": "high", "clock_drift_ok": "0"},
         {"clock_level_ok": "0", "clock_level_side": "high", "clock_drift_ok": "1",
          "error": "OOM"},
     ]
     state = TILE.clock_state(rows)
-    assert state["timed"] == 5
+    assert state["timed"] == 6
     assert state["high"] == 1
     assert state["low"] == 2, "a False with no side is the one-sided era's below"
-    assert state["level"] == 1 and state["drift"] == 1 and state["unknown"] == 1
-    # Only the drifted row: since 2026-09-09 neither LEVEL side excludes.
-    assert state["excluded_shaped"] == 1
+    # The level row of this world is the DRIFTING one, so the steady level
+    # count is ZERO and that row appears once, in `drift_level`. It was
+    # counted as both "1 level" and "1 DRIFT" until 2026-09-09.
+    assert state["level"] == 0 and state["drift"] == 2 and state["unknown"] == 1
+    assert (state["level"] + state["low"] + state["high"] + state["unknown"]
+            + state["drift"]) == state["timed"]
+    assert state["drift_high"] == 1 and state["drift_level"] == 1
+    assert state["drift_low"] == 0 and state["drift_unknown"] == 0
+    # Only the drifted rows: since 2026-09-09 neither LEVEL side excludes.
+    assert state["excluded_shaped"] == 2
+    said = "\n".join(TILE.clock_state_lines(state))
+    assert "1 steady HIGH (kept, side recorded)" in said
+    assert "2 DRIFT failed (excluded, and not in the three counts before it)" in said
+    assert "the 2 drifted rows by side: 1 level, 0 LOW, 1 HIGH" in said
+    # THE PAGE MUST NOT NAME A COLUMN THIS SCRIPT DOES NOT WRITE.
+    assert "roof_at_cell_clock" not in said
+
+
+def test_the_clock_state_docstring_carries_the_rule_it_applies():
+    """THE SECOND CALL SITE IN ONE FUNCTION. `clock_state`'s docstring said
+    "`low` and `drift` are the excluded-shaped states `clock_excluded` names;
+    `high` is kept and counted apart" twenty lines above its own `rule` string,
+    which since 2026-09-09 says "DRIFT excludes; BOTH LEVEL sides are kept".
+    The four sibling scripts had this paragraph rewritten that day and
+    tile_sweep was the one that was missed."""
+    doc = TILE.clock_state.__doc__
+    assert "`drift` IS THE ONE EXCLUDED STATE" in doc
+    assert TILE.clock_state([])["rule"].startswith(
+        "DRIFT excludes; BOTH LEVEL sides are kept")
+    # The retired wording survives only as history, and history is dated. A
+    # sentence that states it in the present tense is the defect returning.
+    retired = "`high` is kept and counted apart"
+    if retired in doc:
+        assert "Until 2026-09-09 this docstring said" in doc[:doc.index(retired)]
 
 
 def test_the_new_clock_columns_are_in_the_header_and_the_row():
@@ -583,6 +650,16 @@ def test_the_new_clock_columns_are_in_the_header_and_the_row():
         assert column in row, column
     assert row["sm_clock_start_mhz"] == f"{H200_MEMORY_LOAD_MHZ:.0f}"
     assert row["sm_clock_end_mhz"] == f"{H200_MEMORY_LOAD_MHZ:.0f}"
+    # ALL FOUR CLOCK COLUMNS GO THROUGH ONE FORMATTER. `sm_clock_load_mhz`
+    # carried an inline copy of `_mhz`'s body until 2026-09-09, which is one
+    # column formatted by hand beside three through the helper.
+    assert row["sm_clock_load_mhz"] == TILE._mhz(t.sm_clock_load_mhz)
+    assert TILE._mhz(None) == "", "empty is NOT DETERMINED, never 0 MHz"
+    # And the docstring lists what it writes: it named `clock_level_side` and
+    # not the four evidence columns until 2026-09-09.
+    for column in ("sm_clock_start_mhz", "sm_clock_end_mhz",
+                   "clock_samples_mhz", "power_w"):
+        assert column in TILE.timing_columns.__doc__, column
     # An instrument without the sample list or the draw writes them EMPTY,
     # which is NOT DETERMINED and never zero.
     assert row["clock_samples_mhz"] == "" and row["power_w"] == ""
