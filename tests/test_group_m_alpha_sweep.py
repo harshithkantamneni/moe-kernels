@@ -44,14 +44,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from moe.baselines import _framework_config as FC  # noqa: E402
-from moe.bench import exit_codes, timing  # noqa: E402
+from moe.bench import exit_codes, roofline, timing  # noqa: E402
 from moe.reference import torch_ref as TORCH_REF  # noqa: E402
 from moe.routing import distributions as DIST  # noqa: E402
 
 H200 = "NVIDIA H200"
 #: What `moe/bench/hardware/measured_nvidia_h200.yaml` publishes for its dense
 #: GEMM, and therefore what LEVEL on this card is scored against.
-H200_REFERENCE_MHZ = 1515.0
+#: The H200's own committed GEMM clock: 1515 MHz on the 2026-09-02
+#: calibration, 1485 on the 2026-09-09 one, which sampled it while the GEMM
+#: ran instead of after it. The tests below plant clocks relative to this, so
+#: it is read from the file rather than transcribed.
+H200_REFERENCE_MHZ = float(roofline.reference_clock("NVIDIA H200").mhz)
 
 
 def _load(name: str):

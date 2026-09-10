@@ -8,10 +8,13 @@ and prints it beside the `2R/b` prediction.
 The measured side never consults the byte model, so the prediction can be wrong.
 
     python scripts/crossing_report.py /workspace/results/run_h200fp8b_vllm.csv \
-        --ridge 162.8 --impl vllm_fused_experts
+        --ridge 152.8 --impl vllm_fused_experts
 
-162.8 is the H200's OWN triad ridge, off `moe/bench/hardware/
-measured_nvidia_h200.yaml`. This line used to read `--ridge 160.3`, which is a
+152.8 is the H200's OWN triad ridge, off `moe/bench/hardware/
+measured_nvidia_h200.yaml`. It read 162.8 until the 2026-09-09 calibration
+sampled the dense GEMM's clock while it ran instead of after it, which is the
+honest reading and the low one; a usage line is read as a recommendation, so
+it names whatever that file holds. This line used to read `--ridge 160.3`, which is a
 2026-08-26 H200 figure that ended up quoted for an A100 arm too; it was
 withdrawn from all 26 published reports on 2026-09-02. `--ridge` is required
 and has no default, so a run that cannot name its card's ridge does not start.
@@ -268,10 +271,11 @@ def print_staircase(found: list, predicted: float,
     of that band are H200 numbers from two calibrations of the same card whose
     compute ceilings disagree by 9.9%, so its width was the ceiling failing to
     reproduce and not the ridge being uncertain, and it was withdrawn from every
-    published report. Against the H200's own band, 152.1-165.6 off its committed
-    calibration, the last crossing sits ABOVE and the first below: the band
-    contains neither, and the sweep pins the ridge even less well than the old
-    figure made it look.
+    published report. Against the H200's own band, 142.8-155.4 off its committed
+    calibration (152.1-165.6 before the 2026-09-09 recalibration moved the
+    card's ridge from 162.8 to 152.8), the last crossing sits ABOVE and the
+    first below: the band contains neither, and the sweep pins the ridge even
+    less well than the old figure made it look.
     """
     if len(found) < 2:
         return

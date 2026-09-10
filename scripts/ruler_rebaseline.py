@@ -184,26 +184,40 @@ POSTHOC_GEMM_CLOCKS_MHZ = (1485, 1500, 1515, 1530, 1530, 1560, 1560, 1845,
 #: actually plateaued. A GEMM clock sampled properly has to land here.
 COMPUTE_SETTLE_BAND_MHZ = (1455, 1515)
 
-#: `moe/bench/hardware/measured_nvidia_h200.yaml`, 2026-09-02. What prediction 2
+#: `moe/bench/hardware/measured_nvidia_h200.yaml`, 2026-09-09. What prediction 2
 #: says a re-measurement must reproduce, and prediction 3 measures against.
-H200_PATTERNS_GBPS = {"read_reduce": 4469.6, "copy": 4300.7, "triad": 4374.8,
-                      "write": 4682.4}
+#: Re-registered from the 2026-09-09 calibration, which is the first one to
+#: carry `read_stream` under its own name rather than the `read` it was
+#: renamed from on 2026-09-02. The 2026-09-02 figures were read_reduce 4469.6,
+#: copy 4300.7, triad 4374.8, write 4682.4: every one of them within 0.05% of
+#: what is registered now, which is the reproducibility this gate exists to
+#: check and is why the bandwidth side of the ruler is the trusted half.
+#: FOUR patterns, and `read_stream` is deliberately not one of them: gate 3
+#: is the read-shape comparison and reads read_stream against read_reduce, so
+#: registering read_stream here would make gate 2 re-judge the number gate 3
+#: exists to judge, against a tolerance chosen for reproducibility rather
+#: than for shape.
+H200_PATTERNS_GBPS = {"read_reduce": 4471.4, "copy": 4300.8,
+                      "triad": 4374.5, "write": 4680.2}
 
-#: 3201 MHz x 2 for DDR x 6144 bits / 8. Nothing can exceed this, which is what
-#: makes it the guard on a probe that might have had its loads deleted.
-H200_PIN_RATE_GBPS = 4916.7
+#: 3201 MHz x 2 for DDR x 6016 bits / 8. Nothing can exceed this, which is what
+#: makes it the guard on a probe that might have had its loads deleted. 6016 is
+#: the ENABLED bus NVML reports on the 141 GB part (6144 x 141/144); this
+#: constant read 4916.7 off the unharvested 6144 until 2026-09-09, 2.1% high on
+#: the one number in this file that is a hard physical bound.
+H200_PIN_RATE_GBPS = 4814.3
 
 #: WHICH CARD THE TWO CONSTANTS ABOVE BELONG TO. `_device_key` normalisation of
 #: "NVIDIA H200", so the guard matches the same way the corpus survey does.
 H200_DEVICE_KEY = "nvidiah200"
 
 #: Theoretical pin rates, per card, from the committed calibrations'
-#: `observed.pin_rate_gbps`: 4916.7 for the H200 and 2039.0 for the A100
+#: `observed.pin_rate_gbps`: 4814.3 for the H200 and 2039.0 for the A100
 #: (`moe/bench/hardware/measured_nvidia_h200.yaml` and
 #: `measured_nvidia_a100_sxm4_80gb.yaml`). A card that is not in this table gets
 #: no pin-rate guard and therefore no read_stream verdict, which is a REFUSAL
 #: rather than a default: an elided-loads check run against another card's pin
-#: rate is not a loose check, it is an inert one. On the A100 the H200's 4916.7
+#: rate is not a loose check, it is an inert one. On the A100 the H200's 4814.3
 #: would pass a read_stream reporting 2.4x that card's entire bus.
 PIN_RATE_GBPS = {"nvidiah200": H200_PIN_RATE_GBPS,
                  "nvidiaa100sxm480gb": 2039.0}

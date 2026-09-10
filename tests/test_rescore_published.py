@@ -103,7 +103,18 @@ def test_the_a100_report_carries_its_own_ridge_and_says_where_it_came_from():
 
 
 def test_every_published_report_now_cites_its_own_card():
-    expected = {"nvidia_a100_sxm4_80gb": 145.8, "nvidia_h200": 162.8}
+    # Each card's ridge as its COMMITTED calibration reads today. The H200's
+    # was 162.8 until its 2026-09-09 session sampled the dense GEMM's clock
+    # under load and put it at 152.8, and every H200 report was rescored
+    # against that: a report citing a ruler the tree no longer ships is the
+    # whole-layer defect, which is what this whole module exists to prevent.
+    from moe.bench import roofline as RL
+
+    expected = {
+        slug[len("measured_"):]: round(
+            RL.load_hardware(slug).ridge_point("bf16"), 1)
+        for slug in ("measured_nvidia_a100_sxm4_80gb", "measured_nvidia_h200")
+    }
     seen = set()
     for path in RS.report_paths(PUBLISHED):
         doc = json.loads(path.read_text())

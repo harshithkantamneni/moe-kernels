@@ -131,6 +131,47 @@ CEILINGS_DISAGREE = "ceilings_disagree"
 #: Nothing recorded to decide with. An answer, not an error.
 UNKNOWN = "unknown"
 
+#: A directory under `results/published/` that is a RAW SESSION, not an arm:
+#: the driver's ledger, its per-arm logs and the run directories the arms
+#: wrote, kept so a reader can re-derive every verdict the session printed.
+#: It carries no `measured.yaml` and no `merged.csv` of its own, so every
+#: comparison this module makes is vacuous on it, and the honest answer is to
+#: say what the directory IS rather than to report a missing calibration.
+#: Marked with a `KIND` file holding `session`, which is the mechanism
+#: `tests/test_calibration_provenance.py` names in place of relaxing the gate.
+#: It is NOT blocking: there is nothing here anybody could quote as a
+#: calibrated arm, which is exactly why there is nothing to block.
+SESSION = "session"
+
+#: The marker file, and the one word it may hold.
+KIND_MARKER = "KIND"
+
+
+def is_session(path) -> bool:
+    """Is `path`, or anything it sits under, a raw session rather than an arm?
+
+    Every tool that walks `results/published/` recursively has to ask this: a
+    session directory holds the run directories its arms wrote, and those carry
+    `report.json` files of their own. On 2026-09-09 the first session committed
+    whole under that root was picked up by `rescore_published_reports` as a
+    dozen extra published reports and by the provenance census as an arm with
+    no calibration. Neither is wrong about the files it found; both are wrong
+    about what the directory is, and the directory is the only thing that can
+    say. The walk stops at the first marked ancestor and at the filesystem
+    root, so a path outside a published tree simply answers no.
+    """
+    path = Path(path)
+    for candidate in (path, *path.parents):
+        marker = candidate / KIND_MARKER
+        try:
+            if marker.is_file() and marker.read_text().strip() == SESSION:
+                return True
+        except OSError:
+            return False
+        if candidate.name == "published":
+            break
+    return False
+
 #: Dropped by `recompute_ceilings.py` into an arm it derives. Its first line is
 #: the source arm's directory name.
 DERIVED_MARKER = "DERIVED_FROM"
@@ -305,6 +346,11 @@ def calibration_provenance(arm: Path | str) -> CalibrationProvenance:
     arm = Path(arm)
     evidence: dict = {"arm": arm.name}
     declared = derived_from(arm)
+
+    kind = arm / KIND_MARKER
+    if kind.exists() and kind.read_text().strip() == SESSION:
+        evidence["kind"] = SESSION
+        return CalibrationProvenance(arm.name, SESSION, evidence, declared, None)
 
     cal = arm / "measured.yaml"
     if not cal.exists():

@@ -95,7 +95,10 @@ def test_the_band_is_each_committed_card_s_own_ridge_and_not_the_withdrawn_one()
     a100 = roofline.load_hardware("measured_nvidia_a100_sxm4_80gb").ridge_point("bf16")
     h200 = roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16")
     assert PR.CROSSING_RIDGE_BAND == (min(a100, h200), max(a100, h200))
-    assert PR.CROSSING_RIDGE_BAND == pytest.approx((145.81, 162.81), abs=0.01)
+    # 145.81 / 152.81 on the calibrations committed today. The A100's end has
+    # not moved; the H200's was 162.81 until its 2026-09-09 recalibration
+    # sampled the GEMM clock under load and put the card's ridge at 152.81.
+    assert PR.CROSSING_RIDGE_BAND == pytest.approx((145.81, 152.81), abs=0.01)
     for end in PR.CROSSING_RIDGE_BAND:
         for withdrawn in WITHDRAWN_BAND:
             assert abs(end - withdrawn) > 1.0
@@ -166,12 +169,17 @@ def test_every_ladder_reaches_past_the_top_of_the_predicted_band():
 def test_the_published_grid_stops_where_deepseek_v3_actually_crossed():
     """THE DEFECT BEING REPAIRED, stated as the numbers that expose it. The
     powers-of-two grid clears DeepSeek-V3's prediction at the H200's own
-    ridge (5210 tokens at 162.8 FLOP/byte) by 11% and has
+    ridge (4889 tokens at 152.8 FLOP/byte, and 5210 at the 162.8 the card
+    read before its 2026-09-09 recalibration) by less than a quarter and has
     nothing above that, and DeepSeek-V3's measured one-stage crossings are past
-    it. Half this study's 'no crossing found' answers are this."""
+    it. Half this study's 'no crossing found' answers are this. The margin is
+    read against whatever ridge is committed, because a lower ridge predicts
+    a smaller crossing and so a wider apparent margin: what the defect is
+    about is that there is nothing ABOVE the prediction, not how far below
+    the top of the grid sits."""
     old = _top_slope(PR.COARSE_BACKBONE)
     band_top = crossing_batch("deepseek-v3", max(PR.CROSSING_RIDGE_BAND))
-    assert 1.0 < old / band_top < 1.15
+    assert 1.0 < old / band_top < 1.25
     assert all(old < c for c in _MEASURED_ONE_STAGE_DEEPSEEK_CROSSINGS)
 
     # The new grid clears them on every ladder, ladder 0 included, which is what

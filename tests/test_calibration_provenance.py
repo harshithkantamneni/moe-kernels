@@ -48,6 +48,7 @@ from moe.bench.published import (
     DIFFERENT_SESSION,
     REPORT_COMMAND,
     SAME_SESSION,
+    SESSION,
     UNKNOWN,
     calibration_provenance,
     derived_from,
@@ -384,6 +385,13 @@ def test_the_fourteen_published_arms_have_these_verdicts():
         "2026-09-01-nvidia_h200-alpha-surface-s4": UNKNOWN,
         "2026-09-01-nvidia_h200-cross-card-s3": UNKNOWN,
         "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3": UNKNOWN,
+        # Not an arm at all: the raw 2026-09-09 session, ledger and logs and
+        # the run directories its arms wrote, kept whole so every verdict it
+        # printed can be re-derived. It carries a KIND file saying `session`,
+        # which is the marker this module's own docstring names in place of
+        # relaxing the gate, and it blocks nothing because it holds nothing
+        # anybody could quote as a calibrated arm.
+        "2026-09-09-nvidia_h200-gaps-session": SESSION,
     }
     got = {p.name: calibration_provenance(p).verdict
            for p in sorted(PUBLISHED.iterdir()) if p.is_dir()}

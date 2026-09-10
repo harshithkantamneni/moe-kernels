@@ -652,8 +652,17 @@ def test_the_reference_is_this_cards_own_calibration_and_names_its_field():
     from moe.bench import roofline
 
     ref = GM.reference_clock_for("NVIDIA H200")
-    assert ref.mhz == 1515.0
-    assert "gemm_clock_mhz" in ref.source
+    # 1515 on the 2026-09-02 calibration, 1485 on the 2026-09-09 one, which
+    # sampled the dense GEMM's clock while it ran instead of after it. The
+    # field is what is pinned; the number is whatever that field holds. Which
+    # field also moved with that calibration: the 2026-09-02 file carried only
+    # the scalar `gemm_clock_mhz`, the 2026-09-09 one carries the whole
+    # under-load record, and the resolver prefers its median because that is
+    # the sample taken while the GEMM ran. Either field is named here, because
+    # the point of the assertion is that the source SAYS which one it read.
+    assert ref.mhz == 1485.0
+    assert "gemm_clock.median_mhz" in ref.source or "gemm_clock_mhz" in ref.source
+    assert ref.grade == "under-load"
     assert ref.card == "NVIDIA H200"
     # THE SAME READER THE DRIVER USES, not a fourth copy of the three-field
     # rule. This is an identity rather than an equality of two numbers: a copy

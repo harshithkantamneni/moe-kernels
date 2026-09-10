@@ -64,8 +64,15 @@ def test_rows_naming_a_calibrated_card_resolve_to_that_cards_own_ridge():
     res = mod.resolve_ridge([_row(700, "NVIDIA H200")], None)
     assert not res.refused and not res.asserted
     assert res.by_dtype == {"bf16": own}
-    assert own == pytest.approx(162.8, abs=0.05)
-    assert "H200" in res.source and "162.8" in res.source
+    # The number is whatever the committed calibration says today (162.8 on
+    # the 2026-09-02 file, 152.8 on the 2026-09-09 one). What is pinned is
+    # that it CAME from that file and is printed in the source line, not the
+    # value: a test that pins the value goes stale on the next calibration
+    # and then asserts a ridge no card has.
+    assert own == pytest.approx(
+        roofline.load_hardware("measured_nvidia_h200").ridge_point("bf16"))
+    assert "H200" in res.source and f"{own:.1f}" in res.source
+    assert not any(abs(own - w) < 0.05 for w in (166.0, 160.3, 176.2))
     assert mod.regime(own * 1.02, {"bf16"}, res) == "COMPUTE"
     assert mod.regime(own * 0.98, {"bf16"}, res) == "memory"
 
