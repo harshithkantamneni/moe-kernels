@@ -29,11 +29,11 @@ sessions rather than any measurement's uncertainty about a ridge.
 The H200's committed calibration, `moe/bench/hardware/measured_nvidia_h200.yaml`,
 gives
 
-    712.2592 TFLOP/s bf16 / 4374.763 GB/s = 162.8 FLOP/byte
+    668.4839 TFLOP/s bf16 / 4374.549 GB/s = 152.8 FLOP/byte
 
-and a band `[152.1, 165.6]` from that same card's own bandwidth patterns carried
+and a band `[142.8, 155.4]` from that same card's own bandwidth patterns carried
 as a ratio against its triad ceiling, which is what a band should be made of.
-162.8 sits inside it; 176.2 does not.
+152.8 sits inside it; neither 160.3 nor 176.2 does.
 
 ## How big the change is, stated before it is quoted
 
@@ -51,12 +51,12 @@ carry one alpha (0.558) and therefore one prediction block:
 
 | field | was | is |
 |---|---|---|
-| `ridge` | 160.3 | 162.8 |
-| `ridge_band` | [160.3, 176.2] | [152.1, 165.6] |
+| `ridge` | 160.3 | 152.8 |
+| `ridge_band` | [160.3, 176.2] | [142.8, 155.4] |
 | `predictions[128].crossing_rows_ridge_lo` | 249.75 | 236.97 |
 | `predictions[128].crossing_rows_ridge_hi` | 372.84 | 350.41 |
-| `predictions[256].crossing_rows_ridge_lo` | 160.30 | 152.10 |
-| `predictions[256].crossing_rows_ridge_hi` | 176.20 | 165.60 |
+| `predictions[256].crossing_rows_ridge_lo` | 160.30 | 142.80 |
+| `predictions[256].crossing_rows_ridge_hi` | 176.20 | 155.40 |
 | `bracketing.horizon_rows` | 416.78 | 423.28 |
 
 plus `ridge_source`, `ridge_band_source`, `bandwidth_source`, `rescored_utc`,
@@ -103,7 +103,7 @@ failure branch of every gate.
 
 ## What is still open
 
-Whether 162.8 is THIS arm's own ridge. It is this card's, which is what was
+Whether 152.8 is THIS arm's own ridge. It is this card's, which is what was
 rescored, and no more than that can be shown from here. This arm's `ARMS.tsv`
 records `calibrate PASS 23s` as its second arm, so a contemporaneous H200
 calibration did exist on 2026-09-01; it was not published beside these reports,
@@ -116,3 +116,19 @@ rows carrying the `achieved_peak_tflops` that would settle it, and that verdict
 has not changed. The claim this NOTE supports is the narrow one: the reports now
 quote an H200 calibration that names its file, instead of a constant from a
 command line.
+
+## Rescored again on 2026-09-09
+
+The first rescoring, above, moved these reports off a ridge that belonged to
+another calibration of this card and onto 162.8, which was this card's own at
+the time. The 2026-09-09 session recalibrated it: the dense GEMM's clock is now
+sampled while it runs rather than after it, which is the honest reading and the
+low one, so the card's bf16 peak reads 668.5 TFLOP/s against 712.3 and its ridge
+152.8 against 162.8. Every number in the table above that names 162.8 or the
+band around it was rewritten by
+
+    .venv/bin/python scripts/rescore_published_reports.py --write
+
+which confines itself to the registered ridge fields and prints its own gates.
+The measured columns are untouched: nothing here was re-timed, and the ridge is
+the only thing that moved.

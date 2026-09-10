@@ -83,6 +83,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from moe.bench import exit_codes  # noqa: E402
+from moe.bench import published as PUB  # noqa: E402
 from moe.bench import roofline as RL  # noqa: E402
 from moe.bench.provenance import provenance_block  # noqa: E402
 from moe.bench.published import two_sample_mde  # noqa: E402
@@ -349,8 +350,16 @@ def rescored_payload(before: dict, path: Path, sweep, now: str) -> dict | None:
 
 
 def report_paths(root: Path) -> list[Path]:
-    """Both committed layouts, deduplicated. Same rule as `alpha_surface.py`."""
-    return sorted({*root.rglob("report.json"), *root.rglob("*.report.json")})
+    """Both committed layouts, deduplicated, minus anything inside a session.
+
+    Same rule as `alpha_surface.py` for the two layouts. The exclusion is the
+    2026-09-09 lesson: a raw session committed under `results/published/`
+    carries the run directories its arms wrote, each with its own
+    `report.json`, and this walk read a dozen of them as published reports to
+    rescore. `published.is_session` asks the directory what it is.
+    """
+    found = {*root.rglob("report.json"), *root.rglob("*.report.json")}
+    return sorted(p for p in found if not PUB.is_session(p.parent))
 
 
 class Outcome:

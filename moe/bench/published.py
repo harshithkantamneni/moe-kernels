@@ -146,6 +146,32 @@ SESSION = "session"
 #: The marker file, and the one word it may hold.
 KIND_MARKER = "KIND"
 
+
+def is_session(path) -> bool:
+    """Is `path`, or anything it sits under, a raw session rather than an arm?
+
+    Every tool that walks `results/published/` recursively has to ask this: a
+    session directory holds the run directories its arms wrote, and those carry
+    `report.json` files of their own. On 2026-09-09 the first session committed
+    whole under that root was picked up by `rescore_published_reports` as a
+    dozen extra published reports and by the provenance census as an arm with
+    no calibration. Neither is wrong about the files it found; both are wrong
+    about what the directory is, and the directory is the only thing that can
+    say. The walk stops at the first marked ancestor and at the filesystem
+    root, so a path outside a published tree simply answers no.
+    """
+    path = Path(path)
+    for candidate in (path, *path.parents):
+        marker = candidate / KIND_MARKER
+        try:
+            if marker.is_file() and marker.read_text().strip() == SESSION:
+                return True
+        except OSError:
+            return False
+        if candidate.name == "published":
+            break
+    return False
+
 #: Dropped by `recompute_ceilings.py` into an arm it derives. Its first line is
 #: the source arm's directory name.
 DERIVED_MARKER = "DERIVED_FROM"
