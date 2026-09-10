@@ -131,6 +131,21 @@ CEILINGS_DISAGREE = "ceilings_disagree"
 #: Nothing recorded to decide with. An answer, not an error.
 UNKNOWN = "unknown"
 
+#: A directory under `results/published/` that is a RAW SESSION, not an arm:
+#: the driver's ledger, its per-arm logs and the run directories the arms
+#: wrote, kept so a reader can re-derive every verdict the session printed.
+#: It carries no `measured.yaml` and no `merged.csv` of its own, so every
+#: comparison this module makes is vacuous on it, and the honest answer is to
+#: say what the directory IS rather than to report a missing calibration.
+#: Marked with a `KIND` file holding `session`, which is the mechanism
+#: `tests/test_calibration_provenance.py` names in place of relaxing the gate.
+#: It is NOT blocking: there is nothing here anybody could quote as a
+#: calibrated arm, which is exactly why there is nothing to block.
+SESSION = "session"
+
+#: The marker file, and the one word it may hold.
+KIND_MARKER = "KIND"
+
 #: Dropped by `recompute_ceilings.py` into an arm it derives. Its first line is
 #: the source arm's directory name.
 DERIVED_MARKER = "DERIVED_FROM"
@@ -305,6 +320,11 @@ def calibration_provenance(arm: Path | str) -> CalibrationProvenance:
     arm = Path(arm)
     evidence: dict = {"arm": arm.name}
     declared = derived_from(arm)
+
+    kind = arm / KIND_MARKER
+    if kind.exists() and kind.read_text().strip() == SESSION:
+        evidence["kind"] = SESSION
+        return CalibrationProvenance(arm.name, SESSION, evidence, declared, None)
 
     cal = arm / "measured.yaml"
     if not cal.exists():
