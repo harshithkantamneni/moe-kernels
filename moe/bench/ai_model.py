@@ -122,6 +122,26 @@ that pair has no consistent (alpha_b, alpha_a) under that model at all. Two
 BN values cannot separate the two readings; three can, which is the experiment
 scripts/bn_decomposition.py exists to run.
 
+THE SECOND ESTIMATOR, added 2026-09-10 BESIDE B/(A+B) and never instead of it.
+The whole of (EXA)'s trouble is in its DENOMINATOR: `1 + phi + delta` is the
+ladder extrapolated back to n = 0 over a lever arm of up to 44 treads, and on
+the 2026-09-10 H200 session that extrapolation produced ten alphas above 1.0,
+three negative fitted intercepts and an alpha_a of -0.81 whose sign lies
+inside the reference fixed cost's own jackknife error. The numerator is fine:
+the slope is the one number no extrapolation touches. So divide it by a
+MEASURED time instead of a fitted level,
+
+    w = (ms per extra M-tile) / (ms to stream the expert weight set once)
+
+which is `moe/bench/weights.py`. Under the model that is exactly the slope in
+weight-read units, `alpha_b + phi` (`slope_weight_streams` below), so at the
+rate the weights really stream at, w is an UPPER BOUND on alpha_b, with
+phi >= 0 the gap; and w scales 1:1 in the assumed rate, which is why
+`weights.weight_streams_per_tile` refuses to supply one. The 100,144 published
+rows were all scored on B/(A+B) and stay readable exactly as they are: w is
+printed and persisted beside alpha, as both fractions were after the clock
+rule, not in place of it.
+
 HISTORY. Derived 2026-09-02 as (LIN) and pinned by a test that rearranged its
 own definition; no fit was ever called. Corrected the same day by the audit
 (AUDIT_REPORT B1, findings X57 and X62), which fed `traffic()` through the real
@@ -315,6 +335,45 @@ def phi(N: int, K: int, *, block_m: int, block_n: int, alpha_a: float,
     return (one_tile.activation_bytes + one_tile.output_bytes) / (K * N * b)
 
 
+def slope_weight_streams(N: int, K: int, *, block_m: int, block_n: int,
+                         alpha_b: float, alpha_a: float, b: int = 2) -> float:
+    """`alpha_b + phi`: what one more M-tile costs, in units of ONE FULL READ OF
+    THIS GEMM'S B OPERAND, `K*N*b`.
+
+    THE BRIDGE TO THE SECOND ESTIMATOR, AND THE UNIT IT CROSSES ON.
+    `moe/bench/weights.py` measures the same SHAPE of quantity off a real
+    ladder, a per-M-tile slope divided by the time to stream a weight set
+    once with no fitted level anywhere. But its weight set is the fused
+    LAYER's routed experts, `E * 3FH * b`, while this module's `W` is the
+    single GEMM written here, `K*N*b`. Those are not the same bytes. For the
+    up-projection on mixtral (`N = 2F`, `K = H`) the layer's set is
+    `E * 3FH / 2FH = 1.5E = 12` times this one, so a number quoted from here is
+    twelve times the same ladder's `w`, and the two agree only after that
+    conversion. `tests/test_ai_model.py` pins the factor.
+
+    Within its own unit the statement is exact: if time is bytes over one
+    bandwidth, the byte ladder's slope IS `alpha_b + phi`, and `w` is that
+    slope divided by the milliseconds of one full read of whichever weight set
+    the divider named.
+
+    SO w IS AN UPPER BOUND ON alpha_b, AND THE GAP IS NAMED. `phi >= 0` always
+    (it is one M-tile's activation and output traffic), so
+    `w - alpha_b = phi`, which on mixtral at BN=64 runs 0.018 to 1.02 at
+    BM=64 over the unmeasured alpha_a. A w of 1.05 is therefore consistent with
+    alpha_b anywhere from 0.03 to 1.0, and quoting it AS alpha_b asserts
+    phi = 0, which is alpha_a = 0 and a zero-width output write.
+
+    NOTHING HERE IS A BANDWIDTH. The identity holds in weight-read units on
+    both sides; the rate enters only when `weights.weight_stream_ms` turns a
+    byte count into milliseconds, and it is 1:1 there. Two ladders compared
+    through this identity must have been divided by the SAME rate or the
+    comparison is between two machines.
+    """
+    _check(1, N, K, block_m, block_n, alpha_b, alpha_a, b)
+    return alpha_b + phi(N, K, block_m=block_m, block_n=block_n,
+                         alpha_a=alpha_a, b=b)
+
+
 def exact_cap(N: int, K: int, *, block_m: int, block_n: int,
               alpha_b: float, alpha_a: float, b: int = 2) -> float:
     """The limit `arithmetic_intensity` actually approaches: 2*BM / (b*(alpha_b + phi)).
@@ -323,9 +382,14 @@ def exact_cap(N: int, K: int, *, block_m: int, block_n: int,
     denominator that makes every identity in this module exact rather than
     close. It is the cap a byte ladder's own slope implies, and the number a
     corrected `LadderFit` cap should be compared against.
+
+    ITS DENOMINATOR IS `slope_weight_streams`, taken from there rather than
+    rewritten here, so the cap and the weight-stream statistic can never come
+    to describe two different slopes: one definition of `alpha_b + phi`, two
+    readers.
     """
-    _check(1, N, K, block_m, block_n, alpha_b, alpha_a, b)
-    slope = alpha_b + phi(N, K, block_m=block_m, block_n=block_n, alpha_a=alpha_a, b=b)
+    slope = slope_weight_streams(N, K, block_m=block_m, block_n=block_n,
+                                 alpha_b=alpha_b, alpha_a=alpha_a, b=b)
     return 2.0 * block_m / (b * slope)
 
 

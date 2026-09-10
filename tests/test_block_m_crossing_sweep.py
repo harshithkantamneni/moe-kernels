@@ -101,6 +101,7 @@ def _load_sibling(name):
     return module
 
 from moe.bench import ai_model, exit_codes  # noqa: E402
+from moe.bench.weights import routed_expert_weight_bytes  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
@@ -153,6 +154,12 @@ def analyse(cells, *, alpha: float, tiles=TILES, **kw):
 
 def gate(report, number: int):
     return next(g for g in report.gates if g.number == number)
+
+
+def gate_json(report: dict, number: int) -> dict:
+    """The same gate off a serialized report.json, which is a dict of dicts and
+    not a list of `Gate` objects. Two shapes, one lookup."""
+    return next(g for g in report["gates"] if g["number"] == number)
 
 
 def planted_reference():
@@ -2195,3 +2202,200 @@ def test_the_vacuity_label_names_the_footing_the_number_stands_on():
     assert "one full weight read, scaled to the smallest" in dense_label
     assert "one full weight read, on the fused layer's own roof, scaled to " \
         "the smallest" in fused_label
+
+
+# --------------------------------------------------------------------------
+# R9. ONE ESTIMATOR DECIDING EVERYTHING, and its denominator an extrapolation.
+#
+# `LadderFit.alpha` = B/(A+B) divides the per-tile slope by a LEVEL fitted by
+# extrapolating the ladder back to zero tiles across up to 44 treads. On the
+# 2026-09-10 H200 session that produced ten values above 1.0 across four arms,
+# three negative intercepts, and an alpha_a of -0.8143 whose sign lies inside
+# the reference fixed cost's own jackknife error. `LadderFit.weight_streams`
+# divides the SAME slope by a measured stream time instead, and
+# `fixed_cost_above_intercept` labels the exact arithmetic state, D > A,
+# that put alpha_upper above 1. Both are ADDED beside alpha; the published rows
+# were all scored on B/(A+B) and every test above still reads them that way.
+# --------------------------------------------------------------------------
+
+def _fit_with_rate(points, block_m=64, ref=None, **kw):
+    return BM.fit_ladder(points, block_m, ref if ref is not None else planted_reference(),
+                         model_name=MIXTRAL.name, dtype="bf16",
+                         bandwidth_gbps=BANDWIDTH,
+                         bandwidth_source="stated by the test", **kw)
+
+
+def test_a_ladder_fit_reports_w_beside_alpha_and_names_the_rate():
+    """The second estimator, present on the fit and carrying its denominator.
+    `w` is the slope over one full stream of the layer's expert weight set, so
+    it must equal exactly that division and must name the bandwidth it used."""
+    pts = [(n, 0.3 + 0.6443482339382172 * n) for n in range(1, 9)]
+    fit = _fit_with_rate(pts)
+    w = fit.weight_streams
+    assert w is not None
+    stream = 1e3 * 2_818_572_288 / (BANDWIDTH * 1e9)
+    assert w.streams == pytest.approx(fit.slope_memory / stream, rel=1e-12)
+    # One full stream per tile at this card's rate reads as w = 1.0 to the
+    # precision the planted slope was written at.
+    assert w.streams == pytest.approx(1.0, abs=1e-4)
+    assert w.bandwidth_gbps == BANDWIDTH
+    assert "stated by the test" in w.render()
+    # And alpha is untouched beside it: this ADDS a statistic.
+    assert fit.alpha == pytest.approx(fit.slope_memory / fit.load_ms, rel=1e-12)
+
+
+def test_a_fit_with_no_named_model_or_rate_has_no_w_rather_than_a_guessed_one():
+    """The four sibling scripts build a `LadderFit` through `fit_ladder`
+    without naming a model, a dtype or a measured bandwidth. w scales 1:1 in
+    the rate, so a w against a guessed card would be a number with no meaning;
+    None is the honest answer and the note says which input was missing."""
+    pts = [(n, 0.3 + 0.64 * n) for n in range(1, 9)]
+    fit = BM.fit_ladder(pts, 64, planted_reference())
+    assert fit.weight_streams is None
+    assert "no default rate" in fit.w_note()
+    assert fit.alpha is not None            # the old estimator is unaffected
+    # Naming only some of the three is still not naming a denominator.
+    assert BM.fit_ladder(pts, 64, planted_reference(),
+                         model_name=MIXTRAL.name).weight_streams is None
+    assert BM.fit_ladder(pts, 64, planted_reference(), dtype="bf16",
+                         bandwidth_gbps=BANDWIDTH).weight_streams is None
+
+
+def test_a_ladder_with_no_memory_branch_says_so_rather_than_dividing_nothing():
+    pts = [(n, 1.0 * n) for n in range(1, 5)]        # entirely on the compute line
+    fit = _fit_with_rate(pts, block_m=256,
+                         ref=BM.ComputeReference(256, 0.0, 1.0, 0.0, "planted"))
+    assert fit.slope_memory is None
+    assert fit.weight_streams is None
+    assert "no memory branch" in fit.w_note()
+
+
+def test_alpha_upper_above_one_is_exactly_D_greater_than_A_and_is_labelled():
+    """THE DIAGNOSTIC, AND THE IDENTITY BEHIND IT. `alpha_upper = B/(A+B-D)`
+    exceeds 1 if and only if `D > A`. That is arithmetic about an
+    extrapolation, not a statement about traffic, and it is what drove
+    bn_decomposition's pooled alpha_a to -0.8143 in four of six cells. The fit
+    is LABELLED, never refused: refusing it would have deleted those four."""
+    slope = 0.6443482339382172
+    seen = set()
+    for intercept, overhead in ((0.50, 0.05), (0.30, 0.40), (0.10, 0.40)):
+        pts = [(n, intercept + slope * n) for n in range(1, 9)]
+        ref = BM.ComputeReference(256, overhead, 1.0, 0.0, "planted")
+        fit = BM.fit_ladder(pts, 64, ref, model_name=MIXTRAL.name, dtype="bf16",
+                            bandwidth_gbps=BANDWIDTH)
+        a = fit.intercept
+        assert a == pytest.approx(intercept, abs=1e-9)
+        assert fit.fixed_cost_above_intercept is (overhead > a)
+        assert (fit.alpha_upper > 1.0) is (overhead > a)
+        seen.add(fit.fixed_cost_above_intercept)
+        # The statistic that does not depend on A or D at all is unmoved by
+        # either of them: the same slope, so the same w, in every state.
+        assert fit.weight_streams.streams == pytest.approx(1.0, abs=1e-4)
+    assert seen == {True, False}, "the cases must exercise both sides"
+
+
+def test_the_D_greater_than_A_label_is_carried_on_the_fit():
+    """It is a state a reader has to be able to find in the file, not only in
+    the prose: `alpha_upper` out of range is the SYMPTOM and this is the cause."""
+    slope = 0.6443482339382172
+    pts = [(n, 0.10 + slope * n) for n in range(1, 9)]
+    ref = BM.ComputeReference(256, 0.40, 1.0, 0.0, "planted")
+    fit = BM.fit_ladder(pts, 64, ref, model_name=MIXTRAL.name, dtype="bf16",
+                        bandwidth_gbps=BANDWIDTH)
+    assert fit.fixed_cost_above_intercept
+    assert fit.alpha_upper > 1.0
+    assert "D > A" in fit.w_note()
+    # And a fit that is NOT in that state does not carry the label.
+    ok = BM.fit_ladder([(n, 0.50 + slope * n) for n in range(1, 9)], 64,
+                       BM.ComputeReference(256, 0.05, 1.0, 0.0, "planted"),
+                       model_name=MIXTRAL.name, dtype="bf16",
+                       bandwidth_gbps=BANDWIDTH)
+    assert ok.fixed_cost_above_intercept is False
+    assert "D > A" not in ok.w_note()
+
+
+def test_both_places_that_print_a_per_block_m_alpha_print_w_beside_it(tmp_path):
+    """THE RECURRING DEFECT, HUNTED WHERE THIS CHANGE COULD REINTRODUCE IT.
+    Two sites in the report print a per-BLOCK_M alpha: the ladder table and
+    gate 3's detail lines. A statistic added to one and not the other is the
+    same shape as every fix this repository has applied at one of two call
+    sites. Both take their w from `LadderFit`, and this asserts both."""
+    rc, report = run(["--self-test", str(REFIT)], tmp_path)
+    assert rc == exit_codes.DONE
+    detail = [line for g in report["gates"] for line in g["detail"]]
+    per_bm = [line for line in detail
+              if re.search(r"BLOCK_M=\s*\d+\s+alpha", line)]
+    assert per_bm, "gate 3 printed no per-BLOCK_M alpha line"
+    for line in per_bm:
+        assert " w " in line, line
+    # And the ladder table's own header and rows carry the column.
+    table = report["ladder"]
+    assert table["32"]["weight_streams_per_tile"] is not None
+    assert table["32"]["weight_stream_bandwidth_gbps"] is not None
+    # `gate.measured` is left as the bare alpha token on purpose: it is what 22
+    # published reports carry and what `exit_codes` parses off a RESULT line.
+    # w rides beside it, never inside it.
+    g3 = gate_json(report, 3)
+    assert g3["measured"].startswith("alpha ")
+    assert "weight-streams/M-tile" not in g3["measured"]
+    assert any("weight-streams/M-tile" in line for line in g3["detail"])
+
+
+def test_the_report_json_carries_w_its_rate_and_the_diagnostic(tmp_path):
+    """Persisted BESIDE alpha, never in place of it: the 100,144 published rows
+    were scored on B/(A+B) and a reader of a new file must still find that
+    column, plus the three numbers that let the new division be checked by
+    hand."""
+    rc, report = run(["--self-test", str(REFIT)], tmp_path)
+    assert rc == exit_codes.DONE
+    row = report["ladder"]["64"]
+    for key in ("alpha", "alpha_corrected", "alpha_upper"):
+        assert row[key] is not None, key
+    assert row["weight_set_bytes"] == 2_818_572_288
+    assert row["weight_stream_ms"] == pytest.approx(
+        1e3 * 2_818_572_288 / (row["weight_stream_bandwidth_gbps"] * 1e9),
+        rel=1e-12)
+    assert row["weight_streams_per_tile"] == pytest.approx(
+        row["slope_memory"] / row["weight_stream_ms"], rel=1e-12)
+    assert row["fixed_cost_above_intercept"] is (row["overhead_ms"]
+                                                 > row["intercept"])
+    assert report["weight_streams_measured"] == pytest.approx(
+        row["weight_streams_per_tile"], rel=1e-12)
+    assert report["weight_streams_bandwidth_source"]
+
+
+def test_w_does_not_move_a_single_gate_or_alpha(tmp_path):
+    """IT ADDS A STATISTIC, IT DOES NOT REPLACE ONE. Every verdict, every
+    alpha and the gate 3 interval are what they were before the column
+    existed, which is what makes the published corpus still readable."""
+    rc, report = run(["--self-test", str(REFIT)], tmp_path)
+    assert rc == exit_codes.DONE
+    assert [g["verdict"] for g in report["gates"]] == ["PASS"] * len(report["gates"])
+    assert report["alpha_measured"] == pytest.approx(0.5239, abs=5e-4)
+    assert report["ladder"]["32"]["alpha"] == pytest.approx(0.5373, abs=5e-4)
+    assert report["ladder"]["64"]["alpha"] == pytest.approx(0.5413, abs=5e-4)
+    # And structurally, not only by the three pinned numbers: alpha is still
+    # B over the FITTED LEVEL on every row, which is the definition the
+    # published corpus was scored under.
+    for row in report["ladder"].values():
+        if row["alpha"] is None:
+            continue
+        level = row["intercept"] + row["slope_memory"]
+        assert row["alpha"] == pytest.approx(row["slope_memory"] / level,
+                                             rel=1e-12)
+
+
+def test_the_sweeps_own_per_expert_byte_count_agrees_with_the_weight_set():
+    """TWO ROUTES TO ONE DENOMINATOR, CHECKED AGAINST EACH OTHER. This file's
+    `weight_bytes_per_expert` (3FH per expert, used by `model_ms`) and
+    `moe.bench.weights.routed_expert_weight_bytes` (the whole routed set, used
+    by `w`) must differ by exactly the expert count. Two copies of one byte
+    count drifting apart is how the two halves of a study end up dividing by
+    different denominators, and this study divides by this one."""
+    for name, dtype, b in (("mixtral-8x7b", "bf16", 2),
+                           ("qwen2-57b-a14b", "bf16", 2),
+                           ("mixtral-8x7b", "fp8_e4m3", 1),
+                           ("deepseek-v3-tp8", "fp32", 4)):
+        cfg = MODEL_CONFIGS[name]
+        assert (BM.weight_bytes_per_expert(cfg, b) * cfg.num_experts
+                == routed_expert_weight_bytes(name, dtype))

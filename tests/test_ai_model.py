@@ -27,9 +27,12 @@ repository does.
 """
 from __future__ import annotations
 
+import csv
 import importlib.util
 import math
+import statistics
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -49,7 +52,15 @@ from moe.bench.ai_model import (
     lin_overstatement,
     overstatement_bracket,
     phi,
+    slope_weight_streams,
     traffic,
+)
+from moe.bench.weights import (
+    WeightSetRefused,
+    layer_weight_bytes,
+    routed_expert_weight_bytes,
+    weight_stream_ms,
+    weight_streams_per_tile,
 )
 from moe.spec import MODEL_CONFIGS
 
@@ -706,3 +717,273 @@ def test_a_nan_dimension_is_refused_by_the_positivity_check():
         cap_from_fitted(0.5, block_m=math.nan, b=2, phi=0.3, delta=0.0)
     with pytest.raises(AIModelRefused, match="positive"):
         cap(N, math.nan, block_m=64, block_n=64, alpha_b=0.3, alpha_a=0.1)
+
+
+# --------------------------------------------------------------------------
+# THE SECOND ESTIMATOR: the slope in weight-stream units.
+#
+# `moe/bench/weights.py` divides a ladder's per-tile slope by a MEASURED time
+# instead of by a fitted level. Two kinds of test below and they are kept
+# apart. The first kind is arithmetic about the byte count and the refusals.
+# The second kind is a REPLAY over
+# results/published/2026-09-10-nvidia_h200-gaps-session: it re-fits the
+# committed cells and pins the numbers the 2026-09-10 synthesis published, so
+# a change to the byte count or to the division has to move a figure a paper
+# quotes before it can pass.
+# --------------------------------------------------------------------------
+
+#: The card's own calibrated triad rate, as the published cells record it in
+#: `prov_bandwidth`. Read from the corpus rather than typed here: the
+#: 2026-09-10 calibration moved this card's ridge from 152.8 to 155.9 and its
+#: bf16 peak from 668.5 to 682.1, and a test that pins a rate instead of
+#: reading the file it came from is stale by construction the next time the
+#: card is calibrated.
+SESSION = ROOT / "results" / "published" / "2026-09-10-nvidia_h200-gaps-session"
+
+
+def _corpus_rows(arm: str):
+    """`(rows, prov_bandwidth_gbps)` for one arm of the published session."""
+    runs = sorted((SESSION / "results" / arm).glob("*/cells.csv"))
+    assert len(runs) == 1, f"{arm}: expected one published run, found {runs}"
+    with open(runs[0], newline="") as fh:
+        rows = [r for r in csv.DictReader(fh) if r["status"] == "ok"]
+    assert rows, f"{arm}: no ok cells"
+    return rows, float(rows[0]["prov_bandwidth"])
+
+
+def _ols(xs, ys):
+    """The same ordinary least squares the sweep's `_line` and
+    `analysis/synth/s8_common_currency.py` both fit. Returns (intercept, slope)."""
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
+    slope = sxy / sxx
+    return my - slope * mx, slope
+
+
+def _ladder_slope_ms(rows, tread_key, keep):
+    """The per-M-tile slope of one ladder: OLS through the per-tread MEDIAN of
+    `ms_p50` over the repeats, which is s8's recipe and the sweep's line."""
+    treads: dict[int, list[float]] = {}
+    for r in rows:
+        if not keep(r):
+            continue
+        treads.setdefault(int(float(r[tread_key])), []).append(float(r["ms_p50"]))
+    ns = sorted(treads)
+    return _ols([float(n) for n in ns], [statistics.median(treads[n]) for n in ns])[1]
+
+
+def test_the_mixtral_bf16_weight_set_is_the_2_8186_gb_every_w_is_quoted_against():
+    """The denominator of every weight-stream figure in the 2026-09-10
+    synthesis. `analysis/synth/s8_common_currency.py` reaches it as
+    `weight_elements(cfg) * num_experts * 2`; `moe.spec.MoEConfig.weight_bytes`
+    reaches it through the two slab shapes; this module is the documented name
+    for it. All three must be the same integer, because a study whose two
+    halves divide by two denominators cannot compare its own ladders."""
+    got = routed_expert_weight_bytes("mixtral-8x7b", "bf16")
+    assert got == 2_818_572_288
+    assert got / 1e9 == pytest.approx(2.8186, abs=5e-5)
+    assert got == MIX.weight_bytes("bf16")
+    # s8's own route: 3FH elements per expert, E experts, 2 bytes.
+    assert got == 3 * MIX.intermediate_size * MIX.hidden_size * MIX.num_experts * 2
+
+
+def test_the_weight_set_scales_with_the_dtype_and_nothing_else():
+    """Per dtype, as the function's contract says. fp8 halves it, fp32 doubles
+    it, and the geometry is untouched."""
+    bf16 = routed_expert_weight_bytes("mixtral-8x7b", "bf16")
+    assert routed_expert_weight_bytes("mixtral-8x7b", "fp16") == bf16
+    assert routed_expert_weight_bytes("mixtral-8x7b", "fp8_e4m3") * 2 == bf16
+    assert routed_expert_weight_bytes("mixtral-8x7b", "fp32") == 2 * bf16
+
+
+def test_a_tp_entry_returns_the_set_one_device_streams():
+    """`intermediate_size` is the PER-SHARD width, so a TP=8 entry is an eighth
+    of the whole model's expert weights and that is the set the kernel on that
+    device re-reads. Reporting the unsharded figure would divide a measured
+    slope by eight times the bytes the measured kernel moved."""
+    whole = routed_expert_weight_bytes("mixtral-8x7b", "bf16")
+    assert routed_expert_weight_bytes("mixtral-8x7b-tp8", "bf16") * 8 == whole
+
+
+def test_the_whole_layer_is_refused_on_a_model_with_a_shared_expert():
+    """THE GEOMETRY THIS MODULE CANNOT RESOLVE. `MoEConfig` carries
+    `shared_experts` as a count, not a width: qwen2-57b-a14b's shared expert is
+    20480 wide where its routed experts are 2560. Returning the routed set
+    under the name `layer_weight_bytes` would understate that layer silently.
+    Mixtral has no shared expert, so there the two functions agree exactly."""
+    for name in ("qwen2-57b-a14b", "deepseek-v3", "deepseek-v2-lite"):
+        with pytest.raises(WeightSetRefused, match="shared expert"):
+            layer_weight_bytes(name, "bf16")
+    assert (layer_weight_bytes("mixtral-8x7b", "bf16")
+            == routed_expert_weight_bytes("mixtral-8x7b", "bf16"))
+
+
+def test_an_unknown_model_or_dtype_is_refused_by_name():
+    """A byte count for a geometry this repository does not hold is a guess,
+    and a guessed denominator is the failure mode the whole statistic exists to
+    avoid. The message lists what IS known so the caller can pick."""
+    with pytest.raises(WeightSetRefused, match="unknown model"):
+        routed_expert_weight_bytes("mixtral-8x22b", "bf16")
+    with pytest.raises(WeightSetRefused, match="unknown dtype"):
+        routed_expert_weight_bytes("mixtral-8x7b", "int4")
+
+
+def test_an_unverified_geometry_is_refused():
+    """`verified` flips per model once the geometry has been checked against
+    the upstream config.json. An unverified one multiplies out to a byte count
+    that looks exactly as authoritative as a checked one."""
+    guess = replace(MIX, name="mixtral-guess", verified=False)
+    with pytest.raises(WeightSetRefused, match="not `verified`"):
+        routed_expert_weight_bytes(guess, "bf16")
+
+
+def test_a_bandwidth_of_none_or_zero_is_refused_rather_than_defaulted():
+    """THE POINT OF THE STATISTIC IS THAT IT NAMES THE RATE IT WAS DIVIDED BY.
+    w scales exactly 1:1 in the rate, so a module that supplied its own would
+    be quoting the card's datasheet as the memory branch's achieved bandwidth
+    which is the confound of statement (5) of the 2026-09-10 synthesis,
+    dressed as a convenience. Zero, negative and NaN are refused for the same reason: they
+    are broken calibration reads, not slow cards."""
+    for bad in (None, 0.0, -4374.3, math.nan, math.inf):
+        with pytest.raises(WeightSetRefused):
+            weight_streams_per_tile(0.5, "mixtral-8x7b", "bf16", bad)
+
+
+def test_w_scales_exactly_one_to_one_in_the_rate_it_names():
+    """w rises with the assumed rate, exactly 1:1, because a faster rate makes
+    one stream take less time and the same slope is then more streams. The test
+    exists so the confound is a property the code demonstrates rather than a
+    sentence in a docstring, and so a w quoted without its rate can be seen to
+    be meaningless. The DIRECTION is pinned too: the first version of this test
+    asserted the reciprocal and the module docstring beside it said "doubling
+    the bandwidth halves w", which is the ratio upside down."""
+    triad, read = 4374.299702465323, 4612.253362489001
+    a = weight_streams_per_tile(0.881234, "mixtral-8x7b", "bf16", triad)
+    b = weight_streams_per_tile(0.881234, "mixtral-8x7b", "bf16", read)
+    assert b.streams / a.streams == pytest.approx(read / triad, rel=1e-12)
+    assert b.streams > a.streams
+    half = weight_streams_per_tile(0.881234, "mixtral-8x7b", "bf16", triad / 2)
+    assert half.streams == pytest.approx(a.streams / 2, rel=1e-12)
+    assert a.bandwidth_gbps == triad and "4374" in a.render()
+
+
+def test_a_stream_of_the_mixtral_weight_set_is_0_6443_ms_at_the_triad_rate():
+    """The denominator the synthesis quotes, to the place it quotes it, at the
+    rate the published cells record."""
+    _, bw = _corpus_rows("bn_decomposition")
+    assert weight_stream_ms("mixtral-8x7b", "bf16", bw) == pytest.approx(
+        0.6443, abs=5e-5)
+
+
+def test_a_negative_slope_is_labelled_and_not_refused():
+    """A ladder whose fitted slope FALLS with another M-tile has said something
+    about its branch membership, and dropping it deletes that. `descending` is
+    the label, `render` says on the line that the number is not a fraction of a
+    stream, and the sweep prints the negative. A non-finite slope is a
+    different thing, a degenerate fit rather than a measurement, and is
+    refused."""
+    w = weight_streams_per_tile(-0.6422, "mixtral-8x7b", "bf16", 4374.3)
+    assert w.streams < 0 and w.descending
+    assert "NEGATIVE" in w.render()
+    assert not weight_streams_per_tile(0.5, "mixtral-8x7b", "bf16",
+                                       4374.3).descending
+    for bad in (math.nan, math.inf, -math.inf):
+        with pytest.raises(WeightSetRefused, match="not finite"):
+            weight_streams_per_tile(bad, "mixtral-8x7b", "bf16", 4374.3)
+
+
+def test_the_model_says_w_is_alpha_b_plus_phi_in_this_gemms_own_weight_unit():
+    """`ai_model.slope_weight_streams` is the three-term model's prediction for
+    the quantity `weights.weight_streams_per_tile` measures, and the unit it is
+    in is ONE FULL READ OF THIS GEMM'S B OPERAND, not the layer's expert set.
+    Both halves are pinned: the identity, and the conversion factor between the
+    two units, which on mixtral's up-projection is exactly 1.5E = 12. A
+    docstring that claimed the two were the same number would be out by that
+    factor."""
+    for bm, bn, aa in ((64, 64, 0.0), (64, 64, 1.0), (128, 256, 0.143)):
+        got = slope_weight_streams(N, K, block_m=bm, block_n=bn,
+                                   alpha_b=AUDIT_ALPHA_B, alpha_a=aa)
+        want = AUDIT_ALPHA_B + phi(N, K, block_m=bm, block_n=bn, alpha_a=aa)
+        assert got == pytest.approx(want, rel=1e-12)
+        # phi >= 0, so the statistic is an UPPER bound on the miss fraction.
+        assert got >= AUDIT_ALPHA_B
+    assert (routed_expert_weight_bytes("mixtral-8x7b", "bf16") / (K * N * 2)
+            == pytest.approx(1.5 * MIX.num_experts))
+
+
+def test_exact_cap_takes_its_denominator_from_slope_weight_streams():
+    """One definition of `alpha_b + phi`, two readers. The cap and the
+    weight-stream statistic cannot come to describe two different slopes."""
+    for bm, bn, ab, aa in ((64, 64, 0.31, 0.14), (128, 256, 0.9, 0.5)):
+        slope = slope_weight_streams(N, K, block_m=bm, block_n=bn,
+                                     alpha_b=ab, alpha_a=aa)
+        assert exact_cap(N, K, block_m=bm, block_n=bn, alpha_b=ab,
+                         alpha_a=aa) == pytest.approx(2.0 * bm / (2 * slope),
+                                                      rel=1e-12)
+
+
+# --- the replay over the published session ------------------------------
+
+#: The weight-stream slopes the 2026-09-10 synthesis publishes in section 1,
+#: at the card's own calibrated triad rate: `(BLOCK_N, BLOCK_M) -> w`. These
+#: are the numbers a paper would quote, so they are pinned to the place the
+#: synthesis prints them.
+BN_G16_W_AT_TRIAD = {(32, 32): 1.254, (32, 64): 1.368,
+                     (64, 32): 0.863, (64, 64): 0.897,
+                     (128, 32): 0.683, (128, 64): 0.731}
+
+
+def test_replay_bn_g16_weight_stream_slopes_from_the_published_cells():
+    """RECOMPUTED FROM results/published/2026-09-10-nvidia_h200-gaps-session,
+    not asserted. Every one of the six ladders the BLOCK_N decomposition was
+    fitted over, scored on the statistic that has no fitted level in it.
+
+    The shape is the whole refutation of the three-term model's activation
+    term: the model's only BLOCK_N-dependent term is proportional to BLOCK_M,
+    so the drop from BN=32 to BN=128 must DOUBLE when BLOCK_M doubles. Measured
+    here it is 1.254 - 0.683 = 0.571 at BM=32 against 1.368 - 0.731 = 0.637 at
+    BM=64, a ratio of 1.115 where the model requires 2.000."""
+    rows, bw = _corpus_rows("bn_decomposition")
+    stream = weight_stream_ms("mixtral-8x7b", "bf16", bw)
+    got = {}
+    for (bn, bm), want in BN_G16_W_AT_TRIAD.items():
+        slope = _ladder_slope_ms(
+            rows, "tiles",
+            lambda r, bn=bn, bm=bm: (int(r["block_n"]) == bn
+                                     and int(r["block_m"]) == bm))
+        got[(bn, bm)] = slope / stream
+        assert got[(bn, bm)] == pytest.approx(want, abs=5e-4), (bn, bm)
+    drop32 = got[(32, 32)] - got[(128, 32)]
+    drop64 = got[(32, 64)] - got[(128, 64)]
+    assert drop64 / drop32 == pytest.approx(1.115, abs=5e-3)
+
+
+def test_replay_cap_test_bm16_g1_ladder_is_one_full_weight_stream_per_tile():
+    """cap_test's BLOCK_M=16, GROUP_SIZE_M=1 ladder, over exactly-full treads
+    from n=3 up: 1.0514 weight-streams per extra M-tile at the triad rate. The
+    per-M-tile cost of this kernel at that schedule is one complete re-read of
+    the layer's expert weights, and no part of that sentence went through a
+    fitted level, an intercept or an extrapolated fixed cost."""
+    rows, bw = _corpus_rows("tile_cap")
+    slope = _ladder_slope_ms(
+        rows, "tiles_per_expert",
+        lambda r: (int(float(r["block_m"])) == 16
+                   and float(r["tile_eff"]) >= 1.0
+                   and int(float(r["tiles_per_expert"])) >= 3))
+    w = weight_streams_per_tile(slope, "mixtral-8x7b", "bf16", bw,
+                                bandwidth_source="triad, published cells")
+    assert w.streams == pytest.approx(1.0514, abs=5e-5)
+    assert w.streams > 1.0
+    assert "triad, published cells" in w.render()
+
+
+def test_the_published_session_ran_at_the_2026_09_10_calibration():
+    """The rate the replays divide by is the card's own, as the cells record
+    it. Pinned here so that the two replays above cannot quietly start reading
+    a different arm's bandwidth: they agree to the last digit because both arms
+    ran against one calibration."""
+    _, bn_bw = _corpus_rows("bn_decomposition")
+    _, cap_bw = _corpus_rows("tile_cap")
+    assert bn_bw == cap_bw == pytest.approx(4374.299702465323, rel=1e-12)
