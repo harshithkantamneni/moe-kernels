@@ -347,8 +347,10 @@ def test_a_planning_run_may_assume_the_h200_band_and_must_say_so(monkeypatch):
 
 def test_the_device_calibration_is_what_a_run_on_that_device_gets(monkeypatch):
     """THE FIX, on the two calibrations actually committed. The A100's own
-    ridge is 145.8 and the H200's is 162.8, and 160.3 is neither."""
-    for path, expected in ((A100_YAML, 145.8), (H200_YAML, 162.8)):
+    ridge is 145.8 and the H200's is 152.8 since its 2026-09-09 recalibration
+    sampled the GEMM clock under load (it read 162.8 before), and 160.3 is
+    neither of them on either reading."""
+    for path, expected in ((A100_YAML, 145.8), (H200_YAML, 152.8)):
         data = yaml.safe_load(path.read_text())
         hw = roofline.load_hardware(path.stem)
         monkeypatch.setattr(roofline, "current_gpu_name",
@@ -368,12 +370,15 @@ def test_the_device_calibration_is_what_a_run_on_that_device_gets(monkeypatch):
 
 def test_the_module_constant_is_not_the_ridge_of_either_committed_card():
     """The reason the default was a defect and not a rounding difference: 160.3
-    is 9.9% above the A100's own ridge and 1.5% below the H200's, and it is a
-    third machine-session's number."""
+    is 9.9% above the A100's own ridge and, since the H200's 2026-09-09
+    recalibration, 4.9% above the H200's too. It was 1.5% BELOW the H200's on
+    the 2026-09-02 file, which is how a third machine-session's number passed
+    for a reasonable default on one card. It is a third machine-session's
+    number under either calibration."""
     a100 = roofline.load_hardware(A100_YAML.stem).ridge_point("bf16")
     h200 = roofline.load_hardware(H200_YAML.stem).ridge_point("bf16")
     assert a100 == pytest.approx(145.81, abs=0.05)
-    assert h200 == pytest.approx(162.81, abs=0.05)
+    assert h200 == pytest.approx(152.81, abs=0.05)
     assert abs(BM.RIDGE_BAND[0] - a100) / a100 > 0.09
     assert BM.RIDGE_BAND[0] != pytest.approx(h200, abs=1.0)
 

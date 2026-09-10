@@ -271,20 +271,23 @@ def test_the_alpha_at_which_a_tile_stops_being_able_to_cross_is_the_caps_inverse
 
 
 def test_block_m_16_cannot_reach_either_cards_ridge_at_any_alpha_this_study_has_fitted():
-    """The consequence FINDINGS calls a knife edge, on each card's OWN ridge. At
-    the repo's old 0.10 the upper bound is 160 against the H200's 162.8 and the
-    A100's 145.8: it fails the H200 by 2%, and it PASSES the A100's ridge on the
-    uncorrected reading, which is the knife edge the withdrawn 160.3 hid. The
-    corrected bracket does not settle the A100 either way: at alpha_a = 0 the
-    BM=16 correction is 0.45%, so the bracket [127, 159] straddles 145.8 and
-    the A100 verdict at the retracted 0.10 is UNDECIDED, which is the honest
-    form of the knife edge. At TEMPO's 0.33 and the refit's 0.558 the upper
-    bound alone fails both cards by a mile."""
+    """The consequence FINDINGS calls a knife edge, on each card's OWN ridge.
+    At the repo's retracted 0.10 the upper bound is 160, and the 2026-09-09
+    recalibration moved the H200's ridge from 162.8 to 152.8, so that bound
+    now CLEARS both cards rather than only the A100: on the uncorrected
+    reading the retracted alpha caps BLOCK_M=16 above every ridge this study
+    has measured, which is the knife edge the withdrawn 160.3 hid, worse than
+    when only one card was on the wrong side of it. The corrected bracket
+    settles neither card: [127, 159] straddles 145.8 and 152.8 alike, so both
+    verdicts at 0.10 are UNDECIDED, which is the honest form of it. What
+    survives untouched by the recalibration is the part the claim rests on:
+    at TEMPO's 0.33 and at the refit's 0.558 the upper bound alone fails both
+    cards by a mile."""
     ridges = _card_ridges()
-    assert AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA) < ridges["nvidia_h200"]
-    assert AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA) > ridges["nvidia_a100_sxm4_80gb"]
+    cap = AR.ai_cap(16, AR.REPO_PUBLISHED_ALPHA)
+    assert all(cap > ridge for ridge in ridges.values())
     lo, hi = AR.corrected_cap_bracket(16, AR.REPO_PUBLISHED_ALPHA)
-    assert lo < ridges["nvidia_a100_sxm4_80gb"] < hi
+    assert all(lo < ridge < hi for ridge in ridges.values())
     assert AR.cap_bracket_verdict(lo, hi, [139.6, 149.3]).startswith("undecided")
     for ridge in ridges.values():
         assert AR.ai_cap(16, AR.TEMPO_ALPHA) < ridge
