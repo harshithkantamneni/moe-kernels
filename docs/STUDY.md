@@ -95,6 +95,16 @@ one-page summary of both.
   rewrote on 2026-08-31 (wrong target, invalid routing pool, two cards on
   different kernels; the "monotonic in expert count" pattern is a pooling
   artefact). Marked; FINDINGS C5 is current.
+- **(m) `alpha_b = 0.9794 +/- 0.0113`, (n) `cap/ridge = 0.080`, and (o) the
+  three-term model's activation re-read term.** Withdrawn or refuted
+  2026-09-10; `docs/FINDINGS.md` RETRACTIONS (m), (n) and (o) carry the
+  arithmetic, and the section below carries the corrected readings. The short
+  form: the first is a fit whose partner `ai_model` refuses and whose honest
+  interval is +/- 0.048; the second is computed from an alpha `ai_model`
+  refuses to invert, and at BLOCK_M = 128 the verdict flips across the
+  candidate range; the third is refuted on the ladder slope alone at 89 to 303
+  sigma. **Never quote the 207% TEMPO contradiction**: it compares a bound
+  with a number.
 
 ## What the 2026-09-09 H200 session settled, and what it left
 
@@ -120,9 +130,13 @@ working state.
   tread behind it.
 - **The DRAM counter route is OPEN on a rented pod**, for the first time: ncu
   2025.1.1 attaches with no permission error (nsys absent). `alpha_b` as a
-  NUMBER rather than an interval is now bookable, at 15 minutes over the
-  alpha-surface cell. This is the highest-value open experiment in the study
-  and it should be booked next.
+  NUMBER rather than an interval is now bookable over the alpha-surface cell.
+  This is the highest-value open experiment in the study and it should be
+  booked next. **This bullet read "at 15 minutes" until 2026-09-10**: that
+  figure priced a one-launch recipe the instrument does not run, and the plan
+  page now budgets an hour of GPU and two pod-hours end to end for twelve
+  profiled invocations. That is the price of ONE BLOCK_N; the traffic-versus-
+  time contrast is two of them, so the driver books two arms and 240 minutes.
 
 **Retracted or re-qualified, which is most of what the session bought.**
 
@@ -178,6 +192,110 @@ bash scripts/h200_gaps_session.sh --new \
 `roofline-n64-g1` is expected to reach CLAIM_FAIL, and that is its result: on
 the committed cells C3 reads +0.053 against a 0.10 gate and C4 reads 0.552
 against a 0.95 gate.
+
+**THAT COMMAND IS SPENT.** All eight of those arms ran on 2026-09-10 and the
+booking below the next heading is the current one. The block is left standing
+because it is what the session was bought against, and a reader who runs the
+line above re-books five arms that now hold a result.
+
+## What the 2026-09-10 H200 session settled, and what it left
+
+Added 2026-09-10, after the second run of `scripts/h200_gaps_session.sh` on a
+rented H200: twenty arms, everything committed under
+`results/published/2026-09-10-nvidia_h200-gaps-session/` (6 DONE, 5 REFUSED,
+5 CLAIM_FAIL, 4 INVALID). `docs/FINDINGS.md` has the numbers, the intervals
+and the per-arm reading; this is what it means for the study's working state.
+Every figure below was recomputed from the committed cells.
+
+**The estimator is what was wrong, and it is replaced.** `LadderFit.alpha =
+B/(A+B)` divides the ladder's slope by a level extrapolated to `n = 0`, a
+place no tread was measured. Over the session's 23 ladders five have a
+NEGATIVE intercept and five return a value above 1.0 on a quantity that cannot
+exceed 1; `alpha_upper = B/(A+B-D)` exceeds 1 exactly when `D > A`, which held
+in four of `bn_g16`'s six cells and in no others: arithmetic, not physics.
+The replacement has no level in it: `w` = (ms per extra M-tile) / (ms to
+stream the layer's whole expert weight set once at the card's measured rate),
+which on mixtral bf16 is a 2.8186 GB weight set and **0.6443 ms** per stream.
+Both are printed; only `w` may be quoted. `docs/APPARATUS.md` section 4 is the
+one-page statement.
+
+**Settled.**
+
+- **The per-M-tile cost, measured in weight streams: 0.68 to 1.37** across 23
+  ladders at BLOCK_M 16 to 64, per-repeat sd 0.002 to 0.005 over 17 repeats.
+- **95.4% of BLOCK_M=16's wall clock at GROUP_SIZE_M=1 is one full re-read per
+  tile**: 89.158 ms measured at n = 132 M-tiles against 85.054 ms of streaming.
+  No fit, no anchor, no extrapolation.
+- **The activation re-read term is REFUTED, model-free.** Its BLOCK_N
+  dependence must double when BLOCK_M doubles; measured it is 1.115 +/- 0.003,
+  1.203 +/- 0.007 and 0.923 +/- 0.012 against a required 2.000, at
+  z = -303 / -121 / -89. What fits 3.1x better at equal parameter count goes as
+  `1/BLOCK_N` with no BLOCK_M in it.
+- **GROUP_SIZE_M moves the cost 24%** at a pinned tile, pinned num_stages and
+  num_warps and an identical modelled residency, and it replicates across 12
+  fresh processes. So `alpha_b` is a function of the SCHEDULE and the model has
+  no slot for one.
+- **BLOCK_M=16 peaks at 0.099 of the roof against 0.537 for a BLOCK_M=256
+  control**, over 162 of 162 cells swept to 132 M-tiles.
+- **The register file runs out exactly where arithmetic intensity would
+  suffice**: of 56 power-of-two tiles, 17 clear this card's ridge and the
+  smallest accumulator among them is 65536 registers against a per-block file
+  of 65536. There is no positive control at vLLM's shipped BLOCK_SIZE_N on any
+  card this study can reach.
+- **The clock is per tile under the power cap**: 1275-1935 MHz, a 1.52x range,
+  at a power held within 2% of 700 W in 95% of 2328 cells.
+
+**Retracted, and this is the session's main product.**
+
+- **`alpha_b = 0.9794 +/- 0.0113` is not a measurement.** Its partner
+  `alpha_a = -0.8143` is one `ai_model` refuses; its honest interval is
+  +/- 0.048 by leave-one-tread-out over the whole chain, and 30.5% of
+  D-propagated draws put it outside [0, 1]. **Never quote the 207% TEMPO
+  contradiction**: it compares a bound with a number.
+- **`cap/ridge = 0.080` is withdrawn as a headline**, being computed from an
+  alpha `ai_model` refuses to invert. What stands: for **BLOCK_M <= 64 the cap
+  binds under every reading this study has held**; at **BLOCK_M = 128, the tile
+  vLLM actually ships, the verdict FLIPS** across the candidate range (0.807 of
+  ridge at 0.9794 against 1.293 at 0.5977, threshold 0.784) and is therefore
+  NOT ESTABLISHED. And the reachability caveat: under balanced routing every
+  shipped bucket at BLOCK_M <= 64 sits at exactly one M-tile per expert.
+
+**Left open, and what it costs.** One experiment decides more than the rest
+together, and its route read OPEN for the second rental running (ncu
+2025.1.1.0 attached with no permission error, `cap_eff 0xa80425fb`, no
+`sys_admin`), so it is bookable rather than aspirational. A DRAM read at ONE
+BLOCK_N gives `alpha_b = (dR/dn - a_per_tile)/W`, a traffic slope with no
+level, no delta and no assumed bandwidth (today the same six cells return
+0.6087, 0.5930 or 0.5143 depending only on which rate is assumed). A read at
+TWO BLOCK_N at a fixed BLOCK_M decides the other half, whether the term that
+replaces the activation re-read is TRAFFIC or TIME (3.85 GB against 2.06 GB
+per M-tile at BLOCK_M=64, or the same bytes at both), and that is a contrast
+between two cells, so it is two arms. Second is a THIRD BLOCK_M in the
+`bn_g16` grid: the current grid has
+two heights that yield a memory branch, which is why every candidate extra
+term correlates +0.72 to +0.98 with the activation column and nothing is
+identifiable. The next session is `--new`, ~300 priced minutes:
+
+```bash
+bash scripts/h200_gaps_session.sh --new \
+  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64
+```
+
+THE COUNTER IS TWO ARMS AND BOTH ARE BOOKED, which is what took that figure
+from ~180 to ~300. A DRAM read at ONE BLOCK_N buys `alpha_b` as a traffic
+slope and nothing else; the traffic-versus-time contrast is BETWEEN
+BLOCK_N=32 and BLOCK_N=128 at the same BLOCK_M=64, so one cell cannot ask it.
+`GROUP_SIZE_M` stays pinned at 16 on both, and a G=1 cell is a third arm this
+session does not book, which is worth saying because the session measured the
+per-M-tile cost moving 24% between G=1 and G=16.
+
+`bn_g16` is expected to reach CLAIM_FAIL again and that is its result; each
+counter arm is expected to reach DONE or CLAIM_FAIL and either is the
+headline.
+Three arms are deliberately NOT in that set: `roofline-n64-g1`,
+`alias_ablation` and `noise_floor` each hold an INVALID whose cause is a gate
+or an instrument rather than a flag, so re-running them buys the same word for
+the same minutes.
 
 ## What changed
 

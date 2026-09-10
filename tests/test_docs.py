@@ -333,3 +333,238 @@ def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():
     # The scoring half of the rule, which is the half a gate reads.
     assert "compute-bound CLAIM gates read the FIXED roof fraction" in text
     assert "issue efficiency" in text
+
+
+# --------------------------------------------------------------------------
+# the 2026-09-10 H200 session, and the three retractions that are its product
+# --------------------------------------------------------------------------
+
+#: What FINDINGS has to carry from that session, as (needle, why) pairs. Every
+#: number is either off a `RESULT:` line in
+#: `results/published/2026-09-10-nvidia_h200-gaps-session/session/logs/`, off
+#: the committed calibration, or recomputed from that directory's cells by the
+#: synthesis scripts named beside it. INTERVALS, NOT POINTS: where the quantity
+#: has a spread the pinned string is the spread, because the session's own
+#: lesson is that this study's headline numbers were points printed by an
+#: estimator whose spread nobody had propagated.
+SESSION_2026_09_10 = (
+    ("682.1", "the measured dense bf16 rate, up from 668.5 on 2026-09-09"),
+    ("1470 MHz", "the GEMM's own clock under load on this rental"),
+    ("155.9", "this card's ridge; the 2026-09-09 one was 152.8"),
+    ("147.9-155.9", "the ridge band a crossing inside it must be quoted as"),
+    ("2.8186 GB", "mixtral bf16's whole expert weight set"),
+    ("0.6443 ms", "one full stream of it at the card's measured triad rate"),
+    ("0.68 to 1.37", "the per-M-tile cost in weight streams, over 23 ladders"),
+    ("89.158 ms", "cap_test's measured time at n = 132 M-tiles"),
+    ("85.054 ms", "132 full weight streams at triad, the model-free comparison"),
+    ("95.4%", "the fraction of BLOCK_M=16's wall clock that is one re-read"),
+    ("1.115 +/- 0.003", "the BN-scaling ratio where the model requires 2.000"),
+    ("z = -303", "how far that sits from the model"),
+    ("0.0218", "the 1/BLOCK_N rival's rms"),
+    ("0.0675", "the published form's rms, 3.1x worse at equal parameters"),
+    ("-23.7%", "what GROUP_SIZE_M 1 -> 16 does to the per-M-tile cost"),
+    ("0.099", "BLOCK_M=16's peak fraction of the dense roof"),
+    ("0.537", "the BLOCK_M=256 control's, on the same layer"),
+    ("65536", "the accumulator and the per-block register file, coinciding"),
+    ("1275 to 1935 MHz", "the clock range at a power held at the cap"),
+    ("2328 cells", "the census the clock result is over"),
+    ("0.013380", "the pooled same-session replicate floor"),
+    ("[0.0100, 0.0204]", "its 95% interval, which excludes the assumed 0.0229"),
+    ("+/- 0.048", "alpha_b's honest interval, not the bootstrap's +/- 0.0113"),
+    ("30.5%", "the D-propagated draws that put alpha_b outside [0, 1]"),
+    ("0.807", "BLOCK_M=128 cap/ridge at alpha_b = 0.9794, capped"),
+    ("1.293", "the same at LIN's 0.5977, NOT capped: the verdict flips"),
+    ("0.784", "the alpha_b at which BLOCK_M=128 stops being capped"),
+    ("3.85 GB", "the traffic reading the counter would see at BLOCK_N=32"),
+    ("2.06 GB", "and at BLOCK_N=128; the same bytes at both means time"),
+)
+
+
+@pytest.mark.parametrize("needle,why", SESSION_2026_09_10,
+                         ids=[n for n, _ in SESSION_2026_09_10])
+def test_findings_carries_the_2026_09_10_session_numbers(needle, why):
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    assert "## The 2026-09-10 H200 session" in text, "the dated section is gone"
+    assert needle in text, f"FINDINGS no longer states {needle!r}: {why}"
+
+
+def test_findings_retracts_the_three_numbers_the_session_retired():
+    """THE RETRACTIONS ARE THE POINT OF THAT SECTION, so they are pinned in
+    words and not only in numbers.
+
+    (1) alpha_b = 0.9794 +/- 0.0113 is a fit whose partner ai_model refuses;
+    (2) the 207% TEMPO contradiction compares a bound with a number;
+    (3) cap/ridge = 0.080 is computed from an alpha ai_model refuses to invert,
+        and at BLOCK_M=128, the tile vLLM ships, the verdict flips across
+        the candidate range rather than binding.
+    A reader who finds any of the three quoted as a measurement elsewhere has
+    to find the retraction here."""
+    text = (ROOT / "docs" / "FINDINGS.md").read_text()
+    section = text.split("## The 2026-09-10 H200 session")[1].split("\n## ")[0]
+    assert "THE RETRACTIONS" in section
+    # 1.28411 is alpha_CORRECTED and it is the one the 0.080 is computed
+    # from: report.json carries alpha_measured 1.28982, alpha_corrected
+    # 1.28411 and ai_cap_measured 12.45999, and 16/1.28411 = 12.45999 while
+    # 16/1.28982 = 12.40483. This needle read "1.28982" until 2026-09-10 and
+    # pinned the wrong attribution into the retraction it was guarding.
+    for needle in ("0.9794", "-0.8143", "207%", "0.080", "1.28411", "1.28982"):
+        assert needle in section, needle
+    # Flattened from here: this file wraps at 78 columns and a sentence that
+    # straddles two lines is still the sentence.
+    flat = " ".join(section.split())
+    # Each one says, in words, what it is being retracted FOR.
+    assert "must NOT be quoted as a measurement" in flat
+    assert "compares a BOUND with a number" in flat
+    assert "refuses to invert" in flat
+    # And the half that survives is stated as plainly as the half that does not.
+    assert "the cap binds under every reading this study has ever held" in flat
+    assert "the verdict FLIPS across the candidate range" in flat
+    assert "NOT ESTABLISHED" in flat
+    # The reachability caveat, which is what stops the surviving half from
+    # being read as a statement about production.
+    assert "exactly ONE M-tile per expert" in flat
+
+
+def test_study_records_what_the_2026_09_10_session_settled_and_what_it_left():
+    text = (ROOT / "docs" / "STUDY.md").read_text()
+    assert "## What the 2026-09-10 H200 session settled" in text
+    section = text.split("## What the 2026-09-10 H200 session settled")[1]
+    section = section.split("\n## ")[0]
+    for needle in ("0.6443 ms", "0.68 to 1.37", "95.4%", "z = -303",
+                   "65536", "1275-1935 MHz", "+/- 0.048", "30.5%",
+                   "1.293", "0.784", "one M-tile per expert",
+                   "Never quote the 207% TEMPO", "--new"):
+        assert needle in section, needle
+    # The next session is a command a reader can run, with the arms named,
+    # and it is the driver's OWN set rather than a prefix of it: the counter
+    # is two arms, and "...,counter_plan,counter" was a passing substring of
+    # the wrong booking until 2026-09-10.
+    listed = subprocess.run(
+        ["bash", "-c",
+         'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' '
+         f'\"{ROOT / "scripts" / "h200_gaps_session.sh"}\")"; rerun_arms'],
+        capture_output=True, text=True, timeout=120).stdout.split()
+    assert listed, "the driver's rerun set is empty"
+    assert f"--only {','.join(listed)}" in section, listed
+    for name in ("counter-n32-m64", "counter-n128-m64"):
+        assert name in listed, name
+
+
+def test_apparatus_states_the_estimator_change_and_prints_both():
+    """R1-R3 for the estimator, on the page that is the vocabulary: what
+    B/(A+B) does wrong, what replaces it, and that both are printed. A page
+    that names only the replacement leaves every published alpha unreadable
+    against its own history; a page that names only the fit teaches the next
+    reader to quote it."""
+    text = " ".join((ROOT / "docs" / "APPARATUS.md").read_text().split())
+    assert "The estimator changed on 2026-09-10, and both are printed" in text
+    # What is wrong with it, with the arithmetic that makes it wrong.
+    assert "value of the ladder's straight line at `n = 0`" in text
+    assert "exceeds 1 exactly when `D > A`" in text
+    assert "-0.8143" in text and "REFUSES the pair" in text
+    # What replaces it, with the measurement in its denominator.
+    assert "2.8186 GB" in text and "0.6443 ms" in text
+    assert "0.68 to 1.37" in text
+    # And that it is not alpha_b, which is the mistake the change invites.
+    assert "`w` is not `alpha_b`" in text
+    for rate in ("0.6087", "0.5930", "0.5143"):
+        assert rate in text, rate
+
+
+# --------------------------------------------------------------------------
+# The counter pair's pre-registered discriminator, recomputed from the cells
+# --------------------------------------------------------------------------
+
+def _bn_g16_slope(block_n: int, block_m: int) -> float:
+    """ms per extra M-tile for one bn_g16 cell, from the published cells.
+
+    OLS of the per-tile-count median of `ms_p50` on the tile count, which is
+    `s8_common_currency.py`'s estimator: a slope, with no fitted level in the
+    denominator, no `delta`, no `D` and no `B/(A+B)`.
+    """
+    import statistics
+    run = sorted(PUBLISHED.glob("2026-09-10-*gaps-session/results/"
+                                "bn_decomposition/*/cells.csv"))
+    assert run, "the 2026-09-10 bn_decomposition cells are not in the tree"
+    with open(run[0], newline="") as fh:
+        rows = [r for r in csv.DictReader(fh) if r["status"] == "ok"
+                and int(r["block_n"]) == block_n
+                and int(r["block_m"]) == block_m]
+    assert rows, (block_n, block_m)
+    tiles = sorted({int(r["tiles"]) for r in rows})
+    med = [statistics.median(float(r["ms_p50"]) for r in rows
+                             if int(r["tiles"]) == k) for k in tiles]
+    mx = sum(tiles) / len(tiles)
+    my = sum(med) / len(med)
+    return (sum((a - mx) * (b - my) for a, b in zip(tiles, med, strict=True))
+            / sum((a - mx) ** 2 for a in tiles))
+
+
+def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_pin():
+    """THE PRE-REGISTERED PREDICTION, RE-DERIVED FROM THE CELLS IT COMES FROM.
+
+    The driver books two counter arms at `--block-m 64`, `--block-n 32` and
+    128, and every page that describes them quotes the same discriminator:
+    3.85 GB of weight-set-equivalent per M-tile at BLOCK_N=32 against 2.06 GB
+    at 128, 1.87x apart. Those are not figures typed into prose: they are the
+    2026-09-10 `bn_g16` ladder slopes at BLOCK_M=64, divided by the time to
+    stream mixtral's whole expert weight set once at this card's own
+    calibrated triad rate.
+
+    THE BLOCK_M MATTERS AND IT IS WHY THIS TEST EXISTS. At BLOCK_M=32, which
+    is the default `dram_counter_route.py` runs at when no `--block-m` is
+    passed, the same slopes give 3.53 GB against 1.93 GB at 1.84x. Until
+    2026-09-10 the driver booked ONE counter arm that passed no `--block-m`
+    and no `--block-n`, so it ran that BLOCK_M=32 cell at a single BLOCK_N
+    while quoting the BLOCK_M=64 figures. A page whose numbers are computed at
+    a different cell from the one the arm runs is exactly the defect this file
+    is for."""
+    import yaml
+    card = yaml.safe_load(
+        (ROOT / "moe" / "bench" / "hardware"
+         / "measured_nvidia_h200.yaml").read_text())
+    triad_gbps = card["memory"]["bandwidth_tb_s"] * 1000.0
+    # The weight set is the plan page's own compulsory W, read off the page
+    # rather than retyped, so a change to the model config moves both.
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+         "--dry-run", "--card", "nvidia_h200", "--block-m", "64",
+         "--block-n", "32"],
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert plan.returncode == 0, plan.stderr[-800:]
+    m = re.search(r"W\s+compulsory\s+([\d.]+) GB", plan.stdout)
+    assert m, plan.stdout[:900]
+    w_gb = float(m.group(1))
+    stream_ms = w_gb / triad_gbps * 1000.0
+    assert round(stream_ms, 4) == 0.6443, stream_ms
+
+    streams = {bn: _bn_g16_slope(bn, 64) / stream_ms for bn in (32, 128)}
+    assert round(streams[32], 4) == 1.3676, streams
+    assert round(streams[128], 4) == 0.7312, streams
+    gb = {bn: streams[bn] * w_gb for bn in (32, 128)}
+    assert round(gb[32], 2) == 3.85, gb
+    assert round(gb[128], 2) == 2.06, gb
+    assert round(gb[32] / gb[128], 2) == 1.87, gb
+
+    # The BLOCK_M=32 cell the single arm actually ran, which is a different
+    # prediction. It is asserted so that a future arm quietly falling back to
+    # the script's default is caught by a number and not by a reading.
+    other = {bn: _bn_g16_slope(bn, 32) / stream_ms * w_gb for bn in (32, 128)}
+    assert round(other[32], 2) == 3.53 and round(other[128], 2) == 1.93, other
+    assert round(other[32] / other[128], 2) == 1.84, other
+
+    # And every page that quotes the discriminator quotes the BLOCK_M=64 one.
+    listing = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "h200_gaps_session.sh"), "--list"],
+        capture_output=True, text=True, cwd=str(ROOT), timeout=120)
+    assert listing.returncode == 0, listing.stderr[-500:]
+    pages = {
+        "--list": listing.stdout,
+        "POD_RUNBOOK.md": (ROOT / "docs" / "POD_RUNBOOK.md").read_text(),
+        "FINDINGS.md": (ROOT / "docs" / "FINDINGS.md").read_text(),
+        "STUDY.md": (ROOT / "docs" / "STUDY.md").read_text(),
+    }
+    for name, text in pages.items():
+        assert "3.85 GB" in text and "2.06 GB" in text, name
+        assert "BLOCK_M=64" in text, name
+        assert "3.53 GB" not in text and "1.93 GB" not in text, name

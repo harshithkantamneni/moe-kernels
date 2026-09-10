@@ -619,7 +619,27 @@
 #  13 counter_plan   Free. Probes whether a DRAM counter route is open on this
 #                    box and prints the manual ncu command if so. A counter is
 #                    the ONLY thing that turns alpha_b into a number rather than
-#                    an interval, and it is blocked on rented pods.
+#                    an interval. THIS LINE SAID "AND IT IS BLOCKED ON RENTED
+#                    PODS" UNTIL 2026-09-10: it read OPEN on the 2026-09-09 and
+#                    2026-09-10 RunPod H200s, which is why arms 14 and 15
+#                    exist.
+#  14 counter-n32-m64   THE COUNTER RUN, added 2026-09-10 because the probe
+#  15 counter-n128-m64  above came back OPEN for the second rental running.
+#                    They are LAST and they are 120 WALL minutes EACH. Reading
+#                    DRAM traffic at TWO BLOCK_N values at fixed BLOCK_M is the
+#                    only contrast that separates a per-N-tile TRAFFIC cost from
+#                    a per-N-tile TIME cost, and a contrast needs two cells, so
+#                    it is two arms and not one: --block-m 64 on both,
+#                    --block-n 32 and 128, and the BLOCK_M is on the arm lines
+#                    because the pre-registered discriminator is registered
+#                    there. UNTIL 2026-09-10 THIS WAS ONE ARM PASSING NEITHER
+#                    FLAG, which ran the script's default BLOCK_N=64 BLOCK_M=32
+#                    cell while three places in this file and one in the runbook
+#                    said it ran the contrast. Either arm on its own still buys
+#                    the other half: alpha_b as a traffic slope with no fitted
+#                    level, no delta and no assumed bandwidth. They run last
+#                    because every arm above is cheaper and because a BLOCKED
+#                    probe retires both for the whole session at no cost.
 #
 # EVERY ARM IS INDEPENDENT AND NONE IS FATAL. One failing arm records its status
 # and the rest continue; a long unattended run that aborts at minute six on a
@@ -982,7 +1002,7 @@ arm_script() { case "$1" in
   cap_test)                      echo scripts/tile_cap_test.py ;;
   dtype)                         echo scripts/dtype_tile_confound.py ;;
   span|span_dense)               echo scripts/span_extent_separation.py ;;
-  counter_plan)                  echo scripts/dram_counter_route.py ;;
+  counter_plan|counter-*)        echo scripts/dram_counter_route.py ;;
   *)                             echo "" ;;
 esac; }
 
@@ -1212,8 +1232,15 @@ calibration_stamp() {
 #               needs a ridge would refuse, one at a time, for the whole
 #               session.
 #   UNDATED     a tracked file with no provenance.utc. It cannot say which
-#               rental measured it, and "cannot say" is not "this one". The
-#               committed measured_nvidia_h200.yaml is exactly this shape.
+#               rental measured it, and "cannot say" is not "this one". THIS
+#               LINE NAMED THE COMMITTED measured_nvidia_h200.yaml AS AN
+#               EXAMPLE UNTIL 2026-09-10, and it had stopped being one: the
+#               2026-09-09 calibration added the provenance block and the
+#               2026-09-10 one carries utc 2026-09-10T04:12:29+00:00, so the
+#               committed ruler is decided on its DATE and never on "cannot
+#               say". The state is still reachable and is planted in
+#               tests/test_h200_gaps_session.py rather than read off a
+#               tracked file that has moved on.
 #   STALE       a tracked file measured BEFORE this session began -- the
 #               previous rental's, still in the checkout. This is the state the
 #               A6 fix created: arm 0 measures this card into an untracked
@@ -1725,6 +1752,22 @@ git_note() {
     *) echo "UNVERIFIED: git check-ignore exited $rc. Usually the path is outside this work tree, the normal case for /workspace on a pod. It is NOT 'tracked'." ;;
   esac
 }
+# WHICH CARD scripts/dram_counter_route.py IS ASKED TO PLAN FOR. That script's
+# --card is a HARD DEFAULT of nvidia_a100_sxm4_80gb and is never derived from
+# the attached device, so a bare invocation on an H200 prints an A100 cell and
+# an A100 ridge. It also takes a CLOSED SET of slugs, so passing a card it does
+# not list would exit 2 on argparse and buy nothing: the attached card is used
+# only where the file names it, and otherwise the operator is told which
+# hypothetical card the page is for. COUNTER_ROUTE_CARD overrides both.
+counter_route_card() {
+  local want="${COUNTER_ROUTE_CARD:-}"
+  if [[ -z "$want" && "${CARD:-nocard}" != nocard ]]; then want="$CARD"; fi
+  if [[ -n "$want" ]] && grep -q -- "\"$want\"" "${REPO:-}/scripts/dram_counter_route.py"; then
+    echo "$want"; return 0
+  fi
+  echo nvidia_h200
+}
+
 # WHAT EACH ARM COSTS, AND WHERE THE NUMBER CAME FROM. Every figure below is
 # what THAT arm's own plan prints when it is invoked the way the lines further
 # down invoke it -- not an estimate made here. The old table was wrong by 2.1x
@@ -1742,11 +1785,12 @@ arm_minutes()  { case "$1" in
   roofline-n256-g32) echo 0 ;;
   bm128_depth) echo 5 ;;        alias_ablation) echo 14 ;;
   noise_floor) echo 120 ;;
-  bn_g16) echo 36 ;;            anchor_measure) echo 5 ;;
+  bn_g16) echo 46 ;;            anchor_measure) echo 5 ;;
   anchor_rescore) echo 0 ;;     occupancy) echo 23 ;;
   mma_switch) echo 7 ;;         ruler) echo 2 ;;         cap_test) echo 5 ;;
   dtype) echo 8 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
   counter_plan) echo 1 ;;
+  counter-n32-m64) echo 120 ;;  counter-n128-m64) echo 120 ;;
 esac; }
 
 # WHERE THAT NUMBER CAME FROM, one line per arm, so no row in the cost table is
@@ -1761,7 +1805,7 @@ arm_basis() { case "$1" in
   bm128_depth) echo "bm128_depth.py --dry-run --model mixtral-8x7b --r-max 2048 -> 'estimate 252 s of GPU', 168 timings (24 treads x 7 reps), for the BM=128 subject against the BM=256 reference. AT --r-max 2048, which is what the pod runs: the default plan is 126 s and a different run id. THE BM=32 PARTNER IS NOT ON THIS COMMAND LINE and never was addable there: it is unconditional in the script (SMALL_TILE_BLOCK_M in BLOCK_SIZES), so it enters the plan by itself. Where the script carries it the same command prints 'estimate 294 s of GPU' and 196 timings, the partner's four extra treads costing 42 s. Both figures book 5 min, and this row quotes the one its own tree prints. Until 2026-09-09 this row named a --partner-block-m flag no version of the script has ever defined, which would have exited 2 on argparse and bought nothing." ;;
   alias_ablation) echo "alias_ablation.py --card 'NVIDIA H200' --models mixtral-8x7b,qwen2-57b-a14b,deepseek-v2-lite,deepseek-v3 --alias-extent block --compute sum --replicates 9 --probe --dot-fallback refuse -> 'WALL 13.7 min ... BOOK THIS ONE', of which 2.0 min is the probe, the figure the page charges outright. Booked 14, above the figure and never at it. THE FALLBACK DOES NOT MOVE THE PAGE: allow and refuse print the same 13.7 because both price the whole ladder; what refuse changes is the cost of a MISS, which is the probe alone. THE SAME COMMAND WITH --run PRINTS THE SAME 13.7 on a box with no GPU, where it refuses at the probe having measured nothing: since 2026-09-03 report_cost charges the probe on the plan page as well, so the dry branch above previews the pod's own booking and the two agree. Until that day the bare plan said 11.6 and this row disclosed the gap; the gap is closed, not disclosed. This row read 13.0 until 2026-09-09 and 13.7 until the sum grid was widened on 2026-09-10; the page now prints 13.7 because the probe compiles ten specialisations instead of six, and 14 is the booking above it. On a GPU box the command WITH --run is the arm itself, so re-derive the row off GPU and without it." ;;
   noise_floor) echo "replicate_noise_floor.py --dry-run --replicates 3 --arms mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16 -> 'TOTAL: ~120 min of GPU'. Already a WALL figure: that script scales its 3066 s model by the 2.35x wall-over-model factor it measured on the s4 arm." ;;
-  bn_g16)     echo "bn_decomposition.py --dry-run --capability 9.0 --group-m 16 -> 'estimate 2142 s of GPU', 1428 timings (84 treads x 17 reps)." ;;
+  bn_g16)     echo "bn_decomposition.py --dry-run --capability 9.0 --group-m 16 --tiles 16,32,64,128 -> 'estimate 2754 s of GPU', 1836 timings (108 treads x 17 reps). 2754 s is 45.9 min, booked 46. THE THIRD SUBJECT TILE IS WHAT MOVED IT, and it is on the command line because that is where the swept set lives: until 2026-09-10 this arm ran the script's default {32, 64, 128} against a 256 reference, and BLOCK_M=128 produced NO alpha at any BLOCK_N (its memory branch came within 15% of its compute branch and was discarded), so six cells over TWO heights were left to fit two parameters. At two heights every candidate extra term correlates +0.72 to +0.98 with the activation column and nothing is identifiable; the same command without 16 prices 2142 s and 1428 timings, which is what this row read until 2026-09-10. BLOCK_M=16 adds 24 treads at 8 per BLOCK_N and is the one added height whose ladder is memory-bound end to end on this card (cap_test swept it to 132 tiles at 9.9% of the roof)." ;;
   anchor_measure) echo "memory_branch_anchor.py --dry-run --measure --model mixtral-8x7b -> 'cells 128 (2 BLOCK_M x 4 G x 16 treads), estimated wall time 4.8 min'. A WALL figure, and the only arm whose plan already charges its compiles." ;;
   anchor_rescore) echo "reads the committed corpus and times nothing. No GPU, seconds." ;;
   occupancy)  echo "occupancy_vs_swizzle.py --dry-run -> 'estimate 1342 s of GPU', 900 timings." ;;
@@ -1771,7 +1815,8 @@ arm_basis() { case "$1" in
   dtype)      echo "dtype_tile_confound.py --dry-run --card 'NVIDIA H200' -> 'COST 28 cells x 3 arms x 2 dtypes; 32 distinct Triton specialisations; 454 s of timed kernel: 3 repeats x (300 ms warmup + 3 trials x max(200 ms budget, one call))'. 454 s is 7.6 min, booked 8. THE 2026-09-09 RE-SCOPE DOES NOT MOVE THAT FIGURE and the plan page says why: the third arm now transplants BLOCK_SIZE_M and GROUP_SIZE_M only, keeping BN/BK/num_stages feasible for the width it runs at, so all 28 cells stand where the full fp8 transplant was infeasible at 22 of them by the shared-memory arithmetic the plan now prints (SM90_SMEM_LIMIT 232448 against num_stages x (BM*BK + BK*BN) x bytes). Re-read the COST line if that plan changes again; this row is the plan's number, not this file's. It read 315 s until d789b5f charged the warmup as time; the three copies of the old figure in this file were not updated with it, and tests/test_h200_gaps_session.py now pins every KERNEL booking to the figure its plan prints. Without --card it refuses and prints no cost at all." ;;
   span_dense) echo "span_extent_separation.py --dry-run --densify -> '84 cells x 9 arms = 756 timed arms. Estimated KERNEL time 1814 s'." ;;
   span)       echo "span_extent_separation.py --dry-run --no-densify -> 'AND THIS GRID WOULD REFUSE: grid too sparse for C2'. Zero minutes: it stops before it spends one, and that refusal is the extent comparison's honest answer on the published grid." ;;
-  counter_plan) echo "dram_counter_route.py --dry-run -> 'Budget 15 minutes of GPU time'. That 15 min is the ncu MEASUREMENT, which this arm does not run: the arm is --probe, which asks whether the counter route is open and returns in seconds." ;;
+  counter_plan) echo "dram_counter_route.py --probe returns in seconds and prints no cost line; 1 min is this file's allowance for it. THIS ROW QUOTED 'Budget 15 minutes of GPU time' UNTIL 2026-09-10 and the plan had stopped saying it: the page now reads 'Budget an hour of GPU time and two pod-hours end to end, not the fifteen minutes the one-launch recipe used to promise', because the profiled launch count is warmup + iters x trials rather than one. Neither figure is this arm's, because both price the MEASUREMENT, which is the counter arm below, but a row quoting a sentence its own plan no longer prints is how a booking goes stale without anyone reading it." ;;
+  counter-n32-m64|counter-n128-m64) echo "dram_counter_route.py --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32, and the same at --block-n 128 -> 'COST. 6 tile counts x 2 cache modes = 12 profiled invocations of at least 11 fused_experts calls each, about 660 profiled kernel launches plus 120 L2-flush launches ... Budget an hour of GPU time and two pod-hours end to end'. Two pod-hours is 120 WALL minutes and that is EACH arm's booking: the page charges ncu replay and its save/restore of the 2.8 GB weight buffers outright, at seconds per launch, so nothing here is left to a ratio. THE COST BLOCK IS BYTE-IDENTICAL AT THE TWO BLOCK_N, verified off GPU (md5 fabbeedc38cf2e784316e9e59f6b8f3c on both pages; the two plans differ in the run id, the pinned line, three corrected-cap rows and the two recipe lines, and nowhere else), so the contrast is TWO sets of 12 invocations and 240 WALL minutes for the pair, which is what this session books. UNTIL 2026-09-10 IT WAS ONE ARM AT 120 AND THE CONTRAST WAS LEFT TO THE OPERATOR while arm_closes said the arm ran it: that arm line passed no --block-n and no --block-m and took the script's own argparse defaults as they stood that day, BLOCK_N=64 and BLOCK_M=32, which is the single pinned cell the 2026-09-10 analysis named as the defect to fix before running. NO LINE NUMBER IS QUOTED HERE ON PURPOSE: dram_counter_route.py is a separate slice's file and the defaults are its to move, so this row records what the arm RAN and pins the flags on its own line rather than citing a line in a file it does not own. Both flags are on both arm lines now, and the pre-registered discriminator below is at the BLOCK_M they pass." ;;
 esac; }
 
 # WHAT THE BOOKED FIGURE DOES NOT INCLUDE, in the arm's own words. Empty for an
@@ -1889,37 +1934,69 @@ session_bound() {
   echo "$total $(bounded_minutes "$total" "$kernel")"
 }
 
-# THE ARMS THE 2026-09-09 SESSION LEFT TO RE-RUN, AND THE COMMAND THAT RUNS
-# THEM. Six arms landed INVALID that day and not one of them was a fact about
-# the card: five were apparatus defects reproduced off GPU in-process, and the
-# sixth (roofline) was the clock rule excluding a tile. --resume-latest will
-# re-run NONE of them, because an INVALID row is latched exactly as a
-# CLAIM_FAIL is, so the booking below is --new. calibrate is in the set at 31 s
-# because every arm levels against it and a fresh session should not read the
-# previous rental's stamp; pin_probe-n64-g1 is in it because roofline, bn_g16
-# and cap_test all pin BLOCK_N=64/GROUP_SIZE_M=1 and are worth nothing if the
+# THE ARMS THE 2026-09-10 SESSION LEFT TO RUN, AND THE COMMAND THAT RUNS THEM.
+# REWRITTEN 2026-09-10; the set it replaced was the 2026-09-09 one (calibrate,
+# pin_probe-n64-g1, roofline-n64-g1, cap_test, bn_g16, dtype, bm128_depth,
+# alias_ablation) and eight of those eight have since been spent. Leaving it
+# standing would have re-booked five arms that now hold a RESULT.
+#
+# WHAT THE 2026-09-10 LEDGER SAYS, since the set is derived from it and not
+# chosen: 6 DONE (calibrate, both pin probes, mma_switch, cap_test and
+# counter_plan), 5 REFUSED, 5 CLAIM_FAIL and 4 INVALID. A CLAIM_FAIL is a RESULT
+# and is never re-run; an INVALID is latched too, and re-running one is only
+# worth minutes when the defect behind it has been FIXED. Three of the four
+# INVALID rows have not been:
+#   roofline-n64-g1  V1 read 0 fresh Triton artefacts at BOTH settings, so the
+#                    forced tile is unverified, and V3 still fails on 4 of 39
+#                    settling DRIFTs. The fix is a settle-on-clock warmup in the
+#                    instrument, not a flag here.
+#   alias_ablation   the widened sum grid DID clear the roof this time (headroom
+#                    2.120 against a 2.111 bar) and P1 was asked and PASSED, but
+#                    `form` failed at R^2 0.5065 on deepseek-v2-lite and
+#                    `bracket` at r = 1.392 on mixtral against a 0.9 limit. Both
+#                    are gate questions, and re-running the same arm against the
+#                    same gates buys the same word for the same 5.4 minutes.
+#   noise_floor      V5 failed at an 11.18x cell-to-cell sd ratio against a 3x
+#                    bar, and that gate rejects perfectly homogeneous data at
+#                    this design most of the time. 120 minutes for the same
+#                    word.
+# occupancy's INVALID is V9 UNKNOWN (vLLM exposed no fused_moe_kernel Triton
+# cache, so the compiled shared memory could not be read); its P1 is a null and
+# its P2 is refuted on the cells it did take, and the arm that would advance it
+# is a 4x4 GROUP_SIZE_M x num_stages grid this script does not yet run.
+#
+# SO THE SET IS SIX ARMS AND ONE PRECONDITION. bn_g16 at a third subject tile,
+# which is what turns the session's refutation of the activation term into an
+# identification; the counter PAIR, the only instrument that reads bytes, and a
+# pair because the contrast that decides traffic from time is between two
+# BLOCK_N and one cell is not a contrast; counter_plan ahead of both, because a
+# BLOCKED probe retires them for the whole session in ten seconds; dtype, whose
+# REFUSED cost nothing and was a
+# schema collision on a re-used results volume rather than a fact about the
+# card; calibrate, because every arm levels against it and a fresh session must
+# not read the previous rental's stamp; and pin_probe-n64-g1, because bn_g16 and
+# both counter cells pin BLOCK_N and GROUP_SIZE_M and are worth nothing if the
 # pin is not honoured.
 rerun_arms() {
-  echo "calibrate pin_probe-n64-g1 roofline-n64-g1 cap_test bn_g16 dtype" \
-       "bm128_depth alias_ablation"
+  echo "calibrate pin_probe-n64-g1 bn_g16 dtype counter_plan counter-n32-m64 counter-n128-m64"
 }
 
 # WHAT EACH ONE IS EXPECTED TO REACH, in the ledger's own words, so that the
 # next session can be read against a prediction instead of against a hope. A
 # CLAIM_FAIL here is a RESULT and is written as one: two of these arms are
 # expected to reach it, and an operator who reads exit 1 as a broken arm will
-# throw away the finding. Every state below was derived by replaying the
-# 2026-09-09 cells through each script's own analyse path under the DRIFT-only
-# rule, so it is a prediction with a basis and not a wish.
+# throw away the finding. Every state below is read off the 2026-09-10 ledger
+# and that session's own gate lines, arm by arm, so it is a prediction with a
+# basis and not a wish. THE SET IT REPLACED WAS DERIVED THE SAME WAY from the
+# 2026-09-09 cells; a rerun table that outlives its session predicts states for
+# arms that have since been spent.
 rerun_expectation() { case "$1" in
-  calibrate)   echo "DONE, 6/6 gates, 31 s. It already reads DONE on the committed 2026-09-09 yaml; re-running it costs half a minute and stamps this session." ;;
-  pin_probe-n64-g1) echo "DONE. It was DONE on 2026-09-09 in 32 s; it is a precondition, not a question." ;;
-  roofline-n64-g1) echo "CLAIM_FAIL, and that is the arm's result. Replayed under DRIFT-only: V2 PASS (5 of 5, 4 shared token counts), V3 PASS once the settling DRIFTs are absorbed by the instrument rather than counted in the share, V4 PASS, C1 PASS at 0.499 of the fixed roof (0.531 at the cell's own clock), C2 PASS at -2.6% per doubling, and then C3 FAIL at +0.053 against a 0.10 gate and C4 FAIL at 0.552 against ROOF_REACHED 0.95. Read C3 and C4: they are the BM=128 plateau and the tile attribution, and they are worth having. 96 s." ;;
-  cap_test)    echo "DONE or CLAIM_FAIL on C1, and C2 is the readout. The counterfactual over the 2026-09-09 cells with the control qualified from its own treads gives V2 PASS (0.96%, +1.96%), C2 PASS with 24 of 24 treads memory-bound, alpha 0.998 raw / 0.994 corrected, cap 16.1 Op/B = 0.105 of the ridge. INVALID here means D1 or D2 did not land: read V1's tread counts on the plan page before the pod bills a second run. 242 s, up from the 143 s this row quoted while the arm was booked --r-max 1024, a value the script now refuses at plan time." ;;
-  bn_g16)      echo "DONE or CLAIM_FAIL, with the three references qualifying at 36.7 / 54.6 / 71.6% of the roof at BN=32/64/128 and V2/V3/V4 PASS on the committed cells. V3 sits AT its 2.0x bar (1.95x raw, 2.15x normalised to 1485 MHz) and the bar was not moved, so V3 is the gate most likely to decide this arm. It is 36 min: about 30 of subject sweep the 2026-09-09 run skipped after spending 344 s on references it had already refused, plus the references again in a fresh session." ;;
-  dtype)       echo "DONE or CLAIM_FAIL on C3/C4. It buys the bf16 native curve, which has never been measured, and a real fp8 native curve; on 2026-09-09 all 28 bf16 native cells timed a leaked fp8 tile. The re-scoped cross-config arm transplants BLOCK_SIZE_M and GROUP_SIZE_M only, so C3 and C4 are re-registered against a matched-BLOCK_M arm and the full transplant is recorded INFEASIBLE with its arithmetic rather than run. 8 min." ;;
-  bm128_depth) echo "DONE or CLAIM_FAIL, and INVALID if the pairing did not land. With the BM=32 partner in the script's BLOCK_SIZES the reference can qualify and C1 becomes decidable; without it the arm is pre-registered INVALID on this card, which is what 292 s bought on 2026-09-09. Read the plan page's block sizes, not this driver's command line: the partner is not a flag. The subject data already on disk say the BM=128 ladder is one straight line at 1.089 ms per tile, 10.3% above C_256/2, which is what P2 predicts and what a qualified reference would let the arm say." ;;
-  alias_ablation) echo "A stop at the probe (exit 3 INVALID, about 2.0 min) or a real P1 line, and nothing in between: it is booked --dot-fallback refuse against the widened sum grid. The probe's best sum reading on 2026-09-09 was 5500 GB/s against a 6151 bar, so the miss is the likely branch and it now costs the probe rather than the arm. If it clears, this is the study's first inferential link and it is 13 min." ;;
+  calibrate)   echo "DONE, 6/6 gates, 29 s. It read DONE on 2026-09-10 and published ridge 155.9 (band 147.9-155.9), 682.1 TFLOP/s bf16 at 1470 MHz and triad 4374.3 GB/s. Re-running it costs half a minute and stamps this session; the card moved 7.1% in dense bf16 between two rentals, so it is not carried." ;;
+  pin_probe-n64-g1) echo "DONE. It was DONE in 29 s on 2026-09-10. It is a precondition, not a question, and it gates bn_g16 and both counter cells." ;;
+  bn_g16)      echo "CLAIM_FAIL is the LIKELY word and it is a result; DONE is possible and INVALID means the third tile did not qualify. On 2026-09-10 at two subject heights the arm reached V0-V5 PASS, C3 and C5 PASS, and C6/C2/C4 FAIL with C1 UNKNOWN, at alpha_a = -0.8143 +/- 0.0961 against a gate of 0.025 on the spread and [0.10, 0.38] on the value. The 2026-09-10 fit is what the third tile is for: at BLOCK_M in {32, 64} the six cells cannot identify the model, every candidate extra term correlates +0.72 to +0.98 with the activation column, and C2 chi2 is 13.28 over 4 dof. READ V5 AND V2 FIRST: V5 wants >= 3 BN values with an alpha and > 3 cells, and the added BLOCK_M=16 has to qualify a compute reference of its own; if it does, the arm returns NINE cells over three heights and C2 becomes a statement about a term rather than about a two-point degeneracy. 46 min, up from 36 while the swept set was {32, 64, 128}. 16 IS AN ADDED HEIGHT, NOT A REPLACEMENT, and this line said replacement until now: the arm line is --tiles 16,32,64,128, BLOCK_M=128 stays in the swept set, and the plan it prints is 108 treads (8 at BLOCK_M=128 per BLOCK_N among them) for 1836 timings and 2754 s, which is the booking above. arm_basis has always said it the other way, that 16 ADDS 24 treads at 8 per BLOCK_N, so the two descriptions of one swept set disagreed. What 2026-09-10 established is that BLOCK_M=128 yielded no alpha at any BLOCK_N there (its memory branch came within 15% of its compute branch and was discarded), so 16 is the height expected to supply the THIRD memory branch that BLOCK_M=128 did not; it is not booked in its place." ;;
+  dtype)       echo "DONE or CLAIM_FAIL on C3/C4, and it is the one arm in this set whose 2026-09-10 word cost nothing: REFUSED at 47 s with ConfoundRefusal, a 70-column timings.csv under a run id whose schema is now 74 columns, on a results volume that outlived the pod. A REFUSED row is re-attempted by every run because refusing is free. ON A FRESH VOLUME IT PLANS AND RUNS; on a re-used one it refuses again with the same line, and the fix it names is --fresh (which discards that file) or a new --run-id (which leaves it alone). It still buys the bf16 native curve, which has never been measured, and a real fp8 native curve. 8 min." ;;
+  counter_plan) echo "DONE, about 10 s, and it is in the set to GATE the arm below rather than to be re-asked. On 2026-09-10 it read P1 PASS, route OPEN: ncu 2025.1.1.0 attached with no permission error, cap_eff 0xa80425fb, sys_admin False, the host module flag absent and it attached anyway. BLOCKED here retires BOTH counter arms for this whole session at a cost of ten seconds, which is the reason it runs first." ;;
+  counter-n32-m64|counter-n128-m64) echo "DONE or CLAIM_FAIL, and either is the session's headline; NOT_PLANNED if scripts/dram_counter_route.py still defines no --run, which this driver checks before the pod spends an argparse exit 2 on it. What EITHER arm settles on its own: alpha_b as a traffic slope, (dR/dn - a_per_tile)/W, with no fitted level, no delta, no D and no assumed bandwidth: today the same six bn_g16 cells give 0.6087, 0.5930 and 0.5143 depending only on which rate is assumed. What only the PAIR settles, and it is why both are in this set: whether the term the session found in place of the activation re-read is TRAFFIC or TIME. At the BLOCK_M=64 both arms pin, the measured per-M-tile cost is 3.85 GB of weight-set-equivalent at BLOCK_N=32 against 2.06 GB at BLOCK_N=128, so a counter that reads those two figures 1.87x apart says traffic and one that reads the same bytes at both says time. READ THEM TOGETHER OR NOT AT ALL: one arm's bytes-per-M-tile is a number with nothing to be compared against, and a session that runs one of the two has not asked the question. 120 WALL min each, 240 for the pair, off a COST block the plan page prints identically at both BLOCK_N." ;;
   *)           echo "" ;;
 esac; }
 
@@ -1931,8 +2008,8 @@ next_session_booking() {
   read -r priced bound <<< "$(session_bound $(rerun_arms))"
   printf '\n==== %s ====\n' "THE NEXT SESSION, AND WHY IT IS --new"
   echo "  --resume-latest re-runs no INVALID and no CLAIM_FAIL row: both are"
-  echo "  results and both are latched. A session that landed six INVALID arms"
-  echo "  therefore resumes into nothing, however many defects were fixed in"
+  echo "  results and both are latched. The 2026-09-10 session landed four of"
+  echo "  each, so it resumes into nothing however many defects were fixed in"
   echo "  between. Open a fresh ledger on purpose:"
   echo ""
   echo "      bash scripts/h200_gaps_session.sh --new \\"
@@ -1947,13 +2024,42 @@ next_session_booking() {
     printf '    %-18s %s\n' "$n" "$exp"
   done
   echo ""
-  echo "  ONE OF THESE IS EXPECTED TO EXIT 1 AND FOUR MAY. CLAIM_FAIL is a"
-  echo "  RESULT in this table (measured, VALIDITY passed, a pre-registered"
-  echo "  CLAIM did not), and roofline's C3 and C4 are exactly what the session"
-  echo "  is being bought for. An INVALID, by contrast, means the fix for that"
-  echo "  arm did not land: read its VALIDITY lines before booking the card"
-  echo "  again. alias_ablation is the one arm whose INVALID is a booked"
-  echo "  outcome rather than a defect, and it costs 2.0 min to reach."
+  echo ""
+  echo "  THREE OF THESE ARE EXPECTED TO EXIT 1 AND ALL THREE ARE RESULTS."
+  echo "  CLAIM_FAIL is a RESULT in this table (measured, VALIDITY passed, a"
+  echo "  pre-registered CLAIM did not): bn_g16 C1/C2/C6, and the C3 of each"
+  echo "  counter arm, are exactly what the card is being rented for, and an"
+  echo "  operator who reads exit 1 as a broken arm throws the finding away."
+  echo "  An INVALID means the fix for that arm did not land: read its"
+  echo "  VALIDITY lines before booking again. THREE ARMS ARE DELIBERATELY"
+  echo "  NOT IN THIS SET and their absence is the booking, not an oversight."
+  echo "  roofline-n64-g1, alias_ablation and noise_floor each hold an INVALID"
+  echo "  whose cause is a gate or an instrument rather than a flag, so"
+  echo "  re-running them buys the same word for the same minutes. occupancy"
+  echo "  is out for the same reason and its successor is a grid this script"
+  echo "  does not yet run."
+}
+
+# THE BLOCK_M THE COUNTER PAIR PINS, IN ONE PLACE. The pre-registered
+# discriminator is computed at this height and at no other: at BLOCK_M=64 the
+# 2026-09-10 ladder slopes give 3.85 GB against 2.06 GB of weight-set-equivalent
+# per M-tile, and at the script's own default of 32 the same slopes give 3.53
+# and 1.93 at 1.84x. So the arm lines, the skip reason and the closes text all
+# read this one function rather than each carrying a 64. A BLOCK_M changed on
+# an arm line and not in the paragraph beside it is the defect this pair exists
+# to close, in its exact shape.
+counter_block_m() { echo 64; }
+
+# THE COUNTER PAIR'S CLOSES TEXT, WRITTEN ONCE AND PARAMETERISED BY BLOCK_N.
+# Two arms that differ in one flag are two places for the same paragraph to go
+# stale, and a description corrected at one of two call sites is this file's
+# standing defect, the one that let a single counter arm be described as
+# running a two-cell contrast it did not run. The BLOCK_N is the argument;
+# everything else is shared, so a correction lands on both rows or on neither.
+counter_closes() {
+  local bn="$1" other
+  [[ "$bn" == 32 ]] && other=128 || other=32
+  echo "THE COUNTER ITSELF, AT BLOCK_N=$bn AND BLOCK_M=$(counter_block_m), one of a PAIR with counter-n$other-m64, and the pair is the session's highest-value booking because it removes a confound nothing else can. WHAT OPEN AND BLOCKED MEAN, and they are the probe arm's two words: OPEN is ncu attaching to this pod with no permission error (2026-09-10: ncu 2025.1.1.0, cap_eff 0xa80425fb, sys_admin False, module flag absent, and it attached anyway), and it is the only state in which this arm is bookable; BLOCKED is the host driver refusing counter collection, which is a FACT ABOUT THE POD and not a broken instrument, and it means this arm buys nothing HERE while the plan stands for the next box. Book counter_plan first in every session and read its P1 RESULT line: OPEN books this arm, BLOCKED does not, and REFUSED (no ncu on PATH) is a third word that says the image is wrong rather than the pod. WHAT IT BUYS THAT NO LADDER CAN. alpha_b = (dR/dn - a_per_tile)/W is a TRAFFIC slope: no fitted level, no delta, no D, and no assumed bandwidth. Today alpha_b is determined only to a factor of two by WHICH RATE IS ASSUMED: the same six bn_g16 cells return 0.6087 at the triad 4374 GB/s, 0.5930 at the session's own measured weight-buffer read rate 4263.5, and 0.5143 at the anchor arm's measured branch rate of about 0.77 of the 4814 pin, and a counter needs none of them. That half is answered by EITHER arm on its own. WHICH OUTCOME DECIDES TRAFFIC VERSUS TIME, and it is why there are TWO arms rather than one and why both pin BLOCK_M=$(counter_block_m). The 2026-09-10 session refuted the three-term model's activation term on the slope alone: that term is the model's only BLOCK_N-dependent one and is strictly proportional to BLOCK_M, so the BLOCK_N dependence must DOUBLE when BLOCK_M doubles, and measured it is 1.115 +/- 0.003, 1.203 +/- 0.007 and 0.923 +/- 0.012 against a required 2.000 (z = -303, -121, -89). What replaces it fits 3.1x better at equal parameter count and goes as 1/BLOCK_N with no BLOCK_M in it: a cost per N-TILE rather than per activation byte. The ladder cannot say whether that cost is TRAFFIC or TIME, and the counter can, in one contrast, but only ACROSS the two arms: one BLOCK_N settles nothing about a BLOCK_N dependence. At BLOCK_M=$(counter_block_m) the measured per-M-tile cost is 1.3676 weight streams at BLOCK_N=32 and 0.7312 at BLOCK_N=128, which is 3.85 GB and 2.06 GB of weight-set-equivalent per M-tile on a 2.81857 GB weight set. IF IT IS TRAFFIC, dram__bytes_read.sum per M-tile lands near those two figures, 1.87x apart, the term belongs inside a byte model, and alpha_b is a function of the N-tile traversal order, which is physically what GROUP_SIZE_M also moves: 24% at a pinned tile, a pinned num_stages and num_warps, and an identical modelled residency of 49152 B per block. IF IT IS TIME, the counter reads the SAME bytes per M-tile at both BLOCK_N within its own few percent, the whole difference sits in gpu__time_duration.sum, and the three-term traffic model cannot contain the term at all: alpha is then measuring a schedule and not a byte count, and the paper says so. Either reading is publishable and neither is available from any ladder this study can run. TWO DEFECTS THE PLAN CARRIED AND THIS PAIR DOES NOT, AND ONE AXIS IT STILL PINS. The registered cell was on nvidia_a100_sxm4_80gb while the route was probed on the H200, so both arms pass --card resolved from the attached device by counter_route_card, and the plan page then reads that card's own ridge (155.93 on the H200 against the 145.81 the A100 default printed). And the plan pinned one schedule, BLOCK_SIZE_M=32 / BLOCK_SIZE_N=64 / GROUP_SIZE_M=16, which is the one axis the session showed the answer depends on: the BLOCK_N half of that pin is what the pair breaks, at the BLOCK_M the discriminator above is registered at, and until 2026-09-10 this line claimed the contrast while the single arm it described passed neither flag and took the script's defaults of 64 and 32. THE AXIS STILL PINNED IS GROUP_SIZE_M, at the script's 16 on both arms, and it is named here rather than left to be read off the plan page: the session measured the per-M-tile cost moving 24% between G=1 and G=16 at byte-identical shared memory and an identical PTX census, so a G=1 counter cell is a THIRD arm and a third two pod-hours, and this session does not book it. VERIFY THE PER-CALL NORMALISATION BEFORE TRUSTING ANY SLOPE: the profiled launch count is warmup + iters x trials fused_experts calls, never one, and the plan's own reduce step divides by the CSV's moe_align_block_size count for exactly that reason."
 }
 
 arm_closes() { case "$1" in
@@ -1976,7 +2082,9 @@ arm_closes() { case "$1" in
   dtype)      echo "STUDY C2's confound: how much of the 1.15 is the config vLLM resolved differently per dtype. RE-SCOPED 2026-09-09, and the re-scope is the arm: the cross-config arm transplants BLOCK_SIZE_M and GROUP_SIZE_M only, with BLOCK_SIZE_N, BLOCK_SIZE_K and num_stages kept feasible for the width it runs at, and C3/C4 are re-registered against that matched-BLOCK_M arm and dated. The full fp8-config-at-bf16-width transplant is INFEASIBLE on sm_90 and is recorded as such with the arithmetic on the plan page (SM90_SMEM_LIMIT 232448 against num_stages x (BM*BK + BK*BN) x bytes: the fp8 N256/K128 tiles at 3-5 stages ask 294912-409600 B), not run and refused per cell. On 2026-09-09 it WAS run: vLLM 0.27.1's override_config has no try/finally, so the OutOfResources raised inside the context left the fp8 config installed process-wide, all 28 bf16 native cells timed the leaked tile, 13 fp8 native cells timed the previous cell's, and 41 arms were corrupted from one infeasible pairing. The guard, the plan-time refusal and the re-scope are what this arm buys back: the bf16 native curve, which has never been measured, a real fp8 native curve, and C4." ;;
   span_dense) echo "The 0.563 EXTENT-versus-KERNEL split on the DENSE grid, the only grid where C3's mechanism is observable. Runs before the sparse arm because the sparse grid's own kernel world predicts C2 FAIL, and a CLAIM gate failing is a result, not a retry. IT RUNS WHOLE OR NOT AT ALL: --max-minutes 35 used to cap it, which does not refuse -- it breaks out of the cell loop, records the truncation as prose, and lets the gates score a partial grid to a complete grid's exit code. The 31 priced minutes exclude 21 Triton specialisations and four weight builds, so this is the arm most likely to overrun; overrunning honestly is better than a scored fraction of a grid." ;;
   span)       echo "The same on the PUBLISHED grid, booked --no-densify, which is what puts it in a different run id from span_dense: with --densify the default, a bare arm derived the dense arm's id, restored its rows, measured nothing and still landed DONE. IT REFUSES, and its own --dry-run says so in advance: on a powers-of-two grid the padding factor is exactly 1.00 everywhere, so c2_grid_power stops it before it spends a minute. The refusal is the extent comparison's honest answer on that grid, it is free, and it is booked at ZERO rather than at 30 minutes it cannot spend." ;;
-  counter_plan) echo "Whether a DRAM counter is reachable here. A counter is the only route to alpha_b as a number rather than an interval; on rented pods it is blocked and this records which way. READ ITS RESULT LINES, AND THE LEDGER WORD IS EARNED: since 2026-09-03 scripts/dram_counter_route.py --probe scores one gate per verdict, prints one RESULT line each, and exits through exit_codes.classify over the same gates, so OPEN and BLOCKED land as the words the table gives them and this driver's second opinion reads the page rather than finding it blank. (Until that day it exited 0 for OPEN and BLOCKED alike with no RESULT line, and before that 3 for everything but OPEN, which filed BLOCKED as INVALID; both halves are fixed.) BLOCKED is the ANSWER, not a broken instrument: a rented pod that cannot reach a DRAM counter is a fact about the pod, recorded so the next session does not spend the minute again." ;;
+  counter_plan) echo "Whether a DRAM counter is reachable here, and it now GATES arms 14 and 15, which are the counter pair. A counter is the only route to alpha_b as a number rather than an interval, and this records which way THIS pod fell. IT IS NOT A FOREGONE BLOCKED ANY MORE and this line said it was until 2026-09-10: the 2026-09-09 and 2026-09-10 RunPod H200s both read OPEN, ncu attaching with no permission error. READ ITS RESULT LINES, AND THE LEDGER WORD IS EARNED: since 2026-09-03 scripts/dram_counter_route.py --probe scores one gate per verdict, prints one RESULT line each, and exits through exit_codes.classify over the same gates, so OPEN and BLOCKED land as the words the table gives them and this driver's second opinion reads the page rather than finding it blank. (Until that day it exited 0 for OPEN and BLOCKED alike with no RESULT line, and before that 3 for everything but OPEN, which filed BLOCKED as INVALID; both halves are fixed.) BLOCKED is the ANSWER, not a broken instrument: a rented pod that cannot reach a DRAM counter is a fact about the pod, recorded so the next session does not spend the minute again." ;;
+  counter-n32-m64)  echo "$(counter_closes 32)" ;;
+  counter-n128-m64) echo "$(counter_closes 128)" ;;
 esac; }
 
 arm_offgpu_gates() { case "$1" in
@@ -1985,7 +2093,7 @@ arm_offgpu_gates() { case "$1" in
   bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
   alias_ablation) echo "scripts/alias_ablation.py --synthetic refit|retracted|tempo|alias-blind  (four planted worlds; 17 RESULT lines each and they SEPARATE by exit code -- refit 0 DONE; retracted and tempo 1 CLAIM_FAIL on P1 with the interval landing on 0.10 and on 0.33; alias-blind 3 INVALID with headroom, attribution, signal and bracket all FAIL, which is the 2026-09-01 apparatus replayed as a planted world. classify_text agrees with the code in all four. THE PLANTED WORLDS RUN IN BOTH DIRECTIONS, which is the point: alias-blind is the world where the gates must NOT report a clean alpha, and the first attempt's 'REFUTED or VOID' is what that world produces.)" ;;
   noise_floor) echo "its plan prints the power table; the floor itself needs replicates" ;;
-  bn_g16)     echo "scripts/bn_decomposition.py --self-test --capability 9.0 --group-m 16 --reps 17 --plant-noise 0.008  (four worlds, four distinct verdicts; exit 0). AT THE PINNING THIS ARM RUNS AND NO OTHER: the same command at --group-m 1 exits 3 INVALID, which is why there is no longer a G=1 arm for this line to vouch for with a G=16 command." ;;
+  bn_g16)     echo "scripts/bn_decomposition.py --self-test --capability 9.0 --group-m 16 --reps 17 --plant-noise 0.008 --tiles 16,32,64,128  (four worlds, four distinct verdicts; exit 0). THE --tiles ARE ON THE GATE LINE BECAUSE THEY ARE ON THE ARM LINE: this file's own standing defect is a gate advertised at one configuration and an arm scheduled at another, which is what the G=1 partner did with a G=16 self-test command. At the swept set this arm runs, S4 reads sd(alpha_a) = 0.0075 against a gate of 0.025 and S5 still fails C2 in the planted MISSING world at chi2 26.22 against a ceiling of 4.0, so the third tile costs the design nothing. AT THE PINNING THIS ARM RUNS AND NO OTHER: the same command at --group-m 1 exits 3 INVALID, which is why there is no longer a G=1 arm for this line to vouch for with a G=16 command." ;;
   anchor_measure|anchor_rescore) echo "scripts/memory_branch_anchor.py --rescore --out-dir <a path outside the tree>  (free, scores every committed report)" ;;
   occupancy)  echo "scripts/occupancy_vs_swizzle.py --self-test, and --audit --fail-on-gate  (A1 FAILs on the corpus by design, exit 1 CLAIM_FAIL). WITHOUT --fail-on-gate the audit prints that FAIL and exits 0, so the advertised check returned the same code whether A1 held or not." ;;
   cap_test)   echo "scripts/tile_cap_test.py --self-test 0.558 and --self-test 0.10" ;;
@@ -1995,6 +2103,7 @@ arm_offgpu_gates() { case "$1" in
   mma_switch) echo "its four gates need two real compiles; --dry-run registers thresholds only" ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "F1 and F2 need a vLLM span, which registers only on the GPU box" ;;
   counter_plan) echo "scripts/dram_counter_route.py --dry-run and --bracket  (the plan and the counter-free bound)" ;;
+  counter-n32-m64|counter-n128-m64) echo "scripts/dram_counter_route.py --self-test  (the estimator, off GPU), then --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32 and the same at --block-n 128, for the cell, the four metrics and the pre-registered per-tile-count predictions. RUN IT AT BOTH BLOCK_N, WHICH IS THE FLAG THE ARM LINE PASSES: a gate advertised at the script's default cell while the arm runs a different one is this file's standing defect, and it is what the single 120-minute counter arm carried until 2026-09-10. THE ESTIMATOR IS THE POINT OF THE SELF-TEST: this arm's alpha_b is (dR/dn - a_per_tile)/W, a traffic slope with no fitted level, no delta and no D in it, so it is not the B/(A+B) that produced every unphysical alpha in the 2026-09-10 session and the self-test is what says so before the card is rented." ;;
   calibrate)  echo "none: it is a measurement and nothing else" ;;
 esac; }
 # <<< LIFTABLE
@@ -2013,7 +2122,8 @@ ARM_NAMES=(calibrate pin_probe-n64-g1 pin_probe-n256-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy
-           mma_switch ruler cap_test dtype span_dense span counter_plan)
+           mma_switch ruler cap_test dtype span_dense span counter_plan
+           counter-n32-m64 counter-n128-m64)
 
 if (( LIST )); then
   say "ARMS, in the order their results are read"
@@ -2351,6 +2461,17 @@ note "             --only $(rental_2h_arms | tr ' ' ',')"
 note "  3 HOURS  ~$RENT3_PRICED priced / ~$RENT3_BOUND bounded min. The same plus the depth sweep, the"
 note "           anchor pair and the whole cheap tail."
 note "             --only $(rental_3h_arms | tr ' ' ',')"
+note ""
+note "THE 2-HOUR SET NOW BOUNDS ABOVE TWO HOURS, and the honest reading is that"
+note "its NAME is the rental and its second figure is not a promise. bn_g16 went"
+note "from 36 to 46 priced minutes on 2026-09-10 when a third subject tile was"
+note "added to its swept set, and 46 KERNEL minutes bound to 109. The set is"
+note "unchanged because what it selects is unchanged: both payload arms and"
+note "their preconditions, nothing else. The bound is the ILLUSTRATION"
+note "described above and not an estimate of any arm. Read the priced figure as"
+note "what the plans charge and the bounded one as the size of what they leave"
+note "out; if the card is booked for exactly two hours, expect bn_g16 to be the"
+note "arm that is still running when it ends."
 note ""
 note "NEITHER SET CONTAINS THE NOISE FLOOR, and that is the decision this block"
 note "exists to record rather than to hide. It is $(arm_minutes noise_floor) WALL minutes on its own,"
@@ -2832,9 +2953,39 @@ say "5. alpha_a and alpha_b separated, and whether the three-term model is compl
 # times the gate for eight times the minutes. GROUP_SIZE_M=16 is the one setting
 # that passes, and it is the arm below. So the minutes go back to the session
 # rather than to a second arm at a pinning its own design gate refuses.
+# A THIRD SUBJECT TILE SINCE 2026-09-10, AND IT IS THE ARM'S WHOLE POINT NOW.
+# On 2026-09-10 this arm ran the script's default swept set {32, 64, 128} with a
+# 256 reference and landed CLAIM_FAIL with SIX usable cells over TWO heights:
+# BLOCK_M=128 produced no alpha at any BLOCK_N, because its memory branch came
+# within 15% of its own compute branch and every cell was discarded. Two heights
+# is not enough grid to identify the model. Every candidate extra term then
+# correlates +0.72 to +0.98 with the activation column, four different terms all
+# drop the chi2 below the bar, and the fit leaves alpha_a at -3.12, -4.00, +0.71
+# and -0.14 depending on which one is added, on a quantity that must lie in
+# [0, 1]. The BN-scaling test refuted the activation term outright at 89 to 303
+# sigma, and refuting is all a two-height grid can do: it cannot say what
+# replaces it.
+#
+# BLOCK_M=16 IS THE ADDED HEIGHT AND NOT BLOCK_M=128, and the reason is on the
+# card. 128's branch is the one that would not separate; 16's is memory-bound
+# end to end here, which cap_test measured on the same day by sweeping it to 132
+# M-tiles at 9.9% of the roof. So --tiles 16,32,64,128 buys three heights that
+# yield a memory branch where the old set bought two, and it breaks the BM/BN
+# versus 1/BN collinearity the whole decomposition currently founders on.
+# It costs 24 treads: the plan goes from 1428 timings and 2142 s to 1836 and
+# 2754, which is the 46 minutes this arm is booked at.
+#
+# SCORE IT ON THE SLOPE, NOT ON B/(A+B). The estimator, not the data, produced
+# every unphysical alpha in the 2026-09-10 session. Of the 23 ladders that
+# session fitted, FIVE have a negative intercept and FIVE return B/(A+B) above
+# 1.0 on a quantity that cannot exceed it, and this arm's own alpha_a of
+# -0.8143 has a sign that lies entirely inside the reference fixed cost's
+# leave-one-tread-out error. `alpha_upper = B/(A+B-D)` exceeds 1 exactly when D > A, which held in
+# four of these six cells and in no others: arithmetic, not physics.
 if (( DRY )); then
   arm bn_g16 "$PY_BASE" "$REPO/scripts/bn_decomposition.py" --dry-run \
-      --capability "${CAPABILITY:-9.0}" --group-m 16 --reps 17
+      --capability "${CAPABILITY:-9.0}" --group-m 16 --reps 17 \
+      --tiles 16,32,64,128
 else
   # On sm_80 it needs --num-stages 3: BM=256 x BN=128 at 4 stages asks 192 KiB
   # against 164. The script refuses and names the fix; we pass it up front.
@@ -2844,7 +2995,7 @@ else
   # which is why it was never caught on a pod; the guard costs nothing.
   STAGES=(); [[ "$SM_MAJOR" == "8" ]] && STAGES=(--num-stages 3)
   arm bn_g16 "$PY_VLLM" "$REPO/scripts/bn_decomposition.py" --group-m 16 --reps 17 \
-      --fail-on-gate ${STAGES[@]+"${STAGES[@]}"}
+      --tiles 16,32,64,128 --fail-on-gate ${STAGES[@]+"${STAGES[@]}"}
 fi
 
 say "6. the memory-branch anchor, measured rather than extrapolated"
@@ -3032,14 +3183,109 @@ else
 fi
 
 say "13. is a DRAM counter route open on this box"
+# THE CARD IS NAMED AT EVERY CALL SITE, AND THAT IS THE POINT OF THIS BLOCK.
+# scripts/dram_counter_route.py takes --card from a HARD DEFAULT of
+# nvidia_a100_sxm4_80gb, not from the attached device, so on 2026-09-10 the
+# probe reported OPEN on an H200 and the plan printed underneath it named an
+# A100 and an A100 ridge of 145.81. The verdict and the cell were about
+# different machines on one page. `counter_route_card` resolves the flag ONCE,
+# from the attached card wherever the script lists it, and all SIX invocations
+# read that one value: this arm's two branches, and one per branch in each of
+# the two counter arms below, which `counter_arm` writes once for both.
+# A card resolved at one of several call sites is this repository's recurring
+# defect and it is what produced that page. --probe is the one invocation
+# without it, because it takes no card and prints no cell.
+COUNTER_PLAN_CARD="$(counter_route_card)"
 if (( DRY )); then
-  arm counter_plan "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --dry-run
+  arm counter_plan "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --dry-run \
+      --card "$COUNTER_PLAN_CARD"
 else
   arm counter_plan "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --probe --out "$SESSION/counter_route.json"
   # The plan is printed regardless: if the probe said OPEN it is the command to
   # type next; if BLOCKED it is what to run on the box where it is not.
-  "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --dry-run >> "$LOGS/counter_plan.log" 2>&1 || true
+  "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --dry-run --card "$COUNTER_PLAN_CARD" \
+      >> "$LOGS/counter_plan.log" 2>&1 || true
 fi
+
+say "14 and 15. the DRAM counter, run at two BLOCK_N"
+# THE ARMS THE PROBE ABOVE EXISTS TO BOOK, and there are TWO of them because
+# one BLOCK_N settles nothing about a BLOCK_N dependence. They are the only
+# instrument in this study that reads bytes rather than time, and everything
+# they settle is settled with no fitted level, no delta, no D and no assumed
+# bandwidth. `arm_closes counter-n32-m64` says what OPEN and BLOCKED mean and
+# which outcome decides traffic versus time; this block is the mechanics.
+#
+# THE CONTRAST IS ON THE ARM LINES, AND UNTIL 2026-09-10 IT WAS NOT. This block
+# booked ONE arm named `counter` that passed no --block-n, no --block-m and no
+# --group-m, so it ran the script's own argparse defaults as they stood on
+# 2026-09-10 (BLOCK_N=64, BLOCK_M=32, GROUP_SIZE_M=16), the
+# single pinned cell the 2026-09-10 analysis named as the second of two defects
+# to fix before running, while `arm_closes` said in the same file that the arm
+# ran "at TWO BLOCK_N at fixed BLOCK_M rather than at one" and listed that pin
+# among the defects the arm did not carry. `arm_basis` said the other thing in
+# the same breath, that a second BLOCK_N is a second booking the operator makes.
+# A description left standing after the behaviour it describes is this
+# repository's recurring defect, and here it was two descriptions of one arm
+# disagreeing inside one file. The pair below runs it: --block-m 64 on both,
+# --block-n 32 and 128, which is the BLOCK_M the pre-registered discriminator
+# (1.3676 against 0.7312 weight streams per M-tile, 3.85 GB against 2.06 GB,
+# 1.87x) is registered at. The two plans carry different run ids
+# (...-n32-m64-... and ...-n128-m64-...) so the two arms land in different run
+# directories, and their COST blocks are byte-identical, so the pair is priced
+# at 2 x 120 = 240 WALL minutes off the same page.
+#
+# GROUP_SIZE_M IS STILL PINNED AT 16 ON BOTH, and that is a booking decision
+# rather than an oversight: a G=1 cell is a third arm and a third two pod-hours.
+# `arm_closes` names it as the axis the pair still pins.
+#
+# ONE GATE, TWO ARMS. The card, the probe gate and the runner check are written
+# ONCE, in `counter_arm`, and both rows go through it. Writing the gate twice is
+# how a fix lands on one call site: this file's own history has both depth arm
+# lines carrying a --partner-block-m that no version of scripts/bm128_depth.py
+# ever defined, and it has the single counter arm this block replaces.
+#
+# --card IS PASSED AND IS NOT COSMETIC. That script's --card is a hard default
+# of nvidia_a100_sxm4_80gb and is never derived from the attached device, so on
+# 2026-09-10 the page printed an A100 ridge of 145.81 beside a verdict measured
+# on a card whose own ridge is 155.93. COUNTER_PLAN_CARD is resolved once by
+# `counter_route_card`, above arm 13, and every invocation reads that one value.
+#
+# THE RUNNER IS CHECKED BEFORE THE POD SPENDS AN ARGPARSE EXIT 2 ON IT. This
+# driver's own standing defect is a flag written on an arm line that the script
+# does not define: on 2026-09-09 both depth arm lines carried --partner-block-m,
+# which no version of scripts/bm128_depth.py has ever defined, and the arm the
+# session existed to rescue would have exited 2 having measured nothing. So the
+# measuring branch asks the file whether it defines --run, exactly as
+# `adopts_exit_codes` asks whether it imports the exit-code table, and NAMES the
+# absence rather than discovering it on the card.
+#
+# AND THE PROBE GATES BOTH, WHICH IS WHY counter_plan RUNS ONE LINE ABOVE. The
+# probe costs ten seconds and answers exactly the question that licenses these
+# arms' four pod-hours, so a BLOCKED or REFUSED verdict has to stop the spend
+# rather than be read off the page afterwards. The gate reads THIS session's
+# ledger row, not the log and not a remembered result from another rental: a
+# counter route is a property of the pod, and the pod is what changes between
+# sessions. It is skipped rather than refused, because nothing is broken when
+# a host declines counter collection.
+counter_arm() {
+  local name="$1" bn="$2"
+  if (( DRY )); then
+    arm "$name" "$PY_BASE" "$REPO/scripts/dram_counter_route.py" --dry-run \
+        --card "$COUNTER_PLAN_CARD" --block-m "$(counter_block_m)" --block-n "$bn"
+  elif [[ "$(ledger_arm_state counter_plan)" != DONE ]]; then
+    skip_arm "$name" \
+      "counter_plan is $(ledger_arm_state counter_plan), not DONE, so no counter route was confirmed OPEN on this box in this session. DONE is the OPEN verdict; CLAIM_FAIL is BLOCKED, which is a fact about the pod and not a broken instrument; REFUSED is no ncu on PATH, which is the image. This arm is 120 wall minutes and it can measure nothing without the route, so it is skipped rather than spent. Read $LOGS/counter_plan.log for which of the three it was."
+  elif ! grep -q -- '"--run"' "$REPO/scripts/dram_counter_route.py"; then
+    skip_arm "$name" \
+      "scripts/dram_counter_route.py defines no --run: it plans, probes, brackets and analyses, and the ncu loop is still the shell recipe its own plan page prints. Run that recipe by hand from the plan in $LOGS/counter_plan.log, at --block-m $(counter_block_m) and BOTH --block-n 32 and 128 or the contrast is not run, and reduce it with --analyse; this arm books the runner and refuses to invent it."
+  else
+    arm "$name" "$PY_VLLM" "$REPO/scripts/dram_counter_route.py" --run \
+        --card "$COUNTER_PLAN_CARD" --block-m "$(counter_block_m)" --block-n "$bn" \
+        --out "$SESSION/counter_run_n$bn.json"
+  fi
+}
+counter_arm counter-n32-m64  32
+counter_arm counter-n128-m64 128
 
 # --------------------------------------------------------------------------
 # Every arm's verdict, together, against the item it closes. THE ONLY THING
