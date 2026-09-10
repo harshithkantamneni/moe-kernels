@@ -110,10 +110,15 @@ def test_the_session_driver_is_documented():
 
 
 def test_the_runbook_arm_table_names_only_arms_the_driver_lists():
-    """The runbook says its arm names "are asserted against `--list` by
+    r"""The runbook says its arm names "are asserted against `--list` by
     `tests/test_docs.py`"; until 2026-09-08 nothing did. Every `| \`arm\` | min |`
     row in the runbook has to be an arm `h200_gaps_session.sh --list` prints,
-    off-GPU, so a renamed or retired arm cannot keep a row."""
+    off-GPU, so a renamed or retired arm cannot keep a row.
+
+    RAW, because `\`` is not an escape sequence and Python says so: this
+    docstring emitted `SyntaxWarning: invalid escape sequence '\`'` on every
+    fresh compile of this file, which is a warning in the suite that reports on
+    the suite's own documentation."""
     runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
     documented = set(re.findall(r"^\| `([a-z0-9_-]+)` \| *\d+ \|", runbook, re.M))
     assert documented, "the runbook's arm table has no rows"
