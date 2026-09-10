@@ -134,7 +134,17 @@ ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
         "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
-        "counter_plan", "counter")
+        "counter_plan", "counter-n32-m64", "counter-n128-m64")
+
+#: The counter is TWO arms and the pair is the instrument: one BLOCK_N buys
+#: alpha_b as a traffic slope, the CONTRAST between two BLOCK_N at one BLOCK_M
+#: is what decides traffic from time. Until 2026-09-10 it was one arm named
+#: `counter` that passed neither --block-n nor --block-m, so it ran the
+#: script's defaults (BLOCK_N=64, BLOCK_M=32) while `arm_closes` said in the
+#: same file that it ran the contrast.
+COUNTER_ARMS = ("counter-n32-m64", "counter-n128-m64")
+COUNTER_BLOCK_M = 64
+COUNTER_BLOCK_NS = (32, 128)
 
 
 def run(args, cwd=None, session=None, env_extra=None):
@@ -265,14 +275,15 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     # A measurement precedes the free re-scoring that reads it.
     assert order.index("anchor_measure") < order.index("anchor_rescore")
     assert order.index("roofline-n64-g1") < order.index("cap_test")
-    # THE PROBE IMMEDIATELY BEFORE THE RUN IT GATES. counter_plan is ten
-    # seconds and its BLOCKED verdict retires the 120-minute counter arm for
-    # the whole session, so running the counter first would spend two pod-hours
+    # THE PROBE IMMEDIATELY BEFORE THE RUNS IT GATES. counter_plan is ten
+    # seconds and its BLOCKED verdict retires FOUR pod-hours of counter for
+    # the whole session, so running either counter arm first would spend them
     # to discover what a ten-second probe answers. This assertion read
     # `order[-1] == "counter_plan"` until 2026-09-10, when the probe stopped
-    # being the last thing in the session.
-    assert order[-2] == "counter_plan"
-    assert order[-1] == "counter"
+    # being the last thing in the session, and `order[-1] == "counter"` until
+    # the counter became the pair it always claimed to be.
+    assert order[-3] == "counter_plan"
+    assert (order[-2], order[-1]) == COUNTER_ARMS
 
 
 def test_the_dense_span_grid_runs_before_the_sparse_one():
@@ -504,8 +515,14 @@ INVOKED = {
     # the arm by name rather than letting the pod discover it as an argparse
     # exit 2, which is the shape of the 2026-09-09 --partner-block-m defect.
     # This row and the test below are what turn red until that runner lands.
+    # --block-m and --block-n ARE ON THE ARM LINES SINCE 2026-09-10 and are
+    # checked here for the same reason as every other flag: the pair runs
+    # --block-m 64 at --block-n 32 and 128, and the script's own defaults are
+    # 32 and 64, so an arm that stops passing them silently runs a different
+    # cell from the one three pages of prose describe.
     "scripts/dram_counter_route.py": ("--dry-run", "--probe", "--card",
-                                      "--out", "--analyse", "--run"),
+                                      "--out", "--analyse", "--run",
+                                      "--block-m", "--block-n"),
     "scripts/replicate_noise_floor.py": ("--dry-run", "--replicates", "--arms",
                                          "--publish"),
     "scripts/memory_branch_anchor.py": ("--rescore", "--out-dir", "--dry-run",
@@ -541,6 +558,40 @@ def test_every_script_the_driver_invokes_exists_and_takes_the_flags_it_is_given(
 GATE_FLAGS = ("--fail-on-gate", "--fail-on-claim")
 
 
+def _dispatched_arm_lines(joined, arm_name):
+    """`arm` lines for an arm that is run through a dispatcher function.
+
+    Since 2026-09-10 the two counter arms are not written as two `arm counter-*`
+    lines: they are `counter_arm counter-n32-m64 32` and
+    `counter_arm counter-n128-m64 128`, and the gate, the card and the runner
+    check live once inside `counter_arm` so a fix cannot land on one of the
+    two. This resolves that one level of indirection, the dispatch call giving
+    the positional arguments and the function body the `arm "$name"` lines,
+    so every test that reads "the command line the pod runs" keeps reading
+    the file instead of a list kept here. Returns [] for an arm that is not
+    dispatched."""
+    call = [ln.split() for ln in joined.splitlines()
+            if re.match(r'\s*[a-z_]+_arm ' + re.escape(arm_name) + r'(\s|$)', ln)]
+    if not call:
+        return []
+    assert len(call) == 1, (arm_name, call)
+    fn, args = call[0][0], call[0][1:]
+    body = joined.split('\n' + fn + '() {', 1)[1].split('\n}', 1)[0]
+    params = re.findall(r'(\w+)="\$(\d+)"', body)
+    assert params, body[:300]
+    subs = {'"$' + var + '"': args[int(pos) - 1] for var, pos in params}
+    subs['"$' + params[0][0] + '"'] = args[0]
+    lines = []
+    for ln in body.splitlines():
+        if not re.match(r'\s*arm "\$\w+"\s', ln):
+            continue
+        for token, value in subs.items():
+            ln = ln.replace(token, value)
+        lines.append(ln)
+    assert lines, body[:300]
+    return lines
+
+
 def measuring_invocation(arm_name):
     """The one command line the pod runs for `arm_name`, as shell words.
 
@@ -550,6 +601,7 @@ def measuring_invocation(arm_name):
     joined = re.sub(r"\\\n\s+", " ", CODE)
     found = [ln for ln in joined.splitlines()
              if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
+    found = found or _dispatched_arm_lines(joined, arm_name)
     # The dry-run branch and the measuring branch, in that order in every arm.
     measuring = [ln for ln in found if "--dry-run" not in ln]
     # alias_ablation.py has no --dry-run flag: a BARE invocation is its plan and
@@ -886,6 +938,10 @@ def test_no_arm_is_given_a_flag_its_own_script_does_not_define(arm_name):
     joined = re.sub(r"\\\n\s+", " ", CODE)
     lines = [ln for ln in joined.splitlines()
              if re.match(rf"\s*arm {re.escape(arm_name)}\s", ln)]
+    # An arm run through a dispatcher (`counter_arm counter-n32-m64 32`) has
+    # its `arm` lines inside that function, and its flags are just as much
+    # written by this driver, so they are resolved and asked the same question.
+    lines = lines or _dispatched_arm_lines(joined, arm_name)
     assert lines, arm_name
     flags = sorted({w for ln in lines for w in shlex.split(ln)
                     if w.startswith("--")})
@@ -3874,64 +3930,134 @@ def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# 9. the counter arm, and the next session it is booked into
+# 9. the counter arms, and the next session they are booked into
 # --------------------------------------------------------------------------
 
-def test_the_counter_arm_is_gated_on_the_probe_that_costs_ten_seconds():
-    """A BLOCKED probe retires a 120-minute arm. `counter_plan` is ten seconds
-    and answers exactly one question, does ncu attach on this box, so
-    running the counter ahead of it would spend two pod-hours to discover what
+def test_the_counter_arms_are_gated_on_the_probe_that_costs_ten_seconds():
+    """A BLOCKED probe retires 240 minutes. `counter_plan` is ten seconds and
+    answers exactly one question, does ncu attach on this box, so running
+    either counter arm ahead of it would spend four pod-hours to discover what
     the probe already knows. The order is asserted in
     `test_the_arms_whose_result_changes_a_later_reading_come_first`; this is
-    the rest of the contract: both arms run the same file, the counter is the
-    session's largest single arm after the noise floor, and the arm's own
-    `closes` text names both verdicts so an operator reading the ledger knows
-    which one licenses the spend."""
-    for name in ("counter_plan", "counter"):
-        assert lift(f"arm_script {name}", REPO=str(ROOT)).stdout.strip() == \
+    the rest of the contract: both counter arms run the same file as the probe,
+    they are the session's largest booking after the noise floor, and each
+    arm's own `closes` text names both verdicts so an operator reading the
+    ledger knows which one licenses the spend.
+
+    ONE GATE, TWO ARMS. The card, the probe check and the runner check are
+    written once in `counter_arm` and both rows go through it, because a gate
+    written twice is where a fix lands on one of two call sites."""
+    for name in ("counter_plan", *COUNTER_ARMS):
+        assert lift(f"arm_script {shlex.quote(name)}", REPO=str(ROOT)).stdout.strip() == \
             "scripts/dram_counter_route.py", name
-    closes = lift("arm_closes counter", REPO=str(ROOT)).stdout
-    assert "OPEN" in closes and "BLOCKED" in closes, closes[:200]
-    # And what each verdict MEANS, not just the words.
-    assert "attaching to this pod with no permission error" in closes
-    assert "FACT ABOUT THE POD" in closes
-    # The contrast that decides traffic versus time, with both readings named.
-    assert "TRAFFIC" in closes and "TIME" in closes
-    assert "3.85 GB" in closes and "2.06 GB" in closes
+    for name in COUNTER_ARMS:
+        closes = lift(f"arm_closes {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert "OPEN" in closes and "BLOCKED" in closes, closes[:200]
+        # And what each verdict MEANS, not just the words.
+        assert "attaching to this pod with no permission error" in closes
+        assert "FACT ABOUT THE POD" in closes
+        # The contrast that decides traffic versus time, with both readings
+        # named, and the BLOCK_M it is registered at.
+        assert "TRAFFIC" in closes and "TIME" in closes
+        assert "3.85 GB" in closes and "2.06 GB" in closes
+        assert f"BLOCK_M={COUNTER_BLOCK_M}" in closes
+        # Each row says WHICH half of the pair it is, so a ledger row is not
+        # readable as the whole contrast.
+        assert f"AT BLOCK_N={name.split('-')[1][1:]}" in closes, closes[:200]
+        # And the axis the pair still pins is named rather than left implied.
+        assert "THE AXIS STILL PINNED IS GROUP_SIZE_M" in closes
     # THE GATE IS CODE, NOT ADVICE. The measuring branch reads THIS session's
-    # counter_plan row and skips the 120-minute arm unless it says DONE. It
-    # reads the ledger rather than the log or a remembered verdict, because a
-    # counter route is a property of the pod and the pod changes between
-    # rentals.
-    block = CODE.split('say "14. the DRAM counter, run"', 1)[1].split("\nsay ", 1)[0]
-    assert 'ledger_arm_state counter_plan' in block, block[:2000]
-    assert 'skip_arm counter' in block
+    # counter_plan row and skips the arm unless it says DONE. It reads the
+    # ledger rather than the log or a remembered verdict, because a counter
+    # route is a property of the pod and the pod changes between rentals.
+    # It is read out of `counter_arm` rather than out of the say-block, because
+    # the ONE gate function is the thing being asserted.
+    assert "\ncounter_arm() {" in CODE, "the counter gate is no longer one function"
+    body = CODE.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    assert 'skip_arm "$name"' in body
+    # Written ONCE: one gate branch, and every counter arm dispatched through
+    # it. A second copy of this branch is the defect this file is built
+    # against, so the count is asserted and not the presence.
+    gate = 'elif [[ "$(ledger_arm_state counter_plan)" != DONE ]]; then'
+    assert body.count(gate) == 1, body
+    assert body.count("--run ") == 1, body
+    dispatch = [ln.split() for ln in CODE.splitlines()
+                if ln.startswith("counter_arm ")]
+    assert [d[1] for d in dispatch] == list(COUNTER_ARMS), dispatch
+    assert [int(d[2]) for d in dispatch] == list(COUNTER_BLOCK_NS), dispatch
     # And the three verdicts are translated where the operator reads the skip,
     # so a BLOCKED pod does not read as a broken arm.
-    assert "CLAIM_FAIL is BLOCKED" in block and "REFUSED is no ncu on PATH" in block
+    assert "CLAIM_FAIL is BLOCKED" in body and "REFUSED is no ncu on PATH" in body
 
 
-def test_the_counter_arm_is_booked_at_the_figure_its_own_plan_prints():
-    """THE COST TABLE'S RULE, applied to the new row: 120 minutes is not this
-    file's guess, it is the plan page's own "two pod-hours end to end" for the
-    twelve profiled invocations the arm makes. Re-derived here by running the
-    plan rather than by trusting the basis string."""
-    plan = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
-         "--dry-run", "--card", "nvidia_h200"],
-        capture_output=True, text=True, timeout=300, cwd=str(ROOT))
-    assert plan.returncode == 0, plan.stderr[-800:]
-    assert "12 profiled invocations" in plan.stdout, plan.stdout[-1500:]
-    assert "two pod-hours end to end" in plan.stdout, plan.stdout[-1500:]
-    booked = int(lift("arm_minutes counter", REPO=str(ROOT)).stdout.strip())
-    assert booked == 2 * 60, booked
-    # A WALL figure: the page charges ncu replay outright rather than leaving
-    # it to a ratio, so nothing about this row is unpriced.
-    assert lift("arm_clock counter", REPO=str(ROOT)).stdout.strip() == "WALL"
-    assert not lift("arm_unpriced counter", REPO=str(ROOT)).stdout.strip()
+def test_the_counter_arms_run_the_two_block_n_contrast_they_are_described_as_running():
+    """THE DEFECT THIS PAIR EXISTS TO CLOSE, asserted against the code rather
+    than against the prose.
+
+    Until 2026-09-10 the driver booked ONE arm named `counter` whose measuring
+    line was `dram_counter_route.py --run --card ... --out ...` and passed no
+    `--block-n`, no `--block-m` and no `--group-m`. Those flags default to 64,
+    32 and 16 (`scripts/dram_counter_route.py`), so the arm ran the single
+    pinned cell the 2026-09-10 analysis named as the second of two defects to
+    fix before running, while `arm_closes` in the same file said it ran "at
+    TWO BLOCK_N at fixed BLOCK_M rather than at one" and `arm_basis` said the
+    opposite again, that a second BLOCK_N is a booking the operator makes.
+
+    So this asserts the behaviour: two arms, one BLOCK_M, two BLOCK_N, on
+    BOTH the planning and the measuring branch, and the BLOCK_M is the one the
+    pre-registered discriminator is quoted at."""
+    # THE FLAGS ARE ASSERTED, THE DEFAULTS ARE NOT. Both arguments have a
+    # default in `dram_counter_route.py`, which is why an arm that passes
+    # neither runs a cell nobody chose; what that default IS belongs to that
+    # file's own slice and has already moved once, so pinning its value here
+    # would be this driver asserting another file's booking.
+    src = (ROOT / "scripts" / "dram_counter_route.py").read_text()
+    for flag in ("--block-n", "--block-m"):
+        assert re.search(rf'"{flag}", type=int, default=\d+', src), flag
+    joined = re.sub(r"\\\n\s+", " ", CODE)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(r'\s*arm "\$name"\s', ln)]
+    assert len(lines) == 2, lines          # one planning, one measuring
+    planning = [ln for ln in lines if "--dry-run" in ln]
+    measuring = [ln for ln in lines if "--dry-run" not in ln]
+    assert len(planning) == 1 and len(measuring) == 1, lines
+    for ln in lines:
+        words = shlex.split(ln)
+        assert "--block-m" in words, ln
+        assert "--block-n" in words, ln
+        # The BLOCK_M is ONE function read by both branches, by the skip
+        # reason and by the closes text, so a change cannot reach one of them.
+        assert words[words.index("--block-m") + 1] == "$(counter_block_m)", ln
+        assert words[words.index("--block-n") + 1] == "$bn", ln
+    pinned = lift("counter_block_m", REPO=str(ROOT)).stdout.strip()
+    assert int(pinned) == COUNTER_BLOCK_M, pinned
+    # `arm_basis` and `arm_offgpu_gates` print the commands an operator
+    # re-derives the booking and checks the gates with, so they read the same
+    # function: a page that says --block-m 64 while the arm passes something
+    # else advertises a cell nobody runs, which is this file's standing defect
+    # in the form it took on the gate lines of the two bn arms.
+    for reader in ("arm_basis", "arm_offgpu_gates"):
+        for name in COUNTER_ARMS:
+            out = lift(f"{reader} {shlex.quote(name)}", REPO=str(ROOT)).stdout
+            assert f"--block-m {COUNTER_BLOCK_M} " in out, (reader, name)
+    # And there is exactly ONE source for it: no literal anywhere in the file.
+    assert f"--block-m {COUNTER_BLOCK_M}" not in CODE, (
+        "a second copy of the pinned BLOCK_M is written into the driver; "
+        "every reader has to go through counter_block_m")
+    # And the prose quotes that function rather than a second copy of 64.
+    for name in COUNTER_ARMS:
+        closes = lift(f"arm_closes {shlex.quote(name)}", REPO=str(ROOT)).stdout
+        assert f"BLOCK_M={COUNTER_BLOCK_M}" in closes, name
+    body = CODE.split("\ncounter_arm() {", 1)[1].split("\n}", 1)[0]
+    assert "64" not in body, body
+    assert "--run" in shlex.split(measuring[0]), measuring[0]
+    # Each arm writes its own result file: one --out for two arms would have
+    # the second overwrite the first, and the contrast is between the two.
+    out = [w for w in shlex.split(measuring[0]) if w.startswith("$SESSION/")]
+    assert out and "$bn" in out[0], measuring[0]
 
 
-def test_the_counter_arm_refuses_by_name_when_the_runner_it_needs_is_absent():
+def test_the_counter_arms_refuse_by_name_when_the_runner_they_need_is_absent():
     """THE 2026-09-09 --partner-block-m DEFECT, not repeated. That flag was
     written on two `arm` lines of a file that never defined it, so the pod
     would have spent an argparse exit 2 and filed the arm REFUSED having
@@ -3944,31 +4070,69 @@ def test_the_counter_arm_refuses_by_name_when_the_runner_it_needs_is_absent():
     exempted here: this test asserts the driver degrades safely, not that the
     forward reference is acceptable."""
     joined = re.sub(r"\\\n\s+", " ", CODE)
-    lines = [ln for ln in joined.splitlines()
-             if re.match(r"\s*arm counter\s", ln)]
-    measuring = [ln for ln in lines if "--dry-run" not in ln]
-    assert len(measuring) == 1, lines
-    assert "--run" in shlex.split(measuring[0]), measuring[0]
-    # The guard greps the very file `arm_script counter` names, for the
-    # argparse spelling of the flag, and skips the arm by name with a reason.
-    rel = lift("arm_script counter", REPO=str(ROOT)).stdout.strip()
+    # The guard greps the very file `arm_script` names, for the argparse
+    # spelling of the flag, and skips the arm by name with a reason. ONE guard
+    # for both arms, because `counter_arm` is one function.
+    rel = lift(f"arm_script {COUNTER_ARMS[0]}", REPO=str(ROOT)).stdout.strip()
     guard = [ln for ln in joined.splitlines()
              if "grep -q" in ln and rel in ln and '"--run"' in ln]
-    assert len(guard) == 1, joined[joined.index("14. the DRAM counter"):][:1200]
-    assert "skip_arm counter" in joined
-    # And the dry branch asks for a PLAN, so a --dry-run reviews the arm
-    # whether or not the runner exists yet.
-    planning = [ln for ln in lines if "--dry-run" in ln]
-    assert len(planning) == 1 and "--card" in planning[0], lines
+    assert len(guard) == 1, joined[joined.index("counter_arm() {"):][:1500]
+    assert 'skip_arm "$name"' in joined
+    # The skip tells the operator to run BOTH BLOCK_N by hand, because a
+    # recipe run at one of them answers the half either arm answers alone.
+    skip = joined[joined.index("defines no --run:"):][:900]
+    assert "BOTH --block-n 32 and 128" in skip, skip
 
 
-def test_the_counter_route_card_is_resolved_once_and_reaches_both_call_sites():
+def test_the_counter_arms_are_booked_at_the_figure_their_own_plan_prints():
+    """THE COST TABLE'S RULE, applied to the new rows: 120 minutes is not this
+    file's guess, it is the plan page's own "two pod-hours end to end" for the
+    twelve profiled invocations one arm makes. Re-derived here by running the
+    plan AT BOTH BLOCK_N the arms run, which is also the evidence for the
+    other half of the booking: the COST block is byte-identical at 32 and 128,
+    so the pair is two sets and 240 minutes, not one set stretched."""
+    pages = {}
+    for bn in COUNTER_BLOCK_NS:
+        plan = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+             "--dry-run", "--card", "nvidia_h200",
+             "--block-m", str(COUNTER_BLOCK_M), "--block-n", str(bn)],
+            capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+        assert plan.returncode == 0, plan.stderr[-800:]
+        assert "12 profiled invocations" in plan.stdout, plan.stdout[-1500:]
+        assert "two pod-hours end to end" in plan.stdout, plan.stdout[-1500:]
+        # The cell the plan registers is the cell the arm line pins.
+        assert (f"GROUP_SIZE_M=16 BLOCK_SIZE_N={bn} "
+                f"BLOCK_SIZE_M={COUNTER_BLOCK_M}") in plan.stdout, plan.stdout[:900]
+        pages[bn] = plan.stdout
+    cost = {bn: page.split("COST.", 1)[1].split("\n\n", 1)[0]
+            for bn, page in pages.items()}
+    assert cost[32] == cost[128], "the two plans no longer price the same"
+    # Two different run ids, so the two arms cannot land in one directory.
+    ids = {bn: page.splitlines()[0] for bn, page in pages.items()}
+    assert ids[32] != ids[128], ids
+    total = 0
+    for name in COUNTER_ARMS:
+        booked = int(lift(f"arm_minutes {shlex.quote(name)}",
+                          REPO=str(ROOT)).stdout.strip())
+        assert booked == 2 * 60, (name, booked)
+        total += booked
+        # A WALL figure: the page charges ncu replay outright rather than
+        # leaving it to a ratio, so nothing about these rows is unpriced.
+        assert lift(f"arm_clock {shlex.quote(name)}",
+                    REPO=str(ROOT)).stdout.strip() == "WALL"
+        assert not lift(f"arm_unpriced {shlex.quote(name)}",
+                        REPO=str(ROOT)).stdout.strip()
+    assert total == 240
+
+
+def test_the_counter_route_card_is_resolved_once_and_reaches_every_call_site():
     """THE RECURRING DEFECT, IN THE FORM IT TOOK ON 2026-09-10.
     `dram_counter_route.py` takes `--card` from a hard default of
     `nvidia_a100_sxm4_80gb` and never from the attached device, so the probe
     reported OPEN on an H200 and the plan printed underneath it named an A100
     and an A100 ridge of 145.81: one page, two machines. The fix is one
-    resolver read by both arms, not a flag added to whichever call site was
+    resolver read by every call site, not a flag added to whichever one was
     noticed.
 
     It also has to REFUSE to pass a card the script does not list, because that
@@ -3988,8 +4152,11 @@ def test_the_counter_route_card_is_resolved_once_and_reaches_both_call_sites():
     assert resolve("nocard") == "nvidia_h200"
     # And an operator override wins, when it is a card the script lists.
     assert resolve("nocard", "nvidia_a100_sxm4_80gb") == "nvidia_a100_sxm4_80gb"
-    # EVERY call site reads the one value, and there is exactly one assignment:
-    # arm 13's printed plan, and both branches of arm 14.
+    # EVERY call site reads the one value, and there is exactly one assignment.
+    # FOUR LINES, SIX INVOCATIONS since 2026-09-10: arm 13's two branches, and
+    # `counter_arm`'s two, which each run for both counter arms. The count is
+    # of LINES, because `counter_arm` is the thing that stops a card from
+    # reaching one arm and not the other.
     joined = re.sub(r"\\\n\s+", " ", CODE)
     users = [ln for ln in joined.splitlines() if "COUNTER_PLAN_CARD" in ln]
     assert sum(1 for ln in users if 'COUNTER_PLAN_CARD="$(counter_route_card)"' in ln) == 1, users
@@ -4019,10 +4186,14 @@ def test_the_next_session_books_the_arms_the_2026_09_10_ledger_left():
         exp = lift(f"rerun_expectation {shlex.quote(name)}",
                    REPO=str(ROOT)).stdout.strip()
         assert exp, f"{name} is booked with no expected state"
-    # The two arms this round exists for are in it, and the probe is ahead of
-    # the run it gates.
-    assert "bn_g16" in listed and "counter" in listed
-    assert listed.index("counter_plan") < listed.index("counter")
+    # The arms this round exists for are in it, and the probe is ahead of the
+    # runs it gates. BOTH counter arms are booked: the contrast is between
+    # them, so a set carrying one of the two spends 120 minutes and cannot ask
+    # the question the session is renting the card for.
+    assert "bn_g16" in listed
+    for name in COUNTER_ARMS:
+        assert name in listed, name
+        assert listed.index("counter_plan") < listed.index(name), name
     # Nothing that already holds a RESULT is re-booked. cap_test and
     # mma_switch read DONE on 2026-09-10 and bm128_depth, anchor_measure,
     # anchor_rescore and ruler read CLAIM_FAIL.

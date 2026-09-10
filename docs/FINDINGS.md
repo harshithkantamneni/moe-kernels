@@ -147,8 +147,9 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   207% TEMPO contradiction that `bn_g16`'s C4 prints goes with it, because
   it compares a bound with a number.
 - **(n) The `cap/ridge = 0.080` headline.** Withdrawn 2026-09-10. `cap_test`'s
-  C2 computes it from `alpha_measured = 1.28982`, a value above 1.0 that
-  `ai_model` refuses to invert. What stands is stated in the 2026-09-10
+  C2 computes it from `alpha_corrected = 1.28411` (raw `alpha_measured`
+  1.28982), a value above 1.0 that `ai_model` refuses to invert. What stands
+  is stated in the 2026-09-10
   section: for BLOCK_M <= 64 the cap binds under every reading this study has
   held, and at BLOCK_M = 128, the tile vLLM ships, the verdict FLIPS across
   the candidate range (0.807 of the ridge at 0.9794 against 1.293 at 0.5977,
@@ -291,7 +292,13 @@ refused the counter. **This paragraph said "the 15-minute plan" until
 2026-09-10** and the plan had stopped saying it: the profiled launch count is
 warmup + iters x trials rather than one, so the page now budgets an hour of
 GPU time and two pod-hours end to end for twelve profiled invocations. The
-`counter` arm of `scripts/h200_gaps_session.sh` books that figure.
+`counter-n32-m64` and `counter-n128-m64` arms of
+`scripts/h200_gaps_session.sh` book that figure once each: the plan's COST
+block is byte-identical at the two BLOCK_N, so the contrast is two sets of
+twelve invocations and 240 WALL minutes. **It was ONE arm until 2026-09-10**
+and that arm passed neither `--block-n` nor `--block-m`, so it ran the
+script's default BLOCK_N=64 BLOCK_M=32 cell while three places in the driver
+and one in the runbook said it ran the two-BLOCK_N contrast.
 
 ### The six INVALID arms, as apparatus findings
 
@@ -543,8 +550,19 @@ disagreement with TEMPO.
 
 **(3) The `cap/ridge = 0.080` headline is WITHDRAWN as stated.** `cap_test`'s
 C2 reads "cap/ridge = 12.5/155.9 = 0.080", and 0.080 is computed from
-`alpha_measured = 1.28982`, a value above 1.0 that `ai_model` refuses to
-invert. What survives, and it is the load-bearing half:
+`alpha_corrected = 1.28411`, a value above 1.0 that `ai_model` refuses to
+invert. THIS SAID `alpha_measured = 1.28982` UNTIL NOW, AND THE ARM'S OWN
+REPORT SAYS OTHERWISE: `report.json` for the 2026-09-10 `tile_cap` run carries
+`alpha_measured` 1.2898201298018195, `alpha_corrected` 1.2841097418444702 and
+`ai_cap_measured` 12.459994250193844, and 16 / 1.28411 = 12.45999 against
+16 / 1.28982 = 12.40483, so 12.46 / 155.9303 = 0.0799 is the printed 0.080 and
+12.40 / 155.9303 = 0.0796 is not. `cap_test.log`'s own C2 line says the same
+in words: "alpha 1.284 activation-corrected (1.290 raw)" and "the gate is
+scored on the LIN cap 12.5". The retraction is unaffected, since both values
+exceed 1.0 and `ai_model` refuses to invert either, but a retraction that
+names the wrong number teaches the next reader to look for the wrong one.
+
+What survives, and it is the load-bearing half:
 
 - **For BLOCK_M <= 64 the cap binds under every reading this study has ever
   held.** On mixtral bf16 the cap reaches the ridge only above `alpha_b` =

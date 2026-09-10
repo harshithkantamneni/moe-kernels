@@ -402,7 +402,12 @@ def test_findings_retracts_the_three_numbers_the_session_retired():
     text = (ROOT / "docs" / "FINDINGS.md").read_text()
     section = text.split("## The 2026-09-10 H200 session")[1].split("\n## ")[0]
     assert "THE RETRACTIONS" in section
-    for needle in ("0.9794", "-0.8143", "207%", "0.080", "1.28982"):
+    # 1.28411 is alpha_CORRECTED and it is the one the 0.080 is computed
+    # from: report.json carries alpha_measured 1.28982, alpha_corrected
+    # 1.28411 and ai_cap_measured 12.45999, and 16/1.28411 = 12.45999 while
+    # 16/1.28982 = 12.40483. This needle read "1.28982" until 2026-09-10 and
+    # pinned the wrong attribution into the retraction it was guarding.
+    for needle in ("0.9794", "-0.8143", "207%", "0.080", "1.28411", "1.28982"):
         assert needle in section, needle
     # Flattened from here: this file wraps at 78 columns and a sentence that
     # straddles two lines is still the sentence.
@@ -430,8 +435,19 @@ def test_study_records_what_the_2026_09_10_session_settled_and_what_it_left():
                    "1.293", "0.784", "one M-tile per expert",
                    "Never quote the 207% TEMPO", "--new"):
         assert needle in section, needle
-    # The next session is a command a reader can run, with the arms named.
-    assert "--only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter" in section
+    # The next session is a command a reader can run, with the arms named,
+    # and it is the driver's OWN set rather than a prefix of it: the counter
+    # is two arms, and "...,counter_plan,counter" was a passing substring of
+    # the wrong booking until 2026-09-10.
+    listed = subprocess.run(
+        ["bash", "-c",
+         'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' '
+         f'\"{ROOT / "scripts" / "h200_gaps_session.sh"}\")"; rerun_arms'],
+        capture_output=True, text=True, timeout=120).stdout.split()
+    assert listed, "the driver's rerun set is empty"
+    assert f"--only {','.join(listed)}" in section, listed
+    for name in ("counter-n32-m64", "counter-n128-m64"):
+        assert name in listed, name
 
 
 def test_apparatus_states_the_estimator_change_and_prints_both():
@@ -453,3 +469,102 @@ def test_apparatus_states_the_estimator_change_and_prints_both():
     assert "`w` is not `alpha_b`" in text
     for rate in ("0.6087", "0.5930", "0.5143"):
         assert rate in text, rate
+
+
+# --------------------------------------------------------------------------
+# The counter pair's pre-registered discriminator, recomputed from the cells
+# --------------------------------------------------------------------------
+
+def _bn_g16_slope(block_n: int, block_m: int) -> float:
+    """ms per extra M-tile for one bn_g16 cell, from the published cells.
+
+    OLS of the per-tile-count median of `ms_p50` on the tile count, which is
+    `s8_common_currency.py`'s estimator: a slope, with no fitted level in the
+    denominator, no `delta`, no `D` and no `B/(A+B)`.
+    """
+    import statistics
+    run = sorted(PUBLISHED.glob("2026-09-10-*gaps-session/results/"
+                                "bn_decomposition/*/cells.csv"))
+    assert run, "the 2026-09-10 bn_decomposition cells are not in the tree"
+    with open(run[0], newline="") as fh:
+        rows = [r for r in csv.DictReader(fh) if r["status"] == "ok"
+                and int(r["block_n"]) == block_n
+                and int(r["block_m"]) == block_m]
+    assert rows, (block_n, block_m)
+    tiles = sorted({int(r["tiles"]) for r in rows})
+    med = [statistics.median(float(r["ms_p50"]) for r in rows
+                             if int(r["tiles"]) == k) for k in tiles]
+    mx = sum(tiles) / len(tiles)
+    my = sum(med) / len(med)
+    return (sum((a - mx) * (b - my) for a, b in zip(tiles, med, strict=True))
+            / sum((a - mx) ** 2 for a in tiles))
+
+
+def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_pin():
+    """THE PRE-REGISTERED PREDICTION, RE-DERIVED FROM THE CELLS IT COMES FROM.
+
+    The driver books two counter arms at `--block-m 64`, `--block-n 32` and
+    128, and every page that describes them quotes the same discriminator:
+    3.85 GB of weight-set-equivalent per M-tile at BLOCK_N=32 against 2.06 GB
+    at 128, 1.87x apart. Those are not figures typed into prose: they are the
+    2026-09-10 `bn_g16` ladder slopes at BLOCK_M=64, divided by the time to
+    stream mixtral's whole expert weight set once at this card's own
+    calibrated triad rate.
+
+    THE BLOCK_M MATTERS AND IT IS WHY THIS TEST EXISTS. At BLOCK_M=32, which
+    is the default `dram_counter_route.py` runs at when no `--block-m` is
+    passed, the same slopes give 3.53 GB against 1.93 GB at 1.84x. Until
+    2026-09-10 the driver booked ONE counter arm that passed no `--block-m`
+    and no `--block-n`, so it ran that BLOCK_M=32 cell at a single BLOCK_N
+    while quoting the BLOCK_M=64 figures. A page whose numbers are computed at
+    a different cell from the one the arm runs is exactly the defect this file
+    is for."""
+    import yaml
+    card = yaml.safe_load(
+        (ROOT / "moe" / "bench" / "hardware"
+         / "measured_nvidia_h200.yaml").read_text())
+    triad_gbps = card["memory"]["bandwidth_tb_s"] * 1000.0
+    # The weight set is the plan page's own compulsory W, read off the page
+    # rather than retyped, so a change to the model config moves both.
+    plan = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
+         "--dry-run", "--card", "nvidia_h200", "--block-m", "64",
+         "--block-n", "32"],
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert plan.returncode == 0, plan.stderr[-800:]
+    m = re.search(r"W\s+compulsory\s+([\d.]+) GB", plan.stdout)
+    assert m, plan.stdout[:900]
+    w_gb = float(m.group(1))
+    stream_ms = w_gb / triad_gbps * 1000.0
+    assert round(stream_ms, 4) == 0.6443, stream_ms
+
+    streams = {bn: _bn_g16_slope(bn, 64) / stream_ms for bn in (32, 128)}
+    assert round(streams[32], 4) == 1.3676, streams
+    assert round(streams[128], 4) == 0.7312, streams
+    gb = {bn: streams[bn] * w_gb for bn in (32, 128)}
+    assert round(gb[32], 2) == 3.85, gb
+    assert round(gb[128], 2) == 2.06, gb
+    assert round(gb[32] / gb[128], 2) == 1.87, gb
+
+    # The BLOCK_M=32 cell the single arm actually ran, which is a different
+    # prediction. It is asserted so that a future arm quietly falling back to
+    # the script's default is caught by a number and not by a reading.
+    other = {bn: _bn_g16_slope(bn, 32) / stream_ms * w_gb for bn in (32, 128)}
+    assert round(other[32], 2) == 3.53 and round(other[128], 2) == 1.93, other
+    assert round(other[32] / other[128], 2) == 1.84, other
+
+    # And every page that quotes the discriminator quotes the BLOCK_M=64 one.
+    listing = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "h200_gaps_session.sh"), "--list"],
+        capture_output=True, text=True, cwd=str(ROOT), timeout=120)
+    assert listing.returncode == 0, listing.stderr[-500:]
+    pages = {
+        "--list": listing.stdout,
+        "POD_RUNBOOK.md": (ROOT / "docs" / "POD_RUNBOOK.md").read_text(),
+        "FINDINGS.md": (ROOT / "docs" / "FINDINGS.md").read_text(),
+        "STUDY.md": (ROOT / "docs" / "STUDY.md").read_text(),
+    }
+    for name, text in pages.items():
+        assert "3.85 GB" in text and "2.06 GB" in text, name
+        assert "BLOCK_M=64" in text, name
+        assert "3.53 GB" not in text and "1.93 GB" not in text, name

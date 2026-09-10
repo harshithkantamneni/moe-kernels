@@ -135,7 +135,8 @@ working state.
   booked next. **This bullet read "at 15 minutes" until 2026-09-10**: that
   figure priced a one-launch recipe the instrument does not run, and the plan
   page now budgets an hour of GPU and two pod-hours end to end for twelve
-  profiled invocations.
+  profiled invocations. That is the price of ONE BLOCK_N; the traffic-versus-
+  time contrast is two of them, so the driver books two arms and 240 minutes.
 
 **Retracted or re-qualified, which is most of what the session bought.**
 
@@ -262,24 +263,35 @@ one-page statement.
 **Left open, and what it costs.** One experiment decides more than the rest
 together, and its route read OPEN for the second rental running (ncu
 2025.1.1.0 attached with no permission error, `cap_eff 0xa80425fb`, no
-`sys_admin`), so it is bookable rather than aspirational. A DRAM read at two
-BLOCK_N values at fixed BLOCK_M gives `alpha_b = (dR/dn - a_per_tile)/W`, a
-traffic slope with no level, no delta and no assumed bandwidth (today the same six cells return
-0.6087, 0.5930 or 0.5143 depending only on which rate is assumed), and it
-decides whether the term that replaces the activation re-read is TRAFFIC or
-TIME (3.85 GB against 2.06 GB per M-tile at BLOCK_M=64, or the same bytes at
-both). Second is a THIRD BLOCK_M in the `bn_g16` grid: the current grid has
+`sys_admin`), so it is bookable rather than aspirational. A DRAM read at ONE
+BLOCK_N gives `alpha_b = (dR/dn - a_per_tile)/W`, a traffic slope with no
+level, no delta and no assumed bandwidth (today the same six cells return
+0.6087, 0.5930 or 0.5143 depending only on which rate is assumed). A read at
+TWO BLOCK_N at a fixed BLOCK_M decides the other half, whether the term that
+replaces the activation re-read is TRAFFIC or TIME (3.85 GB against 2.06 GB
+per M-tile at BLOCK_M=64, or the same bytes at both), and that is a contrast
+between two cells, so it is two arms. Second is a THIRD BLOCK_M in the
+`bn_g16` grid: the current grid has
 two heights that yield a memory branch, which is why every candidate extra
 term correlates +0.72 to +0.98 with the activation column and nothing is
-identifiable. The next session is `--new`, ~180 priced minutes:
+identifiable. The next session is `--new`, ~300 priced minutes:
 
 ```bash
 bash scripts/h200_gaps_session.sh --new \
-  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter
+  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64
 ```
 
-`bn_g16` is expected to reach CLAIM_FAIL again and that is its result; the
-counter is expected to reach DONE or CLAIM_FAIL and either is the headline.
+THE COUNTER IS TWO ARMS AND BOTH ARE BOOKED, which is what took that figure
+from ~180 to ~300. A DRAM read at ONE BLOCK_N buys `alpha_b` as a traffic
+slope and nothing else; the traffic-versus-time contrast is BETWEEN
+BLOCK_N=32 and BLOCK_N=128 at the same BLOCK_M=64, so one cell cannot ask it.
+`GROUP_SIZE_M` stays pinned at 16 on both, and a G=1 cell is a third arm this
+session does not book, which is worth saying because the session measured the
+per-M-tile cost moving 24% between G=1 and G=16.
+
+`bn_g16` is expected to reach CLAIM_FAIL again and that is its result; each
+counter arm is expected to reach DONE or CLAIM_FAIL and either is the
+headline.
 Three arms are deliberately NOT in that set: `roofline-n64-g1`,
 `alias_ablation` and `noise_floor` each hold an INVALID whose cause is a gate
 or an instrument rather than a flag, so re-running them buys the same word for
