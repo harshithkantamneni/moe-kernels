@@ -1,7 +1,15 @@
 # --- byte-compiled / env -------------------------------------------------
 __pycache__/
 *.py[cod]
+# NO TRAILING SLASH. A pattern ending in `/` matches a DIRECTORY only, and
+# every worktree of this repo symlinks .venv at the shared one, so `.venv/`
+# let `git add -A` track the SYMLINK: an absolute path on whoever's laptop
+# ran the command, landing in the tree the pod clones, where it points at
+# nothing. That happened twice on 2026-09-10 before the pattern was the
+# thing that got fixed.
+.venv
 .venv/
+venv
 venv/
 .pytest_cache/
 .ruff_cache/
