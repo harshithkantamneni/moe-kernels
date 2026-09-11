@@ -112,6 +112,30 @@ alone, and every one of the session's 135 DRIFTs was the governor settling on
 the FIRST cell of a rep after a workload change, which is a property of the
 INSTRUMENT and is fixed below rather than gated around.
 
+FLOOR IS A THIRD QUESTION, AND ONLY THE CALIBRATOR ASKS IT (2026-09-11)
+----------------------------------------------------------------------
+WHICH CALL SITE TAKES WHICH RULE, written here because the same rule landing
+at one of two sites is this repository's recurring defect.
+
+  PER-TILE CELLS keep DRIFT-only, unchanged. `driver.py` sets `throttled` from
+  `clock_drift_ok` alone and every consumer of a `cells.csv` row filters on
+  that. The 750-cell census is why, and none of it is retracted: a hot tile
+  clocking down IS the effect those arms measure, so excluding LEVEL-LOW cells
+  would systematically exclude exactly the tiles the study is about.
+
+  THE CALIBRATOR ALSO SCORES FLOOR, `clock_floor_ok` against
+  `max_sm_clock_mhz`. Its job is not to measure a tile, it is to establish the
+  card's CEILING, and a floored clock makes that ceiling wrong: the collapsed
+  pod published ridge 73.6 where the card's ridge is near 156, because the
+  compute peak fell with the clock and the memory side did not. Nothing about
+  a per-tile cell says anything about that, and nothing about the ceiling says
+  a tile should be dropped. Two jobs, two rules.
+
+FLOOR is not LEVEL with a different fraction, either. LEVEL's reference is
+read out of THIS card's own calibration, so on a collapsed card the reference
+collapses with it and 345 against 345 passes; the card's maximum SM clock is
+the only reference in reach that the fault cannot move.
+
 Two more things follow from the same physics. The band edges snap to the
 15 MHz NVML step (`snap_to_clock_step`): 0.95 x 1485 = 1410.75 sits inside one
 step, so 1410 read LOW and 1425 read level for timings 0.1% apart, and 23 of
@@ -213,6 +237,63 @@ LEVEL_HIGH_FRACTION = 1.05
 #: clock moved while the trials ran was not measured at one operating point,
 #: and its median is a blend of two.
 DRIFT_FRACTION = 0.05
+
+#: FLOOR flag, and it is a THIRD question, not a third name for LEVEL or DRIFT.
+#: The under-load SM clock, as a MEDIAN, must be at least this fraction of the
+#: card's OWN maximum SM clock, read from the device at gate time by
+#: `max_sm_clock_mhz`. LEVEL asks "is this clock the one the roof was measured
+#: at"; DRIFT asks "did it move while we measured"; FLOOR asks "is this card
+#: able to hold a clock at all". Only the third catches the card this constant
+#: exists for.
+#:
+#: THE CARD IT EXISTS FOR, measured on a RunPod H200 on 2026-09-11. The part
+#: boosted to its 1980 MHz maximum, collapsed to its 345 MHz floor within ~30 s
+#: of sustained bf16 GEMM and stayed there; `clocks_event_reasons` went
+#: 0x0 -> 0x20 -> 0x68, and at the floor it drew ~240 W of a 700 W limit and
+#: still climbed 87 C -> 93 C. `scripts/calibrate_hardware.py` ran to
+#: completion on it, published a tracked yaml, and its `not_throttled` gate
+#: PASSED, because that gate scored DRIFT and a card pinned flat at its floor
+#: has no drift. It reported ridge 73.6 where this card's ridge is near 156:
+#: the compute peak collapsed with the clock and the memory side did not.
+#:
+#: WHERE THE FRACTION COMES FROM, and it is a window rather than a preference.
+#: Both ends are RATIOS of an observed clock to that card's own maximum, so
+#: nothing here is a clock literal:
+#:
+#:   healthy, the binding end   the LOWEST per-cell `sm_clock_load_mhz` median
+#:                              anywhere in `results/published` is 1275 MHz on
+#:                              a 1980 MHz part, 0.6439, over 5,260 deduped
+#:                              rows (min 1275, p1 1320, p5 1380, median 1545).
+#:                              It drew 697.4 W of 700: a hungry tile at the
+#:                              power cap, not a card in trouble.
+#:   the fault                  345 / 1980 = 0.1742, the pod above.
+#:
+#: so an admissible fraction is 0.1742 < f <= 0.6439. The geometric midpoint
+#: gives equal ratio margin on both sides: sqrt(0.6439 x 0.1742) = 0.33497,
+#: which is 663.2 MHz on that card and snaps to 660 on the `CLOCK_STEP_MHZ`
+#: grid -- exactly 1980/3. The maximally separating point and the simple third
+#: land on the same grid point, so the constant is where the data puts it.
+#:
+#: THE MARGINS IT BUYS. At 1980 the floor is 660 MHz: every published row sits
+#: 1.93x above it and the fault sits 1.91x below it. At an A100's 1410 the
+#: floor is 465 MHz and that card's lowest observed compute-settle sample,
+#: 1230 MHz, is 2.65x above it. Rejected: f = 0.50 leaves the healthy side
+#: only 1.29x, f = 0.60 only 1.08x and would have failed published cells, and
+#: f = 0.25 leaves the fault side only 1.44x.
+#:
+#: IT IS SCORED ON THE MEDIAN AND NEVER ON A SAMPLE. Individual entries in the
+#: published `clock_samples_mhz` lists reach 405 MHz on cards whose medians and
+#: DRIFT verdicts are perfectly healthy (57,106 samples, p1 = 975): one
+#: drain-and-ramp excursion inside a cell. A per-sample gate would need
+#: f <= 0.2045 against a fault at 0.1742 and would have no margin left.
+THERMAL_FLOOR_FRACTION = 1.0 / 3.0
+
+#: The fault above as `(floored clock, that card's maximum)`, in MHz. RECORDED,
+#: never read at gate time: the gate reads the attached card's own maximum, so
+#: this pair only exists so the margin either side of `THERMAL_FLOOR_FRACTION`
+#: can be re-checked by a test instead of believed from prose. A gate that read
+#: 345 or 1980 would be a gate that only works on one part.
+THERMAL_FAULT_OBSERVED_MHZ = (345.0, 1980.0)
 
 #: How much delivered warmup the settle loop may add, as a multiple of
 #: `warmup_ms`. The loop keeps running the trials' own work until two
@@ -1413,6 +1494,93 @@ def level_side(load_mhz: float | None, reference_mhz: float | None) -> str | Non
     if load_mhz > high:
         return LEVEL_HIGH
     return ""
+
+
+def thermal_floor_mhz(max_sm_clock_mhz: float | None) -> float | None:
+    """`THERMAL_FLOOR_FRACTION` of the card's own maximum, on the grid. Pure.
+
+    None when no maximum was read, because a floor derived from a maximum
+    nobody measured is a literal wearing a measurement's clothes, and this
+    repository's standing rule is that a quantity derived from a calibration is
+    never an asserted literal. Every caller has to handle the None: the honest
+    answer for a card whose maximum could not be read is that the question was
+    not asked, not that it passed.
+
+    THE MAXIMUM IS THE ONE REFERENCE THAT DOES NOT MOVE WITH THE FAULT, which
+    is why this is not `level_side` with a different fraction. `level_side`
+    compares against the reference clock the roof was measured at, and
+    `roofline.reference_clock` reads that out of THIS card's own calibration;
+    on a card that collapsed, the calibration collapsed with it, so LEVEL would
+    compare 345 against 345 and pass. The maximum comes off the silicon.
+    """
+    if max_sm_clock_mhz is None or float(max_sm_clock_mhz) <= 0:
+        return None
+    return snap_to_clock_step(THERMAL_FLOOR_FRACTION * float(max_sm_clock_mhz))
+
+
+def clock_floor_ok(load_mhz: float | None,
+                   max_sm_clock_mhz: float | None) -> bool | None:
+    """Is the MEDIAN under-load clock at or above this card's thermal floor.
+
+    True, False, or None for "the comparison could not be made" -- no load
+    median, or no maximum read off the card. None is never a pass: a consumer
+    that maps it to PASS reproduces exactly the hole the 2026-09-11 pod walked
+    through, where the one gate that could have caught a floored card scored
+    something else instead.
+
+    PASS THE MEDIAN, NOT A SAMPLE. `THERMAL_FLOOR_FRACTION` documents why:
+    healthy cards in this corpus post individual samples down to 405 MHz on a
+    1980 MHz part during one drain-and-ramp, and a per-sample gate has no
+    margin left between that and the fault.
+    """
+    floor = thermal_floor_mhz(max_sm_clock_mhz)
+    if floor is None or load_mhz is None or float(load_mhz) <= 0:
+        return None
+    return float(load_mhz) >= floor
+
+
+def max_sm_clock_mhz(device_index: int = 0) -> tuple[float | None, str]:
+    """`(the card's maximum SM clock in MHz, which reader answered)`.
+
+    NVML first through the same binding everything else here reads
+    (`nvmlDeviceGetMaxClockInfo(handle, NVML_CLOCK_SM)`), the forked
+    `nvidia-smi --query-gpu=clocks.max.sm` second, and `(None, reason)` when
+    neither answers. The shape is `scripts/calibrate_hardware._nvml_memory_bus_bits`'s,
+    for the same reason: a wrong maximum is worse than none, because every
+    thermal floor in the tree is a fraction OF it.
+
+    THE FORKED READER IS ACCEPTABLE HERE AND NOWHERE ELSE IN THIS FILE. A
+    maximum clock is a static property of the part: it does not matter that a
+    fork answers tens of milliseconds late, which is exactly why
+    `clock_under_load` and `nvml_clock_reader` refuse the same fallback for a
+    sample that has to land while a queue is busy. Never raises.
+    """
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        try:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(int(device_index))
+            mhz = float(pynvml.nvmlDeviceGetMaxClockInfo(handle,
+                                                         pynvml.NVML_CLOCK_SM))
+        finally:
+            pynvml.nvmlShutdown()
+        if mhz > 0:
+            return mhz, CLOCK_SOURCE_NVML
+    except Exception:                                   # noqa: BLE001
+        # Deliberately broad, for the reasons `ClockState.sample` gives:
+        # pynvml is a ModuleNotFoundError when absent and raises its own
+        # NVMLError family on a restricted container. Neither may stop a
+        # caller, and both mean the same thing here: ask the other reader.
+        pass
+    vals = _nvidia_smi("clocks.max.sm")
+    if vals:
+        try:
+            mhz = float(vals[0].split()[0])
+        except (ValueError, IndexError):
+            mhz = 0.0
+        if mhz > 0:
+            return mhz, CLOCK_SOURCE_NVIDIA_SMI
+    return None, CLOCK_SOURCE_NONE
 
 
 #: What `drift_direction` answers with. The direction is the finding: a rise is
