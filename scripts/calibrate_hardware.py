@@ -41,6 +41,19 @@ The ceilings are timed by `moe.bench.calibrate`, not by
 lands, an arm timed with `time_kernel` and a roof timed here are two
 instruments, and the only defensible thing to do is write down which is which.
 
+WHAT THE CLOCK GATE ASKS. `not_throttled` scores the clock the GEMM actually
+ran at, three ways: FLOOR (the under-load median against
+`timing.THERMAL_FLOOR_FRACTION` of THIS CARD'S OWN MAXIMUM SM clock, read off
+the device here), LEVEL (against a supplied reference clock, absent by
+construction in a calibration) and DRIFT (first against last sample). FLOOR
+was added 2026-09-11 after a rented H200 collapsed from 1980 MHz to its 345 MHz
+floor under sustained GEMM and this script published a tracked yaml whose ridge
+read 73.6 against a real ~156, with `not_throttled` PASSING: the gate scored
+DRIFT, and a card pinned flat at its floor does not drift. PER-TILE CELLS KEEP
+THE DRIFT-ONLY RULE; only the calibrator scores FLOOR, because only the
+calibrator is establishing a ceiling. `under_load_clock_verdict` carries the
+argument.
+
 EXIT CODES are `moe.bench.exit_codes`. `--dry-run` exits REFUSED, because a plan
 measured nothing and scored no gate, and `classify([])` raises rather than
 calling an empty gate list DONE for exactly that reason. (Note the divergence:
@@ -169,9 +182,17 @@ def _device_facts() -> dict:
     the table was the unharvested width. The table is the fallback when NVML
     cannot answer, and a disagreement between the two is written into the
     facts rather than resolved silently.
+
+    THE SECOND FACT IS THE MAXIMUM SM CLOCK, added 2026-09-11 and read the
+    same way: NVML first, the forked `nvidia-smi` second, absent rather than
+    guessed. It is not a percentage's denominator, it is the FLOOR's: gate
+    `not_throttled` scores the GEMM's under-load median against
+    `timing.THERMAL_FLOOR_FRACTION` of it. Nothing else in this file is a
+    reference the card cannot drag down with it.
     """
     import torch
 
+    from moe.bench import timing as T
     from moe.bench.timing import _nvidia_smi
 
     out: dict = {}
@@ -189,6 +210,21 @@ def _device_facts() -> dict:
             out["throttle_reasons"] = parts[2] if len(parts) > 2 else ""
         except (ValueError, IndexError):
             pass
+    # THE MAXIMUM SM CLOCK, which is the one reference a thermal fault cannot
+    # move. Every other clock in this file is read from the card's own
+    # behaviour and therefore collapses with the card; this is a property of
+    # the part. `not_throttled` scores the GEMM's under-load median as a
+    # fraction of it (`timing.thermal_floor_mhz`), and it is written into the
+    # yaml so a later re-score of a committed calibration can ask the same
+    # question without the card being present.
+    max_sm, max_sm_source = T.max_sm_clock_mhz()
+    if max_sm:
+        out["clocks_max_sm_mhz"] = max_sm
+        out["clocks_max_sm_source"] = max_sm_source
+    else:
+        # Named rather than absent: a missing maximum is why `not_throttled`
+        # reads UNKNOWN, and a reader of the yaml should not have to guess.
+        out["clocks_max_sm_unreadable"] = max_sm_source
     clk = out.get("clocks_max_memory_mhz")
     bits, source, table = resolve_memory_bus_bits(props.name, _nvml_memory_bus_bits())
     if clk and bits:
@@ -338,7 +374,9 @@ def write_cells(path: Path, cal, prov) -> Path:
     return path
 
 
-def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
+def score(cal, pin_rate_gbps: float | None,
+          max_sm_clock_mhz: float | None = None,
+          ) -> list[tuple[str, str, str, str]]:
     """`(kind, name, verdict, detail)` for every gate this calibration scores.
 
     SIX gates, and `tests/test_calibrate_hardware.py` plants both branches of
@@ -356,6 +394,16 @@ def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
     sample caught the idle boost, not throttling (`TIMING_BASIS` v2 retired
     it), and this gate scored it until 2026-09-03. A calibration that carries
     no under-load flag is UNKNOWN here, which counts against the gate.
+
+    SINCE 2026-09-11 THAT VERDICT ALSO SCORES FLOOR, the under-load median
+    against `timing.THERMAL_FLOOR_FRACTION` of `max_sm_clock_mhz`, and this
+    function is where that number arrives. It is optional ONLY so that a
+    caller cannot pass it wrongly by forgetting the argument's position;
+    omitting it makes the gate UNKNOWN, never PASS, because "no maximum clock
+    to compare against" is an untested claim and this repository's rule is
+    that an untested claim is visible in the exit code. `main` reads it from
+    `_device_facts`; see `under_load_clock_verdict` for why a per-tile cell
+    keeps the DRIFT-only rule and a calibration does not.
 
     Two of the six are CONDITIONAL, and a gate that is absent is not a gate that
     passed: `write_rate_is_a_store_rate` is scored only when a write pattern was
@@ -420,7 +468,7 @@ def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
                   if cal.clock_ramped else
                   "every pattern was measured in the same clock state"))
 
-    verdict, detail = under_load_clock_verdict(cal)
+    verdict, detail = under_load_clock_verdict(cal, max_sm_clock_mhz)
     gates.append((EX.CLAIM, "not_throttled", verdict, detail))
     return gates
 
@@ -430,11 +478,14 @@ def score(cal, pin_rate_gbps: float | None) -> list[tuple[str, str, str, str]]:
 #: idle pair (`clocks`) or inside the GEMM's own `LoadedClock` block
 #: (`gemm_clock`); the field names are `timing.KernelTiming`'s, so a cell and a
 #: roof are levelled by one vocabulary and `write_cells` already writes the
-#: same three columns.
+#: same three columns. The FLOOR term is NOT read from these blocks: it is a
+#: comparison against the card's maximum SM clock, which no calibration writes
+#: and `main` reads off the device.
 UNDER_LOAD_BLOCKS = ("clocks", "gemm_clock")
 
 
-def under_load_clock_verdict(cal) -> tuple[str, str]:
+def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
+                             ) -> tuple[str, str]:
     """`(verdict, detail)` for gate `not_throttled`, from the flags taken UNDER LOAD.
 
     THE FLAG THIS REPLACES. `Calibration.clocks["throttled"]` is
@@ -448,23 +499,66 @@ def under_load_clock_verdict(cal) -> tuple[str, str]:
     ceilings were measured at the clock they are quoted at, and this gate
     passed on it until 2026-09-03.
 
-    WHAT IT READS INSTEAD, in `timing.clock_flags`' own words. LEVEL,
-    `clock_level_ok`: the SM clock sampled WHILE the GEMM ran, as a median of
-    at least `CLOCK_SAMPLE_FLOOR` samples, is within `LEVEL_FRACTION` of the
-    reference clock the roof is quoted at. That is the question a ceiling has
-    to answer. DRIFT, `clock_drift_ok`: the first and last under-load samples
-    agree within `DRIFT_FRACTION`, either direction. LEVEL is scored when it is
-    present and DRIFT when only DRIFT is; the detail names which, with the
-    numbers it compared, so a reader of the RESULT line knows what decided it.
+    THE THREE TERMS IT READS INSTEAD, in `timing`'s own vocabulary, scored
+    together rather than first-one-wins.
 
-    REFUSES on the legacy shape. A calibration that carries neither flag in
-    any of `UNDER_LOAD_BLOCKS` predates the under-load verdict, and the only
+      FLOOR, `timing.clock_floor_ok`: the median clock sampled WHILE the GEMM
+      ran is at least `timing.THERMAL_FLOOR_FRACTION` of THIS CARD'S OWN
+      MAXIMUM SM clock, read off the device by `timing.max_sm_clock_mhz` and
+      passed in here. Added 2026-09-11, and it is the term that makes this
+      gate do its job.
+
+      LEVEL, `clock_level_ok`: the same median against the reference clock the
+      roof is quoted at. `None` by construction on anything `calibrate.py`
+      writes, because this record IS that reference; scored when a caller
+      supplies one.
+
+      DRIFT, `clock_drift_ok`: first and last under-load samples agree within
+      `timing.DRIFT_FRACTION`, either direction.
+
+    WHY FLOOR HAD TO BE ADDED, and it is the whole reason this function moved.
+    On 2026-09-11 a rented H200 boosted to its 1980 MHz maximum, collapsed to
+    its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there,
+    drawing ~240 W of a 700 W limit while climbing from 87 C to 93 C. This
+    script ran to completion on it, published a tracked yaml, and THIS GATE
+    PASSED: a card pinned flat at its floor has first == last, drift 0.0. The
+    calibration it published reported ridge 73.6 where that card's ridge is
+    near 156, because the compute peak collapsed with the clock and the memory
+    side did not. LEVEL could not have caught it either: the reference comes
+    from the card's own calibration, so on a collapsed card it is a comparison
+    of 345 against 345.
+
+    WHICH CALL SITE TAKES WHICH RULE. THE CALIBRATOR SCORES FLOOR; THE
+    PER-TILE CONSUMERS KEEP DRIFT-ONLY, and that is a deliberate split rather
+    than an unfinished migration. The DRIFT-only rule was adopted 2026-09-09
+    for CELLS, on the 750-cell H200 census: the under-load clock is set per
+    tile by the kernel's own power draw under the board cap, so a hot tile
+    clocking down IS the effect those arms measure, and excluding LEVEL-LOW
+    cells removed exactly the two tiles the study is about. None of that
+    reasoning transfers here. A calibration is not a tile; its whole job is to
+    establish the card's CEILING, and a floored clock makes the ceiling wrong
+    for every arm that will be scored against it. `moe/bench/timing.py`'s
+    module docstring carries the same split, and `driver.py`, `pod_session.sh`
+    S6d and the five per-cell `clock_excluded` helpers are unchanged.
+
+    HOW THE TERMS COMBINE. Any scored term FAILing is a FAIL, and the detail
+    names every term and what each read. Otherwise a term that COULD NOT be
+    scored and should have been -- FLOOR, or a record with no usable sample at
+    all -- is UNKNOWN with the reason, which `exit_codes.classify` counts
+    AGAINST the gate: an untested claim has to be visible in the exit code,
+    and mapping "no maximum clock to compare against" to PASS is the shape of
+    the hole above. A missing LEVEL alone is not UNKNOWN, because it is absent
+    by construction and not by failure.
+
+    REFUSES on the legacy shape. A calibration that carries none of the flags
+    in any of `UNDER_LOAD_BLOCKS` predates the under-load verdict, and the only
     clock evidence it has is the retired pair; the verdict is UNKNOWN with the
-    reason, which `exit_codes.classify` counts AGAINST the gate. Substituting
-    the retired flag would let the gate pass on evidence the instrument has
-    already disowned. A flag that is present but None (no usable sample) is
-    UNKNOWN for the same reason.
+    reason. Substituting the retired flag would let the gate pass on evidence
+    the instrument has already disowned.
     """
+    from moe.bench import timing as T
+
+    floor_mhz = T.thermal_floor_mhz(max_sm_clock_mhz)
     for name in UNDER_LOAD_BLOCKS:
         block = getattr(cal, name, None) or {}
         if not isinstance(block, dict):
@@ -476,29 +570,67 @@ def under_load_clock_verdict(cal) -> tuple[str, str]:
         load = block.get("sm_clock_load_mhz")
         ref = block.get("reference_clock_mhz")
         where = f"{name}.{{clock_level_ok,clock_drift_ok}}"
+        floor = T.clock_floor_ok(load, max_sm_clock_mhz)
+
+        terms: list[tuple[str, bool | None, str]] = []
+        if floor is None:
+            terms.append((
+                "FLOOR", None,
+                "FLOOR NOT SCORED ("
+                + ("this card's maximum SM clock could not be read, so the "
+                   "one term that catches a card pinned flat at its own floor "
+                   "was not asked" if floor_mhz is None else
+                   "no under-load median in this record to compare against a "
+                   f"floor of {floor_mhz:.0f} MHz")
+                + ")"))
+        else:
+            terms.append((
+                "FLOOR", floor,
+                f"FLOOR {'PASS' if floor else 'FAIL'} ({load} MHz median under "
+                f"load against a floor of {floor_mhz:.0f} MHz, "
+                f"{T.THERMAL_FLOOR_FRACTION:.4f} of this card's "
+                f"{float(max_sm_clock_mhz):.0f} MHz maximum)"))
         if level is not None:
             level = bool(level)
-            return (EX.PASS if level else EX.FAIL,
-                    f"scored LEVEL (clock_level_ok={level}) from {where}: "
-                    f"{load if load is not None else 'unrecorded'} MHz under load "
-                    f"against reference {ref if ref is not None else 'unrecorded'} MHz"
-                    + ("" if level else
-                       "; the card ran below the clock its roof is quoted at, so "
-                       "the ceilings are low"))
+            terms.append((
+                "LEVEL", level,
+                f"LEVEL {'PASS' if level else 'FAIL'} (clock_level_ok={level}, "
+                f"{load if load is not None else 'unrecorded'} MHz against "
+                f"reference {ref if ref is not None else 'unrecorded'} MHz)"))
         if drift is not None:
             drift = bool(drift)
-            return (EX.PASS if drift else EX.FAIL,
-                    f"scored DRIFT (clock_drift_ok={drift}) from {where}, LEVEL "
-                    "undetermined (no reference clock): first and last under-load "
-                    f"samples {block.get('sm_clock_start_mhz', 'unrecorded')} -> "
-                    f"{block.get('sm_clock_end_mhz', 'unrecorded')} MHz"
-                    + ("" if drift else
-                       "; the clock moved during the measurement, so the ceilings "
-                       "are a blend of two states"))
-        return (EX.UNKNOWN,
-                f"{where} are present but both None: no usable under-load clock "
-                "sample, so neither LEVEL nor DRIFT can be scored; the retired "
-                "idle-instant `throttled` flag is NOT substituted")
+            terms.append((
+                "DRIFT", drift,
+                f"DRIFT {'PASS' if drift else 'FAIL'} (clock_drift_ok={drift}, "
+                f"{block.get('sm_clock_start_mhz', 'unrecorded')} -> "
+                f"{block.get('sm_clock_end_mhz', 'unrecorded')} MHz)"))
+        else:
+            terms.append(("DRIFT", None,
+                          "DRIFT NOT SCORED (no first and last under-load "
+                          "sample in this record)"))
+
+        said = "; ".join(sentence for _n, _v, sentence in terms)
+        failed = [n for n, v, _s in terms if v is False]
+        if failed:
+            why = {
+                "FLOOR": "the card is pinned near its own clock floor, so "
+                         "every ceiling here was measured on a card that "
+                         "cannot hold a clock and the ridge derived from them "
+                         "is wrong",
+                "LEVEL": "the card ran below the clock its roof is quoted at, "
+                         "so the ceilings are low",
+                "DRIFT": "the clock moved during the measurement, so the "
+                         "ceilings are a blend of two states",
+            }
+            return (EX.FAIL, f"from {where}: {said}. "
+                    + " ".join(why[n] for n in failed))
+        unscored = [n for n, v, _s in terms if v is None]
+        if unscored:
+            return (EX.UNKNOWN, f"from {where}: {said}. "
+                    f"{' and '.join(unscored)} could not be scored, so this "
+                    "claim was not tested; the retired idle-instant "
+                    "`throttled` flag is NOT substituted for it")
+        return (EX.PASS, f"from {where}: {said}")
     return (EX.UNKNOWN,
             "this calibration predates the under-load clock verdict: none of "
             f"{', '.join(UNDER_LOAD_BLOCKS)} carries clock_level_ok or "
@@ -613,6 +745,22 @@ def main(argv: list[str] | None = None) -> int:
     if tdp:
         print(f"  power limit       {tdp:.0f} W"
               + ("   (SXM)" if tdp > 650 else "   (NVL)"))
+    # THE FLOOR, PRINTED BEFORE THE CEILINGS IT QUALIFIES. A reader who sees
+    # only the GB/s and the TFLOP/s cannot tell a card that is merely slow
+    # from one that has stopped clocking, and the 2026-09-11 pod published a
+    # complete-looking page at 345 of 1980 MHz.
+    max_sm = observed.get("clocks_max_sm_mhz")
+    if max_sm:
+        from moe.bench.timing import THERMAL_FLOOR_FRACTION, thermal_floor_mhz
+        print(f"  max SM clock      {max_sm:.0f} MHz  (from "
+              f"{observed.get('clocks_max_sm_source', '?')})"
+              f"  -> thermal floor {thermal_floor_mhz(max_sm):.0f} MHz"
+              f" = {THERMAL_FLOOR_FRACTION:.4f} of it")
+    else:
+        print("  max SM clock      UNREADABLE: "
+              f"{observed.get('clocks_max_sm_unreadable', 'no reason recorded')}. "
+              "The not_throttled gate's FLOOR term cannot be scored.")
+
     pin = observed.get("pin_rate_gbps")
     if pin:
         print(f"  memory clock      {observed['clocks_max_memory_mhz']:.0f} MHz"
@@ -752,11 +900,31 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  clocks (idle pair) {c.get('sm_start_mhz', '?')} -> "
           f"{c.get('sm_end_mhz', '?')} MHz, {c.get('temp_start_c', '?')} -> "
           f"{c.get('temp_end_c', '?')} C  [retired idle-instant reading, not scored]")
-    verdict, detail = under_load_clock_verdict(cal)
+    # THE SECOND CALL SITE, and it takes the same arguments as the gate's. A
+    # fix applied at one of these two and not the other is this repository's
+    # recurring defect: the printed page would describe a verdict the RESULT
+    # line did not score.
+    verdict, detail = under_load_clock_verdict(cal, observed.get("clocks_max_sm_mhz"))
     print(f"  clock under load  {verdict}: {detail}")
-    if verdict == EX.FAIL:
+    if verdict == EX.FAIL and "FLOOR FAIL" in detail:
+        print("                    THIS CARD CANNOT HOLD A CLOCK. It is not "
+              "settling, it is pinned near its own")
+        print("                    floor: the ceilings above, the ridge and "
+              "every efficiency column derived")
+        print("                    from them are wrong, not merely low. Do "
+              "not publish this calibration, and")
+        print("                    do not spend a session on this pod. Check "
+              "nvidia-smi -q -d PERFORMANCE for")
+        print("                    the slowdown reasons and rent another card.")
+    elif verdict == EX.FAIL:
         print("                    ceilings measured off the reference clock are "
               "low; let it settle and re-run")
+    elif verdict == EX.UNKNOWN and "FLOOR NOT SCORED" in detail:
+        print("                    the floor term was not asked, so a card "
+              "pinned flat at its own clock floor")
+        print("                    would look exactly like this page. See "
+              "the detail above for which reader")
+        print("                    failed to answer.")
 
     # A write figure at or above datasheet peak means the byte accounting is
     # wrong (a read-for-ownership would make real traffic 2N), not that the
@@ -864,7 +1032,10 @@ def main(argv: list[str] | None = None) -> int:
     # THE ONLY LINES THE DRIVER MAY GREP. Everything above is prose, including
     # the words PASS and REFUSED where they appear in it.
     print()
-    gates = score(cal, pin)
+    # BOTH the pin rate and the maximum SM clock come from `observed`, which
+    # was read off this device above. The maximum is what the FLOOR term in
+    # `not_throttled` is a fraction of.
+    gates = score(cal, pin, observed.get("clocks_max_sm_mhz"))
     for kind, name, verdict, detail in gates:
         print(EX.result_line(kind, name, verdict, detail))
     return EX.classify([(k, v) for k, _n, v, _d in gates])

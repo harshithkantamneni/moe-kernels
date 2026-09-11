@@ -37,6 +37,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 import calibrate_hardware as CH  # noqa: E402
 
 from moe.bench import exit_codes as EX  # noqa: E402
+from moe.bench import timing as T  # noqa: E402
 from moe.bench.calibrate import BandwidthResult, Calibration  # noqa: E402
 
 
@@ -83,13 +84,28 @@ LEGACY_CLOCKS = {"sm_start_mhz": 1755, "sm_end_mhz": 1200, "temp_start_c": 40,
 #: The derived pin rate for an H200: 3201 MHz x 2 x 6144 bits / 8.
 H200_PIN = 4916.7
 
+#: The maximum SM clock the FLOOR term of `not_throttled` is a fraction OF,
+#: for the synthetic H200 fixture above. It is a PROPERTY OF THE PART, read
+#: from the card by `timing.max_sm_clock_mhz` on a real run and never derived
+#: from any calibration, which is why it may stand as a literal here where a
+#: ridge or a ceiling may not. What must not be a literal is the FLOOR: it is
+#: always `THERMAL_FLOOR_FRACTION` of whatever the device reported, and the
+#: tests below assert that relation rather than 660.
+H200_MAX_SM = 1980.0
+
 
 # --------------------------------------------------------------------------
 # the gates, both branches of each
 # --------------------------------------------------------------------------
 
-def verdicts(cal, pin=H200_PIN) -> dict[str, str]:
-    return {name: verdict for _kind, name, verdict, _detail in CH.score(cal, pin)}
+def verdicts(cal, pin=H200_PIN, max_sm=H200_MAX_SM) -> dict[str, str]:
+    return {name: verdict
+            for _kind, name, verdict, _detail in CH.score(cal, pin, max_sm)}
+
+
+def details(cal, pin=H200_PIN, max_sm=H200_MAX_SM) -> dict[str, tuple[str, str]]:
+    return {name: (verdict, detail)
+            for _kind, name, verdict, detail in CH.score(cal, pin, max_sm)}
 
 
 def test_a_sound_calibration_passes_every_gate_and_exits_done():
@@ -97,7 +113,7 @@ def test_a_sound_calibration_passes_every_gate_and_exits_done():
     docstring on `score` claimed five while emitting six, and the sixth had no
     FAIL branch anywhere in this file."""
     cal = calibration()
-    scored = CH.score(cal, H200_PIN)
+    scored = CH.score(cal, H200_PIN, H200_MAX_SM)
     assert {n for _k, n, _v, _d in scored} == {
         "clock_established", "ceiling_pattern_measured",
         "no_pattern_exceeds_the_pin_rate", "write_rate_is_a_store_rate",
@@ -116,7 +132,8 @@ def test_a_clock_that_was_never_established_is_invalid_not_done():
                                   "spread_pct": 22.0, "after_idle_mhz": 1980})
     assert cal.clock_established is False
     assert verdicts(cal)["clock_established"] == EX.FAIL
-    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.INVALID
+    assert EX.classify([(k, v) for k, _n, v, _d in
+                        CH.score(cal, H200_PIN, H200_MAX_SM)]) == EX.INVALID
 
 
 def test_no_settle_leaves_the_clock_unknown_which_still_counts_against_it():
@@ -126,7 +143,8 @@ def test_no_settle_leaves_the_clock_unknown_which_still_counts_against_it():
     cal = calibration(settle={}, gemm_clock={})
     assert cal.clock_established is None
     assert verdicts(cal)["clock_established"] == EX.UNKNOWN
-    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.INVALID
+    assert EX.classify([(k, v) for k, _n, v, _d in
+                        CH.score(cal, H200_PIN, H200_MAX_SM)]) == EX.INVALID
 
 
 def test_a_disowned_ceiling_pattern_fails_its_validity_gate():
@@ -145,7 +163,8 @@ def test_a_pattern_above_the_pin_rate_is_a_failed_claim():
     specification."""
     cal = calibration(bandwidth_patterns=(pattern("triad", 5200.0),))
     assert verdicts(cal)["no_pattern_exceeds_the_pin_rate"] == EX.FAIL
-    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.CLAIM_FAIL
+    assert EX.classify([(k, v) for k, _n, v, _d in
+                        CH.score(cal, H200_PIN, H200_MAX_SM)]) == EX.CLAIM_FAIL
 
 
 def test_a_write_rate_above_the_pin_rate_fails_its_own_gate():
@@ -166,8 +185,9 @@ def test_a_write_rate_above_the_pin_rate_fails_its_own_gate():
     # and the general pin gate is failed by the same row, which is the point:
     # a write over the pin rate is a pattern over the pin rate.
     assert scored["no_pattern_exceeds_the_pin_rate"] == EX.FAIL
-    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) == EX.CLAIM_FAIL
-    detail = {n: d for _k, n, _v, d in CH.score(cal, H200_PIN)}
+    assert EX.classify([(k, v) for k, _n, v, _d in
+                        CH.score(cal, H200_PIN, H200_MAX_SM)]) == EX.CLAIM_FAIL
+    detail = {n: d for _k, n, _v, d in CH.score(cal, H200_PIN, H200_MAX_SM)}
     assert "read-for-ownership" in detail["write_rate_is_a_store_rate"]
 
 
@@ -189,9 +209,12 @@ def test_an_unknown_bus_width_leaves_the_pin_claim_untested_not_passed():
     claim that nothing exceeded it was never tested. That is UNKNOWN, and
     UNKNOWN counts against the gate."""
     cal = calibration()
-    scored = dict((n, v) for _k, n, v, _d in CH.score(cal, None))
+    scored = dict((n, v) for _k, n, v, _d in CH.score(cal, None, H200_MAX_SM))
     assert scored["no_pattern_exceeds_the_pin_rate"] == EX.UNKNOWN
-    assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, None)]) == EX.CLAIM_FAIL
+    # And only that one: an absent bus width says nothing about the clock.
+    assert scored["not_throttled"] == EX.PASS
+    assert EX.classify([(k, v) for k, _n, v, _d
+                        in CH.score(cal, None, H200_MAX_SM)]) == EX.CLAIM_FAIL
 
 
 def test_a_clock_that_moved_across_the_patterns_fails():
@@ -213,13 +236,15 @@ def test_a_card_below_its_reference_clock_fails_the_throttle_claim_on_level():
                               "sm_clock_load_mhz": 1400.0,
                               "reference_clock_mhz": 1755.0,
                               "clock_level_ok": False, "clock_drift_ok": True})
-    gates = {name: (verdict, detail)
-             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
-    verdict, detail = gates["not_throttled"]
+    verdict, detail = details(cal)["not_throttled"]
     assert verdict == EX.FAIL
-    assert "scored LEVEL (clock_level_ok=False)" in detail
-    assert "1400.0 MHz under load against reference 1755.0 MHz" in detail
+    assert ("LEVEL FAIL (clock_level_ok=False, 1400.0 MHz against reference "
+            "1755.0 MHz)") in detail
     assert "ceilings are low" in detail
+    # 1400 of 1980 is well above the thermal floor, so the FLOOR term PASSES
+    # here and LEVEL is what failed. The two terms are independent questions
+    # and the detail names both.
+    assert "FLOOR PASS" in detail and "DRIFT PASS" in detail
     # The retired flag is NOT what decided it: it says the opposite here.
     assert cal.clocks["throttled"] is False
 
@@ -230,26 +255,34 @@ def test_the_under_load_verdict_passes_a_card_at_its_reference_clock():
     cal = calibration(clocks={**LEGACY_CLOCKS, "clock_level_ok": True,
                               "clock_drift_ok": True, "sm_clock_load_mhz": 1755.0,
                               "reference_clock_mhz": 1755.0})
-    gates = {name: (verdict, detail)
-             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
-    verdict, detail = gates["not_throttled"]
-    assert verdict == EX.PASS and "scored LEVEL (clock_level_ok=True)" in detail
+    verdict, detail = details(cal)["not_throttled"]
+    assert verdict == EX.PASS and "LEVEL PASS (clock_level_ok=True" in detail
     assert cal.clocks["throttled"] is True
 
 
-def test_drift_is_scored_only_when_level_has_no_reference():
-    """A calibration that sampled under load but had no reference to level
-    against still has DRIFT, and the gate says that is what it scored."""
+def test_floor_and_drift_carry_the_gate_when_level_has_no_reference():
+    """A calibration has no reference to LEVEL against -- it IS the reference --
+    so on everything `calibrate.py` writes the gate rests on the other two
+    terms, and the detail names both of them and their numbers.
+
+    UNTIL 2026-09-11 IT RESTED ON DRIFT ALONE, and the DRIFT row below is
+    exactly the shape that let a floored card through: a steady clock passes
+    however low it is. FLOOR is scored beside it now, so the PASS row here is
+    a card that is both steady AND clocking, which is what the ceilings need.
+    """
     for drift, want in ((True, EX.PASS), (False, EX.FAIL)):
         cal = calibration(clocks={**LEGACY_CLOCKS, "clock_level_ok": None,
                                   "clock_drift_ok": drift,
+                                  "sm_clock_load_mhz": 1470.0,
                                   "sm_clock_start_mhz": 1755, "sm_clock_end_mhz": 1600})
-        gates = {name: (verdict, detail)
-                 for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
-        verdict, detail = gates["not_throttled"]
+        verdict, detail = details(cal)["not_throttled"]
         assert verdict == want, drift
-        assert f"scored DRIFT (clock_drift_ok={drift})" in detail
-        assert "LEVEL undetermined" in detail
+        assert f"DRIFT {'PASS' if drift else 'FAIL'} (clock_drift_ok={drift}" in detail
+        assert "1755 -> 1600 MHz" in detail
+        # FLOOR is a fraction of the card's own maximum, never a literal.
+        assert "FLOOR PASS (1470.0 MHz median under load against a floor of " in detail
+        assert f"{T.thermal_floor_mhz(H200_MAX_SM):.0f} MHz" in detail
+        assert "LEVEL" not in detail, "a reference nobody supplied is not a term"
 
 
 def test_a_calibration_that_predates_the_under_load_verdict_is_refused_not_scored():
@@ -266,23 +299,41 @@ def test_a_calibration_that_predates_the_under_load_verdict_is_refused_not_score
     for throttled in (True, False):
         cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": throttled})
         gates = {name: (verdict, detail)
-                 for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
+                 for _k, name, verdict, detail in CH.score(cal, H200_PIN, H200_MAX_SM)}
         verdict, detail = gates["not_throttled"]
         assert verdict == EX.UNKNOWN, throttled
         assert "predates the under-load clock verdict" in detail
         assert "NOT scored" in detail
-        assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN)]) \
+        assert EX.classify([(k, v) for k, _n, v, _d in CH.score(cal, H200_PIN, H200_MAX_SM)]) \
             == EX.CLAIM_FAIL
 
 
 def test_flags_present_but_none_are_unknown_not_passed():
     """No usable under-load sample is not a pass, and the retired flag is not
-    reached for as a substitute."""
+    reached for as a substitute. Neither FLOOR nor DRIFT can be scored from a
+    record with no samples in it, and the detail says so of each."""
     cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
                               "clock_level_ok": None, "clock_drift_ok": None})
-    verdict, detail = CH.under_load_clock_verdict(cal)
+    verdict, detail = CH.under_load_clock_verdict(cal, H200_MAX_SM)
     assert verdict == EX.UNKNOWN
-    assert "both None" in detail and "NOT substituted" in detail
+    assert "FLOOR NOT SCORED" in detail and "DRIFT NOT SCORED" in detail
+    assert "was not tested" in detail and "NOT substituted" in detail
+
+
+def test_a_calibration_with_no_maximum_clock_leaves_the_floor_untested():
+    """THE ARGUMENT IS OPTIONAL AND ITS ABSENCE IS NEVER A PASS. A caller that
+    does not supply the card's maximum has not asked the one question that
+    catches a floored card, and an untested claim has to be visible in the
+    exit code: UNKNOWN, which `classify` counts against the gate. This is the
+    same rule `no_pattern_exceeds_the_pin_rate` takes for a missing bus width.
+    """
+    cal = calibration()
+    verdict, detail = CH.under_load_clock_verdict(cal)          # no maximum
+    assert verdict == EX.UNKNOWN
+    assert "maximum SM clock could not be read" in detail
+    assert "LEVEL PASS" in detail and "DRIFT PASS" in detail, (
+        "the other two terms still passed; it is the untested one that decides")
+    assert CH.under_load_clock_verdict(cal, H200_MAX_SM)[0] == EX.PASS
 
 
 def test_the_under_load_verdict_is_read_from_the_gemm_clock_block_too():
@@ -302,11 +353,11 @@ def test_every_gate_prints_one_result_line_and_nothing_else_does(capsys):
     """The driver greps `RESULT: ` at column zero and nothing else. A line that
     merely contains PASS is prose, and prose is what the pre-2026-09-02 summary
     grep was reading pre-registered expectations out of."""
-    for kind, name, verdict, detail in CH.score(calibration(), H200_PIN):
+    for kind, name, verdict, detail in CH.score(calibration(), H200_PIN, H200_MAX_SM):
         print(EX.result_line(kind, name, verdict, detail))
     printed = capsys.readouterr().out
     lines = EX.parse_result_lines(printed)
-    assert len(lines) == len(CH.score(calibration(), H200_PIN))
+    assert len(lines) == len(CH.score(calibration(), H200_PIN, H200_MAX_SM))
     assert {ln.verdict for ln in lines} == {EX.PASS}
 
 
@@ -471,15 +522,14 @@ def test_the_loaded_clock_record_carries_the_under_load_verdict_the_gate_scores(
     assert (d["sm_clock_load_mhz"], d["sm_clock_start_mhz"],
             d["sm_clock_end_mhz"]) == (1470, 1485, 1470)
     cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=d)
-    gates = {name: (verdict, detail)
-             for _k, name, verdict, detail in CH.score(cal, H200_PIN)}
-    verdict, detail = gates["not_throttled"]
+    verdict, detail = details(cal)["not_throttled"]
     assert verdict == EX.PASS
-    assert "scored DRIFT (clock_drift_ok=True) from gemm_clock." in detail
-    assert "LEVEL undetermined" in detail and "1485 -> 1470 MHz" in detail
+    assert "from gemm_clock." in detail
+    assert "DRIFT PASS (clock_drift_ok=True" in detail and "1485 -> 1470 MHz" in detail
+    assert "FLOOR PASS (1470 MHz median under load" in detail
     # Scored, not refused: no gate is UNKNOWN. (clock_established FAILs on the
     # legacy fixture pair; on the pod it PASSED, and it is not this gate.)
-    assert all(v != EX.UNKNOWN for _k, _n, v, _d in CH.score(cal, H200_PIN))
+    assert all(v != EX.UNKNOWN for _k, _n, v, _d in CH.score(cal, H200_PIN, H200_MAX_SM))
 
 
 def test_a_loaded_clock_that_drifted_under_load_fails_the_gate_and_an_empty_one_is_unknown():
@@ -490,7 +540,7 @@ def test_a_loaded_clock_that_drifted_under_load_fails_the_gate_and_an_empty_one_
     drifted = LoadedClock(label="bf16 GEMM", samples=(1980, 1800, 1600, 1500, 1470),
                           median_mhz=1600, spread_pct=26.0, after_idle_mhz=1470)
     cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=drifted.as_dict())
-    verdict, detail = CH.under_load_clock_verdict(cal)
+    verdict, detail = CH.under_load_clock_verdict(cal, H200_MAX_SM)
     assert verdict == EX.FAIL
     assert "1980 -> 1470 MHz" in detail and "blend of two states" in detail
     empty = LoadedClock(label="bf16 GEMM", samples=(), median_mhz=0,
@@ -498,8 +548,9 @@ def test_a_loaded_clock_that_drifted_under_load_fails_the_gate_and_an_empty_one_
     d = empty.as_dict()
     assert d["clock_drift_ok"] is None and d["clock_level_ok"] is None
     cal = calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=d)
-    verdict, detail = CH.under_load_clock_verdict(cal)
-    assert verdict == EX.UNKNOWN and "both None" in detail
+    verdict, detail = CH.under_load_clock_verdict(cal, H200_MAX_SM)
+    assert verdict == EX.UNKNOWN
+    assert "FLOOR NOT SCORED" in detail and "DRIFT NOT SCORED" in detail
 
 
 
@@ -527,3 +578,168 @@ def test_the_pin_rate_is_built_from_the_enabled_bus_nvml_reports():
     # Off a GPU the NVML reader answers None and never raises.
     got = CH._nvml_memory_bus_bits()
     assert got is None or (isinstance(got, int) and got > 0)
+
+
+# --------------------------------------------------------------------------
+# the card that ran flat at its floor (2026-09-11) and the term that catches it
+# --------------------------------------------------------------------------
+
+
+def floored_calibration():
+    """The 2026-09-11 pod, planted in the shape `calibrate.py` would have
+    written it: the GEMM sampled five times at the card's 345 MHz floor.
+
+    Nothing here is invented. That pod boosted to 1980 MHz, collapsed inside
+    ~30 s of sustained bf16 GEMM, stayed at 345 and drew ~240 W of a 700 W
+    limit while climbing from 87 C to 93 C."""
+    from moe.bench.calibrate import LoadedClock
+
+    floored = LoadedClock(label="bf16 GEMM", samples=(345, 345, 345, 345, 345),
+                          median_mhz=345, spread_pct=0.0, after_idle_mhz=345,
+                          temp_c=93, power_w=240.0)
+    # THE SETTLE COLLAPSED WITH IT, which is the whole difficulty: every other
+    # gate on the page agrees with itself. `clock_established` compares the
+    # GEMM's median against the settle plateau, and on a card that fell before
+    # the settle finished they are both 345, so that VALIDITY gate PASSES and
+    # the page looks complete. Planting a healthy settle here would let this
+    # test pass for the wrong reason -- INVALID on `clock_established` rather
+    # than CLAIM_FAIL on the term this slice added.
+    return calibration(clocks={**LEGACY_CLOCKS}, gemm_clock=floored.as_dict(),
+                       settle={"settled": True, "final_mhz": 345},
+                       gemm_clock_mhz=345)
+
+
+def test_a_card_flat_at_its_floor_fails_the_gate_that_used_to_pass_it():
+    """THE MOTIVATING EVENT, both halves in one test.
+
+    The OLD rule is planted first and shown to pass, because a claim that the
+    gate had a hole is worth nothing unless the hole is demonstrated: DRIFT
+    over this record is True, since first and last samples are both 345. That
+    is what `not_throttled` scored, and it is why a pod that could not hold a
+    clock published a tracked ruler whose ridge read 73.6 against a real ~156.
+
+    The FLOOR term is what fails it, and a FAIL is a RESULT: CLAIM_FAIL, which
+    the session driver latches and refuses on, not INVALID and not a retry."""
+    cal = floored_calibration()
+    # The hole, reproduced: DRIFT alone says this card is fine.
+    assert cal.gemm_clock["clock_drift_ok"] is True
+    assert cal.gemm_clock["clock_level_ok"] is None
+    assert T.clock_flags(345, 345, 345, None) == (None, True)
+
+    verdict, detail = CH.under_load_clock_verdict(cal, H200_MAX_SM)
+    assert verdict == EX.FAIL
+    assert "FLOOR FAIL (345 MHz median under load against a floor of " in detail
+    assert "DRIFT PASS" in detail, "the term that used to decide still passes"
+    assert "pinned near its own clock floor" in detail
+    assert "the ridge derived from them is wrong" in detail
+    scored = CH.score(cal, H200_PIN, H200_MAX_SM)
+    by_name = dict((n, v) for _k, n, v, _d in scored)
+    assert by_name["not_throttled"] == EX.FAIL
+    # EVERY OTHER GATE ON THIS PAGE PASSES, which is the point. The pod that
+    # motivated this ran to completion and published; only the term added here
+    # separates it from a sound calibration.
+    assert by_name["clock_established"] == EX.PASS
+    assert {n for n, v in by_name.items() if v != EX.PASS} == {"not_throttled"}
+    assert EX.classify([(k, v) for k, _n, v, _d in scored]) == EX.CLAIM_FAIL
+    # And with the term absent -- a run that could not read the maximum -- the
+    # page is UNKNOWN, which still counts against the gate. Never PASS.
+    assert CH.under_load_clock_verdict(cal)[0] == EX.UNKNOWN
+
+
+def test_the_floor_is_a_fraction_of_the_cards_own_maximum_and_never_a_literal():
+    """R2. The same 345 MHz record is a FAIL on a 1980 MHz part and a PASS on
+    a part whose maximum is low enough, because the floor moves with the card.
+    A gate carrying 660 as a number would be a gate that works on one part."""
+    cal = floored_calibration()
+    assert T.thermal_floor_mhz(1980.0) == T.snap_to_clock_step(1980.0 / 3)
+    assert T.thermal_floor_mhz(1410.0) == T.snap_to_clock_step(1410.0 / 3)
+    assert T.thermal_floor_mhz(1980.0) > T.thermal_floor_mhz(1410.0)
+    assert CH.under_load_clock_verdict(cal, 1980.0)[0] == EX.FAIL
+    # A hypothetical part whose maximum is 900 MHz: 345 is above a third of it.
+    assert CH.under_load_clock_verdict(cal, 900.0)[0] == EX.PASS
+    # Every edge NVML can report is a clock NVML can report.
+    for maximum in (1410.0, 1755.0, 1980.0, 2100.0):
+        assert T.thermal_floor_mhz(maximum) % T.CLOCK_STEP_MHZ == 0
+
+
+def test_the_floor_fraction_separates_the_published_rows_from_the_fault():
+    """WHERE THE FRACTION CAME FROM, re-derived from the committed corpus on
+    every run rather than believed from the constant's own comment.
+
+    The binding healthy end is the LOWEST per-cell `sm_clock_load_mhz` median
+    in `results/published`, as a fraction of the highest clock the same corpus
+    ever recorded, which on this card is its maximum. The fault end is the
+    2026-09-11 pair, recorded in `timing.THERMAL_FAULT_OBSERVED_MHZ` and never
+    read at gate time. The fraction has to sit strictly between them with real
+    margin on both sides, or it either refuses healthy cards or admits the
+    fault."""
+    import csv
+    import hashlib
+
+    published = REPO / "results" / "published"
+    if not published.is_dir():
+        pytest.skip("no published corpus in this checkout")
+    seen, loads = set(), []
+    for path in sorted(published.rglob("cells.csv")):
+        digest = hashlib.md5(path.read_bytes()).hexdigest()
+        if digest in seen:          # the 2026-09-10 session duplicates its tree
+            continue
+        seen.add(digest)
+        with path.open(newline="") as fh:
+            for row in csv.DictReader(fh):
+                try:
+                    mhz = float(row.get("sm_clock_load_mhz") or 0)
+                except ValueError:
+                    continue
+                if mhz > 0:
+                    loads.append(mhz)
+    assert len(loads) > 1000, f"too few rows to derive a bound from: {len(loads)}"
+    healthy = min(loads) / max(loads)
+    fault_mhz, fault_max = T.THERMAL_FAULT_OBSERVED_MHZ
+    fault = fault_mhz / fault_max
+    assert fault < T.THERMAL_FLOOR_FRACTION < healthy, (fault, healthy)
+    # Margin, as a ratio, on each side. 1.5x is well inside the 1.93 and 1.91
+    # the constant's comment claims, so this fails on a drift rather than on
+    # a rounding.
+    assert healthy / T.THERMAL_FLOOR_FRACTION > 1.5, healthy
+    assert T.THERMAL_FLOOR_FRACTION / fault > 1.5, fault
+    # And no published row would have been refused by it.
+    floor = T.thermal_floor_mhz(max(loads))
+    assert min(loads) > floor, (min(loads), floor)
+
+
+def test_the_floor_is_scored_on_the_median_and_not_on_a_sample():
+    """A healthy card posts individual samples far below the floor during one
+    drain-and-ramp: the published corpus holds entries at 405 MHz on a part
+    whose maximum is 1980, inside cells whose medians and DRIFT verdicts are
+    sound. `clock_floor_ok` takes the median, and a record built from such a
+    trace passes."""
+    from moe.bench.calibrate import LoadedClock
+
+    excursion = LoadedClock(
+        label="bf16 GEMM", samples=(1425, 1410, 405, 825, 1365, 1410, 1425),
+        median_mhz=1410, spread_pct=71.6, after_idle_mhz=1425)
+    d = excursion.as_dict()
+    assert min(d["samples"]) < T.thermal_floor_mhz(H200_MAX_SM)
+    assert T.clock_floor_ok(d["sm_clock_load_mhz"], H200_MAX_SM) is True
+
+
+def test_both_call_sites_of_the_verdict_are_given_the_maximum_clock():
+    """RULE 3, asked of the source. `under_load_clock_verdict` is called twice
+    in this file -- once by `score` for the RESULT line and once by `main` for
+    the printed page -- and a fix landing at one of two call sites is this
+    repository's recurring defect, nineteen instances deep. A call that
+    forgets the maximum is not a crash, it is a page that silently scores one
+    term fewer than the line beside it."""
+    import ast
+
+    source = (REPO / "scripts" / "calibrate_hardware.py").read_text()
+    calls = [node for node in ast.walk(ast.parse(source))
+             if isinstance(node, ast.Call)
+             and getattr(node.func, "id", "") == "under_load_clock_verdict"]
+    assert len(calls) == 2, [ast.unparse(c) for c in calls]
+    for call in calls:
+        assert len(call.args) + len(call.keywords) == 2, ast.unparse(call)
+    # and the printed page's FAIL advice names the floored card, not a settle.
+    assert "THIS CARD CANNOT HOLD A CLOCK" in source
+    assert "let it settle and re-run" in source, "the DRIFT advice still stands"

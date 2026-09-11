@@ -503,13 +503,27 @@ class LoadedClock:
         UNKNOWN counts against a CLAIM gate, so a sound calibration exited
         CLAIM_FAIL and every arm below it was refused.
 
-        DRIFT is the question a calibration can answer about itself: first and
-        last under-load samples within `timing.DRIFT_FRACTION`, the rule
-        `timing.clock_flags` applies to a cell. LEVEL is None BY CONSTRUCTION,
-        not by omission: this record IS the reference clock a roof is quoted
-        at, and a comparison of a clock against itself is not a verdict. A
-        record with no samples carries both as None, which the scorer reads
-        as UNKNOWN, never as a pass.
+        DRIFT is the question this RECORD can answer out of its own fields:
+        first and last under-load samples within `timing.DRIFT_FRACTION`, the
+        rule `timing.clock_flags` applies to a cell. LEVEL is None BY
+        CONSTRUCTION, not by omission: this record IS the reference clock a
+        roof is quoted at, and a comparison of a clock against itself is not a
+        verdict. A record with no samples carries both as None, which the
+        scorer reads as UNKNOWN, never as a pass.
+
+        DRIFT IS NOT THE ONLY QUESTION A CALIBRATION IS ASKED, and this
+        docstring said it was until 2026-09-11. That day a rented H200
+        collapsed from its 1980 MHz maximum to its 345 MHz floor under
+        sustained GEMM and stayed there; first and last samples agreed
+        exactly, drift 0.0, and `scripts/calibrate_hardware.py` published a
+        ruler whose ridge read 73.6 against that card's real ~156. The missing
+        term is FLOOR, the median against THE CARD'S OWN MAXIMUM SM CLOCK, and
+        it is deliberately NOT computed here: the maximum is a property of the
+        silicon that no calibration measures, so it is read off the device by
+        `timing.max_sm_clock_mhz` and passed to
+        `calibrate_hardware.under_load_clock_verdict`, which scores all three
+        terms together. `sm_clock_load_mhz` below is the median that term
+        reads, which is why it is on this record at all.
         """
         from . import timing as T
 

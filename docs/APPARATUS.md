@@ -209,6 +209,40 @@ fp8 compute-bound cells are scored against the fixed 1469.9 TFLOP/s fp8 roof
 with `1469.9 x load / 1395` carried beside it, and there is no fp8 band either
 (76 of 84 fp8 rows sit above 1395).
 
+**FLOOR, and it is asked of the CALIBRATION and of no cell (2026-09-11).** On
+2026-09-11 a rented H200 boosted to its 1980 MHz maximum, collapsed to its
+345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there, drawing
+~240 W of a 700 W limit while climbing from 87 C to 93 C.
+`scripts/calibrate_hardware.py` ran to completion on it, published a tracked
+yaml and its `not_throttled` gate PASSED, because that gate scored DRIFT and a
+card pinned flat at its floor does not drift. The ruler it published put the
+ridge at 73.6 where that card's ridge is near 156: the compute peak fell with
+the clock and the memory side did not. LEVEL could not have caught it either,
+because `roofline.reference_clock` reads the reference out of that same
+calibration, so a collapsed card is compared against its own collapse. The
+third term, `timing.clock_floor_ok`, compares the under-load MEDIAN against
+`timing.THERMAL_FLOOR_FRACTION` of the card's own maximum SM clock, read from
+the device by `timing.max_sm_clock_mhz`: the one reference in reach that the
+fault cannot move. The fraction is one third, which is the geometric midpoint
+of the admissible window -- the lowest per-cell `sm_clock_load_mhz` median in
+`results/published` is 1275 of 1980 (0.6439, at 697.4 W of 700, a hungry tile
+at the cap) and the fault is 345 of 1980 (0.1742) -- and 1980/3 = 660 MHz sits
+on the 15 MHz grid. It is scored on the median and never on a sample: healthy
+cells in this corpus post individual samples down to 405 MHz during one
+drain-and-ramp.
+
+**WHICH CALL SITE TAKES WHICH RULE.** A per-tile CELL is excluded if and only
+if `clock_drift_ok` is False, unchanged, for the reason the 750-cell census
+gave: a hot tile clocking down IS the effect those arms measure, and excluding
+LEVEL-LOW cells removes exactly the tiles this study is about. The CALIBRATOR
+also scores FLOOR, because its job is not to measure a tile but to establish
+the ceiling every one of those cells will be scored against, and a floored
+clock makes that ceiling wrong. `moe/bench/driver.py`, `scripts/pod_session.sh`
+S6d and the five per-cell `clock_excluded` helpers are untouched by it. There
+is a card-acceptance arm, `scripts/thermal_acceptance.py`, that asks the same
+question before the calibration is paid for; it is arm 0 of
+`scripts/h200_gaps_session.sh` and it REFUSES the session rather than warning.
+
 **Two things the instrument does not cover yet, stated so nobody infers them.**
 The roof itself is timed by `moe.bench.calibrate` through `timing.time_eager`
 (queue-deep, pre-primed events, L2 flushed), and `calibrate_hardware.py`
