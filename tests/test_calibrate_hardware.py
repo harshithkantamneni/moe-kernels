@@ -743,3 +743,33 @@ def test_both_call_sites_of_the_verdict_are_given_the_maximum_clock():
     # and the printed page's FAIL advice names the floored card, not a settle.
     assert "THIS CARD CANNOT HOLD A CLOCK" in source
     assert "let it settle and re-run" in source, "the DRIFT advice still stands"
+
+
+def test_the_committed_calibration_in_this_tree_still_passes_the_new_gate():
+    """THE OTHER DIRECTION, and it is the expensive one to get wrong: a term
+    added to catch a sick card must not start refusing the healthy ones this
+    repository has already published against.
+
+    Read out of `moe/bench/hardware/measured_nvidia_h200.yaml` rather than
+    asserted here, which is R2: this card's GEMM clock has read different
+    numbers in different sessions, and a test that carried one of them would
+    fail the next time the card is recalibrated for a reason that has nothing
+    to do with this gate."""
+    import types
+
+    import yaml as yaml_mod
+
+    path = REPO / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml"
+    if not path.exists():
+        pytest.skip("no committed H200 calibration in this checkout")
+    detail = yaml_mod.safe_load(path.read_text())["detail"]
+    cal = types.SimpleNamespace(clocks=detail.get("clocks") or {},
+                                gemm_clock=detail.get("gemm_clock") or {})
+    median = cal.gemm_clock.get("sm_clock_load_mhz")
+    assert median, "the committed file carries no under-load median to score"
+    verdict, detail_text = CH.under_load_clock_verdict(cal, H200_MAX_SM)
+    assert verdict == EX.PASS, detail_text
+    # The relation, not the number: whatever that file says, it is above a
+    # third of the card's maximum with the margin the constant was sized for.
+    assert median >= T.thermal_floor_mhz(H200_MAX_SM)
+    assert median / T.thermal_floor_mhz(H200_MAX_SM) > 1.5, median
