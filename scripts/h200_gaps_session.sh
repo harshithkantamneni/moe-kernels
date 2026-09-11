@@ -8,12 +8,17 @@
 #                                                   # prints the total and the
 #                                                   # minute each arm starts at
 #   bash scripts/h200_gaps_session.sh --list        # the arms and what each closes
-#   bash scripts/h200_gaps_session.sh --only calibrate,roofline-n256-g16,noise_floor
-#                                                   # a subset. calibrate belongs
-#                                                   # in EVERY subset: the ruler
-#                                                   # gate below is not scoped to
-#                                                   # --only, because nothing that
-#                                                   # measures is either.
+#   bash scripts/h200_gaps_session.sh --only thermal,calibrate,roofline-n256-g16,noise_floor
+#                                                   # a subset. thermal and
+#                                                   # calibrate belong in EVERY
+#                                                   # subset: their gates are not
+#                                                   # scoped to --only, because
+#                                                   # nothing that measures is
+#                                                   # either. A card that cannot
+#                                                   # hold a clock serves no
+#                                                   # subset, and a subset run
+#                                                   # against another rental's
+#                                                   # ruler is not this card's.
 #   bash scripts/h200_gaps_session.sh --resume-latest
 #                                                   # RESUME the newest session
 #                                                   # for this card that holds a
@@ -511,6 +516,18 @@
 # THE ORDER IS THE ARGUMENT, so it is stated before the code. The rule behind it:
 # anything whose result changes how a later arm is READ runs before that arm.
 #
+#   0 thermal        CAN THIS RENTED CARD HOLD A CLOCK. Ahead of the ruler,
+#                    because the ruler is measured ON the clock. On 2026-09-11
+#                    a RunPod H200 boosted to 1980 MHz, collapsed to its 345 MHz
+#                    floor within ~30 s of sustained bf16 GEMM and stayed there
+#                    at ~240 W of a 700 W limit while climbing 87 C -> 93 C;
+#                    calibrate ran to completion on it, published a TRACKED yaml
+#                    reading ridge 73.6 against a real ~156, and its
+#                    not_throttled gate PASSED, because that gate scored DRIFT
+#                    and a card flat at its floor has first == last. A collapsed
+#                    card does not measure a LOW ceiling, it measures the WRONG
+#                    one: the compute peak falls with the clock and the memory
+#                    side does not. Three minutes, and it REFUSES the session.
 #   0 calibrate      THIS pod's own ceilings. Not optional: five of the arms
 #                    below REFUSE without a calibration for the attached device,
 #                    and the H200's dense bf16 moved 7.1% between two sessions
@@ -988,6 +1005,7 @@ session_choice() {
 # NO arm's state: R1 deleted the per-arm done-code lists and this restores none.
 # `ledger_state` is still the only thing that turns an exit code into a word.
 arm_script() { case "$1" in
+  thermal)                       echo scripts/thermal_acceptance.py ;;
   calibrate)                     echo scripts/calibrate_hardware.py ;;
   pin_probe-*)                   echo moe/bench/cli.py ;;
   roofline-*)                    echo scripts/bm128_roofline.py ;;
@@ -1443,6 +1461,147 @@ calibration_refusal() {
   esac
 }
 
+# --------------------------------------------------------------------------
+# THE THERMAL GATE. Arm 0 of arm 0: can this rented card hold a clock at all.
+#
+# WHY IT IS A GATE AND NOT A WARNING. On 2026-09-11 a RunPod H200 boosted to
+# 1980 MHz, collapsed to its 345 MHz floor within ~30 s of sustained bf16 GEMM
+# and stayed there, at ~240 W of a 700 W limit while climbing 87 C -> 93 C.
+# calibrate_hardware.py ran to completion on it, published a TRACKED yaml, and
+# its not_throttled gate PASSED: that gate scored DRIFT, and a card pinned flat
+# at its floor has first == last. The ruler it published read ridge 73.6 where
+# that card's ridge is near 156, and every arm below would have been scored
+# against it. A warning at minute 3 costs the whole rental to ignore.
+#
+# TWO QUESTIONS, THE SAME SHAPE AS THE CALIBRATION GATE BELOW, and the arm half
+# comes first for the same reason: when --only leaves this arm out, asking the
+# PAGE first would report on a log this session never wrote and name the wrong
+# problem.
+
+# WHAT THE ARM'S OWN PAGE SAYS ABOUT THE FLOOR, in one word. Read from the
+# RESULT line rather than from the exit code, because the exit code is one
+# integer over four gates and this gate is about ONE of them: a run that is
+# INVALID on its sampler has said nothing about the card, and a run that is
+# DONE with no C1 line at all is the UNEARNED DONE second_opinion already hunts.
+#   HELD        C1 PASS: the median clock held above this card's own floor
+#   FLOORED     C1 FAIL or UNKNOWN: it did not, or the floor was never derived
+#   UNREADABLE  a log with no C1 line in it
+#   MISSING     no log at all
+thermal_state() {
+  local log="${1:-}"
+  [[ -n "$log" && -f "$log" ]] || { echo MISSING; return; }
+  local line
+  line="$(grep -E '^RESULT: CLAIM C1 ' -- "$log" 2>/dev/null | tail -1)"
+  [[ -n "$line" ]] || { echo UNREADABLE; return; }
+  case "$line" in
+    "RESULT: CLAIM C1 PASS"*) echo HELD ;;
+    *)                        echo FLOORED ;;
+  esac
+}
+
+# THE WHOLE DECISION, in three lines, so the test can plant the pair directly
+# rather than reaching into the call site. Prints OK or "<HALF> <WORD>".
+thermal_verdict() {
+  local row="$1" state="$2"
+  [[ "$row" == DONE ]]  || { echo "ARM ${row:-NO_ROW}"; return 1; }
+  [[ "$state" == HELD ]] || { echo "PAGE $state"; return 1; }
+  echo OK
+}
+
+# WHAT AN UNUSABLE CARD COSTS, in the words both halves of this gate need.
+# Factored for the same reason ruler_stakes is: two refusals about one
+# consequence drift into saying two different things about it.
+thermal_stakes() {
+  echo "  A card that cannot hold its clock does not measure a low ceiling, it"
+  echo "  measures the WRONG one: the compute peak collapses with the clock"
+  echo "  while the memory side does not, so the ridge, every roof fraction and"
+  echo "  every alpha below come out wrong rather than merely low. The"
+  echo "  2026-09-11 pod published ridge 73.6 on a card whose ridge is near 156."
+}
+
+thermal_refusal() {
+  local verdict="$1" card="$2" log="$3" state="$4" word="${1#* }"
+  local LEDGER_NOTE
+  LEDGER_NOTE="$(ledger_arm_note thermal)"
+  case "${verdict%% *}" in
+   ARM)
+    echo "REFUSED: the thermal probe did not accept $card."
+    echo "  thermal is '$word' in $LEDGER; its page is $state."
+    case "$word" in
+      NO_ROW)     if [[ -n "$ONLY" ]]; then
+                    echo "  No thermal row at all: --only $ONLY left the first arm out, and"
+                    echo "  this gate is deliberately NOT scoped to --only, because a card"
+                    echo "  that cannot clock cannot run any subset either. Name it first:"
+                    echo "      bash scripts/h200_gaps_session.sh --only thermal,$ONLY"
+                  else
+                    echo "  No thermal row at all, and no --only to explain it: the first arm"
+                    echo "  did not run in this session directory. Read $LEDGER."
+                  fi ;;
+      CLAIM_FAIL) echo "  THIS IS THE ANSWER, NOT A BROKEN ARM. The probe held a load on"
+                  echo "  this card and watched its clock, and the card did not hold one."
+                  echo "  Its own page says which claim and by how much:"
+                  local failed
+                  failed="$(failed_claim_lines "$log")"
+                  if [[ -n "$failed" ]]; then
+                    printf '%s\n' "$failed" | sed 's/^/    /'
+                  else
+                    echo "    its log holds no failing CLAIM line for this driver to quote,"
+                    echo "    which is itself a disagreement between the page and the exit"
+                    echo "    code: read $log before believing either."
+                  fi
+                  echo "  RETURN THE POD AND RENT ANOTHER CARD. Re-running the arm measures"
+                  echo "  the same silicon again, which is why the row is latched." ;;
+      INVALID)    echo "  It MEASURED and then failed a VALIDITY gate, so it said nothing"
+                  echo "  about the card in either direction: either it watched too short a"
+                  echo "  window to take a median from, or its samples came through a forked"
+                  echo "  nvidia-smi, which describes an idle card at its boost clock."
+                  echo "  Install nvidia-ml-py into $PY_BASE and re-run; this is the"
+                  echo "  apparatus, not the pod." ;;
+      REFUSED)    echo "  It refused before measuring, so it cost nothing. The usual cause is"
+                  echo "  a maximum SM clock this container will not report, and the floor is"
+                  echo "  a fraction OF that maximum, so there is nothing to score against."
+                  echo "  Check that nvidia-ml-py is installed in $PY_BASE, or that"
+                  echo "  'nvidia-smi --query-gpu=clocks.max.sm' answers here." ;;
+      UNKNOWN)    echo "  The driver would not latch a word for it. The ledger note says why:"
+                  echo "      ${LEDGER_NOTE:-(the reason was not recorded on the row)}"
+                  echo "  Read the log and decide by hand; an UNKNOWN row is NOT latched and"
+                  echo "  re-runs on resume." ;;
+      *)          echo "  That is not DONE, and DONE is the only state in which this probe"
+                  echo "  stands behind the card." ;;
+    esac
+    thermal_stakes
+    echo "  Read $log where there is one, and re-run the first arm:"
+    echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py"
+    echo "  A CLAIM_FAIL or INVALID row is LATCHED and will not be re-attempted:"
+    echo "  delete its row from $LEDGER to force one." ;;
+   PAGE)
+    echo "REFUSED: the thermal probe exited DONE and its page does not say the"
+    echo "  card held its clock. That is a disagreement between the exit code"
+    echo "  and the log, which costs the arm its word whichever is right."
+    case "$word" in
+      FLOORED)    echo "  Its C1 line is not a PASS: the median clock over the window sat"
+                  echo "  below this card's own thermal floor, or no maximum SM clock could"
+                  echo "  be read and the floor was never derived." ;;
+      UNREADABLE) echo "  Its log carries no 'RESULT: CLAIM C1' line at all, so the claim"
+                  echo "  this whole gate reads was never printed. An exit 0 over a page with"
+                  echo "  no result on it is an UNEARNED DONE." ;;
+      MISSING)    echo "  There is no log at $log, so the row in $LEDGER describes a run"
+                  echo "  whose page is gone." ;;
+      *)          echo "  That is not HELD, and HELD is the only word in which this card is"
+                  echo "  accepted." ;;
+    esac
+    thermal_stakes
+    echo "  Read $log, then re-run the first arm:"
+    echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py" ;;
+   *)
+    # A word neither half issues. There is no safe default: the two states this
+    # gate decides between are "this card can be used" and "this card cannot",
+    # and guessing either is what the gate exists to prevent.
+    echo "REFUSED: thermal_verdict said '$verdict', which this refusal does not"
+    echo "  know how to read. Row state is in $LEDGER and the page is at $log." ;;
+  esac
+}
+
 # WHAT A WRONG RULER COSTS, in the words both halves of the calibration gate
 # need. Factored so the two refusals cannot drift into saying different things
 # about the same consequence.
@@ -1780,6 +1939,7 @@ counter_route_card() {
 # own plans refuse before any GPU time: a refusal is a result and costs nothing,
 # and booking minutes for one hides that the answer is already in.
 arm_minutes()  { case "$1" in
+  thermal) echo 3 ;;
   calibrate) echo 3 ;;
   pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
   roofline-n64-g1) echo 1 ;;    roofline-n256-g16) echo 0 ;;
@@ -1799,6 +1959,7 @@ esac; }
 # a figure this file invented. Read it as an instruction: run the command and
 # the figure is on the page.
 arm_basis() { case "$1" in
+  thermal)    echo "thermal_acceptance.py --dry-run -> 'estimated wall time 160 s (2.7 min: 30 s ramp + 120 s window + 10 s allocation and first matmul)'. A WALL figure, and the only arm whose cost IS its window: it compiles nothing, times nothing and allocates two 8192^2 bf16 buffers once. Booked 3, above the figure and never at it. THE THREE TERMS ARE THE FLAGS ON THE ARM LINE, so a re-derivation runs the same command: --settle-seconds 30 is calibrate.settle_clocks' own budget for the governor's ramp (840 -> 1980 MHz on this card), --seconds 120 is four times the 2026-09-11 card's observed ~30 s to collapse AFTER that ramp, and --poll-seconds 2 puts 60 samples in the window against a floor of 9. The 10 s allocation term is an ALLOWANCE and the plan page says so: _load_compute's 256 MiB and cuBLAS's first-call kernel choice have not been timed here." ;;
   calibrate)  echo "calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan." ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin." ;;
   roofline-n64-g1) echo "bm128_roofline.py --dry-run --block-n 64 --group-m 1 --control 256 -> 'estimate 58 s of GPU', 39 cells." ;;
@@ -1915,7 +2076,7 @@ bounded_minutes() {
 # and refuses the session without arm 0, and an unhonoured pin makes every
 # forced-tile arm below it worthless.
 rental_2h_arms() {
-  echo "calibrate pin_probe-n64-g1 pin_probe-n256-g16 roofline-n64-g1" \
+  echo "thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16 roofline-n64-g1" \
        "roofline-n256-g16 roofline-n256-g32 alias_ablation bn_g16"
 }
 rental_3h_arms() {
@@ -1985,7 +2146,7 @@ session_bound() {
 # the ratio between them to be computed by hand. That is the defect the pair was
 # added to fix, reappearing one level up in the booking.
 rerun_arms() {
-  echo "calibrate pin_probe-n64-g1 bn_g16 dtype counter_plan counter-n32-m64 counter-n128-m64 counter_contrast"
+  echo "thermal calibrate pin_probe-n64-g1 bn_g16 dtype counter_plan counter-n32-m64 counter-n128-m64 counter_contrast"
 }
 
 # WHAT EACH ONE IS EXPECTED TO REACH, in the ledger's own words, so that the
@@ -1998,6 +2159,7 @@ rerun_arms() {
 # 2026-09-09 cells; a rerun table that outlives its session predicts states for
 # arms that have since been spent.
 rerun_expectation() { case "$1" in
+  thermal)     echo "DONE, about 3 min, and it is in the set to GATE every arm below it rather than to be re-asked. It has NO prior ledger word because it did not exist before 2026-09-11: the session it was written for is the one where a rented H200 collapsed to its clock floor and arm 0 published a ruler off it anyway. CLAIM_FAIL is the word that ENDS the session, and it is a result about the pod rather than about the apparatus: return the card. INVALID means the probe could not be trusted -- too few samples, or a forked sampler -- and says nothing about the card either way; REFUSED means no maximum SM clock could be read here, which costs nothing and is fixed by installing nvidia-ml-py in the interpreter this driver runs it under." ;;
   calibrate)   echo "DONE, 6/6 gates, 29 s. It read DONE on 2026-09-10 and published ridge 155.9 (band 147.9-155.9), 682.1 TFLOP/s bf16 at 1470 MHz and triad 4374.3 GB/s. Re-running it costs half a minute and stamps this session; the card moved 7.1% in dense bf16 between two rentals, so it is not carried." ;;
   pin_probe-n64-g1) echo "DONE. It was DONE in 29 s on 2026-09-10. It is a precondition, not a question, and it gates bn_g16 and both counter cells." ;;
   bn_g16)      echo "CLAIM_FAIL is the LIKELY word and it is a result; DONE is possible and INVALID means the third tile did not qualify. On 2026-09-10 at two subject heights the arm reached V0-V5 PASS, C3 and C5 PASS, and C6/C2/C4 FAIL with C1 UNKNOWN, at alpha_a = -0.8143 +/- 0.0961 against a gate of 0.025 on the spread and [0.10, 0.38] on the value. The 2026-09-10 fit is what the third tile is for: at BLOCK_M in {32, 64} the six cells cannot identify the model, every candidate extra term correlates +0.72 to +0.98 with the activation column, and C2 chi2 is 13.28 over 4 dof. READ V5 AND V2 FIRST: V5 wants >= 3 BN values with an alpha and > 3 cells, and the added BLOCK_M=16 has to qualify a compute reference of its own; if it does, the arm returns NINE cells over three heights and C2 becomes a statement about a term rather than about a two-point degeneracy. 46 min, up from 36 while the swept set was {32, 64, 128}. 16 IS AN ADDED HEIGHT, NOT A REPLACEMENT, and this line said replacement until now: the arm line is --tiles 16,32,64,128, BLOCK_M=128 stays in the swept set, and the plan it prints is 108 treads (8 at BLOCK_M=128 per BLOCK_N among them) for 1836 timings and 2754 s, which is the booking above. arm_basis has always said it the other way, that 16 ADDS 24 treads at 8 per BLOCK_N, so the two descriptions of one swept set disagreed. What 2026-09-10 established is that BLOCK_M=128 yielded no alpha at any BLOCK_N there (its memory branch came within 15% of its compute branch and was discarded), so 16 is the height expected to supply the THIRD memory branch that BLOCK_M=128 did not; it is not booked in its place." ;;
@@ -2071,6 +2233,7 @@ counter_closes() {
 }
 
 arm_closes() { case "$1" in
+  thermal)    echo "WHETHER THIS RENTED CARD CAN HOLD A CLOCK AT ALL, and it is FIRST because every arm below it, arm 0 included, is worthless on a card that cannot. WHAT HAPPENED, on a RunPod H200 on 2026-09-11: the part boosted to its 1980 MHz maximum, collapsed to its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there, clocks_event_reasons going 0x0 -> 0x20 SwThermalSlowdown -> 0x68 HwSlowdown|SwThermalSlowdown|HwThermalSlowdown, drawing ~240 W of a 700 W limit while climbing from 87 C to 93 C. That is a cooling fault, not a workload. scripts/calibrate_hardware.py RAN TO COMPLETION on it, published a tracked yaml, and its not_throttled CLAIM gate PASSED, because that gate scored DRIFT and a card pinned flat at its floor has first == last; the only gate that failed was clock_steady_across_patterns, and it failed incidentally on two 675 MHz transients. The ruler it published put the ridge at 73.6 where that card's ridge is near 156, because the compute peak collapsed with the clock and the memory side did not, and every roof fraction, alpha and cap measured below would have been scored against it. WHAT THIS ARM DOES INSTEAD: holds the calibration's OWN compute load (moe.bench.calibrate._load_compute, dense bf16 8192^3) for 30 s of discarded ramp plus a 120 s scored window, polling the SM clock, board power and temperature through NVML with work still in flight. C1 is the median clock against timing.THERMAL_FLOOR_FRACTION of THIS CARD'S OWN MAXIMUM, read off the device: one third, which is the geometric midpoint of the admissible window between the lowest healthy per-cell median in results/published (1275 of 1980, 0.6439, drawn at 697.4 W of a 700 W cap, so a hungry tile and not a sick card) and the fault (345 of 1980, 0.1742), and 1980/3 = 660 MHz sits on the 15 MHz NVML grid. C2 is the repository's own DRIFT rule over the first and last thirds of the window, which catches a card still on its way down while its median is still high. NEITHER IS A CLOCK LITERAL: on an A100 the same file gates at 465 MHz without being told, and the verdict is taken on the MEDIAN because healthy published cells post individual readings at 405 MHz during one drain-and-ramp. IT REFUSES THE SESSION RATHER THAN WARNING, like arm 0's ruler gate and for the same reason: a warning costs a whole rental to ignore, and a CLAIM_FAIL here is a RESULT about this pod that the ledger latches, so the answer is to return the card and rent another rather than to re-run the arm. THE SLOWDOWN REASON MASK IS RECORDED AND PRINTED, NEVER SCORED: a container that does not expose the field would otherwise refuse a healthy card, and the clock already answers what the mask only explains." ;;
   calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
   pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
@@ -2097,6 +2260,7 @@ arm_closes() { case "$1" in
 esac; }
 
 arm_offgpu_gates() { case "$1" in
+  thermal)    echo "scripts/thermal_acceptance.py --self-test  (eight planted worlds, three of them REFUSALS, one VALIDITY RESULT line and exit 0). THE TWO WORLDS THAT CARRY IT: 'floored' replays 2026-09-11 and shows C2 -- the DRIFT rule, which is all calibrate_hardware's not_throttled used to score -- still PASSING on a card flat at its floor, which is the hole; 'hungry-tile' is the lowest per-cell median in results/published at 697.4 W of 700 and must NOT be refused, because a gate that refuses healthy cards costs a rental as surely as one that admits sick ones. Also scripts/thermal_acceptance.py --dry-run for the plan, the two registered predictions and the resolution line." ;;
   roofline-n64-g1|roofline-n256-g16|roofline-n256-g32)
               echo "scripts/bm128_roofline.py --self-test --fail-on-gate  (three planted worlds, exit 0 required)" ;;
   bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
@@ -2128,7 +2292,7 @@ RETRY_ARMS=0
 # row that says "roofline" and a report that says BLOCK_N=64 are the same
 # defect as a run id without its card.
 # --------------------------------------------------------------------------
-ARM_NAMES=(calibrate pin_probe-n64-g1 pin_probe-n256-g16
+ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy
@@ -2160,7 +2324,7 @@ note "vllm py   $PY_VLLM"
 # Every script this driver calls must exist and parse. A missing script would
 # otherwise surface as an arm RETRY forty minutes in, with the reason buried.
 missing=0
-for s in calibrate_hardware bm128_roofline bm128_depth alias_ablation \
+for s in thermal_acceptance calibrate_hardware bm128_roofline bm128_depth alias_ablation \
          replicate_noise_floor \
          bn_decomposition memory_branch_anchor occupancy_vs_swizzle \
          tile_cap_test dtype_tile_confound span_extent_separation \
@@ -2184,7 +2348,7 @@ for extra in moe/bench/cli.py scripts/block_m_crossing_sweep.py; do
   fi
 done
 if (( missing )); then echo "REFUSED: a script this driver schedules is missing or broken."; exit "$RC_REFUSED"; fi
-note "scripts   all 16 present and parse, the thirteen sweep scripts plus"
+note "scripts   all 17 present and parse, the fourteen sweep scripts plus"
 note "          check_mma_path.sh, moe/bench/cli.py (both pin probes) and"
 note "          scripts/block_m_crossing_sweep.py (twelve noise-floor replicates)"
 
@@ -2520,6 +2684,66 @@ fi
 started=$(date -u +%s)
 
 say "SESSION  card=$CARD  $( ((DRY)) && echo '(DRY RUN: plans only)' || echo '(MEASURING)')"
+
+# --------------------------------------------------------------------------
+# 0. CAN THIS CARD HOLD A CLOCK. Before the ruler, because the ruler is measured
+#    ON the clock: a card pinned at its floor publishes a ceiling that is wrong
+#    rather than low, and arm 0 cannot tell the difference from inside itself.
+# --------------------------------------------------------------------------
+say "0. can THIS card hold a clock under sustained load"
+if (( DRY )); then
+  # IT HAS A --dry-run AND A --self-test, and the plan is the one an operator
+  # reads before renting: it prints the two registered predictions, the window,
+  # the wall figure and -- on a box with a card -- that card's own maximum and
+  # the floor derived from it. Off GPU it names the 2026-09-11 card's maximum
+  # instead AND SAYS SO, rather than claiming a reading this box never took.
+  arm thermal "$PY_BASE" "$REPO/scripts/thermal_acceptance.py" --dry-run
+else
+  # THE FLAGS ARE ON THE LINE, not left to the script's defaults, for the reason
+  # the counter pair's line carries its own: a gate advertised at one
+  # configuration while the arm runs another is this file's standing defect.
+  # 30 s of ramp is calibrate.settle_clocks' own budget, 120 s is four times the
+  # 2026-09-11 card's observed time to collapse after that ramp, and a 2 s poll
+  # puts 60 samples in the window against a non-vacuity floor of 9.
+  arm thermal "$PY_BASE" "$REPO/scripts/thermal_acceptance.py" \
+      --seconds 120 --settle-seconds 30 --poll-seconds 2
+  # AND THE GATE, in TWO questions, because an exit code is one integer over
+  # four gates and this gate is about ONE of them.
+  #
+  # DID THE ARM STAND BEHIND A CARD. `ledger_arm_state thermal` over THIS
+  # session's ledger. CLAIM_FAIL is the answer and not a broken arm: the card
+  # cannot hold its clock, the row is latched, and re-running it measures the
+  # same silicon. INVALID says the probe could not be trusted and therefore
+  # said nothing about the card in either direction.
+  #
+  # AND DOES ITS PAGE SAY SO. `thermal_state` reads the C1 RESULT line out of
+  # the log. A DONE row over a page with no C1 line on it is the UNEARNED DONE
+  # `second_opinion` already hunts, and this gate is the one place where that
+  # disagreement decides whether money is spent.
+  #
+  # THE GATE IS NOT SCOPED TO --only, exactly like the calibration gate below
+  # and for a stronger reason: every subset of this session runs kernels on
+  # this card, so there is no subset a floored card can serve. A resume into
+  # the SAME session directory still passes without re-measuring, because the
+  # ledger is that directory's and the first pass's DONE row is still in it.
+  THERMAL_LOG="$LOGS/thermal.log"
+  THERMAL_PAGE="$(thermal_state "$THERMAL_LOG")"
+  THERMAL_ROW="$(ledger_arm_state thermal)"
+  THERMAL_VERDICT="$(thermal_verdict "$THERMAL_ROW" "$THERMAL_PAGE")"
+  if [[ "$THERMAL_VERDICT" == "OK" ]]; then
+    note "   card      held its clock above its own thermal floor for the whole"
+    note "             window, and was still holding it at the end of it. Read"
+    note "             the C1 line in $THERMAL_LOG for the median, the floor and"
+    note "             the maximum it is a third of, and the C1 prose for the"
+    note "             board power beside it: a low clock AT the power cap is a"
+    note "             hungry kernel, a low clock well under it is a sick card."
+    note "             THE SLOWDOWN REASON MASK IS RECORDED THERE, NOT SCORED."
+  else
+    echo
+    thermal_refusal "$THERMAL_VERDICT" "$CARD" "$THERMAL_LOG" "$THERMAL_PAGE"
+    exit "$RC_REFUSED"
+  fi
+fi
 
 # --------------------------------------------------------------------------
 # 0. THIS POD'S OWN CEILINGS, and whether the pin reaches the kernel.

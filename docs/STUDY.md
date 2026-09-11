@@ -280,12 +280,23 @@ between two cells, so it is two arms. Second is a THIRD BLOCK_M in the
 `bn_g16` grid: the current grid has
 two heights that yield a memory branch, which is why every candidate extra
 term correlates +0.72 to +0.98 with the activation column and nothing is
-identifiable. The next session is `--new`, ~300 priced minutes:
+identifiable. The next session is `--new`, ~303 priced minutes:
 
 ```bash
 bash scripts/h200_gaps_session.sh --new \
-  --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
+  --only thermal,calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
 ```
+
+`thermal` is the first arm since 2026-09-11 and it is in this set because it
+GATES the rest. A rented H200 that day boosted to its 1980 MHz maximum,
+collapsed to its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed
+there at ~240 W of a 700 W limit while climbing from 87 C to 93 C.
+`scripts/calibrate_hardware.py` ran to completion on it and published a
+tracked ruler reading ridge 73.6 against that card's real ~156, and its
+`not_throttled` gate PASSED: the gate scored DRIFT, and a card pinned flat at
+its floor has first == last. Three minutes of sustained load and a clock read
+against a third of the card's own maximum retires that whole failure mode
+before the ruler is measured, and it refuses the session rather than warning.
 
 THE COUNTER IS TWO ARMS AND BOTH ARE BOOKED, which is what took that figure
 from ~180 to ~300. A DRAM read at ONE BLOCK_N buys `alpha_b` as a traffic

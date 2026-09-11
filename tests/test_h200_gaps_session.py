@@ -129,7 +129,7 @@ from moe.bench import exit_codes  # noqa: E402
 #: dict is gone from here, and every arm is read off its own plan again.
 
 
-ARMS = ("calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
+ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
@@ -255,8 +255,14 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     it gates actually run."""
     order = re.search(r"^ARM_NAMES=\(([^)]*)\)", TEXT, re.M).group(1).split()
     assert order == list(ARMS)
-    assert order[0] == "calibrate"
-    assert order[1].startswith("pin_probe") and order[2].startswith("pin_probe")
+    # THE CARD BEFORE THE RULER, since 2026-09-11. The ruler is measured ON the
+    # clock: a card pinned at its floor publishes a ceiling that is wrong
+    # rather than low, and arm 0 cannot tell the difference from inside itself
+    # -- it PASSED on such a card, because it scored DRIFT and a flat clock
+    # does not drift. Three minutes here retires the whole rental.
+    assert order[0] == "thermal"
+    assert order[1] == "calibrate"
+    assert order[2].startswith("pin_probe") and order[3].startswith("pin_probe")
     # The control roofline runs first of the three: if BLOCK_M=128 reaches the
     # roof at the LEANEST configuration it reaches it at every richer one, so a
     # refutation there ends the session's whole middle at minute ten.
@@ -503,6 +509,12 @@ def test_the_total_bounds_the_kernel_rows_instead_of_leaving_them_unbounded(tmp_
 # --------------------------------------------------------------------------
 
 INVOKED = {
+    # The card-acceptance arm, added 2026-09-11. Its three window flags are on
+    # the arm line rather than left to the script's defaults, for the reason
+    # the counter pair's are: a gate advertised at one configuration while the
+    # arm runs another is this driver's standing defect.
+    "scripts/thermal_acceptance.py": ("--dry-run", "--self-test", "--seconds",
+                                      "--settle-seconds", "--poll-seconds"),
     "scripts/calibrate_hardware.py": ("--publish", "--dry-run"),
     "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
@@ -2280,7 +2292,12 @@ def test_the_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(tmp_path
     that the file's own documented invocation must name calibrate, so it does,
     and the refusal an operator will actually see says which flag left arm 0
     out instead of reporting UNDATED on a file this session never touched."""
-    assert "--only calibrate,roofline-n256-g16,noise_floor" in TEXT
+    # THE FILE'S OWN DOCUMENTED INVOCATION NAMES BOTH UNCONDITIONAL GATES.
+    # There are two now: the thermal probe refuses a card that cannot clock and
+    # the calibration gate refuses a ruler that is not this card's, and neither
+    # is scoped to --only, so an example that names only one sends an operator
+    # to a refusal the flag itself caused.
+    assert "--only thermal,calibrate,roofline-n256-g16,noise_floor" in TEXT
     ledger = tmp_path / "ARMS.tsv"
     ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
     got = lift('V="$(calibration_verdict "$(ledger_arm_state calibrate)" UNDATED)"\n'
@@ -4354,3 +4371,173 @@ def test_bn_g16_is_booked_at_the_plan_its_own_arm_line_prints():
     assert booked == -(-int(seconds.group(1)) // 60), (booked, seconds.group(1))
     # And the swept set really did gain a height that was not there before.
     assert re.search(r"^  BN=\s*32 BM=\s*16\s", plan.stdout, re.M), plan.stdout[-2000:]
+
+
+# --------------------------------------------------------------------------
+# the thermal gate: arm 0 of arm 0 (2026-09-11)
+# --------------------------------------------------------------------------
+
+#: What the probe's page has to say for the card to be accepted, and every
+#: other word it can say. `thermal_state` reads the C1 RESULT line rather than
+#: the exit code, because the exit code is one integer over four gates and this
+#: gate is about ONE of them: a run that is INVALID on its sampler said nothing
+#: about the card in either direction, and a DONE with no C1 line on the page
+#: is the UNEARNED DONE `second_opinion` already hunts.
+THERMAL_PAGES = (
+    ("RESULT: CLAIM C1 PASS the card holds a clock above its own thermal "
+     "floor: measured 1470 MHz median over the window\n", "HELD"),
+    ("RESULT: CLAIM C1 FAIL the card holds a clock above its own thermal "
+     "floor: measured 345 MHz median over the window\n", "FLOORED"),
+    ("RESULT: CLAIM C1 UNKNOWN the card holds a clock above its own thermal "
+     "floor: measured no usable clock sample\n", "FLOORED"),
+    ("RESULT: VALIDITY V1 FAIL the probe watched a loaded card\n", "UNREADABLE"),
+    ("[thermal] loading this card for 150 s and watching the clock\n",
+     "UNREADABLE"),
+)
+
+
+@pytest.mark.parametrize("page,word", THERMAL_PAGES)
+def test_the_thermal_page_word_is_read_off_the_c1_result_line(tmp_path, page, word):
+    log = tmp_path / "thermal.log"
+    log.write_text(page)
+    got = lift(f'thermal_state {log}', REPO=str(ROOT))
+    assert got.stdout.strip() == word, got.stdout
+
+
+def test_a_thermal_log_that_is_not_there_is_missing_and_not_held(tmp_path):
+    """A row in the ledger over a page that is gone is not an acceptance. The
+    empty-string branch matters too: called with no argument at all, this must
+    not fall through to HELD."""
+    assert lift(f'thermal_state {tmp_path / "absent.log"}',
+                REPO=str(ROOT)).stdout.strip() == "MISSING"
+    assert lift('thermal_state ""', REPO=str(ROOT)).stdout.strip() == "MISSING"
+
+
+@pytest.mark.parametrize("row,page,verdict,rc", [
+    ("DONE", "HELD", "OK", 0),
+    ("DONE", "FLOORED", "PAGE FLOORED", 1),
+    ("DONE", "UNREADABLE", "PAGE UNREADABLE", 1),
+    ("DONE", "MISSING", "PAGE MISSING", 1),
+    ("CLAIM_FAIL", "FLOORED", "ARM CLAIM_FAIL", 1),
+    ("CLAIM_FAIL", "HELD", "ARM CLAIM_FAIL", 1),
+    ("INVALID", "HELD", "ARM INVALID", 1),
+    ("REFUSED", "MISSING", "ARM REFUSED", 1),
+    ("UNKNOWN", "HELD", "ARM UNKNOWN", 1),
+    ("", "HELD", "ARM NO_ROW", 1),
+])
+def test_one_pair_of_words_accepts_the_card_and_every_other_pair_refuses(
+        row, page, verdict, rc):
+    """BOTH HALVES, AND THE FAIL BRANCH OF EACH. DONE alone is an exit code
+    over four gates; HELD alone is a page whose arm this session may never have
+    run. Only the pair means "this card, watched under load by an arm that
+    stood behind what it printed". The empty row prints NO_ROW rather than
+    nothing, because an empty word inside a refusal reads as a bug in the
+    refusal. THE ARM HALF IS ASKED FIRST, deliberately: when --only leaves the
+    probe out, asking the page first would report on a log this session never
+    wrote and name the wrong problem."""
+    got = lift(f'thermal_verdict {row!r} {page!r}; echo "rc=$?"', REPO=str(ROOT))
+    assert got.stdout.split("\n")[0] == verdict, got.stdout
+    assert got.stdout.strip().splitlines()[-1] == f"rc={rc}", got.stdout
+
+
+def test_the_thermal_gate_is_not_scoped_to_only_and_the_refusal_says_which_flag(
+        tmp_path):
+    """THE GATE IS UNCONDITIONAL AND THE ARM IS NOT, exactly as the calibration
+    gate below it. `arm thermal` returns early through `wanted` when --only
+    names other arms; the gate runs anyway, because every subset of this
+    session runs kernels on this card and there is no subset a card that
+    cannot clock can serve. The cost of keeping it unconditional is that the
+    file's own documented invocation must name it, so it does."""
+    assert "--only thermal,calibrate,roofline-n256-g16,noise_floor" in TEXT
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n")
+    got = lift('V="$(thermal_verdict "$(ledger_arm_state thermal)" MISSING)"\n'
+               'echo "$V"\n'
+               f'thermal_refusal "$V" testcard {tmp_path / "thermal.log"} MISSING',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path),
+               ONLY="occupancy", PY_BASE="/usr/bin/python3")
+    assert got.returncode == 0, got.stderr
+    assert got.stdout.splitlines()[0] == "ARM NO_ROW", got.stdout
+    assert "--only occupancy left the first arm out" in got.stdout
+    assert "--only thermal,occupancy" in got.stdout
+    alone = lift(f'thermal_refusal "ARM NO_ROW" testcard {tmp_path / "t.log"} MISSING',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3")
+    assert "left the first arm out" not in alone.stdout, alone.stdout
+    assert "no --only to explain it" in alone.stdout, alone.stdout
+
+
+def test_the_claim_fail_refusal_quotes_the_page_and_says_return_the_pod(tmp_path):
+    """A CLAIM_FAIL here is THE ANSWER and not a broken arm, and the refusal has
+    to say so: the ledger latches the row, so re-running the arm measures the
+    same silicon and the operator's move is to return the card. The failing
+    line is read OFF THE PAGE rather than named here, the same fix the
+    calibration refusal took on 2026-09-09 after describing the wrong gate for
+    three of its four."""
+    log = tmp_path / "thermal.log"
+    log.write_text(
+        "RESULT: VALIDITY V1 PASS the probe watched a loaded card\n"
+        "RESULT: CLAIM C1 FAIL the card holds a clock above its own thermal "
+        "floor: measured 345 MHz median over the window\n")
+    ledger = tmp_path / "ARMS.tsv"
+    ledger.write_text("arm\tstate\trc\tseconds\tdirty\tlog\tnote\n"
+                      f"thermal\tCLAIM_FAIL\t1\t160\t0\t{log}\t\n")
+    got = lift(f'thermal_refusal "ARM CLAIM_FAIL" testcard {log} FLOORED',
+               REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+               PY_BASE="/usr/bin/python3")
+    assert got.returncode == 0, got.stderr
+    # Flattened: these refusals wrap, and a sentence that straddles a wrap is
+    # still the sentence. The same reading `tests/test_docs.py` gives the docs.
+    flat = " ".join(got.stdout.split())
+    assert "THIS IS THE ANSWER, NOT A BROKEN ARM" in flat
+    assert "345 MHz median over the window" in flat, "the page, verbatim"
+    assert "RETURN THE POD AND RENT ANOTHER CARD" in flat
+    assert "measures the WRONG one" in flat, "thermal_stakes"
+    # And an INVALID says the opposite: the apparatus, not the pod.
+    other = lift(f'thermal_refusal "ARM INVALID" testcard {log} HELD',
+                 REPO=str(ROOT), LEDGER=str(ledger), LOGS=str(tmp_path), ONLY="",
+                 PY_BASE="/usr/bin/python3")
+    flat = " ".join(other.stdout.split())
+    assert "said nothing about the card in either direction" in flat
+    assert "this is the apparatus, not the pod" in flat
+
+
+def test_a_word_the_thermal_gate_cannot_read_refuses_rather_than_proceeding():
+    """There is no safe default: the two states this gate decides between are
+    "this card can be used" and "this card cannot", and guessing either is what
+    the gate exists to prevent."""
+    got = lift('thermal_refusal "SOMETHING ELSE" testcard /nowhere/t.log ODD',
+               REPO=str(ROOT), LEDGER="/nowhere/ARMS.tsv", LOGS="/nowhere",
+               ONLY="", PY_BASE="/usr/bin/python3")
+    assert got.stdout.startswith("REFUSED: thermal_verdict said"), got.stdout
+
+
+def test_the_thermal_arm_and_its_gate_run_before_the_calibration_arm():
+    """ORDER IS THE ARGUMENT, and here it is the whole argument: the ruler is
+    measured ON the clock, so a card pinned at its floor publishes a ceiling
+    that is wrong rather than low, and arm 0 cannot tell the difference from
+    inside itself -- on 2026-09-11 it PASSED on such a card, because it scored
+    DRIFT and a flat clock does not drift. Read off the shipped source, so the
+    two cannot be reordered without this failing."""
+    probe = CODE.index('scripts/thermal_acceptance.py" \\')
+    gate = CODE.index('thermal_refusal "$THERMAL_VERDICT"')
+    publish = CODE.index('scripts/calibrate_hardware.py" --publish')
+    assert probe < gate < publish, (probe, gate, publish)
+    # The gate is straight-line top level, never inside `arm()`, which is what
+    # makes it survive --only.
+    block = CODE[probe:publish]
+    assert 'exit "$RC_REFUSED"' in block
+    assert "wanted thermal" not in CODE
+    # And the measuring branch pins its own window rather than inheriting the
+    # script's defaults, the standing defect this driver keeps meeting.
+    words = measuring_invocation("thermal")
+    for flag in ("--seconds", "--settle-seconds", "--poll-seconds"):
+        assert flag in words, (flag, words)
+
+
+def test_the_thermal_arm_is_in_every_named_rental_set():
+    """A set that omits a gating arm refuses the whole session it prices."""
+    for setter in ("rental_2h_arms", "rental_3h_arms", "rerun_arms"):
+        named = lift(setter, REPO=str(ROOT)).stdout.split()
+        assert "thermal" in named, setter
+        assert named[0] == "thermal", (setter, named)

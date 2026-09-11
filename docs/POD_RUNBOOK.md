@@ -35,7 +35,7 @@ actually reach.
 ```bash
 cd /workspace/repo
 bash scripts/h200_gaps_session.sh                       # every arm
-bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrate belongs in EVERY subset
+bash scripts/h200_gaps_session.sh --only thermal,calibrate,bn_g16   # a subset; thermal and calibrate belong in EVERY subset
 ```
 
 ## Where things land, and how to resume
@@ -64,10 +64,10 @@ bash scripts/h200_gaps_session.sh --only calibrate,bn_g16   # a subset; calibrat
 
   ```bash
   bash scripts/h200_gaps_session.sh --new \
-    --only calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
+    --only thermal,calibrate,pin_probe-n64-g1,bn_g16,dtype,counter_plan,counter-n32-m64,counter-n128-m64,counter_contrast
   ```
 
-  ~300 priced / ~373 bounded minutes. THIS BLOCK CARRIED THE 2026-09-09 SET
+  ~303 priced / ~376 bounded minutes. THIS BLOCK CARRIED THE 2026-09-09 SET
   UNTIL 2026-09-10 (calibrate, pin_probe-n64-g1, roofline-n64-g1, cap_test,
   bn_g16, dtype, bm128_depth, alias_ablation at ~71 priced minutes) and all
   eight of those have since been spent, so it was re-booking arms that already
@@ -131,6 +131,7 @@ against `--list` by `tests/test_docs.py`.
 
 | arm | min | clock | what it buys | verdict and disposition |
 |---|---:|---|---|---|
+| `thermal` | 3 | WALL | CAN THIS CARD HOLD A CLOCK, asked before the ruler is measured on that clock. Sustained dense bf16 GEMM for 30 s of discarded ramp plus a 120 s scored window; C1 is the median SM clock against `timing.THERMAL_FLOOR_FRACTION` of the card's OWN maximum, read from the device, and C2 is the DRIFT rule over the first and last thirds | KEEP, and it REFUSES the session. On 2026-09-11 a rented H200 fell from 1980 MHz to its 345 MHz floor under load, `calibrate_hardware.py` published a tracked ruler reading ridge 73.6 against a real ~156, and its `not_throttled` gate PASSED because it scored DRIFT and a floored card does not drift |
 | `calibrate` | 3 | ALLOW | this pod's own ridge and both dtype peaks, published; five arms refuse without it | KEEP: the only file worth committing |
 | `pin_probe-n64-g1` | 2 | ALLOW | does `MOE_FORCE_TILE` reach the kernel at BLOCK_N=64, GROUP_SIZE_M=1, the pinning every alpha arm uses | KEEP: precondition for every tile claim |
 | `pin_probe-n256-g16` | 2 | ALLOW | the same at vLLM's shipped BLOCK_N=256, GROUP_SIZE_M=16 | CUT in the verdict (it served two refusing rooflines); still booked, 2 min |
