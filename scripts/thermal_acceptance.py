@@ -64,6 +64,13 @@ one VALIDITY gate over planted worlds and exits through the table; the measuring
 run exits DONE, CLAIM_FAIL when the card cannot hold its clock -- which is a
 RESULT about this pod and never a retry -- or INVALID when the probe itself
 could not be trusted.
+
+EVERYTHING THE PROBE NEEDS IS CHECKED BEFORE THE LOAD, and each missing piece
+is REFUSED (2) rather than discovered two minutes in: no card, no maximum SM
+clock, no NVML sampler. REFUSED costs nothing and is not latched, which is the
+whole reason to spend the checks up front -- the two states this arm decides
+between are "this pod can be used" and "this pod cannot", and an apparatus
+fault must land in NEITHER of them.
 """
 from __future__ import annotations
 
@@ -153,13 +160,32 @@ class Prediction:
                 f"      a FAIL    {self.fail}"]
 
 
+#: The margin the fraction buys, either side, COMPUTED from the two pairs
+#: `timing` records rather than typed into the sentences that print it. Both
+#: are ratios of an observed clock to the floor OF THE PART IT WAS MEASURED
+#: ON, which is why they are properties of the corpus and stay true whatever
+#: card is attached; a sentence that attached either figure to the attached
+#: card's floor would be wrong on every part but one, and one did.
+def _margin(pair: tuple[float, float]) -> float:
+    observed, maximum = pair
+    floor = T.thermal_floor_mhz(maximum)
+    return observed / floor if floor else float("nan")
+
+
+HEALTHY_MARGIN = _margin(T.THERMAL_HEALTHY_OBSERVED_MHZ)
+FAULT_MARGIN = _margin(T.THERMAL_FAULT_OBSERVED_MHZ)
+
+
 PREDICTIONS = (
     Prediction(
         1, "a healthy card holds a clock well clear of its own floor",
         f"the median SM clock over the scored window is at least "
-        f"{T.THERMAL_FLOOR_FRACTION:.4f} of this card's maximum. Every one of "
-        "the 5,260 published per-cell medians in this repository sits 1.93x "
-        "above that line; the 2026-09-11 fault sat 1.91x below it",
+        f"{T.THERMAL_FLOOR_FRACTION:.4f} of this card's maximum. The lowest "
+        "per-cell median anywhere in this repository's published corpus, "
+        f"{T.THERMAL_HEALTHY_OBSERVED_MHZ[0]:.0f} MHz on a "
+        f"{T.THERMAL_HEALTHY_OBSERVED_MHZ[1]:.0f} MHz part, sits "
+        f"{HEALTHY_MARGIN:.2f}x above that part's own floor; the 2026-09-11 "
+        f"fault sat {1 / FAULT_MARGIN:.2f}x below its part's",
         "THE SESSION IS REFUSED AND THE POD IS RETURNED. A card that cannot "
         "hold a clock produces a ruler whose compute peak has collapsed while "
         "its memory side has not, and every roof fraction, ridge and alpha "
@@ -353,12 +379,22 @@ class Trace:
         """Median board power over the window as a fraction of the limit.
 
         THE DISCRIMINATOR THAT NAMES THE CAUSE, and it is printed rather than
-        gated. Of the 191 published rows whose clock sits below 0.70 of this
-        card's maximum, the LOWEST board power is 685.6 W of a 700 W limit,
-        0.979: a low clock in this corpus is always a hungry tile pinned at the
-        power cap. The 2026-09-11 fault drew 240 W of 700, 0.343, at a clock
-        five times lower. Low clock AND low power is a card in trouble; low
-        clock at the cap is work.
+        gated -- which is the whole reason the population below can be stated
+        honestly instead of being made to carry a threshold.
+
+        425 published rows sit below 0.70 of a 1980 MHz part's maximum. Only
+        191 of them record board power at all (2 of the 21 deduped cells.csv
+        files carry the column), and ALL 191 sit at the cap: the lowest is
+        685.6 W of a 700 W limit, 0.979. So the reading is "every low-clock row
+        in this corpus that CAN be checked is a hungry tile at the power cap",
+        and the 234 that cannot be checked are why this is printed beside the
+        verdict rather than scored as part of it. This docstring said "of the
+        191 published rows below 0.70" until 2026-09-11, which named the subset
+        that answers as though it were the population asked.
+
+        The 2026-09-11 fault drew 240 W of the same 700, 0.343, at 345 MHz
+        against that corpus minimum's 1275. Low clock AND low power is a card
+        in trouble; low clock at the cap is work.
         """
         got = [s.power_w for s in self.scored if s.power_w > 0]
         if not got or not self.power_limit_w:
@@ -394,13 +430,25 @@ def gate_v1_non_vacuity(trace: Trace) -> Gate:
 def gate_v2_nvml(trace: Trace) -> Gate:
     """Did every scored sample come through NVML.
 
-    `ClockState.sample` falls back to a forked `nvidia-smi` when pynvml is
-    missing, and that fork plus an NVML init costs tens of milliseconds on
-    Linux. `calibrate.clock_under_load` REFUSES such a sample for the roof's
-    reference and `timing.nvml_clock_reader` never forks at all, both for the
-    same reason: a reading that lands tens of milliseconds after it was asked
-    for describes whatever the card was doing then, not while the queue was
-    busy. A thermal verdict scored on forked samples has the same defect.
+    WHY A FORKED SAMPLE WOULD BE WORTHLESS HERE. `ClockState.sample` falls
+    back to a forked `nvidia-smi` when pynvml is missing, and that fork plus an
+    NVML init costs tens of milliseconds on Linux, so the reading lands after
+    the queue it was meant to describe. `calibrate.clock_under_load` REFUSES
+    such a sample for the roof's reference for exactly that reason.
+
+    WHAT IT ACTUALLY GUARDS, which is NOT that fallback. `sustain` reads
+    through `timing.nvml_clock_reader`, which has no fallback at all: it
+    RAISES when pynvml is missing, `_main` turns that into a REFUSED before
+    any load is spent, and every sample it does return is stamped
+    `CLOCK_SOURCE_NVML` unconditionally. So on the live path this gate can only
+    FAIL on an empty scored window, which V1 already fails. It is kept, scored
+    and printed anyway, for the two things it does catch: a planted trace in
+    `--self-test` (the `forked-sampler` world is one), and a future reader
+    swapped in here that does fall back -- at which point this gate is the only
+    thing standing between a forked sample and a thermal verdict. A gate that
+    is currently subsumed is not the same as a gate that is vacuous, and this
+    docstring described the fallback as though the arm used it until
+    2026-09-11.
     """
     sources = trace.sources
     ok = bool(sources) and set(sources) == {T.CLOCK_SOURCE_NVML}
@@ -551,8 +599,8 @@ class _ReasonReader:
             pass
 
 
-def sustain(settle_seconds: float, window_seconds: float,
-            poll_seconds: float) -> Trace:
+def sustain(settle_seconds: float, window_seconds: float, poll_seconds: float,
+            max_sm: float, max_source: str) -> Trace:
     """Load the card and watch it. The only function here that touches a GPU.
 
     The load is `moe.bench.calibrate._load_compute`, the calibration's own
@@ -562,6 +610,16 @@ def sustain(settle_seconds: float, window_seconds: float,
     before the queue is drained, which is the method `clock_under_load`
     documents; sampling between two synchronises measures an idle GPU however
     much work surrounds it.
+
+    THE MAXIMUM IS PASSED IN AND NEVER RE-READ HERE. It used to call
+    `max_sm_clock_mhz` itself, which made TWO independent reads of the one
+    quantity the whole arm turns on: `_main` gated its free REFUSAL on the
+    first, and C1 scored the second. A second read that failed where the first
+    succeeded spent the full window and then exited CLAIM_FAIL -- LATCHED, and
+    printed as "RETURN THE POD AND RENT ANOTHER CARD" -- over a perfectly
+    healthy card, because a C1 with no floor is UNKNOWN and UNKNOWN classifies
+    as a failed claim. The value the refusal was decided on is now the value
+    the verdict is scored against, by construction.
     """
     import torch
 
@@ -572,7 +630,6 @@ def sustain(settle_seconds: float, window_seconds: float,
     read = T.nvml_clock_reader()
     reasons = _ReasonReader()
     step = _load_compute()
-    max_sm, max_source = T.max_sm_clock_mhz()
     try:
         started = time.monotonic()
         deadline = started + settle_seconds + window_seconds
@@ -636,7 +693,7 @@ def plant(mhz, *, maximum: float | None = PLANTED_MAX_MHZ, power_w: float = 690.
 
 #: Every planted world, as `(name, trace, {token: verdict}, why)`. The list is
 #: the point: a self-test that plants only successes has never seen its own
-#: refusals, and three of the six worlds below are refusals.
+#: refusals, and three of the eight worlds below are refusals.
 def self_test_worlds() -> list[tuple[str, Trace, dict[str, str], str]]:
     steady = [1470] * 60
     return [
@@ -647,7 +704,13 @@ def self_test_worlds() -> list[tuple[str, Trace, dict[str, str], str]]:
          {"V1": PASS, "V2": PASS, "C1": PASS, "C2": PASS},
          "the LOWEST per-cell median in results/published, at 697.4 W of 700. "
          "It must PASS: a card refused here is a session nobody can run"),
-        ("floored", plant([345] * 60, power_w=240.0),
+        # THE FAULT CLOCK COMES FROM THE PAIR, like the maximum above it. It
+        # was written as 345 here while `PLANTED_MAX_MHZ` was derived, so a
+        # revision of the recorded pair moved one half of the replay and not
+        # the other -- a fix landing at one of two sites, in the file whose
+        # own comment says it carries no clock of its own.
+        ("floored", plant([int(T.THERMAL_FAULT_OBSERVED_MHZ[0])] * 60,
+                          power_w=240.0),
          {"V1": PASS, "V2": PASS, "C1": FAIL, "C2": PASS},
          "2026-09-11. C2 PASSES, which is the hole: flat at the floor is "
          "perfectly steady, and DRIFT was all the old gate scored"),
@@ -671,8 +734,11 @@ def self_test_worlds() -> list[tuple[str, Trace, dict[str, str], str]]:
          "they look"),
         ("no-maximum", plant(steady, maximum=None),
          {"V1": PASS, "V2": PASS, "C1": UNKNOWN, "C2": PASS},
-         "a REFUSAL: no maximum, so no floor, so the claim was NOT TESTED. "
-         "UNKNOWN counts against the gate and never reads as a pass"),
+         "no maximum, so no floor, so the claim was NOT TESTED: UNKNOWN, which "
+         "counts against the gate and never reads as a pass. THE LIVE PATH NO "
+         "LONGER REACHES IT -- _main refuses before measuring and `sustain` is "
+         "handed that same maximum -- and this world is what holds the scorer "
+         "to UNKNOWN if it ever does"),
     ]
 
 
@@ -820,12 +886,21 @@ def resolution_line(max_sm_clock_mhz: float | None, card: str = "this card") -> 
                 "nor the distance to it can be stated.")
     floor = T.thermal_floor_mhz(max_sm_clock_mhz)
     steps = (max_sm_clock_mhz - floor) / T.CLOCK_STEP_MHZ
+    # THE MARGIN SENTENCE IS ABOUT THE CORPUS AND SAYS WHICH PART IT IS ABOUT.
+    # It read "the closest healthy reading in results/published is 1.93x above
+    # it" until 2026-09-11, with 1.93 typed in, while the floor beside it moved
+    # with the card: on an A100 the line printed 1.93x against a 465 MHz floor
+    # where the corpus's own closest reading is 2.74x above it, and the corpus
+    # holds no A100 row at all.
+    healthy, healthy_max = T.THERMAL_HEALTHY_OBSERVED_MHZ
     return (f"RESOLUTION: {T.CLOCK_STEP_MHZ:.0f} MHz, the NVML grid, which is "
             f"{100 * T.CLOCK_STEP_MHZ / max_sm_clock_mhz:.2f}% of {card}'s "
             f"{max_sm_clock_mhz:.0f} MHz maximum. The gate sits {steps:.0f} "
-            f"grid steps below that maximum ({floor:.0f} MHz), and the closest "
-            "healthy reading in results/published is 1.93x above it. This "
-            "probe cannot miss a difference of the size it is looking for.")
+            f"grid steps below that maximum ({floor:.0f} MHz). For scale, on "
+            f"the {healthy_max:.0f} MHz part results/published was measured "
+            f"on, its lowest healthy reading ({healthy:.0f} MHz) sits "
+            f"{HEALTHY_MARGIN:.2f}x above that part's floor. This probe cannot "
+            "miss a difference of the size it is looking for.")
 
 
 def trace_lines(trace: Trace) -> list[str]:
@@ -876,9 +951,18 @@ def render(header: list[str], gates: list[Gate], body: list[str]) -> str:
         failed = [g.token for g in gates if g.kind == CLAIM and g.verdict != PASS]
         out.append(f"READING IT. Validity holds. Claim gates not passed: "
                    f"{failed or 'none'}.")
-        out.append("A failed CLAIM gate is a result, not a broken run: this "
-                   "card cannot hold its clock, and no ceiling measured on it "
-                   "is its ceiling.")
+        # UNDER `if failed`, which it was not until 2026-09-11: a healthy
+        # card's report.txt ended with the sentence "this card cannot hold its
+        # clock", written into the artefact an operator reads and a driver
+        # greps.
+        if failed:
+            out.append("A failed CLAIM gate is a result, not a broken run: "
+                       "this card cannot hold its clock, and no ceiling "
+                       "measured on it is its ceiling.")
+        else:
+            out.append("This card held a clock above its own thermal floor "
+                       "for the whole window and was still holding it at the "
+                       "end of it. The ceilings measured next are this card's.")
     return "\n".join(out)
 
 
@@ -1016,12 +1100,38 @@ def _main(argv=None) -> int:
               "container.")
         return exit_codes.REFUSED
 
+    # AND THE SAMPLER, PROBED BEFORE THE LOAD RATHER THAN INSIDE IT. The
+    # maximum above has a forked `nvidia-smi` fallback -- it is a static
+    # property of the part, so a reading tens of milliseconds late is still
+    # right -- but `nvml_clock_reader` deliberately has none, because a sample
+    # that has to land while a queue is busy cannot be forked. So a pod with
+    # `nvidia-smi` and no nvidia-ml-py gets PAST the check above and then fails
+    # one line into `sustain`, which until 2026-09-11 propagated to ERROR (4)
+    # with a traceback and a RETRY row naming no cause. It is the same operator
+    # error the branch above already knows how to explain, it is decided before
+    # any load is spent, and REFUSED is the table's word for that.
+    try:
+        T.nvml_clock_reader()
+    except T.ClockSourceUnavailable as e:
+        print("\nREFUSED. Nothing was measured.")
+        print(f"  The under-load clock sampler could not be opened: {e}")
+        print("  This arm samples with work in flight, so it will not fall "
+              "back to a forked")
+        print("  nvidia-smi the way the maximum above did: a reading that "
+              "lands tens of")
+        print("  milliseconds late describes an idle card, and a thermal "
+              "verdict scored on")
+        print("  one is worth nothing. Install nvidia-ml-py in THIS "
+              "interpreter and re-run.")
+        return exit_codes.REFUSED
+
     print(f"\n[thermal] loading this card for "
           f"{args.settle_seconds + args.seconds:.0f} s and watching the clock")
     print(f"[thermal] maximum {max_sm:.0f} MHz from {max_source}; floor "
           f"{T.thermal_floor_mhz(max_sm):.0f} MHz")
     started = time.time()
-    trace = sustain(args.settle_seconds, args.seconds, args.poll_seconds)
+    trace = sustain(args.settle_seconds, args.seconds, args.poll_seconds,
+                    max_sm, max_source)
     print(f"[thermal] held the load for {time.time() - started:.0f} s")
 
     gates = gates_for(trace)

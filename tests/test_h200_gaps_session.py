@@ -257,9 +257,12 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     assert order == list(ARMS)
     # THE CARD BEFORE THE RULER, since 2026-09-11. The ruler is measured ON the
     # clock: a card pinned at its floor publishes a ceiling that is wrong
-    # rather than low, and arm 0 cannot tell the difference from inside itself
-    # -- it PASSED on such a card, because it scored DRIFT and a flat clock
-    # does not drift. Three minutes here retires the whole rental.
+    # rather than low, and arm 0 PASSED on such a card because it scored DRIFT
+    # and a flat clock does not drift. It scores the FLOOR term too now, so it
+    # CAN tell -- but only after it has spent the card's minutes, and under
+    # --publish it writes the tracked yaml whichever way that term reads, so
+    # the ordering is still what protects the session. Three minutes here
+    # retires the whole rental.
     assert order[0] == "thermal"
     assert order[1] == "calibrate"
     assert order[2].startswith("pin_probe") and order[3].startswith("pin_probe")

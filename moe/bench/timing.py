@@ -112,8 +112,8 @@ alone, and every one of the session's 135 DRIFTs was the governor settling on
 the FIRST cell of a rep after a workload change, which is a property of the
 INSTRUMENT and is fixed below rather than gated around.
 
-FLOOR IS A THIRD QUESTION, AND ONLY THE CALIBRATOR ASKS IT (2026-09-11)
-----------------------------------------------------------------------
+FLOOR IS A THIRD QUESTION, AND NO PER-TILE CELL ASKS IT (2026-09-11)
+-------------------------------------------------------------------
 WHICH CALL SITE TAKES WHICH RULE, written here because the same rule landing
 at one of two sites is this repository's recurring defect.
 
@@ -130,6 +130,16 @@ at one of two sites is this repository's recurring defect.
   compute peak fell with the clock and the memory side did not. Nothing about
   a per-tile cell says anything about that, and nothing about the ceiling says
   a tile should be dropped. Two jobs, two rules.
+
+  AND THE ACCEPTANCE ARM SCORES FLOOR FIRST, `scripts/thermal_acceptance.py`
+  gate C1, through this same `clock_floor_ok`. It establishes no ceiling at
+  all, which is why it is a bullet of its own: it runs BEFORE the calibrator
+  and REFUSES the session, because the calibrator scores its floor term only
+  after the card's minutes are already spent and, under `--publish`, writes
+  the tracked yaml whichever way that term reads. So `clock_floor_ok` has
+  exactly TWO scoring call sites -- `calibrate_hardware.under_load_clock_verdict`
+  and `thermal_acceptance.Trace.floor_ok` -- and a fix to one of them that
+  misses the other is the defect this whole section is here to catch.
 
 FLOOR is not LEVEL with a different fraction, either. LEVEL's reference is
 read out of THIS card's own calibration, so on a collapsed card the reference
@@ -274,12 +284,23 @@ DRIFT_FRACTION = 0.05
 #: grid -- exactly 1980/3. The maximally separating point and the simple third
 #: land on the same grid point, so the constant is where the data puts it.
 #:
-#: THE MARGINS IT BUYS. At 1980 the floor is 660 MHz: every published row sits
-#: 1.93x above it and the fault sits 1.91x below it. At an A100's 1410 the
-#: floor is 465 MHz and that card's lowest observed compute-settle sample,
-#: 1230 MHz, is 2.65x above it. Rejected: f = 0.50 leaves the healthy side
-#: only 1.29x, f = 0.60 only 1.08x and would have failed published cells, and
-#: f = 0.25 leaves the fault side only 1.44x.
+#: THE MARGINS IT BUYS, all on the 1980 MHz part the corpus was measured on:
+#: the floor is 660 MHz, every published row sits 1.93x above it and the fault
+#: sits 1.91x below it. Both ratios are derived from the two recorded pairs
+#: below rather than typed, and `scripts/thermal_acceptance.py` prints them
+#: from the same pairs, because the ratio is a property of THIS corpus and not
+#: of whatever card is attached. At an A100's 1410 the floor is 465 MHz and
+#: that card's lowest observed compute-settle sample -- 1245 MHz, the minimum
+#: of `settle.clock_history_mhz` in
+#: `moe/bench/hardware/measured_nvidia_a100_sxm4_80gb.yaml` -- is 2.68x above
+#: it. Rejected: f = 0.50 leaves the healthy side only 1.29x, f = 0.60 only
+#: 1.07x, and f = 0.25 leaves the fault side only 1.43x.
+#:
+#: NONE OF THE REJECTED FRACTIONS WOULD HAVE FAILED A PUBLISHED CELL, and this
+#: comment claimed f = 0.60 would until 2026-09-11. At f = 0.60 the floor is
+#: 1185 MHz and the lowest published median is 1275, so zero of the 5,260 rows
+#: fall below it; the reason to reject 0.60 is the 1.07x margin, which is
+#: inside the corpus's own spread, and not a cell it would have refused.
 #:
 #: IT IS SCORED ON THE MEDIAN AND NEVER ON A SAMPLE. Individual entries in the
 #: published `clock_samples_mhz` lists reach 405 MHz on cards whose medians and
@@ -294,6 +315,21 @@ THERMAL_FLOOR_FRACTION = 1.0 / 3.0
 #: can be re-checked by a test instead of believed from prose. A gate that read
 #: 345 or 1980 would be a gate that only works on one part.
 THERMAL_FAULT_OBSERVED_MHZ = (345.0, 1980.0)
+
+#: The binding HEALTHY end, as the same shape of pair: the lowest per-cell
+#: `sm_clock_load_mhz` median anywhere in `results/published`, and the maximum
+#: of the part it was measured on. Recorded for the same reason its fault
+#: counterpart is, and read by the same test
+#: (`test_the_floor_fraction_separates_the_published_rows_from_the_fault`
+#: re-derives both ends from the corpus on every run). It exists so the 1.93x
+#: margin can be COMPUTED wherever it is printed: it was a typed literal in
+#: three places until 2026-09-11, and one of them was a per-card function that
+#: printed the H200 ratio against an A100's floor.
+#:
+#: NOT A GATE INPUT, and it must never become one. The gate reads the attached
+#: card's own maximum; a threshold that consulted this pair would be a
+#: threshold that only works on the part this corpus happens to hold.
+THERMAL_HEALTHY_OBSERVED_MHZ = (1275.0, 1980.0)
 
 #: How much delivered warmup the settle loop may add, as a multiple of
 #: `warmup_ms`. The loop keeps running the trials' own work until two

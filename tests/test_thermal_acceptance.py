@@ -171,9 +171,15 @@ def test_the_floor_moves_with_the_card_and_is_nowhere_a_literal():
     on a part whose maximum is low enough, because the floor is a fraction of
     whatever the device reported. A gate carrying 660 as a number would be a
     gate that works on one part."""
-    floored = TA.plant([345] * 60, maximum=1980.0)
+    fault, fault_max = T.THERMAL_FAULT_OBSERVED_MHZ
+    floored = TA.plant([int(fault)] * 60, maximum=fault_max)
     assert TA.gates_for(floored)[2].verdict == TA.FAIL
-    low_part = TA.plant([345] * 60, maximum=900.0)
+    # The low part is DERIVED, not the literal 900 it was until 2026-09-11: a
+    # maximum whose floor is 0.9 x the fault clock, so this stays a PASS at any
+    # fraction inside THERMAL_FLOOR_FRACTION's own admissible window rather
+    # than only at one third.
+    low_part = TA.plant([int(fault)] * 60,
+                        maximum=0.9 * fault / T.THERMAL_FLOOR_FRACTION)
     assert TA.gates_for(low_part)[2].verdict == TA.PASS
     assert T.thermal_floor_mhz(1980.0) != T.thermal_floor_mhz(1410.0)
     # Every edge is a clock the grid can report.
@@ -365,3 +371,132 @@ def test_an_unplanned_crash_is_error_and_not_a_failed_claim(monkeypatch, capsys)
     assert TA.main([]) == EX.ERROR
     assert EX.ERROR not in EX.FINISHED_CODES
     assert "planted" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# the quantity the refusal gated on is the quantity the gate scores
+# --------------------------------------------------------------------------
+
+def test_the_maximum_is_read_once_and_handed_to_the_probe():
+    """RULE 3, asked of the source, and it is the expensive direction.
+
+    `_main` reads `max_sm_clock_mhz` and REFUSES for free when it is absent.
+    `sustain` used to read it AGAIN and put THAT value on the Trace, so the
+    quantity the free refusal was decided on was not the quantity C1 scored. A
+    second read failing where the first succeeded spent the whole window and
+    then exited CLAIM_FAIL -- latched, and printed by the driver as "RETURN
+    THE POD AND RENT ANOTHER CARD" -- over a healthy card, because a C1 with
+    no floor is UNKNOWN and UNKNOWN classifies as a failed claim.
+    """
+    import ast
+
+    tree = ast.parse(SCRIPT.read_text())
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == "sustain")
+    assert "max_sm" in [a.arg for a in fn.args.args], ast.unparse(fn.args)
+    # A CALL to the reader, not the keyword it is stored under: `sustain` still
+    # names `max_sm_clock_mhz=` when it builds the Trace, and must.
+    inside = [ast.unparse(n) for n in ast.walk(fn)
+              if isinstance(n, ast.Call)
+              and getattr(n.func, "attr", "") == "max_sm_clock_mhz"]
+    assert inside == [], inside
+    # TWO calls in the whole file and both in `_main`, one per mode: the plan
+    # prints the floor an operator should see before renting, and the measuring
+    # path gates on it and then hands it down. Neither is on the other's path,
+    # so the measuring run still reads the quantity exactly once.
+    main = next(n for n in tree.body
+                if isinstance(n, ast.FunctionDef) and n.name == "_main")
+    everywhere = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and getattr(n.func, "attr", "") == "max_sm_clock_mhz"]
+    in_main = [n for n in ast.walk(main) if isinstance(n, ast.Call)
+               and getattr(n.func, "attr", "") == "max_sm_clock_mhz"]
+    assert len(everywhere) == 2 and len(in_main) == 2, (
+        [ast.unparse(n) for n in everywhere])
+    # and the one call site hands it both halves, so the page can say which
+    # reader answered without asking a second time.
+    call = next(n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                and getattr(n.func, "id", "") == "sustain")
+    assert len(call.args) + len(call.keywords) == 5, ast.unparse(call)
+
+
+def test_a_missing_nvml_sampler_refuses_before_the_load_rather_than_crashing():
+    """The maximum has a forked `nvidia-smi` fallback and the under-load
+    sampler deliberately has none, so a pod with nvidia-smi and no
+    nvidia-ml-py passes the maximum's pre-flight and then fails one line into
+    `sustain`. Unhandled, that reached `main`'s wrapper as ERROR (4) with a
+    traceback and a RETRY row naming no cause -- for the same operator error
+    the REFUSED branch above it already knows how to explain."""
+    import ast
+
+    tree = ast.parse(SCRIPT.read_text())
+    main = next(n for n in tree.body
+                if isinstance(n, ast.FunctionDef) and n.name == "_main")
+    handler = next(
+        (h for n in ast.walk(main) if isinstance(n, ast.Try)
+         for h in n.handlers
+         if h.type is not None
+         and "ClockSourceUnavailable" in ast.unparse(h.type)),
+        None)
+    assert handler is not None, "the sampler is never probed before the load"
+    # It REFUSES. Not ERROR, which is retryable and names no cause, and not
+    # CLAIM_FAIL, which would latch an apparatus fault as a verdict on a card.
+    returned = [ast.unparse(n.value) for n in ast.walk(handler)
+                if isinstance(n, ast.Return) and n.value is not None]
+    assert returned == ["exit_codes.REFUSED"], returned
+    # BEFORE the load: a refusal only costs nothing if it is decided before
+    # the window is spent.
+    probe = next(n for n in ast.walk(main) if isinstance(n, ast.Call)
+                 and getattr(n.func, "attr", "") == "nvml_clock_reader")
+    load = next(n for n in ast.walk(main) if isinstance(n, ast.Call)
+                and getattr(n.func, "id", "") == "sustain")
+    assert probe.lineno < load.lineno, (probe.lineno, load.lineno)
+
+
+# --------------------------------------------------------------------------
+# what a page SAYS is what the page found
+# --------------------------------------------------------------------------
+
+def test_a_healthy_page_does_not_say_the_card_cannot_hold_its_clock():
+    """The sentence sat outside `if failed`, so every accepted card's
+    report.txt -- the artefact an operator reads and the driver greps --
+    ended by announcing the failure that had not happened."""
+    healthy = TA.render(["h"], TA.gates_for(TA.plant([1470] * 60)), [])
+    assert "Claim gates not passed: none" in healthy
+    assert "cannot hold its clock" not in healthy, healthy[-400:]
+    floored = TA.render(
+        ["h"],
+        TA.gates_for(TA.plant([int(T.THERMAL_FAULT_OBSERVED_MHZ[0])] * 60)),
+        [])
+    assert "cannot hold its clock" in floored
+
+
+def test_every_statement_of_the_planted_world_count_agrees_with_the_list():
+    """Three sites say how many worlds there are and one said six over a list
+    of eight. Nothing asserted the count, which is why the suite stayed green
+    with it wrong."""
+    import re
+
+    n = len(TA.self_test_worlds())
+    words = {6: "six", 8: "eight"}
+    source = SCRIPT.read_text()
+    assert n in words, n
+    assert words[n] in source
+    for wrong in set(words.values()) - {words[n]}:
+        assert not re.search(rf"\b{wrong}\b (?:planted )?worlds", source), wrong
+
+
+def test_the_margin_printed_beside_a_floor_is_computed_not_typed():
+    """`resolution_line` derives the floor from whatever card is attached and
+    then printed a hardcoded 1.93x beside it: on an A100 that is a 465 MHz
+    floor with the H200's ratio next to it, and the published corpus holds no
+    A100 row at all. The ratio is a property of the CORPUS, so it is derived
+    from the recorded pair and the sentence names the part it is about."""
+    healthy, healthy_max = T.THERMAL_HEALTHY_OBSERVED_MHZ
+    expect = healthy / T.thermal_floor_mhz(healthy_max)
+    assert f"{expect:.2f}x" in TA.resolution_line(healthy_max, "NVIDIA H200")
+    a100 = TA.resolution_line(1410.0, "NVIDIA A100-SXM4-80GB")
+    # the H200 ratio may appear, but only attached to the H200's own maximum
+    assert f"{healthy_max:.0f} MHz part" in a100
+    assert f"{T.thermal_floor_mhz(1410.0):.0f} MHz" in a100
+    # and nothing here is a typed ratio
+    assert "1.93x above it" not in a100

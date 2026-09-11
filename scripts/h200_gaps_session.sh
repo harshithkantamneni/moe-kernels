@@ -1552,15 +1552,20 @@ thermal_refusal() {
                   echo "  RETURN THE POD AND RENT ANOTHER CARD. Re-running the arm measures"
                   echo "  the same silicon again, which is why the row is latched." ;;
       INVALID)    echo "  It MEASURED and then failed a VALIDITY gate, so it said nothing"
-                  echo "  about the card in either direction: either it watched too short a"
-                  echo "  window to take a median from, or its samples came through a forked"
-                  echo "  nvidia-smi, which describes an idle card at its boost clock."
-                  echo "  Install nvidia-ml-py into $PY_BASE and re-run; this is the"
-                  echo "  apparatus, not the pod." ;;
-      REFUSED)    echo "  It refused before measuring, so it cost nothing. The usual cause is"
-                  echo "  a maximum SM clock this container will not report, and the floor is"
-                  echo "  a fraction OF that maximum, so there is nothing to score against."
-                  echo "  Check that nvidia-ml-py is installed in $PY_BASE, or that"
+                  echo "  about the card in either direction. On the live path the reachable"
+                  echo "  cause is V1: it watched too short a window to take three medians"
+                  echo "  from, which means the load or the poll loop stopped early. Read the"
+                  echo "  V1 line for how many samples over how many seconds it got. (V2, the"
+                  echo "  forked-sampler gate, cannot fail on its own here: the arm's reader"
+                  echo "  does not fall back, it REFUSES up front instead.) Either way"
+                  echo "  this is the apparatus, not the pod." ;;
+      REFUSED)    echo "  It refused before measuring, so it cost nothing and the row is not"
+                  echo "  latched. All three causes are missing apparatus, not a bad card:"
+                  echo "  no maximum SM clock (the floor is a fraction OF it, so there is"
+                  echo "  nothing to score against), no NVML sampler (this arm will not fall"
+                  echo "  back to a forked nvidia-smi for a reading taken under load), or no"
+                  echo "  card named at all. Its own REFUSED block names which."
+                  echo "  Check that nvidia-ml-py is installed in $PY_BASE, and that"
                   echo "  'nvidia-smi --query-gpu=clocks.max.sm' answers here." ;;
       UNKNOWN)    echo "  The driver would not latch a word for it. The ledger note says why:"
                   echo "      ${LEDGER_NOTE:-(the reason was not recorded on the row)}"
@@ -1570,10 +1575,29 @@ thermal_refusal() {
                   echo "  stands behind the card." ;;
     esac
     thermal_stakes
-    echo "  Read $log where there is one, and re-run the first arm:"
-    echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py"
-    echo "  A CLAIM_FAIL or INVALID row is LATCHED and will not be re-attempted:"
-    echo "  delete its row from $LEDGER to force one." ;;
+    # THE TAIL IS NOT SHARED BY CLAIM_FAIL, and it was until 2026-09-11. The
+    # CLAIM_FAIL branch above ends "RETURN THE POD AND RENT ANOTHER CARD.
+    # Re-running the arm measures the same silicon again", and this tail then
+    # told the same operator to re-run the arm. Every other word here IS a
+    # re-run; CLAIM_FAIL is the one word that is an answer.
+    if [[ "$word" == "CLAIM_FAIL" ]]; then
+      echo "  Read $log for the page this verdict came off."
+      echo "  DO NOT delete the row to force a re-run on THIS pod: the row is"
+      echo "  latched because the answer would be the same silicon's. On the"
+      echo "  REPLACEMENT card, start a session of its own --"
+      echo "      bash scripts/h200_gaps_session.sh --new"
+      echo "  -- because --resume-latest re-opens THIS session directory, whose"
+      echo "  ledger still carries this card's latched row."
+    else
+      echo "  Read $log where there is one, and re-run the first arm with the"
+      echo "  flags this driver runs it under (a gate advertised at one"
+      echo "  configuration while the arm runs another is this file's standing"
+      echo "  defect):"
+      echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py \\"
+      echo "          --seconds 120 --settle-seconds 30 --poll-seconds 2"
+      echo "  An INVALID row is LATCHED and will not be re-attempted: delete its"
+      echo "  row from $LEDGER to force one. REFUSED and UNKNOWN are not latched."
+    fi ;;
    PAGE)
     echo "REFUSED: the thermal probe exited DONE and its page does not say the"
     echo "  card held its clock. That is a disagreement between the exit code"
@@ -1591,8 +1615,9 @@ thermal_refusal() {
                   echo "  accepted." ;;
     esac
     thermal_stakes
-    echo "  Read $log, then re-run the first arm:"
-    echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py" ;;
+    echo "  Read $log, then re-run the first arm with this driver's own flags:"
+    echo "      $PY_BASE $REPO/scripts/thermal_acceptance.py \\"
+    echo "          --seconds 120 --settle-seconds 30 --poll-seconds 2" ;;
    *)
     # A word neither half issues. There is no safe default: the two states this
     # gate decides between are "this card can be used" and "this card cannot",
@@ -2159,7 +2184,7 @@ rerun_arms() {
 # 2026-09-09 cells; a rerun table that outlives its session predicts states for
 # arms that have since been spent.
 rerun_expectation() { case "$1" in
-  thermal)     echo "DONE, about 3 min, and it is in the set to GATE every arm below it rather than to be re-asked. It has NO prior ledger word because it did not exist before 2026-09-11: the session it was written for is the one where a rented H200 collapsed to its clock floor and arm 0 published a ruler off it anyway. CLAIM_FAIL is the word that ENDS the session, and it is a result about the pod rather than about the apparatus: return the card. INVALID means the probe could not be trusted -- too few samples, or a forked sampler -- and says nothing about the card either way; REFUSED means no maximum SM clock could be read here, which costs nothing and is fixed by installing nvidia-ml-py in the interpreter this driver runs it under." ;;
+  thermal)     echo "DONE, about 3 min, and it is in the set to GATE every arm below it rather than to be re-asked. It has NO prior ledger word because it did not exist before 2026-09-11: the session it was written for is the one where a rented H200 collapsed to its clock floor and arm 0 published a ruler off it anyway. CLAIM_FAIL is the word that ENDS the session, and it is a result about the pod rather than about the apparatus: return the card. INVALID means the probe could not be trusted and says nothing about the card either way; on the live path that is V1, too few samples over too short a window. REFUSED means a piece of the apparatus was missing and it stopped BEFORE spending anything -- no maximum SM clock, no NVML sampler, or no card named -- and all three are fixed by installing nvidia-ml-py in the interpreter this driver runs it under." ;;
   calibrate)   echo "DONE, 6/6 gates, 29 s. It read DONE on 2026-09-10 and published ridge 155.9 (band 147.9-155.9), 682.1 TFLOP/s bf16 at 1470 MHz and triad 4374.3 GB/s. Re-running it costs half a minute and stamps this session; the card moved 7.1% in dense bf16 between two rentals, so it is not carried." ;;
   pin_probe-n64-g1) echo "DONE. It was DONE in 29 s on 2026-09-10. It is a precondition, not a question, and it gates bn_g16 and both counter cells." ;;
   bn_g16)      echo "CLAIM_FAIL is the LIKELY word and it is a result; DONE is possible and INVALID means the third tile did not qualify. On 2026-09-10 at two subject heights the arm reached V0-V5 PASS, C3 and C5 PASS, and C6/C2/C4 FAIL with C1 UNKNOWN, at alpha_a = -0.8143 +/- 0.0961 against a gate of 0.025 on the spread and [0.10, 0.38] on the value. The 2026-09-10 fit is what the third tile is for: at BLOCK_M in {32, 64} the six cells cannot identify the model, every candidate extra term correlates +0.72 to +0.98 with the activation column, and C2 chi2 is 13.28 over 4 dof. READ V5 AND V2 FIRST: V5 wants >= 3 BN values with an alpha and > 3 cells, and the added BLOCK_M=16 has to qualify a compute reference of its own; if it does, the arm returns NINE cells over three heights and C2 becomes a statement about a term rather than about a two-point degeneracy. 46 min, up from 36 while the swept set was {32, 64, 128}. 16 IS AN ADDED HEIGHT, NOT A REPLACEMENT, and this line said replacement until now: the arm line is --tiles 16,32,64,128, BLOCK_M=128 stays in the swept set, and the plan it prints is 108 treads (8 at BLOCK_M=128 per BLOCK_N among them) for 1836 timings and 2754 s, which is the booking above. arm_basis has always said it the other way, that 16 ADDS 24 treads at 8 per BLOCK_N, so the two descriptions of one swept set disagreed. What 2026-09-10 established is that BLOCK_M=128 yielded no alpha at any BLOCK_N there (its memory branch came within 15% of its compute branch and was discarded), so 16 is the height expected to supply the THIRD memory branch that BLOCK_M=128 did not; it is not booked in its place." ;;
@@ -2688,7 +2713,12 @@ say "SESSION  card=$CARD  $( ((DRY)) && echo '(DRY RUN: plans only)' || echo '(M
 # --------------------------------------------------------------------------
 # 0. CAN THIS CARD HOLD A CLOCK. Before the ruler, because the ruler is measured
 #    ON the clock: a card pinned at its floor publishes a ceiling that is wrong
-#    rather than low, and arm 0 cannot tell the difference from inside itself.
+#    rather than low. Arm 0 COULD NOT tell the difference from inside itself
+#    until 2026-09-11, when not_throttled gained the FLOOR term; the ordering
+#    still has to be this way, because arm 0 scores that term only AFTER it has
+#    spent the card's minutes, and under --publish it writes the tracked yaml
+#    whichever way the term reads. Its "do not publish this calibration" is
+#    advice printed to an operator, not a branch.
 # --------------------------------------------------------------------------
 say "0. can THIS card hold a clock under sustained load"
 if (( DRY )); then

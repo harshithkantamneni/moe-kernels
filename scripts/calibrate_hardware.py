@@ -50,9 +50,19 @@ was added 2026-09-11 after a rented H200 collapsed from 1980 MHz to its 345 MHz
 floor under sustained GEMM and this script published a tracked yaml whose ridge
 read 73.6 against a real ~156, with `not_throttled` PASSING: the gate scored
 DRIFT, and a card pinned flat at its floor does not drift. PER-TILE CELLS KEEP
-THE DRIFT-ONLY RULE; only the calibrator scores FLOOR, because only the
-calibrator is establishing a ceiling. `under_load_clock_verdict` carries the
-argument.
+THE DRIFT-ONLY RULE, because a hot tile clocking down is the effect those arms
+measure. `under_load_clock_verdict` carries the argument.
+
+THIS IS NOT THE ONLY SITE THAT SCORES FLOOR, and reading it as one is how the
+gate below gets trusted to protect a session it cannot protect.
+`scripts/thermal_acceptance.py` gate C1 scores the same `clock_floor_ok`
+against the same maximum, and it runs FIRST for a reason this file makes
+plain: the gate here is scored after the card's minutes are already spent,
+and under `--publish` the tracked yaml is written whether it passed or not.
+The FAIL text below says "do not publish this calibration" as ADVICE to an
+operator, not as a branch. `clock_floor_ok` has exactly two scoring call
+sites, this one and that arm's; `timing.py`'s "FLOOR IS A THIRD QUESTION"
+section is the map of which site takes which rule, and it names both.
 
 EXIT CODES are `moe.bench.exit_codes`. `--dry-run` exits REFUSED, because a plan
 measured nothing and scored no gate, and `classify([])` raises rather than

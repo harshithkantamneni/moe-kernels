@@ -651,12 +651,23 @@ def test_the_floor_is_a_fraction_of_the_cards_own_maximum_and_never_a_literal():
     a part whose maximum is low enough, because the floor moves with the card.
     A gate carrying 660 as a number would be a gate that works on one part."""
     cal = floored_calibration()
-    assert T.thermal_floor_mhz(1980.0) == T.snap_to_clock_step(1980.0 / 3)
-    assert T.thermal_floor_mhz(1410.0) == T.snap_to_clock_step(1410.0 / 3)
+    # THE FRACTION IS THE CONSTANT AND NOT THE DIGIT 3. These two lines read
+    # `1980.0 / 3` until 2026-09-11, which pinned THERMAL_FLOOR_FRACTION inside
+    # the one test named "and never a literal": retune it anywhere in its own
+    # admissible window (0.1742 < f <= 0.6439) and this test failed on correct
+    # code, pointing at the arithmetic instead of at the retune.
+    for maximum in (1980.0, 1410.0):
+        assert T.thermal_floor_mhz(maximum) == T.snap_to_clock_step(
+            maximum * T.THERMAL_FLOOR_FRACTION)
     assert T.thermal_floor_mhz(1980.0) > T.thermal_floor_mhz(1410.0)
-    assert CH.under_load_clock_verdict(cal, 1980.0)[0] == EX.FAIL
-    # A hypothetical part whose maximum is 900 MHz: 345 is above a third of it.
-    assert CH.under_load_clock_verdict(cal, 900.0)[0] == EX.PASS
+    fault, fault_max = T.THERMAL_FAULT_OBSERVED_MHZ
+    assert CH.under_load_clock_verdict(cal, fault_max)[0] == EX.FAIL
+    # A hypothetical part small enough that the SAME 345 MHz record clears its
+    # floor, derived so it stays a PASS at any admissible fraction: a maximum
+    # whose floor is 0.9 x the recorded fault clock.
+    low_part = 0.9 * fault / T.THERMAL_FLOOR_FRACTION
+    assert T.thermal_floor_mhz(low_part) < fault
+    assert CH.under_load_clock_verdict(cal, low_part)[0] == EX.PASS
     # Every edge NVML can report is a clock NVML can report.
     for maximum in (1410.0, 1755.0, 1980.0, 2100.0):
         assert T.thermal_floor_mhz(maximum) % T.CLOCK_STEP_MHZ == 0
@@ -706,6 +717,44 @@ def test_the_floor_fraction_separates_the_published_rows_from_the_fault():
     # And no published row would have been refused by it.
     floor = T.thermal_floor_mhz(max(loads))
     assert min(loads) > floor, (min(loads), floor)
+    # THE RECORDED HEALTHY PAIR IS THAT SAME BINDING END, so the margin
+    # `thermal_acceptance` prints is the margin this corpus actually holds.
+    assert T.THERMAL_HEALTHY_OBSERVED_MHZ == (min(loads), max(loads))
+    # NOR WOULD ANY REJECTED FRACTION HAVE REFUSED ONE, which the constant's
+    # comment claimed of f = 0.60 until 2026-09-11. The reason to reject 0.60
+    # is its margin, not a cell it would have failed, and a comment that gives
+    # the wrong reason is the sentence a later retune gets argued from.
+    for rejected in (0.25, 0.50, 0.60):
+        refused = [m for m in loads
+                   if m < T.snap_to_clock_step(rejected * max(loads))]
+        assert refused == [], (rejected, len(refused), min(refused))
+
+
+def test_the_a100_margin_in_the_constants_comment_comes_out_of_the_a100_file():
+    """R2, asked of the one cross-card number the derivation quotes.
+
+    `THERMAL_FLOOR_FRACTION`'s comment reaches for a SECOND part to show the
+    fraction is not H200-shaped, and the clock it quoted was 1230 MHz, which
+    appears in no committed file: the A100's own calibration records a
+    compute-settle history whose minimum is 1245, so the margin was 2.68x and
+    not the 2.65x written down. A derived quantity typed as a literal, drifted
+    from its source before it was ever committed."""
+    import yaml as yaml_mod
+
+    path = (REPO / "moe" / "bench" / "hardware"
+            / "measured_nvidia_a100_sxm4_80gb.yaml")
+    if not path.exists():
+        pytest.skip("no committed A100 calibration in this checkout")
+    history = (yaml_mod.safe_load(path.read_text())["detail"]["settle"]
+               or {}).get("clock_history_mhz") or []
+    assert history, "the committed A100 file carries no compute-settle history"
+    a100_max = 1410.0          # a property of the PART, never of a calibration
+    margin = min(history) / T.thermal_floor_mhz(a100_max)
+    source = (REPO / "moe" / "bench" / "timing.py").read_text()
+    assert f"{min(history):.0f} MHz" in source, min(history)
+    assert f"{margin:.2f}x" in source, margin
+    # and the number it used to carry is gone from the tree entirely.
+    assert "1230 MHz" not in source
 
 
 def test_the_floor_is_scored_on_the_median_and_not_on_a_sample():
@@ -762,14 +811,27 @@ def test_the_committed_calibration_in_this_tree_still_passes_the_new_gate():
     path = REPO / "moe" / "bench" / "hardware" / "measured_nvidia_h200.yaml"
     if not path.exists():
         pytest.skip("no committed H200 calibration in this checkout")
-    detail = yaml_mod.safe_load(path.read_text())["detail"]
+    loaded = yaml_mod.safe_load(path.read_text())
+    detail = loaded["detail"]
     cal = types.SimpleNamespace(clocks=detail.get("clocks") or {},
                                 gemm_clock=detail.get("gemm_clock") or {})
     median = cal.gemm_clock.get("sm_clock_load_mhz")
     assert median, "the committed file carries no under-load median to score"
-    verdict, detail_text = CH.under_load_clock_verdict(cal, H200_MAX_SM)
+    # THE MAXIMUM COMES OUT OF THE SAME FILE WHEN THE FILE HAS IT. Only the
+    # median was read here until 2026-09-11, and the denominator of the whole
+    # threshold was the module literal -- in a test whose docstring says it
+    # reads the file "which is R2". `calibrate_hardware` now writes
+    # `observed.clocks_max_sm_mhz` on every run, so the next recalibration
+    # supplies it; the committed file predates that key, hence the fallback,
+    # and the literal is admissible only because a maximum SM clock is a
+    # property of the PART and never derived from a calibration. It matters on
+    # an H200 NVL, which torch names "NVIDIA H200" identically and which
+    # h200_nvl.yaml documents as a clock-cut part: a recalibration there lands
+    # in this same filename against another SKU's maximum.
+    max_sm = (loaded.get("observed") or {}).get("clocks_max_sm_mhz") or H200_MAX_SM
+    verdict, detail_text = CH.under_load_clock_verdict(cal, max_sm)
     assert verdict == EX.PASS, detail_text
     # The relation, not the number: whatever that file says, it is above a
     # third of the card's maximum with the margin the constant was sized for.
-    assert median >= T.thermal_floor_mhz(H200_MAX_SM)
-    assert median / T.thermal_floor_mhz(H200_MAX_SM) > 1.5, median
+    assert median >= T.thermal_floor_mhz(max_sm)
+    assert median / T.thermal_floor_mhz(max_sm) > 1.5, median
