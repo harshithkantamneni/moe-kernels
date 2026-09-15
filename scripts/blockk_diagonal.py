@@ -2356,6 +2356,59 @@ def report_lines(analysis: Analysis) -> list[str]:
     return out
 
 
+def report_payload(analysis: Analysis, gates: list[Gate], prov, *, run_id: str,
+                   model: str, dtype: str, cells) -> dict:
+    """`report.json`, assembled as a FUNCTION so it can be tested off GPU.
+
+    The sibling arm records the failure this shape exists to prevent: a pod run
+    "spent both ladders and then died between the last timing and the first
+    `write_text`, leaving no report at all". Everything below is pure assembly
+    over objects a planted world also produces, so a serialisation break is a
+    unit test rather than a lost booking.
+
+    `prov.stamp` nests the provenance block and lifts its top-level keys; it
+    raises `ProvenanceCollision` on a conflicting key, which is why none of the
+    keys chosen here is one of them.
+    """
+    return prov.stamp({
+        "experiment": "blockk_diagonal",
+        "run_id": run_id,
+        "model": model,
+        "dtype": dtype,
+        "cells": [c.key for c in cells],
+        "verdict": analysis.verdict,
+        "coefficients": (None if analysis.coef is None else {
+            "intercept": analysis.coef.intercept,
+            "depth": analysis.coef.depth,
+            "block_k": analysis.coef.block_k,
+            "residency": analysis.coef.residency,
+            "sd": analysis.coef.sd,
+            "residual_rms": analysis.coef.residual_rms,
+            "dof": analysis.coef.dof}),
+        # EVERY w CARRIES THE RATE IT WAS DIVIDED BY, here as well as on the
+        # page: w scales exactly 1:1 in it, so a persisted w without one is a
+        # number a later reader cannot use.
+        "w": {k: {"streams": f.streams, "slope_ms": f.slope_ms,
+                  "treads": f.treads, "marginal_ai": f.marginal_ai,
+                  "weight_bytes": f.w.weight_bytes,
+                  "stream_ms": f.w.stream_ms,
+                  "bandwidth_gbps": f.w.bandwidth_gbps,
+                  "bandwidth_source": f.w.bandwidth_source}
+              for k, f in sorted(analysis.fits.items())},
+        "pairs": [asdict(p) for p in analysis.pairs],
+        "residency": {k: asdict(r) for k, r in sorted(
+            analysis.residencies.items())},
+        "design": {"rank": analysis.design.rank,
+                   "singular_values": list(analysis.design.singular_values),
+                   "condition": analysis.design.condition,
+                   "se_multiplier": (list(analysis.design.se_multiplier)
+                                     if analysis.design.se_multiplier else None)},
+        "clock": analysis.clock,
+        "gates": [{"kind": g.kind, "name": g.name, "verdict": g.scored()[2],
+                   "observed": g.observed} for g in gates],
+    })
+
+
 # --------------------------------------------------------------------------
 # The planted worlds.
 # --------------------------------------------------------------------------
@@ -2931,35 +2984,8 @@ def _main(argv=None) -> int:                                    # noqa: C901
 
     report = "\n".join(header + [""] + body) + "\n"
     (out_dir / "report.txt").write_text(report)
-    payload = prov.stamp({
-        "experiment": "blockk_diagonal",
-        "run_id": run_id,
-        "model": cfg.name,
-        "dtype": args.dtype,
-        "cells": [c.key for c in cells],
-        "verdict": analysis.verdict,
-        "coefficients": (None if analysis.coef is None else {
-            "intercept": analysis.coef.intercept,
-            "depth": analysis.coef.depth,
-            "block_k": analysis.coef.block_k,
-            "residency": analysis.coef.residency,
-            "sd": analysis.coef.sd,
-            "residual_rms": analysis.coef.residual_rms,
-            "dof": analysis.coef.dof}),
-        "w": {k: {"streams": f.streams, "slope_ms": f.slope_ms,
-                  "treads": f.treads, "marginal_ai": f.marginal_ai,
-                  "bandwidth_gbps": f.w.bandwidth_gbps,
-                  "bandwidth_source": f.w.bandwidth_source}
-              for k, f in sorted(analysis.fits.items())},
-        "residency": {k: asdict(r) for k, r in sorted(
-            analysis.residencies.items())},
-        "design": {"rank": analysis.design.rank,
-                   "singular_values": list(analysis.design.singular_values),
-                   "condition": analysis.design.condition},
-        "clock": analysis.clock,
-        "gates": [{"kind": g.kind, "name": g.name, "verdict": g.scored()[2],
-                   "observed": g.observed} for g in gates],
-    })
+    payload = report_payload(analysis, gates, prov, run_id=run_id,
+                             model=cfg.name, dtype=args.dtype, cells=cells)
     (out_dir / "report.json").write_text(json.dumps(payload, indent=2,
                                                     default=str))
     for label, path in (("cells", csv_path), ("report", out_dir / "report.txt"),

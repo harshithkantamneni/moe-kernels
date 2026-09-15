@@ -942,3 +942,60 @@ def test_v1_says_what_its_read_back_cannot_see(bk):
     assert any("cannot tell them apart" in line for line in gate.lines)
     assert "pin_probe" in " ".join(gate.lines)
     assert "cannot tell (6,32) from (3,64)" in bk.gate_geometry.__doc__
+
+
+# --------------------------------------------------------------------------
+# 11. report.json, assembled off GPU
+# --------------------------------------------------------------------------
+
+def test_the_report_payload_serialises_from_a_planted_world(bk, limits):
+    """A pod run that spends every timing and then dies at the first
+    `write_text` leaves no report at all -- the sibling arm records exactly
+    that. `report_payload` is a function over objects a planted world also
+    produces, so a serialisation break is caught here."""
+    import json
+
+    from moe.bench import provenance as PV
+
+    parser = bk.build_parser()
+    args = parser.parse_args(["--capability", "9.0", "--reps", "5"])
+    cfg = MODEL_CONFIGS[args.model]
+    cells = bk.parse_cells(bk.DEFAULT_CELLS)
+    rows = bk.ladder_rows(cfg, args.treads)
+    world = bk.SELF_TEST_WORLDS["depth"]
+    residencies = {c.key: bk.cell_residency(c, 2, limits, warps=args.num_warps,
+                                            registers=bk.PLANTED_REGISTERS)
+                   for c in cells}
+    samples = bk.planted_samples(
+        cfg, cells, rows, world, residencies, reps=args.reps, noise=0.004,
+        seed=0, stream_ms=bk.WEIGHTS.weight_stream_ms(cfg, "bf16", 4374.5))
+    observed = {c.key: {"shared": c.smem_bytes(2),
+                        "n_regs": bk.PLANTED_REGISTERS, "n_spills": 0}
+                for c in cells}
+    analysis = bk.analyse(cfg, cells, samples, dtype="bf16",
+                          bandwidth_gbps=4374.5, bandwidth_source="test",
+                          limits=limits, observed=observed, b=2, draws=20,
+                          seed=0, warps=args.num_warps)
+    gates = bk.build_gates(analysis, cfg, cells, 2, ridge=162.8,
+                           ridge_source="test", compiles={c.key: 1 for c in cells},
+                           executed={c.key: 8 for c in cells},
+                           observed=observed, limits=limits, tolerance=0.1)
+    prov = PV.provenance_block(instrument="test", ridge=162.8,
+                               ridge_source="test", bandwidth=4374.5,
+                               bandwidth_source="test", warmup_ms=300.0,
+                               iters=None, target_ms=200.0)
+    payload = bk.report_payload(analysis, gates, prov, run_id="rid",
+                                model=cfg.name, dtype="bf16", cells=cells)
+    back = json.loads(json.dumps(payload, indent=2, default=str))
+    assert back["verdict"] == bk.VERDICT_DEPTH
+    assert back["design"]["rank"] == 4
+    assert len(back["gates"]) == len(gates)
+    assert len(back["pairs"]) == len(bk.ISO_SMEM_PAIRS)
+    # Every persisted w names the rate it was divided by: w scales 1:1 in it.
+    for key, entry in back["w"].items():
+        assert entry["bandwidth_gbps"] == 4374.5, key
+        assert entry["bandwidth_source"], key
+    # The provenance block's top-level keys are lifted and none of ours
+    # collided with them.
+    for field in PV.TOP_LEVEL_KEYS:
+        assert field in back, field
