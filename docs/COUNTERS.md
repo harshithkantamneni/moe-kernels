@@ -208,9 +208,13 @@ grep CapEff /proc/self/status         # bit 21 CAP_SYS_ADMIN, bit 38 CAP_PERFMON
 
 Both bits matter: from Linux 5.8 and driver R450 on, `CAP_PERFMON` opens the
 counter gate as well as `CAP_SYS_ADMIN`, and it is the narrower ask, so it is
-the one to make of a provider first. A mask printed in eight hex digits is 32
-bits wide and cannot carry bit 38 at all, which is a different statement from
-"the bit is clear".
+the one to make of a provider first. Read the bits off the RAW `/proc` field,
+which Linux prints in sixteen zero-padded hex digits. The published
+2026-09-09 and 2026-09-10 payloads record `cap_eff` as `0xa80425fb` because the
+probe stored `hex(mask)` and `hex` strips leading zeros; those eight digits are
+Python's formatting, not the mask's width, and an earlier version of this
+paragraph read a 32-bit mask off them. What the value does establish is that
+`0xa80425fb` is below 2**38, so bit 38 was clear on both pods.
 
 `scripts/dram_counter_route.py --probe` reads both, launches ONE real CUDA
 kernel under `ncu` (`moe/bench/counter_probe_kernel.py`, a 4 MiB in-place add),

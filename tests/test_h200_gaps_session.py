@@ -1254,6 +1254,56 @@ def test_an_invalid_arm_is_recorded_in_its_own_state_and_not_retried(tmp_path):
     assert [r[1] for r in rows] == ["UNKNOWN", "UNKNOWN"], rows
 
 
+def test_counter_plan_is_never_latched_because_a_resume_can_be_on_another_pod(tmp_path):
+    """A COUNTER ROUTE IS A PROPERTY OF THE POD, and the pod is what a resume
+    can change. SESSION_PREFIX is `gaps-$CARD-`, keyed to the card MODEL;
+    /workspace is a network volume two rentals share, which this driver already
+    warns about at MOE_RESULTS_DIR; and a plain re-invocation that finds a
+    session REFUSES and tells the operator to `--resume-latest`. So the latch
+    would hand the previous rental's CLAIM_FAIL to `counter_arm`, which skips
+    both 120-minute arms on it: a stale BLOCKED retires the session's headline
+    pair on a pod nobody asked, and a stale OPEN spends four pod-hours on one
+    where the read is refused. The probe is about fifteen seconds against the
+    240 minutes it gates, so it is re-asked every pass.
+
+    `ledger_arm_state` takes the LAST row for a name, so the fresh verdict is
+    the one the gate reads and the stale row stays as history.
+    """
+    ledger = tmp_path / "ARMS.tsv"
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    # EARNED PAGES, because an unearned exit does not latch in the first place
+    # and would prove nothing about the exemption. These are the two the probe
+    # actually writes: BLOCKED is `P1 FAIL` under exit 1, OPEN is `P1 PASS`
+    # under exit 0.
+    blocked = tmp_path / "blocked.sh"
+    blocked.write_text("#!/bin/bash\necho 'RESULT: CLAIM P1 FAIL route BLOCKED'\n"
+                       "exit 1\n")
+    opened = tmp_path / "open.sh"
+    opened.write_text("#!/bin/bash\necho 'RESULT: CLAIM P1 PASS route OPEN'\nexit 0\n")
+    # A BLOCKED probe on the first pod: CLAIM_FAIL, which every other arm latches.
+    first = arm_lift(f"arm counter_plan bash {blocked}", ROOT, ledger, logs)
+    assert "SKIP" not in first.stdout, first.stdout
+    assert ledger.read_text().splitlines()[-1].split("\t")[1] == "CLAIM_FAIL"
+    # The same command on the REPLACEMENT pod, resumed into this ledger.
+    again = arm_lift(f"arm counter_plan bash {opened}", ROOT, ledger, logs)
+    assert "SKIP counter_plan" not in again.stdout, again.stdout
+    assert "RE-RUN counter_plan" in again.stdout, again.stdout
+    rows = [r.split("\t") for r in ledger.read_text().splitlines()]
+    assert [r[1] for r in rows] == ["CLAIM_FAIL", "DONE"], rows
+    state = lift("ledger_arm_state counter_plan", LEDGER=str(ledger))
+    assert state.stdout.strip() == "DONE"
+    # AND EVERY OTHER ARM STILL LATCHES, which is what makes this an exemption
+    # and not a hole: `never_latches` names one arm.
+    other = tmp_path / "OTHER.tsv"
+    arm_lift(f"arm counter-n32-m64 bash {blocked}", ROOT, other, logs)
+    held = arm_lift(f"arm counter-n32-m64 bash {opened}", ROOT, other, logs)
+    assert "SKIP counter-n32-m64 (already CLAIM_FAIL" in held.stdout, held.stdout
+    assert lift("never_latches counter_plan; echo $?").stdout.strip() == "0"
+    assert lift("never_latches counter-n32-m64; echo $?").stdout.strip() == "1"
+    assert lift("never_latches thermal; echo $?").stdout.strip() == "1"
+
+
 def test_a_refused_arm_is_re_attempted_because_refusing_costs_nothing(tmp_path):
     """The asymmetry the table implies. A REFUSED arm spent no pod minutes and
     the usual reason to re-run this driver is that the precondition it named was
@@ -3784,6 +3834,13 @@ def test_the_help_and_the_closes_text_agree_on_what_the_counter_probe_exits():
     assert "its exit 0 is an UNEARNED DONE" not in help_text
     assert "OPEN lands DONE, BLOCKED lands CLAIM_FAIL" in help_text
     assert "exits 2 with no RESULT line and is re-attempted on every" in help_text
+    # AND THE LATCH SENTENCE AGREES WITH `arm()`. --help said BLOCKED was
+    # "LATCHED as the answer" after counter_plan joined `never_latches`, which
+    # is the same shape of contradiction one paragraph down: a surface an
+    # operator reads first describing behaviour the code no longer has.
+    assert "never_latches" in help_text
+    assert "LATCHED as the answer" not in help_text
+    assert "never_latches" in lift("arm_closes counter_plan", REPO=str(ROOT)).stdout
     caveat = CODE.split("contract_caveat() {", 1)[1].split("\n}\n", 1)[0]
     assert "it exits DONE on BLOCKED" not in caveat
     assert "OPEN DONE" in caveat and "BLOCKED CLAIM_FAIL" in caveat
@@ -4041,10 +4098,13 @@ def test_the_counter_arms_are_gated_on_the_probe_that_costs_fifteen_seconds():
         assert f"AT BLOCK_N={name.split('-')[1][1:]}" in closes, closes[:200]
         # And the axis the pair still pins is named rather than left implied.
         assert "THE AXIS STILL PINNED IS GROUP_SIZE_M" in closes
-    # THE GATE IS CODE, NOT ADVICE. The measuring branch reads THIS session's
-    # counter_plan row and skips the arm unless it says DONE. It reads the
-    # ledger rather than the log or a remembered verdict, because a counter
-    # route is a property of the pod and the pod changes between rentals.
+    # THE GATE IS CODE, NOT ADVICE. The measuring branch reads the counter_plan
+    # row and skips the arm unless it says DONE. It reads the ledger rather
+    # than the log, and the row it reads is THIS pod's because counter_plan is
+    # in `never_latches` and re-probes on every pass: a counter route is a
+    # property of the pod, and --resume-latest onto a shared /workspace can be
+    # a different pod. Pinned by
+    # `test_counter_plan_is_never_latched_because_a_resume_can_be_on_another_pod`.
     # It is read out of `counter_arm` rather than out of the say-block, because
     # the ONE gate function is the thing being asserted.
     assert "\ncounter_arm() {" in CODE, "the counter gate is no longer one function"

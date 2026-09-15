@@ -33,16 +33,30 @@ operator on the pod who wants to see the failure for themselves. The one-liner
 this replaces already existed twice in the tree, spelled differently each time.
 
 WHY THE KERNEL IS TORCH AND NOT TRITON. `read_probe` needs Triton because it is
-measuring a read pattern. This measures nothing: it needs a launch that
-certainly reads DRAM and certainly finishes. `torch.Tensor.add_` over a buffer
-larger than any L2 in this study is both, in one launch, with no compile step.
-Triton here would add a JIT to the critical path of a permission check.
+measuring a read pattern. This measures nothing: it needs a launch that reads
+every element of a real buffer and certainly finishes. `torch.Tensor.add_` is
+both, in one launch, with no compile step. Triton here would add a JIT to the
+critical path of a permission check. This paragraph said "over a buffer larger
+than any L2 in this study" until 2026-09-15, which `PROBE_ELEMENTS` below
+contradicts in the same file: 4 MiB sits INSIDE the L2 of both cards, on
+purpose, because the probe asserts that a value came back and never that the
+value is large.
+
+WHY THE BUFFER IS FILLED ON THE HOST. `ncu --launch-count 1` profiles the
+FIRST kernel launch of the process. `torch.ones(N, device="cuda")` is `empty`
+plus a `fill_` KERNEL, so a first draft of this file profiled the fill -- a
+write-only launch -- while every comment in it described the `add_`. The
+buffer is therefore built on the CPU and copied, which is a `cudaMemcpyAsync`
+and not a kernel launch, so the in-place add is launch zero and the launch the
+caller's payload names is the launch it counted.
 
 WHAT THIS IS NOT. It is not a benchmark and nothing timed here is reported.
 The caller asks exactly one question of the profile it produces: did ncu return
 a NUMBER for the registered metric. The number's VALUE is not asserted by
 anyone -- a counter that reads 0 on a 4 MiB buffer is a reading, and a counter
-that is refused is not.
+that is refused is not. That is also why the paragraph above is a matter of
+honest reporting and not of correctness: had a torch build still slipped a
+launch in ahead of the add, the permission question would still be answered.
 
 Exit codes are this file's own, not `moe.bench.exit_codes`: the caller reads the
 marker line, and these say which of four worlds the child landed in.
@@ -96,16 +110,20 @@ def probe() -> tuple[str, str]:
         # is the only distinction this probe is entitled to draw.
         return NO_CUDA_DEVICE, f"CUDA did not initialise: {type(exc).__name__}: {exc}"
     try:
-        # One in-place add over a real buffer: it reads every element and writes
-        # every element, so `dram__bytes_read.sum` has something to be. `ones`
-        # rather than `empty` so the values are defined and no compiler pass can
-        # argue the read away.
-        buf = torch.ones(PROBE_ELEMENTS, dtype=torch.float32, device="cuda")
+        # THE HOST FILL IS DELIBERATE, see the module docstring: `torch.ones`
+        # with `device="cuda"` would launch a `fill_` kernel ahead of the add
+        # and `--launch-count 1` would profile that one. `ones` on the CPU is
+        # no launch, and `.to("cuda")` is a memcpy, so the add below is the
+        # first kernel this process launches. The values are defined either
+        # way, so no compiler pass can argue the read away.
+        buf = torch.ones(PROBE_ELEMENTS, dtype=torch.float32).to("cuda")
+        # One in-place add over a real buffer: it reads every element and
+        # writes every element, so `dram__bytes_read.sum` has something to be.
         buf.add_(1.0)
         torch.cuda.synchronize()
         # Read one element back to prove the launch retired. `.item()` is a
-        # device-to-host copy, not a second kernel, so it does not add a launch
-        # for `--launch-count 1` to profile instead of the one we meant.
+        # device-to-host copy, not a second kernel, and it happens AFTER the
+        # add in any case.
         got = float(buf[0].item())
     except Exception as exc:                                # noqa: BLE001
         return LAUNCH_FAILED, f"{type(exc).__name__}: {exc}"

@@ -429,16 +429,31 @@ def test_probe_capabilities_reads_both_counter_bits():
     Until 2026-09-15 only bit 21 was read, so a container holding the weaker
     capability that would have sufficed was reported identically to one holding
     nothing, and the operator was sent to ask for the capability providers
-    refuse. The mask WIDTH is recorded beside the bits for the same reason: the
-    published `0xa80425fb` is 32 bits and cannot carry bit 38 at all.
+    refuse.
+
+    THE WIDTH IS READ OFF THE RAW FIELD AND THIS TEST READS THE SAME FIELD.
+    A first draft asserted `cap_eff_bits == 4 * len(cap_eff) - 8`, deriving the
+    width from `hex(mask)`, which strips leading zeros. Linux prints `CapEff`
+    in sixteen digits, so that assertion is 64 == 32 on every Linux box and
+    could only ever have passed here, where there is no `/proc/self/status` and
+    the branch does not run. The relation the code implements is against the
+    FIELD, so this reads the field.
     """
     caps = probe_capabilities()
-    if caps["available"]:
-        assert set(caps) == {"available", "cap_eff", "cap_eff_bits",
-                             "sys_admin", "perfmon"}
-        assert caps["cap_eff_bits"] == 4 * len(caps["cap_eff"]) - 8
-    else:
+    if not caps["available"]:
         assert "perfmon" not in caps
+        return
+    assert set(caps) == {"available", "cap_eff", "cap_eff_field", "cap_eff_bits",
+                         "sys_admin", "perfmon"}
+    field = next(line.split()[1] for line in
+                 Path("/proc/self/status").read_text().splitlines()
+                 if line.startswith("CapEff:"))
+    assert caps["cap_eff_field"] == field
+    assert caps["cap_eff_bits"] == 4 * len(field)
+    mask = int(field, 16)
+    assert int(caps["cap_eff"], 16) == mask
+    assert caps["perfmon"] is bool(mask >> 38 & 1)
+    assert caps["sys_admin"] is bool(mask >> 21 & 1)
 
 
 def test_route_verdict_distinguishes_the_four_failures():
@@ -449,7 +464,9 @@ def test_route_verdict_distinguishes_the_four_failures():
     assert open_[0] == "OPEN"
 
     blocked_cap = route_verdict({"available": True, "sys_admin": False, "perfmon": False,
-                                 "cap_eff": "0xa80425fb", "cap_eff_bits": 32},
+                                 "cap_eff": "0xa80425fb",
+                                 "cap_eff_field": "00000000a80425fb",
+                                 "cap_eff_bits": 64},
                                 {"available": True, "restrict": 1},
                                 {"present": True, "counters_read": False,
                                  "permission_refused": True,
@@ -461,7 +478,16 @@ def test_route_verdict_distinguishes_the_four_failures():
     # The narrower ask is named first, because it is the one a provider grants.
     ask = next(n for n in blocked_cap[1] if "PERFMON" in n and "SYS_ADMIN" in n)
     assert ask.index("--cap-add=PERFMON") < ask.index("--cap-add=SYS_ADMIN")
-    assert any("32 bits wide" in n for n in blocked_cap[1])
+    # THE MASK IS REPORTED, AND NOT A CLAIM ABOUT ITS WIDTH. A note saying the
+    # field "cannot represent bit 38" stood here until 2026-09-15 and could
+    # never fire: `cap_eff_bits` is the width of the raw /proc field, which
+    # Linux prints as sixteen digits whatever the value, so the guard
+    # `cap_eff_bits <= 38` was reachable only from a hand-built dict like this
+    # one. `perfmon` is a measurement of bit 38 on any real box.
+    mask_note = next(n for n in blocked_cap[1] if "capability mask read" in n)
+    assert "00000000a80425fb" in mask_note and "64 bits" in mask_note
+    assert "bit 38) is clear" in mask_note and "bit 21) is clear" in mask_note
+    assert not any("cannot represent" in n for n in blocked_cap[1])
 
     # The combination that means "stop retrying and read the output".
     odd = route_verdict({"available": True, "sys_admin": False, "perfmon": True},
@@ -581,6 +607,45 @@ def test_the_probe_reports_open_only_when_a_number_came_back(monkeypatch):
     assert isinstance(info["metric_value"], float)
     assert info["cause"].startswith("counters readable")
     assert counter_route_is_open(info)
+
+
+def test_a_counter_that_read_zero_is_a_reading_and_the_route_is_open(monkeypatch):
+    """The value the test above is NAMED for, and nothing planted it until now.
+
+    `test_the_probe_reports_open_only_when_a_number_came_back` plants 4.19e6, a
+    positive value, so the property its docstring argues for -- that ZERO is a
+    reading -- was pinned by nothing, and a `values[0] > 0` hardening would
+    have passed the whole suite. It matters on the real pod: `--launch-count 1`
+    profiles the FIRST launch, and a write-only launch reads no DRAM at all, so
+    a legitimate 0 is a shape this probe can actually see.
+    """
+    log = ('"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+           '"0","probe","dram__bytes_read.sum","byte","0"\n')
+    _plant_ncu(monkeypatch, log=log, stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    import scripts.dram_counter_route as DCR
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is True
+    assert info["metric_value"] == 0.0
+    assert counter_route_is_open(info)
+    assert route_verdict({}, {}, info, {"present": True, "importer_present": True})[0] \
+        == "OPEN"
+
+
+def test_the_self_test_scores_the_probe_worlds_off_gpu():
+    """`--self-test` is the pod's only off-GPU check of the logic that gates
+    240 booked minutes, and it had no probe section until 2026-09-15: the
+    verdict logic was exercised only by this file, which the pod never runs,
+    while `arm_verify counter_plan` named `--dry-run` and `--bracket`.
+
+    The planted worlds go through the SAME `probe_reading` the live probe hands
+    its child's bytes to, so this is not a second copy of the rules."""
+    rows = DCR.self_test_probe()
+    assert len(rows) == 5
+    assert all(passed for _label, passed, _detail in rows), rows
+    details = " ".join(d for _l, _p, d in rows)
+    assert "verdict OPEN exit 0" in details
+    assert "verdict BLOCKED exit 1" in details
+    assert "verdict REFUSE exit 2" in details
 
 
 def test_a_metric_ncu_refused_to_supply_is_not_a_readable_counter(monkeypatch):

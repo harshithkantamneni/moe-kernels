@@ -238,14 +238,24 @@ EXIT_INVALID = exit_codes.INVALID
 #: The columns `timing.KernelTiming` contributes to every measured row. Named
 #: as a group so the header and the row builder cannot drift apart.
 #:
-#: `clock_level_side` IS ONE OF THEM, since 2026-09-15, and its absence was the
-#: defect. `timing.clock_flags` fails LEVEL on EITHER edge of the band and
-#: records which edge in `KernelTiming.clock_level_side`; this header carried
-#: the verdict and not the side, so every row this file has ever written
-#: destroyed the one field that separates a card that SAGGED from one that
-#: BOOSTED, and no later reader could recover it. On an H200 a memory-bound arm
-#: boosts, so the rows most likely to carry a False are the ones where False
-#: means nothing is wrong.
+#: `clock_level_side` IS ONE OF THEM, since 2026-09-15. `timing.clock_flags`
+#: fails LEVEL on EITHER edge of the band and records which edge in
+#: `KernelTiming.clock_level_side`; a header that carries the verdict and not
+#: the side destroys the one field that separates a card that SAGGED from one
+#: that BOOSTED, and no later reader can recover it. On an H200 a memory-bound
+#: arm boosts, so the rows most likely to carry a False are the ones where
+#: False means nothing is wrong.
+#:
+#: IT IS EMPTY ON EVERY ROW THIS SCRIPT MEASURES TODAY, and saying otherwise
+#: would be inventing a defect this column did not fix. `main` passes
+#: `reference_clock_mhz=None` (this script reads no calibration and there is no
+#: flag to supply one), `clock_flags` returns None for LEVEL without a
+#: reference, and a row whose LEVEL is None carries no side. The column is here
+#: for the caller that threads a reference through `meta`, which is the one
+#: change that would make LEVEL live in this file; the fold, the cell and the
+#: reader are written now so that caller does not also have to widen the
+#: schema. The COLUMN ORDER still matters immediately, which is why `Store`
+#: refuses a file written under the narrower header.
 TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
                       "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
                       "clock_drift_ok", "l2_flush", "host_bound")
@@ -847,6 +857,18 @@ class ArmResult:
         }
 
 
+class SchemaCollision(RuntimeError):
+    """The CSV on disk was written under a different set of columns.
+
+    A NAMED REFUSAL for the same reason `OverrideHookMissing` is one: nothing
+    was measured, so the exit is REFUSED and not the 1 a bare
+    `SystemExit(<str>)` produces. `scripts/dtype_tile_confound.py` raises
+    `ConfoundRefusal` at the identical point in the identical `Store` and has
+    since 2026-09-09; this file is the OTHER of the two call sites and did not,
+    which is this repository's standing defect in its plainest form.
+    """
+
+
 class Store:
     """Append-only CSV of arm results, flushed per arm, re-read on resume.
 
@@ -868,6 +890,31 @@ class Store:
                     except (KeyError, ValueError):
                         continue
                     self.done[key] = row
+        # THE HEADER ON DISK HAS TO BE THIS HEADER, AND NOTHING CHECKED UNTIL
+        # 2026-09-15. `run_id` is a hash of the PLAN, deliberately, so the same
+        # command resumes onto the file an earlier build wrote
+        # (`test_the_run_id_is_a_hash_of_the_plan_so_the_same_command_resumes`),
+        # and `pod_session.sh` runs this arm into a persistent session
+        # directory. That was safe while the columns did not move. This commit
+        # moved them: `clock_level_side` was INSERTED between `clock_level_ok`
+        # and `clock_drift_ok`. Appending a wider row under the narrower header
+        # shifts every field past the first difference, so a reader gets the
+        # side where the DRIFT verdict should be -- and DRIFT is the one rule in
+        # this tree that excludes a cell, so a FAILED drift comes back as None,
+        # "not determined", which every gate keeps. `DictWriter` cannot see any
+        # of it: it writes the fieldnames it was given and never reads the file.
+        # `dtype_tile_confound.Store` has had this check since 2026-09-09.
+        if path.exists():
+            with path.open(newline="") as fh:
+                on_disk = next(csv.reader(fh), [])
+            if on_disk and tuple(on_disk) != CSV_COLUMNS:
+                raise SchemaCollision(
+                    f"{path} was written under a different schema "
+                    f"({len(on_disk)} columns against {len(CSV_COLUMNS)}); "
+                    "appending to it would shift every column after the first "
+                    "difference and nothing downstream could tell. Use --fresh "
+                    "to start the file again, or a new --run-id to leave it "
+                    "alone.")
         path.parent.mkdir(parents=True, exist_ok=True)
         new = not path.exists()
         self._fh = path.open("a", newline="")
@@ -1070,12 +1117,22 @@ def _fold_side(timings: list) -> str:
 
     Only repeats whose LEVEL actually FAILED carry a side worth folding: a
     passing repeat has "" and folding that in would dilute a real sag to
-    nothing. Of the failures, LOW wins over HIGH, which is the convention
-    `bm128_depth.tread_clock` already uses for a mixed tread: a group that
-    contains a sagged repeat is reported as sagged, because the sag is the
-    state that would make the number untrustworthy, and only an ALL-high group
-    is reported high. A LEVEL failure that carries no side at all folds to "",
-    which every consumer in this tree reads as LOW.
+    nothing. Of the failures, LOW wins over HIGH: a group that contains a
+    sagged repeat is reported as sagged, because the sag is the state that
+    would make the number untrustworthy, and only an ALL-high group is reported
+    high. `bm128_depth.tread_clock` folds a mixed tread the same way.
+
+    A LEVEL FAILURE THAT CARRIES NO SIDE FOLDS TO "", WHICH IS NOT LOW, and an
+    earlier version of this docstring claimed "every consumer in this tree
+    reads [it] as LOW". They do not agree, deliberately, and none of the three
+    that differ is wrong: `crossing_report.level_side_of` counts an unsided row
+    as NEITHER high nor low, `run_all.sh`'s `side_of` prints a v6 unsided row as
+    `unrecorded` while reading a v5 one as low by that instrument's own
+    definition, and `pod_session.sh` counts unsided failures on their own line.
+    `tread_clock` differs from this fold here too: it reports a mixed
+    [high, unsided] tread LOW where this returns "". "" means the row failed
+    LEVEL and did not say which edge, and inventing an edge for it is the one
+    thing no reader should do.
     """
     sides = [str(getattr(t, "clock_level_side", "") or "") for t in timings
              if getattr(t, "clock_level_ok", None) is False]
@@ -2052,7 +2109,14 @@ def _main(argv: list[str] | None = None) -> int:
             # is not given a reference, which is "not determined" and excludes
             # nothing. Threading it is what lets a caller supply one.
             "reference_clock_mhz": None}
-    store = Store(csv_path, fresh=args.fresh)
+    try:
+        store = Store(csv_path, fresh=args.fresh)
+    except SchemaCollision as exc:
+        print("\n".join(["", "=" * 72,
+                         "REFUSED. Nothing was measured.",
+                         f"  SchemaCollision: {exc}",
+                         "=" * 72]))
+        return EXIT_NOT_MEASURED
     results: dict[tuple[str, int], dict[str, ArmResult]] = {}
     started = time.time()
     stopped = ""

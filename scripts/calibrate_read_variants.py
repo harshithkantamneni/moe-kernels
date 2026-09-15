@@ -64,9 +64,17 @@ reported as a product of two terms that are each attributable:
 
 The formulation term is a ratio of two rows from one run under one instrument,
 and it is what C4 asks about. The instrument term compares two loops and is
-scored separately, only when the clock LEVEL says this run is comparable with
-the roof at all. A run that cannot tell them apart says so instead of
-attributing the difference to whichever of the two the author had in mind.
+scored separately, and the clock LEVEL decides it ON THE LOW SIDE ONLY: a card
+that SAGGED below the band was not delivering what the roof was measured at, so
+the two loops cannot be compared, while a card that BOOSTED above it is scored,
+because the compared quantity is a BANDWIDTH and HBM does not run on the SM
+clock. THIS FILE DESCRIBED THE RULE IN TWO PLACES, here and in `score`'s own
+docstring, and both still described the rule as it stood before `score` grew
+its HIGH branch: "only when the clock LEVEL says this run is comparable with
+the roof at all". Under that rule every pure streaming read on an H200, which
+boosts, went UNKNOWN on exactly the healthy case. A run that
+cannot tell the two terms apart says so instead of attributing the difference
+to whichever of the two the author had in mind.
 
 THE REGISTERED RULE IN docs/ IS THE OLD ONE, AND THIS FILE NO LONGER SCORES IT
 -----------------------------------------------------------------------------
@@ -376,10 +384,14 @@ def score(readings: list[Reading], gpu_name: str,
                      anomaly needs. This is the C4 question, and it is scored
                      entirely within one instrument.
     C2 instrument    does the registered `read` figure reproduce here, on the
-                     SAME formulation, to within 0.5%. UNKNOWN unless the clock
-                     LEVEL says this run is comparable with the roof, because
-                     the two figures come from two loops and a throttled card
-                     would be reported as an instrument difference.
+                     SAME formulation, to within 0.5%. UNKNOWN when the clock
+                     SAGGED below the band or was never determined, because the
+                     two figures come from two loops and a throttled card would
+                     be reported as an instrument difference. A LEVEL failure
+                     on the HIGH side is SCORED, not skipped: the quantity is a
+                     bandwidth, a boost does not inflate it (1.7% measured
+                     sensitivity), and skipping it made the gate UNKNOWN on
+                     every healthy H200 run.
 
     Returned as `(kind, name, verdict, detail)` tuples so `EX.classify` scores
     them and `EX.result_line` prints them: the exit code is the shared table's,

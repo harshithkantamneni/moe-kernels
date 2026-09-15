@@ -32,6 +32,7 @@ the pod adds is the numbers.
 """
 from __future__ import annotations
 
+import csv
 import importlib.util
 import sys
 from pathlib import Path
@@ -814,12 +815,48 @@ def test_a_scored_page_returns_what_its_own_result_lines_imply(gates, code):
 # The LEVEL side, which this file used to destroy at the writer.
 # --------------------------------------------------------------------------
 
+def test_a_csv_written_under_the_narrower_header_is_refused_not_appended_to(tmp_path):
+    """INSTANCE 22 OF THE STANDING DEFECT: the guard was at one of two Stores.
+
+    `run_id` is a hash of the PLAN, so the same command deliberately resumes
+    onto a file an earlier build wrote, and `pod_session.sh` runs this arm into
+    a persistent session directory. `clock_level_side` was inserted BETWEEN
+    `clock_level_ok` and `clock_drift_ok`, so appending a wider row under the
+    old header shifts every field past the first difference: `clock_drift_ok`
+    reads the side, `l2_flush` reads the drift flag, and a row whose DRIFT
+    verdict FAILED -- the one rule in this tree that excludes anything -- comes
+    back None, "not determined", which every gate keeps. `DictWriter` never
+    reads the file, so nothing downstream can see it.
+    `dtype_tile_confound.Store` has refused this since 2026-09-09.
+    """
+    old_columns = tuple(c for c in TVF.CSV_COLUMNS if c != "clock_level_side")
+    assert len(old_columns) == len(TVF.CSV_COLUMNS) - 1
+    path = tmp_path / "resume.csv"
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(old_columns))
+        writer.writeheader()
+        writer.writerow({"model": "qwen2-57b-a14b", "num_tokens": 32, "arm": "bm",
+                         "clock_level_ok": "0", "clock_drift_ok": "0"})
+    with pytest.raises(TVF.SchemaCollision) as exc:
+        TVF.Store(path)
+    assert "different schema" in str(exc.value)
+    assert f"{len(old_columns)} columns against {len(TVF.CSV_COLUMNS)}" in str(exc.value)
+    # --fresh is the named way past it, and it must not raise.
+    TVF.Store(path, fresh=True).close()
+
+
 def test_the_level_side_survives_the_csv_round_trip(tmp_path):
     """THE DEFECT: the header carried `clock_level_ok` and not
     `clock_level_side`, so a row that failed LEVEL came off disk saying only
     that it failed, and no reader could tell a card that SAGGED from one that
     BOOSTED. On an H200 the memory-bound arms boost, so the rows most likely to
     carry a False are the ones where False means nothing is wrong.
+
+    THE FAILED LEVEL BELOW IS PLANTED AND THIS SCRIPT CANNOT YET MEASURE ONE:
+    `main` passes `reference_clock_mhz=None`, so every row it writes today has
+    LEVEL None and an empty side. What is pinned here is the ROUND TRIP -- that
+    a side written reaches disk and comes back -- for the caller that threads a
+    reference through `meta`. See `TIMING_CSV_COLUMNS`.
     """
     assert "clock_level_side" in TVF.TIMING_CSV_COLUMNS
     assert "clock_level_side" in TVF.CSV_COLUMNS

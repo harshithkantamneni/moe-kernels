@@ -129,6 +129,7 @@ import math
 import os
 import re
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -334,10 +335,15 @@ CAP_SYS_ADMIN_BIT = 21
 #: that reads only bit 21 cannot tell "no capability at all" from "the weaker
 #: capability that would have sufficed", which is the difference between two
 #: different asks to a provider -- and providers refuse `--cap-add=SYS_ADMIN`
-#: far more often than `--cap-add=PERFMON`. Note the width: a mask printed as
-#: eight hex digits, as the 2026-09-09 and 2026-09-10 payloads' `0xa80425fb`
-#: was, is 32 bits and cannot represent bit 38 at all, so PERFMON is absent
-#: there by construction.
+#: far more often than `--cap-add=PERFMON`. THE PUBLISHED PAYLOADS SAY NOTHING
+#: ABOUT THE FIELD'S WIDTH, and a first draft of this comment claimed they did:
+#: the 2026-09-09 and 2026-09-10 payloads record `cap_eff` as `0xa80425fb`
+#: because `probe_capabilities` stored `hex(mask)`, and `hex` strips leading
+#: zeros. Linux renders `CapEff` in sixteen zero-padded hex digits, so those
+#: eight digits are Python's formatting and not the mask's width. What the
+#: payloads DO establish is the VALUE: 0xa80425fb is below 2**38, so bit 38 was
+#: clear on both pods. That is a measurement of the bit, which is the stronger
+#: statement anyway.
 CAP_PERFMON_BIT = 38
 
 #: The metric `--probe` asks for, and deliberately the SAME metric `--run`'s
@@ -356,9 +362,15 @@ NCU_PROBE_KERNEL = REPO / "moe" / "bench" / "counter_probe_kernel.py"
 #: torch-importing child under a profiler is "roughly fifteen seconds a rung ...
 #: the child's torch import dominates, not the profiling"
 #: (`scripts/nsys_dram_probe.py`). 180 is twelve times that, which is slack for
-#: a cold page cache on a fresh pod and still an eighth of the one minute the
-#: session books the whole probe arm. It is a ceiling, not a budget: on a box
-#: with no torch the child returns immediately.
+#: a cold page cache on a fresh pod. IT IS A CEILING AND NOT A BUDGET, and it is
+#: deliberately LARGER than the arm's own booking rather than inside it: the
+#: session books `counter_plan` one minute, which prices the EXPECTED 15 s, and
+#: a ceiling set inside that booking would turn a pod that is merely slow into a
+#: pod this file reports as hung. A child that actually reaches 180 s has wedged
+#: on CUDA init, which is the MooseFS-stall shape this study has already hit, and
+#: `_run` kills its whole process group when it does. This comment read "an
+#: eighth of the one minute" until 2026-09-15, which inverted the comparison it
+#: was making: 180 s is three times sixty, not an eighth of it.
 NCU_PROBE_TIMEOUT_S = 180
 
 
@@ -1509,13 +1521,56 @@ COUNTER_SCHEMA_TEXT = """\
 # --------------------------------------------------------------------------
 
 def _run(argv, timeout=60) -> tuple[int, str, str]:
+    """Run one child, bounded, and on a timeout kill EVERYTHING IT STARTED.
+
+    THE PROCESS GROUP IS THE POINT. `subprocess.run(..., timeout=)` kills the
+    child it spawned and waits for that one only. Every caller here spawns
+    `ncu`, and ncu's own child is what does the work: the probe interpreter
+    that imports torch and creates a CUDA context, or a whole vLLM sweep at
+    `profile_one_tile_count`. SIGKILL cannot be caught, so a killed ncu tears
+    nothing down, and the grandchild is reparented to init still holding a CUDA
+    context on a card this session is paying for. That was harmless while the
+    probe target was `/bin/true`; since 2026-09-15 it is a torch process, and a
+    torch child wedged on CUDA init is exactly the failure that reaches the
+    timeout in the first place.
+
+    So the child gets its own session (`start_new_session`), which makes it a
+    process-group leader, and the timeout path signals the GROUP.
+
+    AND CTRL-C SIGNALS IT TOO, which is the half `start_new_session` would
+    otherwise take away. A child in the terminal's own process group receives
+    the SIGINT the terminal sends; one in a session of its own does not, so an
+    operator interrupting a wedged probe would have kept the wedged probe. The
+    KeyboardInterrupt path therefore kills the group before re-raising, and it
+    is the SAME kill as the timeout's, written once.
+    """
+    def kill_group() -> None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            proc.kill()
+        try:
+            # Every holder of the pipes is now signalled, so this returns; the
+            # bound is there so a kill the kernel somehow did not deliver
+            # cannot turn a timeout into a hang.
+            proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            pass
+
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-        return p.returncode, p.stdout, p.stderr
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, start_new_session=True)
     except FileNotFoundError:
         return 127, "", f"{argv[0]}: not found"
+    try:
+        out, err = proc.communicate(timeout=timeout)
+        return proc.returncode, out, err
     except subprocess.TimeoutExpired:
+        kill_group()
         return 124, "", f"{argv[0]}: timed out after {timeout}s"
+    except BaseException:
+        kill_group()
+        raise
 
 
 def probe_capabilities() -> dict:
@@ -1530,9 +1585,14 @@ def probe_capabilities() -> dict:
     BOTH BITS, since 2026-09-15. CAP_PERFMON also opens the gate on any driver
     from R450 on, and it is the capability a provider will actually grant, so a
     probe that reported only SYS_ADMIN sent the operator to ask for the one
-    answer that is usually no. `cap_eff_bits` is recorded beside the mask
-    because a mask printed in 32 bits cannot carry bit 38 and a reader needs to
-    see that rather than infer it.
+    answer that is usually no.
+
+    `cap_eff_field` IS THE RAW TOKEN and `cap_eff_bits` is measured off it,
+    because the width of what the kernel printed is not recoverable from the
+    value. `cap_eff` is `hex(mask)`, which strips leading zeros, and reading a
+    width off THAT is a mistake this file made once already: the published
+    `0xa80425fb` is ten characters because the value is small, not because the
+    kernel printed a 32-bit field. Linux renders `CapEff` in sixteen digits.
 
     THIS IS RECORDED DETAIL, NOT A VERDICT. Neither bit decides whether the
     route is open: `probe_ncu` decides that by reading a counter. These are
@@ -1547,7 +1607,7 @@ def probe_capabilities() -> dict:
             field = line.split()[1]
             mask = int(field, 16)
             return {"available": True, "cap_eff": hex(mask),
-                    "cap_eff_bits": 4 * len(field),
+                    "cap_eff_field": field, "cap_eff_bits": 4 * len(field),
                     "sys_admin": bool(mask >> CAP_SYS_ADMIN_BIT & 1),
                     "perfmon": bool(mask >> CAP_PERFMON_BIT & 1)}
     return {"available": False, "why": "CapEff not present in /proc/self/status"}
@@ -1578,10 +1638,20 @@ def ncu_probe_argv(binary: str, log_file: Path) -> list[str]:
 
     Four flags and each is load-bearing.
 
-      `--launch-count 1`   the child launches exactly one kernel, but a torch
-                           that decides to launch two would otherwise double
-                           the profile for no gain. One launch is all a
-                           permission check needs.
+      `--launch-count 1`   ncu profiles the FIRST kernel launch and stops, and
+                           one launch is all a permission check needs. WHICH
+                           launch that is matters and this comment said "the
+                           child launches exactly one kernel" until 2026-09-15,
+                           which was false: `torch.ones` on CUDA is `empty` plus
+                           a `fill_` kernel, so the profiled launch was the
+                           fill and not the add the probe module described.
+                           `counter_probe_kernel` now builds its buffer on the
+                           host and copies it, which is a memcpy and not a
+                           launch, so the in-place add IS launch zero. The
+                           verdict does not depend on that -- the caller asserts
+                           that a NUMBER came back and never its value -- but a
+                           payload naming one kernel beside a count off another
+                           is a page that cannot be read.
       `--target-processes all`  ncu attaches to the interpreter's children as
                            well, the way `ncu_argv` does; a torch that forks
                            would otherwise be profiled by nobody.
@@ -1652,12 +1722,13 @@ def probe_ncu() -> dict:
                                  initialise). Nothing is known about counters
                                  here, and saying otherwise is the old defect.
 
-    WHY IT IS STILL CHEAP. One child interpreter, one `torch.ones` of 4 MiB and
-    one in-place add. The cost is the child's torch import, which this repo has
-    measured at roughly fifteen seconds; the profiling itself is a single
-    launch. Against an arm the session books a minute for and counter arms it
-    books two hours for, fifteen seconds to find out whether those two hours
-    can happen at all is the cheapest thing in the session.
+    WHY IT IS STILL CHEAP. One child interpreter, one 4 MiB host buffer copied
+    to the card and one in-place add over it, which is the first and only
+    kernel the child launches. The cost is the child's torch import, which this
+    repo has measured at roughly fifteen seconds; the profiling itself is a
+    single launch. Against an arm the session books a minute for and counter
+    arms it books two hours for, fifteen seconds to find out whether those two
+    hours can happen at all is the cheapest thing in the session.
     """
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
@@ -1669,6 +1740,23 @@ def probe_ncu() -> dict:
         rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file),
                                timeout=NCU_PROBE_TIMEOUT_S)
         log_text = log_file.read_text() if log_file.exists() else ""
+    return probe_reading(binary, version, rc2, out2, err2, log_text)
+
+
+def probe_reading(binary: str, version: str, returncode: int,
+                  stdout: str, stderr: str, log_text: str) -> dict:
+    """What `probe_ncu` CONCLUDES, separated from what it RUNS. Pure.
+
+    Split out on 2026-09-15 so `--self-test` can plant the four worlds and
+    check the verdict and the exit code they produce without a GPU, a driver or
+    an ncu. This file already holds that a parser exercised for the first time
+    on a rented box is an assertion and not a check (`do_self_test`); the logic
+    below is what decides whether two 120-minute arms are bookable, and it was
+    in exactly that position until this split. There is ONE copy: `probe_ncu`
+    runs the child and hands its bytes here, `self_test_probe` plants bytes and
+    hands them here, and neither restates a rule the other applies.
+    """
+    rc2, out2, err2 = returncode, stdout, stderr
     # ncu's own errors go to the log file when one is given, and the child's
     # marker line goes to stdout. Both must be read or the diagnosis is the
     # half that happened to be in the stream someone looked at.
@@ -1828,12 +1916,20 @@ def route_verdict(caps: dict, flag: dict, ncu: dict, nsys: dict) -> tuple[str, l
                          "counters were still refused. SYS_ADMIN is the capability "
                          "NVIDIA's own page names, so this is not a capability problem "
                          "and the raw ncu output needs reading.")
-        if caps.get("available") and caps.get("cap_eff_bits", 64) <= CAP_PERFMON_BIT:
-            notes.append(f"the mask came back {caps.get('cap_eff')}, "
-                         f"{caps.get('cap_eff_bits')} bits wide, which cannot represent "
-                         f"CAP_PERFMON (bit {CAP_PERFMON_BIT}) at all: read `perfmon "
-                         "False` as 'absent from this mask' rather than as a measurement "
-                         "of the bit.")
+        if caps.get("available"):
+            # THE MASK ITSELF, so the three capability lines above can be
+            # checked rather than believed. There was a "the field was too
+            # narrow to carry bit 38" note here until this commit and it could
+            # never fire: `cap_eff_bits` is the width of the RAW /proc field,
+            # and Linux prints sixteen digits whatever the value. `perfmon` is
+            # a real reading of bit 38 on any box that reaches this line.
+            notes.append(f"the effective capability mask read "
+                         f"{caps.get('cap_eff_field', caps.get('cap_eff'))} "
+                         f"({caps.get('cap_eff_bits')} bits as the kernel printed it), "
+                         f"so CAP_PERFMON (bit {CAP_PERFMON_BIT}) is "
+                         f"{'set' if caps.get('perfmon') else 'clear'} and CAP_SYS_ADMIN "
+                         f"(bit {CAP_SYS_ADMIN_BIT}) is "
+                         f"{'set' if caps.get('sys_admin') else 'clear'} by measurement.")
         if flag.get("available") and flag.get("restrict") == 1:
             notes.append("the host loaded the module with "
                          "RestrictProfilingToAdminUsers=1; the host-side fix is a module "
@@ -1871,6 +1967,33 @@ def route_verdict(caps: dict, flag: dict, ncu: dict, nsys: dict) -> tuple[str, l
                      "failure exactly. Any capture here writes a .qdstrm that this machine "
                      "cannot convert. See docs/COUNTERS.md for the version-matched fix.")
     return "REFUSE", notes or ["not enough evidence on this machine to name the route"]
+
+
+def probe_gates(verdict: str, ncu: dict) -> list[Gate]:
+    """P1, or NO GATE AT ALL when the route is REFUSE. Written once.
+
+    REFUSE means the box did not say enough to name a route: nothing was
+    established, so there is nothing to score and `exit_codes` documents a log
+    with zero RESULT lines beside exit 2 as exactly that shape. OPEN and
+    BLOCKED are both MEASURED, so both print P1 -- PASS and FAIL -- and the
+    ledger files either as finished.
+    """
+    if verdict == REFUSE:
+        return []
+    return [Gate(
+        "P1", "CLAIM", "a DRAM counter can be READ on this box",
+        PASS if verdict == "OPEN" else FAIL,
+        f"route {verdict}: {ncu.get('cause', ncu.get('why', 'no ncu'))}",
+        "OPEN",
+        "the counter experiment on this box; the plan stands and needs "
+        "another box or a provider-side change named in the notes above")]
+
+
+def probe_exit(verdict: str, gates: list[Gate]) -> int:
+    """The code `--probe` returns. REFUSED before any gate, else the table's."""
+    if verdict == REFUSE:
+        return exit_codes.REFUSED
+    return exit_codes.classify(g.scored() for g in gates)
 
 
 def do_probe(args) -> int:
@@ -1911,15 +2034,8 @@ def do_probe(args) -> int:
     # was written to obtain and it now says so in the greppable line. REFUSE
     # stays REFUSED (2), before any gate: the box did not say enough to name a
     # route, nothing was established, and there is no gate to print.
-    gates: list[Gate] = []
-    if verdict != REFUSE:
-        gates.append(Gate(
-            "P1", "CLAIM", "a DRAM counter can be READ on this box",
-            PASS if verdict == "OPEN" else FAIL,
-            f"route {verdict}: {ncu.get('cause', ncu.get('why', 'no ncu'))}",
-            "OPEN",
-            "the counter experiment on this box; the plan stands and needs "
-            "another box or a provider-side change named in the notes above"))
+    gates = probe_gates(verdict, ncu)
+    if gates:
         print()
         for g in gates:
             for line in g.render():
@@ -1934,9 +2050,7 @@ def do_probe(args) -> int:
         out.write_text(json.dumps(payload, indent=2))
         print(f"\n  wrote {out}")
         print(f"  git   {git_visibility(out)}")
-    if verdict == REFUSE:
-        return exit_codes.REFUSED
-    return exit_codes.classify(g.scored() for g in gates)
+    return probe_exit(verdict, gates)
 
 
 # --------------------------------------------------------------------------
@@ -3268,6 +3382,62 @@ def self_test_parser() -> list[tuple[str, bool, str]]:
     return out
 
 
+def self_test_probe() -> list[tuple[str, bool, str]]:
+    """The probe worlds, planted, scored end to end off any GPU.
+
+    WHY THIS SECTION EXISTS. `do_self_test`'s own rule is that a stage first
+    exercised on a rented box is an assertion and not a check, and until
+    2026-09-15 the probe's verdict logic was in exactly that position: the
+    pytest suite planted `_run`, the pod never runs pytest, and `arm_verify
+    counter_plan` named only `--dry-run` and `--bracket`, neither of which
+    touches it. What the logic decides is whether two 120-minute arms are
+    bookable, so it is the most expensive thing in this file to get wrong.
+
+    Each world is planted as the BYTES ncu and the child would produce and is
+    pushed through the same `probe_reading` -> `route_verdict` ->
+    `probe_gates` -> `probe_exit` chain `--probe` runs. The VERDICT AND THE
+    EXIT CODE are both scored, because the ledger reads the code and an OPEN
+    that exited 2 would retire the arms as surely as a BLOCKED.
+    """
+    header = ('"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n')
+    launched = f"{PK.MARKER} {PK.LAUNCHED} NVIDIA H200: one add_ over 1048576 fp32"
+    nsys_ok = {"present": True, "importer_present": True}
+    caps_none = {"available": True, "cap_eff": "0xa80425fb",
+                 "cap_eff_field": "00000000a80425fb", "cap_eff_bits": 64,
+                 "sys_admin": False, "perfmon": False}
+    worlds = (
+        ("a counter that came back with a NUMBER", "OPEN", exit_codes.DONE,
+         dict(returncode=0, stdout=launched, stderr="",
+              log_text=header + '"0","probe","dram__bytes_read.sum","byte","4194304"\n')),
+        ("a counter that honestly read ZERO", "OPEN", exit_codes.DONE,
+         dict(returncode=0, stdout=launched, stderr="",
+              log_text=header + '"0","probe","dram__bytes_read.sum","byte","0"\n')),
+        ("ERR_NVGPUCTRPERM on a launched kernel", "BLOCKED", exit_codes.CLAIM_FAIL,
+         dict(returncode=1, stdout=launched,
+              stderr="==ERROR== ERR_NVGPUCTRPERM - The user does not have permission "
+                     "to access NVIDIA GPU Performance Counters on the target device 0.",
+              log_text="")),
+        ("the /bin/true shape: ncu profiled nothing", REFUSE, exit_codes.REFUSED,
+         dict(returncode=0, stdout="", stderr="",
+              log_text="==WARNING== No kernels were profiled.\n")),
+        ("no CUDA device for the probe child", REFUSE, exit_codes.REFUSED,
+         dict(returncode=1,
+              stdout=f"{PK.MARKER} {PK.NO_CUDA_DEVICE} torch.cuda.is_available() is False",
+              stderr="", log_text="")),
+    )
+    out = []
+    for label, want_verdict, want_exit, planted in worlds:
+        ncu = probe_reading("/planted/ncu", "Version 2025.1.1.0", **planted)
+        verdict, _notes = route_verdict(caps_none, {"available": False, "why": "planted"},
+                                        ncu, nsys_ok)
+        code = probe_exit(verdict, probe_gates(verdict, ncu))
+        good = verdict == want_verdict and code == want_exit
+        out.append((label, good,
+                    f"verdict {verdict} exit {code}, wanted {want_verdict} "
+                    f"exit {want_exit}; counters_read={ncu['counters_read']}"))
+    return out
+
+
 def do_self_test(args) -> int:
     """Plant an alpha, synthesise the counter rows the model implies, and check
     the estimator returns it. Then plant a ladder and check the bracket contains
@@ -3275,14 +3445,17 @@ def do_self_test(args) -> int:
     one clustered, and check C1 registers the question each cell can carry.
     Then plant a TRAFFIC world and a TIME world and check the contrast scorer
     names the right rival. Then plant a PROFILE with a known call count and
-    check `--run`'s parser and its per-call division return it.
+    check `--run`'s parser and its per-call division return it. Then plant the
+    PROBE worlds and check the verdict and the exit code each produces.
 
     This is the check that the analysis half is not itself the source of a
     number. `block_m_crossing_sweep.py` has the same shape for the same reason:
     an estimator that has never been run against a known answer is an assertion.
     The parser half was added on 2026-09-10 with `--run`: a runner whose parsing
     has never been exercised is the same assertion one layer down, and it would
-    have been exercised for the first time on a rented box.
+    have been exercised for the first time on a rented box. The probe half was
+    added on 2026-09-15 for the same reason and a larger bill: it is the gate
+    that decides whether 240 booked minutes are spent.
     """
     cfg = MODEL_CONFIGS["mixtral-8x7b"]
     bm, ok = 32, True
@@ -3350,6 +3523,13 @@ def do_self_test(args) -> int:
         parser_ok &= passed
         print(f"  {label:<58} {'PASS' if passed else 'FAIL'}  {detail}")
     ok &= parser_ok
+
+    print("\n  THE PROBE'S VERDICT AND EXIT CODE, on planted ncu and child output.")
+    probe_ok = True
+    for label, passed, detail in self_test_probe():
+        probe_ok &= passed
+        print(f"  {label:<58} {'PASS' if passed else 'FAIL'}  {detail}")
+    ok &= probe_ok
     print(f"\n  SELF TEST {'PASS' if ok else 'FAIL'}")
     # A SELF TEST IS A VALIDITY GATE ON THE ANALYSIS HALF, so its failure is
     # INVALID (3) and not CLAIM_FAIL (1): an estimator that cannot recover a
@@ -3358,12 +3538,13 @@ def do_self_test(args) -> int:
     # files as a finished result and never retries. The gate prints its RESULT
     # line like every other gate in this file, so the log and the code agree.
     gate = Gate("S1", "VALIDITY",
-                "the estimator, the bracket, C1's registration, the contrast scorer "
-                "and the runner's parser recover planted alphas, ratios, call counts "
-                "and refusals",
+                "the estimator, the bracket, C1's registration, the contrast scorer, "
+                "the runner's parser and the probe's verdict recover planted alphas, "
+                "ratios, call counts, refusals and routes",
                 PASS if ok else FAIL, "every planted row above",
                 "all rows PASS", "everything this file computes, everything --run "
-                "would write and everything --contrast would read")
+                "would write, everything --contrast would read and the gate that "
+                "decides whether the counter arms are bookable at all")
     print(gate.result_line())
     return exit_codes.classify([gate.scored()])
 
