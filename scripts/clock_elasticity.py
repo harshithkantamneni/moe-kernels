@@ -95,7 +95,7 @@ import block_m_crossing_sweep as SWEEP  # noqa: E402
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.bench import timing as T  # noqa: E402
-from moe.spec import MODEL_CONFIGS  # noqa: E402
+from moe.spec import DTYPE_BYTES, MODEL_CONFIGS  # noqa: E402
 
 # --------------------------------------------------------------------------
 # What ran, named. NOT `timing.TIMING_BASIS`: that basis is a back-to-back
@@ -2440,7 +2440,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "verdict and the estimator recovers each planted "
                          "elasticity. Needs no GPU")
     ap.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(MODEL_CONFIGS))
-    ap.add_argument("--dtype", default=DEFAULT_DTYPE)
+    ap.add_argument("--dtype", default=DEFAULT_DTYPE,
+                    choices=sorted(DTYPE_BYTES),
+                    help="constrained here rather than discovered inside "
+                         "make_inputs: a dtype this repository does not know is "
+                         "an argparse 2 before the weights are drawn, not a "
+                         "traceback after 2.82 GB of them")
     ap.add_argument("--treads", type=int, default=DEFAULT_TREADS,
                     help="exactly-full tile stacks on the ladder, r = n x "
                          f"BLOCK_M at BLOCK_M={PINNED['BLOCK_SIZE_M']}")
