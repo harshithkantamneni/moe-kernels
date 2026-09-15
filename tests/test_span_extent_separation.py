@@ -15,9 +15,10 @@ NINE GROUPS, and the second is the point.
   - the analysis recovers a planted mechanism and tells a kernel world from an
     extent world, on the gates that are supposed to discriminate;
   - the refusals: a partial sum, a crossing below saturation, an errored row
-    restored as a timing, a probe with no power, and a run id that omits a swept
-    parameter are each a way this project has produced a confident wrong number,
-    and each is pinned here;
+    restored as a timing, a probe with no power, a run id that omits a swept
+    parameter, and a resume onto a CSV written under a narrower header are each
+    a way this project has produced a confident wrong number, and each is
+    pinned here;
   - the off-GPU contract: `--dry-run` writes nothing and says nothing was
     measured, and the missing-stack message names which half is absent;
   - the RESUME KEY: a timings file planted on one card is restored by NONE of it
@@ -691,6 +692,58 @@ def test_the_store_counts_what_it_restored_against_what_it_wrote(tmp_path):
     assert second.restore(("mixtral-8x7b", 256, "act")) is None
     second.close()
     assert (second.written_arms, second.restored_arms) == (0, 1)
+
+
+def test_a_csv_written_under_the_narrower_header_is_refused_not_appended_to(tmp_path):
+    """THE THIRD STORE, and the one the guard's own commit did not count.
+
+    `dtype_tile_confound.Store` has refused a schema collision since
+    2026-09-09 and `tuned_vs_fallback.Store` since 2026-09-15, and the commit
+    that added the second wrote down "one of two Stores" while this file held
+    a third with the identical shape. The exposure is identical too:
+    `plan_run_id` is a hash of the PLAN and carries no build, so the same
+    command deliberately resumes onto an earlier commit's file;
+    `results_root()` prefers `$MOE_RESULTS_DIR` and then `/workspace/results`
+    BECAUSE the volume outlives the pod; and `clock_level_side` was INSERTED
+    between `clock_level_ok` and `clock_drift_ok` on 2026-09-02. Appending a
+    wider row under the narrower header shifts every field past the first
+    difference, so `clock_drift_ok` reads the SIDE -- and DRIFT is the one rule
+    in this tree that excludes a cell, so a FAILED drift comes back None, "not
+    determined", which every gate keeps.
+
+    The two defences already in `Store` are both about the CARD and neither
+    sees this: a shifted row still carries the right `gpu_name` and the right
+    resume key.
+    """
+    old_columns = tuple(c for c in SE.ALL_CSV_COLUMNS if c != "clock_level_side")
+    assert len(old_columns) == len(SE.ALL_CSV_COLUMNS) - 1
+    path = tmp_path / "timings.csv"
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(old_columns))
+        writer.writeheader()
+        writer.writerow({"gpu_name": "H200", "model": "mixtral-8x7b",
+                         "num_tokens": "256", "arm": "gemm_up",
+                         "clock_level_ok": "False", "clock_drift_ok": "False"})
+    with pytest.raises(SE.SchemaCollision) as exc:
+        SE.Store(path, "H200")
+    assert "different schema" in str(exc.value)
+    assert f"{len(old_columns)} columns against {len(SE.ALL_CSV_COLUMNS)}" in str(exc.value)
+    # --fresh is the named way past it, and it must not raise.
+    SE.Store(path, "H200", fresh=True).close()
+
+
+def test_the_schema_collision_is_a_refusal_and_not_a_crash():
+    """REFUSED (2), not ERROR (4). `main` files an unexpected exception as
+    ERROR, which is the one retryable code, and a retry would meet the same
+    file. So the collision is a `SeparationRefusal` and `run_measurement`
+    converts it at the Store call site, returning the same
+    `(None, reason, empty tally)` triple the `find_pieces` refusal returns --
+    the shape `_main` already turns into `exit_codes.REFUSED`.
+    """
+    assert issubclass(SE.SchemaCollision, SE.SeparationRefusal)
+    source = inspect.getsource(SE.run_measurement)
+    assert "except SchemaCollision" in source
+    assert "MeasurementTally(0, 0, csv_path)" in source
 
 
 def meta_for(gpu_name="H200"):

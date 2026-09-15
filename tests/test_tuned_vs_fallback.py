@@ -816,7 +816,12 @@ def test_a_scored_page_returns_what_its_own_result_lines_imply(gates, code):
 # --------------------------------------------------------------------------
 
 def test_a_csv_written_under_the_narrower_header_is_refused_not_appended_to(tmp_path):
-    """INSTANCE 22 OF THE STANDING DEFECT: the guard was at one of two Stores.
+    """INSTANCE 22 OF THE STANDING DEFECT: the guard was at ONE of THREE Stores.
+
+    This docstring said "one of two" until the sweep that followed it found the
+    third, `span_extent_separation.Store`, carrying the same insertion and no
+    guard. `test_every_append_mode_store_refuses_a_narrower_header_on_disk`
+    now counts them rather than trusting a sentence.
 
     `run_id` is a hash of the PLAN, so the same command deliberately resumes
     onto a file an earlier build wrote, and `pod_session.sh` runs this arm into

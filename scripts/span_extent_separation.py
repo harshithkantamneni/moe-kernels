@@ -811,6 +811,28 @@ class ConfigUnobserved(SeparationRefusal):
     """
 
 
+class SchemaCollision(SeparationRefusal):
+    """The CSV on disk was written under a different set of columns.
+
+    THE THIRD STORE. `dtype_tile_confound.Store` has refused this since
+    2026-09-09 and `tuned_vs_fallback.Store` since 2026-09-15, and the commit
+    that added the second one counted "one of two Stores" while this file held
+    a third with the same shape: an append-mode `DictWriter` over a fixed
+    column tuple, a `plan_run_id` that is a hash of the PLAN so the same
+    command deliberately resumes onto an earlier build's file, and a results
+    root that prefers the network volume BECAUSE it outlives the pod.
+    `clock_level_side` was INSERTED between `clock_level_ok` and
+    `clock_drift_ok` here too, on 2026-09-02, so the exposure is the same one:
+    every field past the first difference shifts, `clock_drift_ok` reads the
+    side, and a FAILED drift comes back None, "not determined", which every
+    gate keeps.
+
+    A NAMED refusal rather than a bare raise, because `main` files an
+    unexpected exception as ERROR (4), "the apparatus broke". Nothing broke and
+    nothing was measured: that is REFUSED (2), and the caller converts it.
+    """
+
+
 # --------------------------------------------------------------------------
 # The plan: cells, and the arithmetic every cell knows before it is timed.
 # --------------------------------------------------------------------------
@@ -3851,6 +3873,31 @@ class Store:
                     if theirs != self.gpu_name:
                         self.foreign[theirs] = self.foreign.get(theirs, 0) + 1
                     self.done[key] = row
+        # THE HEADER ON DISK HAS TO BE THIS HEADER, and nothing checked here
+        # until 2026-09-15. The two defences above are both about the CARD; this
+        # is about the COLUMNS, and neither sees the other's failure.
+        # `plan_run_id` is a hash of the plan and omits the build, so the same
+        # command resumes onto a file an earlier commit wrote, and
+        # `results_root()` prefers `$MOE_RESULTS_DIR` and then the network
+        # volume. `clock_level_side` was inserted BETWEEN `clock_level_ok` and
+        # `clock_drift_ok` on 2026-09-02: appending a wider row under the
+        # narrower header shifts every field past the first difference, so
+        # `clock_drift_ok` reads the SIDE and `l2_flush` reads the drift flag.
+        # DRIFT is the one rule in this tree that excludes a cell, and a FAILED
+        # drift then comes back None, "not determined", which every gate keeps.
+        # `DictWriter` cannot see any of it: it writes the fieldnames it was
+        # given and never reads the file.
+        if path.exists():
+            with path.open(newline="") as fh:
+                on_disk = next(csv.reader(fh), [])
+            if on_disk and tuple(on_disk) != ALL_CSV_COLUMNS:
+                raise SchemaCollision(
+                    f"{path} was written under a different schema "
+                    f"({len(on_disk)} columns against {len(ALL_CSV_COLUMNS)}); "
+                    "appending to it would shift every column after the first "
+                    "difference and nothing downstream could tell. Use --fresh "
+                    "to start the file again, or a new --run-id to leave it "
+                    "alone.")
         path.parent.mkdir(parents=True, exist_ok=True)
         new = not path.exists()
         self._fh = path.open("a", newline="")
@@ -4944,7 +4991,15 @@ def run_measurement(cells: list[Cell], arms: list[str], args, out_dir: Path,
                   "the clock the roof was measured at, and this script scores "
                   "nothing against the roof"))
 
-    store = Store(csv_path, gpu_name, fresh=args.fresh)
+    try:
+        store = Store(csv_path, gpu_name, fresh=args.fresh)
+    except SchemaCollision as exc:
+        # Converted here rather than left to `main`, which files an unexpected
+        # exception as ERROR (4) and invites a retry that would hit the same
+        # file. Nothing was measured and nothing was spent: REFUSED, the same
+        # word and the same shape as the `find_pieces` refusal above.
+        print(f"\nNOT A RESULT: {exc}")
+        return None, str(exc), MeasurementTally(0, 0, csv_path)
     if store.foreign:
         print("\n" + store.foreign_reason)
     results: Results = {}

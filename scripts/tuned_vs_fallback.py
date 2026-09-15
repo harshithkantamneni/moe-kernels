@@ -864,8 +864,15 @@ class SchemaCollision(RuntimeError):
     was measured, so the exit is REFUSED and not the 1 a bare
     `SystemExit(<str>)` produces. `scripts/dtype_tile_confound.py` raises
     `ConfoundRefusal` at the identical point in the identical `Store` and has
-    since 2026-09-09; this file is the OTHER of the two call sites and did not,
-    which is this repository's standing defect in its plainest form.
+    since 2026-09-09; this file did not, which is this repository's standing
+    defect in its plainest form.
+
+    THERE WERE THREE STORES AND THIS LINE COUNTED TWO. It said "this file is
+    the OTHER of the two call sites" on the day the guard landed here, and
+    `scripts/span_extent_separation.py` held a third with the same shape and
+    the same mid-list `clock_level_side` insertion. Guarding two of three while
+    writing down that there were two is the standing defect committed inside
+    its own fix. All three refuse now.
     """
 
 

@@ -1259,3 +1259,101 @@ def test_no_new_reader_of_the_level_flag_is_blind_to_its_side():
     fixed = sorted(set(SIDE_BLIND_READERS) - set(blind))
     if fixed:
         print(f"\nledger entries that now name the side; prune them: {fixed}")
+
+
+# --------------------------------------------------------------------------
+# The resume header, which two of three Stores guarded.
+# --------------------------------------------------------------------------
+
+#: Module-level CSV appenders that are NOT `Store` classes and are NOT covered
+#: below, named here so the gap is a written decision rather than an oversight.
+#: Each opens in append mode with a `DictWriter` over a field tuple derived
+#: from a dataclass, so a field inserted mid-dataclass shifts an existing file
+#: exactly as a column inserted mid-tuple does -- and `block_m_crossing_sweep`
+#: says in its own comment that a resumed `cells.csv` is "written by two
+#: processes on two days and possibly two commits". They are a slice of their
+#: own: each needs a typed refusal and a call-site conversion, and none of them
+#: is the call site the 2026-09-15 guard's own prose miscounted.
+UNGUARDED_APPENDERS = (
+    "block_m_crossing_sweep.py", "bm128_depth.py", "bm128_roofline.py",
+)
+
+
+def stores_without_a_header_check(root: Path) -> list[str]:
+    """Names of the `.py` files under `root` that define an append-mode `Store`
+    and never read the header already on disk.
+
+    A grep over two facts that have to appear together: `class Store` with a
+    `path.open("a"` inside it, and a `csv.reader` read of the first line. It
+    decides MEMBERSHIP, not correctness; each Store's own planted narrow header
+    is what checks the refusal fires.
+    """
+    out = []
+    for p in sorted(root.glob("*.py")):
+        text = p.read_text()
+        if "class Store" not in text or 'path.open("a"' not in text:
+            continue
+        if "next(csv.reader(fh), [])" not in text:
+            out.append(p.name)
+    return out
+
+
+def test_the_store_header_tripwire_can_pass_and_fail(tmp_path):
+    """Planted both ways, because a grep for a string that is never present
+    passes forever. The 2026-09-15 guard is the reason: it landed at two Stores
+    out of three and its own docstring recorded the count as two."""
+    (tmp_path / "guarded.py").write_text(
+        'class Store:\n'
+        '    def __init__(self, path):\n'
+        '        with path.open(newline="") as fh:\n'
+        '            on_disk = next(csv.reader(fh), [])\n'
+        '        self._fh = path.open("a", newline="")\n')
+    (tmp_path / "no_store.py").write_text('def append(path):\n    path.open("a")\n')
+    assert stores_without_a_header_check(tmp_path) == []
+    (tmp_path / "blind.py").write_text(
+        'class Store:\n'
+        '    def __init__(self, path):\n'
+        '        self._fh = path.open("a", newline="")\n')
+    assert stores_without_a_header_check(tmp_path) == ["blind.py"]
+
+
+def test_every_append_mode_store_refuses_a_narrower_header_on_disk():
+    """THE COUNT IS TAKEN, not quoted. `tuned_vs_fallback.SchemaCollision`
+    said "the OTHER of the two call sites" on the day it was written and there
+    were three: `dtype_tile_confound`, `tuned_vs_fallback` and
+    `span_extent_separation`, each an append-mode `DictWriter` over a fixed
+    column tuple, each resumed by a plan-hash run id onto a results root that
+    prefers the network volume, and each with `clock_level_side` inserted
+    between `clock_level_ok` and `clock_drift_ok`. A fourth Store added without
+    the check fails here rather than on a pod."""
+    blind = stores_without_a_header_check(REPO / "scripts")
+    assert blind == [], (
+        f"{blind} define an append-mode Store that never reads the header "
+        "already on disk. `DictWriter` writes the fieldnames it was given and "
+        "never looks at the file, so a wider row appended under a narrower "
+        "header shifts every field past the first difference and nothing "
+        "downstream can tell: clock_drift_ok reads the LEVEL side, and a "
+        "FAILED drift -- the one rule in this tree that excludes a cell -- "
+        "comes back None, which every gate keeps. Copy the check from "
+        "dtype_tile_confound.Store, raise a TYPED refusal so the exit is "
+        "REFUSED and not the ERROR an unexpected exception gets, and convert "
+        "it at the Store call site")
+    guarded = [p.name for p in sorted((REPO / "scripts").glob("*.py"))
+               if "class Store" in p.read_text()]
+    assert guarded == ["dtype_tile_confound.py", "span_extent_separation.py",
+                       "tuned_vs_fallback.py"], (
+        f"the set of Stores moved: {guarded}. The count is pinned because the "
+        "defect this tripwire exists for was a guard applied to two of three "
+        "while its own prose said there were two")
+
+
+def test_the_unguarded_appenders_are_named_and_still_unguarded():
+    """The ledger above is a decision, not a to-do left implicit. If one of
+    these grows the check, prune it from the tuple; if a new module-level
+    appender appears, it is not silently covered by the Store tripwire."""
+    for name in UNGUARDED_APPENDERS:
+        text = (REPO / "scripts" / name).read_text()
+        assert 'path.open("a", newline="")' in text, name
+        assert "class Store" not in text, (
+            f"{name} now defines a Store and belongs to the tripwire above, "
+            "not to this ledger")
