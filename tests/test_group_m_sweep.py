@@ -768,7 +768,8 @@ def test_the_report_names_the_cells_that_ran_under_the_roofs_clock(
     _, failed = replay_with(lambda r: measured_row(r, level=False),
                             tmp_path, monkeypatch, capsys)
     assert "ran BELOW the clock this card's roof was measured at" in failed
-    assert "the governor's, not the kernel's" in failed
+    assert "flagged LEVEL low; KEPT" in failed
+    assert "roof_at_cell_clock" in failed
     _, clean = replay_with(lambda r: measured_row(r, level=True),
                            tmp_path, monkeypatch, capsys)
     assert "every timed cell was scored against 1515 MHz" in clean
@@ -796,17 +797,25 @@ def test_a_boosted_ladder_is_kept_and_named_high_not_governor_bound(
     assert code == 0
 
 
-def test_a_sagging_ladder_is_named_low_and_governor_bound(
-        tmp_path, monkeypatch, capsys):
-    """THE LOW WORLD, the FAIL twin of the one above: 1400 MHz against 1515
-    with side low is the governor's time and the page says so; nothing on it
-    reads KEPT."""
+def test_a_sagging_ladder_is_named_low_and_kept(tmp_path, monkeypatch, capsys):
+    """THE LOW WORLD, the twin of the one above: 1400 MHz against 1515 with
+    side low.
+
+    IT IS KEPT, and the page said "their time is the governor's" until
+    2026-09-15 while nothing in this arm dropped the row. The 750-cell H200
+    census settled the word: the under-load clock is set per tile by that
+    tile's own power draw under the board cap, so a LOW cell is a tile family's
+    steady state and not a governor event, which is why the 2026-09-09 rule
+    excludes on DRIFT alone. The page names the side and says which roof
+    fraction is comparable; it does not call one side a defect.
+    """
     _, out = replay_with(
         lambda r: measured_row(r, level=False, side="low", load=1400.0),
         tmp_path, monkeypatch, capsys)
     assert "ran BELOW the clock this card's roof was measured at" in out
-    assert "flagged LEVEL low; their time is the governor's" in out
-    assert "KEPT" not in out
+    assert "flagged LEVEL low; KEPT" in out
+    assert "roof_at_cell_clock" in out
+    assert "governor's" not in out
     assert "ran ABOVE" not in out
 
 
@@ -823,8 +832,8 @@ def test_a_jsonl_from_before_the_side_column_derives_the_side_from_its_own_row(
     assert "governor's" not in high
     _, low = replay_with(lambda r: measured_row(r, level=False, load=1400.0),
                          tmp_path, monkeypatch, capsys)
-    assert "flagged LEVEL low; their time is the governor's" in low
-    assert "KEPT" not in low
+    assert "flagged LEVEL low; KEPT" in low
+    assert "governor's" not in low
 
 
 def test_a_drift_failure_gets_its_own_line(tmp_path, monkeypatch, capsys):
@@ -845,11 +854,16 @@ def test_a_drift_failure_gets_its_own_line(tmp_path, monkeypatch, capsys):
     assert "flagged LEVEL high; KEPT" in moved
 
 
-def test_level_split_keeps_high_excludes_low_and_reads_a_bare_false_as_low():
+def test_level_split_sorts_both_sides_and_reads_a_bare_false_as_low():
     """The rule itself, on planted rows, so the page and the split cannot
     disagree: a 1980-vs-1515 row with side high is `high`; a 1400 row with
     side low is `low`; a False with no side and no load is the one-sided era's
-    below and is `low`; None is `blind`; True is in none of the three."""
+    below and is `low`; None is `blind`; True is in none of the three.
+
+    IT SORTS, IT DOES NOT EXCLUDE, and this test was named
+    `..._keeps_high_excludes_low` until 2026-09-15 over a function that has
+    never dropped a row: both lists are returned and both are reported.
+    """
     high = {"clock_level_ok": False, "clock_level_side": "high",
             "sm_clock_load_mhz": 1980.0, "reference_clock_mhz": 1515.0}
     low = {"clock_level_ok": False, "clock_level_side": "low",

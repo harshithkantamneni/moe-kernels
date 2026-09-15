@@ -41,7 +41,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from moe.bench import exit_codes  # noqa: E402
+from moe.bench import exit_codes, timing  # noqa: E402
 
 
 def _load_script():
@@ -808,3 +808,79 @@ def test_a_scored_page_returns_what_its_own_result_lines_imply(gates, code):
     rc = exit_codes.classify(g.scored() for g in gates)
     assert rc == code, printed
     assert exit_codes.classify_text(printed) == rc
+
+
+# --------------------------------------------------------------------------
+# The LEVEL side, which this file used to destroy at the writer.
+# --------------------------------------------------------------------------
+
+def test_the_level_side_survives_the_csv_round_trip(tmp_path):
+    """THE DEFECT: the header carried `clock_level_ok` and not
+    `clock_level_side`, so a row that failed LEVEL came off disk saying only
+    that it failed, and no reader could tell a card that SAGGED from one that
+    BOOSTED. On an H200 the memory-bound arms boost, so the rows most likely to
+    carry a False are the ones where False means nothing is wrong.
+    """
+    assert "clock_level_side" in TVF.TIMING_CSV_COLUMNS
+    assert "clock_level_side" in TVF.CSV_COLUMNS
+    cell = make_cell("qwen2-57b-a14b", 32)
+    meta = {"run_id": "r", "gpu_name": H200, "vllm_version": "", "seed": 0,
+            "torch_version": "", "routing": "uniform"}
+    store = TVF.Store(tmp_path / "t.csv")
+    result = TVF.ArmResult(cell.model, cell.num_tokens, "bm",
+                           TVF.arm_config(cell, "bm"), config_origin="derived")
+    result.sm_clock_load_mhz = 1980.0
+    result.clock_level_ok = False
+    result.clock_level_side = timing.LEVEL_HIGH
+    result.clock_drift_ok = True
+    store.write(result, cell, meta)
+    store.close()
+    reread = TVF.Store(tmp_path / "t.csv")
+    back = reread.restore((cell.model, cell.num_tokens, "bm"))
+    reread.close()
+    assert back.clock_level_ok is False
+    assert back.clock_level_side == timing.LEVEL_HIGH
+    assert back.clock_drift_ok is True
+
+
+def test_a_pre_side_csv_reads_back_with_no_side_rather_than_a_guess():
+    """A row written before the column existed carries no side, and "" is what
+    every consumer in this tree reads as LOW. Not None, not "high"."""
+    assert TVF._fold_side([]) == ""
+
+
+class _T:
+    def __init__(self, ok, side):
+        self.clock_level_ok, self.clock_level_side = ok, side
+
+
+def test_the_side_folds_low_dominating_and_only_an_all_high_group_is_high():
+    """The convention `bm128_depth.tread_clock` already uses, applied at this
+    writer so the two cannot drift: a group containing a sagged repeat is
+    reported sagged, because the sag is the state that makes the number
+    untrustworthy; only an ALL-high group is high. Passing repeats contribute
+    no side, so a single boosted repeat among passes still reads high.
+    """
+    high, low, ok = (_T(False, timing.LEVEL_HIGH), _T(False, timing.LEVEL_LOW),
+                     _T(True, ""))
+    assert TVF._fold_side([high, high]) == timing.LEVEL_HIGH
+    assert TVF._fold_side([high, ok]) == timing.LEVEL_HIGH
+    assert TVF._fold_side([high, low]) == timing.LEVEL_LOW
+    assert TVF._fold_side([low, low]) == timing.LEVEL_LOW
+    assert TVF._fold_side([ok, ok]) == ""
+    # A failure with no side recorded folds to "", never up to a side.
+    assert TVF._fold_side([_T(False, "")]) == ""
+    assert TVF._fold_side([high, _T(False, "")]) == ""
+
+
+def test_nothing_in_this_file_excludes_a_row_on_the_level_flag():
+    """The side is RECORDED here, not acted on: this script measures tuned
+    against fallback and a clock outside the band is a fact about the row, not
+    a reason to drop it. Parsed rather than grepped, so the prose that explains
+    the flag is not mistaken for code that reads it."""
+    import ast
+    src = Path(TVF.__file__).read_text()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Compare) and isinstance(node.left, ast.Attribute):
+            assert node.left.attr != "clock_level_ok", \
+                f"line {node.lineno} branches on clock_level_ok"

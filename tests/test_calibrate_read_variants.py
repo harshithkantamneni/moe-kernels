@@ -162,11 +162,51 @@ def test_a_ratio_taken_across_a_bad_row_is_refused(defect, word):
 def test_the_cross_instrument_term_is_not_scored_without_a_level(defect):
     """The two figures come from two loops. Comparing them across a clock nobody
     checked would report a throttled card as an instrument difference, which is
-    the 2.1%-margin-on-an-8-16%-bias problem in one line."""
+    the 2.1%-margin-on-an-8-16%-bias problem in one line.
+
+    `level` is now the LOW side specifically. A sagged card is not delivering
+    what it was calibrated at, which is the case this refusal was written for.
+    """
     gates = _gates(CRV.plant(1.03, defect))
     assert gates["C4_instrument"][0] == EX.UNKNOWN
     assert gates["within_run"][0] == EX.PASS, \
         "a level says nothing about a ratio taken inside one run"
+
+
+def test_a_boosted_clock_is_scored_rather_than_refused():
+    """THE DEFECT, planted through this arm's own analysis.
+
+    Every reading in this file is a pure streaming read, and on an H200 a
+    streaming read BOOSTS above the bf16-GEMM reference the roof is quoted at.
+    `clock_flags` fails LEVEL on either edge, so the side-blind refusal fired
+    on the healthy case: C4_instrument went UNKNOWN on exactly the cards this
+    script is run on. A read rate is a BANDWIDTH and HBM does not run on the SM
+    clock, so a boost is no reason to refuse the comparison.
+    """
+    readings = CRV.plant(1.0028, "level-high")
+    baseline = CRV.pick(readings, CRV.BASELINE)
+    assert baseline.level_ok is False
+    assert baseline.level_side == CRV.timing.LEVEL_HIGH
+    gates = _gates(readings, registered=baseline.gbps)
+    assert gates["C4_instrument"][0] == EX.PASS
+    assert "HIGH side" in gates["C4_instrument"][1]
+    assert "not rescaled with the SM clock" in gates["C4_instrument"][1]
+    # And the LOW side at the SAME ratio still refuses, so the change is about
+    # the side and not about loosening the gate.
+    low = CRV.plant(1.0028, "level")
+    assert _gates(low, registered=CRV.pick(low, CRV.BASELINE).gbps)[
+        "C4_instrument"][0] == EX.UNKNOWN
+
+
+def test_the_flag_column_names_the_side_and_not_just_bad():
+    """"LEVEL-BAD" told a reader nothing about which edge, which is how a boost
+    and a throttle came to be one word in every report this file printed."""
+    for defect, word in (("level-high", "LEVEL-HIGH"), ("level", "LEVEL-LOW")):
+        readings = CRV.plant(1.0028, defect)
+        scored = CRV.score(readings, H200, CRV.REGISTERED_READ_GBPS)
+        lines = CRV.report(readings, scored, 4463.0, "planted")
+        assert any(word in ln for ln in lines), defect
+        assert not any("LEVEL-BAD" in ln for ln in lines), defect
 
 
 def test_the_instrument_term_fires_on_the_gap_the_pod_run_measured():
@@ -203,6 +243,7 @@ def test_a_run_with_no_baseline_row_scores_nothing_rather_than_guessing():
     (["--self-test", "1.03", "--self-test-defect", "pin"], EX.INVALID),
     (["--self-test", "1.03", "--self-test-defect", "host-bound"], EX.INVALID),
     (["--self-test", "1.03", "--self-test-defect", "level"], EX.CLAIM_FAIL),
+    (["--self-test", "1.03", "--self-test-defect", "level-high"], EX.CLAIM_FAIL),
 ])
 def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(argv, code, capsys):
     """One property over every mode this file can reach on a laptop: the code

@@ -50,11 +50,18 @@ def write_csv(path: Path, rows: list[dict], fieldnames=COLUMNS) -> Path:
 
 
 def cell_row(t: int, ms: float, *, load: float = REFERENCE_MHZ,
-             side: str = "", version: int = SCHEMA_VERSION,
-             refused: str = "") -> dict:
+             side: str = "", drifted: bool = False,
+             version: int = SCHEMA_VERSION, refused: str = "") -> dict:
     """One mixtral vLLM row at T tokens. `side` "high" plants a boosted cell,
-    "low" a throttled one, "" a level one; `refused` is a driver `roof_note`
-    on a v6 row whose roof was not scored."""
+    "low" a sagged one, "" a level one; `drifted` plants a DRIFT failure;
+    `refused` is a driver `roof_note` on a v6 row whose roof was not scored.
+
+    `throttled` IS WRITTEN FROM `drifted` ALONE, which is what
+    `driver._apply_kernel_timing` does. This fixture set it from `side == "low"`
+    until 2026-09-15, a row shape the driver has not written since the
+    2026-09-09 DRIFT-only change, so the test planted a world that cannot occur
+    and then asserted the report's behaviour in it.
+    """
     tflops = 40.0 * t / 512
     roof = roof_at_clock(PEAK_TFLOPS, REFERENCE_MHZ, load)
     row = {"schema_version": version, "impl": "vllm_fused_experts",
@@ -63,10 +70,11 @@ def cell_row(t: int, ms: float, *, load: float = REFERENCE_MHZ,
            "correctness_passed": "True", "tflops": tflops,
            "achieved_peak_tflops": PEAK_TFLOPS,
            "pct_of_achieved_tflops": 100.0 * tflops / PEAK_TFLOPS,
-           "throttled": "True" if side == "low" else "False",
+           "throttled": "True" if drifted else "False",
            "instrument": "queue-deep/l2-flush/clock-under-load/v3",
            "clock_level_ok": "failed" if side else "ok",
-           "clock_level_side": side, "clock_drift_ok": "ok",
+           "clock_level_side": side,
+           "clock_drift_ok": "failed" if drifted else "ok",
            "host_bound_ok": "ok", "sm_clock_load_mhz": load,
            "reference_clock_mhz": REFERENCE_MHZ,
            "roof_at_cell_clock_tflops": 0.0 if refused else roof,
@@ -88,21 +96,31 @@ def grid_rows(**over) -> list[dict]:
     return [cell_row(t, max(0.4, 0.4 * t / 512), **over) for t in GRID]
 
 
-def test_a_boosted_row_is_kept_and_a_throttled_row_is_skipped(tmp_path):
-    """THE PLANTED PAIR. Both fail LEVEL; only the LOW side is `throttled`."""
+def test_both_level_sides_are_kept_and_counted_and_only_drift_is_skipped(tmp_path):
+    """THE PLANTED TRIO, and the first two used to be one.
+
+    `throttled` on a v6 row is DRIFT and nothing else, so NEITHER LEVEL side is
+    excluded here. Only the HIGH side was counted, so a cell whose rows had all
+    sagged printed the same header as a clean one, and this test could not
+    have noticed because its own fixture set `throttled` from `side == "low"`,
+    a row the driver has not written since 2026-09-09.
+    """
     rows = grid_rows()
     rows.append(cell_row(512, 0.41, load=BOOSTED_MHZ, side="high"))
     rows.append(cell_row(512, 0.60, load=1400.0, side="low"))
+    rows.append(cell_row(512, 0.55, drifted=True))
     got = run_report(write_csv(tmp_path / "v6.csv", rows))
     assert got.returncode == 0, got.stderr
-    assert f"kept {len(GRID) + 1} rows, skipped 1 (throttled or failed)" in got.stdout
+    assert f"kept {len(GRID) + 2} rows, skipped 1 (throttled or failed)" in got.stdout
     assert ("of the kept rows, 1 failed LEVEL HIGH (boosted above the "
-            "reference clock): kept") in got.stdout
-    assert f"1 of {len(GRID) + 1} rows failed LEVEL HIGH" in got.stdout
+            "reference clock) and") in got.stdout
+    assert "1 failed LEVEL LOW (sagged below it): both kept" in got.stdout
+    assert f"1 of {len(GRID) + 2} rows failed LEVEL HIGH" in got.stdout
+    assert f"1 of {len(GRID) + 2} rows failed LEVEL LOW" in got.stdout
     assert "use pct_of_roof_at_cell_clock" in got.stdout
-    # The gate can also be lifted, and then the LOW row is in the pool.
+    # The gate can also be lifted, and then the DRIFTED row is in the pool.
     lifted = run_report(tmp_path / "v6.csv", "--include-throttled")
-    assert f"kept {len(GRID) + 2} rows, skipped 0" in lifted.stdout
+    assert f"kept {len(GRID) + 3} rows, skipped 0" in lifted.stdout
 
 
 def test_a_level_corpus_reports_no_high_side_rows(tmp_path):

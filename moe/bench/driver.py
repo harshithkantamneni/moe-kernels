@@ -1048,11 +1048,16 @@ def _apply_kernel_timing(row: SC.Row, kt, cfg: RunConfig) -> None:
     misbehaved, do not pool it", and three consumers BRANCH ON THIS COLUMN:
     `scripts/run_all.sh`, `scripts/publish_results.sh` and
     `scripts/efficiency_report.py`. A fourth read it when v5 landed and no
-    longer does: `scripts/pod_session.sh` gate S6d RE-DERIVES the rule from
-    the two verdicts instead (`dr == VERDICT_FAILED or side == LEVEL_LOW`,
-    pod_session.sh:1523, the word `throttled` appearing only in its prose), so
-    a change to what this column means does not reach S6d and S6d has to be
-    moved by hand beside it. Leaving it False on every v5 row did not make
+    longer does: `scripts/pod_session.sh` gate S6d RE-DERIVES its own rule
+    from the two verdicts instead, the word `throttled` appearing only in its
+    prose, so a change to what this column means does not reach S6d and S6d has
+    to be moved by hand beside it. THIS SENTENCE QUOTED S6d's RULE AS
+    `dr == VERDICT_FAILED or side == LEVEL_LOW` AT AN EXACT LINE NUMBER UNTIL
+    2026-09-15, and the line it cited had said otherwise since the 2026-09-09
+    DRIFT-only change: S6d excludes on DRIFT alone and counts BOTH LEVEL sides
+    among the rows it keeps. A citation to an exact line that the line
+    contradicts is worse than none, so the rule is described here and not
+    transcribed. Leaving it False on every v5 row did not make
     those checks conservative, it made them vacuous: back when S6d read the
     column, "thermal stability" compared 0.0% against "< 5%" and could no
     longer FAIL for any reason, on any card, at any temperature. A check that

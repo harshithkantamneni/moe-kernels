@@ -1143,31 +1143,62 @@ LEVEL_SIDE = "clock_level_side"
 #: is a stale entry to prune, which the test names in its output.
 #:
 #: Why each is on it. The first nine are the verdict's F2 list. The next four
-#: were found by the 2026-09-08 review of this slice and belong to no slice yet:
-#: group_m_alpha_sweep.py:2482 `level_failed` reports HIGH rows as "ran below
-#: the clock"; dtype_tile_confound.py:1356 and tuned_vs_fallback.py:1025 fold a
-#: HIGH failure into `clock_flagged` / `clock_throttled`; calibrate_read_variants
-#: copies the flag without the side. calibrate_hardware.py:412-425 scores a
-#: calibration's `clocks`/`gemm_clock` block FAIL on `clock_level_ok is False`
-#: with the words "ran below the clock its roof is quoted at"; no writer in this
-#: tree emits the flag into those blocks yet, so it is latent, and it is the
-#: same shape.
-SIDE_BLIND_READERS = {
-    "alias_ablation.py": "F1 slice (verdict F2 list)",
-    "block_m_crossing_sweep.py": "F1 slice (verdict F2 list)",
-    "bm128_depth.py": "F1 slice (verdict F2 list)",
-    "bm128_roofline.py": "F1 slice (verdict F2 list)",
-    "bn_decomposition.py": "F2 slice (verdict F2 list)",
-    "memory_branch_anchor.py": "F2 slice (verdict F2 list)",
-    "occupancy_vs_swizzle.py": "F2 slice (verdict F2 list)",
-    "span_extent_separation.py": "F3 slice (verdict F2 list)",
-    "tile_sweep.py": "F3 slice (verdict F2 list)",
-    "group_m_alpha_sweep.py": "unassigned; :2482 level_failed reports HIGH as below",
-    "dtype_tile_confound.py": "unassigned; :1356 _fold_flag, :2439-2445 clock_flagged",
-    "tuned_vs_fallback.py": "unassigned; :1025 _fold_flag",
-    "calibrate_read_variants.py": "unassigned; :196 copies the flag without the side",
-    "calibrate_hardware.py": "unassigned, latent; :412-425 scores the block FAIL as below",
-}
+#: were found by the 2026-09-08 review of this slice and belonged to no slice:
+#: group_m_alpha_sweep.py `level_failed` reported HIGH rows as "ran below the
+#: clock"; dtype_tile_confound.py and tuned_vs_fallback.py folded a HIGH failure
+#: into `clock_flagged` / `clock_throttled`; calibrate_read_variants copied the
+#: flag without the side. calibrate_hardware.py scored a calibration's
+#: `clocks`/`gemm_clock` block FAIL on `clock_level_ok is False` with the words
+#: "ran below the clock its roof is quoted at".
+#:
+#: THE LEDGER IS EMPTY AS OF 2026-09-15, AND THAT IS THE POINT OF IT. The last
+#: three were fixed that day, after the H200 prediction came true on a rented
+#: box: a memory-bound cell at 1980 MHz against a 1470 MHz reference, LEVEL
+#: failed, side high. `tuned_vs_fallback` now carries `clock_level_side` in its
+#: header, its dataclass and its fold; `calibrate_read_variants` carries it on
+#: `Reading` and SCORES the C4_instrument gate on a boosted card instead of
+#: returning UNKNOWN; `calibrate_hardware` reads the side and rescales the roof
+#: on a HIGH-side failure rather than failing the `not_throttled` claim with a
+#: sentence that was the opposite of what the card did. The F1-F3 nine and the
+#: other two had already landed, and the test above had been printing them as
+#: prunable ever since.
+#:
+#: An empty ledger means the tripwire covers EVERY script with no exceptions: a
+#: reader that drops the side, in any file, fails `test_no_new_reader...` with
+#: the rule to install. An entry left here after its file was fixed is an
+#: excuse with nothing behind it, which is the stale-description half of this
+#: project's recurring defect, so entries are pruned the day they stop being
+#: true rather than kept as history. The history is in this comment.
+SIDE_BLIND_READERS: dict[str, str] = {}
+
+
+def test_the_readers_fixed_on_2026_09_15_stay_off_the_ledger():
+    """A pruned entry is only pruned if the tripwire now covers it.
+
+    The ledger is one-directional, so a fixed entry left on it would sit there
+    for ever and a regression would be excused by its own excuse. These three
+    are off it, which means they are inside `test_no_new_reader...`: dropping
+    `clock_level_side` from any of them fails that test with the rule to
+    install.
+    """
+    fixed = ("tuned_vs_fallback.py", "calibrate_read_variants.py",
+             "calibrate_hardware.py")
+    for name in fixed:
+        assert name not in SIDE_BLIND_READERS, name
+        text = (REPO / "scripts" / name).read_text()
+        assert LEVEL_FLAG in text and LEVEL_SIDE in text, name
+    assert not set(fixed) & set(side_blind_readers(REPO / "scripts"))
+
+
+def test_the_ledger_is_empty_so_the_tripwire_has_no_exceptions():
+    """The strongest state this tripwire can be in, asserted rather than left
+    to be noticed. Adding a name back is allowed -- it is a ledger -- but it
+    has to be done deliberately, with a reason, and this test is where the
+    reason has to be written."""
+    assert SIDE_BLIND_READERS == {}, (
+        "an entry is back on the ledger. It excuses a script from the "
+        "side-blind tripwire, so say here which script, which call site, and "
+        "which slice owns the fix")
 
 
 def side_blind_readers(root: Path) -> list[str]:

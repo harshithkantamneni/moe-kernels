@@ -237,9 +237,18 @@ EXIT_INVALID = exit_codes.INVALID
 
 #: The columns `timing.KernelTiming` contributes to every measured row. Named
 #: as a group so the header and the row builder cannot drift apart.
+#:
+#: `clock_level_side` IS ONE OF THEM, since 2026-09-15, and its absence was the
+#: defect. `timing.clock_flags` fails LEVEL on EITHER edge of the band and
+#: records which edge in `KernelTiming.clock_level_side`; this header carried
+#: the verdict and not the side, so every row this file has ever written
+#: destroyed the one field that separates a card that SAGGED from one that
+#: BOOSTED, and no later reader could recover it. On an H200 a memory-bound arm
+#: boosts, so the rows most likely to carry a False are the ones where False
+#: means nothing is wrong.
 TIMING_CSV_COLUMNS = ("instrument", "warmup_ms", "iters", "trials",
-                      "sm_clock_load_mhz", "clock_level_ok", "clock_drift_ok",
-                      "l2_flush", "host_bound")
+                      "sm_clock_load_mhz", "clock_level_ok", "clock_level_side",
+                      "clock_drift_ok", "l2_flush", "host_bound")
 
 CSV_COLUMNS = (
     "run_id", "utc", "gpu_name", "vllm_version", "torch_version", "vllm_tag",
@@ -777,6 +786,7 @@ class ArmResult:
     trials: int = 0
     sm_clock_load_mhz: float | None = None
     clock_level_ok: bool | None = None
+    clock_level_side: str = ""
     clock_drift_ok: bool | None = None
     l2_flush: bool | None = None
     host_bound: bool | None = None
@@ -825,6 +835,7 @@ class ArmResult:
             "sm_clock_load_mhz": ("" if self.sm_clock_load_mhz is None
                                   else f"{self.sm_clock_load_mhz:.0f}"),
             "clock_level_ok": _flag(self.clock_level_ok),
+            "clock_level_side": self.clock_level_side,
             "clock_drift_ok": _flag(self.clock_drift_ok),
             "l2_flush": _flag(self.l2_flush),
             "host_bound": _flag(self.host_bound),
@@ -910,6 +921,7 @@ class Store:
             iters=num("iters", int) or 0, trials=num("trials", int) or 0,
             sm_clock_load_mhz=num("sm_clock_load_mhz"),
             clock_level_ok=_unflag(row.get("clock_level_ok", "")),
+            clock_level_side=str(row.get("clock_level_side", "") or ""),
             clock_drift_ok=_unflag(row.get("clock_drift_ok", "")),
             l2_flush=_unflag(row.get("l2_flush", "")),
             host_bound=_unflag(row.get("host_bound", "")),
@@ -1023,6 +1035,7 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
     clocks = [t.sm_clock_load_mhz for t in timings if t.sm_clock_load_mhz]
     result.sm_clock_load_mhz = statistics.median(clocks) if clocks else None
     result.clock_level_ok = _fold_flag([t.clock_level_ok for t in timings])
+    result.clock_level_side = _fold_side(timings)
     result.clock_drift_ok = _fold_flag([t.clock_drift_ok for t in timings])
     result.host_bound = _fold_flag([t.host_bound for t in timings], bad=True)
     return result
@@ -1031,17 +1044,48 @@ def summarise_timings(result: ArmResult, timings: list) -> ArmResult:
 def _fold_flag(values: list, bad: bool = False) -> bool | None:
     """Fold a tri-state flag over repeats so one bad repeat wins, None absorbing.
 
-    `bad` is the DOMINATING value: False for the two clock flags, whose False
-    means throttled or drifting, True for `host_bound`, whose True means the
-    interval carried host time. One function with the polarity as an argument
-    rather than two that differ by a negation, because that difference is how a
-    filter comes to pass a row it should have dropped.
+    `bad` is the DOMINATING value: False for the two clock flags, True for
+    `host_bound`, whose True means the interval carried host time. One function
+    with the polarity as an argument rather than two that differ by a negation,
+    because that difference is how a filter comes to pass a row it should have
+    dropped.
+
+    WHAT `clock_level_ok is False` MEANS, because this docstring said "throttled
+    or drifting" until 2026-09-15 and that was only half true. DRIFT False is
+    drifting. LEVEL False is the under-load median OUTSIDE the band around the
+    reference clock, on EITHER edge: a card that sagged, or one that boosted
+    above the clock the roof was quoted at. `_fold_side` folds the side beside
+    this so a reader can tell which, and nothing in this file excludes a row on
+    either flag.
     """
     if any(v is bad for v in values):
         return bad
     if any(v is None for v in values):
         return None
     return not bad
+
+
+def _fold_side(timings: list) -> str:
+    """Fold `clock_level_side` over repeats, LOW dominating. Pure.
+
+    Only repeats whose LEVEL actually FAILED carry a side worth folding: a
+    passing repeat has "" and folding that in would dilute a real sag to
+    nothing. Of the failures, LOW wins over HIGH, which is the convention
+    `bm128_depth.tread_clock` already uses for a mixed tread: a group that
+    contains a sagged repeat is reported as sagged, because the sag is the
+    state that would make the number untrustworthy, and only an ALL-high group
+    is reported high. A LEVEL failure that carries no side at all folds to "",
+    which every consumer in this tree reads as LOW.
+    """
+    sides = [str(getattr(t, "clock_level_side", "") or "") for t in timings
+             if getattr(t, "clock_level_ok", None) is False]
+    if not sides:
+        return ""
+    if all(s == timing.LEVEL_HIGH for s in sides):
+        return timing.LEVEL_HIGH
+    if any(s == timing.LEVEL_LOW for s in sides):
+        return timing.LEVEL_LOW
+    return ""
 
 
 def _flag(value: bool | None) -> str:

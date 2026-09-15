@@ -1453,13 +1453,20 @@ def level_split(timed: list[dict]) -> dict[str, list[dict]]:
     the defect was in what the page told the reader and not in alpha; the
     page is what gets quoted.
 
-    `low` is the exclusion-shaped state: the card sagged under the roof's
-    clock and the time is the governor's. `high` is KEPT: the time is a time
-    at one clock, the fixed-roof fraction is what is not comparable, and
-    `roof_at_cell_clock` is the number to read beside it. A False with no
-    side and no way to derive one is the one-sided era's below and is counted
-    `low`. `blind` is the rows whose LEVEL was not determined, which is a
-    fact about the apparatus and not about the card.
+    BOTH SIDES ARE KEPT, and `low` was called "the exclusion-shaped state ...
+    the time is the governor's" here until 2026-09-15. Nothing in this arm ever
+    excluded on it -- the paragraph above says so -- and the 750-cell H200
+    census settled what the word should be: the under-load clock is set per
+    tile by that tile's own power draw under the board cap, so a LOW cell is
+    the STEADY STATE of a tile family and not a governor event, and the
+    2026-09-09 DRIFT-only rule was adopted on exactly that finding. `low` is
+    the card sitting below the band the roof's clock defines; `high` is above
+    it. In BOTH the time is a time at one clock and what is not comparable is
+    the FIXED-roof fraction, so `roof_at_cell_clock` is the number to read
+    beside either. A False with no side and no way to derive one is the
+    one-sided era's below and is counted `low`. `blind` is the rows whose
+    LEVEL was not determined, which is a fact about the apparatus and not
+    about the card.
     """
     from moe.bench import timing
 
@@ -2537,8 +2544,13 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
     # THE THREE CLOCK VERDICTS, AND THEY ARE NOT THE SAME MEASUREMENT. LEVEL
     # asks whether the card sat at the clock the ROOF was measured at while the
     # cell ran, sampled under load, and since 03df2d4 it fails on EITHER side:
-    # `level_split` names which, because only the low side is the governor's
-    # time. DRIFT asks whether the under-load samples agreed with each other.
+    # `level_split` names which, and NEITHER side is an exclusion here: the
+    # 750-cell H200 census showed the under-load clock is set per tile by that
+    # tile's own power draw under the board cap, so a low cell is a tile
+    # family's steady state and not the governor taking the card away. This
+    # comment said "only the low side is the governor's time" until 2026-09-15,
+    # which was the sentence the page printed and the census refuted.
+    # DRIFT asks whether the under-load samples agreed with each other.
     # `throttled` below is the retired idle-instant pair, kept so a resumed
     # jsonl still parses and so the two can be compared on the next pod. LEVEL
     # is printed FIRST because it is the one the instrument is at v2 for, and
@@ -2563,15 +2575,13 @@ def _analyse(say, AR, plan: Plan, records: list[dict], meta: dict, args,
             say("  every timed cell was scored against "
                 + (f"{float(against):.0f} MHz" if against else "a reference")
                 + ", so a clock problem could have been seen.")
-        if level_low:
-            say(f"  {len(level_low)} of them ran BELOW the clock this card's "
+        for rows, where, word in ((level_low, "BELOW", "low"),
+                                  (level_high, "ABOVE", "high")):
+            if not rows:
+                continue
+            say(f"  {len(rows)} of them ran {where} the clock this card's "
                 "roof was measured at and")
-            say("  are flagged LEVEL low; their time is the governor's, not "
-                "the kernel's.")
-        if level_high:
-            say(f"  {len(level_high)} of them ran ABOVE the clock this card's "
-                "roof was measured at and")
-            say("  are flagged LEVEL high; KEPT. The time is a time at one "
+            say(f"  are flagged LEVEL {word}; KEPT. The time is a time at one "
                 "clock; what is not")
             say("  comparable is the fixed-roof fraction, so read "
                 "roof_at_cell_clock beside them.")

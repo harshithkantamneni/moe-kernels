@@ -2164,8 +2164,15 @@ def test_a_side_on_a_verdict_that_did_not_fail_is_refused(bm):
 
 def test_tread_clock_reports_the_side_and_only_an_all_high_tread_is_high(bm):
     """The side travels with the majority verdict. A tread whose repeats failed
-    on BOTH edges was timed at two operating points and its median is a
-    blend, which is the throttle and not the boosted state: it is LOW."""
+    on BOTH edges was timed at two operating points and its median is a blend,
+    which a reader must not take for a clean boost: it is reported LOW.
+
+    REPORTED, NOT EXCLUDED. `Sample.clock_excluded` is DRIFT alone, so BOTH
+    sides reach the ladder and the side exists so `tread_fractions` can say
+    which roof fraction is comparable. `tread_clock`'s own docstring said "and
+    excluded" until 2026-09-15, over code that has excluded nothing on a side
+    since 2026-09-09.
+    """
     all_high = [_clocked(bm, r, 1980.0, False, "high") for r in range(1, 6)]
     level, _, mhz, side = bm.tread_clock(all_high, 128)[4]
     assert level is False and side == "high" and mhz == 1980.0
@@ -2181,6 +2188,10 @@ def test_tread_clock_reports_the_side_and_only_an_all_high_tread_is_high(bm):
                 + [_clocked(bm, r, 1515.0, True, "") for r in range(2, 6)])
     assert bm.tread_clock(one_high, 128)[4][0] is True
     assert bm.tread_clock(one_high, 128)[4][3] == ""
+    # And neither side is an exclusion: every sample above survives
+    # `clock_excluded`, which is DRIFT alone.
+    for group in (all_high, mixed, fine, one_high):
+        assert not any(s.clock_excluded for s in group)
 
 
 def test_the_level_side_round_trips_through_the_csv(bm, tmp_path):

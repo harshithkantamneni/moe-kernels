@@ -549,7 +549,10 @@ def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
     establish the card's CEILING, and a floored clock makes the ceiling wrong
     for every arm that will be scored against it. `moe/bench/timing.py`'s
     module docstring carries the same split, and `driver.py`, `pod_session.sh`
-    S6d and the five per-cell `clock_excluded` helpers are unchanged.
+    S6d and the five per-cell `clock_excluded` helpers are unchanged. THE
+    SPLIT IS ABOUT LOW, NOT ABOUT LEVEL: this gate still fails a SAGGED block
+    where a cell would keep it, and since 2026-09-15 neither of them treats a
+    BOOSTED clock as a throttle.
 
     HOW THE TERMS COMBINE. Any scored term FAILing is a FAIL, and the detail
     names every term and what each read. Otherwise a term that COULD NOT be
@@ -602,11 +605,36 @@ def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
                 f"{float(max_sm_clock_mhz):.0f} MHz maximum)"))
         if level is not None:
             level = bool(level)
-            terms.append((
-                "LEVEL", level,
-                f"LEVEL {'PASS' if level else 'FAIL'} (clock_level_ok={level}, "
-                f"{load if load is not None else 'unrecorded'} MHz against "
-                f"reference {ref if ref is not None else 'unrecorded'} MHz)"))
+            side = str(block.get("clock_level_side") or "")
+            shown = f"{load if load is not None else 'unrecorded'} MHz against "\
+                    f"reference {ref if ref is not None else 'unrecorded'} MHz"
+            if level is False and side == T.LEVEL_HIGH:
+                # A HIGH-SIDE LEVEL FAILURE RESCALES THE ROOF, IT DOES NOT FAIL
+                # THE CLAIM. `clock_flags` reports False on EITHER edge of the
+                # band and records which in `clock_level_side`; this term read
+                # the bare verdict until 2026-09-15 and called every one of them
+                # "the card ran below the clock its roof is quoted at". On an
+                # H200 that sentence is false for every memory-shaped block,
+                # which boosts ABOVE the GEMM reference rather than sagging
+                # below it. The correct treatment is `driver._apply_cost`'s:
+                # move the roof to the clock the work ran at and keep the
+                # measurement. The scale is printed so a reader can apply it.
+                scale = (float(load) / float(ref)) if (load and ref) else None
+                terms.append((
+                    "LEVEL", True,
+                    f"LEVEL PASS on the HIGH side (clock_level_ok=False, "
+                    f"clock_level_side={side!r}, {shown}"
+                    + (f"; a roof quoted at the reference is rescaled by "
+                       f"{scale:.4f} for this block, which is what "
+                       f"roofline.roof_at_clock does per row" if scale else
+                       "; the scale cannot be computed without both clocks")
+                    + ")"))
+            else:
+                terms.append((
+                    "LEVEL", level,
+                    f"LEVEL {'PASS' if level else 'FAIL'} "
+                    f"(clock_level_ok={level}, "
+                    f"clock_level_side={side or 'unrecorded'!r}, {shown})"))
         if drift is not None:
             drift = bool(drift)
             terms.append((
@@ -627,8 +655,13 @@ def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
                          "every ceiling here was measured on a card that "
                          "cannot hold a clock and the ridge derived from them "
                          "is wrong",
-                "LEVEL": "the card ran below the clock its roof is quoted at, "
-                         "so the ceilings are low",
+                "LEVEL": "the card ran BELOW the band around the clock its "
+                         "roof is quoted at, so the ceilings are low. Only the "
+                         "LOW side reaches this: a HIGH-side LEVEL failure is "
+                         "a boost, not a throttle, and is scored PASS above "
+                         "with the roof rescale it implies. A failure carrying "
+                         "no side is read as LOW, because a pre-v6 LEVEL was "
+                         "one-sided and could only fail low",
                 "DRIFT": "the clock moved during the measurement, so the "
                          "ceilings are a blend of two states",
             }

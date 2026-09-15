@@ -53,11 +53,14 @@ by default, and the default output is byte for byte what it was without it. Read
 cells it fits to a mean relative error of 24% and lands three times below the
 ridge, so it removes the ambiguity without resolving it.
 
-THE CLOCK GATE HERE IS `throttled`, AND ON A v6 ROW THAT WORD MEANS LOW OR
-DRIFT. `moe/bench/driver.py` sets it from the under-load verdicts and keeps a
-LEVEL failure on the HIGH side out of it (a cell boosted above the reference
-clock is not a thermal event; its time is the kernel's), so a boosted
-memory-bound cell is KEPT by this report and counted beside the kept total. What
+THE CLOCK GATE HERE IS `throttled`, AND ON A v6 ROW THAT WORD MEANS DRIFT AND
+NOTHING ELSE. This paragraph said "LOW OR DRIFT" until 2026-09-15, which was the
+2026-09-08 rule; the 2026-09-09 DRIFT-only change moved `driver._apply_kernel_timing`
+to `row.throttled = row.clock_drift_ok == VERDICT_FAILED`, and the sentence
+under it did not move. NEITHER LEVEL SIDE EXCLUDES A ROW HERE: a boosted cell is
+not a thermal event and its time is the kernel's, and on the 750-cell H200
+census a LOW cell was the STEADY STATE of one tile family rather than a
+throttle, so both sides are KEPT and counted beside the kept total. What
 a HIGH-side row cannot be quoted for is its FIXED-roof fraction, and this report
 prints both compute-side fractions per cell: `pct_of_achieved_tflops` against the
 calibration's roof, and `pct_of_roof_at_cell_clock` against the roof at the clock
@@ -489,19 +492,48 @@ def print_head_to_head(summary: list[tuple[str, dict]]) -> None:
           "ridge.")
 
 
-#: The word the instrument writes in `clock_level_side` for a boosted cell:
-#: `timing.LEVEL_HIGH`, spelled here because `moe/bench/timing.py` imports
-#: torch at module scope and this report runs off-GPU from a CSV.
+#: The two words the instrument writes in `clock_level_side`:
+#: `timing.LEVEL_HIGH` and `timing.LEVEL_LOW`, spelled here because
+#: `moe/bench/timing.py` imports torch at module scope and this report runs
+#: off-GPU from a CSV. BOTH are counted, since 2026-09-15: only HIGH was, so a
+#: pool of sagged cells and a pool of boosted ones printed the same header, and
+#: neither is excluded, so the difference was invisible in every total.
 LEVEL_HIGH = "high"
+LEVEL_LOW = "low"
 
 #: What is printed for the corrected fraction on a row that predates it.
 ROOF_PREDATES = "not available (v<6 row)"
 
 
+def level_side_of(row: dict) -> str:
+    """This row's `clock_level_side`, or "" when it has none.
+
+    "" for an absent column, an empty one and the `UNRECORDED` stamp: none of
+    those is a side. A pre-v6 row therefore reads "" here, which the callers
+    count as neither, because a pre-v6 LEVEL was one-sided and a side inferred
+    from a version is not a side the row recorded.
+    """
+    side = row.get("clock_level_side")
+    if side is None or side == UNRECORDED:
+        return ""
+    return str(side)
+
+
 def is_level_high(row: dict) -> bool:
     """Did this row's LEVEL verdict fail on the HIGH side? False on a pre-v6 row."""
-    side = row.get("clock_level_side")
-    return side is not None and side != UNRECORDED and str(side) == LEVEL_HIGH
+    return level_side_of(row) == LEVEL_HIGH
+
+
+def is_level_low(row: dict) -> bool:
+    """Did this row's LEVEL verdict fail on the LOW side? False on a pre-v6 row.
+
+    THE COUNTERPART THAT WAS MISSING. Neither side excludes a row from this
+    report -- `throttled` is DRIFT alone -- so a LOW row was silently inside
+    `kept` with nothing printed about it. On the 750-cell H200 census a LOW
+    cell was the steady state of one tile family rather than a throttle, which
+    is exactly why it is kept and exactly why it has to be counted.
+    """
+    return level_side_of(row) == LEVEL_LOW
 
 
 def roof_fractions(row: dict) -> tuple[float | None, float | None, str]:
@@ -529,12 +561,20 @@ def roof_fractions(row: dict) -> tuple[float | None, float | None, str]:
 
 
 def print_roof_fractions(fixed: list[float], cell: list[float],
-                         absent: collections.Counter, high: int, total: int) -> None:
+                         absent: collections.Counter, high: int, low: int,
+                         total: int) -> None:
     """The two compute-side fractions of one cell, medianed, side by side.
 
     Printed under every cell's table because the fraction of roof is what a
     reader takes off a row by hand, and the one they would take (the fixed
-    roof) is the one that is inflated on a boosted cell.
+    roof) is the one that is distorted on a cell outside the clock band.
+
+    BOTH SIDES ARE PRINTED, since 2026-09-15. Only the HIGH count was, which
+    left a cell whose rows all sagged looking identical to a clean one: neither
+    side excludes a row here, so LOW was inside the total with nothing said. The
+    fixed-roof fraction is inflated on a boosted cell and deflated on a sagged
+    one, and `pct_of_roof_at_cell_clock` is the fraction that is comparable in
+    both directions.
     """
     print("  fraction of compute roof (median over the rows in this cell):")
     if fixed:
@@ -549,11 +589,13 @@ def print_roof_fractions(fixed: list[float], cell: list[float],
     for note, count in absent.most_common():
         print(f"    pct_of_roof_at_cell_clock (roof AT THE CELL'S CLOCK):      "
               f"{note}  [{count} rows]")
-    if high:
-        print(f"    {high} of {total} rows failed LEVEL HIGH (boosted above the "
-              "reference clock): kept,")
-        print("    their fixed-roof fraction is not comparable; use "
-              "pct_of_roof_at_cell_clock")
+    for count, word, where in ((high, "HIGH", "boosted above"),
+                               (low, "LOW", "sagged below")):
+        if count:
+            print(f"    {count} of {total} rows failed LEVEL {word} ({where} the "
+                  "reference clock): kept,")
+            print("    their fixed-roof fraction is not comparable; use "
+                  "pct_of_roof_at_cell_clock")
 
 
 def main() -> int:
@@ -567,11 +609,12 @@ def main() -> int:
     ap.add_argument("--routing", default=None, help="restrict to one routing kind")
     ap.add_argument("--include-throttled", action="store_true",
                     help="keep rows whose `throttled` column is True. On a v6 "
-                         "row that word means the under-load LEVEL check failed "
-                         "LOW or the DRIFT check failed; a LEVEL failure on the "
-                         "HIGH side (a boosted cell) never sets it and such "
-                         "rows are kept without this flag. On a pre-v5 row it "
-                         "is the retired idle-instant flag")
+                         "row that word means the under-load DRIFT check "
+                         "failed, and nothing else: NEITHER LEVEL side sets "
+                         "it, so a boosted cell and a sagged one are both kept "
+                         "without this flag and are counted separately in the "
+                         "header. On a pre-v5 row it is the retired "
+                         "idle-instant flag")
     ap.add_argument("--l2-flush", choices=["true", "false"], default=None,
                     help="restrict to one L2 mode; default mixes both")
     ap.add_argument("--cuda-graph", choices=["true", "false"], default=None,
@@ -656,6 +699,7 @@ def main() -> int:
     roof_cell: dict[tuple[str, str, str], list[float]] = {}
     roof_absent: dict[tuple[str, str, str], collections.Counter] = {}
     level_high: collections.Counter = collections.Counter()
+    level_low: collections.Counter = collections.Counter()
     cell_rows: collections.Counter = collections.Counter()
     kept = skipped = untimed = tileless = 0
     for path in csvs:
@@ -711,6 +755,8 @@ def main() -> int:
                 cell_rows[key] += 1
                 if is_level_high(r):
                     level_high[key] += 1
+                elif is_level_low(r):
+                    level_low[key] += 1
                 try:
                     tiles.setdefault(key, {}).setdefault(t, []).append(
                         m_tiles_for_row(r, args.block_m))
@@ -726,12 +772,20 @@ def main() -> int:
     print(f"kept {kept} rows, skipped {skipped} (throttled or failed), "
           f"{untimed} never timed (skipped graph mode: ms_p50 is 0.0, "
           f"which is not a measurement)")
-    # `throttled` on a v6 row is LOW or DRIFT; a HIGH-side LEVEL failure is a
-    # boosted cell, kept, and said so here rather than folded into either count.
+    # `throttled` on a v6 row is DRIFT and nothing else, so BOTH LEVEL sides
+    # are inside `kept` and neither is visible in the skipped count. Each is
+    # printed on its own line rather than folded into either total: a reader
+    # who sees only "kept N" cannot tell a pool of boosted memory-bound cells
+    # from a pool of sagged ones, and the fixed-roof fraction means something
+    # different in each.
     n_high = sum(level_high.values())
+    n_low = sum(level_low.values())
     print(f"  of the kept rows, {n_high} failed LEVEL HIGH (boosted above the "
-          "reference clock): kept, their")
-    print("  fixed-roof fraction is not comparable; use pct_of_roof_at_cell_clock")
+          "reference clock) and")
+    print(f"  {n_low} failed LEVEL LOW (sagged below it): both kept, neither "
+          "is a DRIFT event. A")
+    print("  flagged row's fixed-roof fraction is not comparable across the "
+          "band; use pct_of_roof_at_cell_clock")
     print(dirty_share_line(admitted_dirty, "admitted rows"))
     if len(modes) > 1:
         print("  timing modes mixed into each median (l2_flush, cuda_graph): "
@@ -903,7 +957,7 @@ def main() -> int:
         print()
         print_roof_fractions(roof_fixed.get(key_, []), roof_cell.get(key_, []),
                              roof_absent.get(key_, collections.Counter()),
-                             level_high[key_], cell_rows[key_])
+                             level_high[key_], level_low[key_], cell_rows[key_])
         # Outside the else: a cell whose grid does not bracket a slope crossing
         # is exactly the cell where a second estimator is worth having, and
         # printing it only where the first one succeeded would hide that.

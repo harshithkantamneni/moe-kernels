@@ -235,11 +235,12 @@ def test_a_card_below_its_reference_clock_fails_the_throttle_claim_on_level():
     cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
                               "sm_clock_load_mhz": 1400.0,
                               "reference_clock_mhz": 1755.0,
-                              "clock_level_ok": False, "clock_drift_ok": True})
+                              "clock_level_ok": False, "clock_level_side": "low",
+                              "clock_drift_ok": True})
     verdict, detail = details(cal)["not_throttled"]
     assert verdict == EX.FAIL
-    assert ("LEVEL FAIL (clock_level_ok=False, 1400.0 MHz against reference "
-            "1755.0 MHz)") in detail
+    assert ("LEVEL FAIL (clock_level_ok=False, clock_level_side='low', "
+            "1400.0 MHz against reference 1755.0 MHz)") in detail
     assert "ceilings are low" in detail
     # 1400 of 1980 is well above the thermal floor, so the FLOOR term PASSES
     # here and LEVEL is what failed. The two terms are independent questions
@@ -247,6 +248,50 @@ def test_a_card_below_its_reference_clock_fails_the_throttle_claim_on_level():
     assert "FLOOR PASS" in detail and "DRIFT PASS" in detail
     # The retired flag is NOT what decided it: it says the opposite here.
     assert cal.clocks["throttled"] is False
+
+
+def test_a_level_failure_with_no_side_is_still_read_as_low():
+    """A pre-v6 LEVEL was one-sided and could only fail low, so a failure with
+    no side recorded keeps the old rule rather than falling through to the
+    boost branch. The detail says which it read, so a reader can tell a
+    measured LOW from an assumed one."""
+    cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
+                              "sm_clock_load_mhz": 1400.0,
+                              "reference_clock_mhz": 1755.0,
+                              "clock_level_ok": False, "clock_drift_ok": True})
+    verdict, detail = details(cal)["not_throttled"]
+    assert verdict == EX.FAIL
+    assert "clock_level_side='unrecorded'" in detail
+    assert "no side is read as LOW" in detail
+
+
+def test_a_boosted_card_rescales_the_roof_instead_of_failing_the_claim():
+    """THE DEFECT, planted. `timing.clock_flags` returns False on EITHER edge
+    of the band; this gate read the bare verdict and said "the card ran below
+    the clock its roof is quoted at" for a card that ran ABOVE it.
+
+    On an H200 a memory-shaped block boosts to 1980 MHz against a 1470 MHz
+    bf16-GEMM reference, so the side-blind rule failed the `not_throttled`
+    claim on a card that was not throttled at all. The prescription is
+    `driver._apply_cost`'s: move the roof to the clock the work ran at. The
+    factor is COMPUTED here, not typed, so the gate and this test cannot
+    disagree about it.
+    """
+    load, ref = 1980.0, 1470.0
+    cal = calibration(clocks={**LEGACY_CLOCKS, "throttled": False,
+                              "sm_clock_load_mhz": load,
+                              "reference_clock_mhz": ref,
+                              "clock_level_ok": False, "clock_level_side": "high",
+                              "clock_drift_ok": True})
+    verdict, detail = details(cal)["not_throttled"]
+    assert verdict == EX.PASS
+    assert "LEVEL PASS on the HIGH side" in detail
+    assert f"rescaled by {load / ref:.4f}" in detail
+    # The sentence that was wrong for this card must not appear at all.
+    assert "ceilings are low" not in detail
+    # And the rescale is the one roofline computes, not a second arithmetic.
+    from moe.bench import roofline as RF
+    assert RF.roof_at_clock(100.0, ref, load) == 100.0 * load / ref
 
 
 def test_the_under_load_verdict_passes_a_card_at_its_reference_clock():

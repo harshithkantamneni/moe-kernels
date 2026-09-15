@@ -2711,10 +2711,18 @@ def tread_clock(samples: list[Sample], block_m: int
 
     THE SIDE OF A FAILED TREAD IS "high" ONLY WHEN EVERY FAILED REPEAT IS
     HIGH. A tread whose repeats failed on both edges was timed at two operating
-    points and its median is a blend; that is the throttle the exclusion is
-    for, not the boosted state the HIGH side names, so it is returned as LOW
-    and excluded. A tread whose verdict is not False carries "" whatever its
-    repeats say, because a side is the direction of a failure.
+    points and its median is a blend, which is the state a reader must not take
+    for a clean boost, so it is returned as LOW. A tread whose verdict is not
+    False carries "" whatever its repeats say, because a side is the direction
+    of a failure.
+
+    RETURNED AS LOW, NOT EXCLUDED, and this paragraph said "and excluded" until
+    2026-09-15. Nothing here excludes on a side: `Sample.clock_excluded` is
+    DRIFT alone and has been since the 2026-09-09 change, so BOTH sides reach
+    the ladder and the side travels with the tread so `tread_fractions` can say
+    which roof fraction is comparable. A description that claims an exclusion
+    the code does not perform is the half of this repository's recurring defect
+    that no test catches.
     """
     out: dict[int, tuple[bool | None, bool | None, float | None, str]] = {}
     by: dict[int, list[Sample]] = {}

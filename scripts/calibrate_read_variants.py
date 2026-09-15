@@ -181,6 +181,14 @@ class Reading:
     three verdicts `time_kernel` returns, and None means NOT DETERMINED in all
     three, never False. `instrument` travels with the row so a planted reading
     can never be mistaken for a measured one.
+
+    `level_side` IS CARRIED, since 2026-09-15, and dropping it was the defect.
+    `timing.clock_flags` returns False on EITHER edge of the band and records
+    which in `KernelTiming.clock_level_side`; this class copied the verdict and
+    threw the side away, so no gate below could tell a card that SAGGED from
+    one that BOOSTED, and every one of these readings is a pure streaming read,
+    which on an H200 boosts. A flattening that drops the discriminating field
+    is not a flattening.
     """
 
     name: str
@@ -190,6 +198,7 @@ class Reading:
     host_bound: bool | None = None
     drift_ok: bool | None = None
     level_ok: bool | None = None
+    level_side: str = ""
     clock_mhz: float | None = None
     note: str = ""
 
@@ -199,7 +208,9 @@ class Reading:
         return cls(name=name, gbps=nbytes / (kt.ms_p50 * 1e-3) / 1e9,
                    ms_p50=kt.ms_p50, instrument=kt.instrument,
                    host_bound=kt.host_bound, drift_ok=kt.clock_drift_ok,
-                   level_ok=kt.clock_level_ok, clock_mhz=kt.sm_clock_load_mhz,
+                   level_ok=kt.clock_level_ok,
+                   level_side=kt.clock_level_side or "",
+                   clock_mhz=kt.sm_clock_load_mhz,
                    note=note or kt.clock_note)
 
 
@@ -322,13 +333,21 @@ def plant(ratio: float, defect: str) -> list[Reading]:
              "a.count_nonzero()": base * 0.152}
     if defect == "pin":
         rates["torch.sum(dim=1)"] = PIN_RATE_GBPS["nvidiah200"] * 1.01
-    flags = {"host_bound": False, "drift_ok": True, "level_ok": True}
+    flags: dict = {"host_bound": False, "drift_ok": True, "level_ok": True,
+                   "level_side": ""}
     if defect == "host-bound":
         flags["host_bound"] = True
     elif defect == "drift":
         flags["drift_ok"] = False
     elif defect == "level":
+        # The LOW side, because that is the one this defect is about: a card
+        # that sagged below the band cannot be compared against a rate measured
+        # above it. The HIGH side is its own planted world below.
         flags["level_ok"] = False
+        flags["level_side"] = timing.LEVEL_LOW
+    elif defect == "level-high":
+        flags["level_ok"] = False
+        flags["level_side"] = timing.LEVEL_HIGH
     elif defect == "unlevelled":
         flags["level_ok"] = None
     return [Reading(name=name, gbps=gbps, ms_p50=8.0 * (1 << 30) / (gbps * 1e6),
@@ -426,8 +445,32 @@ def score(readings: list[Reading], gpu_name: str,
     if baseline is None:
         gates.append((EX.CLAIM, "C4_instrument", EX.UNKNOWN,
                       "not scored without a baseline row"))
+    elif baseline.level_ok is False and baseline.level_side == timing.LEVEL_HIGH:
+        # A BOOSTED CLOCK DOES NOT STOP THIS COMPARISON, and until 2026-09-15 it
+        # did. `clock_flags` fails LEVEL on either edge of the band, and every
+        # reading in this file is a pure streaming read, which on an H200 boosts
+        # ABOVE the bf16-GEMM reference rather than sagging below it: the gate
+        # therefore went UNKNOWN on the healthy case and was scored only on
+        # cards that happened to sit inside the band. The quantity compared here
+        # is a BANDWIDTH, and HBM does not run on the SM clock -- `calibrate.py`
+        # measured 1.7% sensitivity, which is the same fact that makes
+        # `driver._apply_cost` rescale the compute roof with the clock and leave
+        # the bandwidth roof alone. So the row is scored, and the side is said.
+        delta = 100 * (baseline.gbps / registered_gbps - 1)
+        detail = (f"{BASELINE} reads {baseline.gbps:.1f} GB/s here against the "
+                  f"registered {registered_gbps:.1f}, {delta:+.2f}% on one "
+                  f"formulation, tolerance {INSTRUMENT_TOL_PCT:.1f}%; LEVEL "
+                  f"failed on the HIGH side at "
+                  f"{baseline.clock_mhz or 0:.0f} MHz, which is a boost and not "
+                  "a throttle, and a read rate is not rescaled with the SM "
+                  "clock (1.7% measured sensitivity)")
+        gates.append((EX.CLAIM, "C4_instrument",
+                      EX.PASS if abs(delta) <= INSTRUMENT_TOL_PCT else EX.FAIL,
+                      detail))
     elif baseline.level_ok is not True:
-        why = ("the loaded clock was below the level the roof was measured at"
+        why = ("the loaded clock sagged BELOW the band around the level the "
+               "roof was measured at, so the card was not delivering what it "
+               "was calibrated at"
                if baseline.level_ok is False else
                "no reference clock, so LEVEL was not determined")
         gates.append((EX.CLAIM, "C4_instrument", EX.UNKNOWN,
@@ -469,7 +512,10 @@ def report(readings: list[Reading], gates, registered_gbps: float,
         clock = f"{r.clock_mhz:7.0f}" if r.clock_mhz else "      -"
         flags = ",".join(filter(None, [
             "HOST-BOUND" if r.host_bound else "",
-            "LEVEL-BAD" if r.level_ok is False else "",
+            # The SIDE, not "BAD": a boost and a sag are different states and
+            # only one of them is a reason to distrust the row.
+            (f"LEVEL-{(r.level_side or 'UNSIDED').upper()}"
+             if r.level_ok is False else ""),
             "LEVEL-?" if r.level_ok is None else "",
             "DRIFT" if r.drift_ok is False else "",
         ])) or "ok"
@@ -541,8 +587,12 @@ def build_parser() -> argparse.ArgumentParser:
                          "the baseline and score it off GPU")
     ap.add_argument("--self-test-defect", default="none",
                     choices=("none", "pin", "host-bound", "drift", "level",
-                             "unlevelled"),
-                    help="plant the FAIL branch of one validity flag")
+                             "level-high", "unlevelled"),
+                    help="plant the FAIL branch of one validity flag. `level` "
+                         "is the LOW side, a card that sagged, which refuses "
+                         "the instrument comparison; `level-high` is the BOOST "
+                         "an H200 shows on every read in this file, which is "
+                         "SCORED rather than refused")
     return ap
 
 
