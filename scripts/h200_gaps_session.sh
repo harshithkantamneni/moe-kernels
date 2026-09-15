@@ -1025,6 +1025,7 @@ arm_script() { case "$1" in
   bn_g16)                        echo scripts/bn_decomposition.py ;;
   anchor_measure|anchor_rescore) echo scripts/memory_branch_anchor.py ;;
   occupancy)                     echo scripts/occupancy_vs_swizzle.py ;;
+  blockk-*)                      echo scripts/blockk_diagonal.py ;;
   mma_switch)                    echo scripts/check_mma_path.sh ;;
   ruler)                         echo scripts/ruler_rebaseline.py ;;
   cap_test)                      echo scripts/tile_cap_test.py ;;
@@ -2009,6 +2010,7 @@ arm_minutes()  { case "$1" in
   noise_floor) echo 120 ;;
   bn_g16) echo 46 ;;            anchor_measure) echo 5 ;;
   anchor_rescore) echo 0 ;;     occupancy) echo 23 ;;
+  blockk-w4) echo 15 ;;
   mma_switch) echo 7 ;;         ruler) echo 2 ;;         cap_test) echo 5 ;;
   dtype) echo 8 ;;              span_dense) echo 31 ;;   span) echo 0 ;;
   counter_plan) echo 1 ;;
@@ -2033,6 +2035,7 @@ arm_basis() { case "$1" in
   anchor_measure) echo "memory_branch_anchor.py --dry-run --measure --model mixtral-8x7b -> 'cells 128 (2 BLOCK_M x 4 G x 16 treads), estimated wall time 4.8 min'. A WALL figure, and the only arm whose plan already charges its compiles." ;;
   anchor_rescore) echo "reads the committed corpus and times nothing. No GPU, seconds." ;;
   occupancy)  echo "occupancy_vs_swizzle.py --dry-run -> 'estimate 1342 s of GPU', 900 timings." ;;
+  blockk-w4)  echo "blockk_diagonal.py --dry-run --capability 9.0 --num-warps 4 -> 'estimate 864 s of GPU', 960 timings (8 cells x 8 treads x 15 reps). 864 s is 14.4 min, booked 15. THE WARP COUNT IS ON THE COMMAND LINE AND IN THE ARM NAME because it is the one configuration choice on this page an operator may want to overrule, and the plan prints the table it was chosen from: residency is min(by_smem, by_threads, by_blocks, by_regs) and only the first depends on BLOCK_SIZE_K, so a register file too small for two CTAs flattens the whole ladder onto one rung and the design separates nothing. At num_warps=8 that happens above n_regs 64; at 4 it happens above 168, and this arm's kernel has never been measured. THE FIGURE DOES NOT MOVE WITH IT -- the same command at --num-warps 8 prints the same 864 s, because the cost is timings x (warmup + trials x budget) and the warp count changes neither -- so this row is the booking at either choice and the reason the flag is on the line is identification, not price." ;;
   mma_switch) echo "check_mma_path.sh --dry-run prints its four gates and NO time estimate. 7 min is this file's allowance for two real fused_moe compiles and two PTX dumps." ;;
   ruler)      echo "ruler_rebaseline.py --dry-run -> 'estimated GPU time 105 s (two settles, two GEMMs, two clock samples, two bandwidth passes, one Triton compile)'. That figure NAMES its compile, so nothing is unpriced here." ;;
   cap_test)   echo "tile_cap_test.py --dry-run --capability 9.0 --r-max 2112 -> '81 rows-per-expert x 2 tiles = 162 cells' and 'estimated GPU time 242 s'. AT --r-max 2112, which is what the pod runs: the default takes r_max from depth.rows, which on the H200 band is 688, stops the grid at 672 and leaves two BLOCK_M=256 stacks against V1's three. This row read '96 cells and 143 s' at --r-max 1024 until 2026-09-09; that booking is now REFUSED at plan time by the script's own V4 check, which prints 'the deepest BLOCK_M=16 stack is 66 tiles against the 132 V4 requires' and 'raise --r-max to at least 2112', and prints no cost line to read. 2112 is that printed minimum." ;;
@@ -2062,7 +2065,7 @@ esac; }
 # invented number wearing a measurement's clothes. The exclusions are printed
 # instead, and the total says to book above it rather than at it.
 arm_unpriced() { case "$1" in
-  roofline-n64-g1|bn_g16|occupancy|cap_test)
+  roofline-n64-g1|bn_g16|occupancy|cap_test|blockk-w4)
               echo "compiles and allocation, in the plan's own words" ;;
   bm128_depth) echo "compiles and allocation, in the plan's own words. The BM=32 scaling partner is NOT an exclusion and is not a flag: it is unconditional in scripts/bm128_depth.py, so its treads are in whatever cell count and estimate that script's own plan page prints, and this row books that figure. 252 s prices the {128, 256} pairing alone; with the partner the same command prices 294 s, four treads and 42 s more, and both are a 5 minute ceiling" ;;
   dtype)      echo "compiles and allocation for 32 distinct Triton specialisations across 2 models" ;;
@@ -2308,6 +2311,7 @@ arm_closes() { case "$1" in
   anchor_measure) echo "The evaluation's weakest link: the memory-branch level, measured at matched reuse rather than extrapolated. Decides whether any numeric alpha is publishable." ;;
   anchor_rescore) echo "Free: every committed report re-scored under the anchor arm 0 just calibrated, so the size of the correction to every published alpha is known. Written under the session directory, never into results/published." ;;
   occupancy)  echo "Whether alpha tracks residency or program order. If residency, the swizzle is a dead lever, the cross-card null is explained, and reuse-distance prediction does not transfer to this regime." ;;
+  blockk-w4)  echo "THE ARM ABOVE'S P6, which reads UNKNOWN in every report this study has published: no two num_stages settings in the whole corpus ever shared a resident-block count, so occupancy's P1 residency null is confounded with software-pipeline depth and three of the four modelling attempts of the 2026-09-10 synthesis lean on that null. BLOCK_SIZE_K is 64 in EVERY fit in the corpus and Triton's shared memory per CTA goes as num_stages x BLOCK_K x (BLOCK_M + BLOCK_N) x bytes, so moving it pulls residency and depth apart: (3,64) and (6,32) are 48 KiB at depths 3 and 6, (4,64) and (2,128) are 64 KiB at depths 4 and 2, and (3,32)/(3,64)/(3,128) is a residency ladder at byte-identical depth. IT IS SCORED ON w, THE WEIGHT-STREAM SLOPE, AND NOT ON THE EXA RATIO, and the plan page says why: EXA's denominator carries a fitted intercept 217x noisier than the slope it is added to and NEGATIVE in two of that session's arms, so a residency effect of a few per cent arrives there as a sign flip. WHAT EACH READING SETTLES: if w follows DEPTH, P1's null is confirmed, what moved with num_stages was latency hiding and the concurrency family is closed; if it follows RESIDENCY, the null was an artefact of the lockstep and C2 prints the size the footprint hypothesis returns at as a fraction of the concurrency model's own predicted swing; if NEITHER moves, C1 is UNKNOWN and the arm says it could not separate what it did not see. WHAT IT CANNOT CLOSE, and the page says so before it runs: the register file. Residency is min(by_smem, by_threads, by_blocks, by_regs) and only the first depends on BLOCK_SIZE_K, so a kernel whose n_regs leaves room for one CTA puts every cell on one rung and the design separates nothing. That is measured rather than assumed -- n_regs is read back off each compiled kernel -- and a COMPILE CENSUS refuses before any timed cell when the realised design is singular, so the failure costs one compile per cell instead of the whole booking." ;;
   mma_switch) echo "STUDY item 3's loose end. CLOSES whether the tile alone selects the instruction at fixed tokens." ;;
   ruler)      echo "STUDY item 2's follow-up. Prices the read-vs-triad and clocks-first changes on the committed corpus without adopting them." ;;
   cap_test)   echo "FINDINGS' fourth readout, DEMOTED: BLOCK_M=16 runs multi-tile in 1 of 24 cells on uniform routing, so this tests the formula, not the claim. BOOKED --r-max 2112 SINCE 2026-09-09: at the default the grid held two exactly-full BLOCK_M=256 stacks against V1's three and the arm was unsatisfiable from its own plan page, and the 1024 first booked in its place is itself refused at plan time (V4 wants a 132-tile BLOCK_M=16 stack and 1024 gives 66; the script prints the 2112 minimum). On the 2026-09-09 cells, with the control qualified from its own treads, the counterfactual reads alpha 0.998 raw / 0.994 corrected and a cap of 16.1 Op/B = 0.105 of the ridge, which is a 10x refutation of the retracted 0.10; that is what this arm is now booked to measure rather than replay." ;;
@@ -2329,6 +2333,7 @@ arm_offgpu_gates() { case "$1" in
   noise_floor) echo "its plan prints the power table; the floor itself needs replicates" ;;
   bn_g16)     echo "scripts/bn_decomposition.py --self-test --capability 9.0 --group-m 16 --reps 17 --plant-noise 0.008 --tiles 16,32,64,128  (four worlds, four distinct verdicts; exit 0). THE --tiles ARE ON THE GATE LINE BECAUSE THEY ARE ON THE ARM LINE: this file's own standing defect is a gate advertised at one configuration and an arm scheduled at another, which is what the G=1 partner did with a G=16 self-test command. At the swept set this arm runs, S4 reads sd(alpha_a) = 0.0075 against a gate of 0.025 and S5 still fails C2 in the planted MISSING world at chi2 26.22 against a ceiling of 4.0, so the third tile costs the design nothing. AT THE PINNING THIS ARM RUNS AND NO OTHER: the same command at --group-m 1 exits 3 INVALID, which is why there is no longer a G=1 arm for this line to vouch for with a G=16 command." ;;
   anchor_measure|anchor_rescore) echo "scripts/memory_branch_anchor.py --rescore --out-dir <a path outside the tree>  (free, scores every committed report)" ;;
+  blockk-w4)  echo "scripts/blockk_diagonal.py --self-test depth|residency|blockk|null --capability 9.0 --num-warps 4  (four planted worlds; nine RESULT lines each and they SEPARATE by exit code -- depth 0 DONE with C1/C2/C3 all PASS, residency 1 CLAIM_FAIL with C1 and C2 FAIL, blockk 1 CLAIM_FAIL with C3 FAIL and C1 UNKNOWN, null 1 CLAIM_FAIL with C1 UNKNOWN). THE FOUR WORLDS LAND ON FOUR DISTINCT CLAIM TRIPLES, which is the discrimination itself: a gate that cannot separate them would have passed on any of them. Then scripts/blockk_diagonal.py --dry-run --capability 9.0 --num-warps 4, which prints the design matrix with its rank and singular values, the REGISTER SENSITIVITY table that says at which n_regs each warp count stops separating anything, and the minimum detectable effect per coefficient at the assumed spread. THE --capability AND --num-warps ARE ON THE GATE LINE BECAUSE THEY ARE ON THE ARM LINE: a gate advertised at one configuration and an arm scheduled at another is this file's standing defect, and here the warp count decides whether the design is identifiable at all." ;;
   occupancy)  echo "scripts/occupancy_vs_swizzle.py --self-test, and --audit --fail-on-gate  (A1 FAILs on the corpus by design, exit 1 CLAIM_FAIL). WITHOUT --fail-on-gate the audit prints that FAIL and exits 0, so the advertised check returned the same code whether A1 held or not." ;;
   cap_test)   echo "scripts/tile_cap_test.py --self-test 0.558 and --self-test 0.10" ;;
   span|span_dense) echo "scripts/span_extent_separation.py --self-test kernel|extent|neither --densify --fail-on-world  (15 RESULT lines and exit 0 per world). THE FLAG IS THE CHECK: without it all three worlds exit 2 with ZERO RESULT lines, and the script says so on its own last line -- a gate that examined nothing reporting no failures." ;;
@@ -2356,7 +2361,7 @@ RETRY_ARMS=0
 ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
-           bn_g16 anchor_measure anchor_rescore occupancy
+           bn_g16 anchor_measure anchor_rescore occupancy blockk-w4
            mma_switch ruler cap_test dtype span_dense span counter_plan
            counter-n32-m64 counter-n128-m64 counter_contrast)
 
@@ -3348,6 +3353,34 @@ else
   # returns 1. With the flag both are 1. So this arm's registered outcome was
   # unreachable: it could land DONE, REFUSED or INVALID and nothing else.
   arm occupancy "$PY_VLLM" "$REPO/scripts/occupancy_vs_swizzle.py" --run --fail-on-gate
+fi
+
+say "7b. the BLOCK_K diagonal: residency or pipeline depth, which P6 could not say"
+# THE WARP COUNT IS THE ARM'S CONFIGURATION AND IS IN ITS NAME. Residency is
+# min(by_smem, by_threads, by_blocks, by_regs) and only by_smem depends on
+# BLOCK_SIZE_K, so a register file with room for one CTA collapses the whole
+# ladder onto one rung and the three-parameter design separates nothing. The
+# script's own --dry-run prints the table: at num_warps=8, which is
+# block_m_crossing_sweep.FIXED's value, the design is singular above n_regs 64;
+# at 4 it holds to 168. Nothing on this arm's page is quoted against the
+# published corpus -- every gate is a contrast ACROSS ITS OWN CELLS at one warp
+# count -- so 4 costs nothing and buys the identification.
+#
+# --capability IS ON THE DRY BRANCH AND NOT ON THE MEASURING ONE, which is the
+# script's own rule and this file's: --card and --capability may name an ABSENT
+# device so a laptop can print the pod's real path, and may never contradict a
+# present one. On the pod the capability is read off the device.
+if (( DRY )); then
+  arm blockk-w4 "$PY_BASE" "$REPO/scripts/blockk_diagonal.py" --dry-run \
+      --capability "${CAPABILITY:-9.0}" --num-warps 4
+else
+  # --fail-on-gate is accepted and IGNORED by this script, which returns what
+  # exit_codes.classify returns in every mode. It is passed because the file
+  # defines the flag: a script that defines a gate flag and is not given it can
+  # only ever report its gates passing, and this arm's registered outcomes
+  # include a CLAIM_FAIL that IS the finding.
+  arm blockk-w4 "$PY_VLLM" "$REPO/scripts/blockk_diagonal.py" --num-warps 4 \
+      --fail-on-gate
 fi
 
 # --------------------------------------------------------------------------

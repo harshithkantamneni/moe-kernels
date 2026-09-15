@@ -132,7 +132,7 @@ from moe.bench import exit_codes  # noqa: E402
 ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
-        "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
+        "bn_g16", "anchor_measure", "anchor_rescore", "occupancy", "blockk-w4",
         "mma_switch", "ruler", "cap_test", "dtype", "span_dense", "span",
         "counter_plan", "counter-n32-m64", "counter-n128-m64",
         "counter_contrast")
@@ -403,7 +403,7 @@ def test_no_arm_books_a_figure_this_file_invented(tmp_path):
 #: from the arm's own printed plan and then checks this list against what it
 #: found.
 KERNEL_ARMS = ("roofline-n64-g1", "bm128_depth", "bn_g16", "occupancy",
-               "cap_test", "dtype", "span_dense")
+               "blockk-w4", "cap_test", "dtype", "span_dense")
 
 
 def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
@@ -532,6 +532,12 @@ INVOKED = {
     "scripts/bn_decomposition.py": ("--dry-run", "--group-m", "--reps",
                                     "--capability", "--fail-on-gate", "--tiles"),
     "scripts/occupancy_vs_swizzle.py": ("--dry-run", "--run", "--fail-on-gate"),
+    # The warp count is on BOTH branches and in the arm name: it is the one
+    # configuration choice that decides whether this arm's design is
+    # identifiable at all, and the script's own --dry-run prints the table it
+    # was chosen from.
+    "scripts/blockk_diagonal.py": ("--dry-run", "--capability", "--num-warps",
+                                   "--fail-on-gate", "--self-test", "--cells"),
     # --run IS D3'S AND IS NOT HERE YET. The counter arm's measuring branch
     # runs `dram_counter_route.py --run`; the file it runs currently plans,
     # probes, brackets and analyses, and its ncu loop is still the shell recipe
@@ -891,6 +897,7 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
     ("calibrate", "--dry-run"),
     ("anchor_measure", "--measure"),
     ("bm128_depth", "--r-max"),
+    ("blockk-w4", "--num-warps"),
     ("dtype", "--card"),
 ])
 def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
