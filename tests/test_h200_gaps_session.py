@@ -129,7 +129,12 @@ from moe.bench import exit_codes  # noqa: E402
 #: dict is gone from here, and every arm is read off its own plan again.
 
 
+#: `elasticity-m32-n64-g16` sits after the three preconditions and ahead of every
+#: ladder, added 2026-09-16. Its result does not change what any arm below
+#: MEASURES; it changes what every one of them MEANS, so an operator cutting the
+#: session short has to see it before spending 46 minutes on bn_g16's alpha.
 ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
+        "elasticity-m32-n64-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
@@ -266,6 +271,15 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     assert order[0] == "thermal"
     assert order[1] == "calibrate"
     assert order[2].startswith("pin_probe") and order[3].startswith("pin_probe")
+    # AND THE CLOCK ELASTICITY BEFORE EVERY LADDER, since 2026-09-16. It gates
+    # nothing and refuses nothing; it decides what every alpha below MEANS. The
+    # session-3 reading found that sweeping the admissible clock elasticity moves
+    # pooled EXA alpha_b from 0.974 to 0.897, 21x the quoted sd, and breaks the
+    # 26.7-sigma BLOCK_M monotonicity at 0.5, so an operator who runs out of pod
+    # hours inside bn_g16 needs this reading rather than another alpha.
+    assert order[4] == "elasticity-m32-n64-g16"
+    assert order.index("elasticity-m32-n64-g16") < order.index("bn_g16")
+    assert order.index("elasticity-m32-n64-g16") < order.index("roofline-n64-g1")
     # The control roofline runs first of the three: if BLOCK_M=128 reaches the
     # roof at the LEANEST configuration it reaches it at every richer one, so a
     # refutation there ends the session's whole middle at minute ten.
@@ -519,6 +533,16 @@ INVOKED = {
     "scripts/thermal_acceptance.py": ("--dry-run", "--self-test", "--seconds",
                                       "--settle-seconds", "--poll-seconds"),
     "scripts/calibrate_hardware.py": ("--publish", "--dry-run"),
+    # THE DUTY LIST AND THE REPEAT COUNT ARE BOTH PLAN-SHAPING. The duty states
+    # set the cost (the idle gaps are 17x the kernel time and they ARE the
+    # experiment) and --repeats and --treads set the V1 clock-separation
+    # threshold the plan COMPUTES from them, so an arm line missing any of them
+    # previews a different sweep, a different threshold and a different run id.
+    "scripts/clock_elasticity.py": ("--dry-run", "--self-test", "--model",
+                                    "--dtype", "--treads", "--duty",
+                                    "--repeats", "--burst-ms", "--target-ms",
+                                    "--trials", "--warm-ms", "--settle-seconds",
+                                    "--card", "--min-clock-ratio"),
     "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
                                   "--dry-run"),

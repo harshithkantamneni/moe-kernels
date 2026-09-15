@@ -1017,6 +1017,7 @@ session_choice() {
 arm_script() { case "$1" in
   thermal)                       echo scripts/thermal_acceptance.py ;;
   calibrate)                     echo scripts/calibrate_hardware.py ;;
+  elasticity-*)                  echo scripts/clock_elasticity.py ;;
   pin_probe-*)                   echo moe/bench/cli.py ;;
   roofline-*)                    echo scripts/bm128_roofline.py ;;
   bm128_depth)                   echo scripts/bm128_depth.py ;;
@@ -2002,6 +2003,7 @@ counter_route_card() {
 arm_minutes()  { case "$1" in
   thermal) echo 3 ;;
   calibrate) echo 3 ;;
+  elasticity-m32-n64-g16) echo 40 ;;
   pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
   roofline-n64-g1) echo 1 ;;    roofline-n256-g16) echo 0 ;;
   roofline-n256-g32) echo 0 ;;
@@ -2021,6 +2023,7 @@ esac; }
 # the figure is on the page.
 arm_basis() { case "$1" in
   thermal)    echo "thermal_acceptance.py --dry-run -> 'estimated wall time 160 s (2.7 min: 30 s ramp + 120 s window + 10 s allocation and first matmul)'. A WALL figure, and the only arm whose cost IS its window: it compiles nothing, times nothing and allocates two 8192^2 bf16 buffers once. Booked 3, above the figure and never at it. THE THREE TERMS ARE THE FLAGS ON THE ARM LINE, so a re-derivation runs the same command: --settle-seconds 30 is calibrate.settle_clocks' own budget for the governor's ramp (840 -> 1980 MHz on this card), --seconds 120 is four times the 2026-09-11 card's observed ~30 s to collapse AFTER that ramp, and --poll-seconds 2 puts 60 samples in the window against a floor of 9. The 10 s allocation term is an ALLOWANCE and the plan page says so: _load_compute's 256 MiB and cuBLAS's first-call kernel choice have not been timed here." ;;
+  elasticity-m32-n64-g16) echo "clock_elasticity.py --dry-run --model mixtral-8x7b --dtype bf16 --treads 8 --duty 1.0 0.5 0.25 0.1 --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 --settle-seconds 10 -> 'estimated wall time 2216 s (36.9 min)', 416 rows (13 repeats x 4 states x 8 treads). A WALL figure and every term is named on the page: 7.40 s of kernel per state per repeat over the 8 treads, x17.00 duty inflation (the sum of 1/duty over the four states, which is what the idle gaps cost and they ARE the experiment), + 40 s of settles per repeat, x13 repeats, + a 60 s ALLOWANCE for the 2.82 GB mixtral weight build and Triton's first choice under the pin, which the page labels an allowance because neither has been timed here. Booked 40, above the figure and never at it. EVERY FLAG THAT SHAPES THAT NUMBER IS ON THE ARM LINE, so a re-derivation runs the same command and gets the same run id: the duty list sets the inflation, --repeats sets both the cost and the V1 threshold the plan computes from it (13 repeats x 8 treads x 4 states -> 1.050x), and --settle-seconds is 4 of the 13 minutes. THE 7.40 s IS NOT THIS FILE'S NUMBER EITHER: the plan sizes each tread's burst with the same burst_shape() the pod calls, over the per-tread medians the 2026-09-10 bn_decomposition arm published at this exact tile, and tests/test_clock_elasticity.py recomputes those medians from that committed cells.csv." ;;
   calibrate)  echo "calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan." ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin." ;;
   roofline-n64-g1) echo "bm128_roofline.py --dry-run --block-n 64 --group-m 1 --control 256 -> 'estimate 58 s of GPU', 39 cells." ;;
@@ -2294,6 +2297,7 @@ counter_closes() {
 }
 
 arm_closes() { case "$1" in
+  elasticity-m32-n64-g16) echo "WHETHER ANY ALPHA IN THIS STUDY IS QUOTABLE AT ALL, on the one of its three independent failures that nothing in the corpus has ever measured. THE PROBLEM: this card is power-capped at 689-695 W in every published cell, so the SM clock is an ENDOGENOUS RESPONSE to the tile and the tread rather than an input -- 1462-1965 MHz across one grid -- and d log ms / d log f is therefore a free parameter of the whole study. Sweeping it over its admissible range moves pooled EXA alpha_b from 0.974 to 0.897, which is 21x the quoted sd of 0.0037, and the 26.7-sigma monotone rise of alpha_b with BLOCK_M breaks at 0.5 and INVERTS at 1.0. Every clock difference on record is confounded with the thing that caused it: a different tile, a different tread, a different model. WHAT THIS ARM DOES: one pinned cell (BLOCK_SIZE_M=32, BLOCK_SIZE_N=64, BLOCK_SIZE_K=64, GROUP_SIZE_M=16, num_warps=8, num_stages=4, mixtral-8x7b bf16 -- the cell the 2026-09-10 bn_decomposition arm measured), the SAME TENSORS built once and reused, run as an 8-tread ladder at four SUSTAINED DUTY CYCLES 1.0, 0.5, 0.25 and 0.10. nvidia-smi -lgc needs root and a rented pod returns Insufficient Permissions, so the clock is moved by DUTY CYCLE instead: under a power cap the settled clock is a function of sustained board power, and a host-side idle gap after each burst of launches moves it at a kernel whose bytes and instructions never change. The gap is outside every measured interval and the FIRST call of every burst is DISCARDED, because it launches into a queue the gap drained and a constant additive offset does not cancel in a log slope. The clock is read through NVML with the burst STILL IN FLIGHT -- thermal_acceptance's own method, reused rather than rewritten -- because a free-running poller at 10% duty lands in an idle gap nine times in ten and reports the boost clock of an idle card. WHAT IT REGISTERS BEFORE IT RUNS, and this is the part that makes it a test rather than a measurement: THREE bands, each with its consequence. Below 0.25 the raw readings STAND, pooled EXA alpha_b is near 0.974 and the BLOCK_M ladder stays monotone. Above 0.40 the ladder is NON-MONOTONE, pooled alpha_b falls to about 0.93, and C3's DIRECTION is RETRACTED while its inequality survives. Between them the session-3 analysis registered NOTHING, and that gap is registered as a band of its own so the arm cannot invent a third reading after seeing its own number. C1 asks whether the interval sits wholly inside ONE band and C2 is the pre-registered claim that it is the first; a C2 FAIL is a RESULT and the page prints the registered consequence of whichever band it landed in. WHAT REFUSES IT: V1, the states must actually separate in clock AT EVERY TREAD, against a threshold this file does not carry -- it is COMPUTED from the design (13 repeats x 8 treads x 4 states against the 0.01071 across-repeat spread the 2026-09-10 ladder published at this tile) so a shallower run is held to a WIDER separation, and it is a RATIO of two clocks on one card, never a clock, so the same arithmetic gates an A100 without being told. NO RULER IS RESOLVED AND NONE IS NEEDED: an elasticity is a ratio of logs, with no ridge, no bandwidth, no compute peak and no fitted level in it, which is why this arm is the one place in the session that cannot inherit a bad calibration. LEVEL EXCLUDES NOTHING HERE ON EITHER SIDE and the arm says so twice: at a duty below 1.0 a LEVEL HIGH row is the experiment working. DRIFT excludes, and so does a host-bound row, because a host-bound interval bounds the kernel from above and a bound that moves with the clock would BE the finding. WHAT IT LEAVES OPEN: it cannot make the card SLOWER than its full-duty clock, so the swept range runs from the full-duty operating point UP toward the boost ceiling and is widest at the shallow treads; it measures ONE cell, so an elasticity that varies with the tile is outside it; and FORM and PHYSICS, the other two reasons the session-3 reading gave for alpha not being identified, are untouched by it." ;;
   thermal)    echo "WHETHER THIS RENTED CARD CAN HOLD A CLOCK AT ALL, and it is FIRST because every arm below it, arm 0 included, is worthless on a card that cannot. WHAT HAPPENED, on a RunPod H200 on 2026-09-11: the part boosted to its 1980 MHz maximum, collapsed to its 345 MHz floor within ~30 s of sustained bf16 GEMM and stayed there, clocks_event_reasons going 0x0 -> 0x20 SwThermalSlowdown -> 0x68 HwSlowdown|SwThermalSlowdown|HwThermalSlowdown, drawing ~240 W of a 700 W limit while climbing from 87 C to 93 C. That is a cooling fault, not a workload. scripts/calibrate_hardware.py RAN TO COMPLETION on it, published a tracked yaml, and its not_throttled CLAIM gate PASSED, because that gate scored DRIFT and a card pinned flat at its floor has first == last; the only gate that failed was clock_steady_across_patterns, and it failed incidentally on two 675 MHz transients. The ruler it published put the ridge at 73.6 where that card's ridge is near 156, because the compute peak collapsed with the clock and the memory side did not, and every roof fraction, alpha and cap measured below would have been scored against it. WHAT THIS ARM DOES INSTEAD: holds the calibration's OWN compute load (moe.bench.calibrate._load_compute, dense bf16 8192^3) for 30 s of discarded ramp plus a 120 s scored window, polling the SM clock, board power and temperature through NVML with work still in flight. C1 is the median clock against timing.THERMAL_FLOOR_FRACTION of THIS CARD'S OWN MAXIMUM, read off the device: one third, which is the geometric midpoint of the admissible window between the lowest healthy per-cell median in results/published (1275 of 1980, 0.6439, drawn at 697.4 W of a 700 W cap, so a hungry tile and not a sick card) and the fault (345 of 1980, 0.1742), and 1980/3 = 660 MHz sits on the 15 MHz NVML grid. C2 is the repository's own DRIFT rule over the first and last thirds of the window, which catches a card still on its way down while its median is still high. NEITHER IS A CLOCK LITERAL: on an A100 the same file gates at 465 MHz without being told, and the verdict is taken on the MEDIAN because healthy published cells post individual readings at 405 MHz during one drain-and-ramp. IT REFUSES THE SESSION RATHER THAN WARNING, like arm 0's ruler gate and for the same reason: a warning costs a whole rental to ignore, and a CLAIM_FAIL here is a RESULT about this pod that the ledger latches, so the answer is to return the card and rent another rather than to re-run the arm. THE SLOWDOWN REASON MASK IS RECORDED AND PRINTED, NEVER SCORED: a container that does not expose the field would otherwise refuse a healthy card, and the clock already answers what the mask only explains." ;;
   calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
@@ -2339,6 +2343,7 @@ arm_offgpu_gates() { case "$1" in
   counter_plan) echo "scripts/dram_counter_route.py --dry-run and --bracket  (the plan and the counter-free bound), then --self-test, which is the one that checks THIS ARM AND ITS OWN LOGIC and which until 2026-09-15 had nothing in it that did. Its PROBE section plants the worlds the probe must keep apart -- a counter that returned a number, one that honestly returned zero, ERR_NVGPUCTRPERM, ncu profiling nothing at all, and a child that reached no CUDA device -- through the same probe_reading the live probe hands the child bytes to, and scores the VERDICT AND THE EXIT CODE of each. --dry-run and --bracket touch none of that, so the logic deciding whether the 240-minute counter pair is bookable had no off-GPU check the pod could run. It is the same --self-test the counter arms below advertise, so a pod that runs either runs it." ;;
   counter-n32-m64|counter-n128-m64) echo "scripts/dram_counter_route.py --self-test  (the estimator, off GPU), then --dry-run --card nvidia_h200 --block-m $(counter_block_m) --block-n 32 and the same at --block-n 128, for the cell, the four metrics and the pre-registered per-tile-count predictions. RUN IT AT BOTH BLOCK_N, WHICH IS THE FLAG THE ARM LINE PASSES: a gate advertised at the script's default cell while the arm runs a different one is this file's standing defect, and it is what the single 120-minute counter arm carried until 2026-09-10. THE ESTIMATOR IS THE POINT OF THE SELF-TEST: this arm's alpha_b is (dR/dn - a_per_tile)/W, a traffic slope with no fitted level, no delta and no D in it, so it is not the B/(A+B) that produced every unphysical alpha in the 2026-09-10 session and the self-test is what says so before the card is rented." ;;
   counter_contrast) echo "scripts/dram_counter_route.py --self-test  (the estimator, the ncu parser AND the contrast scorer, off GPU: the self-test carries a THE CONTRAST SCORER section that plants a traffic world, a time world and one it must refuse). There is no --dry-run for this arm: --contrast is exclusive with it, and the predictions it is scored against are already registered on the counter pair's own plan pages, in section 2." ;;
+  elasticity-m32-n64-g16) echo "scripts/clock_elasticity.py --self-test  (eleven planted worlds, six of them REFUSALS, five VALIDITY RESULT lines and exit 0). THE FOUR WORLDS THAT CARRY IT: 'one-clock' plants four duty states that all settled at the same clock and V1 refuses it, which is the refusal this whole arm turns on -- three states at one clock measure nothing; 'level-both-sides' plants a LEVEL HIGH row, a LEVEL LOW row and a DRIFTING one in one state and asserts both LEVEL rows are KEPT, because at a duty cycle below 1.0 the boosted rows ARE the experiment and a scorer that filtered on LEVEL would drop the signal; 'straddling' is the only world in which C1 can FAIL, so the design-resolution gate is proven reachable rather than assumed; and 'clock-carries' at 0.60 is the only world in which C2 can FAIL, which is the reading that RETRACTS C3's direction. S2 and S3 are the estimator gates and they are the point: S2 asks that a planted elasticity comes back, S3 that a DIFFERENT planted elasticity comes back different, so a scorer reporting its prior cannot pass. Also scripts/clock_elasticity.py --dry-run --model mixtral-8x7b --dtype bf16 --treads 8 --duty 1.0 0.5 0.25 0.1 --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 --settle-seconds 10 for the three registered bands, the design arithmetic that CHOOSES the V1 threshold, and the priced wall clock." ;;
   calibrate)  echo "none: it is a measurement and nothing else" ;;
 esac; }
 # <<< LIFTABLE
@@ -2353,7 +2358,7 @@ RETRY_ARMS=0
 # row that says "roofline" and a report that says BLOCK_N=64 are the same
 # defect as a run id without its card.
 # --------------------------------------------------------------------------
-ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16
+ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16 elasticity-m32-n64-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy
@@ -2385,7 +2390,8 @@ note "vllm py   $PY_VLLM"
 # Every script this driver calls must exist and parse. A missing script would
 # otherwise surface as an arm RETRY forty minutes in, with the reason buried.
 missing=0
-for s in thermal_acceptance calibrate_hardware bm128_roofline bm128_depth alias_ablation \
+for s in thermal_acceptance calibrate_hardware clock_elasticity \
+         bm128_roofline bm128_depth alias_ablation \
          replicate_noise_floor \
          bn_decomposition memory_branch_anchor occupancy_vs_swizzle \
          tile_cap_test dtype_tile_confound span_extent_separation \
@@ -2953,6 +2959,79 @@ fi
 #    the flag is redundant; it is passed anyway, so that a script that grows the
 #    downgrade back cannot silently take this arm's CLAIM_FAIL away.
 # --------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# 0c. IS ANY ALPHA BELOW QUOTABLE. The clock elasticity at a byte-identical
+#     kernel, which nothing in this corpus has ever measured.
+# --------------------------------------------------------------------------
+say "0c. clock elasticity at one pinned cell"
+# WHY IT SITS HERE, AHEAD OF EVERY LADDER AND BEHIND THE THREE PRECONDITIONS.
+# Its result does not change what any arm below MEASURES; it changes what every
+# one of them MEANS. Sweeping the admissible elasticity moves pooled EXA alpha_b
+# from 0.974 to 0.897, 21x the quoted sd, so an operator who has to cut the
+# session short should be told which of the three registered worlds this card is
+# in before spending 46 minutes on bn_g16's alpha.
+#
+# IT IS BEHIND calibrate ONLY for the LEVEL labels: the reference clock it
+# records LEVEL against comes from that yaml, and LEVEL is a record here and
+# never an exclusion, so a session run without arm 0 still gets the elasticity,
+# just without the side labels. It is behind the pin probes for read order and
+# not because they gate it: this arm pins its tile through vLLM's own
+# override_config, the way scripts/block_m_crossing_sweep.py does, not through
+# MOE_FORCE_TILE, and it reads the tile back off its own rows in V2.
+if (( DRY )); then
+  # EVERY FLAG THAT SHAPES THE PLAN IS ON BOTH BRANCHES. The duty list sets the
+  # cost (the gaps are the experiment and they are 17x the kernel time), and
+  # --repeats and --treads set the V1 threshold the plan COMPUTES from them, so
+  # a dry branch missing any of them previews a different sweep, a different
+  # threshold and a different run id.
+  arm elasticity-m32-n64-g16 "$PY_BASE" "$REPO/scripts/clock_elasticity.py" --dry-run \
+      --model mixtral-8x7b --dtype bf16 --treads 8 --duty 1.0 0.5 0.25 0.1 \
+      --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 \
+      --settle-seconds 10
+else
+  # NO --card: the script names the live device, and that name is what its run
+  # id and its output directory are keyed on. Passing "$CARD" here would file
+  # the rows under this driver's spelling of the part while the rows themselves
+  # carry torch's, which is the collision provenance.run_id exists to prevent.
+  #
+  # NO GATE FLAG, and the absence is the design: scripts/clock_elasticity.py
+  # defines none. `classify` over its gates IS its exit code, so a failed claim
+  # is CLAIM_FAIL whether or not this line remembered a flag -- which is the
+  # downgrade three other arms in this session had to be given one to close.
+  arm elasticity-m32-n64-g16 "$PY_VLLM" "$REPO/scripts/clock_elasticity.py" \
+      --model mixtral-8x7b --dtype bf16 --treads 8 --duty 1.0 0.5 0.25 0.1 \
+      --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 \
+      --settle-seconds 10
+  # NO GATE STOPS THE SESSION ON THIS ARM, and that is deliberate rather than an
+  # omission. thermal and calibrate gate because a bad card or a bad ruler makes
+  # every number below WRONG; this arm makes numbers below MEAN something
+  # different, and both readings are worth having. A CLAIM_FAIL here says the
+  # clock carries enough of a measured millisecond that C3's direction is
+  # retracted, and the arms below are still the right arms to run -- their alphas
+  # are then read as blends rather than as traffic. An INVALID says the states
+  # did not separate and this container's governor does not answer to duty,
+  # which says nothing about any other arm at all.
+  ELASTICITY_ROW="$(ledger_arm_state elasticity-m32-n64-g16)"
+  case "$ELASTICITY_ROW" in
+    DONE)       note "   alpha      the interval fell wholly below 0.25: at this cell a"
+                note "              measured millisecond is TRAFFIC, not issue rate. The"
+                note "              raw readings below stand and pooled EXA alpha_b stays"
+                note "              near 0.974 with the BLOCK_M ladder monotone." ;;
+    CLAIM_FAIL) note "   alpha      READ THE C1 AND C2 LINES BEFORE ANY ALPHA BELOW."
+                note "              C1 FAIL means the design did not separate the three"
+                note "              registered worlds and NO consequence is licensed."
+                note "              C2 FAIL with C1 PASS is the RESULT: the page names the"
+                note "              band it landed in and that band's registered reading,"
+                note "              which above 0.40 RETRACTS C3's direction." ;;
+    INVALID)    note "   alpha      the elasticity is UNMEASURED on this pod, not zero."
+                note "              V1 is the likely gate: the duty states did not separate"
+                note "              in clock, so this container's governor does not answer"
+                note "              to duty at this kernel. Every alpha below keeps the"
+                note "              free parameter it had before this arm ran." ;;
+    *)          : ;;
+  esac
+fi
+
 say "1a. CONTROL: BLOCK_M=128 at the SWEPT configuration (BN=64, G=1)"
 note "This arm can refute a ceiling and cannot confirm one for production."
 if (( DRY )); then

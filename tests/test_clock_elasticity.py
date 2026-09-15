@@ -1,0 +1,1000 @@
+"""The clock-elasticity arm: its estimator, its gates, its instrument and its exits.
+
+WHAT THIS ARM IS FOR and therefore what these tests have to hold it to. The
+session-3 reading found alpha unidentified for three independent reasons, one of
+which is that the card is power-capped, the SM clock is an endogenous response to
+the tile and the tread, and NOTHING in the corpus moves the clock at a
+byte-identical kernel. Sweeping the admissible elasticity moves pooled EXA
+alpha_b from 0.974 to 0.897, 21x the quoted sd. So the number this arm returns is
+load-bearing for every alpha in the study, and the three things that can silently
+make it wrong are:
+
+    the SIGN     -- d log ms / d log f is negative and the registered bands are
+                    positive, so a convention applied twice, or nowhere, flips a
+                    retraction into a confirmation
+    the EXCLUSION RULE -- LEVEL must be kept on BOTH sides (at a duty cycle below
+                    1.0 the boosted rows ARE the experiment) and DRIFT must
+                    exclude; a filter on the wrong verdict drops the signal
+    the INTERVAL -- a bootstrap over ROWS rather than over REPEATS reports a
+                    width several times too narrow, which is the understatement
+                    the session-3 reading already found once
+
+Every one of those has a test below that fails if it regresses.
+"""
+from __future__ import annotations
+
+import ast
+import csv
+import importlib.util
+import inspect
+import re
+import statistics
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from moe.bench import exit_codes  # noqa: E402
+from moe.bench import timing as T  # noqa: E402
+
+SCRIPT = ROOT / "scripts" / "clock_elasticity.py"
+SOURCE = SCRIPT.read_text()
+
+
+def _load():
+    spec = importlib.util.spec_from_file_location("clock_elasticity", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+CE = _load()
+
+
+def run(args, timeout=900):
+    return subprocess.run([sys.executable, str(SCRIPT), *args],
+                          capture_output=True, text=True, timeout=timeout,
+                          cwd=str(ROOT))
+
+
+def parsed(args):
+    return CE.build_parser().parse_args(args)
+
+
+# --------------------------------------------------------------------------
+# 1. the exit-code contract, in every off-GPU mode
+# --------------------------------------------------------------------------
+
+#: Every mode this file can be run in without a card, and what it must exit.
+OFF_GPU_MODES = (
+    (["--dry-run"], exit_codes.REFUSED),
+    (["--dry-run", "--repeats", "3"], exit_codes.REFUSED),
+    (["--self-test", "--draws", "200"], exit_codes.DONE),
+    (["--duty", "1.0", "0.5"], exit_codes.REFUSED),
+    (["--duty", "1.0", "0.5", "0.5"], exit_codes.REFUSED),
+    ([], exit_codes.REFUSED),
+)
+
+
+@pytest.mark.parametrize("argv,code", OFF_GPU_MODES)
+def test_every_off_gpu_mode_exits_the_code_its_own_page_implies(argv, code):
+    """THE PROPERTY, over every mode: a log with RESULT lines recomputes the
+    process's own exit code, and a log with none exits REFUSED. A script that
+    prints one thing and exits another is the defect moe/bench/exit_codes.py is
+    named against."""
+    got = run(argv)
+    assert got.returncode == code, (argv, got.stdout[-3000:], got.stderr[-2000:])
+    lines = exit_codes.parse_result_lines(got.stdout)
+    if lines:
+        assert exit_codes.classify_text(got.stdout) == got.returncode
+    else:
+        assert got.returncode == exit_codes.REFUSED, argv
+
+
+def test_a_dry_run_prints_a_plan_scores_nothing_and_writes_nothing(tmp_path):
+    """A plan is not a measurement. It prints the registered bands, the design
+    arithmetic and the priced cost, scores no gate, and exits REFUSED -- which is
+    what `classify_text` raising NoGatesScored over its log means."""
+    got = run(["--dry-run", "--out", str(tmp_path)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "RESULT: " not in got.stdout
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(got.stdout)
+    for want in ("PREDICTIONS, registered before the run", "RESOLUTION",
+                 "estimated wall time", "THE THREE REGISTERED BANDS",
+                 "V1 THRESHOLD"):
+        assert want in got.stdout, want
+    assert not list(tmp_path.rglob("*")), "a plan wrote something"
+
+
+def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does():
+    got = run(["--self-test", "--draws", "200"])
+    lines = exit_codes.parse_result_lines(got.stdout)
+    raw = [ln for ln in got.stdout.splitlines() if ln.startswith("RESULT: ")]
+    assert len(raw) == len(lines), "a RESULT line the parser cannot read back"
+    assert [r.name for r in lines] == ["S1", "S2", "S3", "S4", "S5"]
+
+
+def test_an_unplanned_crash_is_error_and_never_claim_fail(monkeypatch):
+    """ERROR (4) is the only retryable code. Left to propagate an exception exits
+    the interpreter ONE, and ONE is CLAIM_FAIL, which this table defines as a
+    RESULT -- so a crashed arm would be filed as 'the clock carries the time' and
+    C3's direction retracted over a run that never measured."""
+    monkeypatch.setattr(CE, "_main", lambda argv=None: (_ for _ in ()).throw(
+        RuntimeError("planted")))
+    rc = CE.main([])
+    assert rc == exit_codes.ERROR
+    assert rc != exit_codes.CLAIM_FAIL
+    assert rc not in exit_codes.FINISHED_CODES
+    assert exit_codes.ledger_state(rc) == "RETRY"
+
+
+def test_this_file_defines_no_gate_softening_flag():
+    """bn_decomposition and occupancy_vs_swizzle both downgrade a CLAIM_FAIL to
+    DONE when their gate flag is absent, and the driver has to remember to pass
+    it. There is no such flag here: `classify` over the gates IS the exit code,
+    so a failed claim is CLAIM_FAIL whether or not anyone remembered."""
+    for flag in ("--fail-on-gate", "--fail-on-claim", "--fail-on-world"):
+        assert f'"{flag}"' not in SOURCE, flag
+    known = {a.option_strings[0] for a in CE.build_parser()._actions
+             if a.option_strings}
+    assert not {f for f in known if f.startswith("--fail-on")}
+
+
+# --------------------------------------------------------------------------
+# 2. the corpus figures PRICE the run and must still be the corpus's
+# --------------------------------------------------------------------------
+
+PUBLISHED = (ROOT / "results" / "published" /
+             "2026-09-10-nvidia_h200-gaps-session" / "results" /
+             "bn_decomposition" /
+             "nvidia_h200-bm32_64_128-budget400.0-dtypebf16-flushtrue-g16-"
+             "iters50-k64-modelmixtral_8x7b-n32_64-b59b409f" / "cells.csv")
+
+
+def _published_treads():
+    by = {}
+    with PUBLISHED.open(newline="") as fh:
+        for row in csv.DictReader(fh):
+            if (row["status"] == "ok" and row["block_n"] == "64"
+                    and row["block_m"] == "32"):
+                by.setdefault(int(row["tiles"]), []).append(float(row["ms_p50"]))
+    return by
+
+
+@pytest.mark.skipif(not PUBLISHED.exists(), reason="the published arm is absent")
+def test_the_priced_ladder_is_still_the_one_that_was_published():
+    """CORPUS_LADDER_MS and CORPUS_REPEAT_SPREAD price this arm and, through the
+    MDE, CHOOSE its V1 threshold. Recomputed here from the committed file rather
+    than trusted, so neither can drift away from what was measured -- which is
+    the difference between a number with a provenance and a number with a
+    comment."""
+    by = _published_treads()
+    got = [statistics.median(by[n]) for n in sorted(by)]
+    assert len(got) >= len(CE.CORPUS_LADDER_MS)
+    for want, saw in zip(CE.CORPUS_LADDER_MS, got, strict=False):
+        assert abs(want - saw) < 5e-4, (want, saw)
+    spreads = [statistics.pstdev(v) / statistics.median(v)
+               for v in by.values() if len(v) > 1]
+    assert abs(statistics.median(spreads) - CE.CORPUS_REPEAT_SPREAD) < 5e-5
+
+
+def test_the_priced_ladder_scores_nothing():
+    """It is an input to the PRICE and to the design arithmetic, and to nothing
+    that decides a verdict. Asked of the source: no gate function may mention
+    it."""
+    tree = ast.parse(SOURCE)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("gate_"):
+            body = ast.unparse(node)
+            assert "CORPUS_LADDER_MS" not in body, node.name
+            assert "corpus_call_ms" not in body, node.name
+
+
+# --------------------------------------------------------------------------
+# 3. the sign convention, applied ONCE
+# --------------------------------------------------------------------------
+
+def test_the_reported_elasticity_is_positive_and_the_slope_is_negative():
+    """d log ms / d log f is NEGATIVE and the registered bands are POSITIVE.
+    Both numbers are on the record, and this is the test that says which is
+    which: a planted 0.60 comes back as eta +0.60 and slope -0.60."""
+    est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.0), draws=0)
+    assert est.value == pytest.approx(0.60, abs=1e-6)
+    assert est.slope == pytest.approx(-0.60, abs=1e-6)
+    assert est.value == pytest.approx(CE.ETA_SIGN * est.slope)
+
+
+def test_the_sign_is_applied_at_one_place():
+    """THE RECURRING DEFECT, in the one form that would be silent here: a second
+    negation somewhere downstream turns a retraction into a confirmation and
+    every printed number still looks reasonable. `ETA_SIGN` appears in `fit` and
+    nowhere else that computes a value."""
+    tree = ast.parse(SOURCE)
+    users = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        # CODE, not docstrings: a docstring that NAMES the convention is the
+        # documentation working, and a test that counted it would push the
+        # explanation out of the file it explains.
+        body = "\n".join(
+            ast.unparse(stmt) for stmt in node.body
+            if not (isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)))
+        if "ETA_SIGN" in body:
+            users.add(node.name)
+    assert users == {"fit"}, users
+
+
+@pytest.mark.parametrize("eps", [0.0, 0.05, 0.32, 0.60, 1.0])
+def test_the_estimator_recovers_what_was_planted(eps):
+    est = CE.fit(CE.plant_rows(eps=eps, jitter=0.0), draws=0)
+    assert est.value == pytest.approx(eps, abs=1e-6)
+
+
+def test_a_pure_bandwidth_world_reads_zero_and_a_pure_issue_rate_world_reads_one():
+    """The two physical anchors. A time that does not move with the clock is
+    traffic (0); a time inversely proportional to the clock is issue rate (1).
+    Without these the estimator could be off by a factor and every planted world
+    in between would still agree with it."""
+    assert CE.fit(CE.plant_rows(eps=0.0, jitter=0.0), draws=0).value == \
+        pytest.approx(0.0, abs=1e-9)
+    assert CE.fit(CE.plant_rows(eps=1.0, jitter=0.0), draws=0).value == \
+        pytest.approx(1.0, abs=1e-9)
+
+
+# --------------------------------------------------------------------------
+# 4. the exclusion rule: DRIFT excludes, LEVEL does not, on either side
+# --------------------------------------------------------------------------
+
+def test_both_sides_of_level_are_kept_and_drift_is_excluded():
+    """THE FIVE-ROW PLANTING the repository's side-blind tripwire asks for, and
+    the fifth row is the one every earlier world in this tree was missing: a
+    tread that is LEVEL HIGH *and* DRIFTING at once. Counting on LEVEL alone
+    kept that tread twice and stayed green.
+
+    At a duty cycle below 1.0 a LEVEL HIGH row is the experiment working. A
+    filter on LEVEL here would drop exactly the states that carry the signal."""
+    rows = CE.plant_rows(
+        eps=0.05, jitter=0.0,
+        level_at={(0, 1, 0): T.LEVEL_HIGH, (0, 2, 0): T.LEVEL_LOW,
+                  (0, 3, 0): T.LEVEL_HIGH},
+        drift_at={(0, 3, 0), (0, 4, 0)},
+        host_at={(0, 5, 0)})
+    by = {(r.state_index, r.tiles, r.repeat): r for r in rows}
+    assert CE.exclusion(by[(0, 1, 0)]) == "", "a LEVEL HIGH row was excluded"
+    assert CE.exclusion(by[(0, 2, 0)]) == "", "a LEVEL LOW row was excluded"
+    assert CE.exclusion(by[(0, 3, 0)]) == CE.DROP_DRIFT, "HIGH *and* DRIFTING"
+    assert CE.exclusion(by[(0, 4, 0)]) == CE.DROP_DRIFT
+    assert CE.exclusion(by[(0, 5, 0)]) == CE.DROP_HOST
+    counts = CE.level_counts(CE.kept_rows(rows))
+    assert counts[T.LEVEL_HIGH] >= 1 and counts[T.LEVEL_LOW] >= 1
+
+
+def test_only_one_function_decides_whether_a_row_is_in_the_fit():
+    """The 2026-09-15 defect in this tree's own words: a guard applied at one of
+    N call sites. Every reader of `clock_drift_ok` and `host_bound` that could
+    DROP a row has to be `exclusion`, so a rule changed there changes it
+    everywhere."""
+    tree = ast.parse(SOURCE)
+    owner = {}
+    for top in tree.body:
+        if isinstance(top, ast.FunctionDef):
+            for node in ast.walk(top):
+                if isinstance(node, ast.FunctionDef):
+                    owner[node] = top.name
+    readers = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        body = "\n".join(
+            ast.unparse(stmt) for stmt in node.body
+            if not (isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)))
+        if "clock_drift_ok is False" in body or "row.host_bound" in body:
+            readers.add(owner.get(node, node.name))
+    assert readers == {"exclusion"}, readers
+
+
+def test_this_file_reads_the_side_of_every_level_verdict():
+    """The repository-wide tripwire, asserted here too so the reason lives beside
+    the code: a reader of `clock_level_ok` that never reads `clock_level_side`
+    reads a HIGH failure as a LOW one."""
+    assert "clock_level_ok" in SOURCE and "clock_level_side" in SOURCE
+    assert "T.LEVEL_HIGH" in SOURCE and "T.LEVEL_LOW" in SOURCE, (
+        "the sides are read through timing's own names, so a rename moves them "
+        "here too")
+    assert T.LEVEL_HIGH == "high" and T.LEVEL_LOW == "low", (
+        "if the values change, this file's planted worlds move with them")
+
+
+# --------------------------------------------------------------------------
+# 5. the interval: a bootstrap over REPEATS, not over rows
+# --------------------------------------------------------------------------
+
+def test_the_bootstrap_resamples_repeats_and_not_rows():
+    """Rows inside one repeat share whatever the card was doing, so resampling
+    rows treats 13 correlated passes as hundreds of independent draws and reports
+    an interval a factor of several too narrow. Read off the source: the thing
+    the bootstrap draws from is the repeat list."""
+    body = inspect.getsource(CE.fit)
+    assert "rng.choice(repeats)" in body
+    assert "rng.choice(keep)" not in body and "rng.choice(rows)" not in body
+
+
+def test_fewer_repeats_give_a_wider_interval():
+    wide = CE.fit(CE.plant_rows(eps=0.30, jitter=0.02, repeats=3, seed=5),
+                  draws=600, seed=1)
+    tight = CE.fit(CE.plant_rows(eps=0.30, jitter=0.02, repeats=21, seed=5),
+                   draws=600, seed=1)
+    assert wide.half_width > tight.half_width
+
+
+def test_the_interval_is_a_95_percent_one_and_covers_the_planted_value():
+    est = CE.fit(CE.plant_rows(eps=0.30, jitter=0.01, repeats=13, seed=3),
+                 draws=1000, seed=2)
+    assert est.lo < 0.30 < est.hi
+    assert est.resampled == 1000
+
+
+# --------------------------------------------------------------------------
+# 6. the gates, each planted both ways
+# --------------------------------------------------------------------------
+
+def _score(rows, **overrides):
+    args = CE._self_test_args(CE.build_parser().parse_args(["--dry-run"]))
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    threshold, source = CE.registered_clock_ratio(args)
+    est = CE.fit(rows, draws=400, seed=0)
+    return {g.token: g for g in CE.gates_for(rows, args, threshold, source, est)}
+
+
+def test_v1_passes_on_a_separated_design_and_fails_on_one_clock():
+    ok = _score(CE.plant_rows(eps=0.05, jitter=0.0))
+    assert ok["V1"].verdict == CE.PASS
+    flat = _score(CE.plant_rows(eps=0.05, mhz=(1650.0,) * 4))
+    assert flat["V1"].verdict == CE.FAIL
+    assert "1650" not in flat["V1"].threshold, "the threshold is a RATIO, not a clock"
+
+
+def test_v1_fails_when_one_tread_out_of_eight_did_not_separate():
+    """Per tread, not pooled. A tread whose clock never moved contributes nothing
+    to Sxx and the pooled slope simply ignores it, so a pooled-only gate would
+    quietly fit a design smaller than the one that was booked."""
+    rows = [r for r in CE.plant_rows(eps=0.05, jitter=0.0)
+            if not (r.tiles == 4 and r.state_index > 0)]
+    stuck = [r for r in CE.plant_rows(eps=0.05, jitter=0.0)
+             if r.tiles == 4 and r.state_index > 0]
+    for r in stuck:
+        r.sm_clock_load_mhz = CE.PLANTED_STATE_MHZ[0]
+    assert _score(rows + stuck)["V1"].verdict == CE.FAIL
+
+
+def test_v2_reads_the_tile_off_the_rows():
+    assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V2"].verdict == CE.PASS
+    mixed = _score(CE.plant_rows(eps=0.05, jitter=0.0,
+                                 block_m_at={(0, 1, 0): 64}))
+    assert mixed["V2"].verdict == CE.FAIL
+    shapes = CE.plant_rows(eps=0.05, jitter=0.0)
+    shapes[0].calls_per_burst = 9
+    assert _score(shapes)["V2"].verdict == CE.FAIL, (
+        "one tread launched in two burst shapes carries two shares of one "
+        "discarded lead call")
+
+
+def test_v3_fails_on_a_design_that_is_deep_in_one_state_only():
+    deep = CE.plant_rows(eps=0.05, jitter=0.0, repeats=13)
+    thin = [r for r in deep
+            if r.state_index == 0 or (r.repeat < 2 and r.tiles < 3)]
+    assert _score(thin)["V3"].verdict == CE.FAIL
+    assert _score(deep)["V3"].verdict == CE.PASS
+
+
+def test_v4_counts_drift_and_host_bound_and_never_level():
+    rows = CE.plant_rows(eps=0.05, jitter=0.0)
+    assert _score(rows)["V4"].verdict == CE.PASS
+    every = {(i, t, r) for i in range(4) for t in range(1, 9) for r in range(13)}
+    all_high = _score(CE.plant_rows(
+        eps=0.05, jitter=0.0,
+        level_at=dict.fromkeys(every, T.LEVEL_HIGH)))
+    assert all_high["V4"].verdict == CE.PASS, (
+        "a run where every row sat LEVEL HIGH is a run at a boosted clock, "
+        "which is the experiment, not an exclusion")
+    drifted = _score(CE.plant_rows(
+        eps=0.05, jitter=0.0,
+        drift_at={k for k in every if (k[1] + k[2]) % 3 == 0}))
+    assert drifted["V4"].verdict == CE.FAIL
+
+
+def test_v5_sees_a_sag_inside_a_burst_that_every_drift_verdict_passes():
+    """A card that boosts at the start of each 40 ms burst and sags by its end
+    has first == last on every burst-to-burst comparison, so DRIFT passes
+    everywhere and the per-call time is still an average over two operating
+    points. V5 is the only gate that can see it."""
+    sagging = CE.plant_rows(eps=0.05, jitter=0.0,
+                            burst_moves_at={(0, 1, 0)})
+    gates = _score(sagging)
+    assert gates["V5"].verdict == CE.FAIL
+    assert all(r.clock_drift_ok is not False for r in sagging)
+    assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V5"].verdict == CE.PASS
+
+
+def test_v6_catches_a_memory_clock_that_moved_with_the_duty_cycle():
+    every = {(i, t, r) for i in range(4) for t in range(1, 9) for r in range(13)}
+    moved = _score(CE.plant_rows(
+        eps=0.05, jitter=0.0,
+        mem_at={k: CE.PLANTED_MEM_MHZ + 200.0 * k[0] for k in every}))
+    assert moved["V6"].verdict == CE.FAIL
+    assert _score(CE.plant_rows(eps=0.05, jitter=0.0))["V6"].verdict == CE.PASS
+
+
+def test_v0_refuses_a_run_that_measured_nothing():
+    assert CE.gate_v0_non_vacuity([], []).verdict == CE.FAIL
+
+
+@pytest.mark.parametrize("eps,band,c1,c2", [
+    (0.05, "RAW-STANDS", CE.PASS, CE.PASS),
+    (0.32, "UNREGISTERED-GAP", CE.PASS, CE.FAIL),
+    (0.60, "CLOCK-CARRIES", CE.PASS, CE.FAIL),
+])
+def test_each_registered_band_is_reachable_and_names_its_own_consequence(
+        eps, band, c1, c2):
+    gates = _score(CE.plant_rows(eps=eps, jitter=0.002, seed=4))
+    assert gates["C1"].verdict == c1
+    assert gates["C2"].verdict == c2
+    assert band in gates["C1"].measured
+    named = [b for b in CE.BANDS if b[0] == band][0]
+    page = "\n".join(gates["C1"].render() + gates["C2"].render())
+    assert named[3][:40] in page, "the band's registered consequence is printed"
+
+
+def test_c1_fails_when_the_interval_crosses_a_registered_boundary():
+    """A FAIL here is a result about the DESIGN, not about the card: an interval
+    across a boundary is consistent with two worlds whose readings contradict
+    each other, and picking the nearer one is how a pre-registration becomes a
+    post-registration."""
+    gates = _score(CE.plant_rows(eps=0.25, jitter=0.04, seed=11))
+    assert gates["C1"].verdict == CE.FAIL
+    assert gates["C2"].verdict == CE.FAIL
+    assert "not shown" in "\n".join(gates["C2"].lines)
+
+
+def test_band_of_refuses_an_interval_that_straddles():
+    assert CE.band_of(0.05, 0.10)[0] == "RAW-STANDS"
+    assert CE.band_of(0.20, 0.30) is None
+    assert CE.band_of(0.30, 0.50) is None
+    assert CE.band_of(0.45, 0.90)[0] == "CLOCK-CARRIES"
+    assert CE.band_of(None, None) is None
+
+
+# --------------------------------------------------------------------------
+# 7. the V1 threshold is COMPUTED, never asserted
+# --------------------------------------------------------------------------
+
+def test_a_shallower_design_is_held_to_a_wider_separation():
+    """The threshold is the MDE arithmetic's own answer, so it moves with the
+    design. A constant would let a three-repeat run claim the resolution a
+    thirteen-repeat run was sized for."""
+    few = CE.required_clock_ratio(repeats=3, treads=8, states=4)
+    many = CE.required_clock_ratio(repeats=21, treads=8, states=4)
+    assert few > many > 1.0
+    narrow = CE.required_clock_ratio(repeats=13, treads=2, states=4)
+    assert narrow > CE.required_clock_ratio(repeats=13, treads=8, states=4)
+
+
+def test_the_threshold_on_the_plan_page_is_the_one_the_gate_uses():
+    plan = run(["--dry-run", "--repeats", "3"]).stdout
+    threshold, _ = CE.registered_clock_ratio(parsed(["--repeats", "3"]))
+    assert f"V1 THRESHOLD {threshold:.3f}x" in plan
+    other = run(["--dry-run", "--repeats", "21"]).stdout
+    assert plan.split("V1 THRESHOLD")[1][:8] != other.split("V1 THRESHOLD")[1][:8]
+
+
+def test_the_operator_can_overrule_the_threshold_and_the_page_says_who_did():
+    args = parsed(["--min-clock-ratio", "1.5"])
+    threshold, source = CE.registered_clock_ratio(args)
+    assert threshold == 1.5 and "operator" in source
+
+
+# --------------------------------------------------------------------------
+# 8. the instrument, driven off GPU through its injection seams
+# --------------------------------------------------------------------------
+
+class FakeEvents:
+    """`_EventPairs`' shape, scripted. Records the order of every operation so
+    the flush/record/gap arrangement can be asserted rather than assumed."""
+
+    log: list = []
+    per_call_ms = 2.0
+    lead_ms = 8.0
+
+    def __init__(self, n):
+        self.n = n
+        self.starts = [_Rec(self, "start", i) for i in range(n)]
+        self.ends = [_Rec(self, "end", i) for i in range(n)]
+
+    def synchronize(self):
+        FakeEvents.log.append(("sync", -1))
+
+    def elapsed(self, n):
+        # The lead call launches into a drained queue and costs more; every
+        # other call is the kernel alone. That difference is what the discard
+        # exists for, so the fake has to have it.
+        return [FakeEvents.lead_ms if i == 0 else FakeEvents.per_call_ms
+                for i in range(n)]
+
+
+class _Rec:
+    def __init__(self, owner, kind, index):
+        self.owner, self.kind, self.index = owner, kind, index
+
+    def record(self):
+        FakeEvents.log.append((self.kind, self.index))
+
+
+class FakeFlusher:
+    megabytes = 256
+
+    def flush(self):
+        FakeEvents.log.append(("flush", -1))
+
+
+def _clock_reader(values):
+    it = iter(values)
+    last = [values[-1]]
+
+    def read():
+        try:
+            mhz = next(it)
+        except StopIteration:
+            mhz = last[0]
+        FakeEvents.log.append(("clock", int(mhz)))
+        return T.ClockState(int(mhz), 60, source=T.CLOCK_SOURCE_NVML,
+                            power_w=690.0)
+    return read
+
+
+def _drive(duty=0.25, calls=8, bursts=3, trials=2, clocks=(1800,) * 12,
+           per_call=2.0):
+    FakeEvents.log = []
+    FakeEvents.per_call_ms = per_call
+    slept = []
+    got = CE.time_duty(
+        lambda: FakeEvents.log.append(("call", -1)),
+        duty=duty, calls_per_burst=calls, bursts=bursts, trials=trials,
+        warm_ms=0.0, l2_flush=True, per_call_ms=per_call,
+        reference_clock_mhz=1650.0, clock_read=_clock_reader(list(clocks)),
+        mem_read=lambda: 2619.0, events=FakeEvents, flusher=FakeFlusher(),
+        sleep=slept.append)
+    return got, slept
+
+
+def test_time_duty_refuses_off_gpu_unless_every_seam_is_injected():
+    """`time_kernel`'s own terms, for its own reason: an instrument that invents
+    numbers when its device is missing is worse than one that stops."""
+    with pytest.raises(T.TimingRefused) as caught:
+        CE.time_duty(lambda: None, duty=0.5, calls_per_burst=8, bursts=1,
+                     trials=1, warm_ms=0.0, l2_flush=True, per_call_ms=1.0,
+                     reference_clock_mhz=None)
+    assert "events" in str(caught.value) and "clock_read" in str(caught.value)
+
+
+def test_a_burst_needs_two_calls_because_one_of_them_is_discarded():
+    with pytest.raises(T.TimingRefused):
+        CE.time_duty(lambda: None, duty=0.5, calls_per_burst=1, bursts=1,
+                     trials=1, warm_ms=0.0, l2_flush=True, per_call_ms=1.0,
+                     reference_clock_mhz=None, clock_read=_clock_reader([1800]),
+                     events=FakeEvents, flusher=FakeFlusher())
+
+
+def test_the_lead_call_of_every_burst_is_discarded():
+    """It launched into a queue the previous gap had drained, so its interval
+    carries launch latency the others do not. A constant additive offset does
+    NOT cancel in a log slope, which is why it is discarded rather than
+    tolerated."""
+    got, _ = _drive(calls=8, bursts=3, trials=2, per_call=2.0)
+    assert got.samples == 3 * 2 * 7, "one call per burst must be dropped"
+    assert got.dropped_leads == 6
+    assert got.ms_p50 == pytest.approx(2.0), (
+        "the 8 ms lead reached the percentiles")
+    assert got.ms_min == pytest.approx(2.0)
+
+
+def test_the_gap_is_outside_every_measured_interval_and_sets_the_duty():
+    """The gap is the independent variable and it is a host-side sleep AFTER the
+    synchronise, so no event pair can contain it."""
+    got, slept = _drive(duty=0.25, calls=8, bursts=3, trials=2, per_call=2.0)
+    assert got.gap_ms == pytest.approx(8 * 2.0 * 3.0)
+    assert len(slept) == 6 and all(s == pytest.approx(got.gap_ms / 1000.0)
+                                   for s in slept)
+    order = FakeEvents.log
+    first_sync = order.index(("sync", -1))
+    assert ("clock", 1800) in order[:first_sync], (
+        "the clock must be read BEFORE the synchronise, with the burst in "
+        "flight; a reading taken after it describes an idle card")
+    # flush, start, call, end -- the flush is outside the pair by construction.
+    window = order[order.index(("flush", -1)):]
+    assert window[:4] == [("flush", -1), ("start", 0), ("call", -1), ("end", 0)]
+
+
+def test_duty_one_asks_for_no_gap_at_all():
+    got, slept = _drive(duty=1.0)
+    assert got.gap_ms == pytest.approx(0.0)
+    assert slept == []
+
+
+def test_one_clock_sample_per_burst_and_the_verdicts_come_from_them():
+    got, _ = _drive(bursts=3, trials=2, clocks=(1800,) * 6)
+    assert len(got.clock_samples_mhz) == 6
+    assert got.sm_clock_load_mhz == pytest.approx(1800.0)
+    assert got.clock_drift_ok is True
+    assert got.clock_level_side == T.LEVEL_HIGH, (
+        "1800 against a 1650 reference is HIGH, and at a duty below 1.0 that "
+        "is the experiment working")
+    assert got.mem_clock_mhz == pytest.approx(2619.0)
+
+
+def test_a_drifting_cell_is_flagged_and_names_its_direction():
+    got, _ = _drive(bursts=3, trials=2,
+                    clocks=(1800, 1800, 1790, 1500, 1400, 1300))
+    assert got.clock_drift_ok is False
+    assert got.clock_drift_direction == T.DRIFT_DOWN
+    assert "EXCLUDED" in got.clock_note
+
+
+def test_the_within_burst_quarters_are_taken_from_the_kept_calls():
+    FakeEvents.log = []
+    FakeEvents.per_call_ms = 2.0
+    got, _ = _drive(calls=8, bursts=2, trials=1)
+    assert got.head_ms == pytest.approx(2.0) and got.tail_ms == pytest.approx(2.0)
+    assert got.within_burst_ok is True
+
+
+def test_a_cell_with_too_few_clock_samples_carries_no_clock_and_says_so():
+    got, _ = _drive(bursts=1, trials=1, clocks=(0, 0, 0))
+    assert got.sm_clock_load_mhz is None
+    assert "cannot read this cell" in got.clock_note
+    row = CE.plant_rows(eps=0.05, jitter=0.0)[0]
+    row.sm_clock_load_mhz = None
+    assert CE.exclusion(row) == CE.DROP_NO_CLOCK
+
+
+def test_the_burst_shape_rule_is_called_by_the_plan_and_by_the_runner():
+    """One rule, two callers. A plan that sized bursts differently from the pod
+    would price a run nobody is going to make -- which is the unit defect
+    `block_m_crossing_sweep.estimated_seconds` carries its own note about."""
+    tree = ast.parse(SOURCE)
+    callers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and "burst_shape(" in ast.unparse(node):
+            callers.add(node.name)
+    assert {"estimated_seconds", "plan_lines", "run_arm"} <= callers, callers
+
+
+@pytest.mark.parametrize("per_call", [0.7738, 2.4154, 4.6153, 20.0])
+def test_every_burst_holds_enough_calls_for_the_quarters_v5_reads(per_call):
+    calls, bursts, kept = CE.burst_shape(per_call, CE.DEFAULT_BURST_MS,
+                                         CE.DEFAULT_TARGET_MS)
+    assert calls >= CE.MIN_CALLS_PER_BURST
+    assert calls - 1 >= 4, "V5 takes a median of a quarter, not one sample"
+    assert kept >= T.iters_for(per_call, CE.DEFAULT_TARGET_MS)
+    assert bursts * trials_floor() >= T.CLOCK_SAMPLE_FLOOR
+
+
+def trials_floor():
+    return CE.DEFAULT_TRIALS
+
+
+# --------------------------------------------------------------------------
+# 9. the row store
+# --------------------------------------------------------------------------
+
+def test_a_row_survives_the_csv_with_its_absences_intact(tmp_path):
+    """`""` must read back as None and never as 0 or False. A `clock_drift_ok`
+    that came back False where it was unknown would exclude every cell; one that
+    came back True where it was FAILED would keep every drifting one."""
+    path = tmp_path / "cells.csv"
+    row = CE.plant_rows(eps=0.1, jitter=0.0, treads=1, repeats=1)[0]
+    row.power_w = None
+    row.clock_drift_ok = None
+    row.within_burst_ok = None
+    CE.append_row(path, row)
+    back = CE.read_rows(path)
+    assert len(back) == 1
+    assert back[0].power_w is None
+    assert back[0].clock_drift_ok is None
+    assert back[0].within_burst_ok is None
+    assert back[0].ms_p50 == pytest.approx(row.ms_p50)
+    assert back[0].duty_requested == pytest.approx(row.duty_requested)
+    assert back[0].clock_level_side == row.clock_level_side
+
+
+def test_the_store_refuses_a_narrower_header_already_on_disk(tmp_path):
+    """`DictWriter` writes the fieldnames it was given and never looks at the
+    file, so a wider row appended under a narrower header shifts every field past
+    the first difference: `clock_drift_ok` would then be read out of
+    `clock_level_side`, and a FAILED drift -- the one verdict here that excludes
+    a row -- would come back None, which every gate keeps."""
+    path = tmp_path / "cells.csv"
+    path.write_text("duty_requested,ms_p50\n1.0,2.0\n")
+    row = CE.plant_rows(eps=0.1, jitter=0.0, treads=1, repeats=1)[0]
+    with pytest.raises(CE.SchemaCollision) as caught:
+        CE.append_row(path, row)
+    assert caught.value.code == exit_codes.REFUSED
+    assert "columns this run adds" in str(caught.value)
+
+
+def test_a_fresh_file_is_written_with_the_header_and_appends_match_it(tmp_path):
+    path = tmp_path / "cells.csv"
+    for row in CE.plant_rows(eps=0.1, jitter=0.0, treads=2, repeats=1):
+        CE.append_row(path, row)
+    header = path.read_text().splitlines()[0].split(",")
+    assert header == CE.ROW_FIELDS
+    assert len(CE.read_rows(path)) == 2 * len(CE.DUTY_LEVELS)
+
+
+def test_this_file_defines_no_store_class():
+    """tests/test_shell_gates.py pins the set of `class Store` definitions under
+    scripts/ to exactly three, because the 2026-09-15 header guard landed at two
+    of them while its own prose said there were two. A fourth would turn that
+    test red in another slice's file, so this appender is a module-level function
+    -- with the header check that guard exists to install, which is the part that
+    matters."""
+    assert "class Store" not in SOURCE
+    assert 'path.open("a", newline="")' in SOURCE
+    assert "next(csv.reader(fh), [])" in SOURCE
+
+
+# --------------------------------------------------------------------------
+# 10. the run id
+# --------------------------------------------------------------------------
+
+#: Every parser dest, and whether it belongs in the key. IN: anything that
+#: changes the milliseconds on a row. OUT: re-analysis of one set of cells, and
+#: where the cells are filed.
+ID_EXEMPT = {"dry_run", "self_test", "out", "run_id", "card", "draws",
+             "seed_bootstrap", "min_clock_ratio"}
+
+
+def test_every_knob_that_changes_a_measurement_is_in_the_run_id():
+    args = parsed(["--card", "NVIDIA H200"])
+    base = CE.default_run_id(args)
+    for action in CE.build_parser()._actions:
+        if not action.option_strings or action.dest in ("help",):
+            continue
+        if action.dest in ID_EXEMPT:
+            continue
+        moved = parsed(["--card", "NVIDIA H200"])
+        current = getattr(moved, action.dest)
+        if isinstance(current, bool):
+            setattr(moved, action.dest, not current)
+        elif isinstance(current, list):
+            setattr(moved, action.dest, [*current, 0.75])
+        elif isinstance(current, int):
+            setattr(moved, action.dest, current + 1)
+        elif isinstance(current, float):
+            setattr(moved, action.dest, current + 1.0)
+        else:
+            setattr(moved, action.dest, "qwen2-57b-a14b")
+        assert CE.default_run_id(moved) != base, (
+            f"--{action.dest} changes the measurement and not the run id")
+
+
+def test_re_analysis_knobs_are_not_in_the_run_id():
+    """Two analyses of one sweep belong in one directory, which is why --ridge
+    and --alpha are out of every other arm's key and why --draws is out of this
+    one's."""
+    base = CE.default_run_id(parsed(["--card", "NVIDIA H200"]))
+    for flag, value in (("--draws", "17"), ("--seed-bootstrap", "9"),
+                        ("--min-clock-ratio", "1.4")):
+        assert CE.default_run_id(
+            parsed(["--card", "NVIDIA H200", flag, value])) == base, flag
+
+
+def test_the_run_id_carries_the_card_and_refuses_without_one():
+    got = CE.default_run_id(parsed(["--card", "NVIDIA H200"]))
+    assert got.startswith("nvidia_h200-")
+
+
+# --------------------------------------------------------------------------
+# 11. the design refusals, decided before any GPU time
+# --------------------------------------------------------------------------
+
+def test_two_states_are_refused_before_anything_is_spent():
+    got = run(["--duty", "1.0", "0.5", "--card", "NVIDIA H200"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "below the 3 this design needs" in got.stdout
+    assert got.stdout.startswith("REFUSED before any GPU time"), (
+        "a design refusal must be decided before a plan is even built")
+    assert "RESULT: " not in got.stdout
+
+
+def test_two_identical_duty_values_are_refused():
+    got = run(["--duty", "1.0", "0.5", "0.5", "--card", "NVIDIA H200"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "one state wearing two labels" in got.stdout
+
+
+@pytest.mark.parametrize("duty", ["1.5", "0", "-0.5"])
+def test_a_duty_outside_zero_to_one_is_refused_and_never_clamped(duty):
+    """`time_duty` takes max(0, gap), so a duty above 1 would silently become
+    duty 1 and the run would carry two states at one cadence under two labels --
+    the duplicate-state refusal wearing a disguise the ledger cannot see."""
+    got = run(["--duty", "1.0", "0.5", duty, "--card", "NVIDIA H200"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "outside (0, 1]" in got.stdout
+    assert "RESULT: " not in got.stdout
+
+
+def test_a_model_whose_routing_cannot_form_a_full_stack_is_refused():
+    """`rows_quantum` is 3 for deepseek-v2-lite, and BLOCK_M=32 stacks land on a
+    legal row only by accident. Refused rather than nudged: a nudged row is not a
+    full tile stack and the ladder here reads full stacks only."""
+    got = run(["--model", "deepseek-v2-lite", "--card", "NVIDIA H200"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "multiple of 3" in got.stdout
+
+
+def test_a_measuring_run_without_a_card_is_refused():
+    got = run([])
+    assert got.returncode == exit_codes.REFUSED
+    assert "no card was named" in got.stdout
+
+
+# --------------------------------------------------------------------------
+# 12. the self-test's own gates can fail
+# --------------------------------------------------------------------------
+
+def test_the_self_test_can_fail(monkeypatch, capsys):
+    """A self-test that plants only worlds it passes is a smoke test. Break the
+    estimator and S1, S2 and S3 have to go red and the mode has to exit
+    INVALID -- not DONE, and not CLAIM_FAIL."""
+    monkeypatch.setattr(CE, "within_tread_slope",
+                        lambda cells: (-0.99, {}, 1.0, 4))
+    rc = CE.self_test(parsed(["--self-test", "--draws", "50"]))
+    out = capsys.readouterr().out
+    assert rc == exit_codes.INVALID
+    assert exit_codes.classify_text(out) == rc
+    names = {r.name: r.verdict for r in exit_codes.parse_result_lines(out)}
+    assert names["S2"] == exit_codes.FAIL
+    assert names["S3"] == exit_codes.FAIL
+
+
+def test_the_planted_worlds_cover_every_gate_and_both_verdicts():
+    """Each gate has to FAIL in at least one world and PASS in at least one, or
+    the world list is a list of successes."""
+    args = parsed(["--self-test"])
+    seen: dict[str, set[str]] = {}
+    planted = CE._self_test_args(args)
+    threshold, source = CE.registered_clock_ratio(planted)
+    for world in CE.self_test_worlds(args):
+        # WITH DRAWS: C1 reads an INTERVAL, and at draws=0 there is none, so a
+        # coverage test run without them would report C1 as a gate that never
+        # passes and hide that it is the design's own resolution being scored.
+        est = CE.fit(world.rows, draws=300, seed=0)
+        for gate in CE.gates_for(world.rows, planted, threshold, source, est):
+            seen.setdefault(gate.token, set()).add(gate.verdict)
+    assert set(seen) == {"V0", "V1", "V2", "V3", "V4", "V5", "V6", "C1", "C2"}
+    for token, verdicts in seen.items():
+        if token == "V0":
+            continue          # V0 is planted empty in its own unit test above
+        assert CE.FAIL in verdicts, f"{token} never fails in any planted world"
+        assert CE.PASS in verdicts, f"{token} never passes in any planted world"
+
+
+# --------------------------------------------------------------------------
+# 13. the resume, which a 40-minute arm on a rented pod will meet
+# --------------------------------------------------------------------------
+
+def test_a_resume_adopts_the_burst_shape_already_on_its_rows(tmp_path):
+    """Re-sized from a fresh warm, the second process can land one call either
+    side of the rounding, and V2 would then FAIL the whole arm for two burst
+    shapes at one tread -- correctly, because the discarded lead would be a
+    different share of two halves of one file. The recorded shape is the run's.
+
+    Asserted against `burst_shape` rather than against a remembered number: the
+    rounding is the thing that moves, so the test asks the rule."""
+    ms = CE.corpus_call_ms(1)
+    fresh, _b, _k = CE.burst_shape(ms, CE.DEFAULT_BURST_MS, CE.DEFAULT_TARGET_MS)
+    # A cell measured by an earlier process at one call fewer.
+    row = CE.plant_rows(eps=0.1, jitter=0.0, treads=1, repeats=1)[0]
+    row.calls_per_burst = fresh - 1
+    path = tmp_path / "cells.csv"
+    CE.append_row(path, row)
+    prior = {r.calls_per_burst for r in CE.read_rows(path)
+             if r.tiles == 1 and r.status == "ok"}
+    assert prior == {fresh - 1}, "the shape has to survive the round trip"
+    assert "adopted from the rows already on disk" in inspect.getsource(CE.run_arm)
+
+
+def test_the_resume_key_is_the_cell_and_not_the_row_count():
+    """Skipping N rows because N are on disk would resume the wrong cells the
+    moment one in the middle failed. The key is (repeat, duty, tread)."""
+    body = inspect.getsource(CE.run_arm)
+    assert "(r.repeat, _duty_key(r.duty_requested), r.tiles)" in body
+    assert "if (repeat, _duty_key(duty), tread) in have:" in body
+
+
+def test_a_resumed_arm_scores_the_whole_file_and_not_only_what_it_measured():
+    """A resume that scored only its own cells would report a design four states
+    wide as one, and V3 would refuse an arm that is in fact complete."""
+    assert "return read_rows(csv_path) if have else rows" in \
+        inspect.getsource(CE.run_arm)
+
+
+# --------------------------------------------------------------------------
+# 14. the booking in the session driver is this plan's own figure
+# --------------------------------------------------------------------------
+
+DRIVER = ROOT / "scripts" / "h200_gaps_session.sh"
+ARM = "elasticity-m32-n64-g16"
+
+
+def _lift(script):
+    body = ('set -uo pipefail\n'
+            f'REPO={str(ROOT)!r}\n'
+            f'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' "{DRIVER}")"\n'
+            f'{script}\n')
+    return subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+                          timeout=120).stdout
+
+
+def test_the_booked_minutes_are_above_this_plan_and_never_at_it():
+    """"Book above it and never at it" needs the figure it is above to be the
+    one this plan prints, with the flags the arm line passes. A booking read off
+    a different command is a number somebody made up, which is the state the
+    whole cost table was in before it named its commands."""
+    words = _lift(f"arm_basis {ARM}").strip()
+    assert words, "the arm has no basis"
+    quoted = re.search(r"'estimated wall time (\d+) s \(([\d.]+) min\)'", words)
+    assert quoted, words[:400]
+    plan = run(["--dry-run", "--model", "mixtral-8x7b", "--dtype", "bf16",
+                "--treads", "8", "--duty", "1.0", "0.5", "0.25", "0.1",
+                "--repeats", "13", "--burst-ms", "40", "--target-ms", "200",
+                "--trials", "3", "--warm-ms", "200", "--settle-seconds", "10"])
+    assert f"estimated wall time {quoted.group(1)} s " in plan.stdout
+    assert f"({quoted.group(2)} min)" in plan.stdout
+    booked = int(_lift(f"arm_minutes {ARM}").strip())
+    assert booked > float(quoted.group(2)), (booked, quoted.group(2))
+
+
+def test_the_booking_is_on_the_wall_clock_and_the_page_charges_everything():
+    """WALL means the plan charged every term, including the compiles. The
+    driver derives the word from `arm_unpriced` and the session's own test
+    re-derives it a third way, from what the plan PRINTS, so this asserts the
+    thing both of them read: the page carries no kernel-time disclaimer."""
+    assert _lift(f"arm_unpriced {ARM}").strip() == ""
+    assert _lift(f"arm_clock {ARM}").strip() == "WALL"
+    plan = run(["--dry-run"]).stdout.lower()
+    assert "excluding compiles and allocation" not in plan
+    assert "not the wall clock" not in plan
+    assert "weight build and first compile" in plan
+
+
+def test_the_arm_line_carries_every_flag_that_moves_the_plan():
+    """A dry branch missing --duty or --repeats previews a different sweep, a
+    different V1 threshold and a different run id. Read out of the driver rather
+    than listed here, so a list cannot go stale against it."""
+    code = DRIVER.read_text()
+    joined = re.sub(r"\\\n\s+", " ", code)
+    lines = [ln for ln in joined.splitlines()
+             if re.match(rf"\s*arm {re.escape(ARM)}\s", ln)]
+    assert len(lines) == 2, lines
+    for line in lines:
+        for flag in ("--model", "--dtype", "--treads", "--duty", "--repeats",
+                     "--burst-ms", "--target-ms", "--trials", "--warm-ms",
+                     "--settle-seconds"):
+            assert flag in line, (flag, line)
+        assert "--publish" not in line
+    dry = [ln for ln in lines if "--dry-run" in ln]
+    assert len(dry) == 1
+    # And the measuring branch runs the interpreter that has vLLM in it.
+    measuring = [ln for ln in lines if "--dry-run" not in ln][0]
+    assert "$PY_VLLM" in measuring, measuring
