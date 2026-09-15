@@ -2243,10 +2243,16 @@ def self_test_worlds(args) -> list[PlantedWorld]:
     """Every planted world. SEVEN of the twelve are REFUSALS: a scorer that has
     only ever seen a clean design has never been shown to refuse one.
 
-    The count is not carried in prose anywhere else. `self_test` prints
-    `len()` of this list and counts the refusals off the `why` strings, because
-    two hand-maintained counts of one set is how this file's own docstring came
-    to say nine where there were eleven."""
+    The count is not carried in prose anywhere else IN THIS FILE, and that
+    sentence stood here while `--self-test`'s own argparse help said eleven and
+    six: a fix that went to one of the three places a count was typed. `self_test`
+    prints `len()` of this list and counts the refusals off the `why` strings,
+    because two hand-maintained counts of one set is how this file's own
+    docstring came to say nine where there were eleven. THE THIRD PLACE IS NOT
+    IN THIS FILE: `arm_offgpu_gates elasticity-m32-n64-g16` in
+    scripts/h200_gaps_session.sh advertises both counts to the operator before
+    the pod is rented, and tests/test_h200_gaps_session.py re-derives them from
+    this list rather than trusting that line."""
     duties = list(DUTY_LEVELS)
     n_states = len(duties)
     return [
@@ -2658,10 +2664,17 @@ def build_parser() -> argparse.ArgumentParser:
                          f"so it exits {exit_codes.REFUSED} REFUSED; "
                          "--self-test is the off-GPU mode that DOES score")
     ap.add_argument("--self-test", action="store_true",
-                    help="score eleven planted worlds, six of them refusals, "
-                         "and check the scorer reproduces each registered "
-                         "verdict and the estimator recovers each planted "
-                         "elasticity. Needs no GPU")
+                    help="score every planted world self_test_worlds() "
+                         "returns, refusals included, and check the scorer "
+                         "reproduces each registered verdict and the estimator "
+                         "recovers each planted elasticity. NO COUNT IS TYPED "
+                         "HERE, and that is the point: the run prints len() of "
+                         "that list and counts the refusals off the why "
+                         "strings. A count typed HERE is what went stale "
+                         "when a twelfth world was added, and it was the "
+                         "third copy of a number self_test_worlds() docstring "
+                         "already promised was carried nowhere else. Needs no "
+                         "GPU")
     ap.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(MODEL_CONFIGS))
     ap.add_argument("--dtype", default=DEFAULT_DTYPE,
                     choices=sorted(DTYPE_BYTES),

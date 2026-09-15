@@ -83,6 +83,7 @@ its case statement, which would agree with it until it did not.
 """
 from __future__ import annotations
 
+import importlib.util
 import math
 import re
 import shlex
@@ -4685,3 +4686,125 @@ def test_the_thermal_arm_is_in_every_named_rental_set():
         named = lift(setter, REPO=str(ROOT)).stdout.split()
         assert "thermal" in named, setter
         assert named[0] == "thermal", (setter, named)
+
+
+
+#: Spelled out because the gate lines are read by a human before a rental, and
+#: "TWELVE planted worlds" is what one of them says. The test below derives the
+#: NUMBER from the script and only uses this to render it; it is not a count.
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+                 11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen"}
+
+
+def _load_script_module(stem: str):
+    """Import a `scripts/<stem>.py` for its own registrations.
+
+    The point of reaching into the module rather than parsing its output is
+    that the WORLD TABLES are the registration: a test that re-typed them here
+    would be the fourth hand-maintained copy of the thing this file is checking.
+    """
+    path = ROOT / "scripts" / f"{stem}.py"
+    spec = importlib.util.spec_from_file_location(f"_driver_check_{stem}", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_advertised_elasticity_world_count_is_the_scripts_own():
+    """THE RECURRING DEFECT, on the arm added 2026-09-16: a count typed into
+    prose at one of N sites, left standing after the set under it grew.
+
+    `clock_elasticity.py` carried its planted-world count in THREE places. One
+    COMPUTES it -- `self_test` prints `len()` of the list and counts the
+    refusals off the `why` strings -- one docstring was updated when a twelfth
+    world (`slower-at-speed`, the one that makes V7's FAIL branch reachable)
+    was added, and two were not: the `--self-test` argparse help said "eleven
+    planted worlds, six of them refusals", and `arm_offgpu_gates
+    elasticity-m32-n64-g16` said the same while also naming only FOUR carrying
+    worlds. That gate line is what an operator reads to verify the arm BEFORE
+    renting the pod. The docstring meanwhile asserted that "the count is not
+    carried in prose anywhere else".
+
+    So this derives both counts from the script's own world list, and pins that
+    no typed copy came back into the argparse help."""
+    elasticity = _load_script_module("clock_elasticity")
+    args = elasticity.build_parser().parse_args(["--self-test"])
+    worlds = elasticity.self_test_worlds(args)
+    refusals = [w for w in worlds if w.why.startswith("A REFUSAL")]
+    assert len(worlds) > len(refusals) > 0, (len(worlds), len(refusals))
+
+    advertised = lift("arm_offgpu_gates elasticity-m32-n64-g16",
+                      REPO=str(ROOT)).stdout.upper()
+    assert f"{_NUMBER_WORDS[len(worlds)]} PLANTED WORLDS".upper() in advertised, (
+        len(worlds), advertised)
+    assert f"{_NUMBER_WORDS[len(refusals)]} OF THEM REFUSALS".upper() in advertised, (
+        len(refusals), advertised)
+
+    # AND EVERY WORLD THE SCRIPT ITSELF FLAGS AS CARRYING A GATE'S ONLY
+    # REACHABLE FAIL BRANCH IS NAMED ON THAT LINE. `slower-at-speed` was the
+    # one that was not, which is how the line came to say FOUR.
+    carrying = [w.name for w in worlds
+                if "THE WORLD THAT MAKES" in w.why.upper()]
+    assert carrying, [w.name for w in worlds]
+    for name in carrying:
+        assert name.upper() in advertised, (name, advertised)
+
+    # NO COUNT SURVIVES IN THE ARGPARSE HELP, which is where the stale one was.
+    # The run prints both off its own list; a second typed copy is the defect,
+    # not a second source.
+    help_text = elasticity.build_parser().format_help().lower()
+    self_test_help = help_text.split("--self-test", 1)[1].split("--model", 1)[0]
+    for stale in _NUMBER_WORDS.values():
+        assert f"{stale} planted" not in self_test_help, (stale, self_test_help)
+        assert f"{stale} of them" not in self_test_help, (stale, self_test_help)
+
+
+def test_the_advertised_private_world_exits_are_the_scripts_own():
+    """THE SAME DEFECT ONE ARM OVER, and this one would have read a WORKING arm
+    as a broken one.
+
+    `private_weight_reference.py`'s WORLDS table registers
+    `faster-than-its-ruler` as `dict(ALL_PASS, C2=FAIL)`, which classifies to
+    exit 1 CLAIM_FAIL, and `ragged` as `{"V0": FAIL, "V1": FAIL}`, which is TWO
+    validity gates. The driver's gate line said "the rest 3 INVALID on the one
+    validity gate each is planted to break" -- so an operator running the
+    advertised eleven-world sweep before renting would get a 1 where the line
+    promised a 3, on a world whose CLAIM_FAIL is the registered answer.
+
+    Both counts and both exits are derived from the WORLDS table here. Nothing
+    in this test names a world's verdict."""
+    private = _load_script_module("private_weight_reference")
+    by_code: dict[int, list[str]] = {}
+    for name, world in private.WORLDS.items():
+        validity_failed = any(v == private.FAIL
+                              for k, v in world.expect.items()
+                              if k.startswith("V"))
+        claim_failed = any(v == private.FAIL
+                           for k, v in world.expect.items()
+                           if k.startswith("C"))
+        if validity_failed:
+            code = exit_codes.INVALID
+        elif claim_failed:
+            code = exit_codes.CLAIM_FAIL
+        else:
+            code = exit_codes.DONE
+        by_code.setdefault(code, []).append(name)
+
+    line = lift("arm_offgpu_gates private-mixtral-bm32", REPO=str(ROOT)).stdout
+    # Every world is still on the advertised --self-test choice list.
+    for name in private.WORLDS:
+        assert name in line, (name, line)
+    # The one CLAIM_FAIL that is NOT about C1 has to be named as a CLAIM_FAIL.
+    assert "faster-than-its-ruler" in by_code[exit_codes.CLAIM_FAIL], by_code
+    assert "faster-than-its-ruler 1 CLAIM_FAIL" in line, line
+    invalid = by_code[exit_codes.INVALID]
+    assert f"{_NUMBER_WORDS[len(invalid)]} 3 INVALID".upper() in line.upper(), (
+        invalid, line)
+    # And `ragged` breaks TWO validity gates, which "the one validity gate each
+    # is planted to break" denied.
+    broken = [k for k, v in private.WORLDS["ragged"].expect.items()
+              if k.startswith("V") and v == private.FAIL]
+    assert len(broken) == 2, broken
+    assert "TWO of them" in line, line

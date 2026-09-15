@@ -220,9 +220,21 @@ def test_outcome_for_names_every_registered_world():
 def test_the_band_edges_are_the_studys_own_and_not_a_second_copy():
     """ALPHA_BAND is IMPORTED. A local copy that drifted would put the
     prediction page and the study in different worlds while both printed a
-    confident table."""
+    confident table.
+
+    IDENTITY IS ASKED AGAINST THE MODULE OBJECT `PW` ITSELF BOUND, and not
+    against a fresh `import block_m_crossing_sweep`, which is what this test did
+    until it was run inside the whole suite rather than alone. Six other test
+    files load `scripts/block_m_crossing_sweep.py` BY PATH under that same
+    module name, so whichever ran first owns `sys.modules` and a later plain
+    import can hand back a DIFFERENT module object holding an equal but
+    distinct `(0.529, 0.588)`. `is` then fails on two files that agree
+    perfectly, which is an artefact of the loader and not a drift. So: identity
+    against `PW.SWEEP` proves PW typed no second copy, and EQUALITY against
+    whatever instance this process resolves proves the value is the study's."""
     import block_m_crossing_sweep as SWEEP
-    assert PW.ALPHA_BAND is SWEEP.ALPHA_BAND
+    assert PW.ALPHA_BAND is PW.SWEEP.ALPHA_BAND
+    assert PW.ALPHA_BAND == SWEEP.ALPHA_BAND
     names = [n for n, _lo, _hi, _m in PW.OUTCOMES]
     band = PW.OUTCOMES[names.index("REFIT-CONFIRMED")]
     assert (band[1], band[2]) == SWEEP.ALPHA_BAND
