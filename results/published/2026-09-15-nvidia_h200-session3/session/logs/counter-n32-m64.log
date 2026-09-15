@@ -1,0 +1,8 @@
+DRAM COUNTER RUN  id=nvidia_h200-mixtral-8x7b-bf16-g16-n32-m64-s4-t1.2.3.4.6.8-ccall-4metrics
+  ncu             /usr/local/cuda/bin/ncu  [Version 2025.1.1.0 (build 35528883) (public-release)]
+  cell            mixtral-8x7b bf16 BLOCK_SIZE_M=64 BLOCK_SIZE_N=32 GROUP_SIZE_M=16 num_stages=4
+  cache-control   all
+  profiles        /workspace/session/gaps-nvidia_h200-20260914T234626Z/counter_run_n32.profiles
+
+REFUSED: no ncu CSV header in this output: expected a row carrying 'Kernel Name', 'Metric Name' and 'Metric Value'. Profile with --csv --page raw and read the log file, not the console
+RESULT: VALIDITY R1 FAIL no ncu CSV header in this output: expected a row carrying 'Kernel Name', 'Metric Name' and 'Metric Value'. Profile with --csv --page raw and read the log file,

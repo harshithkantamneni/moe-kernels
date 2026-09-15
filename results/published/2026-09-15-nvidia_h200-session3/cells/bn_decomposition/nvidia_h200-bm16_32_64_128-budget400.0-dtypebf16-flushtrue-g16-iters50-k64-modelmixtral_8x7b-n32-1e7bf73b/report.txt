@@ -1,0 +1,345 @@
+experiment  bn_decomposition: separate alpha_a from alpha_b, and test whether the model is complete
+
+## Predictions, registered before anything is measured
+
+THE ARITHMETIC (check it, do not test it; it is algebra, not a claim)
+  W = 3 F H = 176,160,768 elements per expert; one M-tile carries 2H + 3F = 51,200 elements per row read or written once,
+  and W/BN re-read per extra N-tile. K = W/(2H+3F) = 3440.6 (ai_model.py uses the up-GEMM's K = 4096, a 16% difference,
+  worth 0.0060 in alpha at BM=128).
+  alpha_fitted = (alpha_b + phi)/(1 + phi + delta)   EXACT
+  alpha_fitted = alpha_b + alpha_a (BM/BN) + BM/K    the study's form, the same thing linearised at small phi
+  B/C = ridge b (alpha_b + phi) / (2 BM), scored at ridge = 152.90 Op/B (measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d).
+
+P1  alpha_a, as a SLOPE over three or more BN and not a two-point difference, lands in [0.10, 0.38].
+    BASIS  alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:
+             BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086
+             BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043
+             source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json
+             every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.
+             the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run.
+    A FAIL at zero says BN does not move alpha and there is no activation re-read to model.
+    A FAIL high, with a clean residual, says the two-point slopes were biased by the denominator.
+
+P2  THE RESIDUAL IS NOISE: chi2 <= 4.0 against this run's own bootstrap sigma.
+    This is the registered expectation and the one most likely to FAIL, because the published
+    G=1 pair ALREADY disagrees with the model: read through (EXA), BN=64 implies alpha_b 0.92
+    and BN=256 implies 0.81, a 0.107 gap against a published cross-arm alpha spread of 0.023.
+    A FAIL names its shape: the candidate is alpha_b itself moving with BN, because BN changes
+    the order the L2 is walked in -- a term the three-term model forbids.
+
+P3  alpha_b is the SAME at every BLOCK_M, within 3 bootstrap sigma. Nothing in the model lets a
+    weight miss fraction depend on the tile height, so this is the cheapest test of the whole
+    decomposition and it needs no external number.
+
+P4  alpha_b at GROUP_SIZE_M=16, against TEMPO's b2/b of 0.311/0.319. NO prior agreement is claimed:
+    the study's earlier 'decomposed 0.307 corroborates TEMPO to 2-4%' is WITHDRAWN, because 0.307
+    was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of the estimator, and pooled over
+    GROUP_SIZE_M 1, 8, 16 and 64 besides. This run pins ONE swizzle. Read through (EXA) the study's
+    own G=1 ladders put alpha_b near 0.92, so C4 is predicted to FAIL at G=16 unless it is 16 or
+    above -- and that failure is a statement about the swizzle, not about TEMPO. Either verdict is the
+    first alpha_b in this study that may be compared with TEMPO at all.
+
+P5  WHICH CELLS GO MISSING, registered because two of them are predicted to.
+    THE PRIMARY AT BN=64 IS PREDICTED TO BE DISCARDED: the anchor is 0.991, inside the parallel-branch
+    tolerance of 0.15, and that is the measured median of 22 published ladders rather than a guess.
+    At BN=32 the primary was predicted to escape UP (every tread memory bound) and at BN=128 to keep a
+    prefix, so it was registered to contribute 2 of 3 points. IT CONTRIBUTED NONE. In the committed
+    2026-09-10 H200 arm all three BLOCK_M=128 cells came back blank, at all three BLOCK_N, and the
+    pooled fit that was registered on three heights was made over TWO. That is why a FOURTH height
+    is swept: BLOCK_M=16 is the height furthest from its compute branch and so the one
+    least likely to lose it, and the identification line on the plan page prints what it buys.
+    BM=64, BM=32 and BM=16 sit far outside the parallel-branch band at every BN, which is what makes
+    the sweep survive the primary going missing a second time.
+    THE BN=32 ARM IS THE ONE AT RISK: its BLOCK_M=256 reference is predicted compute bound in the LADDER
+    world and MEMORY bound in the LIN-ERA one, so the two worlds disagree about whether the arm exists.
+    If it is refused only two BN values remain, V5 FAILS, alpha_a is UNIDENTIFIED, and the deliverable is
+    that refusal plus this prediction naming it in advance -- not a fitted number.
+
+P6  BLOCK_N=256 CANNOT BE MEASURED AT ALL on either card as pinned: BM=256 x BN=256 needs 256
+    accumulator registers per thread against a maximum of 255, so the arm has no reference. It is
+    excluded by arithmetic before any GPU time, and the resource bill below prints the number.
+
+P7  The references agree across BN to within 2.0x. The failure this bar exists for is 43.6x,
+    from a kernel that spilled its accumulator and still fitted a line through the origin to 0.2%.
+
+PREDICTED CELLS, both worlds, before the run:
+                 LIN-ERA (0.307, 0.143)         LADDER (0.920, 0.146)      calibrated-ridge B/C
+  BM   BN    a_fit    B/C  treads      a_fit    B/C  treads    LIN-ERA LADDER
+   16   32    0.356  4.832    8/8     0.926  6.340    8/8       3.659   9.531
+   16   64    0.334  4.381    8/8     0.923  6.108    8/8       3.317   9.182
+   16  128    0.322  4.155    8/8     0.922  5.992    8/8       3.147   9.008
+   32   32    0.398  2.895    8/8     0.931  3.416    8/8       2.192   5.135
+   32   64    0.359  2.444    8/8     0.926  3.184    8/8       1.851   4.787
+   32  128    0.337  2.218    8/8     0.923  3.068    8/8       1.680   4.612
+   64   32    0.468  1.926    8/8     0.939  1.954    8/8       1.459   2.938
+   64   64    0.403  1.475    8/8     0.931  1.722    8/8       1.117   2.589
+   64  128    0.364  1.250    8/8     0.927  1.606    8/8       0.946   2.414
+  128   32    0.569  1.442    8/8     0.951  1.223    8/8       1.092   1.839
+  128   64    0.476  0.991*   8/8     0.940  0.991*   2/8       0.750   1.490
+  128  128    0.412  0.765    4/8     0.932  0.875*   0/8       0.580   1.315
+  256   32    0.687  1.200    4/4     0.964  0.858*   0/4       0.909   1.289
+  256   64    0.578  0.749    2/4     0.952  0.626    0/4       0.567   0.940
+  256  128    0.489  0.523    1/4     0.941  0.510    0/4       0.396   0.766
+  * = |B/C - 1| <= the parallel-branch tolerance. On a SUBJECT row the fit DISCARDS the memory branch
+  there and the cell yields NO alpha whatever the tread column says, because two branches within 15% of
+  each other are one line. On the BLOCK_M=256 REFERENCE row it is harmless: that ladder is never fitted
+  for a memory branch, only for proportionality, and 0/m treads is what qualifies it.
+  treads n/m = memory-bound treads out of the ladder's length. 0/m is a compute reference; m/m is a cell
+  whose alpha needs no reference for membership. The B/C columns are ANCHORED at 0.991, the measured median over the 22
+  published BLOCK_M=128 ladders, so the kernel's achieved rho cancels. The last two columns are the same
+  quantity computed from the CALIBRATED ridge instead; they run about 15% high, and taken literally they say
+  the BLOCK_M=256 reference at BN=64 is memory bound -- which it measurably is not, in 22 of 24 published arms.
+
+## The plan
+
+model        mixtral-8x7b E=8 k=2 bf16
+pinned       {'BLOCK_SIZE_K': 64, 'GROUP_SIZE_M': 16, 'num_warps': 8, 'num_stages': 4}  (BLOCK_SIZE_N is the sweep)
+BN grid      [32, 64, 128]
+subjects     [16, 32, 64, 128], primary 128; reference 256. EVERY arm's reference is measured first, across all arms, and level-checked before any subject costs anything -- an arm that qualifies none of its own can still borrow one, and whether it can is not knowable until the others exist
+repeats      17 round-robin passes per setting
+identification  corr(g1, 1/BN) over this design's 12 cells = 0.552. g1 is the three-term model's only BLOCK_N-dependent
+             column and is strictly proportional to BLOCK_M; 1/BN is the rival that fits the 2026-09-10 arm 3.1x
+             better at equal parameter count. Where the two are collinear no repeat count separates them.
+             without BLOCK_M=16 the same number is 0.663 over 9 cells, which is what the fourth height is worth.
+             the committed 2026-09-10 arm yielded 0 of 3 BLOCK_M=128 cells with an alpha, so the fit registered on 3 heights was made over 2: [32, 64].
+             BLOCK_M=16 measured at BLOCK_N=64, GROUP_SIZE_M=1, num_warps=8, num_stages=4: 56 of 56 treads memory bound at B/C = 5.46, against the parallel-branch tolerance |B/C - 1| <= 0.15 that discarded every BLOCK_M=128 cell in the committed bn arm. 9 of 9 gates PASS.
+               source: /workspace/moe-kernels/results/published/2026-09-10-nvidia_h200-gaps-session/results/tile_cap/nvidia_h200-bm16-budget400.0-ctl256-dtypebf16-g1-iters50-l2flushtrue-modelmixtral_8x7b-n64-plant-ce661a4a/report.json
+design power at GROUP_SIZE_M=16: the corpus puts alpha_b near 0.61 there, and the response moves with alpha_a as g1 (1 - alpha_b)/(1 + phi)^2, so the lever is 100% of its size at GROUP_SIZE_M=16.
+             planted TRUTH world at GROUP_SIZE_M=16, 17 reps, spread 1.82% (the worst published across-repeat spread (H200 s4 ladders 0.76-1.82%, A100 0.48-0.61%); nothing measured was available to resolve it from): sd(alpha_a) = 0.1675 against the 0.025 C1 needs -> CANNOT RESOLVE alpha_a
+             that sd is the MEDIAN over 5 planted realisations, which ran 0.0941, 0.0959, 0.1675, 0.2271, 0.2529; the verdict is scored on the WORST of them (0.2529). One realisation is not a property of the design: at the worst published spread this figure swings by an order of magnitude between seeds, and it is what decides whether the arm is paid for.
+             AT THIS PINNING C1 WILL READ UNKNOWN however the run goes. --group-m 16 is the setting that resolves it; --reps buys the rest, and this line is what says how much it bought.
+             C6 will FAIL with it and both are CLAIM gates, so the arm is expected to end 1 CLAIM_FAIL, printed as exit 0 without --fail-on-gate. It is NOT 3 INVALID and must not be re-measured: alpha_b, C3 and C5 are what a run at this pinning is for and they stay quotable.
+             MDE (alpha_a, planted TRUTH world, two-sided 5% at 80% power): 0.4691 in alpha_a, from sd 0.1675. Assumption: lognormal spread 1.82% on every timing, from the worst published across-repeat spread (H200 s4 ladders 0.76-1.82%, A100 0.48-0.61%); nothing measured was available to resolve it from; 200 bootstrap draws. Beside it, the cross-arm floor 0.0229 ASSUMED (s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]): this run's own bootstrap resamples WITHIN-PROCESS warm repeats and cannot see anything that changes between processes, so it is a lower bound and the floor is the DECLARED upper one and not a measurement
+timing       300 ms of warmup under load, then 3 trial(s) of 400 ms of kernel time each, L2 flush ON; the instrument sizes its own iteration count from the warmup's queue-deep per-call time
+timings      1836 (108 treads x 17 reps)
+estimate     2754 s of GPU at what the instrument charges (warmup + trials x budget per timing), excluding compiles and allocation
+  BN=  32 BM=  16  treads  8  rows 16..128  T 64..512
+  BN=  32 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN=  32 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN=  32 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN=  32 BM= 256  treads  4  rows 256..1024  T 1024..4096
+  BN=  64 BM=  16  treads  8  rows 16..128  T 64..512
+  BN=  64 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN=  64 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN=  64 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN=  64 BM= 256  treads  4  rows 256..1024  T 1024..4096
+  BN= 128 BM=  16  treads  8  rows 16..128  T 64..512
+  BN= 128 BM=  32  treads  8  rows 32..256  T 128..1024
+  BN= 128 BM=  64  treads  8  rows 64..512  T 256..2048
+  BN= 128 BM= 128  treads  8  rows 128..1024  T 512..4096
+  BN= 128 BM= 256  treads  4  rows 256..1024  T 1024..4096
+ridge        152.897 Op/B, measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d
+ridge band   142.80-155.50, this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+bandwidth    4374.7 GB/s, this machine's calibration (NVIDIA H200 (measured))
+ceiling      668.9 TFLOP/s bf16, measured on NVIDIA H200 (measured)
+instrument   queue-deep/l2-flush/settled-warmup/clock-under-load/v4
+card         nvidia_h200
+
+TILE RESOURCE BILL, one CTA, at sm_90
+  BN=  32  BLOCK_M=  16  smem     24 KiB of    227 KiB  acc     2 reg/thread of 255  ok
+  BN=  32  BLOCK_M=  32  smem     32 KiB of    227 KiB  acc     4 reg/thread of 255  ok
+  BN=  32  BLOCK_M=  64  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN=  32  BLOCK_M= 128  smem     80 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN=  32  BLOCK_M= 256  smem    144 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  16  smem     40 KiB of    227 KiB  acc     4 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  32  smem     48 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN=  64  BLOCK_M=  64  smem     64 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN=  64  BLOCK_M= 128  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN=  64  BLOCK_M= 256  smem    160 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  16  smem     72 KiB of    227 KiB  acc     8 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  32  smem     80 KiB of    227 KiB  acc    16 reg/thread of 255  ok
+  BN= 128  BLOCK_M=  64  smem     96 KiB of    227 KiB  acc    32 reg/thread of 255  ok
+  BN= 128  BLOCK_M= 128  smem    128 KiB of    227 KiB  acc    64 reg/thread of 255  ok
+  BN= 128  BLOCK_M= 256  smem    192 KiB of    227 KiB  acc   128 reg/thread of 255  ok
+
+WARP-GRID BILL, one CTA. A RECORD, NOT A REFUSAL: an under-occupied warp grid computes the right
+answer with warps to spare, so the cell is measured, but NEITHER of its branches is comparable with
+the rest of the grid: idle warps cost issue slots on the compute side and outstanding loads on the
+memory side, so C is understated and B, and therefore w and alpha, are overstated. It must never be
+promoted to a reference, and its slope must be read against the check below before it is used.
+  BN=  32  BLOCK_M=  16  output    512 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  UNDER-OCCUPIED: 4 of 8 warps hold a tile
+  BN=  32  BLOCK_M=  32  output   1024 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M=  64  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M= 128  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  32  BLOCK_M= 256  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  16  output   1024 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  32  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M=  64  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M= 128  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN=  64  BLOCK_M= 256  output  16384 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  16  output   2048 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  32  output   4096 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M=  64  output   8192 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M= 128  output  16384 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  BN= 128  BLOCK_M= 256  output  32768 elements of   1024 (8 warps x one 128-element m16n8k16 tile)  full
+  REGISTERED CHECK, BM=16 x BN=32: read its w against the line BM=32 and BM=64 set at the SAME BN=32. Both live hypotheses are smooth in
+    BLOCK_M there, so a w ABOVE that line is the warp grid and not the tiling, and the cell must not be used to separate them until the excess is read.
+
+WEIGHT-STREAM SLOPE  moe.bench.weights.weight_stream_ms
+             one complete stream of this layer's expert weights is 0.6443 ms at 4374.7 GB/s. Every cell is scored on w = B / that, beside its alpha.
+WRITES TO    /workspace/results/gaps-nvidia_h200/bn_decomposition/nvidia_h200-bm16_32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32-1e7bf73b
+             git check-ignore exited 128; path unverified (fatal: Invalid path '/workspace/results/gaps-nvidia_h200/bn_decomposition': No such file or directory)
+             cells.csv (one row per tread per repeat, flushed), CARD, report.txt, report.json, triton-cache/
+
+## The arms
+
+  BN=  32  [OWN] BLOCK_M=256 ladder, 4 treads, proportional to 2.1%: compute branch 2.9231 ms per tile, fixed cost 0.2721 ms
+            LEVEL    246.8 TFLOP/s =  36.9% of 668.9   gate [25%, 100%]
+            issue efficiency  31.4% of 784.9 TFLOP/s, the roof at this ladder's own 1725 MHz (record, never a gate input)
+  BN=  64  [OWN] BLOCK_M=256 ladder, 4 treads, proportional to 3.0%: compute branch 1.9770 ms per tile, fixed cost 0.2728 ms
+            LEVEL    365.0 TFLOP/s =  54.6% of 668.9   gate [25%, 100%]
+            issue efficiency  49.5% of 737.1 TFLOP/s, the roof at this ladder's own 1620 MHz (record, never a gate input)
+  BN= 128  [OWN] BLOCK_M=256 ladder, 4 treads, proportional to 3.6%: compute branch 1.5070 ms per tile, fixed cost 0.2439 ms
+            LEVEL    478.8 TFLOP/s =  71.6% of 668.9   gate [25%, 100%]
+            issue efficiency  67.5% of 709.8 TFLOP/s, the roof at this ladder's own 1560 MHz (record, never a gate input)
+  across BN, implied rates span 1.94x (gate <= 2.0x, on the raw rates against the fixed roof)
+  the same spread with each arm rescaled to its own clock is 2.14x, printed as a record: the arms held different clocks under the power cap and the gate is pre-registered on the raw rates
+
+## The cells
+
+   BN   BM   treads  mem   alpha    corrected       w  A/D   sigma  surv  basis
+    32   16      8    8    0.8412     0.8381  1.2855  D>A  0.0231  100%  membership from the compute branch scaled off BLOCK_M=256
+    64   16      8    8    0.6289     0.6248  0.7071  D>A  0.0068  100%  membership from the compute branch scaled off BLOCK_M=256
+   128   16      8    8    0.4874     0.4830  0.5080  D<A  0.0042  100%  membership from the compute branch scaled off BLOCK_M=256
+    32   32      8    8    0.7767     0.7709  1.2449  D>A  0.0198  100%  membership from the compute branch scaled off BLOCK_M=256
+    64   32      8    8    0.7021     0.6944  0.8576  D>A  0.0063  100%  membership from the compute branch scaled off BLOCK_M=256
+   128   32      8    8    0.6049     0.5966  0.6811  D<A  0.0070  100%  membership from the compute branch scaled off BLOCK_M=256
+    32   64      8    8    0.8455     0.8340  1.3695  D>A  0.0198  100%  membership from the compute branch scaled off BLOCK_M=256
+    64   64      8    8    0.7114     0.6967  0.9008  D>A  0.0062  100%  membership from the compute branch scaled off BLOCK_M=256
+   128   64      8    8    0.6555     0.6387  0.7253  D<A  0.0051  100%  membership from the compute branch scaled off BLOCK_M=256
+    32  128      8    0     BLANK       n/a     n/a          n/a   n/a  no_memory_branch
+    64  128      8    0     BLANK       n/a     n/a          n/a   n/a  no_memory_branch
+   128  128      8    0     BLANK       n/a     n/a          n/a   n/a  no_memory_branch
+  w = B / T_w, the memory branch's slope in units of ONE COMPLETE stream of this layer's expert weights
+  at the card's own rate. T_w = 0.6443 ms for 8 x 3 F H x 2 B at 4374.7 GB/s. NO fitted level, no intercept,
+  no delta and no D enter it, which is what makes it comparable across arms that alpha is not.
+  estimator: moe.bench.weights.weight_stream_ms
+  A/D = whether this arm's compute reference's fitted fixed cost D exceeds this ladder's own
+  intercept A. `alpha_upper = B/(A + B - D)` is above 1 EXACTLY when D > A, so a D>A cell's
+  alpha_upper is unphysical by arithmetic and not by measurement. In the committed 2026-09-10
+  arm that held in four of six cells and in no others.
+  under-occupied BM=16 x BN=32: w = 1.2855 against 1.1204 on the BM=32/64 line at this BN, +14.7%. Above it is the warp grid, not the tiling.
+    BN=  32 BM=  16  A= 0.15638 B= 0.82827 D= 0.27207 ms  D>A
+    BN=  64 BM=  16  A= 0.26881 B= 0.45555 D= 0.27278 ms  D>A
+    BN= 128 BM=  16  A= 0.34418 B= 0.32728 D= 0.24386 ms  D<A
+    BN=  32 BM=  32  A= 0.23067 B= 0.80210 D= 0.27207 ms  D>A
+    BN=  64 BM=  32  A= 0.23450 B= 0.55254 D= 0.27278 ms  D>A
+    BN= 128 BM=  32  A= 0.28662 B= 0.43882 D= 0.24386 ms  D<A
+    BN=  32 BM=  64  A= 0.16129 B= 0.88236 D= 0.27207 ms  D>A
+    BN=  64 BM=  64  A= 0.23544 B= 0.58037 D= 0.27278 ms  D>A
+    BN= 128 BM=  64  A= 0.24559 B= 0.46731 D= 0.24386 ms  D<A
+
+## The decomposition
+
+  EXACT  alpha_upper = (alpha_b + phi)/(1 + phi), 2 parameters
+    alpha_b   0.9747 +/- 0.0037   alpha_a  -0.8753 +/- 0.0619
+    EXA over 9 cells, 7 degree(s) of freedom, residual RMS 0.0849
+  LINEAR alpha = alpha_b + alpha_a BM/BN + BM/K, the study's form
+    alpha_b   0.5908   alpha_a   0.1370
+    LIN over 9 cells, 7 degree(s) of freedom, residual RMS 0.0773
+  RAW3   alpha = (alpha_b + phi)/(1 + phi + delta), delta FITTED -- cross-check only, never gated
+    alpha_b  -0.0077   alpha_a  -0.0155   delta  -1.0102
+    EXA3 over 9 cells, 6 degree(s) of freedom, residual RMS 0.0012
+  THE TWO FORMS ARE THE SAME MODEL, linearised or not. Where they disagree, phi is not small: it is 0.792 at BM=128, BN=64 on this model, so the linear form's denominator is off by that much.
+
+  per BLOCK_M (this is what C3 reads):
+    BM=  16  EXA alpha_b  0.9191 alpha_a -3.3053   LIN alpha_b  0.3766 alpha_a  0.9299
+    BM=  32  EXA alpha_b  0.9643 alpha_a -2.1288   LIN alpha_b  0.5583 alpha_a  0.2176
+    BM=  64  EXA alpha_b  1.0144 alpha_a -0.4802   LIN alpha_b  0.5699 alpha_a  0.1277
+
+## Noise, and which kind of it
+
+  1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)
+  SCOPE: these resamples are of WITHIN-PROCESS WARM REPEATS -- one process, one allocation, one clock state, repeats interleaved round robin. Nothing that changes between processes is in them, and every cross-arm comparison this study publishes is exactly that kind of comparison, so every interval below is a LOWER bound on the uncertainty of a number compared across arms.
+  cross-arm floor 0.0229 ASSUMED (s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]), carried beside the intervals and never used as a gate
+  MDE (alpha_a, this run, two-sided 5% at 80% power): 0.1734 in alpha_a, from sd 0.0619. Assumption: this run's own bootstrap over 1000 draws; measured across-repeat spread 0.25% (this run's own repeats, median over 3 arm(s)). Beside it, the cross-arm floor 0.0229 ASSUMED (s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]): this run's own bootstrap resamples WITHIN-PROCESS warm repeats and cannot see anything that changes between processes, so it is a lower bound and the floor is the DECLARED upper one and not a measurement
+  C2 power probe: the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.25% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict
+
+## Clock state of the timed treads
+
+  1836 timed treads: 748 steady level, 3 steady LOW (kept, side recorded), 920 steady HIGH (kept, side recorded), 165 DRIFT failed (excluded, and not in the three counts before it), 0 steady with LEVEL not determined
+  the 165 drifted treads by side: 88 level, 0 LOW, 77 HIGH, 0 with LEVEL not determined; a tread whose clock moved is not steady at any side, so none of them is counted as kept
+  scored against the fixed roof; this fit drops no tread for its clock, and None means NOT DETERMINED, never fine
+
+## Gates
+
+RESULT: VALIDITY V0 PASS this report examined real work | saw arms on their OWN branch=3, bn arms with a reference=3, bootstrap draws=1000, timings read=1836, treads fitted=96, usable alpha cells=9 | gate every counted quantity is above zero
+[PASS] VALIDITY V0 non-vacuity  this report examined real work
+         gate: every counted quantity is above zero
+         saw:  arms on their OWN branch=3, bn arms with a reference=3, bootstrap draws=1000, timings read=1836, treads fitted=96, usable alpha cells=9
+RESULT: VALIDITY V1 PASS every (BN, BM) setting compiled its own kernel | saw n32/bm16:16, n32/bm32:16, n32/bm64:16, n32/bm128:16, n32/bm256:17, n64/bm16:16, n64/bm32:16, n64/bm64:16, n64/bm128:16, n64/bm256:16, n128/bm16:16, n128/bm32:16, n128/bm64:16, n128/bm128:16, n128/bm256:16 | gate >= 1 fresh Triton artefact per setting that ran cells
+[PASS] VALIDITY V1 override took effect  every (BN, BM) setting compiled its own kernel
+         gate: >= 1 fresh Triton artefact per setting that ran cells
+         saw:  n32/bm16:16, n32/bm32:16, n32/bm64:16, n32/bm128:16, n32/bm256:17, n64/bm16:16, n64/bm32:16, n64/bm64:16, n64/bm128:16, n64/bm256:16, n128/bm16:16, n128/bm32:16, n128/bm64:16, n128/bm128:16, n128/bm256:16
+RESULT: VALIDITY V2 PASS each arm's compute reference runs at a plausible rate | saw BN=32 36.9%; BN=64 54.6%; BN=128 71.6% | issue efficiency (record, not the gate input): BN=32 31.4% at 1725 MHz; BN=64 49.5% at 1620 MHz; BN=128 67.5% at 1560 MHz | gate implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject
+[PASS] VALIDITY V2 reference level  each arm's compute reference runs at a plausible rate
+         gate: implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject
+         saw:  BN=32 36.9%; BN=64 54.6%; BN=128 71.6% | issue efficiency (record, not the gate input): BN=32 31.4% at 1725 MHz; BN=64 49.5% at 1620 MHz; BN=128 67.5% at 1560 MHz
+         `compute_reference` tests PROPORTIONALITY and never LEVEL; a line 43.6x too steep is perfectly proportional and qualified at 0.2% mean error.
+         An arm on an IMPORTED branch is not a failure of this gate -- it passed the same level bar, on another arm's ladder -- but it is an ASSUMPTION, and V3's cross-BN spread is what stands behind it.
+RESULT: VALIDITY V3 PASS the arms' compute references describe one machine | saw 1.94x raw (fixed roof, the gate input); 2.14x normalised to each arm's own clock (record, not the gate input) | gate max/min implied TFLOP/s across BN <= 2.0x, on the RAW rates against the fixed roof
+[PASS] VALIDITY V3 references agree across BN  the arms' compute references describe one machine
+         gate: max/min implied TFLOP/s across BN <= 2.0x, on the RAW rates against the fixed roof
+         saw:  1.94x raw (fixed roof, the gate input); 2.14x normalised to each arm's own clock (record, not the gate input)
+RESULT: VALIDITY V4 PASS quiet, monotone ladders and stable membership | saw spread BN=32:0.188%, BN=64:0.250%, BN=128:0.357%; 0 inversion(s); 0 unstable cell(s) | gate across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws
+[PASS] VALIDITY V4 ladders are readable  quiet, monotone ladders and stable membership
+         gate: across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws
+         saw:  spread BN=32:0.188%, BN=64:0.250%, BN=128:0.357%; 0 inversion(s); 0 unstable cell(s)
+RESULT: VALIDITY V5 PASS at least 3 BN values survive with an alpha | saw 9 usable cell(s) over 3 BN value(s); BM=16: BN [32, 64, 128], BM=32: BN [32, 64, 128], BM=64: BN [32, 64, 128] | gate >= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom
+[PASS] VALIDITY V5 identifiability  at least 3 BN values survive with an alpha
+         gate: >= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom
+         saw:  9 usable cell(s) over 3 BN value(s); BM=16: BN [32, 64, 128], BM=32: BN [32, 64, 128], BM=64: BN [32, 64, 128]
+         the primary BLOCK_M=128 carries 0 BN value(s). The parallel-branch tolerance is the predicted reason for a shortfall there and it is not a defect in the run: |B/C - 1| at 128 is predicted at 0.10 on the A100 against a tolerance of 0.15.
+         IT IS NO LONGER ONLY A PREDICTION. On 2026-09-10 the primary carried ZERO BN values on the H200: every BLOCK_M=128 cell at every BLOCK_N had its memory branch discarded, so this gate's shortfall clause is the arm's normal state and not its bad day. BLOCK_M=16 is swept because a fit over the two heights that survived cannot separate the activation column from the 1/BN column that beats it.
+RESULT: CLAIM C6 FAIL alpha_a's interval is tighter than the two-point reading it replaces | saw sd = 0.0619 | gate bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced
+[FAIL] CLAIM    C6 estimator sharpness  alpha_a's interval is tighter than the two-point reading it replaces
+         gate: bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced
+         saw:  sd = 0.0619
+         a non-PASS here invalidates: C1 ALONE, which reads UNKNOWN: an estimator whose interval is wider than the hypothesis it tests has not tested it, and a PASS would be an artefact of the band's width. alpha_b, C3 and C5 do not pass through this spread and stay quotable
+         1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)
+         the bar is read from BM=64 of mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json
+RESULT: CLAIM C1 UNKNOWN alpha_a lands in [0.10, 0.38] | saw alpha_a = -0.8753 +/- 0.0619 -- UNKNOWN, not scored: C6 says the interval is too wide | gate 0.10 <= alpha_a <= 0.38 from the EXA fit
+[UNKNOWN] CLAIM    C1 alpha_a  alpha_a lands in [0.10, 0.38]
+         gate: 0.10 <= alpha_a <= 0.38 from the EXA fit
+         saw:  alpha_a = -0.8753 +/- 0.0619 -- UNKNOWN, not scored: C6 says the interval is too wide
+         alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:
+           BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086
+           BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043
+           source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json
+           every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.
+           the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run.
+         A FAIL ABOVE the band with a clean residual would say both committed two-point slopes were biased low by the denominator the two-point form drops; a FAIL at or near zero says BN does not move alpha at all and there is no activation re-read to decompose. A PASS is weak: the two slopes above disagree by a factor of two and the band covers both, which is the width a three-point fit is here to narrow.
+RESULT: CLAIM C2 FAIL the three terms are ALL of it: the residual is noise | saw chi2 = 317.26 over 7 dof; residual RMS 0.0849 | gate chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning
+[FAIL] CLAIM    C2 model completeness  the three terms are ALL of it: the residual is noise
+         gate: chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning
+         saw:  chi2 = 317.26 over 7 dof; residual RMS 0.0849
+         C2 power probe: the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.25% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict
+         structure: worst correlation +0.367 against N-tiles per M-tile
+         A FAIL is a RESULT and the more interesting one: it says alpha_fitted is not the blend the study writes down, and the correlation above names the term to add. The candidate this run is built to see is alpha_b itself moving with BN, which the model forbids and which the published G=1 pair already hints at: the two BN values there imply alpha_b 0.92 and 0.81.
+           residual +0.1176 at BN=32 BM=16
+           residual +0.0327 at BN=32 BM=32
+           residual -0.0790 at BN=32 BM=64
+           residual +0.0322 at BN=64 BM=16
+           residual +0.0681 at BN=64 BM=32
+           residual +0.0355 at BN=64 BM=64
+           residual -0.1851 at BN=128 BM=16
+           residual -0.0452 at BN=128 BM=32
+           residual +0.0231 at BN=128 BM=64
+RESULT: CLAIM C3 FAIL alpha_b is the same at every BLOCK_M | saw BM=16: 0.9191, BM=32: 0.9643, BM=64: 1.0144; worst BM=16 vs BM=64 gap 0.0953 = 26.7 sigma | gate worst pair within 3 bootstrap sigma
+[FAIL] CLAIM    C3 alpha_b invariance  alpha_b is the same at every BLOCK_M
+         gate: worst pair within 3 bootstrap sigma
+         saw:  BM=16: 0.9191, BM=32: 0.9643, BM=64: 1.0144; worst BM=16 vs BM=64 gap 0.0953 = 26.7 sigma
+         A FAIL says the fitted intercept absorbs something that scales with BM and is not in the model -- which is the same statement C2 makes, arriving by a route that does not need a residual.
+RESULT: CLAIM C5 PASS 0 <= alpha_b <= 1 | saw alpha_b = 0.9747 +/- 0.0037, inside [0, 1] | gate within 3 bootstrap sigma of [0, 1]
+[PASS] CLAIM    C5 alpha_b is a miss fraction  0 <= alpha_b <= 1
+         gate: within 3 bootstrap sigma of [0, 1]
+         saw:  alpha_b = 0.9747 +/- 0.0037, inside [0, 1]
+         A FAIL above 1 is not a fitting artefact to be clipped: it says the per-M-tile cost divided by the weight bytes contains traffic the three terms do not name, which is C2's verdict arriving without a residual.
+RESULT: CLAIM C4 FAIL alpha_b corroborates TEMPO's b2/b of 0.311/0.319 | saw alpha_b = 0.9747 +/- 0.0037, nearest TEMPO value off by 205.6% | gate within 15% of the nearer TEMPO value
+[FAIL] CLAIM    C4 alpha_b against TEMPO  alpha_b corroborates TEMPO's b2/b of 0.311/0.319
+         gate: within 15% of the nearer TEMPO value
+         saw:  alpha_b = 0.9747 +/- 0.0037, nearest TEMPO value off by 205.6%
+         THIS RUN IS PINNED AT GROUP_SIZE_M=16 and alpha_b is a property of that swizzle, not of the kernel. The study's earlier 0.307, and its '2-4% from TEMPO', are WITHDRAWN: that number was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of reading a B/(A+B) fit as if it divided by weight bytes alone, not a measurement of alpha_b; through (EXA) the same G=1 ladders read alpha_b near 0.92, which is what 'consecutive M-tiles of one expert are scheduled far apart and the L2 keeps nothing' should look like. It was also pooled over GROUP_SIZE_M 1, 8, 16 and 64, which swing alpha by 0.39. So a FAIL at G=1 does NOT refute TEMPO, and a PASS at any G is the first number in this study that may be compared with TEMPO at all. Re-run at --group-m 16 to compare like with like.
+
+7 PASS, 4 FAIL, 1 UNKNOWN
+the gates imply 1 CLAIM_FAIL: measured; VALIDITY passed; a CLAIM gate did not (a result, not a retry)

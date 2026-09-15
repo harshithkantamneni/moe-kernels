@@ -1,0 +1,482 @@
+{
+  "experiment": "tile_cap",
+  "cap_tile": 16,
+  "control_tile": 256,
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 152.89716036611227,
+  "ridge_band": [
+    142.7973479416667,
+    155.4971120793359
+  ],
+  "dtype_bytes": 2,
+  "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+  "ridge_band_source": "this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling",
+  "ridge_device": "NVIDIA H200 (measured)",
+  "card": "nvidia_h200",
+  "synthetic": false,
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 64,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 1,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "plateau_tflops": 371.37725979794345,
+  "model_roof_tflops": 668.8743078905766,
+  "fused_layer_roof_tflops": 311.02655316911813,
+  "fused_plateau_band": [
+    0.465,
+    0.756
+  ],
+  "lin_overstatement": [
+    1.0044642857142858,
+    1.25390625
+  ],
+  "timing_spread_median": 0.019345210997358753,
+  "memory_branch_margin": 0.05803563299207626,
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "planned_cells": 162,
+  "measured_cells": 162,
+  "depth_required": {
+    "tiles": 43,
+    "rows": 688,
+    "horizon_roof": {
+      "142.7973479416667": 29,
+      "155.4971120793359": 43
+    },
+    "horizon_disc": {
+      "142.7973479416667": 13,
+      "155.4971120793359": 13
+    },
+    "saturation_tiles": 17,
+    "binding": "the near-roof horizon at the worst end of the ridge band"
+  },
+  "depth_reached_tiles": 132,
+  "roof_fraction_gate": 0.85,
+  "cap_discriminator": 0.616995877077339,
+  "alpha_measured": 1.439157482063463,
+  "alpha_corrected": 1.432763585925426,
+  "ai_cap_measured": 11.167229651265568,
+  "peak_roof_fraction": {
+    "16": 0.1015868593938899,
+    "256": 0.5552272757629948
+  },
+  "peak_issue_efficiency": {
+    "16": 0.09955512220601209,
+    "256": 0.4902006578808422
+  },
+  "reference_clock_mhz": 1470.0,
+  "reference_clock_source": "NVIDIA H200 (measured): detail.gemm_clock.median_mhz = 1470 MHz, the median of the samples taken while the calibration's dense GEMM ran (bf16 GEMM)",
+  "compute_reference": "BLOCK_M=256 ladder, 7 treads, proportional to 0.6%: compute branch 1.9638 ms per tile, fixed cost 0.0000 ms",
+  "compute_reference_candidate": 256,
+  "compute_reference_block_m": 256,
+  "compute_reference_refused_block_m": null,
+  "compute_reference_mean_rel_err": 0.0060483545023847516,
+  "compute_reference_refusals": [],
+  "compute_reference_roof_fraction": 0.549319197992296,
+  "compute_reference_vacuity_ratio": 0.19050035338767893,
+  "compute_reference_level_ratio": 0.18421019800513447,
+  "compute_reference_level_comparisons": 5,
+  "ladder": {
+    "16": {
+      "points": [
+        [
+          1,
+          0.7582079768180847
+        ],
+        [
+          3,
+          2.0147199630737305
+        ],
+        [
+          4,
+          2.6694079637527466
+        ],
+        [
+          5,
+          3.346016049385071
+        ],
+        [
+          6,
+          4.029280185699463
+        ],
+        [
+          8,
+          5.339120149612427
+        ],
+        [
+          10,
+          6.636928081512451
+        ],
+        [
+          12,
+          7.988383769989014
+        ],
+        [
+          14,
+          9.309792041778564
+        ],
+        [
+          16,
+          10.644415855407715
+        ],
+        [
+          18,
+          11.949695587158203
+        ],
+        [
+          20,
+          13.284799575805664
+        ],
+        [
+          22,
+          14.632543563842773
+        ],
+        [
+          24,
+          15.950688362121582
+        ],
+        [
+          26,
+          17.310016632080078
+        ],
+        [
+          28,
+          18.62995147705078
+        ],
+        [
+          30,
+          19.953088760375977
+        ],
+        [
+          32,
+          21.289071083068848
+        ],
+        [
+          34,
+          22.622623443603516
+        ],
+        [
+          36,
+          24.101072311401367
+        ],
+        [
+          38,
+          25.320127487182617
+        ],
+        [
+          40,
+          26.694656372070312
+        ],
+        [
+          42,
+          27.994319915771484
+        ],
+        [
+          44,
+          29.31875228881836
+        ],
+        [
+          46,
+          30.628864288330078
+        ],
+        [
+          48,
+          32.057281494140625
+        ],
+        [
+          50,
+          33.40089416503906
+        ],
+        [
+          52,
+          34.7081298828125
+        ],
+        [
+          54,
+          36.06876754760742
+        ],
+        [
+          56,
+          37.36553764343262
+        ],
+        [
+          58,
+          38.74883270263672
+        ],
+        [
+          60,
+          40.12291145324707
+        ],
+        [
+          62,
+          41.58633613586426
+        ],
+        [
+          64,
+          42.72025489807129
+        ],
+        [
+          66,
+          44.177663803100586
+        ],
+        [
+          68,
+          45.532766342163086
+        ],
+        [
+          70,
+          46.925872802734375
+        ],
+        [
+          74,
+          49.990928649902344
+        ],
+        [
+          90,
+          60.43499183654785
+        ],
+        [
+          92,
+          61.954416275024414
+        ],
+        [
+          94,
+          63.200767517089844
+        ],
+        [
+          96,
+          64.42427444458008
+        ],
+        [
+          98,
+          65.93462371826172
+        ],
+        [
+          100,
+          67.04072189331055
+        ],
+        [
+          102,
+          68.42119979858398
+        ],
+        [
+          104,
+          69.7159194946289
+        ],
+        [
+          106,
+          71.23863983154297
+        ],
+        [
+          108,
+          72.5514907836914
+        ],
+        [
+          110,
+          73.9659194946289
+        ],
+        [
+          114,
+          76.5697135925293
+        ],
+        [
+          116,
+          78.4812126159668
+        ],
+        [
+          120,
+          80.983154296875
+        ],
+        [
+          122,
+          82.21673583984375
+        ],
+        [
+          124,
+          83.84870147705078
+        ],
+        [
+          128,
+          86.23344039916992
+        ],
+        [
+          130,
+          87.55300521850586
+        ],
+        [
+          132,
+          88.79409790039062
+        ]
+      ],
+      "memory_points": 57,
+      "alpha": 1.439157482063463,
+      "slope_memory": 0.6743844906530562,
+      "slope_compute": 0.1227382334875943,
+      "crosses": false,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "mean_rel_err": 0.014760364182128574
+    },
+    "256": {
+      "points": [
+        [
+          2,
+          3.921663999557495
+        ],
+        [
+          3,
+          5.874815940856934
+        ],
+        [
+          4,
+          7.796031951904297
+        ],
+        [
+          5,
+          9.71457576751709
+        ],
+        [
+          6,
+          11.684320449829102
+        ],
+        [
+          7,
+          13.751744270324707
+        ],
+        [
+          8,
+          15.882608413696289
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "slope_memory": null,
+      "slope_compute": 1.9638117358015088,
+      "crosses": null,
+      "basis": "the reference ladder itself: compute bound at every tread",
+      "mean_rel_err": 0.0060483545023847516
+    }
+  },
+  "gates": [
+    {
+      "tag": "V0",
+      "kind": "VALIDITY",
+      "claim": "override_config changed the kernel at every setting",
+      "verdict": "PASS",
+      "measured": "fresh Triton artefacts per setting: BM=16:17, BM=256:16",
+      "gate": ">= 1 per setting",
+      "consequence": "the two settings may have been one kernel, every difference below is a comparison of that kernel with itself, and nothing on this page is evidence"
+    },
+    {
+      "tag": "V1",
+      "kind": "VALIDITY",
+      "claim": "the run measured the grid it planned",
+      "verdict": "PASS",
+      "measured": "162/162 cells, 57/7 aligned treads",
+      "gate": "all 162 cells and >= 3 aligned treads per tile",
+      "consequence": "the ladders below were fitted on a grid with holes in it, and no roof fraction, alpha or ratio on this page may be quoted"
+    },
+    {
+      "tag": "V2",
+      "kind": "VALIDITY",
+      "claim": "the control BLOCK_M=256 reached a compute roof in this grid",
+      "verdict": "PASS",
+      "measured": "proportional to 0.6%, last tread -1.05%",
+      "gate": "the reference IS BLOCK_M=256, its through-origin fit within 5%, and its last tread within +/-5.80%",
+      "consequence": "the compute branch every tread at the cap tile is classified against is not one, so neither C1 nor C2 may be quoted. Three ways in, and the lines above say which: the control's own LEVEL checks refused it and name themselves; its ladder is not proportional to its tile count, and the fit error that failed is quoted; or it is too short to qualify at all, which the plan now refuses before the pod is rented. Membership then falls back to a split search, which invents an alpha rather than declining to"
+    },
+    {
+      "tag": "V3",
+      "kind": "VALIDITY",
+      "claim": "the control BLOCK_M=256 reached the fused-layer roof",
+      "verdict": "PASS",
+      "measured": "peak 0.555 of the dense peak (371 TFLOP/s), own-clock 0.490",
+      "gate": "in [0.465, 1.058] of ridge x bandwidth, i.e. >= the fused-layer roof 311 TFLOP/s and <= the dense peak 669 widened by max(5%, 3 x the 1.93% per-cell spread)",
+      "consequence": "nothing in this sweep reached a roof a fused layer can reach, so C1 is a statement about the instrument rather than about the tile. THE WHOLE PAGE IS UNQUOTABLE, C2 INCLUDED: this is a VALIDITY gate and a VALIDITY gate that is not PASS exits INVALID under moe.bench.exit_codes, which means nothing in the report may be quoted. What is true of C2 is narrower and is not a licence: C2's NUMBER is arithmetically independent of the roof -- it fits a re-read fraction from the cap tile's own treads and never divides by ridge x bandwidth -- so re-running the CONTROL is enough to recover it and the cap tile's cells need not be re-measured. Until that control is re-run, C2 is not a result"
+    },
+    {
+      "tag": "V4",
+      "kind": "VALIDITY",
+      "claim": "the sweep reached the depth at which the retracted world would trip C1",
+      "verdict": "PASS",
+      "measured": "132 tiles",
+      "gate": ">= 13 tiles",
+      "consequence": "the sweep stopped before the competing hypothesis would have shown itself, so C1 rules nothing out and its PASS may not be quoted"
+    },
+    {
+      "tag": "C1",
+      "kind": "CLAIM",
+      "claim": "BLOCK_M=16 never gets near the compute roof, at any batch",
+      "verdict": "PASS",
+      "measured": "peak 0.102 of the roof, own-clock 0.100",
+      "gate": "<= 0.850 (near-roof) and <= 0.617 (discriminating)",
+      "consequence": "BLOCK_M=16 DOES approach its compute roof, which retracts the structural ceiling this study put on a decode-tuned MoE kernel and is the publishable answer in the other direction"
+    },
+    {
+      "tag": "C2",
+      "kind": "CLAIM",
+      "claim": "the re-read fraction measured at BLOCK_M=16 puts its AI ceiling far below the ridge",
+      "verdict": "PASS",
+      "measured": "cap/ridge = 11.2/152.9 = 0.073",
+      "gate": "<= 0.617, the midpoint of the two worlds",
+      "consequence": "the measured re-read fraction is small enough to put BLOCK_M=16 within reach of the roof, which is the retracted world's prediction and not this study's"
+    },
+    {
+      "tag": "C3",
+      "kind": "CLAIM",
+      "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
+      "verdict": "PASS",
+      "measured": "ms(BM=16) / ms(BM=256) = 5.429x at 2048 rows per expert",
+      "gate": ">= 1.50x",
+      "consequence": "time did NOT fall with the tile height in the multi-tile regime, so the extra weight re-reads a short tile pays are outweighed by padded arithmetic or lost occupancy, and the traffic reading of the cap is wrong"
+    },
+    {
+      "tag": "C4",
+      "kind": "CLAIM",
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "verdict": "PASS",
+      "measured": "median step minus tread +21.77%",
+      "gate": ">= +11.44% (half the model's step) and > 3x noise (5.80%)",
+      "consequence": "the time steps do not land where the tile count changes, so whatever the ladders measured is not the tile quantum and the mechanism behind C1 and C2 is not the one claimed"
+    }
+  ],
+  "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+  "gpu_name": "NVIDIA H200",
+  "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-15T01:35:59+00:00",
+    "hostname": "9d476ebc86ca",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 152.89716036611227,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+    "bandwidth": 4374.667955172987,
+    "bandwidth_source": "measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+    "warmup_ms": 300.0,
+    "iters": 33,
+    "target_ms": 400.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

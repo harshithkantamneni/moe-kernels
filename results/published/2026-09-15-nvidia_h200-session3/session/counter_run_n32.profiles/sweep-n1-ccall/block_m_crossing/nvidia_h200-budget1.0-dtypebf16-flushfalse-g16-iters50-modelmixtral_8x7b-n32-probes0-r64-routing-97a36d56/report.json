@@ -1,0 +1,295 @@
+{
+  "alpha": 0.558,
+  "alpha_band": [
+    0.529,
+    0.588
+  ],
+  "retracted_alpha": 0.1,
+  "ridge": 152.89716036611227,
+  "ridge_band": [
+    142.7973479416667,
+    155.4971120793359
+  ],
+  "ridge_source": "calibration: measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+  "ridge_band_source": "this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling",
+  "bandwidth_gbps": 4374.667955172987,
+  "bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+  "cells_excluded_for_drift": 0,
+  "cells_excluded_for_drift_from_ladders": 0,
+  "cells_kept_level_high": 1,
+  "cells_kept_level_high_from_ladders": 1,
+  "cells_kept_level_low": 0,
+  "cells_kept_level_low_from_ladders": 0,
+  "clock_exclusion_reaches": [
+    "plateau",
+    "compute_reference",
+    "noise_margin",
+    "gate_1",
+    "gate_2",
+    "gate_3",
+    "gate_4",
+    "ladder_fits"
+  ],
+  "ridge_band_degenerate": false,
+  "model_roof_tflops": 668.8743078905766,
+  "dtype_bytes": 2,
+  "model": "mixtral-8x7b",
+  "dtype": "bf16",
+  "fixed": {
+    "BLOCK_SIZE_N": 32,
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "plateau_tflops": 62.005582630894764,
+  "timing_spread_median": 0.048261820677961725,
+  "overhead_ms": 0.0,
+  "compute_reference": {
+    "block_m": null,
+    "overhead_ms": 0.0,
+    "slope_per_tile": null,
+    "mean_rel_err": Infinity,
+    "note": "no candidate ladder (BLOCK_M=64) had the 3 treads needed to qualify a compute branch. Membership falls back to a split search and NO alpha may decide a verdict",
+    "refused_block_m": null,
+    "refusals": [],
+    "roof_fraction": null,
+    "vacuity_ratio": null,
+    "vacuity_basis": "dense",
+    "fused_roof_fraction": null,
+    "fused_roof_band": null,
+    "vacuity_floor": null,
+    "skipped": [
+      "BLOCK_M=64 has 1 aligned tread(s), under the 3 a through-origin fit needs to be a qualification rather than a line through two points; it was NOT tried as the reference and it was NOT refused"
+    ],
+    "level_ratio": null,
+    "level_comparisons": 0
+  },
+  "sm_count": 132,
+  "sm_source": "reported by the driver",
+  "card": "nvidia_h200",
+  "alpha_measured": null,
+  "alpha_source": "",
+  "weight_streams_measured": null,
+  "weight_streams_bandwidth_gbps": 4374.667955172987,
+  "weight_streams_bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+  "predictions": {
+    "64": {
+      "ai_cap": 114.6953405017921,
+      "crossing_rows_ridge_lo": null,
+      "crossing_rows_ridge_hi": null,
+      "first_compute_tread": null,
+      "crosses": false,
+      "crossing_rows": null,
+      "no_crossing_reason": "BLOCK_M=64 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 114.7 Op/B sits at or below the ridge 142.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number",
+      "cap_overstatement": [
+        1.0178571428571428,
+        3.015625
+      ],
+      "cap_overstatement_note": "cap is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta, 1.02-3.02x here (alpha_a unmeasured, delta taken as 0, so a lower bound)"
+    }
+  },
+  "ladder": {
+    "64": {
+      "points": [
+        [
+          1,
+          2.909232020378113
+        ]
+      ],
+      "memory_points": 0,
+      "alpha": null,
+      "alpha_corrected": null,
+      "alpha_upper": null,
+      "weight_streams_per_tile": null,
+      "weight_stream_ms": null,
+      "weight_set_bytes": null,
+      "weight_stream_bandwidth_gbps": 4374.667955172987,
+      "weight_stream_bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+      "fixed_cost_above_intercept": null,
+      "intercept": null,
+      "overhead_ms": 0.0,
+      "slope_memory": null,
+      "slope_compute": 2.909232020378113,
+      "slope_compute_ref": null,
+      "crosses": null,
+      "basis": "split search: no usable compute reference",
+      "identifiable": false,
+      "unidentifiable_reason": "no_compute_reference",
+      "outcome": "too_few_memory_treads",
+      "outcome_reason": "BLOCK_M=64 has 0 memory-bound tread(s), under the 3 a verdict needs",
+      "undecided": false,
+      "branch_start": 0,
+      "excluded_drifted": 0,
+      "kept_high_clock": 1,
+      "kept_low_clock": 0,
+      "mean_rel_err": 0.0
+    }
+  },
+  "bracketing": {
+    "reached_rows": 64.0,
+    "reached_tiles": 1,
+    "horizon_rows": 366.95318487866945,
+    "positive_control": null,
+    "saturation": 0.558,
+    "last_gain": 0.0,
+    "best_other_roof_fraction": 0.0,
+    "roof_tflops": 668.8743078905766
+  },
+  "gates": [
+    {
+      "number": 0,
+      "claim": "override_config changed the kernel at every setting",
+      "kind": "VALIDITY",
+      "basis": "OBSERVED",
+      "verdict": "PASS",
+      "measured": "fresh Triton artefacts per setting: BM=64:17",
+      "gate": ">= 1 per setting",
+      "detail": [],
+      "provenance": {}
+    },
+    {
+      "number": 1,
+      "claim": "time steps at T = n x BLOCK_M x E/k",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "UNDECIDED",
+      "measured": "0 bracketed boundaries",
+      "gate": ">= 3",
+      "detail": [
+        "No boundary had a point below, at and above it. Raise --step-probes or lower --row-step."
+      ],
+      "provenance": {}
+    },
+    {
+      "number": 2,
+      "claim": "time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "FAIL",
+      "measured": "ms(BM=64) / ms(BM=64) = 1.000x at 64 rows per expert",
+      "gate": ">= 1.50x",
+      "detail": [
+        "time moves not at all with BLOCK_M, which is what a block size already compute bound at the smallest tile looks like",
+        "model at alpha=0.558: 1.000x   model at the retracted alpha=0.10: 1.000x",
+        "a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 1 weight re-reads",
+        "rows/expert  BM=64          ms(lo)/ms(hi)",
+        "         64     2.9092 ms   1.000x"
+      ],
+      "provenance": {}
+    },
+    {
+      "number": 3,
+      "claim": "the fitted alpha's interval overlaps the pre-registered band 0.529-0.588",
+      "kind": "CLAIM",
+      "basis": "DERIVED",
+      "verdict": "UNDECIDED",
+      "measured": "alpha not identifiable at any block size",
+      "gate": "interval overlaps [0.529, 0.588] (the refit's 90% band; a FAIL names the direction)",
+      "detail": [
+        "No ladder had enough memory-bound treads, so no block size measured the re-read fraction.",
+        "Lower --r-max is not the fix; a block size whose cap is below the ridge is. 32 and 64 are those.",
+        "NO ladder's fitted slopes imply a crossing exists (C > B is met nowhere; slopes missing at [64]), so nothing here is a crossing measurement and no crossing has been observed",
+        "model's crossing ratio, for reference only: ridge 142.8: no crossing   ridge 155.5: no crossing"
+      ],
+      "provenance": {
+        "tests": "alpha interval overlaps ALPHA_BAND, both sides",
+        "alpha_band": [
+          0.529,
+          0.588
+        ],
+        "alpha_interval": null,
+        "retired_one_sided_threshold": 0.33,
+        "retired_one_sided_verdict": null,
+        "retired_one_sided_note": "alpha_hat > 0.33, the midpoint of the refit and the retracted value. INFORMATIONAL. It is one-sided and passes for everything from 0.33 to 1.0, which is why it is no longer the verdict.",
+        "not_an_observed_crossing": true,
+        "observed_crossing_ratio": null,
+        "ladders_whose_slopes_imply_a_crossing": [],
+        "ladders_with_a_missing_slope": [
+          64
+        ],
+        "alpha_hat": null,
+        "alpha_source": "",
+        "alpha_source_block_m": null,
+        "imported_from_another_block_m": null,
+        "target_tile_outcome": null,
+        "target_tile_outcome_reason": null,
+        "restated_crossing_ratio": null,
+        "restated_crossing_ratio_note": "1 + alpha_hat, the model's identity evaluated at the fitted alpha. It is what the retired ratio gate printed as 'measured'. It is not a measurement and it is only the crossing ratio at all when the BLOCK_M=128 crossing lands in tread 2.",
+        "model_ratio_ridge_lo": null,
+        "model_ratio_ridge_hi": null,
+        "model_ratio_retracted": 1.1,
+        "ridge_band": [
+          142.7973479416667,
+          155.4971120793359
+        ]
+      }
+    },
+    {
+      "number": 4,
+      "claim": "BLOCK_M=64 never reaches the compute roof (ridge x bandwidth)",
+      "kind": "CLAIM",
+      "basis": "OBSERVED",
+      "verdict": "UNDECIDED",
+      "measured": "peak 0.093 of ridge x bandwidth",
+      "gate": "< 0.95 of ridge x bandwidth, and <= 0.875 (the midpoint of this run's ceiling 0.750 and the rival world's 1.000)",
+      "detail": [
+        "THE SWEEP IS NOT BRACKETED, so an absence here is not evidence of absence and this gate refuses to score it.",
+        "measured in fractions of ridge x bandwidth (669 TFLOP/s); the refit caps this block size at cap/ridge = 114.7/152.9 = 0.750 and the retracted alpha=0.1 at 1.000",
+        "throughput per tread as a fraction of that roof: n=1:0.09",
+        "this arm's own plateau is 62.0 TFLOP/s = 9.3% of that roof. Against the plateau this block size peaks at 1.000, which is the number the retired gate scored against 0.85. It is ARM-RELATIVE and it is not the verdict.",
+        "swept to 64 rows per expert (1 M-tiles)",
+        "horizon 367 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size",
+        "positive control: NOTHING reached the compute roof in this grid (best other block size 0.00 of ridge x bandwidth = 669 TFLOP/s), so the sweep never demonstrated it can detect a crossing at all",
+        "modelled AI at the last tread is 55.8% of the ceiling, and the last tread gained 0.0% of throughput over the one before it"
+      ],
+      "provenance": {
+        "units": "fraction of ridge x bandwidth (peak compute)",
+        "roof_tflops": 668.8743078905766,
+        "plateau_tflops": 62.005582630894764,
+        "plateau_over_roof": 0.09270139680867884,
+        "model_ceiling": 0.7501469630119624,
+        "retracted_ceiling": 1.0,
+        "threshold": 0.8750734815059812,
+        "positive_control_block_m": null,
+        "best_other_roof_fraction": 0.0,
+        "retired_denominator": "the arm's own plateau; see GATE4_ROOF_FRACTION",
+        "peak_roof_fraction": 0.09270139680867884,
+        "peak_arm_relative_fraction": 1.0,
+        "worlds_separate": true,
+        "reached_roof": false,
+        "exceeded_ceiling_midpoint": false
+      }
+    }
+  ],
+  "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+  "gpu_name": "NVIDIA H200",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-15T00:53:35+00:00",
+    "hostname": "9d476ebc86ca",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 152.89716036611227,
+    "ridge_source": "calibration: measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+    "bandwidth": 4374.667955172987,
+    "bandwidth_source": "calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)",
+    "warmup_ms": 1.0,
+    "iters": 10,
+    "target_ms": 1.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "run_id": "nvidia_h200-1mmixtral_8x7b_qwen2_57b_a14b-2t32_64_128_256_384_512_768_1024_1536_2048_3072_4096_6-77928810",
+  "card": "NVIDIA H200",
+  "row_label_gpu": "NVIDIA H200",
+  "vllm_version": "0.27.1",
+  "vllm_tag": "v0.27.1",
+  "self_test_fp8_ratio": null,
+  "sign": "r = fp8_time / bf16_time; shift = rm/rc; shift > 1 means fp8 crosses LATER",
+  "ceilings": {
+    "path": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "measured_on": "2026-09-14",
+    "peak_flops": {
+      "bf16": 668874307890576.5,
+      "fp16": 668874307890576.5,
+      "fp8_e4m3": 1442534911104580.2,
+      "fp8_e5m2": 1442534911104580.2
+    },
+    "bandwidth_bytes_s": 4374667955172.9863
+  },
+  "shifts": {
+    "mixtral-8x7b|cfg_bf16": {
+      "tilt": 0.961144478417999,
+      "r_low": 0.5834556560547608,
+      "r_high": 0.6070426134217645,
+      "log_slope": 0.013334891215101636,
+      "n_paired": 6,
+      "low_tokens": [
+        32.0,
+        64.0,
+        768.0
+      ],
+      "high_tokens": [
+        1536.0,
+        3072.0,
+        6144.0
+      ],
+      "memory_tokens": [
+        32.0,
+        64.0,
+        768.0
+      ],
+      "compute_tokens": [
+        1536.0,
+        3072.0,
+        6144.0
+      ],
+      "rm": 0.5834556560547608,
+      "rc": 0.6070426134217645,
+      "branch_shift": 0.961144478417999,
+      "branch_note": "",
+      "memory_slope_bf16": 0.24854300784440753,
+      "compute_slope_bf16": 0.9576861405498748,
+      "unpaired_tokens": [
+        1024,
+        4096,
+        8192
+      ],
+      "ratios": [
+        {
+          "num_tokens": 32,
+          "bf16_ms": 0.6934080123901367,
+          "fp8_ms": 0.39054399728775024,
+          "r": 0.5632239465211369
+        },
+        {
+          "num_tokens": 64,
+          "bf16_ms": 0.6758080124855042,
+          "fp8_ms": 0.3943040072917938,
+          "r": 0.5834556560547608
+        },
+        {
+          "num_tokens": 768,
+          "bf16_ms": 1.4349119663238525,
+          "fp8_ms": 0.9464319944381714,
+          "r": 0.6595749541784547
+        },
+        {
+          "num_tokens": 1536,
+          "bf16_ms": 2.1798720359802246,
+          "fp8_ms": 1.400607943534851,
+          "r": 0.6425184232913189
+        },
+        {
+          "num_tokens": 3072,
+          "bf16_ms": 4.172544002532959,
+          "fp8_ms": 2.532912015914917,
+          "r": 0.6070426134217645
+        },
+        {
+          "num_tokens": 6144,
+          "bf16_ms": 8.2227201461792,
+          "fp8_ms": 4.8218560218811035,
+          "r": 0.5864064368190429
+        }
+      ]
+    },
+    "mixtral-8x7b|tile_fp8": {
+      "tilt": 1.0203674977940755,
+      "r_low": 0.564489218351984,
+      "r_high": 0.5532214810569219,
+      "log_slope": -0.010179948280456716,
+      "n_paired": 6,
+      "low_tokens": [
+        768.0,
+        1536.0,
+        2048.0
+      ],
+      "high_tokens": [
+        4096.0,
+        6144.0,
+        8192.0
+      ],
+      "memory_tokens": [],
+      "compute_tokens": [],
+      "rm": null,
+      "rc": null,
+      "branch_shift": null,
+      "branch_note": "no flat stretch (pooled bf16 slope never <= 0.4); no steep stretch (pooled bf16 slope never >= 0.6), which is what 2*BLOCK_M/(alpha*b) < ridge predicts",
+      "memory_slope_bf16": null,
+      "compute_slope_bf16": null,
+      "unpaired_tokens": [
+        32,
+        64,
+        128,
+        512,
+        3072
+      ],
+      "ratios": [
+        {
+          "num_tokens": 768,
+          "bf16_ms": 1.4376640319824219,
+          "fp8_ms": 0.8032640218734741,
+          "r": 0.5587286069651741
+        },
+        {
+          "num_tokens": 1536,
+          "bf16_ms": 2.180448055267334,
+          "fp8_ms": 1.235967993736267,
+          "r": 0.566841292435527
+        },
+        {
+          "num_tokens": 2048,
+          "bf16_ms": 2.839295983314514,
+          "fp8_ms": 1.6027519702911377,
+          "r": 0.564489218351984
+        },
+        {
+          "num_tokens": 4096,
+          "bf16_ms": 5.423072099685669,
+          "fp8_ms": 3.000159978866577,
+          "r": 0.5532214810569219
+        },
+        {
+          "num_tokens": 6144,
+          "bf16_ms": 8.220592021942139,
+          "fp8_ms": 4.497648000717163,
+          "r": 0.5471197194450456
+        },
+        {
+          "num_tokens": 8192,
+          "bf16_ms": 10.726399898529053,
+          "fp8_ms": 5.942336082458496,
+          "r": 0.5539916597061972
+        }
+      ]
+    }
+  },
+  "predicted": {
+    "mixtral-8x7b|native|activations bf16": {
+      "tilt": 1.0701002329783706,
+      "branch_shift": 1.0386140432824207
+    },
+    "mixtral-8x7b|cfg_bf16|activations bf16": {
+      "tilt": 1.0701002329783706,
+      "branch_shift": 1.0359726996664438
+    },
+    "mixtral-8x7b|tile_fp8|activations bf16": {
+      "tilt": 1.0701002329783706,
+      "branch_shift": 1.0386140432824207
+    },
+    "mixtral-8x7b|native|activations quantised": {
+      "tilt": 1.078330333582322,
+      "branch_shift": 1.0665838006692616
+    },
+    "mixtral-8x7b|cfg_bf16|activations quantised": {
+      "tilt": 1.078330333582322,
+      "branch_shift": 1.0665838006692616
+    },
+    "mixtral-8x7b|tile_fp8|activations quantised": {
+      "tilt": 1.078330333582322,
+      "branch_shift": 1.0665838006692616
+    },
+    "qwen2-57b-a14b|native|activations bf16": {
+      "tilt": 0.8413425581707548,
+      "branch_shift": 0.8860333434463169
+    },
+    "qwen2-57b-a14b|cfg_bf16|activations bf16": {
+      "tilt": 0.9527509378472809,
+      "branch_shift": 0.9552700323906663
+    },
+    "qwen2-57b-a14b|tile_fp8|activations bf16": {
+      "tilt": 0.9377176351637628,
+      "branch_shift": 0.9547845024934105
+    },
+    "qwen2-57b-a14b|native|activations quantised": {
+      "tilt": 0.8978776417338281,
+      "branch_shift": 0.9176773245130465
+    },
+    "qwen2-57b-a14b|cfg_bf16|activations quantised": {
+      "tilt": 1.0262956348597987,
+      "branch_shift": 1.0
+    },
+    "qwen2-57b-a14b|tile_fp8|activations quantised": {
+      "tilt": 1.0,
+      "branch_shift": 1.0
+    }
+  },
+  "refusals": [
+    "RegimeNotResolved: mixtral-8x7b arm native: 2 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [64, 384, 1536, 3072, 6144].",
+    "RegimeNotResolved: qwen2-57b-a14b arm native: 0 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 384].",
+    "RegimeNotResolved: qwen2-57b-a14b arm cfg_bf16: 0 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [32, 64, 128, 256, 384, 2048, 4096, 8192].",
+    "RegimeNotResolved: qwen2-57b-a14b arm tile_fp8: 2 paired cells, below the 6 a tilt needs (3 in each third). Widen --tokens, or look at the failed arms below. Token counts with only one dtype: [128, 384, 1536, 4096, 6144]."
+  ],
+  "published_confounded_shift": 1.131,
+  "block_m_agreement_at_crossing": [
+    7,
+    7
+  ],
+  "timed_arms": 168,
+  "failed_arms": [],
+  "partial": "",
+  "gates": [
+    {
+      "name": "V0 ceilings",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml has a measured peak for both ('bf16', 'fp8_e4m3')",
+      "observed": "bf16 668.9 TFLOP/s, fp8_e4m3 1442.5 TFLOP/s, bandwidth 4374.7 GB/s, measured 2026-09-14"
+    },
+    {
+      "name": "V1 fp8 is fp8",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "every fp8 arm's weight dtype is a torch float8 type and its quant config is not None",
+      "observed": "fp8 weights arrived as ['torch.float8_e4m3fn'], quant config ['FusedMoEQuantConfig']; fp8 preflight OK: silicon has fp8 tensor cores, torch has torch.float8_e4m3fn, vLLM has fp8_w8a8_moe_quant_config"
+    },
+    {
+      "name": "V2 correctness",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "relative error against golden_forward within moe.bench.tolerance's budget",
+      "observed": "4 checks, worst rel err 5.436e-02, 0 over budget"
+    },
+    {
+      "name": "V3 override",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "zero arms running a config they were not given, and >= 2 distinct observed configs across the run",
+      "observed": "0 of 112 forced arms ran a config they were not given; 21 distinct observed configs"
+    },
+    {
+      "name": "V4 derivation",
+      "kind": "VALIDITY",
+      "verdict": "PASS",
+      "rule": "zero native cells where the observed config differs from the derived one",
+      "observed": "0 mismatches over 56 observed native arms"
+    },
+    {
+      "name": "V5 noise floor",
+      "kind": "VALIDITY",
+      "verdict": "FAIL",
+      "rule": "p90 |placebo - 1| < 3%, p90 timing spread < 3%, and no timed arm carries a False under-load DRIFT flag from time_kernel (LEVEL is recorded on BOTH sides and excludes on neither: on this card the under-load clock is set per tile by the kernel's own power draw)",
+      "observed": "p90 placebo deviation 0.23% over 9 pairs; p90 per-timing spread 0.87%; under-load clock: 108 of 168 determined arms DRIFTED and are excluded from every ratio on this page; the steady arms are kept and their side recorded per row in clock_level_side (1 below the band, 40 above it, both scored); between-load clock movement +27.3% worst cell, context only; worst qwen2-57b-a14b T=32 fp8_e4m3: tile_fp8/native = 1.0023"
+    },
+    {
+      "name": "C1 confound exists",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "the configs differ in at least one key at every crossing-bracketing cell",
+      "observed": "7 of 7 cells within 2.0x of the published bf16 crossing have differing configs"
+    },
+    {
+      "name": "C2 not the M tile",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "agreement fraction >= 90% over cells within 2.0x of the published bf16 crossing",
+      "observed": "BLOCK_SIZE_M agrees in 7 of 7 bracketing cells (100%); this is DERIVED from vLLM's shipped configs and is decided off GPU"
+    },
+    {
+      "name": "C3 pure dtype",
+      "kind": "CLAIM",
+      "verdict": "PASS",
+      "rule": "median matched tilt in [0.9, 1.08] over the matched arms as re-scoped on 2026-09-09 (cfg_bf16 pins BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages; tile_fp8 pins BLOCK_SIZE_M, GROUP_SIZE_M); the model at the MEASURED alpha predicts [0.938, 1.078] over the same cells",
+      "observed": "median matched tilt 0.991 over 2 (model, arm) pairs, 90% interval [0.961, 1.020]; the published confounded figure is 1.131 +/- 0.095"
+    },
+    {
+      "name": "C4 config share",
+      "kind": "CLAIM",
+      "verdict": "UNKNOWN",
+      "rule": "median (tilt_native - tilt_matched) / (tilt_native - 1) >= 50% over the matched arms as re-scoped on 2026-09-09",
+      "observed": "the native arm showed no excess over 1.0 to apportion, so there is nothing for the config to explain"
+    }
+  ],
+  "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+  "gpu_name": "NVIDIA H200",
+  "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-15T00:43:44+00:00",
+    "hostname": "9d476ebc86ca",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 152.89716036611227,
+    "ridge_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "bandwidth": 4374667955172.9863,
+    "bandwidth_source": "/workspace/moe-kernels/moe/bench/hardware/measured_nvidia_h200.yaml",
+    "warmup_ms": 300.0,
+    "iters": null,
+    "target_ms": 200.0,
+    "missing": {
+      "iters": "not supplied by caller",
+      "sglang": "package not installed"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+
+PREDICTIONS, stated before the run and not adjusted after it
+  alpha 0.558 (band 0.529-0.588), bf16 at 2 bytes, ridge 152.9 Op/B, band 142.8-155.5 Op/B
+  ridge source: calibration: measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d
+  ridge band source: this device's own bandwidth patterns (copy, read_reduce, read_stream, triad, write), carried as a ratio against the triad ceiling
+  bandwidth source: 4374.7 GB/s, calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)
+  iterations per trial: median 10 over 1 timed cells, range 10-10. Sized per cell by the instrument from --cell-budget-ms, not by --iters, which is retired as a timing knob.
+  BLOCK_M   AI cap   crossing @ridge 142.8       crossing @ridge 155.5
+       64    114.7   NO CROSSING EVER       NO CROSSING EVER    
+          BLOCK_M=64 never crosses at alpha=0.558: its AI cap 2*BM/(alpha*b) = 114.7 Op/B sits at or below the ridge 142.8 Op/B, so no batch size makes it compute bound. This is the study's own claim arriving, not a missing number
+  every AI cap above is 2*BM/(alpha*b) from a FITTED alpha and is HIGH by ai_model.lin_overstatement = 1+phi+delta (alpha_a is unmeasured anywhere in this repo and delta is taken as 0, so each range is a bracket and a lower bound): BM=64 1.02-1.52x
+  GATE 3 will test alpha > 0.33 (midpoint of 0.558 and 0.1) as an INFORMATIONAL line; the VERDICT is whether the fitted alpha's interval overlaps the band [0.529, 0.588], in both directions
+  GATE 4 will test BLOCK_M=64 against the roof in fractions of ridge x bandwidth: this run's ceiling 0.750, the retracted world's 1.000, so the gate is 0.95 (reached the roof) and 0.875 (passed its own ceiling)
+
+MEASURED  mixtral-8x7b bf16  1 cells, 1 of them exactly-full tile stacks
+  compute plateau 57.8 TFLOP/s useful, taken as the roof every roof fraction below is against
+  that plateau is 8.6% of ridge x bandwidth (669 TFLOP/s). Far below 100% means nothing in the sweep reached a roof and every roof fraction is relative to something that is not one.
+  per-cell timing spread, median 5.89%
+  compute reference: no candidate ladder (BLOCK_M=64) had the 3 treads needed to qualify a compute branch. Membership falls back to a split search and NO alpha may decide a verdict
+    LEVEL vs smaller BM   NOT CHECKED   no smaller ladder shares an exactly-full row count with the reference, so this check examined nothing and is not a pass
+    PASSED OVER: BLOCK_M=64 has 1 aligned tread(s), under the 3 a through-origin fit needs to be a qualification rather than a line through two points; it was NOT tried as the reference and it was NOT refused
+  132 SMs (reported by the driver), one resident CTA per SM assumed for every wave count
+  up-GEMM waves run 13.6 to 13.6 across the sweep. The smallest is the smallest tile stack, and even it is many waves deep, so no cell here is a partial-wave measurement and occupancy cannot be the thing that moved between two adjacent cells.
+
+THE LADDER: milliseconds per exactly-full tile stack, which is where gates 2, 3 and 4 are read
+  alpha is a LOWER bound (the fused layer's fixed cost sits in the denominator); alpha-hi takes that cost out, and alpha-corrected also removes activation traffic
+  alpha here is B/(A+B), which is (alpha_b+phi)/(1+phi+delta) and NOT a weight miss fraction: see moe/bench/ai_model.py and LadderFit.alpha
+  w is B divided by one full stream of the ROUTED expert weight set (the set the fused grouped GEMM streams; a shared expert, where the model has one, is a different kernel and is not in this count): 2.8186 GB in 0.6443 ms at 4374.7 GB/s (calibration: measured on this device: NVIDIA H200 (measured), 4374.7 GB/s (triad pattern)). No fitted level, no intercept, no fixed cost. It scales 1:1 in that rate, and under the three-term model it is alpha_b + phi AT THIS RATE, so it bounds the weight miss fraction from above only if the memory branch achieved this bandwidth, which this run did not measure. A weight stream is a pure read and the rate above is whichever pattern the source names, so this line reads the card's own bandwidth_patterns rather than quoting one card's gap: on card=nvidia_h200 the measured read_stream pattern is 4612.8 GB/s, 5.44% ABOVE the 4374.7 GB/s this report divides by, so every w below RISES by that much at the read rate and the printed number is not an upper bound there.
+  D>A marks a ladder whose reference fixed cost stands above its own fitted intercept. alpha-hi = B/(A+B-D) exceeds 1 exactly when D>A and the column has a value at all; where D also exceeds the whole level A+B the alpha-hi column reads n/a, because B/(A+B-D) is then a division by a level that is zero or negative and is not reported. Either way those rows are arithmetic about an extrapolation and not a miss fraction. Such a ladder is LABELLED and kept: refusing it would have deleted four of bn_decomposition's six cells on 2026-09-10. w does not depend on A or D at all.
+  1 cell(s) KEPT with LEVEL failed HIGH and 0 KEPT with LEVEL failed LOW: their SM clock under load sat steadily outside the band around the clock the roof was measured at. On a power-capped card that band is not a health check: the under-load clock is set per tile by the kernel's own power draw (H200, 700 W: BM=128/BN=64 a median 1395 MHz, BM=256 1650, memory-shaped 1950-1980, against a 1485 MHz calibration GEMM). Their milliseconds are measurements and stay in every fit; their fraction of the FIXED roof is off by the clock ratio -- OVERSTATED on the high side, UNDERSTATED on the low -- and the roof at their own clock (the driver's roof_at_cell_clock_tflops) is the one to read them against.
+    The plateau gates 1, 2 and 4 read is still the fixed-roof fraction, so on a boosted cell it is HIGH and on a sagged cell LOW: gate 4's absence claim (the null tile never reaches the roof) is biased toward FAIL by the first and toward PASS by the second. 1 high and 0 low were aligned treads and are counted per ladder below.
+  BLOCK_M  treads  memory-bound  alpha   alpha-corrected  alpha-hi  w streams/tile  D>A  B ms/tile  C ms/tile  fit err
+       64       1             0    n/a             n/a       n/a            n/a  n/a        n/a     3.1215   0.00%   [1 kept with LEVEL high; fixed-roof fraction overstated by the clock ratio]
+           BLOCK_M=64 has 0 memory-bound tread(s), under the 3 a verdict needs
+
+GATES
+RESULT: VALIDITY override_took_effect PASS [VALIDITY/OBSERVED] override_config changed the kernel at every setting | measured fresh Triton artefacts per setting: BM=64:17 | gate >= 1 per setting
+GATE 0  PASS      [VALIDITY/OBSERVED] override_config changed the kernel at every setting
+          measured fresh Triton artefacts per setting: BM=64:17   gate >= 1 per setting
+
+RESULT: CLAIM tile_steps UNKNOWN [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k | measured 0 bracketed boundaries | gate >= 3
+GATE 1  UNDECIDED [CLAIM/OBSERVED] time steps at T = n x BLOCK_M x E/k
+          measured 0 bracketed boundaries   gate >= 3
+          No boundary had a point below, at and above it. Raise --step-probes or lower --row-step.
+
+RESULT: CLAIM time_falls_with_block_m FAIL [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy) | measured ms(BM=64) / ms(BM=64) = 1.000x at 64 rows per expert | gate >= 1.50x
+GATE 2  FAIL      [CLAIM/OBSERVED] time falls with BLOCK_M at equal rows per expert (traffic, not occupancy)
+          measured ms(BM=64) / ms(BM=64) = 1.000x at 64 rows per expert   gate >= 1.50x
+          time moves not at all with BLOCK_M, which is what a block size already compute bound at the smallest tile looks like
+          model at alpha=0.558: 1.000x   model at the retracted alpha=0.10: 1.000x
+          a refutation here is the interesting answer: it says the padded arithmetic or the lost occupancy outweighs 1 weight re-reads
+          rows/expert  BM=64          ms(lo)/ms(hi)
+                   64     3.1215 ms   1.000x
+
+RESULT: CLAIM alpha_in_band UNKNOWN [CLAIM/DERIVED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588 | measured alpha not identifiable at any block size | gate interval overlaps [0.529, 0.588] (the refit's 90% band; a FAIL names the direction)
+GATE 3  UNDECIDED [CLAIM/DERIVED] the fitted alpha's interval overlaps the pre-registered band 0.529-0.588
+          measured alpha not identifiable at any block size   gate interval overlaps [0.529, 0.588] (the refit's 90% band; a FAIL names the direction)
+          No ladder had enough memory-bound treads, so no block size measured the re-read fraction.
+          Lower --r-max is not the fix; a block size whose cap is below the ridge is. 32 and 64 are those.
+          NO ladder's fitted slopes imply a crossing exists (C > B is met nowhere; slopes missing at [64]), so nothing here is a crossing measurement and no crossing has been observed
+          model's crossing ratio, for reference only: ridge 142.8: no crossing   ridge 155.5: no crossing
+
+RESULT: CLAIM no_crossing_at_the_null_tile UNKNOWN [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth) | measured peak 0.086 of ridge x bandwidth | gate < 0.95 of ridge x bandwidth, and <= 0.875 (the midpoint of this run's ceiling 0.750 and the rival world's 1.000)
+GATE 4  UNDECIDED [CLAIM/OBSERVED] BLOCK_M=64 never reaches the compute roof (ridge x bandwidth)
+          measured peak 0.086 of ridge x bandwidth   gate < 0.95 of ridge x bandwidth, and <= 0.875 (the midpoint of this run's ceiling 0.750 and the rival world's 1.000)
+          THE SWEEP IS NOT BRACKETED, so an absence here is not evidence of absence and this gate refuses to score it.
+          measured in fractions of ridge x bandwidth (669 TFLOP/s); the refit caps this block size at cap/ridge = 114.7/152.9 = 0.750 and the retracted alpha=0.1 at 1.000
+          throughput per tread as a fraction of that roof: n=1:0.09
+          this arm's own plateau is 57.8 TFLOP/s = 8.6% of that roof. Against the plateau this block size peaks at 1.000, which is the number the retired gate scored against 0.85. It is ARM-RELATIVE and it is not the verdict.
+          swept to 64 rows per expert (1 M-tiles)
+          horizon 367 rows: 2x the crossing the retracted alpha=0.1 predicts for this block size
+          positive control: NOTHING reached the compute roof in this grid (best other block size 0.00 of ridge x bandwidth = 669 TFLOP/s), so the sweep never demonstrated it can detect a crossing at all
+          modelled AI at the last tread is 55.8% of the ceiling, and the last tread gained 0.0% of throughput over the one before it
+
+READING IT. Gates [1, 2, 3, 4] did not pass. A FAIL here is a result: it falsifies the tile-corrected roofline at alpha=0.558 in a specific, named place, which is what the gate was built to do.

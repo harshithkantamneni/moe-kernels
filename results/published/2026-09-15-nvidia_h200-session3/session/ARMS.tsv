@@ -1,0 +1,16 @@
+arm	state	rc	seconds	dirty	log	note
+thermal	DONE	0	155	0	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/thermal.log	log agrees: RESULT lines imply 0
+calibrate	DONE	0	30	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/calibrate.log	log agrees: RESULT lines imply 0
+pin_probe-n64-g1	DONE	0	34	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/pin_probe-n64-g1.log	log agrees: RESULT lines imply 0
+bn_g16	CLAIM_FAIL	1	3064	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/bn_g16.log	log agrees: RESULT lines imply 1
+dtype	INVALID	3	581	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/dtype.log	log agrees: RESULT lines imply 3
+counter_plan	DONE	0	9	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/counter_plan.log	log agrees: RESULT lines imply 0
+counter-n32-m64	INVALID	3	35	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/counter-n32-m64.log	log agrees: RESULT lines imply 3
+counter-n128-m64	INVALID	3	34	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/counter-n128-m64.log	log agrees: RESULT lines imply 3
+counter_contrast	NOT_PLANNED	-	0	1	-	the contrast is a RATIO ACROSS two cells and /workspace/session/gaps-nvidia_h200-20260914T234626Z/counter_run_n32.json /workspace/session/gaps-nvidia_h200-20260914T234626Z/counter_run_n128.json was not written, so there is one cell and --analyse is what scores one cell. Read the counter pair's rows above for why: counter_plan not DONE retires both, and a run that exited before writing its payload is in its own log. Nothing is spent here and nothing is claimed.
+anchor_measure	CLAIM_FAIL	1	243	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/anchor_measure.log	log agrees: RESULT lines imply 1
+anchor_rescore	CLAIM_FAIL	1	6	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/anchor_rescore.log	log agrees: RESULT lines imply 1
+occupancy	INVALID	3	1521	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/occupancy.log	log agrees: RESULT lines imply 3
+mma_switch	DONE	0	72	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/mma_switch.log	log agrees: RESULT lines imply 0
+ruler	CLAIM_FAIL	1	31	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/ruler.log	log agrees: RESULT lines imply 1
+cap_test	DONE	0	325	1	/workspace/session/gaps-nvidia_h200-20260914T234626Z/logs/cap_test.log	log agrees: RESULT lines imply 0

@@ -1,0 +1,820 @@
+{
+  "ridge": 152.89716036611227,
+  "bandwidth_gbps": 4374.667955172987,
+  "weight_stream_ms": 0.6442939937114714,
+  "weight_stream_source": "moe.bench.weights.weight_stream_ms",
+  "ceiling_tflops": 668.8743078905765,
+  "ceiling_source": "measured on NVIDIA H200 (measured)",
+  "pinned": {
+    "BLOCK_SIZE_K": 64,
+    "GROUP_SIZE_M": 16,
+    "num_warps": 8,
+    "num_stages": 4
+  },
+  "block_ns": [
+    32,
+    64,
+    128
+  ],
+  "subjects": [
+    16,
+    32,
+    64,
+    128
+  ],
+  "reference_block_m": 256,
+  "arms": [
+    {
+      "block_n": 32,
+      "block_m": 256,
+      "slope_per_tile": 2.9231371164321898,
+      "overhead_ms": 0.27207183837890625,
+      "implied_tflops": 246.84251096940918,
+      "ceiling_tflops": 668.8743078905765,
+      "fraction": 0.3690416989521909,
+      "refusals": [],
+      "note": "BLOCK_M=256 ladder, 4 treads, proportional to 2.1%: compute branch 2.9231 ms per tile, fixed cost 0.2721 ms",
+      "basis": "OWN",
+      "import_note": "",
+      "load_clock_mhz": 1725.0,
+      "reference_clock_mhz": 1470.0,
+      "roof_at_cell_clock_tflops": 784.9035245654725,
+      "own_clock_fraction": 0.3144877086723018
+    },
+    {
+      "block_n": 64,
+      "block_m": 256,
+      "slope_per_tile": 1.97697012424469,
+      "overhead_ms": 0.2727760076522827,
+      "implied_tflops": 364.97997459808505,
+      "ceiling_tflops": 668.8743078905765,
+      "fraction": 0.5456630196323723,
+      "refusals": [],
+      "note": "BLOCK_M=256 ladder, 4 treads, proportional to 3.0%: compute branch 1.9770 ms per tile, fixed cost 0.2728 ms",
+      "basis": "OWN",
+      "import_note": "",
+      "load_clock_mhz": 1620.0,
+      "reference_clock_mhz": 1470.0,
+      "roof_at_cell_clock_tflops": 737.1267882875741,
+      "own_clock_fraction": 0.49513866596270817
+    },
+    {
+      "block_n": 128,
+      "block_m": 256,
+      "slope_per_tile": 1.506973350048065,
+      "overhead_ms": 0.24385607242584229,
+      "implied_tflops": 478.8103954890681,
+      "ceiling_tflops": 668.8743078905765,
+      "fraction": 0.7158450995061967,
+      "refusals": [],
+      "note": "BLOCK_M=256 ladder, 4 treads, proportional to 3.6%: compute branch 1.5070 ms per tile, fixed cost 0.2439 ms",
+      "basis": "OWN",
+      "import_note": "",
+      "load_clock_mhz": 1560.0,
+      "reference_clock_mhz": 1470.0,
+      "roof_at_cell_clock_tflops": 709.825796128775,
+      "own_clock_fraction": 0.6745463437654545
+    }
+  ],
+  "cells": [
+    {
+      "block_n": 32,
+      "block_m": 16,
+      "alpha": 0.8411784724021195,
+      "alpha_upper": 1.1623489184409384,
+      "alpha_corrected": 0.8381356241165432,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0018765738373154746,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.8282714308727355,
+      "intercept_ms": 0.15638457025800445,
+      "fixed_cost_ms": 0.27207183837890625,
+      "weight_streams": 1.2855488937611501,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 32,
+      "block_m": 32,
+      "alpha": 0.7766532228785874,
+      "alpha_upper": 1.0544318052870154,
+      "alpha_corrected": 0.7708510388951124,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0018765738373154746,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.8021036265861421,
+      "intercept_ms": 0.23066570077623627,
+      "fixed_cost_ms": 0.27207183837890625,
+      "weight_streams": 1.2449341983860571,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 32,
+      "block_m": 64,
+      "alpha": 0.8454587411202559,
+      "alpha_upper": 1.1435839640814236,
+      "alpha_corrected": 0.8339753040200962,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0018765738373154746,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.8823590519882384,
+      "intercept_ms": 0.16128626040049943,
+      "fixed_cost_ms": 0.27207183837890625,
+      "weight_streams": 1.369497559499798,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 32,
+      "block_m": 128,
+      "alpha": null,
+      "alpha_upper": null,
+      "alpha_corrected": null,
+      "memory_points": 0,
+      "treads": 8,
+      "spread": 0.0018765738373154746,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256; the branch starts at tread n=6, not at the first tread, which sits inside the margin; memory branch DISCARDED, its slope was within 15% of the compute branch and the two are then the same line",
+      "blank": "no_memory_branch",
+      "slope_memory_ms": null,
+      "intercept_ms": null,
+      "fixed_cost_ms": 0.27207183837890625,
+      "weight_streams": null,
+      "fixed_cost_exceeds_intercept": null
+    },
+    {
+      "block_n": 64,
+      "block_m": 16,
+      "alpha": 0.6288984089542122,
+      "alpha_upper": 1.0087754230018111,
+      "alpha_corrected": 0.624762155094944,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0025013756374287956,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.4555521933805375,
+      "intercept_ms": 0.2688131204673221,
+      "fixed_cost_ms": 0.2727760076522827,
+      "weight_streams": 0.7070564025536197,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 64,
+      "block_m": 32,
+      "alpha": 0.7020506798305726,
+      "alpha_upper": 1.074430636328789,
+      "alpha_corrected": 0.6944369656063323,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0025013756374287956,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.552543811854862,
+      "intercept_ms": 0.23449881587709687,
+      "fixed_cost_ms": 0.2727760076522827,
+      "weight_streams": 0.8575957827449543,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 64,
+      "block_m": 64,
+      "alpha": 0.7114049742172713,
+      "alpha_upper": 1.0687537383611332,
+      "alpha_corrected": 0.6967145853675397,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0025013756374287956,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.5803746417874381,
+      "intercept_ms": 0.23544006688254226,
+      "fixed_cost_ms": 0.2727760076522827,
+      "weight_streams": 0.9007916377493692,
+      "fixed_cost_exceeds_intercept": true
+    },
+    {
+      "block_n": 64,
+      "block_m": 128,
+      "alpha": null,
+      "alpha_upper": null,
+      "alpha_corrected": null,
+      "memory_points": 0,
+      "treads": 8,
+      "spread": 0.0025013756374287956,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "no_memory_branch",
+      "slope_memory_ms": null,
+      "intercept_ms": null,
+      "fixed_cost_ms": 0.2727760076522827,
+      "weight_streams": null,
+      "fixed_cost_exceeds_intercept": null
+    },
+    {
+      "block_n": 128,
+      "block_m": 16,
+      "alpha": 0.4874127666002728,
+      "alpha_upper": 0.7653734583472489,
+      "alpha_corrected": 0.4829506466290964,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0035715434273751734,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.3272807704550879,
+      "intercept_ms": 0.3441845519202098,
+      "fixed_cost_ms": 0.24385607242584229,
+      "weight_streams": 0.5079680606205546,
+      "fixed_cost_exceeds_intercept": false
+    },
+    {
+      "block_n": 128,
+      "block_m": 32,
+      "alpha": 0.6049011404852054,
+      "alpha_upper": 0.9112012825504773,
+      "alpha_corrected": 0.5966408726717181,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0035715434273751734,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.43881867542153313,
+      "intercept_ms": 0.28661998893533425,
+      "fixed_cost_ms": 0.24385607242584229,
+      "weight_streams": 0.6810845354831065,
+      "fixed_cost_exceeds_intercept": false
+    },
+    {
+      "block_n": 128,
+      "block_m": 64,
+      "alpha": 0.6555019455988154,
+      "alpha_upper": 0.9962966402658103,
+      "alpha_corrected": 0.6386908736276145,
+      "memory_points": 8,
+      "treads": 8,
+      "spread": 0.0035715434273751734,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "",
+      "slope_memory_ms": 0.4673081984122594,
+      "intercept_ms": 0.2455931156873703,
+      "fixed_cost_ms": 0.24385607242584229,
+      "weight_streams": 0.7253027390808333,
+      "fixed_cost_exceeds_intercept": false
+    },
+    {
+      "block_n": 128,
+      "block_m": 128,
+      "alpha": null,
+      "alpha_upper": null,
+      "alpha_corrected": null,
+      "memory_points": 0,
+      "treads": 8,
+      "spread": 0.0035715434273751734,
+      "basis": "membership from the compute branch scaled off BLOCK_M=256",
+      "blank": "no_memory_branch",
+      "slope_memory_ms": null,
+      "intercept_ms": null,
+      "fixed_cost_ms": 0.24385607242584229,
+      "weight_streams": null,
+      "fixed_cost_exceeds_intercept": null
+    }
+  ],
+  "cell_sigma": {
+    "32:16": 0.023115027657226554,
+    "32:32": 0.01980461578665333,
+    "32:64": 0.01980862633947468,
+    "64:16": 0.006813056159873427,
+    "64:32": 0.0062797898805826095,
+    "64:64": 0.00615563668471995,
+    "128:16": 0.004175608997705321,
+    "128:32": 0.0070102357894148894,
+    "128:64": 0.00507426093796696
+  },
+  "cell_survival": {
+    "32:16": 1.0,
+    "32:32": 1.0,
+    "32:64": 1.0,
+    "64:16": 1.0,
+    "64:32": 1.0,
+    "64:64": 1.0,
+    "128:16": 1.0,
+    "128:32": 1.0,
+    "128:64": 1.0
+  },
+  "fits": {
+    "pooled_exact": {
+      "form": "EXA",
+      "block_m": null,
+      "alpha_b": 0.9747086063748357,
+      "alpha_a": -0.8753373840859522,
+      "delta": null,
+      "n_cells": 9,
+      "dof": 7,
+      "rms": 0.08491947658875496,
+      "residuals": [
+        0.11757815156229023,
+        0.03274278271780262,
+        -0.07898099597539932,
+        0.03220012058205035,
+        0.0680564625100768,
+        0.03554432515519923,
+        -0.18509788211887734,
+        -0.045161248295002676,
+        0.023118283861858213
+      ],
+      "labels": [
+        "BN=32 BM=16",
+        "BN=32 BM=32",
+        "BN=32 BM=64",
+        "BN=64 BM=16",
+        "BN=64 BM=32",
+        "BN=64 BM=64",
+        "BN=128 BM=16",
+        "BN=128 BM=32",
+        "BN=128 BM=64"
+      ],
+      "note": "EXA over 9 cells, 7 degree(s) of freedom"
+    },
+    "pooled_linear": {
+      "form": "LIN",
+      "block_m": null,
+      "alpha_b": 0.5907527805403036,
+      "alpha_a": 0.13698433913870708,
+      "delta": null,
+      "n_cells": 9,
+      "dof": 7,
+      "rms": 0.0773108997646966,
+      "residuals": [
+        0.17728322467341473,
+        0.0396155079614815,
+        -0.03786390817365226,
+        -0.0007507539898157223,
+        0.03350513448282022,
+        -0.0349333359379298,
+        -0.12511335395141682,
+        -0.029398320077870133,
+        -0.022344194987032218
+      ],
+      "labels": [
+        "BN=32 BM=16",
+        "BN=32 BM=32",
+        "BN=32 BM=64",
+        "BN=64 BM=16",
+        "BN=64 BM=32",
+        "BN=64 BM=64",
+        "BN=128 BM=16",
+        "BN=128 BM=32",
+        "BN=128 BM=64"
+      ],
+      "note": "LIN over 9 cells, 7 degree(s) of freedom"
+    },
+    "pooled_raw_delta_fitted": {
+      "form": "EXA3",
+      "block_m": null,
+      "alpha_b": -0.0076813516078513035,
+      "alpha_a": -0.015456802101436202,
+      "delta": -1.0102004899488535,
+      "n_cells": 9,
+      "dof": 6,
+      "rms": 0.0012207407357459578,
+      "residuals": [
+        -0.00041432157624898824,
+        0.0011225183808156736,
+        0.0009440382836851668,
+        0.0009649550742947266,
+        3.623683785680676e-05,
+        -0.0005126536605738474,
+        0.001302925435498925,
+        -0.0006572971736527045,
+        -0.0027864016016758697
+      ],
+      "labels": [
+        "BN=32 BM=16",
+        "BN=32 BM=32",
+        "BN=32 BM=64",
+        "BN=64 BM=16",
+        "BN=64 BM=32",
+        "BN=64 BM=64",
+        "BN=128 BM=16",
+        "BN=128 BM=32",
+        "BN=128 BM=64"
+      ],
+      "note": "EXA3 over 9 cells, 6 degree(s) of freedom"
+    },
+    "exact_bm16": {
+      "form": "EXA",
+      "block_m": 16,
+      "alpha_b": 0.9190777913539613,
+      "alpha_a": -3.3052876980094363,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.06016122687943297,
+      "residuals": [
+        -0.023380501140223497,
+        0.08253567352941038,
+        -0.05915517238918688
+      ],
+      "labels": [
+        "BN=32 BM=16",
+        "BN=64 BM=16",
+        "BN=128 BM=16"
+      ],
+      "note": "EXA over 3 cells, 1 degree(s) of freedom"
+    },
+    "exact_bm32": {
+      "form": "EXA",
+      "block_m": 32,
+      "alpha_b": 0.9642943573931534,
+      "alpha_a": -2.1287871718783697,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.02382587294655229,
+      "residuals": [
+        -0.02484206268003253,
+        0.03213555070643448,
+        -0.007293488026402062
+      ],
+      "labels": [
+        "BN=32 BM=32",
+        "BN=64 BM=32",
+        "BN=128 BM=32"
+      ],
+      "note": "EXA over 3 cells, 1 degree(s) of freedom"
+    },
+    "exact_bm64": {
+      "form": "EXA",
+      "block_m": 64,
+      "alpha_b": 1.014391581970976,
+      "alpha_a": -0.480162929272389,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.016850832963693142,
+      "residuals": [
+        -0.0055625022630994,
+        0.022849130535841367,
+        -0.017286628272741855
+      ],
+      "labels": [
+        "BN=32 BM=64",
+        "BN=64 BM=64",
+        "BN=128 BM=64"
+      ],
+      "note": "EXA over 3 cells, 1 degree(s) of freedom"
+    },
+    "linear_bm16": {
+      "form": "LIN",
+      "block_m": 16,
+      "alpha_b": 0.3766224372572715,
+      "alpha_a": 0.9299102209458826,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.010907892253325056,
+      "residuals": [
+        -0.005049372947140918,
+        0.01514811884142242,
+        -0.010098745894281669
+      ],
+      "labels": [
+        "BN=32 BM=16",
+        "BN=64 BM=16",
+        "BN=128 BM=16"
+      ],
+      "note": "LIN over 3 cells, 1 degree(s) of freedom"
+    },
+    "linear_bm32": {
+      "form": "LIN",
+      "block_m": 32,
+      "alpha_b": 0.5582992737231031,
+      "alpha_a": 0.2176031064632974,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.018469576428528523,
+      "residuals": [
+        -0.008549752545908285,
+        0.02564925763772552,
+        -0.017099505091817235
+      ],
+      "labels": [
+        "BN=32 BM=32",
+        "BN=64 BM=32",
+        "BN=128 BM=32"
+      ],
+      "note": "LIN over 3 cells, 1 degree(s) of freedom"
+    },
+    "linear_bm64": {
+      "form": "LIN",
+      "block_m": 64,
+      "alpha_b": 0.5698738716711328,
+      "alpha_a": 0.12769727842696366,
+      "delta": null,
+      "n_cells": 3,
+      "dof": 1,
+      "rms": 0.003432896130459014,
+      "residuals": [
+        0.001589122119005304,
+        -0.004767366357015579,
+        0.003178244238010275
+      ],
+      "labels": [
+        "BN=32 BM=64",
+        "BN=64 BM=64",
+        "BN=128 BM=64"
+      ],
+      "note": "LIN over 3 cells, 1 degree(s) of freedom"
+    }
+  },
+  "chi2": 317.257424387717,
+  "chi2_note": "7 degree(s) of freedom, sigma per cell from this run's own bootstrap",
+  "structure": {
+    "correlations": {
+      "(BM/BN)^2": -0.21748219863465018,
+      "N-tiles per M-tile": 0.3669889196781394,
+      "1/BN": 0.3669889196781394,
+      "BLOCK_M": -0.005578115079190112
+    },
+    "worst": "N-tiles per M-tile",
+    "value": 0.3669889196781394,
+    "read": true
+  },
+  "bootstrap": {
+    "draws": 1000,
+    "alpha_a_sd": 0.061890139620116955,
+    "alpha_b_sd": 0.0036556635085437097,
+    "delta_sd": null,
+    "alpha_b_by_bm_sd": {
+      "16": 0.00209743959848118,
+      "32": 0.0031548147978741558,
+      "64": 0.002894171654931467
+    },
+    "note": "1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)",
+    "scope": "within-process warm repeats, resampled with replacement; blind to anything that changes between processes",
+    "mde_alpha_a": 0.17339050030666733,
+    "mde_convention": "one-sample, two-sided 0.05, power 0.8",
+    "cross_arm_prior_sd": 0.022862534415054224,
+    "cross_arm_prior_sd_basis": "ASSUMED",
+    "cross_arm_prior_sd_source": "s3-vs-s4 paired sd 0.0323 over 11 cells / sqrt(2). CONFOUNDS num_stages with rerun noise, so it is an upper bound on SAME-SESSION rerun noise and on nothing else: both arms ran in the same pod hour (/workspace/session/20260901T214218Z), so it is NOT established for cross-pod, cross-day or cross-card comparisons. It is also heteroscedastic: mixtral n=4 sd 0.0486 against qwen2 n=7 sd 0.0186, a 2.61x ratio, so it must not be quoted per cell at mixtral G>=8 [no measured floor: results/published/NOISE_FLOOR.json carries stages_control but replicate_floor is null: part (a) has not run on a card yet]"
+  },
+  "measured_spread": 0.0025013756374287956,
+  "measured_spread_source": "this run's own repeats, median over 3 arm(s)",
+  "clock_state": {
+    "timed": 1836,
+    "level": 748,
+    "low": 3,
+    "high": 920,
+    "drift": 165,
+    "unknown": 0,
+    "drift_level": 88,
+    "drift_low": 0,
+    "drift_high": 77,
+    "drift_unknown": 0,
+    "excluded_shaped": 165,
+    "rule": "DRIFT excludes; BOTH LEVEL sides are kept with the side recorded, because the under-load clock is set per tile by the kernel's own power draw under the cap; the fixed roof is what the compute-bound gates score against; the four LEVEL counts are over the STEADY treads only and the five counts partition the timed treads; this fit drops no tread for its clock"
+  },
+  "c2_power": {
+    "ran": true,
+    "group_m": 16,
+    "reps": 17,
+    "noise": 0.0025013756374287956,
+    "noise_source": "this run's own repeats, median over 3 arm(s)",
+    "draws": 200,
+    "truth_pass": true,
+    "missing_pass": false,
+    "truth_chi2": 0.4206514919973627,
+    "missing_chi2": 251.68575318002473,
+    "note": "",
+    "discriminates": true,
+    "reason": "the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.25% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict"
+  },
+  "alpha_a_band": [
+    0.1,
+    0.38
+  ],
+  "spreads": {
+    "32": 0.0018765738373154746,
+    "64": 0.0025013756374287956,
+    "128": 0.0035715434273751734
+  },
+  "inversions": [],
+  "gates": [
+    {
+      "kind": "VALIDITY",
+      "name": "V0 non-vacuity",
+      "prediction": "this report examined real work",
+      "rule": "every counted quantity is above zero",
+      "passed": true,
+      "observed": "arms on their OWN branch=3, bn arms with a reference=3, bootstrap draws=1000, timings read=1836, treads fitted=96, usable alpha cells=9",
+      "invalidates": "every gate in this report: a check with no input reports no failures",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V1 override took effect",
+      "prediction": "every (BN, BM) setting compiled its own kernel",
+      "rule": ">= 1 fresh Triton artefact per setting that ran cells",
+      "passed": true,
+      "observed": "n32/bm16:16, n32/bm32:16, n32/bm64:16, n32/bm128:16, n32/bm256:17, n64/bm16:16, n64/bm32:16, n64/bm64:16, n64/bm128:16, n64/bm256:16, n128/bm16:16, n128/bm32:16, n128/bm64:16, n128/bm128:16, n128/bm256:16",
+      "invalidates": "every number in this report: one kernel compared with itself gives alpha_a = 0 and a residual of pure noise, which is a PASS on C1's alternative and on C2",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V2 reference level",
+      "prediction": "each arm's compute reference runs at a plausible rate",
+      "rule": "implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject",
+      "passed": true,
+      "observed": "BN=32 36.9%; BN=64 54.6%; BN=128 71.6% | issue efficiency (record, not the gate input): BN=32 31.4% at 1725 MHz; BN=64 49.5% at 1620 MHz; BN=128 67.5% at 1560 MHz",
+      "invalidates": "every alpha in the arms that failed, and with them the points the decomposition is fitted through",
+      "lines": [
+        "`compute_reference` tests PROPORTIONALITY and never LEVEL; a line 43.6x too steep is perfectly proportional and qualified at 0.2% mean error.",
+        "An arm on an IMPORTED branch is not a failure of this gate -- it passed the same level bar, on another arm's ladder -- but it is an ASSUMPTION, and V3's cross-BN spread is what stands behind it."
+      ]
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V3 references agree across BN",
+      "prediction": "the arms' compute references describe one machine",
+      "rule": "max/min implied TFLOP/s across BN <= 2.0x, on the RAW rates against the fixed roof",
+      "passed": true,
+      "observed": "1.94x raw (fixed roof, the gate input); 2.14x normalised to each arm's own clock (record, not the gate input)",
+      "invalidates": "the comparison BETWEEN arms, which is the entire experiment: alpha_a is a difference across BN and cannot survive the references moving 40x between them",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V4 ladders are readable",
+      "prediction": "quiet, monotone ladders and stable membership",
+      "rule": "across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws",
+      "passed": true,
+      "observed": "spread BN=32:0.188%, BN=64:0.250%, BN=128:0.357%; 0 inversion(s); 0 unstable cell(s)",
+      "invalidates": "the fitted slopes, which are what alpha is: OLS gives the last tread the most leverage, and a cell whose membership flips between draws has a sigma conditioned on surviving",
+      "lines": []
+    },
+    {
+      "kind": "VALIDITY",
+      "name": "V5 identifiability",
+      "prediction": "at least 3 BN values survive with an alpha",
+      "rule": ">= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom",
+      "passed": true,
+      "observed": "9 usable cell(s) over 3 BN value(s); BM=16: BN [32, 64, 128], BM=32: BN [32, 64, 128], BM=64: BN [32, 64, 128]",
+      "invalidates": "C1, C2, C3 and C4 alike: with two BN points and two unknowns the fit is exact, the residual is identically zero, and the model cannot be tested at all",
+      "lines": [
+        "the primary BLOCK_M=128 carries 0 BN value(s). The parallel-branch tolerance is the predicted reason for a shortfall there and it is not a defect in the run: |B/C - 1| at 128 is predicted at 0.10 on the A100 against a tolerance of 0.15.",
+        "IT IS NO LONGER ONLY A PREDICTION. On 2026-09-10 the primary carried ZERO BN values on the H200: every BLOCK_M=128 cell at every BLOCK_N had its memory branch discarded, so this gate's shortfall clause is the arm's normal state and not its bad day. BLOCK_M=16 is swept because a fit over the two heights that survived cannot separate the activation column from the 1/BN column that beats it."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C6 estimator sharpness",
+      "prediction": "alpha_a's interval is tighter than the two-point reading it replaces",
+      "rule": "bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced",
+      "passed": false,
+      "observed": "sd = 0.0619",
+      "invalidates": "C1 ALONE, which reads UNKNOWN: an estimator whose interval is wider than the hypothesis it tests has not tested it, and a PASS would be an artefact of the band's width. alpha_b, C3 and C5 do not pass through this spread and stay quotable",
+      "lines": [
+        "1000 draws, repeats resampled with replacement, whole chain re-decided per draw (reference, refusals, membership, alpha)",
+        "the bar is read from BM=64 of mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C1 alpha_a",
+      "prediction": "alpha_a lands in [0.10, 0.38]",
+      "rule": "0.10 <= alpha_a <= 0.38 from the EXA fit",
+      "passed": null,
+      "observed": "alpha_a = -0.8753 +/- 0.0619 -- UNKNOWN, not scored: C6 says the interval is too wide",
+      "invalidates": "",
+      "lines": [
+        "alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:",
+        "  BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086",
+        "  BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043",
+        "  source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json",
+        "  every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.",
+        "  the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run.",
+        "A FAIL ABOVE the band with a clean residual would say both committed two-point slopes were biased low by the denominator the two-point form drops; a FAIL at or near zero says BN does not move alpha at all and there is no activation re-read to decompose. A PASS is weak: the two slopes above disagree by a factor of two and the band covers both, which is the width a three-point fit is here to narrow."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C2 model completeness",
+      "prediction": "the three terms are ALL of it: the residual is noise",
+      "rule": "chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning",
+      "passed": false,
+      "observed": "chi2 = 317.26 over 7 dof; residual RMS 0.0849",
+      "invalidates": "",
+      "lines": [
+        "C2 power probe: the probe discriminates at this pinning (GROUP_SIZE_M=16, 17 reps, spread 0.25% from this run's own repeats, median over 3 arm(s), 200 draws: TRUTH PASSES, MISSING FAILS), so C2's verdict below is a verdict",
+        "structure: worst correlation +0.367 against N-tiles per M-tile",
+        "A FAIL is a RESULT and the more interesting one: it says alpha_fitted is not the blend the study writes down, and the correlation above names the term to add. The candidate this run is built to see is alpha_b itself moving with BN, which the model forbids and which the published G=1 pair already hints at: the two BN values there imply alpha_b 0.92 and 0.81.",
+        "  residual +0.1176 at BN=32 BM=16",
+        "  residual +0.0327 at BN=32 BM=32",
+        "  residual -0.0790 at BN=32 BM=64",
+        "  residual +0.0322 at BN=64 BM=16",
+        "  residual +0.0681 at BN=64 BM=32",
+        "  residual +0.0355 at BN=64 BM=64",
+        "  residual -0.1851 at BN=128 BM=16",
+        "  residual -0.0452 at BN=128 BM=32",
+        "  residual +0.0231 at BN=128 BM=64"
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C3 alpha_b invariance",
+      "prediction": "alpha_b is the same at every BLOCK_M",
+      "rule": "worst pair within 3 bootstrap sigma",
+      "passed": false,
+      "observed": "BM=16: 0.9191, BM=32: 0.9643, BM=64: 1.0144; worst BM=16 vs BM=64 gap 0.0953 = 26.7 sigma",
+      "invalidates": "",
+      "lines": [
+        "A FAIL says the fitted intercept absorbs something that scales with BM and is not in the model -- which is the same statement C2 makes, arriving by a route that does not need a residual."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C5 alpha_b is a miss fraction",
+      "prediction": "0 <= alpha_b <= 1",
+      "rule": "within 3 bootstrap sigma of [0, 1]",
+      "passed": true,
+      "observed": "alpha_b = 0.9747 +/- 0.0037, inside [0, 1]",
+      "invalidates": "",
+      "lines": [
+        "A FAIL above 1 is not a fitting artefact to be clipped: it says the per-M-tile cost divided by the weight bytes contains traffic the three terms do not name, which is C2's verdict arriving without a residual."
+      ]
+    },
+    {
+      "kind": "CLAIM",
+      "name": "C4 alpha_b against TEMPO",
+      "prediction": "alpha_b corroborates TEMPO's b2/b of 0.311/0.319",
+      "rule": "within 15% of the nearer TEMPO value",
+      "passed": false,
+      "observed": "alpha_b = 0.9747 +/- 0.0037, nearest TEMPO value off by 205.6%",
+      "invalidates": "",
+      "lines": [
+        "THIS RUN IS PINNED AT GROUP_SIZE_M=16 and alpha_b is a property of that swizzle, not of the kernel. The study's earlier 0.307, and its '2-4% from TEMPO', are WITHDRAWN: that number was ALPHA_BY_BLOCK_M solved through (LIN), a unit artefact of reading a B/(A+B) fit as if it divided by weight bytes alone, not a measurement of alpha_b; through (EXA) the same G=1 ladders read alpha_b near 0.92, which is what 'consecutive M-tiles of one expert are scheduled far apart and the L2 keeps nothing' should look like. It was also pooled over GROUP_SIZE_M 1, 8, 16 and 64, which swing alpha by 0.39. So a FAIL at G=1 does NOT refute TEMPO, and a PASS at any G is the first number in this study that may be compared with TEMPO at all. Re-run at --group-m 16 to compare like with like."
+      ]
+    }
+  ],
+  "result_lines": [
+    "RESULT: VALIDITY V0 PASS this report examined real work | saw arms on their OWN branch=3, bn arms with a reference=3, bootstrap draws=1000, timings read=1836, treads fitted=96, usable alpha cells=9 | gate every counted quantity is above zero",
+    "RESULT: VALIDITY V1 PASS every (BN, BM) setting compiled its own kernel | saw n32/bm16:16, n32/bm32:16, n32/bm64:16, n32/bm128:16, n32/bm256:17, n64/bm16:16, n64/bm32:16, n64/bm64:16, n64/bm128:16, n64/bm256:16, n128/bm16:16, n128/bm32:16, n128/bm64:16, n128/bm128:16, n128/bm256:16 | gate >= 1 fresh Triton artefact per setting that ran cells",
+    "RESULT: VALIDITY V2 PASS each arm's compute reference runs at a plausible rate | saw BN=32 36.9%; BN=64 54.6%; BN=128 71.6% | issue efficiency (record, not the gate input): BN=32 31.4% at 1725 MHz; BN=64 49.5% at 1620 MHz; BN=128 67.5% at 1560 MHz | gate implied TFLOP/s in [25%, 100%] of the attached card's calibrated peak, and the reference outranks every subject",
+    "RESULT: VALIDITY V3 PASS the arms' compute references describe one machine | saw 1.94x raw (fixed roof, the gate input); 2.14x normalised to each arm's own clock (record, not the gate input) | gate max/min implied TFLOP/s across BN <= 2.0x, on the RAW rates against the fixed roof",
+    "RESULT: VALIDITY V4 PASS quiet, monotone ladders and stable membership | saw spread BN=32:0.188%, BN=64:0.250%, BN=128:0.357%; 0 inversion(s); 0 unstable cell(s) | gate across-repeat spread <= 2%, zero inversions beyond 2 sigma, every cell surviving >= 50% of bootstrap draws",
+    "RESULT: VALIDITY V5 PASS at least 3 BN values survive with an alpha | saw 9 usable cell(s) over 3 BN value(s); BM=16: BN [32, 64, 128], BM=32: BN [32, 64, 128], BM=64: BN [32, 64, 128] | gate >= 3 distinct BN, and > 3 cells in total so the pooled fit keeps a degree of freedom",
+    "RESULT: CLAIM C6 FAIL alpha_a's interval is tighter than the two-point reading it replaces | saw sd = 0.0619 | gate bootstrap sd(alpha_a) <= 0.025, inside the 0.043 sd of the sharpest two-point slope this three-point fit replaces. That sd is the DECLARED prior over the pair's ds and is PINNED there, so a measured cross-arm floor does not lower this bar and does not make the two-point reading sharper than it was registered at. NOT half the band width either: the band is 0.28 wide and half of it would be a looser bar than the reading being replaced",
+    "RESULT: CLAIM C1 UNKNOWN alpha_a lands in [0.10, 0.38] | saw alpha_a = -0.8753 +/- 0.0619 -- UNKNOWN, not scored: C6 says the interval is too wide | gate 0.10 <= alpha_a <= 0.38 from the EXA fit",
+    "RESULT: CLAIM C2 FAIL the three terms are ALL of it: the residual is noise | saw chi2 = 317.26 over 7 dof; residual RMS 0.0849 | gate chi2 = sum (r/sigma)^2 / dof <= 4.0, sigma from this run's own bootstrap, AND the same gate must FAIL on a planted missing-term world at this pinning",
+    "RESULT: CLAIM C3 FAIL alpha_b is the same at every BLOCK_M | saw BM=16: 0.9191, BM=32: 0.9643, BM=64: 1.0144; worst BM=16 vs BM=64 gap 0.0953 = 26.7 sigma | gate worst pair within 3 bootstrap sigma",
+    "RESULT: CLAIM C5 PASS 0 <= alpha_b <= 1 | saw alpha_b = 0.9747 +/- 0.0037, inside [0, 1] | gate within 3 bootstrap sigma of [0, 1]",
+    "RESULT: CLAIM C4 FAIL alpha_b corroborates TEMPO's b2/b of 0.311/0.319 | saw alpha_b = 0.9747 +/- 0.0037, nearest TEMPO value off by 205.6% | gate within 15% of the nearer TEMPO value"
+  ],
+  "gpu": "NVIDIA H200",
+  "run_id": "nvidia_h200-bm16_32_64_128-budget400.0-dtypebf16-flushtrue-g16-iters50-k64-modelmixtral_8x7b-n32-1e7bf73b",
+  "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+  "alpha_a_band_provenance": [
+    "alpha_a band [0.10, 0.38], derived from the ONLY pair of committed arms that differ in BLOCK_SIZE_N and nothing else:",
+    "  BM= 32  alpha 1.0073 (BN=64) - 0.9001 (BN=256) over ds 0.375  ->  alpha_a 0.286 +/- 0.086",
+    "  BM= 64  alpha 0.9327 (BN=64) - 0.8235 (BN=256) over ds 0.750  ->  alpha_a 0.146 +/- 0.043",
+    "  source: mixtral-8x7b-bf16-r1024-g1-n64-d66ad3.report.json vs mixtral-8x7b-bf16-r1024-g1-n256-16cc16.report.json",
+    "  every +/- above is the DECLARED prior 0.0229, times sqrt(2) for the difference of two arms, divided by that pair's ds. It is PINNED to the declared number and deliberately NOT re-read from a measured floor: a pre-registration that moves when new information arrives is not one, so this band and the C6 bar built on it stay where they were registered even after part (a) publishes. What a measured floor moves is what the run can RESOLVE, which is the MDE and the cross-arm floor printed beside every interval below.",
+    "  the band is 0.28 wide against input sds of 0.043-0.086, i.e. 3.2-6.5x the spread of the numbers that built it. A PASS inside it is weak evidence; a FAIL outside it is not. Narrowing it is what a three-point BN fit is for, which is this run."
+  ],
+  "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+  "gpu_name": "NVIDIA H200",
+  "bandwidth_source": "this machine's calibration (NVIDIA H200 (measured))",
+  "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+  "provenance": {
+    "provenance_version": 1,
+    "git_sha": "63d27a7df5e2840881dfc5c77243e55a93840734",
+    "git_dirty": true,
+    "git_dirty_files": 1,
+    "utc": "2026-09-15T00:43:26+00:00",
+    "hostname": "9d476ebc86ca",
+    "gpu_name": "NVIDIA H200",
+    "driver_version": "580.159.04",
+    "cuda_version": "13.0",
+    "python": "3.12.3",
+    "torch": "2.13.0",
+    "triton": "3.7.1",
+    "vllm": "0.27.1",
+    "sglang": null,
+    "instrument": "queue-deep/l2-flush/settled-warmup/clock-under-load/v4",
+    "ridge": 152.89716036611227,
+    "ridge_source": "measured on this device: NVIDIA H200 (measured), 668.9 TFLOP/s bf16 over 4374.7 GB/s (triad pattern); calibrated 2026-09-14 at 63d27a7d",
+    "bandwidth": 4374.667955172987,
+    "bandwidth_source": "this machine's calibration (NVIDIA H200 (measured))",
+    "warmup_ms": 300.0,
+    "iters": 128,
+    "target_ms": 400.0,
+    "missing": {
+      "sglang": "package not installed"
+    }
+  }
+}
