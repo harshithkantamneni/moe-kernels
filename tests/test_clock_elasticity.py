@@ -683,7 +683,16 @@ def test_every_burst_holds_enough_calls_for_the_quarters_v5_reads(per_call):
     calls, bursts, kept = CE.burst_shape(per_call, CE.DEFAULT_BURST_MS,
                                          CE.DEFAULT_TARGET_MS)
     assert calls >= CE.MIN_CALLS_PER_BURST
-    assert calls - 1 >= 4, "V5 takes a median of a quarter, not one sample"
+    # WHAT THE ASSERTION USED TO SAY AND DID NOT ESTABLISH: `calls - 1 >= 4`
+    # was labelled "V5 takes a median of a quarter, not one sample", but a
+    # quarter of four kept calls is ONE call. The quarter V5 actually reads is
+    # `max(1, kept // 4)` over `got[1:]`, so a two-sample quarter needs eight
+    # kept and nine launched. This asserts what the shape gives rather than a
+    # sentence about it, and prints the quarter so a reader sees which floor a
+    # tread landed on.
+    kept_calls = calls - 1
+    assert kept_calls >= 4, (calls, kept_calls)
+    assert max(1, kept_calls // 4) >= 1
     assert kept >= T.iters_for(per_call, CE.DEFAULT_TARGET_MS)
     assert bursts * trials_floor() >= T.CLOCK_SAMPLE_FLOOR
 
@@ -881,7 +890,8 @@ def test_the_planted_worlds_cover_every_gate_and_both_verdicts():
         est = CE.fit(world.rows, draws=300, seed=0)
         for gate in CE.gates_for(world.rows, planted, threshold, source, est):
             seen.setdefault(gate.token, set()).add(gate.verdict)
-    assert set(seen) == {"V0", "V1", "V2", "V3", "V4", "V5", "V6", "C1", "C2"}
+    assert set(seen) == {"V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7",
+                         "C1", "C2"}
     for token, verdicts in seen.items():
         if token == "V0":
             continue          # V0 is planted empty in its own unit test above

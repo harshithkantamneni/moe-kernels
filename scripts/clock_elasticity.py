@@ -68,7 +68,11 @@ EXIT CODES are `moe.bench.exit_codes`. `--dry-run` measured nothing and scored n
 gate, so it exits REFUSED (2) and prints no RESULT line. There is deliberately no
 gate-softening flag in this file: `classify` over the gates is the exit code in
 every scoring mode, so a failed claim is CLAIM_FAIL whether or not anyone
-remembered a flag.
+remembered a flag. `--min-clock-ratio` is not one either, and it took a rule to
+keep it from becoming one: it may TIGHTEN V1's threshold and `registered_clock_ratio`
+REFUSES a value below the design's own requirement, because the flag is out of the
+run id and a looser threshold would re-score the cells already on disk into the
+same directory and overwrite the page that said INVALID.
 """
 from __future__ import annotations
 
@@ -92,6 +96,7 @@ sys.path.insert(0, str(HERE))
 
 import block_m_crossing_sweep as SWEEP  # noqa: E402
 
+from moe.baselines import _framework_config as FC  # noqa: E402
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 from moe.bench import timing as T  # noqa: E402
@@ -170,8 +175,14 @@ DEFAULT_REPEATS = 13
 DEFAULT_BURST_MS = 40.0
 
 #: Calls per burst, floor and ceiling. The floor is what V5 needs: it reads the
-#: first and last QUARTER of a burst's kept calls, and a quarter of fewer than
-#: eight calls is one call, which is a sample and not a median.
+#: first and last QUARTER of a burst's KEPT calls, and the kept calls are
+#: `got[1:]` because the lead call of every burst is discarded. So the floor
+#: that buys a two-sample quarter is NINE launched calls, not eight: at eight,
+#: seven are kept and `7 // 4` is one, which is a sample and not a median.
+#: Eight is still the number here, and it is the number V5 tolerates rather
+#: than the number it wants: the booked ladder's deepest tread lands on nine by
+#: one call, and a run that lands on the floor gets a one-sample quarter and a
+#: V5 that is weaker there than the docstring used to claim.
 MIN_CALLS_PER_BURST = 8
 MAX_CALLS_PER_BURST = 512
 
@@ -245,6 +256,28 @@ BANDS = (
 #: unregistered gap. An interval wider than the gap cannot be placed inside it,
 #: so a design that cannot reach this cannot distinguish the three worlds.
 RESOLUTION_TARGET = (BAND_HIGH - BAND_LOW) / 2.0
+
+#: THE PHYSICALLY ADMISSIBLE RANGE, and why it needs a gate rather than a
+#: sentence. `eta` is the share of a measured millisecond that moves with the
+#: SM clock: 0 is a call whose time is pure traffic, 1 is a call whose time is
+#: pure issue rate. BELOW 0 the call got SLOWER as the clock rose at a
+#: byte-identical kernel, and ABOVE 1 it got faster than the clock did; both are
+#: apparatus faults and neither is a reading. `band_of`'s outer bands are
+#: deliberately OPEN at their far edges -- RAW-STANDS has no lower edge -- so
+#: without this gate a negative interval lands inside the pre-registered PASS
+#: and the page prints "the clock is not what is wrong with alpha" over a run
+#: whose clock channel is broken. The failure is not hypothetical for THIS
+#: instrument: one NVML sample per burst, taken a few ms after a 360 ms idle
+#: gap at duty 0.10, reads a ramp transient, and a sampled clock systematically
+#: low in the low-duty states and right at the anchor produces exactly eta < 0.
+#:
+#: THE MARGIN IS THE DESIGN'S OWN HALF-WIDTH, not a typed slack: an interval
+#: that pokes out of [0, 1] by less than the resolution the design was sized
+#: for is noise against the edge, and one that sits a whole half-width outside
+#: is not.
+ADMISSIBLE_LO = 0.0
+ADMISSIBLE_HI = 1.0
+ADMISSIBLE_MARGIN = RESOLUTION_TARGET
 
 # --------------------------------------------------------------------------
 # The one corpus fact this file carries, and it PRICES the run rather than
@@ -704,8 +737,13 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
     cells = collapse(keep)
     slope, per_tread, sxx, used = within_tread_slope(cells)
     ladder, ladder_states = ladder_slope_elasticity(cells)
-    states = len({d for _, d in cells})
-    treads = len({t for t, _ in cells})
+    # COUNTED OFF THE CELLS THAT ENTERED THE SLOPE, not off the labels present
+    # somewhere in the file. A tread that lost every state but one contributes
+    # nothing to Sxx, and the report line that read "24 (8 treads x 4 states)"
+    # over 24 cells was arithmetic nobody could reproduce.
+    fitted = set(per_tread)
+    states = len({d for t, d in cells if t in fitted})
+    treads = len(fitted)
     lo = hi = None
     drawn = 0
     if slope is not None and draws > 0 and len(repeats) >= 2:
@@ -780,13 +818,55 @@ def required_clock_ratio(*, repeats: int, treads: int, states: int,
     return math.exp(sd_needed / shape)
 
 
-def registered_clock_ratio(args) -> tuple[float, str]:
-    """The V1 threshold and where it came from. `--min-clock-ratio` overrides."""
-    if getattr(args, "min_clock_ratio", None):
-        return float(args.min_clock_ratio), "--min-clock-ratio, the operator's assertion"
+def loosening_refusal(args) -> str:
+    """The refusal text when `--min-clock-ratio` would LOOSEN V1, else "".
+
+    A separate function and not an inline test because the rule is about a
+    FLAG and belongs with the other flag refusals, which run before a plan is
+    built and cost nothing.
+    """
+    asked = getattr(args, "min_clock_ratio", None)
+    if not asked:
+        return ""
     need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
                                 states=len(args.duty))
     rounded = math.ceil(need * 100.0) / 100.0
+    if float(asked) >= rounded:
+        return ""
+    return (f"REFUSED before any GPU time. --min-clock-ratio "
+            f"{float(asked):.4f} is BELOW this design's own requirement "
+            f"{rounded:.4f}. The flag may TIGHTEN V1 and may not loosen it: it "
+            f"is deliberately out of the run id, so a looser threshold would "
+            f"re-score the cells already on disk into the SAME directory and "
+            f"overwrite the report that said INVALID -- an INVALID turned into "
+            f"a DONE for the price of the settles, with nothing re-measured. A "
+            f"design that needs a lower threshold lowers the REQUIREMENT, by "
+            f"running fewer treads or more repeats.")
+
+
+def registered_clock_ratio(args) -> tuple[float, str]:
+    """The V1 threshold and where it came from.
+
+    `--min-clock-ratio` may TIGHTEN it and may not loosen it, and that
+    asymmetry is what keeps the file's claim to have no gate-softening flag
+    true. The flag is deliberately out of the run id, so a looser value would
+    re-score the cells already on disk into the same directory and overwrite
+    `report.txt` in place: an INVALID turned into a DONE for the price of the
+    settles, with nothing on the page that had not been rewritten. A tighter
+    value cannot do that, and a design that genuinely needs a lower threshold
+    lowers it the honest way, by running fewer treads or more repeats -- both
+    of which move the computed requirement with them.
+    """
+    need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
+                                states=len(args.duty))
+    rounded = math.ceil(need * 100.0) / 100.0
+    asked = getattr(args, "min_clock_ratio", None)
+    if asked and float(asked) >= rounded:
+        return float(asked), ("--min-clock-ratio, the operator's assertion, "
+                              f"tighter than the design's own {rounded:.4f}")
+    # A LOOSER VALUE NEVER REACHES HERE: `loosening_refusal` refuses it in
+    # `_main` before any plan is built, beside the other design refusals. This
+    # branch is what makes the rule true if a caller skips that check.
     return rounded, (f"the design's own requirement {need:.4f}, rounded up to "
                      f"the next hundredth, from {args.repeats} repeats x "
                      f"{args.treads} treads x {len(args.duty)} states against a "
@@ -832,22 +912,36 @@ def gate_v1_separation(cells, threshold: float, source: str) -> Gate:
     separation rather than to the same number.
     """
     ratios = clock_ratio_by_tread(cells)
+    # EVERY TREAD THE RUN KEPT ROWS FOR, not every tread that happens to carry
+    # two clocks. `clock_ratio_by_tread` can only speak for treads with two
+    # surviving states, so a tread that lost three of its four states used to
+    # DROP OUT of a gate whose own title says "at every tread" -- 78 drifted
+    # rows, under the 20% ceiling V4 allows, silently took two of eight booked
+    # treads out of the design and V1 still said every one had separated.
+    present = sorted({t for t, _ in cells})
+    silent = [t for t in present if t not in ratios]
     if not ratios:
         return Gate(VALIDITY, "1", "the duty states separated in clock at every tread",
                     FAIL, "no tread has two states with a usable clock",
-                    f"every tread spans >= {threshold:.3f}x",
+                    f"every one of the {len(present)} kept treads spans "
+                    f">= {threshold:.3f}x",
                     "the elasticity: with no clock separation there is no slope")
     worst_tread = min(ratios, key=lambda t: ratios[t])
     worst = ratios[worst_tread]
-    ok = worst >= threshold
+    ok = worst >= threshold and not silent
     return Gate(
         VALIDITY, "1", "the duty states separated in clock at every tread",
         PASS if ok else FAIL,
         f"narrowest tread {worst_tread} spans {worst:.4f}x "
-        f"(widest {max(ratios.values()):.4f}x over {len(ratios)} treads)",
-        f">= {threshold:.3f}x, from {source}",
+        f"(widest {max(ratios.values()):.4f}x over {len(ratios)} of "
+        f"{len(present)} kept treads)"
+        + (f"; treads with fewer than two states and so NO separation at all: "
+           f"{silent}" if silent else ""),
+        f">= {threshold:.3f}x at every one of the {len(present)} kept treads, "
+        f"from {source}",
         "the elasticity and both claims: a slope fitted across states that sat "
-        "at one clock is a slope over nothing",
+        "at one clock is a slope over nothing, and a tread that lost its states "
+        "is a tread the pooled slope never saw",
         ["per tread: " + ", ".join(f"n{t}={v:.4f}x"
                                     for t, v in sorted(ratios.items()))])
 
@@ -855,11 +949,15 @@ def gate_v1_separation(cells, threshold: float, source: str) -> Gate:
 def gate_v2_one_kernel(keep) -> Gate:
     """Was it the SAME kernel in every state, read off the rows.
 
-    Read off the rows and not asserted, which is the brief's own instruction.
-    The live path builds the tensors once and pins one tile, so this can only
-    fail if the pin did not reach the kernel or two runs were resumed into one
-    directory -- and both of those are exactly the failures a run id and a
-    docstring cannot catch. `calls_per_burst` is in the comparison because it is
+    Read off the rows and not asserted, which is the brief's own instruction --
+    and off the rows means off what `get_config()` reported INSIDE the pin, not
+    off `PINNED`. Written the other way this gate compared the module constant
+    with six copies of itself and could not fail on a single live run however
+    the override went; `observed_tile` is where the difference now lives, and
+    `forcing_tile_config` refuses before any cell is timed when a forced key
+    comes back changed. What is left for this gate is the failure neither of
+    those catches: two runs resumed into one directory, and a burst shape that
+    moved between them. `calls_per_burst` is in the comparison because it is
     the loop shape: the same tile launched in bursts of 52 and of 9 carries a
     different share of one drained-queue lead call, and the lead call is
     discarded per burst rather than per run.
@@ -907,7 +1005,8 @@ def gate_v3_depth(keep, duties, threshold_treads: int, threshold_repeats: int,
         f"{len(good)} of {len(duties)} planned states are deep enough ({detail})",
         f">= {min_states} states with >= {threshold_treads} treads and "
         f">= {threshold_repeats} repeats each",
-        "the interval: a bootstrap over two repeats has two distinct draws")
+        "the interval: a bootstrap over two repeats has three distinct draws, "
+        "{a,a} {a,b} {b,b}, and an interval read off three is a decoration")
 
 
 def gate_v4_exclusions(rows, keep, ceiling: float) -> Gate:
@@ -1013,6 +1112,52 @@ def gate_v6_memory_clock(keep) -> Gate:
         "the reading: the slope would be a blend of issue rate and bandwidth")
 
 
+def gate_v7_admissible(est: Elasticity) -> Gate:
+    """Is the measured elasticity a number this experiment can produce.
+
+    VALIDITY and not a claim, because an interval outside [0, 1] says the clock
+    channel is wrong and not that the card is unusual. It is scored on the
+    INTERVAL and not on the point estimate: a point a hair below zero with an
+    interval straddling it is a small elasticity measured with noise, which is
+    a reading, while an interval lying WHOLLY below -ADMISSIBLE_MARGIN is the
+    instrument telling the truth about itself.
+
+    UNKNOWN when there is no interval; V0 and V3 are what catch that case.
+    """
+    lo_edge = ADMISSIBLE_LO - ADMISSIBLE_MARGIN
+    hi_edge = ADMISSIBLE_HI + ADMISSIBLE_MARGIN
+    want = (f"the interval intersects [{lo_edge:.3f}, {hi_edge:.3f}], "
+            f"which is [0, 1] widened by the design's own half-width "
+            f"{ADMISSIBLE_MARGIN:.3f}")
+    costs = ("both claims and the whole page: eta below 0 is a call that got "
+             "SLOWER as the clock rose at a byte-identical kernel, and eta "
+             "above 1 is one that got faster than the clock. Neither is a "
+             "reading, and RAW-STANDS is open below 0 so the first of them "
+             "would otherwise score as the pre-registered PASS")
+    if est.lo is None or est.hi is None:
+        return Gate(VALIDITY, "7", "the elasticity is physically admissible",
+                    UNKNOWN, "no interval: the fit produced no slope",
+                    want, costs)
+    ok = est.hi >= lo_edge and est.lo <= hi_edge
+    lines = []
+    if not ok:
+        lines.append(
+            "BELOW 0: the measured call got slower as the clock rose. Suspect "
+            "the clock READ before the clock: this instrument takes one NVML "
+            "sample per burst, and a sample that lands in the ramp after the "
+            "idle gap is low in the low-duty states and right at the anchor, "
+            "which is this sign exactly."
+            if est.hi < lo_edge else
+            "ABOVE 1: the measured call sped up by more than the clock did. "
+            "Something other than the SM clock moved between the states; V6 "
+            "is the memory clock and this is everything else.")
+    return Gate(
+        VALIDITY, "7", "the elasticity is physically admissible",
+        PASS if ok else FAIL,
+        f"[{est.lo:.4f}, {est.hi:.4f}] against [{lo_edge:.3f}, {hi_edge:.3f}]",
+        want, costs, lines)
+
+
 def gate_c1_resolved(est: Elasticity) -> Gate:
     """Does the interval sit WHOLLY inside one registered band.
 
@@ -1088,6 +1233,7 @@ def gates_for(rows, args, threshold: float, source: str,
         gate_v4_exclusions(rows, keep, EXCLUSION_CEILING),
         gate_v5_within_burst(keep),
         gate_v6_memory_clock(keep),
+        gate_v7_admissible(est),
         gate_c1_resolved(est),
         gate_c2_registered_reading(est),
     ]
@@ -1640,8 +1786,20 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
 
     cache_root.mkdir(parents=True, exist_ok=True)
     os.environ["TRITON_CACHE_DIR"] = str(cache_root)
-    override_config, where = SWEEP.find_override()
-    print(f"override hook: {where}.override_config")
+    # THE PIN IS VERIFIED, NOT ASSUMED, at every one of the three sites that
+    # enters it. `SWEEP.find_override()` gives the hook and nothing more:
+    # entering a context and assuming it took is how MOE_FORCE_TILE came to be
+    # set for a whole session with nothing reading it, and this arm's whole
+    # reason for pinning GROUP_SIZE_M=16 is that it is the swizzle the published
+    # alpha was fitted at. A silently unhonoured override leaves every page
+    # saying G=16 over a kernel that ran vLLM's own choice.
+    # `forcing_tile_config` asks `get_config()` back after entering and raises
+    # `ForceTileNotHonoured` when the answer is not what was asked, and it is
+    # this repository's own guard: its docstring names the case of an arm that
+    # runs ONE setting and so cannot prove the pin by counting Triton artefacts
+    # the way `block_m_crossing_sweep` gate 0 does. This arm runs one setting.
+    print(f"override hook: {FC.bindings_of('override_config')[0].__name__}"
+          ".override_config, verified through get_config() at every entry")
     print(f"triton cache:  {cache_root} (fresh for this run)")
 
     reference_clock, clock_source = SWEEP.reference_clock_mhz()
@@ -1674,11 +1832,19 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
     # per burst is a smaller share of one discarded lead. V2 reads the shape off
     # the rows precisely because it must be the same in every state.
     shape: dict[int, tuple[int, int, float]] = {}
+    observed: dict | None = None
     print("\nsizing the burst at full duty, once, for every tread:")
     for tread in treads:
         _rows, tokens, x, weights, ids, w, kw = built[tread]
         call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
-        with override_config(dict(PINNED)):
+        with FC.forcing_tile_config(dict(PINNED)):
+            # WHAT vLLM SAYS IT WILL HAND THE KERNEL, read back INSIDE the
+            # context and carried onto every row. Until this line the tile
+            # columns were copies of `PINNED`, so V2 "read off the rows" was
+            # reading back what the module constant asserted and could not fail
+            # on a live run however the pin went.
+            if observed is None:
+                observed = dict(FC.vllm_forced_config() or {})
             call()
             torch.cuda.synchronize()
             warm = T.warm_until(call, args.warm_ms, T._EventPairs,
@@ -1711,13 +1877,23 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
         for repeat in range(args.repeats):
             states = order if repeat % 2 == 0 else list(reversed(order))
             for index, duty in enumerate(states):
+                # THE SETTLE IS A COST OF MEASURING, so a state with nothing
+                # left to measure does not pay it. Outside this test, a resume
+                # of a COMPLETE run still ran every settle -- 13 repeats x 4
+                # states x 10 s = 520 s of cadence -- to produce no new row.
+                todo = [t for t in treads
+                        if (repeat, _duty_key(duty), t) not in have]
+                if not todo:
+                    print(f"\nrepeat {repeat} state duty={duty:g}: already on "
+                          "disk, no settle and no cells")
+                    continue
                 calls, bursts, per_call = shape[treads[len(treads) // 2]]
                 mid = built[treads[len(treads) // 2]]
                 settle_call = SWEEP._make_call(fused_experts, mid[2], mid[3],
                                                mid[5], mid[4], mid[6])
                 print(f"\nrepeat {repeat} state duty={duty:g}: settling "
                       f"{args.settle_seconds:.0f} s at this cadence")
-                with override_config(dict(PINNED)):
+                with FC.forcing_tile_config(dict(PINNED)):
                     _settle(settle_call, duty=duty, calls=calls,
                             per_call_ms=per_call, seconds=args.settle_seconds,
                             flusher=flusher)
@@ -1728,7 +1904,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                     calls, bursts, per_call = shape[tread]
                     call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
                     try:
-                        with override_config(dict(PINNED)):
+                        with FC.forcing_tile_config(dict(PINNED)):
                             t = time_duty(
                                 call, duty=duty, calls_per_burst=calls,
                                 bursts=bursts, trials=args.trials,
@@ -1739,7 +1915,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                                 clock_read=read, mem_read=mem_read,
                                 flusher=flusher)
                         row = _row_from(t, args, duty, index, repeat, tread,
-                                        rows_per_expert, tokens)
+                                        rows_per_expert, tokens, observed)
                     except T.TimingRefused:
                         # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR.
                         # Filed as a failed row, the arm would walk the whole
@@ -1749,7 +1925,8 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                     except Exception as exc:            # noqa: BLE001
                         row = _failed_row(args, duty, index, repeat, tread,
                                           rows_per_expert, tokens,
-                                          f"{type(exc).__name__}: {exc}")
+                                          f"{type(exc).__name__}: {exc}",
+                                          observed)
                         print(f"  FAILED duty={duty:g} tread={tread}: {row.detail}")
                     rows.append(row)
                     append_row(csv_path, row, prov)
@@ -1791,19 +1968,37 @@ def _settle(fn, *, duty: float, calls: int, per_call_ms: float, seconds: float,
             time.sleep(gap_s)
 
 
+def observed_tile(observed: dict | None) -> dict:
+    """The tile the ROWS carry: what `get_config()` reported, key by key.
+
+    THE ONE PLACE the row's tile columns are decided, so the difference between
+    "what this file asked for" and "what vLLM said it would run" exists at one
+    call site and not six. `PINNED` fills a key `get_config()` did not report,
+    and that is a fallback and not an equality: the fallback is reachable only
+    off the live path, because `forcing_tile_config` refuses to yield at all
+    when a forced key comes back changed or missing.
+    """
+    seen = dict(observed or {})
+    return {k: seen.get(k, v) for k, v in PINNED.items()}
+
+
 def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
-              rows_per_expert, tokens) -> Row:
+              rows_per_expert, tokens, observed: dict | None = None) -> Row:
     """One row. `state_index` is the duty's own place in `--duty` and
     `order_index` is where it fell in THIS repeat, which are different numbers
     on the reversed repeats and are both worth keeping: the first identifies the
-    state, the second is what a reader checks a thermal trend against."""
+    state, the second is what a reader checks a thermal trend against.
+
+    `observed` is what `get_config()` reported inside the pin, so V2 reads a
+    kernel's tile back off the rows rather than reading back `PINNED`."""
+    tile = observed_tile(observed)
     return Row(
         duty_requested=duty, duty_achieved=t.duty_achieved,
         state_index=list(args.duty).index(duty),
         repeat=repeat, order_index=index, model=args.model, dtype=args.dtype,
-        block_m=PINNED["BLOCK_SIZE_M"], block_n=PINNED["BLOCK_SIZE_N"],
-        block_k=PINNED["BLOCK_SIZE_K"], group_m=PINNED["GROUP_SIZE_M"],
-        num_warps=PINNED["num_warps"], num_stages=PINNED["num_stages"],
+        block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
+        block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
+        num_warps=tile["num_warps"], num_stages=tile["num_stages"],
         tiles=tread, rows_per_expert=rows_per_expert, tokens=tokens,
         calls_per_burst=t.calls_per_burst, bursts=t.bursts, trials=t.trials,
         ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std, samples=t.samples,
@@ -1825,14 +2020,15 @@ def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
 
 
 def _failed_row(args, duty, index, repeat, tread, rows_per_expert, tokens,
-                detail: str) -> Row:
+                detail: str, observed: dict | None = None) -> Row:
+    tile = observed_tile(observed)
     return Row(
         duty_requested=duty, duty_achieved=0.0,
         state_index=list(args.duty).index(duty), repeat=repeat,
         order_index=index, model=args.model, dtype=args.dtype,
-        block_m=PINNED["BLOCK_SIZE_M"], block_n=PINNED["BLOCK_SIZE_N"],
-        block_k=PINNED["BLOCK_SIZE_K"], group_m=PINNED["GROUP_SIZE_M"],
-        num_warps=PINNED["num_warps"], num_stages=PINNED["num_stages"],
+        block_m=tile["BLOCK_SIZE_M"], block_n=tile["BLOCK_SIZE_N"],
+        block_k=tile["BLOCK_SIZE_K"], group_m=tile["GROUP_SIZE_M"],
+        num_warps=tile["num_warps"], num_stages=tile["num_stages"],
         tiles=tread, rows_per_expert=rows_per_expert, tokens=tokens,
         calls_per_burst=0, bursts=0, trials=args.trials, ms_p50=0.0, ms_min=0.0,
         ms_stdev=0.0, samples=0, burst_ms=0.0, gap_ms=0.0, head_ms=None,
@@ -2044,8 +2240,13 @@ class PlantedWorld:
 
 
 def self_test_worlds(args) -> list[PlantedWorld]:
-    """Every planted world. Four of the nine are REFUSALS: a scorer that has only
-    ever seen a clean design has never been shown to refuse one."""
+    """Every planted world. SEVEN of the twelve are REFUSALS: a scorer that has
+    only ever seen a clean design has never been shown to refuse one.
+
+    The count is not carried in prose anywhere else. `self_test` prints
+    `len()` of this list and counts the refusals off the `why` strings, because
+    two hand-maintained counts of one set is how this file's own docstring came
+    to say nine where there were eleven."""
     duties = list(DUTY_LEVELS)
     n_states = len(duties)
     return [
@@ -2055,14 +2256,14 @@ def self_test_worlds(args) -> list[PlantedWorld]:
             "hold.",
             plant_rows(eps=0.05, jitter=0.004),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}, 0.05),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
         PlantedWorld(
             "clock-carries", "elasticity 0.60: past the upper edge. C2 FAILS, "
             "and that FAIL is the finding -- C3's DIRECTION is retracted. THE "
             "WORLD THAT MAKES C2'S FAIL BRANCH REACHABLE.",
             plant_rows(eps=0.60, jitter=0.004),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": FAIL}, 0.60),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": FAIL}, 0.60),
         PlantedWorld(
             "unregistered-gap", "elasticity 0.32: inside the gap the analysis "
             "never stopped in. C1 PASSES -- the design resolved WHICH world -- "
@@ -2070,7 +2271,7 @@ def self_test_worlds(args) -> list[PlantedWorld]:
             "sentence written afterwards.",
             plant_rows(eps=0.32, jitter=0.004),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": FAIL}, 0.32),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": FAIL}, 0.32),
         PlantedWorld(
             "straddling", "elasticity 0.25 at ten times the noise: the interval "
             "crosses the lower edge. C1 FAILS, which is a result about the "
@@ -2078,28 +2279,33 @@ def self_test_worlds(args) -> list[PlantedWorld]:
             "THE WORLD THAT MAKES C1'S FAIL BRANCH REACHABLE.",
             plant_rows(eps=0.25, jitter=0.04, seed=11),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": FAIL, "C2": FAIL}, None),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": FAIL, "C2": FAIL}, None),
         PlantedWorld(
             "one-clock", "A REFUSAL: four duty states that all settled at the "
             "same clock. The elasticity is undefined and V1 says so; without "
             "this gate the arm would report a slope over nothing.",
             plant_rows(eps=0.20, mhz=(1650.0,) * n_states),
+            # V7 is UNKNOWN and not PASS here, and that is the gate working:
+            # with every state at one clock there is no slope and so no
+            # interval, and a gate that answered PASS over no interval would be
+            # reporting its prior.
             {"V0": PASS, "V1": FAIL, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": FAIL, "C2": FAIL}, None),
+             "V5": PASS, "V6": PASS, "V7": UNKNOWN, "C1": FAIL, "C2": FAIL},
+            None),
         PlantedWorld(
             "two-tiles", "A REFUSAL: one row ran a different BLOCK_M. V2 reads "
             "the tile off the rows and fails; a slope across states that ran "
             "different kernels compares kernels, not clocks.",
             plant_rows(eps=0.05, jitter=0.004, block_m_at={(0, 1, 0): 64}),
             {"V0": PASS, "V1": PASS, "V2": FAIL, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}, 0.05),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
         PlantedWorld(
             "thin", "A REFUSAL: two repeats and three treads. V3 fails on "
             "depth; the bootstrap over two repeats has three distinct draws and "
             "an interval from it is a decoration.",
             plant_rows(eps=0.05, treads=3, repeats=2),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": FAIL, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}, None),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
         PlantedWorld(
             "drifting", "A REFUSAL: a third of the rows drifted. V4 fails; what "
             "is left is a subsample the card chose. The DRIFT rows are the ones "
@@ -2110,7 +2316,7 @@ def self_test_worlds(args) -> list[PlantedWorld]:
                                  for r in range(DEFAULT_REPEATS)
                                  if (t + r) % 3 == 0}),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": FAIL,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}, None),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
         PlantedWorld(
             "sagging-burst", "A REFUSAL: the clock held BETWEEN bursts and sagged "
             "20% INSIDE them. Every DRIFT verdict passes and the per-call time "
@@ -2119,7 +2325,7 @@ def self_test_worlds(args) -> list[PlantedWorld]:
             plant_rows(eps=0.05, jitter=0.004,
                        burst_moves_at={(0, 1, 0), (1, 2, 1), (2, 3, 2)}),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": FAIL, "V6": PASS, "C1": PASS, "C2": PASS}, None),
+             "V5": FAIL, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, None),
         PlantedWorld(
             "memory-clock-moved", "A REFUSAL: the HBM clock tracked the duty "
             "cycle. V6 fails; a slope fitted across states whose memory clock "
@@ -2131,7 +2337,7 @@ def self_test_worlds(args) -> list[PlantedWorld]:
                                for t in range(1, DEFAULT_TREADS + 1)
                                for r in range(DEFAULT_REPEATS)}),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": FAIL, "C1": PASS, "C2": PASS}, None),
+             "V5": PASS, "V6": FAIL, "V7": PASS, "C1": PASS, "C2": PASS}, None),
         PlantedWorld(
             "level-both-sides", "NOT a refusal, and that is the point. One row "
             "planted LEVEL HIGH, one LEVEL LOW and one DRIFTING, in one state. "
@@ -2142,7 +2348,19 @@ def self_test_worlds(args) -> list[PlantedWorld]:
                        level_at={(0, 1, 0): T.LEVEL_HIGH, (0, 2, 0): T.LEVEL_LOW},
                        drift_at={(0, 3, 0)}),
             {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-             "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}, 0.05),
+             "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}, 0.05),
+        PlantedWorld(
+            "slower-at-speed", "A REFUSAL, and the one that was scored as the "
+            "pre-registered PASS until V7 existed: elasticity -0.35, a call "
+            "that got SLOWER as the clock rose at a byte-identical kernel. "
+            "RAW-STANDS is OPEN below zero, so C1 and C2 both read PASS and the "
+            "page would print 'the clock is not what is wrong with alpha' over "
+            "a run whose clock channel is broken. V7 is the only gate that can "
+            "see it. THE WORLD THAT MAKES V7'S FAIL BRANCH REACHABLE.",
+            plant_rows(eps=-0.35, jitter=0.004),
+            {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+             "V5": PASS, "V6": PASS, "V7": FAIL, "C1": PASS, "C2": PASS},
+            -0.35),
     ]
 
 
@@ -2171,9 +2389,14 @@ def self_test(args) -> int:
     resolves, and PROOF THAT EACH CLAIM GATE CAN FAIL are four different
     statements, and one gate over all of them cannot say which broke.
     """
-    print("SELF TEST. Eleven planted worlds; six of them are refusals, because "
-          "a scorer that\nhas only ever seen a clean design has never been shown "
-          "to refuse one.\n")
+    worlds = self_test_worlds(args)
+    refusals = sum(1 for w in worlds if w.why.startswith("A REFUSAL"))
+    # COUNTED OFF THE LIST, never typed: the line that stood here said eleven
+    # and six while the docstring one function up said nine and four, and both
+    # were describing the same tuple.
+    print(f"SELF TEST. {len(worlds)} planted worlds; {refusals} of them are "
+          "refusals, because a scorer that\nhas only ever seen a clean design "
+          "has never been shown to refuse one.\n")
     planted = _self_test_args(args)
     threshold, source = registered_clock_ratio(planted)
     verdicts_ok = True
@@ -2181,7 +2404,7 @@ def self_test(args) -> int:
     resolves_ok = True
     seen_values: dict[str, float] = {}
     claim_fails: dict[str, bool] = {"C1": False, "C2": False}
-    for world in self_test_worlds(args):
+    for world in worlds:
         est = fit(world.rows, draws=args.draws, seed=args.seed)
         gates = gates_for(world.rows, planted, threshold, source, est)
         got = {g.token: g.verdict for g in gates}
@@ -2523,6 +2746,10 @@ def _main(argv=None) -> int:
               "(0, 1]. A duty is a fraction of wall time the GPU is busy; 1.0 "
               "is no host sleep at all and is the most sustained pressure a "
               "byte-identical kernel can apply.")
+        return exit_codes.REFUSED
+    loosened = loosening_refusal(args)
+    if loosened:
+        print(loosened)
         return exit_codes.REFUSED
     cfg = MODEL_CONFIGS[args.model]
     quantum = SWEEP.rows_quantum(cfg)

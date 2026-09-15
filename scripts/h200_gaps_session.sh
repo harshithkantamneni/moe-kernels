@@ -479,8 +479,10 @@
 # session prints two named subsets under its cost table, both computed from
 # `arm_minutes` and `arm_clock` so that a re-booked arm moves them by itself:
 #
-#   2 HOURS  calibrate, both pin probes, the three rooflines, alias_ablation and
-#            bn_g16. Both payload arms with their preconditions, nothing else.
+#   2 HOURS  calibrate, both pin probes, private-mixtral-bm32, the three
+#            rooflines, alias_ablation and bn_g16. Both payload arms with their
+#            preconditions and the 3-minute reading that says what their alpha
+#            means, nothing else. The 40-minute elasticity is in NEITHER set.
 #   3 HOURS  the same plus bm128_depth, the anchor pair, mma_switch, ruler,
 #            cap_test, dtype and counter_plan. Still no noise floor.
 #
@@ -1019,6 +1021,7 @@ arm_script() { case "$1" in
   calibrate)                     echo scripts/calibrate_hardware.py ;;
   elasticity-*)                  echo scripts/clock_elasticity.py ;;
   pin_probe-*)                   echo moe/bench/cli.py ;;
+  private-*)                     echo scripts/private_weight_reference.py ;;
   roofline-*)                    echo scripts/bm128_roofline.py ;;
   bm128_depth)                   echo scripts/bm128_depth.py ;;
   alias_ablation)                echo scripts/alias_ablation.py ;;
@@ -2006,6 +2009,7 @@ arm_minutes()  { case "$1" in
   calibrate) echo 3 ;;
   elasticity-m32-n64-g16) echo 40 ;;
   pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
+  private-mixtral-bm32) echo 3 ;;
   roofline-n64-g1) echo 1 ;;    roofline-n256-g16) echo 0 ;;
   roofline-n256-g32) echo 0 ;;
   bm128_depth) echo 5 ;;        alias_ablation) echo 14 ;;
@@ -2028,6 +2032,7 @@ arm_basis() { case "$1" in
   elasticity-m32-n64-g16) echo "clock_elasticity.py --dry-run --model mixtral-8x7b --dtype bf16 --treads 8 --duty 1.0 0.5 0.25 0.1 --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200 --settle-seconds 10 -> 'estimated wall time 2216 s (36.9 min)', 416 rows (13 repeats x 4 states x 8 treads). A WALL figure and every term is named on the page: 7.40 s of kernel per state per repeat over the 8 treads, x17.00 duty inflation (the sum of 1/duty over the four states, which is what the idle gaps cost and they ARE the experiment), + 40 s of settles per repeat, x13 repeats, + a 60 s ALLOWANCE for the 2.82 GB mixtral weight build and Triton's first choice under the pin, which the page labels an allowance because neither has been timed here. Booked 40, above the figure and never at it. EVERY FLAG THAT SHAPES THAT NUMBER IS ON THE ARM LINE, so a re-derivation runs the same command and gets the same run id: the duty list sets the inflation, --repeats sets both the cost and the V1 threshold the plan computes from it (13 repeats x 8 treads x 4 states -> 1.050x), and --settle-seconds is 4 of the 13 minutes. THE 7.40 s IS NOT THIS FILE'S NUMBER EITHER: the plan sizes each tread's burst with the same burst_shape() the pod calls, over the per-tread medians the 2026-09-10 bn_decomposition arm published at this exact tile, and tests/test_clock_elasticity.py recomputes those medians from that committed cells.csv." ;;
   calibrate)  echo "calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan." ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin." ;;
+  private-mixtral-bm32) echo "private_weight_reference.py --dry-run --capability 9.0 --model mixtral-8x7b --block-m 32 --treads 6 --repeats 9 --device-memory-gb 140 -> 'estimated GPU time 145 s at the model's own timings, excluding compiles and allocation', 162 cells (6 treads x 3 arms x 9 repeats). 145 s is 2.4 min, booked 3, which is the ceiling of the arm's own printed figure; the wall bound over the KERNEL rows is this file's own arithmetic and no per-arm figure is multiplied by it. EVERY SHAPING FLAG IS ON BOTH BRANCHES except --device-memory-gb, which names a HYPOTHETICAL card for the off-GPU fit check and is deliberately absent from the measuring line: on the pod the attached device is asked instead, and passing a typed number beside a real card would check the plan against nothing. THE FIGURE IS NOT THE 2 GPU-HOURS THIS ARM WAS COMMISSIONED WITH, and the gap is not an error in either: time_kernel holds --cell-budget-ms of kernel time per trial, so 162 cells is 145 s whatever each call costs. The spare budget buys a SECOND run at another tile or another model, which is a second arm and a second run id, not more repeats of this one: the binding uncertainty here is V5's machinery bound, a systematic that does not shrink with repeats." ;;
   roofline-n64-g1) echo "bm128_roofline.py --dry-run --block-n 64 --group-m 1 --control 256 -> 'estimate 58 s of GPU', 39 cells." ;;
   roofline-n256-g16) echo "bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0 -> exit 2, 'REFUSED before any GPU time, from the pinned constants alone'. Zero minutes, and the refusal is the arm's finding." ;;
   roofline-n256-g32) echo "the same command at --group-m 32: REFUSED before any GPU time for the same missing BLOCK_M=256 control. Zero minutes." ;;
@@ -2071,6 +2076,8 @@ arm_unpriced() { case "$1" in
   roofline-n64-g1|bn_g16|occupancy|cap_test|blockk-w4)
               echo "compiles and allocation, in the plan's own words" ;;
   bm128_depth) echo "compiles and allocation, in the plan's own words. The BM=32 scaling partner is NOT an exclusion and is not a flag: it is unconditional in scripts/bm128_depth.py, so its treads are in whatever cell count and estimate that script's own plan page prints, and this row books that figure. 252 s prices the {128, 256} pairing alone; with the partner the same command prices 294 s, four treads and 42 s more, and both are a 5 minute ceiling" ;;
+  private-mixtral-bm32)
+              echo "compiles and allocation, in the plan's own words, and the plan names both: the private weight build copies 16.91 GB device-to-device once, and the five-part buffer proof runs four extra fused_experts calls at the deepest tread after the last timed cell" ;;
   dtype)      echo "compiles and allocation for 32 distinct Triton specialisations across 2 models" ;;
   span_dense) echo "up to 21 distinct Triton specialisations across 4 models and one weight build per model, the largest deepseek-v3 at 22.5 GB" ;;
   calibrate|mma_switch|pin_probe-n64-g1|pin_probe-n256-g16)
@@ -2142,8 +2149,19 @@ bounded_minutes() {
 # both pin probes are in every set: the calibration gate is not scoped to --only
 # and refuses the session without arm 0, and an unhonoured pin makes every
 # forced-tile arm below it worthless.
+#
+# AND THE INTERPRETATION ARMS, WHICH ARE NOT SYMMETRIC. `private-mixtral-bm32`
+# is in both sets: it is three minutes, it reads alpha as a ratio of two
+# measured slopes, and a rental whose whole point is to reach bn_g16's alpha
+# should not reach it without the one arm that says what an alpha here means.
+# `elasticity-m32-n64-g16` is in NEITHER, and that is a budget decision the
+# owner may overrule rather than an oversight: at 40 WALL minutes it is a third
+# of a two-hour booking, and it is the one arm of the pair that can spend its
+# whole booking and exit INVALID when the duty states fail to separate. A short
+# rental that wants it adds it by name to --only and drops a roofline.
 rental_2h_arms() {
-  echo "thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16 roofline-n64-g1" \
+  echo "thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16" \
+       "private-mixtral-bm32 roofline-n64-g1" \
        "roofline-n256-g16 roofline-n256-g32 alias_ablation bn_g16"
 }
 rental_3h_arms() {
@@ -2305,6 +2323,7 @@ arm_closes() { case "$1" in
   calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
   pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
+  private-mixtral-bm32) echo "ALPHA AS A RATIO OF TWO MEASURED SLOPES, with no assumed bandwidth and no fitted intercept anywhere in it, which is the one thing the 2026-09-10 reading says this apparatus has never had. Every alpha in this study divides a time by an ASSUMED rate or by an extrapolation back to n=0, and that is why the same nine cells give 0.9747 under one parameterisation and 0.5908 under another against a quoted sd of 0.0037. This arm runs the ladder THREE TIMES at one geometry: SHARED (the normal path), PRIVATE (every M-tile given its own copy of the expert weights, so reuse is impossible BY CONSTRUCTION and the slope IS the alpha=1 reference), and ALIAS (the private expert space, allocation, padding and sorted-id table with the shared traffic AND the shared addresses, which is the control that bounds the TABLE-AND-PADDING half of the proxy error; nothing here bounds a cost paid by READING the copies, and the plan page says so). slope(shared)/slope(private) is alpha as a traffic fraction with no assumed RATE in it, and it is a traffic fraction on the further assumption that both arms deliver the same bytes per second, which the page registers rather than hides. NO KERNEL WAS WRITTEN: vLLM fused_moe reads its expert index PER M-TILE, so a private copy per tile is a relabelling of topk_ids plus a wider w1/w2, and the tile, the launch grid, the M-tile count, the FLOPs and the activation traffic are identical across the three arms. WHAT IT SETTLES, either way: a ratio in ALPHA_BAND confirms the refit as a traffic fraction; a ratio near 1.0 says the whole weight set is re-read and the model SHAPE was right where its coefficient was not identifiable; a ratio under 0.35 says most of the per-M-tile cost is issue and latency, the traffic model is the wrong KIND of model, and the study's negative result becomes a positive one. The arm PRINTS which, from a partition registered before the run. BY-PRODUCT: slope(private) read as a rate is the delivered weight-read bandwidth of the kernel under test, which is the denominator every published w is divided by, measured. IT RUNS AFTER THE PIN PROBES because it forces its tile through the same override hook they validate, and AFTER calibrate because C2 and V4 are scored against this card own ridge and triad. BM=32 AND NOT 64, and that is the design, not taste: at 64 a world of alpha=0.10 puts the shared ladder over 95% of the roof from tread 3, so V4 would void the page in the one outcome worth the most, and the script REFUSES that configuration at plan time with its discrimination floor printed." ;;
   roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
   roofline-n256-g16) echo "THE CLAIM'S CONFIGURATION, and NO ARM CAN CONFIRM IT ON sm_90. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. It was scheduled to contest TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. IT REFUSES AT EVERY WARP AND STAGE COUNT: the BLOCK_M=256 control that cancels the fused layer carries a 256x256 fp32 accumulator, 65536 of 65536 registers per block however the warps are split (bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0, and the same with --num-warps 16 --num-stages 3, both exit 2), so no pin rescues it and NO BLOCK_SIZE_N confirms the headline on this card. The refusal is the arm's finding: the paper's headline has no confirming arm on the H200, and this driver will not run the subject without its control." ;;
   roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim would rest on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same accumulator as the G=16 arm, at every warp and stage count; there is no fix on sm_90 that unblocks either." ;;
@@ -2315,7 +2334,7 @@ arm_closes() { case "$1" in
   anchor_measure) echo "The evaluation's weakest link: the memory-branch level, measured at matched reuse rather than extrapolated. Decides whether any numeric alpha is publishable." ;;
   anchor_rescore) echo "Free: every committed report re-scored under the anchor arm 0 just calibrated, so the size of the correction to every published alpha is known. Written under the session directory, never into results/published." ;;
   occupancy)  echo "Whether alpha tracks residency or program order. If residency, the swizzle is a dead lever, the cross-card null is explained, and reuse-distance prediction does not transfer to this regime." ;;
-  blockk-w4)  echo "THE ARM ABOVE'S P6, which reads UNKNOWN in every report this study has published: no two num_stages settings in the whole corpus ever shared a resident-block count, so occupancy's P1 residency null is confounded with software-pipeline depth and three of the four modelling attempts of the 2026-09-10 synthesis lean on that null. BLOCK_SIZE_K is 64 in EVERY fit in the corpus and Triton's shared memory per CTA goes as num_stages x BLOCK_K x (BLOCK_M + BLOCK_N) x bytes, so moving it pulls residency and depth apart: (3,64) and (6,32) are 48 KiB at depths 3 and 6, (4,64) and (2,128) are 64 KiB at depths 4 and 2, and (3,32)/(3,64)/(3,128) is a residency ladder at byte-identical depth. IT IS SCORED ON w, THE WEIGHT-STREAM SLOPE, AND NOT ON THE EXA RATIO, and the plan page says why: EXA's denominator carries a fitted intercept 217x noisier than the slope it is added to and NEGATIVE in two of that session's arms, so a residency effect of a few per cent arrives there as a sign flip. WHAT EACH READING SETTLES: if w follows DEPTH, P1's null is confirmed, what moved with num_stages was latency hiding and the concurrency family is closed; if it follows RESIDENCY, the null was an artefact of the lockstep and C2 prints the size the footprint hypothesis returns at as a fraction of the concurrency model's own predicted swing; if NEITHER moves, C1 is UNKNOWN and the arm says it could not separate what it did not see. WHAT IT CANNOT CLOSE, and the page says so before it runs: the register file. Residency is min(by_smem, by_threads, by_blocks, by_regs) and only the first depends on BLOCK_SIZE_K, so a kernel whose n_regs leaves room for one CTA puts every cell on one rung and the design separates nothing. That is measured rather than assumed -- n_regs is read back off each compiled kernel -- and a COMPILE CENSUS refuses before any timed cell when the realised design is singular, so the failure costs one compile per cell instead of the whole booking." ;;
+  blockk-w4)  echo "THE ARM ABOVE'S P6, which reads UNKNOWN in every report this study has published: no two num_stages settings in the whole corpus ever shared a resident-block count, so occupancy's P1 residency null is confounded with software-pipeline depth and three of the four modelling attempts of the 2026-09-10 synthesis lean on that null. BLOCK_SIZE_K is 64 in EVERY fit in the corpus and Triton's shared memory per CTA goes as num_stages x BLOCK_K x (BLOCK_M + BLOCK_N) x bytes, so moving it pulls residency and depth apart: (3,64) and (6,32) are 48 KiB at depths 3 and 6, (4,64) and (2,128) are 64 KiB at depths 4 and 2, and (3,32)/(3,64)/(3,128) is a residency ladder at byte-identical depth. IT IS SCORED ON w, THE WEIGHT-STREAM SLOPE, AND NOT ON THE EXA RATIO, and the plan page says why: EXA's denominator carries a fitted intercept far noisier than the slope it is added to (the session-3 analysis puts it at 217x; no committed file in this tree holds that figure, and no gate reads it) and NEGATIVE in two of that session's arms, so a residency effect of a few per cent arrives there as a sign flip. WHAT EACH READING SETTLES: if w follows DEPTH, P1's null is confirmed, what moved with num_stages was latency hiding and the concurrency family is closed; if it follows RESIDENCY, the null was an artefact of the lockstep and C2 prints the size the footprint hypothesis returns at as a fraction of the concurrency model's own predicted swing; if NEITHER moves, C1 is UNKNOWN and the arm says it could not separate what it did not see. WHAT IT CANNOT CLOSE, and the page says so before it runs: the register file. Residency is min(by_smem, by_threads, by_blocks, by_regs) and only the first depends on BLOCK_SIZE_K, so a kernel whose n_regs leaves room for one CTA puts every cell on one rung and the design separates nothing. That is measured rather than assumed -- n_regs is read back off each compiled kernel -- and a COMPILE CENSUS refuses before any timed cell when the realised design is singular, so the failure costs one compile per cell instead of the whole booking." ;;
   mma_switch) echo "STUDY item 3's loose end. CLOSES whether the tile alone selects the instruction at fixed tokens." ;;
   ruler)      echo "STUDY item 2's follow-up. Prices the read-vs-triad and clocks-first changes on the committed corpus without adopting them." ;;
   cap_test)   echo "FINDINGS' fourth readout, DEMOTED: BLOCK_M=16 runs multi-tile in 1 of 24 cells on uniform routing, so this tests the formula, not the claim. BOOKED --r-max 2112 SINCE 2026-09-09: at the default the grid held two exactly-full BLOCK_M=256 stacks against V1's three and the arm was unsatisfiable from its own plan page, and the 1024 first booked in its place is itself refused at plan time (V4 wants a 132-tile BLOCK_M=16 stack and 1024 gives 66; the script prints the 2112 minimum). On the 2026-09-09 cells, with the control qualified from its own treads, the counterfactual reads alpha 0.998 raw / 0.994 corrected and a cap of 16.1 Op/B = 0.105 of the ridge, which is a 10x refutation of the retracted 0.10; that is what this arm is now booked to measure rather than replay." ;;
@@ -2330,6 +2349,7 @@ esac; }
 
 arm_offgpu_gates() { case "$1" in
   thermal)    echo "scripts/thermal_acceptance.py --self-test  (eight planted worlds, three of them REFUSALS, one VALIDITY RESULT line and exit 0). THE TWO WORLDS THAT CARRY IT: 'floored' replays 2026-09-11 and shows C2 -- the DRIFT rule, which is all calibrate_hardware's not_throttled used to score -- still PASSING on a card flat at its floor, which is the hole; 'hungry-tile' is the lowest per-cell median in results/published at 697.4 W of 700 and must NOT be refused, because a gate that refuses healthy cards costs a rental as surely as one that admits sick ones. Also scripts/thermal_acceptance.py --dry-run for the plan, the two registered predictions and the resolution line." ;;
+  private-mixtral-bm32) echo "scripts/private_weight_reference.py --self-test refit|no-reuse|issue-bound|aliased|machinery|compute-bound|noisy-identity|over-allocated|holes|ragged|faster-than-its-ruler  (eleven planted worlds, nine RESULT lines each, and they SEPARATE by exit code: refit 0 DONE, no-reuse and issue-bound 1 CLAIM_FAIL on C1 with the outcome NAMED on the line, the rest 3 INVALID on the one validity gate each is planted to break. Every gate FAIL branch is reachable from some world and tests/test_private_weight_reference.py COUNTS that rather than listing it). Then --dry-run --device-memory-gb 140 for the memory arithmetic, the depth table and the discrimination floor, and --dry-run --block-m=64 --device-memory-gb 140, which REFUSES and is the check that chose the default tile. THE EQUALS FORM IS DELIBERATE: this driver pins the counter pair's tile in counter_block_m() and tests/test_h200_gaps_session.py forbids a second copy of that literal anywhere in this file, so the tall tile is named here in the form argparse accepts and that grep does not match." ;;
   roofline-n64-g1|roofline-n256-g16|roofline-n256-g32)
               echo "scripts/bm128_roofline.py --self-test --fail-on-gate  (three planted worlds, exit 0 required)" ;;
   bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
@@ -2363,7 +2383,8 @@ RETRY_ARMS=0
 # row that says "roofline" and a report that says BLOCK_N=64 are the same
 # defect as a run id without its card.
 # --------------------------------------------------------------------------
-ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16 elasticity-m32-n64-g16
+ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16
+           private-mixtral-bm32 elasticity-m32-n64-g16
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy blockk-w4
@@ -2399,6 +2420,7 @@ for s in thermal_acceptance calibrate_hardware clock_elasticity \
          bm128_roofline bm128_depth alias_ablation \
          replicate_noise_floor \
          bn_decomposition memory_branch_anchor occupancy_vs_swizzle \
+         private_weight_reference \
          tile_cap_test dtype_tile_confound span_extent_separation \
          ruler_rebaseline dram_counter_route; do
   if [[ ! -f "$REPO/scripts/$s.py" ]]; then note "MISSING scripts/$s.py"; missing=1
@@ -2702,7 +2724,10 @@ read -r RENT3_PRICED RENT3_BOUND <<< "$(session_bound $(rental_3h_arms))"
 note "WHAT A RENTAL OF A GIVEN LENGTH ACTUALLY REACHES:"
 note ""
 note "  2 HOURS  ~$RENT2_PRICED priced / ~$RENT2_BOUND bounded min. BOTH PAYLOAD ARMS -- the alias"
-note "           ablation and bn_g16 -- with their preconditions and nothing else."
+note "           ablation and bn_g16 -- with their preconditions, plus the 3-minute"
+note "           private-weight reference that says what their alpha MEANS, and"
+note "           nothing else. The 40-minute clock elasticity is in NEITHER set:"
+note "           it reads on the same question and costs a third of this booking."
 note "             --only $(rental_2h_arms | tr ' ' ',')"
 note "  3 HOURS  ~$RENT3_PRICED priced / ~$RENT3_BOUND bounded min. The same plus the depth sweep, the"
 note "           anchor pair and the whole cheap tail."
@@ -2953,25 +2978,48 @@ else
 fi
 
 # --------------------------------------------------------------------------
-# 1. THE CLAIM, in three configurations. All three run WITH --fail-on-gate, and
-#    the sentence that stood here -- "all three run WITHOUT --fail-on-gate: a C1
-#    FAIL means BLOCK_M=128 reached the roof, which is one of the two registered
-#    outcomes and a result" -- had the conclusion backwards. A failing claim
-#    being a RESULT is the argument FOR the flag, not against it: CLAIM_FAIL is
-#    the state this ledger latches as finished, and folding it into 0 files it
-#    as DONE, "every VALIDITY and CLAIM gate PASSED", over a claim that did not.
-#    bm128_roofline no longer has a mode in which a failed gate exits 0 and says
-#    the flag is redundant; it is passed anyway, so that a script that grows the
-#    downgrade back cannot silently take this arm's CLAIM_FAIL away.
+# 0c. THE NO-REUSE REFERENCE. Runs here, after the pin probes and after the
+#     calibration, because it forces its tile through the same override hook
+#     the probes validate and its C2 and V4 are scored against THIS card's own
+#     ridge and triad. Nothing below it depends on its result to EXECUTE; every
+#     alpha below it depends on its result to be READ, which is the order this
+#     session sorts by. It is the FIRST OF TWO arms with that property -- 0d,
+#     the clock elasticity, is the other -- and it runs first of the two for a
+#     budget reason and not a dependency: neither reads the other, this one is
+#     booked at 3 minutes against that one's 40, and that one can spend its whole
+#     booking and still exit INVALID when the duty states fail to separate.
+#
+#     --device-memory-gb IS ON THE DRY BRANCH ONLY, and that is deliberate and
+#     not the --r-max defect one arm over: it names a HYPOTHETICAL card so the
+#     memory arithmetic can be checked off a GPU box, and the script ignores it
+#     whenever a device answers. Passing it on the pod would check the plan
+#     against a number somebody typed while a real card sat underneath it.
+#     Every flag that shapes the LADDER -- the model, the tile, the depth, the
+#     repeats -- is on both branches, so the dry run previews the pod's own run
+#     id and not a different sweep.
 # --------------------------------------------------------------------------
+say "0c. alpha as a ratio of two MEASURED slopes: the private-weight reference"
+note "The only arm in this session with no assumed bandwidth and no fitted intercept in its answer."
+if (( DRY )); then
+  arm private-mixtral-bm32 "$PY_BASE" "$REPO/scripts/private_weight_reference.py" --dry-run \
+      --capability "${CAPABILITY:-9.0}" --model mixtral-8x7b --block-m 32 \
+      --treads 6 --repeats 9 --device-memory-gb 140
+else
+  arm private-mixtral-bm32 "$PY_VLLM" "$REPO/scripts/private_weight_reference.py" \
+      --model mixtral-8x7b --block-m 32 --treads 6 --repeats 9
+fi
+
 # --------------------------------------------------------------------------
-# 0c. IS ANY ALPHA BELOW QUOTABLE. The clock elasticity at a byte-identical
+# 0d. IS ANY ALPHA BELOW QUOTABLE. The clock elasticity at a byte-identical
 #     kernel, which nothing in this corpus has ever measured.
 # --------------------------------------------------------------------------
-say "0c. clock elasticity at one pinned cell"
-# WHY IT SITS HERE, AHEAD OF EVERY LADDER AND BEHIND THE THREE PRECONDITIONS.
-# Its result does not change what any arm below MEASURES; it changes what every
-# one of them MEANS. Sweeping the admissible elasticity moves pooled EXA alpha_b
+say "0d. clock elasticity at one pinned cell"
+# WHY IT SITS HERE, AHEAD OF EVERY LADDER, BEHIND THE THREE PRECONDITIONS AND
+# BEHIND 0c. Its result does not change what any arm below MEASURES; it changes
+# what every one of them MEANS, which it has in common with 0c and with nothing
+# else in this session. It is behind 0c only on price: neither arm reads the
+# other, and forty minutes that can end in INVALID do not go ahead of three that
+# measure alpha directly. Sweeping the admissible elasticity moves pooled EXA alpha_b
 # from 0.974 to 0.897, 21x the quoted sd, so an operator who has to cut the
 # session short should be told which of the three registered worlds this card is
 # in before spending 46 minutes on bn_g16's alpha.
@@ -3032,11 +3080,29 @@ else
                 note "              V1 is the likely gate: the duty states did not separate"
                 note "              in clock, so this container's governor does not answer"
                 note "              to duty at this kernel. Every alpha below keeps the"
-                note "              free parameter it had before this arm ran." ;;
+                note "              free parameter it had before this arm ran."
+                note "              AND THIS ROW LATCHES. V1 is a property of the POD and"
+                note "              a --resume-latest onto shared /workspace can be another"
+                note "              pod, but this arm is 40 minutes and never_latches would"
+                note "              re-spend them on every resume of the same rental to"
+                note "              reach the same INVALID. An operator who has CHANGED"
+                note "              pods deletes this row from the ledger to re-ask." ;;
     *)          : ;;
   esac
 fi
 
+# --------------------------------------------------------------------------
+# 1. THE CLAIM, in three configurations. All three run WITH --fail-on-gate, and
+#    the sentence that stood here -- "all three run WITHOUT --fail-on-gate: a C1
+#    FAIL means BLOCK_M=128 reached the roof, which is one of the two registered
+#    outcomes and a result" -- had the conclusion backwards. A failing claim
+#    being a RESULT is the argument FOR the flag, not against it: CLAIM_FAIL is
+#    the state this ledger latches as finished, and folding it into 0 files it
+#    as DONE, "every VALIDITY and CLAIM gate PASSED", over a claim that did not.
+#    bm128_roofline no longer has a mode in which a failed gate exits 0 and says
+#    the flag is redundant; it is passed anyway, so that a script that grows the
+#    downgrade back cannot silently take this arm's CLAIM_FAIL away.
+# --------------------------------------------------------------------------
 say "1a. CONTROL: BLOCK_M=128 at the SWEPT configuration (BN=64, G=1)"
 note "This arm can refute a ceiling and cannot confirm one for production."
 if (( DRY )); then
@@ -3840,8 +3906,35 @@ fi
 printf '\ntotal %s min of wall clock\n' "$(( ($(date -u +%s) - started) / 60 ))"
 printf 'work tree %s dirty file(s) at start, %s now\n' "$DIRTY_AT_START" "$(dirty_count)"
 
-say "READ THESE FOUR FIRST"
+# NO COUNT IN THE HEADING, since 2026-09-16. It read "READ THESE FOUR FIRST"
+# and the session had just gained two arms whose whole justification, in both
+# slices that added them, is that an operator cutting the rental short has to
+# see them before spending 46 minutes on bn_g16's alpha -- which is this
+# block's own criterion. A number in a heading is one more thing to keep in
+# step with the list under it, and this file's standing defect is exactly that.
+say "READ THESE FIRST"
 cat <<EOF
+  private-mixtral-bm32  the ratio, and read it BEFORE any alpha below. It is
+               the only number in this session with no assumed bandwidth and no
+               fitted intercept in it: slope(shared)/slope(private), where the
+               private arm gives every M-tile its own copy of the expert weights
+               so reuse is impossible by construction. The page NAMES the world
+               it landed in from a partition registered before the run --
+               ISSUE-AND-LATENCY, below/at/above the refit band, or NO-REUSE --
+               and a C1 FAIL is one of those names and not a broken arm. Read V5
+               beside it: it bounds the TABLE-AND-PADDING half of the proxy
+               error, and the page says in as many words that nothing here
+               bounds a cost paid by READING the copies.
+  elasticity-m32-n64-g16  which band, and it decides what every alpha below
+               MEANS rather than what any of them measures. Below 0.25 the raw
+               readings stand; above 0.40 C3's DIRECTION is retracted while its
+               inequality survives; between them NEITHER registered consequence
+               is licensed and the page says so instead of picking the nearer
+               edge. READ C1 BEFORE C2: a C2 FAIL with C1 FAIL is "not shown",
+               not "shown false". An INVALID here is UNMEASURED and not zero --
+               V1 is the likely gate and it is a property of THIS pod's
+               governor -- and every alpha below then keeps the free parameter
+               it had before this arm ran.
   alias_ablation  the P1 line, and read it BEFORE the roofline verdict. It is
                the only arm that says whether alpha is a fraction of a DRAM
                weight read at all, which is the unit every roof fraction, every

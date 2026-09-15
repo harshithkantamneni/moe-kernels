@@ -19,9 +19,11 @@ FIVE GROUPS, in the order a reader has to take them.
     kept with the side recorded, and the fifth row is HIGH-AND-DRIFT in one
     tread -- because every earlier world in this repo had its drifting row
     sitting LEVEL, so a counter filtering on LEVEL alone counted that tread
-    twice and stayed green. The AST check that there is exactly ONE reader of
-    those verdicts is here too: this project's recurring defect is a rule
-    applied at one of N call sites.
+    twice and stayed green. The AST check that the readers of those verdicts
+    are exactly the two `CLOCK_VERDICT_READERS` names -- the one that EXCLUDES
+    and the one that COUNTS -- is here too: this project's recurring defect is
+    a rule applied at one of N call sites, and its twin is a sentence that
+    counts the sites wrong.
 
   - THE EXIT CONTRACT. Every off-GPU mode, `classify_text(log) == rc` or a
     REFUSED with no RESULT line; one RESULT line per gate and nothing else
@@ -107,15 +109,23 @@ def test_every_registered_pair_has_equal_shared_memory(bk):
     b = dtype_bytes("bf16")
     by_key = {c.key: c for c in bk.parse_cells(bk.DEFAULT_CELLS)}
     assert len(bk.ISO_SMEM_PAIRS) == 2, bk.ISO_SMEM_PAIRS
-    for low_key, high_key in bk.ISO_SMEM_PAIRS:
-        low, high = by_key[low_key], by_key[high_key]
-        assert low.smem_bytes(b) == high.smem_bytes(b), (low_key, high_key)
-        assert low.num_stages != high.num_stages, "a pair that is not a contrast"
+    # NAMED `from`/`to` AND NOT `low`/`high`: the second registered pair runs
+    # 4 stages to 2, so the pair order is the REGISTERED order and not the
+    # depth order, and the direction lives in log2(to/from).
+    for from_key, to_key in bk.ISO_SMEM_PAIRS:
+        a, z = by_key[from_key], by_key[to_key]
+        assert a.smem_bytes(b) == z.smem_bytes(b), (from_key, to_key)
+        assert a.num_stages != z.num_stages, "a pair that is not a contrast"
         # And the depths differ by a factor of two, which is the unit every
         # coefficient on the page is quoted in.
-        ratio = max(low.num_stages, high.num_stages) / min(low.num_stages,
-                                                           high.num_stages)
-        assert ratio == 2.0, (low_key, high_key, ratio)
+        ratio = max(a.num_stages, z.num_stages) / min(a.num_stages,
+                                                      z.num_stages)
+        assert ratio == 2.0, (from_key, to_key, ratio)
+    # ONE pair descends in depth, which is why the field names matter.
+    by = {c.key: c for c in bk.parse_cells(bk.DEFAULT_CELLS)}
+    directions = {by[t].num_stages > by[f].num_stages
+                  for f, t in bk.ISO_SMEM_PAIRS}
+    assert directions == {True, False}, "both directions are registered"
 
 
 def test_the_iso_depth_ladder_holds_the_depth_and_moves_the_footprint(bk):
@@ -295,8 +305,17 @@ def test_the_census_refusal_names_the_flag_and_exits_refused(bk):
     raises = [ast.unparse(node) for node in ast.walk(tree)
               if isinstance(node, ast.Raise)
               and "CensusRefusal" in ast.unparse(node)]
-    assert len(raises) == 2, raises
+    # THREE, and the third is the one that saves the booking. The census is the
+    # only place that knows, for free, whether the kernel probe read `n_regs`,
+    # and without it V3 reads UNKNOWN and the page is INVALID after every timed
+    # cell is paid for -- the failure occupancy_vs_swizzle's V9 met on two
+    # separate pods. A ladder at the residency BOUND is still rank 4, so the
+    # singular refusal cannot see it, and every compile succeeds, so the
+    # compile refusal cannot either.
+    assert len(raises) == 3, raises
     assert any("--num-warps" in r and "singular" in r for r in raises)
+    assert any("n_regs" in r and "UNKNOWN" in r for r in raises)
+    assert any("could not be compiled" in r for r in raises)
 
 
 # --------------------------------------------------------------------------
@@ -378,8 +397,12 @@ def test_the_five_clock_counts_partition_the_timed_treads(bk):
     assert "kept" in " ".join(bk.clock_state_lines(state))
 
 
-def test_exactly_one_reader_of_the_clock_verdicts(bk):
+def test_the_clock_verdicts_are_read_by_exactly_the_pinned_functions(bk):
     """THE RECURRING DEFECT, pinned by AST rather than by a docstring's count.
+
+    Named for what it asserts. As `test_exactly_one_reader_of_the_clock_verdicts`
+    its own body asserted TWO, which is the defect it exists to catch wearing
+    the test's name.
 
     A rule applied at one of N call sites is this project's standing failure and
     a clock rule is the exact shape of it. Docstrings are stripped before the
@@ -968,7 +991,8 @@ def test_the_report_payload_serialises_from_a_planted_world(bk, limits):
                    for c in cells}
     samples = bk.planted_samples(
         cfg, cells, rows, world, residencies, reps=args.reps, noise=0.004,
-        seed=0, stream_ms=bk.WEIGHTS.weight_stream_ms(cfg, "bf16", 4374.5))
+        seed=0, stream_ms=bk.WEIGHTS.weight_stream_ms(cfg, "bf16", 4374.5),
+        b=2)
     observed = {c.key: {"shared": c.smem_bytes(2),
                         "n_regs": bk.PLANTED_REGISTERS, "n_spills": 0}
                 for c in cells}

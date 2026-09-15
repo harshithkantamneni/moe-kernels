@@ -1340,8 +1340,8 @@ def test_every_append_mode_store_refuses_a_narrower_header_on_disk():
         "it at the Store call site")
     guarded = [p.name for p in sorted((REPO / "scripts").glob("*.py"))
                if "class Store" in p.read_text()]
-    assert guarded == ["dtype_tile_confound.py", "span_extent_separation.py",
-                       "tuned_vs_fallback.py"], (
+    assert guarded == ["dtype_tile_confound.py", "private_weight_reference.py",
+                       "span_extent_separation.py", "tuned_vs_fallback.py"], (
         f"the set of Stores moved: {guarded}. The count is pinned because the "
         "defect this tripwire exists for was a guard applied to two of three "
         "while its own prose said there were two")

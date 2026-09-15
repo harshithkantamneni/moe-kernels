@@ -129,12 +129,18 @@ from moe.bench import exit_codes  # noqa: E402
 #: dict is gone from here, and every arm is read off its own plan again.
 
 
-#: `elasticity-m32-n64-g16` sits after the three preconditions and ahead of every
-#: ladder, added 2026-09-16. Its result does not change what any arm below
-#: MEASURES; it changes what every one of them MEANS, so an operator cutting the
-#: session short has to see it before spending 46 minutes on bn_g16's alpha.
+#: TWO INTERPRETATION ARMS sit after the three preconditions and ahead of every
+#: ladder, both added 2026-09-16. Neither changes what any arm below MEASURES;
+#: both change what every one of them MEANS, so an operator cutting the session
+#: short has to see them before spending 46 minutes on bn_g16's alpha.
+#: `private-mixtral-bm32` is first of the two and that ordering is a budget
+#: decision, not a dependency: neither reads the other, the private reference is
+#: booked at 3 minutes against the elasticity's 40, and the elasticity is the one
+#: of the pair that can spend its whole booking and still exit INVALID (V1, the
+#: duty states failing to separate in clock). Three minutes buys a direct alpha
+#: before forty are risked on what the fitted one means.
 ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
-        "elasticity-m32-n64-g16",
+        "private-mixtral-bm32", "elasticity-m32-n64-g16",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy", "blockk-w4",
@@ -271,15 +277,22 @@ def test_the_arms_whose_result_changes_a_later_reading_come_first():
     assert order[0] == "thermal"
     assert order[1] == "calibrate"
     assert order[2].startswith("pin_probe") and order[3].startswith("pin_probe")
-    # AND THE CLOCK ELASTICITY BEFORE EVERY LADDER, since 2026-09-16. It gates
-    # nothing and refuses nothing; it decides what every alpha below MEANS. The
-    # session-3 reading found that sweeping the admissible clock elasticity moves
-    # pooled EXA alpha_b from 0.974 to 0.897, 21x the quoted sd, and breaks the
-    # 26.7-sigma BLOCK_M monotonicity at 0.5, so an operator who runs out of pod
-    # hours inside bn_g16 needs this reading rather than another alpha.
-    assert order[4] == "elasticity-m32-n64-g16"
-    assert order.index("elasticity-m32-n64-g16") < order.index("bn_g16")
-    assert order.index("elasticity-m32-n64-g16") < order.index("roofline-n64-g1")
+    # AND THE TWO INTERPRETATION ARMS BEFORE EVERY LADDER, since 2026-09-16.
+    # Neither gates anything and neither refuses anything; between them they
+    # decide what every alpha below MEANS. The session-3 reading found that
+    # sweeping the admissible clock elasticity moves pooled EXA alpha_b from
+    # 0.974 to 0.897, 21x the quoted sd, and breaks the 26.7-sigma BLOCK_M
+    # monotonicity at 0.5; the private-weight reference measures alpha as a
+    # ratio of two slopes with no assumed rate in it at all. An operator who
+    # runs out of pod hours inside bn_g16 needs either reading rather than
+    # another alpha. THE ORDER BETWEEN THE TWO IS A BUDGET DECISION AND NOT A
+    # DEPENDENCY: neither arm reads the other, so the 3-minute one runs first
+    # and the 40-minute one that can exit INVALID on V1 runs second.
+    assert (order[4], order[5]) == ("private-mixtral-bm32",
+                                    "elasticity-m32-n64-g16")
+    for early in ("private-mixtral-bm32", "elasticity-m32-n64-g16"):
+        assert order.index(early) < order.index("bn_g16")
+        assert order.index(early) < order.index("roofline-n64-g1")
     # The control roofline runs first of the three: if BLOCK_M=128 reaches the
     # roof at the LEANEST configuration it reaches it at every richer one, so a
     # refutation there ends the session's whole middle at minute ten.
@@ -416,8 +429,9 @@ def test_no_arm_books_a_figure_this_file_invented(tmp_path):
 #: this list; the test below does not trust it, it re-derives every membership
 #: from the arm's own printed plan and then checks this list against what it
 #: found.
-KERNEL_ARMS = ("roofline-n64-g1", "bm128_depth", "bn_g16", "occupancy",
-               "blockk-w4", "cap_test", "dtype", "span_dense")
+KERNEL_ARMS = ("private-mixtral-bm32", "roofline-n64-g1", "bm128_depth",
+               "bn_g16", "occupancy", "blockk-w4", "cap_test", "dtype",
+               "span_dense")
 
 
 def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
@@ -538,6 +552,14 @@ INVOKED = {
     # experiment) and --repeats and --treads set the V1 clock-separation
     # threshold the plan COMPUTES from them, so an arm line missing any of them
     # previews a different sweep, a different threshold and a different run id.
+    # AND THE LAST TWO ARE NOT ON THE ARM LINE, deliberately. This tuple is a
+    # RENAME tripwire -- the test below only asks that the script still mentions
+    # each string -- so it is the right place to pin a flag the driver must keep
+    # NOT passing: `--card` would file the rows under this driver's spelling of
+    # the part while the rows carry torch's, and `--min-clock-ratio` is the
+    # operator's own assertion about V1, which the arm line has no business
+    # making. The comment above used to call every string here a plan-shaping
+    # flag on the arm line, and two of them are neither.
     "scripts/clock_elasticity.py": ("--dry-run", "--self-test", "--model",
                                     "--dtype", "--treads", "--duty",
                                     "--repeats", "--burst-ms", "--target-ms",
@@ -546,6 +568,13 @@ INVOKED = {
     "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
                                   "--dry-run"),
+    # The no-reuse reference, added 2026-09-14. Every flag that shapes the
+    # ladder is on both branches; --device-memory-gb is the dry branch's alone
+    # and names a HYPOTHETICAL card, the way dtype's --card does.
+    "scripts/private_weight_reference.py": ("--dry-run", "--capability",
+                                            "--model", "--block-m", "--treads",
+                                            "--repeats", "--self-test",
+                                            "--device-memory-gb"),
     "scripts/tile_cap_test.py": ("--dry-run", "--capability", "--fail-on-gate"),
     "scripts/dtype_tile_confound.py": ("--dry-run", "--card", "--fail-on-claim"),
     "scripts/span_extent_separation.py": ("--dry-run", "--densify",
@@ -923,6 +952,8 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
     ("bm128_depth", "--r-max"),
     ("blockk-w4", "--num-warps"),
     ("dtype", "--card"),
+    ("private-mixtral-bm32", "--block-m"),
+    ("private-mixtral-bm32", "--treads"),
 ])
 def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
     """FOUR ARMS PREVIEWED SOMETHING ELSE. calibrate was skipped entirely with
@@ -2904,13 +2935,29 @@ def test_the_short_rentals_buy_the_payload_and_leave_the_floor_out(tmp_path):
 def test_the_read_first_block_leads_with_the_arm_that_sets_the_units(tmp_path):
     """The roofline verdict is a fraction of a roof, and the alias ablation is
     what says the fraction is a fraction of the right thing. So it is read
-    first, and the block says why rather than just listing it."""
+    first among the arms about the ROOF, and the block says why rather than
+    just listing it.
+
+    AND THE TWO INTERPRETATION ARMS COME ABOVE IT, since 2026-09-16. Their whole
+    justification is that an operator cutting the rental short has to see them
+    before spending the session's longest arm on another alpha, which is this
+    block's own criterion, and leaving them out of it while the arm comments
+    said that was the same contradiction the rental subsets carried. The
+    heading no longer counts its own entries."""
     got = run(["--dry-run"], session=tmp_path / "s").stdout
-    block = got.split("READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+    block = got.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     assert block.index("alias_ablation") < block.index("roofline-n256-g16")
     assert "BEFORE the roofline verdict" in block
-    for name in ("alias_ablation", "roofline-n256-g16", "noise_floor", "bn_g16"):
+    for name in ("private-mixtral-bm32", "elasticity-m32-n64-g16",
+                 "alias_ablation", "roofline-n256-g16", "noise_floor",
+                 "bn_g16"):
         assert name in block, name
+    # The two arms whose result changes what every alpha below MEANS are read
+    # before the arms whose alphas they qualify.
+    for early in ("private-mixtral-bm32", "elasticity-m32-n64-g16"):
+        assert block.index(early) < block.index("bn_g16"), early
+    # And no count in the heading to fall out of step with the list.
+    assert "READ THESE FOUR FIRST" not in got
     # And the commit block says the arm writes nothing tracked, because an arm
     # with no --publish flag is one an operator can release a pod on top of.
     commit = got.split("WHAT TO COMMIT, AND WHAT NOT TO")[1]
@@ -2977,7 +3024,7 @@ def test_both_end_of_rental_surfaces_disclose_the_dot_mode_state(tmp_path):
 
     closes = lift("arm_closes alias_ablation", REPO=str(ROOT)).stdout
     block = run(["--dry-run"], session=tmp_path / "s").stdout.split(
-        "READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+        "READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     entry = block.split("roofline-n256-g16")[0]
     for surface in (closes, entry):
         # Flattened, because one surface is a heredoc wrapped at 76 columns and
@@ -3840,7 +3887,7 @@ def test_the_production_arms_no_longer_promise_a_confirmation_no_card_can_give(t
     assert "there is no fix on sm_90 that unblocks either" in listing
     assert "the only arm that can confirm it" not in listing
     body = run(["--dry-run"], session=tmp_path / "s").stdout
-    block = body.split("READ THESE FOUR FIRST")[1].split("WHAT TO COMMIT")[0]
+    block = body.split("READ THESE FIRST")[1].split("WHAT TO COMMIT")[0]
     assert "only arm here that can CONFIRM" not in block
     assert "CANNOT be confirmed on sm_90" in block
     assert "the paper has no confirming arm" in block

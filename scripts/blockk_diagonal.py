@@ -69,19 +69,32 @@ WHY IT IS SCORED ON w AND NOT ON THE EXA RATIO, and this is not a taste.
 `alpha = B / (A + B)` divides the ladder's per-tile slope by a LEVEL that is an
 extrapolation of the ladder back to n = 0. On the 2026-09-10 H200 session that
 denominator produced ten values above 1.0 across four arms and three NEGATIVE
-fitted intercepts, and `bn_decomposition`'s session-3 EXA fit returned
-alpha_a = -0.8143 whose entire SIGN sits inside the reference fixed cost's own
-jackknife error. The intercept `A` is 217 times noisier than the slope `B` it
-is added to, and it goes negative in two arms -- so a residency effect of a few
-per cent in `B` arrives in `B/(A+B)` as a sign flip and vanishes. `w` is the
-same slope `B` divided by a MEASURED byte count over a rate the caller names:
+fitted intercepts -- `moe/bench/weights.py`'s own record of that session, and
+`tests/test_block_m_crossing_sweep.py`'s R9 note; `docs/STUDY.md` line 234
+counts five and five off the committed cells, and the tree has not reconciled
+the two -- and `bn_decomposition`'s session-3 EXA fit returned alpha_a = -0.8143
+whose entire SIGN sits inside the reference fixed cost's own jackknife error.
+The intercept `A` is far noisier than the slope `B` it is added to and goes
+negative in two arms, so a residency effect of a few per cent in `B` arrives in
+`B/(A+B)` as a sign flip and vanishes. `w` is the same slope `B` divided by a
+MEASURED byte count over a rate the caller names:
 
     w = (ms per extra M-tile) / (ms to stream the routed expert weight set once)
 
-no fitted level, no intercept, 0.115% cold-replicate noise and 0.37%
-cross-session. It is the one statistic this apparatus measures well, and the
-effect this arm is looking for is a few per cent. `moe.bench.weights` owns the
-arithmetic and this file does not reimplement any of it.
+no fitted level and no intercept. THE NOISE FIGURES THIS PARAGRAPH USED TO
+CARRY -- "217 times noisier", "0.115% cold-replicate", "0.37% cross-session" --
+ARE NOT IN THIS TREE. They are the session-3 analysis's, quoted in the brief
+that commissioned this arm, and no committed file holds any of them: the
+published NOISE_FLOOR.json records spreads of ALPHA and not of `w`, so nothing
+here can recompute them. They are stated as the analysis's and not as this
+page's, and NO GATE READS ANY OF THEM -- the only spread this file scores
+against is `ASSUMED_W_SPREAD`, which names its own source and is replaced by
+this run's own measured spread the moment one cell is on disk. `w` is the one
+statistic this apparatus is said to measure well, and the effect this arm is
+looking for is a few per cent; whether the pod delivers the noise the analysis
+claims is a thing this arm's own V4 replicate-spread check MEASURES rather than
+assumes. `moe.bench.weights` owns the arithmetic and this file does not
+reimplement any of it.
 
 WHAT THE TWO READINGS MEAN, BOTH REGISTERED BEFORE THE RUN.
 
@@ -138,9 +151,11 @@ the exclusion: the clock moved while the tread was timed, so the median is a
 blend of two operating points. BOTH sides of a LEVEL failure are KEPT with the
 side recorded, because under the 700 W cap the under-load clock is an OUTCOME
 of the tile -- and this arm sweeps seven tiles, so it will see several
-operating points by construction. `clock_excluded` below is the ONE reader of
-those verdicts in this file and `tests/test_blockk_diagonal.py` asserts by AST
-that it is the only one.
+operating points by construction. TWO functions here read those verdicts and
+`tests/test_blockk_diagonal.py` asserts by AST that it is exactly those two:
+`clock_excluded`, which is the ONE function that EXCLUDES on them, and
+`clock_state`, which only COUNTS. `CLOCK_VERDICT_READERS` is the list the test
+compares against, so a third reader appearing anywhere goes red.
 """
 from __future__ import annotations
 
@@ -265,8 +280,12 @@ PINNED_WARPS = 4
 DEFAULT_CELLS = "1x32,2x32,3x32,6x32,3x64,4x64,2x128,3x128"
 
 #: The two pairs the module docstring is about, registered by name so the
-#: report cannot quietly compare a different pair. Each is
-#: `(low-depth cell, high-depth cell)` and the two members MUST have equal
+#: report cannot quietly compare a different pair. Each is `(from, to)` and NOT
+#: `(low depth, high depth)`: the second registered pair runs 4 stages -> 2, so
+#: a field called `low_key` named the DEEPER cell and `w_low` its w, and both
+#: went into `report.json` through `asdict` for any later reader to misread.
+#: The contrast arithmetic was right throughout -- `log2(to/from)` carries the
+#: sign -- and only the names were backwards. The two members MUST have equal
 #: computed shared memory; V2 asserts it and `--dry-run` prints the arithmetic.
 ISO_SMEM_PAIRS = (("3x64", "6x32"), ("4x64", "2x128"))
 
@@ -329,14 +348,21 @@ REGISTERS_PER_SM: dict[tuple[int, int], int] = {
 #: The per-cell relative spread of `w` this design's power is computed against
 #: when no cells are on disk to measure it from. It is the conservative end of
 #: the range `moe/bench/weights.py` records from the 2026-09-10 session -- "a
-#: per-repeat sd of 0.002 to 0.005" against a subject-range median w of 1.168 --
-#: and it is labelled ASSUMED wherever it is printed. `--plant-noise` overrides
-#: it; a resumed or replayed directory measures it instead.
+#: per-repeat sd of 0.002 to 0.005" -- over the median of ALL TWENTY-THREE of
+#: that session's ladders, 1.168, and that is the number weights.py publishes.
+#: IT IS NOT THE SUBJECT-RANGE MEDIAN, which this line used to call it: that
+#: module went out of its way to separate the two, 0.683-1.368 being the range
+#: over the SIXTEEN ladders at BLOCK_M <= 64, and it publishes no median for
+#: that subset. This arm runs at BLOCK_M=64, i.e. inside the subject subset, so
+#: the denominator is a SCALE taken from the wider set and not the subset's own.
+#: Labelled ASSUMED wherever it is printed. `--plant-noise` overrides it; a
+#: resumed or replayed directory measures it instead.
 ASSUMED_W_SPREAD = 0.005 / 1.168
 ASSUMED_W_SPREAD_SOURCE = (
     "ASSUMED: 0.005/1.168, the widest per-repeat sd of w in moe/bench/"
-    "weights.py's record of the 2026-09-10 session over its subject-range "
-    "median. No cell of THIS run was on disk to measure it from")
+    "weights.py's record of the 2026-09-10 session over the median of ALL 23 "
+    "of that session's ladders (NOT the subject subset, which publishes no "
+    "median). No cell of THIS run was on disk to measure it from")
 
 #: What a planted run calls its card, in the run id and nowhere else.
 SYNTHETIC_CARD = "synthetic"
@@ -875,6 +901,29 @@ def compile_census(args, cfg, cells, rows, cache_root: Path, probe, limits, b,
             + ". Every cell here is a rung of the design matrix, so dropping "
             "one changes its rank and the predictions were registered against "
             "the whole grid. Nothing was timed.")
+    # THE READ-BACK IS WHAT V3 SCORES, AND THE CENSUS IS WHERE IT IS FREE.
+    # `gate_residency` reads UNKNOWN when any cell carries only the residency
+    # BOUND, and UNKNOWN there voids the page -- occupancy_vs_swizzle's V9 got
+    # exactly that on two separate pods. Nothing in the metered loop supplies
+    # n_regs, so a run that reaches the loop without it is fifteen minutes of
+    # card bought to print INVALID. The two refusals below could not see it: a
+    # ladder at the residency BOUND is still rank 4, so `design.identified`
+    # is True and the compiles all succeeded. This costs nothing beyond the
+    # compiles already paid for above.
+    unread = sorted(c.key for c in cells
+                    if not int(observed.get(c.key, {}).get("n_regs", 0) or 0))
+    if unread:
+        raise CensusRefusal(
+            f"the kernel probe read no n_regs for {len(unread)} of "
+            f"{len(cells)} cell(s): {', '.join(unread)}"
+            + (f" (probe note: {probe.note})" if probe.note else "")
+            + ". Residency is min(by_smem, by_threads, by_blocks, by_regs) and "
+            "only the first depends on BLOCK_SIZE_K, so without n_regs every "
+            "cell carries an upper BOUND and V3 reads UNKNOWN, which makes the "
+            "whole page INVALID after the metered loop has been paid for. The "
+            "probe reads `n_regs` off the compiled kernel object and `shared` "
+            "off its metadata, and either can be absent on a Triton the probe "
+            "does not know. Nothing was timed.")
     if not design.identified:
         raise CensusRefusal(
             "the design as this card REALISES it is singular: the register "
@@ -950,9 +999,11 @@ def clock_excluded(level_ok: bool | None, side: str,
                    drift_ok: bool | None) -> bool:
     """Do a tread's clock verdicts exclude it. DRIFT does; NO LEVEL SIDE DOES.
 
-    THE ONE READER OF THE CLOCK VERDICTS IN THIS FILE, and
-    `tests/test_blockk_diagonal.py` asserts by AST that no other function here
-    tests `clock_drift_ok is False` or `clock_level_ok is False`. This
+    THE ONE FUNCTION IN THIS FILE THAT EXCLUDES ON THE CLOCK VERDICTS, and
+    `tests/test_blockk_diagonal.py` asserts by AST that the only OTHER function
+    reading them is `clock_state`, which counts and drops nothing. Written as
+    "the one reader" this comment was false in its own file by one function.
+    This
     repository's recurring defect is a rule applied at one of N call sites, and
     a clock rule is the exact shape of it: the sibling arm carried the old
     LEVEL-LOW exclusion into `fit_ladder` and left four gates scoring the
@@ -975,16 +1026,28 @@ def clock_excluded(level_ok: bool | None, side: str,
 def clock_state(samples: list[Sample]) -> dict:
     """How many timed treads sat where, in counts that PARTITION the treads.
 
-    The four LEVEL counts are over the STEADY treads only and `drift` takes the
-    rest, so the five sum to `timed` and no tread is called kept and
-    excluded-shaped in one sentence. A tread that both drifted and sat HIGH was
-    counted twice by the version of this block that filtered on LEVEL alone.
+    The four LEVEL counts are over the STEADY treads only, `drift` and
+    `host_bound` take the rest, so the six sum to `timed` and no tread is
+    called kept and excluded-shaped in one sentence. A tread that both drifted
+    and sat HIGH was counted twice by the version of this block that filtered
+    on LEVEL alone.
+
+    HOST-BOUND IS COUNTED HERE BECAUSE `collapse` DROPS IT. The exclusion rule
+    has three call sites -- `collapse` drops on `clock_excluded(...) or
+    host_bound`, `measure` prints on the same disjunction, and this counter --
+    and this one implemented the clock half alone, so V0's "timings kept",
+    which is `timed - excluded`, reported sixteen kept timings that no fit had
+    used and the CLOCK block printed "0 DRIFT failed" over a grid with nothing
+    in it. `clock_excluded` is still the ONE function that decides the CLOCK
+    half; host-bound is not a clock verdict and is read here directly.
     """
     from moe.bench import timing
 
     timed = [s for s in samples if s.status == "ok"]
     drifted = [s for s in timed if s.clock_drift_ok is False]
-    steady = [s for s in timed if s.clock_drift_ok is not False]
+    host = [s for s in timed if s.clock_drift_ok is not False and s.host_bound]
+    steady = [s for s in timed
+              if s.clock_drift_ok is not False and not s.host_bound]
 
     def sides(rows: list[Sample]) -> dict:
         return {
@@ -999,16 +1062,21 @@ def clock_state(samples: list[Sample]) -> dict:
     kept, moved = sides(steady), sides(drifted)
     return {
         "timed": len(timed), "level": kept["level"], "low": kept["low"],
-        "high": kept["high"], "drift": len(drifted), "unknown": kept["unknown"],
+        "high": kept["high"], "drift": len(drifted), "host_bound": len(host),
+        "unknown": kept["unknown"],
         "drift_level": moved["level"], "drift_low": moved["low"],
         "drift_high": moved["high"], "drift_unknown": moved["unknown"],
+        # THE SAME DISJUNCTION `collapse` FITS ON, so "timings kept" is the
+        # count of timings a fit could actually read.
         "excluded": sum(1 for s in timed
                         if clock_excluded(s.clock_level_ok,
                                           s.clock_level_side,
-                                          s.clock_drift_ok)),
-        "rule": "DRIFT excludes; BOTH LEVEL sides are kept with the side "
-                "recorded; the four LEVEL counts are over the STEADY treads "
-                "only and the five counts partition the timed treads",
+                                          s.clock_drift_ok) or s.host_bound),
+        "rule": "DRIFT excludes and so does a HOST-BOUND interval, which "
+                "bounds the kernel from above; BOTH LEVEL sides are kept with "
+                "the side recorded; the four LEVEL counts are over the treads "
+                "that are neither, and the six counts partition the timed "
+                "treads",
     }
 
 
@@ -1017,8 +1085,9 @@ def clock_state_lines(state: dict) -> list[str]:
            f"{state['low']} steady LOW (kept, side recorded), "
            f"{state['high']} steady HIGH (kept, side recorded), "
            f"{state['drift']} DRIFT failed (excluded, and not in the three "
-           f"counts before it), {state['unknown']} steady with LEVEL not "
-           "determined"]
+           f"counts before it), {state['host_bound']} HOST-BOUND (excluded, "
+           f"steady clock and an interval that bounds the kernel from above), "
+           f"{state['unknown']} steady with LEVEL not determined"]
     if state["drift"]:
         out.append(f"  the {state['drift']} drifted treads by side: "
                    f"{state['drift_level']} level, {state['drift_low']} LOW, "
@@ -1289,45 +1358,49 @@ class PairContrast:
     summarise is a thing a reader has to be able to see.
     """
 
-    low_key: str
-    high_key: str
+    #: `from` and `to` are the REGISTERED ORDER of the pair, which is not the
+    #: order of their depths: `("4x64", "2x128")` runs 4 stages to 2. There is
+    #: no `iso_smem` property here any more; it returned the literal True, had
+    #: no call site, and read like a check. `gate_iso_smem` is the check.
+    from_key: str
+    to_key: str
+    from_stages: int
+    to_stages: int
     smem_bytes: int
-    resident_low: int
-    resident_high: int
-    w_low: float
-    w_high: float
+    resident_from: int
+    resident_to: int
+    w_from: float
+    w_to: float
     delta_per_doubling: float | None
     sd: float | None
-
-    @property
-    def iso_smem(self) -> bool:
-        return True
 
     def line(self) -> str:
         delta = ("NOT STATEABLE" if self.delta_per_doubling is None
                  else f"{self.delta_per_doubling:+.4f}"
                       + ("" if self.sd is None else f" +/- {self.sd:.4f}"))
-        return (f"  {self.low_key} -> {self.high_key}  "
-                f"{self.smem_bytes / 1024:.0f} KiB/CTA both, resident "
-                f"{self.resident_low} and {self.resident_high}: w "
-                f"{self.w_low:.4f} -> {self.w_high:.4f}, "
+        return (f"  {self.from_key} -> {self.to_key}  "
+                f"{self.smem_bytes / 1024:.0f} KiB/CTA both, depth "
+                f"{self.from_stages} -> {self.to_stages}, resident "
+                f"{self.resident_from} and {self.resident_to}: w "
+                f"{self.w_from:.4f} -> {self.w_to:.4f}, "
                 f"d ln w per depth doubling {delta}")
 
 
 def pair_contrast(pair: tuple[str, str], fits: dict[str, CellFit],
                   residencies: dict[str, CellResidency], b: int,
                   sd: float | None = None) -> PairContrast | None:
-    low_key, high_key = pair
-    lo, hi = fits.get(low_key), fits.get(high_key)
+    from_key, to_key = pair
+    lo, hi = fits.get(from_key), fits.get(to_key)
     if lo is None or hi is None or lo.streams <= 0 or hi.streams <= 0:
         return None
     ratio = math.log2(hi.cell.num_stages / lo.cell.num_stages)
     delta = ((math.log(hi.streams) - math.log(lo.streams)) / ratio
              if ratio else None)
     return PairContrast(
-        low_key, high_key, lo.cell.smem_bytes(b),
-        residencies[low_key].resident_blocks if low_key in residencies else 0,
-        residencies[high_key].resident_blocks if high_key in residencies else 0,
+        from_key, to_key, lo.cell.num_stages, hi.cell.num_stages,
+        lo.cell.smem_bytes(b),
+        residencies[from_key].resident_blocks if from_key in residencies else 0,
+        residencies[to_key].resident_blocks if to_key in residencies else 0,
         lo.streams, hi.streams, delta, sd)
 
 
@@ -1647,7 +1720,7 @@ def gate_residency(residencies: dict[str, CellResidency],
                     "the x axis: an upper bound cannot say whether two cells "
                     "share a rung, which is the whole content of the depth "
                     "contrast", lines)
-    tied = [p for p in pairs if p.resident_low == p.resident_high]
+    tied = [p for p in pairs if p.resident_from == p.resident_to]
     return Gate(VALIDITY, "V3 residency", "the resident-block ladder is "
                 "measured, not bounded",
                 "every cell's n_regs read back, and every registered pair "
@@ -1782,16 +1855,30 @@ def gate_separation(coef: Coefficients | None, pairs: list[PairContrast],
                     "the separation. An arm that saw no effect of either knob "
                     "cannot say which of them P1 was reading", lines)
     dominates = abs(coef.depth) > abs(coef.residency)
+    # THE PASS DOES NOT MEAN THE SAME THING IN THE BOTH WORLD, and until this
+    # branch existed the page said it did: C1 PASS was printed as "P1's null is
+    # CONFIRMED, the concurrency family is CLOSED" over a run whose C2 said
+    # residency had moved w by more than the concurrency model predicts. The
+    # gate's VERDICT is unchanged -- the registered claim is an inequality and
+    # the inequality held -- and what changes is the sentence a PASS licenses.
+    if verdict == VERDICT_BOTH:
+        costs = ("nothing about P1's null, which is NOT confirmed here: both "
+                 "knobs cleared their own spread and this PASS is the "
+                 "registered INEQUALITY alone, |bD| > |bR|. Read C2 in the "
+                 "same breath; the concurrency family is not closed by a page "
+                 "on which residency moved w")
+    else:
+        costs = ("the confirmation of occupancy_vs_swizzle P1's residency "
+                 "null. A FAIL here is the finding: P1's null was an artefact "
+                 "of the lockstep and the concurrent-footprint hypothesis "
+                 "returns")
     return Gate(CLAIM, "C1 depth-not-residency",
                 "w moves with pipeline DEPTH and not with RESIDENCY",
                 f"|bD| clears {K_SIGMA:.0f} sigma and exceeds |bR|",
                 verdict in (VERDICT_DEPTH, VERDICT_BOTH) and dominates,
                 f"{verdict}: |bD| {abs(coef.depth):.4f} against |bR| "
                 f"{abs(coef.residency):.4f}",
-                "the confirmation of occupancy_vs_swizzle P1's residency null. "
-                "A FAIL here is the finding: P1's null was an artefact of the "
-                "lockstep and the concurrent-footprint hypothesis returns",
-                lines)
+                costs, lines)
 
 
 def gate_residency_null(coef: Coefficients | None, predicted_swing: float | None,
@@ -1897,26 +1984,50 @@ def concurrency_swing(cfg, residencies: dict[str, CellResidency], b: int,
 
 
 def mde_line(design: Design, spread: float, spread_source: str) -> list[str]:
-    """The smallest coefficient this design resolves, before it is paid for.
+    """A CONSERVATIVE BOUND on the smallest coefficient this design resolves.
 
-    `sd(b_j) = sigma x sqrt(diag((X'X)^-1)_jj)` with `sigma` the per-cell
-    relative spread of `w`, and the gate is `K_SIGMA` of that. Printed in the
-    PLAN and not in the post-mortem, because the only cheap moment to find that
-    a gate cannot resolve the effect it is registered against is before a pod
-    is rented.
+    `sd(b_j) = sigma x sqrt(diag((X'X)^-1)_jj)`, where `sigma` must be the sd of
+    ONE OBSERVATION of the regression -- and one observation here is one CELL's
+    `ln w`, not one timing. WHAT IS ACTUALLY PASSED IN is `resolve_spread`: the
+    median per-tread across-repeat relative spread of `ms_p50`, a per-TIMING
+    figure, taken BEFORE the median over the repeats and BEFORE the slope fit
+    over the treads. Two collapses stand between it and a cell's `ln w`, and
+    both shrink it, so this line is an UPPER BOUND on `sd(b_j)` and the effects
+    it says are unresolvable include effects this design does resolve: a
+    planted `bD` of 0.015, under the 0.0235 the default plan prints, comes back
+    at 0.0165 +/- 0.0032 and C1 reads DEPTH.
+
+    THE SENTENCE THAT USED TO CLOSE THIS BLOCK said a coefficient smaller than
+    its line "is not resolvable by this design at this spread, whatever it
+    measures", and that is false by roughly the collapse factor. The bound is
+    left conservative rather than re-derived because the two directions are not
+    symmetric: a plan page that overstates its own power talks an owner into
+    booking a card, and the number that settles it is the bootstrap sd this arm
+    prints beside every coefficient AFTER the run, which carries the whole
+    chain and needs no propagation argument.
+
+    `resolve_spread` is the same figure `planted_samples` uses as a per-timing
+    sd, where it IS one, and that double role is why the mismatch was invisible.
+    Printed in the PLAN and not in the post-mortem, because the only cheap
+    moment to find that a gate cannot resolve the effect it is registered
+    against is before a pod is rented.
     """
     if not design.se_multiplier:
         return ["MINIMUM DETECTABLE EFFECT: not stateable. The design is "
                 "singular, so no number of repeats resolves the coefficients."]
     names = ("intercept", "bD depth", "bK block_k", "bR residency")
     out = [f"MINIMUM DETECTABLE EFFECT at {K_SIGMA:.0f} sigma, per doubling, "
-           f"in ln w, at a per-cell spread of {spread:.4%}:",
+           f"in ln w, at a per-TIMING spread of {spread:.4%}:",
            f"             spread source: {spread_source}"]
     for name, mult in zip(names[1:], design.se_multiplier[1:], strict=True):
         out.append(f"             {name:12s} {K_SIGMA * spread * mult:.4f}")
-    out.append("             a coefficient smaller than its own line here is "
-               "not resolvable by this design at this spread, whatever it "
-               "measures")
+    out.append("             AN UPPER BOUND, not the line it looks like. The "
+               "sigma above is a per-TIMING spread and one observation of this "
+               "regression is a CELL's ln w, which is a median over the "
+               "repeats and then a slope over the treads; both collapses "
+               "shrink it. A coefficient under its line here may still be "
+               "resolved, and the number that says so is the bootstrap sd "
+               "printed beside each coefficient after the run.")
     return out
 
 
@@ -1927,9 +2038,13 @@ def mde_line(design: Design, spread: float, spread_source: str) -> list[str]:
 #: the design the card actually realises.
 MDE_BOUND_NOTE = (
     "             COMPUTED AT THE RESIDENCY BOUND. No n_regs has been read, so "
-    "this is the top row of the register-sensitivity table above, which is the "
-    "worst-conditioned row; the compile census reprints these lines at the "
-    "measured n_regs before a timed cell is paid for.")
+    "this is the top row of the register-sensitivity table above. THAT ROW IS "
+    "NOT THE WORST-CONDITIONED ONE FOR EVERY COEFFICIENT, which this note used "
+    "to claim: read the table's own bR column, where the deepest register "
+    "rows are worse conditioned than the bound, so a kernel landing there has "
+    "a bR standard error WIDER than the line above. The compile census "
+    "reprints these lines at the measured n_regs before a timed cell is paid "
+    "for, and those are the realised numbers.")
 
 
 def predictions_text(cfg, cells, b, residencies, design, ridge, ridge_source,
@@ -1943,7 +2058,11 @@ def predictions_text(cfg, cells, b, residencies, design, ridge, ridge_source,
         "count, so its P1 residency null is confounded with pipeline depth. "
         "This arm moves BLOCK_SIZE_K, which is 64 in every fit in the corpus, "
         "so that shared memory and prefetch depth come apart.", "",
-        "THE TWO WORLDS THE GATES DISCRIMINATE.",
+        "THE FOUR WORLDS THE GATES DISCRIMINATE. Four, because `verdict_of` "
+        "has four outcomes and this block registered three: the BOTH world was "
+        "reachable, planted in the test file, and had no registered reading, "
+        "so the page asserted C1's 'the concurrency family is CLOSED' and C2's "
+        "'residency moved w by more than the model predicts' in one report.",
         "  FOLLOWS DEPTH      C1 PASS. P1's null is confirmed: what moved with "
         "num_stages was latency hiding, the concurrency family is closed, and "
         "the reuse-distance reading of alpha stands unopposed by a footprint "
@@ -1952,6 +2071,12 @@ def predictions_text(cfg, cells, b, residencies, design, ridge, ridge_source,
         "lockstep, residency moves the weight-stream cost, and C2 prints the "
         "size it returns at as a fraction of the concurrency model's own "
         "predicted swing.",
+        "  BOTH               C1 PASS and C2 FAIL, and the PASS is the "
+        "REGISTERED INEQUALITY and nothing more: both knobs cleared their own "
+        "spread and depth is the larger. P1's null is NOT confirmed -- "
+        "residency moved w -- and the concurrency family is NOT closed. The "
+        "quotable sentence is the ORDERING of the two coefficients, with C2's "
+        "printed fraction of the predicted swing beside it.",
         "  NEITHER            C1 UNKNOWN, and the page is not a null on either "
         "knob: an arm that saw no effect of either cannot say which of them P1 "
         "was reading.", "",
@@ -1994,12 +2119,16 @@ def predictions_text(cfg, cells, b, residencies, design, ridge, ridge_source,
     out += design.lines()
     out += ["",
             "SCORED ON w, NOT ON B/(A+B). The EXA ratio's denominator carries "
-            "a fitted intercept 217x noisier than the slope it is added to, "
-            "and that intercept goes NEGATIVE in two of the 2026-09-10 "
-            "session's arms, so a residency effect of a few per cent in the "
-            "slope arrives in the ratio as a sign flip. w is the same slope "
-            "over a byte count from moe.spec and a rate the caller names: no "
-            "fitted level, no intercept, 0.115% cold-replicate noise.",
+            "a fitted intercept far noisier than the slope it is added to, and "
+            "that intercept goes NEGATIVE in two of the 2026-09-10 session's "
+            "arms, so a residency effect of a few per cent in the slope "
+            "arrives in the ratio as a sign flip. w is the same slope over a "
+            "byte count from moe.spec and a rate the caller names: no fitted "
+            "level and no intercept. The per-cent noise figures the session-3 "
+            "analysis quotes for w are ITS figures and are in no committed "
+            "file here, so they are not printed as this page's; the spread "
+            "this design is actually powered against is the line below, which "
+            "says ASSUMED or says which of this run's own cells it measured.",
             "",
             f"ridge {ridge:.3f} Op/B, {ridge_source}. Used ONLY by V4, to ask "
             "whether each cell's MEASURED marginal arithmetic intensity is "
@@ -2024,9 +2153,12 @@ def estimated_seconds(cells, treads: int, reps: int, warmup_ms: float,
     `time_kernel` warms for a fixed DURATION and then runs `trials` trials, each
     sized by `iters_for` to hold `cell_budget_ms` of kernel time, so one timing
     costs `warmup_ms + trials x cell_budget_ms` and is nearly independent of the
-    kernel's own duration. Every tread of this arm lands between 0.6 and 5 ms,
-    which is inside `iters_for`'s clamp at both ends, so "nearly" is "exactly"
-    here and the figure is not softened by a caveat it does not need.
+    kernel's own duration. The treads of this arm run from a few tenths of a
+    millisecond to about seven at the top of the published subject range for
+    `w`, which was written here as "between 0.6 and 5 ms" and understated the
+    deep end. The conclusion is unchanged and has room to spare: `iters_for`
+    clamps at `lo=10`, which binds only above 20 ms per call, so "nearly" is
+    "exactly" here and the figure needs no caveat.
     """
     return (len(cells) * treads * reps
             * (warmup_ms + trials * cell_budget_ms) / 1e3)
@@ -2420,11 +2552,15 @@ def report_payload(analysis: Analysis, gates: list[Gate], prov, *, run_id: str,
 PLANTED_INTERCEPT_MS = 0.12
 
 #: The per-thread register count every planted world's kernels report. Chosen so
-#: that the register limit does NOT bind on the planted card -- 65536 / (256
-#: threads x 32) = 8 blocks, which is the thread-slot limit anyway -- because a
-#: self test whose planted register file flattened the ladder would be testing
-#: V5's refusal and nothing else. `test_blockk_diagonal.py` plants the other
-#: case explicitly.
+#: that the register limit does NOT bind on the planted card. AT THIS ARM'S OWN
+#: WARP COUNT, which is 4 and not 8: a CTA is 128 threads, so 65536 / (128 x 32)
+#: is 16 blocks by registers against a thread-slot limit of 16, and the
+#: self-test prints exactly `threads 16, regs 16`. The arithmetic that stood
+#: here was done at 256 threads and printed 8 against a thread-slot limit it
+#: also called 8; the conclusion survived and neither number did. A self test
+#: whose planted register file flattened the ladder would be testing V5's
+#: refusal and nothing else. `test_blockk_diagonal.py` plants the other case
+#: explicitly.
 PLANTED_REGISTERS = 32
 
 
@@ -2503,12 +2639,18 @@ PLANTED_CLOCKS = (
 
 
 def planted_samples(cfg, cells, rows, world: World, residencies, *, reps: int,
-                    noise: float, seed: int, stream_ms: float) -> list[Sample]:
+                    noise: float, seed: int, stream_ms: float,
+                    b: int) -> list[Sample]:
     """Rows of the shape `measure` writes, through the same CSV contract.
 
     Every row carries `SWEEP.SYNTHETIC_INSTRUMENT`, so "not measured" is a value
     in the column and not an absence, and the five clock states above so the
     exclusion rule is exercised rather than assumed.
+
+    `b` is the dtype width and is a PARAMETER. Written as the literal 2 in the
+    `compiled_smem` column it was a derived quantity typed in, and at any dtype
+    but bf16 it wrote a CSV column disagreeing with the `observed` dict the
+    same caller builds from the run's own width.
     """
     from moe.bench import timing
 
@@ -2541,7 +2683,7 @@ def planted_samples(cfg, cells, rows, world: World, residencies, *, reps: int,
                     sm_clock_end_mhz=1485.0, clock_samples_mhz="1485 1485",
                     power_w=690.0, clock_level_ok=level, clock_drift_ok=drift,
                     host_bound=False, clock_level_side=sides[side],
-                    compiled_smem=cell.smem_bytes(2),
+                    compiled_smem=cell.smem_bytes(b),
                     compiled_regs=PLANTED_REGISTERS, compiled_spills=0))
     return out
 
@@ -2565,7 +2707,7 @@ def self_test(args, cfg, cells, rows, limits, b, *, bandwidth_gbps,
                    for c in cells}
     samples = planted_samples(cfg, cells, rows, world, residencies,
                               reps=args.reps, noise=noise, seed=args.seed,
-                              stream_ms=stream_ms)
+                              stream_ms=stream_ms, b=b)
     analysis = analyse(cfg, cells, samples, dtype=args.dtype,
                        bandwidth_gbps=bandwidth_gbps,
                        bandwidth_source=bandwidth_source, limits=limits,
@@ -3032,8 +3174,11 @@ def main(argv=None) -> int:
 
 
 #: Read by `tests/test_blockk_diagonal.py`, which parses THIS file and asserts
-#: that exactly one function tests the clock verdicts. Kept here so the test
-#: names the rule rather than a line number.
+#: that these are exactly the functions testing the clock verdicts -- the one
+#: that EXCLUDES on them and the one that COUNTS them. Kept here so the test
+#: names the rule rather than a line number, and so the count lives in one
+#: place: five sentences in this file said "exactly one" against this tuple's
+#: two.
 CLOCK_VERDICT_READERS = ("clock_excluded", "clock_state")
 
 
