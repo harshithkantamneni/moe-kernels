@@ -1018,6 +1018,7 @@ arm_script() { case "$1" in
   thermal)                       echo scripts/thermal_acceptance.py ;;
   calibrate)                     echo scripts/calibrate_hardware.py ;;
   pin_probe-*)                   echo moe/bench/cli.py ;;
+  private-*)                     echo scripts/private_weight_reference.py ;;
   roofline-*)                    echo scripts/bm128_roofline.py ;;
   bm128_depth)                   echo scripts/bm128_depth.py ;;
   alias_ablation)                echo scripts/alias_ablation.py ;;
@@ -2003,6 +2004,7 @@ arm_minutes()  { case "$1" in
   thermal) echo 3 ;;
   calibrate) echo 3 ;;
   pin_probe-n64-g1) echo 2 ;;   pin_probe-n256-g16) echo 2 ;;
+  private-mixtral-bm32) echo 3 ;;
   roofline-n64-g1) echo 1 ;;    roofline-n256-g16) echo 0 ;;
   roofline-n256-g32) echo 0 ;;
   bm128_depth) echo 5 ;;        alias_ablation) echo 14 ;;
@@ -2023,6 +2025,7 @@ arm_basis() { case "$1" in
   thermal)    echo "thermal_acceptance.py --dry-run -> 'estimated wall time 160 s (2.7 min: 30 s ramp + 120 s window + 10 s allocation and first matmul)'. A WALL figure, and the only arm whose cost IS its window: it compiles nothing, times nothing and allocates two 8192^2 bf16 buffers once. Booked 3, above the figure and never at it. THE THREE TERMS ARE THE FLAGS ON THE ARM LINE, so a re-derivation runs the same command: --settle-seconds 30 is calibrate.settle_clocks' own budget for the governor's ramp (840 -> 1980 MHz on this card), --seconds 120 is four times the 2026-09-11 card's observed ~30 s to collapse AFTER that ramp, and --poll-seconds 2 puts 60 samples in the window against a floor of 9. The 10 s allocation term is an ALLOWANCE and the plan page says so: _load_compute's 256 MiB and cuBLAS's first-call kernel choice have not been timed here." ;;
   calibrate)  echo "calibrate_hardware.py --dry-run prints NO time estimate: a bandwidth ladder, an 8192^3 GEMM per dtype and up to 30 s of settle under load. 3 min is this file's own standing allowance and the one figure here that is not read off a plan." ;;
   pin_probe-n64-g1|pin_probe-n256-g16) echo "moe.bench.cli prints no plan off a GPU box (no framework span registers), so there is no figure to read. 2 min is one profile-cell census under a pin." ;;
+  private-mixtral-bm32) echo "private_weight_reference.py --dry-run --capability 9.0 --model mixtral-8x7b --block-m 32 --treads 6 --repeats 9 --device-memory-gb 140 -> 'estimated GPU time 145 s at the model's own timings, excluding compiles and allocation', 162 cells (6 treads x 3 arms x 9 repeats). 145 s is 2.4 min, booked 3, which is the ceiling of the arm's own printed figure; the wall bound over the KERNEL rows is this file's own arithmetic and no per-arm figure is multiplied by it. EVERY SHAPING FLAG IS ON BOTH BRANCHES except --device-memory-gb, which names a HYPOTHETICAL card for the off-GPU fit check and is deliberately absent from the measuring line: on the pod the attached device is asked instead, and passing a typed number beside a real card would check the plan against nothing. THE FIGURE IS NOT THE 2 GPU-HOURS THIS ARM WAS COMMISSIONED WITH, and the gap is not an error in either: time_kernel holds --cell-budget-ms of kernel time per trial, so 162 cells is 145 s whatever each call costs. The spare budget buys a SECOND run at another tile or another model, which is a second arm and a second run id, not more repeats of this one: the binding uncertainty here is V5's machinery bound, a systematic that does not shrink with repeats." ;;
   roofline-n64-g1) echo "bm128_roofline.py --dry-run --block-n 64 --group-m 1 --control 256 -> 'estimate 58 s of GPU', 39 cells." ;;
   roofline-n256-g16) echo "bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0 -> exit 2, 'REFUSED before any GPU time, from the pinned constants alone'. Zero minutes, and the refusal is the arm's finding." ;;
   roofline-n256-g32) echo "the same command at --group-m 32: REFUSED before any GPU time for the same missing BLOCK_M=256 control. Zero minutes." ;;
@@ -2065,6 +2068,8 @@ arm_unpriced() { case "$1" in
   roofline-n64-g1|bn_g16|occupancy|cap_test)
               echo "compiles and allocation, in the plan's own words" ;;
   bm128_depth) echo "compiles and allocation, in the plan's own words. The BM=32 scaling partner is NOT an exclusion and is not a flag: it is unconditional in scripts/bm128_depth.py, so its treads are in whatever cell count and estimate that script's own plan page prints, and this row books that figure. 252 s prices the {128, 256} pairing alone; with the partner the same command prices 294 s, four treads and 42 s more, and both are a 5 minute ceiling" ;;
+  private-mixtral-bm32)
+              echo "compiles and allocation, in the plan's own words, and the plan names both: the private weight build copies 16.91 GB device-to-device once, and the five-part buffer proof runs four extra fused_experts calls at the deepest tread after the last timed cell" ;;
   dtype)      echo "compiles and allocation for 32 distinct Triton specialisations across 2 models" ;;
   span_dense) echo "up to 21 distinct Triton specialisations across 4 models and one weight build per model, the largest deepseek-v3 at 22.5 GB" ;;
   calibrate|mma_switch|pin_probe-n64-g1|pin_probe-n256-g16)
@@ -2298,6 +2303,7 @@ arm_closes() { case "$1" in
   calibrate)  echo "This pod's own ridge and both dtype peaks. Five arms below REFUSE without it, and the H200's dense bf16 moved 7.1% between two sessions, so it is not a constant anything can carry over. It also WRITES a tracked yaml, which is one of the two reasons the dirty-file count is re-asked after every arm." ;;
   pin_probe-n64-g1) echo "The S6a gate ('observed tile_block_m = none') at BLOCK_N=64, GROUP_SIZE_M=1 -- the configuration the control roofline, both bn arms, the anchor and the cap test all pin. Every one of them is worthless if the pin is not honoured." ;;
   pin_probe-n256-g16) echo "The same at BLOCK_N=256, GROUP_SIZE_M=16, the shape vLLM 0.27.1 ships for mixtral at BLOCK_M=128. A pin that reaches the kernel at BLOCK_N=64 is evidence about BLOCK_N=64." ;;
+  private-mixtral-bm32) echo "ALPHA AS A RATIO OF TWO MEASURED SLOPES, with no assumed bandwidth and no fitted intercept anywhere in it, which is the one thing the 2026-09-10 reading says this apparatus has never had. Every alpha in this study divides a time by an ASSUMED rate or by an extrapolation back to n=0, and that is why the same nine cells give 0.9747 under one parameterisation and 0.5908 under another against a quoted sd of 0.0037. This arm runs the ladder THREE TIMES at one geometry: SHARED (the normal path), PRIVATE (every M-tile given its own copy of the expert weights, so reuse is impossible BY CONSTRUCTION and the slope IS the alpha=1 reference), and ALIAS (the private machinery with the shared traffic, which is the control that BOUNDS the proxy error). slope(shared)/slope(private) is alpha as a traffic fraction, directly. NO KERNEL WAS WRITTEN: vLLM fused_moe reads its expert index PER M-TILE, so a private copy per tile is a relabelling of topk_ids plus a wider w1/w2, and the tile, the launch grid, the M-tile count, the FLOPs and the activation traffic are identical across the three arms. WHAT IT SETTLES, either way: a ratio in ALPHA_BAND confirms the refit as a traffic fraction; a ratio near 1.0 says the whole weight set is re-read and the model SHAPE was right where its coefficient was not identifiable; a ratio under 0.35 says most of the per-M-tile cost is issue and latency, the traffic model is the wrong KIND of model, and the study's negative result becomes a positive one. The arm PRINTS which, from a partition registered before the run. BY-PRODUCT: slope(private) read as a rate is the delivered weight-read bandwidth of the kernel under test, which is the denominator every published w is divided by, measured. IT RUNS AFTER THE PIN PROBES because it forces its tile through the same override hook they validate, and AFTER calibrate because C2 and V4 are scored against this card own ridge and triad. BM=32 AND NOT 64, and that is the design, not taste: at 64 a world of alpha=0.10 puts the shared ladder over 95% of the roof from tread 3, so V4 would void the page in the one outcome worth the most, and the script REFUSES that configuration at plan time with its discrimination floor printed." ;;
   roofline-n64-g1) echo "THE CONTROL. BLOCK_M=128 at the SWEPT configuration, which production does not ship. It can REFUTE the ceiling (if 128 reaches the roof here, it reaches it everywhere richer) and it CANNOT confirm one for production. Its likely outcome is already predictable from the published G=1 ladders." ;;
   roofline-n256-g16) echo "THE CLAIM'S CONFIGURATION, and NO ARM CAN CONFIRM IT ON sm_90. BLOCK_M=128 at vLLM's own tuned entry for this shape (BLOCK_N=256, GROUP_SIZE_M=16, num_stages 4), which no arm in this study has ever measured. It was scheduled to contest TEMPO's 'the tile term is inactive in decode' in the configuration TEMPO's readers run. No fit, no alpha, no anchor. IT REFUSES AT EVERY WARP AND STAGE COUNT: the BLOCK_M=256 control that cancels the fused layer carries a 256x256 fp32 accumulator, 65536 of 65536 registers per block however the warps are split (bm128_roofline.py --dry-run --block-n 256 --group-m 16 --control 256 --capability 9.0, and the same with --num-warps 16 --num-stages 3, both exit 2), so no pin rescues it and NO BLOCK_SIZE_N confirms the headline on this card. The refusal is the arm's finding: the paper's headline has no confirming arm on the H200, and this driver will not run the subject without its control." ;;
   roofline-n256-g32) echo "The same at GROUP_SIZE_M=32, vLLM's entry at 2048 tokens. Without it the production claim would rest on a single swizzle, and the swizzle is the lever this study has already shown moves alpha by 0.39. Refuses for the same accumulator as the G=16 arm, at every warp and stage count; there is no fix on sm_90 that unblocks either." ;;
@@ -2322,6 +2328,7 @@ esac; }
 
 arm_offgpu_gates() { case "$1" in
   thermal)    echo "scripts/thermal_acceptance.py --self-test  (eight planted worlds, three of them REFUSALS, one VALIDITY RESULT line and exit 0). THE TWO WORLDS THAT CARRY IT: 'floored' replays 2026-09-11 and shows C2 -- the DRIFT rule, which is all calibrate_hardware's not_throttled used to score -- still PASSING on a card flat at its floor, which is the hole; 'hungry-tile' is the lowest per-cell median in results/published at 697.4 W of 700 and must NOT be refused, because a gate that refuses healthy cards costs a rental as surely as one that admits sick ones. Also scripts/thermal_acceptance.py --dry-run for the plan, the two registered predictions and the resolution line." ;;
+  private-mixtral-bm32) echo "scripts/private_weight_reference.py --self-test refit|no-reuse|issue-bound|aliased|machinery|compute-bound|noisy-identity|over-allocated|holes|ragged|faster-than-its-ruler  (eleven planted worlds, nine RESULT lines each, and they SEPARATE by exit code: refit 0 DONE, no-reuse and issue-bound 1 CLAIM_FAIL on C1 with the outcome NAMED on the line, the rest 3 INVALID on the one validity gate each is planted to break. Every gate FAIL branch is reachable from some world and tests/test_private_weight_reference.py COUNTS that rather than listing it). Then --dry-run --device-memory-gb 140 for the memory arithmetic, the depth table and the discrimination floor, and --dry-run --block-m=64 --device-memory-gb 140, which REFUSES and is the check that chose the default tile. THE EQUALS FORM IS DELIBERATE: this driver pins the counter pair's tile in counter_block_m() and tests/test_h200_gaps_session.py forbids a second copy of that literal anywhere in this file, so the tall tile is named here in the form argparse accepts and that grep does not match." ;;
   roofline-n64-g1|roofline-n256-g16|roofline-n256-g32)
               echo "scripts/bm128_roofline.py --self-test --fail-on-gate  (three planted worlds, exit 0 required)" ;;
   bm128_depth) echo "scripts/bm128_depth.py --self-test  (three worlds from the law)" ;;
@@ -2354,6 +2361,7 @@ RETRY_ARMS=0
 # defect as a run id without its card.
 # --------------------------------------------------------------------------
 ARM_NAMES=(thermal calibrate pin_probe-n64-g1 pin_probe-n256-g16
+           private-mixtral-bm32
            roofline-n64-g1 roofline-n256-g16 roofline-n256-g32
            bm128_depth alias_ablation noise_floor
            bn_g16 anchor_measure anchor_rescore occupancy
@@ -2388,6 +2396,7 @@ missing=0
 for s in thermal_acceptance calibrate_hardware bm128_roofline bm128_depth alias_ablation \
          replicate_noise_floor \
          bn_decomposition memory_branch_anchor occupancy_vs_swizzle \
+         private_weight_reference \
          tile_cap_test dtype_tile_confound span_extent_separation \
          ruler_rebaseline dram_counter_route; do
   if [[ ! -f "$REPO/scripts/$s.py" ]]; then note "MISSING scripts/$s.py"; missing=1
@@ -2939,6 +2948,34 @@ elif (( CARD_OK )); then
 else
   skip_arm pin_probe-n256-g16 \
     "no CUDA device: no framework span registers off the GPU box, so the plan would refuse for a reason that is about this laptop and not about the pin."
+fi
+
+# --------------------------------------------------------------------------
+# 0d. THE NO-REUSE REFERENCE. Runs here, after the pin probes and after the
+#     calibration, because it forces its tile through the same override hook
+#     the probes validate and its C2 and V4 are scored against THIS card's own
+#     ridge and triad. Nothing below it depends on its result to EXECUTE; every
+#     alpha below it depends on its result to be READ, which is the order this
+#     session sorts by.
+#
+#     --device-memory-gb IS ON THE DRY BRANCH ONLY, and that is deliberate and
+#     not the --r-max defect one arm over: it names a HYPOTHETICAL card so the
+#     memory arithmetic can be checked off a GPU box, and the script ignores it
+#     whenever a device answers. Passing it on the pod would check the plan
+#     against a number somebody typed while a real card sat underneath it.
+#     Every flag that shapes the LADDER -- the model, the tile, the depth, the
+#     repeats -- is on both branches, so the dry run previews the pod's own run
+#     id and not a different sweep.
+# --------------------------------------------------------------------------
+say "0d. alpha as a ratio of two MEASURED slopes: the private-weight reference"
+note "The only arm in this session with no assumed bandwidth and no fitted intercept in its answer."
+if (( DRY )); then
+  arm private-mixtral-bm32 "$PY_BASE" "$REPO/scripts/private_weight_reference.py" --dry-run \
+      --capability "${CAPABILITY:-9.0}" --model mixtral-8x7b --block-m 32 \
+      --treads 6 --repeats 9 --device-memory-gb 140
+else
+  arm private-mixtral-bm32 "$PY_VLLM" "$REPO/scripts/private_weight_reference.py" \
+      --model mixtral-8x7b --block-m 32 --treads 6 --repeats 9
 fi
 
 # --------------------------------------------------------------------------

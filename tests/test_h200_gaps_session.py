@@ -130,6 +130,7 @@ from moe.bench import exit_codes  # noqa: E402
 
 
 ARMS = ("thermal", "calibrate", "pin_probe-n64-g1", "pin_probe-n256-g16",
+        "private-mixtral-bm32",
         "roofline-n64-g1", "roofline-n256-g16", "roofline-n256-g32",
         "bm128_depth", "alias_ablation", "noise_floor",
         "bn_g16", "anchor_measure", "anchor_rescore", "occupancy",
@@ -402,8 +403,8 @@ def test_no_arm_books_a_figure_this_file_invented(tmp_path):
 #: this list; the test below does not trust it, it re-derives every membership
 #: from the arm's own printed plan and then checks this list against what it
 #: found.
-KERNEL_ARMS = ("roofline-n64-g1", "bm128_depth", "bn_g16", "occupancy",
-               "cap_test", "dtype", "span_dense")
+KERNEL_ARMS = ("private-mixtral-bm32", "roofline-n64-g1", "bm128_depth",
+               "bn_g16", "occupancy", "cap_test", "dtype", "span_dense")
 
 
 def test_the_cost_column_names_the_clock_each_figure_is_on(tmp_path):
@@ -522,6 +523,13 @@ INVOKED = {
     "scripts/ruler_rebaseline.py": ("--dry-run", "--fail-on-gate"),
     "scripts/check_mma_path.sh": ("--block-m", "--tokens", "--model", "--out",
                                   "--dry-run"),
+    # The no-reuse reference, added 2026-09-14. Every flag that shapes the
+    # ladder is on both branches; --device-memory-gb is the dry branch's alone
+    # and names a HYPOTHETICAL card, the way dtype's --card does.
+    "scripts/private_weight_reference.py": ("--dry-run", "--capability",
+                                            "--model", "--block-m", "--treads",
+                                            "--repeats", "--self-test",
+                                            "--device-memory-gb"),
     "scripts/tile_cap_test.py": ("--dry-run", "--capability", "--fail-on-gate"),
     "scripts/dtype_tile_confound.py": ("--dry-run", "--card", "--fail-on-claim"),
     "scripts/span_extent_separation.py": ("--dry-run", "--densify",
@@ -892,6 +900,8 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
     ("anchor_measure", "--measure"),
     ("bm128_depth", "--r-max"),
     ("dtype", "--card"),
+    ("private-mixtral-bm32", "--block-m"),
+    ("private-mixtral-bm32", "--treads"),
 ])
 def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
     """FOUR ARMS PREVIEWED SOMETHING ELSE. calibrate was skipped entirely with

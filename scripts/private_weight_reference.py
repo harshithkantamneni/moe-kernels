@@ -1,0 +1,3042 @@
+#!/usr/bin/env python
+"""alpha as a measured ratio of two slopes, with no assumed bandwidth in it.
+
+    python scripts/private_weight_reference.py --dry-run --device-memory-gb 140
+    python scripts/private_weight_reference.py --self-test refit
+    python scripts/private_weight_reference.py --self-test issue-bound
+    python scripts/private_weight_reference.py                # the pod run
+
+WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
+routed expert weight set that is re-read per extra M-tile. Every estimate of it
+so far divides a measured TIME by something that was not measured in the same
+breath: either an ASSUMED bandwidth (`w = slope_ms / weight_stream_ms(rate)`)
+or a FITTED intercept (`LadderFit.alpha = B / (A + B)`, an extrapolation of the
+ladder back to n = 0). The 13-agent reading of the 2026-09-10 session concluded
+that alpha, so defined, is NOT IDENTIFIED BY THIS APPARATUS on three
+independent grounds: the same nine cells give 0.9747 under one parameterisation
+and 0.5908 under another against a quoted sd of 0.0037 (FORM); the card is
+power-capped so the SM clock is an endogenous response to the tile, and
+sweeping the admissible clock elasticity moves pooled alpha by 21 sd (CLOCK);
+and by bus arithmetic the published alpha exceeds what the H200 memory bus can
+deliver in 4 of 9 cells (PHYSICS).
+
+This arm removes the denominator. It measures a SECOND ladder in which the
+re-read fraction is ONE BY CONSTRUCTION, and divides one measured slope by the
+other:
+
+    alpha_ratio = slope(SHARED) / slope(PRIVATE)
+
+No bandwidth, no intercept, no assumed rate anywhere in it. If the PRIVATE
+ladder really re-reads the whole weight set per M-tile, its slope IS the
+alpha = 1 reference in the same units, on the same card, at the same clock, in
+the same kernel, measured minutes apart.
+
+THE THREE ARMS, and the third is the control.
+
+    SHARED    the normal path. E experts, `n` M-tiles each, one copy of the
+              weight set. This is the ladder the whole study fits.
+    PRIVATE   `E x n` experts, each holding ONE M-tile, each pointing at its
+              OWN copy of its expert's weights. Reuse across M-tiles is
+              impossible: tile j of expert e reads copy j and nothing else
+              reads copy j. `n` complete copies are resident.
+    ALIAS     `E x n` experts allocated exactly as in PRIVATE, `n` copies
+              resident and touched, the SAME expanded expert-id space and the
+              SAME `moe_align_block_size` padding -- but every M-tile routed
+              back to copy 0. It reads one copy, like SHARED, through
+              PRIVATE's machinery.
+
+NO KERNEL WAS WRITTEN FOR THIS AND NONE IS NEEDED. vLLM's fused_moe Triton
+kernel reads its expert index PER M-TILE (`off_experts = tl.load(expert_ids_ptr
++ pid_m)`, filled by `moe_align_block_size` from `topk_ids`), so giving each
+M-tile a private weight copy is a RELABELLING of `topk_ids` plus a wider `w1`
+and `w2`. The kernel binary, the tile, the launch grid, the M-tile count, the
+padded rows, the FLOPs and the activation traffic are identical across all
+three arms at a tread. The only thing that moves is which address each tile
+reads its weights from. `private_topk_ids` is the whole of it and it is pure.
+
+THE CAVEAT, REGISTERED HERE AND PRINTED ON THE PLAN PAGE BEFORE THE RUN.
+Private copies change the address stream, the TLB footprint, the DRAM page
+locality and the size of the sorted-id table `moe_align_block_size` builds.
+So slope(PRIVATE) is a BOUNDED PROXY for the no-reuse case, not the no-reuse
+case itself, and this arm measures the bound rather than asserting it:
+
+  * ALIAS bounds the MACHINERY. It carries every one of those changes -- the
+    same `E x n` expert space, the same allocation, the same padding, the same
+    sorted-id table -- and reads one copy. `slope(ALIAS) - slope(SHARED)` is
+    therefore the per-M-tile cost of the machinery alone, with the traffic held
+    fixed, and V5 requires it to be small against slope(PRIVATE). A large
+    difference does not refute the ratio; it says the proxy error is not
+    bounded and so nothing on the page is quotable, which is a VALIDITY
+    failure and not a claim failure.
+  * The n = 1 TREAD bounds the INSTRUMENT. At one M-tile per expert the three
+    arms are one physical situation -- one copy, identity relabelling, `E`
+    experts -- so the spread between their three timings is this arm's own
+    floor for a slope comparison, measured rather than imported. V6 requires
+    it to be small; a large spread means the difference the ratio is made of
+    cannot be resolved by this design, whatever the ratio came out as. The
+    brief that commissioned this arm asked for that control in those terms.
+    IT IS A PLAN-TIME REQUIREMENT, not a post-hoc one: a model whose routing
+    cannot form `r = 1 x BLOCK_M` as an integer token count is REFUSED before
+    a pod is rented, and `deepseek-v2-lite` (rows_quantum 3) is exactly such a
+    model. See `identity_tread_refusal`.
+
+WHAT A RATIO MEANS, PARTITIONED BEFORE THE RUN. `OUTCOMES` below is one
+ordered table covering [0, inf) with no gap and no overlap, read by the
+prediction page and by the report, so the world the measurement lands in is
+NAMED by this script and not left to a reader:
+
+    ratio < 0.35              ISSUE-AND-LATENCY. Most of the per-M-tile cost
+                              is not weight traffic at all. The traffic model
+                              is the wrong KIND of model and the study's
+                              negative result becomes a positive one.
+    0.35 .. ALPHA_BAND[0]     BELOW THE REFIT BAND.
+    ALPHA_BAND                REFIT CONFIRMED: the fitted 0.558 is a traffic
+                              fraction after all, measured without a rate.
+    ALPHA_BAND[1] .. 0.85     ABOVE THE REFIT BAND.
+    ratio >= 0.85             NO REUSE. Essentially the whole weight set is
+                              re-read per M-tile; the re-read is real and the
+                              model's SHAPE was right even where its
+                              coefficient was not identifiable from timing.
+
+THE BY-PRODUCT, and it is not small. `slope(PRIVATE)` divided by the card's
+calibrated weight-stream time is `w(PRIVATE)`, which SHOULD be 1.0 exactly if
+the private arm re-reads the whole set once per tile and achieves the
+calibrated rate. Read the other way round, `weight_bytes / slope(PRIVATE)` is
+the DELIVERED bandwidth of the grouped GEMM's weight read, measured inside the
+kernel under test with no triad benchmark in it. C2 scores the relation
+between that and the card's own calibrated ceiling. A kernel cannot beat its
+card's measured ceiling, so a violation says the copies were not all read (and
+V2 says they were) or the calibration is not a ceiling.
+
+WHAT THIS ARM DOES NOT DO. It does not fit `alpha_a`, it does not separate the
+activation term from the weight term, and it does not decide anything about
+BLOCK_M other than the one it is run at. The ratio is scored RAW -- both slopes
+carry the same activation and compute terms, and dividing them subtracts
+nothing -- because being model-free is the entire reason this ladder was worth
+renting a card for. The activation-corrected ratio is PRINTED beside it, under
+the model that correction assumes, and is scored by nothing.
+
+EXIT CODES are `moe/bench/exit_codes.py`'s table and nothing is folded into
+DONE. There is deliberately no gate-softening flag: a CLAIM that did not pass
+returns 1, which the ledger already reads as a finished result.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import math
+import os
+import random
+import re
+import statistics
+import subprocess
+import sys
+import time
+import traceback
+from dataclasses import asdict, dataclass, field, replace
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+# `scripts/` is not a package. The sibling sweep is imported by putting its own
+# directory on the path and registering it under its module name, which is what
+# every other runner in this directory does and what `@dataclass` needs when it
+# resolves annotations through `sys.modules[cls.__module__]`.
+sys.path.insert(0, str(HERE))
+
+import block_m_crossing_sweep as SWEEP  # noqa: E402
+
+from moe.bench import exit_codes, roofline  # noqa: E402
+from moe.bench import provenance as PV  # noqa: E402
+from moe.bench import weights as WEIGHTS  # noqa: E402
+from moe.spec import MODEL_CONFIGS, dtype_bytes  # noqa: E402
+
+VALIDITY, CLAIM = exit_codes.VALIDITY, exit_codes.CLAIM
+PASS, FAIL, UNKNOWN = exit_codes.PASS, exit_codes.FAIL, exit_codes.UNKNOWN
+
+# --------------------------------------------------------------------------
+# THE ARMS. Three names, used as a CSV column, as a dict key and in every
+# printed table, declared once so a typo is an import error and not a silently
+# empty ladder.
+# --------------------------------------------------------------------------
+
+SHARED = "shared"
+PRIVATE = "private"
+ALIAS = "alias"
+
+#: In the order they are printed and fitted. The rotation the sweep runs them
+#: in is derived from this tuple, never listed a second time.
+ARMS: tuple[str, ...] = (SHARED, ALIAS, PRIVATE)
+
+ARM_MEANING = {
+    SHARED: "one copy of the weight set, E experts, n M-tiles each: the ladder "
+            "this study fits",
+    ALIAS:  "n copies resident and E x n experts, every M-tile routed back to "
+            "copy 0: PRIVATE's machinery with SHARED's traffic",
+    PRIVATE: "n copies resident, E x n experts, M-tile j of expert e reads "
+             "copy j: reuse across M-tiles is impossible by construction",
+}
+
+# --------------------------------------------------------------------------
+# Everything this script argues about, before any of it is used. The study's
+# constants are IMPORTED, never restated: a local copy of alpha that drifted
+# from the sweep's would put the two files in different worlds while both
+# printed a confident table.
+# --------------------------------------------------------------------------
+
+ALPHA = SWEEP.ALPHA                       # 0.558, refit 2026-08-31
+ALPHA_BAND = SWEEP.ALPHA_BAND             # (0.529, 0.588), the 90% band
+RETRACTED_ALPHA = SWEEP.RETRACTED_ALPHA   # 0.10, the world the study retracted
+
+#: DESIGN DECISION 1. The default model is mixtral-8x7b and not
+#: deepseek-v2-lite, and the reason is the n = 1 control, not the footprint.
+#: deepseek-v2-lite has E=64, k=6, so `rows_quantum` is 3 and rows per expert
+#: must be a multiple of 3; `r = n x BLOCK_M` at any power-of-two BLOCK_M is
+#: never a multiple of 3 at n = 1, so THE ONE TREAD WHERE THE THREE ARMS ARE
+#: ONE PHYSICAL SITUATION CANNOT BE FORMED ON THAT MODEL. mixtral has
+#: rows_quantum 1, so n = 1, 2, 3, ... all exist; its routed weight set is
+#: 2.8186 GB against deepseek-v2-lite's 1.1073 GB, which is the figure the
+#: memory plan prints and gates rather than a figure this file asserts. It is
+#: also the model every `w` in the 2026-09-10 synthesis is quoted on, and its
+#: E x n expert space stays small (8 x 8 = 64 at the deepest default tread)
+#: where deepseek-v2-lite's would reach 768, far outside anything
+#: `moe_align_block_size` is exercised at in this repository.
+#: `--model deepseek-v2-lite` still runs; it refuses at plan time with the
+#: quantum arithmetic printed, and `identity_tread_refusal` is that refusal.
+DEFAULT_MODEL = "mixtral-8x7b"
+
+#: DESIGN DECISION 2. One BLOCK_M per run, 32 by default, and it is in the run
+#: id. NOT 64, and the reason is `discrimination_floor`, not taste: the compute
+#: per M-tile scales with the tile height while the weight traffic per M-tile
+#: does not, so a taller tile runs into its compute ceiling at a shallower
+#: tread in exactly the world this arm exists to be able to find. Computed off
+#: GPU at this repo's H200 ridge and triad, the deepest tread whose SHARED
+#: ladder is still memory bound is:
+#:
+#:     BLOCK_M     alpha=1.0   alpha=0.558   alpha=0.10   alpha=0.05
+#:         16          >63         >63           >63          18
+#:         32          >63         >63             8           6
+#:         64          >63         >63             2           2
+#:
+#: At 64 the ISSUE-AND-LATENCY world is unmeasurable past tread 2 -- V4 would
+#: void the page in the one outcome that would turn the study's negative result
+#: into a positive one -- and a design that cannot resolve one of its own
+#: registered outcomes is not a design. 32 keeps the whole planned ladder
+#: memory bound down to alpha ~ 0.05, is in the study's forced tile set, and is
+#: a tile alpha is quoted at. `--block-m 16` is safer still and `--block-m 64`
+#: is available; the plan page prints the floor for whichever is chosen and
+#: REFUSES when the registered alternative world falls below it.
+#: A second tile is a second run and a second directory, not a second column.
+DEFAULT_BLOCK_M = 32
+
+#: DESIGN DECISION 3. Six treads, n = 1 .. 6. The deepest tread sets the memory
+#: bill (`n` complete copies) and the ladder's lever arm at once. Six rather
+#: than the eight the depth table above allows at BLOCK_M=32: eight is the
+#: H200's own number and the A100's is seven, so eight is a design that passes
+#: its own depth check by one tread on one card. Six copies of mixtral bf16 is
+#: 16.9 GB, which the plan checks against the attached card rather than against
+#: this comment.
+DEFAULT_TREADS = 6
+
+#: DESIGN DECISION 4. Nine repeats of the whole ladder, repeats OUTER, arms
+#: rotated within a tread. Nine because the interval on the ratio is a
+#: bootstrap over repeats and the arm is cheap: the whole sweep is minutes of
+#: kernel time. Repeats outer and arms rotated is what keeps a thermal or
+#: governor drift from landing on one arm: with arms innermost and a fixed
+#: order, SHARED would be first in every triple for the whole run.
+DEFAULT_REPEATS = 9
+
+#: DESIGN DECISION 5. The interval is a percentile bootstrap over repeats at
+#: 90%, matching `ALPHA_BAND`'s own convention, so C1's overlap test compares
+#: two intervals of the same kind.
+DEFAULT_DRAWS = 2000
+INTERVAL_PCT = 90.0
+
+#: DESIGN DECISION 6. V5's bound on the machinery. `|slope(ALIAS) -
+#: slope(SHARED)|` must be under this fraction of `slope(PRIVATE)`, which is
+#: the denominator the ratio is formed against, so the number bounds the
+#: RATIO's proxy error directly rather than bounding a slope nobody quotes.
+MACHINERY_BOUND = 0.10
+
+#: DESIGN DECISION 7. V6's bound on the instrument. At n = 1 the three arms
+#: are one physical situation; the largest relative gap between their three
+#: medians must be under this. 2% is above the 0.115% cold-replicate and 0.37%
+#: cross-session noise the study has measured and well under the smallest
+#: effect the ratio has to resolve (the 0.35 / 0.529 boundary is 0.18 wide).
+IDENTITY_SPREAD = 0.02
+
+#: DESIGN DECISION 8. V3's two tolerances. The weight allocation is an exact
+#: arithmetic prediction -- `n_max x E x 3FH x bytes` -- so it is gated tight;
+#: the high-water mark includes the framework's own intermediates, which this
+#: file predicts by a stated ALLOWANCE and therefore gates one-sided.
+WEIGHT_ALLOC_TOLERANCE = 0.01
+#: The multiplier on the modelled activation working set, as an allowance for
+#: vLLM's intermediate caches, the sorted-id tables and the allocator's own
+#: rounding. Stated as a number here because it is a DESIGN choice, and the
+#: arithmetic it multiplies is printed on the plan page in full.
+ACTIVATION_ALLOWANCE = 3.0
+
+#: DESIGN DECISION 9. C2's tolerance. The delivered weight-read rate implied
+#: by slope(PRIVATE) is compared with the card's own calibrated ceiling as a
+#: RELATION, never against a literal: a kernel may not exceed its card's
+#: measured ceiling by more than this. The number is a tolerance on a
+#: comparison, not a quantity derived from a calibration.
+ACHIEVED_RATE_TOLERANCE = 0.10
+
+#: DESIGN DECISION 10. The fraction of the card's free memory the predicted
+#: peak may occupy before the plan REFUSES. Two thirds leaves the allocator
+#: room to fragment and leaves the pod usable for the arm that follows.
+MEMORY_HEADROOM = 0.66
+
+#: A tread needs this many M-tiles-per-expert points before a slope may be
+#: quoted. The sweep's own reason applies unchanged: two points make a line
+#: with no residual, so a two-tread fit cannot notice that one of its points
+#: was wrong.
+MIN_TREADS = SWEEP.MIN_MEMORY_TREADS      # 3
+
+#: A tread whose achieved throughput reaches this fraction of the fixed roof is
+#: compute bound, and V4 refuses the whole page if any fitted tread of SHARED
+#: or PRIVATE is. Imported: a second copy of the sweep's threshold would
+#: disagree with it one day.
+COMPUTE_BOUND_FRACTION = SWEEP.COMPUTE_BOUND_FRACTION   # 0.95
+
+#: Repeats a cell needs before its median is a median.
+MIN_REPEATS = 3
+
+#: The card slug a run id carries when no device is attached.
+NO_CARD_SLUG = SWEEP.NO_CARD_SLUG
+
+#: What `--self-test` writes into the provenance block's `instrument`, so a
+#: planted report cannot satisfy a presence check while naming an instrument it
+#: never touched.
+SYNTHETIC_INSTRUMENT = SWEEP.SYNTHETIC_INSTRUMENT
+
+#: The instrument this arm times with. Imported from the sweep so a rename
+#: lands here as a refusal rather than as a row with an empty column.
+def timing_basis() -> str | None:
+    return SWEEP.timing_basis()
+
+
+# --------------------------------------------------------------------------
+# Refusals. Typed, so "this cannot be measured" and "this measured nothing" are
+# distinguishable by a caller and by the exit code.
+# --------------------------------------------------------------------------
+
+class PrivateWeightRefusal(RuntimeError):
+    """The arm declines to produce a number rather than produce one."""
+
+
+class SchemaCollision(PrivateWeightRefusal):
+    """A cells.csv on disk whose header is not the one this build writes.
+
+    `csv.DictWriter` writes the fieldnames it was given and never looks at the
+    file, so a wider row appended under a narrower header shifts every field
+    past the first difference and nothing downstream can tell. Raised at the
+    Store, converted to REFUSED at the call site.
+    """
+
+
+class Unmeasurable(PrivateWeightRefusal):
+    """A quantity the samples cannot support. Never substituted with a default."""
+
+
+# --------------------------------------------------------------------------
+# THE OUTCOME PARTITION. One ordered table, covering [0, inf) with no gap and
+# no overlap, registered before the run and read by BOTH the prediction page
+# and the report. Two copies of this partition is how a prediction page and a
+# report come to name two different worlds for one number.
+# --------------------------------------------------------------------------
+
+#: The boundary below which the per-M-tile cost is not weight traffic. 0.35 is
+#: the "near 0.3" world this arm was commissioned to be able to find, with room
+#: for the activation term the ratio does not subtract. That term is NOT a
+#: number in this comment because it moves with the tile: it is
+#: `E x BLOCK_M x (2H + 3F) x bytes` over one weight stream, which the plan
+#: page prints per run (0.93% of a stream per M-tile at the default tile,
+#: 1.86% at twice it).
+ISSUE_BOUND_MAX = 0.35
+
+#: The boundary above which the weight set is, to within the arm's own floor,
+#: re-read whole per M-tile. 0.85 is the brief's registered "near 1.0" world
+#: with room for the same activation term and for a machinery bound at its V5
+#: limit.
+NO_REUSE_MIN = 0.85
+
+#: `(name, lo, hi, meaning)`, half-open `[lo, hi)`, in order. The last row is
+#: closed at infinity.
+OUTCOMES: tuple[tuple[str, float, float, str], ...] = (
+    ("ISSUE-AND-LATENCY", 0.0, ISSUE_BOUND_MAX,
+     "most of the per-M-tile cost is NOT weight traffic: giving every M-tile "
+     "its own copy barely moved the time. The traffic model is the wrong KIND "
+     "of model, and the study's negative result about alpha becomes a positive "
+     "result about the mechanism."),
+    ("BELOW-THE-REFIT-BAND", ISSUE_BOUND_MAX, ALPHA_BAND[0],
+     "the re-read is real but smaller than the refit says: between the two "
+     "registered worlds, and the page says so rather than rounding to one."),
+    ("REFIT-CONFIRMED", ALPHA_BAND[0], ALPHA_BAND[1],
+     "the refit 0.558 is a traffic fraction after all, measured here without "
+     "an assumed rate and without a fitted intercept."),
+    ("ABOVE-THE-REFIT-BAND", ALPHA_BAND[1], NO_REUSE_MIN,
+     "the re-read is larger than the refit says: between the two registered "
+     "worlds, and the page says so rather than rounding to one."),
+    ("NO-REUSE", NO_REUSE_MIN, math.inf,
+     "essentially the whole weight set is re-read per extra M-tile. The "
+     "re-read is real and the traffic model's SHAPE was right even though its "
+     "coefficient was not identifiable from timing."),
+)
+
+
+def outcome_for(ratio: float) -> tuple[str, str]:
+    """`(name, meaning)` for a ratio. Total over the reals, refusing nothing.
+
+    A negative ratio is a real state -- one of the two ladders got FASTER with
+    another M-tile, which says its branch membership is wrong and not that the
+    ratio is small -- so it is named rather than clamped into the first band.
+    """
+    if not math.isfinite(ratio):
+        return ("NOT-A-RATIO",
+                "one of the two slopes is not finite, so no ratio was formed")
+    if ratio < 0.0:
+        return ("DESCENDING",
+                "the ratio is NEGATIVE: one of the two ladders got faster with "
+                "another M-tile, so it is not a fraction of anything and its "
+                "branch membership is what to look at")
+    for name, lo, hi, meaning in OUTCOMES:
+        if lo <= ratio < hi:
+            return name, meaning
+    # `OUTCOMES` ends at infinity, so this is unreachable for a finite,
+    # non-negative ratio; it is here so a future edit that leaves a gap fails
+    # loudly instead of returning the last row by accident.
+    raise Unmeasurable(f"ratio {ratio} fell through the OUTCOMES partition; "
+                       "the table has a gap in it")
+
+
+def partition_is_total() -> str:
+    """"" when `OUTCOMES` tiles [0, inf) with no gap and no overlap, else why not.
+
+    Checked at import by the test suite and printed by `--dry-run`, because the
+    whole content of the table is that it has no gap: a ratio that fell into
+    one would be named by whichever row happened to be tested last.
+    """
+    edge = 0.0
+    for name, lo, hi, _meaning in OUTCOMES:
+        if lo != edge:
+            return f"{name} starts at {lo} where the previous row ended at {edge}"
+        if not hi > lo:
+            return f"{name} is empty: [{lo}, {hi})"
+        edge = hi
+    if edge != math.inf:
+        return f"the table ends at {edge} and not at infinity"
+    return ""
+
+
+# --------------------------------------------------------------------------
+# Geometry. Pure arithmetic over `moe.spec`, so every number on the plan page
+# is checkable off GPU and by the test suite.
+# --------------------------------------------------------------------------
+
+def ladder_treads(cfg, block_m: int, max_treads: int) -> list[int]:
+    """`n = 1 .. max_treads`, refusing a model whose routing cannot form them.
+
+    Exactly-full tile stacks only: `r = n x BLOCK_M`, zero padding, one tread
+    per `n`. A nudged row is not a full stack and a fit over partly-filled
+    treads is a fit over padding.
+    """
+    quantum = SWEEP.rows_quantum(cfg)
+    bad = [n for n in range(1, max_treads + 1) if (n * block_m) % quantum]
+    if bad:
+        raise PrivateWeightRefusal(
+            f"{cfg.name} routes k={cfg.top_k} over E={cfg.num_experts}, so "
+            f"rows per expert must be a multiple of {quantum}, and treads "
+            f"{bad} at BLOCK_M={block_m} are not. See "
+            "identity_tread_refusal for what that costs this design.")
+    return list(range(1, max_treads + 1))
+
+
+def identity_tread_refusal(cfg, block_m: int) -> str:
+    """"" when `n = 1` is formable on this model at this tile, else why not.
+
+    THE CONTROL IS PART OF THE DESIGN AND SO IS ITS FEASIBILITY. V6 reads the
+    n = 1 tread, where the three arms are one physical situation, and a model
+    that cannot form `r = 1 x BLOCK_M` as an integer token count has no such
+    tread at any depth. Finding that out after renting a pod would cost the
+    whole arm; finding it out here costs nothing and the message names the
+    model that does have one.
+    """
+    quantum = SWEEP.rows_quantum(cfg)
+    if block_m % quantum == 0:
+        return ""
+    return (
+        f"{cfg.name} needs rows per expert to be a multiple of "
+        f"{quantum} (k={cfg.top_k} over E={cfg.num_experts}), and one M-tile "
+        f"is {block_m} rows, which is not. So the n = 1 tread -- the ONE tread "
+        "where SHARED, ALIAS and PRIVATE are the same physical situation, and "
+        "the control that bounds this arm's own instrument floor -- cannot be "
+        "formed on this model at this tile at any depth. Run --model "
+        f"{DEFAULT_MODEL} (rows_quantum "
+        f"{SWEEP.rows_quantum(MODEL_CONFIGS[DEFAULT_MODEL])}), or choose a "
+        f"--block-m that is a multiple of {quantum}, which no power of two is "
+        f"when {quantum} is odd and greater than one.")
+
+
+def modelled_roof_fraction(cfg, *, block_m: int, tiles: int, alpha: float,
+                           ridge: float, bandwidth_gbps: float, b: int) -> float:
+    """What fraction of the fixed roof a tread would reach in a world of `alpha`.
+
+    The study's own `model_ms` -- `overhead + max(traffic, padded compute)` --
+    divided into the useful FLOPs of the same tread. It is the MODEL and
+    nothing that reads it is evidence for it; its job here is to say, before a
+    pod is rented, whether the design can still see traffic at this depth in
+    each world it registers.
+    """
+    rows = tiles * block_m
+    ms = SWEEP.model_ms(cfg, rows, block_m, alpha=alpha, ridge=ridge,
+                        bandwidth_gbps=bandwidth_gbps, b=b)
+    if ms <= 0:
+        return math.inf
+    tflops = SWEEP.useful_flops(cfg, cfg.num_experts * rows) / (ms * 1e-3) / 1e12
+    roof = ridge * bandwidth_gbps / 1e3
+    return tflops / roof if roof > 0 else math.inf
+
+
+def deepest_memory_bound_tread(cfg, *, block_m: int, alpha: float, ridge: float,
+                               bandwidth_gbps: float, b: int,
+                               limit: int = 256) -> int:
+    """The deepest `n` whose SHARED ladder is still under the compute ceiling.
+
+    THE DESIGN QUESTION THIS ANSWERS. The compute an M-tile does scales with
+    the tile height and the weight traffic an extra M-tile costs does not, so a
+    ladder in a LOW-alpha world climbs toward its roof as it deepens: at
+    BLOCK_M=64 on mixtral at this repo's H200 ridge, a world of alpha=0.10 is
+    compute bound from tread 3. A ladder fitted through such treads has a slope
+    set by arithmetic, and the ratio it feeds moves toward 1.0 -- toward the
+    NO-REUSE reading -- for a reason that has nothing to do with reuse. V4
+    catches that AFTER the pod is paid for; this catches it before.
+    """
+    last = 0
+    for n in range(1, limit + 1):
+        frac = modelled_roof_fraction(cfg, block_m=block_m, tiles=n, alpha=alpha,
+                                      ridge=ridge, bandwidth_gbps=bandwidth_gbps,
+                                      b=b)
+        if frac >= COMPUTE_BOUND_FRACTION:
+            return last
+        last = n
+    return last
+
+
+def discrimination_floor(cfg, *, block_m: int, treads: int, ridge: float,
+                         bandwidth_gbps: float, b: int) -> float:
+    """The LOWEST alpha at which this design's own shared ladder still sees traffic.
+
+    Bisected on a monotone predicate: more re-read is more traffic is more
+    memory bound, so "the whole planned ladder is under the compute ceiling" is
+    monotone increasing in alpha. Below the number this returns the design
+    cannot report an ISSUE-AND-LATENCY world at all, because its own shared
+    ladder would be compute bound before the deepest tread and V4 would void
+    the page. It is a property of the DESIGN and belongs on the plan page
+    beside the depth, not in a post mortem.
+    """
+    def ok(alpha: float) -> bool:
+        return deepest_memory_bound_tread(
+            cfg, block_m=block_m, alpha=alpha, ridge=ridge,
+            bandwidth_gbps=bandwidth_gbps, b=b, limit=treads) >= treads
+
+    if ok(0.0):
+        return 0.0
+    if not ok(1.0):
+        return math.inf
+    lo, hi = 0.0, 1.0
+    for _ in range(40):
+        mid = (lo + hi) / 2.0
+        if ok(mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+def depth_refusal(cfg, *, block_m: int, treads: int, ridge: float,
+                  bandwidth_gbps: float, b: int) -> str:
+    """"" when the design can still discriminate its registered worlds, else why not.
+
+    ASKED BEFORE THE POD IS RENTED. The registered alternative this arm exists
+    to be able to FIND is the ISSUE-AND-LATENCY world, whose registered
+    representative is the study's own retracted alpha. If this design's shared
+    ladder would be compute bound at that alpha before the deepest planned
+    tread, then a run in that world returns INVALID on V4 rather than the
+    finding, and the pod minutes buy nothing.
+    """
+    floor = discrimination_floor(cfg, block_m=block_m, treads=treads,
+                                 ridge=ridge, bandwidth_gbps=bandwidth_gbps,
+                                 b=b)
+    if floor <= RETRACTED_ALPHA:
+        return ""
+    deepest = deepest_memory_bound_tread(
+        cfg, block_m=block_m, alpha=RETRACTED_ALPHA, ridge=ridge,
+        bandwidth_gbps=bandwidth_gbps, b=b, limit=treads + 64)
+    return (
+        f"at BLOCK_M={block_m} on {cfg.name}, a world of alpha="
+        f"{RETRACTED_ALPHA} puts the SHARED ladder over "
+        f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof from tread "
+        f"{deepest + 1}, and this run plans {treads}. The design's "
+        f"discrimination floor is alpha={floor:.4f}: below it the shared "
+        "ladder is compute bound before the deepest tread, V4 voids the page, "
+        "and the ISSUE-AND-LATENCY world -- the one outcome that would turn "
+        "this study's negative result into a positive one -- cannot be "
+        f"reported at all. Lower --treads to {deepest}, or lower --block-m: "
+        "the compute an M-tile does scales with the tile height and the weight "
+        "traffic an extra M-tile costs does not.")
+
+
+def depth_lines(cfg, *, block_m: int, treads: list[int], ridge: float,
+                bandwidth_gbps: float, b: int, alpha: float) -> list[str]:
+    """The depth table, printed on the plan page in every registered world."""
+    floor = discrimination_floor(cfg, block_m=block_m, treads=len(treads),
+                                 ridge=ridge, bandwidth_gbps=bandwidth_gbps, b=b)
+    out = ["depth       the deepest tread whose SHARED ladder is still under "
+           f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof, per world, at this "
+           "run's own ridge:"]
+    for label, a in (("no-reuse ", 1.0), ("refit    ", alpha),
+                     ("retracted", RETRACTED_ALPHA)):
+        deepest = deepest_memory_bound_tread(
+            cfg, block_m=block_m, alpha=a, ridge=ridge,
+            bandwidth_gbps=bandwidth_gbps, b=b, limit=len(treads) + 64)
+        out.append(f"            alpha={a:<5.3f} {label}  tread "
+                   f"{deepest:>3d}   against the {len(treads)} planned")
+    out.append(f"            DISCRIMINATION FLOOR: alpha={floor:.4f}. Below "
+               "it this design's own shared ladder is compute bound before the "
+               "deepest tread, V4 voids the page, and no ISSUE-AND-LATENCY "
+               "result can be reported. The arm can therefore separate the "
+               f"registered worlds down to alpha={floor:.4f} and no further, "
+               "and that is a property of the design and not of the card.")
+    return out
+
+
+def weight_bytes_total(cfg, dtype: str, copies: int) -> int:
+    """Bytes of routed expert weights resident when `copies` copies are held.
+
+    `copies x E x 3FH x bytes(dtype)`, with the per-copy term taken from
+    `moe.bench.weights.routed_expert_weight_bytes` -- the module that owns the
+    one multiplication -- rather than recomputed here. A second copy of a byte
+    count is how two halves of a study come to divide by different
+    denominators, and this file's whole argument is a division.
+    """
+    return copies * WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
+
+
+def activation_working_set(cfg, tokens: int, b: int) -> int:
+    """A MODELLED activation working set for one cell, in bytes.
+
+    `x` and `y` at `[T, H]`, plus the permuted stack at `[T k, 2F + F + H]`:
+    the gate+up output, the activated half and the down output, which is what
+    a fused grouped GEMM has live at once. It is an ALLOWANCE and is labelled
+    one everywhere it is printed: vLLM's own intermediate caches, the sorted-id
+    tables and the allocator's rounding are not modelled here, which is what
+    `ACTIVATION_ALLOWANCE` is for.
+    """
+    dense = 2 * tokens * cfg.hidden_size * b
+    permuted = (tokens * cfg.top_k
+                * (2 * cfg.intermediate_size + cfg.intermediate_size
+                   + cfg.hidden_size) * b)
+    return dense + permuted
+
+
+def flush_buffer_bytes() -> tuple[int, str]:
+    """The L2 flush buffer `time_kernel` allocates, and where the size came from.
+
+    A NAMED TERM AND NOT PART OF AN ALLOWANCE. It is 4x this device's own L2
+    -- 240 MB on a 60 MiB H200 -- which is the same order as every activation
+    buffer in the cell put together, and leaving it inside a fudge factor is
+    how a memory prediction comes to be a memory prediction of nothing. ASKED
+    of the instrument, never restated: `timing.flush_mb_for_device` owns the
+    rule and a change there moves this line with it.
+    """
+    try:
+        from moe.bench import timing
+    except Exception as exc:                              # noqa: BLE001
+        # Broad for the reason `timing_basis` is: an installed-and-broken torch
+        # raises OSError on a missing libcudart, and a plan is never worth
+        # taking down for it.
+        return 0, (f"not asked: moe.bench.timing did not import "
+                   f"({type(exc).__name__}); the flush buffer is NOT in the "
+                   "prediction below")
+    megabytes = timing.flush_mb_for_device()
+    fallback = megabytes == timing.DEFAULT_FLUSH_MB
+    return megabytes * 2 ** 20, (
+        "timing.flush_mb_for_device(), "
+        + ("this device's own L2 x 4" if not fallback else
+           f"DEFAULT_FLUSH_MB, the fallback for a device that could not be "
+           f"queried ({megabytes} MB)"))
+
+
+@dataclass(frozen=True)
+class MemoryPlan:
+    """The device memory this arm commits to, and whether it fits.
+
+    Built before any allocation and printed on the plan page. `fits` is None
+    when there is no card and no `--device-memory-gb` to check against, which
+    is NOT the same answer as True.
+    """
+
+    copies: int
+    per_copy_bytes: int
+    weight_bytes: int
+    activation_bytes: int
+    allowance: float
+    flush_bytes: int
+    flush_source: str
+    predicted_peak_bytes: int
+    device_free_bytes: int | None
+    device_source: str
+    headroom: float
+
+    @property
+    def fits(self) -> bool | None:
+        if self.device_free_bytes is None:
+            return None
+        return self.predicted_peak_bytes <= self.headroom * self.device_free_bytes
+
+    def lines(self) -> list[str]:
+        gb = 1e9
+        out = [
+            "memory      the arithmetic this arm commits to, before a byte is "
+            "allocated:",
+            f"            per copy of the routed expert weight set   "
+            f"{self.per_copy_bytes / gb:9.4f} GB",
+            f"            x {self.copies} copies at the deepest tread          "
+            f"        {self.weight_bytes / gb:9.4f} GB",
+            f"            + modelled activation working set x {self.allowance:.1f} "
+            f"allowance  {self.activation_bytes * self.allowance / gb:9.4f} GB",
+            f"            + the instrument's L2 flush buffer          "
+            f"{self.flush_bytes / gb:9.4f} GB  ({self.flush_source})",
+            f"            = predicted peak                            "
+            f"{self.predicted_peak_bytes / gb:9.4f} GB",
+        ]
+        if self.device_free_bytes is None:
+            out.append("            against NO DEVICE and no --device-memory-gb: "
+                       "the fit is NOT CHECKED, which is not the same answer as "
+                       "fits")
+        else:
+            out.append(
+                f"            against {self.device_free_bytes / gb:.1f} GB "
+                f"({self.device_source}), of which this arm may take "
+                f"{self.headroom:.0%} = "
+                f"{self.headroom * self.device_free_bytes / gb:.1f} GB: "
+                + ("FITS" if self.fits else "DOES NOT FIT"))
+        return out
+
+
+def memory_plan(cfg, dtype: str, b: int, copies: int, tokens_max: int,
+                device_free_bytes: int | None, device_source: str,
+                allowance: float = ACTIVATION_ALLOWANCE,
+                headroom: float = MEMORY_HEADROOM,
+                flush: tuple[int, str] | None = None) -> MemoryPlan:
+    per_copy = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
+    weights = weight_bytes_total(cfg, dtype, copies)
+    act = activation_working_set(cfg, tokens_max, b)
+    flush_bytes, flush_source = flush if flush is not None else flush_buffer_bytes()
+    return MemoryPlan(
+        copies=copies, per_copy_bytes=per_copy, weight_bytes=weights,
+        activation_bytes=act, allowance=allowance, flush_bytes=flush_bytes,
+        flush_source=flush_source,
+        predicted_peak_bytes=int(weights + allowance * act + flush_bytes),
+        device_free_bytes=device_free_bytes, device_source=device_source,
+        headroom=headroom)
+
+
+# --------------------------------------------------------------------------
+# THE RELABELLING. Pure, and the whole of the private arm's mechanism.
+# --------------------------------------------------------------------------
+
+def private_copy_index(ranks, block_m: int):
+    """Which copy a routing slot reads, from its rank within its own expert.
+
+    Split out and named because it is the one line the whole arm rests on:
+    the `j`-th M-tile of an expert holds ranks `[j BM, (j+1) BM)`, so the copy
+    a slot reads is its rank floor-divided by the tile height. Takes and
+    returns anything supporting `//`, which is both a torch tensor and an int,
+    so the test suite can check it without a device.
+    """
+    return ranks // block_m
+
+
+def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int):
+    """Relabel `[T, k]` expert ids so every M-tile reads its own weight copy.
+
+    Slot `(t, j)` currently naming expert `e` is renamed to `copy * E + e`,
+    where `copy` is the slot's rank within expert `e` under flattened index
+    order, divided by `BLOCK_M`. Expert `e` then splits into exactly
+    `rows_per_expert / BLOCK_M` experts of exactly `BLOCK_M` rows each, so
+    `moe_align_block_size` builds the SAME number of M-tiles as the shared
+    arm, with zero padding, and each carries a distinct expert index.
+
+    THE ORDERING DOES NOT HAVE TO MATCH THE KERNEL'S SORT. If
+    `moe_align_block_size` groups an expert's rows in a different order from
+    this one, the CONTENTS of a given M-tile differ between the two arms while
+    the count, the height, the padding and the arithmetic do not -- and every
+    copy holds the same weights, so the layer's output does not differ either.
+    What the ordering buys is that the two arms' M-tiles hold the same rows,
+    which is why `V2`'s output-equality part is a bitwise comparison and not a
+    tolerance.
+
+    REFUSES an imbalanced histogram rather than rounding one: this arm is run
+    on `balanced_ids`, whose per-expert count is exact by construction, and a
+    histogram that is off by one row would put `rows_per_expert / BLOCK_M + 1`
+    copies under one expert and read past the copies that were allocated.
+    """
+    import torch
+
+    if rows_per_expert % block_m:
+        raise PrivateWeightRefusal(
+            f"{rows_per_expert} rows per expert is not a whole number of "
+            f"BLOCK_M={block_m} tiles; this arm fits exactly-full stacks only")
+    flat = ids.reshape(-1).to(torch.int64)
+    counts = torch.bincount(flat, minlength=num_experts)
+    if int(counts.min()) != rows_per_expert or int(counts.max()) != rows_per_expert:
+        raise PrivateWeightRefusal(
+            f"the routing histogram is not exactly {rows_per_expert} rows for "
+            f"every one of {num_experts} experts (min {int(counts.min())}, max "
+            f"{int(counts.max())}); the private relabelling needs an exact "
+            "histogram, which balanced_ids produces by construction")
+    order = torch.argsort(flat, stable=True)
+    sorted_e = flat[order]
+    starts = torch.cumsum(counts, 0) - counts
+    ranks = (torch.arange(flat.numel(), device=flat.device, dtype=torch.int64)
+             - starts[sorted_e])
+    copies = private_copy_index(ranks, block_m)
+    renamed = copies * num_experts + sorted_e
+    out = torch.empty_like(flat)
+    out[order] = renamed
+    return out.reshape(ids.shape).to(ids.dtype)
+
+
+def expert_space(num_experts: int, tiles: int) -> int:
+    """`E x n`: the expert count the private and alias arms declare."""
+    return num_experts * tiles
+
+
+# --------------------------------------------------------------------------
+# One measured sample, and the store that appends them.
+# --------------------------------------------------------------------------
+
+@dataclass
+class Sample:
+    """One (arm, tread, repeat) timing and everything derivable from it.
+
+    THE STATE THE CELL WAS TIMED IN IS A COLUMN. `instrument`, `warmup_ms`,
+    `iters`, `trials`, the three clock fields and `l2_flush` are what
+    `moe.bench.timing.time_kernel` reported about the measurement it just made,
+    written per row because they are what makes a row comparable with the roof
+    or not.
+
+    AND A FAILED LEVEL CARRIES ITS SIDE. `clock_level_side` is LOW, HIGH or ""
+    and is a RECORD, never an exclusion: since 2026-09-09 `clock_drift_ok` alone
+    decides membership, because on a power-capped card the under-load clock is
+    an outcome of the tile and a band around the calibration GEMM's operating
+    point excludes a TILE rather than a defect. `excluded` is the one predicate
+    any fit here reads.
+    """
+
+    arm: str
+    repeat: int
+    block_m: int
+    tiles: int
+    rows_per_expert: int
+    tokens: int
+    #: Copies of the weight set this call could ADDRESS, which is not the same
+    #: as the copies it READ: the alias arm addresses `n` and reads copy 0,
+    #: which is the whole of what makes it the control. The arm name is what
+    #: says which; this column says how much of the allocation was in reach.
+    copies: int
+    #: `global_num_experts` as the call declared it: `E` for shared, `E x n`
+    #: for alias and private. Written per row because it is what sizes
+    #: `moe_align_block_size`'s sorted-id table, which is the machinery V5
+    #: measures the cost of.
+    experts_declared: int
+    ms_p50: float
+    ms_min: float = 0.0
+    ms_stdev: float = 0.0
+    iters: int = 0
+    trials: int = 0
+    warmup_ms: float = 0.0
+    instrument: str = ""
+    sm_clock_load_mhz: float | None = None
+    clock_level_ok: bool | None = None
+    clock_level_side: str = ""
+    clock_drift_ok: bool | None = None
+    l2_flush: bool = False
+    status: str = "ok"
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        # The sweep owns the rule that a failed LEVEL without a side is not a
+        # state the instrument produces; borrowed rather than restated.
+        SWEEP.check_level_side(self.clock_level_ok, self.clock_level_side)
+
+    @property
+    def excluded(self) -> bool:
+        """Did the clock MOVE inside the timed region. The ONE exclusion.
+
+        False for None on purpose: an exclusion has to be positively
+        established, and a row with no clock is a row whose comparability is
+        unknown, which the report counts rather than throws away.
+        """
+        return self.clock_drift_ok is False
+
+    @property
+    def usable(self) -> bool:
+        return self.status == "ok" and self.ms_p50 > 0 and not self.excluded
+
+
+CSV_FIELDS = list(Sample.__dataclass_fields__)
+PROVENANCE_COLUMNS = sorted(PV.Provenance().as_columns())
+
+
+class Store:
+    """Append-mode `cells.csv`, refusing a header that is not this one.
+
+    `csv.DictWriter` writes the fieldnames it was given and never looks at the
+    file, so a wider row appended under a narrower header shifts every field
+    past the first difference and nothing downstream can tell: `clock_drift_ok`
+    would read the LEVEL side, and a FAILED drift -- the one rule in this tree
+    that excludes a cell -- would come back None, which every gate keeps. The
+    header already on disk is READ and compared before the first append, and a
+    disagreement is a typed refusal naming the added and missing columns rather
+    than a wider row under a narrower head.
+    """
+
+    def __init__(self, path: Path, fields: list[str]):
+        self.path = path
+        self.fields = list(fields)
+        if path.exists() and path.stat().st_size:
+            with path.open(newline="") as fh:
+                on_disk = next(csv.reader(fh), [])
+            if on_disk and on_disk != self.fields:
+                added = [c for c in self.fields if c not in on_disk]
+                gone = [c for c in on_disk if c not in self.fields]
+                raise SchemaCollision(
+                    f"{path} was written with a different header.\n"
+                    f"  columns this build adds:   {added or 'none'}\n"
+                    f"  columns on disk and gone:  {gone or 'none'}\n"
+                    "Appending wider rows under a narrower header shifts every "
+                    "field past the first difference and nothing downstream can "
+                    "tell. Point --out at a fresh directory, or delete this "
+                    "file and re-measure it.")
+        self._new = not (path.exists() and path.stat().st_size)
+
+    def append(self, sample: Sample, prov=None) -> None:
+        row = asdict(sample)
+        if prov is not None:
+            row.update(prov.as_columns())
+        with self.path.open("a", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=self.fields,
+                                    extrasaction="ignore")
+            if self._new:
+                writer.writeheader()
+                self._new = False
+            writer.writerow(row)
+            fh.flush()
+
+
+def _opt_float(text: str):
+    return float(text) if text not in ("", None) else None
+
+
+def _opt_bool(text: str):
+    if text in ("", None):
+        return None
+    return text == "True"
+
+
+def read_samples(path: Path) -> list[Sample]:
+    """Every row back, BY HEADER NAME, with optional fields absent rather than
+    defaulted. A pre-column file reads back as None, never as 0 or False."""
+    if not path.exists():
+        return []
+    out = []
+    with path.open(newline="") as fh:
+        for row in csv.DictReader(fh):
+            out.append(Sample(
+                arm=row["arm"], repeat=int(row["repeat"]),
+                block_m=int(row["block_m"]), tiles=int(row["tiles"]),
+                rows_per_expert=int(row["rows_per_expert"]),
+                tokens=int(row["tokens"]), copies=int(row["copies"]),
+                experts_declared=int(row["experts_declared"]),
+                ms_p50=float(row["ms_p50"]),
+                ms_min=float(row.get("ms_min") or 0.0),
+                ms_stdev=float(row.get("ms_stdev") or 0.0),
+                iters=int(row.get("iters") or 0),
+                trials=int(row.get("trials") or 0),
+                warmup_ms=float(row.get("warmup_ms") or 0.0),
+                instrument=row.get("instrument", ""),
+                sm_clock_load_mhz=_opt_float(row.get("sm_clock_load_mhz", "")),
+                clock_level_ok=_opt_bool(row.get("clock_level_ok", "")),
+                clock_level_side=row.get("clock_level_side", "") or "",
+                clock_drift_ok=_opt_bool(row.get("clock_drift_ok", "")),
+                l2_flush=(row.get("l2_flush", "") == "True"),
+                status=row.get("status", "ok"), detail=row.get("detail", "")))
+    return out
+
+
+# --------------------------------------------------------------------------
+# The fit. Ordinary least squares in `n`, and a percentile bootstrap over
+# repeats. Pure: samples in, numbers out, no GPU and no I/O.
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Ladder:
+    """One arm's ladder: the per-tread medians and the line through them."""
+
+    arm: str
+    points: tuple[tuple[int, float], ...]
+    intercept_ms: float
+    slope_ms: float
+    mean_rel_err: float
+    spread: float | None
+    excluded: int
+
+    @property
+    def treads(self) -> int:
+        return len(self.points)
+
+
+def fit_line(points) -> tuple[float, float, float]:
+    """`(intercept, slope, mean relative residual)` by ordinary least squares.
+
+    Refuses fewer than two points rather than returning a slope of zero: a
+    one-point ladder has no slope, and zero is a value a gate would read.
+    """
+    pts = list(points)
+    if len(pts) < 2:
+        raise Unmeasurable(f"a ladder of {len(pts)} point(s) has no slope")
+    xs = [float(n) for n, _ in pts]
+    ys = [float(t) for _, t in pts]
+    mx, my = statistics.fmean(xs), statistics.fmean(ys)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx <= 0:
+        raise Unmeasurable("every tread of this ladder is at the same n; "
+                           "there is no lever arm to fit a slope over")
+    slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True)) / sxx
+    intercept = my - slope * mx
+    errs = [abs(intercept + slope * x - y) / y for x, y in zip(xs, ys, strict=True)
+            if y > 0]
+    return intercept, slope, (statistics.fmean(errs) if errs else 0.0)
+
+
+def collapse(samples, arm: str, rng=None) -> tuple[list[tuple[int, float]],
+                                                   float | None, int]:
+    """Per-tread median across repeats, the median across-repeat spread, and the
+    count of treads-by-repeat a DRIFTING clock excluded.
+
+    With `rng` the repeats are resampled WITH REPLACEMENT, which is the
+    bootstrap: the slope, the ratio and the interval are then recomputed on
+    that draw, so the interval carries the instability of the ladder and not
+    only the scatter of one pass.
+    """
+    by: dict[int, list[float]] = {}
+    dropped = 0
+    for s in samples:
+        if s.arm != arm or s.status != "ok" or s.ms_p50 <= 0:
+            continue
+        if s.excluded:
+            dropped += 1
+            continue
+        by.setdefault(s.tiles, []).append(s.ms_p50)
+    points = []
+    for n, vals in sorted(by.items()):
+        draw = ([rng.choice(vals) for _ in vals] if rng is not None else vals)
+        points.append((n, statistics.median(draw)))
+    spreads = [statistics.pstdev(v) / statistics.median(v)
+               for v in by.values() if len(v) > 1 and statistics.median(v) > 0]
+    return points, (statistics.median(spreads) if spreads else None), dropped
+
+
+def ladder_for(samples, arm: str, rng=None) -> Ladder:
+    points, spread, dropped = collapse(samples, arm, rng)
+    intercept, slope, err = fit_line(points)
+    return Ladder(arm=arm, points=tuple(points), intercept_ms=intercept,
+                  slope_ms=slope, mean_rel_err=err, spread=spread,
+                  excluded=dropped)
+
+
+def ratio_interval(samples, draws: int, seed: int, pct: float = INTERVAL_PCT
+                   ) -> tuple[float, float, int]:
+    """`(lo, hi, draws that produced a ratio)` by percentile bootstrap.
+
+    A draw that cannot be fitted -- too few treads survived the resample, or a
+    zero denominator -- is DROPPED and counted, never replaced by a value. The
+    count is printed beside the interval so an interval standing on a third of
+    its draws cannot pass for one standing on all of them.
+    """
+    rng = random.Random(seed)
+    got: list[float] = []
+    for _ in range(draws):
+        try:
+            shared = ladder_for(samples, SHARED, rng)
+            private = ladder_for(samples, PRIVATE, rng)
+        except Unmeasurable:
+            continue
+        if private.slope_ms == 0:
+            continue
+        got.append(shared.slope_ms / private.slope_ms)
+    if len(got) < 2:
+        raise Unmeasurable(
+            f"only {len(got)} of {draws} bootstrap draws produced a ratio; "
+            "there is no interval to quote")
+    got.sort()
+    tail = (100.0 - pct) / 2.0
+
+    def at(percentile: float) -> float:
+        idx = min(len(got) - 1, max(0, int(round(percentile / 100.0 * (len(got) - 1)))))
+        return got[idx]
+
+    return at(tail), at(100.0 - tail), len(got)
+
+
+# --------------------------------------------------------------------------
+# The proof that the private arm really read distinct buffers.
+# --------------------------------------------------------------------------
+
+#: The five parts of the buffer proof, in the order they are run. COUNTED here
+#: rather than described in prose: a proof that claims four parts and runs
+#: three is the shape of defect this repository keeps producing, and
+#: `BufferProof.verdict` reads this tuple rather than a literal.
+PROOF_PARTS: tuple[tuple[str, str], ...] = (
+    ("addresses", "the n copies occupy disjoint contiguous address ranges "
+                  "spanning exactly n x the weight set, in both w1 and w2"),
+    ("sentinels", "a distinct value written into each copy reads back from "
+                  "that copy and from no other, and the original bytes are "
+                  "restored before anything else reads them"),
+    ("kernel_read", "zeroing copies 1..n-1 CHANGES the private arm's output, "
+                    "so the kernel read them"),
+    ("shared_blind", "the same zeroing leaves the shared arm's output bitwise "
+                     "unchanged, so the change above is the private mapping "
+                     "and not a global corruption"),
+    ("same_layer", "with nothing zeroed, the private arm's output is bitwise "
+                   "equal to the shared arm's, so the relabelling computes the "
+                   "same layer"),
+)
+
+
+@dataclass(frozen=True)
+class BufferProof:
+    """Which parts of the five-part proof held, and whether it was measured.
+
+    `synthetic` is True for a planted proof under `--self-test`, where no
+    device exists to prove anything on. The report says so on the gate's own
+    line: a planted proof satisfying a presence check while describing a device
+    the run never touched is exactly the defect the provenance block's
+    `instrument` field exists against.
+    """
+
+    parts: dict[str, bool]
+    detail: dict[str, str]
+    synthetic: bool = False
+
+    @property
+    def verdict(self) -> str:
+        missing = [name for name, _ in PROOF_PARTS if name not in self.parts]
+        if missing:
+            return UNKNOWN
+        return PASS if all(self.parts[name] for name, _ in PROOF_PARTS) else FAIL
+
+    def lines(self) -> list[str]:
+        out = []
+        for name, what in PROOF_PARTS:
+            got = self.parts.get(name)
+            mark = "PASS" if got else ("FAIL" if got is False else "NOT RUN")
+            out.append(f"{mark:8s} {name}: {what}")
+            if self.detail.get(name):
+                out.append(f"         {self.detail[name]}")
+        if self.synthetic:
+            out.append("this proof was PLANTED by --self-test. No device was "
+                       "read and nothing here is evidence about hardware.")
+        return out
+
+
+def planted_proof(ok: bool) -> BufferProof:
+    return BufferProof(
+        parts={name: ok for name, _ in PROOF_PARTS},
+        detail={name: "planted" for name, _ in PROOF_PARTS},
+        synthetic=True)
+
+
+# --------------------------------------------------------------------------
+# Gates.
+# --------------------------------------------------------------------------
+
+@dataclass
+class Gate:
+    """One scored gate: the claim, the verdict, and what a FAIL costs.
+
+    `verdict` is PASS, FAIL or UNKNOWN in `moe.bench.exit_codes`'s own
+    vocabulary, so `classify` refuses a spelling it does not recognise rather
+    than letting it fall through a comparison. UNKNOWN counts AGAINST the gate
+    on both kinds.
+    """
+
+    tag: str
+    kind: str
+    claim: str
+    verdict: str
+    measured: str
+    threshold: str
+    #: Read as "if this FAILS, <consequence>". Printed on a PASS too, so a
+    #: reader knows what was at stake without re-deriving it.
+    consequence: str
+    lines: list[str] = field(default_factory=list)
+
+    def scored(self) -> tuple[str, str, str]:
+        return (self.kind, self.tag, self.verdict)
+
+    def result_line(self) -> str:
+        detail = (f"[{self.kind}] {self.claim} | measured {self.measured} "
+                  f"| gate {self.threshold}")
+        return exit_codes.result_line(*self.scored(), " ".join(detail.split()))
+
+    def render(self) -> list[str]:
+        out = [self.result_line(),
+               f"{self.tag:3s} {self.kind:8s} {self.verdict:8s} {self.claim}",
+               f"             measured {self.measured}   gate {self.threshold}",
+               f"             if this FAILS: {self.consequence}"]
+        out += [f"             {line}" for line in self.lines]
+        return out
+
+    def as_dict(self) -> dict:
+        return {"tag": self.tag, "kind": self.kind, "claim": self.claim,
+                "verdict": self.verdict, "measured": self.measured,
+                "gate": self.threshold, "consequence": self.consequence,
+                "detail": list(self.lines)}
+
+
+def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
+                        repeats: int) -> Gate:
+    """Did the run measure the grid it planned.
+
+    A CHECK THAT EXAMINED NOTHING REPORTS NO FAILURES. Every gate below reads
+    ladders, and a ladder assembled from three surviving cells out of a hundred
+    still fits, still reports a slope and still passes. So the counts are a
+    gate: cells measured against cells planned, usable treads per arm, repeats
+    per cell, and the cells a DRIFTING clock excluded named on their own line
+    rather than silently dropped.
+    """
+    ok = {(s.arm, s.tiles, s.repeat) for s in samples if s.usable}
+    failed = [s for s in samples
+              if s.status != "ok" and (s.arm, s.tiles, s.repeat) not in ok]
+    per_arm = {arm: len({s.tiles for s in samples if s.usable and s.arm == arm})
+               for arm in ARMS}
+    dropped = {arm: sum(1 for s in samples
+                        if s.arm == arm and s.status == "ok" and s.excluded)
+               for arm in ARMS}
+    reps = {arm: min([sum(1 for s in samples
+                          if s.usable and s.arm == arm and s.tiles == n)
+                      for n in treads] or [0])
+            for arm in ARMS}
+    short = [arm for arm in ARMS if per_arm[arm] < max(MIN_TREADS, 2)]
+    thin = [arm for arm in ARMS if reps[arm] < MIN_REPEATS]
+    detail = [
+        f"{len(ok)} of {planned} planned cells measured and usable",
+        "usable treads per arm: "
+        + ", ".join(f"{arm}:{per_arm[arm]}" for arm in ARMS)
+        + f" (of {len(treads)} planned)",
+        "fewest repeats behind any tread, per arm: "
+        + ", ".join(f"{arm}:{reps[arm]}" for arm in ARMS)
+        + f" (of {repeats} planned, floor {MIN_REPEATS})",
+        "cells excluded because the clock DRIFTED across their own trials, and "
+        "so absent from every ladder above: "
+        + ", ".join(f"{arm}:{dropped[arm]}" for arm in ARMS)
+        + (" (none)" if not sum(dropped.values()) else ""),
+        f"{len(failed)} cell(s) failed and were not recovered",
+    ]
+    for s in failed[:5]:
+        detail.append(f"  {s.arm} n={s.tiles} rep={s.repeat}: {s.detail}")
+    verdict = PASS if (len(ok) == planned and not failed and not short
+                       and not thin) else FAIL
+    return Gate("V0", VALIDITY, "the run measured the grid it planned",
+                verdict,
+                f"{len(ok)}/{planned} cells, treads "
+                + "/".join(str(per_arm[a]) for a in ARMS),
+                f"all {planned} cells, >= {max(MIN_TREADS, 2)} usable treads "
+                f"and >= {MIN_REPEATS} repeats per arm",
+                "every ladder below was fitted on a grid with holes in it, and "
+                "no slope, ratio or interval on this page may be quoted",
+                detail)
+
+
+def gate_v1_matched_geometry(samples, *, block_m: int, treads: list[int]) -> Gate:
+    """Did the three arms run the SAME geometry over the SAME treads.
+
+    The ratio is a difference of two slopes, so the two ladders have to be
+    measured over one tread set at one tile with one token count per tread. If
+    they are not, the ratio is a comparison of two different experiments and the
+    number it produces looks exactly as plausible as the one it should have
+    been. Asked of the ROWS rather than of the plan: the plan is what was
+    intended and the rows are what ran.
+    """
+    tiles = {arm: {s.tiles for s in samples if s.usable and s.arm == arm}
+             for arm in ARMS}
+    common = set.intersection(*tiles.values()) if all(tiles.values()) else set()
+    mismatched = [arm for arm in ARMS if tiles[arm] != common]
+    bms = sorted({s.block_m for s in samples if s.usable})
+    tokens = {}
+    for s in samples:
+        if s.usable:
+            tokens.setdefault(s.tiles, set()).add(s.tokens)
+    split = sorted(n for n, seen in tokens.items() if len(seen) > 1)
+    rows_ok = all(s.rows_per_expert == s.tiles * s.block_m
+                  for s in samples if s.usable)
+    detail = [
+        "treads per arm: "
+        + "; ".join(f"{arm}:{sorted(tiles[arm])}" for arm in ARMS),
+        f"tread set common to all three arms: {sorted(common)}",
+        f"BLOCK_M seen in the rows: {bms}",
+        "token count per tread is single-valued: "
+        + ("yes" if not split else f"NO, split at treads {split}"),
+        "every usable row has rows_per_expert == tiles x BLOCK_M: "
+        + ("yes" if rows_ok else "NO"),
+    ]
+    verdict = PASS if (not mismatched and bms == [block_m] and not split
+                       and rows_ok and common) else FAIL
+    return Gate("V1", VALIDITY,
+                "the three arms ran one geometry over one tread set",
+                verdict,
+                f"{len(common)} common treads at BLOCK_M={bms}",
+                f"all three arms over the same treads at BLOCK_M={block_m}, "
+                "one token count per tread",
+                "the ratio compares two ladders measured over different grids, "
+                "and its value is a fact about the difference between the "
+                "grids",
+                detail)
+
+
+def gate_v2_distinct_buffers(proof: BufferProof) -> Gate:
+    """Did the private arm allocate AND READ distinct weight buffers.
+
+    PROVEN, NOT ASSERTED, in five parts counted from `PROOF_PARTS`. The part
+    that matters most is `kernel_read`: zeroing copies 1..n-1 must CHANGE the
+    private arm's output. Without it, a relabelling bug that sent every M-tile
+    back to copy 0 would produce a private ladder identical to the shared one,
+    a ratio of exactly 1.0, and the headline "the whole weight set is re-read"
+    -- from an arm that measured no private read at all. `shared_blind` is the
+    control on that control.
+    """
+    passed = sum(1 for name, _ in PROOF_PARTS if proof.parts.get(name))
+    return Gate("V2", VALIDITY,
+                "the private arm allocated and READ distinct weight copies",
+                proof.verdict,
+                f"{passed} of {len(PROOF_PARTS)} parts",
+                f"all {len(PROOF_PARTS)} parts of the proof",
+                "the private ladder is not a no-reuse reference at all, and the "
+                "ratio is a number about the apparatus",
+                proof.lines())
+
+
+def gate_v3_memory(plan: MemoryPlan, *, weight_delta_bytes: int | None,
+                   high_water_bytes: int | None) -> Gate:
+    """Was the memory the plan predicted the memory the run took.
+
+    TWO PARTS, and they are gated differently because they are known
+    differently. The weight allocation is exact arithmetic -- `n x E x 3FH x
+    bytes` -- and is gated tight and two-sided: too little means the copies
+    were never materialised, too much means something else was allocated under
+    their name. The high-water mark includes the framework's own intermediates,
+    which this file predicts by a stated ALLOWANCE, so it is gated one-sided
+    against that ceiling.
+    """
+    detail = []
+    parts: list[bool | None] = []
+    if weight_delta_bytes is None:
+        detail.append("the weight allocation delta was not recorded")
+        parts.append(None)
+    else:
+        rel = abs(weight_delta_bytes - plan.weight_bytes) / plan.weight_bytes
+        parts.append(rel <= WEIGHT_ALLOC_TOLERANCE)
+        detail.append(
+            f"weight allocation: {weight_delta_bytes / 1e9:.4f} GB measured "
+            f"against {plan.weight_bytes / 1e9:.4f} GB predicted, "
+            f"{rel:.2%} apart (gate {WEIGHT_ALLOC_TOLERANCE:.0%})")
+    if high_water_bytes is None:
+        detail.append("the high-water mark was not recorded")
+        parts.append(None)
+    else:
+        parts.append(high_water_bytes <= plan.predicted_peak_bytes)
+        detail.append(
+            f"high-water mark: {high_water_bytes / 1e9:.4f} GB against the "
+            f"plan's ceiling {plan.predicted_peak_bytes / 1e9:.4f} GB "
+            f"(weights + {plan.allowance:.1f}x the modelled activation set)")
+    if any(p is None for p in parts):
+        verdict = UNKNOWN
+    else:
+        verdict = PASS if all(parts) else FAIL
+    return Gate("V3", VALIDITY,
+                "the device memory taken is the memory the plan predicted",
+                verdict,
+                f"{sum(1 for p in parts if p)} of {len(parts)} parts",
+                f"weight allocation within {WEIGHT_ALLOC_TOLERANCE:.0%} of "
+                "prediction, high-water mark at or under the plan's ceiling",
+                "the copies are not the copies the plan priced, so neither the "
+                "no-reuse reference nor the cost of reaching it is what this "
+                "page says",
+                detail)
+
+
+def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
+    """Is every fitted tread of SHARED and PRIVATE on the memory branch.
+
+    A ratio of two slopes is a ratio of two TRAFFIC costs only where traffic is
+    what the time is made of. A tread that has run into its compute ceiling has
+    a slope set by the tile's arithmetic and not by its reads, and including one
+    in either ladder drags that ladder's slope toward the other's, which moves
+    the ratio toward 1.0 -- toward the NO-REUSE reading -- for a reason that has
+    nothing to do with reuse.
+
+    SCORED AGAINST THE FIXED ROOF, which is what `roofline.ROOF_NOTE_SCORED`
+    says a compute-bound gate reads: the calibration's GEMM and every cell here
+    run under one board power cap, so the fixed roof compares delivered
+    throughput under one budget. The own-clock fraction is printed beside each
+    tread as issue efficiency and is scored by nothing.
+    """
+    hot = [r for r in rows if r["arm"] in (SHARED, PRIVATE)
+           and r["pct_of_roof"] >= COMPUTE_BOUND_FRACTION]
+    worst = max((r["pct_of_roof"] for r in rows
+                 if r["arm"] in (SHARED, PRIVATE)), default=0.0)
+    detail = [f"roof {roof_tflops:.1f} TFLOP/s, {roof_source}",
+              f"worst fitted tread of shared/private reaches {worst:.1%} of it"]
+    for r in hot[:5]:
+        detail.append(f"  COMPUTE BOUND: {r['arm']} n={r['tiles']} at "
+                      f"{r['pct_of_roof']:.1%} of the fixed roof")
+    detail.append("own-clock issue efficiency is printed per tread in the "
+                  "ladder table and is scored by nothing here; "
+                  + roofline.ROOF_NOTE_SCORED)
+    return Gate("V4", VALIDITY,
+                "every fitted tread of both ladders is memory bound",
+                PASS if not hot else FAIL,
+                f"worst {worst:.1%} of the fixed roof",
+                f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
+                "fitted tread of shared and private",
+                "at least one ladder's slope is set by arithmetic and not by "
+                "reads, which pulls the ratio toward 1.0 for a reason that is "
+                "not reuse",
+                detail)
+
+
+def gate_v5_machinery(shared: Ladder, alias: Ladder, private: Ladder) -> Gate:
+    """Is the PROXY ERROR bounded: what does the private machinery itself cost.
+
+    THE CAVEAT THIS ARM REGISTERS BEFORE IT RUNS, measured rather than argued.
+    Private copies change the address stream, the TLB footprint, the DRAM page
+    locality and the size of the sorted-id table `moe_align_block_size` builds.
+    ALIAS carries every one of those and reads ONE copy, so
+    `slope(ALIAS) - slope(SHARED)` is the per-M-tile cost of the machinery with
+    the traffic held fixed. Divided by `slope(PRIVATE)` -- the denominator the
+    ratio is formed against -- it is the additive error bar on the ratio in the
+    ratio's own units.
+
+    A FAILURE IS A VALIDITY FAILURE AND NOT A FINDING. It does not say the
+    ratio is wrong; it says the proxy error is not bounded, so nothing on the
+    page is quotable and the next experiment is a cheaper machinery.
+    """
+    if private.slope_ms == 0:
+        return Gate("V5", VALIDITY,
+                    "the private machinery costs little against the effect",
+                    UNKNOWN, "no private slope", f"< {MACHINERY_BOUND:.0%}",
+                    "the proxy error on the ratio is unbounded", [])
+    gap = alias.slope_ms - shared.slope_ms
+    rel = abs(gap) / abs(private.slope_ms)
+    detail = [
+        f"slope(shared)  {shared.slope_ms:.6f} ms per M-tile",
+        f"slope(alias)   {alias.slope_ms:.6f} ms per M-tile  "
+        f"(same machinery as private, same traffic as shared)",
+        f"slope(private) {private.slope_ms:.6f} ms per M-tile",
+        f"machinery = alias - shared = {gap:+.6f} ms per M-tile, which is "
+        f"{rel:.2%} of the private slope",
+        "read this as the additive error bar on the ratio: the ratio is "
+        f"uncertain by about +/-{rel:.3f} from the machinery alone, over and "
+        "above its bootstrap interval",
+    ]
+    return Gate("V5", VALIDITY,
+                "the private machinery's own per-M-tile cost is bounded",
+                PASS if rel < MACHINERY_BOUND else FAIL,
+                f"{rel:.2%} of the private slope",
+                f"< {MACHINERY_BOUND:.0%} of the private slope",
+                "the proxy error on the ratio is not bounded: the private "
+                "ladder is measuring its own machinery as well as its traffic, "
+                "and nothing on this page may be quoted",
+                detail)
+
+
+def gate_v6_identity(samples, *, identity_tread: int = 1) -> Gate:
+    """At one M-tile per expert the three arms are ONE physical situation.
+
+    One copy, an identity relabelling, `E` experts: the three calls are the
+    same call. So the spread between their three medians is not a difference
+    between arms, it is THIS ARM'S OWN FLOOR for a slope comparison, measured
+    on the card that will carry the ratio rather than imported from another
+    session.
+
+    WHAT A DISAGREEMENT HERE WOULD MEAN, registered before the run: not that
+    one arm is slower, because there is nothing for it to be slower at, but
+    that the difference the ratio is made of cannot be resolved by this design
+    -- a governor that moves between three calls seconds apart, an allocator
+    state that does not reset, or an ordering effect the rotation did not
+    remove. The ratio would then be unreadable whatever value it took, which is
+    why this is VALIDITY.
+    """
+    med = {}
+    for arm in ARMS:
+        vals = [s.ms_p50 for s in samples
+                if s.usable and s.arm == arm and s.tiles == identity_tread]
+        if vals:
+            med[arm] = statistics.median(vals)
+    if len(med) < len(ARMS):
+        return Gate("V6", VALIDITY,
+                    f"the three arms agree at n={identity_tread}, where they "
+                    "are one physical situation",
+                    UNKNOWN,
+                    f"{len(med)} of {len(ARMS)} arms reached n={identity_tread}",
+                    f"all three arms measured at n={identity_tread}",
+                    "this arm's own instrument floor is unknown, so the ratio "
+                    "cannot be read against it",
+                    [f"medians at n={identity_tread}: "
+                     + ", ".join(f"{a}:{med[a]:.4f} ms" for a in sorted(med))])
+    lo, hi = min(med.values()), max(med.values())
+    rel = (hi - lo) / lo if lo > 0 else math.inf
+    detail = [f"medians at n={identity_tread}: "
+              + ", ".join(f"{a}:{med[a]:.4f} ms" for a in ARMS),
+              f"widest gap {rel:.3%} of the fastest",
+              "this is the floor the ratio's own difference has to stand "
+              "above, measured on this card in this session"]
+    return Gate("V6", VALIDITY,
+                f"the three arms agree at n={identity_tread}, where they are "
+                "one physical situation",
+                PASS if rel <= IDENTITY_SPREAD else FAIL,
+                f"{rel:.3%} widest gap",
+                f"<= {IDENTITY_SPREAD:.1%}",
+                "the three code paths do not agree where they must, so the "
+                "difference between them at depth is not attributable to "
+                "traffic and the ratio is unreadable at any value",
+                detail)
+
+
+def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
+                  *, corrected: float | None) -> Gate:
+    """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit.
+
+    THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
+    (0.529-0.588, 90%), and the gate is a two-sided overlap of two intervals of
+    the same kind. Both registered alternatives -- a ratio near 1.0, meaning
+    the whole set is re-read, and a ratio near 0.3, meaning the per-M-tile cost
+    is not traffic -- FAIL it, and that is the point: a CLAIM that does not pass
+    is a result, and this is the arm where either of those results is worth
+    more than a pass.
+
+    SCORED RAW. Both slopes carry the same activation and compute terms and
+    dividing them subtracts nothing, so the raw ratio owes nothing to a model.
+    The activation-corrected value is printed beside it under the model that
+    correction assumes and is scored by nothing, because being model-free is
+    the entire reason this ladder exists.
+    """
+    lo, hi = interval
+    name, meaning = outcome_for(ratio)
+    overlaps = not (hi < ALPHA_BAND[0] or lo > ALPHA_BAND[1])
+    detail = [
+        f"ratio = slope(shared) / slope(private) = {ratio:.4f}",
+        f"{INTERVAL_PCT:.0f}% percentile bootstrap interval "
+        f"[{lo:.4f}, {hi:.4f}] over {draws} draws that produced a ratio",
+        f"THE WORLD THIS LANDS IN: {name}",
+        f"  {meaning}",
+        "the registered partition, in full: "
+        + "; ".join(f"{n} [{a:.3f}, {b:.3f})" for n, a, b, _ in OUTCOMES),
+    ]
+    if corrected is not None:
+        detail.append(
+            f"activation-corrected ratio {corrected:.4f}, printed only: it "
+            "subtracts a MODELLED activation slope from both terms, and the "
+            "raw number above is the one this arm was built to produce")
+    detail.append(
+        "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured "
+        "slope over another, taken minutes apart on one card at one tile in "
+        "one kernel.")
+    return Gate("C1", CLAIM,
+                "the re-read fraction, measured against a no-reuse reference, "
+                "is the study's refit alpha",
+                PASS if overlaps else FAIL,
+                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}",
+                f"the interval overlaps ALPHA_BAND "
+                f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}] in both directions",
+                "the refit alpha is not the traffic fraction it is quoted as, "
+                "and the page names which of the registered worlds it is "
+                "instead",
+                detail)
+
+
+def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
+                          bandwidth_gbps: float, bandwidth_source: str,
+                          stream_ms: float) -> Gate:
+    """The private slope, read as a delivered bandwidth, against the ceiling.
+
+    `weight_bytes / slope(PRIVATE)` is the rate at which the grouped GEMM
+    delivered its weight read, measured INSIDE the kernel under test with no
+    triad benchmark in it -- provided V2 holds and the private arm really did
+    read a whole fresh copy per M-tile. A kernel cannot deliver more than its
+    card's own measured ceiling, so this is a RELATION and not a comparison
+    with a literal: a violation says either that the copies were not all read,
+    which V2 answers, or that the calibration is not a ceiling.
+
+    The same number inverted is `w(PRIVATE) = slope / stream_ms`, which SHOULD
+    be 1.0 when the arm re-reads the set once per tile at the calibrated rate.
+    Both are printed; the gate is on the relation.
+    """
+    if private.slope_ms <= 0:
+        return Gate("C2", CLAIM,
+                    "the private arm's delivered weight-read rate is at or "
+                    "under the card's own ceiling",
+                    UNKNOWN, "no positive private slope",
+                    f"<= the calibrated rate x {1 + ACHIEVED_RATE_TOLERANCE:.2f}",
+                    "the denominator of the ratio is not a weight stream", [])
+    achieved = weight_bytes / (private.slope_ms * 1e-3) / 1e9
+    w_private = private.slope_ms / stream_ms
+    ceiling = bandwidth_gbps * (1.0 + ACHIEVED_RATE_TOLERANCE)
+    detail = [
+        f"slope(private) {private.slope_ms:.6f} ms per M-tile moves "
+        f"{weight_bytes / 1e9:.4f} GB, so it delivered "
+        f"{achieved:.1f} GB/s",
+        f"the card's calibrated rate is {bandwidth_gbps:.1f} GB/s "
+        f"({bandwidth_source or 'source NOT STATED'}); the gate allows "
+        f"{ACHIEVED_RATE_TOLERANCE:.0%} over it, i.e. {ceiling:.1f} GB/s",
+        f"w(private) = {w_private:.4f} weight-streams per M-tile at that rate; "
+        "1.0000 is what a full fresh read per tile at the calibrated rate "
+        "would give, and the excess over 1 is the shortfall of the achieved "
+        "rate against the calibrated one",
+        "THIS IS THE STUDY'S OWN DENOMINATOR, MEASURED. Every published w "
+        "divides a slope by a stream time computed at an ASSUMED rate; this "
+        "row says what that assumption was worth on this card in this kernel.",
+    ]
+    return Gate("C2", CLAIM,
+                "the private arm's delivered weight-read rate is at or under "
+                "the card's own ceiling",
+                PASS if achieved <= ceiling else FAIL,
+                f"{achieved:.1f} GB/s, w={w_private:.4f}",
+                f"<= {ceiling:.1f} GB/s",
+                "either the private arm did not read every copy (V2 answers "
+                "that) or the calibrated bandwidth this study divides every "
+                "slope by is not a ceiling",
+                detail)
+
+
+# --------------------------------------------------------------------------
+# The plan and the predictions, printed BEFORE anything runs.
+# --------------------------------------------------------------------------
+
+def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
+                     bandwidth_gbps: float, bw_source: str, dtype: str,
+                     stream_ms: float, ridge: float, ridge_source: str) -> list[str]:
+    weight = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
+    act_per_tile = (cfg.num_experts * block_m
+                    * SWEEP.activation_bytes_per_row(cfg))
+    act_share = act_per_tile / weight
+    out = ["", "PREDICTIONS, registered before the run and printed before any "
+                "measurement",
+           "  the quantity: ratio = slope(shared) / slope(private), one "
+           "measured slope over another",
+           f"  the study's refit alpha {alpha:.3f}, band "
+           f"{ALPHA_BAND[0]}-{ALPHA_BAND[1]} (90%), against the retracted "
+           f"{RETRACTED_ALPHA}",
+           f"  ridge       {ridge:.2f} Op/B, {ridge_source or 'source not stated'}",
+           f"  bandwidth   {bandwidth_gbps:.1f} GB/s, "
+           f"{bw_source or 'source not stated'}",
+           f"  one complete stream of the routed expert weight set: "
+           f"{weight / 1e9:.4f} GB in {stream_ms:.4f} ms at that rate",
+           "",
+           "  THE REGISTERED PARTITION OF THE RATIO, covering [0, inf) with no "
+           "gap and no overlap:"]
+    for name, lo, hi, meaning in OUTCOMES:
+        top = "inf" if hi == math.inf else f"{hi:.3f}"
+        out.append(f"    [{lo:.3f}, {top:>5s})  {name}")
+        out.append(f"                     {meaning}")
+    gap = partition_is_total()
+    out.append("  the partition is total and disjoint: "
+               + ("checked" if not gap else f"BROKEN -- {gap}"))
+    out.append("")
+    out.append("  WHAT EACH ARM PREDICTS, under the study's own traffic model, "
+               "so the two worlds are on the page before the run:")
+    out.append(f"    shared   slope ~ alpha x one stream + activations "
+               f"= {alpha:.3f} + {act_share:.4f} streams per M-tile")
+    out.append("    alias    the same traffic through the private machinery: "
+               "the SAME slope, and the difference is V5")
+    out.append(f"    private  slope ~ one stream + activations = 1.0000 + "
+               f"{act_share:.4f} streams per M-tile, BY CONSTRUCTION")
+    out.append(f"    so the ratio is predicted at "
+               f"{(alpha + act_share) / (1.0 + act_share):.4f} in the refit "
+               f"world and {(1.0 + act_share) / (1.0 + act_share):.4f} in the "
+               "no-reuse world")
+    out.append(f"    and at {(RETRACTED_ALPHA + act_share) / (1.0 + act_share):.4f} "
+               f"in the retracted alpha={RETRACTED_ALPHA} world, which the "
+               "partition names ISSUE-AND-LATENCY")
+    out.append("")
+    out.append("  THE GATES, and the thresholds they are scored at:")
+    out.append(f"    V0 all cells, >= {max(MIN_TREADS, 2)} usable treads and "
+               f">= {MIN_REPEATS} repeats per arm")
+    out.append("    V1 one tread set, one BLOCK_M, one token count per tread")
+    out.append(f"    V2 all {len(PROOF_PARTS)} parts of the buffer proof: "
+               + ", ".join(name for name, _ in PROOF_PARTS))
+    out.append(f"    V3 weight allocation within {WEIGHT_ALLOC_TOLERANCE:.0%} "
+               "of prediction; high-water mark under the plan's ceiling")
+    out.append(f"    V4 every fitted tread of shared and private under "
+               f"{COMPUTE_BOUND_FRACTION:.0%} of the fixed roof")
+    out.append(f"    V5 |slope(alias) - slope(shared)| < {MACHINERY_BOUND:.0%} "
+               "of slope(private): the machinery's own cost, which bounds the "
+               "proxy error")
+    out.append(f"    V6 the three arms within {IDENTITY_SPREAD:.1%} at n=1, "
+               "where they are one physical situation")
+    out.append("    C1 the ratio's interval overlaps ALPHA_BAND in both "
+               "directions")
+    out.append(f"    C2 the delivered weight-read rate is at or under the "
+               f"card's own, +{ACHIEVED_RATE_TOLERANCE:.0%}")
+    out.append("")
+    out.append("  THE CAVEAT, REGISTERED: private copies change the address "
+               "stream, the TLB footprint, the DRAM page locality and the size "
+               "of the sorted-id table, so slope(private) is a BOUNDED PROXY "
+               "for the no-reuse case and not the no-reuse case itself. V5 "
+               "measures that bound at depth (the machinery with the traffic "
+               "held fixed) and V6 measures this arm's own floor at n=1 (the "
+               "machinery and the traffic both held fixed). Neither is an "
+               "argument; both are numbers on this page after the run.")
+    out.append("  NOT A READOUT: the LEVEL of either ladder. Only the slopes "
+               "are compared, and the intercepts differ between arms by "
+               "exactly the machinery V5 measures.")
+    out.append("  NOT MEASURED HERE: alpha_a, the activation-side miss "
+               "fraction. Both ladders carry the same activation term and the "
+               "ratio subtracts nothing.")
+    return out
+
+
+def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
+               bandwidth_gbps: float, bw_source: str, out_dir: Path,
+               pinned: dict, run_id: str, resources, card: str, git_note: str,
+               mem: MemoryPlan, tokens: dict[int, int], ridge: float,
+               alpha: float) -> list[str]:
+    deepest = treads[-1]
+    return [
+        f"experiment  private_weight_reference / {run_id}",
+        f"model       {args.model} E={cfg.num_experts} k={cfg.top_k}  "
+        f"{args.dtype} ({b} bytes)",
+        f"tile        BLOCK_M={block_m}, one tile per run and in the run id",
+        f"pinned      {pinned}",
+        "arms        " + "; ".join(f"{a}: {ARM_MEANING[a]}" for a in ARMS),
+        f"ladder      {len(treads)} treads n={treads[0]}..{treads[-1]}, "
+        f"exactly-full tile stacks only (r = n x {block_m})",
+        "            r per tread: "
+        + ", ".join(f"n={n}:r={n * block_m}:T={tokens[n]}" for n in treads),
+        f"            {SWEEP.rows_step(cfg)} token step, rows quantum "
+        f"{SWEEP.rows_quantum(cfg)}",
+        f"repeats     {args.repeats} of the whole ladder, repeats OUTER, arms "
+        f"rotated within a tread so no arm is first in every triple",
+        f"cells       {len(treads)} treads x {len(ARMS)} arms x "
+        f"{args.repeats} repeats = {len(treads) * len(ARMS) * args.repeats}",
+        f"experts     shared declares E={cfg.num_experts}; alias and private "
+        f"declare E x n, up to {expert_space(cfg.num_experts, deepest)} at the "
+        "deepest tread",
+        f"bandwidth   {bandwidth_gbps:.1f} GB/s, {bw_source}",
+        f"card        {card}"
+        + ("   (no CUDA device: this is a plan or a replay, not a measurement)"
+           if card == NO_CARD_SLUG else ""),
+        f"WRITES TO   {out_dir}",
+        "            cells.csv (appended per cell), report.txt, report.json, "
+        "triton-cache/",
+        f"git         {git_note}",
+        "resources   one CTA's bill under the pinned constants, so a setting "
+        "that cannot physically run is refused here and not diagnosed from its "
+        "timing afterwards:",
+        *[resources[block_m].render()],
+        *mem.lines(),
+        *depth_lines(cfg, block_m=block_m, treads=treads, ridge=ridge,
+                     bandwidth_gbps=bandwidth_gbps, b=b, alpha=alpha),
+    ]
+
+
+def estimated_seconds(cfg, *, treads: list[int], block_m: int, repeats: int,
+                      alpha: float, ridge: float, bandwidth_gbps: float, b: int,
+                      warmup_ms: float, trials: int, cell_budget_ms: float
+                      ) -> float:
+    """Kernel seconds at the model's own timings. EXCLUDING compiles and
+    allocation, which the plan says in those words and the driver's cost table
+    reads the clock off.
+
+    The private arm is priced at `alpha = 1`, which is what it is by
+    construction, and the alias arm at the shared arm's traffic, which is what
+    it reads. Pricing all three at the study's alpha would under-book the one
+    arm whose whole design is to move more bytes.
+    """
+    total = 0.0
+    for arm in ARMS:
+        a = 1.0 if arm == PRIVATE else alpha
+        for n in treads:
+            rows = n * block_m
+            ms = SWEEP.model_ms(cfg, rows, block_m, alpha=a, ridge=ridge,
+                                bandwidth_gbps=bandwidth_gbps, b=b)
+            iters = SWEEP.planned_iters(ms, cell_budget_ms)
+            total += repeats * (warmup_ms + trials * iters * ms) * 1e-3
+    return total
+
+
+# --------------------------------------------------------------------------
+# The analysis. Pure: samples in, report out. No GPU, no I/O, so `--self-test`
+# and the test suite exercise exactly what the pod run prints.
+# --------------------------------------------------------------------------
+
+@dataclass
+class Report:
+    lines: list[str]
+    gates: list[Gate]
+    payload: dict
+
+    def text(self) -> str:
+        return "\n".join(self.lines) + "\n"
+
+
+def tread_rows(samples, cfg, *, block_m: int, roof_tflops: float,
+               reference_mhz: float | None, reference_grade: str) -> list[dict]:
+    """One row per (arm, tread): the median time, the achieved rate, and BOTH
+    roof fractions, the fixed one and the one at the cell's own clock."""
+    rows = []
+    for arm in ARMS:
+        by: dict[int, list] = {}
+        for s in samples:
+            if s.usable and s.arm == arm:
+                by.setdefault(s.tiles, []).append(s)
+        for n, group in sorted(by.items()):
+            ms = statistics.median([s.ms_p50 for s in group])
+            rows_total = cfg.num_experts * n * block_m
+            tflops = (SWEEP.useful_flops(cfg, rows_total) / (ms * 1e-3)) / 1e12
+            clocks = [s.sm_clock_load_mhz for s in group
+                      if s.sm_clock_load_mhz]
+            load = statistics.median(clocks) if clocks else None
+            own_roof, note = roofline.cell_clock_roof(
+                roof_tflops, load, reference_mhz, reference_grade)
+            rows.append({
+                "arm": arm, "tiles": n, "rows_per_expert": n * block_m,
+                "tokens": group[0].tokens, "copies": group[0].copies,
+                "experts_declared": group[0].experts_declared,
+                "repeats": len(group), "ms_p50": ms,
+                "achieved_tflops": tflops,
+                "pct_of_roof": tflops / roof_tflops if roof_tflops else 0.0,
+                "sm_clock_load_mhz": load,
+                "roof_at_cell_clock_tflops": own_roof,
+                "pct_of_roof_at_cell_clock": (tflops / own_roof if own_roof
+                                              else 0.0),
+                "roof_note": note,
+                "level_sides": sorted({s.clock_level_side for s in group
+                                       if s.clock_level_side}),
+            })
+    return rows
+
+
+def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
+            alpha: float, dtype: str, b: int, bandwidth_gbps: float,
+            bandwidth_source: str, ridge: float, ridge_source: str,
+            roof_tflops: float, roof_source: str,
+            reference_mhz: float | None, reference_grade: str,
+            reference_source: str,
+            mem: MemoryPlan, proof: BufferProof,
+            weight_delta_bytes: int | None, high_water_bytes: int | None,
+            draws: int, seed: int, header: list[str], card: str,
+            synthetic: bool, model_name: str, pinned: dict, prov=None) -> Report:
+    planned = len(treads) * len(ARMS) * repeats
+    lines = list(header)
+    lines += ["", "=" * 72, "LADDERS", "=" * 72,
+              f"{'arm':8s} {'n':>3s} {'r':>6s} {'T':>7s} {'copies':>6s} "
+              f"{'E*':>6s} {'reps':>4s} {'ms':>10s} {'TFLOP/s':>9s} "
+              f"{'%roof':>7s} {'%own':>7s} {'MHz':>6s}"]
+    rows = tread_rows(samples, cfg, block_m=block_m, roof_tflops=roof_tflops,
+                      reference_mhz=reference_mhz,
+                      reference_grade=reference_grade)
+    for r in rows:
+        own = (f"{r['pct_of_roof_at_cell_clock']:6.1%}"
+               if r["roof_at_cell_clock_tflops"] else "     --")
+        mhz = f"{r['sm_clock_load_mhz']:6.0f}" if r["sm_clock_load_mhz"] else "    --"
+        lines.append(
+            f"{r['arm']:8s} {r['tiles']:3d} {r['rows_per_expert']:6d} "
+            f"{r['tokens']:7d} {r['copies']:6d} {r['experts_declared']:6d} "
+            f"{r['repeats']:4d} {r['ms_p50']:10.4f} "
+            f"{r['achieved_tflops']:9.1f} {r['pct_of_roof']:6.1%} {own} {mhz}")
+    if rows and not any(r["roof_at_cell_clock_tflops"] for r in rows):
+        lines.append(f"  %own is not scored on any row: {rows[0]['roof_note']}")
+
+    ladders: dict[str, Ladder] = {}
+    unmeasurable = ""
+    try:
+        for arm in ARMS:
+            ladders[arm] = ladder_for(samples, arm)
+    except Unmeasurable as exc:
+        unmeasurable = str(exc)
+
+    lines += ["", "FITS, ms = A + B n over the treads above"]
+    for arm in ARMS:
+        lad = ladders.get(arm)
+        if lad is None:
+            lines.append(f"  {arm:8s} NOT FITTED: {unmeasurable}")
+            continue
+        stream = WEIGHTS.weight_streams_per_tile(
+            lad.slope_ms, cfg, dtype, bandwidth_gbps,
+            bandwidth_source=bandwidth_source)
+        lines.append(
+            f"  {arm:8s} A={lad.intercept_ms:9.4f} ms  B={lad.slope_ms:9.6f} "
+            f"ms/M-tile  treads={lad.treads}  mean rel err {lad.mean_rel_err:.3%}"
+            + (f"  across-repeat spread {lad.spread:.3%}" if lad.spread is not None
+               else "  across-repeat spread NOT DETERMINED")
+            + (f"  drifting cells excluded {lad.excluded}" if lad.excluded else ""))
+        lines.append(f"           w = {stream.render()}")
+
+    ratio = corrected = None
+    interval = (math.nan, math.nan)
+    got_draws = 0
+    if ladders.get(SHARED) and ladders.get(PRIVATE) and ladders[PRIVATE].slope_ms:
+        ratio = ladders[SHARED].slope_ms / ladders[PRIVATE].slope_ms
+        act_ms = (cfg.num_experts * block_m
+                  * SWEEP.activation_bytes_per_row(cfg)
+                  / (bandwidth_gbps * 1e9) * 1e3)
+        denom = ladders[PRIVATE].slope_ms - act_ms
+        if denom > 0:
+            corrected = (ladders[SHARED].slope_ms - act_ms) / denom
+        try:
+            lo, hi, got_draws = ratio_interval(samples, draws, seed)
+            interval = (lo, hi)
+        except Unmeasurable as exc:
+            lines.append(f"  interval NOT FORMED: {exc}")
+
+    stream_ms = WEIGHTS.weight_stream_ms(cfg, dtype, bandwidth_gbps)
+    gates: list[Gate] = [
+        gate_v0_non_vacuity(samples, planned=planned, treads=treads,
+                            repeats=repeats),
+        gate_v1_matched_geometry(samples, block_m=block_m, treads=treads),
+        gate_v2_distinct_buffers(proof),
+        gate_v3_memory(mem, weight_delta_bytes=weight_delta_bytes,
+                       high_water_bytes=high_water_bytes),
+        gate_v4_memory_bound(rows, roof_tflops=roof_tflops,
+                             roof_source=roof_source),
+    ]
+    if ladders.get(SHARED) and ladders.get(ALIAS) and ladders.get(PRIVATE):
+        gates.append(gate_v5_machinery(ladders[SHARED], ladders[ALIAS],
+                                       ladders[PRIVATE]))
+    else:
+        gates.append(Gate("V5", VALIDITY,
+                          "the private machinery's own per-M-tile cost is "
+                          "bounded", UNKNOWN, "a ladder was not fitted",
+                          f"< {MACHINERY_BOUND:.0%} of the private slope",
+                          "the proxy error on the ratio is unbounded",
+                          [unmeasurable] if unmeasurable else []))
+    gates.append(gate_v6_identity(samples, identity_tread=treads[0]))
+    if ratio is None:
+        gates.append(Gate("C1", CLAIM,
+                          "the re-read fraction, measured against a no-reuse "
+                          "reference, is the study's refit alpha",
+                          UNKNOWN, "no ratio was formed",
+                          f"the interval overlaps ALPHA_BAND "
+                          f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}]",
+                          "the refit alpha is not the traffic fraction it is "
+                          "quoted as",
+                          [unmeasurable] if unmeasurable else []))
+    else:
+        gates.append(gate_c1_ratio(ratio, interval, got_draws,
+                                   corrected=corrected))
+    if ladders.get(PRIVATE):
+        gates.append(gate_c2_achieved_rate(
+            ladders[PRIVATE],
+            weight_bytes=WEIGHTS.routed_expert_weight_bytes(cfg, dtype),
+            bandwidth_gbps=bandwidth_gbps, bandwidth_source=bandwidth_source,
+            stream_ms=stream_ms))
+    else:
+        gates.append(Gate("C2", CLAIM,
+                          "the private arm's delivered weight-read rate is at "
+                          "or under the card's own ceiling",
+                          UNKNOWN, "no private ladder", "a relation",
+                          "the denominator of the ratio is not a weight stream",
+                          []))
+
+    lines += ["", "=" * 72, "GATES", "=" * 72]
+    for g in gates:
+        lines += g.render()
+        lines.append("")
+    rc = exit_codes.classify(g.scored() for g in gates)
+    lines.append(f"the gates imply {exit_codes.describe(rc)}")
+
+    payload = {
+        "experiment": "private_weight_reference",
+        "synthetic": synthetic,
+        "card": card,
+        "model": model_name,
+        "dtype": dtype,
+        "block_m": block_m,
+        "pinned": dict(pinned),
+        "treads": list(treads),
+        "repeats": repeats,
+        "alpha_refit": alpha,
+        "alpha_band": list(ALPHA_BAND),
+        "ridge": ridge,
+        "ridge_source": ridge_source,
+        "bandwidth_gbps": bandwidth_gbps,
+        "bandwidth_source": bandwidth_source,
+        "roof_tflops": roof_tflops,
+        "roof_source": roof_source,
+        "reference_clock_mhz": reference_mhz,
+        "reference_clock_grade": reference_grade,
+        "reference_clock_source": reference_source,
+        "weight_stream_ms": stream_ms,
+        "memory_plan": asdict(mem),
+        "weight_delta_bytes": weight_delta_bytes,
+        "high_water_bytes": high_water_bytes,
+        "buffer_proof": {"parts": dict(proof.parts), "detail": dict(proof.detail),
+                         "synthetic": proof.synthetic,
+                         "verdict": proof.verdict},
+        "ladders": {arm: {"points": [list(p) for p in lad.points],
+                          "intercept_ms": lad.intercept_ms,
+                          "slope_ms": lad.slope_ms,
+                          "mean_rel_err": lad.mean_rel_err,
+                          "across_repeat_spread": lad.spread,
+                          "excluded_drifted": lad.excluded}
+                    for arm, lad in ladders.items()},
+        "treads_table": rows,
+        "ratio": ratio,
+        "ratio_interval": list(interval),
+        "ratio_interval_pct": INTERVAL_PCT,
+        "ratio_draws": got_draws,
+        "ratio_corrected": corrected,
+        "outcome": (outcome_for(ratio)[0] if ratio is not None else None),
+        "outcomes_partition": [[n, lo, (None if hi == math.inf else hi), m]
+                               for n, lo, hi, m in OUTCOMES],
+        "gates": [g.as_dict() for g in gates],
+    }
+    if prov is not None:
+        payload = prov.stamp(payload)
+    return Report(lines, gates, payload)
+
+
+# --------------------------------------------------------------------------
+# Planted worlds: the scorer proven off GPU.
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class World:
+    """A planted world, what it is planted to demonstrate, and the verdicts.
+
+    A SELF-TEST THAT ASSERTS NOTHING IS A SMOKE TEST. `expect` is the
+    registration: the verdict every named gate must return in this world. A
+    gate absent from `expect` is deliberately unregistered; a gate NAMED in
+    `expect` that the report does not contain is itself a mismatch, because a
+    registration that silently matches nothing is the
+    check-that-examined-nothing shape one level up.
+    """
+
+    name: str
+    why: str
+    expect: dict[str, str]
+    #: The re-read fraction the SHARED arm is generated at. The private arm is
+    #: always generated at 1.0, which is what it is by construction.
+    alpha: float = ALPHA
+    #: Milliseconds per M-tile the alias arm costs OVER the shared arm: the
+    #: machinery, planted, which is what V5 measures. Charged on `n - n0` and
+    #: NOT on `n`, because at the identity tread the alias arm IS the shared
+    #: arm -- one copy, an identity relabelling, E experts -- so a machinery
+    #: cost that did not vanish there would be an unphysical world, and it
+    #: would fail V6 as well, which is a different gate about a different
+    #: thing. This is the shape a planted world has to have before the gate it
+    #: is planted for means anything.
+    machinery_ms_per_tile: float = 0.0
+    #: Relative perturbation applied to the alias arm at the identity tread
+    #: alone, which is what V6 measures.
+    identity_skew: float = 0.0
+    #: The buffer proof's planted verdict.
+    proof_ok: bool = True
+    #: Planted allocation observations, as a multiple of the prediction.
+    weight_alloc_factor: float = 1.0
+    high_water_factor: float = 1.0
+    #: Multiplier on the roof, so a world can put the ladder over its ceiling.
+    roof_factor: float = 1.0
+    #: Multiplier on EVERY arm's milliseconds. A card that delivers faster than
+    #: its own calibrated rate leaves the ratio untouched -- both terms move
+    #: together -- and refutes the ceiling, which is what C2 is about and what
+    #: no other field in this table can reach.
+    speedup: float = 1.0
+    #: Treads to delete from EVERY arm, so a world can thin the grid without
+    #: unmatching it: V0 counts cells and fails, V1 compares tread SETS and
+    #: does not, which is the distinction between the two gates.
+    drop_treads: tuple[int, ...] = ()
+    #: Treads to delete from ONE arm, which unmatches the tread sets and is the
+    #: only thing V1 is about. Named separately because a world that drops from
+    #: every arm registered V1 FAIL once and got PASS, correctly: the gates
+    #: measure different failures and a world has to produce the one it names.
+    drop_treads_from: tuple[str, tuple[int, ...]] | None = None
+
+    def check(self, report: Report) -> list[str]:
+        got = {g.tag: g.verdict for g in report.gates}
+        bad = []
+        for tag, want in sorted(self.expect.items()):
+            if tag not in got:
+                bad.append(f"{tag}: registered {want}, but the report has no "
+                           f"gate {tag}")
+            elif got[tag] != want:
+                bad.append(f"{tag}: registered {want}, got {got[tag]}")
+        return bad
+
+
+ALL_PASS = {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
+            "V5": PASS, "V6": PASS, "C1": PASS, "C2": PASS}
+
+#: Every world this file knows, and every gate's FAIL branch is reachable from
+#: one of them. A gate that cannot fail is as useless as one that cannot pass,
+#: and until a world reaches its FAIL branch nothing has shown which it is.
+WORLDS: dict[str, World] = {
+    "refit": World(
+        "refit",
+        "the world the study says it is in: the shared ladder re-reads "
+        f"alpha={ALPHA} of the weight set per M-tile, the private ladder "
+        "re-reads all of it, and the ratio lands in ALPHA_BAND",
+        dict(ALL_PASS)),
+    "no-reuse": World(
+        "no-reuse",
+        "the first registered alternative: the shared ladder re-reads the "
+        "WHOLE set per M-tile, so the ratio is 1.0 and the refit band is "
+        "refuted from above",
+        dict(ALL_PASS, C1=FAIL), alpha=1.0),
+    "issue-bound": World(
+        "issue-bound",
+        "the second registered alternative: the shared ladder re-reads almost "
+        f"nothing (alpha={RETRACTED_ALPHA}), so the per-M-tile cost is issue "
+        "and latency and the traffic model is the wrong kind of model",
+        dict(ALL_PASS, C1=FAIL), alpha=RETRACTED_ALPHA),
+    "aliased": World(
+        "aliased",
+        "the relabelling silently sent every M-tile back to copy 0: the "
+        "buffer proof fails, and without V2 this world would have printed a "
+        "ratio of 1.0 and the NO-REUSE headline off an arm that measured no "
+        "private read at all",
+        {"V2": FAIL}, proof_ok=False),
+    "machinery": World(
+        "machinery",
+        "the private machinery costs as much per M-tile as the effect: V5 "
+        "fails and the page is unquotable, which is not the same statement as "
+        "the ratio being wrong",
+        dict(ALL_PASS, V5=FAIL), machinery_ms_per_tile=0.35),
+    "compute-bound": World(
+        "compute-bound",
+        "the roof is low enough that the ladders run into it: V4 fails, "
+        "because a slope set by arithmetic is not a slope about traffic",
+        {"V4": FAIL}, roof_factor=0.02),
+    "noisy-identity": World(
+        "noisy-identity",
+        "the three arms disagree at n=1, where they are one physical "
+        "situation: this arm's own floor is above the effect it has to "
+        "resolve, so V6 fails and the ratio is unreadable at any value",
+        dict(ALL_PASS, V6=FAIL), identity_skew=0.08),
+    "over-allocated": World(
+        "over-allocated",
+        "the weight allocation is not the one the plan priced: V3 fails, "
+        "because copies that are not the copies the plan priced are not the "
+        "no-reuse reference the plan registered",
+        dict(ALL_PASS, V3=FAIL), weight_alloc_factor=1.5, high_water_factor=1.5),
+    "holes": World(
+        "holes",
+        "two treads never landed, in every arm: V0 fails on the counts, "
+        "because a ladder assembled from what survived still fits and still "
+        "reports a slope. V1 PASSES here and that is the registration: the "
+        "tread sets still match, so the two gates are about different failures",
+        {"V0": FAIL, "V1": PASS}, drop_treads=(2, 3)),
+    "faster-than-its-ruler": World(
+        "faster-than-its-ruler",
+        "every arm delivers 25% more bandwidth than the card's calibration "
+        "claims is possible: C2 fails and C1 does not, because both terms of "
+        "the ratio moved together. This is the world where the denominator "
+        "every published w is divided by is refuted, and it is the only one "
+        "this table can reach it from",
+        dict(ALL_PASS, C2=FAIL), speedup=0.8),
+    "ragged": World(
+        "ragged",
+        "two treads never landed IN ONE ARM: the ratio would be a comparison "
+        "of two ladders measured over different grids, which is what V1 is "
+        "for and what dropping from every arm does not produce",
+        {"V0": FAIL, "V1": FAIL}, drop_treads_from=(PRIVATE, (2, 3))),
+}
+
+
+def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
+                    repeats: int, alpha_shared: float, ridge: float,
+                    bandwidth_gbps: float, b: int, noise: float,
+                    seed: int) -> list[Sample]:
+    """Cells GENERATED from the study's own traffic model at a stated alpha.
+
+    Every row carries `SYNTHETIC_INSTRUMENT`, so "not measured" is a VALUE on
+    the row and not an absence a reader has to notice. Nothing here was
+    measured and the report says so on its own line.
+    """
+    rng = random.Random(seed)
+    out: list[Sample] = []
+    for rep in range(repeats):
+        for n in treads:
+            if n in world.drop_treads:
+                continue
+            rows = n * block_m
+            tokens = SWEEP.tokens_for_rows(cfg, rows)
+            for arm in ARMS:
+                if (world.drop_treads_from
+                        and arm == world.drop_treads_from[0]
+                        and n in world.drop_treads_from[1]):
+                    continue
+                a = 1.0 if arm == PRIVATE else alpha_shared
+                ms = SWEEP.model_ms(cfg, rows, block_m, alpha=a, ridge=ridge,
+                                    bandwidth_gbps=bandwidth_gbps, b=b)
+                if arm == ALIAS:
+                    # Charged on `n - n0`: at the identity tread the alias arm
+                    # IS the shared arm, so the machinery has nothing to cost.
+                    ms += world.machinery_ms_per_tile * (n - treads[0])
+                    if n == treads[0]:
+                        ms *= (1.0 + world.identity_skew)
+                ms *= world.speedup
+                if noise:
+                    ms *= (1.0 + rng.gauss(0.0, noise))
+                copies = 1 if arm == SHARED else n
+                experts = (cfg.num_experts if arm == SHARED
+                           else expert_space(cfg.num_experts, n))
+                out.append(Sample(
+                    arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                    rows_per_expert=rows, tokens=tokens, copies=copies,
+                    experts_declared=experts, ms_p50=ms, ms_min=ms,
+                    ms_stdev=0.0, iters=0, trials=0, warmup_ms=0.0,
+                    instrument=SYNTHETIC_INSTRUMENT,
+                    sm_clock_load_mhz=None, clock_level_ok=None,
+                    clock_level_side="", clock_drift_ok=None, l2_flush=False))
+    return out
+
+
+# --------------------------------------------------------------------------
+# The GPU half.
+# --------------------------------------------------------------------------
+
+def build_private_weights(cfg, dtype: str, copies: int, seed: int,
+                          device: str = "cuda"):
+    """`(w1, w2, allocated_bytes)` with `copies` BITWISE IDENTICAL copies resident.
+
+    ONE ALLOCATION AT THE DEEPEST TREAD, and every shallower tread takes a
+    CONTIGUOUS PREFIX of it. That is not a saving, it is the design: the memory
+    environment -- the resident footprint, the allocator's state, the pressure
+    on the TLB -- is then IDENTICAL at every tread and in every arm, so nothing
+    in the ladder moves because an allocation moved. Copy `c` occupies experts
+    `[c E, (c+1) E)`, so the shared arm's `w1[:E]` is copy 0 and is a
+    contiguous view of the same storage.
+
+    Every copy is FILLED, not merely reserved: an untouched copy is a page
+    table entry, not a byte on the bus, and the arm's whole claim is about
+    bytes on the bus.
+
+    AND THE COPIES LEAVE HERE BITWISE IDENTICAL. Nothing distinguishing is
+    written into them, which is what makes V2's `same_layer` part a bitwise
+    comparison: the private arm reads different ADDRESSES holding the same
+    BYTES, so if it computes anything other than the shared arm's output the
+    relabelling is wrong. The sentinel write that tells one copy's memory from
+    another's lives in `prove_distinct_buffers`, which runs after the last
+    timed cell and restores what it wrote before the comparison; an earlier
+    version of this function wrote the sentinels here and left them in, which
+    made every copy different from every other and would have failed
+    `same_layer` on a correct relabelling.
+    """
+    import torch
+
+    e, h, f = cfg.num_experts, cfg.hidden_size, cfg.intermediate_size
+    dt = {"bf16": torch.bfloat16, "fp16": torch.float16}[dtype]
+    total = expert_space(e, copies)
+    cuda = device.startswith("cuda")
+    before = torch.cuda.memory_allocated() if cuda else None
+    w1 = torch.empty((total, 2 * f, h), dtype=dt, device=device)
+    w2 = torch.empty((total, h, f), dtype=dt, device=device)
+    g = torch.Generator(device=device).manual_seed(seed)
+    # Fan-in scaling, the same shape `moe.reference.torch_ref.make_inputs`
+    # uses, so the numerics sit where every other arm's do.
+    w1[:e].normal_(0.0, h ** -0.5, generator=g)
+    w2[:e].normal_(0.0, f ** -0.5, generator=g)
+    for c in range(1, copies):
+        w1[c * e:(c + 1) * e].copy_(w1[:e])
+        w2[c * e:(c + 1) * e].copy_(w2[:e])
+    if not cuda:
+        # None means NOT MEASURED, never zero: V3 then reads UNKNOWN, which
+        # counts against it, where a zero would read as an allocation that did
+        # not happen and FAIL it for the wrong reason.
+        return w1, w2, None
+    torch.cuda.synchronize()
+    return w1, w2, torch.cuda.memory_allocated() - before
+
+
+#: The value written into one element of each copy to tell its memory from
+#: every other copy's. Far outside the fan-in-scaled range the weights are
+#: drawn in (order 1e-2), exactly representable in bf16 and fp16, and NEGATIVE,
+#: so a read-back that came from the wrong copy or from an uninitialised page
+#: cannot be mistaken for a weight.
+SENTINEL_BASE = -1024.0
+
+
+def sentinel_roundtrip(w1, experts_per_copy: int, copies: int
+                       ) -> tuple[bool, str]:
+    """Write a distinct value into each copy, read them all back, PUT THE
+    ORIGINAL BYTES BACK, and say whether all three held.
+
+    Split out of the prover and made device-agnostic for one reason: the write
+    and the restore have to be one operation, and the first version of this
+    wrote sentinels at BUILD time and never restored them. Every copy was then
+    different from every other, which is exactly the state part 5 exists to
+    rule out, so a CORRECT relabelling would have failed `same_layer` and the
+    arm would have exited INVALID on a working instrument. It is testable
+    without a device so that pairing cannot come apart again.
+    """
+    import torch
+
+    try:
+        original = w1[:, 0, 0].clone()
+        want = {c: SENTINEL_BASE * (c + 1) for c in range(copies)}
+        for c in range(copies):
+            w1[c * experts_per_copy, 0, 0] = want[c]
+        seen = {c: float(w1[c * experts_per_copy, 0, 0].item())
+                for c in range(copies)}
+        w1[:, 0, 0] = original
+        restored = bool(torch.equal(w1[:, 0, 0], original))
+    except RuntimeError as exc:
+        # A FAILED PART, NOT A CRASH. torch refuses to write a tensor whose
+        # elements share a memory location, which is exactly the world this
+        # part exists to detect; raising here would exit ERROR (the apparatus
+        # broke) where the truth is INVALID (the instrument is not what the
+        # page says it is). Nothing is timed after the proof, so the sentinels
+        # left behind by a half-finished round trip cost nothing.
+        return False, (f"torch refused the sentinel round trip ({exc}); that "
+                       "refusal is itself the finding: the copies do not hold "
+                       "distinct memory")
+    ok = seen == want and len(set(seen.values())) == copies and restored
+    return ok, (f"wrote {copies} distinct values, read back "
+                f"{len(set(seen.values()))} distinct, and restored the "
+                f"original bytes: {restored}")
+
+
+def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int,
+                           dtype: str) -> BufferProof:
+    """Run the five-part proof. Returns the parts and their evidence.
+
+    RUN AFTER EVERY TIMED CELL, never before one: part 3 ZEROES copies
+    1..n-1 and the arm does not restore them, so a cell timed afterwards would
+    be timed against a weight set of zeros. That ordering costs one rebuild of
+    the deepest tread's inputs and buys a proof that cannot perturb a single
+    measured millisecond.
+
+    THE SENTINELS ARE WRITTEN AND THEN PUT BACK, inside part 2, BEFORE part 5
+    compares the two arms' outputs. A distinct value per copy is what tells one
+    copy's memory from another's; leaving it there would make the copies
+    different from each other, which is precisely the state part 5 exists to
+    rule out, and `same_layer` would then FAIL on a correct relabelling.
+    """
+    import torch
+
+    e = cfg.num_experts
+    parts: dict[str, bool] = {}
+    detail: dict[str, str] = {}
+
+    # 1. addresses
+    item = w1.element_size()
+    stride1 = e * w1.stride(0) * item
+    stride2 = e * w2.stride(0) * item
+    ok = True
+    for c in range(copies):
+        if (w1[c * e].data_ptr() != w1.data_ptr() + c * stride1
+                or w2[c * e].data_ptr() != w2.data_ptr() + c * stride2):
+            ok = False
+    span = copies * (stride1 + stride2)
+    want = weight_bytes_total(cfg, dtype, copies)
+    parts["addresses"] = ok and span == want
+    detail["addresses"] = (f"{copies} copies span {span} bytes against "
+                           f"{want} predicted; strides w1 {stride1} w2 "
+                           f"{stride2}")
+
+    # 2. sentinels
+    parts["sentinels"], detail["sentinels"] = sentinel_roundtrip(w1, e, copies)
+
+    # 5. same layer, measured BEFORE anything is zeroed
+    shared_before = call_for(SHARED)().clone()
+    private_before = call_for(PRIVATE)().clone()
+    parts["same_layer"] = bool(torch.equal(shared_before, private_before))
+    detail["same_layer"] = (
+        "private output is bitwise equal to shared"
+        if parts["same_layer"] else
+        "private and shared outputs DIFFER with nothing zeroed; the "
+        "relabelling is not computing the same layer")
+
+    # 3 and 4. zero every copy above the first, then re-run both arms.
+    w1[e:].zero_()
+    w2[e:].zero_()
+    torch.cuda.synchronize()
+    private_after = call_for(PRIVATE)().clone()
+    shared_after = call_for(SHARED)().clone()
+    parts["kernel_read"] = not torch.equal(private_before, private_after)
+    detail["kernel_read"] = (
+        "zeroing copies 1.. changed the private output, so the kernel read them"
+        if parts["kernel_read"] else
+        "zeroing copies 1.. left the private output UNCHANGED: the kernel never "
+        "read them and the private ladder is not a no-reuse reference")
+    parts["shared_blind"] = bool(torch.equal(shared_before, shared_after))
+    detail["shared_blind"] = (
+        "the shared output is bitwise unchanged by the same zeroing"
+        if parts["shared_blind"] else
+        "the shared output CHANGED too, so the zeroing corrupted copy 0 and "
+        "part 3 proves nothing")
+    return BufferProof(parts=parts, detail=detail, synthetic=False)
+
+
+def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
+              csv_path: Path, cache_root: Path, store: Store, prov,
+              dtype: str) -> tuple[list[Sample], BufferProof, int, int]:
+    """The metered part. Appends every cell as it lands, so aborting keeps it.
+
+    REPEATS OUTER, ARMS ROTATED. A repeat walks the whole ladder and the three
+    arms are rotated inside each tread, so no arm is first in every triple and
+    a drift over the session lands on all three rather than on the one that
+    always ran last. Within a repeat the inputs for a tread are built once and
+    the three arms share them, which is what makes the comparison a comparison.
+    """
+    import torch
+
+    from moe.bench import timing
+    from moe.spec import BenchSpec, RoutingSpec
+
+    reference_clock, clock_source = SWEEP.reference_clock_mhz()
+    print("reference clock: "
+          + (f"{reference_clock:.0f} MHz, {clock_source}" if reference_clock
+             else f"NOT RESOLVED ({clock_source}); every cell's clock LEVEL "
+                  "verdict will be None and no cell can be excluded for it"))
+
+    # BEFORE vLLM is imported: Triton may snapshot this at import, and a warm
+    # cache compiles and dumps nothing.
+    cache_root.mkdir(parents=True, exist_ok=True)
+    os.environ["TRITON_CACHE_DIR"] = str(cache_root)
+
+    override_config, where = SWEEP.find_override()
+    from vllm.model_executor.layers.fused_moe import fused_experts
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+
+    from moe.baselines._framework_config import vllm_call_kwargs
+
+    print(f"override hook: {where}.override_config")
+    print(f"triton cache: {cache_root} (fresh for this run)")
+
+    torch.cuda.reset_peak_memory_stats()
+    deepest = treads[-1]
+    w1, w2, weight_delta = build_private_weights(cfg, dtype, deepest, args.seed)
+    print(f"private weights: {deepest} copies, "
+          f"{weight_delta / 1e9:.4f} GB allocated and filled")
+
+    done = {(s.arm, s.tiles, s.repeat) for s in read_samples(csv_path)
+            if s.status == "ok"}
+    samples = read_samples(csv_path)
+    conf = dict(pinned, BLOCK_SIZE_M=block_m)
+    e = cfg.num_experts
+
+    def inputs_for(n: int):
+        rows = n * block_m
+        tokens = SWEEP.tokens_for_rows(cfg, rows)
+        spec = BenchSpec(cfg, num_tokens=tokens, dtype=dtype,
+                         routing=RoutingSpec("uniform", 0.0), seed=args.seed)
+        x = torch.randn((tokens, cfg.hidden_size), device="cuda",
+                        dtype=w1.dtype)
+        ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
+        weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
+                             device="cuda")
+        private_ids = private_topk_ids(ids, e, block_m, rows)
+        kw = vllm_call_kwargs(spec)
+        kw["activation"] = MoEActivation(kw["activation"])
+        return tokens, x, ids, private_ids, weights, kw
+
+    def call_for(arm: str, x, ids, private_ids, weights, kw, n: int):
+        experts = e if arm == SHARED else expert_space(e, n)
+        use_ids = private_ids if arm == PRIVATE else ids
+        args_kw = dict(kw, global_num_experts=experts)
+
+        def call():
+            return fused_experts(hidden_states=x, w1=w1[:experts],
+                                 w2=w2[:experts], topk_weights=weights,
+                                 topk_ids=use_ids, **args_kw)
+        return call
+
+    started = time.time()
+    for rep in range(args.repeats):
+        for n in treads:
+            # A RESUME BUILDS NOTHING IT IS NOT GOING TO TIME. The inputs are
+            # per (tread, repeat) and the three arms share them, so a tread
+            # whose whole triple is already on disk is skipped before the
+            # allocation rather than after it.
+            if all((a, n, rep) in done for a in ARMS):
+                continue
+            tokens, x, ids, private_ids, weights, kw = inputs_for(n)
+            # THE ROTATION IS DERIVED FROM `ARMS`, never listed a second time.
+            order = [ARMS[(i + rep) % len(ARMS)] for i in range(len(ARMS))]
+            for arm in order:
+                if (arm, n, rep) in done:
+                    continue
+                call = call_for(arm, x, ids, private_ids, weights, kw, n)
+                copies = 1 if arm == SHARED else n
+                experts = e if arm == SHARED else expert_space(e, n)
+                try:
+                    with override_config(conf):
+                        call()
+                        torch.cuda.synchronize()
+                        t = timing.time_kernel(
+                            call, warmup_ms=args.warmup,
+                            target_ms=args.cell_budget_ms, trials=args.trials,
+                            l2_flush=not args.no_l2_flush,
+                            reference_clock_mhz=reference_clock)
+                    sample = Sample(
+                        arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                        rows_per_expert=n * block_m, tokens=tokens,
+                        copies=copies, experts_declared=experts,
+                        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+                        iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
+                        instrument=t.instrument,
+                        sm_clock_load_mhz=t.sm_clock_load_mhz,
+                        clock_level_ok=t.clock_level_ok,
+                        # THE SIDE TRAVELS WITH THE VERDICT. A failed LEVEL
+                        # without it is refused at construction, because read
+                        # as LOW it would drop every boosted tread; NEITHER
+                        # side excludes here, DRIFT alone does.
+                        clock_level_side=t.clock_level_side,
+                        clock_drift_ok=t.clock_drift_ok,
+                        l2_flush=t.l2_flush)
+                    if t.clock_level_side:
+                        print(f"  ^ LEVEL {t.clock_level_side.upper()}: kept in "
+                              "every fit, side recorded; its fraction of the "
+                              "fixed roof is read beside the own-clock one")
+                except timing.TimingRefused:
+                    # THE INSTRUMENT'S OWN REFUSAL IS NOT ONE CELL'S ERROR.
+                    # Filed per cell, the arm walks its whole grid writing
+                    # zeroed rows and exits DONE.
+                    raise
+                except Exception as exc:                  # noqa: BLE001
+                    sample = Sample(
+                        arm=arm, repeat=rep, block_m=block_m, tiles=n,
+                        rows_per_expert=n * block_m, tokens=tokens,
+                        copies=copies, experts_declared=experts, ms_p50=0.0,
+                        status="failed",
+                        detail=f"{type(exc).__name__}: {exc}")
+                    print(f"  {arm} n={n} rep={rep} FAILED  {sample.detail}")
+                samples.append(sample)
+                store.append(sample, prov)
+                print(f"  rep{rep:2d} {arm:8s} n={n:3d} T={tokens:7d} "
+                      f"copies={copies:3d} E*={experts:5d} "
+                      f"{sample.ms_p50:9.4f} ms")
+    print(f"\nswept in {time.time() - started:.0f} s")
+
+    # THE PROOF IS LAST, and it zeroes buffers: nothing is timed after it.
+    tokens, x, ids, private_ids, weights, kw = inputs_for(deepest)
+    proof = prove_distinct_buffers(
+        lambda arm: call_for(arm, x, ids, private_ids, weights, kw, deepest),
+        w1, w2, cfg=cfg, copies=deepest, dtype=dtype)
+    return samples, proof, weight_delta, torch.cuda.max_memory_allocated()
+
+
+# --------------------------------------------------------------------------
+# Persistence and CLI.
+# --------------------------------------------------------------------------
+
+def detect_card_slug() -> str:
+    """Slug for the ATTACHED device, or `NO_CARD_SLUG`.
+
+    THE CARD IS A SWEPT PARAMETER, swept by the operator moving pods, and the
+    results root defaults to a network volume that outlives the pod. Without
+    the card in the run id the same command on two cards shares one directory,
+    the second finds every cell present and prints the first card's timings
+    under the second's heading.
+    """
+    try:
+        import torch
+    except ImportError:
+        return NO_CARD_SLUG
+    try:
+        if not torch.cuda.is_available():
+            return NO_CARD_SLUG
+        name = torch.cuda.get_device_name(0)
+    except Exception:                                     # noqa: BLE001
+        return NO_CARD_SLUG
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or NO_CARD_SLUG
+
+
+def git_visibility(path: Path) -> str:
+    """ASK GIT whether it would keep this path. Never assert it from memory.
+
+    rc 0 ignored, rc 1 kept, anything else UNVERIFIED and said so: rc 128 is
+    what `git check-ignore` returns for a path outside the work tree, which is
+    the pod default `/workspace/results/...`, and reporting that as tracked is
+    the failure this function exists to prevent.
+    """
+    try:
+        proc = subprocess.run(["git", "check-ignore", "-q", str(path)],
+                              cwd=str(HERE.parent), capture_output=True,
+                              timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"git check-ignore could not run ({exc}); path UNVERIFIED"
+    if proc.returncode == 0:
+        return ("IGNORED by git: nothing written here enters the repo, which is "
+                "the intended deal for a pod run.")
+    if proc.returncode == 1:
+        return "git WILL KEEP this path: anything written here is committable."
+    return (f"git check-ignore exited {proc.returncode}; path UNVERIFIED "
+            f"({proc.stderr.decode(errors='replace').strip()}). Common cause: "
+            "the path is outside this work tree, e.g. /workspace/results on a "
+            "pod, which git has no opinion about at all.")
+
+
+def default_run_id(args, card: str) -> str:
+    """Derived from every argument that changes a measured cell.
+
+    IN THE KEY: the card, the model, the dtype, the tile, the pinned tile
+    knobs, the ladder depth, the repeat count, and every TIMING knob
+    (`--warmup`, `--trials`, `--cell-budget-ms`, the L2 flush), because those
+    change the measured milliseconds and a resumed run keyed on
+    `(arm, tread, repeat)` would otherwise print one timing regime's numbers
+    under another's label.
+
+    OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`, `--seed` for the
+    bootstrap. They re-analyse one set of cells, and two analyses of one sweep
+    belong in one directory. `--device-memory-gb` is out for the same reason:
+    it gates a plan, it does not move a millisecond.
+
+    A SELF-TEST IS PREFIXED AND ITS WORLD IS IN THE KEY. A planted report
+    written into a metered run's directory would overwrite the only
+    machine-readable artefact of an arm that cost pod minutes, with a synthetic
+    one; the prefix and the world keep them apart, and `report.json` carries
+    `synthetic: true` besides.
+    """
+    swept = {
+        "model": args.model, "dtype": args.dtype, "bm": args.block_m,
+        "n": args.block_n, "g": args.group_m, "stages": args.num_stages,
+        "treads": args.treads, "reps": args.repeats,
+        "warmup": args.warmup, "budget": args.cell_budget_ms,
+        "trials": args.trials, "l2flush": not args.no_l2_flush,
+        "seed": args.seed,
+        # NEVER None: `provenance.run_id` refuses an unresolved knob, and it is
+        # right to. "measured" is a resolved value that says a real card was
+        # asked; a planted world is a different resolved value.
+        "planted": "measured" if args.self_test is None else args.self_test,
+        "plantnoise": args.plant_noise,
+    }
+    prefix = "synthetic-" if args.self_test is not None else ""
+    return prefix + PV.run_id(card=card, **swept)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(MODEL_CONFIGS),
+                    help="mixtral by default; see DESIGN DECISION 1 for why "
+                         "and not deepseek-v2-lite")
+    ap.add_argument("--dtype", default="bf16", choices=("bf16", "fp16"),
+                    help="float only: this arm allocates and copies whole "
+                         "weight sets and an fp8 path would quantise each copy "
+                         "separately")
+    ap.add_argument("--block-m", type=int, default=DEFAULT_BLOCK_M,
+                    help="the one tile height this run measures; in the run id")
+    ap.add_argument("--treads", type=int, default=DEFAULT_TREADS,
+                    help="ladder depth in M-tiles per expert; the deepest "
+                         "tread sets the memory bill at one copy per tile")
+    ap.add_argument("--repeats", type=int, default=DEFAULT_REPEATS,
+                    help="repeats of the whole ladder; the bootstrap resamples "
+                         "these")
+    ap.add_argument("--draws", type=int, default=DEFAULT_DRAWS,
+                    help="bootstrap draws for the interval on the ratio")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--block-n", type=int, default=SWEEP.FIXED["BLOCK_SIZE_N"])
+    ap.add_argument("--group-m", type=int, default=SWEEP.FIXED["GROUP_SIZE_M"])
+    ap.add_argument("--num-stages", type=int, default=SWEEP.FIXED["num_stages"])
+    ap.add_argument("--warmup", type=float, default=300.0,
+                    help="MILLISECONDS of delivered GPU load, not a call count")
+    ap.add_argument("--cell-budget-ms", type=float, default=200.0)
+    ap.add_argument("--trials", type=int, default=3)
+    ap.add_argument("--no-l2-flush", action="store_true")
+    ap.add_argument("--sm-count", type=int, default=0)
+    ap.add_argument("--capability", default="",
+                    help="compute capability for the off-GPU resource check, "
+                         "e.g. 9.0; read from the device when it is attached")
+    ap.add_argument("--ridge", type=float, default=0.0,
+                    help="operator's assertion; otherwise the attached card's "
+                         "own calibration")
+    ap.add_argument("--ridge-band", default="")
+    ap.add_argument("--bandwidth-gbps", type=float, default=0.0)
+    ap.add_argument("--device-memory-gb", type=float, default=0.0,
+                    help="a HYPOTHETICAL card's memory, for checking the plan "
+                         "off a GPU box. Ignored when a device is attached, "
+                         "which is asked instead")
+    ap.add_argument("--alpha", type=float, default=ALPHA,
+                    help="the refit the predictions are printed against; it "
+                         "scores nothing")
+    ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--run-id", default="")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print the plan, the predictions and the cost, and "
+                         "REFUSE: nothing is measured and no gate is scored")
+    ap.add_argument("--self-test", default=None, choices=sorted(WORLDS),
+                    help="score the gates against a planted world, off GPU")
+    ap.add_argument("--plant-noise", type=float, default=0.004,
+                    help="relative spread planted on every synthetic cell")
+    return ap
+
+
+def _device_memory(args) -> tuple[int | None, str]:
+    """`(free bytes, source)` for the memory check. The ATTACHED card first.
+
+    `--device-memory-gb` is a hypothetical and is labelled one; it is ignored
+    whenever a device answers, because a plan checked against a number the
+    operator typed while a real card sat underneath it is a plan checked
+    against nothing.
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            free, _total = torch.cuda.mem_get_info()
+            return int(free), "free on the attached device, asked of the driver"
+    except Exception:                                     # noqa: BLE001
+        pass
+    if args.device_memory_gb:
+        return (int(args.device_memory_gb * 1e9),
+                f"HYPOTHETICAL: --device-memory-gb {args.device_memory_gb} "
+                "names a card that is not attached")
+    return None, "no device and no --device-memory-gb"
+
+
+def _main(argv=None) -> int:
+    """The body, and the one place an exit code is chosen. `main` wraps it.
+
+    Every return is a member of `moe.bench.exit_codes`'s table: REFUSED (2)
+    before anything is measured, `--dry-run` included, because a plan scores no
+    gate; ERROR (4) for a planted world that came out other than registered;
+    and otherwise `classify` over the scored gates with NOTHING FOLDED. There
+    is deliberately no gate-softening flag: a CLAIM_FAIL is returned as 1,
+    which the ledger already reads as a finished result.
+    """
+    args = build_parser().parse_args(argv)
+    cfg = MODEL_CONFIGS[args.model]
+    b = dtype_bytes(args.dtype)
+    block_m = args.block_m
+    synthetic = args.self_test is not None
+
+    gap = partition_is_total()
+    if gap:
+        print(f"REFUSED: the OUTCOMES partition is broken: {gap}")
+        return exit_codes.REFUSED
+
+    # THE CONTROL IS PART OF THE DESIGN, SO ITS FEASIBILITY IS A PLAN-TIME
+    # REFUSAL. V6 reads the n=1 tread and a model that cannot form one has no
+    # such tread at any depth; finding that out after renting a pod costs the
+    # whole arm.
+    why = identity_tread_refusal(cfg, block_m)
+    if why:
+        print(f"REFUSED: {why}")
+        return exit_codes.REFUSED
+    try:
+        treads = ladder_treads(cfg, block_m, args.treads)
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    if len(treads) < MIN_TREADS:
+        print(f"REFUSED: --treads {args.treads} gives {len(treads)} tread(s) "
+              f"and a slope may not be quoted below {MIN_TREADS}: two points "
+              "make a line with no residual, so a two-tread fit cannot notice "
+              "that one of its points was wrong.")
+        return exit_codes.REFUSED
+
+    try:
+        rr = SWEEP.resolve_ridge(args, synthetic=synthetic or args.dry_run)
+    except SWEEP.RidgeUnavailable as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    ridge, ridge_source, ridge_device = rr.ridge, rr.source, rr.device
+    ridge_kind = getattr(rr, "source_kind", "")
+    bw = SWEEP.resolve_bandwidth(args, synthetic=synthetic or args.dry_run)
+    bandwidth, bw_source = bw.gbps, bw.detail
+
+    # THE SECOND RULER COMES OUT OF THE SAME FILE AS THE FIRST OR NOT AT ALL.
+    # The own-clock roof is `peak x load / reference`, so `reference` has to be
+    # the clock the peak in `ridge x bandwidth` was measured at, and that holds
+    # for exactly one of the three ways this run can get a ridge: the attached
+    # device's own calibration.
+    reference_mhz: float | None = None
+    reference_grade = ""
+    if synthetic or args.dry_run:
+        reference_source = ("no hardware is read in this mode, so there is no "
+                            "clock to scale a roof by")
+    elif ridge_kind != "calibration":
+        reference_source = (f"the ridge came from elsewhere "
+                            f"({ridge_kind or 'unstated'}), so this card's "
+                            "calibration clock does not describe the roof it "
+                            "states")
+    else:
+        rc = roofline.reference_clock(
+            ridge_device or None, family=roofline.reference_family(args.dtype))
+        reference_source, reference_grade = rc.source, rc.grade
+        if rc.usable_for_roof:
+            reference_mhz = rc.mhz
+        elif rc.mhz:
+            reference_source += (
+                f" [grade {rc.grade!r}, not the under-load median, so it is "
+                "recorded and NOT used to scale a roof]")
+
+    roof_tflops = ridge * bandwidth / 1e3
+    roof_source = (f"ridge {ridge:.2f} Op/B x bandwidth {bandwidth:.1f} GB/s; "
+                   f"ridge: {ridge_source}; bandwidth: {bw_source}")
+
+    tokens = {n: SWEEP.tokens_for_rows(cfg, n * block_m) for n in treads}
+    free_bytes, mem_source = _device_memory(args)
+    mem = memory_plan(cfg, args.dtype, b, treads[-1], tokens[treads[-1]],
+                      free_bytes, mem_source)
+
+    card = detect_card_slug()
+    pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
+                  GROUP_SIZE_M=args.group_m, BLOCK_SIZE_N=args.block_n)
+    run_id = args.run_id or default_run_id(args, card)
+    out_dir = (args.out or SWEEP.results_root()) / "private_weight_reference" / run_id
+    csv_path = out_dir / "cells.csv"
+    cache_root = out_dir / "triton-cache"
+
+    capability = SWEEP.resolve_capability(args, synthetic=synthetic or args.dry_run)
+    resources, refused = SWEEP.tile_resource_plan(pinned, (block_m,), b,
+                                                 capability)
+    stream_ms = WEIGHTS.weight_stream_ms(cfg, args.dtype, bandwidth)
+
+    header = plan_lines(cfg, args, block_m=block_m, treads=treads, b=b,
+                        bandwidth_gbps=bandwidth, bw_source=bw_source,
+                        out_dir=out_dir, pinned=pinned, run_id=run_id,
+                        resources=resources, card=card,
+                        git_note=git_visibility(out_dir), mem=mem,
+                        tokens=tokens, ridge=ridge, alpha=args.alpha)
+    header += prediction_lines(cfg, block_m=block_m, treads=treads,
+                               alpha=args.alpha, bandwidth_gbps=bandwidth,
+                               bw_source=bw_source, dtype=args.dtype,
+                               stream_ms=stream_ms, ridge=ridge,
+                               ridge_source=ridge_source)
+    print("\n".join(header))
+
+    if refused:
+        print("\nREFUSED: the pinned setting cannot physically run.")
+        for tile, reason in sorted(refused.items()):
+            print(f"  BLOCK_M={tile}: {reason}")
+        return exit_codes.REFUSED
+
+    # A DESIGN THAT CANNOT REPORT ITS OWN REGISTERED ALTERNATIVE IS REFUSED
+    # HERE, not measured and then voided on V4. The compute an M-tile does
+    # scales with the tile height and the weight traffic an extra M-tile costs
+    # does not, so the deepest tread that still sees traffic depends on the
+    # world, and the shallowest world this arm registers is the one that
+    # decides the depth.
+    short = depth_refusal(cfg, block_m=block_m, treads=len(treads), ridge=ridge,
+                          bandwidth_gbps=bandwidth, b=b)
+    if short:
+        print("\nREFUSED: this design cannot separate the worlds it registers.")
+        print("  " + short)
+        return exit_codes.REFUSED
+
+    # A PLAN THAT WILL NOT FIT IS A REFUSAL AND NOT A WARNING. The deepest
+    # tread holds `n` complete copies of the weight set, and an allocation
+    # that fails halfway through a metered run costs the arm.
+    if mem.fits is False:
+        print("\nREFUSED: the private weight copies do not fit this card.")
+        print(f"  predicted peak {mem.predicted_peak_bytes / 1e9:.2f} GB "
+              f"against {mem.headroom:.0%} of "
+              f"{mem.device_free_bytes / 1e9:.2f} GB "
+              f"({mem.device_source})")
+        print(f"  lower --treads (the bill is one copy per tread: "
+              f"{mem.per_copy_bytes / 1e9:.4f} GB each), or run a model with a "
+              "smaller routed expert weight set")
+        return exit_codes.REFUSED
+
+    if args.dry_run:
+        secs = estimated_seconds(cfg, treads=treads, block_m=block_m,
+                                 repeats=args.repeats, alpha=args.alpha,
+                                 ridge=ridge, bandwidth_gbps=bandwidth, b=b,
+                                 warmup_ms=args.warmup, trials=args.trials,
+                                 cell_budget_ms=args.cell_budget_ms)
+        print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
+              "excluding compiles and allocation")
+        print("NOT IN THAT FIGURE: the Triton compiles, and the private weight "
+              f"build, which copies {mem.weight_bytes / 1e9:.2f} GB "
+              "device-to-device once, and the five-part buffer proof's four "
+              "extra fused_experts calls at the deepest tread.")
+        # REFUSED (2) AND NOT DONE (0). A dry run scores no gate, prints no
+        # RESULT line, and `exit_codes.classify_text` over this log raises
+        # `NoGatesScored`, which that module documents as what a REFUSED log
+        # looks like from there. DONE says "measured; every gate PASSED", and
+        # this run measured nothing.
+        print("\n".join(["", "=" * 72,
+                         "REFUSED. Nothing was measured and nothing was "
+                         "written.",
+                         "  reason: --dry-run was given",
+                         "  Everything above is arithmetic over this repo's "
+                         "calibration, moe/spec.py's",
+                         "  geometry and vLLM's resource model. No gate was "
+                         "scored, so no RESULT line",
+                         "  was printed and none of it is a result. Run "
+                         "--self-test <world> for the",
+                         "  planted worlds, or the bare command on the pod.",
+                         "=" * 72]))
+        return exit_codes.REFUSED
+
+    if not synthetic:
+        missing = SWEEP.missing_gpu_stack()
+        if missing:
+            print("\n" + missing)
+            return exit_codes.REFUSED
+
+    prov = PV.provenance_block(
+        instrument=(SYNTHETIC_INSTRUMENT if synthetic else timing_basis()),
+        ridge=ridge, ridge_source=ridge_source,
+        bandwidth=bandwidth, bandwidth_source=bw_source,
+        warmup_ms=args.warmup, iters=None, target_ms=args.cell_budget_ms)
+
+    if synthetic:
+        world = WORLDS[args.self_test]
+        samples = planted_samples(
+            world, cfg, block_m=block_m, treads=treads, repeats=args.repeats,
+            alpha_shared=world.alpha, ridge=ridge, bandwidth_gbps=bandwidth,
+            b=b, noise=args.plant_noise, seed=args.seed)
+        proof = planted_proof(world.proof_ok)
+        weight_delta = int(mem.weight_bytes * world.weight_alloc_factor)
+        high_water = int(mem.predicted_peak_bytes * world.high_water_factor)
+        roof_tflops *= world.roof_factor
+        roof_source += f"; PLANTED x {world.roof_factor} by --self-test"
+        print(f"\nSELF TEST: cells GENERATED from the study's traffic model in "
+              f"the {world.name!r} world at a planted spread of "
+              f"{args.plant_noise:.2%}. Nothing here was measured.")
+        print("The gates below are being run against a world we constructed, "
+              "which tests the gates and not the hardware.")
+        print(f"  registered world: {world.why}")
+    else:
+        world = None
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            store = Store(csv_path, CSV_FIELDS + PROVENANCE_COLUMNS)
+        except SchemaCollision as exc:
+            print(f"\nREFUSED: {exc}")
+            return exit_codes.REFUSED
+        samples, proof, weight_delta, high_water = run_sweep(
+            args, cfg, block_m=block_m, treads=treads, pinned=pinned,
+            csv_path=csv_path, cache_root=cache_root, store=store, prov=prov,
+            dtype=args.dtype)
+
+    report = analyse(
+        samples, cfg, block_m=block_m, treads=treads, repeats=args.repeats,
+        alpha=args.alpha, dtype=args.dtype, b=b, bandwidth_gbps=bandwidth,
+        bandwidth_source=bw_source, ridge=ridge, ridge_source=ridge_source,
+        roof_tflops=roof_tflops, roof_source=roof_source,
+        reference_mhz=reference_mhz, reference_grade=reference_grade,
+        reference_source=reference_source, mem=mem, proof=proof,
+        weight_delta_bytes=weight_delta, high_water_bytes=high_water,
+        draws=args.draws, seed=args.seed, header=header, card=card,
+        synthetic=synthetic, model_name=args.model, pinned=pinned,
+        prov=_observed_iters(prov, samples))
+
+    print("\n".join(report.lines[len(header):]))
+    print(_iters_line(samples))
+    if not synthetic:
+        (out_dir / "report.txt").write_text(report.text())
+        (out_dir / "report.json").write_text(json.dumps(report.payload, indent=2))
+        print(f"cells    {csv_path}")
+        print(f"report   {out_dir / 'report.txt'}")
+        print(f"json     {out_dir / 'report.json'}")
+
+    # THE PLANTED WORLD IS CHECKED AGAINST ITS REGISTRATION, and a mismatch is
+    # ERROR rather than any code in the gate table. A self-test that came out
+    # differently from the world it planted has not produced a result about
+    # anything -- the apparatus is broken -- and INVALID or CLAIM_FAIL would
+    # both invite a reader to interpret it.
+    if world is not None:
+        bad = world.check(report)
+        for line in bad:
+            print(f"SELF-TEST MISMATCH  {line}")
+        if bad:
+            print(f"the planted world {world.name!r} did not return its "
+                  f"registered verdicts ({len(bad)} of {len(world.expect)} "
+                  "gates). This is a defect in the gates or in the model that "
+                  "generates the cells, not a finding about hardware; nothing "
+                  "here may be read as a result.")
+            return exit_codes.ERROR
+        print(f"SELF-TEST OK  all {len(world.expect)} registered verdicts in "
+              f"the {world.name!r} world came back as registered")
+
+    rc = exit_codes.classify(g.scored() for g in report.gates)
+    print(f"exit     {exit_codes.describe(rc)}")
+    if rc == exit_codes.CLAIM_FAIL:
+        print("         a claim that did not pass is a RESULT and the arm is "
+              "FINISHED, not broken.")
+    return rc
+
+
+def _observed_iters(prov, samples):
+    """The provenance block with the iteration count the cells were actually
+    timed at. Nothing timed means nothing recorded: a planted world carries
+    iters=0 on every row, so there is no median to take and the block keeps its
+    None and its reason."""
+    counts = sorted(s.iters for s in samples if s.usable and s.iters > 0)
+    if not counts:
+        return prov
+    missing = {k: v for k, v in prov.missing.items() if k != "iters"}
+    return replace(prov, iters=int(statistics.median(counts)), missing=missing)
+
+
+def _iters_line(samples) -> str:
+    counts = sorted(s.iters for s in samples if s.usable and s.iters > 0)
+    if not counts:
+        return ("iterations per trial: none recorded (nothing was timed; a "
+                "planted world's cells carry iters=0)")
+    return (f"iterations per trial: median {int(statistics.median(counts))} "
+            f"over {len(counts)} timed cells, range {counts[0]}-{counts[-1]}. "
+            "Sized per cell by the instrument from --cell-budget-ms.")
+
+
+def main(argv=None) -> int:
+    """AN UNPLANNED CRASH IS ERROR (4), which is the only retryable code.
+
+    Left to propagate, an unexpected exception exits the interpreter ONE, and
+    ONE is CLAIM_FAIL, which the shared table defines as a RESULT: the driver
+    would file the arm as finished, skip it on every resume and exit the
+    session 0 over an arm that never measured. A torch OOM, a truncated report
+    or a drifted import would be published as one of this experiment's
+    registered outcomes.
+
+    A REFUSAL FROM THE INSTRUMENT IS NOT A CRASH. `timing.TimingRefused` is
+    re-raised by the sweep rather than filed per cell, and it is REFUSED (2)
+    with the remedy in its message, not ERROR (4).
+    """
+    try:
+        return _main(argv)
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return exit_codes.REFUSED
+    except SystemExit as exc:
+        # `SWEEP.resolve_bandwidth` refuses through a `SystemExit` carrying
+        # `code = REFUSED`, and `ladder_rows`-style refusals in the sibling do
+        # the same with a string. A string payload is a refusal with its remedy
+        # in the message, not an exit code.
+        if isinstance(exc.code, str):
+            print(f"REFUSED: {exc.code}", file=sys.stderr)
+            return exit_codes.REFUSED
+        return int(exc.code or 0)
+    except Exception as exc:                              # noqa: BLE001
+        try:
+            from moe.bench import timing
+            refused = isinstance(exc, timing.TimingRefused)
+        except ImportError:
+            refused = False
+        if refused:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return exit_codes.REFUSED
+        traceback.print_exc()
+        print("ERROR: private_weight_reference crashed before it could reach a "
+              "verdict. This is the apparatus failing, not a claim failing, so "
+              f"it exits {exit_codes.ERROR} and not {exit_codes.CLAIM_FAIL}: "
+              "the traceback above is the thing to fix, and the arm may be "
+              "re-run.", file=sys.stderr)
+        return exit_codes.ERROR
+
+
+if __name__ == "__main__":
+    sys.exit(main())
