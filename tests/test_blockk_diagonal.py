@@ -910,3 +910,35 @@ def test_an_absent_card_may_be_named_and_a_present_one_may_not_be_contradicted(
     assert rc == exit_codes.REFUSED, "a dry run refuses AFTER printing its plan"
     assert "may never contradict" not in out
     assert "run id      nvidia_h200-" in out
+
+
+def test_the_report_never_prints_a_w_without_the_rate_it_was_divided_by(bk,
+                                                                        capsys):
+    """w scales exactly 1:1 in the rate, so a w whose rate is not on the page
+    is not a measurement. The block states it once while there IS one rate and
+    falls back to the per-cell form the moment there is not."""
+    bk.main(["--self-test", "depth", "--capability", "9.0", "--num-warps", "4"])
+    out = capsys.readouterr().out
+    block = out.split("PER CELL, w =", 1)[1].split("\nCLOCK:", 1)[0]
+    assert "GB/s" in block and "one stream is" in block
+    for cell in bk.parse_cells(bk.DEFAULT_CELLS):
+        assert f"  {cell.key:8s} w " in block, cell.key
+    # And the fallback exists rather than being a comment about one.
+    tree = ast.parse(SCRIPT.read_text())
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                and n.name == "report_lines")
+    body = ast.unparse(node)
+    assert "fit.w.render()" in body and "if one_rate else" in body
+
+
+def test_v1_says_what_its_read_back_cannot_see(bk):
+    """The two members of a pair have EQUAL shared memory by construction, so
+    `metadata.shared` cannot tell them apart. A gate whose limitation is left
+    to be noticed is the stale-prose half of this project's recurring defect,
+    so it is on the gate's own lines and in its docstring."""
+    gate = bk.gate_geometry({"3x64": 4, "6x32": 4}, {"3x64": 8, "6x32": 8},
+                            {"3x64": {"shared": 49152},
+                             "6x32": {"shared": 24576}})
+    assert any("cannot tell them apart" in line for line in gate.lines)
+    assert "pin_probe" in " ".join(gate.lines)
+    assert "cannot tell (6,32) from (3,64)" in bk.gate_geometry.__doc__

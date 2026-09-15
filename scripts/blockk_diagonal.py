@@ -1483,7 +1483,19 @@ def gate_geometry(compiles: dict[str, int], executed: dict[str, int],
     (so a distinct kernel was built for it), and where the compiled kernel's
     metadata could be read at all its shared memory differs across cells that
     differ in `stages x BLOCK_K` -- which is the one thing a shared kernel
-    could not produce.
+    could not produce. The PER-CELL agreement between the read-back and the
+    model is V2's; this gate asks only that the grid is not one kernel.
+
+    WHAT THE READ-BACK CANNOT SEE, AND IT IS SAID HERE RATHER THAN LEFT TO BE
+    NOTICED. The two members of a registered pair have EQUAL shared memory by
+    construction -- that is what makes them a pair -- so `metadata.shared`
+    cannot tell (6,32) from (3,64). If `override_config` delivered the wrong
+    member of a pair, this gate and V2 would both pass. The probe this arm
+    borrows records `shared`, `n_regs` and `n_spills` and not `num_stages`, so
+    nothing here closes that; what does is upstream in the session, where the
+    two `pin_probe` arms establish that the override reaches the kernel at all
+    before any arm that pins a tile is run. An arm run outside that session is
+    resting on the context manager's word.
     """
     silent = sorted(k for k, n in executed.items() if n > 0
                     and compiles.get(k, 0) <= 0)
@@ -1493,7 +1505,10 @@ def gate_geometry(compiles: dict[str, int], executed: dict[str, int],
              + ", ".join(f"{k}={compiles.get(k, 0)}" for k in sorted(executed)),
              "compiled shared memory per cell: "
              + (", ".join(f"{k}={v}" for k, v in sorted(smems.items()))
-                if smems else "NOT READ on this platform")]
+                if smems else "NOT READ on this platform"),
+             "the two members of a registered pair have EQUAL shared memory by "
+             "construction, so this read-back cannot tell them apart; the pin "
+             "itself is what the session's pin_probe arms establish"]
     if silent:
         return Gate(VALIDITY, "V1 geometry", "every cell ran its own kernel",
                     "at least one new Triton entry per timed cell",
@@ -2310,11 +2325,31 @@ def report_lines(analysis: Analysis) -> list[str]:
         out.append("  no three-parameter fit was formed")
     out += ["", "THE REGISTERED ISO-SHARED-MEMORY PAIRS, model-free:"]
     out += [p.line() for p in analysis.pairs] or ["  none formed"]
-    out += ["", "PER CELL:"]
+    # THE RATE IS STATED ONCE FOR THE BLOCK, AND ONLY WHILE IT IS ONE RATE.
+    # `WeightStreamSlope.render()` keeps the number and the rate on one line
+    # because a w quoted without the rate it was divided by is not a
+    # measurement -- w scales exactly 1:1 in it. One run has one bandwidth, so
+    # repeating a 250-character provenance sentence at all eight cells buries
+    # the eight numbers the page is about. The header below carries it once,
+    # and the moment the fits do NOT agree on a rate this falls back to
+    # `render()` per cell rather than printing a heading that is true of some
+    # of the rows.
+    rates = {(f.w.bandwidth_gbps, f.w.bandwidth_source)
+             for f in analysis.fits.values()}
+    one_rate = rates.pop() if len(rates) == 1 else None
+    out += ["", "PER CELL, w = ms per extra M-tile / ms per complete stream of "
+            "the routed expert weight set:"]
+    if one_rate:
+        first = next(iter(analysis.fits.values()))
+        out.append(f"  all at {one_rate[0]:.1f} GB/s ({one_rate[1]}); one "
+                   f"stream is {first.w.stream_ms:.4f} ms of "
+                   f"{first.w.weight_bytes / 1e9:.4f} GB, {first.w.model} "
+                   f"{first.w.dtype}")
     for key in sorted(analysis.fits):
         fit = analysis.fits[key]
         res = analysis.residencies.get(key)
-        out.append(f"  {key:8s} {fit.w.render()}")
+        out.append(f"  {key:8s} w {fit.streams:8.4f}"
+                   if one_rate else f"  {key:8s} {fit.w.render()}")
         out.append(f"           {res.line() if res else 'residency NOT COMPUTED'}")
     out += ["", "CLOCK:"] + clock_state_lines(analysis.clock)
     out.append(f"  rule: {analysis.clock['rule']}")
@@ -2719,6 +2754,22 @@ def _main(argv=None) -> int:                                    # noqa: C901
         f"estimate     {secs:.0f} s of GPU at what the instrument charges "
         "(warmup + trials x budget per timing), excluding compiles and "
         "allocation",
+        "not priced   the two terms that figure leaves out, with what is known "
+        "about each rather than a shrug. COMPILES: at most "
+        f"{len(cells)} x {args.treads} = {len(cells) * args.treads} distinct "
+        "Triton specialisations, and probably "
+        f"{len(cells)} -- the kernel's constexprs are the tile, and every "
+        "token count on this ladder is a multiple of 16, so the "
+        "divisibility-by-16 specialisation key does not move across the "
+        "treads. The COMPILE CENSUS pays the first one per cell before the "
+        "metered loop and prints the count it actually built. ALLOCATION: the "
+        "expert weight set is drawn ONCE, not once per tread -- "
+        "moe.reference.torch_ref.make_inputs caches it on "
+        "(model, dtype, seed, device, scale), which this arm never moves -- so "
+        f"the {len(cells) * args.treads * args.reps} rebuilds redraw only the "
+        f"activations, at most "
+        f"{cfg.hidden_size * SWEEP.tokens_for_rows(cfg, rows[-1]) * b / 1e6:.0f}"
+        " MB each.",
         f"card         {limits.line()}",
         f"card slug    {card}" + ("" if detected else
                                   "  (NO DEVICE: this id is the off-GPU one "
