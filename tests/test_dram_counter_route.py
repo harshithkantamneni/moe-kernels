@@ -23,6 +23,7 @@ import pytest
 import yaml
 
 import scripts.dram_counter_route as DCR
+from moe.bench import counter_probe_kernel as PK
 from moe.bench import exit_codes
 from moe.bench import provenance as PV
 from moe.spec import MODEL_CONFIGS
@@ -65,12 +66,14 @@ from scripts.dram_counter_route import (
     contrast_rows,
     corpus_knobs,
     corpus_slope,
+    counter_route_is_open,
     discrimination,
     git_visibility,
     main,
     measured_bandwidth_gbps,
     measured_dr_dn,
     measured_ridge,
+    ncu_argv,
     normalise_per_call,
     occupancy_block_n,
     ols,
@@ -80,6 +83,7 @@ from scripts.dram_counter_route import (
     plan_id,
     predicted_read_bytes,
     probe_capabilities,
+    probe_kernel_word,
     route_verdict,
     run_id_for,
     score_counter_run,
@@ -419,23 +423,52 @@ def test_probe_capabilities_never_guesses():
         assert "sys_admin" not in caps
 
 
+def test_probe_capabilities_reads_both_counter_bits():
+    """CAP_PERFMON as well as CAP_SYS_ADMIN, because either opens the gate.
+
+    Until 2026-09-15 only bit 21 was read, so a container holding the weaker
+    capability that would have sufficed was reported identically to one holding
+    nothing, and the operator was sent to ask for the capability providers
+    refuse. The mask WIDTH is recorded beside the bits for the same reason: the
+    published `0xa80425fb` is 32 bits and cannot carry bit 38 at all.
+    """
+    caps = probe_capabilities()
+    if caps["available"]:
+        assert set(caps) == {"available", "cap_eff", "cap_eff_bits",
+                             "sys_admin", "perfmon"}
+        assert caps["cap_eff_bits"] == 4 * len(caps["cap_eff"]) - 8
+    else:
+        assert "perfmon" not in caps
+
+
 def test_route_verdict_distinguishes_the_four_failures():
-    open_ = route_verdict({}, {}, {"present": True, "cause": "attached with no permission error"},
+    open_ = route_verdict({}, {}, {"present": True, "counters_read": True,
+                                   "metric": NCU_METRICS[0], "metric_value": 4.19e6,
+                                   "cause": "counters readable: ..."},
                           {"present": True, "importer_present": True})
     assert open_[0] == "OPEN"
 
-    blocked_cap = route_verdict({"available": True, "sys_admin": False},
+    blocked_cap = route_verdict({"available": True, "sys_admin": False, "perfmon": False,
+                                 "cap_eff": "0xa80425fb", "cap_eff_bits": 32},
                                 {"available": True, "restrict": 1},
-                                {"present": True, "cause": "ERR_NVGPUCTRPERM: counters gated"},
+                                {"present": True, "counters_read": False,
+                                 "permission_refused": True,
+                                 "cause": "ERR_NVGPUCTRPERM: counters gated"},
                                 {"present": True, "importer_present": True})
     assert blocked_cap[0] == "BLOCKED"
-    assert any("SYS_ADMIN" in n for n in blocked_cap[1])
+    assert any("SYS_ADMIN" in n and "PERFMON" in n for n in blocked_cap[1])
     assert any("RestrictProfilingToAdminUsers=1" in n for n in blocked_cap[1])
+    # The narrower ask is named first, because it is the one a provider grants.
+    ask = next(n for n in blocked_cap[1] if "PERFMON" in n and "SYS_ADMIN" in n)
+    assert ask.index("--cap-add=PERFMON") < ask.index("--cap-add=SYS_ADMIN")
+    assert any("32 bits wide" in n for n in blocked_cap[1])
 
     # The combination that means "stop retrying and read the output".
-    odd = route_verdict({"available": True, "sys_admin": False},
+    odd = route_verdict({"available": True, "sys_admin": False, "perfmon": True},
                         {"available": True, "restrict": 0},
-                        {"present": True, "cause": "ERR_NVGPUCTRPERM: counters gated"},
+                        {"present": True, "counters_read": False,
+                         "permission_refused": True,
+                         "cause": "ERR_NVGPUCTRPERM: counters gated"},
                         {"present": True, "importer_present": True})
     assert odd[0] == "BLOCKED"
     assert any("ALREADY allows" in n for n in odd[1])
@@ -445,6 +478,255 @@ def test_route_verdict_distinguishes_the_four_failures():
                              {"present": True, "importer_present": False})
     assert importer[0] == "REFUSE"
     assert any("its importer" in n for n in importer[1])
+
+
+def test_a_box_with_no_cuda_device_refuses_and_does_not_report_blocked():
+    """"We could not ask" is not "the answer is no".
+
+    BLOCKED is CLAIM_FAIL, which the ledger files as a FINDING and never
+    retries. A box where the probe interpreter could not launch a kernel has
+    established nothing about counter permission, so it must land in REFUSE,
+    which scores no gate at all.
+    """
+    for word in (PK.NO_TORCH, PK.NO_CUDA_DEVICE, PK.LAUNCH_FAILED, "NO_MARKER"):
+        verdict, notes = route_verdict(
+            {"available": True, "sys_admin": False, "perfmon": False},
+            {"available": False, "why": "no params file"},
+            {"present": True, "counters_read": False, "probe_kernel": word,
+             "probe_kernel_detail": "planted",
+             "cause": "no CUDA device at all: planted"},
+            {"present": True, "importer_present": True})
+        assert verdict == REFUSE, word
+        assert any("UNTESTED" in n for n in notes), word
+
+
+# --------------------------------------------------------------------------
+# The probe kernel, and the /bin/true defect it replaces.
+# --------------------------------------------------------------------------
+
+def _code_strings(text: str) -> set[str]:
+    """Every string constant this module EXECUTES, docstrings excluded."""
+    import ast
+    tree = ast.parse(text)
+    docstrings = {id(node.value) for node in ast.walk(tree)
+                  if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+                  and isinstance(node.value.value, str)}
+    return {node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in docstrings}
+
+
+def _plant_ncu(monkeypatch, *, log: str, stdout: str = "", rc: int = 0):
+    """Stand in for one `ncu` invocation: write `log` where --log-file says."""
+    import scripts.dram_counter_route as DCR
+    monkeypatch.setattr(DCR.shutil, "which", lambda name: f"/usr/bin/{name}-stub")
+    seen: list[list[str]] = []
+
+    def fake_run(argv, timeout=60):
+        del timeout
+        seen.append(list(argv))
+        if "--version" in argv:
+            return 0, "ncu 2025.1.1.0\n", ""
+        Path(argv[argv.index("--log-file") + 1]).write_text(log)
+        return rc, stdout, ""
+
+    monkeypatch.setattr(DCR, "_run", fake_run)
+    return seen
+
+
+def test_the_probe_profiles_a_real_kernel_and_bin_true_is_gone(monkeypatch):
+    """THE DEFECT, pinned in the shape a grep cannot drift past.
+
+    `ncu --metrics <m> /bin/true` launches no CUDA kernel, so the permission
+    check never happens and ncu exits 0 having read nothing. The probe must run
+    a real file on disk that launches a kernel, and `/bin/true` must not survive
+    as an executable string anywhere in this script.
+
+    PARSED, NOT GREPPED. The prose in this file names `/bin/true` on purpose --
+    it is the incident this probe was rewritten against, and a test that
+    forbade the word would forbid recording why. So the check is over the
+    module's string CONSTANTS with its docstrings removed: a comment or a
+    docstring may say it, code may not.
+    """
+    import scripts.dram_counter_route as DCR
+    assert "/bin/true" not in _code_strings(Path(DCR.__file__).read_text())
+    seen = _plant_ncu(monkeypatch, log=canned_ncu_csv(
+        calls=1, read_per_call=4.19e6, write_per_call=4.19e6,
+        hit_pct=1.0, ns_per_call=1e5))
+    info = DCR.probe_ncu()
+    argv = next(a for a in seen if "--version" not in a)
+    assert argv[-1] == str(DCR.NCU_PROBE_KERNEL)
+    assert Path(argv[-1]).exists(), "the probe kernel is a real file on disk"
+    assert argv[-2] == DCR.sys.executable
+    assert "--launch-count" in argv and argv[argv.index("--launch-count") + 1] == "1"
+    assert "--csv" in argv and "--page" in argv and "raw" in argv
+    assert info["counters_read"] is True
+
+
+def test_the_probe_reports_open_only_when_a_number_came_back(monkeypatch):
+    """A NUMBER, not a positive one.
+
+    The question is whether the driver let ncu report the counter, and a
+    counter that honestly reads 0 for a launch has been reported. Requiring a
+    positive value would make the verdict depend on which launch ncu picked,
+    which is the kind of coupling that put `/bin/true` in here.
+    """
+    log = canned_ncu_csv(calls=1, read_per_call=4.19e6, write_per_call=1.0,
+                         hit_pct=2.0, ns_per_call=1e5)
+    _plant_ncu(monkeypatch, log=log, stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    import scripts.dram_counter_route as DCR
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is True
+    assert info["metric"] == NCU_METRICS[0]
+    assert isinstance(info["metric_value"], float)
+    assert info["cause"].startswith("counters readable")
+    assert counter_route_is_open(info)
+
+
+def test_a_metric_ncu_refused_to_supply_is_not_a_readable_counter(monkeypatch):
+    """`n/a` is the shape of a counter the replay could not supply. It must not
+    read as 0.0 and it must not read as OPEN: the whole parser exists because a
+    zero that was never measured fits every gate downstream."""
+    import scripts.dram_counter_route as DCR
+    log = ('"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
+           '"0","probe","dram__bytes_read.sum","byte","n/a"\n')
+    _plant_ncu(monkeypatch, log=log,
+               stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert info["metric_value"] is None
+    assert "no readable dram__bytes_read.sum" in info["cause"]
+
+
+def test_the_2026_09_published_probe_shape_is_no_longer_open(monkeypatch):
+    """The exact payload both published sessions carried, replayed.
+
+    `results/published/2026-09-*-nvidia_h200-gaps-session/session/counter_route.json`
+    records `returncode 0`, `output_head "==WARNING== No kernels were
+    profiled."` and `cause "attached with no permission error"`, and the
+    session booked four pod-hours on that word. The same bytes must now come
+    back not-open.
+    """
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, log="==WARNING== No kernels were profiled.\n", rc=0)
+    info = DCR.probe_ncu()
+    assert info["returncode"] == 0
+    assert info["counters_read"] is False
+    assert not counter_route_is_open(info)
+    assert route_verdict({}, {}, info, {"present": True, "importer_present": True})[0] \
+        == REFUSE
+
+
+def test_a_launched_kernel_that_ncu_did_not_profile_is_not_open(monkeypatch):
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, log="==WARNING== No kernels were profiled.\n",
+               stdout=f"{PK.MARKER} {PK.LAUNCHED} H200: one add_")
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert "profiled NO kernels" in info["cause"]
+
+
+def test_err_nvgpuctrperm_is_reported_as_a_fact_about_the_pod(monkeypatch):
+    """It is a measured refusal, not a broken instrument.
+
+    The log ncu wrote on the 2026-09-15 pod, verbatim in shape: it connected,
+    it refused the counter, and the application returned an error code. That is
+    a CLAIM refuted by the box, which the shared table files as finished.
+    """
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, rc=1, log=(
+        "==PROF== Connected to process 5183 (/usr/bin/python3.12)\n"
+        "==ERROR== ERR_NVGPUCTRPERM - The user does not have permission to access "
+        "NVIDIA GPU Performance Counters on the target device 0.\n"
+        "==PROF== Disconnected from process 5183\n"
+        "==ERROR== The application returned an error code (1).\n"))
+    info = DCR.probe_ncu()
+    assert info["counters_read"] is False
+    assert "fact about the pod" in info["cause"]
+    verdict, _ = route_verdict({"available": True, "sys_admin": False, "perfmon": False},
+                               {"available": True, "restrict": 1}, info,
+                               {"present": True, "importer_present": True})
+    assert verdict == "BLOCKED"
+
+
+def test_a_box_with_no_cuda_device_says_so_and_claims_nothing(monkeypatch):
+    import scripts.dram_counter_route as DCR
+    _plant_ncu(monkeypatch, rc=1, log="==WARNING== No kernels were profiled.\n",
+               stdout=f"{PK.MARKER} {PK.NO_CUDA_DEVICE} torch.cuda.is_available() is False")
+    info = DCR.probe_ncu()
+    assert info["probe_kernel"] == PK.NO_CUDA_DEVICE
+    assert info["counters_read"] is False
+    assert "no CUDA device at all" in info["cause"]
+    assert "NOTHING about counter permission" in info["cause"]
+
+
+def test_one_predicate_decides_the_route_and_both_call_sites_call_it():
+    """Rule 3, as a test. The route-open rule was `cause.startswith("attached")`
+    written out twice, in `route_verdict` and in `do_run`'s pre-flight, so the
+    probe's verdict and the runner's gate were one rule at two sites. Both now
+    call `counter_route_is_open` and the prose test is gone from the file.
+    """
+    import ast
+
+    import scripts.dram_counter_route as DCR
+    text = Path(DCR.__file__).read_text()
+    # The retired rule was `cause.startswith("attached")`. The needle is the
+    # string constant, taken out of the parsed module, because the docstring
+    # that records the retirement quotes the whole expression.
+    assert "attached" not in _code_strings(text)
+    tree = ast.parse(text)
+    callers = {fn.name for fn in ast.walk(tree)
+               if isinstance(fn, ast.FunctionDef)
+               and any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                       and n.func.id == "counter_route_is_open"
+                       for n in ast.walk(fn))}
+    assert {"route_verdict", "do_run"} <= callers, callers
+
+
+def test_the_probe_kernel_module_names_its_four_worlds_and_only_one_passes():
+    assert set(PK.WORDS) == {PK.LAUNCHED, PK.NO_TORCH, PK.NO_CUDA_DEVICE,
+                             PK.LAUNCH_FAILED}
+    assert len(PK.WORDS) == len(set(PK.WORDS))
+    for word in PK.WORDS:
+        assert probe_kernel_word(f"{PK.MARKER} {word} detail here") == (word, "detail here")
+    # An unknown word is not silently accepted as a launch.
+    assert probe_kernel_word(f"{PK.MARKER} SOMETHING_ELSE x") == ("", "")
+    assert probe_kernel_word("no marker anywhere") == ("", "")
+
+
+def test_the_probe_kernel_never_raises_and_only_launched_exits_zero(capsys):
+    """It runs on whatever the pod has, including a box with no card.
+
+    A probe that throws on a machine with no CUDA turns "no device here" into a
+    traceback, which `exit_codes` reads as CLAIM_FAIL -- a refuted claim about
+    counters, from a box that was never asked. This laptop has no CUDA device,
+    so the assertion is on the CONTRACT and not on which word comes back.
+    """
+    word, detail = PK.probe()
+    assert word in PK.WORDS
+    assert isinstance(detail, str) and detail
+    rc = PK.main()
+    printed = capsys.readouterr().out.strip()
+    assert printed.startswith(f"{PK.MARKER} {word}")
+    assert probe_kernel_word(printed) == (word, detail)
+    assert (rc == 0) == (word == PK.LAUNCHED)
+
+
+def test_the_parse_refusals_do_not_prescribe_flags_ncu_argv_already_passes():
+    """R1's advice reached an operator and sent them nowhere.
+
+    `parse_ncu_csv`'s refusals told the reader to "Profile with --csv --page
+    raw", which `ncu_argv` already does, and R1 is the one line of this file's
+    output that a human on a pod reads.
+    """
+    import scripts.dram_counter_route as DCR
+    argv = ncu_argv("ncu", "all", Path("/tmp/x.csv"))
+    assert "--csv" in argv and "--page" in argv and "--log-file" in argv
+    for bad in ("--csv --page raw and read the log file",
+                "Profile with --csv --page raw, which emits the column"):
+        assert not any(bad in s for s in _code_strings(Path(DCR.__file__).read_text()))
+    with pytest.raises(CounterRunRefused, match="NOT A FLAG PROBLEM"):
+        parse_ncu_csv("nothing that looks like a header at all\n")
 
 
 # --------------------------------------------------------------------------
@@ -1124,7 +1406,7 @@ def test_run_refuses_before_touching_the_gpu(capsys):
     assert "needs --out" in capsys.readouterr().out
     assert main(["--run", "--out", "/tmp/nothing-will-be-written.json"]) == \
         exit_codes.REFUSED
-    assert "no open counter route" in capsys.readouterr().out
+    assert "no counter could be read" in capsys.readouterr().out
     assert not Path("/tmp/nothing-will-be-written.json").exists()
 
 

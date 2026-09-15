@@ -282,13 +282,29 @@ That closes the loose end STUDY item 3 left open on 2026-08-27 ("confirm the
 instruction actually switched by re-running check_mma_path.sh under the
 override").
 
-### The DRAM counter route is OPEN on this box
+### RETRACTED: the DRAM counter route was never read open on this box
 
-`dram_counter_route.py --probe`, DONE: ncu 2025.1.1 attached with no permission
-error on this RunPod H200 (nsys is absent). The `dram__bytes_read.sum` plan
-over the alpha-surface cell can be booked, which is the only route to
-`alpha_b` as a number rather than as an interval. Every previous rented pod
-refused the counter. **This paragraph said "the 15-minute plan" until
+**Retracted 2026-09-15.** This section read "The DRAM counter route is OPEN on
+this box", on the strength of `dram_counter_route.py --probe` reading DONE with
+ncu 2025.1.1 "attached with no permission error" on this RunPod H200.
+The 2026-09-09 and 2026-09-10 readings came from a probe that ran `ncu
+--metrics dram__bytes_read.sum /bin/true`. `/bin/true` launches no CUDA
+kernel, so ncu attached, found nothing to profile and exited 0 WITHOUT EVER
+ATTEMPTING A COUNTER READ: the permission error cannot appear on that path,
+and both published payloads carry ncu's own `==WARNING== No kernels were
+profiled.` in the field the probe captured and never read. On 2026-09-15 a
+rented H200 booked two 120-minute arms on that word and both died in 35
+seconds with ERR_NVGPUCTRPERM, reproduced by hand over a torch matmul on that
+pod, which also held neither CAP_SYS_ADMIN nor CAP_PERFMON. WHAT IS ACTUALLY
+KNOWN: on the one box where a counter read was ever attempted it was REFUSED;
+the 2026-09-09 and 2026-09-10 pods were never asked, and nothing is known
+about them either way. The probe now launches a real kernel
+(`moe/bench/counter_probe_kernel.py`) and reports OPEN only when ncu returns a
+number for the registered metric.
+The `dram__bytes_read.sum` plan over the alpha-surface cell is therefore NOT
+bookable on the strength of any probe this study has run, and it remains the
+only route to `alpha_b` as a number rather than as an interval. The costing
+below stands unchanged: it was never a function of the verdict. **This paragraph said "the 15-minute plan" until
 2026-09-10** and the plan had stopped saying it: the profiled launch count is
 warmup + iters x trials rather than one. The page prices the five-cell extended
 plan now, at `5 cells x 6 tile counts x 2 cache modes = 60 profiled
@@ -426,7 +442,9 @@ this grid cannot say whether that cost is TRAFFIC or TIME, which is the
 distinction that decides whether a traffic model can contain it at all. At
 BLOCK_M=64 the two candidates are 3.85 GB and 2.06 GB of weight-set-equivalent
 per M-tile at BLOCK_N=32 and 128; a DRAM counter separates them 1.87x apart,
-and the route is OPEN on this box.
+and no box this study has rented has been SHOWN to allow one: see the
+retraction above, and on the 2026-09-15 pod the counter read was refused with
+ERR_NVGPUCTRPERM.
 
 ### GROUP_SIZE_M moves the per-M-tile cost 24% at an identical geometry
 

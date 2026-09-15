@@ -4005,11 +4005,14 @@ def test_the_summary_says_a_resume_will_not_re_run_an_invalid_row(tmp_path):
 # 9. the counter arms, and the next session they are booked into
 # --------------------------------------------------------------------------
 
-def test_the_counter_arms_are_gated_on_the_probe_that_costs_ten_seconds():
-    """A BLOCKED probe retires 240 minutes. `counter_plan` is ten seconds and
-    answers exactly one question, does ncu attach on this box, so running
-    either counter arm ahead of it would spend four pod-hours to discover what
-    the probe already knows. The order is asserted in
+def test_the_counter_arms_are_gated_on_the_probe_that_costs_fifteen_seconds():
+    """A BLOCKED probe retires 240 minutes. `counter_plan` is about fifteen
+    seconds and answers exactly one question, CAN A COUNTER BE READ on this
+    box, so running either counter arm ahead of it would spend four pod-hours
+    to discover what the probe already knows. It was "ten seconds" and "does
+    ncu attach" until 2026-09-15: attaching is not reading, the probe profiled
+    `/bin/true` and so never attempted a counter, and the two arms below were
+    booked twice on that false OPEN. The order is asserted in
     `test_the_arms_whose_result_changes_a_later_reading_come_first`; this is
     the rest of the contract: both counter arms run the same file as the probe,
     they are the session's largest booking after the noise floor, and each
@@ -4026,7 +4029,7 @@ def test_the_counter_arms_are_gated_on_the_probe_that_costs_ten_seconds():
         closes = lift(f"arm_closes {shlex.quote(name)}", REPO=str(ROOT)).stdout
         assert "OPEN" in closes and "BLOCKED" in closes, closes[:200]
         # And what each verdict MEANS, not just the words.
-        assert "attaching to this pod with no permission error" in closes
+        assert "returning a NUMBER for dram__bytes_read.sum" in closes
         assert "FACT ABOUT THE POD" in closes
         # The contrast that decides traffic versus time, with both readings
         # named, and the BLOCK_M it is registered at.

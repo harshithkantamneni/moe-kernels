@@ -203,15 +203,41 @@ A tenant can *observe* both without paying for a long session:
 
 ```bash
 grep RestrictProfilingToAdminUsers /proc/driver/nvidia/params   # the host's setting
-grep CapEff /proc/self/status                                   # bit 21 is CAP_SYS_ADMIN
+grep CapEff /proc/self/status         # bit 21 CAP_SYS_ADMIN, bit 38 CAP_PERFMON
 ```
 
-`scripts/dram_counter_route.py --probe` reads both, runs one sub-second `ncu`
-attach against `/bin/true`, and returns `OPEN` / `BLOCKED` / `REFUSE` with the
-specific next action. It distinguishes four failures that are indistinguishable
-in a log: no `ncu`, blocked by the host flag, blocked but fixable with a
-capability, and `nsys` present without its importer. Run it in the first minute
-of any new pod.
+Both bits matter: from Linux 5.8 and driver R450 on, `CAP_PERFMON` opens the
+counter gate as well as `CAP_SYS_ADMIN`, and it is the narrower ask, so it is
+the one to make of a provider first. A mask printed in eight hex digits is 32
+bits wide and cannot carry bit 38 at all, which is a different statement from
+"the bit is clear".
+
+`scripts/dram_counter_route.py --probe` reads both, launches ONE real CUDA
+kernel under `ncu` (`moe/bench/counter_probe_kernel.py`, a 4 MiB in-place add),
+and returns `OPEN` / `BLOCKED` / `REFUSE`. It reports `OPEN` only when `ncu`
+hands back a NUMBER for `dram__bytes_read.sum`, parsed by the same
+`parse_ncu_csv` the measuring path uses. Run it in the first minute of any new
+pod. It costs about fifteen seconds, which is the child's `torch` import.
+
+**THIS PROBE RAN `ncu --metrics dram__bytes_read.sum /bin/true` UNTIL
+2026-09-15, AND EVERY `OPEN` IT EVER RETURNED WAS A FALSE POSITIVE.**
+`/bin/true` launches no CUDA kernel. On this driver the permission check
+happens at the first counter collection, which is the first kernel launch, so
+`ncu` attached, found nothing to profile, printed `==WARNING== No kernels were
+profiled.` and exited 0 without ever attempting a read. The probe reported
+"attached with no permission error" and the 2026-09-09 and 2026-09-10 sessions
+recorded `OPEN` on that basis; both published payloads carry `ncu`'s own
+warning in the `output_head` field the probe captured and never consulted. On
+2026-09-15 a rented H200 booked two 120-minute counter arms on that word and
+both died in 35 seconds with `ERR_NVGPUCTRPERM`. What is known today: on the
+one box where a counter read was ever attempted it was REFUSED, and the
+2026-09-09 and 2026-09-10 pods were never asked.
+
+The four failures it still distinguishes, because they are indistinguishable in
+a log: no `ncu`; a counter read REFUSED by the box (`ERR_NVGPUCTRPERM`, a fact
+about the pod and not a broken instrument); a counter read that SUCCEEDED; and
+no CUDA device to launch on at all, where nothing has been established either
+way and the verdict is `REFUSE` rather than `BLOCKED`.
 
 ### 2.2 The structural answer, which needs no provider documentation
 

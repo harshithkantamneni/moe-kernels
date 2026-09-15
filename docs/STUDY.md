@@ -128,11 +128,26 @@ working state.
   2.28%, and the fitted slope is anchor-independent to 0.31%. The evaluation's
   "weakest link" (an extrapolated memory-branch level) now has a measured n=1
   tread behind it.
-- **The DRAM counter route is OPEN on a rented pod**, for the first time: ncu
-  2025.1.1 attaches with no permission error (nsys absent). `alpha_b` as a
-  NUMBER rather than an interval is now bookable over the alpha-surface cell.
-  This is the highest-value open experiment in the study and it should be
-  booked next. **This bullet read "at 15 minutes" until 2026-09-10**: that
+- ~~**The DRAM counter route is OPEN on a rented pod**, for the first time:
+  ncu 2025.1.1 attaches with no permission error (nsys absent).~~
+  **RETRACTED 2026-09-15: the counter route is RETRACTED, not open, and the
+  reading was never taken.** The 2026-09-09 and 2026-09-10 readings came from
+  a probe that ran `ncu --metrics dram__bytes_read.sum /bin/true`. `/bin/true`
+  launches no CUDA kernel, so ncu attached, found nothing to profile and
+  exited 0 WITHOUT EVER ATTEMPTING A COUNTER READ: the permission error cannot
+  appear on that path, and both published payloads carry ncu's own
+  `==WARNING== No kernels were profiled.` in the field the probe captured and
+  never read. On 2026-09-15 a rented H200 booked two 120-minute arms on that
+  word and both died in 35 seconds with ERR_NVGPUCTRPERM, reproduced by hand
+  over a torch matmul on that pod, which also held neither CAP_SYS_ADMIN nor
+  CAP_PERFMON. WHAT IS ACTUALLY KNOWN: on the one box where a counter read was
+  ever attempted it was REFUSED; the 2026-09-09 and 2026-09-10 pods were never
+  asked, and nothing is known about them either way. The probe now launches a
+  real kernel (`moe/bench/counter_probe_kernel.py`) and reports OPEN only when
+  ncu returns a number for the registered metric.
+  `alpha_b` as a NUMBER rather than an interval is still the study's
+  highest-value open experiment, and it is NOT bookable until some box passes
+  the honest probe. **This bullet read "at 15 minutes" until 2026-09-10**: that
   figure priced a one-launch recipe the instrument does not run, because the
   profiled launch count is warmup + iters x trials rather than one. The plan
   page prices the whole five-cell extended plan now, at `5 cells x 6 tile
@@ -267,9 +282,23 @@ one-page statement.
   shipped bucket at BLOCK_M <= 64 sits at exactly one M-tile per expert.
 
 **Left open, and what it costs.** One experiment decides more than the rest
-together, and its route read OPEN for the second rental running (ncu
-2025.1.1.0 attached with no permission error, `cap_eff 0xa80425fb`, no
-`sys_admin`), so it is bookable rather than aspirational. A DRAM read at ONE
+together, and it is aspirational rather than bookable, because the
+route read that made it look bookable was never a reading at all.
+The 2026-09-09 and 2026-09-10 readings came from a probe that ran `ncu
+--metrics dram__bytes_read.sum /bin/true`. `/bin/true` launches no CUDA
+kernel, so ncu attached, found nothing to profile and exited 0 WITHOUT EVER
+ATTEMPTING A COUNTER READ: the permission error cannot appear on that path,
+and both published payloads carry ncu's own `==WARNING== No kernels were
+profiled.` in the field the probe captured and never read. On 2026-09-15 a
+rented H200 booked two 120-minute arms on that word and both died in 35
+seconds with ERR_NVGPUCTRPERM, reproduced by hand over a torch matmul on that
+pod, which also held neither CAP_SYS_ADMIN nor CAP_PERFMON. WHAT IS ACTUALLY
+KNOWN: on the one box where a counter read was ever attempted it was REFUSED;
+the 2026-09-09 and 2026-09-10 pods were never asked, and nothing is known
+about them either way. The probe now launches a real kernel
+(`moe/bench/counter_probe_kernel.py`) and reports OPEN only when ncu returns a
+number for the registered metric.
+A DRAM read at ONE
 BLOCK_N gives `alpha_b = (dR/dn - a_per_tile)/W`, a traffic slope with no
 level, no delta and no assumed bandwidth (today the same six cells return
 0.6087, 0.5930 or 0.5143 depending only on which rate is assumed). A read at

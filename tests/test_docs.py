@@ -306,10 +306,21 @@ def test_study_records_what_the_session_settled_and_what_it_left():
     assert "~~Loose end: confirm the instruction actually switched" in order
     assert "CLOSED 2026-09-09" in order
     # The three things that changed the study's working state.
-    for needle in ("BLOCK_M % 64 == 0", "counter route is OPEN",
+    for needle in ("BLOCK_M % 64 == 0",
                    "may be quoted as a point", "0.678 of the ridge",
                    "144.9-152.8", "--new"):
         assert needle in text, needle
+    # THE COUNTER ROUTE NEEDLE WAS "counter route is OPEN" and it is retracted.
+    # The 2026-09-09 and 2026-09-10 readings came from a probe that profiled
+    # `/bin/true`, which launches no kernel, so no counter read was ever
+    # attempted. The page must carry the retraction AND its cause, because a
+    # session booked four pod-hours on the word: a page that merely deleted the
+    # claim would let the next reader re-derive it from the published payloads.
+    assert "counter route is RETRACTED" in text
+    assert "No kernels were profiled" in text
+    assert "ERR_NVGPUCTRPERM" in text
+    assert "- ~~**The DRAM counter route is OPEN on a rented pod**" in text, \
+        "the retracted claim is still standing unstruck"
 
 
 def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():

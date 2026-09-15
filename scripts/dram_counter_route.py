@@ -42,9 +42,11 @@ this file does three separate things, and keeps them separate on purpose:
   --run      DRIVES ncu over one registered cell and writes the JSON --analyse
              consumes. Until 2026-09-10 this file planned, bracketed,
              self-tested, probed and scored, and there was no way to take the
-             measurement: the route came back OPEN on the H200 box and the arm
-             had no runner. See "THE PER-CALL TRAP" below, which is the whole
-             reason this is a mode and not a shell one-liner.
+             measurement, and the probe said OPEN. That OPEN was a false
+             positive (see "--probe" above), so this mode has still never run
+             on a box whose counters were shown readable. See "THE PER-CALL
+             TRAP" below, which is the whole reason this is a mode and not a
+             shell one-liner.
 
   --contrast scores the RATIO of dR/dn across two or more runs, which is the
              reading the extended plan exists to take and which no single
@@ -96,9 +98,14 @@ and a count that does not exceed the cell's own `iters x trials` is REFUSED.
 
 WHY THE PLAN IS ON THE H200 AND NOT THE A100. It was registered against the
 A100 mixtral G=16 cell, because that is where the three anchors disagree most.
-The route came back OPEN on the H200 box (ncu 2025.1.1.0, attached, no
-permission error, no CAP_SYS_ADMIN needed) and on no other, so the plan now
-registers the H200 cell and reads every prediction out of
+It moved to the H200 on 2026-09-10 because the probe read OPEN there and
+nowhere else. THAT OPEN WAS A FALSE POSITIVE and the move outlived it: the
+probe profiled `/bin/true` and so never asked for a counter at all, and on
+2026-09-15 a rented H200 refused the read outright with ERR_NVGPUCTRPERM. The
+plan stays on the H200 anyway, because the H200 is the card this study rents
+and the card whose calibration and session corpus are in the tree, and NOT
+because any box has been shown to allow a counter. It registers the H200 cell
+and reads every prediction out of
 `moe/bench/hardware/measured_nvidia_h200.yaml` and the committed session
 corpus. The honest consequence is stated where it lands: on the H200 the three
 anchors agree to 0.04 and the anchor contrast (C1) is worth about 5% in
@@ -125,6 +132,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -136,6 +144,7 @@ sys.path.insert(0, str(REPO))
 # rather than approximated here: this file spent its life returning integers it
 # chose for itself and writing JSON that named no commit and no machine.
 from moe.bench import ai_model, exit_codes  # noqa: E402
+from moe.bench import counter_probe_kernel as PK  # noqa: E402
 from moe.bench import provenance as PV  # noqa: E402
 
 # Imported, never re-derived. Two byte models for one study is how the padding
@@ -169,8 +178,13 @@ NO_CARD = "no-card-nothing-measured"
 #: touches a device, and one constant covering every mode would have said so.
 INSTRUMENT = "arithmetic-over-published-rows/no-kernel-timed"
 
-#: `--probe` measures nothing at all: it asks the box what it is.
-PROBE_INSTRUMENT = "machine-configuration-probe/nothing-timed"
+#: `--probe` times nothing, but since 2026-09-15 it is no longer true that it
+#: touches no device: it launches ONE kernel under ncu, because a counter probe
+#: that launches none cannot reach the permission check it exists to reach. The
+#: string says both halves. Nothing it measures is reported as a measurement --
+#: the only question asked of the profile is whether a number came back.
+PROBE_INSTRUMENT = ("machine-configuration-probe/one-probe-kernel-profiled/"
+                    "nothing-timed")
 
 #: `--contrast` is arithmetic over payloads `--run` measured, and the arithmetic
 #: is a RATIO of two counter slopes: no bandwidth constant, no byte model and no
@@ -292,15 +306,18 @@ DEFAULT_TILES = (1, 2, 3, 4, 6, 8)
 #: anywhere on the surface. It was this file's default cell until 2026-09-10 and
 #: it is still the cell `docs/COUNTERS.md` section 4 registers, so it keeps a
 #: name here rather than disappearing into history. It is NOT the plan's cell
-#: any more: no counter route has ever been open on an A100 this study can rent.
+#: any more: no counter route has ever been SHOWN open on an A100 this study
+#: can rent, and as of 2026-09-15 none has been shown open on an H200 either.
 A100_REPORT = (REPO / "results" / "published"
                / "2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3"
                / "mixtral-8x7b-bf16-r1024-g16-n64-b156b5.report.json")
 
-#: The cell the plan is written for, by default: the H200 twin of the same arm,
-#: on the card whose `--probe` came back OPEN. Same model, same dtype, same
-#: GROUP_SIZE_M=16, same BLOCK_SIZE_N=64, so the counter still answers the
-#: ladder rather than a different question, on the box that can answer it.
+#: The cell the plan is written for, by default: the H200 twin of the same arm.
+#: Same model, same dtype, same GROUP_SIZE_M=16, same BLOCK_SIZE_N=64, so the
+#: counter still answers the ladder rather than a different question. The H200
+#: was chosen on 2026-09-10 because its `--probe` came back OPEN; that reading
+#: was retracted on 2026-09-15 and the choice now rests on this being the card
+#: this study rents and calibrates, not on a counter anyone has read.
 DEFAULT_REPORT = (REPO / "results" / "published"
                   / "2026-09-01-nvidia_h200-alpha-surface-s4"
                   / "mixtral-8x7b-bf16-r1024-g16-n64-69f35a.report.json")
@@ -310,6 +327,39 @@ DEFAULT_REPORT = (REPO / "results" / "published"
 #: host module parameter, so a probe that does not check it cannot tell
 #: "this container could profile" from "this host refuses".
 CAP_SYS_ADMIN_BIT = 21
+
+#: Bit 38, CAP_PERFMON, and it was missing until 2026-09-15. Since Linux 5.8 and
+#: driver R450 the counter gate accepts CAP_PERFMON as well as CAP_SYS_ADMIN, so
+#: a container can profile while holding neither SYS_ADMIN nor root. A probe
+#: that reads only bit 21 cannot tell "no capability at all" from "the weaker
+#: capability that would have sufficed", which is the difference between two
+#: different asks to a provider -- and providers refuse `--cap-add=SYS_ADMIN`
+#: far more often than `--cap-add=PERFMON`. Note the width: a mask printed as
+#: eight hex digits, as the 2026-09-09 and 2026-09-10 payloads' `0xa80425fb`
+#: was, is 32 bits and cannot represent bit 38 at all, so PERFMON is absent
+#: there by construction.
+CAP_PERFMON_BIT = 38
+
+#: The metric `--probe` asks for, and deliberately the SAME metric `--run`'s
+#: first registered metric is: a probe that proves a different counter readable
+#: proves the wrong thing. It is read through `parse_ncu_csv`, the same parser
+#: `--run` uses, for the same reason.
+NCU_PROBE_METRIC = NCU_METRICS[0]
+
+#: The probe kernel `--probe` profiles: a real file on disk, launched in a child
+#: interpreter under ncu. See that module for why `/bin/true` was not one.
+NCU_PROBE_KERNEL = REPO / "moe" / "bench" / "counter_probe_kernel.py"
+
+#: Seconds the profiled probe child may take. The old no-op probe had 90 and
+#: finished in under one; this one imports torch and creates a CUDA context in a
+#: child under a profiler, and this repo's own measured figure for a
+#: torch-importing child under a profiler is "roughly fifteen seconds a rung ...
+#: the child's torch import dominates, not the profiling"
+#: (`scripts/nsys_dram_probe.py`). 180 is twelve times that, which is slack for
+#: a cold page cache on a fresh pod and still an eighth of the one minute the
+#: session books the whole probe arm. It is a ceiling, not a budget: on a box
+#: with no torch the child returns immediately.
+NCU_PROBE_TIMEOUT_S = 180
 
 
 # --------------------------------------------------------------------------
@@ -1469,22 +1519,37 @@ def _run(argv, timeout=60) -> tuple[int, str, str]:
 
 
 def probe_capabilities() -> dict:
-    """Is CAP_SYS_ADMIN held by THIS process?
+    """Which of the two counter capabilities does THIS process hold?
 
     NVIDIA's ERR_NVGPUCTRPERM page says a container may profile either because
     the host enabled it or because the container "was started with the
     appropriate permissions by passing --cap-add=SYS_ADMIN". Those are two
     different asks to a provider and a log cannot tell them apart, so the probe
     reads the capability mask rather than guessing from a failure message.
+
+    BOTH BITS, since 2026-09-15. CAP_PERFMON also opens the gate on any driver
+    from R450 on, and it is the capability a provider will actually grant, so a
+    probe that reported only SYS_ADMIN sent the operator to ask for the one
+    answer that is usually no. `cap_eff_bits` is recorded beside the mask
+    because a mask printed in 32 bits cannot carry bit 38 and a reader needs to
+    see that rather than infer it.
+
+    THIS IS RECORDED DETAIL, NOT A VERDICT. Neither bit decides whether the
+    route is open: `probe_ncu` decides that by reading a counter. These are
+    what a human needs in order to FIX a refusal, and they are reported whether
+    the route is open or shut.
     """
     path = Path("/proc/self/status")
     if not path.exists():
         return {"available": False, "why": "no /proc/self/status; not a Linux container"}
     for line in path.read_text().splitlines():
         if line.startswith("CapEff:"):
-            mask = int(line.split()[1], 16)
+            field = line.split()[1]
+            mask = int(field, 16)
             return {"available": True, "cap_eff": hex(mask),
-                    "sys_admin": bool(mask >> CAP_SYS_ADMIN_BIT & 1)}
+                    "cap_eff_bits": 4 * len(field),
+                    "sys_admin": bool(mask >> CAP_SYS_ADMIN_BIT & 1),
+                    "perfmon": bool(mask >> CAP_PERFMON_BIT & 1)}
     return {"available": False, "why": "CapEff not present in /proc/self/status"}
 
 
@@ -1508,29 +1573,187 @@ def probe_module_flag() -> dict:
     return {"available": False, "why": "the parameter is not listed by this driver"}
 
 
-def probe_ncu() -> dict:
-    """Is ncu installed, and if so what does a minimal invocation actually say?
+def ncu_probe_argv(binary: str, log_file: Path) -> list[str]:
+    """The probe invocation: one registered metric over one real kernel.
 
-    The minimal invocation profiles `true`, which launches no kernel. That is
-    deliberate: the permission check happens at profiler ATTACH, before any
-    kernel runs, so ERR_NVGPUCTRPERM surfaces in under a second with no GPU work
-    and no risk of a long profile on a metered box.
+    Four flags and each is load-bearing.
+
+      `--launch-count 1`   the child launches exactly one kernel, but a torch
+                           that decides to launch two would otherwise double
+                           the profile for no gain. One launch is all a
+                           permission check needs.
+      `--target-processes all`  ncu attaches to the interpreter's children as
+                           well, the way `ncu_argv` does; a torch that forks
+                           would otherwise be profiled by nobody.
+      `--csv --page raw`   the SAME page `--run` parses, because the probe is
+                           read by `parse_ncu_csv`, the same parser. A probe
+                           that proves a different output shape parseable
+                           proves the wrong thing.
+      `--log-file`         ncu's CSV and the child's own stdout otherwise
+                           interleave in one stream, and the child's stdout is
+                           where the probe kernel's marker line lands.
+    """
+    return [binary, "--metrics", NCU_PROBE_METRIC,
+            "--launch-count", "1", "--target-processes", "all",
+            "--csv", "--page", "raw", "--log-file", str(log_file),
+            "--", sys.executable, str(NCU_PROBE_KERNEL)]
+
+
+def probe_kernel_word(blob: str) -> tuple[str, str]:
+    """The probe child's own marker line, or `("", "")` if it printed none.
+
+    Parsed rather than inferred from a return code: the child and ncu both
+    contribute to that code and only the child knows which of its four worlds
+    it landed in.
+    """
+    for line in blob.splitlines():
+        line = line.strip()
+        if not line.startswith(PK.MARKER):
+            continue
+        rest = line[len(PK.MARKER):].strip().split(" ", 1)
+        word = rest[0] if rest else ""
+        if word in PK.WORDS:
+            return word, (rest[1] if len(rest) > 1 else "")
+    return "", ""
+
+
+def probe_ncu() -> dict:
+    """Is ncu installed, and CAN IT READ A COUNTER ON THIS BOX?
+
+    THE DEFECT THIS REPLACES, measured on a rented H200 on 2026-09-15. This
+    function used to run
+
+        ncu --metrics dram__bytes_read.sum /bin/true
+
+    and call rc 0 "attached with no permission error". `/bin/true` launches no
+    CUDA kernel, so ncu attached, found nothing to profile, printed
+    `==WARNING== No kernels were profiled.` and exited 0 WITHOUT EVER
+    ATTEMPTING A COUNTER READ. The permission error cannot appear on that path.
+    Every OPEN this probe ever returned, 2026-09-09 and 2026-09-10 included,
+    was that false positive: both published payloads carry ncu's own
+    "No kernels were profiled" in `output_head`, beside `cause` "attached".
+    A session booked two 120-minute counter arms on the word and both died in
+    35 seconds with ERR_NVGPUCTRPERM.
+
+    SO THIS PROFILES A REAL KERNEL AND READS THE VALUE BACK. The four worlds it
+    must keep apart, because a log cannot:
+
+      no ncu on PATH          -- the tool is not installed. `present` False.
+      ERR_NVGPUCTRPERM        -- ncu ran, a kernel launched, the counter read
+                                 was REFUSED. THIS IS A FACT ABOUT THE POD and
+                                 not a broken instrument: the host module flag
+                                 or the container's capabilities, both named in
+                                 the recorded detail beside this.
+      counters readable       -- a kernel launched and ncu returned a NUMBER
+                                 for the registered metric, parsed by the same
+                                 `parse_ncu_csv` `--run` uses.
+      no CUDA device          -- the probe child could not launch a kernel at
+                                 all (no torch, no card, or CUDA refused to
+                                 initialise). Nothing is known about counters
+                                 here, and saying otherwise is the old defect.
+
+    WHY IT IS STILL CHEAP. One child interpreter, one `torch.ones` of 4 MiB and
+    one in-place add. The cost is the child's torch import, which this repo has
+    measured at roughly fifteen seconds; the profiling itself is a single
+    launch. Against an arm the session books a minute for and counter arms it
+    books two hours for, fifteen seconds to find out whether those two hours
+    can happen at all is the cheapest thing in the session.
     """
     binary = shutil.which("ncu") or shutil.which("nv-nsight-cu-cli")
     if not binary:
-        return {"present": False, "why": "no ncu on PATH"}
+        return {"present": False, "counters_read": False, "why": "no ncu on PATH"}
     rc, out, err = _run([binary, "--version"], timeout=30)
     version = (out or err).strip().splitlines()[-1] if (out or err) else ""
-    rc2, out2, err2 = _run([binary, "--metrics", NCU_METRICS[0], "/bin/true"], timeout=90)
-    blob = f"{out2}\n{err2}"
+    with tempfile.TemporaryDirectory(prefix="ncu-counter-probe-") as tmp:
+        log_file = Path(tmp) / "probe.csv"
+        rc2, out2, err2 = _run(ncu_probe_argv(binary, log_file),
+                               timeout=NCU_PROBE_TIMEOUT_S)
+        log_text = log_file.read_text() if log_file.exists() else ""
+    # ncu's own errors go to the log file when one is given, and the child's
+    # marker line goes to stdout. Both must be read or the diagnosis is the
+    # half that happened to be in the stream someone looked at.
+    blob = "\n".join(part for part in (out2, err2, log_text) if part)
+    word, detail = probe_kernel_word(blob)
+    info = {"present": True, "binary": binary, "version": version,
+            "returncode": rc2, "metric": NCU_PROBE_METRIC,
+            "probe_kernel": word or "NO_MARKER",
+            "probe_kernel_detail": detail,
+            "counters_read": False, "permission_refused": False,
+            "metric_value": None,
+            "output_head": blob.strip()[:600]}
+    # ORDER MATTERS AND IS THE POINT. The permission refusal is checked first
+    # because it is the one world where a kernel demonstrably launched and the
+    # COUNTER was the thing that was refused. Then the counter value is read,
+    # and a value that came back is the whole of OPEN: it is direct evidence,
+    # and nothing the child printed can add to it or take it away. Only when no
+    # value came back does the child's marker get consulted, and then only to
+    # SAY WHY. The old probe had this exactly inverted: it concluded from ncu's
+    # return code, which is a fact about the process, that a counter was
+    # readable, which is a fact about the driver.
     if "ERR_NVGPUCTRPERM" in blob:
-        cause = "ERR_NVGPUCTRPERM: counters gated by the host module flag or a missing capability"
-    elif rc2 == 0:
-        cause = "attached with no permission error"
+        info["permission_refused"] = True
+        info["cause"] = ("ERR_NVGPUCTRPERM: a kernel launched and the COUNTER READ was "
+                         "REFUSED by this box. That is a fact about the pod -- its host "
+                         "module flag or its container capabilities, both recorded beside "
+                         "this -- and not a broken instrument")
+        return info
+    try:
+        launches = parse_ncu_csv(log_text)
+        values = [lz.metrics[NCU_PROBE_METRIC] for lz in launches
+                  if NCU_PROBE_METRIC in lz.metrics]
+        if not values:
+            raise CounterRunRefused(
+                f"ncu profiled {len(launches)} launch(es) and none reported "
+                f"{NCU_PROBE_METRIC}")
+        info["counters_read"] = True
+        info["metric_value"] = values[0]
+        info["cause"] = (f"counters readable: {NCU_PROBE_METRIC} came back as "
+                         f"{values[0]:.6g} on a profiled launch of the probe kernel")
+        return info
+    except CounterRunRefused as exc:
+        unreadable = str(exc)
+    if word == PK.NO_TORCH:
+        info["cause"] = (f"no CUDA device reached: the probe interpreter has no torch "
+                         f"({detail}), so no kernel launched and nothing was ever asked "
+                         "of a counter")
+    elif word == PK.NO_CUDA_DEVICE:
+        info["cause"] = (f"no CUDA device at all: {detail}. ncu had nothing to profile, "
+                         "so this box has said NOTHING about counter permission")
+    elif word == PK.LAUNCH_FAILED:
+        info["cause"] = (f"the probe kernel failed to run ({detail}), so counter "
+                         "permission is UNTESTED here: no launch retired")
+    elif not word:
+        info["cause"] = (f"the probe kernel printed no {PK.MARKER} line, so it is not "
+                         f"known whether a kernel launched at all; ncu exited {rc2} and "
+                         f"returned no counter ({unreadable})")
+    elif "No kernels were profiled" in blob:
+        # The exact string the 2026-09-09 and 2026-09-10 payloads carried in
+        # `output_head` while reporting "attached with no permission error". It
+        # now decides, and it decides against.
+        info["cause"] = ("the probe kernel ran and ncu profiled NO kernels, so no counter "
+                         "was read; this is the shape the /bin/true probe mistook for "
+                         "permission")
     else:
-        cause = f"failed with rc={rc2} and no permission marker; read the raw output"
-    return {"present": True, "binary": binary, "version": version,
-            "returncode": rc2, "cause": cause, "output_head": blob.strip()[:600]}
+        info["cause"] = (f"the probe kernel ran and ncu returned no readable "
+                         f"{NCU_PROBE_METRIC}: {unreadable}")
+    return info
+
+
+def counter_route_is_open(ncu: dict) -> bool:
+    """THE test for "a counter can be read here", written once.
+
+    It is a function and not two inlined string comparisons because it WAS two.
+    `route_verdict` and `do_run` each spelled out `cause.startswith("attached")`
+    separately, so the probe's verdict and the runner's pre-flight were one
+    rule at two call sites, which is this repository's most-repeated defect and
+    the reason a broken premise reached a rented box twice. Anything that needs
+    to know whether the route is open asks here.
+
+    The test is `counters_read`, a boolean set by the one branch of `probe_ncu`
+    that actually parsed a number out of a profile. It is NOT the prose in
+    `cause`: prose is for the operator, and the old rule keyed on prose.
+    """
+    return bool(ncu.get("present")) and bool(ncu.get("counters_read"))
 
 
 def probe_nsys() -> dict:
@@ -1570,19 +1793,47 @@ def route_verdict(caps: dict, flag: dict, ncu: dict, nsys: dict) -> tuple[str, l
     open for two weeks; a probe that cannot tell says so.
     """
     notes = []
-    if ncu.get("present") and ncu.get("cause", "").startswith("attached"):
-        return "OPEN", ["ncu attached with no permission error: read the plan with "
-                        "--dry-run and then take it with --run, which drives ncu over "
-                        "one cell and writes the JSON --analyse scores. Run every cell "
-                        "of a registered pair and score the RATIO with --contrast: the "
+    if counter_route_is_open(ncu):
+        return "OPEN", [f"ncu read {ncu.get('metric')} off a profiled launch of the probe "
+                        f"kernel ({ncu.get('metric_value')}): a counter is READABLE on "
+                        "this box, which is the thing the two counter arms need and the "
+                        "thing the /bin/true probe never checked. Read the plan with "
+                        "--dry-run and then take it with --run, which drives ncu over one "
+                        "cell and writes the JSON --analyse scores. Run every cell of a "
+                        "registered pair and score the RATIO with --contrast: the "
                         "discriminator is across cells and --analyse sees one. This is "
                         "the decisive route."]
-    if ncu.get("present") and "ERR_NVGPUCTRPERM" in ncu.get("cause", ""):
-        if caps.get("available") and not caps.get("sys_admin"):
-            notes.append("this process does NOT hold CAP_SYS_ADMIN. NVIDIA's own "
-                         "ERR_NVGPUCTRPERM page names --cap-add=SYS_ADMIN as the "
-                         "container-side fix, so ask the provider for that capability "
-                         "before asking for a host reboot.")
+    if ncu.get("present") and ncu.get("permission_refused"):
+        # A FLAG SET BY THE PROBE, not a substring of its prose. Keying this on
+        # `"ERR_NVGPUCTRPERM" in cause` read BLOCKED off any message that merely
+        # MENTIONED the error -- including `parse_ncu_csv`'s own refusal, which
+        # now tells the operator to grep the log for exactly that token. A
+        # verdict that moves when a sentence is rewritten is not a verdict.
+        # RECORDED DETAIL, NOT GATES. ERR_NVGPUCTRPERM already decided the
+        # verdict; none of the lines below can change it. They exist so the next
+        # ask of the provider is the right ask, which is the one thing a tenant
+        # can act on.
+        if caps.get("available") and not caps.get("sys_admin") and not caps.get("perfmon"):
+            notes.append("this process holds NEITHER CAP_SYS_ADMIN NOR CAP_PERFMON. "
+                         "Either opens the gate on a driver from R450 on and PERFMON is "
+                         "the narrower ask, so ask the provider for --cap-add=PERFMON "
+                         "first, --cap-add=SYS_ADMIN second, and a host reboot last.")
+        elif caps.get("available") and not caps.get("sys_admin"):
+            notes.append("this process holds CAP_PERFMON but NOT CAP_SYS_ADMIN and the "
+                         "counters were still refused. PERFMON suffices only from driver "
+                         "R450 on, so read the driver version before asking for a "
+                         "capability this container already has.")
+        elif caps.get("available") and not caps.get("perfmon"):
+            notes.append("this process holds CAP_SYS_ADMIN but NOT CAP_PERFMON and the "
+                         "counters were still refused. SYS_ADMIN is the capability "
+                         "NVIDIA's own page names, so this is not a capability problem "
+                         "and the raw ncu output needs reading.")
+        if caps.get("available") and caps.get("cap_eff_bits", 64) <= CAP_PERFMON_BIT:
+            notes.append(f"the mask came back {caps.get('cap_eff')}, "
+                         f"{caps.get('cap_eff_bits')} bits wide, which cannot represent "
+                         f"CAP_PERFMON (bit {CAP_PERFMON_BIT}) at all: read `perfmon "
+                         "False` as 'absent from this mask' rather than as a measurement "
+                         "of the bit.")
         if flag.get("available") and flag.get("restrict") == 1:
             notes.append("the host loaded the module with "
                          "RestrictProfilingToAdminUsers=1; the host-side fix is a module "
@@ -1592,7 +1843,25 @@ def route_verdict(caps: dict, flag: dict, ncu: dict, nsys: dict) -> tuple[str, l
                          "(RestrictProfilingToAdminUsers=0) yet ncu still refused. That "
                          "combination is not explained by the module flag and needs the "
                          "raw ncu output read, not another retry.")
+        if not flag.get("available"):
+            notes.append(f"the host module parameter could not be read "
+                         f"({flag.get('why')}), so 'the host forbids it' and 'this "
+                         "container lacks the capability' cannot be separated from "
+                         "inside; the capability line above is the side a tenant can act "
+                         "on.")
         return "BLOCKED", notes
+    if ncu.get("present") and ncu.get("probe_kernel") in (
+            PK.NO_TORCH, PK.NO_CUDA_DEVICE, PK.LAUNCH_FAILED, "NO_MARKER"):
+        # ncu is here and the box never got a kernel, so NOTHING is known about
+        # counter permission. This is REFUSE and not BLOCKED, and the difference
+        # is the whole defect: BLOCKED is a measured refusal that the ledger
+        # files as a finding, and "we could not ask" is not a finding.
+        notes.append(f"ncu is installed but the probe launched no kernel to count "
+                     f"({ncu.get('probe_kernel')}: {ncu.get('probe_kernel_detail')}). "
+                     "Counter permission is UNTESTED here, not open and not blocked: on "
+                     "a box with no CUDA device there is no counter question to answer, "
+                     "and on one with a device this means the probe interpreter cannot "
+                     "reach it. Fix the interpreter, then probe again.")
     if not ncu.get("present"):
         notes.append("no ncu here. It installs from the public CUDA apt tree as a plain "
                      "file: the nsight-compute-* debs sit beside the nsight-systems-* ones "
@@ -1614,6 +1883,11 @@ def do_probe(args) -> int:
     print(f"  module    {flag}")
     print(f"  ncu       {ncu.get('cause', ncu.get('why'))}"
           + (f"  [{ncu.get('version', '')}]" if ncu.get("present") else ""))
+    if ncu.get("present"):
+        # Printed separately from the cause because it is the half the old probe
+        # never had: which world the CHILD landed in is what decides whether the
+        # ncu line above is about counters at all.
+        print(f"  kernel    {ncu.get('probe_kernel')}  {ncu.get('probe_kernel_detail', '')}")
     if nsys.get("present"):
         # "importer MISSING" is only meaningful when nsys is here at all; printing it
         # for a machine with no nsys would report the pod's failure on a laptop.
@@ -1630,7 +1904,7 @@ def do_probe(args) -> int:
     # both OPEN and BLOCKED: a log with zero RESULT lines beside exit 0, which
     # `exit_codes` documents as the shape a REFUSED log has, and the driver's
     # summary printed "NOT scored" beside a finished arm. The pre-registered
-    # expectation is that a counter route is OPEN; BLOCKED is that expectation
+    # expectation is that a counter can be READ; BLOCKED is that expectation
     # refuted by the box, a CLAIM_FAIL, which the table defines as "measured,
     # the world disagreed": a RESULT the ledger files as finished and the
     # summary prints as the finding, never a retry. It is the answer this arm
@@ -1640,7 +1914,7 @@ def do_probe(args) -> int:
     gates: list[Gate] = []
     if verdict != REFUSE:
         gates.append(Gate(
-            "P1", "CLAIM", "a counter route is open on this box",
+            "P1", "CLAIM", "a DRAM counter can be READ on this box",
             PASS if verdict == "OPEN" else FAIL,
             f"route {verdict}: {ncu.get('cause', ncu.get('why', 'no ncu'))}",
             "OPEN",
@@ -1735,8 +2009,13 @@ def parse_ncu_csv(text: str) -> list[Launch]:
     if header is None:
         raise CounterRunRefused(
             "no ncu CSV header in this output: expected a row carrying "
-            "'Kernel Name', 'Metric Name' and 'Metric Value'. Profile with "
-            "--csv --page raw and read the log file, not the console")
+            "'Kernel Name', 'Metric Name' and 'Metric Value'. THIS IS NOT A FLAG "
+            "PROBLEM -- `ncu_argv` already passes --csv --page raw --log-file, and "
+            "telling the operator to pass them is where this message used to send "
+            "them. A header-less log means ncu collected nothing: either no kernel "
+            "was launched inside the profiled process, or the counter read was "
+            "refused (grep the log for ERR_NVGPUCTRPERM). `--probe` separates those "
+            "two and a re-run with the same flags will not")
     if "ID" not in header:
         raise CounterRunRefused(
             f"the ncu CSV has no 'ID' column (columns: {header}). Without a launch "
@@ -1752,8 +2031,12 @@ def parse_ncu_csv(text: str) -> list[Launch]:
         raise CounterRunRefused(
             f"the ncu CSV has no 'Metric Unit' column (columns: {header}). ncu "
             "rescales per launch, so a value without its unit cannot be reduced "
-            "to bytes and would be off by whatever prefix ncu chose. Profile with "
-            "--csv --page raw, which emits the column")
+            "to bytes and would be off by whatever prefix ncu chose. AND THE FIX IS "
+            "NOT --csv --page raw, which is what this message used to advise and "
+            "what `ncu_argv` already passes: a raw page that emits the other columns "
+            "and not this one is a different ncu from the one this parser was "
+            "written against, so read the log's own header and the ncu version "
+            "before changing any flag")
     idx = {name: header.index(name) for name in
            ("ID", "Kernel Name", "Metric Name", "Metric Unit", "Metric Value")}
     order: list[str] = []
@@ -2021,8 +2304,12 @@ def do_run(args) -> int:
               "is not a measurement.")
         return exit_codes.REFUSED
     ncu = probe_ncu()
-    if not (ncu.get("present") and ncu.get("cause", "").startswith("attached")):
-        print("REFUSE: no open counter route on this box. --probe says: "
+    if not counter_route_is_open(ncu):
+        # THE SAME predicate `route_verdict` uses, called rather than restated.
+        # Until 2026-09-15 this line spelled out `cause.startswith("attached")`
+        # for itself, so the probe and the runner were one rule at two call
+        # sites and both read a premise that had never been checked.
+        print("REFUSE: no counter could be read on this box. --probe says: "
               f"{ncu.get('cause', ncu.get('why'))}")
         return exit_codes.REFUSED
     ridge, ridge_src = measured_ridge(args.card)
@@ -3381,9 +3668,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--card", default="nvidia_h200",
                     choices=sorted(DATASHEET_PEAK_GBPS),
                     help="which card the plan is written for. The H200 by default, "
-                         "because that is the only box whose --probe has ever come "
-                         "back OPEN. It was the A100 until 2026-09-10, where the three "
-                         "anchors are furthest apart and no counter route exists")
+                         "because it is the card this study rents and calibrates. It "
+                         "was the A100 until 2026-09-10, where the three anchors are "
+                         "furthest apart. NOT because any --probe has read a counter: "
+                         "the 2026-09-09 and 2026-09-10 OPEN readings profiled "
+                         "/bin/true and never attempted one, and the 2026-09-15 pod "
+                         "refused the read")
     ap.add_argument("--model", default="mixtral-8x7b", choices=sorted(MODEL_CONFIGS))
     ap.add_argument("--dtype", default="bf16", choices=("bf16", "fp16"))
     ap.add_argument("--group-m", type=int, default=16,
