@@ -44,6 +44,8 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "compute-bound"), True),
     (("--self-test", "noisy-identity"), True),
     (("--self-test", "clock-split"), True),
+    (("--self-test", "alignment-step"), True),
+    (("--self-test", "ratio-path-split"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -104,7 +106,7 @@ def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does():
     raw = [ln for ln in got.stdout.splitlines() if ln.startswith("RESULT: ")]
     assert len(raw) == len(parsed), "a RESULT line the parser cannot read back"
     assert [r.name for r in parsed] == ["V0", "V1", "V2", "V3", "V4", "V5",
-                                        "V6", "V7", "C1", "C2"]
+                                        "V6", "V7", "V8", "C1", "C2"]
 
 
 def test_a_dry_run_is_refused_and_not_done():
@@ -825,7 +827,8 @@ def test_every_knob_that_moves_a_millisecond_is_in_the_run_id():
                         ("--trials", 5), ("--model", "qwen2-57b-a14b"),
                         ("--num-stages", 3), ("--block-n", 128),
                         ("--group-m", 16), ("--seed", 3),
-                        ("--session-tag", "gaps-nvidia_h200-20260918")):
+                        ("--session-tag", "gaps-nvidia_h200-20260918"),
+                        ("--declared-copies", 9)):
         other = PW.default_run_id(_args(**{flag: value}), "NVIDIA H200")
         assert other != base, flag
 
@@ -901,7 +904,8 @@ def test_the_cost_estimate_prices_the_private_arm_at_alpha_one():
               cell_budget_ms=200.0)
     for alpha in (PW.RETRACTED_ALPHA, PW.ALPHA, 1.0):
         want = (2 * _one_arm_seconds(alpha, **kw)
-                + _one_arm_seconds(1.0, **kw))
+                + _one_arm_seconds(1.0, **kw)
+                + PW.probe_seconds(kw["treads"], 2))
         assert PW.estimated_seconds(CFG, alpha=alpha, **kw) == pytest.approx(
             want, rel=1e-12), alpha
 
@@ -1075,6 +1079,42 @@ def test_v7_leaves_a_tread_no_ratio_arm_reached_to_v0_and_v1():
         == exit_codes.PASS
 
 
+def test_v7_and_v4_read_unknown_when_they_examined_nothing():
+    """A check that examined nothing reports no failures: the review's case.
+    With no tread reached by both ratio arms V7 has compared no clocks, and
+    with no shared or private row V4 has read no roof fraction."""
+    natives = [s for s in _pair_world() if s.arm == PW.NATIVE]
+    assert PW.gate_v7_clock_parity(natives, treads=[1, 2, 3]).verdict \
+        == exit_codes.UNKNOWN
+    assert PW.gate_v4_memory_bound([], roof_tflops=600.0,
+                                   roof_source="x").verdict == exit_codes.UNKNOWN
+    rows = [{"arm": PW.NATIVE, "tiles": 1, "pct_of_roof": 0.99}]
+    assert PW.gate_v4_memory_bound(rows, roof_tflops=600.0,
+                                   roof_source="x").verdict == exit_codes.UNKNOWN
+
+
+def test_the_proof_keeps_no_backup_of_a_copy_it_zeroes():
+    """The review's severity-one finding: a clone of one copy is a whole
+    weight set above the sweep's peak, and V3 scores that peak. The restore
+    comes from copy 0, which is never zeroed."""
+    import inspect
+    src = inspect.getsource(PW.prove_distinct_buffers)
+    assert ".clone()" not in src.split("# 3 and 4.")[1], (
+        "the zeroing loops clone something")
+    assert "copy_(w1[::copies])" in src and "copy_(w2[::copies])" in src
+
+
+def test_the_device_guard_accepts_a_no_uuid_identity_only_against_itself(
+        tmp_path):
+    out = tmp_path / "run"
+    weak = PW.NO_UUID_PREFIX + "nvidia_h200"
+    assert PW.device_guard(out, weak) == ""
+    (out / "cells.csv").write_text("x\n")
+    assert PW.device_guard(out, weak) == ""
+    assert PW.device_guard(out, "GPU-aaaa") != ""
+    assert PW.device_guard(out, PW.NO_UUID_PREFIX + "nvidia_a100") != ""
+
+
 def test_the_device_guard_refuses_a_second_card_and_resumes_the_first(tmp_path):
     out = tmp_path / "run"
     assert PW.device_guard(out, "GPU-aaaa") == ""
@@ -1108,37 +1148,42 @@ def _reference_fused(x, w1, w2, topk_weights, topk_ids):
     return y
 
 
-def _cpu_proof(*, misroute=None):
-    """The whole proof on the toy model, off GPU. `misroute(ids)` plants a
-    broken relabelling into the private arm."""
+def _cpu_proof(*, misroute=None, declared=None):
+    """The whole proof on the toy model, off GPU. `misroute(ids, declared)`
+    plants a broken relabelling into the private arm; `declared` above the
+    three copies read plants the padding `declared_copies_for` adds."""
     import torch
     toy = MODEL_CONFIGS["toy"]
     e, k, bm, copies = toy.num_experts, toy.top_k, 4, 3
+    declared = declared or copies
     rows = copies * bm
-    w1, w2, _ = PW.build_private_weights(toy, "bf16", copies, seed=0,
+    w1, w2, _ = PW.build_private_weights(toy, "bf16", declared, seed=0,
                                          device="cpu")
     ids = balanced_flat_ids(e, rows, k, seed=3).to(torch.int64)
     tokens = ids.shape[0]
     x = torch.randn((tokens, toy.hidden_size), dtype=torch.bfloat16,
                     generator=torch.Generator().manual_seed(1))
     weights = torch.full(ids.shape, 1.0 / k)
-    private = PW.private_topk_ids(ids, e, bm, rows, copies)
+    private = PW.private_topk_ids(ids, e, bm, rows, declared)
     if misroute is not None:
-        private = misroute(private, copies)
-    by_arm = {PW.NATIVE: ids, PW.SHARED: PW.shared_topk_ids(ids, copies),
+        private = misroute(private, declared)
+    by_arm = {PW.NATIVE: ids, PW.SHARED: PW.shared_topk_ids(ids, declared),
               PW.PRIVATE: private}
     calls = []
 
     def call_for(arm):
-        a1, a2 = (w1[::copies], w2[::copies]) if arm == PW.NATIVE else (w1, w2)
+        a1, a2 = ((w1[::declared], w2[::declared]) if arm == PW.NATIVE
+                  else (w1, w2))
 
         def call():
             calls.append(arm)
             return _reference_fused(x, a1, a2, weights, by_arm[arm])
         return call
     before = (w1.clone(), w2.clone())
-    proof = PW.prove_distinct_buffers(call_for, w1, w2, cfg=toy, copies=copies,
-                                      dtype="bf16", private_ids=private)
+    proof = PW.prove_distinct_buffers(call_for, w1, w2, cfg=toy,
+                                      copies_read=copies, dtype="bf16",
+                                      private_ids=private,
+                                      copies_declared=declared)
     return proof, calls, before, (w1, w2)
 
 
@@ -1146,7 +1191,7 @@ def test_the_buffer_proof_passes_a_correct_relabelling_end_to_end():
     import torch
     proof, calls, before, after = _cpu_proof()
     assert proof.verdict == exit_codes.PASS, proof.lines()
-    assert len(calls) == PW.proof_calls(3)
+    assert len(calls) == PW.proof_calls(3, 3)
     # It restores what it zeroed: nothing is left corrupted.
     assert torch.equal(before[0], after[0]) and torch.equal(before[1], after[1])
 
@@ -1154,8 +1199,8 @@ def test_the_buffer_proof_passes_a_correct_relabelling_end_to_end():
 def test_the_buffer_proof_catches_every_tile_past_the_first_reading_copy_one():
     """The reviewer's case, and why the zeroing is one copy at a time: zeroing
     copies 1..n-1 together changes the output for this bug too."""
-    def to_copy_one(private, copies):
-        c = private % copies
+    def to_copy_one(private, declared):
+        c = private % declared
         return private - c + (c > 0).to(private.dtype)
     proof, *_ = _cpu_proof(misroute=to_copy_one)
     assert proof.parts["kernel_read"] is False, proof.lines()
@@ -1163,6 +1208,242 @@ def test_the_buffer_proof_catches_every_tile_past_the_first_reading_copy_one():
 
 
 def test_the_buffer_proof_catches_a_relabelling_back_to_copy_zero():
-    proof, *_ = _cpu_proof(misroute=lambda p, copies: p - p % copies)
+    proof, *_ = _cpu_proof(misroute=lambda p, declared: p - p % declared)
     assert proof.parts["kernel_read"] is False
     assert proof.verdict == exit_codes.FAIL
+
+
+def test_the_buffer_proof_passes_padding_copies_that_are_never_read():
+    """`declared_copies_for` may declare more copies than the deepest tread
+    reads. The proof zeroes each of those too and both arms must not move."""
+    import torch
+    proof, calls, before, after = _cpu_proof(declared=4)
+    assert proof.verdict == exit_codes.PASS, proof.lines()
+    assert len(calls) == PW.proof_calls(3, 4) == 3 + 6 + 2
+    assert "never read" in proof.detail["kernel_read"]
+    assert torch.equal(before[0], after[0]) and torch.equal(before[1], after[1])
+
+
+def test_the_buffer_proof_catches_a_tile_reading_a_padding_copy():
+    """A relabelling that sends copy 2's tiles to the never-read copy 3:
+    zeroing copy 2 then moves nothing (kernel_read) and zeroing copy 3 moves
+    the private output (shared_blind). Both parts see it."""
+    def to_padding(private, declared):
+        return private + ((private % declared) == 2).to(private.dtype)
+    proof, *_ = _cpu_proof(misroute=to_padding, declared=4)
+    assert proof.parts["kernel_read"] is False, proof.lines()
+    assert proof.parts["shared_blind"] is False, proof.lines()
+    assert proof.verdict == exit_codes.FAIL
+
+
+# --------------------------------------------------------------------------
+# 15. the alignment kernel: cited, derived, measured, and kept apart
+# --------------------------------------------------------------------------
+
+def test_align_path_follows_the_cited_condition():
+    lo, hi = PW.ALIGN_SMALL_BATCH_MAX_IDS, PW.ALIGN_SMALL_BATCH_MAX_EXPERTS
+    assert PW.align_path(lo - 1, hi) == PW.SMALL_BATCH
+    assert PW.align_path(lo, hi) == PW.BLOCK_SCAN
+    assert PW.align_path(lo - 1, hi + 1) == PW.BLOCK_SCAN
+
+
+def test_the_default_ladder_crosses_the_id_bound_and_native_switches_at_four():
+    """The fact the whole add-on exists for, asserted on the default design
+    rather than remembered: mixtral at BLOCK_M=32 puts 256 n ids on the
+    table, so the study's own E=8 call switches kernel between treads 3 and
+    4, inside the fit."""
+    treads = PW.ladder_treads(CFG, PW.DEFAULT_BLOCK_M, PW.DEFAULT_TREADS)
+    counts = [PW.ids_for_tread(CFG, n, PW.DEFAULT_BLOCK_M) for n in treads]
+    assert min(counts) < PW.ALIGN_SMALL_BATCH_MAX_IDS <= max(counts)
+    census = PW.path_census(CFG, treads, PW.DEFAULT_BLOCK_M,
+                            {a: PW.declared_experts(a, CFG.num_experts, 6)
+                             for a in PW.ARMS})
+    assert census.switch_tread(PW.NATIVE) == 4
+
+
+def test_declared_copies_pad_past_the_expert_bound_only_when_the_ladder_crosses():
+    n, why = PW.declared_copies_for(CFG, [1, 2, 3, 4, 5, 6], 32)
+    assert n == 9 and CFG.num_experts * n > PW.ALIGN_SMALL_BATCH_MAX_EXPERTS
+    assert "72" in why
+    # A ladder on one side of the id bound pads nothing.
+    assert PW.declared_copies_for(CFG, [1, 2, 3], 32)[0] == 3
+    assert PW.declared_copies_for(CFG, [4, 5, 6], 32)[0] == 6
+    # A model already past the expert bound pads nothing.
+    v3 = MODEL_CONFIGS["deepseek-v3"]
+    assert v3.num_experts > PW.ALIGN_SMALL_BATCH_MAX_EXPERTS
+    treads = PW.ladder_treads(v3, 32, 2)
+    assert PW.declared_copies_for(v3, treads, 32)[0] == 2
+    # The operator may declare more, never fewer than the deepest tread reads.
+    assert PW.declared_copies_for(CFG, [1, 2, 3, 4, 5, 6], 32, 12)[0] == 12
+    with pytest.raises(PW.PrivateWeightRefusal):
+        PW.declared_copies_for(CFG, [1, 2, 3, 4, 5, 6], 32, 5)
+
+
+def test_the_census_refuses_a_ratio_arm_that_switches_and_lets_native_switch():
+    treads = [1, 2, 3, 4, 5, 6]
+    tight = PW.path_census(CFG, treads, 32, {PW.NATIVE: 8, PW.SHARED: 48,
+                                             PW.PRIVATE: 48})
+    assert tight.switch_tread(PW.SHARED) == 4
+    assert [r for r in tight.refusals if r.startswith("shared")]
+    assert [r for r in tight.refusals if r.startswith("private")]
+    assert not [r for r in tight.refusals if r.startswith("native")]
+    padded = PW.path_census(CFG, treads, 32, {PW.NATIVE: 8, PW.SHARED: 72,
+                                              PW.PRIVATE: 72})
+    assert padded.refusals == ()
+    assert padded.switch_tread(PW.NATIVE) == 4
+    assert padded.switch_tread(PW.SHARED) is None
+    assert padded.switch_tread(PW.PRIVATE) is None
+
+
+def test_the_census_refuses_the_naive_assignment_and_the_buffer_clamp():
+    """Two other launch-changing branches in vLLM's own arithmetic, refused
+    from the plan: the toy model at one tread has 16 ids, so declaring 64
+    experts trips both `16 x 4 <= 64` and `16 < 64`."""
+    toy = MODEL_CONFIGS["toy"]
+    census = PW.path_census(toy, [1], 4, {PW.NATIVE: toy.num_experts,
+                                          PW.SHARED: 64, PW.PRIVATE: 64})
+    assert any("naive assignment" in r for r in census.refusals)
+    assert any("clamps the sorted-id buffer" in r for r in census.refusals)
+    fine = PW.path_census(toy, [1], 4, {a: toy.num_experts for a in PW.ARMS})
+    assert fine.refusals == ()
+
+
+def test_the_census_refuses_a_declaration_the_scan_kernel_refuses():
+    census = PW.path_census(CFG, [1], 32, {PW.NATIVE: 8, PW.SHARED: 1024,
+                                           PW.PRIVATE: 1024})
+    assert any("refuses" in r for r in census.refusals)
+
+
+def test_leverage_is_the_indicator_regressed_on_n():
+    assert PW.leverage([1, 2, 3, 4, 5, 6], 4) == pytest.approx(4.5 / 17.5)
+    assert PW.leverage([1, 2, 3, 4, 5, 6], 1) == pytest.approx(0.0)
+
+
+def test_step_bias_is_the_leverage_over_the_private_slope():
+    assert PW.step_bias(0.01, [1, 2, 3, 4, 5, 6], 4, 0.5) == pytest.approx(
+        (4.5 / 17.5) * 0.01 / 0.5)
+    assert PW.step_bias(0.01, [1, 2, 3, 4, 5, 6], 4, 0.0) == math.inf
+
+
+def _series(step_ms: float, split: int, noise=0.0, seed=0):
+    import random
+    rng = random.Random(seed)
+    out = []
+    for n in range(1, 7):
+        numel = 256 * n
+        ms = 0.012 + 8e-6 * numel + (step_ms if n >= split else 0.0)
+        out.append((n, numel, ms * (1.0 + rng.gauss(0.0, noise))))
+    return out
+
+
+def test_step_fit_recovers_a_planted_step_and_finds_none_on_a_line():
+    fit = PW.step_fit(_series(0.05, 4))
+    assert fit.split_tread == 4
+    assert fit.step_ms == pytest.approx(0.05, rel=1e-9)
+    assert fit.rss_with < 1e-20
+    flat = PW.step_fit(_series(0.0, 4))
+    assert abs(flat.step_ms) < 1e-9
+    assert flat.rss_without < 1e-20
+    with pytest.raises(PW.Unmeasurable):
+        PW.step_fit(_series(0.0, 4)[:2])
+
+
+def _probe_from(series_by_label, spread=0.0):
+    cells = []
+    for label, series in series_by_label.items():
+        for rep in range(3):
+            for n, numel, ms in series:
+                jitter = (rep - 1) * spread
+                cells.append(PW.ProbeCell(label, n, numel, 72, rep,
+                                          ms * (1.0 + jitter)))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+def _census():
+    return PW.path_census(CFG, [1, 2, 3, 4, 5, 6], 32,
+                          {PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72})
+
+
+def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one():
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)})
+    assert PW.gate_v8_alignment(flat, treads=treads, census=_census(),
+                                private_slope_ms=0.64).verdict == exit_codes.PASS
+    split = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, 4)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(split, treads=treads, census=_census(),
+                                private_slope_ms=0.64)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+    # Over budget but the probe's own spread swallows it: not shown either way.
+    noisy = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, 4)}, spread=5.0)
+    assert PW.gate_v8_alignment(noisy, treads=treads, census=_census(),
+                                private_slope_ms=0.64).verdict == exit_codes.UNKNOWN
+    assert PW.gate_v8_alignment(None, treads=treads, census=_census(),
+                                private_slope_ms=0.64).verdict == exit_codes.UNKNOWN
+
+
+def test_v8_budget_is_a_bias_on_the_ratio_and_not_a_step_in_microseconds():
+    """The same step passes at a deep private slope and fails at a shallow one:
+    the gate is on what the step does to the RATIO."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.02, 4)}, spread=1e-4)
+    assert PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                private_slope_ms=0.64).verdict == exit_codes.PASS
+    assert PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                private_slope_ms=0.2).verdict == exit_codes.FAIL
+
+
+def test_the_planted_probe_puts_natives_step_where_the_census_does():
+    census = _census()
+    probe = PW.planted_probe(PW.WORLDS["refit"], CFG, block_m=32,
+                             treads=[1, 2, 3, 4, 5, 6],
+                             declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72,
+                                              PW.PRIVATE: 72},
+                             census=census, noise=0.002, seed=0)
+    native = PW.read_probe(probe, PW.NATIVE, census)
+    assert native.real and native.fit.split_tread == 4
+    shared = PW.read_probe(probe, PW.SHARED, census)
+    assert not shared.real
+
+
+def test_the_declaration_fit_takes_natives_step_out_of_v5():
+    """LOAD-BEARING: in the alignment-step world the raw native - shared slope
+    gap carries the step at the design's leverage and would FAIL V5; the fit
+    with the step term reads the declaration's per-tile cost as ~0 and PASSES.
+    Noise off, so the arithmetic is exact."""
+    world = PW.WORLDS["alignment-step"]
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(world, CFG, block_m=32, treads=treads,
+                                 repeats=3, alpha_shared=world.alpha,
+                                 ridge=160.0, bandwidth_gbps=4000.0, b=2,
+                                 noise=0.0, seed=0, copies_declared=9,
+                                 native_switch=4)
+    fit = PW.declaration_fit(samples, treads, 4)
+    assert fit.step_ms == pytest.approx(world.alignment_step_ms, rel=1e-6)
+    assert abs(fit.per_tile_ms) < 1e-9
+    native, shared, private = (PW.ladder_for(samples, a) for a in PW.ARMS)
+    raw = abs(native.slope_ms - shared.slope_ms) / private.slope_ms
+    assert raw == pytest.approx(PW.leverage(treads, 4) * world.alignment_step_ms
+                                / private.slope_ms, rel=1e-6)
+    assert raw > PW.MACHINERY_BOUND, "the planted step is not load-bearing"
+    assert PW.gate_v5_machinery(native, shared, private).verdict == exit_codes.FAIL
+    assert PW.gate_v5_machinery(native, shared, private, fit).verdict \
+        == exit_codes.PASS
+    # And with no switch inside the ladder the fit is the plain line.
+    line = PW.declaration_fit(samples, treads, None)
+    assert line.step_ms is None and line.dof == 4
+
+
+def test_the_declaration_fit_still_finds_a_real_per_tile_cost_beside_a_step():
+    world = PW.WORLDS["machinery"]
+    treads = [1, 2, 3, 4, 5, 6]
+    samples = PW.planted_samples(
+        PW.World("x", "x", {}, machinery_ms_per_tile=0.35, alignment_step_ms=0.4),
+        CFG, block_m=32, treads=treads, repeats=3, alpha_shared=world.alpha,
+        ridge=160.0, bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
+        copies_declared=9, native_switch=4)
+    fit = PW.declaration_fit(samples, treads, 4)
+    assert fit.per_tile_ms == pytest.approx(0.35, rel=1e-6)
+    assert fit.step_ms == pytest.approx(0.4, rel=1e-6)

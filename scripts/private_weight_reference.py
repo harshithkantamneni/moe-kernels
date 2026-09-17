@@ -109,6 +109,23 @@ exactly, because the pieces are not equally covered:
     work, and PRIVATE moves more bytes per call than SHARED. V7 requires the
     two arms' under-load clocks to agree at every fitted tread, so a ratio
     that carries a clock difference is refused rather than published.
+  * THE ALIGNMENT KERNEL. vLLM builds the sorted-id table with one of two
+    kernels, chosen by the id count and the declared expert count (the cited
+    `ALIGN_*` constants), and for this model at this tile the switch falls
+    INSIDE the ladder. A step in the per-call time that a straight-line fit
+    reads as slope, in both ratio arms alike, pulling the ratio toward 1.
+    Three things are done about it, kept apart: the RATIO ARMS ARE MOVED OFF
+    THE SWITCH by construction (`declared_copies_for` declares enough copies
+    that `E x n_decl` clears the expert bound, so both take the scan path at
+    every tread, and the census REFUSES a plan where they do not); the switch
+    is MEASURED on the attached build by `probe_alignment`, timing the
+    alignment op alone along the ladder for each declaration, and V8 refuses
+    the design if the ratio arms' own series carries a step worth more than
+    `ALIGN_STEP_RATIO_BUDGET` of the ratio; and NATIVE, which keeps the
+    study's declaration and so keeps the switch, has its ladder difference
+    from SHARED fitted WITH a step term (`declaration_fit`), so V5 scores the
+    per-tile cost of the declaration with the step taken out, and the step
+    itself is a reported number with an interval.
   * NOTHING BOUNDS THE FOOTPRINT ITSELF, and the page says so rather than
     implying otherwise. A cost that (a) vanishes at one copy and (b) is paid by
     READING the copies rather than by declaring them -- a TLB or DRAM-page
@@ -781,6 +798,7 @@ class MemoryPlan:
     is NOT the same answer as True.
     """
 
+    #: Copies ALLOCATED AND FILLED: what V3 prices. At or above `copies_read`.
     copies: int
     per_copy_bytes: int
     weight_bytes: int
@@ -792,6 +810,9 @@ class MemoryPlan:
     device_free_bytes: int | None
     device_source: str
     headroom: float
+    #: Copies the deepest tread READS. The difference is the padding that
+    #: keeps the ratio arms on one alignment kernel (`declared_copies_for`).
+    copies_read: int = 0
 
     @property
     def fits(self) -> bool | None:
@@ -806,8 +827,12 @@ class MemoryPlan:
             "allocated:",
             f"            per copy of the routed expert weight set   "
             f"{self.per_copy_bytes / gb:9.4f} GB",
-            f"            x {self.copies} copies at the deepest tread          "
-            f"        {self.weight_bytes / gb:9.4f} GB",
+            f"            x {self.copies} copies declared and filled"
+            + (f" ({self.copies_read} read at the deepest tread, "
+               f"{self.copies - self.copies_read} never read)"
+               if self.copies_read and self.copies_read != self.copies
+               else " (all read at the deepest tread)")
+            + f"  {self.weight_bytes / gb:9.4f} GB",
             f"            + modelled activation working set x {self.allowance:.1f} "
             f"allowance  {self.activation_bytes * self.allowance / gb:9.4f} GB",
             f"            + the instrument's L2 flush buffer          "
@@ -833,7 +858,8 @@ def memory_plan(cfg, dtype: str, b: int, copies: int, tokens_max: int,
                 device_free_bytes: int | None, device_source: str,
                 allowance: float = ACTIVATION_ALLOWANCE,
                 headroom: float = MEMORY_HEADROOM,
-                flush: tuple[int, str] | None = None) -> MemoryPlan:
+                flush: tuple[int, str] | None = None,
+                copies_read: int | None = None) -> MemoryPlan:
     per_copy = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
     weights = weight_bytes_total(cfg, dtype, copies)
     act = activation_working_set(cfg, tokens_max, b)
@@ -844,7 +870,8 @@ def memory_plan(cfg, dtype: str, b: int, copies: int, tokens_max: int,
         flush_source=flush_source,
         predicted_peak_bytes=int(weights + allowance * act + flush_bytes),
         device_free_bytes=device_free_bytes, device_source=device_source,
-        headroom=headroom)
+        headroom=headroom,
+        copies_read=copies if copies_read is None else copies_read)
 
 
 # --------------------------------------------------------------------------
@@ -946,12 +973,13 @@ def private_topk_ids(ids, num_experts: int, block_m: int, rows_per_expert: int,
 
 
 def expert_space(num_experts: int, copies_declared: int) -> int:
-    """`E x n_max`: the expert count SHARED and PRIVATE declare at EVERY tread.
+    """`E x n_decl`: the expert count SHARED and PRIVATE declare at EVERY tread.
 
-    Fixed at the deepest tread's copy count, never `E x n` at tread `n`: the
-    sorted-id buffer and the launch grid scale with the declaration, and a
-    declaration that grew with the tread put a per-tread dead-launch term into
-    one slope and not the other.
+    Fixed, never `E x n` at tread `n`: the sorted-id buffer and the launch
+    grid scale with the declaration, and a declaration that grew with the
+    tread put a per-tread dead-launch term into one slope and not the other.
+    `n_decl` is the deepest tread's copy count, or more when
+    `declared_copies_for` pads it past vLLM's small-batch expert bound.
     """
     return num_experts * copies_declared
 
@@ -966,6 +994,429 @@ def declared_experts(arm: str, num_experts: int, copies_declared: int) -> int:
 def copies_read(arm: str, tiles: int) -> int:
     """How many distinct copies an arm's call READS at tread `tiles`."""
     return tiles if arm == PRIVATE else 1
+
+
+# --------------------------------------------------------------------------
+# THE ALIGNMENT PATH. vLLM builds the sorted-id table with one of two kernels,
+# chosen by the id count and the declared expert count, and the switch sits
+# INSIDE this ladder. What is cited, what is derived and what is measured are
+# kept apart below.
+# --------------------------------------------------------------------------
+
+#: A HYPOTHESIS ABOUT THE POD'S BUILD, cited and not measured. vLLM v0.27.1,
+#: `csrc/libtorch_stable/moe/moe_align_sum_kernels.cu`, host function
+#: `moe_align_block_size`:
+#:
+#:     bool small_batch_expert_mode =
+#:         (topk_ids.numel() < 1024) && (num_experts <= 64);
+#:
+#: Under both bounds ONE block does the whole alignment; at or past either, a
+#: two-block scan plus a sort kernel whose grid is `numel / 256` blocks. For
+#: mixtral at BLOCK_M=32 the id count is 256 n, so an E=8 declaration crosses
+#: the id bound between treads 3 and 4: a step in the per-call time that a
+#: straight-line fit reads as slope. These numbers shape the PLAN and name the
+#: split the NATIVE step is fitted at; the probe MEASURES where the step is on
+#: the attached build, and V8 is scored on the probe and never on these.
+ALIGN_SMALL_BATCH_MAX_IDS = 1024
+ALIGN_SMALL_BATCH_MAX_EXPERTS = 64
+#: `STD_TORCH_CHECK(padded_num_experts < 1024)`: the scan path assigns one
+#: thread per expert padded to a warp and refuses past this.
+ALIGN_MAX_PADDED_EXPERTS = 1024
+ALIGN_WARP = 32
+#: `fused_experts_impl` skips alignment entirely when
+#: `num_tokens x top_k x 4 <= global_num_experts` (its "naive" assignment), a
+#: THIRD path this arm must never be on: a different kernel launch.
+NAIVE_ASSIGNMENT_SPARSITY = 4
+
+SMALL_BATCH = "small-batch"
+BLOCK_SCAN = "block-scan"
+
+
+def align_path(numel: int, declared: int) -> str:
+    """Which alignment kernel the cited hypothesis says a call takes."""
+    if (numel < ALIGN_SMALL_BATCH_MAX_IDS
+            and declared <= ALIGN_SMALL_BATCH_MAX_EXPERTS):
+        return SMALL_BATCH
+    return BLOCK_SCAN
+
+
+def ids_for_tread(cfg, tread: int, block_m: int) -> int:
+    """`topk_ids.numel()` at a tread: tokens x k, which is E x rows per expert."""
+    return SWEEP.tokens_for_rows(cfg, tread * block_m) * cfg.top_k
+
+
+def declared_copies_for(cfg, treads: list[int], block_m: int,
+                        requested: int = 0) -> tuple[int, str]:
+    """How many copies SHARED and PRIVATE declare, and why.
+
+    At least the deepest tread's count, so every read copy has a slot. And
+    when the ladder's id counts straddle the small-batch id bound while
+    `E x n_max` is under the expert bound, ENOUGH MORE that `E x n_decl`
+    clears the expert bound: both ratio arms then take the scan kernel at
+    every tread and no step can enter either slope. The extra copies are
+    allocated and filled like the others and never read; their price is
+    memory and dead launches, and dead launches are a per-tread constant.
+
+    `requested` overrides the rule and is refused below `n_max`. A request
+    that leaves the ratio arms on the crossing is refused by the CENSUS, with
+    the crossing named, not here.
+    """
+    n_max = treads[-1]
+    e = cfg.num_experts
+    if requested:
+        if requested < n_max:
+            raise PrivateWeightRefusal(
+                f"--declared-copies {requested} is below the {n_max} copies "
+                "the deepest tread reads; every read copy needs a slot")
+        return requested, f"--declared-copies {requested}, the operator's choice"
+    counts = [ids_for_tread(cfg, n, block_m) for n in treads]
+    straddles = min(counts) < ALIGN_SMALL_BATCH_MAX_IDS <= max(counts)
+    if straddles and e * n_max <= ALIGN_SMALL_BATCH_MAX_EXPERTS:
+        n_decl = max(n_max, -(-(ALIGN_SMALL_BATCH_MAX_EXPERTS + 1) // e))
+        return n_decl, (
+            f"the ladder's id count runs {min(counts)}..{max(counts)}, across "
+            f"the small-batch id bound {ALIGN_SMALL_BATCH_MAX_IDS}, and E x "
+            f"n_max = {e * n_max} is under the expert bound "
+            f"{ALIGN_SMALL_BATCH_MAX_EXPERTS}; declaring {n_decl} copies "
+            f"(E x {n_decl} = {e * n_decl}) keeps both ratio arms on the scan "
+            "kernel at every tread")
+    if straddles:
+        return n_max, (f"E x n_max = {e * n_max} already clears the expert "
+                       f"bound {ALIGN_SMALL_BATCH_MAX_EXPERTS}: one kernel "
+                       "throughout")
+    return n_max, (f"the ladder's id count {min(counts)}..{max(counts)} does "
+                   f"not cross {ALIGN_SMALL_BATCH_MAX_IDS}: one kernel "
+                   "throughout")
+
+
+@dataclass(frozen=True)
+class PathCensus:
+    """Every (arm, tread)'s alignment kernel under the hypothesis, and what the
+    plan refuses on. Pure arithmetic, printed on the plan page."""
+
+    #: `(arm, tread, tokens, numel, declared, path)`
+    rows: tuple[tuple[str, int, int, int, int, str], ...]
+    refusals: tuple[str, ...]
+
+    def switch_tread(self, arm: str) -> int | None:
+        """The first tread at which `arm`'s kernel differs from its first."""
+        mine = [(n, path) for a, n, _t, _i, _d, path in self.rows if a == arm]
+        for n, path in mine[1:]:
+            if path != mine[0][1]:
+                return n
+        return None
+
+    def lines(self) -> list[str]:
+        out = ["alignment   which moe_align_block_size kernel each call takes "
+               f"under the cited HYPOTHESIS (ids < {ALIGN_SMALL_BATCH_MAX_IDS} "
+               f"and experts <= {ALIGN_SMALL_BATCH_MAX_EXPERTS} -> "
+               f"{SMALL_BATCH}, else {BLOCK_SCAN}); the probe MEASURES it:"]
+        for a, n, t, i, d, path in self.rows:
+            out.append(f"            {a:8s} n={n:<2d} T={t:<6d} ids={i:<6d} "
+                       f"declared={d:<4d} {path}")
+        for arm in ARMS:
+            sw = self.switch_tread(arm)
+            out.append(f"            {arm:8s} "
+                       + (f"SWITCHES at tread {sw}" if sw
+                          else "one kernel throughout"))
+        return out
+
+    def as_dict(self) -> dict:
+        return {"rows": [list(r) for r in self.rows],
+                "refusals": list(self.refusals),
+                "switch_tread": {arm: self.switch_tread(arm) for arm in ARMS},
+                "hypothesis": {"max_ids": ALIGN_SMALL_BATCH_MAX_IDS,
+                               "max_experts": ALIGN_SMALL_BATCH_MAX_EXPERTS}}
+
+
+def path_census(cfg, treads: list[int], block_m: int,
+                declared_by_arm: dict[str, int]) -> PathCensus:
+    rows = []
+    refusals = []
+    for arm in ARMS:
+        d = declared_by_arm[arm]
+        padded = -(-d // ALIGN_WARP) * ALIGN_WARP
+        if padded >= ALIGN_MAX_PADDED_EXPERTS:
+            refusals.append(
+                f"{arm} declares {d} experts, padded to {padded}, and vLLM's "
+                f"scan kernel refuses {ALIGN_MAX_PADDED_EXPERTS} or more")
+        for n in treads:
+            tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
+            numel = tokens * cfg.top_k
+            if numel * NAIVE_ASSIGNMENT_SPARSITY <= d:
+                refusals.append(
+                    f"{arm} at n={n}: {tokens} x {cfg.top_k} x "
+                    f"{NAIVE_ASSIGNMENT_SPARSITY} <= {d} declared puts vLLM on "
+                    "its naive assignment, a different kernel launch with no "
+                    "alignment at all")
+            if numel < d:
+                refusals.append(
+                    f"{arm} at n={n}: {numel} ids < {d} declared clamps the "
+                    "sorted-id buffer, a different launch grid")
+            rows.append((arm, n, tokens, numel, d, align_path(numel, d)))
+    census = PathCensus(tuple(rows), ())
+    for arm in RATIO_ARMS:
+        sw = census.switch_tread(arm)
+        if sw:
+            refusals.append(
+                f"{arm} changes alignment kernel at tread {sw}: a step inside "
+                "a ratio arm's ladder, which a straight-line fit reads as "
+                "slope. Declare more copies (--declared-copies) so that E x "
+                f"n_decl > {ALIGN_SMALL_BATCH_MAX_EXPERTS}, or keep the ladder "
+                "on one side of the id bound")
+    return PathCensus(tuple(rows), tuple(refusals))
+
+
+# --------------------------------------------------------------------------
+# THE PROBE: the step, measured on the attached build, and the fit that finds
+# a step in a series.
+# --------------------------------------------------------------------------
+
+#: The probe's cells are cheap, so it repeats them: the step it reports is a
+#: median over these, and its own across-repeat spread is the noise a split
+#: is judged against.
+PROBE_REPEATS = 3
+PROBE_WARMUP_MS = 50.0
+PROBE_TARGET_MS = 30.0
+PROBE_TRIALS = 3
+#: A step is REAL, for the record and for choosing the split the V5 fit uses,
+#: when it exceeds this many across-repeat spreads of the series' own cells.
+PROBE_STEP_SIGMA = 3.0
+
+#: DESIGN DECISION 12. How much of the ratio an alignment step in the ratio
+#: arms may be worth before V8 refuses the design: a hundredth, a sixth of
+#: ALPHA_BAND's width. CHOSEN. The bias is arithmetic (`step_bias`) at the
+#: run's own calibrated weight-stream time; nothing here is a card's number.
+ALIGN_STEP_RATIO_BUDGET = 0.01
+
+
+@dataclass(frozen=True)
+class ProbeCell:
+    label: str       # the arm whose declaration was probed
+    tread: int
+    numel: int
+    declared: int
+    repeat: int
+    ms: float
+
+
+@dataclass(frozen=True)
+class AlignProbe:
+    cells: tuple[ProbeCell, ...]
+    synthetic: bool
+    note: str = ""
+
+    def labels(self) -> list[str]:
+        return [a for a in ARMS if any(c.label == a for c in self.cells)]
+
+    def series(self, label: str) -> list[tuple[int, int, float]]:
+        """`(tread, numel, median ms)` per tread for one declaration."""
+        by: dict[tuple[int, int], list[float]] = {}
+        for c in self.cells:
+            if c.label == label:
+                by.setdefault((c.tread, c.numel), []).append(c.ms)
+        return [(n, i, statistics.median(v)) for (n, i), v in sorted(by.items())]
+
+    def spread_ms(self, label: str) -> float | None:
+        """Median across-repeat spread of this declaration's cells, in ms."""
+        by: dict[int, list[float]] = {}
+        for c in self.cells:
+            if c.label == label:
+                by.setdefault(c.tread, []).append(c.ms)
+        s = [statistics.pstdev(v) for v in by.values() if len(v) > 1]
+        return statistics.median(s) if s else None
+
+    def as_dict(self) -> dict:
+        return {"synthetic": self.synthetic, "note": self.note,
+                "cells": [asdict(c) for c in self.cells]}
+
+
+@dataclass(frozen=True)
+class StepFit:
+    """`ms = a + c numel + s 1{tread >= split}`, at the split that fits best,
+    beside the plain affine fit it is judged against."""
+
+    split_tread: int | None
+    step_ms: float
+    slope_ms_per_id: float
+    intercept_ms: float
+    rss_with: float
+    rss_without: float
+
+
+def _ols(rows: list[list[float]], ys: list[float]) -> list[float]:
+    """Least squares by the normal equations, for two or three columns.
+    REFUSES a singular design rather than returning a number for it."""
+    k = len(rows[0])
+    ata = [[sum(r[i] * r[j] for r in rows) for j in range(k)] for i in range(k)]
+    aty = [sum(r[i] * y for r, y in zip(rows, ys, strict=True)) for i in range(k)]
+    m = [row[:] + [aty[i]] for i, row in enumerate(ata)]
+    scale = max(abs(v) for row in ata for v in row) or 1.0
+    for col in range(k):
+        piv = max(range(col, k), key=lambda r: abs(m[r][col]))
+        if abs(m[piv][col]) < 1e-12 * scale:
+            raise Unmeasurable("the design is singular: a column is constant "
+                               "or two columns coincide")
+        m[col], m[piv] = m[piv], m[col]
+        pivot = m[col][col]
+        m[col] = [v / pivot for v in m[col]]
+        for r in range(k):
+            if r != col:
+                f = m[r][col]
+                m[r] = [a - f * b for a, b in zip(m[r], m[col], strict=True)]
+    return [m[i][k] for i in range(k)]
+
+
+def step_fit(points: list[tuple[int, int, float]]) -> StepFit:
+    """The best single step in an otherwise affine series.
+
+    `points` are `(tread, numel, ms)`. For every split between two treads the
+    series is fitted as `a + c numel + s 1{tread >= split}`; the split with
+    the smallest residual sum of squares is reported with its step, beside
+    the plain affine fit's residual. Whether the step is REAL is the caller's
+    call against the series' own noise; this only finds it.
+    """
+    pts = sorted(points)
+    if len(pts) < 3:
+        raise Unmeasurable(f"{len(pts)} points cannot carry a step and a slope")
+    ys = [ms for _n, _i, ms in pts]
+    plain = _ols([[1.0, float(i)] for _n, i, _ms in pts], ys)
+    rss0 = sum((plain[0] + plain[1] * i - ms) ** 2 for _n, i, ms in pts)
+    best = None
+    for j in range(1, len(pts)):
+        split = pts[j][0]
+        rows = [[1.0, float(i), 1.0 if n >= split else 0.0] for n, i, _ in pts]
+        try:
+            a, c, s_ = _ols(rows, ys)
+        except Unmeasurable:
+            continue
+        rss = sum((a + c * i + s_ * (1.0 if n >= split else 0.0) - ms) ** 2
+                  for n, i, ms in pts)
+        if best is None or rss < best[0]:
+            best = (rss, split, s_, c, a)
+    if best is None:
+        return StepFit(None, 0.0, plain[1], plain[0], rss0, rss0)
+    rss, split, s_, c, a = best
+    return StepFit(split, s_, c, a, rss, rss0)
+
+
+def leverage(treads: list[int], split_tread: int) -> float:
+    """How much of a unit step at `split_tread` a straight-line fit over
+    `treads` reads as SLOPE: `Sxy / Sxx` of the indicator on `n`. Arithmetic
+    over the tread set alone; 0.257 for n = 1..6 split at 4."""
+    xs = [float(n) for n in treads]
+    ind = [1.0 if n >= split_tread else 0.0 for n in treads]
+    mx, mi = statistics.fmean(xs), statistics.fmean(ind)
+    sxx = sum((x - mx) ** 2 for x in xs)
+    if sxx <= 0:
+        raise Unmeasurable("one tread has no lever arm")
+    return sum((x - mx) * (d - mi) for x, d in zip(xs, ind, strict=True)) / sxx
+
+
+def step_bias(step_ms: float, treads: list[int], split_tread: int,
+              private_slope_ms: float) -> float:
+    """An upper bound on what a step common to BOTH ratio arms does to the
+    ratio: `L |step| / B_p`, the ratio -> 0 limit of
+    `L step (B_p - B_s) / (B_p (B_p + L step))`, with `L` the leverage."""
+    if private_slope_ms <= 0:
+        return math.inf
+    return leverage(treads, split_tread) * abs(step_ms) / private_slope_ms
+
+
+def probe_alignment(cfg, *, block_m: int, treads: list[int],
+                    declared_by_arm: dict[str, int], copies_declared: int,
+                    reference_clock: float | None,
+                    repeats: int = PROBE_REPEATS) -> AlignProbe:
+    """Time vLLM's alignment op ALONE, per distinct declaration, along the
+    ladder, on the attached build.
+
+    The op is `moe_align_block_size(topk_ids, BLOCK_M, declared)`, called as
+    `fused_experts_impl` calls it, on the ids each arm passes. It is the one
+    place in the call whose kernel choice depends on the id count and the
+    declaration, so timing it alone isolates the switch from the GEMM. Cheap:
+    tens of milliseconds a cell and no Triton compile.
+    """
+    import torch
+    from vllm.model_executor.layers.fused_moe.moe_align_block_size import moe_align_block_size
+
+    from moe.bench import timing
+
+    labels: dict[int, str] = {}
+    for arm in ARMS:
+        labels.setdefault(declared_by_arm[arm], arm)
+    cells = []
+    for rep_ in range(repeats):
+        for n in treads:
+            tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
+            ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
+            for d, arm in sorted(labels.items()):
+                use = ids if arm == NATIVE else shared_topk_ids(ids, copies_declared)
+
+                def call(use=use, d=d):
+                    moe_align_block_size(use, block_m, d)
+                call()
+                torch.cuda.synchronize()
+                t = timing.time_kernel(call, warmup_ms=PROBE_WARMUP_MS,
+                                       target_ms=PROBE_TARGET_MS,
+                                       trials=PROBE_TRIALS, l2_flush=False,
+                                       reference_clock_mhz=reference_clock)
+                cells.append(ProbeCell(arm, n, tokens * cfg.top_k, d, rep_,
+                                       t.ms_p50))
+    return AlignProbe(tuple(cells), synthetic=False)
+
+
+def probe_seconds(treads: list[int], declarations: int,
+                  repeats: int = PROBE_REPEATS) -> float:
+    return (declarations * len(treads) * repeats
+            * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_TARGET_MS) * 1e-3)
+
+
+@dataclass(frozen=True)
+class ProbeReading:
+    """One declaration's series read: its best step, whether that step clears
+    the series' own noise, and what the hypothesis said."""
+
+    label: str
+    fit: StepFit
+    spread_ms: float | None
+    real: bool
+    hypothesis_split: int | None
+
+    def lines(self) -> list[str]:
+        f = self.fit
+        out = [f"{self.label:8s} best split at tread "
+               f"{f.split_tread if f.split_tread else '-'}: step "
+               f"{f.step_ms * 1e3:+.2f} us, affine part {f.intercept_ms * 1e3:.2f} "
+               f"us + {f.slope_ms_per_id * 1e6:.4f} ns/id; RSS with the step "
+               f"{f.rss_with:.3e}, without {f.rss_without:.3e}; across-repeat "
+               f"spread "
+               + (f"{self.spread_ms * 1e3:.2f} us" if self.spread_ms is not None
+                  else "NOT DETERMINED")
+               + f"; the step is {'REAL' if self.real else 'NOT resolved'} at "
+               f"{PROBE_STEP_SIGMA:.0f} spreads"]
+        if self.hypothesis_split:
+            out.append(f"         the hypothesis puts this declaration's switch at "
+                       f"tread {self.hypothesis_split}: "
+                       + ("FOUND THERE" if self.real
+                          and f.split_tread == self.hypothesis_split
+                          else "found elsewhere" if self.real
+                          else "no step resolved, so the hypothesis is not "
+                               "confirmed on this build"))
+        else:
+            out.append("         the hypothesis puts this declaration on one "
+                       "kernel throughout: "
+                       + ("a step was resolved anyway" if self.real
+                          else "no step resolved, consistent"))
+        return out
+
+
+def read_probe(probe: AlignProbe, label: str, census: PathCensus
+               ) -> ProbeReading:
+    fit = step_fit(probe.series(label))
+    spread = probe.spread_ms(label)
+    real = (spread is not None and fit.split_tread is not None
+            and abs(fit.step_ms) > PROBE_STEP_SIGMA * spread)
+    return ProbeReading(label, fit, spread, real, census.switch_tread(label))
 
 
 # --------------------------------------------------------------------------
@@ -1596,12 +2047,23 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
     throughput under one budget. The own-clock fraction is printed beside each
     tread as issue efficiency and is scored by nothing.
     """
-    hot = [r for r in rows if r["arm"] in (SHARED, PRIVATE)
-           and r["pct_of_roof"] >= COMPUTE_BOUND_FRACTION]
-    worst = max((r["pct_of_roof"] for r in rows
-                 if r["arm"] in (SHARED, PRIVATE)), default=0.0)
+    fitted = [r for r in rows if r["arm"] in RATIO_ARMS]
+    hot = [r for r in fitted if r["pct_of_roof"] >= COMPUTE_BOUND_FRACTION]
+    worst = max((r["pct_of_roof"] for r in fitted), default=0.0)
     detail = [f"roof {roof_tflops:.1f} TFLOP/s, {roof_source}",
               f"worst fitted tread of shared/private reaches {worst:.1%} of it"]
+    if not fitted:
+        return Gate("V4", VALIDITY,
+                    "every fitted tread of both ladders is memory bound",
+                    UNKNOWN, "no shared or private tread was measured",
+                    f"< {COMPUTE_BOUND_FRACTION:.0%} of the fixed roof on every "
+                    "fitted tread of shared and private",
+                    "at least one ladder's slope is set by arithmetic and not "
+                    "by reads, which pulls the ratio toward 1.0 for a reason "
+                    "that is not reuse",
+                    detail + ["nothing to examine: a check that examined "
+                              "nothing reports no failures, so this is UNKNOWN "
+                              "and not PASS"])
     for r in hot[:5]:
         detail.append(f"  COMPUTE BOUND: {r['arm']} n={r['tiles']} at "
                       f"{r['pct_of_roof']:.1%} of the fixed roof")
@@ -1620,7 +2082,91 @@ def gate_v4_memory_bound(rows, *, roof_tflops: float, roof_source: str) -> Gate:
                 detail)
 
 
-def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder) -> Gate:
+@dataclass(frozen=True)
+class DeclarationFit:
+    """`ms(NATIVE) - ms(SHARED)` per tread, fitted as
+    `a + s 1{n >= switch} + b n`: the declaration's per-tile cost `b` with
+    NATIVE's alignment step `s` taken out.
+
+    The two arms read the same bytes at the same addresses in the same order,
+    so their difference carries no traffic: a constant (the dead launches of
+    the wider declaration, at NATIVE's smaller count), the step NATIVE alone
+    crosses (it keeps the study's `E` declaration, so it keeps the switch the
+    ratio arms were moved off), and whatever the declaration costs per tile,
+    which is what V5 bounds. `step_ms` is None when no switch falls inside the
+    treads present, and the fit is then the two-term line.
+    """
+
+    switch_tread: int | None
+    step_ms: float | None
+    per_tile_ms: float
+    intercept_ms: float
+    points: tuple[tuple[int, float], ...]
+    dof: int
+
+
+def declaration_fit(samples, treads: list[int], switch_tread: int | None,
+                    repeats: list[int] | None = None) -> DeclarationFit:
+    """Fit the NATIVE - SHARED difference, paired per tread over the same
+    repeats, with the step at `switch_tread` when it falls inside the ladder."""
+    native, _sp, _d = collapse(samples, NATIVE, repeats)
+    shared, _sp, _d = collapse(samples, SHARED, repeats)
+    sh = dict(shared)
+    pts = [(n, ms - sh[n]) for n, ms in native if n in sh]
+    if len(pts) < 3:
+        raise Unmeasurable(f"{len(pts)} treads common to native and shared "
+                           "cannot carry a step and a slope")
+    ys = [d for _n, d in pts]
+    ind = [1.0 if (switch_tread is not None and n >= switch_tread) else 0.0
+           for n, _d in pts]
+    if switch_tread is not None and 0.0 < statistics.fmean(ind) < 1.0:
+        a, s_, b = _ols([[1.0, i, float(n)] for (n, _d), i in
+                         zip(pts, ind, strict=True)], ys)
+        return DeclarationFit(switch_tread, s_, b, a, tuple(pts), len(pts) - 3)
+    a, b = _ols([[1.0, float(n)] for n, _d in pts], ys)
+    return DeclarationFit(None, None, b, a, tuple(pts), len(pts) - 2)
+
+
+def declaration_interval(samples, treads: list[int], switch_tread: int | None,
+                         draws: int, seed: int, pct: float = INTERVAL_PCT
+                         ) -> tuple[tuple[float, float], tuple[float, float] | None, int]:
+    """Percentile bootstrap over repeats, paired, for `b` and for `s`."""
+    rng = random.Random(seed + 1)
+    population = repeat_indices(samples)
+    bs: list[float] = []
+    ss: list[float] = []
+    for _ in range(draws):
+        if len(population) < 2:
+            break
+        drawn = [rng.choice(population) for _ in population]
+        try:
+            fit = declaration_fit(samples, treads, switch_tread, drawn)
+        except Unmeasurable:
+            continue
+        bs.append(fit.per_tile_ms)
+        if fit.step_ms is not None:
+            ss.append(fit.step_ms)
+    if len(bs) < 2:
+        raise Unmeasurable(f"only {len(bs)} of {draws} draws fitted the "
+                           "declaration difference")
+    tail = (100.0 - pct) / 2.0
+
+    def band(vals: list[float]) -> tuple[float, float]:
+        vals = sorted(vals)
+
+        def at(q: float) -> float:
+            idx = min(len(vals) - 1, max(0, int(round(q / 100.0 * (len(vals) - 1)))))
+            return vals[idx]
+        return at(tail), at(100.0 - tail)
+
+    return band(bs), (band(ss) if len(ss) >= 2 else None), len(bs)
+
+
+def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
+                      fit: DeclarationFit | None = None,
+                      per_tile_band: tuple[float, float] | None = None,
+                      step_band: tuple[float, float] | None = None,
+                      switch_source: str = "") -> Gate:
     """Does the machinery-matched ratio speak for the study's own call.
 
     THE RATIO IS FORMED BETWEEN TWO CALLS WITH ONE DIFFERENCE. SHARED and
@@ -1651,22 +2197,46 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder) -> Gate:
                     UNKNOWN, "no private slope", f"< {MACHINERY_BOUND:.0%}",
                     "the ratio's distance from the study's own call is "
                     "unbounded", [])
-    gap = native.slope_ms - shared.slope_ms
+    raw_gap = native.slope_ms - shared.slope_ms
+    gap = fit.per_tile_ms if fit is not None else raw_gap
     rel = abs(gap) / abs(private.slope_ms)
     detail = [
         f"slope(native)  {native.slope_ms:.6f} ms per M-tile  "
         f"(the study's call: E declared)",
         f"slope(shared)  {shared.slope_ms:.6f} ms per M-tile  "
-        f"(same bytes, addresses and order; E x n_max declared)",
+        f"(same bytes, addresses and order; E x n_decl declared)",
         f"slope(private) {private.slope_ms:.6f} ms per M-tile",
-        f"declaration = native - shared = {gap:+.6f} ms per M-tile, which is "
-        f"{rel:.2%} of the private slope",
+    ]
+    if fit is not None:
+        detail.append(
+            f"native - shared per tread, fitted as a + s 1{{n >= "
+            f"{fit.switch_tread if fit.switch_tread else '-'}}} + b n over "
+            f"{len(fit.points)} treads ({fit.dof} dof): b = {fit.per_tile_ms:+.6f} "
+            "ms per M-tile"
+            + (f" [{per_tile_band[0]:+.6f}, {per_tile_band[1]:+.6f}]"
+               if per_tile_band else "")
+            + (f", s = {fit.step_ms * 1e3:+.2f} us"
+               + (f" [{step_band[0] * 1e3:+.2f}, {step_band[1] * 1e3:+.2f}]"
+                  if step_band else "")
+               + " -- NATIVE's alignment step, taken OUT of b"
+               if fit.step_ms is not None else
+               ", no switch inside the ladder, so no step term")
+            + f", a = {fit.intercept_ms:+.4f} ms")
+        if switch_source:
+            detail.append(f"the switch tread came from {switch_source}")
+        detail.append(
+            f"the raw slope gap native - shared is {raw_gap:+.6f} ms per M-tile "
+            f"({abs(raw_gap) / abs(private.slope_ms):.2%} of the private "
+            "slope); it carries the step at the design's leverage and is "
+            "printed, not scored")
+    detail += [
+        f"declaration = b = {gap:+.6f} ms per M-tile, which is {rel:.2%} of "
+        "the private slope",
         f"intercepts: native {native.intercept_ms:.4f} ms, shared "
         f"{shared.intercept_ms:.4f} ms -- the dead launches of the wider "
         "declaration belong HERE, as a constant, and are not scored",
-        "read the slope gap as the additive error bar on reading the ratio as "
-        f"the native call's: about +/-{rel:.3f}, over and above its bootstrap "
-        "interval",
+        "read b as the additive error bar on reading the ratio as the native "
+        f"call's: about +/-{rel:.3f}, over and above its bootstrap interval",
     ]
     return Gate("V5", VALIDITY,
                 "the declaration's own per-M-tile cost is bounded",
@@ -1784,7 +2354,14 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                          else ""))
     if unread:
         detail.append(f"no clock in one or both ratio arms at treads {unread}")
-    if unread:
+    if not detail:
+        # No tread reached by both ratio arms: nothing was compared, and a
+        # check that examined nothing reports no failures. V0 and V1 own that
+        # state; this gate says UNKNOWN rather than PASS over it.
+        detail.append("no tread was reached by both ratio arms, so no clocks "
+                      "were compared")
+        verdict = UNKNOWN
+    elif unread:
         verdict = UNKNOWN
     else:
         verdict = PASS if not over else FAIL
@@ -1798,6 +2375,85 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                 "the two slopes were taken at different clocks on a card whose "
                 "time moves with its clock, so the ratio carries a clock "
                 "difference of unknown elasticity and may not be quoted",
+                detail)
+
+
+def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
+                      census: PathCensus, private_slope_ms: float,
+                      ratio_label: str = SHARED) -> Gate:
+    """Are the two ratio arms on ONE alignment kernel along the whole ladder,
+    as MEASURED, and is what is left worth less than the budget.
+
+    The probe timed vLLM's alignment op alone at the ratio arms' declaration
+    at every tread. `step_fit` finds the best single step in that series;
+    `step_bias` says what a step of that size, common to both arms at that
+    split, could do to the ratio through a straight-line fit. PASS when the
+    bias is under `ALIGN_STEP_RATIO_BUDGET`; FAIL when it is over AND the
+    step clears the series' own noise; UNKNOWN when it is over but unresolved
+    (a noisy probe has not shown the design sound) or when no probe ran.
+
+    NATIVE's declaration is read beside it and RECORDED: where its step is,
+    whether it is where the cited hypothesis puts it. It is not scored: NATIVE
+    is allowed its switch, and the V5 fit takes it out.
+    """
+    if probe is None:
+        return Gate("V8", VALIDITY,
+                    "the ratio arms take one alignment kernel along the ladder",
+                    UNKNOWN, "no probe ran",
+                    f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}",
+                    "an alignment step of unknown size may sit inside both "
+                    "ratio slopes", [])
+    detail = []
+    readings = {}
+    for label in probe.labels():
+        try:
+            readings[label] = read_probe(probe, label, census)
+        except Unmeasurable as exc:
+            detail.append(f"{label}: series not fitted: {exc}")
+    if probe.synthetic:
+        detail.append("this probe was PLANTED by --self-test; nothing here was "
+                      "read off a device")
+    if ratio_label not in readings:
+        return Gate("V8", VALIDITY,
+                    "the ratio arms take one alignment kernel along the ladder",
+                    UNKNOWN, "the ratio declaration was not probed",
+                    f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}",
+                    "an alignment step of unknown size may sit inside both "
+                    "ratio slopes", detail)
+    r = readings[ratio_label]
+    if r.fit.split_tread is None:
+        bias = 0.0
+    else:
+        bias = step_bias(r.fit.step_ms, treads, r.fit.split_tread,
+                         private_slope_ms)
+    for reading in readings.values():
+        detail += reading.lines()
+    detail.append(
+        f"the ratio arms' step, {r.fit.step_ms * 1e3:+.2f} us at tread "
+        f"{r.fit.split_tread if r.fit.split_tread else '-'}, read as slope at "
+        f"leverage {leverage(treads, r.fit.split_tread) if r.fit.split_tread else 0.0:.3f} "
+        f"against a private slope of {private_slope_ms:.4f} ms (one calibrated "
+        f"weight stream), could move the ratio by at most {bias:.4f}")
+    if bias <= ALIGN_STEP_RATIO_BUDGET:
+        verdict = PASS
+    elif r.real:
+        verdict = FAIL
+    else:
+        verdict = UNKNOWN
+        detail.append("the step is over budget but NOT resolved against the "
+                      "probe's own spread: the design is not shown sound, and "
+                      "not shown unsound")
+    return Gate("V8", VALIDITY,
+                "the ratio arms take one alignment kernel along the ladder",
+                verdict,
+                f"bias <= {bias:.4f}"
+                + (", a REAL step" if r.real else ", no step resolved"),
+                f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}, from "
+                "the probed series at the ratio arms' own declaration",
+                "vLLM changes alignment kernel inside the ratio arms' ladder "
+                "on this build, and the step it leaves in both slopes is worth "
+                "more than the budget; the ratio is not quotable at this "
+                "declaration",
                 detail)
 
 
@@ -2020,6 +2676,9 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "where they are the same call")
     out.append(f"    V7 shared and private under-load clocks within "
                f"{CLOCK_PARITY:.0%} at every tread")
+    out.append(f"    V8 the probed alignment step at the ratio arms' "
+               f"declaration is worth <= {ALIGN_STEP_RATIO_BUDGET} of the "
+               "ratio; FAIL needs it over budget AND resolved")
     out.append(f"    C1 PASS: point in ALPHA_BAND and interval inside "
                f"[{ISSUE_BOUND_MAX}, {NO_REUSE_MIN}); FAIL: interval misses "
                "ALPHA_BAND; otherwise UNKNOWN")
@@ -2043,11 +2702,28 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "one. The only trace such a cost leaves here is the private "
                "ladder's own mean relative residual, printed in the ladder "
                "table and SCORED BY NOTHING.")
-    out.append("  AND ONE STEP BOTH SLOPES SHARE: vLLM may switch alignment "
-               "implementation with the id count, which grows with the tread "
-               "in every arm alike. A step common to both slopes pulls the "
-               "ratio toward 1.0; it is not separable here and is registered, "
-               "not removed.")
+    out.append("  THE ALIGNMENT KERNEL, SEPARATED THREE WAYS: vLLM switches "
+               "moe_align_block_size kernel at the cited id and expert bounds, "
+               "and for this ladder the id bound falls inside it. The ratio "
+               "arms are declared past the expert bound so both take one "
+               "kernel throughout (the census above, refused otherwise); the "
+               "probe times the alignment op alone along the ladder at each "
+               "declaration and V8 scores the ratio arms' series; and NATIVE, "
+               "which keeps the study's declaration and its switch, has its "
+               "difference from SHARED fitted with a step term so V5 reads the "
+               "declaration's per-tile cost with the step out and the step is "
+               "printed with an interval.")
+    out.append("  AND TWO SMALL ASYMMETRIES, REGISTERED AND NOT REMOVED: on "
+               "the scan kernel, `count_and_sort_expert_tokens` does one "
+               "atomic add per id into a per-expert counter, so SHARED's E "
+               "counters take 32n increments each while PRIVATE's E x n take "
+               "32 each; a per-tread term in the numerator alone, of order a "
+               "tenth of a microsecond against a slope of hundreds. And the "
+               "wider declaration puts expert slots past 2^31 bytes from the "
+               "weight base (slot 71 at 117 MB a slot), which the kernel "
+               "addresses through an int64 cast of `off_experts`; a build "
+               "without it reads the wrong bytes, and V2's same_layer and "
+               "kernel_read parts are what catch that.")
     out.append("  AND THE ASSUMPTION THE RATIO KEEPS: no rate enters the "
                "number, but the ratio is alpha as a traffic fraction only if "
                "both arms deliver the same bytes per second. The shared arm's "
@@ -2065,7 +2741,8 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
                bandwidth_gbps: float, bw_source: str, out_dir: Path,
                pinned: dict, run_id: str, resources, card: str, git_note: str,
                mem: MemoryPlan, tokens: dict[int, int], ridge: float,
-               alpha: float) -> list[str]:
+               alpha: float, copies_declared: int, declared_reason: str,
+               census: PathCensus) -> list[str]:
     deepest = treads[-1]
     return [
         f"experiment  private_weight_reference / {run_id}",
@@ -2086,8 +2763,11 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         f"cells       {len(treads)} treads x {len(ARMS)} arms x "
         f"{args.repeats} repeats = {len(treads) * len(ARMS) * args.repeats}",
         f"experts     native declares E={cfg.num_experts}; shared and private "
-        f"declare E x n_max = {expert_space(cfg.num_experts, deepest)} at "
-        "EVERY tread, copy c of expert e at slot e x n_max + c",
+        f"declare E x n_decl = {expert_space(cfg.num_experts, copies_declared)} "
+        "at EVERY tread, copy c of expert e at slot e x n_decl + c",
+        f"            n_decl = {copies_declared} against n_max = {deepest} "
+        f"read: {declared_reason}",
+        *census.lines(),
         "session     " + (args.session_tag or "(none: a bare run, keyed on its "
                                               "arguments and card alone)"),
         f"bandwidth   {bandwidth_gbps:.1f} GB/s, {bw_source}",
@@ -2110,8 +2790,8 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
 
 def estimated_seconds(cfg, *, treads: list[int], block_m: int, repeats: int,
                       alpha: float, ridge: float, bandwidth_gbps: float, b: int,
-                      warmup_ms: float, trials: int, cell_budget_ms: float
-                      ) -> float:
+                      warmup_ms: float, trials: int, cell_budget_ms: float,
+                      probe_repeats: int = PROBE_REPEATS) -> float:
     """Kernel seconds at the model's own timings. EXCLUDING compiles and
     allocation, which the plan says in those words and the driver's cost table
     reads the clock off.
@@ -2130,6 +2810,9 @@ def estimated_seconds(cfg, *, treads: list[int], block_m: int, repeats: int,
                                 bandwidth_gbps=bandwidth_gbps, b=b)
             iters = SWEEP.planned_iters(ms, cell_budget_ms)
             total += repeats * (warmup_ms + trials * iters * ms) * 1e-3
+    # The alignment probe: two distinct declarations (native's and the ratio
+    # arms'), every tread, PROBE_REPEATS times, at its own budget.
+    total += probe_seconds(treads, 2, probe_repeats)
     return total
 
 
@@ -2194,8 +2877,15 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             mem: MemoryPlan, proof: BufferProof,
             weight_delta_bytes: int | None, high_water_bytes: int | None,
             draws: int, seed: int, header: list[str], card: str,
-            synthetic: bool, model_name: str, pinned: dict, prov=None) -> Report:
+            synthetic: bool, model_name: str, pinned: dict, prov=None,
+            probe: AlignProbe | None = None, census: PathCensus | None = None,
+            copies_declared: int | None = None) -> Report:
     planned = len(treads) * len(ARMS) * repeats
+    if census is None:
+        census = path_census(cfg, treads, block_m, {
+            arm: declared_experts(arm, cfg.num_experts,
+                                  copies_declared or treads[-1])
+            for arm in ARMS})
     lines = list(header)
     lines += ["", "=" * 72, "LADDERS", "=" * 72,
               f"{'arm':8s} {'n':>3s} {'r':>6s} {'T':>7s} {'copies':>6s} "
@@ -2259,6 +2949,38 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             lines.append(f"  interval NOT FORMED: {exc}")
 
     stream_ms = WEIGHTS.weight_stream_ms(cfg, dtype, bandwidth_gbps)
+
+    # WHERE NATIVE'S SWITCH IS TAKEN FROM: the probe when it resolved a step
+    # there, else the cited hypothesis. Said on the page either way.
+    native_switch = census.switch_tread(NATIVE)
+    switch_source = (f"the cited hypothesis (tread {native_switch})"
+                     if native_switch else "the cited hypothesis (no switch)")
+    if probe is not None and NATIVE in probe.labels():
+        try:
+            reading = read_probe(probe, NATIVE, census)
+            if reading.real:
+                native_switch = reading.fit.split_tread
+                switch_source = (f"the probe, which resolved native's step at "
+                                 f"tread {native_switch}")
+            else:
+                switch_source += ("; the probe resolved no step for native, so "
+                                  "the hypothesis stands unconfirmed")
+        except Unmeasurable as exc:
+            switch_source += f"; the probe's native series was not fitted ({exc})"
+    decl_fit = None
+    decl_bands: tuple = (None, None)
+    if ladders.get(NATIVE) and ladders.get(SHARED):
+        try:
+            decl_fit = declaration_fit(samples, treads, native_switch)
+            b_band, s_band, _n = declaration_interval(samples, treads,
+                                                      native_switch, draws, seed)
+            decl_bands = (b_band, s_band)
+        except Unmeasurable as exc:
+            lines.append(f"  declaration difference NOT FITTED: {exc}")
+    if decl_fit is not None:
+        lines += ["", "DECLARATION, native - shared per tread (no traffic in it): "
+                  + ", ".join(f"n={n}:{d:+.4f}" for n, d in decl_fit.points)]
+
     gates: list[Gate] = [
         gate_v0_non_vacuity(samples, planned=planned, treads=treads,
                             repeats=repeats),
@@ -2271,7 +2993,9 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     ]
     if ladders.get(NATIVE) and ladders.get(SHARED) and ladders.get(PRIVATE):
         gates.append(gate_v5_machinery(ladders[NATIVE], ladders[SHARED],
-                                       ladders[PRIVATE]))
+                                       ladders[PRIVATE], decl_fit,
+                                       decl_bands[0], decl_bands[1],
+                                       switch_source))
     else:
         gates.append(Gate("V5", VALIDITY,
                           "the declaration's own per-M-tile cost is bounded",
@@ -2282,6 +3006,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                           [unmeasurable] if unmeasurable else []))
     gates.append(gate_v6_identity(samples, identity_tread=treads[0]))
     gates.append(gate_v7_clock_parity(samples, treads=treads))
+    gates.append(gate_v8_alignment(probe, treads=treads, census=census,
+                                   private_slope_ms=stream_ms))
     if ratio is None:
         gates.append(Gate("C1", CLAIM,
                           "the re-read fraction, measured against a no-reuse "
@@ -2353,6 +3079,21 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                           "excluded_drifted": lad.excluded}
                     for arm, lad in ladders.items()},
         "treads_table": rows,
+        "copies_declared": copies_declared,
+        "path_census": census.as_dict(),
+        "align_probe": probe.as_dict() if probe is not None else None,
+        "declaration_fit": ({"switch_tread": decl_fit.switch_tread,
+                             "switch_source": switch_source,
+                             "step_ms": decl_fit.step_ms,
+                             "per_tile_ms": decl_fit.per_tile_ms,
+                             "intercept_ms": decl_fit.intercept_ms,
+                             "per_tile_band": (list(decl_bands[0])
+                                               if decl_bands[0] else None),
+                             "step_band": (list(decl_bands[1])
+                                           if decl_bands[1] else None),
+                             "points": [list(p) for p in decl_fit.points],
+                             "dof": decl_fit.dof}
+                            if decl_fit is not None else None),
         "ratio": ratio,
         "ratio_interval": list(interval),
         "ratio_interval_pct": INTERVAL_PCT,
@@ -2407,6 +3148,14 @@ class World:
     #: Relative offset of the private arm's planted clock, which is what V7
     #: measures.
     private_clock_skew: float = 0.0
+    #: NATIVE's alignment step in the SWEEP, planted from the tread the census
+    #: hypothesis says its kernel switches: the thing `declaration_fit` takes
+    #: out of V5's number.
+    alignment_step_ms: float = 0.0
+    #: The PROBE's planted step at native's declaration (a real build has
+    #: one) and at the ratio arms' declaration (a sound design has none).
+    native_probe_step_ms: float = 0.02
+    ratio_probe_step_ms: float = 0.0
     #: The buffer proof's planted verdict.
     proof_ok: bool = True
     #: Planted allocation observations, as a multiple of the prediction.
@@ -2442,7 +3191,8 @@ class World:
 
 
 ALL_PASS = {"V0": PASS, "V1": PASS, "V2": PASS, "V3": PASS, "V4": PASS,
-            "V5": PASS, "V6": PASS, "V7": PASS, "C1": PASS, "C2": PASS}
+            "V5": PASS, "V6": PASS, "V7": PASS, "V8": PASS, "C1": PASS,
+            "C2": PASS}
 
 #: Every world this file knows, and every gate's FAIL branch is reachable from
 #: one of them. A gate that cannot fail is as useless as one that cannot pass,
@@ -2500,6 +3250,24 @@ WORLDS: dict[str, World] = {
         "timings do not move, so every other gate passes and V7 is the only "
         "thing standing between this world and a published ratio",
         dict(ALL_PASS, V7=FAIL), private_clock_skew=-0.03),
+    "alignment-step": World(
+        "alignment-step",
+        "NATIVE crosses vLLM's alignment-kernel switch inside the ladder and "
+        "pays a step of 0.4 ms from there: the raw native - shared slope gap "
+        "reads that step at the design's leverage and would FAIL V5, and the "
+        "step-aware fit takes it out, so V5 PASSES and the step is printed "
+        "with an interval. Registered ALL PASS: this is the world V5's fit "
+        "exists for",
+        dict(ALL_PASS), alignment_step_ms=0.4),
+    "ratio-path-split": World(
+        "ratio-path-split",
+        "the probe finds a step at the RATIO arms' own declaration: on this "
+        "build the alignment kernel switches inside their ladder after all "
+        "(the expert bound is not where the source says), so V8 fails before "
+        "a slope is trusted. The planted sweep is healthy, so every other "
+        "gate passes and V8 is the only thing between this world and a "
+        "published ratio",
+        dict(ALL_PASS, V8=FAIL), ratio_probe_step_ms=0.5),
     "over-allocated": World(
         "over-allocated",
         "the weight allocation is not the one the plan priced: V3 fails, "
@@ -2533,7 +3301,8 @@ WORLDS: dict[str, World] = {
 def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                     repeats: int, alpha_shared: float, ridge: float,
                     bandwidth_gbps: float, b: int, noise: float,
-                    seed: int) -> list[Sample]:
+                    seed: int, copies_declared: int | None = None,
+                    native_switch: int | None = None) -> list[Sample]:
     """Cells GENERATED from the study's own traffic model at a stated alpha.
 
     Every row carries `SYNTHETIC_INSTRUMENT`, so "not measured" is a VALUE on
@@ -2542,6 +3311,7 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
     """
     rng = random.Random(seed)
     out: list[Sample] = []
+    n_decl = copies_declared or treads[-1]
     for rep in range(repeats):
         for n in treads:
             if n in world.drop_treads:
@@ -2559,6 +3329,10 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                 if arm == NATIVE:
                     # A SLOPE, charged on `n - n0`: what V5 is about.
                     ms += world.machinery_ms_per_tile * (n - treads[0])
+                    # A STEP, from the tread native's kernel switches: what
+                    # V5's fit takes out.
+                    if native_switch is not None and n >= native_switch:
+                        ms += world.alignment_step_ms
                 if arm == PRIVATE and n == treads[0]:
                     ms *= (1.0 + world.identity_skew)
                 ms *= world.speedup
@@ -2571,13 +3345,42 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                     rows_per_expert=rows, tokens=tokens,
                     copies=copies_read(arm, n),
                     experts_declared=declared_experts(arm, cfg.num_experts,
-                                                      treads[-1]),
+                                                      n_decl),
                     ms_p50=ms, ms_min=ms,
                     ms_stdev=0.0, iters=0, trials=0, warmup_ms=0.0,
                     instrument=SYNTHETIC_INSTRUMENT,
                     sm_clock_load_mhz=clock, clock_level_ok=None,
                     clock_level_side="", clock_drift_ok=None, l2_flush=False))
     return out
+
+
+def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
+                  declared_by_arm: dict[str, int], census: PathCensus,
+                  noise: float, seed: int) -> AlignProbe:
+    """A probe GENERATED for a planted world: an affine alignment cost per
+    declaration, native's step where the census hypothesis puts it, and the
+    ratio arms' step only in the world that plants one."""
+    rng = random.Random(seed + 7)
+    labels: dict[int, str] = {}
+    for arm in ARMS:
+        labels.setdefault(declared_by_arm[arm], arm)
+    ratio_split = census.switch_tread(NATIVE) or treads[len(treads) // 2]
+    cells = []
+    for rep_ in range(PROBE_REPEATS):
+        for n in treads:
+            numel = ids_for_tread(cfg, n, block_m)
+            for d, arm in sorted(labels.items()):
+                ms = 0.012 + 8e-6 * numel
+                sw = census.switch_tread(arm)
+                if arm == NATIVE and sw is not None and n >= sw:
+                    ms += world.native_probe_step_ms
+                if arm != NATIVE and n >= ratio_split:
+                    ms += world.ratio_probe_step_ms
+                if noise:
+                    ms *= (1.0 + rng.gauss(0.0, noise))
+                cells.append(ProbeCell(arm, n, numel, d, rep_, ms))
+    return AlignProbe(tuple(cells), synthetic=True,
+                      note=f"planted for the {world.name!r} world")
 
 
 # --------------------------------------------------------------------------
@@ -2593,10 +3396,12 @@ def build_private_weights(cfg, dtype: str, copies: int, seed: int,
     the resident footprint, the allocator's state, the pressure on the TLB --
     is then IDENTICAL at every tread and in every arm, and so is the declared
     expert space, so nothing in the ladder moves because an allocation or a
-    declaration moved. Copy `c` of expert `e` is slot `copy_slot(e, c, n_max)`,
-    EXPERT-FIRST, so the native arm's `w1[::n_max]` is copy 0 of every expert
+    declaration moved. Copy `c` of expert `e` is slot `copy_slot(e, c, n_decl)`,
+    EXPERT-FIRST, so the native arm's `w1[::n_decl]` is copy 0 of every expert
     as a strided view of the same storage (the kernel addresses experts
-    through `stride(0)`, and vLLM asserts only `stride(-1) == 1`).
+    through `stride(0)`, and vLLM asserts only `stride(-1) == 1`). `copies` is
+    the DECLARED count, which `declared_copies_for` may set above the deepest
+    tread's: the extra copies are filled like the others and never read.
 
     Every copy is FILLED, not merely reserved: an untouched copy is a page
     table entry, not a byte on the bus, and the arm's whole claim is about
@@ -2648,12 +3453,15 @@ def build_private_weights(cfg, dtype: str, copies: int, seed: int,
 SENTINEL_BASE = -1024.0
 
 
-def proof_calls(copies: int) -> int:
-    """fused_experts calls the buffer proof makes at `copies` copies: three
-    before anything is zeroed, then three per copy c >= 1 (private zeroed,
-    shared zeroed, private restored). Counted here so the plan page and the
-    session's cost note cannot drift from the proof."""
-    return 3 + 3 * max(0, copies - 1)
+def proof_calls(copies_read: int, copies_declared: int | None = None) -> int:
+    """fused_experts calls the buffer proof makes: three before anything is
+    zeroed, three per READ copy c >= 1 (private zeroed, shared zeroed, private
+    restored), and two per never-read copy (private and shared under its
+    zeroing). Counted here so the plan page and the session's cost note
+    cannot drift from the proof."""
+    declared = copies_read if copies_declared is None else copies_declared
+    return (3 + 3 * max(0, copies_read - 1)
+            + 2 * max(0, declared - copies_read))
 
 
 def sentinel_roundtrip(w1, copies: int) -> tuple[bool, str]:
@@ -2703,13 +3511,18 @@ def _sync(t) -> None:
         torch.cuda.synchronize()
 
 
-def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
-                           private_ids) -> BufferProof:
+def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies_read: int,
+                           dtype: str, private_ids,
+                           copies_declared: int | None = None) -> BufferProof:
     """Run the five-part proof. Returns the parts and their evidence.
 
     `call_for(arm)` returns a zero-argument callable producing that arm's
     `[T, H]` output at the deepest tread; `private_ids` are the `[T, k]` slot
     ids that call passes, from which the tokens routed to each copy are read.
+    `copies_read` is the deepest tread's count; `copies_declared`, at or above
+    it, is the allocation. A declared-but-never-read copy is zeroed too, and
+    NEITHER arm's output may move: that is the check that the padding
+    `declared_copies_for` adds is inert.
 
     ONE COPY AT A TIME, AND RESTORED. For every copy `c >= 1` the proof zeroes
     that copy alone, checks that the private output changed on EXACTLY the
@@ -2725,6 +3538,14 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
     otherwise time a ladder against a corrupted weight set; the restore check
     is part of `shared_blind` and says so if it did.
 
+    THE RESTORE COPIES FROM COPY 0 AND KEEPS NO BACKUP. Every copy is bitwise
+    copy 0 by construction, copy 0 is never zeroed, and its sentinels are put
+    back before this loop. A version that cloned the copy before zeroing it
+    held one whole weight set (two, at the tuple rebind) above the sweep's
+    peak, and V3 scores the peak against a ceiling with under a gigabyte of
+    slack: a perfect run came back INVALID on its own proof. The restore is
+    still CHECKED, bitwise, against the output from before the zeroing.
+
     THE SENTINELS ARE WRITTEN AND THEN PUT BACK, inside part 2, BEFORE part 5
     compares the two arms' outputs. A distinct value per copy is what tells one
     copy's memory from another's; leaving it there would make the copies
@@ -2734,6 +3555,9 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
     import torch
 
     e = cfg.num_experts
+    copies = copies_read if copies_declared is None else copies_declared
+    if copies < copies_read:
+        raise PrivateWeightRefusal(f"{copies} copies declared, {copies_read} read")
     parts: dict[str, bool] = {}
     detail: dict[str, str] = {}
 
@@ -2778,24 +3602,36 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
            else "NOT bitwise equal to shared")
         + " (recorded, not scored: native runs a different launch grid)")
 
-    # 3 and 4. one copy at a time.
+    # 3 and 4. one copy at a time: the read copies, then the never-read ones.
     copy_of_slot = (private_ids.to(torch.int64) % copies)
     read_ok = True
     blind_ok = True
     notes = []
-    for c in range(1, copies):
-        expect = (copy_of_slot == c).any(dim=1)
-        keep1, keep2 = w1[c::copies].clone(), w2[c::copies].clone()
+    for c in range(copies_read, copies):
         w1[c::copies].zero_()
         w2[c::copies].zero_()
         _sync(w1)
-        private_zeroed = call_for(PRIVATE)().clone()
-        shared_zeroed = call_for(SHARED)().clone()
+        inert = (bool(torch.equal(call_for(PRIVATE)(), private_before))
+                 and bool(torch.equal(call_for(SHARED)(), shared_before)))
+        w1[c::copies].copy_(w1[::copies])
+        w2[c::copies].copy_(w2[::copies])
+        _sync(w1)
+        blind_ok = blind_ok and inert
+        notes.append(f"c={c} (never read): zeroing it left both outputs "
+                     f"unchanged={inert}")
+    for c in range(1, copies_read):
+        expect = (copy_of_slot == c).any(dim=1)
+        w1[c::copies].zero_()
+        w2[c::copies].zero_()
+        _sync(w1)
+        private_zeroed = call_for(PRIVATE)()
+        shared_zeroed = call_for(SHARED)()
         changed = (private_zeroed != private_before).any(dim=1)
         exact = bool(torch.equal(changed, expect))
         unchanged_shared = bool(torch.equal(shared_zeroed, shared_before))
-        w1[c::copies].copy_(keep1)
-        w2[c::copies].copy_(keep2)
+        del private_zeroed, shared_zeroed
+        w1[c::copies].copy_(w1[::copies])
+        w2[c::copies].copy_(w2[::copies])
         _sync(w1)
         restored = bool(torch.equal(call_for(PRIVATE)(), private_before))
         read_ok = read_ok and exact and int(expect.sum()) > 0
@@ -2804,9 +3640,10 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
                      f"{int(expect.sum())} routed, exact={exact}, "
                      f"shared unchanged={unchanged_shared}, "
                      f"restored={restored}")
-    if copies < 2:
+    if copies_read < 2:
         read_ok = blind_ok = False
-        notes.append("fewer than two copies: nothing to prove a private read of")
+        notes.append("fewer than two copies read: nothing to prove a private "
+                     "read of")
     parts["kernel_read"] = read_ok
     detail["kernel_read"] = (
         ("every copy c >= 1, zeroed alone, changed exactly the tokens routed "
@@ -2817,19 +3654,29 @@ def prove_distinct_buffers(call_for, w1, w2, *, cfg, copies: int, dtype: str,
         + " | " + "; ".join(notes))
     parts["shared_blind"] = blind_ok
     detail["shared_blind"] = (
-        "the shared output was bitwise unchanged by every zeroing and every "
-        "restore put the private output back bitwise"
+        "the shared output was bitwise unchanged by every zeroing, every "
+        "restore put the private output back bitwise, and zeroing a never-read "
+        "copy moved neither output"
         if blind_ok else
-        "the shared output CHANGED under a zeroing, or a restore did not put "
-        "the private output back: the zeroing corrupted what it should not "
-        "have, and part 3 proves nothing")
+        "the shared output CHANGED under a zeroing, a restore did not put the "
+        "private output back, or a never-read copy was read: the zeroing "
+        "corrupted what it should not have, and part 3 proves nothing")
     return BufferProof(parts=parts, detail=detail, synthetic=False)
 
 
 def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
               csv_path: Path, cache_root: Path, store: Store, prov,
-              dtype: str) -> tuple[list[Sample], BufferProof, int, int]:
+              dtype: str, copies_declared: int, census: PathCensus,
+              stream_ms: float
+              ) -> tuple[list[Sample], BufferProof, int | None, int | None,
+                         AlignProbe]:
     """The metered part. Appends every cell as it lands, so aborting keeps it.
+
+    THE PROBE RUNS FIRST AND CAN END IT. Before a weight is allocated the
+    alignment op is timed along the ladder at both declarations, and V8 is
+    scored on it: a FAIL means this build switches kernel inside the ratio
+    arms' ladder, the sweep would measure a slope with a step in it, and the
+    sweep is SKIPPED. Seconds, against minutes of card time for an INVALID.
 
     REPEATS OUTER, ARMS ROTATED, TREADS ALTERNATED. A repeat walks the whole
     ladder and the three arms are rotated inside each tread, so no arm is first
@@ -2866,12 +3713,35 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     print(f"override hook: {where}.override_config")
     print(f"triton cache: {cache_root} (fresh for this run)")
 
-    torch.cuda.reset_peak_memory_stats()
+    e = cfg.num_experts
     deepest = treads[-1]
-    w1, w2, weight_delta = build_private_weights(cfg, dtype, deepest, args.seed)
-    native_w1, native_w2 = w1[::deepest], w2[::deepest]
-    print(f"private weights: {deepest} copies, "
-          f"{weight_delta / 1e9:.4f} GB allocated and filled")
+    declared_by_arm = {arm: declared_experts(arm, e, copies_declared)
+                       for arm in ARMS}
+    probe = probe_alignment(cfg, block_m=block_m, treads=treads,
+                            declared_by_arm=declared_by_arm,
+                            copies_declared=copies_declared,
+                            reference_clock=reference_clock,
+                            repeats=args.probe_repeats)
+    early = gate_v8_alignment(probe, treads=treads, census=census,
+                              private_slope_ms=stream_ms)
+    print("\n".join(["", "ALIGNMENT PROBE, before any weight is allocated:",
+                     *[f"  {ln}" for ln in early.lines]]))
+    if early.verdict == FAIL:
+        print("SWEEP SKIPPED: V8 FAILS on the probe, so this build switches "
+              "alignment kernel inside the ratio arms' ladder and no slope "
+              "measured here would be free of it. Nothing was allocated and "
+              "nothing was timed.")
+        return ([], BufferProof(parts={}, detail={"skipped": "V8 failed on the "
+                                                  "probe; the proof did not run"},
+                                synthetic=False), None, None, probe)
+
+    torch.cuda.reset_peak_memory_stats()
+    w1, w2, weight_delta = build_private_weights(cfg, dtype, copies_declared,
+                                                 args.seed)
+    native_w1, native_w2 = w1[::copies_declared], w2[::copies_declared]
+    print(f"private weights: {copies_declared} copies declared ({deepest} read "
+          f"at the deepest tread), {weight_delta / 1e9:.4f} GB allocated and "
+          "filled")
 
     # A DRIFTED CELL IS NOT DONE. Keyed on `status == "ok"`, a resume of the
     # same command skipped every cell the clock had drifted through -- the one
@@ -2883,7 +3753,6 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
             if s.usable}
     samples = read_samples(csv_path)
     conf = dict(pinned, BLOCK_SIZE_M=block_m)
-    e = cfg.num_experts
 
     def inputs_for(n: int):
         rows = n * block_m
@@ -2895,8 +3764,8 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
         ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
         weights = torch.full(ids.shape, 1.0 / cfg.top_k, dtype=torch.float32,
                              device="cuda")
-        private_ids = private_topk_ids(ids, e, block_m, rows, deepest)
-        shared_ids = shared_topk_ids(ids, deepest)
+        private_ids = private_topk_ids(ids, e, block_m, rows, copies_declared)
+        shared_ids = shared_topk_ids(ids, copies_declared)
         kw = vllm_call_kwargs(spec)
         kw["activation"] = MoEActivation(kw["activation"])
         return tokens, x, {NATIVE: ids, SHARED: shared_ids,
@@ -2905,7 +3774,7 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     def call_for(arm: str, x, ids_by_arm, weights, kw):
         # ONE DECLARATION FOR BOTH RATIO ARMS AT EVERY TREAD, over the whole
         # allocation; native is the study's call over copy 0 through a view.
-        experts = declared_experts(arm, e, deepest)
+        experts = declared_by_arm[arm]
         a1, a2 = (native_w1, native_w2) if arm == NATIVE else (w1, w2)
         args_kw = dict(kw, global_num_experts=experts)
         use_ids = ids_by_arm[arm]
@@ -2933,7 +3802,7 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                     continue
                 call = call_for(arm, x, ids_by_arm, weights, kw)
                 copies = copies_read(arm, n)
-                experts = declared_experts(arm, e, deepest)
+                experts = declared_by_arm[arm]
                 try:
                     with override_config(conf):
                         call()
@@ -2988,7 +3857,7 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     # AND IT RUNS UNDER THE SAME PIN AS EVERY TIMED CELL. Outside it, vLLM
     # re-resolves the tile per call from `E, _, N = w2.shape`, so the proof's
     # NATIVE call (E=8) would take this card's tuned entry and its SHARED and
-    # PRIVATE calls (E = E*n_max) would fall to `get_default_config`, which is a
+    # PRIVATE calls (E = E*n_decl) would fall to `get_default_config`, which is a
     # different BLOCK_SIZE_M, BLOCK_SIZE_N and GROUP_SIZE_M. Two consequences,
     # and both are defects: `same_layer` is a BITWISE comparison between two
     # calls that would not be guaranteed to run one kernel configuration, and
@@ -2999,9 +3868,10 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     with override_config(conf):
         proof = prove_distinct_buffers(
             lambda arm: call_for(arm, x, ids_by_arm, weights, kw),
-            w1, w2, cfg=cfg, copies=deepest, dtype=dtype,
-            private_ids=ids_by_arm[PRIVATE])
-    return samples, proof, weight_delta, torch.cuda.max_memory_allocated()
+            w1, w2, cfg=cfg, copies_read=deepest, dtype=dtype,
+            private_ids=ids_by_arm[PRIVATE], copies_declared=copies_declared)
+    return (samples, proof, weight_delta, torch.cuda.max_memory_allocated(),
+            probe)
 
 
 # --------------------------------------------------------------------------
@@ -3030,20 +3900,30 @@ def detect_card_slug() -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or NO_CARD_SLUG
 
 
+NO_UUID_PREFIX = "no-uuid:"
+
+
 def device_identity() -> str:
-    """The attached GPU's UUID, or "" when there is none or it cannot be read.
+    """The attached GPU's UUID; `no-uuid:<slug>` when a device is attached but
+    its UUID cannot be read; "" with no device at all.
 
     The card SLUG names a model of card; the UUID names the card. Two H200
     pods share a slug, and this study has measured two rentals of one card
-    type 7.1% apart.
+    type 7.1% apart. A torch that exposes no UUID gets the weaker identity
+    RECORDED, so a resume on the same slug is still possible and a resume
+    from a UUID-bearing record onto it is still refused; the guard's
+    docstring says what that costs.
     """
     try:
         import torch
         if not torch.cuda.is_available():
             return ""
-        return str(torch.cuda.get_device_properties(0).uuid)
     except Exception:                                     # noqa: BLE001
         return ""
+    try:
+        return str(torch.cuda.get_device_properties(0).uuid)
+    except Exception:                                     # noqa: BLE001
+        return NO_UUID_PREFIX + detect_card_slug()
 
 
 DEVICE_FILE = "DEVICE"
@@ -3054,11 +3934,12 @@ def device_guard(out_dir: Path, identity: str) -> str:
     why a resume here would mix two cards.
 
     Writes `DEVICE` on first use. A directory with cells in it and no DEVICE
-    file, or a different UUID, is REFUSED rather than resumed: the resume is
-    keyed on (arm, tread, repeat), so the new card would fill the holes in the
-    old card's ladder and the report would print one ratio from two cards.
-    An unreadable UUID is refused on a directory that already holds cells, for
-    the same reason.
+    file, or a different identity, is REFUSED rather than resumed: the resume
+    is keyed on (arm, tread, repeat), so the new card would fill the holes in
+    the old card's ladder and the report would print one ratio from two
+    cards. A `no-uuid:<slug>` identity matches only itself, so on a torch
+    with no UUID two pods of one card type CAN resume each other: the guard
+    is then only as strong as the slug, and the page's DEVICE line says so.
     """
     marker = out_dir / DEVICE_FILE
     has_cells = (out_dir / "cells.csv").exists()
@@ -3148,6 +4029,9 @@ def default_run_id(args, card: str) -> str:
         "trials": args.trials, "l2flush": not args.no_l2_flush,
         "seed": args.seed,
         "session": args.session_tag or "bare",
+        # The declaration sizes the launch grid, so it moves a millisecond;
+        # "auto" is a function of knobs already in the key.
+        "decl": args.declared_copies or "auto",
         # NEVER None: `provenance.run_id` refuses an unresolved knob, and it is
         # right to. "measured" is a resolved value that says a real card was
         # asked; a planted world is a different resolved value.
@@ -3208,6 +4092,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--session-tag", default="",
                     help="the driving session's name; in the run id, so a new "
                          "session measures fresh and a resumed one resumes")
+    ap.add_argument("--declared-copies", type=int, default=0,
+                    help="copies SHARED and PRIVATE declare and the build "
+                         "allocates; 0 = the rule in declared_copies_for, "
+                         "which pads past vLLM's small-batch expert bound "
+                         "when the ladder crosses its id bound")
+    ap.add_argument("--probe-repeats", type=int, default=PROBE_REPEATS,
+                    help="repeats of the alignment probe's cells")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, and "
                          "REFUSE: nothing is measured and no gate is scored")
@@ -3337,9 +4228,18 @@ def _main(argv=None) -> int:
                    f"ridge: {ridge_source}; bandwidth: {bw_source}")
 
     tokens = {n: SWEEP.tokens_for_rows(cfg, n * block_m) for n in treads}
+    try:
+        copies_declared, declared_reason = declared_copies_for(
+            cfg, treads, block_m, args.declared_copies)
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    declared_by_arm = {arm: declared_experts(arm, cfg.num_experts,
+                                             copies_declared) for arm in ARMS}
+    census = path_census(cfg, treads, block_m, declared_by_arm)
     free_bytes, mem_source = _device_memory(args)
-    mem = memory_plan(cfg, args.dtype, b, treads[-1], tokens[treads[-1]],
-                      free_bytes, mem_source)
+    mem = memory_plan(cfg, args.dtype, b, copies_declared, tokens[treads[-1]],
+                      free_bytes, mem_source, copies_read=treads[-1])
 
     card = detect_card_slug()
     pinned = dict(SWEEP.FIXED, num_stages=args.num_stages,
@@ -3359,7 +4259,9 @@ def _main(argv=None) -> int:
                         out_dir=out_dir, pinned=pinned, run_id=run_id,
                         resources=resources, card=card,
                         git_note=git_visibility(out_dir), mem=mem,
-                        tokens=tokens, ridge=ridge, alpha=args.alpha)
+                        tokens=tokens, ridge=ridge, alpha=args.alpha,
+                        copies_declared=copies_declared,
+                        declared_reason=declared_reason, census=census)
     header += prediction_lines(cfg, block_m=block_m, treads=treads,
                                alpha=args.alpha, bandwidth_gbps=bandwidth,
                                bw_source=bw_source, dtype=args.dtype,
@@ -3371,6 +4273,16 @@ def _main(argv=None) -> int:
         print("\nREFUSED: the pinned setting cannot physically run.")
         for tile, reason in sorted(refused.items()):
             print(f"  BLOCK_M={tile}: {reason}")
+        return exit_codes.REFUSED
+
+    # A LADDER WITH A KERNEL SWITCH INSIDE A RATIO ARM IS REFUSED HERE, from
+    # the cited hypothesis, before a pod is rented; the probe then checks the
+    # hypothesis on the pod, and V8 refuses on the measurement.
+    if census.refusals:
+        print("\nREFUSED: the alignment census finds a path this design "
+              "cannot carry.")
+        for why in census.refusals:
+            print(f"  {why}")
         return exit_codes.REFUSED
 
     # A DESIGN THAT CANNOT REPORT ITS OWN REGISTERED ALTERNATIVE IS REFUSED
@@ -3405,14 +4317,16 @@ def _main(argv=None) -> int:
                                  repeats=args.repeats, alpha=args.alpha,
                                  ridge=ridge, bandwidth_gbps=bandwidth, b=b,
                                  warmup_ms=args.warmup, trials=args.trials,
-                                 cell_budget_ms=args.cell_budget_ms)
+                                 cell_budget_ms=args.cell_budget_ms,
+                                 probe_repeats=args.probe_repeats)
         print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
-              "excluding compiles and allocation")
+              "excluding compiles and allocation; that includes the alignment "
+              f"probe's {probe_seconds(treads, 2, args.probe_repeats):.0f} s")
         print("NOT IN THAT FIGURE: the Triton compiles, and the private weight "
               f"build, which copies {mem.weight_bytes / 1e9:.2f} GB "
               "device-to-device once, and the five-part buffer proof's "
-              f"{proof_calls(treads[-1])} extra fused_experts calls at the "
-              "deepest tread.")
+              f"{proof_calls(treads[-1], copies_declared)} extra fused_experts "
+              "calls at the deepest tread.")
         # REFUSED (2) AND NOT DONE (0). A dry run scores no gate, prints no
         # RESULT line, and `exit_codes.classify_text` over this log raises
         # `NoGatesScored`, which that module documents as what a REFUSED log
@@ -3437,6 +4351,14 @@ def _main(argv=None) -> int:
         if missing:
             print("\n" + missing)
             return exit_codes.REFUSED
+        # V7 READS THE UNDER-LOAD CLOCK OF EVERY CELL, so a host whose NVML
+        # bindings are absent would spend the whole sweep and then read
+        # UNKNOWN at every tread, which is INVALID. Asked once, here, the way
+        # the sampler itself asks, before a byte is allocated.
+        unreadable = clock_sampler_refusal()
+        if unreadable:
+            print(f"\nREFUSED: {unreadable}")
+            return exit_codes.REFUSED
 
     prov = PV.provenance_block(
         instrument=(SYNTHETIC_INSTRUMENT if synthetic else timing_basis()),
@@ -3449,7 +4371,12 @@ def _main(argv=None) -> int:
         samples = planted_samples(
             world, cfg, block_m=block_m, treads=treads, repeats=args.repeats,
             alpha_shared=world.alpha, ridge=ridge, bandwidth_gbps=bandwidth,
-            b=b, noise=args.plant_noise, seed=args.seed)
+            b=b, noise=args.plant_noise, seed=args.seed,
+            copies_declared=copies_declared,
+            native_switch=census.switch_tread(NATIVE))
+        probe = planted_probe(world, cfg, block_m=block_m, treads=treads,
+                              declared_by_arm=declared_by_arm, census=census,
+                              noise=args.plant_noise, seed=args.seed)
         proof = planted_proof(world.proof_ok)
         weight_delta = int(mem.weight_bytes * world.weight_alloc_factor)
         high_water = int(mem.predicted_peak_bytes * world.high_water_factor)
@@ -3473,10 +4400,11 @@ def _main(argv=None) -> int:
         except SchemaCollision as exc:
             print(f"\nREFUSED: {exc}")
             return exit_codes.REFUSED
-        samples, proof, weight_delta, high_water = run_sweep(
+        samples, proof, weight_delta, high_water, probe = run_sweep(
             args, cfg, block_m=block_m, treads=treads, pinned=pinned,
             csv_path=csv_path, cache_root=cache_root, store=store, prov=prov,
-            dtype=args.dtype)
+            dtype=args.dtype, copies_declared=copies_declared, census=census,
+            stream_ms=stream_ms)
 
     report = analyse(
         samples, cfg, block_m=block_m, treads=treads, repeats=args.repeats,
@@ -3488,7 +4416,8 @@ def _main(argv=None) -> int:
         weight_delta_bytes=weight_delta, high_water_bytes=high_water,
         draws=args.draws, seed=args.seed, header=header, card=card,
         synthetic=synthetic, model_name=args.model, pinned=pinned,
-        prov=_observed_iters(prov, samples))
+        prov=_observed_iters(prov, samples), probe=probe, census=census,
+        copies_declared=copies_declared)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -3524,6 +4453,25 @@ def _main(argv=None) -> int:
         print("         a claim that did not pass is a RESULT and the arm is "
               "FINISHED, not broken.")
     return rc
+
+
+def clock_sampler_refusal() -> str:
+    """"" when the under-load clock sampler can read this device, else why not.
+
+    The same probe `BackgroundClockSampler` makes at the start of every timed
+    region; made once here so its failure is a plan-time refusal and not an
+    INVALID after the sweep.
+    """
+    from moe.bench import timing
+
+    try:
+        timing.nvml_clock_reader(None)
+    except timing.ClockSourceUnavailable as exc:
+        return (f"the under-load clock cannot be read on this host ({exc}); "
+                "V7 compares the two ratio arms' clocks at every tread and "
+                "would read UNKNOWN throughout, which is INVALID after the "
+                "whole sweep is paid for")
+    return ""
 
 
 def _observed_iters(prov, samples):

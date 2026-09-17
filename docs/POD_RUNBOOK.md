@@ -226,6 +226,54 @@ verified that everything worth keeping exists somewhere that outlives the pod.
 
 ---
 
+## The private-weight reference alone (2026-09-17)
+
+The one arm whose number needs no assumed bandwidth and no fitted intercept
+(`private-mixtral-bm32`, 3 min) was rebuilt on 2026-09-17 after two reviews,
+and it is the arm to run BEFORE the two interpretation arms it shares
+`three-arms` with (`elasticity-m32-n64-g16`, `blockk-w4`), whose reviews found
+design defects that are NOT yet fixed. Rent about an hour and run only the
+preconditions and this arm:
+
+```
+bash scripts/h200_gaps_session.sh --new --only thermal,calibrate,pin_probe-n64-g1,private-mixtral-bm32
+```
+
+What the rebuilt arm does that the plan page states before a byte is timed:
+copy `c` of expert `e` sits at expert slot `e x 9 + c` (expert-first, so the
+private arm's tiles run in the shared arm's order), SHARED and PRIVATE both
+declare all 72 slots at every tread (one sorted-id buffer, one launch grid,
+one dead-launch count, so the two differ ONLY in the addresses tiles read),
+and NATIVE is the study's own 8-expert call over a strided view of copy 0.
+Nine copies are declared and six read: 25.4 GB of a 141 GB card, and the
+padding is what keeps both ratio arms on ONE `moe_align_block_size` kernel,
+because vLLM switches kernel at ids < 1024 and experts <= 64 and this ladder
+crosses the id bound between treads 3 and 4. Before the weights are built the
+arm times the alignment op alone along the ladder at both declarations; V8
+refuses the design on that measurement and SKIPS the sweep if the ratio arms'
+series carries a step worth more than 0.01 of the ratio. NATIVE keeps the
+switch, and V5 fits it out.
+
+Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
+V7 (the two arms' clocks agree at every tread), V2 (each copy read by exactly
+its own tiles, one copy zeroed at a time), V5 (the declaration's per-tile
+cost with native's step out; the step itself is printed with an interval),
+V6 (shared and private agree at n=1, where they are the same call), then C1,
+which names the world the ratio landed in: ISSUE-AND-LATENCY, below/at/above
+the refit band, or NO-REUSE. C1 UNKNOWN means the point and the interval
+disagree on a world and the claim is unresolved at this precision, not that
+the arm broke. The arm REFUSES at plan time if the under-load clock sampler
+cannot read the card (V7 would be UNKNOWN throughout), and it writes a
+`DEVICE` file with the GPU UUID under its results directory so that a resume
+on another pod of the same card type is refused rather than merged.
+
+One thing to eyeball on the pod before the run, because V2 would only catch
+it after the sweep: the installed vLLM's `fused_moe.py` must cast
+`off_experts` to int64 (slot 71 x 117 MB is past 2^31 bytes from the weight
+base).
+
+---
+
 ## Before you rent anything
 
 All of this runs on a laptop, costs nothing, and catches most of what would
