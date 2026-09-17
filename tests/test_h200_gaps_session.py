@@ -575,7 +575,8 @@ INVOKED = {
     "scripts/private_weight_reference.py": ("--dry-run", "--capability",
                                             "--model", "--block-m", "--treads",
                                             "--repeats", "--self-test",
-                                            "--device-memory-gb"),
+                                            "--device-memory-gb",
+                                            "--session-tag"),
     "scripts/tile_cap_test.py": ("--dry-run", "--capability", "--fail-on-gate"),
     "scripts/dtype_tile_confound.py": ("--dry-run", "--card", "--fail-on-claim"),
     "scripts/span_extent_separation.py": ("--dry-run", "--densify",
@@ -955,6 +956,7 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
     ("dtype", "--card"),
     ("private-mixtral-bm32", "--block-m"),
     ("private-mixtral-bm32", "--treads"),
+    ("private-mixtral-bm32", "--session-tag"),
 ])
 def test_the_dry_run_previews_the_run_the_pod_executes(arm_name, flag):
     """FOUR ARMS PREVIEWED SOMETHING ELSE. calibrate was skipped entirely with

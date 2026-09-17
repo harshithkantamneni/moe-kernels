@@ -43,6 +43,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "machinery"), True),
     (("--self-test", "compute-bound"), True),
     (("--self-test", "noisy-identity"), True),
+    (("--self-test", "clock-split"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -103,7 +104,7 @@ def test_every_gate_prints_exactly_one_result_line_and_nothing_else_does():
     raw = [ln for ln in got.stdout.splitlines() if ln.startswith("RESULT: ")]
     assert len(raw) == len(parsed), "a RESULT line the parser cannot read back"
     assert [r.name for r in parsed] == ["V0", "V1", "V2", "V3", "V4", "V5",
-                                        "V6", "C1", "C2"]
+                                        "V6", "V7", "C1", "C2"]
 
 
 def test_a_dry_run_is_refused_and_not_done():
@@ -265,15 +266,21 @@ def test_every_new_expert_holds_exactly_one_full_m_tile(block_m, tiles):
 
     e, k = CFG.num_experts, CFG.top_k
     rows = tiles * block_m
+    n_max = 6
     ids = balanced_flat_ids(e, rows, k)
-    out = PW.private_topk_ids(ids, e, block_m, rows)
+    out = PW.private_topk_ids(ids, e, block_m, rows, n_max)
     counts = torch.bincount(out.reshape(-1).long(),
-                            minlength=PW.expert_space(e, tiles))
-    assert counts.numel() == PW.expert_space(e, tiles)
-    assert int(counts.min()) == block_m and int(counts.max()) == block_m
-    # And the relabelling is a pure renaming: the original expert survives as
-    # the residue, so a row still reads the weights of its own expert.
-    assert bool(((out.reshape(-1).long() % e) == ids.reshape(-1).long()).all())
+                            minlength=PW.expert_space(e, n_max))
+    assert counts.numel() == PW.expert_space(e, n_max)
+    used = counts[counts > 0]
+    assert used.numel() == e * tiles
+    assert int(used.min()) == block_m and int(used.max()) == block_m
+    # EXPERT-FIRST: the original expert is the QUOTIENT and the copy the
+    # residue, so a row still reads the weights of its own expert and no slot
+    # past `tiles` copies of any expert is touched.
+    flat = out.reshape(-1).long()
+    assert bool(((flat // n_max) == ids.reshape(-1).long()).all())
+    assert int((flat % n_max).max()) == tiles - 1
     assert out.dtype == ids.dtype
 
 
@@ -282,8 +289,9 @@ def test_the_identity_tread_relabels_to_itself():
     whole content of V6: there is nothing for the three arms to differ by."""
     e, k = CFG.num_experts, CFG.top_k
     ids = balanced_flat_ids(e, PW.DEFAULT_BLOCK_M, k)
-    out = PW.private_topk_ids(ids, e, PW.DEFAULT_BLOCK_M, PW.DEFAULT_BLOCK_M)
-    assert bool((out == ids).all())
+    out = PW.private_topk_ids(ids, e, PW.DEFAULT_BLOCK_M, PW.DEFAULT_BLOCK_M,
+                              PW.DEFAULT_TREADS)
+    assert bool((out == PW.shared_topk_ids(ids, PW.DEFAULT_TREADS)).all())
 
 
 def test_an_imbalanced_histogram_is_refused_and_not_rounded():
@@ -299,14 +307,71 @@ def test_an_imbalanced_histogram_is_refused_and_not_rounded():
     first = int(torch.nonzero(flat == 0)[0])
     flat[first] = 1
     with pytest.raises(PW.PrivateWeightRefusal):
-        PW.private_topk_ids(ids, e, 32, 64)
+        PW.private_topk_ids(ids, e, 32, 64, 6)
 
 
 def test_a_partly_filled_stack_is_refused():
     e, k = CFG.num_experts, CFG.top_k
     ids = balanced_flat_ids(e, 48, k)
     with pytest.raises(PW.PrivateWeightRefusal):
-        PW.private_topk_ids(ids, e, 32, 48)
+        PW.private_topk_ids(ids, e, 32, 48, 6)
+
+
+def test_a_ladder_deeper_than_the_declaration_is_refused():
+    """Expert-first, tile n_max of expert e would be slot (e+1) x n_max: the
+    NEXT expert's copy 0, allocated and holding the wrong weights, so nothing
+    would crash. Refused at the relabelling instead."""
+    e, k = CFG.num_experts, CFG.top_k
+    ids = balanced_flat_ids(e, 7 * 32, k)
+    with pytest.raises(PW.PrivateWeightRefusal):
+        PW.private_topk_ids(ids, e, 32, 7 * 32, 6)
+
+
+def _slot_order_by_expert(ids, n_max):
+    """The expert each M-tile belongs to, in the order `moe_align_block_size`'s
+    sort by slot id visits them."""
+    import torch
+    flat = ids.reshape(-1).long()
+    order = torch.argsort(flat, stable=True)
+    return (flat[order] // n_max).tolist()
+
+
+@pytest.mark.parametrize("tiles", [1, 2, 4, 6])
+def test_shared_and_private_visit_the_experts_in_the_same_order(tiles):
+    """THE ORDER DEFECT. Copy-first ids (`c x E + e`) sorted to expert 0..E-1
+    of copy 0, then of copy 1, while the shared arm ran every tile of expert 0
+    first -- and ORDER is the lever this study measured moving the per-M-tile
+    cost by 30-48%. Expert-first slots must put the private arm's tiles in the
+    shared arm's expert order, row for row."""
+    e, k, bm, n_max = CFG.num_experts, CFG.top_k, 32, 6
+    ids = balanced_flat_ids(e, tiles * bm, k)
+    private = PW.private_topk_ids(ids, e, bm, tiles * bm, n_max)
+    shared = PW.shared_topk_ids(ids, n_max)
+    assert _slot_order_by_expert(private, n_max) == _slot_order_by_expert(
+        shared, n_max)
+
+
+def _align_buffer(numel, declared, block_m):
+    """vLLM's `moe_align_block_size` buffer length, the launch grid's EM."""
+    return numel + declared * (block_m - 1)
+
+
+def test_shared_and_private_declare_one_space_so_the_dead_launches_are_a_constant():
+    """THE LAUNCH DEFECT. The sorted-id buffer and so the launch grid scale with
+    the declaration. Declaring E x n at tread n put ~8 dead M-rows per extra
+    tread into the private slope alone. Now both ratio arms declare
+    E x n_max at every tread: identical buffers, and a dead-row count that does
+    not change with the tread, so it lands in an intercept."""
+    e, bm, n_max = CFG.num_experts, 32, 6
+    dead = set()
+    for n in range(1, n_max + 1):
+        numel = e * n * bm
+        s = _align_buffer(numel, PW.declared_experts(PW.SHARED, e, n_max), bm)
+        p = _align_buffer(numel, PW.declared_experts(PW.PRIVATE, e, n_max), bm)
+        assert s == p, n
+        dead.add(s - numel)
+    assert len(dead) == 1
+    assert PW.declared_experts(PW.NATIVE, e, n_max) == e
 
 
 def test_the_copy_index_is_the_rank_over_the_tile_height():
@@ -465,9 +530,8 @@ def _sample(arm, n, rep, ms, *, level_ok=None, side="", drift_ok=None,
             load=None):
     return PW.Sample(
         arm=arm, repeat=rep, block_m=32, tiles=n, rows_per_expert=n * 32,
-        tokens=n * 128, copies=(1 if arm == PW.SHARED else n),
-        experts_declared=(CFG.num_experts if arm == PW.SHARED
-                          else PW.expert_space(CFG.num_experts, n)),
+        tokens=n * 128, copies=PW.copies_read(arm, n),
+        experts_declared=PW.declared_experts(arm, CFG.num_experts, 6),
         ms_p50=ms, ms_min=ms, ms_stdev=0.0, iters=100, trials=3,
         warmup_ms=300.0, instrument="planted",
         sm_clock_load_mhz=load, clock_level_ok=level_ok,
@@ -578,8 +642,8 @@ def _noiseless(alpha: float, treads=(1, 2, 3, 4, 5, 6), repeats=3):
     out = []
     for rep in range(repeats):
         for n in treads:
+            out.append(_sample(PW.NATIVE, n, rep, 0.4 + alpha * n))
             out.append(_sample(PW.SHARED, n, rep, 0.5 + alpha * n))
-            out.append(_sample(PW.ALIAS, n, rep, 0.5 + alpha * n))
             out.append(_sample(PW.PRIVATE, n, rep, 0.5 + 1.0 * n))
     return out
 
@@ -687,11 +751,15 @@ def test_the_copies_leave_the_builder_bitwise_identical():
     e = toy.num_experts
     assert w1.shape[0] == PW.expert_space(e, copies)
     for c in range(1, copies):
-        assert torch.equal(w1[c * e:(c + 1) * e], w1[:e]), c
-        assert torch.equal(w2[c * e:(c + 1) * e], w2[:e]), c
+        assert torch.equal(w1[c::copies], w1[::copies]), c
+        assert torch.equal(w2[c::copies], w2[::copies]), c
+    # Distinct experts hold distinct weights: a layout that wrote one expert's
+    # draw into every slot would pass the copy equality above.
+    assert not torch.equal(w1[PW.copy_slot(0, 0, copies)],
+                           w1[PW.copy_slot(1, 0, copies)])
     # And the weights are not all zero, which an `empty` that was never filled
     # would also satisfy the equality above with.
-    assert float(w1[:e].abs().max()) > 0.0
+    assert float(w1[::copies].abs().max()) > 0.0
     # Off a CUDA device the allocation delta is None -- NOT MEASURED -- so V3
     # reads UNKNOWN rather than FAILing on an allocation of zero.
     assert delta is None
@@ -707,9 +775,8 @@ def test_the_sentinel_round_trip_distinguishes_the_copies_and_puts_them_back():
     copies = 4
     w1, _w2, _d = PW.build_private_weights(toy, "bf16", copies, seed=0,
                                            device="cpu")
-    e = toy.num_experts
     before = w1.clone()
-    ok, detail = PW.sentinel_roundtrip(w1, e, copies)
+    ok, detail = PW.sentinel_roundtrip(w1, copies)
     assert ok, detail
     assert torch.equal(w1, before), "the sentinels were not put back"
     assert f"{copies} distinct" in detail
@@ -730,8 +797,8 @@ def test_the_sentinel_check_fails_when_the_copies_are_not_distinct_memory():
     # on an expanded tensor materialises a real copy -- and a test built that
     # way passes while proving nothing.
     aliased = base.as_strided((copies * e, n, h), (0, h, 1))
-    assert aliased[0].data_ptr() == aliased[e].data_ptr()
-    ok, detail = PW.sentinel_roundtrip(aliased, e, copies)
+    assert aliased[0].data_ptr() == aliased[1].data_ptr()
+    ok, detail = PW.sentinel_roundtrip(aliased, copies)
     assert not ok, detail
 
 
@@ -757,7 +824,8 @@ def test_every_knob_that_moves_a_millisecond_is_in_the_run_id():
                         ("--warmup", 500.0), ("--cell-budget-ms", 400.0),
                         ("--trials", 5), ("--model", "qwen2-57b-a14b"),
                         ("--num-stages", 3), ("--block-n", 128),
-                        ("--group-m", 16), ("--seed", 3)):
+                        ("--group-m", 16), ("--seed", 3),
+                        ("--session-tag", "gaps-nvidia_h200-20260918")):
         other = PW.default_run_id(_args(**{flag: value}), "NVIDIA H200")
         assert other != base, flag
 
@@ -801,7 +869,8 @@ def test_the_arm_rotation_is_derived_from_the_arm_tuple_and_covers_it():
 
 
 def test_the_three_arms_are_declared_once():
-    assert PW.ARMS == (PW.SHARED, PW.ALIAS, PW.PRIVATE)
+    assert PW.ARMS == (PW.NATIVE, PW.SHARED, PW.PRIVATE)
+    assert PW.RATIO_ARMS == (PW.SHARED, PW.PRIVATE)
     assert set(PW.ARM_MEANING) == set(PW.ARMS)
 
 
@@ -933,3 +1002,167 @@ def test_a_paired_draw_takes_both_arms_from_the_same_repeats():
     points, _spread, _dropped = PW.collapse(rows, PW.SHARED, [1, 1, 1])
     # Every point is repeat 1's own time, because repeat 1 is the whole draw.
     assert points == [(1, 3.0), (2, 4.0), (3, 5.0)], points
+
+
+# --------------------------------------------------------------------------
+# 14. the 2026-09-17 review round: C1's verdict, V6's pair, V7, the device
+#     guard, and the buffer proof run end to end against a CPU reference
+# --------------------------------------------------------------------------
+
+def test_c1_does_not_pass_a_point_the_page_names_as_another_world():
+    """The reviewer's case: 0.600 [0.585, 0.615] overlapped the band, PASSED
+    and exited DONE while the page named ABOVE-THE-REFIT-BAND."""
+    assert PW.outcome_for(0.600)[0] == "ABOVE-THE-REFIT-BAND"
+    assert PW.c1_verdict(0.600, (0.585, 0.615)) == exit_codes.UNKNOWN
+
+
+def test_c1_does_not_pass_an_interval_that_reaches_an_alternative_world():
+    assert PW.c1_verdict(PW.ALPHA, (0.30, 0.80)) == exit_codes.UNKNOWN
+    assert PW.c1_verdict(PW.ALPHA, (0.40, 0.90)) == exit_codes.UNKNOWN
+
+
+def test_c1_passes_a_resolved_point_in_band_and_fails_a_miss():
+    assert PW.c1_verdict(PW.ALPHA, (0.54, 0.57)) == exit_codes.PASS
+    assert PW.c1_verdict(0.95, (0.93, 0.97)) == exit_codes.FAIL
+    assert PW.c1_verdict(0.10, (0.08, 0.12)) == exit_codes.FAIL
+    assert PW.c1_verdict(PW.ALPHA, (math.nan, math.nan)) == exit_codes.UNKNOWN
+
+
+def _pair_world(*, native_n1=None, private_clock=1500.0, shared_clock=1500.0,
+                treads=(1, 2, 3)):
+    out = []
+    for rep in range(3):
+        for n in treads:
+            out.append(_sample(PW.NATIVE, n, rep,
+                               (native_n1 if (n == 1 and native_n1) else 0.5
+                                + 0.5 * n), load=1500.0))
+            out.append(_sample(PW.SHARED, n, rep, 0.5 + 0.5 * n,
+                               load=shared_clock))
+            out.append(_sample(PW.PRIVATE, n, rep, 0.5 + 1.0 * n
+                               if n > 1 else 1.0, load=private_clock))
+    return out
+
+
+def test_v6_compares_the_same_call_and_records_native_without_scoring_it():
+    """NATIVE differs from SHARED by a constant declaration at n=1. Requiring
+    all three to agree there would refuse a correct instrument."""
+    samples = _pair_world(native_n1=1.5)   # native 50% off at n=1
+    gate = PW.gate_v6_identity(samples, identity_tread=1)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    assert any("native sits" in line for line in gate.lines)
+
+
+def test_v7_fails_a_clock_split_and_passes_a_matched_clock():
+    assert PW.gate_v7_clock_parity(_pair_world(), treads=[1, 2, 3]).verdict \
+        == exit_codes.PASS
+    split = _pair_world(private_clock=1500.0 * (1 - 2 * PW.CLOCK_PARITY))
+    assert PW.gate_v7_clock_parity(split, treads=[1, 2, 3]).verdict \
+        == exit_codes.FAIL
+
+
+def test_v7_reads_an_unread_clock_as_unknown_and_not_as_a_match():
+    samples = _pair_world()
+    for s in samples:
+        if s.arm == PW.PRIVATE and s.tiles == 2:
+            s.sm_clock_load_mhz = None
+    assert PW.gate_v7_clock_parity(samples, treads=[1, 2, 3]).verdict \
+        == exit_codes.UNKNOWN
+
+
+def test_v7_leaves_a_tread_no_ratio_arm_reached_to_v0_and_v1():
+    samples = [s for s in _pair_world() if s.tiles != 3]
+    assert PW.gate_v7_clock_parity(samples, treads=[1, 2, 3]).verdict \
+        == exit_codes.PASS
+
+
+def test_the_device_guard_refuses_a_second_card_and_resumes_the_first(tmp_path):
+    out = tmp_path / "run"
+    assert PW.device_guard(out, "GPU-aaaa") == ""
+    assert (out / PW.DEVICE_FILE).read_text().strip() == "GPU-aaaa"
+    (out / "cells.csv").write_text("x\n")
+    assert PW.device_guard(out, "GPU-aaaa") == ""
+    assert "GPU-bbbb" in PW.device_guard(out, "GPU-bbbb")
+    assert PW.device_guard(out, "") != ""
+
+
+def test_the_device_guard_refuses_cells_of_unknown_provenance(tmp_path):
+    out = tmp_path / "run"
+    out.mkdir()
+    (out / "cells.csv").write_text("x\n")
+    assert PW.device_guard(out, "GPU-aaaa") != ""
+
+
+def _reference_fused(x, w1, w2, topk_weights, topk_ids):
+    """A per-slot reference of vLLM's fused_experts with SwiGLU: every slot
+    reads exactly the expert slot its id names, which is the property the
+    proof tests. Row-independent by construction, like the Triton kernel."""
+    import torch
+    f = w2.shape[2]
+    y = torch.zeros_like(x)
+    for t in range(x.shape[0]):
+        for j in range(topk_ids.shape[1]):
+            slot = int(topk_ids[t, j])
+            h = w1[slot] @ x[t]
+            act = torch.nn.functional.silu(h[:f]) * h[f:]
+            y[t] += topk_weights[t, j].to(x.dtype) * (w2[slot] @ act)
+    return y
+
+
+def _cpu_proof(*, misroute=None):
+    """The whole proof on the toy model, off GPU. `misroute(ids)` plants a
+    broken relabelling into the private arm."""
+    import torch
+    toy = MODEL_CONFIGS["toy"]
+    e, k, bm, copies = toy.num_experts, toy.top_k, 4, 3
+    rows = copies * bm
+    w1, w2, _ = PW.build_private_weights(toy, "bf16", copies, seed=0,
+                                         device="cpu")
+    ids = balanced_flat_ids(e, rows, k, seed=3).to(torch.int64)
+    tokens = ids.shape[0]
+    x = torch.randn((tokens, toy.hidden_size), dtype=torch.bfloat16,
+                    generator=torch.Generator().manual_seed(1))
+    weights = torch.full(ids.shape, 1.0 / k)
+    private = PW.private_topk_ids(ids, e, bm, rows, copies)
+    if misroute is not None:
+        private = misroute(private, copies)
+    by_arm = {PW.NATIVE: ids, PW.SHARED: PW.shared_topk_ids(ids, copies),
+              PW.PRIVATE: private}
+    calls = []
+
+    def call_for(arm):
+        a1, a2 = (w1[::copies], w2[::copies]) if arm == PW.NATIVE else (w1, w2)
+
+        def call():
+            calls.append(arm)
+            return _reference_fused(x, a1, a2, weights, by_arm[arm])
+        return call
+    before = (w1.clone(), w2.clone())
+    proof = PW.prove_distinct_buffers(call_for, w1, w2, cfg=toy, copies=copies,
+                                      dtype="bf16", private_ids=private)
+    return proof, calls, before, (w1, w2)
+
+
+def test_the_buffer_proof_passes_a_correct_relabelling_end_to_end():
+    import torch
+    proof, calls, before, after = _cpu_proof()
+    assert proof.verdict == exit_codes.PASS, proof.lines()
+    assert len(calls) == PW.proof_calls(3)
+    # It restores what it zeroed: nothing is left corrupted.
+    assert torch.equal(before[0], after[0]) and torch.equal(before[1], after[1])
+
+
+def test_the_buffer_proof_catches_every_tile_past_the_first_reading_copy_one():
+    """The reviewer's case, and why the zeroing is one copy at a time: zeroing
+    copies 1..n-1 together changes the output for this bug too."""
+    def to_copy_one(private, copies):
+        c = private % copies
+        return private - c + (c > 0).to(private.dtype)
+    proof, *_ = _cpu_proof(misroute=to_copy_one)
+    assert proof.parts["kernel_read"] is False, proof.lines()
+    assert proof.verdict == exit_codes.FAIL
+
+
+def test_the_buffer_proof_catches_a_relabelling_back_to_copy_zero():
+    proof, *_ = _cpu_proof(misroute=lambda p, copies: p - p % copies)
+    assert proof.parts["kernel_read"] is False
+    assert proof.verdict == exit_codes.FAIL
