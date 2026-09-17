@@ -1236,7 +1236,15 @@ def test_the_committed_transcript_is_what_the_script_writes_today(tmp_path):
 #: clock, and the two halves of the git stamp. Everything else is a function of
 #: the committed reports and calibrations, so a re-run that moves anything else
 #: has changed the analysis without changing the transcript.
-_STAMP_KEYS = ("utc", "git_sha", "git_dirty", "git_dirty_files")
+#: `hostname` IS A RUN STAMP AND WAS NOT LISTED AS ONE. It records the machine
+#: that produced the payload, exactly as `utc` records when, and it is not
+#: content: the rescore reads committed reports and is a pure function of them.
+#: Left out of this tuple, the comparison below asserted that the laptop
+#: regenerating the pair still answers to the name it had when the pair was
+#: written, and it stopped being true the day the machine moved network and
+#: macOS began reporting a DHCP name instead of `<name>.local`. Nothing about
+#: the analysis changed; the test failed on the hostname alone.
+_STAMP_KEYS = ("utc", "git_sha", "git_dirty", "git_dirty_files", "hostname")
 
 
 def _strip_stamp(payload: dict) -> dict:

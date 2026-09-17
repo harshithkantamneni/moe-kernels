@@ -230,7 +230,7 @@ verified that everything worth keeping exists somewhere that outlives the pod.
 
 The one arm whose number needs no assumed bandwidth and no fitted intercept
 (`private-mixtral-bm32`, 3 min) was rebuilt on 2026-09-17 after two reviews,
-and it is the arm to run BEFORE the two interpretation arms it shares
+and it is the arm to run BEFORE the other two arms it shares
 `three-arms` with (`elasticity-m32-n64-g16`, `blockk-w4`), whose reviews found
 design defects that are NOT yet fixed. Rent about an hour and run only the
 preconditions and this arm:
@@ -250,8 +250,14 @@ padding is what keeps both ratio arms on ONE `moe_align_block_size` kernel,
 because vLLM switches kernel at ids < 1024 and experts <= 64 and this ladder
 crosses the id bound between treads 3 and 4. Before the weights are built the
 arm times the alignment op alone along the ladder at both declarations; V8
-refuses the design on that measurement and SKIPS the sweep if the ratio arms'
-series carries a step worth more than 0.01 of the ratio. NATIVE keeps the
+refuses the design on that measurement and SKIPS the sweep when it comes back
+FAIL (a step over budget, resolved against its own standard error) and equally
+when it comes back UNKNOWN (over budget but unresolved, or the probe's own
+cells host-bound): V8 is a VALIDITY gate, so an UNKNOWN latches the page
+INVALID just as a FAIL does, and nothing the ladder measures afterwards can
+change a verdict taken before it. The gate's own lines name what would close
+an UNKNOWN -- more `--probe-repeats`, or a probe that keeps the GPU behind
+the host. NATIVE keeps the
 switch, and V5 fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),

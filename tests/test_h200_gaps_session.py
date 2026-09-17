@@ -4780,18 +4780,18 @@ def test_the_advertised_private_world_exits_are_the_scripts_own():
     private = _load_script_module("private_weight_reference")
     by_code: dict[int, list[str]] = {}
     for name, world in private.WORLDS.items():
-        validity_failed = any(v == private.FAIL
-                              for k, v in world.expect.items()
-                              if k.startswith("V"))
-        claim_failed = any(v == private.FAIL
-                           for k, v in world.expect.items()
-                           if k.startswith("C"))
-        if validity_failed:
-            code = exit_codes.INVALID
-        elif claim_failed:
-            code = exit_codes.CLAIM_FAIL
-        else:
-            code = exit_codes.DONE
+        # THROUGH `exit_codes.classify`, NOT A SECOND COPY OF ITS RULE. This
+        # loop used to compute the class itself from `v == FAIL`, and that copy
+        # drifted the moment a world registered a VALIDITY gate as UNKNOWN:
+        # `host-bound-probe` is `dict(ALL_PASS, V8=UNKNOWN)`, which classify()
+        # lands on INVALID because ANY validity gate not PASS is INVALID
+        # (exit_codes.py: "'not PASS' covers FAIL and UNKNOWN alike"), while
+        # the FAIL-only copy landed it on DONE and then demanded the driver
+        # line say NINE where the script's own binaries produce TEN. The rule
+        # has one home; this asks it rather than restating it.
+        code = exit_codes.classify(
+            [(private.VALIDITY if k.startswith("V") else private.CLAIM, v)
+             for k, v in world.expect.items()])
         by_code.setdefault(code, []).append(name)
 
     line = lift("arm_offgpu_gates private-mixtral-bm32", REPO=str(ROOT)).stdout
@@ -4810,3 +4810,429 @@ def test_the_advertised_private_world_exits_are_the_scripts_own():
               if k.startswith("V") and v == private.FAIL]
     assert len(broken) == 2, broken
     assert "TWO of them" in line, line
+
+
+# --------------------------------------------------------------------------
+# the private-weight arm's prose, pinned to the code it describes
+# --------------------------------------------------------------------------
+
+#: `docs/POD_RUNBOOK.md`, as the two tests that read its prose see it.
+_RUNBOOK = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
+
+#: `_NUMBER_WORDS` above stops at fourteen and the private arm's table is at
+#: FIFTEEN worlds, so these tests cannot spell their own counts out of it: the
+#: partition below reads a count word for `WORLDS`, for what the partition
+#: leaves over and for a page's RESULT lines, and the first of those is already
+#: past the end. Extended here rather than in the shared table because the
+#: tests that share it count other things and are not the ones that moved. A
+#: number past the end asserts with the missing entry named, because a bare
+#: KeyError inside a test about miscounted prose says nothing about which
+#: count ran off the end, which is the shape of the defect being tested.
+_COUNT_WORDS = dict(_NUMBER_WORDS)
+_COUNT_WORDS.update({15: "fifteen", 16: "sixteen", 17: "seventeen",
+                     18: "eighteen", 19: "nineteen", 20: "twenty"})
+
+
+def _count_word(n: int) -> str:
+    """The word the driver's prose spells a count of `n` as."""
+    assert n in _COUNT_WORDS, (
+        f"no count word for {n}: extend _COUNT_WORDS before asserting against "
+        f"a sentence that has to spell {n} out")
+    return _COUNT_WORDS[n]
+
+
+def _private_gate_line() -> str:
+    """The `arm_offgpu_gates private-mixtral-bm32` line, from the shipped case.
+
+    Lifted rather than grepped so the line under test is the one an operator
+    gets out of `--list`, expansions and all.
+    """
+    done = lift("arm_offgpu_gates private-mixtral-bm32", REPO=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def _private_closes_line() -> str:
+    """The `arm_closes private-mixtral-bm32` paragraph, same source."""
+    done = lift("arm_closes private-mixtral-bm32", REPO=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    return done.stdout
+
+
+def _private_plan() -> str:
+    """`private_weight_reference.py --dry-run --device-memory-gb 140`'s output.
+
+    The same two flags the driver's own gate line advertises, so the numbers
+    this file checks the prose against are the numbers an operator reads off
+    the advertised command and not a second parameterisation of it.
+    """
+    done = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
+         "--dry-run", "--device-memory-gb", "140"],
+        capture_output=True, text=True, timeout=300, cwd=str(ROOT),
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()),
+             "PYTHONPATH": str(ROOT)})
+    # 2 REFUSED is the plan's own code: `--dry-run` measured nothing, and a
+    # refusal is not a failure of the plan it printed.
+    assert done.returncode == exit_codes.REFUSED, (
+        done.stdout[-3000:] + done.stderr[-2000:])
+    return done.stdout
+
+
+def _world_exit_codes(private) -> dict[str, int]:
+    """`{world name: the exit code its REGISTERED verdicts classify to}`.
+
+    Taken through `exit_codes.classify` and not by counting `== FAIL` here,
+    because the rule that decides this is one-directional: a VALIDITY gate
+    that came back UNKNOWN latches INVALID exactly as a FAIL does, and
+    `host-bound-probe` registers `dict(ALL_PASS, V8=UNKNOWN)` and no FAIL at
+    all. A local re-implementation that asked for FAIL would read that world
+    as 0 DONE and agree with the driver's prose for the wrong reason.
+
+    `expect` is a registration and not a prediction this file is trusting on
+    its own: `main` runs `World.check` against the report every `--self-test`
+    produces and refuses a world whose gates came back other than registered,
+    so a table that drifted from the binary fails there rather than quietly
+    here. The test below spends one process proving that tie on the one world
+    whose registration this round added.
+    """
+    codes: dict[str, int] = {}
+    for name, world in private.WORLDS.items():
+        gates = []
+        for tag, verdict in world.expect.items():
+            # `tag[:1]`, not `tag[0]`: an empty tag is a malformed
+            # registration and has to assert as one, not IndexError.
+            assert tag[:1] in ("V", "C"), (name, tag)
+            kind = exit_codes.VALIDITY if tag.startswith("V") else exit_codes.CLAIM
+            gates.append((kind, verdict))
+        codes[name] = exit_codes.classify(gates)
+    return codes
+
+
+def test_the_gate_lines_exit_code_sentence_partitions_every_planted_world():
+    """THE RECURRING DEFECT, in its exact 2026-09-17 form: the sentence that
+    tells an operator what the advertised `--self-test` sweep should exit
+    partitioned 13 of the 14 worlds and left one out, in silence.
+
+    `arm_offgpu_gates private-mixtral-bm32` is what a renter reads to verify
+    this arm BEFORE paying for a pod, and it separates the worlds by exit
+    code: some named world by world, the rest swept up as "the remaining N 3
+    INVALID". `alignment-step` registers `dict(ALL_PASS)` -- it is the world
+    V5's step-aware fit exists FOR, so every gate passes and it exits 0 DONE
+    -- and it was named in neither half. It fell into "the remaining", whose
+    count word was derived from the INVALID worlds rather than from what was
+    left over, so the two errors hid each other: NINE was the right count of
+    INVALID worlds and the wrong count of unnamed ones, and an operator
+    running the sweep would have scored a 0 as a missing 3.
+
+    So this reads the sentence as a PARTITION. Every world named in a clause
+    must carry the code its own registered verdict set classifies to, every
+    world left over must be in the remaining clause's bucket with the
+    remaining clause's code, and the count word must be the size of what is
+    actually left. A sixteenth world added to `WORLDS` and left out of the
+    sentence moves `len(remaining)` and fails here, whatever code it exits.
+    """
+    private = _load_script_module("private_weight_reference")
+    codes = _world_exit_codes(private)
+    line = _private_gate_line()
+
+    # THE ADVERTISED SET IS THE REGISTERED SET. The alternation is what an
+    # operator pastes, so it is the list the partition below is taken over. As
+    # a SET: the line runs the worlds in the order they are read rather than
+    # the order they are registered, and that ordering is the line's to choose.
+    alternation = re.search(r"--self-test ([\w|-]+)", line)
+    assert alternation, line
+    assert set(alternation.group(1).split("|")) == set(private.WORLDS), (
+        alternation.group(1), list(private.WORLDS))
+    assert f"{_count_word(len(private.WORLDS))} planted worlds" in line, (
+        len(private.WORLDS), line)
+
+    sentence = line.split("SEPARATE by exit code:", 1)[1].split(
+        "Every gate FAIL branch", 1)[0]
+    named: dict[str, int] = {}
+    remaining_clause = None
+    for clause in sentence.split(";"):
+        if "the remaining" in clause:
+            assert remaining_clause is None, sentence
+            remaining_clause = clause
+            continue
+        code = re.search(r"\b([0-3]) (DONE|CLAIM_FAIL|INVALID)\b", clause)
+        assert code, clause
+        assert exit_codes.CODE_NAMES[int(code.group(1))] == code.group(2), clause
+        for name in private.WORLDS:
+            if re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", clause):
+                assert name not in named, (name, sentence)
+                named[name] = int(code.group(1))
+    assert remaining_clause is not None, sentence
+    for name, code in sorted(named.items()):
+        assert codes[name] == code, (name, code, codes[name], sentence)
+
+    remaining = [n for n in private.WORLDS if n not in named]
+    bucket = re.search(r"the remaining (\w+) ([0-3]) (DONE|CLAIM_FAIL|INVALID)\b",
+                       remaining_clause)
+    assert bucket, remaining_clause
+    assert bucket.group(1).lower() == _count_word(len(remaining)), (
+        bucket.group(1), remaining)
+    for name in remaining:
+        assert codes[name] == int(bucket.group(2)), (name, codes[name], sentence)
+    assert set(named) | set(remaining) == set(private.WORLDS)
+    assert not set(named) & set(remaining)
+
+
+def test_the_world_that_reaches_a_validity_gates_unknown_branch_is_named_and_run():
+    """`gate_v8_alignment` returns UNKNOWN on four separate branches and no
+    planted world reached any of them, so the driver's own gate line could
+    describe the sweep as separating on FAIL alone and be right about every
+    world in the table.
+
+    That mattered because `run_sweep` skips the sweep on UNKNOWN as well as
+    FAIL: the branch that saves the whole ladder's card time was reachable
+    only through a code path the advertised self-test never walked, and
+    "the remaining N 3 INVALID on the validity gates each is planted to
+    break" is false for a world that breaks nothing and is merely not
+    resolved by it. `host-bound-probe` registers `V8=UNKNOWN`, which
+    `exit_codes.classify` maps to 3 INVALID under the one-directional
+    not-PASS rule.
+
+    This derives the UNKNOWN-registering worlds from `WORLDS`, requires at
+    least one, requires the gate line to name each as reading UNKNOWN rather
+    than FAIL, and RUNS it: the exit code, the second opinion off the printed
+    lines, the advertised RESULT-line count and the V8 line's own verdict all
+    come back from the process rather than from this file.
+
+    It is also the one place the partition test's METHOD is paid for. That
+    test never starts a process: it classifies `expect` and compares the
+    result with prose. So the code this file derives for `host-bound-probe`
+    is asserted against the code the binary actually returns, which is the
+    step that turns the derivation into a measurement for the world whose
+    registration this round added. Only one of `gate_v8_alignment`'s four
+    UNKNOWN branches is reachable from the table; the other three are still
+    covered by nothing, and that is a gap this test does not close."""
+    private = _load_script_module("private_weight_reference")
+    codes = _world_exit_codes(private)
+    unknown_worlds = [
+        name for name, world in private.WORLDS.items()
+        if any(tag.startswith("V") and verdict == private.UNKNOWN
+               for tag, verdict in world.expect.items())]
+    assert unknown_worlds, list(private.WORLDS)
+
+    line = _private_gate_line()
+    assert "reads UNKNOWN rather than FAIL" in line, line
+    for name in unknown_worlds:
+        assert name in line.split("the remaining", 1)[1], (name, line)
+
+    advertised = re.search(r"(\w+) RESULT lines each", line)
+    assert advertised, line
+
+    for name in unknown_worlds:
+        done = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
+             "--self-test", name],
+            capture_output=True, text=True, timeout=600, cwd=str(ROOT),
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()),
+                 "PYTHONPATH": str(ROOT)})
+        assert done.returncode == codes[name], (
+            name, done.returncode, codes[name], done.stdout[-2000:])
+        assert exit_codes.classify_text(done.stdout) == codes[name], name
+        results = [ln for ln in done.stdout.splitlines()
+                   if ln.startswith(exit_codes.RESULT_PREFIX)]
+        assert _count_word(len(results)) == advertised.group(1).lower(), (
+            name, len(results), advertised.group(1))
+        v8 = [ln for ln in results if " V8 " in ln]
+        assert len(v8) == 1, results
+        assert f" V8 {exit_codes.UNKNOWN} " in v8[0], v8[0]
+
+
+def test_the_driver_and_the_runbook_name_every_verdict_that_skips_the_sweep():
+    """Two pages told an operator the ladder is skipped on a FAIL, and the
+    code skips it on FAIL and UNKNOWN.
+
+    `run_sweep` guards the skip with `if early.verdict in (FAIL, UNKNOWN)`,
+    and the reason is in the exit-code table rather than in the gate: V8 is a
+    VALIDITY gate, so an UNKNOWN latches the page INVALID exactly as a FAIL
+    does, and nothing measured after the probe re-reads the probe. An
+    operator who had read either page would have expected an UNKNOWN probe to
+    proceed into the ladder and to cost the arm's whole booking for a verdict
+    already in hand.
+
+    Two halves, and each catches what the other cannot. The verdict set is
+    READ out of the guard rather than typed into the loop, so the pages are
+    checked against the code and not against this file's memory of it. The
+    set is also PINNED to FAIL and UNKNOWN, and the pin is the half that
+    catches the regression: a guard narrowed back to FAIL alone would leave
+    both pages promising a skip the code no longer performs, and a
+    derived-only loop would read the narrowed set, ask the pages for FAIL,
+    find it, and pass. Widening the guard fails the pin rather than the
+    pages, which is the prompt to move the guard, the pin and both pages in
+    one edit.
+
+    This reads the guard as source text because the branch behind it needs a
+    CUDA device to reach: `--self-test` plants its samples and never calls
+    `run_sweep`, so no off-GPU test can walk the skip itself."""
+    source = (ROOT / "scripts" / "private_weight_reference.py").read_text()
+    guards = re.findall(r"if early\.verdict in \(([^)]*)\):", source)
+    assert len(guards) == 1, (
+        "run_sweep no longer guards the skip with a membership test, so the "
+        f"set of verdicts the two pages must name cannot be read: {guards}")
+    skip_verdicts = {tok.strip() for tok in guards[0].split(",") if tok.strip()}
+    assert skip_verdicts == {"FAIL", "UNKNOWN"}, skip_verdicts
+    # The branch this guard opens is the one that pays for nothing.
+    body = source.split("if early.verdict in (", 1)[1].split("\ndef ", 1)[0]
+    assert "SWEEP SKIPPED" in body
+
+    closes = _private_closes_line()
+    assert "skipping the sweep" in closes, closes
+    driver_clause = closes.split("skipping the sweep", 1)[1].split(";", 1)[0]
+    runbook_paragraphs = [p for p in _RUNBOOK.split("\n\n")
+                          if "SKIPS the sweep" in p]
+    assert len(runbook_paragraphs) == 1, len(runbook_paragraphs)
+    for where, prose in (("arm_closes", driver_clause),
+                         ("POD_RUNBOOK.md", runbook_paragraphs[0])):
+        for verdict in sorted(skip_verdicts):
+            assert verdict in prose, (where, verdict, prose)
+        assert "VALIDITY" in prose, (where, prose)
+
+
+def test_the_exfil_line_archives_the_results_root_and_not_only_the_session(tmp_path):
+    """The one command that gets the measurements off a pod before it is
+    released tarred `$SESSION` alone.
+
+    `$SESSION` holds `ARMS.tsv` and `logs/<arm>.log`; every arm's `cells.csv`,
+    `report.json`, `DEVICE` file and `triton-cache/` are written under
+    `$RESULTS`, which `MOE_RESULTS_DIR` exports to every arm and which is
+    keyed to the CARD and not to the session. So the tarball carried the
+    RESULT lines and not one of the rows they were scored from, and the pod
+    that held them is gone by the time anyone notices.
+
+    This does not read the line for two variable names: it EVALUATES the
+    shipped command against two planted directories and asks `tar` what came
+    back, because `-C` takes its argument positionally and a second `-C`
+    written in the wrong place archives the same tree twice."""
+    command = re.search(r"(tar czf (?:[^\n]*\\\n)*[^\n]*)", TEXT)
+    assert command, "no tar line in the driver"
+    line = command.group(1).replace("\\\n", " ")
+    for variable in ("$SESSION", "$RESULTS"):
+        assert variable in line, (variable, line)
+
+    session = tmp_path / "session" / "gaps-h200-20260917T000000Z"
+    results = tmp_path / "results" / "gaps-h200"
+    (session / "logs").mkdir(parents=True)
+    (session / "ARMS.tsv").write_text("arm\tstate\n")
+    (results / "private_weight_reference").mkdir(parents=True)
+    (results / "private_weight_reference" / "cells.csv").write_text("arm\n")
+    planted = line.replace("/workspace/", f"{tmp_path}/")
+    done = subprocess.run(
+        ["bash", "-c", "set -euo pipefail\n" + planted],
+        capture_output=True, text=True, timeout=120,
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CARD": "h200",
+             "SESSION": str(session), "RESULTS": str(results)})
+    assert done.returncode == 0, done.stderr
+    tarball = tmp_path / "exfil-gaps-h200.tar.gz"
+    assert tarball.exists(), sorted(p.name for p in tmp_path.iterdir())
+    listing = subprocess.run(["tar", "tzf", str(tarball)],
+                             capture_output=True, text=True, timeout=120)
+    assert listing.returncode == 0, listing.stderr
+    members = listing.stdout.split()
+    # The ledger comes from $SESSION and a cells row comes from $RESULTS.
+    assert any(m.endswith("ARMS.tsv") for m in members), members
+    assert any(m.endswith("cells.csv") for m in members), members
+    # BOTH ROOTS ONCE. A misplaced second `-C` archives one tree twice, and a
+    # tarball holding two copies of $SESSION and no $RESULTS is caught above;
+    # one holding $RESULTS twice beside $SESSION is not, so count the tops.
+    tops = {m.removeprefix("./").split("/", 1)[0] for m in members}
+    assert tops == {session.name, results.name}, tops
+
+
+def test_the_gate_line_names_the_padded_declaration_the_layout_actually_uses():
+    """The driver printed the slot arithmetic with the WRONG factor in it.
+
+    `copy_slot` puts copy `c` of expert `e` at `e x n_decl + c`, where
+    `n_decl` is `declared_copies_for`'s PADDED count and `n_max` is the
+    deepest tread's copy count. The two are not equal at the booked ladder --
+    the plan prints them side by side -- because the padding is what keeps
+    SHARED and PRIVATE on one `moe_align_block_size` kernel, and the gate
+    line said `e x n_max + c`, which is a different address map: it would
+    stride the copies of one expert over the slots of the next.
+
+    Every number here is read off `--dry-run --device-memory-gb 140`, the
+    command the same gate line advertises, so the padding the prose explains
+    is the padding the plan commits to. Both SYMBOLS come off the plan too:
+    the factor the slot formula uses has to be the one the plan calls the
+    declared count, and the one it calls the read count is the string that
+    must not appear."""
+    plan = _private_plan()
+    slot = re.search(r"copy c of expert e at slot e x (\w+) \+ c", plan)
+    assert slot, plan
+    counts = re.search(r"(\w+) = (\d+) against (\w+) = (\d+) read", plan)
+    assert counts, plan
+    decl_name, n_decl = counts.group(1), int(counts.group(2))
+    max_name, n_max = counts.group(3), int(counts.group(4))
+    # The plan's own two mentions have to agree before the prose is judged
+    # against either: the formula's factor IS the declared count.
+    assert decl_name == slot.group(1), (decl_name, slot.group(1))
+    assert decl_name != max_name, counts.groups()
+    assert n_decl > n_max, (n_decl, n_max)
+    slots = re.search(r"declare E x n_decl = (\d+) at EVERY tread", plan)
+    assert slots, plan
+    filled = re.search(r"x (\d+) copies declared and filled "
+                       r"\((\d+) read at the deepest tread, (\d+) never read\)", plan)
+    assert filled, plan
+    assert (int(filled.group(1)), int(filled.group(2)), int(filled.group(3))) == (
+        n_decl, n_max, n_decl - n_max), filled.groups()
+
+    closes = _private_closes_line()
+    assert f"expert slot e x {decl_name} + c" in closes, (decl_name, closes)
+    # THE WRONG FACTOR, BY THE NAME THE PLAN GIVES IT. The 2026-09-17 line read
+    # `e x n_max + c`, a SYMBOL, so the numeric form `e x 6 + c` was never on
+    # the page and an assert against the digit alone would have passed over the
+    # defect it is named for. Both forms are refused: they are one address map
+    # written two ways.
+    assert f"e x {max_name} + c" not in closes, (max_name, closes)
+    assert f"e x {n_max} + c" not in closes, (n_max, closes)
+    assert f"{n_decl} copies and {slots.group(1)} slots" in closes, closes
+    assert f"{n_max} read, {n_decl - n_max} filled and never read" in closes, closes
+
+
+def test_the_runbook_counts_the_arms_the_private_reference_precedes():
+    """The runbook told an operator to run `private-mixtral-bm32` "BEFORE the
+    two interpretation arms it shares `three-arms` with", and named
+    `elasticity-m32-n64-g16` and `blockk-w4` in the parenthesis beside it.
+
+    The driver's own rental-set comment is where "the interpretation arms"
+    comes from, and it names the PAIR `private-mixtral-bm32` and
+    `elasticity-m32-n64-g16` -- `blockk-w4` is not one of them, and
+    `private-mixtral-bm32` is, so the sentence ordered the arm before itself
+    and mislabelled the set it actually points at. The fix is a COUNT of what
+    is left rather than a category name, so this derives the count from the
+    names in the parenthesis and checks the label is gone from both pages.
+
+    WHAT THIS DOES NOT CHECK, because the repository cannot supply it: which
+    arms `three-arms` carries. That is a branch, not a set this driver
+    defines, so the parenthesis is checked for self-consistency and for
+    naming real arms, and its MEMBERSHIP is checked by nobody. A runbook that
+    named two other real arms would pass here."""
+    paragraph = re.sub(r"\s+", " ", _RUNBOOK)
+    phrase = re.search(r"run BEFORE the other (\w+) arms it shares "
+                       r"`three-arms` with \(([^)]*)\)", paragraph)
+    assert phrase, "the runbook no longer names the arms three-arms carries"
+    others = re.findall(r"`([\w.-]+)`", phrase.group(2))
+    assert phrase.group(1) == _count_word(len(others)), (phrase.group(1), others)
+    assert "private-mixtral-bm32" not in others, others
+    for name in others:
+        assert name in ARMS, (name, ARMS)
+
+    # AND THE LABEL IS GONE, not merely joined by a count. The driver's comment
+    # is the only place the phrase is defined, and it defines it over a pair
+    # that CONTAINS the subject of this sentence.
+    pair = TEXT.split("AND THE INTERPRETATION ARMS", 1)[1].split("\nrental_2h_arms", 1)[0]
+    interpretation = {n for n in ARMS
+                      if re.search(rf"`{re.escape(n)}`", pair)}
+    # PIN THE DEFINITION, because this sentence's whole justification is that
+    # the label named a set the subject is IN. `interpretation != set(others)`
+    # stood here and could never fire: it follows from the subject being in the
+    # one set and out of the other, and both of those are asserted already. A
+    # comment rewritten to drop the subject, or widened past a pair, makes the
+    # old label defensible again and this test should be the thing that says so.
+    assert len(interpretation) == 2, interpretation
+    assert "private-mixtral-bm32" in interpretation, interpretation
+    assert "interpretation arms" not in _RUNBOOK

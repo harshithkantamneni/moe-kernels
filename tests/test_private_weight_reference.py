@@ -9,10 +9,15 @@ pod run will execute.
 from __future__ import annotations
 
 import ast
+import contextlib
 import csv
+import io
+import json
 import math
+import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -24,6 +29,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import private_weight_reference as PW  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
+from moe.bench import timing as TIMING  # noqa: E402
 from moe.bench import weights as WEIGHTS  # noqa: E402
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
@@ -45,6 +51,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "noisy-identity"), True),
     (("--self-test", "clock-split"), True),
     (("--self-test", "alignment-step"), True),
+    (("--self-test", "host-bound-probe"), True),
     (("--self-test", "ratio-path-split"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
@@ -1319,7 +1326,7 @@ def test_leverage_is_the_indicator_regressed_on_n():
     assert PW.leverage([1, 2, 3, 4, 5, 6], 1) == pytest.approx(0.0)
 
 
-def test_step_bias_is_the_leverage_over_the_private_slope():
+def test_step_bias_is_the_leverage_over_the_weight_stream():
     assert PW.step_bias(0.01, [1, 2, 3, 4, 5, 6], 4, 0.5) == pytest.approx(
         (4.5 / 17.5) * 0.01 / 0.5)
     assert PW.step_bias(0.01, [1, 2, 3, 4, 5, 6], 4, 0.0) == math.inf
@@ -1348,39 +1355,21 @@ def test_step_fit_recovers_a_planted_step_and_finds_none_on_a_line():
         PW.step_fit(_series(0.0, 4)[:2])
 
 
-def _probe_from(series_by_label, spread=0.0):
+def _probe_from(series_by_label, spread=0.0, host_bound=False):
     cells = []
     for label, series in series_by_label.items():
         for rep in range(3):
             for n, numel, ms in series:
                 jitter = (rep - 1) * spread
                 cells.append(PW.ProbeCell(label, n, numel, 72, rep,
-                                          ms * (1.0 + jitter)))
+                                          ms * (1.0 + jitter),
+                                          host_bound=host_bound))
     return PW.AlignProbe(tuple(cells), synthetic=True)
 
 
 def _census():
     return PW.path_census(CFG, [1, 2, 3, 4, 5, 6], 32,
                           {PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72})
-
-
-def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one():
-    treads = [1, 2, 3, 4, 5, 6]
-    flat = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)})
-    assert PW.gate_v8_alignment(flat, treads=treads, census=_census(),
-                                private_slope_ms=0.64).verdict == exit_codes.PASS
-    split = _probe_from({PW.NATIVE: _series(0.02, 4),
-                         PW.SHARED: _series(0.5, 4)}, spread=1e-4)
-    gate = PW.gate_v8_alignment(split, treads=treads, census=_census(),
-                                private_slope_ms=0.64)
-    assert gate.verdict == exit_codes.FAIL, gate.lines
-    # Over budget but the probe's own spread swallows it: not shown either way.
-    noisy = _probe_from({PW.NATIVE: _series(0.02, 4),
-                         PW.SHARED: _series(0.5, 4)}, spread=5.0)
-    assert PW.gate_v8_alignment(noisy, treads=treads, census=_census(),
-                                private_slope_ms=0.64).verdict == exit_codes.UNKNOWN
-    assert PW.gate_v8_alignment(None, treads=treads, census=_census(),
-                                private_slope_ms=0.64).verdict == exit_codes.UNKNOWN
 
 
 def test_v8_budget_is_a_bias_on_the_ratio_and_not_a_step_in_microseconds():
@@ -1390,9 +1379,9 @@ def test_v8_budget_is_a_bias_on_the_ratio_and_not_a_step_in_microseconds():
     probe = _probe_from({PW.NATIVE: _series(0.02, 4),
                          PW.SHARED: _series(0.02, 4)}, spread=1e-4)
     assert PW.gate_v8_alignment(probe, treads=treads, census=_census(),
-                                private_slope_ms=0.64).verdict == exit_codes.PASS
+                                weight_stream_ms=0.64).verdict == exit_codes.PASS
     assert PW.gate_v8_alignment(probe, treads=treads, census=_census(),
-                                private_slope_ms=0.2).verdict == exit_codes.FAIL
+                                weight_stream_ms=0.2).verdict == exit_codes.FAIL
 
 
 def test_the_planted_probe_puts_natives_step_where_the_census_does():
@@ -1447,3 +1436,1624 @@ def test_the_declaration_fit_still_finds_a_real_per_tile_cost_beside_a_step():
     fit = PW.declaration_fit(samples, treads, 4)
     assert fit.per_tile_ms == pytest.approx(0.35, rel=1e-6)
     assert fit.step_ms == pytest.approx(0.4, rel=1e-6)
+
+
+# --------------------------------------------------------------------------
+# 12. the step rule's own operating characteristic
+# --------------------------------------------------------------------------
+
+#: The per-cell relative noise every step-rule simulation below draws with, and
+#: the seed it draws at. BOTH RULES ARE EXACTLY SCALE-FREE IN IT on pure noise:
+#: `_series` adds `ms x sigma x z`, `StepFit.step_ms` and `_ols_se`'s residual
+#: are linear in the series, and `AlignProbe.spread_ms` is too, so every rate
+#: below is a property of the RULE at this geometry and not of any card's
+#: microseconds. `test_..._far_less_often_than_the_spread_rule_it_replaced`
+#: asserts that invariance rather than trusting it.
+STEP_RULE_NOISE = 0.02
+STEP_RULE_SEED = 20260917
+
+
+def _noise_probe(label, repeats, noise, rng, step_ms=0.0, split=4):
+    """`repeats` INDEPENDENTLY noised copies of this design's own six-tread
+    series, as an `AlignProbe`, so `AlignProbe.series` takes a real median over
+    real repeats.
+
+    `_probe_from` cannot be used for this: its jitter is `(rep - 1) x spread`,
+    the same factor on every cell of a repeat, so its median series is the
+    noiseless one. This one redraws `_series` per repeat, which is what the
+    probe does on a pod.
+    """
+    cells = []
+    for rep in range(repeats):
+        for n, numel, ms in _series(step_ms, split, noise=noise,
+                                    seed=rng.randrange(1 << 30)):
+            cells.append(PW.ProbeCell(label, n, numel, 72, rep, ms))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+def _old_spread_rule(probe, label, fit):
+    """The step rule `read_probe` carried before the six-lens round, verbatim:
+    a step is REAL when it exceeds `PROBE_STEP_SIGMA` ACROSS-REPEAT SPREADS of
+    the series' own cells. Kept here so the two rules are scored on the same
+    worlds, cell for cell."""
+    spread = probe.spread_ms(label)
+    return (spread is not None and fit.split_tread is not None
+            and abs(fit.step_ms) > PW.PROBE_STEP_SIGMA * spread)
+
+
+def _step_rule_trial(*, repeats, worlds, noise=STEP_RULE_NOISE,
+                     seed=STEP_RULE_SEED, step_ms=0.0, split=4):
+    """Score both rules on `worlds` simulated probes and return
+    `(old_rate, new_rate, found_rate, old_index, new_index)`.
+
+    The rates are the fraction of worlds each rule called REAL; `found_rate` is
+    the fraction where the NEW rule resolved a step AND put it at `split`. The
+    two indices are the median of `|step_ms| / threshold` under each rule, a
+    CONTINUOUS reading of how far the rule is from firing, which is estimated
+    far more stably from `worlds` draws than a 5% tail is.
+    """
+    import random
+    import statistics
+    rng = random.Random(seed)
+    old_hits = new_hits = found = 0
+    old_index, new_index = [], []
+    for _ in range(worlds):
+        probe = _noise_probe(PW.SHARED, repeats, noise, rng, step_ms, split)
+        fit = PW.step_fit(probe.series(PW.SHARED))
+        if _old_spread_rule(probe, PW.SHARED, fit):
+            old_hits += 1
+        if fit.resolved():
+            new_hits += 1
+            if fit.split_tread == split:
+                found += 1
+        old_index.append(abs(fit.step_ms)
+                         / (PW.PROBE_STEP_SIGMA * probe.spread_ms(PW.SHARED)))
+        new_index.append(abs(fit.step_ms) / fit.threshold_ms())
+    return (old_hits / worlds, new_hits / worlds, found / worlds,
+            statistics.median(old_index), statistics.median(new_index))
+
+
+def _first_disagreement(*, repeats=3, worlds=200, noise=STEP_RULE_NOISE,
+                        seed=STEP_RULE_SEED):
+    """The first simulated world the OLD rule calls REAL and the NEW one does
+    not, as `(probe, fit)`.
+
+    WHY A WITNESS IS NEEDED AT ALL. Every rate in this file is scored on
+    `StepFit.resolved` directly, so none of them touches `read_probe`, the
+    caller that actually hands V8 its verdict: a `read_probe` reverted to the
+    spread would leave all of them green. Only a world the two rules read
+    DIFFERENTLY can say which one the caller is using. At this seed the second
+    world drawn is already one, and the search is over `worlds` draws so a
+    future edit that made disagreements rare would raise rather than pass.
+    """
+    import random
+    rng = random.Random(seed)
+    for _ in range(worlds):
+        probe = _noise_probe(PW.SHARED, repeats, noise, rng)
+        fit = PW.step_fit(probe.series(PW.SHARED))
+        if _old_spread_rule(probe, PW.SHARED, fit) and not fit.resolved():
+            return probe, fit
+    raise AssertionError(f"no world in {worlds} separated the two rules")
+
+
+def test_the_new_step_rule_fires_on_pure_noise_far_less_often_than_the_spread_rule_it_replaced():
+    """`PROBE_STEP_SIGMA`'s docstring claims a MEASURED operating characteristic
+    for `StepFit.resolved` and nothing tested it.
+
+    WHAT THIS WOULD HAVE CAUGHT. `read_probe` used to call a step REAL when
+    `|step_ms| > PROBE_STEP_SIGMA x AlignProbe.spread_ms`, a threshold on the
+    ACROSS-REPEAT spread of a single cell, while `step_fit` had already chosen
+    the split as the smallest-RSS of five candidates. Tested as if the split
+    had been named in advance, that rule fires on PURE NOISE in 142 of the 600
+    worlds below (0.2367). `resolved` prices the same search -- `step_se` from
+    `_ols_se`'s own residual, widened by `selection_penalty(splits_tried)` --
+    and fires in 42 (0.0700). An `_ols_se` that divides its `s2` by `n` instead
+    of `n - k`, or a `selection_penalty` that returns 1.0, moves the rate
+    assertions below directly; a `read_probe` reverted to the spread leaves
+    every one of them green, because they score `resolved` and not the caller,
+    and is caught by the witness at the end instead. All three would put V8's
+    FAIL and the split handed to `declaration_fit` back on a one-in-four false
+    alarm per run.
+
+    HOW THE BOUNDS WERE CHOSEN, so a fixed seed is not a coin flip. At 600
+    worlds the binomial standard error of a rate near 0.0700 is
+    sqrt(0.07 x 0.93 / 600) = 0.0104, so the 0.12 ceiling asserted on the new
+    rule sits 4.8 of those above what it measures here; the old rule's error
+    near 0.2367 is sqrt(0.2367 x 0.7633 / 600) = 0.0174, so the 0.15 floor sits
+    5.0 below it. Both are bounds on the RATE, not the rate.
+    """
+    old_rate, new_rate, found_rate, _, _ = _step_rule_trial(
+        repeats=3, worlds=600)
+    assert old_rate >= 0.15, old_rate
+    assert new_rate <= 0.12, new_rate
+    assert 2 * new_rate < old_rate, (new_rate, old_rate)
+    # NOT blind, either: a 3-sigma rule that never fires is a rule with no
+    # resolution, which is exactly the failure the next test is about.
+    assert new_rate > 0.0
+    # And fewer than half of those false alarms land on the census' own split
+    # (7 of the 42 here), so they are the search talking and not a feature of
+    # the ladder: a rule that always named tread 4 would fail this.
+    assert found_rate < new_rate / 2, (found_rate, new_rate)
+    # BOTH RATES ARE PROPERTIES OF THE RULE, NOT OF A CARD. `_series` scales
+    # every deviation by `noise`, and `step_ms`, `step_se` and `spread_ms` are
+    # all homogeneous of degree one in the series, so a ten-fold noisier probe
+    # is the same set of verdicts. Allowed one world in 600 for a draw that
+    # sits on its own threshold to within float rounding.
+    loud_old, loud_new, _, _, _ = _step_rule_trial(
+        repeats=3, worlds=600, noise=10 * STEP_RULE_NOISE)
+    assert loud_old == pytest.approx(old_rate, abs=1.0 / 600)
+    assert loud_new == pytest.approx(new_rate, abs=1.0 / 600)
+    # AND THE GATE READS THE NEW RULE, which no rate above can show. At this
+    # seed the second world drawn fits a step of +1.00 us that clears 3 of its
+    # own spreads (0.96 us) but not its own threshold (1.35 us): the old rule
+    # calls it REAL, `resolved` does not, and `read_probe` sides with
+    # `resolved`.
+    witness, witness_fit = _first_disagreement()
+    assert _old_spread_rule(witness, PW.SHARED, witness_fit)
+    assert not witness_fit.resolved()
+    assert PW.read_probe(witness, PW.SHARED, _census()).real is False
+
+
+def test_more_probe_repeats_do_not_make_the_new_step_rule_stricter_as_they_made_the_spread_rule():
+    """THE DIRECTION, which is the defect the round was really about.
+
+    `AlignProbe.series` is a MEDIAN over `--probe-repeats`, so the noise of the
+    number `step_fit` fits falls as the repeats grow; the old threshold,
+    `PROBE_STEP_SIGMA x AlignProbe.spread_ms`, is the spread of ONE cell and
+    does not move. Measuring more therefore made the old instrument BLINDER:
+    on pure noise it fires in 0.2367 of the worlds at 3 repeats, 0.0400 at 5
+    and 0.0000 at 9, and its median resolution index `|step_ms| / threshold`
+    falls 0.703 -> 0.499 -> 0.336, i.e. a step of a fixed size relative to the
+    series' own residual gets HARDER to resolve the more the probe is
+    repeated. `StepFit.threshold_ms` is built on `step_se`, which is computed
+    from that same median series, so it falls with the repeats the way the
+    estimate does: 0.0700 -> 0.0617 -> 0.0717 with an index of
+    0.433 -> 0.423 -> 0.432, flat to within 3% across the three.
+
+    WHAT THIS WOULD HAVE CAUGHT. Any threshold that stops reading the fitted
+    series and goes back to a per-cell quantity -- `spread_ms`, a fixed
+    microsecond floor, `pstdev` of the raw cells -- reintroduces exactly this:
+    the V8 UNKNOWN whose remedy line says "more --probe-repeats is what closes
+    it" would then be advice that makes the gate less able to close, not more.
+    The index bounds are the load-bearing ones: a median over 600 worlds is a
+    far steadier statistic than a 5% tail, and the old rule's index ratio
+    0.336/0.703 = 0.478 is nowhere near the new rule's 0.432/0.433 = 0.998.
+    """
+    by_repeats = {r: _step_rule_trial(repeats=r, worlds=600) for r in (3, 5, 9)}
+    old = {r: v[0] for r, v in by_repeats.items()}
+    new = {r: v[1] for r, v in by_repeats.items()}
+    old_index = {r: v[3] for r, v in by_repeats.items()}
+    new_index = {r: v[4] for r, v in by_repeats.items()}
+    # THE PATHOLOGY: the old rule's false alarms are extinguished by the very
+    # repeats that were supposed to sharpen it.
+    assert old[3] > old[5] > old[9], old
+    assert old[3] >= 0.15 and old[9] <= 0.01, old
+    assert old_index[9] < 0.6 * old_index[3], old_index
+    # ITS ABSENCE: the new rule neither collapses nor runs away.
+    assert all(0.02 <= rate <= 0.12 for rate in new.values()), new
+    assert max(new.values()) < 2 * min(new.values()), new
+    assert new[9] >= new[3] / 2, new
+    assert 0.85 <= new_index[9] / new_index[3] <= 1.15, new_index
+    assert 0.85 <= new_index[5] / new_index[3] <= 1.15, new_index
+
+
+def test_a_step_worth_a_fifth_of_the_alignment_budget_is_still_found_by_the_new_rule():
+    """POWER, the half of an operating characteristic a stricter rule can buy
+    by refusing everything.
+
+    A rule that never fires has no false positives, so the two simulations
+    above are only worth having beside this one. The steps here are named in
+    the units V8 actually gates on: `step_bias` of 0.002 and 0.004 of the
+    ratio, a fifth and two fifths of `ALIGN_STEP_RATIO_BUDGET`, converted to
+    milliseconds through `leverage` at the six-tread ladder's split of 4 and
+    the 0.64 ms weight stream the other V8 tests use. At the same per-cell
+    noise the false-positive simulation runs at, `resolved` finds the smaller
+    in 381 of 400 worlds (0.9525) and the larger in all 400, and puts the
+    split at tread 4 every time it fires.
+
+    WHAT THIS WOULD HAVE CAUGHT. `selection_penalty` grows without bound in
+    `splits_tried`, and `threshold_ms` multiplies it by `PROBE_STEP_SIGMA`:
+    a "safer" edit that raised either -- or an `_ols_se` that overstated
+    `step_se` -- would trade this power away silently, and V8 would answer
+    UNKNOWN on a design whose step really is over budget, which is the answer
+    that costs a pod session. The 0.90 floor sits 4.9 binomial standard errors
+    (sqrt(0.9525 x 0.0475 / 400) = 0.0106) below the measured 0.9525.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    weight_stream_ms = 0.64
+    worth = {frac: frac * PW.ALIGN_STEP_RATIO_BUDGET * weight_stream_ms
+             / PW.leverage(treads, 4) for frac in (0.2, 0.4)}
+    assert PW.step_bias(worth[0.2], treads, 4, weight_stream_ms) \
+        == pytest.approx(0.002)
+    assert PW.step_bias(worth[0.4], treads, 4, weight_stream_ms) \
+        == pytest.approx(0.004)
+    _, small_rate, small_found, _, _ = _step_rule_trial(
+        repeats=3, worlds=400, step_ms=worth[0.2])
+    assert small_rate >= 0.90, small_rate
+    assert small_found >= 0.90, small_found
+    _, big_rate, big_found, _, _ = _step_rule_trial(
+        repeats=3, worlds=400, step_ms=worth[0.4])
+    assert big_rate >= 0.99, big_rate
+    assert big_found >= 0.99, big_found
+
+
+def test_the_selection_penalty_is_sqrt_two_log_k_and_is_what_widens_the_threshold():
+    """`selection_penalty` prices the fact that `step_fit` REPORTS THE MINIMUM
+    RSS over every candidate split, so the step it hands back is the largest of
+    `splits_tried` draws and not one named in advance.
+
+    WHAT THIS WOULD HAVE CAUGHT. The arithmetic has two traps a plausible edit
+    walks into: `math.log(1)` is 0.0 and `math.log(0)` raises, so a
+    `selection_penalty` written without the `splits_tried > 1` guard either
+    zeroes `threshold_ms` -- every step REAL, V8 FAILs on noise -- or throws
+    `ValueError` out of the middle of a gate. It has to be 1.0 for a single
+    candidate, rising, and it has to reach `threshold_ms` multiplicatively
+    beside `PROBE_STEP_SIGMA` rather than being folded into `step_se`.
+    """
+    assert PW.selection_penalty(0) == 1.0
+    assert PW.selection_penalty(1) == 1.0
+    assert PW.selection_penalty(5) == pytest.approx(math.sqrt(2.0 * math.log(5)))
+    # The closed form beside it only says the two spellings agree, so the shape
+    # is pinned at two points by numbers as well, which a reader can check
+    # against a table without running this function.
+    assert PW.selection_penalty(5) == pytest.approx(1.7941, abs=5e-5)
+    assert PW.selection_penalty(12) == pytest.approx(2.2293, abs=5e-5)
+    widths = [PW.selection_penalty(k) for k in range(1, 13)]
+    assert widths == sorted(widths) and len(set(widths)) == len(widths)
+    # A six-tread ladder offers five splits, so 1.79 is the one this design
+    # pays, and the threshold is exactly sigma x se x that penalty.
+    fit = PW.step_fit(_series(0.0, 4, noise=STEP_RULE_NOISE, seed=1))
+    assert fit.splits_tried == 5
+    assert fit.threshold_ms() == pytest.approx(
+        PW.PROBE_STEP_SIGMA * fit.step_se * PW.selection_penalty(5))
+    assert fit.threshold_ms(6.0) == pytest.approx(2.0 * fit.threshold_ms(3.0))
+    # AND A FIT WITH NO DEGREE OF FREEDOM LEFT CANNOT RESOLVE ANYTHING:
+    # `_ols_se` returns zero errors when `n - k` is zero, and `resolved`
+    # requires `step_se > 0` rather than dividing by it. Three points, three
+    # columns, a planted step of 0.05 ms that the old spread rule would have
+    # called REAL on any probe whose cells agreed with each other.
+    thin = PW.step_fit(_series(0.05, 3)[:3])
+    assert thin.step_ms == pytest.approx(0.05) and thin.splits_tried == 2
+    assert thin.step_se == 0.0
+    assert thin.threshold_ms() == 0.0 and not thin.resolved()
+
+
+def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one():
+    """The three verdicts V8 can reach from a probe, plus the no-probe UNKNOWN.
+
+    THE THIRD BRANCH IS THE ONE THIS ROUND MOVED. It used to build its doubtful
+    probe with `_probe_from(..., spread=5.0)`, but that jitter is
+    `(rep - 1) x spread` applied to a whole repeat, so `AlignProbe.series`,
+    which takes a MEDIAN over the three repeats, returns the same series for
+    any spread at all. The old rule read `AlignProbe.spread_ms` and so was
+    fooled by it; `StepFit.resolved` reads the standard error of the fitted
+    coefficient on the median series, which that probe leaves bit-identical to
+    the resolved one -- it now reads FAIL. The branch therefore carries its
+    noise where the new rule looks: in the series itself, through `_series`'s
+    own `noise=`. At seed 2 that series fits a step of +0.141 ms at tread 4,
+    worth 0.056 of the ratio -- 5.6 times `ALIGN_STEP_RATIO_BUDGET` -- against
+    a threshold of 0.272 ms, so the step is 0.52 of what it would have to be:
+    over budget, unresolved, and therefore neither shown sound nor unsound.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)})
+    assert PW.gate_v8_alignment(flat, treads=treads, census=_census(),
+                                weight_stream_ms=0.64).verdict == exit_codes.PASS
+    split = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, 4)}, spread=1e-4)
+    gate = PW.gate_v8_alignment(split, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+    # Over budget but the series' OWN residual swallows it: not shown either
+    # way. The two conditions are asserted before the verdict, so a future
+    # UNKNOWN reached for another reason -- a host-bound cell, an unprobed
+    # declaration -- cannot pass this branch by accident.
+    noisy = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.1, 4, noise=0.3, seed=2)})
+    fit = PW.step_fit(noisy.series(PW.SHARED))
+    assert PW.step_bias(fit.step_ms, treads, fit.split_tread, 0.64) \
+        > PW.ALIGN_STEP_RATIO_BUDGET
+    assert abs(fit.step_ms) < fit.threshold_ms()
+    doubted = PW.gate_v8_alignment(noisy, treads=treads, census=_census(),
+                                   weight_stream_ms=0.64)
+    assert doubted.verdict == exit_codes.UNKNOWN, doubted.lines
+    assert any("over budget but NOT resolved" in line for line in doubted.lines)
+    assert PW.gate_v8_alignment(None, treads=treads, census=_census(),
+                                weight_stream_ms=0.64).verdict == exit_codes.UNKNOWN
+
+
+# --------------------------------------------------------------------------
+# 13. a host-bound probe times the HOST, so V8 says UNKNOWN
+# --------------------------------------------------------------------------
+
+def _verdict_probe(verdicts_by_label):
+    """An `AlignProbe` whose cells carry EXACTLY the named `(host_bound,
+    host_note)` per tread, repeated three times like `_probe_from`.
+
+    `_probe_from` stamps ONE verdict on every cell it makes, so it cannot
+    express the case `AlignProbe.host_bound` has to reduce: a declaration
+    holding a None cell, a True cell and a False cell at once. Each list is
+    one entry per tread of `_series`, in tread order.
+    """
+    cells = []
+    for label, verdicts in verdicts_by_label.items():
+        series = _series(0.0, 4)
+        for rep in range(3):
+            for (n, numel, ms), (hot, note) in zip(series, verdicts, strict=True):
+                cells.append(PW.ProbeCell(label, n, numel, 72, rep, ms,
+                                          host_bound=hot, host_note=note))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+#: The two notes `timing.host_bound_verdict` ITSELF writes, taken from the
+#: instrument rather than copied into this file. A note copied by hand drifts
+#: the moment the instrument rewords itself, and prose that no code produces is
+#: this repository's recurring defect; the real hot note is also 364 characters
+#: with `;`, `:` and parentheses inside it, so carrying it end to end is what
+#: shows the page passes the instrument's sentence through WHOLE rather than
+#: summarising or splitting it.
+#:
+#: The hot walls are host-bound by the instrument's own arithmetic: three
+#: trials of 100 iterations that spent 0.99 s of their 1.00 s wall in the
+#: enqueue loop end with a GPU backlog of 0.01 s, which is under the
+#: `HOST_BOUND_BACKLOG_ITERS` = 2 iterations of the trial's own 0.01 s
+#: per-iteration wall that `host_bound_verdict` thresholds against. The
+#: unjudged note is the one it returns for no trials at all.
+_HOT_VERDICT, _, _, _HOT_NOTE = TIMING.host_bound_verdict(
+    [TIMING.TrialWall(enqueue_s=0.99, wall_s=1.0)] * 3, 100)
+_UNJUDGED_VERDICT, _, _, _UNJUDGED_NOTE = TIMING.host_bound_verdict([], 0)
+
+#: One declaration's planted verdicts for `_verdict_probe`, one per tread of
+#: `_series`: a cell the instrument could not judge, two it called host-bound,
+#: three it cleared. The None cell carries a note of its own, so a reader of
+#: `AlignProbe.host_bound` that took the note off the first cell WITH a note
+#: rather than off the first HOT cell would report the wrong sentence.
+_MIXED_VERDICTS = [(None, _UNJUDGED_NOTE), (True, _HOT_NOTE), (True, _HOT_NOTE),
+                   (False, ""), (False, ""), (False, "")]
+
+
+def test_the_planted_host_bound_notes_are_the_instruments_own_sentences():
+    """THREE TESTS BELOW REST ON THIS FIXTURE, so the fixture is checked first:
+    the notes they plant have to be the ones `timing.host_bound_verdict`
+    returns, not a paraphrase that would let the V8 page carry a sentence the
+    instrument never writes. This asserts what the two planted walls MEAN --
+    one set host-bound, one unjudgeable -- and that the hot note is the whole
+    sentence, remedy clause included, rather than a truncation of it.
+    """
+    assert (_HOT_VERDICT, _UNJUDGED_VERDICT) == (True, None)
+    assert _UNJUDGED_NOTE == "no trials; host-bound not determinable"
+    assert _HOT_NOTE.startswith("host-bound: in 3 of 3 trials")
+    # The instrument's note ENDS with its own remedy; a note cut short at the
+    # first clause is the fake this fixture used to plant.
+    assert _HOT_NOTE.endswith("to measure the GPU alone")
+
+
+def test_v8_is_unknown_on_a_host_bound_probe_even_where_the_series_is_flat_and_the_bias_is_zero():
+    """THE HOST-BOUND BRANCH BEATS THE PASS BRANCH, which is the whole point of
+    it. `gate_v8_alignment` reads `AlignProbe.host_bound(ratio_label)` BEFORE
+    it compares `bias` with `ALIGN_STEP_RATIO_BUDGET`, because an alignment
+    call is tens of microseconds -- the size of the host's own enqueue cost --
+    so a host-bound cell timed the HOST and its flatness is a fact about the
+    wrong machine. Planted identically on both sides: the same flat series, a
+    bias of exactly 0.0000, and only `ProbeCell.host_bound` moved. Ordered the
+    other way round the gate would have certified the design off a probe that
+    never timed the kernel the ratio arms run.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}
+    hot = PW.gate_v8_alignment(_probe_from(flat, host_bound=True),
+                               treads=treads, census=_census(),
+                               weight_stream_ms=0.64)
+    cool = PW.gate_v8_alignment(_probe_from(flat, host_bound=False),
+                                treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert hot.verdict == exit_codes.UNKNOWN, hot.lines
+    assert cool.verdict == exit_codes.PASS, cool.lines
+    # The bias branch AGREED with PASS in both: the same flat series gives a
+    # measured bias of 0.0000 either way, so nothing but the host-bound
+    # verdict separated UNKNOWN from PASS.
+    assert hot.measured == cool.measured
+    assert hot.measured.startswith("bias <= 0.0000")
+
+
+def test_v8_reads_the_host_bound_verdict_before_the_budget_so_an_over_budget_real_step_is_unknown():
+    """The other side of the same ordering, and the one a PASS-only test cannot
+    reach: a probe whose ratio series carries a REAL 0.5 ms step is FAIL when
+    the cells were GPU-bound and UNKNOWN when they were host-bound. A step in
+    the host's enqueue cost is not evidence that vLLM switched alignment
+    kernel inside the ratio arms' ladder, so V8 must not spend its FAIL on it
+    either. If the host-bound test sat in the `elif` chain after `r.real` this
+    would still read FAIL and the run would be refused for the wrong reason.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    # NO `spread=` HERE, DELIBERATELY, and the neighbouring tests that pass one
+    # are passing a dead argument: `_probe_from` scales a WHOLE REPEAT by
+    # `(rep - 1) * spread` and `AlignProbe.series` takes the per-tread MEDIAN
+    # over repeats, so the middle repeat -- jitter exactly 0 -- IS the series.
+    # Measured on this construction: split_tread, step_ms, step_se, rss_with,
+    # threshold_ms and resolved() are bit-identical at spread 0.0, 1e-4 and
+    # 5.0. Writing 1e-4 here would claim a noisy probe and plant none.
+    stepped = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.5, 4)}
+    cool = PW.gate_v8_alignment(_probe_from(stepped, host_bound=False),
+                                treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    hot = PW.gate_v8_alignment(_probe_from(stepped, host_bound=True),
+                               treads=treads, census=_census(),
+                               weight_stream_ms=0.64)
+    assert cool.verdict == exit_codes.FAIL, cool.lines
+    assert hot.verdict == exit_codes.UNKNOWN, hot.lines
+    # Both scored the SAME over-budget real step, so the budget cannot be what
+    # separated them: the 0.5 ms step sits at tread 4, whose leverage over
+    # these six treads is 4.5/17.5 = 0.2571, and 0.2571 x 0.5 / 0.64 ms of
+    # weight stream is a bias of 0.2009 -- twenty times ALIGN_STEP_RATIO_BUDGET.
+    assert hot.measured == cool.measured == "bias <= 0.2009, a REAL step"
+    assert PW.step_bias(0.5, treads, 4, 0.64) > 20 * PW.ALIGN_STEP_RATIO_BUDGET
+    # WHY `cool` IS FAIL AND NOT UNKNOWN, recorded because it is not obvious
+    # from the verdict alone: the planted series fits the step term EXACTLY, so
+    # the residual is at the rounding floor (RSS 5.1e-31) and `step_se` is
+    # 7.0e-16 ms, a number out of rounding rather than out of noise.
+    # `resolved()` clears it only because 0.5 ms beats a threshold of
+    # 3.8e-15 ms, a margin of 1.3e14. If a floor is ever put under `step_se`,
+    # THIS line reports it rather than the bare verdict assert above.
+    fit = PW.step_fit(_probe_from(stepped).series(PW.SHARED))
+    assert fit.step_se > 0.0
+    assert abs(fit.step_ms) > 1e6 * fit.threshold_ms()
+
+
+def test_v8_is_unknown_when_no_probed_cell_carried_a_host_bound_verdict_at_all():
+    """`ProbeCell.host_bound` is `bool | None` and its docstring says None is
+    "not determinable", WHICH IS NOT THE SAME AS False. `timing.host_bound_verdict`
+    returns None when a trial spanned no wall time or there were no trials, so
+    a probe of Nones is an instrument that answered nothing, not an instrument
+    that cleared the cells. The gate's `judged == 0` arm exists for that: read
+    as False it would have PASSED this flat series and called the design sound
+    on a probe with no verdict in it.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}
+    blind = _probe_from(flat, host_bound=None)
+    assert blind.host_bound(PW.SHARED) == (0, 0, "")
+    gate = PW.gate_v8_alignment(blind, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any("returned no host-bound verdict for any probed cell" in ln
+               for ln in gate.lines), gate.lines
+
+
+def test_align_probe_host_bound_counts_one_declaration_at_a_time_and_notes_a_hot_cell():
+    """`AlignProbe.host_bound(label)` filters `self.cells` by `label` first, so
+    one declaration's verdicts cannot be counted into another's. It matters
+    here because the probe times NATIVE's declaration beside the ratio arms'
+    in the same `AlignProbe`, and NATIVE is the arm allowed its switch: a
+    reduction over ALL cells would let NATIVE's host-bound cells send V8
+    UNKNOWN about a SHARED series the instrument had cleared. The counts are
+    3 repeats x the per-tread verdicts in `_MIXED_VERDICTS`, and the note is
+    taken off the first HOT cell, not off the first cell that has one.
+    """
+    probe = _verdict_probe({PW.SHARED: _MIXED_VERDICTS,
+                            PW.NATIVE: [(False, "")] * 6})
+    per_tread = _MIXED_VERDICTS
+    want_hot = 3 * sum(1 for hot, _ in per_tread if hot)
+    want_judged = 3 * sum(1 for hot, _ in per_tread if hot is not None)
+    assert (want_hot, want_judged) == (6, 15)
+    assert probe.host_bound(PW.SHARED) == (want_hot, want_judged, _HOT_NOTE)
+    # NATIVE's own 18 cells were all cleared, and SHARED's 6 hot ones did not
+    # leak into them.
+    assert probe.host_bound(PW.NATIVE) == (0, 3 * 6, "")
+    # PRIVATE shares SHARED's declaration and is not probed separately, so it
+    # has no cells at all: no verdict, and the note is empty rather than
+    # SHARED's.
+    assert probe.host_bound(PW.PRIVATE) == (0, 0, "")
+
+
+def test_v8_is_not_sent_unknown_by_native_cells_the_instrument_called_host_bound():
+    """THE GATE-LEVEL HALF of the test above, which the unit assertions cannot
+    reach. NATIVE's declaration is probed in the SAME `AlignProbe` as the ratio
+    arms' and is not scored by V8 at all, so a `host_bound` that reduced over
+    every cell -- the obvious implementation, and the one the label filter
+    exists to rule out -- would read 18 hot here and return UNKNOWN about a
+    SHARED series the instrument had cleared end to end. That is a refusal to
+    quote the ratio bought entirely with cells from the arm V8 does not score.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _verdict_probe({PW.SHARED: [(False, "")] * 6,
+                            PW.NATIVE: [(True, _HOT_NOTE)] * 6})
+    assert probe.host_bound(PW.NATIVE) == (18, 18, _HOT_NOTE)
+    assert probe.host_bound(PW.SHARED) == (0, 18, "")
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    # And the page reports the RATIO arms' count, not the probe's: 0 of 18.
+    assert ("the instrument called 0 of 18 probed cells HOST-BOUND at this "
+            "declaration") in gate.lines, gate.lines
+    assert not any(_HOT_NOTE in ln for ln in gate.lines), gate.lines
+
+
+def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it():
+    """PROSE DRIFT IS THIS REPOSITORY'S RECURRING DEFECT: a gate that returns
+    UNKNOWN without saying what it could not time sends a reader back to the
+    probe's raw cells. The line must carry the COUNT (so a reader sees whether
+    one cell or every cell was host-bound), the instrument's own note, and the
+    remedy -- raising `--probe-target-ms` so the GPU keeps a backlog, or a
+    profiler -- because neither is guessable from "UNKNOWN".
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _verdict_probe({PW.SHARED: _MIXED_VERDICTS,
+                            PW.NATIVE: [(False, "")] * 6})
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert ("the instrument called 6 of 15 probed cells HOST-BOUND at this "
+            f"declaration: {_HOT_NOTE}") in gate.lines, gate.lines
+    # The note came off a HOT cell. The unjudged cell sits FIRST in the
+    # declaration and carries a note of its own, so a reduction that took the
+    # note off the first cell that HAS one would put this sentence on the page
+    # instead, and the page would name the wrong reason for the UNKNOWN.
+    assert not any(_UNJUDGED_NOTE in ln for ln in gate.lines), gate.lines
+    assert ("the probe did not time the kernel it is about, so its step is not "
+            "evidence either way; raise --probe-target-ms so the GPU keeps a "
+            "backlog, or read the step from a profiler instead") in gate.lines
+    # And a cleared probe says so on the same line rather than staying silent,
+    # so "0 of 18" is a positive record that the instrument did look.
+    cool = PW.gate_v8_alignment(
+        _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}),
+        treads=treads, census=_census(), weight_stream_ms=0.64)
+    assert ("the instrument called 0 of 18 probed cells HOST-BOUND at this "
+            "declaration") in cool.lines, cool.lines
+
+
+# --------------------------------------------------------------------------
+# 14. the bias bound on the side the denominator shrinks
+# --------------------------------------------------------------------------
+
+def test_step_bias_on_a_positive_step_still_divides_by_the_whole_weight_stream():
+    """A regression pin on the half of `step_bias` the correction left alone.
+    Splitting the function on the sign of `step_ms` is a chance to move the
+    branch that was already right: for `s >= 0` the fitted denominator
+    `B_p + L s` GROWS, so `weight_stream_ms` is the whole scale the move is
+    taken against and `moved` is never subtracted from it. Two consequences
+    are pinned here because only the negative branch may have them: the
+    positive branch has no `inf` guard, so a step worth more than the stream
+    is a large bias rather than an unmeasurable design, and a `step_ms` of
+    exactly 0.0 takes this branch and comes back 0.0 because `moved` is 0,
+    not because a guard caught it.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    lev = 4.5 / 17.5
+    assert PW.leverage(treads, 4) == pytest.approx(lev)
+    for step_ms, stream_ms in ((0.01, 0.5), (0.25, 0.64), (4.0, 0.64)):
+        assert PW.step_bias(step_ms, treads, 4, stream_ms) == pytest.approx(
+            lev * step_ms / stream_ms)
+    # 4.0 ms of step is 4.0 x 4.5/17.5 = 1.0286 ms of slope against a 0.64 ms
+    # stream: past the point where the NEGATIVE branch returns `inf`, and
+    # still a finite 1.607 here.
+    big = PW.step_bias(4.0, treads, 4, 0.64)
+    assert math.isfinite(big) and big == pytest.approx((4.0 * 4.5 / 17.5) / 0.64)
+    assert big == pytest.approx(1.6071, abs=5e-5)
+    assert PW.step_bias(0.0, treads, 4, 0.64) == 0.0
+
+
+def test_step_bias_on_a_negative_step_shrinks_the_denominator_and_doubles_at_half_the_stream():
+    """The defect the sign split exists for. A step `s` common to both ratio
+    arms enters each straight-line fit as `L s` of slope, so the ratio is
+    `(B_s + L s)/(B_p + L s)`, and for `s < 0` the DENOMINATOR falls to
+    `B_p - L|s|`. The old single-branch form divided by `weight_stream_ms` on
+    both sides, so on the negative side it reported a move against a
+    denominator the step had already shrunk. The worked case in the new
+    docstring is derived here rather than quoted: set the stream to exactly
+    twice `L|s|` and the negative bound is `moved / (2 moved - moved)` = 1.0
+    against the positive branch's `moved / (2 moved)` = 0.5, a factor of two.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    lev = PW.leverage(treads, 4)
+    step_ms = 0.7
+    moved = lev * step_ms
+    # `L|s|` is exactly half the stream, which is where the shrunk denominator
+    # equals the whole one and the two branches stand in a ratio of two.
+    stream_ms = 2.0 * moved
+    assert PW.step_bias(step_ms, treads, 4, stream_ms) == pytest.approx(0.5)
+    assert PW.step_bias(-step_ms, treads, 4, stream_ms) == pytest.approx(1.0)
+    assert PW.step_bias(-step_ms, treads, 4, stream_ms) == pytest.approx(
+        2.0 * PW.step_bias(step_ms, treads, 4, stream_ms))
+    # Strictly larger at every magnitude short of consuming the stream, by
+    # exactly the denominator the positive branch does not shrink. The stream
+    # is consumed at 0.64 x 17.5/4.5 = 2.4889 ms; 2.0 ms is the largest
+    # magnitude in this sweep and still leaves 0.64 - 0.5143 = 0.1257 ms of it.
+    stream_ms = 0.64
+    assert stream_ms / lev == pytest.approx(2.4889, abs=5e-5)
+    for step_ms in (0.001, 0.01, 0.1, 0.5, 1.0, 2.0):
+        moved = lev * step_ms
+        assert moved < stream_ms
+        positive = PW.step_bias(step_ms, treads, 4, stream_ms)
+        negative = PW.step_bias(-step_ms, treads, 4, stream_ms)
+        assert positive == pytest.approx(moved / stream_ms)
+        assert negative == pytest.approx(moved / (stream_ms - moved))
+        assert negative > positive
+
+
+def test_step_bias_is_inf_when_a_negative_step_has_consumed_the_weight_stream():
+    """`inf` is a refusal and not a big number. When `L|s|` reaches
+    `weight_stream_ms` the fitted denominator `B_p + L s` has been driven to
+    zero or through it, and a ratio formed against that denominator is not a
+    measurement of anything, so `step_bias` declines to put a number on it.
+    The old form returned `L|s| / weight_stream_ms` there, a finite number
+    that reads as a bias on a ratio that no longer exists. The guard belongs
+    to the negative branch alone, which is pinned by the same magnitude
+    positive coming back finite. A `weight_stream_ms` of zero or less is the
+    other nothing-left-to-measure state and was already `inf`.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    lev = PW.leverage(treads, 4)
+    step_ms = 2.0
+    moved = lev * step_ms
+    # Exactly at the boundary the denominator is 0, and past it it is negative.
+    assert PW.step_bias(-step_ms, treads, 4, moved) == math.inf
+    assert PW.step_bias(-step_ms, treads, 4, 0.5 * moved) == math.inf
+    # The same magnitude with the sign flipped is finite, and is what the old
+    # form returned for BOTH signs: moved/moved = 1.0 and moved/(moved/2) = 2.0.
+    assert PW.step_bias(step_ms, treads, 4, moved) == pytest.approx(1.0)
+    assert PW.step_bias(step_ms, treads, 4, 0.5 * moved) == pytest.approx(2.0)
+    for stream_ms in (0.0, -0.1):
+        assert PW.step_bias(0.01, treads, 4, stream_ms) == math.inf
+        assert PW.step_bias(-0.01, treads, 4, stream_ms) == math.inf
+
+
+def _slope_of_a_ladder_carrying(step_ms: float, per_tile_ms: float,
+                                treads: list[int], split: int,
+                                intercept_ms: float) -> float:
+    """The slope `fit_line` reads off one arm whose per-tread time is
+    `intercept_ms + per_tile_ms n`, with `step_ms` added from `split` up.
+    `fit_line` is the script's own ladder estimator (`ladder_for` calls it),
+    so what comes back is the slope the ratio is really formed from and not a
+    stand-in for it.
+
+    REFUSES a ladder carrying a non-positive time. A large negative step on a
+    shallow arm drives cells through zero, and `fit_line` would still return a
+    slope for that (its residual term skips `y <= 0` and says nothing), so the
+    caller has to keep its planted designs to ladders a card could produce.
+    """
+    pts = [(n, intercept_ms + per_tile_ms * n + (step_ms if n >= split else 0.0))
+           for n in treads]
+    assert min(ms for _n, ms in pts) > 0.0, f"a ladder no card could produce: {pts}"
+    return PW.fit_line(pts)[1]
+
+
+def test_step_bias_bounds_what_a_common_step_does_to_a_fitted_ratio_on_both_sides():
+    """THE TEST THE CORRECTION IS FOR: the bound checked against the thing it
+    bounds, rather than against its own algebra. Two ladders are built with
+    per-tile costs `B_p = stream` and `B_s = alpha B_p`, one step common to
+    both is planted at tread 4, both are fitted with `fit_line`, and
+    `slope(SHARED)/slope(PRIVATE)` is compared with the unstepped `alpha`. The
+    move is `L|s| |B_p - B_s| / (B_p |B_p + L s|)`, so the denominator that
+    shrinks on the negative side is the FIT's, not a modelling choice.
+
+    `step_bias` holds at every magnitude and both signs. The old form,
+    `L|s| / B_p` for both signs, is violated on the negative side, and this
+    pins WHERE: `move > L|s|/B_p` reduces to `L|s| > B_s`, so the old formula
+    stops bounding once the fraction `L|s|/B_p` passes `alpha`, which is
+    exactly when the negative step has eaten the whole numerator slope. Two
+    alphas, so the crossing is a property of the arithmetic rather than of one
+    planted pair.
+
+    WHAT THIS IS AND IS NOT EVIDENCE OF. The fractions here run to 0.90 of the
+    stream, which at this leverage is a step of 2.24 ms: 90x the 24.76 us of
+    the reachable case below, so "the old form was not a bound" is arithmetic
+    and not a design the probe could hand the gate. The REACHABLE consequence
+    of the correction is the verdict flip in the last test in this file, which
+    needs 24.76 us.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    split = 4
+    lev = PW.leverage(treads, split)
+    stream_ms = 0.64
+    fractions = (0.05, 0.30, 0.50, 0.60, 0.80, 0.90)
+    old_form_violations = 0
+    for alpha in (0.55, 0.20):
+        for fraction in fractions:
+            step_ms = fraction * stream_ms / lev
+            for signed in (step_ms, -step_ms):
+                # 3.0 ms and 2.0 ms of intercept: arbitrary to the slope, which
+                # is what is read, but enough that the deepest negative step
+                # (2.24 ms, at fraction 0.90) leaves every cell above zero.
+                shared = _slope_of_a_ladder_carrying(
+                    signed, alpha * stream_ms, treads, split, 3.0)
+                private = _slope_of_a_ladder_carrying(
+                    signed, stream_ms, treads, split, 2.0)
+                # The planted step reaches each fit as exactly `L s` of slope.
+                assert shared == pytest.approx(alpha * stream_ms + lev * signed)
+                assert private == pytest.approx(stream_ms + lev * signed)
+                move = abs(shared / private - alpha)
+                bound = PW.step_bias(signed, treads, split, stream_ms)
+                assert move <= bound + 1e-12, (alpha, fraction, signed, move, bound)
+                old_form = lev * abs(signed) / stream_ms
+                broke = move > old_form + 1e-12
+                assert broke == (signed < 0.0 and fraction > alpha), (
+                    alpha, fraction, signed, move, old_form)
+                if broke:
+                    old_form_violations += 1
+    # Three fractions clear alpha = 0.55 and five clear alpha = 0.20, each on
+    # the negative side only: of the 2 x 6 x 2 = 24 planted designs the old
+    # form was not a bound on 8.
+    assert old_form_violations == 8
+
+
+def _signed_step_probe(step_ms: float, *, noise: float = 1e-5, seed: int = 3):
+    """A three-repeat alignment probe whose SHARED series carries `step_ms` at
+    tread 4, on a 0.12 ms + 8 ns/id line.
+
+    The line is ten times `_series`'s 0.012 ms intercept because a NEGATIVE
+    step of tens of microseconds on the shallower one drives cells to negative
+    times, which no probe can produce. `noise` is a per-cell relative draw,
+    there only so `step_fit`'s residual is real and `StepFit.step_se` is a
+    standard error rather than the rounding of an exactly-fitted series, which
+    is what `ProbeReading.real` is judged against.
+    """
+    import random
+    rng = random.Random(seed)
+    cells = []
+    for label, step in ((PW.NATIVE, 0.02), (PW.SHARED, step_ms)):
+        for rep in range(3):
+            for n in range(1, 7):
+                numel = 256 * n
+                ms = 0.12 + 8e-6 * numel + (step if n >= 4 else 0.0)
+                cells.append(PW.ProbeCell(label, n, numel, 72, rep,
+                                          ms * (1.0 + rng.gauss(0.0, noise)),
+                                          host_bound=False))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+def test_v8_fails_a_negative_ratio_arm_step_the_positive_only_bias_scored_inside_budget():
+    """The correction changes a VERDICT, not just a printed number. The window
+    where it does is arithmetic: the old form passes when
+    `L|s|/ws <= ALIGN_STEP_RATIO_BUDGET` and the new one goes over budget when
+    `L|s|/(ws - L|s|) > ALIGN_STEP_RATIO_BUDGET`, i.e. when
+    `L|s|/ws > 0.01/1.01 = 0.009901`, so every fraction in (0.009901, 0.01] is
+    PASS under the old form and, once the step is resolved against its own
+    standard error, FAIL under the new one. At ws = 0.64 ms and L = 4.5/17.5
+    the fraction 0.00995 is a step of 24.76 us, the tens of microseconds an
+    alignment call is, so `gate_v8_alignment` reaching a different verdict here
+    is a reachable design and not an arithmetic curiosity. The same magnitude
+    with the sign flipped still PASSES, which is the whole content of the fix:
+    the gate now reads a bound that knows which side of the fit the denominator
+    shrinks on.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    stream_ms = 0.64
+    lev = PW.leverage(treads, 4)
+    budget = PW.ALIGN_STEP_RATIO_BUDGET
+    fraction = 0.00995
+    assert budget / (1.0 + budget) < fraction <= budget
+    step_ms = fraction * stream_ms / lev
+    assert step_ms * 1e3 == pytest.approx(24.76, abs=0.01)
+
+    down = _signed_step_probe(-step_ms)
+    read = PW.read_probe(down, PW.SHARED, _census())
+    assert read.fit.split_tread == 4 and read.real
+    old_form = lev * abs(read.fit.step_ms) / stream_ms
+    corrected = PW.step_bias(read.fit.step_ms, treads, 4, stream_ms)
+    assert old_form <= budget < corrected
+    gate = PW.gate_v8_alignment(down, treads=treads, census=_census(),
+                                weight_stream_ms=stream_ms)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+
+    up = _signed_step_probe(step_ms)
+    assert PW.step_bias(PW.read_probe(up, PW.SHARED, _census()).fit.step_ms,
+                        treads, 4, stream_ms) <= budget
+    assert PW.gate_v8_alignment(up, treads=treads, census=_census(),
+                                weight_stream_ms=stream_ms).verdict == exit_codes.PASS
+
+
+# --------------------------------------------------------------------------
+# 15. the probe's own repeat floor
+# --------------------------------------------------------------------------
+
+def _probe_at_repeats(series_by_label, repeats, spread=0.0, host_bound=False):
+    """`_probe_from` with the REPEAT COUNT a parameter, which is the one thing
+    `--probe-repeats` moves and the one thing `_probe_from`'s `range(3)` holds
+    fixed. `host_bound=False` because a cell with no verdict sends V8 down its
+    `judged == 0` branch, which is UNKNOWN whatever the step is.
+    """
+    cells = []
+    for label, series in series_by_label.items():
+        for rep in range(repeats):
+            jitter = (rep - (repeats - 1) / 2.0) * spread
+            for n, numel, ms in series:
+                cells.append(PW.ProbeCell(label, n, numel, 72, rep,
+                                          ms * (1.0 + jitter),
+                                          host_bound=host_bound))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+@pytest.mark.parametrize("typed", ["1", "0", "-3"])
+def test_a_probe_repeat_count_under_the_floor_is_refused_naming_the_flag_typed(typed):
+    """THE KNOB HAD NO FLOOR AND ITS FLOOR IS THE GATE'S. `--repeats` and
+    `--treads` were both refused at plan time; `--probe-repeats` was accepted
+    at any value, so `--probe-repeats 1` bought the whole probe, printed a
+    V8 line whose across-repeat spread read NOT DETERMINED, and put an
+    unreplicated `StepFit.step_se` under a VALIDITY verdict. The refusal has
+    to name the flag the operator typed and the floor, or it sends them
+    looking at `--repeats`, which is a different number with a different
+    reason.
+
+    WHAT THIS DELIBERATELY DOES NOT PIN, and why the omission is the point.
+    The shipped message ends `V8 ... could not reach its FAIL branch at all.
+    A gate that cannot fail is not a gate.` That sentence is FALSE of this
+    code, and the test below measures it false: `read_probe` now takes `real`
+    from `StepFit.resolved`, whose standard error comes off the fit's own
+    residual, which a one-repeat series has. Asserting the sentence here
+    would make this file certify a claim it also disproves, so only the
+    clauses that hold below the floor are pinned: the flag, the floor, the
+    named gate, and `A single pass forms no across-repeat spread`. The
+    wording is the owner's to correct; these asserts survive the correction.
+    """
+    got = run(["--probe-repeats", typed, "--dry-run", "--device-memory-gb", "140"])
+    assert got.returncode == exit_codes.REFUSED, got.stdout[-2000:]
+    assert (f"REFUSED: --probe-repeats {typed} is below "
+            f"{PW.MIN_PROBE_REPEATS}.") in got.stdout, got.stdout[:2000]
+    assert "A single pass forms no across-repeat spread" in got.stdout
+    assert "V8" in got.stdout
+    # Refused BEFORE anything is measured, so no gate is scored: the shape
+    # every other plan-time refusal in this file has.
+    assert "RESULT: " not in got.stdout
+
+
+def test_the_probe_repeat_floor_is_read_after_the_treads_floor_and_before_the_repeats_one():
+    """ORDER IS BEHAVIOUR HERE, because a refusal that names a flag the
+    operator did not type sends them to fix the wrong one. `_main` checks
+    `len(treads) < MIN_TREADS`, then `args.probe_repeats < MIN_PROBE_REPEATS`,
+    then `args.repeats < MIN_REPEATS`, and each returns immediately -- so with
+    two floors broken at once exactly one refusal is printed. Pinned in both
+    directions: `--probe-repeats 1 --repeats 1` must report the probe knob and
+    say nothing about the ladder's, and `--treads 2 --probe-repeats 1` must
+    report the treads knob, which is checked first.
+    """
+    both = run(["--probe-repeats", "1", "--repeats", "1",
+                "--dry-run", "--device-memory-gb", "140"])
+    assert both.returncode == exit_codes.REFUSED
+    assert f"--probe-repeats 1 is below {PW.MIN_PROBE_REPEATS}." in both.stdout
+    assert f"--repeats 1 is below the {PW.MIN_REPEATS}" not in both.stdout
+    assert "every ladder here needs" not in both.stdout
+    assert both.stdout.count("REFUSED:") == 1, both.stdout[:2000]
+
+    short = len(PW.ladder_treads(CFG, PW.DEFAULT_BLOCK_M, 2))
+    assert short < PW.MIN_TREADS, "the shallow ladder must break the tread floor"
+    treads_first = run(["--treads", "2", "--probe-repeats", "1",
+                        "--dry-run", "--device-memory-gb", "140"])
+    assert treads_first.returncode == exit_codes.REFUSED
+    assert f"--treads 2 gives {short} tread(s)" in treads_first.stdout
+    assert "--probe-repeats" not in treads_first.stdout
+    assert treads_first.stdout.count("REFUSED:") == 1, treads_first.stdout[:2000]
+
+
+def test_the_probe_repeat_floor_is_read_before_the_run_needs_a_calibrated_device():
+    """A PLAN-TIME FLOOR HAS TO COST NOTHING, which is a statement about where
+    it sits relative to `SWEEP.resolve_ridge`, not about its wording. Without
+    `--device-memory-gb` and without `--dry-run` this command reaches
+    `resolve_ridge`, which on a machine with no CUDA device refuses with `no
+    calibration for this device`. `--probe-repeats 1` must stop BEFORE that,
+    on its own refusal, so an operator who mistyped the knob is told about the
+    knob rather than about a card. The ridge refusal's absence is the whole
+    assertion: were the floor read after the resolve, the same command would
+    print it and the flag would never be mentioned.
+    """
+    early = run(["--probe-repeats", "1"])
+    assert early.returncode == exit_codes.REFUSED, early.stdout[-2000:]
+    assert f"--probe-repeats 1 is below {PW.MIN_PROBE_REPEATS}." in early.stdout
+    assert "no calibration for this device" not in early.stdout
+    assert early.stdout.count("REFUSED:") == 1, early.stdout[:2000]
+    assert "RESULT: " not in early.stdout
+
+
+def test_two_probe_repeats_clear_the_floor_and_are_priced_into_the_plan():
+    """THE FLOOR IS AT THE LOWEST COUNT THAT STILL FORMS A SPREAD, not at the
+    default. `MIN_PROBE_REPEATS` is 2 and `PROBE_REPEATS` is 3, so the default
+    run is not refused by its own floor and the operator keeps one step of
+    room below it. `--probe-repeats 2` must therefore reach the plan, and the
+    plan must PRICE it: `probe_seconds(treads, 2, repeats)` is `2 declarations
+    x 6 treads x repeats x (PROBE_WARMUP_MS + PROBE_TRIALS x PROBE_TARGET_MS)`
+    = `2 x 6 x repeats x 140 ms`, which is 3.36 s at two repeats and 5.04 s at
+    three.
+
+    THE TWO FIGURES ARE ASSERTED AS FIGURES, not re-derived from the same
+    constants the function multiplies, because a test that recomputes
+    `probe_seconds`' one line and compares cannot notice the budget constants
+    moving underneath the prose above. If PROBE_WARMUP_MS, PROBE_TRIALS or
+    PROBE_TARGET_MS changes, 3.36 and 5.04 are what has to be re-derived and
+    this docstring is what has to be rewritten.
+    """
+    assert PW.MIN_PROBE_REPEATS == 2
+    assert PW.MIN_PROBE_REPEATS < PW.PROBE_REPEATS
+
+    treads = PW.ladder_treads(CFG, PW.DEFAULT_BLOCK_M, PW.DEFAULT_TREADS)
+    assert len(treads) == 6, treads
+    at_two = PW.probe_seconds(treads, 2, PW.MIN_PROBE_REPEATS)
+    at_default = PW.probe_seconds(treads, 2, PW.PROBE_REPEATS)
+    assert at_two == pytest.approx(3.36), at_two
+    assert at_default == pytest.approx(5.04), at_default
+    # A floor on a knob that changed nothing downstream would show up as one
+    # figure twice on the plan page.
+    assert f"{at_two:.0f}" != f"{at_default:.0f}", (at_two, at_default)
+
+    got = run(["--probe-repeats", str(PW.MIN_PROBE_REPEATS),
+               "--dry-run", "--device-memory-gb", "140"])
+    assert got.returncode == exit_codes.REFUSED          # the DRY RUN's refusal
+    assert "REFUSED: --probe-repeats" not in got.stdout
+    assert "reason: --dry-run was given" in got.stdout
+    assert f"probe's {at_two:.0f} s" in got.stdout
+
+
+def test_at_one_probe_repeat_no_spread_is_formed_and_the_step_verdict_is_the_fits_own_residual():
+    """WHAT ONE REPEAT ACTUALLY COSTS V8, taken off the code rather than off
+    the refusal's wording, because the two do not agree.
+
+    TRUE, and the floor's first clause: `AlignProbe.spread_ms` groups a
+    declaration's cells by tread and keeps `pstdev` only where `len(v) > 1`,
+    so at one repeat every group has one cell, the median is over an empty
+    list and the method returns None. `ProbeReading.lines()` then prints
+    `across-repeat spread NOT DETERMINED`, and the operator reads a V8 line
+    with no measurement of the instrument's own noise on it.
+
+    NOT TRUE of this code, and the reason this test exists: the refusal also
+    says V8 `could not reach its FAIL branch at all` at one repeat. That held
+    of the rule THIS PATCH REPLACED, where `read_probe` set
+    `real = (spread is not None and ...)` and a None spread forced UNKNOWN.
+    `StepFit.resolved` reads `step_se`, which `_ols_se` takes from the fit's
+    own residual over `len(treads) - 3` degrees of freedom, a quantity one
+    repeat has, so a one-repeat probe carrying a 500 us step at the ratio
+    arms' declaration reaches FAIL. Pinned so the floor's justification is not
+    carried forward as a property of the scorer.
+
+    AND THE MIDDLE CLAUSE IS PINNED FOR WHAT IT IS WORTH, which is less than
+    it reads. `AlignProbe.series` medians over repeats, so the fit always sees
+    `len(treads)` points however often the probe ran: `splits_tried` and the
+    degrees of freedom behind `step_se` are the same at 1, 2 and 3 repeats.
+    More repeats move the MEDIAN the error is computed on; they never buy the
+    error more replication. So the floor's real content is narrow and is the
+    first clause alone: below two repeats there is no across-repeat spread to
+    print beside the verdict.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    census = _census()
+    noisy = {PW.NATIVE: _series(0.02, 4, noise=0.004, seed=11),
+             PW.SHARED: _series(0.5, 4, noise=0.004, seed=3)}
+    one = _probe_at_repeats(noisy, 1)
+    two = _probe_at_repeats(noisy, 2, spread=1e-3)
+
+    assert one.spread_ms(PW.SHARED) is None
+    assert two.spread_ms(PW.SHARED) is not None
+    assert "across-repeat spread NOT DETERMINED" in "\n".join(
+        PW.read_probe(one, PW.SHARED, census).lines())
+
+    # The fit sees one point per TREAD at every repeat count, so nothing the
+    # knob does reaches the residual the standard error is taken on.
+    for probe in (one, two, _probe_at_repeats(noisy, 3, spread=1e-3)):
+        f = PW.step_fit(probe.series(PW.SHARED))
+        assert len(probe.series(PW.SHARED)) == len(treads)
+        assert f.splits_tried == len(treads) - 1
+        assert f.step_se > 0.0, "every repeat count still leaves a residual"
+
+    fit = PW.step_fit(one.series(PW.SHARED))
+    assert abs(fit.step_ms) > fit.threshold_ms()
+    assert fit.resolved()
+    assert PW.gate_v8_alignment(one, treads=treads, census=census,
+                                weight_stream_ms=0.64).verdict == exit_codes.FAIL
+    # The two rules read this same one-repeat probe in OPPOSITE directions,
+    # which is the disagreement the refusal's last sentence still describes.
+    old_real = (one.spread_ms(PW.SHARED) is not None
+                and fit.split_tread is not None
+                and abs(fit.step_ms) > PW.PROBE_STEP_SIGMA
+                * (one.spread_ms(PW.SHARED) or 0.0))
+    assert old_real is False and fit.resolved() is True
+
+
+def test_the_probe_repeat_refusal_reads_back_through_the_exit_code_contract():
+    """THE REFUSAL SHORT-CIRCUITS A MODE THAT WOULD OTHERWISE SCORE GATES, so
+    it has to leave a log the contract at the top of this file accepts. A
+    scoring mode's log must recompute its own exit code; `--self-test refit`
+    is such a mode and returns DONE with RESULT lines. Adding
+    `--probe-repeats 1` must turn it into the other shape exactly -- REFUSED,
+    no RESULT line, `classify_text` raising `NoGatesScored` -- and not into a
+    log that prints a verdict and exits 2, which is the defect
+    `moe/bench/exit_codes.py` exists to prevent. The DONE leg is also what
+    shows the floor does not fire at the default `--probe-repeats`.
+    """
+    scored = run(["--self-test", "refit"])
+    assert scored.returncode == exit_codes.DONE, scored.stdout[-2000:]
+    assert exit_codes.parse_result_lines(scored.stdout)
+
+    refused = run(["--self-test", "refit", "--probe-repeats", "1"])
+    assert refused.returncode == exit_codes.REFUSED
+    assert "RESULT: " not in refused.stdout
+    assert exit_codes.parse_result_lines(refused.stdout) == []
+    with pytest.raises(exit_codes.NoGatesScored):
+        exit_codes.classify_text(refused.stdout)
+
+
+# --------------------------------------------------------------------------
+# report.json carries no bare NaN
+# --------------------------------------------------------------------------
+
+#: The three tokens `json.dumps` writes for non-finite floats. Python's own
+#: `json.loads` decodes all three; RFC 8259 has a production for none of them,
+#: so a document carrying one parses here and nowhere else.
+JSON_NON_FINITE_TOKENS: tuple[str, ...] = ("NaN", "Infinity", "-Infinity")
+
+#: A JSON string literal, escapes included, so the scan below can delete every
+#: string before looking for a token in VALUE position.
+_JSON_STRING = re.compile(r'"(?:[^"\\]|\\.)*"')
+
+#: The `--draws` the "an interval WAS formed" pass is driven at. `DEFAULT_DRAWS`
+#: is 2000 and every draw refits BOTH ladders twice over (`ratio_interval` and
+#: `declaration_interval` each take the count), which costs about a second a
+#: world; fifteen worlds at the default is about fifteen seconds of an
+#: eighteen-minute suite for a document whose SHAPE is reached at any count the
+#: percentile rule accepts. MEASURED, not assumed: at 16 draws every world's
+#: payload has the same keys, the same formed interval and the same two
+#: declaration bands as at 2000. The shipped count is still driven once, at the
+#: end of the test, so the configuration the pod runs is not the one this file
+#: never runs.
+FORMED_DRAWS = 16
+
+
+def _bare_non_finite_tokens(text: str) -> list[str]:
+    """The non-finite tokens standing as VALUES in `text`, strings deleted.
+
+    `parse_constant` is the check that cannot be fooled; this one runs beside
+    it only so that a failure NAMES the token. It searches the capitalised
+    spellings `json.dumps` writes, and it deletes string literals before
+    looking, so what it reports is a token in value position and never a word
+    in a note. That is not hypothetical: the document really does carry the
+    lowercase spelling inside strings -- `gate_c1_ratio` renders an unformed
+    interval through an f-string, where `math.nan` prints as "nan", in its
+    `measured` line and again in the basis line under it, and the key
+    "provenance" spells those three letters too. A scan relaxed to catch those
+    would be one capitalisation away from accepting the bare value it is here
+    to find.
+    """
+    outside_strings = _JSON_STRING.sub('""', text)
+    return [token for token in JSON_NON_FINITE_TOKENS
+            if token in outside_strings]
+
+
+def _no_json_constants(token: str):
+    """`parse_constant` for `json.loads`, which refuses instead of decoding.
+
+    Python calls this for NaN, Infinity and -Infinity and for no other token,
+    so it converts "this document is Python-JSON, not JSON" into a failure.
+    This is the ANYWHERE check: it fires on a bare token in any field, not only
+    on `ratio_interval`, which is the one field the fix reached.
+    """
+    raise AssertionError(f"the document carries the bare token {token!r}, "
+                         "which no strict JSON parser accepts")
+
+
+def _payload_for(argv: list[str]) -> tuple[int, dict, str]:
+    """`(exit code, the payload `_main` would serialise, the run's log)`.
+
+    A PLANTED WORLD WRITES NO FILE: `_main` guards `report.txt` and
+    `report.json` with `if not synthetic`, so `--self-test` never reaches the
+    writer and the only way to hold a planted world's document is to take the
+    payload `analyse` hands back, which is the object the writer serialises.
+    `analyse` is WRAPPED rather than called again with reconstructed arguments,
+    so the payload under test is the one the script's own argument assembly
+    produced.
+    """
+    captured: list = []
+    real = PW.analyse
+
+    def wrapper(*args, **kwargs):
+        report = real(*args, **kwargs)
+        captured.append(report)
+        return report
+
+    PW.analyse = wrapper
+    log = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(log):
+            rc = PW._main(argv)
+    finally:
+        PW.analyse = real
+    assert captured, f"{argv} never reached analyse:\n{log.getvalue()[-600:]}"
+    return rc, captured[0].payload, log.getvalue()
+
+
+def _analyse(samples, treads: list[int], *, block_m: int = 32,
+             draws: int = 10, copies: int = 9):
+    """`PW.analyse` over planted cells, with what a planted run hands it.
+
+    The memory plan and the buffer proof `_main` builds for a synthetic world,
+    no probe, and the census `analyse` derives itself when it is given none.
+    The ridge and bandwidth are the ones the planted-world tests above this
+    one use, so the ladders come out at the same slopes.
+    """
+    mem = PW.memory_plan(CFG, "bf16", 2, copies,
+                         PW.SWEEP.tokens_for_rows(CFG, treads[-1] * block_m),
+                         140_000_000_000, "HYPOTHETICAL: no card is attached")
+    return PW.analyse(
+        samples, CFG, block_m=block_m, treads=treads, repeats=3,
+        alpha=PW.ALPHA, dtype="bf16", b=2, bandwidth_gbps=4000.0,
+        bandwidth_source="this test", ridge=160.0, ridge_source="this test",
+        roof_tflops=989.0, roof_source="this test", reference_mhz=None,
+        reference_grade="", reference_source="this test", mem=mem,
+        proof=PW.planted_proof(True), weight_delta_bytes=mem.weight_bytes,
+        high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=0,
+        header=[], card="no card", synthetic=True,
+        model_name=PW.DEFAULT_MODEL, pinned={}, copies_declared=copies)
+
+
+def test_an_interval_that_was_not_formed_is_null_in_the_payload_and_not_nan():
+    """`analyse` opens with `interval = (math.nan, math.nan)` and leaves it
+    there when `ratio_interval` raises `Unmeasurable`, and the payload used to
+    write `list(interval)` into `report.json`: `json.dumps` then emitted the
+    bare token `NaN` twice, which Python's own loader accepts and every strict
+    parser rejects. `--draws 1` takes that path by `ratio_interval`'s own rule,
+    since one draw cannot produce the two ratios a percentile needs, while the
+    ratio itself is still fitted -- so what is asserted here is the INTERVAL
+    and not an absent ladder.
+    """
+    rc, payload, log = _payload_for(["--self-test", "refit", "--draws", "1"])
+    assert "interval NOT FORMED: only 1 of 1 bootstrap draws" in log
+    assert payload["ratio"] is not None, "the ratio itself must still be formed"
+    assert payload["ratio_interval"] == [None, None]
+    assert payload["ratio_draws"] == 0
+    text = json.dumps(payload, indent=2)
+    assert _bare_non_finite_tokens(text) == []
+    json.loads(text, parse_constant=_no_json_constants)
+    # The starved run's OWN verdict, named rather than ignored: the 'refit'
+    # world registers C1 PASS, `c1_verdict` cannot score a claim off a
+    # non-finite interval, and a planted world that came out other than
+    # registered is ERROR and not any code in the gate table. Both of these
+    # held BEFORE the fix too; they are here to say which run this is, and the
+    # assertions above are the ones the fix moved.
+    assert "SELF-TEST MISMATCH  C1: registered PASS, got UNKNOWN" in log
+    assert rc == exit_codes.ERROR
+
+
+@pytest.mark.parametrize("stubbed,expected", [
+    ((0.56, math.inf, 7), [0.56, None]),
+    ((-math.inf, 0.56, 7), [None, 0.56]),
+    ((math.nan, math.inf, 7), [None, None]),
+])
+def test_analyse_nulls_each_non_finite_end_of_the_interval_on_its_own(
+        stubbed, expected):
+    """Report assembly is a FUNCTION here so that a serialisation break is a
+    unit test rather than a pod finding. Pre-fix it wrote `list(interval)`, so
+    an endpoint that came back infinite reached `json.dumps` as the bare token
+    `Infinity`. The map has to null THAT END and keep the other: an interval
+    flattened to `[null, null]` whenever either end is non-finite would throw
+    away a bound the bootstrap did produce. BOTH ENDS ARE DRIVEN, because a map
+    written over the second element alone passes a one-sided case and is still
+    wrong. `ratio_interval` is stubbed rather than starved because its own
+    refusal path yields two non-finite ends at once and so cannot tell a
+    per-element map from a whole-value one; the third row is that refusal's own
+    shape, kept so the per-element map is shown to agree with it.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    world = PW.WORLDS["refit"]
+    samples = PW.planted_samples(world, CFG, block_m=32, treads=treads,
+                                 repeats=3, alpha_shared=world.alpha,
+                                 ridge=160.0, bandwidth_gbps=4000.0, b=2,
+                                 noise=0.0, seed=0, copies_declared=9,
+                                 native_switch=4)
+    real = PW.ratio_interval
+    PW.ratio_interval = lambda *a, **k: stubbed
+    try:
+        payload = _analyse(samples, treads).payload
+    finally:
+        PW.ratio_interval = real
+    assert payload["ratio_interval"] == expected
+    assert payload["ratio_draws"] == 7
+    text = json.dumps(payload, indent=2)
+    assert _bare_non_finite_tokens(text) == []
+    json.loads(text, parse_constant=_no_json_constants)
+
+
+def test_every_planted_worlds_whole_report_document_is_strict_json(tmp_path):
+    """THE FIELD THE FIX REACHED IS NOT THE CLAIM. `report.json` is read
+    downstream by strict parsers, so what has to hold is that no field emits a
+    bare NaN, Infinity or -Infinity -- which is why this drives every world in
+    `WORLDS` and checks the WHOLE serialised document with `parse_constant`,
+    rather than reading `ratio_interval` back out of a dict.
+
+    Each world is driven twice: once where the bootstrap FORMS an interval and
+    the two declaration bands, and once at `--draws 1`, where `ratio_interval`
+    and `declaration_interval` both refuse and `analyse` keeps the `(nan, nan)`
+    it opened with. The second pass is the one that bites: pre-fix every world
+    produced two bare `NaN` tokens there, and the first passed. The two passes
+    are asserted to BE two -- an interval and bands on one side, none on the
+    other -- so that a future change to the refusal rule cannot quietly turn
+    the formed pass into a second starved one and leave the formed half of the
+    document unread.
+
+    WHAT THIS DOES NOT ESTABLISH, said plainly: the fix nulls `ratio_interval`
+    and nothing else, and no planted world drives any other field non-finite,
+    so what is proven here is that these fifteen worlds serialise clean. A
+    non-finite `per_tile_band` or `step_band` on real cells would still reach
+    `json.dumps` as a bare token; that is an open hole in the script, not a
+    hole this test can close.
+
+    The exit code is not what this test reads, and it has no single shape: a
+    world whose registration names C1 exits ERROR when starved, since C1
+    cannot be scored off an interval that was not formed and a planted world
+    that came out other than registered is ERROR, while a world an earlier
+    gate already refuses exits INVALID, never having reached C1.
+    """
+    source = SCRIPT.read_text()
+    assert 'write_text(json.dumps(report.payload, indent=2))' in source, (
+        "the document serialised below is no longer the one `_main` writes")
+    # AND NOTHING IS WRITTEN FOR A PLANTED WORLD, which is why the payload and
+    # not a file is what gets read: `--out` is honoured, the directory is
+    # created in the measured branch alone, and a self-test leaves it absent.
+    out = tmp_path / "runs"
+    _payload_for(["--self-test", "refit", "--draws", "1", "--out", str(out)])
+    assert not out.exists(), sorted(p.name for p in out.rglob("*"))
+
+    for name in sorted(PW.WORLDS):
+        for draws in (FORMED_DRAWS, 1):
+            _rc, payload, _log = _payload_for(
+                ["--self-test", name, "--draws", str(draws)])
+            text = json.dumps(payload, indent=2)
+            assert _bare_non_finite_tokens(text) == [], (name, draws)
+            json.loads(text, parse_constant=_no_json_constants)
+            formed = draws != 1
+            where = (name, draws)
+            assert (payload["ratio_draws"] > 0) is formed, where
+            assert (None not in payload["ratio_interval"]) is formed, where
+            decl = payload["declaration_fit"]
+            assert (decl["per_tile_band"] is not None) is formed, where
+            assert (decl["step_band"] is not None) is formed, where
+
+    # AND ONCE AT THE SHIPPED COUNT. Every pass above trades `DEFAULT_DRAWS`
+    # for a count that reaches the same document forty times cheaper; this one
+    # run says the count the pod will actually use reaches it too.
+    _rc, payload, _log = _payload_for(["--self-test", "refit"])
+    assert payload["ratio_draws"] > FORMED_DRAWS, "this pass took --draws"
+    text = json.dumps(payload, indent=2)
+    assert _bare_non_finite_tokens(text) == []
+    json.loads(text, parse_constant=_no_json_constants)
+
+
+# --------------------------------------------------------------------------
+# 16. the page a V8 early exit prints: analyse() over NO samples at all
+# --------------------------------------------------------------------------
+
+#: The two ways `run_sweep` can return before a weight is allocated, and the
+#: V8 verdict each leaves on the page. V8 is a VALIDITY gate and
+#: `exit_codes.classify` counts both of these verdicts against it, which is
+#: why the sweep is skipped for both; PASS is the only V8 verdict that lets
+#: the ladder run.
+V8_EARLY_EXITS: tuple[tuple[str, str], ...] = (
+    ("host-bound-probe", exit_codes.UNKNOWN),
+    ("ratio-path-split", exit_codes.FAIL),
+)
+
+
+def _stand_in_for_vllm(monkeypatch):
+    """Put non-importing stand-ins for vLLM's fused-MoE modules into
+    `sys.modules` for the length of one test.
+
+    `run_sweep` resolves `SWEEP.find_override`'s `override_config` hook and
+    imports `fused_experts` and `MoEActivation` BEFORE it times the alignment
+    probe, so its early return cannot be reached on a host where those imports
+    fail, which is every host this suite runs on EXCEPT the pod. None of the
+    three stand-ins is ever called: the early return happens before the first
+    cell. `monkeypatch.setitem` removes them again, so on the pod, where vLLM
+    is installed and these shadow it, every other test in this file and every
+    later file sees vLLM's own modules back.
+    """
+    fused = types.ModuleType("vllm.model_executor.layers.fused_moe")
+    fused.override_config = lambda *a, **k: None
+    fused.fused_experts = lambda *a, **k: None
+    activation = types.ModuleType(
+        "vllm.model_executor.layers.fused_moe.activation")
+    activation.MoEActivation = object
+    fused.activation = activation
+    layers = types.ModuleType("vllm.model_executor.layers")
+    layers.fused_moe = fused
+    executor = types.ModuleType("vllm.model_executor")
+    executor.layers = layers
+    root = types.ModuleType("vllm")
+    root.model_executor = executor
+    for name, mod in (("vllm", root),
+                      ("vllm.model_executor", executor),
+                      ("vllm.model_executor.layers", layers),
+                      ("vllm.model_executor.layers.fused_moe", fused),
+                      ("vllm.model_executor.layers.fused_moe.activation",
+                       activation)):
+        monkeypatch.setitem(sys.modules, name, mod)
+
+
+def _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name: str):
+    """Drive the real `run_sweep` to its V8 early return in `world_name`, and
+    hand back what it returned, what it printed and the plan the page needs.
+
+    The probe is the only thing measured before that return, so
+    `probe_alignment` is replaced by `planted_probe` for the named world and
+    every other line of `run_sweep` is the shipped code. `build_private_weights`
+    is replaced by a sentinel that RAISES: running past the early return is
+    then an error that names itself rather than a later assertion guessing at
+    it, and its silence is this file's proof that no weight was allocated.
+    """
+    treads = list(range(1, PW.DEFAULT_TREADS + 1))
+    block_m = PW.DEFAULT_BLOCK_M
+    copies_declared, _why = PW.declared_copies_for(CFG, treads, block_m, None)
+    declared_by_arm = {arm: PW.declared_experts(arm, CFG.num_experts,
+                                                copies_declared)
+                       for arm in PW.ARMS}
+    census = PW.path_census(CFG, treads, block_m, declared_by_arm)
+    world = PW.WORLDS[world_name]
+
+    def planted(cfg, **kwargs):
+        return PW.planted_probe(world, cfg, block_m=block_m, treads=treads,
+                                declared_by_arm=declared_by_arm, census=census,
+                                noise=0.0, seed=0)
+
+    def never(*a, **k):
+        raise AssertionError("build_private_weights ran past the early return")
+
+    _stand_in_for_vllm(monkeypatch)
+    monkeypatch.setenv("TRITON_CACHE_DIR", str(tmp_path / "unused-cache"))
+    monkeypatch.setattr(PW, "probe_alignment", planted)
+    monkeypatch.setattr(PW, "build_private_weights", never)
+
+    out_dir = tmp_path / world_name
+    out_dir.mkdir(parents=True)
+    csv_path = out_dir / "cells.csv"
+    store = PW.Store(csv_path, PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
+    args = PW.build_parser().parse_args(["--device-memory-gb", "140"])
+    stream_ms = WEIGHTS.weight_stream_ms(CFG, args.dtype, 4000.0)
+    samples, proof, weight_delta, high_water, probe = PW.run_sweep(
+        args, CFG, block_m=block_m, treads=treads, pinned={},
+        csv_path=csv_path, cache_root=out_dir / "triton-cache", store=store,
+        prov=None, dtype=args.dtype, copies_declared=copies_declared,
+        census=census, stream_ms=stream_ms)
+    return types.SimpleNamespace(
+        samples=samples, proof=proof, weight_delta=weight_delta,
+        high_water=high_water, probe=probe, log=capsys.readouterr().out,
+        args=args, treads=treads, block_m=block_m, census=census,
+        copies_declared=copies_declared, csv_path=csv_path,
+        stream_ms=stream_ms)
+
+
+def _page_after(skipped):
+    """`analyse` over a skipped sweep, with the argument shape `_main` hands it
+    on exactly this path: the early return's empty `samples`, its empty
+    `BufferProof`, `None` for both memory observations, and the probe that
+    ended the run. Everything else is what `_main` computes before `run_sweep`
+    and does not recompute after it."""
+    treads, block_m = skipped.treads, skipped.block_m
+    b = PW.dtype_bytes(skipped.args.dtype)
+    mem = PW.memory_plan(
+        CFG, skipped.args.dtype, b, skipped.copies_declared,
+        PW.SWEEP.tokens_for_rows(CFG, treads[-1] * block_m),
+        int(140e9), "--device-memory-gb", copies_read=treads[-1])
+    prov = PW.PV.provenance_block(
+        instrument="a stand-in basis, so the block is the shape a pod's is",
+        ridge=160.0, ridge_source="fixed for this test",
+        bandwidth=4000.0, bandwidth_source="fixed for this test",
+        warmup_ms=skipped.args.warmup, iters=None,
+        target_ms=skipped.args.cell_budget_ms)
+    return PW.analyse(
+        skipped.samples, CFG, block_m=block_m, treads=treads,
+        repeats=skipped.args.repeats, alpha=skipped.args.alpha,
+        dtype=skipped.args.dtype, b=b, bandwidth_gbps=4000.0,
+        bandwidth_source="fixed for this test", ridge=160.0,
+        ridge_source="fixed for this test", roof_tflops=640.0,
+        roof_source="fixed for this test", reference_mhz=None,
+        reference_grade="", reference_source="fixed for this test",
+        mem=mem, proof=skipped.proof,
+        weight_delta_bytes=skipped.weight_delta,
+        high_water_bytes=skipped.high_water, draws=skipped.args.draws,
+        seed=skipped.args.seed, header=["PLAN"], card="NVIDIA H200",
+        synthetic=False, model_name=PW.DEFAULT_MODEL, pinned={},
+        prov=PW._observed_iters(prov, skipped.samples), probe=skipped.probe,
+        census=skipped.census, copies_declared=skipped.copies_declared)
+
+
+def _one_skip_line(log: str) -> str:
+    lines = [ln for ln in log.splitlines() if ln.startswith("SWEEP SKIPPED")]
+    assert len(lines) == 1, log[-2000:]
+    return lines[0]
+
+
+@pytest.mark.parametrize("world_name,v8", V8_EARLY_EXITS)
+def test_the_page_a_v8_early_exit_prints_scores_every_gate_and_is_invalid(
+        world_name, v8, monkeypatch, tmp_path, capsys):
+    """THE REPORT SHAPE NO WORLD EXERCISED. `--self-test` builds its samples
+    from `planted_samples` and never enters `run_sweep`, so the only way to an
+    empty `samples` list is the pod's own V8 early return, and nothing in this
+    suite called `analyse([], ...)` before this. The defect it guards is a page
+    that RAISES instead of printing: `tread_rows`, `ladder_for`,
+    `ratio_interval` and `declaration_fit` all group by arm and tread and every
+    group is empty here, and an exception there reaches `main` as ERROR (4),
+    which `ledger_state` in the session driver maps to RETRY -- so a build that
+    can never pass V8 would be re-rented instead of reported. Both early-exit
+    causes are driven, because the page must be the same one except at V8.
+    """
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
+    assert skipped.samples == []
+    assert skipped.proof.parts == {}
+    report = _page_after(skipped)
+    assert [(g.tag, g.verdict) for g in report.gates] == [
+        ("V0", exit_codes.FAIL),
+        ("V1", exit_codes.FAIL),
+        ("V2", exit_codes.UNKNOWN),
+        ("V3", exit_codes.UNKNOWN),
+        ("V4", exit_codes.UNKNOWN),
+        ("V5", exit_codes.UNKNOWN),
+        ("V6", exit_codes.UNKNOWN),
+        ("V7", exit_codes.UNKNOWN),
+        ("V8", v8),
+        ("C1", exit_codes.UNKNOWN),
+        ("C2", exit_codes.UNKNOWN),
+    ], [(g.tag, g.verdict) for g in report.gates]
+    assert exit_codes.classify(g.scored() for g in report.gates) \
+        == exit_codes.INVALID
+    # V0 counts the grid that was planned and never timed. 162 is THIS
+    # command's geometry, stated rather than recomputed from `analyse`'s own
+    # `len(treads) x len(ARMS) x repeats`: a test that re-evaluates the
+    # expression it is checking follows it into a wrong answer. The line above
+    # pins the three defaults the 162 is made of, so moving one fails here and
+    # says which.
+    assert (len(skipped.treads), len(PW.ARMS), skipped.args.repeats) == (6, 3, 9)
+    assert report.gates[0].measured.startswith("0/162 cells, treads 0/0/0")
+    # V8 reports the host-bound census on either path, so the page says which
+    # machine the probe timed even when the answer is "all of them, the host".
+    # The hot count is the WORLD's plant, named here rather than read back out
+    # of `probe.host_bound`, which is the call `gate_v8_alignment` itself makes.
+    probed = len(skipped.treads) * PW.PROBE_REPEATS
+    hot = probed if world_name == "host-bound-probe" else 0
+    assert skipped.probe.host_bound(PW.SHARED)[:2] == (hot, probed)
+    assert any(f"called {hot} of {probed} probed cells HOST-BOUND" in ln
+               for ln in report.gates[8].lines), report.gates[8].lines
+    # And every gate still prints the RESULT line the driver recomputes from.
+    assert len(exit_codes.parse_result_lines("\n".join(report.lines))) \
+        == len(report.gates)
+
+
+@pytest.mark.parametrize("world_name,v8", V8_EARLY_EXITS)
+def test_the_skipped_pages_report_json_holds_no_nan_token(
+        world_name, v8, monkeypatch, tmp_path, capsys):
+    """`_main` writes `report.json` with `json.dumps`, which emits a BARE
+    `NaN` token for a float nan. `analyse` seeds `interval = (math.nan,
+    math.nan)` and only replaces it once a ratio is formed, so on this page
+    both ends stay nan; before the patch `payload["ratio_interval"]` was
+    `list(interval)` and the file could not be read by any strict JSON parser,
+    which is every consumer of these reports except Python's own loader. The
+    whole payload is searched, not just that one key: any other field that
+    reaches this page as a nan fails here too.
+    """
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
+    report = _page_after(skipped)
+    assert report.payload["ratio"] is None
+    assert report.payload["ratio_interval"] == [None, None]
+    blob = json.dumps(report.payload, indent=2)
+    assert "NaN" not in blob and "Infinity" not in blob
+
+    def refuse(token):
+        raise AssertionError(f"report.json carries the non-JSON token {token!r}")
+
+    on_disk = tmp_path / "report.json"
+    on_disk.write_text(blob)
+    assert json.loads(on_disk.read_text(), parse_constant=refuse) \
+        == report.payload
+    assert report.text().endswith("\n")
+
+
+def test_a_v8_unknown_skips_the_sweep_exactly_as_a_v8_fail_does(
+        monkeypatch, tmp_path, capsys):
+    """WHY THE EMPTY PAGE IS REACHABLE AT ALL. V8 is a VALIDITY gate, and
+    `exit_codes.classify` scores UNKNOWN on a VALIDITY gate exactly as it
+    scores FAIL, so a probe that came back UNKNOWN latches INVALID whatever the
+    ladder measures afterwards. `run_sweep` used to return early only on
+    `early.verdict == FAIL`, so ANY of V8's UNKNOWN branches paid for the whole
+    ladder, the private weight allocation and the five-part buffer proof to
+    arrive at a verdict already in hand before any of it. This patch adds one
+    more such branch -- every probed cell timing the host's enqueue cost rather
+    than the alignment kernel, which the 'host-bound-probe' world plants -- and
+    widens the early return to cover all of them.
+    """
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
+    assert skipped.samples == []
+    assert skipped.proof.parts == {} and skipped.proof.synthetic is False
+    assert skipped.weight_delta is None and skipped.high_water is None
+    # Nothing was timed, so no cell ever reached the store and its file was
+    # never created; `build_private_weights` not raising is what says no weight
+    # was allocated.
+    assert not skipped.csv_path.exists()
+    # V8 on the probe that ended it is UNKNOWN for the host-bound reason, not
+    # for a probe that was never taken.
+    gate = PW.gate_v8_alignment(skipped.probe, treads=skipped.treads,
+                                census=skipped.census,
+                                weight_stream_ms=skipped.stream_ms)
+    assert gate.verdict == exit_codes.UNKNOWN
+    hot, judged, note = skipped.probe.host_bound(PW.SHARED)
+    assert (hot, judged) == (18, 18) and note == "planted host-bound"
+    assert any("did not time the kernel it is about" in ln for ln in gate.lines)
+    skip_line = _one_skip_line(skipped.log)
+    assert "V8 came back UNKNOWN" in skip_line
+    assert "V8 is a VALIDITY gate" in skip_line
+    assert "latch INVALID after the whole ladder was paid for" in skip_line
+    assert skip_line.endswith("Nothing was allocated and nothing was timed.")
+
+
+def test_the_sweep_skipped_line_says_which_of_the_two_v8_verdicts_ended_it(
+        monkeypatch, tmp_path, capsys):
+    """ONE MESSAGE FOR TWO CAUSES NAMES NEITHER. A FAIL says the build switches
+    alignment kernel inside the ratio arms' ladder, which is a statement about
+    the build and is not fixed by re-running; an UNKNOWN says the probe has not
+    shown it either way, which is a statement about the probe, and
+    `gate_v8_alignment`'s own lines name its two repairs (raise
+    `--probe-target-ms`, or read the step off a profiler). The single pre-patch
+    sentence, 'V8 FAILS on the probe, so this build switches alignment
+    kernel...', was printed for the FAIL and was the only branch there was.
+    """
+    said = {}
+    for world_name, verdict in V8_EARLY_EXITS:
+        skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
+        said[verdict] = _one_skip_line(skipped.log)
+    assert set(said) == {exit_codes.FAIL, exit_codes.UNKNOWN}
+    fail, unknown = said[exit_codes.FAIL], said[exit_codes.UNKNOWN]
+    assert fail != unknown
+    assert "V8 came back FAIL" in fail and "V8 came back UNKNOWN" not in fail
+    assert "switches alignment kernel inside the ratio arms' ladder" in fail
+    assert "switches alignment kernel" not in unknown
+    assert ("has not shown this build's ratio arms share one alignment kernel"
+            in unknown)
+    for line in (fail, unknown):
+        assert line.endswith("Nothing was allocated and nothing was timed.")
+
+
+def test_the_skipped_page_prints_five_not_run_parts_and_never_its_own_reason(
+        monkeypatch, tmp_path, capsys):
+    """OPEN FINDING, ASSERTED AS IT IS AND NOT REPAIRED HERE. `run_sweep`'s
+    early return builds `BufferProof(parts={}, detail={'skipped': ...})`, but
+    `BufferProof.lines` walks `PROOF_PARTS` and prints one line per part, so
+    the one key `detail` holds is the one key that is never rendered: V2 says
+    NOT RUN five times and never once says why. The stored reason is stale as
+    well -- it reads 'V8 failed on the probe' on the UNKNOWN path too, where
+    V8 did not fail.
+    """
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
+    assert len(PW.PROOF_PARTS) == 5          # the five this test is named for
+    lines = skipped.proof.lines()
+    assert len(lines) == len(PW.PROOF_PARTS)
+    assert all(ln.startswith("NOT RUN") for ln in lines)
+    assert set(skipped.proof.detail) == {"skipped"}
+    assert not any("skipped" in ln for ln in lines)
+    assert skipped.proof.detail["skipped"].startswith("V8 failed on the probe")
+    report = _page_after(skipped)
+    v2 = next(g for g in report.gates if g.tag == "V2")
+    assert v2.verdict == exit_codes.UNKNOWN
+    assert v2.measured == "0 of 5 parts"
+    assert not any("skipped" in ln for ln in v2.lines)
+
+
+def test_the_skipped_pages_iteration_line_blames_a_world_the_pod_never_ran(
+        monkeypatch, tmp_path, capsys):
+    """OPEN FINDING, ASSERTED AS IT IS AND NOT REPAIRED HERE. `_iters_line`
+    has one empty-case string and it explains the emptiness as a planted
+    world's `iters=0` rows, which was the only way to reach it before the V8
+    early return existed. The early return produces the same empty list on a
+    pod with no planted world anywhere, and `_main` prints that line under a
+    report whose `synthetic` field is False, because `_main` sets that field
+    from `--self-test` alone.
+
+    THE CONFLATION IS SHOWN, not merely described: the 162 cells of a planted
+    world, every one of which ran and carries `iters=0`, and the early
+    return's zero cells, none of which ran at all, print the SAME sentence,
+    and it names only the first.
+    """
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
+    empty = PW._iters_line(skipped.samples)
+    assert empty == ("iterations per trial: none recorded (nothing was timed; "
+                     "a planted world's cells carry iters=0)")
+    world = PW.WORLDS["refit"]
+    planted = PW.planted_samples(
+        world, CFG, block_m=skipped.block_m, treads=skipped.treads,
+        repeats=skipped.args.repeats, alpha_shared=world.alpha, ridge=160.0,
+        bandwidth_gbps=4000.0, b=PW.dtype_bytes(skipped.args.dtype), noise=0.0,
+        seed=skipped.args.seed, copies_declared=skipped.copies_declared,
+        native_switch=skipped.census.switch_tread(PW.NATIVE))
+    assert len(planted) == 162 and {s.iters for s in planted} == {0}
+    assert PW._iters_line(planted) == empty
