@@ -2514,9 +2514,18 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     step clears the series' own noise; UNKNOWN when it is over but unresolved
     (a noisy probe has not shown the design sound) or when no probe ran.
 
-    NATIVE's declaration is read beside it and RECORDED: where its step is,
-    whether it is where the cited hypothesis puts it. It is not scored: NATIVE
-    is allowed its switch, and the V5 fit takes it out.
+    NATIVE's declaration is read beside it. It is never scored as a design
+    fault -- NATIVE is allowed its switch, and the V5 fit takes it out -- but
+    it IS the probe's POSITIVE CONTROL when the cells came back host-bound
+    (`native_control`). A host-bound cell times the host's enqueue cost, which
+    on an H200 is expected to be several times the alignment kernel's own, so a
+    flat ratio series from such a probe is not by itself evidence that nothing
+    stepped. NATIVE declares E, under the expert bound, and the census puts
+    its switch at `census.switch_tread(NATIVE)`: if the probe resolves NATIVE's
+    step AT that tread, it has shown it can see a kernel switch of this op at
+    this size through whatever host cost is present, and the ratio series is
+    scored exactly as a GPU-bound one would be. If it does not, UNKNOWN, and
+    the page says it means "the probe could not see the switch it was shown".
     """
     if probe is None:
         return Gate("V8", VALIDITY,
@@ -2563,17 +2572,15 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
         f"this declaration" + (f": {note}" if note else "")
         if judged else
         "the instrument returned no host-bound verdict for any probed cell")
+    control = None
     if judged == 0 or hot:
-        # A HOST-BOUND PROBE TIMES THE HOST. An alignment call is tens of
-        # microseconds, so the enqueue cost and the kernel are the same size
-        # there, and a step in the host's cost is not a step in the kernel the
-        # ratio arms run. Neither PASS nor FAIL is a statement about this
-        # design, so neither is returned.
+        # A HOST-BOUND PROBE TIMES THE HOST, so on its own it is not evidence
+        # either way. NATIVE's switch is the positive control that decides
+        # whether it became evidence anyway.
+        control, control_lines = native_control(readings, census)
+        detail += control_lines
+    if control is False:
         verdict = UNKNOWN
-        detail.append("the probe did not time the kernel it is about, so its "
-                      "step is not evidence either way; raise --probe-target-ms "
-                      "so the GPU keeps a backlog, or read the step from a "
-                      "profiler instead")
     elif bias <= ALIGN_STEP_RATIO_BUDGET:
         verdict = PASS
     elif r.real:
@@ -2595,6 +2602,51 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                 "more than the budget; the ratio is not quotable at this "
                 "declaration",
                 detail)
+
+
+def native_control(readings: dict, census: PathCensus
+                   ) -> tuple[bool, list[str]]:
+    """Did the probe resolve NATIVE's kernel switch at the tread the census
+    puts it: `(confirmed, the lines that say so)`.
+
+    THE ASSUMPTION THIS RESTS ON, registered here and printed on the page:
+    the host's enqueue cost does not itself step at that tread. The dispatch
+    is the same call at every tread and at both declarations; only `numel`
+    and `num_experts` move. If the host cost stepped there, a resolved NATIVE
+    step could be the host's, and the control would certify nothing.
+    """
+    want = census.switch_tread(NATIVE)
+    assumption = ("ASSUMED: the host's enqueue cost does not itself step at "
+                  "that tread -- the dispatch is the same call at every tread "
+                  "and only numel and num_experts move")
+    if want is None:
+        return False, [
+            "POSITIVE CONTROL UNAVAILABLE: the census puts NATIVE on one "
+            "alignment kernel throughout this ladder, so there is no switch "
+            "to show the host-bound probe; UNKNOWN means the instrument was "
+            "not demonstrated, not that the design is doubted"]
+    r = readings.get(NATIVE)
+    if r is not None and r.real and r.fit.split_tread == want:
+        return True, [
+            f"POSITIVE CONTROL CONFIRMED: the probe was host-bound, but it "
+            f"resolved NATIVE's step at tread {want}, where the census puts "
+            f"its kernel switch ({r.fit.step_ms * 1e3:+.2f} us against a "
+            f"threshold of {r.fit.threshold_ms() * 1e3:.2f} us); it has shown "
+            "it can see a kernel switch of this op at this size through the "
+            "host cost present, so the ratio series is scored as evidence",
+            f"  {assumption}"]
+    got = ("was not probed" if r is None
+           else "resolved no step" if not r.real
+           else f"resolved its step at tread {r.fit.split_tread}, not {want}")
+    return False, [
+        f"POSITIVE CONTROL NOT CONFIRMED: NATIVE's switch is due at tread "
+        f"{want} and the host-bound probe {got}. UNKNOWN therefore means one "
+        "specific thing: this probe could not see a kernel switch it was "
+        "shown, so a flat ratio series from it certifies nothing, and a step "
+        "in it is not evidence of a kernel switch either. What would close "
+        "it is a timing that excludes the host: read the step from a "
+        "profiler, or time the op under a CUDA graph",
+        f"  {assumption}"]
 
 
 def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
@@ -3427,12 +3479,23 @@ WORLDS: dict[str, World] = {
         dict(ALL_PASS), alignment_step_ms=0.4),
     "host-bound-probe": World(
         "host-bound-probe",
-        "the probe's own cells came back HOST-BOUND: an alignment call is "
-        "tens of microseconds, so the enqueue cost and the kernel are the "
-        "same size there, and what the probe timed is the host. V8 reads "
-        "UNKNOWN rather than scoring a step in the wrong machine's time, and "
-        "on a pod that UNKNOWN skips the sweep instead of paying for it",
-        dict(ALL_PASS, V8=UNKNOWN), probe_host_bound=True),
+        "the probe's own cells came back HOST-BOUND and it did NOT resolve "
+        "NATIVE's kernel switch where the census puts it: the positive "
+        "control failed, so the probe has not shown it can see a switch "
+        "through the host's enqueue cost, and V8 reads UNKNOWN rather than "
+        "certifying a flat series it may have been blind to. On a pod that "
+        "UNKNOWN skips the sweep instead of paying for it",
+        dict(ALL_PASS, V8=UNKNOWN), probe_host_bound=True,
+        native_probe_step_ms=0.0),
+    "host-bound-controlled": World(
+        "host-bound-controlled",
+        "the probe's cells came back HOST-BOUND, as they are expected to on "
+        "an H200, but it resolved NATIVE's kernel switch at the tread the "
+        "census puts it: the positive control shows the probe sees a switch "
+        "of this op at this size through the host cost, so the ratio arms' "
+        "flat series is evidence and V8 PASSES. Without the control this "
+        "world, which is the one a rented card is in, produced no ladder",
+        dict(ALL_PASS), probe_host_bound=True),
     "ratio-path-split": World(
         "ratio-path-split",
         "the probe finds a step at the RATIO arms' own declaration: on this "

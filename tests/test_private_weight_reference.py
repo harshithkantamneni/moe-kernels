@@ -52,6 +52,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "clock-split"), True),
     (("--self-test", "alignment-step"), True),
     (("--self-test", "host-bound-probe"), True),
+    (("--self-test", "host-bound-controlled"), True),
     (("--self-test", "ratio-path-split"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
@@ -1840,7 +1841,9 @@ def test_v8_is_unknown_on_a_host_bound_probe_even_where_the_series_is_flat_and_t
     never timed the kernel the ratio arms run.
     """
     treads = [1, 2, 3, 4, 5, 6]
-    flat = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}
+    # NATIVE planted FLAT: its switch is due at tread 4 and the probe does not
+    # show it, so the positive control fails and cannot rescue the hot probe.
+    flat = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4)}
     hot = PW.gate_v8_alignment(_probe_from(flat, host_bound=True),
                                treads=treads, census=_census(),
                                weight_stream_ms=0.64)
@@ -1873,7 +1876,10 @@ def test_v8_reads_the_host_bound_verdict_before_the_budget_so_an_over_budget_rea
     # Measured on this construction: split_tread, step_ms, step_se, rss_with,
     # threshold_ms and resolved() are bit-identical at spread 0.0, 1e-4 and
     # 5.0. Writing 1e-4 here would claim a noisy probe and plant none.
-    stepped = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.5, 4)}
+    # NATIVE flat, so the positive control fails and the hot probe stays
+    # unscored; with the control confirmed it would be FAIL, which the
+    # control test below pins.
+    stepped = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.5, 4)}
     cool = PW.gate_v8_alignment(_probe_from(stepped, host_bound=False),
                                 treads=treads, census=_census(),
                                 weight_stream_ms=0.64)
@@ -1910,7 +1916,9 @@ def test_v8_is_unknown_when_no_probed_cell_carried_a_host_bound_verdict_at_all()
     on a probe with no verdict in it.
     """
     treads = [1, 2, 3, 4, 5, 6]
-    flat = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}
+    # NATIVE flat: an unjudged probe is rescued by the positive control
+    # exactly as a host-bound one is, so the control is planted absent here.
+    flat = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4)}
     blind = _probe_from(flat, host_bound=None)
     assert blind.host_bound(PW.SHARED) == (0, 0, "")
     gate = PW.gate_v8_alignment(blind, treads=treads, census=_census(),
@@ -1974,8 +1982,8 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
     UNKNOWN without saying what it could not time sends a reader back to the
     probe's raw cells. The line must carry the COUNT (so a reader sees whether
     one cell or every cell was host-bound), the instrument's own note, and the
-    remedy -- raising `--probe-target-ms` so the GPU keeps a backlog, or a
-    profiler -- because neither is guessable from "UNKNOWN".
+    reason the positive control did not rescue it (NATIVE's switch not seen
+    where the census puts it), because neither is guessable from "UNKNOWN".
     """
     treads = [1, 2, 3, 4, 5, 6]
     probe = _verdict_probe({PW.SHARED: _MIXED_VERDICTS,
@@ -1990,9 +1998,9 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
     # note off the first cell that HAS one would put this sentence on the page
     # instead, and the page would name the wrong reason for the UNKNOWN.
     assert not any(_UNJUDGED_NOTE in ln for ln in gate.lines), gate.lines
-    assert ("the probe did not time the kernel it is about, so its step is not "
-            "evidence either way; raise --probe-target-ms so the GPU keeps a "
-            "backlog, or read the step from a profiler instead") in gate.lines
+    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED: NATIVE's switch "
+                             "is due at tread 4 and the host-bound probe "
+                             "resolved no step") for ln in gate.lines), gate.lines
     # And a cleared probe says so on the same line rather than staying silent,
     # so "0 of 18" is a positive record that the instrument did look.
     cool = PW.gate_v8_alignment(
@@ -2000,6 +2008,87 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
         treads=treads, census=_census(), weight_stream_ms=0.64)
     assert ("the instrument called 0 of 18 probed cells HOST-BOUND at this "
             "declaration") in cool.lines, cool.lines
+
+
+# --------------------------------------------------------------------------
+# 13b. NATIVE as the host-bound probe's POSITIVE CONTROL
+# --------------------------------------------------------------------------
+
+def test_v8_passes_a_host_bound_flat_series_when_natives_switch_resolves_at_the_census_tread():
+    """THE RENTED-CARD CASE. On an H200 the probe is expected to be host-bound
+    (~30-45 us host against ~6-10 us GPU per call), and V8 used to return
+    UNKNOWN for every host-bound probe -- which skipped the sweep, so a rented
+    pod produced no ladder at all. NATIVE declares E=8, under the expert
+    bound, and the ladder crosses the id bound between treads 3 and 4, so its
+    kernel switches at `census.switch_tread(NATIVE)` == 4. A probe that
+    RESOLVES that step at tread 4 has shown it can see a kernel switch of this
+    op at this size through the host cost; a flat ratio series from it is
+    then evidence, and PASS is earned. Pre-change this reads UNKNOWN.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    assert _census().switch_tread(PW.NATIVE) == 4
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.0, 4)}, host_bound=True)
+    assert probe.host_bound(PW.SHARED)[:2] == (18, 18)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    assert any(ln.startswith("POSITIVE CONTROL CONFIRMED") for ln in gate.lines)
+    # The assumption the control rests on is REGISTERED on the page.
+    assert any("ASSUMED: the host's enqueue cost does not itself step at that "
+               "tread" in ln for ln in gate.lines), gate.lines
+
+
+def test_the_confirmed_control_lets_a_host_bound_probe_fail_a_real_ratio_step():
+    """Once the control has shown the probe sensitive, the ratio series is
+    scored like a GPU-bound one in BOTH directions: a real 0.5 ms step (bias
+    0.2009, twenty budgets) is FAIL, not the UNKNOWN it was pre-change."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4),
+                         PW.SHARED: _series(0.5, 4)}, host_bound=True)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+
+
+def test_natives_step_at_the_wrong_tread_is_not_a_positive_control():
+    """The control is a PREDICTION, not "some step somewhere": NATIVE resolved
+    at tread 3 when the census says 4 is a probe seeing something other than
+    the switch it was shown, and it certifies nothing."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 3),
+                         PW.SHARED: _series(0.0, 4)}, host_bound=True)
+    native = PW.read_probe(probe, PW.NATIVE, _census())
+    assert native.real and native.fit.split_tread == 3
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any("resolved its step at tread 3, not 4" in ln for ln in gate.lines)
+
+
+def test_no_census_switch_means_no_positive_control():
+    """A ladder that never crosses the id bound gives NATIVE no switch to show
+    the probe, so a host-bound probe stays UNKNOWN and says the control was
+    UNAVAILABLE rather than failed."""
+    treads = [1, 2, 3]
+    census = PW.path_census(CFG, treads, 32,
+                            {PW.NATIVE: 8, PW.SHARED: 24, PW.PRIVATE: 24})
+    assert census.switch_tread(PW.NATIVE) is None
+    probe = _probe_from({PW.NATIVE: _series(0.0, 4)[:3],
+                         PW.SHARED: _series(0.0, 4)[:3]}, host_bound=True)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=census,
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any(ln.startswith("POSITIVE CONTROL UNAVAILABLE") for ln in gate.lines)
+
+
+def test_the_host_bound_worlds_separate_on_the_control_alone():
+    """The two planted host-bound worlds differ ONLY in whether NATIVE's probe
+    step is planted, and that alone moves V8 between UNKNOWN and PASS."""
+    a, b = PW.WORLDS["host-bound-probe"], PW.WORLDS["host-bound-controlled"]
+    assert a.probe_host_bound and b.probe_host_bound
+    assert a.native_probe_step_ms == 0.0 and b.native_probe_step_ms is None
+    assert a.expect["V8"] == exit_codes.UNKNOWN and b.expect["V8"] == exit_codes.PASS
 
 
 # --------------------------------------------------------------------------
@@ -2969,7 +3058,8 @@ def test_a_v8_unknown_skips_the_sweep_exactly_as_a_v8_fail_does(
     assert gate.verdict == exit_codes.UNKNOWN
     hot, judged, note = skipped.probe.host_bound(PW.SHARED)
     assert (hot, judged) == (18, 18) and note == "planted host-bound"
-    assert any("did not time the kernel it is about" in ln for ln in gate.lines)
+    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED")
+               for ln in gate.lines), gate.lines
     skip_line = _one_skip_line(skipped.log)
     assert "V8 came back UNKNOWN" in skip_line
     assert "V8 is a VALIDITY gate" in skip_line
