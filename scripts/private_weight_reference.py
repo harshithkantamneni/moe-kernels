@@ -1206,11 +1206,16 @@ PROBE_TRIALS = 3
 #:     a SINGLE cell. More measurement made the instrument blinder.
 #: The standard error of the fitted coefficient is on the median series, so it
 #: falls with the repeats the way the estimate does, and the penalty prices the
-#: search. At 3 repeats the same simulation puts this rule at 5.8% on pure
-#: noise, 5.0% at 5 repeats and 6.5% at 9 -- stable, and in the direction a
-#: sigma rule is supposed to run -- while a step worth 0.002 of the ratio is
-#: found 96% of the time and one worth 0.004 always. Both figures are
-#: properties of the RULE at this geometry, not of any card.
+#: search. AND THE SIGMA IS A TAIL PROBABILITY, NOT A MULTIPLIER: `s2` is
+#: estimated on `n - 3` degrees of freedom, three at the default six treads,
+#: so the threshold is the Student-t quantile with the two-sided tail this
+#: sigma leaves under a normal (`step_quantile`: 9.22 at three dof). A bare
+#: 3 sigma fired on pure noise 0.43 of the time at 4 treads and 0.15 at 5.
+#: Measured at 3 repeats, 600 worlds: 0.3% on pure noise at six treads, flat
+#: across 3, 5 and 9 repeats, under 1% at 4 and 5 treads; a step worth the
+#: whole 0.01 budget is found 96% of the time and one worth 1.5 budgets
+#: 99.8%. Sub-budget steps are found less often (a fifth of the budget: 25%)
+#: and PASS V8 either way. All properties of the RULE, not of any card.
 PROBE_STEP_SIGMA = 3.0
 
 #: DESIGN DECISION 12. How much of the ratio an alignment step in the ratio
@@ -1301,10 +1306,22 @@ class StepFit:
     step_se: float = 0.0
     splits_tried: int = 0
 
+    #: `n - 3`: points left over after the intercept, the per-id slope and
+    #: the step. `step_fit` refuses a series that leaves none.
+    dof: int = 0
+
     def threshold_ms(self, sigma: float = PROBE_STEP_SIGMA) -> float:
         """How big `|s|` has to be before it is a step and not the best of
-        `splits_tried` noise draws."""
-        return sigma * self.step_se * selection_penalty(self.splits_tried)
+        `splits_tried` noise draws: the Student-t quantile at this fit's own
+        `dof` for the two-sided tail `sigma` standard errors leave under a
+        normal (`step_quantile`), times `step_se`, times the search penalty.
+
+        A bare `sigma` here judged `s2 = RSS/(n-3)` with one to three degrees
+        of freedom as if it were the true variance: measured on pure noise
+        at 3 repeats that fired 0.42 of the time at 4 treads and 0.15 at 5.
+        The t quantile prices the variance estimate's own noise."""
+        return (step_quantile(sigma, self.dof) * self.step_se
+                * selection_penalty(self.splits_tried))
 
     def resolved(self, sigma: float = PROBE_STEP_SIGMA) -> bool:
         return (self.split_tread is not None and self.step_se > 0.0
@@ -1319,6 +1336,70 @@ def selection_penalty(splits_tried: int) -> float:
     return math.sqrt(2.0 * math.log(splits_tried)) if splits_tried > 1 else 1.0
 
 
+def _betacf(a: float, b: float, x: float) -> float:
+    """The continued fraction of the regularised incomplete beta function, by
+    the modified Lentz method (Numerical Recipes 6.4). No scipy on the pod
+    image this runs on, and a table would cover only the dof it listed."""
+    tiny = 1e-300
+    c, d = 1.0, 1.0 - (a + b) * x / (a + 1.0)
+    d = 1.0 / (d if abs(d) > tiny else tiny)
+    h = d
+    for m in range(1, 400):
+        m2 = 2 * m
+        for aa in (m * (b - m) * x / ((a - 1.0 + m2) * (a + m2)),
+                   -(a + m) * (a + b + m) * x / ((a + m2) * (a + 1.0 + m2))):
+            d = 1.0 + aa * d
+            d = 1.0 / (d if abs(d) > tiny else tiny)
+            c = 1.0 + aa / c
+            c = c if abs(c) > tiny else tiny
+            h *= d * c
+        if abs(d * c - 1.0) < 1e-15:
+            return h
+    raise Unmeasurable("the incomplete beta continued fraction did not converge")
+
+
+def _betai(a: float, b: float, x: float) -> float:
+    """The regularised incomplete beta function `I_x(a, b)`."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    front = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+                     + a * math.log(x) + b * math.log(1.0 - x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _betacf(a, b, x) / a
+    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
+
+
+def t_two_sided_tail(t: float, dof: int) -> float:
+    """`P(|T| > t)` for Student's t on `dof` degrees of freedom."""
+    return _betai(dof / 2.0, 0.5, dof / (dof + t * t))
+
+
+def step_quantile(sigma: float, dof: int) -> float:
+    """The t quantile on `dof` degrees of freedom whose two-sided tail equals
+    the two-sided NORMAL tail `sigma` leaves, `erfc(sigma / sqrt 2)`: 0.0027
+    for 3. So `PROBE_STEP_SIGMA` keeps its meaning as a false-alarm rate and
+    the threshold widens for a variance estimated from few points: 235.8 at
+    one dof, 19.21 at two, 9.22 at three (the six-tread default), 3.01 at a
+    thousand. Refuses `dof <= 0`, where there is no variance to be uncertain
+    about and the old code returned a threshold of zero."""
+    if dof <= 0:
+        raise Unmeasurable(f"{dof} degrees of freedom: no residual to estimate "
+                           "a step's standard error from")
+    p = math.erfc(sigma / math.sqrt(2.0))
+    lo, hi = 0.0, 1.0
+    while t_two_sided_tail(hi, dof) > p:
+        hi *= 2.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if t_two_sided_tail(mid, dof) > p:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
 def _ols(rows: list[list[float]], ys: list[float]) -> list[float]:
     """Least squares by the normal equations, for two or three columns.
     REFUSES a singular design rather than returning a number for it."""
@@ -1329,7 +1410,7 @@ def _ols_se(rows: list[list[float]], ys: list[float]
             ) -> tuple[list[float], list[float]]:
     """`(coefficients, their standard errors)`, by Gauss-Jordan on
     `[X'X | I | X'y]`, so the inverse that the errors need comes out of the
-    same elimination as the fit. `s^2 = RSS / (n - k)`; the errors are zero
+    same elimination as the fit. `s^2 = RSS / (n - k)`; the errors are NaN
     when there is no degree of freedom left to estimate one with, and a caller
     that reads them has to say what it does with a zero. REFUSES a singular
     design rather than returning a number for it."""
@@ -1356,9 +1437,16 @@ def _ols_se(rows: list[list[float]], ys: list[float]
     resid = [sum(c * x for c, x in zip(coefs, row, strict=True)) - y
              for row, y in zip(rows, ys, strict=True)]
     dof = n - k
-    s2 = (sum(r * r for r in resid) / dof) if dof > 0 else 0.0
-    ses = [math.sqrt(max(0.0, s2 * m[i][k + i])) for i in range(k)]
+    # NaN, NOT ZERO, with nothing left over: a zero error made every step
+    # "exact" and `resolved` had to special-case it. Coefficients stand.
+    s2 = (sum(r * r for r in resid) / dof) if dof > 0 else math.nan
+    ses = [math.sqrt(max(0.0, s2 * m[i][k + i])) if dof > 0 else math.nan
+           for i in range(k)]
     return coefs, ses
+
+
+#: `a + c numel + s 1{tread >= split}`: the step fit's column count.
+STEP_FIT_COLUMNS = 3
 
 
 def step_fit(points: list[tuple[int, int, float]]) -> StepFit:
@@ -1371,8 +1459,13 @@ def step_fit(points: list[tuple[int, int, float]]) -> StepFit:
     call against the series' own noise; this only finds it.
     """
     pts = sorted(points)
-    if len(pts) < 3:
-        raise Unmeasurable(f"{len(pts)} points cannot carry a step and a slope")
+    if len(pts) <= STEP_FIT_COLUMNS:
+        raise Unmeasurable(
+            f"{len(pts)} treads cannot resolve a step: the fit has "
+            f"{STEP_FIT_COLUMNS} columns (intercept, per-id slope, step), so "
+            f"{len(pts)} treads leave {len(pts) - STEP_FIT_COLUMNS} degrees of "
+            "freedom and no standard error to judge the step against; run at "
+            f"least {STEP_FIT_COLUMNS + 1} treads")
     ys = [ms for _n, _i, ms in pts]
     plain = _ols([[1.0, float(i)] for _n, i, _ms in pts], ys)
     rss0 = sum((plain[0] + plain[1] * i - ms) ** 2 for _n, i, ms in pts)
@@ -1390,10 +1483,11 @@ def step_fit(points: list[tuple[int, int, float]]) -> StepFit:
                   for n, i, ms in pts)
         if best is None or rss < best[0]:
             best = (rss, split, s_, c, a, ses[2])
+    dof = len(pts) - STEP_FIT_COLUMNS
     if best is None:
-        return StepFit(None, 0.0, plain[1], plain[0], rss0, rss0, 0.0, 0)
+        return StepFit(None, 0.0, plain[1], plain[0], rss0, rss0, 0.0, 0, dof)
     rss, split, s_, c, a, se = best
-    return StepFit(split, s_, c, a, rss, rss0, se, tried)
+    return StepFit(split, s_, c, a, rss, rss0, se, tried, dof)
 
 
 def leverage(treads: list[int], split_tread: int) -> float:
@@ -4438,6 +4532,19 @@ def _main(argv=None) -> int:
               f"and a slope may not be quoted below {MIN_TREADS}: two points "
               "make a line with no residual, so a two-tread fit cannot notice "
               "that one of its points was wrong.")
+        return exit_codes.REFUSED
+    # AND V8'S OWN FLOOR, which is one tread higher. The probe's step fit has
+    # STEP_FIT_COLUMNS columns, so a ladder of that many treads leaves no
+    # degree of freedom: the step's standard error used to come back exactly
+    # 0.0 and V8 could never FAIL (a planted 501 us step, 39x the budget, read
+    # UNKNOWN). Refused here, before a card is touched, with the count named.
+    if len(treads) <= STEP_FIT_COLUMNS:
+        print(f"REFUSED: --treads {args.treads} gives {len(treads)} tread(s), "
+              f"and V8's step fit has {STEP_FIT_COLUMNS} columns (intercept, "
+              f"per-id slope, step): {len(treads)} treads leave "
+              f"{len(treads) - STEP_FIT_COLUMNS} degrees of freedom, so no "
+              "alignment step could be judged against its own error and V8 "
+              f"could not fail. Run at least {STEP_FIT_COLUMNS + 1} treads.")
         return exit_codes.REFUSED
     # AND THE SAME FLOOR ON THE REPEATS, WHICH WAS NOT REFUSED AND IS NOW.
     # `--treads 2` cost nothing and said why; `--repeats 2` measured all 36

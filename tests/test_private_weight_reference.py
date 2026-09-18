@@ -1547,9 +1547,12 @@ def test_the_new_step_rule_fires_on_pure_noise_far_less_often_than_the_spread_ru
     the split as the smallest-RSS of five candidates. Tested as if the split
     had been named in advance, that rule fires on PURE NOISE in 142 of the 600
     worlds below (0.2367). `resolved` prices the same search -- `step_se` from
-    `_ols_se`'s own residual, widened by `selection_penalty(splits_tried)` --
-    and fires in 42 (0.0700). An `_ols_se` that divides its `s2` by `n` instead
-    of `n - k`, or a `selection_penalty` that returns 1.0, moves the rate
+    `_ols_se`'s own residual, at the Student-t quantile for its own dof
+    (`step_quantile`), widened by `selection_penalty(splits_tried)` -- and
+    fires in 2 (0.0033). Before the t quantile it used a bare 3 sigma against
+    a variance estimated on three degrees of freedom and fired in 42 (0.0700).
+    An `_ols_se` that divides its `s2` by `n` instead of `n - k`, or a
+    `selection_penalty` that returns 1.0, moves the rate
     assertions below directly; a `read_probe` reverted to the spread leaves
     every one of them green, because they score `resolved` and not the caller,
     and is caught by the witness at the end instead. All three would put V8's
@@ -1557,24 +1560,18 @@ def test_the_new_step_rule_fires_on_pure_noise_far_less_often_than_the_spread_ru
     alarm per run.
 
     HOW THE BOUNDS WERE CHOSEN, so a fixed seed is not a coin flip. At 600
-    worlds the binomial standard error of a rate near 0.0700 is
-    sqrt(0.07 x 0.93 / 600) = 0.0104, so the 0.12 ceiling asserted on the new
-    rule sits 4.8 of those above what it measures here; the old rule's error
+    worlds the binomial standard error of a rate near 0.0033 is
+    sqrt(0.0033 x 0.9967 / 600) = 0.0024, so the 0.02 ceiling asserted on the
+    new rule sits 7 of those above what it measures here; the old rule's error
     near 0.2367 is sqrt(0.2367 x 0.7633 / 600) = 0.0174, so the 0.15 floor sits
     5.0 below it. Both are bounds on the RATE, not the rate.
     """
     old_rate, new_rate, found_rate, _, _ = _step_rule_trial(
         repeats=3, worlds=600)
     assert old_rate >= 0.15, old_rate
-    assert new_rate <= 0.12, new_rate
-    assert 2 * new_rate < old_rate, (new_rate, old_rate)
-    # NOT blind, either: a 3-sigma rule that never fires is a rule with no
-    # resolution, which is exactly the failure the next test is about.
-    assert new_rate > 0.0
-    # And fewer than half of those false alarms land on the census' own split
-    # (7 of the 42 here), so they are the search talking and not a feature of
-    # the ladder: a rule that always named tread 4 would fail this.
-    assert found_rate < new_rate / 2, (found_rate, new_rate)
+    assert new_rate <= 0.02, new_rate
+    # NOT blind, either: POWER is pinned two tests below, at the budget.
+    assert found_rate <= new_rate
     # BOTH RATES ARE PROPERTIES OF THE RULE, NOT OF A CARD. `_series` scales
     # every deviation by `noise`, and `step_ms`, `step_se` and `spread_ms` are
     # all homogeneous of degree one in the series, so a ten-fold noisier probe
@@ -1608,8 +1605,8 @@ def test_more_probe_repeats_do_not_make_the_new_step_rule_stricter_as_they_made_
     series' own residual gets HARDER to resolve the more the probe is
     repeated. `StepFit.threshold_ms` is built on `step_se`, which is computed
     from that same median series, so it falls with the repeats the way the
-    estimate does: 0.0700 -> 0.0617 -> 0.0717 with an index of
-    0.433 -> 0.423 -> 0.432, flat to within 3% across the three.
+    estimate does: 0.0033 -> 0.0050 -> 0.0000 with an index of
+    0.141 -> 0.138 -> 0.141, flat to within 3% across the three.
 
     WHAT THIS WOULD HAVE CAUGHT. Any threshold that stops reading the fitted
     series and goes back to a per-cell quantity -- `spread_ms`, a fixed
@@ -1618,7 +1615,7 @@ def test_more_probe_repeats_do_not_make_the_new_step_rule_stricter_as_they_made_
     it" would then be advice that makes the gate less able to close, not more.
     The index bounds are the load-bearing ones: a median over 600 worlds is a
     far steadier statistic than a 5% tail, and the old rule's index ratio
-    0.336/0.703 = 0.478 is nowhere near the new rule's 0.432/0.433 = 0.998.
+    0.336/0.703 = 0.478 is nowhere near the new rule's 0.141/0.141 = 1.00.
     """
     by_repeats = {r: _step_rule_trial(repeats=r, worlds=600) for r in (3, 5, 9)}
     old = {r: v[0] for r, v in by_repeats.items()}
@@ -1631,51 +1628,55 @@ def test_more_probe_repeats_do_not_make_the_new_step_rule_stricter_as_they_made_
     assert old[3] >= 0.15 and old[9] <= 0.01, old
     assert old_index[9] < 0.6 * old_index[3], old_index
     # ITS ABSENCE: the new rule neither collapses nor runs away.
-    assert all(0.02 <= rate <= 0.12 for rate in new.values()), new
-    assert max(new.values()) < 2 * min(new.values()), new
-    assert new[9] >= new[3] / 2, new
+    assert all(rate <= 0.02 for rate in new.values()), new
     assert 0.85 <= new_index[9] / new_index[3] <= 1.15, new_index
     assert 0.85 <= new_index[5] / new_index[3] <= 1.15, new_index
 
 
-def test_a_step_worth_a_fifth_of_the_alignment_budget_is_still_found_by_the_new_rule():
+def test_a_step_at_the_alignment_budget_is_still_found_by_the_new_rule():
     """POWER, the half of an operating characteristic a stricter rule can buy
     by refusing everything.
 
     A rule that never fires has no false positives, so the two simulations
     above are only worth having beside this one. The steps here are named in
-    the units V8 actually gates on: `step_bias` of 0.002 and 0.004 of the
-    ratio, a fifth and two fifths of `ALIGN_STEP_RATIO_BUDGET`, converted to
+    the units V8 actually gates on: `step_bias` of 0.010 and 0.015 of the
+    ratio, one and one-and-a-half `ALIGN_STEP_RATIO_BUDGET`, converted to
     milliseconds through `leverage` at the six-tread ladder's split of 4 and
     the 0.64 ms weight stream the other V8 tests use. At the same per-cell
     noise the false-positive simulation runs at, `resolved` finds the smaller
-    in 381 of 400 worlds (0.9525) and the larger in all 400, and puts the
-    split at tread 4 every time it fires.
+    in 383 of 400 worlds (0.9575) and the larger in 399 (0.9975), and puts
+    the split at tread 4 every time it fires.
+
+    WHAT THE t QUANTILE COST, stated rather than hidden. Before it, a step
+    worth a fifth of the budget was found 0.9525 of the time; now 0.2475, and
+    two fifths 0.6525. That is the price of pricing a variance estimated on
+    three degrees of freedom, and it does not move a V8 verdict: a step under
+    the budget PASSES whether or not it is resolved.
 
     WHAT THIS WOULD HAVE CAUGHT. `selection_penalty` grows without bound in
     `splits_tried`, and `threshold_ms` multiplies it by `PROBE_STEP_SIGMA`:
     a "safer" edit that raised either -- or an `_ols_se` that overstated
     `step_se` -- would trade this power away silently, and V8 would answer
     UNKNOWN on a design whose step really is over budget, which is the answer
-    that costs a pod session. The 0.90 floor sits 4.9 binomial standard errors
-    (sqrt(0.9525 x 0.0475 / 400) = 0.0106) below the measured 0.9525.
+    that costs a pod session. The 0.90 floor sits 5.7 binomial standard errors
+    (sqrt(0.9575 x 0.0425 / 400) = 0.0101) below the measured 0.9575.
     """
     treads = [1, 2, 3, 4, 5, 6]
     weight_stream_ms = 0.64
     worth = {frac: frac * PW.ALIGN_STEP_RATIO_BUDGET * weight_stream_ms
-             / PW.leverage(treads, 4) for frac in (0.2, 0.4)}
-    assert PW.step_bias(worth[0.2], treads, 4, weight_stream_ms) \
-        == pytest.approx(0.002)
-    assert PW.step_bias(worth[0.4], treads, 4, weight_stream_ms) \
-        == pytest.approx(0.004)
+             / PW.leverage(treads, 4) for frac in (1.0, 1.5)}
+    assert PW.step_bias(worth[1.0], treads, 4, weight_stream_ms) \
+        == pytest.approx(0.010)
+    assert PW.step_bias(worth[1.5], treads, 4, weight_stream_ms) \
+        == pytest.approx(0.015)
     _, small_rate, small_found, _, _ = _step_rule_trial(
-        repeats=3, worlds=400, step_ms=worth[0.2])
+        repeats=3, worlds=400, step_ms=worth[1.0])
     assert small_rate >= 0.90, small_rate
     assert small_found >= 0.90, small_found
     _, big_rate, big_found, _, _ = _step_rule_trial(
-        repeats=3, worlds=400, step_ms=worth[0.4])
-    assert big_rate >= 0.99, big_rate
-    assert big_found >= 0.99, big_found
+        repeats=3, worlds=400, step_ms=worth[1.5])
+    assert big_rate >= 0.98, big_rate
+    assert big_found >= 0.98, big_found
 
 
 def test_the_selection_penalty_is_sqrt_two_log_k_and_is_what_widens_the_threshold():
@@ -1702,21 +1703,18 @@ def test_the_selection_penalty_is_sqrt_two_log_k_and_is_what_widens_the_threshol
     widths = [PW.selection_penalty(k) for k in range(1, 13)]
     assert widths == sorted(widths) and len(set(widths)) == len(widths)
     # A six-tread ladder offers five splits, so 1.79 is the one this design
-    # pays, and the threshold is exactly sigma x se x that penalty.
+    # pays, and the threshold is exactly the t quantile at its three dof x se
+    # x that penalty.
     fit = PW.step_fit(_series(0.0, 4, noise=STEP_RULE_NOISE, seed=1))
-    assert fit.splits_tried == 5
+    assert fit.splits_tried == 5 and fit.dof == 3
     assert fit.threshold_ms() == pytest.approx(
-        PW.PROBE_STEP_SIGMA * fit.step_se * PW.selection_penalty(5))
-    assert fit.threshold_ms(6.0) == pytest.approx(2.0 * fit.threshold_ms(3.0))
-    # AND A FIT WITH NO DEGREE OF FREEDOM LEFT CANNOT RESOLVE ANYTHING:
-    # `_ols_se` returns zero errors when `n - k` is zero, and `resolved`
-    # requires `step_se > 0` rather than dividing by it. Three points, three
-    # columns, a planted step of 0.05 ms that the old spread rule would have
-    # called REAL on any probe whose cells agreed with each other.
-    thin = PW.step_fit(_series(0.05, 3)[:3])
-    assert thin.step_ms == pytest.approx(0.05) and thin.splits_tried == 2
-    assert thin.step_se == 0.0
-    assert thin.threshold_ms() == 0.0 and not thin.resolved()
+        PW.step_quantile(PW.PROBE_STEP_SIGMA, 3) * fit.step_se
+        * PW.selection_penalty(5))
+    assert fit.threshold_ms(6.0) > 2.0 * fit.threshold_ms(3.0)
+    # AND A FIT WITH NO DEGREE OF FREEDOM LEFT IS REFUSED, naming the count,
+    # rather than returning `step_se == 0.0` and a `resolved` hard-wired False.
+    with pytest.raises(PW.Unmeasurable, match="3 treads cannot resolve a step"):
+        PW.step_fit(_series(0.05, 3)[:3])
 
 
 def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one():
@@ -2070,12 +2068,12 @@ def test_no_census_switch_means_no_positive_control():
     """A ladder that never crosses the id bound gives NATIVE no switch to show
     the probe, so a host-bound probe stays UNKNOWN and says the control was
     UNAVAILABLE rather than failed."""
-    treads = [1, 2, 3]
+    treads = [4, 5, 6, 7]
     census = PW.path_census(CFG, treads, 32,
-                            {PW.NATIVE: 8, PW.SHARED: 24, PW.PRIVATE: 24})
+                            {PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72})
     assert census.switch_tread(PW.NATIVE) is None
-    probe = _probe_from({PW.NATIVE: _series(0.0, 4)[:3],
-                         PW.SHARED: _series(0.0, 4)[:3]}, host_bound=True)
+    line = [(n, 256 * n, 0.012 + 8e-6 * 256 * n) for n in treads]
+    probe = _probe_from({PW.NATIVE: line, PW.SHARED: line}, host_bound=True)
     gate = PW.gate_v8_alignment(probe, treads=treads, census=census,
                                 weight_stream_ms=0.64)
     assert gate.verdict == exit_codes.UNKNOWN, gate.lines
@@ -2089,6 +2087,79 @@ def test_the_host_bound_worlds_separate_on_the_control_alone():
     assert a.probe_host_bound and b.probe_host_bound
     assert a.native_probe_step_ms == 0.0 and b.native_probe_step_ms is None
     assert a.expect["V8"] == exit_codes.UNKNOWN and b.expect["V8"] == exit_codes.PASS
+
+
+# --------------------------------------------------------------------------
+# 13c. the step rule at the ladder's own degrees of freedom
+# --------------------------------------------------------------------------
+
+def test_step_quantile_matches_the_t_table_and_refuses_no_dof():
+    """`step_quantile(3, dof)` is the t quantile with the two-sided tail
+    erfc(3/sqrt 2) = 0.0026998. One dof is Cauchy, closed form
+    cot(pi p / 2); the rest against published t tables to four figures."""
+    p = math.erfc(3.0 / math.sqrt(2.0))
+    assert PW.step_quantile(3.0, 1) == pytest.approx(
+        1.0 / math.tan(math.pi * p / 2.0), rel=1e-9)
+    assert PW.step_quantile(3.0, 2) == pytest.approx(19.2067, abs=5e-4)
+    assert PW.step_quantile(3.0, 3) == pytest.approx(9.2189, abs=5e-4)
+    assert PW.step_quantile(3.0, 10) == pytest.approx(3.9569, abs=5e-4)
+    assert PW.step_quantile(3.0, 100000) == pytest.approx(3.0, abs=1e-3)
+    for dof in (1, 2, 3, 7, 30):
+        assert PW.t_two_sided_tail(PW.step_quantile(3.0, dof), dof) \
+            == pytest.approx(p, rel=1e-8)
+    for dof in (0, -1):
+        with pytest.raises(PW.Unmeasurable):
+            PW.step_quantile(3.0, dof)
+
+
+def _short_ladder_noise_rate(treads: int, worlds: int = 600) -> float:
+    """Pure-noise false-REAL rate of `StepFit.resolved` on the first `treads`
+    points of `_series`, 3 independently noised repeats, median series."""
+    import random
+    rng = random.Random(STEP_RULE_SEED)
+    hits = 0
+    for _ in range(worlds):
+        probe = _noise_probe(PW.SHARED, 3, STEP_RULE_NOISE, rng)
+        hits += PW.step_fit(probe.series(PW.SHARED)[:treads]).resolved()
+    return hits / worlds
+
+
+def test_the_step_rule_is_calibrated_at_four_and_five_treads_not_only_six():
+    """THE DEFECT. `s2 = RSS/(n-3)` on one or two degrees of freedom judged
+    against a bare 3 sigma fired on pure noise 0.428 of the time at 4 treads
+    and 0.155 at 5 (the rule before it: 0.233), a rule calibrated at six
+    treads only. At the t quantile both sit under 0.02."""
+    assert _short_ladder_noise_rate(4) <= 0.02
+    assert _short_ladder_noise_rate(5) <= 0.02
+
+
+def test_ols_se_returns_nan_and_not_zero_when_no_dof_is_left():
+    """A zero standard error made every coefficient look exact; NaN cannot be
+    mistaken for a measurement."""
+    rows = [[1.0, 1.0, 0.0], [1.0, 2.0, 1.0], [1.0, 3.0, 1.0]]
+    coefs, ses = PW._ols_se(rows, [1.0, 2.5, 3.0])
+    assert all(math.isfinite(c) for c in coefs)
+    assert all(math.isnan(e) for e in ses)
+
+
+def test_three_treads_are_refused_and_four_still_fail_a_real_step():
+    """`--self-test ratio-path-split --treads 3` read V8 UNKNOWN on a planted
+    501 us step, 39x the budget, because dof was 0 and `step_se` exactly 0.0.
+    Now the command is REFUSED with the count named, before a card is
+    touched; at 4 treads, one dof, the same planted step still FAILs V8."""
+    three = subprocess.run(
+        [sys.executable, str(SCRIPT), "--self-test", "ratio-path-split",
+         "--treads", "3"], capture_output=True, text=True, cwd=ROOT)
+    assert three.returncode == exit_codes.REFUSED, three.stdout
+    assert "--treads 3 gives 3 tread(s)" in three.stdout
+    assert "leave 0 degrees of freedom" in three.stdout
+    four = subprocess.run(
+        [sys.executable, str(SCRIPT), "--self-test", "ratio-path-split",
+         "--treads", "4"], capture_output=True, text=True, cwd=ROOT)
+    assert "SELF-TEST OK" in four.stdout, four.stdout[-2000:]
+    v8 = [r for r in exit_codes.parse_result_lines(four.stdout)
+          if r.name == "V8"]
+    assert [r.verdict for r in v8] == [exit_codes.FAIL], v8
 
 
 # --------------------------------------------------------------------------
