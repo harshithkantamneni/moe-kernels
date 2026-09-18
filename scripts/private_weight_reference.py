@@ -1855,7 +1855,7 @@ def collapse(samples, arm: str, repeats: list[int] | None = None
     cells within each tread INDEPENDENTLY, and `ratio_interval` then called it
     once for SHARED and once for PRIVATE, so the two arms were resampled
     independently too. In the world the arm rotation exists to produce -- a
-    governor or thermal walk over the session, common to both arms in a
+    governor or thermal walk over the sweep's 145 s, common to both arms in a
     repeat -- that draws an interval out of noise the ratio does not have: a
     ladder with ZERO disagreement between repeats came back 0.4652 to 0.6614,
     3.3x the width of ALPHA_BAND, and the widening runs in the direction that
@@ -4088,8 +4088,9 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                  "page would latch INVALID after the whole ladder was paid "
                  "for; the gate's own lines name what would close it.")
               + " Nothing was allocated and nothing was timed.")
-        return ([], BufferProof(parts={}, detail={"skipped": "V8 failed on the "
-                                                  "probe; the proof did not run"},
+        return ([], BufferProof(parts={}, detail={"skipped": (
+                    f"V8 came back {early.verdict} on the probe; the proof "
+                    "did not run")},
                                 synthetic=False), None, None, probe)
 
     torch.cuda.reset_peak_memory_stats()
@@ -4556,11 +4557,10 @@ def _main(argv=None) -> int:
     if args.probe_repeats < MIN_PROBE_REPEATS:
         print(f"REFUSED: --probe-repeats {args.probe_repeats} is below "
               f"{MIN_PROBE_REPEATS}. A single pass forms no across-repeat "
-              "spread, the step's standard error is taken on a residual with "
-              "no replication behind it, and V8 -- the gate that decides "
-              "whether the ratio arms share one alignment kernel -- could not "
-              "reach its FAIL branch at all. A gate that cannot fail is not a "
-              "gate.")
+              "spread, so V8 -- the gate that decides whether the ratio arms "
+              "share one alignment kernel -- would print its step with no "
+              "replicate beside it, and one bad pass would enter the fit "
+              "unchallenged.")
         return exit_codes.REFUSED
     if args.repeats < MIN_REPEATS:
         print(f"REFUSED: --repeats {args.repeats} is below the {MIN_REPEATS} "
@@ -4699,8 +4699,7 @@ def _main(argv=None) -> int:
               "at its own floor to keep the ratio arms on one alignment "
               "kernel. Run a model with a smaller routed expert weight set, or "
               "a ladder that does not straddle the id bound (see the alignment "
-              "census above), or take the padding off with --declared-copies "
-              "and read V8 on the measurement.")
+              "census above).")
         return exit_codes.REFUSED
 
     if args.dry_run:

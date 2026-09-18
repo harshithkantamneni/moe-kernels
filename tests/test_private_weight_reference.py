@@ -2435,16 +2435,13 @@ def test_a_probe_repeat_count_under_the_floor_is_refused_naming_the_flag_typed(t
     looking at `--repeats`, which is a different number with a different
     reason.
 
-    WHAT THIS DELIBERATELY DOES NOT PIN, and why the omission is the point.
-    The shipped message ends `V8 ... could not reach its FAIL branch at all.
-    A gate that cannot fail is not a gate.` That sentence is FALSE of this
-    code, and the test below measures it false: `read_probe` now takes `real`
-    from `StepFit.resolved`, whose standard error comes off the fit's own
-    residual, which a one-repeat series has. Asserting the sentence here
-    would make this file certify a claim it also disproves, so only the
-    clauses that hold below the floor are pinned: the flag, the floor, the
-    named gate, and `A single pass forms no across-repeat spread`. The
-    wording is the owner's to correct; these asserts survive the correction.
+    AND WHAT IT MUST NOT SAY. The message used to end `V8 ... could not
+    reach its FAIL branch at all. A gate that cannot fail is not a gate.`,
+    which was true of the spread rule and false of `StepFit.resolved`, whose
+    standard error comes off the fit's own residual that a one-repeat series
+    has; the test below measures V8 FAILing at one repeat. The replication
+    clause is the floor's whole justification now, and the false headline is
+    asserted absent.
     """
     got = run(["--probe-repeats", typed, "--dry-run", "--device-memory-gb", "140"])
     assert got.returncode == exit_codes.REFUSED, got.stdout[-2000:]
@@ -2452,6 +2449,8 @@ def test_a_probe_repeat_count_under_the_floor_is_refused_naming_the_flag_typed(t
             f"{PW.MIN_PROBE_REPEATS}.") in got.stdout, got.stdout[:2000]
     assert "A single pass forms no across-repeat spread" in got.stdout
     assert "V8" in got.stdout
+    assert "could not reach its FAIL branch" not in got.stdout
+    assert "A gate that cannot fail is not a gate" not in got.stdout
     # Refused BEFORE anything is measured, so no gate is scored: the shape
     # every other plan-time refusal in this file has.
     assert "RESULT: " not in got.stdout
@@ -2553,8 +2552,8 @@ def test_at_one_probe_repeat_no_spread_is_formed_and_the_step_verdict_is_the_fit
     `across-repeat spread NOT DETERMINED`, and the operator reads a V8 line
     with no measurement of the instrument's own noise on it.
 
-    NOT TRUE of this code, and the reason this test exists: the refusal also
-    says V8 `could not reach its FAIL branch at all` at one repeat. That held
+    NOT TRUE of this code, and the reason this test exists: the refusal used
+    to say V8 `could not reach its FAIL branch at all` at one repeat. That held
     of the rule THIS PATCH REPLACED, where `read_probe` set
     `real = (spread is not None and ...)` and a None spread forced UNKNOWN.
     `StepFit.resolved` reads `step_se`, which `_ols_se` takes from the fit's
@@ -3100,6 +3099,58 @@ def test_the_skipped_pages_report_json_holds_no_nan_token(
     assert report.text().endswith("\n")
 
 
+@pytest.mark.parametrize("world_name,v8", V8_EARLY_EXITS)
+def test_the_skipped_report_json_names_the_v8_verdict_the_page_prints(
+        world_name, v8, monkeypatch, tmp_path, capsys):
+    """`run_sweep`'s early return stored `{"skipped": "V8 failed on the probe;
+    ..."}` on EVERY path, and `analyse` writes `proof.detail` verbatim into
+    report.json's `buffer_proof`, so an UNKNOWN page shipped an artefact that
+    said FAIL. The stored reason now carries `early.verdict`."""
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
+    report = _page_after(skipped)
+    page_v8 = next(g for g in report.gates if g.tag == "V8").verdict
+    assert page_v8 == v8
+    stored = report.payload["buffer_proof"]["detail"]["skipped"]
+    assert stored.startswith(f"V8 came back {v8} on the probe"), stored
+    other = exit_codes.FAIL if v8 == exit_codes.UNKNOWN else exit_codes.UNKNOWN
+    assert other not in stored and "failed" not in stored.replace(v8, "")
+
+
+def test_every_flag_the_script_prints_is_one_its_parser_accepts():
+    """V8 once told the operator to "raise --probe-target-ms", a flag argparse
+    never had (PROBE_TARGET_MS is a module constant). Every `--flag` in a
+    string literal of the script must be an option `build_parser` accepts,
+    save the session driver's own flags, which the script cites by name."""
+    import ast
+    driver_flags = {"--new"}
+    accepted = set()
+    for action in PW.build_parser()._actions:
+        accepted |= set(action.option_strings)
+    unknown = {}
+    for node in ast.walk(ast.parse(SCRIPT.read_text())):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            for flag in re.findall(r"(?<![\w-])--[a-z][a-z0-9-]+", node.value):
+                if flag not in accepted and flag not in driver_flags:
+                    unknown.setdefault(flag, node.lineno)
+    assert not unknown, unknown
+
+
+def test_the_memory_refusal_offers_no_remedy_the_census_refuses_first():
+    """"take the padding off with --declared-copies" could never be taken:
+    padding exists only when the ladder straddles the id bound, and a
+    declaration under the padding puts the ratio arms on the crossing, which
+    the census refuses before memory is priced. Verified by running."""
+    got = run(["--dry-run", "--device-memory-gb", "20"])
+    assert got.returncode == exit_codes.REFUSED, got.stdout[-2000:]
+    assert "do not fit this card" in got.stdout, got.stdout[-2000:]
+    assert "--declared-copies" not in got.stdout.split("do not fit this card")[1]
+    census = run(["--dry-run", "--device-memory-gb", "20",
+                  "--declared-copies", "6"])
+    assert census.returncode == exit_codes.REFUSED
+    assert "do not fit this card" not in census.stdout
+    assert "changes alignment kernel at tread" in census.stdout
+
+
 def test_a_v8_unknown_skips_the_sweep_exactly_as_a_v8_fail_does(
         monkeypatch, tmp_path, capsys):
     """WHY THE EMPTY PAGE IS REACHABLE AT ALL. V8 is a VALIDITY gate, and
@@ -3144,8 +3195,7 @@ def test_the_sweep_skipped_line_says_which_of_the_two_v8_verdicts_ended_it(
     alignment kernel inside the ratio arms' ladder, which is a statement about
     the build and is not fixed by re-running; an UNKNOWN says the probe has not
     shown it either way, which is a statement about the probe, and
-    `gate_v8_alignment`'s own lines name its two repairs (raise
-    `--probe-target-ms`, or read the step off a profiler). The single pre-patch
+    `gate_v8_alignment`'s own lines name what would close it. The single pre-patch
     sentence, 'V8 FAILS on the probe, so this build switches alignment
     kernel...', was printed for the FAIL and was the only branch there was.
     """
@@ -3171,9 +3221,9 @@ def test_the_skipped_page_prints_five_not_run_parts_and_never_its_own_reason(
     early return builds `BufferProof(parts={}, detail={'skipped': ...})`, but
     `BufferProof.lines` walks `PROOF_PARTS` and prints one line per part, so
     the one key `detail` holds is the one key that is never rendered: V2 says
-    NOT RUN five times and never once says why. The stored reason is stale as
-    well -- it reads 'V8 failed on the probe' on the UNKNOWN path too, where
-    V8 did not fail.
+    NOT RUN five times and never once says why. The stored reason carries
+    V8's actual verdict (it used to read 'V8 failed on the probe' on the
+    UNKNOWN path too, and report.json contradicted the page).
     """
     skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
     assert len(PW.PROOF_PARTS) == 5          # the five this test is named for
@@ -3182,7 +3232,8 @@ def test_the_skipped_page_prints_five_not_run_parts_and_never_its_own_reason(
     assert all(ln.startswith("NOT RUN") for ln in lines)
     assert set(skipped.proof.detail) == {"skipped"}
     assert not any("skipped" in ln for ln in lines)
-    assert skipped.proof.detail["skipped"].startswith("V8 failed on the probe")
+    assert skipped.proof.detail["skipped"].startswith(
+        "V8 came back UNKNOWN on the probe")
     report = _page_after(skipped)
     v2 = next(g for g in report.gates if g.tag == "V2")
     assert v2.verdict == exit_codes.UNKNOWN
