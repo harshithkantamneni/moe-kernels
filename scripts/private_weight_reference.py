@@ -13,12 +13,18 @@ breath: either an ASSUMED bandwidth (`w = slope_ms / weight_stream_ms(rate)`)
 or a FITTED intercept (`LadderFit.alpha = B / (A + B)`, an extrapolation of the
 ladder back to n = 0). The 13-agent reading of the 2026-09-10 session concluded
 that alpha, so defined, is NOT IDENTIFIED BY THIS APPARATUS on three
-independent grounds: the same nine cells give 0.9747 under one parameterisation
-and 0.5908 under another against a quoted sd of 0.0037 (FORM); the card is
-power-capped so the SM clock is an endogenous response to the tile, and
-sweeping the admissible clock elasticity moves pooled alpha by 21 sd (CLOCK);
-and by bus arithmetic the published alpha exceeds what the H200 memory bus can
-deliver in 4 of 9 cells (PHYSICS).
+independent grounds: the same six cells give 0.9794 under one parameterisation
+and 0.5977 under another, a factor of 1.6 apart, against that fit's own
+bootstrap sd of 0.0113 -- and against the 0.0037 the corpus published, which
+the same reading calls an understatement (FORM; the pair, the cell count and
+both sds are `bn_decomposition`'s own committed report, not this file's);
+the card is power-capped so the SM clock is an endogenous response to the
+tile, and sweeping the admissible clock elasticity moves pooled alpha from
+0.974 to 0.897, seven times that bootstrap sd and 21 times the published one
+(CLOCK);
+and by bus arithmetic 4 of the 40 published alphas, re-scored against their
+own measured n=1 anchors, imply more than their card's pin rate -- all four
+on the A100, none on the H200 (PHYSICS; ANCHOR_RESCORE.json gate C1).
 
 This arm removes the denominator. It measures a SECOND ladder in which the
 re-read fraction is ONE BY CONSTRUCTION, and divides one measured slope by the
@@ -150,8 +156,9 @@ removes the assumed RATE -- no bandwidth and no intercept enter the number --
 and it is alpha as a traffic fraction only if the two arms deliver the same
 bytes per second. The shared arm's non-re-read bytes come from L2, which is not
 free, so time is proportional to DRAM traffic in both arms only if that
-proportionality holds, and the 2026-09-10 PHYSICS finding -- the published alpha
-exceeding bus capability in 4 of 9 cells -- is the case where it does not. This
+proportionality holds, and the corpus rescore's PHYSICS finding -- 4 of 40
+published alphas implying more bandwidth than their own card's pin rate,
+worst 2335 GB/s against the A100's 2039 -- is the case where it does not. This
 arm removes the assumed rate and keeps the assumption that the two arms SHARE
 one. That is weaker than assuming a number and it is not nothing.
 
@@ -364,9 +371,16 @@ MACHINERY_WANT = (f"PASS: the FAR edge of b's {INTERVAL_PCT:.0f}% band < "
 
 #: DESIGN DECISION 7. V6's bound on the instrument. At n = 1 SHARED and
 #: PRIVATE are the same call; the relative gap between their medians must be
-#: under this. 2% is above the 0.115% cold-replicate and 0.37% cross-session
-#: noise the study has measured and well under the smallest effect the ratio
-#: has to resolve (the 0.35 / 0.529 boundary is 0.18 wide).
+#: under this. 2% is above the spread of a MEASURED TREAD TIME across cold
+#: replicates in the one committed arm that has any -- 0.16% median and 1.18%
+#: worst over the 188 treads of `results/published/2026-09-10-nvidia_h200-
+#: gaps-session/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-
+#: fresh-n3`, the same 0.2-1.0% band `bm128_roofline.py` quotes -- and well
+#: under the smallest effect the ratio has to resolve (the 0.35 / 0.529
+#: boundary is 0.18 wide). The "0.115% cold-replicate" and "0.37% cross-
+#: session" figures this line used to name are the session-3 analysis's, hold
+#: in no committed file, and are spreads of a FITTED SLOPE, not of the
+#: per-call median V6 compares.
 IDENTITY_SPREAD = 0.02
 
 #: DESIGN DECISION 11. V7's bound on the clock. At every fitted tread the

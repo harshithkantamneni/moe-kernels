@@ -123,9 +123,20 @@ without git. The mechanism behind (a)-(c) is `moe/bench/ai_model.py`, behind
   bracket; and re-anchoring moves the published alpha by a median 0.094 (max
   0.193, median bracket width 0.242) against the 0.05 those alphas are quoted
   to. So no alpha in this repository may be quoted as a point: quote the anchor
-  interval. Two consequences follow directly. `SURFACE.txt`'s "0 of 12 fits
-  within 0.05 of the pooled 0.558" is WITHDRAWN, because 4 of 40 brackets
-  contain 0.558. And the BLOCK_M <= 64 cap SURVIVES: at the bracket's most
+  interval. Two consequences follow directly. The A100 arm's `SURFACE.txt`
+  "0 of 12 fits within 0.05 of the pooled 0.558" is WITHDRAWN, because 4 of
+  40 brackets contain 0.558 and all 4 of them are that arm's. The identical
+  line runs in three surface arms with three counts: "0 of 18"
+  (`2026-09-01-nvidia_h200-alpha-surface-s4`, of which the anchor rescored
+  17), "0 of 11" (`2026-09-01-nvidia_h200-cross-card-s3`) and this "0 of 12"
+  (`2026-09-02-nvidia_a100_sxm4_80gb-alpha-surface-s3`). The other two are
+  REQUALIFIED and not withdrawn: 0 of 17 and 0 of 11 brackets contain 0.558
+  there, so what is wrong with those lines is only that "within 0.05" of a
+  fitted point is a property of an unidentified anchor (W4). Each
+  `SURFACE.txt` has carried that note beneath its own line, with its own
+  count, since 2026-09-03; the `SURFACE.pooled.txt` beside it repeats the line
+  unannotated under a header that supersedes the whole file. And the
+  BLOCK_M <= 64 cap SURVIVES: at the bracket's most
   generous alpha, through the corrected cap `2BM/(b(alpha_b + phi))`, the worst
   case is 0.678 of the ridge, still below it
   (`RESULT: CLAIM tile_cap PASS`).
@@ -262,8 +273,10 @@ below.
 `memory_branch_anchor.py --rescore`, CLAIM_FAIL, 40 fits over two cards. The
 four failing CLAIM gates are the finding and they are in RETRACTIONS (k): 4 of
 40 published alphas imply more than the card's pin rate, 12 of 40 fall outside
-their own anchor bracket, 4 brackets contain the pooled 0.558 (so `SURFACE.txt`'s
-"0 of 12 within 0.05" is withdrawn), and re-anchoring moves the median alpha by
+their own anchor bracket, 4 brackets contain the pooled 0.558 -- all 4 of them
+in the A100 arm, so that arm's `SURFACE.txt` "0 of 12 within 0.05" is
+withdrawn while the s4 arm's "0 of 18" and the cross-card arm's "0 of 11" are
+requalified on W4 instead -- and re-anchoring moves the median alpha by
 0.094 against a quoted 0.05. What did NOT move: the `tile_cap` gate passes, so
 the BLOCK_M <= 64 cap holds at the bracket's most generous alpha, worst 0.678
 of the ridge.

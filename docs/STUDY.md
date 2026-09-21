@@ -165,8 +165,15 @@ working state.
   found 4 of 40 published alphas implying more than the card's pin rate, 12 of
   40 outside their own anchor bracket, and a median re-anchoring shift of
   0.094 against the 0.05 those numbers are quoted to. Quote the anchor
-  interval. `SURFACE.txt`'s "0 of 12 fits within 0.05 of the pooled 0.558" is
-  WITHDRAWN: 4 of 40 brackets contain 0.558. The `BLOCK_M <= 64` cap SURVIVES
+  interval. The A100 arm's `SURFACE.txt` "0 of 12 fits within 0.05 of the
+  pooled 0.558" is WITHDRAWN: 4 of that arm's 12 brackets contain 0.558, and
+  those 4 are the whole of the 4 of 40. The same line runs in two more arms
+  with two more counts, "0 of 18" (`2026-09-01-nvidia_h200-alpha-surface-s4`)
+  and "0 of 11" (`2026-09-01-nvidia_h200-cross-card-s3`); no bracket in either
+  contains 0.558, so those two are REQUALIFIED rather than withdrawn, on the
+  ground that "within 0.05" of a fitted point is a property of an unidentified
+  anchor (W4). All three files have carried that note beneath their own line
+  since 2026-09-03. The `BLOCK_M <= 64` cap SURVIVES
   at the bracket's most generous alpha, worst 0.678 of the ridge, which is the
   one load-bearing claim the rescore leaves standing.
 - **A crossing inside the ridge band is a band.** The ruler arm reproduces the

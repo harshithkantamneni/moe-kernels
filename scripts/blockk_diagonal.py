@@ -38,8 +38,8 @@ are two ISO-SHARED-MEMORY pairs whose depths differ by a factor of two, and
 
     (3, 32)   (3, 64)   (3, 128)      24 / 48 / 96 KiB, depth 3 THROUGHOUT
 
-is a residency ladder at BYTE-IDENTICAL pipeline depth. Those five settings
-plus (1,32), (6,32) and (2,128) are the eight cells this arm times.
+is a residency ladder at BYTE-IDENTICAL pipeline depth. Those six settings
+plus (1,32) and (2,32) are the eight cells this arm times.
 
 THE THIRD MECHANISM, NAMED BEFORE IT CAN CONTAMINATE ANYTHING. Holding smem
 fixed forces `stages` and `BK` to move in opposite directions, so inside an
@@ -83,11 +83,25 @@ MEASURED byte count over a rate the caller names:
 
 no fitted level and no intercept. THE NOISE FIGURES THIS PARAGRAPH USED TO
 CARRY -- "217 times noisier", "0.115% cold-replicate", "0.37% cross-session" --
-ARE NOT IN THIS TREE. They are the session-3 analysis's, quoted in the brief
-that commissioned this arm, and no committed file holds any of them: the
-published NOISE_FLOOR.json records spreads of ALPHA and not of `w`, so nothing
-here can recompute them. They are stated as the analysis's and not as this
-page's, and NO GATE READS ANY OF THEM -- the only spread this file scores
+ARE NOT IN THIS TREE AS LITERALS. They are the session-3 analysis's, quoted in
+the brief that commissioned this arm, and no committed file holds any of them.
+TWO OF THE THREE ARE NONETHELESS RECOMPUTABLE HERE, and NOISE_FLOOR.json is
+the wrong file to have looked in: it records spreads of ALPHA, but the twelve
+fresh-cache replicate reports under `results/published/2026-09-10-nvidia_h200-
+gaps-session/results/gaps-nvidia_h200/replicate_noise_floor/nvidia_h200-fresh-
+n3/` each carry a whole ladder, so per cell `B` is `slope_memory`, `A` is
+`B(1-alpha)/alpha` exactly, and `w` is `B` over a load that is constant across
+replicates (all twelve report the same calibrated bandwidth), which makes w's
+relative spread IDENTICALLY the slope's. Over that arm's eight cells the
+intercept's relative spread across three cold replicates runs 27x to 785x the
+slope's, median 38x, and the slope's own runs 0.04% to 0.34%, median 0.15%.
+THE DIRECTION THIS PARAGRAPH RESTS ON IS THE APPARATUS'S OWN, at every cell.
+"217x" is not reproduced by any pooling of those rows -- the closest single
+cell, mixtral G=1 BLOCK_M=64, gives 213x -- and three replicates cannot pin a
+ratio of two spreads to three figures, so no such number is quoted here. What
+stays unrecomputable is "0.37% cross-session": no committed replicate spans
+sessions, and the noise-floor file says so of itself. They are stated as the
+analysis's and not as this page's, and NO GATE READS ANY OF THEM -- the only spread this file scores
 against is `ASSUMED_W_SPREAD`, which names its own source and is replaced by
 this run's own measured spread the moment one cell is on disk. `w` is the one
 statistic this apparatus is said to measure well, and the effect this arm is
@@ -150,7 +164,7 @@ THE CLOCK RULE IS THE APPARATUS STANDARD AND IS NOT RE-DECIDED HERE. DRIFT is
 the exclusion: the clock moved while the tread was timed, so the median is a
 blend of two operating points. BOTH sides of a LEVEL failure are KEPT with the
 side recorded, because under the 700 W cap the under-load clock is an OUTCOME
-of the tile -- and this arm sweeps seven tiles, so it will see several
+of the tile -- and this arm sweeps eight cells, so it will see several
 operating points by construction. TWO functions here read those verdicts and
 `tests/test_blockk_diagonal.py` asserts by AST that it is exactly those two:
 `clock_excluded`, which is the ONE function that EXCLUDES on them, and
@@ -956,7 +970,7 @@ class Sample:
     never "fine". `clock_level_side` says which way a LEVEL failure went and is
     a RECORD: since 2026-09-09 neither side excludes, because under the power
     cap the under-load clock is an outcome of the tile, and this arm sweeps
-    seven tiles.
+    eight cells.
     """
 
     cell: str
@@ -1014,7 +1028,7 @@ def clock_excluded(level_ok: bool | None, side: str,
     load is a blend of two operating points and the time is not a time at one
     of them. Both sides of a LEVEL failure are KEPT with `side` recorded,
     because under the 700 W cap the under-load clock is an outcome of the
-    TILE -- and a seven-tile sweep will produce several operating points by
+    TILE -- and an eight-cell sweep will produce several operating points by
     construction, so a band around the calibration GEMM's own point would
     exclude cells and not defects. `level_ok` and `side` are taken here so that
     the signature states what the rule reads and what it declines to read.
@@ -1549,7 +1563,7 @@ def gate_geometry(compiles: dict[str, int], executed: dict[str, int],
     If `override_config` silently failed, all eight cells ran ONE kernel, w is
     identical across the grid by construction, all three coefficients come out
     exactly zero and the residual is exactly noise -- a tidy, false NEITHER on
-    a page whose whole content is a comparison across those seven kernels.
+    a page whose whole content is a comparison across those eight kernels.
 
     TWO FACTS, because either alone is satisfiable by an accident. Each cell's
     own Triton cache directory gained at least one entry while it was timed
@@ -1597,7 +1611,8 @@ def gate_geometry(compiles: dict[str, int], executed: dict[str, int],
                     None, "every cell compiled, but no compiled shared memory "
                           "could be read back to confirm the settings differed",
                     "the cross-check on the pin. The compile counts are "
-                    "consistent with seven kernels and cannot prove it",
+                    f"consistent with {len(executed)} kernels and cannot "
+                    "prove it",
                     lines)
     return Gate(VALIDITY, "V1 geometry", "every cell ran its own kernel",
                 "at least one new Triton entry per timed cell, and at least "
