@@ -56,6 +56,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "ratio-path-split"), True),
     (("--self-test", "ratio-step-over-budget"), True),
     (("--self-test", "ratio-step-under-budget"), True),
+    (("--self-test", "private-step-alone"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -1421,8 +1422,9 @@ def test_the_declaration_fit_takes_natives_step_out_of_v5():
                                 / private.slope_ms, rel=1e-6)
     assert raw > PW.MACHINERY_BOUND, "the planted step is not load-bearing"
     assert PW.gate_v5_machinery(native, shared, private).verdict == exit_codes.FAIL
-    # The fit alone is UNKNOWN: V5 scores b's FAR EDGE, and with no band the
-    # point is all there is. The band from the same noise-free samples PASSES.
+    # The fit alone is UNKNOWN: a PASS is scored on b's FAR EDGE, and with no
+    # band the point is all there is. The band from the same noise-free
+    # samples PASSES.
     assert PW.gate_v5_machinery(native, shared, private, fit).verdict \
         == exit_codes.UNKNOWN
     band, _s, _n = PW.declaration_interval(samples, treads, 4, 50, 0)
@@ -2278,6 +2280,214 @@ def test_v8_reads_the_host_bound_verdict_of_every_series_it_scores():
                               census=_census(), weight_stream_ms=0.64)
     assert ok.verdict == exit_codes.PASS, ok.lines
     assert any(ln.startswith("POSITIVE CONTROL CONFIRMED") for ln in ok.lines)
+
+
+def test_a_planted_world_steps_one_ratio_arm_and_not_the_other():
+    """WHAT NO WORLD COULD SHOW. `planted_probe` gave both ratio arms the
+    same step, so `pair_step_bias` -- added because SHARED's and PRIVATE's
+    steps need NOT be one step -- was numerically the common-step bound it
+    replaced in every planted world, and no --self-test page exercised the
+    asymmetry. `private-step-alone` plants the same 1.5 budgets
+    `ratio-step-over-budget` plants in both, in PRIVATE's series alone.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    census = _census()
+    by_arm = {PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72}
+    stream = WEIGHTS.weight_stream_ms(CFG, "bf16", 4000.0)
+    probe = PW.planted_probe(PW.WORLDS["private-step-alone"], CFG, block_m=32,
+                             treads=treads, declared_by_arm=by_arm,
+                             census=census, noise=0.0, seed=0,
+                             weight_stream_ms=stream)
+    shared = PW.step_fit(probe.series(PW.SHARED))
+    private = PW.step_fit(probe.series(PW.PRIVATE))
+    # SHARED is a straight line; PRIVATE carries the step, at the census tread.
+    assert abs(shared.step_ms) < 1e-12, shared
+    assert private.split_tread == 4 and private.step_ms > 0
+    # And the step is worth the budgets the world registers, through the
+    # bound that needed no common-step premise.
+    bias = PW.pair_step_bias(None, (private.step_ms, 4), treads, stream)
+    assert bias == pytest.approx(1.5 * PW.ALIGN_STEP_RATIO_BUDGET, rel=1e-9)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=census,
+                                weight_stream_ms=stream)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+    assert any("NOT the same step" in ln for ln in gate.lines), gate.lines
+    # THE PUNCHLINE: the common-step bound this replaced reads SHARED's series
+    # alone, which is flat, so it scores this same probe at ~0 and PASSES it.
+    # This world is the one place in the table where the two bounds disagree.
+    old_rule = PW.step_bias(shared.step_ms, treads, shared.split_tread or 4,
+                            stream)
+    assert old_rule < PW.ALIGN_STEP_RATIO_BUDGET / 100 < bias
+    # ITS TWIN plants the same size in BOTH arms and reads the same bias, so
+    # the pair differ in one variable: which series carries the step.
+    both = PW.planted_probe(PW.WORLDS["ratio-step-over-budget"], CFG,
+                            block_m=32, treads=treads, declared_by_arm=by_arm,
+                            census=census, noise=0.0, seed=0,
+                            weight_stream_ms=stream)
+    assert PW.step_fit(both.series(PW.SHARED)).step_ms \
+        == pytest.approx(PW.step_fit(both.series(PW.PRIVATE)).step_ms)
+    assert PW.gate_v8_alignment(both, treads=treads, census=census,
+                                weight_stream_ms=stream).measured \
+        == gate.measured
+
+
+def _page_from(samples, probe, treads, census, copies_declared=9):
+    """`analyse` over planted samples and a chosen probe, with every basis
+    fixed, so a test can ask what the page says about the tread V5 was
+    fitted at."""
+    block_m = 32
+    b = PW.dtype_bytes("bf16")
+    mem = PW.memory_plan(CFG, "bf16", b, copies_declared,
+                         PW.SWEEP.tokens_for_rows(CFG, treads[-1] * block_m),
+                         int(140e9), "--device-memory-gb",
+                         copies_read=treads[-1])
+    return PW.analyse(
+        samples, CFG, block_m=block_m, treads=treads, repeats=3,
+        alpha=PW.ALPHA, dtype="bf16", b=b, bandwidth_gbps=4000.0,
+        bandwidth_source="fixed for this test", ridge=160.0,
+        ridge_source="fixed for this test", roof_tflops=640.0,
+        roof_source="fixed for this test", reference_mhz=None,
+        reference_grade="", reference_source="fixed for this test",
+        mem=mem, proof=PW.planted_proof(True), weight_delta_bytes=None,
+        high_water_bytes=None, draws=200, seed=0, header=["PLAN"],
+        card="NVIDIA H200", synthetic=True, model_name=PW.DEFAULT_MODEL,
+        pinned={}, prov=None, probe=probe, census=census,
+        copies_declared=copies_declared)
+
+
+def test_a_host_timed_native_step_does_not_choose_the_tread_v5_is_fitted_at():
+    """b IS WHAT V5 SCORES, and the tread the step term sits at moves it.
+    `analyse` took the probe's split whenever NATIVE's step was resolved,
+    with no regard for what the probe had TIMED -- so on the host-bound
+    probe an H200 is expected to give, a step in the host's enqueue cost
+    could choose the tread `declaration_fit` puts its step term at, and the
+    page said nothing about where the split came from.
+
+    `native_step_is_admissible` is the rule, read by V8's control and by
+    this override alike: the probe's split stands in for the census
+    hypothesis only when NATIVE's own cells were JUDGED and none came back
+    host-bound. Planted here: NATIVE's probe step at tread 3, where the
+    census says 4, on cells the instrument called host-bound.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    census = _census()
+    world = PW.WORLDS["refit"]
+    samples = PW.planted_samples(world, CFG, block_m=32, treads=treads,
+                                 repeats=3, alpha_shared=world.alpha,
+                                 ridge=160.0, bandwidth_gbps=4000.0, b=2,
+                                 noise=0.0, seed=0, copies_declared=9,
+                                 native_switch=4)
+    hot = {PW.NATIVE: True, PW.SHARED: False, PW.PRIVATE: False}
+    probe = _per_label_probe({PW.NATIVE: _series(0.02, 3),
+                              PW.SHARED: _series(0.0, 4),
+                              PW.PRIVATE: _series(0.0, 4)}, hot)
+    assert PW.read_probe(probe, PW.NATIVE, census).fit.split_tread == 3
+    report = _page_from(samples, probe, treads, census)
+    v5 = next(g for g in report.gates if g.tag == "V5")
+    # The census tread stands, and the page names the refusal and its reason.
+    assert any("the cited hypothesis (tread 4)" in ln for ln in v5.lines), v5.lines
+    assert any("REFUSED as the fit's tread because" in ln
+               and "HOST-BOUND" in ln for ln in v5.lines), v5.lines
+    assert not any("the probe, which resolved native's step at tread 3" in ln
+                   for ln in v5.lines), v5.lines
+    # And a GPU-timed probe that disagrees IS taken, with its provenance.
+    cool = _per_label_probe({PW.NATIVE: _series(0.02, 3),
+                             PW.SHARED: _series(0.0, 4),
+                             PW.PRIVATE: _series(0.0, 4)},
+                            {PW.NATIVE: False, PW.SHARED: False,
+                             PW.PRIVATE: False})
+    taken = next(g for g in _page_from(samples, cool, treads, census).gates
+                 if g.tag == "V5")
+    assert any("the probe, which resolved native's step at tread 3" in ln
+               and "read in GPU time" in ln for ln in taken.lines), taken.lines
+
+
+def test_the_plan_page_says_whether_this_ladder_supplies_v8s_positive_control():
+    """WHAT V8 CAN SAY IS A PROPERTY OF THE LADDER, and the operator should
+    read it in the dry run rather than discover it after the card is paid
+    for. NATIVE's own kernel switch is the positive control; a ladder whose
+    id counts stay on one side of the 1024-id bound has none, so on the
+    host-bound probe this op's size makes likely V8 can only read UNKNOWN --
+    which latches the page INVALID after the whole ladder has run, because
+    the sweep is skipped on a FAIL alone.
+
+    At the booked tile (32) mixtral's ids run 256..1536 and cross; at 16 they
+    run 128..768 and do not. NOT A REFUSAL: a probe the instrument judges and
+    clears still PASSES at such a tile, and refusing would forbid a
+    configuration that works -- qwen2-57b-a14b, for one, is above the bound
+    at every tile the parser accepts.
+    """
+    ladder = run(["--dry-run", "--device-memory-gb", "140", "--block-m", "16"])
+    assert "AND THIS LADDER GIVES V8 NO POSITIVE CONTROL" in ladder.stdout
+    assert "128..768" in ladder.stdout and "1024-id bound" in ladder.stdout
+    assert "NATIVE switches kernel nowhere in it" in ladder.stdout
+    booked = run(["--dry-run", "--device-memory-gb", "140", "--block-m", "32"])
+    assert "AND THIS LADDER GIVES V8 NO POSITIVE CONTROL" not in booked.stdout
+    assert "native switches at tread 4" in booked.stdout
+    # The two tiles' arithmetic, from the census rather than from this file.
+    treads = [1, 2, 3, 4, 5, 6]
+    assert PW.ids_for_tread(CFG, 6, 16) < PW.ALIGN_SMALL_BATCH_MAX_IDS
+    assert PW.ids_for_tread(CFG, 4, 32) >= PW.ALIGN_SMALL_BATCH_MAX_IDS
+    for bm, want in ((16, None), (32, 4)):
+        decl, _why = PW.declared_copies_for(CFG, treads, bm, 0)
+        census = PW.path_census(CFG, treads, bm, {
+            a: PW.declared_experts(a, CFG.num_experts, decl) for a in PW.ARMS})
+        assert census.switch_tread(PW.NATIVE) == want, bm
+
+
+def test_the_probe_repeat_count_is_out_of_the_run_id_and_the_page_says_why():
+    """`--probe-repeats` changes the probe's cells and can change V8's
+    verdict, which makes it look like a key. It is deliberately OUT: the
+    probe is re-timed every invocation and never resumed -- nothing in
+    cells.csv comes from it -- so two runs differing only in it hold the same
+    measured ladder, and keying on it would split their directories and stop
+    the second resuming the first's card minutes.
+
+    The classification was unwritten, which is how a knob drifts into a key.
+    It is now in `default_run_id`'s OUT list and in the flag's own help, and
+    the value stays recoverable from report.json's `align_probe`.
+    """
+    a = PW.build_parser().parse_args(["--probe-repeats", "3"])
+    b = PW.build_parser().parse_args(["--probe-repeats", "9"])
+    assert PW.default_run_id(a, "NVIDIA H200") == PW.default_run_id(b, "NVIDIA H200")
+    doc = " ".join(PW.default_run_id.__doc__.split())
+    assert "--probe-repeats" in doc and "OUT ON PURPOSE" in doc
+    assert "never resumed" in doc and "align_probe" in doc
+    help_text = " ".join(PW.build_parser().format_help().split())
+    assert "NOT in the run id" in help_text
+    # And the artefact really carries what the key leaves out.
+    probe = _per_label_probe({PW.NATIVE: _series(0.02, 4),
+                              PW.SHARED: _series(0.0, 4),
+                              PW.PRIVATE: _series(0.0, 4)})
+    assert {c["repeat"] for c in probe.as_dict()["cells"]} == {0, 1, 2}
+
+
+def test_a_refused_bootstrap_on_b_is_not_reported_as_a_refused_fit():
+    """`declaration_fit` and `declaration_interval` shared one try, so a
+    failed BOOTSTRAP printed the FIT's sentence -- "declaration difference
+    NOT FITTED" two lines above the page's own "DECLARATION, native - shared
+    per tread", which IS the fit. And since V5 reads UNKNOWN when b has no
+    band, that failure decides a verdict, so which of the two refused is the
+    difference between a page a reader can follow and one that contradicts
+    itself. The ratio's own interval has said it this way since it was
+    written ("interval NOT FORMED: ...").
+
+    `--draws 1` reaches it: one draw cannot form a percentile band.
+    """
+    got = run(["--self-test", "refit", "--draws", "1"])
+    assert "b's band NOT FORMED over 1 draws" in got.stdout, got.stdout[-3000:]
+    assert "declaration difference NOT FITTED" not in got.stdout
+    # The fit itself is on the page, two lines under the refusal that used to
+    # claim it had failed.
+    assert "DECLARATION, native - shared per tread" in got.stdout
+    v5 = [ln for ln in got.stdout.splitlines() if "NO BAND on b" in ln]
+    assert len(v5) == 1, got.stdout[-3000:]
+    assert "b's band was NOT FORMED" in v5[0], v5[0]
+    assert next(r for r in exit_codes.parse_result_lines(got.stdout)
+                if r.name == "V5").verdict == exit_codes.UNKNOWN
+    # And with the draws the default gives, the band forms and V5 scores it.
+    assert next(r for r in exit_codes.parse_result_lines(
+        run(["--self-test", "refit"]).stdout)
+        if r.name == "V5").verdict == exit_codes.PASS
 
 
 def test_the_counter_asymmetry_line_carries_the_slope_difference_it_measured():
@@ -3376,23 +3586,44 @@ def _v5_ladders(native_per_tile_ms: float):
     return tuple(PW.ladder_for(samples, a) for a in PW.ARMS)
 
 
-def test_v5_fails_a_declaration_cost_a_tenth_admitted_and_reads_the_far_edge():
+def test_v5_scores_a_pass_on_the_far_edge_and_a_fail_on_the_near_one():
     """MACHINERY_BOUND was 0.10, which admits a ratio error larger than
-    ALPHA_BAND's entire 0.059 width. At 0.03, a declaration cost of 5% of the
-    private slope FAILs (it PASSED before); and a point at 1% whose band
-    reaches 4% FAILs too, because the bound is scored on b's FAR edge."""
+    ALPHA_BAND's entire 0.059 width; it is 0.03, and a declaration cost of 5%
+    of the private slope FAILs where it once PASSED.
+
+    THE TWO EDGES DECIDE DIFFERENT VERDICTS, and that is the half this test
+    was rewritten for. A PASS is a claim about how far the ratio CAN sit from
+    the study's own call, so it holds only at b's WORST edge. A FAIL is a
+    claim that the declaration's cost IS over the bound, and the measurement
+    says that only when b's NEAREST edge is over it too. In between -- a band
+    straddling the bound -- the run resolved nothing about the declaration,
+    which is UNKNOWN, and a VALIDITY UNKNOWN latches the page INVALID anyway.
+    Scoring the FAIL on the far edge printed the registered harm ("the wider
+    declaration changes the per-M-tile cost itself") off a measurement whose
+    point sat at 1% of a 3% bound.
+
+    Every other gate in this file is built the same way: V8 FAILs on the
+    bound over the RESOLVED steps and answers UNKNOWN when only the wide one
+    is over; C1 FAILs only when the whole interval misses ALPHA_BAND.
+    """
     assert PW.MACHINERY_BOUND == 0.03
     assert PW.MACHINERY_BOUND < ALPHA_BAND_WIDTH()
     native, shared, private = _v5_ladders(0.0)
+    # The whole band over the bound: the cost IS there, and V5 refuses.
     fit = PW.DeclarationFit(None, None, 0.05 * private.slope_ms, 0.0, (), 4)
     band = (0.045 * private.slope_ms, 0.055 * private.slope_ms)
     assert PW.gate_v5_machinery(native, shared, private, fit, band).verdict \
         == exit_codes.FAIL
+    # A point at 1% whose band reaches 4%: the far edge is over, the near
+    # edge is not. Pre-change this read FAIL.
     fit = PW.DeclarationFit(None, None, 0.01 * private.slope_ms, 0.0, (), 4)
     wide = (-0.04 * private.slope_ms, 0.02 * private.slope_ms)
     gate = PW.gate_v5_machinery(native, shared, private, fit, wide)
-    assert gate.verdict == exit_codes.FAIL, gate.lines
-    assert gate.measured.startswith("4.00% of the private slope at b's far edge")
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any("band STRADDLES the bound" in ln for ln in gate.lines), gate.lines
+    assert gate.measured.startswith(
+        "4.00% of the private slope at b's far edge, 2.00% at its near edge")
+    # And a band wholly inside the bound still PASSES.
     tight = (0.005 * private.slope_ms, 0.015 * private.slope_ms)
     assert PW.gate_v5_machinery(native, shared, private, fit, tight).verdict \
         == exit_codes.PASS

@@ -116,7 +116,8 @@ exactly, because the pieces are not equally covered:
     kernels, chosen by the id count and the declared expert count (the cited
     `ALIGN_*` constants), and for this model at this tile the switch falls
     INSIDE the ladder. A step in the per-call time that a straight-line fit
-    reads as slope, in both ratio arms alike, pulling the ratio toward 1.
+    reads as slope -- in both ratio arms, or in ONE of them, which is why
+    the bound V8 scores assumes neither -- pulling the ratio toward 1.
     Three things are done about it, kept apart: the RATIO ARMS ARE MOVED OFF
     THE SWITCH by construction (`declared_copies_for` declares enough copies
     that `E x n_decl` clears the expert bound, so both take the scan path at
@@ -356,8 +357,10 @@ MACHINERY_BOUND = 0.03
 
 #: What V5 asks for, written once: three call sites printed it and step 5
 #: moved only one of them to the far-edge rule.
-MACHINERY_WANT = (f"far edge of b's {INTERVAL_PCT:.0f}% band < "
-                  f"{MACHINERY_BOUND:.0%} of the private slope")
+MACHINERY_WANT = (f"PASS: the FAR edge of b's {INTERVAL_PCT:.0f}% band < "
+                  f"{MACHINERY_BOUND:.0%} of the private slope. FAIL: its "
+                  "NEAR edge is over that bound, i.e. the whole band is. "
+                  "Otherwise UNKNOWN")
 
 #: DESIGN DECISION 7. V6's bound on the instrument. At n = 1 SHARED and
 #: PRIVATE are the same call; the relative gap between their medians must be
@@ -2453,7 +2456,8 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
                       fit: DeclarationFit | None = None,
                       per_tile_band: tuple[float, float] | None = None,
                       step_band: tuple[float, float] | None = None,
-                      switch_source: str = "") -> Gate:
+                      switch_source: str = "",
+                      band_absence: str = "") -> Gate:
     """Does the machinery-matched ratio speak for the study's own call.
 
     THE RATIO IS FORMED BETWEEN TWO CALLS WITH ONE DIFFERENCE. SHARED and
@@ -2487,10 +2491,21 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
     raw_gap = native.slope_ms - shared.slope_ms
     gap = fit.per_tile_ms if fit is not None else raw_gap
     rel = abs(gap) / abs(private.slope_ms)
-    # THE FAR EDGE: the point, and both ends of its band when there is one.
-    far = max([abs(gap)] + ([abs(v) for v in per_tile_band]
-                            if per_tile_band else []))
+    # THE TWO EDGES OF b, IN THE RATIO'S OWN UNITS. A PASS is a claim about
+    # how far the ratio CAN sit from the study's call, so it has to hold at
+    # the band's WORST edge. A FAIL is a claim that the declaration's cost IS
+    # over the bound, which the measurement makes only when the band's NEAREST
+    # edge is over it too -- every other gate here is built the same way (V8
+    # fails on the bound over the RESOLVED steps and answers UNKNOWN when only
+    # the wide one is over; C1 fails only when the whole interval misses
+    # ALPHA_BAND). Scoring the FAIL on the far edge alone printed "the wider
+    # declaration changes the per-M-tile cost itself" off a measurement whose
+    # point sat well inside the bound.
+    edges = [abs(v) for v in per_tile_band] if per_tile_band else []
+    far = max([abs(gap)] + edges)
+    near = min(edges) if edges else abs(gap)
     rel_far = far / abs(private.slope_ms)
+    rel_near = near / abs(private.slope_ms)
     detail = [
         f"slope(native)  {native.slope_ms:.6f} ms per M-tile  "
         f"(the study's call: E declared)",
@@ -2527,24 +2542,35 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
         f"{shared.intercept_ms:.4f} ms -- the dead launches of the wider "
         "declaration belong HERE, as a constant, and are not scored",
         "read b as the additive error bar on reading the ratio as the native "
-        f"call's: about +/-{rel_far:.3f} at the band's far edge, over and "
-        "above the ratio's own bootstrap interval",
+        + (f"call's: about +/-{rel_far:.3f} at the band's far edge, over and "
+           "above the ratio's own bootstrap interval" if per_tile_band else
+           f"call's: about +/-{rel:.3f} at the POINT, which is all there is "
+           "without a band, and over and above the ratio's own interval"),
     ]
-    if rel_far >= MACHINERY_BOUND:
+    if rel_near >= MACHINERY_BOUND:
         verdict = FAIL
     elif per_tile_band is None:
         # The point is under the bound but nothing says how far b can sit
-        # from it, and the bound is a claim about the far edge.
+        # from it, and a PASS is a claim about the far edge.
         verdict = UNKNOWN
         detail.append("NO BAND on b, so only the point was scored: the point "
-                      "is under the bound but its far edge is unknown")
+                      "is under the bound but its far edge is unknown"
+                      + (f" -- {band_absence}" if band_absence else ""))
+    elif rel_far >= MACHINERY_BOUND:
+        verdict = UNKNOWN
+        detail.append(
+            f"b's band STRADDLES the bound: its near edge is {rel_near:.2%} "
+            f"of the private slope and its far edge {rel_far:.2%}, against "
+            f"{MACHINERY_BOUND:.0%}. The measurement neither bounded the "
+            "declaration's per-M-tile cost nor showed it over: not a finding "
+            "about the declaration, a statement about this run's precision")
     else:
         verdict = PASS
     return Gate("V5", VALIDITY,
                 "the declaration's own per-M-tile cost is bounded",
                 verdict,
-                f"{rel_far:.2%} of the private slope at b's far edge "
-                f"(point {rel:.2%})",
+                f"{rel_far:.2%} of the private slope at b's far edge, "
+                f"{rel_near:.2%} at its near edge (point {rel:.2%})",
                 MACHINERY_WANT,
                 "the wider declaration changes the per-M-tile cost itself, so "
                 "the matched ratio is about a call the study does not make, "
@@ -2908,6 +2934,48 @@ def private_ids_lines(probe: AlignProbe, shared: ProbeReading,
         "re-reads no more than the whole set per M-tile"]
 
 
+def native_step_is_admissible(reading, probe: AlignProbe | None
+                              ) -> tuple[bool, str]:
+    """May NATIVE's probed step stand in for the census hypothesis:
+    `(admissible, why)`.
+
+    ADMISSIBLE MEANS TIMED ON THE MACHINE THE STEP IS ABOUT. NATIVE's cells
+    are what the positive control is read from, and a cell the instrument
+    called host-bound timed the host's enqueue cost, not the kernel: a step
+    in it is a step in the wrong machine's time. So the probe's split
+    replaces the hypothesis only when NATIVE's own cells were JUDGED and
+    none came back host-bound. "No verdict at all" is not GPU time and is
+    not admissible -- V8's own prose already says such cells establish
+    nothing.
+
+    WHY NOT "the positive control confirmed it": the control confirms when
+    the probe's split EQUALS the census tread, so taking the probe's split
+    only then is an override that can never change anything. The question
+    the override answers is the opposite one -- whether to believe a probe
+    that DISAGREES with the hypothesis -- and only the machine it was timed
+    on can answer it.
+
+    ONE HOME. `native_control` scores the control for V8 and `analyse`
+    chooses the tread `declaration_fit` is given; both read this, so the
+    rule is not written twice.
+    """
+    if reading is None or not reading.real:
+        return False, "the probe resolved no step for native"
+    if probe is None:
+        return False, "no probe"
+    hot, judged, _note = probe.host_bound(NATIVE)
+    if not judged:
+        return False, ("the instrument returned no host-bound verdict for "
+                       "native's own cells, so what they timed is not "
+                       "established")
+    if hot:
+        return False, (f"{hot} of {judged} of native's own cells were "
+                       "HOST-BOUND, so the step in them is a step in the "
+                       "host's enqueue cost and not in the kernel")
+    return True, (f"native's own {judged} cells were judged and none was "
+                  "host-bound, so its step was read in GPU time")
+
+
 def native_control(readings: dict, census: PathCensus, *, hot: int,
                    judged: int, native: tuple[int, int, str]
                    ) -> tuple[bool, list[str]]:
@@ -2950,6 +3018,10 @@ def native_control(readings: dict, census: PathCensus, *, hot: int,
             "NATIVE's own cells carried no host-bound verdict")
     r = readings.get(NATIVE)
     if r is not None and r.real and r.fit.split_tread == want:
+        # The control is the PREDICTION met, which is a different question
+        # from `native_step_is_admissible` (was the step timed on the GPU):
+        # a host-bound probe that finds the switch where the census puts it
+        # has shown its sensitivity, which is the whole point of the control.
         return True, [
             f"POSITIVE CONTROL CONFIRMED: {state}, but the probe resolved "
             f"NATIVE's step at tread {want}, where the census puts its kernel "
@@ -3134,7 +3206,8 @@ def gate_c2_achieved_rate(private: Ladder, *, weight_bytes: int,
 def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                      bandwidth_gbps: float, bw_source: str, dtype: str,
                      stream_ms: float, ridge: float, ridge_source: str,
-                     copies_declared: int) -> list[str]:
+                     copies_declared: int,
+                     census: PathCensus | None = None) -> list[str]:
     weight = WEIGHTS.routed_expert_weight_bytes(cfg, dtype)
     act_per_tile = (cfg.num_experts * block_m
                     * SWEEP.activation_bytes_per_row(cfg))
@@ -3231,10 +3304,16 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "one. The only trace such a cost leaves here is the private "
                "ladder's own mean relative residual, printed in the ladder "
                "table and SCORED BY NOTHING.")
+    native_switch = census.switch_tread(NATIVE) if census is not None else None
     out.append("  THE ALIGNMENT KERNEL, SEPARATED THREE WAYS: vLLM switches "
                "moe_align_block_size kernel at the cited id and expert bounds, "
-               "and for this ladder the id bound falls inside it. The ratio "
-               "arms are declared past the expert bound so both take one "
+               + (f"and for this ladder the id bound falls inside it (native "
+                  f"switches at tread {native_switch}). The ratio "
+                  if native_switch else
+                  "and for THIS ladder it does not: the id count stays on one "
+                  "side of the bound at every tread, so NATIVE switches "
+                  "nowhere in it. The ratio ")
+               + "arms are declared past the expert bound so both take one "
                "kernel throughout (the census above, refused otherwise); the "
                "probe times the alignment op alone along the ladder once per "
                "ARM -- NATIVE's declaration, and SHARED's and PRIVATE's id "
@@ -3244,6 +3323,26 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "difference from SHARED fitted with a step term so V5 reads the "
                "declaration's per-tile cost with the step out and the step is "
                "printed with an interval.")
+    if census is not None and census.switch_tread(NATIVE) is None:
+        # REGISTERED BEFORE A POD IS RENTED, because it decides what V8 can
+        # say. The positive control is NATIVE's own kernel switch: with none
+        # in this ladder there is nothing to show a host-bound probe, and an
+        # H200's probe is EXPECTED to be host-bound (the alignment call is
+        # tens of microseconds, the size of the host's own enqueue cost). V8
+        # can then reach PASS only on a probe the instrument judged and
+        # cleared; otherwise UNKNOWN, which latches the page INVALID after
+        # the ladder has been paid for -- the skip is FAIL-only.
+        out.append("  AND THIS LADDER GIVES V8 NO POSITIVE CONTROL: its id "
+                   f"count runs {ids_for_tread(cfg, treads[0], block_m)}.."
+                   f"{ids_for_tread(cfg, treads[-1], block_m)} and stays on "
+                   f"one side of the {ALIGN_SMALL_BATCH_MAX_IDS}-id bound, so "
+                   "NATIVE switches kernel nowhere in it and there is no "
+                   "switch to show the probe. If the probe comes back "
+                   "host-bound, which is what this op's size makes likely, V8 "
+                   "can only read UNKNOWN -- the page latches INVALID and the "
+                   "ladder is still paid for, because the sweep is skipped on "
+                   "a FAIL alone. A tile whose ladder CROSSES that bound "
+                   "supplies the control; the booked tile does.")
     slot_elems = max(2 * cfg.intermediate_size * cfg.hidden_size,
                      cfg.hidden_size * cfg.intermediate_size)
     top_slot = expert_space(cfg.num_experts, copies_declared) - 1
@@ -3500,10 +3599,21 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     if probe is not None and NATIVE in probe.labels():
         try:
             reading = read_probe(probe, NATIVE, census)
-            if reading.real:
+            ok, why = native_step_is_admissible(reading, probe)
+            if ok:
                 native_switch = reading.fit.split_tread
                 switch_source = (f"the probe, which resolved native's step at "
-                                 f"tread {native_switch}")
+                                 f"tread {native_switch} ({why})")
+            elif reading.real and reading.fit.split_tread != native_switch:
+                # A STEP THE PROBE COULD NOT TIME ON THE GPU DOES NOT GET TO
+                # CHOOSE THE TREAD V5 IS FITTED AT. b is what V5 scores at
+                # MACHINERY_BOUND, and the tread the step term sits at moves
+                # it; a host-timed split would put a step in the host's time
+                # into the declaration's own per-M-tile cost.
+                switch_source += (
+                    f"; the probe put native's step at tread "
+                    f"{reading.fit.split_tread} instead, and that reading is "
+                    f"REFUSED as the fit's tread because {why}")
             else:
                 switch_source += ("; the probe resolved no step for native, so "
                                   "the hypothesis stands unconfirmed")
@@ -3511,14 +3621,31 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             switch_source += f"; the probe's native series was not fitted ({exc})"
     decl_fit = None
     decl_bands: tuple = (None, None)
+    band_absence = ""
     if ladders.get(NATIVE) and ladders.get(SHARED):
+        # TWO REFUSALS, TWO SENTENCES. The fit and its bootstrap shared one
+        # try, so a failed BOOTSTRAP was reported as a failed FIT -- "the
+        # declaration difference NOT FITTED" printed two lines above the
+        # fitted declaration. And since V5 reads UNKNOWN when b has no band,
+        # the bootstrap's failure now decides a verdict, which makes saying
+        # which one failed the difference between a page a reader can follow
+        # and one that contradicts itself. The ratio's own interval has said
+        # it this way since it was written: "interval NOT FORMED: ...".
         try:
             decl_fit = declaration_fit(samples, treads, native_switch)
-            b_band, s_band, _n = declaration_interval(samples, treads,
-                                                      native_switch, draws, seed)
-            decl_bands = (b_band, s_band)
         except Unmeasurable as exc:
+            band_absence = f"the declaration difference was not fitted ({exc})"
             lines.append(f"  declaration difference NOT FITTED: {exc}")
+        else:
+            try:
+                b_band, s_band, _n = declaration_interval(
+                    samples, treads, native_switch, draws, seed)
+                decl_bands = (b_band, s_band)
+            except Unmeasurable as exc:
+                band_absence = f"b's band was NOT FORMED ({exc})"
+                lines.append(f"  b's band NOT FORMED over {draws} draws: {exc}"
+                             " -- the declaration IS fitted below; what is "
+                             "missing is the band V5 scores its far edge on")
     if decl_fit is not None:
         lines += ["", "DECLARATION, native - shared per tread (no traffic in it): "
                   + ", ".join(f"n={n}:{d:+.4f}" for n, d in decl_fit.points)]
@@ -3537,7 +3664,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         gates.append(gate_v5_machinery(ladders[NATIVE], ladders[SHARED],
                                        ladders[PRIVATE], decl_fit,
                                        decl_bands[0], decl_bands[1],
-                                       switch_source))
+                                       switch_source, band_absence))
     else:
         gates.append(Gate("V5", VALIDITY,
                           "the declaration's own per-M-tile cost is bounded",
@@ -3710,6 +3837,12 @@ class World:
     #: weight-stream time and leverage by `planted_probe`, so no calibrated
     #: quantity is a literal here. Overrides `ratio_probe_step_ms`.
     ratio_probe_budgets: float | None = None
+    #: The same, planted in PRIVATE's series ALONE. `pair_step_bias` exists
+    #: because the two ratio arms' steps need not be one step, and every
+    #: other world plants them equal, which makes the pair bound numerically
+    #: the common-step bound it replaced. A world that steps one arm is the
+    #: only registration that tells the two apart.
+    private_probe_budgets: float | None = None
     #: What the instrument said about the planted probe's cells. A world that
     #: plants no verdict would leave V8 UNKNOWN on every page.
     probe_host_bound: bool = False
@@ -3858,6 +3991,15 @@ WORLDS: dict[str, World] = {
         "the budget on the ratio, so V8 PASSES. A step is not a defect; a "
         "step worth more than a hundredth of the ratio is",
         dict(ALL_PASS), ratio_probe_budgets=0.7),
+    "private-step-alone": World(
+        "private-step-alone",
+        "the step is in PRIVATE's id set and NOT in SHARED's: the alignment "
+        "op costs the two arms differently at the same declaration, which is "
+        "the case pair_step_bias exists for and the only one the common-step "
+        "bound it replaced could not express. Sized at the same 1.5 budgets "
+        "ratio-step-over-budget plants in both arms, so the two worlds "
+        "differ in exactly one variable: which series carries the step",
+        dict(ALL_PASS, V8=FAIL), private_probe_budgets=1.5),
     "over-allocated": World(
         "over-allocated",
         "the weight allocation is not the one the plan priced: V3 fails, "
@@ -3950,19 +4092,35 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
 DEFAULT_PLANTED_PROBE_STEP_MS = 0.02
 
 
+def planted_step_in_budgets(budgets: float | None, world_name: str,
+                            treads: list[int], split: int,
+                            weight_stream_ms: float | None) -> float:
+    """A planted probe step, in ms, sized so `pair_step_bias` reads exactly
+    `budgets` ALIGN_STEP_RATIO_BUDGETs.
+
+    `|a| / (B + a) = f` gives `a = f B / (1 - f)`, and `s = a / L`. The same
+    inversion serves a step common to both ratio arms and a step in one of
+    them alone: with `a = c` the bound is `|a| / (B + a)`, and with the
+    numerator flat it is `|c| / (B + c)` -- the same number, which is why
+    the two worlds sized at 1.5 budgets read the same bias and differ only
+    in WHICH series carries the step. 0.0 for a world that plants none.
+    """
+    if budgets is None:
+        return 0.0
+    if not weight_stream_ms:
+        raise Unmeasurable(f"the {world_name!r} world sizes its step in "
+                           "budgets and needs the run's weight stream")
+    f = budgets * ALIGN_STEP_RATIO_BUDGET
+    return f * weight_stream_ms / (1.0 - f) / leverage(treads, split)
+
+
 def planted_ratio_step_ms(world: World, treads: list[int], split: int,
                           weight_stream_ms: float | None) -> float:
-    """The ratio arms' planted probe step, in ms. A world sized in budgets
-    gets the step whose `pair_step_bias`, common to both arms, is exactly
-    that many ALIGN_STEP_RATIO_BUDGETs: `|a| / (B + a) = f` gives
-    `a = f B / (1 - f)`, and `s = a / L`."""
+    """The step planted in BOTH ratio series, in ms."""
     if world.ratio_probe_budgets is None:
         return world.ratio_probe_step_ms
-    if not weight_stream_ms:
-        raise Unmeasurable(f"the {world.name!r} world sizes its step in "
-                           "budgets and needs the run's weight stream")
-    f = world.ratio_probe_budgets * ALIGN_STEP_RATIO_BUDGET
-    return f * weight_stream_ms / (1.0 - f) / leverage(treads, split)
+    return planted_step_in_budgets(world.ratio_probe_budgets, world.name,
+                                   treads, split, weight_stream_ms)
 
 
 def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
@@ -3977,6 +4135,9 @@ def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
     ratio_split = census.switch_tread(NATIVE) or treads[len(treads) // 2]
     ratio_step = planted_ratio_step_ms(world, treads, ratio_split,
                                        weight_stream_ms)
+    private_step = planted_step_in_budgets(world.private_probe_budgets,
+                                           world.name, treads, ratio_split,
+                                           weight_stream_ms)
     cells = []
     for rep_ in range(PROBE_REPEATS):
         for n in treads:
@@ -3993,6 +4154,8 @@ def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
                     ms += native_step
                 if arm != NATIVE and n >= ratio_split:
                     ms += ratio_step
+                if arm == PRIVATE and n >= ratio_split:
+                    ms += private_step
                 if noise:
                     ms *= (1.0 + rng.gauss(0.0, noise))
                 cells.append(ProbeCell(arm, n, numel, d, rep_, ms,
@@ -4659,6 +4822,17 @@ def default_run_id(args, card: str) -> str:
     `--device-memory-gb` is out for the same reason: it gates a plan, it does
     not move a millisecond.
 
+    AND `--probe-repeats`, WHICH IS OUT ON PURPOSE AND IS THE ONE THAT LOOKS
+    LIKE IT SHOULD BE IN. It changes the probe's cells and so can change V8's
+    verdict. But the probe is re-timed on every invocation and is never
+    resumed -- nothing in `cells.csv` comes from it, and the resume key is
+    `(arm, tread, repeat)` over the LADDER -- so two runs differing only in
+    this knob hold the same measured ladder, and keying on it would put them
+    in different directories and stop the second resuming the first's card
+    minutes. The value is not lost: `report.json` carries `align_probe` with
+    every probed cell and its repeat index, so the count is recoverable from
+    the artefact this key exists to protect.
+
     A SELF-TEST IS PREFIXED AND ITS WORLD IS IN THE KEY. A planted report
     written into a metered run's directory would overwrite the only
     machine-readable artefact of an arm that cost pod minutes, with a synthetic
@@ -4742,7 +4916,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "which pads past vLLM's small-batch expert bound "
                          "when the ladder crosses its id bound")
     ap.add_argument("--probe-repeats", type=int, default=PROBE_REPEATS,
-                    help="repeats of the alignment probe's cells")
+                    help="repeats of the alignment probe's cells; NOT in the "
+                         "run id, because the probe is never resumed (see "
+                         "default_run_id) -- report.json's align_probe carries "
+                         "the count")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the plan, the predictions and the cost, and "
                          "REFUSE: nothing is measured and no gate is scored")
@@ -4932,7 +5109,8 @@ def _main(argv=None) -> int:
                                bw_source=bw_source, dtype=args.dtype,
                                stream_ms=stream_ms, ridge=ridge,
                                ridge_source=ridge_source,
-                               copies_declared=copies_declared)
+                               copies_declared=copies_declared,
+                               census=census)
     print("\n".join(header))
 
     if refused:
