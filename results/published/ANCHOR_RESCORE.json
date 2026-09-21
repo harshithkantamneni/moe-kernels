@@ -5718,7 +5718,7 @@
   },
   {
    "claim": "no anchor bracket admits the pooled alpha 0.558",
-   "invalidates": "SURFACE.txt's line \"alpha = 0.558 ...: 0 of 12 fits within 0.05\". That count is a statement about POINT estimates whose anchor is unidentified; the listed fits are consistent with the pooled value once the anchor is bracketed, so the sentence must be withdrawn or requalified.",
+   "invalidates": "the SURFACE.txt line \"alpha = 0.558 ...: 0 of N fits within 0.05\" in each surface arm; the hits listed above say which arm's brackets contain it. That count is a statement about POINT estimates whose anchor is unidentified; the listed fits are consistent with the pooled value once the anchor is bracketed, so the sentence must be withdrawn or requalified.",
    "kind": "CLAIM",
    "lines": [
     "  2026-09-02-nvidia_a100_sxm mixtral-8x7b   G=16 BM= 32  bracket [0.449, 0.580] contains 0.558",
@@ -5743,7 +5743,7 @@
   }
  ],
  "generated_by": "scripts/memory_branch_anchor.py --rescore",
- "git_sha": "b70e269b0817b8559929de5535b89a5b8582022d",
+ "git_sha": "ff90047553b6975716ed1fa0723afc315a277f19",
  "gpu_name": null,
  "instrument": "imported: the committed reports' own timings; --rescore times nothing",
  "mde_alpha": 0.017013667977858273,
@@ -5756,7 +5756,7 @@
   "driver_version": null,
   "git_dirty": false,
   "git_dirty_files": 0,
-  "git_sha": "b70e269b0817b8559929de5535b89a5b8582022d",
+  "git_sha": "ff90047553b6975716ed1fa0723afc315a277f19",
   "gpu_name": null,
   "hostname": "Harshiths-MacBook-Pro.local",
   "instrument": "imported: the committed reports' own timings; --rescore times nothing",
@@ -5782,7 +5782,7 @@
   "target_ms": null,
   "torch": "2.13.0",
   "triton": null,
-  "utc": "2026-09-10T17:32:51+00:00",
+  "utc": "2026-09-21T23:12:04+00:00",
   "vllm": null,
   "warmup_ms": null
  },

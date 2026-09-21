@@ -210,7 +210,7 @@ GATE C4  CLAIM    FAIL    no anchor bracket admits the pooled alpha 0.558
                           2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=16 BM= 32  bracket [0.453, 0.594] contains 0.558
                           2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G=64 BM= 32  bracket [0.422, 0.585] contains 0.558
                           2026-09-02-nvidia_a100_sxm qwen2-57b-a14b G= 8 BM= 32  bracket [0.464, 0.603] contains 0.558
-                        INVALIDATES: SURFACE.txt's line "alpha = 0.558 ...: 0 of 12 fits within 0.05". That count is a statement about POINT estimates whose anchor is unidentified; the listed fits are consistent with the pooled value once the anchor is bracketed, so the sentence must be withdrawn or requalified.
+                        INVALIDATES: the SURFACE.txt line "alpha = 0.558 ...: 0 of N fits within 0.05" in each surface arm; the hits listed above say which arm's brackets contain it. That count is a statement about POINT estimates whose anchor is unidentified; the listed fits are consistent with the pooled value once the anchor is bracketed, so the sentence must be withdrawn or requalified.
 RESULT: CLAIM correction_smaller_than_the_prior FAIL re-anchoring moves the published alpha by less than the 0.05 it is quoted to | measured median shift 0.094 (max 0.193); median bracket width 0.242 (max 0.338) | gate median shift <= 0.05, a PRIOR (the quoted precision), not noise-derived; the anchor MDE is 0.017
 GATE C5  CLAIM    FAIL    re-anchoring moves the published alpha by less than the 0.05 it is quoted to
                         measured median shift 0.094 (max 0.193); median bracket width 0.242 (max 0.338)   gate median shift <= 0.05, a PRIOR (the quoted precision), not noise-derived; the anchor MDE is 0.017
@@ -229,7 +229,7 @@ W1. 4 published alpha values are IMPOSSIBLE, not uncertain.
 
 W2. 12 of 40 published alpha-corrected values fall outside their own anchor bracket and may not be quoted as point estimates.
 
-W3. SURFACE.txt's "alpha = 0.558 ...: 0 of 12 fits within 0.05" must be withdrawn or requalified. 4 bracket(s) contain 0.558; the 0-of-12 count is a property of an unidentified anchor, not of the data.
+W3. The SURFACE.txt "alpha = 0.558 ...: 0 of N fits within 0.05" line must be withdrawn or requalified in every surface arm. 4 bracket(s) contain 0.558, listed by arm under C4; the 0-of-N count is a property of an unidentified anchor, not of the data.
 
 W4. No alpha in this study may be quoted as a number. Every reported alpha carries an anchor interval wider than the precision it is printed at, and this file's `anchor.json` carries the interval per fit.
 
