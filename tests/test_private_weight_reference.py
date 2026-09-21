@@ -1578,7 +1578,12 @@ def test_the_new_step_rule_fires_on_pure_noise_far_less_often_than_the_spread_ru
     assert old_rate >= 0.15, old_rate
     assert new_rate <= 0.02, new_rate
     # NOT blind, either: POWER is pinned two tests below, at the budget.
-    assert found_rate <= new_rate
+    # And the false alarms that DO fire must not cluster on the census' own
+    # split, which would make them look like a feature of the ladder rather
+    # than the search talking. An absolute bound, because `found_rate` is
+    # counted inside the `resolved()` branch and `found_rate <= new_rate`
+    # therefore cannot fail.
+    assert found_rate <= 0.02, found_rate
     # BOTH RATES ARE PROPERTIES OF THE RULE, NOT OF A CARD. `_series` scales
     # every deviation by `noise`, and `step_ms`, `step_se` and `spread_ms` are
     # all homogeneous of degree one in the series, so a ten-fold noisier probe
@@ -1953,9 +1958,10 @@ def test_align_probe_host_bound_counts_one_declaration_at_a_time_and_notes_a_hot
     # NATIVE's own 18 cells were all cleared, and SHARED's 6 hot ones did not
     # leak into them.
     assert probe.host_bound(PW.NATIVE) == (0, 3 * 6, "")
-    # PRIVATE shares SHARED's declaration and is not probed separately, so it
-    # has no cells at all: no verdict, and the note is empty rather than
-    # SHARED's.
+    # THIS FIXTURE plants no PRIVATE cells, so PRIVATE has no verdict here and
+    # the note is empty rather than SHARED's. The PRODUCTION probe does emit
+    # them -- PROBE_LABELS is len(ARMS) since step 5 -- which is exactly why
+    # `host_bound` has to be asked per label rather than over every cell.
     assert probe.host_bound(PW.PRIVATE) == (0, 0, "")
 
 
@@ -2003,9 +2009,10 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
     # note off the first cell that HAS one would put this sentence on the page
     # instead, and the page would name the wrong reason for the UNKNOWN.
     assert not any(_UNJUDGED_NOTE in ln for ln in gate.lines), gate.lines
-    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED: NATIVE's switch "
-                             "is due at tread 4 and the host-bound probe "
-                             "resolved no step") for ln in gate.lines), gate.lines
+    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED: the probe's "
+                             "ratio cells were host-bound (6 of 15); NATIVE's "
+                             "switch is due at tread 4 and the probe resolved "
+                             "no step") for ln in gate.lines), gate.lines
     # And a cleared probe says so on the same line rather than staying silent,
     # so "0 of 18" is a positive record that the instrument did look.
     cool = PW.gate_v8_alignment(
@@ -2167,6 +2174,175 @@ def test_three_treads_are_refused_and_four_still_fail_a_real_step():
     v8 = [r for r in exit_codes.parse_result_lines(four.stdout)
           if r.name == "V8"]
     assert [r.verdict for r in v8] == [exit_codes.FAIL], v8
+
+
+# --------------------------------------------------------------------------
+# 13d. the two arms V8 scores: which one may refuse the design, and which
+#      cells the instrument judged
+# --------------------------------------------------------------------------
+
+def _per_label_probe(series_by_label, hot_by_label=None):
+    """An `AlignProbe` whose per-label host-bound verdict is set per LABEL.
+
+    `_probe_from` stamps one verdict on every cell of every label, so it
+    cannot express the case the gate has to survive: the two ratio id sets
+    are timed at one declaration with one host enqueue cost and two GPU
+    times, so the instrument's `g > h` test can land differently on them.
+    """
+    hot_by_label = hot_by_label or {}
+    cells = []
+    for label, series in series_by_label.items():
+        for rep in range(3):
+            for n, numel, ms in series:
+                cells.append(PW.ProbeCell(label, n, numel, 72, rep, ms,
+                                          host_bound=hot_by_label.get(label)))
+    return PW.AlignProbe(tuple(cells), synthetic=True)
+
+
+def test_v8_does_not_fail_on_a_step_its_own_rule_called_noise():
+    """THE REGRESSION step 5 introduced. `bias` is taken over BOTH ratio
+    series but `real` was `r.real or rp.real`, so an UNRESOLVED noise step in
+    one arm could carry the bias over budget while the OTHER arm's resolved
+    step supplied the licence to FAIL. The gate's own registered rule -- its
+    docstring, its printed criterion and the plan page -- is "FAIL needs it
+    over budget AND resolved", and on a pod a FAIL skips the whole sweep
+    before a byte is allocated, which is the trade the step-5 revert exists
+    to refuse.
+
+    Planted here: SHARED carries a resolved step worth well under the budget,
+    PRIVATE carries a larger step its own standard error does not resolve.
+    The pair bound clears the budget; the bound over the RESOLVED steps alone
+    does not. Pre-fix: FAIL. Now: UNKNOWN, and the page says which number it
+    was taken on.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    shared = _series(0.02, 4)
+    private = _series(0.18, 4, noise=0.25, seed=5)
+    probe = _per_label_probe({PW.NATIVE: _series(0.02, 4), PW.SHARED: shared,
+                              PW.PRIVATE: private}, {PW.NATIVE: False,
+                                                     PW.SHARED: False,
+                                                     PW.PRIVATE: False})
+    sh = PW.step_fit(probe.series(PW.SHARED))
+    pv = PW.step_fit(probe.series(PW.PRIVATE))
+    assert sh.resolved() and not pv.resolved(), (sh, pv)
+    wide = PW.pair_step_bias((sh.step_ms, sh.split_tread),
+                             (pv.step_ms, pv.split_tread), treads, 0.64)
+    narrow = PW.pair_step_bias((sh.step_ms, sh.split_tread), None, treads, 0.64)
+    assert wide > PW.ALIGN_STEP_RATIO_BUDGET >= narrow, (wide, narrow)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any("only through a step the rule did NOT resolve" in ln
+               for ln in gate.lines), gate.lines
+    # And a RESOLVED over-budget step still refuses the design.
+    still = _per_label_probe({PW.NATIVE: _series(0.02, 4),
+                              PW.SHARED: _series(0.5, 4),
+                              PW.PRIVATE: _series(0.0, 4)})
+    assert PW.gate_v8_alignment(still, treads=treads, census=_census(),
+                                weight_stream_ms=0.64).verdict \
+        == exit_codes.FAIL
+
+
+def test_v8_reads_the_host_bound_verdict_of_every_series_it_scores():
+    """PRIVATE's id set has been half the scored bias since step 5, but the
+    host-bound census read SHARED's cells alone -- so a PRIVATE series the
+    instrument had timed on the HOST was scored with the positive control
+    never consulted, and the page printed a count that was true of SHARED and
+    false of the declaration.
+
+    The two are not host-bound together. `host_bound_verdict` thresholds the
+    GPU's backlog, which is the sign test `g > h`; the host cost `h` is
+    identical for the two id sets (one op, one declaration, one call shape,
+    ids built outside the timed region) while `g` differs by exactly the
+    counter asymmetry this gate prints -- PRIVATE spreads the same increments
+    over n times as many counters, so it has LESS contention and crosses
+    first. Planted here: PRIVATE hot, SHARED cool.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4),
+            PW.PRIVATE: _series(0.0, 4)}
+    hot = {PW.NATIVE: False, PW.SHARED: False, PW.PRIVATE: True}
+    gate = PW.gate_v8_alignment(_per_label_probe(flat, hot), treads=treads,
+                                census=_census(), weight_stream_ms=0.64)
+    # Pre-fix this PASSED: SHARED was cool, so the control was never asked.
+    assert gate.verdict == exit_codes.UNKNOWN, gate.lines
+    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED")
+               for ln in gate.lines), gate.lines
+    assert any("0 of 18 of shared's, 18 of 18 of private's probed cells "
+               "HOST-BOUND at the ratio arms' declaration" in ln
+               for ln in gate.lines), gate.lines
+    # With NATIVE's switch resolved where the census puts it, the same
+    # asymmetric probe earns PASS through the control.
+    controlled = dict(flat, **{PW.NATIVE: _series(0.02, 4)})
+    ok = PW.gate_v8_alignment(_per_label_probe(controlled, hot), treads=treads,
+                              census=_census(), weight_stream_ms=0.64)
+    assert ok.verdict == exit_codes.PASS, ok.lines
+    assert any(ln.startswith("POSITIVE CONTROL CONFIRMED") for ln in ok.lines)
+
+
+def test_the_counter_asymmetry_line_carries_the_slope_difference_it_measured():
+    """The one MEASUREMENT step 5 added had its value asserted nowhere: the
+    tests checked that the line is printed, not that the number on it is the
+    difference it claims. Planted here: PRIVATE's series costs a known extra
+    per-id slope, so the printed microseconds per tread are arithmetic.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    extra_per_id = 2e-6                      # ms per id, PRIVATE's ids only
+    shared = _series(0.0, 4)
+    private = [(n, numel, ms + extra_per_id * numel)
+               for n, numel, ms in shared]
+    probe = _per_label_probe({PW.NATIVE: _series(0.02, 4), PW.SHARED: shared,
+                              PW.PRIVATE: private})
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    ids_per_tread = 256                      # this ladder's own id step
+    want_us = extra_per_id * ids_per_tread * 1e3
+    assert want_us == pytest.approx(0.512)
+    line = next(ln for ln in gate.lines
+                if ln.startswith("slope(private ids) - slope(shared ids)"))
+    got = float(re.search(r"= \+?(-?[0-9.]+) us per tread", line).group(1))
+    assert got == pytest.approx(want_us, rel=1e-6), line
+    # And in the ratio's own units against the weight stream.
+    ratio_units = float(re.search(r"([+-][0-9.]+) of the weight stream", line)
+                        .group(1))
+    assert ratio_units == pytest.approx(extra_per_id * ids_per_tread / 0.64,
+                                        rel=1e-6), line
+
+
+def test_the_control_says_which_case_it_is_in_and_whether_native_was_host_bound():
+    """`native_control` opened "POSITIVE CONTROL CONFIRMED: the probe was
+    host-bound" on BOTH branches that reach it -- including the one where the
+    instrument returned no host-bound verdict at all, one line under a page
+    that says exactly that. And it claimed the switch was seen "through the
+    host cost present" without ever reading NATIVE's own verdicts, which are
+    what would show that.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    stepped = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4),
+               PW.PRIVATE: _series(0.0, 4)}
+    blind = PW.gate_v8_alignment(_per_label_probe(stepped), treads=treads,
+                                 census=_census(), weight_stream_ms=0.64)
+    assert blind.verdict == exit_codes.PASS, blind.lines
+    assert any("returned no host-bound verdict for any probed cell" in ln
+               for ln in blind.lines), blind.lines
+    assert not any("the probe was host-bound" in ln for ln in blind.lines)
+    assert any("no host-bound verdict for the ratio cells" in ln
+               for ln in blind.lines), blind.lines
+    # NATIVE's own verdicts are read and reported: a switch seen in GPU time
+    # is not the same demonstration as one seen through host cost.
+    gpu_native = PW.gate_v8_alignment(
+        _per_label_probe(stepped, {PW.NATIVE: False, PW.SHARED: True,
+                                   PW.PRIVATE: True}),
+        treads=treads, census=_census(), weight_stream_ms=0.64)
+    assert gpu_native.verdict == exit_codes.PASS, gpu_native.lines
+    assert any("were NOT called host-bound, so the switch below was seen in "
+               "GPU time" in ln for ln in gpu_native.lines), gpu_native.lines
+    hot_native = PW.gate_v8_alignment(
+        _per_label_probe(stepped, {PW.NATIVE: True, PW.SHARED: True,
+                                   PW.PRIVATE: True}),
+        treads=treads, census=_census(), weight_stream_ms=0.64)
+    assert any("NATIVE's own cells were host-bound in 18 of 18" in ln
+               for ln in hot_native.lines), hot_native.lines
 
 
 # --------------------------------------------------------------------------
@@ -3087,12 +3263,17 @@ def test_the_page_a_v8_early_exit_prints_scores_every_gate_and_is_invalid(
     assert report.gates[0].measured.startswith("0/162 cells, treads 0/0/0")
     # V8 reports the host-bound census on either path, so the page says which
     # machine the probe timed even when the answer is "all of them, the host".
-    # The hot count is the WORLD's plant, named here rather than read back out
-    # of `probe.host_bound`, which is the call `gate_v8_alignment` itself makes.
+    # The counts are the WORLD's plant, named here rather than read back out
+    # of `probe.host_bound`, which is the call `gate_v8_alignment` itself
+    # makes. BOTH ratio series are counted and both are named: PRIVATE's id
+    # set is scored too, and the two need not be host-bound together.
     probed = len(skipped.treads) * PW.PROBE_REPEATS
     hot = 0
-    assert skipped.probe.host_bound(PW.SHARED)[:2] == (hot, probed)
-    assert any(f"called {hot} of {probed} probed cells HOST-BOUND" in ln
+    for label in (PW.SHARED, PW.PRIVATE):
+        assert skipped.probe.host_bound(label)[:2] == (hot, probed)
+    assert any(f"called {hot} of {probed} of shared's, {hot} of {probed} of "
+               "private's probed cells HOST-BOUND at the ratio arms' "
+               "declaration" in ln
                for ln in report.gates[8].lines), report.gates[8].lines
     # And every gate still prints the RESULT line the driver recomputes from.
     assert len(exit_codes.parse_result_lines("\n".join(report.lines))) \

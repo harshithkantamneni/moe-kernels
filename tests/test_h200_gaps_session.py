@@ -4985,9 +4985,9 @@ def test_the_world_that_reaches_a_validity_gates_unknown_branch_is_named_and_run
     describe the sweep as separating on FAIL alone and be right about every
     world in the table.
 
-    That mattered because `run_sweep` skips the sweep on UNKNOWN as well as
-    FAIL: the branch that saves the whole ladder's card time was reachable
-    only through a code path the advertised self-test never walked, and
+    That matters because `exit_codes.classify` latches INVALID on a VALIDITY
+    UNKNOWN exactly as it does on a FAIL, so a world registering V8=UNKNOWN
+    is INVALID although it breaks nothing -- and
     "the remaining N 3 INVALID on the validity gates each is planted to
     break" is false for a world that breaks nothing and is merely not
     resolved by it. `host-bound-probe` registers `V8=UNKNOWN`, which

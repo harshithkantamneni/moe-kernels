@@ -122,7 +122,8 @@ exactly, because the pieces are not equally covered:
     that `E x n_decl` clears the expert bound, so both take the scan path at
     every tread, and the census REFUSES a plan where they do not); the switch
     is MEASURED on the attached build by `probe_alignment`, timing the
-    alignment op alone along the ladder for each declaration, and V8 refuses
+    alignment op alone along the ladder once per ARM (NATIVE's declaration,
+    and SHARED's and PRIVATE's id sets at the ratio arms'), and V8 refuses
     the design if the ratio arms' own series carries a step worth more than
     `ALIGN_STEP_RATIO_BUDGET` of the ratio; and NATIVE, which keeps the
     study's declaration and so keeps the switch, has its ladder difference
@@ -352,6 +353,11 @@ INTERVAL_PCT = 90.0
 #: coexist with a declaration cost big enough to carry the ratio from one
 #: registered world to the next. Three hundredths is half the band's width.
 MACHINERY_BOUND = 0.03
+
+#: What V5 asks for, written once: three call sites printed it and step 5
+#: moved only one of them to the far-edge rule.
+MACHINERY_WANT = (f"far edge of b's {INTERVAL_PCT:.0f}% band < "
+                  f"{MACHINERY_BOUND:.0%} of the private slope")
 
 #: DESIGN DECISION 7. V6's bound on the instrument. At n = 1 SHARED and
 #: PRIVATE are the same call; the relative gap between their medians must be
@@ -1217,7 +1223,10 @@ PROBE_TRIALS = 3
 #: estimated on `n - 3` degrees of freedom, three at the default six treads,
 #: so the threshold is the Student-t quantile with the two-sided tail this
 #: sigma leaves under a normal (`step_quantile`: 9.22 at three dof). A bare
-#: 3 sigma fired on pure noise 0.43 of the time at 4 treads and 0.15 at 5.
+#: 3 sigma fired on pure noise 0.42 of the time at 4 treads and 0.15 at 5
+#: (0.4202 +/- 0.0011 and 0.1534 +/- 0.0008, 200,000 worlds over 8 seeds at
+#: this file's own probe geometry; the owner's 2,000-trial run of the same
+#: rule read 0.428 and 0.155, which is within one standard error of it).
 #: Measured at 3 repeats, 600 worlds: 0.3% on pure noise at six treads, flat
 #: across 3, 5 and 9 repeats, under 1% at 4 and 5 treads; a step worth the
 #: whole 0.01 budget is found 96% of the time and one worth 1.5 budgets
@@ -1227,7 +1236,8 @@ PROBE_STEP_SIGMA = 3.0
 
 #: DESIGN DECISION 12. How much of the ratio an alignment step in the ratio
 #: arms may be worth before V8 refuses the design: a hundredth, a sixth of
-#: ALPHA_BAND's width. CHOSEN. The bias is arithmetic (`step_bias`) at the
+#: ALPHA_BAND's width. CHOSEN. The bias is arithmetic (`pair_step_bias` over
+#: both ratio series, or `step_bias` when PRIVATE's was not probed) at the
 #: run's own calibrated weight-stream time; nothing here is a card's number.
 ALIGN_STEP_RATIO_BUDGET = 0.01
 
@@ -1324,9 +1334,11 @@ class StepFit:
         normal (`step_quantile`), times `step_se`, times the search penalty.
 
         A bare `sigma` here judged `s2 = RSS/(n-3)` with one to three degrees
-        of freedom as if it were the true variance: measured on pure noise
-        at 3 repeats that fired 0.42 of the time at 4 treads and 0.15 at 5.
-        The t quantile prices the variance estimate's own noise."""
+        of freedom as if it were the true variance, which fired on pure noise
+        far more often than its sigma claimed at four and five treads;
+        `PROBE_STEP_SIGMA`'s note carries that measurement and this docstring
+        does not restate it. The t quantile prices the variance estimate's
+        own noise."""
         return (step_quantile(sigma, self.dof) * self.step_se
                 * selection_penalty(self.splits_tried))
 
@@ -1574,8 +1586,13 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
                     declared_by_arm: dict[str, int], copies_declared: int,
                     reference_clock: float | None,
                     repeats: int = PROBE_REPEATS) -> AlignProbe:
-    """Time vLLM's alignment op ALONE, per distinct declaration, along the
-    ladder, on the attached build.
+    """Time vLLM's alignment op ALONE, once per ARM, along the ladder, on the
+    attached build.
+
+    Three series: NATIVE's own declaration, and SHARED's and PRIVATE's ID
+    SETS at the ratio arms' shared declaration. The two id sets are timed
+    apart because they are what differs between the arms whose slopes the
+    ratio divides, and V8 bounds the step over both of them.
 
     The op is `moe_align_block_size(topk_ids, BLOCK_M, declared)`, called as
     `fused_experts_impl` calls it, on the ids each arm passes. It is the one
@@ -2464,7 +2481,7 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
     if private.slope_ms == 0:
         return Gate("V5", VALIDITY,
                     "the declaration's own per-M-tile cost is bounded",
-                    UNKNOWN, "no private slope", f"< {MACHINERY_BOUND:.0%}",
+                    UNKNOWN, "no private slope", MACHINERY_WANT,
                     "the ratio's distance from the study's own call is "
                     "unbounded", [])
     raw_gap = native.slope_ms - shared.slope_ms
@@ -2528,8 +2545,7 @@ def gate_v5_machinery(native: Ladder, shared: Ladder, private: Ladder,
                 verdict,
                 f"{rel_far:.2%} of the private slope at b's far edge "
                 f"(point {rel:.2%})",
-                f"far edge of b's {INTERVAL_PCT:.0f}% band < "
-                f"{MACHINERY_BOUND:.0%} of the private slope",
+                MACHINERY_WANT,
                 "the wider declaration changes the per-M-tile cost itself, so "
                 "the matched ratio is about a call the study does not make, "
                 "and nothing on this page may be quoted as the study's alpha",
@@ -2671,13 +2687,18 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     """Are the two ratio arms on ONE alignment kernel along the whole ladder,
     as MEASURED, and is what is left worth less than the budget.
 
-    The probe timed vLLM's alignment op alone at the ratio arms' declaration
-    at every tread. `step_fit` finds the best single step in that series;
-    `step_bias` says what a step of that size, common to both arms at that
-    split, could do to the ratio through a straight-line fit. PASS when the
-    bias is under `ALIGN_STEP_RATIO_BUDGET`; FAIL when it is over AND the
-    step clears the series' own noise; UNKNOWN when it is over but unresolved
-    (a noisy probe has not shown the design sound) or when no probe ran.
+    The probe timed vLLM's alignment op alone at every tread, once per ARM.
+    `step_fit` finds the best single step in each series, and
+    `pair_step_bias` says what SHARED's step and PRIVATE's TOGETHER could do
+    to the ratio through a straight-line fit -- with no premise that the two
+    are one step, which is what probing PRIVATE's id set bought.
+    (`step_bias`, the common-step bound, is the fallback when PRIVATE's
+    series was not probed.) PASS when that bias is under
+    `ALIGN_STEP_RATIO_BUDGET`; FAIL when the bound over the RESOLVED steps
+    is over it, because a design is not refused on a step this gate called
+    noise; UNKNOWN when only the wide bound is over (a noisy probe has shown
+    neither), or when no probe ran. The host-bound census covers every series
+    that enters the bias, not SHARED's alone.
 
     NATIVE's declaration is read beside it. It is never scored as a design
     fault -- NATIVE is allowed its switch, and the V5 fit takes it out -- but
@@ -2718,16 +2739,36 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                     "ratio slopes", detail)
     r = readings[ratio_label]
     rp = readings.get(PRIVATE) if ratio_label == SHARED else None
+
+    def step_of(reading, resolved_only: bool = False):
+        """`(step_ms, split)` for the bound, or None for "no step here".
+
+        `resolved_only` drops a step the series' own standard error did not
+        resolve, and TWO BOUNDS COME OUT OF THIS. `bias` is the widest
+        defensible bound, over every fitted step, and is what the page
+        reports; `bias_real` is the bound over the steps the rule RESOLVED,
+        and is what may refuse a design. Scoring the FAIL on the wide one let
+        an unresolved noise step in one arm carry the verdict while the other
+        arm's resolved step supplied `real` -- a FAIL earned by a step this
+        gate itself called noise, which on a pod skips the whole sweep.
+        """
+        if reading is None:
+            return None
+        f = reading.fit
+        if f.split_tread is None or (resolved_only and not reading.real):
+            return None
+        return (f.step_ms, f.split_tread)
+
     if rp is not None:
-        def step_of(reading):
-            f = reading.fit
-            return None if f.split_tread is None else (f.step_ms, f.split_tread)
         bias = pair_step_bias(step_of(r), step_of(rp), treads, weight_stream_ms)
+        bias_real = pair_step_bias(step_of(r, True), step_of(rp, True),
+                                   treads, weight_stream_ms)
         real = r.real or rp.real
     else:
         bias = (0.0 if r.fit.split_tread is None else
                 step_bias(r.fit.step_ms, treads, r.fit.split_tread,
                           weight_stream_ms))
+        bias_real = bias if r.real else 0.0
         real = r.real
     for reading in readings.values():
         detail += reading.lines()
@@ -2737,32 +2778,72 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
         detail.append("PRIVATE's id set was NOT probed: the bias below takes "
                       "the ratio arms' step as COMMON to both, a premise "
                       "nothing here checked")
-    hot, judged, note = probe.host_bound(ratio_label)
+    def step_said(reading):
+        f = reading.fit
+        return ("no step resolved a split" if f.split_tread is None else
+                f"{f.step_ms * 1e3:+.2f} us at tread {f.split_tread}, at "
+                f"leverage {leverage(treads, f.split_tread):.3f}")
     detail.append(
-        f"the ratio arms' step, {r.fit.step_ms * 1e3:+.2f} us at tread "
-        f"{r.fit.split_tread if r.fit.split_tread else '-'}, read as slope at "
-        f"leverage {leverage(treads, r.fit.split_tread) if r.fit.split_tread else 0.0:.3f} "
-        f"against a weight stream of {weight_stream_ms:.4f} ms (the "
-        "denominator's own scale), could move the ratio by at most "
-        f"{bias:.4f}")
-    detail.append(
-        f"the instrument called {hot} of {judged} probed cells HOST-BOUND at "
-        f"this declaration" + (f": {note}" if note else "")
-        if judged else
-        "the instrument returned no host-bound verdict for any probed cell")
+        f"{ratio_label}'s step: {step_said(r)}"
+        + (f"; {PRIVATE}'s step: {step_said(rp)}" if rp is not None else "")
+        + f"; against a weight stream of {weight_stream_ms:.4f} ms (the "
+        f"denominator's own scale) they could move the ratio by at most "
+        f"{bias:.4f}"
+        + (f", and by {bias_real:.4f} over the RESOLVED steps alone, which is "
+           "the number a FAIL is taken on" if bias_real != bias else ""))
+    # EVERY SERIES THAT ENTERS THE BIAS, not SHARED's alone. PRIVATE's id set
+    # has been scored since step 5, and the two are not host-bound together:
+    # the host's enqueue cost is the same for both (one op, one declaration,
+    # one call shape, ids built outside the timed region) while their GPU
+    # time differs by exactly the counter asymmetry this gate prints below,
+    # so the instrument's verdict is the sign test g > h and each series
+    # crosses at its own tread. Reading SHARED alone let a host-timed PRIVATE
+    # series be scored with the control never consulted.
+    scored_labels = [ratio_label] + ([PRIVATE] if rp is not None else [])
+    counts = {lab: probe.host_bound(lab) for lab in scored_labels}
+    hot = sum(c[0] for c in counts.values())
+    judged = sum(c[1] for c in counts.values())
+    note = next((c[2] for c in counts.values() if c[2]), "")
+    if not judged:
+        detail.append("the instrument returned no host-bound verdict for any "
+                      "probed cell")
+    elif len(scored_labels) == 1:
+        detail.append(
+            f"the instrument called {hot} of {judged} probed cells HOST-BOUND "
+            "at this declaration" + (f": {note}" if note else ""))
+    else:
+        # PER ARM AND NOT POOLED: an asymmetry here is itself a reading. It
+        # says the op's GPU time straddles the host's enqueue cost between
+        # the two id sets, which is the asymmetry private_ids_lines measures.
+        detail.append(
+            "the instrument called "
+            + ", ".join(f"{counts[lab][0]} of {counts[lab][1]} of {lab}'s"
+                        for lab in scored_labels)
+            + " probed cells HOST-BOUND at the ratio arms' declaration"
+            + (f": {note}" if note else ""))
     control = None
     if judged == 0 or hot:
         # A HOST-BOUND PROBE TIMES THE HOST, so on its own it is not evidence
         # either way. NATIVE's switch is the positive control that decides
         # whether it became evidence anyway.
-        control, control_lines = native_control(readings, census)
+        control, control_lines = native_control(readings, census, hot=hot,
+                                                judged=judged,
+                                                native=probe.host_bound(NATIVE))
         detail += control_lines
     if control is False:
         verdict = UNKNOWN
     elif bias <= ALIGN_STEP_RATIO_BUDGET:
         verdict = PASS
-    elif real:
+    elif real and bias_real > ALIGN_STEP_RATIO_BUDGET:
         verdict = FAIL
+    elif real:
+        verdict = UNKNOWN
+        detail.append(
+            f"over budget at {bias:.4f} only through a step the rule did NOT "
+            f"resolve: the RESOLVED steps alone are worth {bias_real:.4f}, "
+            "inside the budget. A design is not refused on a step this gate "
+            "called noise, and it is not certified while an unresolved step "
+            "could be that big; more --probe-repeats is what closes it")
     else:
         verdict = UNKNOWN
         detail.append("the step is over budget but NOT resolved against its own "
@@ -2772,12 +2853,15 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                 "the ratio arms take one alignment kernel along the ladder",
                 verdict,
                 f"bias <= {bias:.4f}"
+                + (f", {bias_real:.4f} over the resolved steps"
+                   if bias_real != bias else "")
                 + (", a REAL step" if real else ", no step resolved"),
                 f"step bias on the ratio <= {ALIGN_STEP_RATIO_BUDGET}, from "
                 "the probed series at the ratio arms' own declaration",
                 "vLLM changes alignment kernel inside the ratio arms' ladder "
-                "on this build, and the step it leaves in both slopes is worth "
-                "more than the budget; the ratio is not quotable at this "
+                "on this build, and the step it leaves -- in one of the two "
+                "slopes or in both, which the page names -- is worth more "
+                "than the budget; the ratio is not quotable at this "
                 "declaration",
                 detail)
 
@@ -2824,10 +2908,17 @@ def private_ids_lines(probe: AlignProbe, shared: ProbeReading,
         "re-reads no more than the whole set per M-tile"]
 
 
-def native_control(readings: dict, census: PathCensus
+def native_control(readings: dict, census: PathCensus, *, hot: int,
+                   judged: int, native: tuple[int, int, str]
                    ) -> tuple[bool, list[str]]:
     """Did the probe resolve NATIVE's kernel switch at the tread the census
     puts it: `(confirmed, the lines that say so)`.
+
+    `hot`/`judged` are the ratio series' own host-bound counts and `native`
+    is NATIVE's, so the lines say which case they are in instead of asserting
+    one. This branch is reached on two of them -- cells the instrument called
+    host-bound, and cells it could not judge at all -- and the confirmed line
+    used to open "the probe was host-bound" on both.
 
     THE ASSUMPTION THIS RESTS ON, registered here and printed on the page:
     the host's enqueue cost does not itself step at that tread. The dispatch
@@ -2845,22 +2936,35 @@ def native_control(readings: dict, census: PathCensus
             "alignment kernel throughout this ladder, so there is no switch "
             "to show the host-bound probe; UNKNOWN means the instrument was "
             "not demonstrated, not that the design is doubted"]
+    state = (f"the probe's ratio cells were host-bound ({hot} of {judged})"
+             if hot else
+             "the instrument returned no host-bound verdict for the ratio "
+             "cells, so what they timed is not established")
+    native_hot, native_judged, _note = native
+    seen = (f"NATIVE's own cells were host-bound in {native_hot} of "
+            f"{native_judged}" if native_hot else
+            f"NATIVE's own {native_judged} judged cells were NOT called "
+            "host-bound, so the switch below was seen in GPU time and this "
+            "control does not demonstrate the same sensitivity under host "
+            "cost" if native_judged else
+            "NATIVE's own cells carried no host-bound verdict")
     r = readings.get(NATIVE)
     if r is not None and r.real and r.fit.split_tread == want:
         return True, [
-            f"POSITIVE CONTROL CONFIRMED: the probe was host-bound, but it "
-            f"resolved NATIVE's step at tread {want}, where the census puts "
-            f"its kernel switch ({r.fit.step_ms * 1e3:+.2f} us against a "
-            f"threshold of {r.fit.threshold_ms() * 1e3:.2f} us); it has shown "
-            "it can see a kernel switch of this op at this size through the "
-            "host cost present, so the ratio series is scored as evidence",
+            f"POSITIVE CONTROL CONFIRMED: {state}, but the probe resolved "
+            f"NATIVE's step at tread {want}, where the census puts its kernel "
+            f"switch ({r.fit.step_ms * 1e3:+.2f} us against a threshold of "
+            f"{r.fit.threshold_ms() * 1e3:.2f} us); it has shown it can see a "
+            "kernel switch of this op at this size, so the ratio series is "
+            "scored as evidence",
+            f"  {seen}",
             f"  {assumption}"]
     got = ("was not probed" if r is None
            else "resolved no step" if not r.real
            else f"resolved its step at tread {r.fit.split_tread}, not {want}")
     return False, [
-        f"POSITIVE CONTROL NOT CONFIRMED: NATIVE's switch is due at tread "
-        f"{want} and the host-bound probe {got}. UNKNOWN therefore means one "
+        f"POSITIVE CONTROL NOT CONFIRMED: {state}; NATIVE's switch is due at "
+        f"tread {want} and the probe {got}. UNKNOWN therefore means one "
         "specific thing: this probe could not see a kernel switch it was "
         "shown, so a flat ratio series from it certifies nothing, and a step "
         "in it is not evidence of a kernel switch either. What would close "
@@ -3132,8 +3236,10 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "and for this ladder the id bound falls inside it. The ratio "
                "arms are declared past the expert bound so both take one "
                "kernel throughout (the census above, refused otherwise); the "
-               "probe times the alignment op alone along the ladder at each "
-               "declaration and V8 scores the ratio arms' series; and NATIVE, "
+               "probe times the alignment op alone along the ladder once per "
+               "ARM -- NATIVE's declaration, and SHARED's and PRIVATE's id "
+               "sets at the ratio arms' -- and V8 scores both ratio series; "
+               "and NATIVE, "
                "which keeps the study's declaration and its switch, has its "
                "difference from SHARED fitted with a step term so V5 reads the "
                "declaration's per-tile cost with the step out and the step is "
@@ -3436,8 +3542,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         gates.append(Gate("V5", VALIDITY,
                           "the declaration's own per-M-tile cost is bounded",
                           UNKNOWN, "a ladder was not fitted",
-                          f"far edge of b's band < {MACHINERY_BOUND:.0%} of "
-                          "the private slope",
+                          MACHINERY_WANT,
                           "the ratio's distance from the study's own call is "
                           "unbounded",
                           [unmeasurable] if unmeasurable else []))
@@ -4189,7 +4294,7 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
     """The metered part. Appends every cell as it lands, so aborting keeps it.
 
     THE PROBE RUNS FIRST AND CAN END IT. Before a weight is allocated the
-    alignment op is timed along the ladder at both declarations, and V8 is
+    alignment op is timed along the ladder once per arm, and V8 is
     scored on it: a FAIL means this build switches kernel inside the ratio
     arms' ladder, the sweep would measure a slope with a step in it, and the
     sweep is SKIPPED. Seconds, against minutes of card time for an INVALID.
@@ -4251,10 +4356,14 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
         # page still latches INVALID on it, but throwing away the ladder and
         # every other gate's number over an inconclusive probe is the wrong
         # trade on a rented card. So the sweep runs and V8 stays on the page.
+        # NAMING WHAT WAS MEASURED, because this line is the only thing the
+        # pod prints when the arm ends here: the gate's own `measured` string
+        # carries the bound, which of the two ratio series resolved a step,
+        # and the bound over the resolved ones.
         print("SWEEP SKIPPED: V8 came back FAIL, so this build switches "
               "alignment kernel inside the ratio arms' ladder and no slope "
-              "measured here would be free of it. Nothing was allocated and "
-              "nothing was timed.")
+              f"measured here would be free of it ({early.measured}). "
+              "Nothing was allocated and nothing was timed.")
         return ([], BufferProof(parts={}, detail={"skipped": (
                     f"V8 came back {early.verdict} on the probe; the proof "
                     "did not run")},
