@@ -1429,15 +1429,17 @@ def gate_c3_tile_cap(fits) -> Gate:
 
 
 def gate_c4_pooled_alpha(fits) -> Gate:
-    """SURFACE.txt's `0 of 12 fits within 0.05 of 0.558`, re-scored."""
+    """SURFACE.txt's `0 of N fits within 0.05 of 0.558`, re-scored."""
     hits = [f for f in fits if f.contains_pooled]
     return Gate(
         "C4", CLAIM, f"no anchor bracket admits the pooled alpha {POOLED_ALPHA}",
         PASS if not hits else FAIL,
         f"{len(hits)} of {len(fits)} brackets contain {POOLED_ALPHA}",
         "0 brackets",
-        f"SURFACE.txt's line \"alpha = {POOLED_ALPHA} ...: 0 of 12 fits within "
-        "0.05\". That count is a statement about POINT estimates whose anchor is "
+        f"the SURFACE.txt line \"alpha = {POOLED_ALPHA} ...: 0 of N fits within "
+        "0.05\" in each surface arm; the hits listed above say which arm's "
+        "brackets contain it. That count is a statement about POINT estimates "
+        "whose anchor is "
         "unidentified; the listed fits are consistent with the pooled value once "
         "the anchor is bracketed, so the sentence must be withdrawn or requalified.",
         [f"  {f.arm[:26]:26s} {f.model[:14]:14s} G={f.group_m:2d} BM={f.block_m:3d}  "
@@ -1782,9 +1784,10 @@ def render_withdrawals(fits: list[ScoredFit], gates: list[Gate]) -> list[str]:
         hits = [f for f in fits if f.contains_pooled]
         n += 1
         out += ["",
-                f"W{n}. SURFACE.txt's \"alpha = {POOLED_ALPHA} ...: 0 of 12 fits within "
-                f"0.05\" must be withdrawn or requalified. {len(hits)} bracket(s) "
-                f"contain {POOLED_ALPHA}; the 0-of-12 count is a property of an "
+                f"W{n}. The SURFACE.txt \"alpha = {POOLED_ALPHA} ...: 0 of N fits "
+                f"within 0.05\" line must be withdrawn or requalified in every "
+                f"surface arm. {len(hits)} bracket(s) contain {POOLED_ALPHA}, "
+                f"listed by arm under C4; the 0-of-N count is a property of an "
                 "unidentified anchor, not of the data."]
     if "C5" in failed:
         n += 1
