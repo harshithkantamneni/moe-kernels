@@ -5044,40 +5044,20 @@ def test_the_world_that_reaches_a_validity_gates_unknown_branch_is_named_and_run
 
 
 def test_the_driver_and_the_runbook_name_every_verdict_that_skips_the_sweep():
-    """Two pages told an operator the ladder is skipped on a FAIL, and the
-    code skips it on FAIL and UNKNOWN.
+    """The skip is on FAIL ONLY, and both pages say so.
 
-    `run_sweep` guards the skip with `if early.verdict in (FAIL, UNKNOWN)`,
-    and the reason is in the exit-code table rather than in the gate: V8 is a
-    VALIDITY gate, so an UNKNOWN latches the page INVALID exactly as a FAIL
-    does, and nothing measured after the probe re-reads the probe. An
-    operator who had read either page would have expected an UNKNOWN probe to
-    proceed into the ladder and to cost the arm's whole booking for a verdict
-    already in hand.
-
-    Two halves, and each catches what the other cannot. The verdict set is
-    READ out of the guard rather than typed into the loop, so the pages are
-    checked against the code and not against this file's memory of it. The
-    set is also PINNED to FAIL and UNKNOWN, and the pin is the half that
-    catches the regression: a guard narrowed back to FAIL alone would leave
-    both pages promising a skip the code no longer performs, and a
-    derived-only loop would read the narrowed set, ask the pages for FAIL,
-    find it, and pass. Widening the guard fails the pin rather than the
-    pages, which is the prompt to move the guard, the pin and both pages in
-    one edit.
-
-    This reads the guard as source text because the branch behind it needs a
-    CUDA device to reach: `--self-test` plants its samples and never calls
-    `run_sweep`, so no off-GPU test can walk the skip itself."""
+    `run_sweep` guards the skip with `if early.verdict == FAIL:`. It skipped
+    on FAIL and UNKNOWN for one commit, which threw away the ladder and every
+    other gate's number over an inconclusive probe; with NATIVE's switch as
+    V8's positive control, an UNKNOWN is a statement about the instrument and
+    the sweep runs past it. The guard is READ out of the source (the branch
+    needs a CUDA device to reach) and PINNED to FAIL, and both pages must
+    name FAIL as the skip and say an UNKNOWN still runs the ladder."""
     source = (ROOT / "scripts" / "private_weight_reference.py").read_text()
-    guards = re.findall(r"if early\.verdict in \(([^)]*)\):", source)
-    assert len(guards) == 1, (
-        "run_sweep no longer guards the skip with a membership test, so the "
-        f"set of verdicts the two pages must name cannot be read: {guards}")
-    skip_verdicts = {tok.strip() for tok in guards[0].split(",") if tok.strip()}
-    assert skip_verdicts == {"FAIL", "UNKNOWN"}, skip_verdicts
-    # The branch this guard opens is the one that pays for nothing.
-    body = source.split("if early.verdict in (", 1)[1].split("\ndef ", 1)[0]
+    assert not re.findall(r"if early\.verdict in \(", source)
+    guards = re.findall(r"if early\.verdict == (\w+):", source)
+    assert guards == ["FAIL"], guards
+    body = source.split("if early.verdict == FAIL:", 1)[1].split("\ndef ", 1)[0]
     assert "SWEEP SKIPPED" in body
 
     closes = _private_closes_line()
@@ -5088,9 +5068,9 @@ def test_the_driver_and_the_runbook_name_every_verdict_that_skips_the_sweep():
     assert len(runbook_paragraphs) == 1, len(runbook_paragraphs)
     for where, prose in (("arm_closes", driver_clause),
                          ("POD_RUNBOOK.md", runbook_paragraphs[0])):
-        for verdict in sorted(skip_verdicts):
-            assert verdict in prose, (where, verdict, prose)
-        assert "VALIDITY" in prose, (where, prose)
+        assert "FAIL" in prose and "ONLY" in prose, (where, prose)
+        assert "UNKNOWN" in prose, (where, prose)
+        assert "still runs" in prose, (where, prose)
 
 
 def test_the_exfil_line_archives_the_results_root_and_not_only_the_session(tmp_path):

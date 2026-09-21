@@ -249,16 +249,17 @@ Nine copies are declared and six read: 25.4 GB of a 141 GB card, and the
 padding is what keeps both ratio arms on ONE `moe_align_block_size` kernel,
 because vLLM switches kernel at ids < 1024 and experts <= 64 and this ladder
 crosses the id bound between treads 3 and 4. Before the weights are built the
-arm times the alignment op alone along the ladder at both declarations; V8
+arm times the alignment op alone along the ladder, once per arm (NATIVE's
+declaration, and SHARED's and PRIVATE's id sets at the ratio arms'); V8
 refuses the design on that measurement and SKIPS the sweep when it comes back
-FAIL (a step over budget, resolved against its own standard error) and equally
-when it comes back UNKNOWN (over budget but unresolved, or the probe's own
-cells host-bound): V8 is a VALIDITY gate, so an UNKNOWN latches the page
-INVALID just as a FAIL does, and nothing the ladder measures afterwards can
-change a verdict taken before it. The gate's own lines name what would close
-an UNKNOWN -- more `--probe-repeats`, or a probe that keeps the GPU behind
-the host. NATIVE keeps the
-switch, and V5 fits it out.
+FAIL (a step over budget, resolved against its own standard error), and ONLY
+then. An UNKNOWN (over budget but unresolved, or a host-bound probe that did
+not resolve NATIVE's own switch at the census tread) is a statement about the
+instrument, not the design: the ladder still runs, and the page latches
+INVALID on V8, a VALIDITY gate, with every other gate's number beside it. The
+H200 is expected to give a host-bound probe; NATIVE's switch is the positive
+control that lets such a probe earn PASS. NATIVE keeps the switch, and V5
+fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
 V7 (the two arms' clocks agree at every tread), V2 (each copy read by exactly

@@ -54,6 +54,8 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "host-bound-probe"), True),
     (("--self-test", "host-bound-controlled"), True),
     (("--self-test", "ratio-path-split"), True),
+    (("--self-test", "ratio-step-over-budget"), True),
+    (("--self-test", "ratio-step-under-budget"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -913,7 +915,7 @@ def test_the_cost_estimate_prices_the_private_arm_at_alpha_one():
     for alpha in (PW.RETRACTED_ALPHA, PW.ALPHA, 1.0):
         want = (2 * _one_arm_seconds(alpha, **kw)
                 + _one_arm_seconds(1.0, **kw)
-                + PW.probe_seconds(kw["treads"], 2))
+                + PW.probe_seconds(kw["treads"], PW.PROBE_LABELS))
         assert PW.estimated_seconds(CFG, alpha=alpha, **kw) == pytest.approx(
             want, rel=1e-12), alpha
 
@@ -1419,7 +1421,12 @@ def test_the_declaration_fit_takes_natives_step_out_of_v5():
                                 / private.slope_ms, rel=1e-6)
     assert raw > PW.MACHINERY_BOUND, "the planted step is not load-bearing"
     assert PW.gate_v5_machinery(native, shared, private).verdict == exit_codes.FAIL
+    # The fit alone is UNKNOWN: V5 scores b's FAR EDGE, and with no band the
+    # point is all there is. The band from the same noise-free samples PASSES.
     assert PW.gate_v5_machinery(native, shared, private, fit).verdict \
+        == exit_codes.UNKNOWN
+    band, _s, _n = PW.declaration_interval(samples, treads, 4, 50, 0)
+    assert PW.gate_v5_machinery(native, shared, private, fit, band).verdict \
         == exit_codes.PASS
     # And with no switch inside the ladder the fit is the plain line.
     line = PW.declaration_fit(samples, treads, None)
@@ -2508,16 +2515,16 @@ def test_two_probe_repeats_clear_the_floor_and_are_priced_into_the_plan():
     default. `MIN_PROBE_REPEATS` is 2 and `PROBE_REPEATS` is 3, so the default
     run is not refused by its own floor and the operator keeps one step of
     room below it. `--probe-repeats 2` must therefore reach the plan, and the
-    plan must PRICE it: `probe_seconds(treads, 2, repeats)` is `2 declarations
-    x 6 treads x repeats x (PROBE_WARMUP_MS + PROBE_TRIALS x PROBE_TARGET_MS)`
-    = `2 x 6 x repeats x 140 ms`, which is 3.36 s at two repeats and 5.04 s at
-    three.
+    plan must PRICE it: `probe_seconds(treads, PROBE_LABELS, repeats)` is `3
+    series (one per arm) x 6 treads x repeats x (PROBE_WARMUP_MS + PROBE_TRIALS
+    x PROBE_TARGET_MS)` = `3 x 6 x repeats x 140 ms`, which is 5.04 s at two
+    repeats and 7.56 s at three.
 
     THE TWO FIGURES ARE ASSERTED AS FIGURES, not re-derived from the same
     constants the function multiplies, because a test that recomputes
     `probe_seconds`' one line and compares cannot notice the budget constants
     moving underneath the prose above. If PROBE_WARMUP_MS, PROBE_TRIALS or
-    PROBE_TARGET_MS changes, 3.36 and 5.04 are what has to be re-derived and
+    PROBE_TARGET_MS changes, 5.04 and 7.56 are what has to be re-derived and
     this docstring is what has to be rewritten.
     """
     assert PW.MIN_PROBE_REPEATS == 2
@@ -2525,10 +2532,10 @@ def test_two_probe_repeats_clear_the_floor_and_are_priced_into_the_plan():
 
     treads = PW.ladder_treads(CFG, PW.DEFAULT_BLOCK_M, PW.DEFAULT_TREADS)
     assert len(treads) == 6, treads
-    at_two = PW.probe_seconds(treads, 2, PW.MIN_PROBE_REPEATS)
-    at_default = PW.probe_seconds(treads, 2, PW.PROBE_REPEATS)
-    assert at_two == pytest.approx(3.36), at_two
-    assert at_default == pytest.approx(5.04), at_default
+    at_two = PW.probe_seconds(treads, PW.PROBE_LABELS, PW.MIN_PROBE_REPEATS)
+    at_default = PW.probe_seconds(treads, PW.PROBE_LABELS, PW.PROBE_REPEATS)
+    assert at_two == pytest.approx(5.04), at_two
+    assert at_default == pytest.approx(7.56), at_default
     # A floor on a knob that changed nothing downstream would show up as one
     # figure twice on the plan page.
     assert f"{at_two:.0f}" != f"{at_default:.0f}", (at_two, at_default)
@@ -2876,14 +2883,13 @@ def test_every_planted_worlds_whole_report_document_is_strict_json(tmp_path):
 # 16. the page a V8 early exit prints: analyse() over NO samples at all
 # --------------------------------------------------------------------------
 
-#: The two ways `run_sweep` can return before a weight is allocated, and the
-#: V8 verdict each leaves on the page. V8 is a VALIDITY gate and
-#: `exit_codes.classify` counts both of these verdicts against it, which is
-#: why the sweep is skipped for both; PASS is the only V8 verdict that lets
-#: the ladder run.
+#: The worlds in which `run_sweep` returns before a weight is allocated, and
+#: the V8 verdict each leaves on the page. FAIL ONLY: an UNKNOWN is a
+#: statement about the instrument, and the ladder runs past it (see
+#: `test_a_v8_unknown_runs_the_sweep_and_only_a_fail_skips_it`).
 V8_EARLY_EXITS: tuple[tuple[str, str], ...] = (
-    ("host-bound-probe", exit_codes.UNKNOWN),
     ("ratio-path-split", exit_codes.FAIL),
+    ("ratio-step-over-budget", exit_codes.FAIL),
 )
 
 
@@ -2922,7 +2928,14 @@ def _stand_in_for_vllm(monkeypatch):
         monkeypatch.setitem(sys.modules, name, mod)
 
 
-def _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name: str):
+class _ReachedAllocation(Exception):
+    """Raised where `run_sweep` resets the peak-memory counter, the first line
+    past the V8 early return: reaching it is what "the sweep ran" means off a
+    GPU."""
+
+
+def _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name: str,
+                    reach: bool = False):
     """Drive the real `run_sweep` to its V8 early return in `world_name`, and
     hand back what it returned, what it printed and the plan the page needs.
 
@@ -2941,11 +2954,13 @@ def _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name: str):
                        for arm in PW.ARMS}
     census = PW.path_census(CFG, treads, block_m, declared_by_arm)
     world = PW.WORLDS[world_name]
+    args = PW.build_parser().parse_args(["--device-memory-gb", "140"])
+    stream_ms = WEIGHTS.weight_stream_ms(CFG, args.dtype, 4000.0)
 
     def planted(cfg, **kwargs):
         return PW.planted_probe(world, cfg, block_m=block_m, treads=treads,
                                 declared_by_arm=declared_by_arm, census=census,
-                                noise=0.0, seed=0)
+                                noise=0.0, seed=0, weight_stream_ms=stream_ms)
 
     def never(*a, **k):
         raise AssertionError("build_private_weights ran past the early return")
@@ -2959,8 +2974,22 @@ def _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name: str):
     out_dir.mkdir(parents=True)
     csv_path = out_dir / "cells.csv"
     store = PW.Store(csv_path, PW.CSV_FIELDS + PW.PROVENANCE_COLUMNS)
-    args = PW.build_parser().parse_args(["--device-memory-gb", "140"])
-    stream_ms = WEIGHTS.weight_stream_ms(CFG, args.dtype, 4000.0)
+    if reach:
+        import torch
+
+        def reached(*a, **k):
+            raise _ReachedAllocation
+        monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", reached)
+        with pytest.raises(_ReachedAllocation):
+            PW.run_sweep(
+                args, CFG, block_m=block_m, treads=treads, pinned={},
+                csv_path=csv_path, cache_root=out_dir / "triton-cache",
+                store=store, prov=None, dtype=args.dtype,
+                copies_declared=copies_declared, census=census,
+                stream_ms=stream_ms)
+        return types.SimpleNamespace(log=capsys.readouterr().out,
+                                     treads=treads, census=census,
+                                     stream_ms=stream_ms)
     samples, proof, weight_delta, high_water, probe = PW.run_sweep(
         args, CFG, block_m=block_m, treads=treads, pinned={},
         csv_path=csv_path, cache_root=out_dir / "triton-cache", store=store,
@@ -3027,7 +3056,7 @@ def test_the_page_a_v8_early_exit_prints_scores_every_gate_and_is_invalid(
     group is empty here, and an exception there reaches `main` as ERROR (4),
     which `ledger_state` in the session driver maps to RETRY -- so a build that
     can never pass V8 would be re-rented instead of reported. Both early-exit
-    causes are driven, because the page must be the same one except at V8.
+    worlds are driven, because the page must be the same one whatever the step.
     """
     skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
     assert skipped.samples == []
@@ -3061,7 +3090,7 @@ def test_the_page_a_v8_early_exit_prints_scores_every_gate_and_is_invalid(
     # The hot count is the WORLD's plant, named here rather than read back out
     # of `probe.host_bound`, which is the call `gate_v8_alignment` itself makes.
     probed = len(skipped.treads) * PW.PROBE_REPEATS
-    hot = probed if world_name == "host-bound-probe" else 0
+    hot = 0
     assert skipped.probe.host_bound(PW.SHARED)[:2] == (hot, probed)
     assert any(f"called {hot} of {probed} probed cells HOST-BOUND" in ln
                for ln in report.gates[8].lines), report.gates[8].lines
@@ -3151,67 +3180,149 @@ def test_the_memory_refusal_offers_no_remedy_the_census_refuses_first():
     assert "changes alignment kernel at tread" in census.stdout
 
 
-def test_a_v8_unknown_skips_the_sweep_exactly_as_a_v8_fail_does(
-        monkeypatch, tmp_path, capsys):
-    """WHY THE EMPTY PAGE IS REACHABLE AT ALL. V8 is a VALIDITY gate, and
-    `exit_codes.classify` scores UNKNOWN on a VALIDITY gate exactly as it
-    scores FAIL, so a probe that came back UNKNOWN latches INVALID whatever the
-    ladder measures afterwards. `run_sweep` used to return early only on
-    `early.verdict == FAIL`, so ANY of V8's UNKNOWN branches paid for the whole
-    ladder, the private weight allocation and the five-part buffer proof to
-    arrive at a verdict already in hand before any of it. This patch adds one
-    more such branch -- every probed cell timing the host's enqueue cost rather
-    than the alignment kernel, which the 'host-bound-probe' world plants -- and
-    widens the early return to cover all of them.
-    """
-    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
-    assert skipped.samples == []
-    assert skipped.proof.parts == {} and skipped.proof.synthetic is False
-    assert skipped.weight_delta is None and skipped.high_water is None
-    # Nothing was timed, so no cell ever reached the store and its file was
-    # never created; `build_private_weights` not raising is what says no weight
-    # was allocated.
-    assert not skipped.csv_path.exists()
-    # V8 on the probe that ended it is UNKNOWN for the host-bound reason, not
-    # for a probe that was never taken.
-    gate = PW.gate_v8_alignment(skipped.probe, treads=skipped.treads,
-                                census=skipped.census,
-                                weight_stream_ms=skipped.stream_ms)
-    assert gate.verdict == exit_codes.UNKNOWN
-    hot, judged, note = skipped.probe.host_bound(PW.SHARED)
-    assert (hot, judged) == (18, 18) and note == "planted host-bound"
-    assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED")
-               for ln in gate.lines), gate.lines
-    skip_line = _one_skip_line(skipped.log)
-    assert "V8 came back UNKNOWN" in skip_line
-    assert "V8 is a VALIDITY gate" in skip_line
-    assert "latch INVALID after the whole ladder was paid for" in skip_line
-    assert skip_line.endswith("Nothing was allocated and nothing was timed.")
+# --------------------------------------------------------------------------
+# 17. the five judgment calls, decided
+# --------------------------------------------------------------------------
+
+def _v5_ladders(native_per_tile_ms: float):
+    """Native, shared and private ladders over six treads, noise-free, with
+    `native_per_tile_ms` of declaration cost per M-tile in NATIVE alone."""
+    samples = PW.planted_samples(
+        PW.World("x", "x", {}, machinery_ms_per_tile=native_per_tile_ms), CFG,
+        block_m=32, treads=[1, 2, 3, 4, 5, 6], repeats=3,
+        alpha_shared=PW.ALPHA, ridge=160.0, bandwidth_gbps=4000.0, b=2,
+        noise=0.0, seed=0, copies_declared=9)
+    return tuple(PW.ladder_for(samples, a) for a in PW.ARMS)
 
 
-def test_the_sweep_skipped_line_says_which_of_the_two_v8_verdicts_ended_it(
+def test_v5_fails_a_declaration_cost_a_tenth_admitted_and_reads_the_far_edge():
+    """MACHINERY_BOUND was 0.10, which admits a ratio error larger than
+    ALPHA_BAND's entire 0.059 width. At 0.03, a declaration cost of 5% of the
+    private slope FAILs (it PASSED before); and a point at 1% whose band
+    reaches 4% FAILs too, because the bound is scored on b's FAR edge."""
+    assert PW.MACHINERY_BOUND == 0.03
+    assert PW.MACHINERY_BOUND < ALPHA_BAND_WIDTH()
+    native, shared, private = _v5_ladders(0.0)
+    fit = PW.DeclarationFit(None, None, 0.05 * private.slope_ms, 0.0, (), 4)
+    band = (0.045 * private.slope_ms, 0.055 * private.slope_ms)
+    assert PW.gate_v5_machinery(native, shared, private, fit, band).verdict \
+        == exit_codes.FAIL
+    fit = PW.DeclarationFit(None, None, 0.01 * private.slope_ms, 0.0, (), 4)
+    wide = (-0.04 * private.slope_ms, 0.02 * private.slope_ms)
+    gate = PW.gate_v5_machinery(native, shared, private, fit, wide)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+    assert gate.measured.startswith("4.00% of the private slope at b's far edge")
+    tight = (0.005 * private.slope_ms, 0.015 * private.slope_ms)
+    assert PW.gate_v5_machinery(native, shared, private, fit, tight).verdict \
+        == exit_codes.PASS
+
+
+def ALPHA_BAND_WIDTH() -> float:
+    return PW.ALPHA_BAND[1] - PW.ALPHA_BAND[0]
+
+
+def test_c1_passes_only_an_interval_inside_the_band_and_fails_one_starting_at_its_edge():
+    """C1 PASSed REFIT-CONFIRMED with an interval reaching into
+    ABOVE-THE-REFIT-BAND; now the whole interval must sit inside ALPHA_BAND.
+    And the FAIL test was closed at the upper edge while membership is
+    half-open, so an interval starting AT 0.588 was UNKNOWN; it misses the
+    band and is FAIL."""
+    lo_edge, hi_edge = PW.ALPHA_BAND
+    assert PW.c1_verdict(PW.ALPHA, (lo_edge + 0.005, hi_edge + 0.007)) \
+        == exit_codes.UNKNOWN
+    assert PW.c1_verdict(PW.ALPHA, (lo_edge - 0.004, hi_edge - 0.004)) \
+        == exit_codes.UNKNOWN
+    assert PW.c1_verdict(hi_edge + 0.002, (hi_edge, hi_edge + 0.01)) \
+        == exit_codes.FAIL
+    assert PW.outcome_for(hi_edge)[0] != PW.outcome_for(PW.ALPHA)[0]
+    assert PW.c1_verdict(PW.ALPHA, (lo_edge, hi_edge - 1e-9)) == exit_codes.PASS
+
+
+def test_the_probe_times_private_ids_as_a_third_series_and_prices_it():
+    """PRIVATE's ids are probed at the shared declaration: ~2.5 s more on
+    the pod, and the only measurement of the counter asymmetry the plan page
+    registers."""
+    assert PW.PROBE_LABELS == len(PW.ARMS) == 3
+    treads = [1, 2, 3, 4, 5, 6]
+    assert PW.probe_seconds(treads, 1) == pytest.approx(2.52)
+    probe = PW.planted_probe(PW.WORLDS["refit"], CFG, block_m=32, treads=treads,
+                             declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72,
+                                              PW.PRIVATE: 72},
+                             census=_census(), noise=0.002, seed=0)
+    assert probe.labels() == [PW.NATIVE, PW.SHARED, PW.PRIVATE]
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert any(ln.startswith("slope(private ids) - slope(shared ids) = ")
+               and "us per tread" in ln for ln in gate.lines), gate.lines
+
+
+def test_a_step_in_private_ids_alone_is_bounded_and_fails_v8():
+    """step_bias assumed the step COMMON to both ratio arms and nothing
+    checked it. A 0.5 ms step in PRIVATE's series alone moves the ratio's
+    denominator: pre-change V8 read only SHARED and PASSED it."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4),
+                         PW.PRIVATE: _series(0.5, 4)})
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.FAIL, gate.lines
+    assert any("NOT the same step" in ln for ln in gate.lines), gate.lines
+    lev = PW.leverage(treads, 4)
+    want = (lev * 0.5) / (0.64 + lev * 0.5)
+    assert PW.pair_step_bias(None, (0.5, 4), treads, 0.64) == pytest.approx(want)
+    # A COMMON step is bounded no looser than step_bias.
+    assert PW.pair_step_bias((0.02, 4), (0.02, 4), treads, 0.64) \
+        <= PW.step_bias(0.02, treads, 4, 0.64)
+
+
+@pytest.mark.parametrize("name,budgets,v8", [
+    ("ratio-step-over-budget", 1.5, exit_codes.FAIL),
+    ("ratio-step-under-budget", 0.7, exit_codes.PASS)])
+def test_planted_worlds_sit_either_side_of_the_v8_budget(name, budgets, v8):
+    """No world sat within 2x of V8's budget. These two plant a real common
+    ratio step sized IN BUDGETS at the run's own weight stream."""
+    world = PW.WORLDS[name]
+    assert world.ratio_probe_budgets == budgets and world.expect["V8"] == v8
+    got = run(["--self-test", name])
+    line = [r for r in exit_codes.parse_result_lines(got.stdout)
+            if r.name == "V8"]
+    assert [r.verdict for r in line] == [v8], got.stdout[-2000:]
+    bias = float(re.search(r"bias <= ([0-9.]+)", got.stdout).group(1))
+    assert bias == pytest.approx(budgets * PW.ALIGN_STEP_RATIO_BUDGET, rel=0.05)
+
+
+def test_a_v8_unknown_runs_the_sweep_and_only_a_fail_skips_it(
         monkeypatch, tmp_path, capsys):
-    """ONE MESSAGE FOR TWO CAUSES NAMES NEITHER. A FAIL says the build switches
-    alignment kernel inside the ratio arms' ladder, which is a statement about
-    the build and is not fixed by re-running; an UNKNOWN says the probe has not
-    shown it either way, which is a statement about the probe, and
-    `gate_v8_alignment`'s own lines name what would close it. The single pre-patch
-    sentence, 'V8 FAILS on the probe, so this build switches alignment
-    kernel...', was printed for the FAIL and was the only branch there was.
+    """THE REVERT, and why it is safe only after NATIVE became V8's positive
+    control. A FAIL is a statement about the BUILD (it switches alignment
+    kernel inside the ratio arms' ladder) and skipping the sweep saves the
+    card's minutes. An UNKNOWN is now a statement about the INSTRUMENT: the
+    probe could not see NATIVE's own switch at the census tread. The page
+    still latches INVALID on V8, but the ladder and every other gate's number
+    are worth having on a rented card, so `run_sweep` goes on to allocate.
+    Pre-revert the host-bound-probe world stopped here with SWEEP SKIPPED.
     """
-    said = {}
+    ran = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe",
+                          reach=True)
+    assert "SWEEP SKIPPED" not in ran.log
+    assert "V8 came back UNKNOWN on the probe: the sweep RUNS" in ran.log
+    # And a FAIL still stops before a weight is allocated.
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "ratio-path-split")
+    assert skipped.samples == [] and not skipped.csv_path.exists()
+    assert _one_skip_line(skipped.log).startswith("SWEEP SKIPPED: V8 came back FAIL")
+
+
+def test_the_sweep_skipped_line_names_the_build_and_an_unknown_prints_none(
+        monkeypatch, tmp_path, capsys):
+    """A FAIL says the build switches alignment kernel inside the ratio arms'
+    ladder, which is not fixed by re-running, and it is the only verdict that
+    prints SWEEP SKIPPED. Every FAIL world prints the same sentence."""
     for world_name, verdict in V8_EARLY_EXITS:
-        skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name)
-        said[verdict] = _one_skip_line(skipped.log)
-    assert set(said) == {exit_codes.FAIL, exit_codes.UNKNOWN}
-    fail, unknown = said[exit_codes.FAIL], said[exit_codes.UNKNOWN]
-    assert fail != unknown
-    assert "V8 came back FAIL" in fail and "V8 came back UNKNOWN" not in fail
-    assert "switches alignment kernel inside the ratio arms' ladder" in fail
-    assert "switches alignment kernel" not in unknown
-    assert ("has not shown this build's ratio arms share one alignment kernel"
-            in unknown)
-    for line in (fail, unknown):
+        assert verdict == exit_codes.FAIL
+        line = _one_skip_line(
+            _skip_the_sweep(monkeypatch, tmp_path, capsys, world_name).log)
+        assert "switches alignment kernel inside the ratio arms' ladder" in line
+        assert "UNKNOWN" not in line
         assert line.endswith("Nothing was allocated and nothing was timed.")
 
 
@@ -3225,7 +3336,7 @@ def test_the_skipped_page_prints_five_not_run_parts_and_never_its_own_reason(
     V8's actual verdict (it used to read 'V8 failed on the probe' on the
     UNKNOWN path too, and report.json contradicted the page).
     """
-    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "ratio-path-split")
     assert len(PW.PROOF_PARTS) == 5          # the five this test is named for
     lines = skipped.proof.lines()
     assert len(lines) == len(PW.PROOF_PARTS)
@@ -3233,7 +3344,7 @@ def test_the_skipped_page_prints_five_not_run_parts_and_never_its_own_reason(
     assert set(skipped.proof.detail) == {"skipped"}
     assert not any("skipped" in ln for ln in lines)
     assert skipped.proof.detail["skipped"].startswith(
-        "V8 came back UNKNOWN on the probe")
+        "V8 came back FAIL on the probe")
     report = _page_after(skipped)
     v2 = next(g for g in report.gates if g.tag == "V2")
     assert v2.verdict == exit_codes.UNKNOWN
@@ -3256,7 +3367,7 @@ def test_the_skipped_pages_iteration_line_blames_a_world_the_pod_never_ran(
     return's zero cells, none of which ran at all, print the SAME sentence,
     and it names only the first.
     """
-    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "host-bound-probe")
+    skipped = _skip_the_sweep(monkeypatch, tmp_path, capsys, "ratio-path-split")
     empty = PW._iters_line(skipped.samples)
     assert empty == ("iterations per trial: none recorded (nothing was timed; "
                      "a planted world's cells carry iters=0)")
