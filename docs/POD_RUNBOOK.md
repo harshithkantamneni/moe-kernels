@@ -314,6 +314,29 @@ and that output, not a hand-computed difference, is the figure to quote.
 
 ---
 
+## The alpha(G) chain (2026-09-22): the next session's command
+
+The next pod session is one sequenced ledger, not the arm by hand:
+
+```
+bash scripts/alpha_g_chain.sh --dry-run     # plan and price; nothing measured
+bash scripts/alpha_g_chain.sh               # a new chain session on this card
+bash scripts/alpha_g_chain.sh --resume      # continue the latest one
+```
+
+It runs, in order: both arms' `--self-test`; the driver's thermal, calibrate
+and pin_probe-n64-g1 in the chain's own session directory; `clock_elasticity`
+at each G of {1, 4, 16, 64} with the three cap-binding duty states, so every
+G of the ladder has its own per-M-tile elasticity and a band (RAW-STANDS: the
+ratio beside it is a re-read fraction; CLOCK-CARRIES: a time ratio); then
+`private_weight_reference` at `--duty 0.5` for every G at seed 0, then 1,
+then 2, each later seed scored with the earlier ones through
+`--replicate-of`. `$SESSION/CHAIN.tsv` is the ledger, `$SESSION/PAIRS.tsv`
+the table (G, seed, ratio, interval, exit word, duty, run id, eta and band),
+logs under `$SESSION/chain-logs/`. The laptop dry run prices it at about
+140 min of arms plus overhead, about $11 at $4.59/h: book 4 h. The exfil
+line is printed at the end; copy it off before releasing the pod.
+
 ## Before you rent anything
 
 All of this runs on a laptop, costs nothing, and catches most of what would
