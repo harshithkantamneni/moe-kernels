@@ -4062,14 +4062,23 @@ def planted_timings(cfg, roof: Roof, b: int, rows_by_tile: dict[int, list[int]],
 #: VERDICT that no world reaches is a branch nobody has executed, which is how
 #: the (C1 PASS, C2 PASS, C3 FAIL) path stayed unexercised until 2026-09-02.
 #:
-#: Each row is `(name, alpha, overhead_ms, gemm_share, gate, expected, verdict)`.
+#: Each row is `(name, alpha, overhead_ms, gemm_share, gate, expected, verdict)`,
+#: where `alpha` is a number or `("cap/ridge", fraction)`: a world whose story
+#: is "capped below the ridge" is planted as a FRACTION of whatever ridge the
+#: roof it runs on carries, never as an alpha. Until 2026-09-21 the two capped
+#: worlds planted alpha 1.00, which put the subject at 128/ridge of the roof, a
+#: calibration-dependent number (0.79 at ridge 162.8, 0.85 at 151.4); the
+#: fourth H200 calibration moved the ridge to 151.4, the unlocated world's gap
+#: to its control fell under CONTROL_SEPARATION, and a planted world read the
+#: wrong verdict on a laptop. `self_test` resolves the fraction against the
+#: roof it is handed.
 SELF_TEST_WORLDS = (
-    # cap(128) = 128 Op/B against a ridge of ~163: the memory branch binds at
-    # every tread and the curve is flat below the roof. cap(256) = 256 Op/B is
-    # above the ridge, so the control is compute bound, reaches the roof, and
-    # C4 locates the ceiling. This is the study's own hypothesis.
-    ("capped      alpha 1.00", 1.00, 0.05, 1.00, "C2", True, BINDING),
-    # The retracted world. cap(128) = 1280 Op/B, ten times the H200 ridge, so
+    # cap(128) = 0.80 of the ridge, on whatever roof this runs on: the memory
+    # branch binds at every tread and the curve is flat below the roof.
+    # cap(256) = 1.60 of the ridge, so the control is compute bound, reaches
+    # the roof, and C4 locates the ceiling. This is the study's own hypothesis.
+    ("capped      cap 0.80 ridge", ("cap/ridge", 0.80), 0.05, 1.00, "C2", True, BINDING),
+    # The retracted world. cap(128) = 1280 Op/B, eight times the H200 ridge, so
     # nothing is memory bound and the subject reaches the roof.
     ("uncapped    alpha 0.10", 0.10, 0.05, 1.00, "C1", False, NOT_BINDING),
     # A fused layer with a 5 ms FIXED cost. Nothing is capped; throughput climbs
@@ -4084,12 +4093,13 @@ SELF_TEST_WORLDS = (
     # existed the branch that says it was never executed.
     ("layer-bound alpha 0.10, GEMMs get 0.75", 0.10, 0.05, 0.75, "C3", False,
      NOT_TILE),
-    # THE WORLD THE PUBLISHED CORPUS DESCRIBES. Capped at 128 and the layer
-    # keeps 45% of itself, so the subject sits at 0.42 and the control at 0.55:
-    # a real, tile-dependent gap of 0.13, with the control nowhere near the
-    # roof. C4 FAILs and the verdict is the third outcome. The published H200
-    # arm reads 0.468 and 0.526 at BLOCK_SIZE_N=64, GROUP_SIZE_M=1.
-    ("unlocated   alpha 1.00, GEMMs get 0.55", 1.00, 0.05, 0.55, "C4", False,
+    # THE WORLD THE PUBLISHED CORPUS DESCRIBES. Capped at 0.80 of the ridge and
+    # the layer keeps 45% of itself, so the subject sits at 0.80 x 0.55 = 0.44
+    # and the control at 0.55: a real, tile-dependent gap of 0.11, with the
+    # control nowhere near the roof. C4 FAILs and the verdict is the third
+    # outcome. The published H200 arm reads 0.468 and 0.526 at BLOCK_SIZE_N=64,
+    # GROUP_SIZE_M=1.
+    ("unlocated   cap 0.80 ridge, GEMMs get 0.55", ("cap/ridge", 0.80), 0.05, 0.55, "C4", False,
      GAP_UNLOCATED),
 )
 
@@ -4149,6 +4159,9 @@ def self_test(cfg, roof: Roof, b: int, *, r_min: int, r_max: int,
     quads: set[tuple] = set()
     real_verdicts: set[str] = set()
     for name, alpha, overhead, share, moves, expect, want in SELF_TEST_WORLDS:
+        if isinstance(alpha, tuple):
+            # ("cap/ridge", f): plant the cap as a fraction of THIS roof's ridge
+            alpha = 2 * SUBJECT_BLOCK_M / (b * alpha[1] * roof.ridge)
         timings = planted_timings(cfg, roof, b, grid, alpha=alpha,
                                   overhead_ms=overhead, reps=reps, noise=noise,
                                   seed=seed, gemm_share=share)

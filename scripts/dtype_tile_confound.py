@@ -148,10 +148,14 @@ HIGH: `LadderFit.alpha` returns `(alpha_b + phi) / (1 + phi + delta)` (EXA,
 `moe/bench/ai_model.py`), so the LIN ceiling is the exact one times
 `1 + phi + delta`, and `alpha_a` inside `phi` is unmeasured, so the factor is a
 BRACKET. At GROUP_SIZE_M = 1 with the pooled level 0.84 and BLOCK_SIZE_M = 128
-the LIN ceiling is 152.4 FLOP/byte against the H200's measured ridge of 162.8,
-and dividing it by any factor above 1 only lowers it: the configuration vLLM's
-fallback ladder holds across the whole decode range cannot be compute bound at
-any batch, a fortiori. Where the tuned file lifts the swizzle to 16 -- mixtral
+the LIN ceiling is 152.4 FLOP/byte against a ridge this card has read as 162.8,
+152.8, 155.9 and 151.4 across four calibrations, i.e. INSIDE the card's own
+between-pattern ridge band on every one of them (141.6-154.1 on the 2026-09-21
+file), the region `calibrate.py` defines as unresolved by a calibration; and
+dividing the ceiling by any factor above 1 only lowers it. So whether the
+configuration vLLM's fallback ladder holds across the whole decode range ever
+reaches the compute branch is not decidable on this ruler, a fortiori not
+plannable. Where the tuned file lifts the swizzle to 16 -- mixtral
 above M=448 -- an earlier version of this paragraph said "alpha falls to 0.68,
 the ceiling rises to 188, and the compute branch IS reachable". That sentence
 does not survive (EXA). 188 is the LIN ceiling at the pooled 0.68; it stays
@@ -1155,9 +1159,11 @@ def crossing_bracket_cells(cells: list[Cell], bracket: float = CROSSING_BRACKET
 # MEASURED RIDGE, AND ITS OWN DRY RUN REFUTED THAT. Arithmetic intensity is
 # BOUNDED, and at the swizzle vLLM actually picks -- GROUP_SIZE_M = 1, pooled
 # alpha level 0.84 -- BLOCK_SIZE_M = 128 has a LIN ceiling `2 BM / (alpha b)`
-# of 152.4 FLOP/byte against a ridge of 162.8, and the exact ceiling is lower
-# by `1 + phi + delta` (EXA). That configuration cannot be
-# compute bound at any batch, so cells the byte model labelled "compute" were
+# of 152.4 FLOP/byte, inside the card's own ridge band on every calibration it
+# has had (162.8 to 151.4; band 141.6-154.1 on 2026-09-21), and the exact
+# ceiling is lower by `1 + phi + delta` (EXA). Whether that configuration ever
+# reaches the compute branch is unresolved by this ruler, so cells the byte
+# model labelled "compute" were
 # still on the memory branch, `rc` was a second `rm`, and the predicted shift
 # came out at a meaningless 1.000. Assuming the label is how a gate stops being
 # able to fail.

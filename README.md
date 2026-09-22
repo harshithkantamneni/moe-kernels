@@ -26,7 +26,7 @@ the right statistic, since every expert is the mean.
 
 Under skewed routing it stops being. Arithmetic intensity works out to
 rows-per-expert, so on this H200 an expert crosses the roofline ridge at about
-156 rows (155.9 FLOP/byte on the card's 2026-09-10 calibration), and a skewed
+151 rows (151.4 FLOP/byte on the card's 2026-09-21 calibration), and a skewed
 launch contains experts on both sides of it at once: at
 `zipf:1.2` and 4096 tokens, 35 experts are compute-bound and hold 73% of the
 rows while 221 are memory-bound. That is one draw, and a typical one: over 40
@@ -45,8 +45,10 @@ sessions' compute ceilings failing to reproduce, no card's own ridge, and every
 published ladder report scored against it has been rescored to the attached
 card's own calibration, H200 162.8 and A100 145.8 FLOP/byte). The H200's own
 ridge has since moved again, to 155.9 on the 2026-09-10 calibration, because
-that session sampled the dense GEMM's clock while it ran rather than after it.
-Three calibrations of one card now read 162.8, 152.8 and 155.9, which is the
+that session sampled the dense GEMM's clock while it ran rather than after it,
+and to 151.4 on the 2026-09-21 one. Four calibrations of one card on this
+branch now read 162.8, 152.8, 155.9 and 151.4 (a fifth, 152.9 on 2026-09-14,
+sits unadopted on `pod-h200-session3`), which is the
 same non-reproducing compute term the paragraph above describes and is why the
 band was withdrawn rather than widened. The number to quote is the ridge of the
 calibration a row was measured against, and
@@ -225,7 +227,7 @@ break CUDA-graph capture and CUDA graphs are how MoE inference actually runs.
 
 ## Status
 
-Harness complete; 4764 tests collected off-GPU (`pytest --collect-only -q`;
+Harness complete; 4766 tests collected off-GPU (`pytest --collect-only -q`;
 `tests/test_docs.py` fails when this line goes stale). 14 published arms in
 `results/published/`: 11 carry a `merged.csv`, 100,144 rows in all, 72,760 of
 them current (the rest superseded and kept for provenance), and 3 are ladder

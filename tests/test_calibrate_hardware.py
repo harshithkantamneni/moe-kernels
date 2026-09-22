@@ -406,6 +406,36 @@ def test_every_gate_prints_one_result_line_and_nothing_else_does(capsys):
     assert {ln.verdict for ln in lines} == {EX.PASS}
 
 
+def test_the_printed_page_scores_each_gemm_clocks_own_drift():
+    """Session 4's page read `clock, fp8 GEMM 1395 MHz median of [...], spread
+    6.4%` and no verdict, while the block it printed from carried
+    `clock_drift_ok: false` (1395 -> 1320, 5.4%). The page prints the DRIFT
+    verdict each block carries, says the fp8 one is scored by no gate, and the
+    RESULT lines do not change, because no gate was added."""
+    cal = calibration(
+        gemm_clock={"median_mhz": 1455, "samples": [1455, 1440, 1455, 1455, 1470],
+                    "spread_pct": 2.04, "after_idle_mhz": 1470,
+                    "sm_clock_start_mhz": 1455, "sm_clock_end_mhz": 1470,
+                    "clock_drift_ok": True},
+        fp8_gemm_clock={"median_mhz": 1395, "samples": [1395, 1350, 1395, 1410, 1320],
+                        "spread_pct": 6.38, "after_idle_mhz": 1320, "power_w": 689.0,
+                        "sm_clock_start_mhz": 1395, "sm_clock_end_mhz": 1320,
+                        "clock_drift_ok": False})
+    lines = CH.clock_lines(cal)
+    bf16 = next(ln for ln in lines if "clock, bf16 GEMM" in ln)
+    fp8 = next(ln for ln in lines if "clock, fp8 GEMM" in ln)
+    assert "DRIFT PASS (1455 -> 1470 MHz)" in bf16
+    assert "scored by no gate" not in bf16
+    assert "DRIFT FAIL (1395 -> 1320 MHz)" in fp8
+    assert "scored by no gate" in fp8 and "UNDER_LOAD_BLOCKS" in fp8
+    assert "published as measured" in fp8
+    # A block written before the verdict existed prints as it always did.
+    assert all("DRIFT" not in ln for ln in CH.clock_lines(calibration()))
+    # And no RESULT line moved: the verdict is a printed fact, not a gate.
+    assert (len(CH.score(cal, H200_PIN, H200_MAX_SM))
+            == len(CH.score(calibration(), H200_PIN, H200_MAX_SM)))
+
+
 # --------------------------------------------------------------------------
 # where it writes
 # --------------------------------------------------------------------------
@@ -867,8 +897,9 @@ def test_the_committed_calibration_in_this_tree_still_passes_the_new_gate():
     # threshold was the module literal -- in a test whose docstring says it
     # reads the file "which is R2". `calibrate_hardware` now writes
     # `observed.clocks_max_sm_mhz` on every run, so the next recalibration
-    # supplies it; the committed file predates that key, hence the fallback,
-    # and the literal is admissible only because a maximum SM clock is a
+    # supplies it; the 2026-09-10 file predated that key (hence the fallback,
+    # which the 2026-09-21 file's own `clocks_max_sm_mhz: 1980` no longer
+    # takes), and the literal is admissible only because a maximum SM clock is a
     # property of the PART and never derived from a calibration. It matters on
     # an H200 NVL, which torch names "NVIDIA H200" identically and which
     # h200_nvl.yaml documents as a clock-cut part: a recalibration there lands

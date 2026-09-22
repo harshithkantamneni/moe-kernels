@@ -260,8 +260,9 @@ def test_two_models_go_from_a_half_to_agreement_on_the_last_crossing(model, firs
 def test_rows_per_expert_at_the_last_crossing_lands_near_the_card_s_own_ridge():
     """Why the ambiguity is worth resolving rather than averaging over. `2R/b`
     at bf16 puts the crossing at `rows_per_expert = ridge`, and the H200's own
-    ridge is 155.9 (`measured_nvidia_h200.yaml`, recalibrated 2026-09-10 at
-    c0644be; 152.8 from 2026-09-09 at ab61e55, 162.8 before that, and the
+    ridge is 151.4 (`measured_nvidia_h200.yaml`, recalibrated 2026-09-21 on
+    session 4; 155.9 from 2026-09-10 at c0644be, 152.8 from 2026-09-09 at
+    ab61e55, 162.8 before that, and the
     160.3-176.2 band this test scored against before 2026-09-02 was two
     compute calibrations disagreeing).
 

@@ -534,14 +534,16 @@ calibration of `docs/INSTRUMENTATION.md` defect 7, and `recompute_ceilings.py` i
 the wrong tool for it. The published arm stays refused until its rows are
 re-measured.
 
-**Prediction**, from the three existing H200 calibrations:
+**Prediction**, from the four H200 calibrations committed on this branch
+(2026-09-02, 09-09, 09-10, 09-21; a fifth, 152.9 on 2026-09-14, sits on
+`pod-h200-session3` unadopted and is superseded by the 09-21 file):
 
 | quantity | expect | note |
 |---|---|---|
-| bandwidth, triad | 4374-4377 GB/s | reproduces to 0.06% across sessions |
-| dense bf16 | 701-771 TFLOP/s | the term that does NOT reproduce: 9.9% spread |
-| bf16 ridge | about 155.9 FLOP/byte, band 147.9-155.9 | the card's 2026-09-10 calibration, 682.1 TFLOP/s over 4374.3 GB/s. This row said 152.8 from the 2026-09-09 calibration until 2026-09-10, 162.8 from the 2026-09-02 one until 2026-09-09, and before that a "band every absolute figure carries" of 160.3-176.2 until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, not any card's own band, `docs/FINDINGS.md` RETRACTIONS (e)). Read the committed `moe/bench/hardware/measured_<card>.yaml` rather than this row: four rentals have moved it and the between-rental spread in the compute ceiling is the largest single uncertainty in any roof fraction quoted here |
-| fp8_e4m3 | about 1454 TFLOP/s | 2.13x the bf16 figure, measured at 1380 MHz against bf16's 1470 on 2026-09-10 |
+| bandwidth, triad | 4374-4378 GB/s | reproduces to 0.09% across seven calibrations |
+| dense bf16 | 663-771 TFLOP/s | the term that does NOT reproduce: 16% between the extremes of seven calibrations (712.4, 701.6, 770.9 on 2026-08-28; 712.3, 668.5, 682.1, 663.0 since) |
+| bf16 ridge | about 151.4 FLOP/byte, band 143.7-151.4 (read_stream..triad, `calibrate.py`'s band; the sweeps' all-pattern band the rescored reports carry is 141.6-154.1) | the card's 2026-09-21 calibration, 663.0 TFLOP/s at 1455 MHz over 4378.0 GB/s. This row said 155.9 from the 2026-09-10 calibration until 2026-09-21, 152.8 from the 2026-09-09 calibration until 2026-09-10, 162.8 from the 2026-09-02 one until 2026-09-09, and before that a "band every absolute figure carries" of 160.3-176.2 until 2026-09-02 (retracted: that spread is the compute ceiling failing to reproduce, not any card's own band, `docs/FINDINGS.md` RETRACTIONS (e)). Read the committed `moe/bench/hardware/measured_<card>.yaml` rather than this row: five rentals have moved it and the between-rental spread in the compute ceiling is the largest single uncertainty in any roof fraction quoted here |
+| fp8_e4m3 | about 1437 TFLOP/s | 2.17x the bf16 figure, at a 1395 MHz median on 2026-09-21 whose clock fell 1395 -> 1320 during the GEMM: DRIFT FAIL by the calibrator's own first-to-last rule, printed on the page and scored by no gate (`fp8_gemm_clock` is not in `UNDER_LOAD_BLOCKS`), so the ceiling is published as measured and its only consumer, the dtype arm, recalibrates on its own pod; 1454 at 1380 MHz on 2026-09-10 |
 
 **The gates.**
 
@@ -745,9 +747,11 @@ effort. Only override_config varying it settles it, and NOT at fixed batch:
 group_m_alpha_sweep.py deliberately refuses that instruction, because one batch
 cannot identify alpha under this estimator -- the token count IS the intercept,
 so a single x-level is absorbed exactly and only curvature is left. On the
-design's own x values at 0.5% noise the top rung alone gives a 90% band of
-0.373-0.756 against the seven-rung ladder's 0.552-0.580, 14x narrower against an
-effect size of 0.082. The ladder is identical across every GROUP_SIZE_M, so the
+design's own x values at the median measured spread of 0.77% the top rung alone
+gives a 90% band of 0.395-2.310 against the seven-rung ladder's 0.550-0.593, 44x
+narrower against an effect size of 0.082 (the top rung is 384 since 2026-09-21,
+when the fourth H200 calibration put 448's worst routing realisation over the
+preflight's 90%-of-the-band line). The ladder is identical across every GROUP_SIZE_M, so the
 cross-setting comparison is still at fixed design.
 
 **Prediction.** alpha keeps falling monotonically at 32. (Retracted 2026-09-02 as

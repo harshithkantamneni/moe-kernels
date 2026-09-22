@@ -652,11 +652,12 @@ CALIBRATION_SLUGS = {"a100": "measured_nvidia_a100_sxm4_80gb",
 
 def calibrated_ridges_phrase(dtype: str = "bf16",
                              directory: Path | None = None) -> str:
-    """"145.8 (A100) and 155.9 (H200)", off the committed calibrations.
+    """"145.8 (A100) and 151.4 (H200)", off the committed calibrations.
 
     A PHRASE AND NOT A CONSTANT, because these two ridges are the printed
     predictions' only reference to a real card and one of them does not
-    reproduce: the H200's has read 162.8, 152.8 and 155.9 in nine days. The
+    reproduce: the H200's has read 162.8, 152.8, 155.9 and 151.4 in nineteen
+    days. The
     text below quoted whichever pair was current when it was typed and went
     stale twice, which is a prediction registered against a machine that no
     longer exists. Built here so every sentence that names them names the

@@ -447,9 +447,12 @@ def test_an_fp8_cell_at_its_own_roof_s_clock_is_level_and_roofed_unchanged():
 
 def test_a_script_with_a_private_walk_gets_each_cell_its_own_reference_from_one_call():
     """THE DROP-IN FOR THE THIRD COPY OF THE WALK. `scripts/dtype_tile_confound.py`
-    resolves one bf16 clock and hands it to its fp8 cells; on the committed
-    H200 that files an fp8 cell at its own roof's clock as LEVEL-failed LOW
-    and its any-flag noise gate then fails the arm. This pins the call it
+    resolves one bf16 clock and hands it to its fp8 cells; on the 2026-09-10
+    H200 file that filed an fp8 cell at its own roof's clock as LEVEL-failed
+    LOW (1380 against bf16's 1470) and its any-flag noise gate then failed the
+    arm; on the 2026-09-21 file the two GEMM clocks (1395, 1455) share a LEVEL
+    band, so the defect is invisible on the committed file and the FAIL branch
+    below plants a sagged reference instead. This pins the call it
     should make instead, per cell, against the file the pod reads, with three
     cells built FROM the references they are scored against rather than from
     remembered MHz: fp8 at its own GEMM's clock is level, a boosted bf16 cell
@@ -485,15 +488,15 @@ def test_a_script_with_a_private_walk_gets_each_cell_its_own_reference_from_one_
         # NOTHING here is excluded: a steady clock passes DRIFT whichever side
         # of the band it sits on, and DRIFT is the exclusion.
         assert drift is True, (dtype, mhz)
-    # THE FAIL BRANCH the private walk takes today: one bf16 clock for all.
-    # Its premise is that this card's two GEMM clocks sit further apart than
-    # the LEVEL band, which is why the substitution is not harmless. That is
-    # asserted as the band relation, not as the 90 MHz gap of any one
-    # calibration.
-    one_clock, fp8_clock = by_dtype["bf16"].mhz, by_dtype["fp8_e4m3"].mhz
-    assert not T.level_band(one_clock)[0] <= fp8_clock <= T.level_band(one_clock)[1], (
-        "the fp8 GEMM sits inside the bf16 band on this calibration, so the "
-        "single-clock walk is no longer detectable here; re-derive the case")
+    # THE FAIL BRANCH the private walk takes today: one bf16 clock for all. It
+    # is harmful when the two GEMM clocks sit further apart than the LEVEL band,
+    # which the 2026-09-10 file's did (1380 against 1470) and the 2026-09-21
+    # file's do not (1395 against 1455, inside 1380-1530). Read off whichever
+    # file is committed, the branch would be exercised or not by the rental, so
+    # a sagged fp8 reference is PLANTED as a fraction of the bf16 one instead.
+    one_clock = by_dtype["bf16"].mhz
+    fp8_clock = T.snap_to_clock_step(one_clock * 0.90)
+    assert not T.level_band(one_clock)[0] <= fp8_clock <= T.level_band(one_clock)[1]
     assert T.clock_flags(fp8_clock, fp8_clock, fp8_clock, one_clock) == (False, True)
     assert T.level_side(fp8_clock, one_clock) == T.LEVEL_LOW
 

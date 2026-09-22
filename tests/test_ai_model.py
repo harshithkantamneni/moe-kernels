@@ -1198,9 +1198,11 @@ def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
     pattern is faster than its triad ceiling. Divided by the read rate the same
     published tile_cap ladder reads HIGHER than the number the report calls a
     bound, by more than the width of the gap being bounded, so the unqualified
-    sentence can be false. Both rates come out of the committed calibration
-    file rather than being typed here, because a test that pins a rate is stale
-    the next time the card is calibrated."""
+    sentence can be false. The triad rate is the corpus's own recorded one,
+    frozen with its rows, so the w at it may be pinned; the read rate is the
+    committed file's, so only the RATIO relation is asserted against it. A test
+    that pins a rate, or a number derived from one, is stale the next time the
+    card is calibrated (1.1085 was, on 2026-09-21)."""
     import yaml
 
     from moe.bench.roofline import HARDWARE_DIR
@@ -1219,7 +1221,6 @@ def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
 
     assert read_rate > triad, "a pure read is not slower than the triad ceiling"
     assert at_triad == pytest.approx(1.0514, abs=5e-5)
-    assert at_read == pytest.approx(1.1085, abs=5e-5)
     # 1:1 in the rate, in the direction a denominator implies: a FASTER rate
     # makes one stream take less time, so the same slope is MORE streams.
     assert at_read / at_triad == pytest.approx(read_rate / triad, rel=1e-12)
@@ -1227,7 +1228,8 @@ def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
     # phi, so the gap the bound allows for is the whole phi bracket over the
     # unmeasured alpha_a. In LAYER units at BM=16 that bracket is 3.7e-4 (no
     # activation re-read) to 2.1e-2 (a full one) -- and the choice of rate
-    # moves w by 5.7e-2, more than the widest end of it. So alpha_b can sit
+    # moves w by ~0.057 (the exact figure moves with the committed read rate
+    # and is not pinned), more than the widest end of it. So alpha_b can sit
     # above the number the report prints as its upper bound, whatever alpha_a
     # turns out to be, and only the rate decides.
     per_gemm_read = (K * N * 2) / routed_expert_weight_bytes(MIX, "bf16")
@@ -1235,7 +1237,6 @@ def test_the_triad_w_is_an_upper_bound_on_alpha_b_only_at_the_rate_it_names():
     hi = phi(N, K, block_m=16, block_n=64, alpha_a=1.0) * per_gemm_read
     assert lo == pytest.approx(3.72e-4, rel=1e-2)
     assert hi == pytest.approx(2.116e-2, rel=1e-2)
-    assert at_read - at_triad == pytest.approx(5.71e-2, rel=1e-2)
     assert at_read - at_triad > hi > lo, (
         "the rate ambiguity is wider than the whole phi bracket, so a w quoted "
         "without its rate is not a bound on alpha_b")

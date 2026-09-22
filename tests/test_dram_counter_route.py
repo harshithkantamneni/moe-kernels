@@ -1491,13 +1491,19 @@ def test_contrast_reproduces_the_analysis_separation_from_the_committed_cells():
     on. Nothing is transcribed: the slopes come out of
     results/published/2026-09-10-.../bn_decomposition/*/cells.csv with the
     synthesis's own estimator (median per tread, OLS on the medians) and the
-    denominator out of this card's calibration.
+    denominator is the triad rate THAT RUN recorded in its report.json, not
+    the tree's current ruler: the figures are the 2026-09-10 cells', and the
+    ruler has moved since (4374.3 -> 4378.0 GB/s on 2026-09-21, which is
+    0.085% and enough to trip a four-place pin). test_docs reads the same
+    report the same way.
     """
     cells = {c.name: c for c in contrast_plan(64)}
-    gbps, _ = measured_bandwidth_gbps("nvidia_h200")
+    run = sorted((REPO / "results" / "published").glob(
+        "2026-09-10-*gaps-session/results/bn_decomposition/*/report.json"))
+    assert run, "the 2026-09-10 bn_decomposition report is not in the tree"
+    gbps = json.loads(run[0].read_text())["bandwidth_gbps"]
     W = weight_bytes_total(MIXTRAL)
     stream = weight_stream_ms(W, gbps)
-    assert stream == pytest.approx(0.6443, abs=5e-4)
     lo, hi = cells["bn32-g16-m64"], cells["bn128-g16-m64"]
     assert lo.w(stream) == pytest.approx(1.368, abs=0.002)
     assert hi.w(stream) == pytest.approx(0.731, abs=0.002)

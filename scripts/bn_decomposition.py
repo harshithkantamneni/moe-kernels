@@ -1408,7 +1408,8 @@ def weight_elements(cfg) -> int:
 #: local provisional copy stayed in service, two estimators of one statistic ran
 #: side by side, and the guard test written to catch exactly that passed: it
 #: only fires on a module this tuple names. Both copies happened to agree to
-#: every digit (0.6443482339382172 ms on mixtral bf16 at 4374.2997 GB/s), which
+#: every digit (0.6443482339382172 ms on mixtral bf16 at the 2026-09-10 file's
+#: 4374.2997 GB/s), which
 #: is what a silent fork looks like on the day it lands and not a defence.
 #:
 #: THE INTERFACE IS THE SHIPPED ONE, not the one this note used to register.

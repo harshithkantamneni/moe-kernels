@@ -1068,6 +1068,30 @@ def test_the_self_test_passes_every_one_of_its_own_gates(rf, capsys):
     assert "0 FAIL, 0 UNKNOWN" in out
 
 
+def test_the_planted_worlds_reach_their_verdicts_on_a_roof_whose_ridge_moved(
+        rf, cfg, roof):
+    """The capped worlds plant cap/ridge, not alpha. Until 2026-09-21 the
+    'unlocated' world planted alpha 1.00, which put its subject at 128/ridge of
+    the roof: 0.79 at ridge 162.8, 0.85 at 151.4, and on the fourth H200
+    calibration the gap to its 0.55 control fell under CONTROL_SEPARATION and
+    the world read NOT_TILE on a laptop. A planted world is a FRACTION of the
+    roof it is scored on, so all five verdicts must come back on a roof whose
+    ridge sits 8% either side of the committed one."""
+    import dataclasses
+    for scale in (0.92, 1.08):
+        moved = dataclasses.replace(
+            roof, ridge=roof.ridge * scale,
+            tflops=roof.ridge * scale * roof.bandwidth_gbps / 1000.0)
+        lines, gates = rf.self_test(cfg, moved, 2, r_min=32, r_max=4096,
+                                    control_block_m=256, doublings=2)
+        body = "\n".join(lines)
+        for expected in (rf.BINDING, rf.NOT_BINDING, rf.STILL_RISING,
+                         rf.NOT_TILE, rf.GAP_UNLOCATED):
+            assert expected in body, (scale, expected)
+        assert all(g.passed is True for g in gates), \
+            (scale, [g.name for g in gates if g.passed is not True])
+
+
 def test_every_planted_world_reaches_a_different_verdict(rf, cfg, roof):
     lines, gates = rf.self_test(cfg, roof, 2, r_min=32, r_max=4096,
                                 control_block_m=256, doublings=2)

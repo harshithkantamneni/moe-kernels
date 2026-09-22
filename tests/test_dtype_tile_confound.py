@@ -50,6 +50,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -344,7 +345,8 @@ def test_matched_config_and_quantised_activations_pin_the_tilt_to_a_two_number_b
     mixtral's bf16 tuned config takes GROUP_SIZE_M=16 above M=448, where
     `2 BM / (alpha b)` is 188 against the ridge and the compute branch is
     reachable, so it sits exactly at the top; qwen2's high-batch cells take
-    GROUP_SIZE_M=1, where the ceiling is 152.4 against a ridge of 152.8, and it
+    GROUP_SIZE_M=1, where the ceiling is 152.4 against a ridge this card has
+    read as 152.8 to 151.4 (inside its own band on every calibration), and it
     lands inside at 1.027 rather than on the pure-bytes floor. Which model
     attains which end is a property of vLLM's shipped configs crossed with this
     card's calibration; that the tilt cannot leave the band is a property of
@@ -758,18 +760,39 @@ def test_alpha_curve_is_monotone_and_clamped_outside_the_measured_range():
         DTC.alpha_for_group(0)
 
 
-def test_the_measured_alpha_caps_block_m_128_below_the_h200_ridge(ceilings):
-    """The fact that decided this script's estimand.
+def test_the_block_m_128_cap_sits_inside_the_cards_own_ridge_band(ceilings):
+    """The fact that decided this script's estimand, restated as what survives.
 
-    `2 BM / (alpha b)` at BLOCK_SIZE_M=128, GROUP_SIZE_M=1 and bf16 is 152.4
-    against a measured ridge of 162.8, so the config vLLM's ladder actually picks
-    across the decode range cannot be compute bound at any batch. A flat-versus-
-    steep branch test therefore cannot find a roofline crossing on it, which is
-    why the TILT and not the branch shift is what the gates read.
+    `2 BM / (alpha b)` at BLOCK_SIZE_M=128, GROUP_SIZE_M=1 and bf16 is 152.4.
+    This card's ridge has read 162.8, 152.8, 155.9 and 151.4 across four
+    calibrations, so the cap has sat below it, on it and above it; what has
+    held on every one of them is that the cap lies INSIDE the card's own
+    between-pattern ridge band (`ridge_band_from_detail`, the same silicon
+    against its several DRAM rulers), which `calibrate.py` defines as the
+    region a crossing is not resolved in. A flat-versus-steep branch test can
+    therefore be planned neither to find nor to exclude a roofline crossing on
+    it, which is why the TILT and not the branch shift is what the gates read.
+    Until 2026-09-21 this test asserted `cap < ridge`, a science claim the
+    fourth calibration refuted by 0.6%; this relation holds on all four
+    committed rulers and is stated as the relation it always was, so it does
+    not fail on the previous file either.
     """
     alpha = DTC.alpha_for_group(1)
     cap = 2 * 128 / (alpha * 2)
-    assert cap < ceilings.ridge(DTC.BF16)
+    raw = yaml.safe_load(Path(ceilings.path).read_text())
+    name = "block_m_crossing_sweep"
+    sweep = sys.modules.get(name)
+    if sweep is None:
+        spec = importlib.util.spec_from_file_location(
+            name, ROOT / "scripts" / f"{name}.py")
+        sweep = importlib.util.module_from_spec(spec)
+        sys.modules[name] = sweep
+        spec.loader.exec_module(sweep)
+    ridge = ceilings.ridge(DTC.BF16)
+    (low, high), source = sweep.ridge_band_from_detail(raw["detail"], ridge)
+    assert low < high, source
+    assert low <= cap <= high, (cap, low, high, source)
+    assert abs(cap - 152.4) < 0.1, cap
 
 
 # --------------------------------------------------------------------------

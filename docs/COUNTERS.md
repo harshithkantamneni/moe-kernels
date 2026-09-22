@@ -424,7 +424,8 @@ THE REGISTERED CARD IS THE H200, and this section carried the A100 for a day
 after the script stopped defaulting to it. `dram_counter_route.py` resolves
 `--card` from the attached device and the session driver passes what
 `counter_route_card` resolved, so the plan an operator reads on the box prints
-the H200's own ridge of **155.93** (682.086 TFLOP/s over 4.37430 TB/s) and not
+the H200's own ridge of **151.43** (662.951 TFLOP/s over 4.37803 TB/s on the
+2026-09-21 calibration; 155.93 on the 2026-09-10 one) and not
 the A100's 145.81. The A100 row is kept below and labelled RETIRED because it
 is the registration the 2026-09-02 analysis was written against and
 `tests/test_dram_counter_route.py` still asserts its figures; it is not the
@@ -435,7 +436,7 @@ cell any session books.
 
 | | |
 |---|---|
-| card | nvidia_h200. Ridge **155.93** FLOP/byte from `measured_nvidia_h200.yaml` (682.086 TFLOP/s over 4.37430 TB/s) |
+| card | nvidia_h200. Ridge **151.43** FLOP/byte from `measured_nvidia_h200.yaml` (662.951 TFLOP/s over 4.37803 TB/s, 2026-09-21) |
 | model | `mixtral-8x7b`, bf16, `E=8 k=2 H=4096 F=14336` |
 | pinned | `GROUP_SIZE_M=16`, `BLOCK_SIZE_M=64`, `BLOCK_SIZE_N` **32 and 128**, one arm each, `BLOCK_SIZE_K=64`, `num_warps=8`, `num_stages=4` |
 | swept | tiles per expert `n = 1, 2, 3, 4, 6, 8` (rows per expert 64..512), and `--cache-control` in `{all, none}` |

@@ -175,3 +175,31 @@ reports carry today is
 and every report's own `rescored_from` block, not this file, is the record of
 what it was rescored off. Read this table as of its date; read the reports for
 what they say now.
+
+## Rescored a fourth time on 2026-09-21
+
+The card was recalibrated on a fourth rental (pod 74osfqvrxtewaw, tree
+81f80b7, session 4): dense bf16 663.0 TFLOP/s at 1455 MHz over triad 4378.0
+GB/s, ridge 151.4, all-pattern band [141.6, 154.1]. The same
+
+    .venv/bin/python scripts/rescore_published_reports.py --write
+
+rewrote the registered ridge fields in these reports once more, printed its
+four gates, and is a no-op on a second pass. This shift is 2.9%, ABOVE the
+tool's 2.7% MDE, where the 2026-09-10 one was 2.0% and inside it. Nothing was
+re-timed. The 2026-09-10 table above is now dated; what the reports carry
+today is
+
+| field | today |
+|---|---|
+| `ridge` | 151.4 |
+| `ridge_band` | [141.6, 154.1] |
+| `predictions[128].crossing_rows_ridge_lo` | 220.61 |
+| `predictions[128].crossing_rows_ridge_hi` | 240.09 |
+| `predictions[256].crossing_rows_ridge_lo` | 141.60 |
+| `predictions[256].crossing_rows_ridge_hi` | 154.10 |
+| `bracketing.horizon_rows` | 363.36 |
+
+and `rescored_from` in every report still names the 160.3 this arm was first
+scored against. Read this table as of its date; read the reports for what they
+say now.

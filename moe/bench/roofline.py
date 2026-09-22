@@ -334,9 +334,12 @@ REFERENCE_SETTLE_PLATEAU = "settle-plateau"
 #: `scripts/dtype_tile_confound.py:_reference_clock` is a THIRD copy, and
 #: since the reference went per family it is a divergent one: it walks the
 #: bf16 fields only and hands that clock to the fp8 cells the arm exists to
-#: time, so on the committed H200 an fp8 cell at the fp8 GEMM's own 1395 MHz
-#: is level under the driver and LEVEL-failed LOW under that script (1395
-#: against the bf16 GEMM's 1485 is 0.939, under the band's snapped 1410 edge).
+#: time, so on the H200 files committed before 2026-09-21 an fp8 cell at the
+#: fp8 GEMM's own 1395 MHz was level under the driver and LEVEL-failed LOW
+#: under that script (1395 against the bf16 GEMM's 1485 is 0.939, under the
+#: band's snapped 1410 edge); on the 2026-09-21 file the two clocks are 1395
+#: and 1455 (0.959, inside the band), so the divergence is invisible there,
+#: which is not the same as absent.
 #: Before ab61e55 the same divergence ran the other way, HIGH, on the idle
 #: scalars that file then carried: 1905 against 1515. A
 #: script with a private walk should call `reference_clock_from_doc(raw,

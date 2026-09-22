@@ -23,7 +23,8 @@ own slope `B`, which is the one number in the fit that no extrapolation
 touches. The denominator is a byte count from `moe.spec` divided by a rate the
 CALLER supplies, so the number always names the rate it was divided by. On
 mixtral bf16 the expert weight set is 2.8186 GB and one stream is 0.6443 ms at
-this H200's calibrated triad rate of 4374.3 GB/s. Measured that way over the 23
+the 2026-09-10 calibration's triad rate of 4374.3 GB/s (0.6438 ms at the
+2026-09-21 file's 4378.0). Measured that way over the 23
 ladders of the 2026-09-10 session, w runs 0.683 to 4.424 with a median of
 1.168 and a per-repeat sd of 0.002 to 0.005 over 17 repeats.
 
@@ -204,9 +205,10 @@ def weight_stream_ms(model: str | MoEConfig, dtype: str,
     """Milliseconds to stream the routed expert weight set once at this rate.
 
     `routed_expert_weight_bytes / (bandwidth_gbps * 1e9) * 1e3`. On mixtral
-    bf16 at this H200's calibrated triad rate of 4374.2997 GB/s it is
-    0.644348 ms; at the same card's measured `read_stream` pattern
-    (4612.2534 GB/s) it is 0.611105 ms, and the ratio of the two is exactly
+    bf16 at the 2026-09-10 calibration's triad rate of 4374.2997 GB/s it is
+    0.644348 ms (0.643799 ms at the 2026-09-21 file's 4378.0333); at the
+    2026-09-10 file's measured `read_stream` pattern (4612.2534 GB/s) it is
+    0.611105 ms (0.611016 at 4612.9272), and the ratio of the two is exactly
     the ratio a w quoted at one rate differs from the same w at the other.
     """
     bw = _check_bandwidth(bandwidth_gbps)

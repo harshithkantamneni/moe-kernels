@@ -16,6 +16,7 @@ CSVs become 72,760 current ones.
 from __future__ import annotations
 
 import csv
+import json
 import re
 import subprocess
 import sys
@@ -367,7 +368,8 @@ def test_apparatus_states_the_clock_rule_with_its_date_and_its_reason():
 #: What FINDINGS has to carry from that session, as (needle, why) pairs. Every
 #: number is either off a `RESULT:` line in
 #: `results/published/2026-09-10-nvidia_h200-gaps-session/session/logs/`, off
-#: the committed calibration, or recomputed from that directory's cells by the
+#: the 2026-09-10 calibration (as FINDINGS' dated section quotes it; the
+#: committed ruler has moved since), or recomputed from that directory's cells by the
 #: synthesis scripts named beside it. INTERVALS, NOT POINTS: where the quantity
 #: has a spread the pinned string is the spread, because the session's own
 #: lesson is that this study's headline numbers were points printed by an
@@ -533,8 +535,8 @@ def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_p
     3.85 GB of weight-set-equivalent per M-tile at BLOCK_N=32 against 2.06 GB
     at 128, 1.87x apart. Those are not figures typed into prose: they are the
     2026-09-10 `bn_g16` ladder slopes at BLOCK_M=64, divided by the time to
-    stream mixtral's whole expert weight set once at this card's own
-    calibrated triad rate.
+    stream mixtral's whole expert weight set once at the triad rate that
+    session's own report recorded.
 
     THE BLOCK_M MATTERS AND IT IS WHY THIS TEST EXISTS. At BLOCK_M=32, which
     is the default `dram_counter_route.py` runs at when no `--block-m` is
@@ -544,11 +546,13 @@ def test_the_counter_discriminator_is_the_corpus_slope_at_the_block_m_the_arms_p
     while quoting the BLOCK_M=64 figures. A page whose numbers are computed at
     a different cell from the one the arm runs is exactly the defect this file
     is for."""
-    import yaml
-    card = yaml.safe_load(
-        (ROOT / "moe" / "bench" / "hardware"
-         / "measured_nvidia_h200.yaml").read_text())
-    triad_gbps = card["memory"]["bandwidth_tb_s"] * 1000.0
+    # THE RATE THE RUN RECORDED, not the tree's current ruler: the slopes are
+    # the 2026-09-10 cells', so the stream they are divided by is that
+    # session's own triad figure, frozen in its report.json beside them.
+    run = sorted(PUBLISHED.glob("2026-09-10-*gaps-session/results/"
+                                "bn_decomposition/*/report.json"))
+    assert run, "the 2026-09-10 bn_decomposition report is not in the tree"
+    triad_gbps = json.loads(run[0].read_text())["bandwidth_gbps"]
     # The weight set is the plan page's own compulsory W, read off the page
     # rather than retyped, so a change to the model config moves both.
     plan = subprocess.run(

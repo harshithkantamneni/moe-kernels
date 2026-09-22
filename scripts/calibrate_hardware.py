@@ -491,6 +491,17 @@ def score(cal, pin_rate_gbps: float | None,
 #: same three columns. The FLOOR term is NOT read from these blocks: it is a
 #: comparison against the card's maximum SM clock, which no calibration writes
 #: and `main` reads off the device.
+#:
+#: `fp8_gemm_clock` is deliberately NOT here. The bf16 block is the RULER's
+#: (every ridge is bf16 TFLOP/s over a bandwidth) and its verdict is the
+#: calibration's; the fp8 block qualifies a ceiling only the dtype arm reads.
+#: That block's own DRIFT verdict is printed on the page beside its median by
+#: `clock_lines` and scored by no gate: session 4 (2026-09-21) read 1395 ->
+#: 1320 MHz, 5.4% first-to-last, and published the fp8 ceiling as measured.
+#: Whether a drifted fp8 ceiling should be WITHHELD at the writer is an open
+#: decision, not a rule: the sibling thermal gate scores thirds rather than
+#: ends and calls the same five samples 0.5% steady. `under_load_clock_verdict`
+#: returns at the first block that carries flags.
 UNDER_LOAD_BLOCKS = ("clocks", "gemm_clock")
 
 
@@ -683,6 +694,36 @@ def under_load_clock_verdict(cal, max_sm_clock_mhz: float | None = None,
             "that records the clock under load")
 
 
+def clock_lines(cal) -> list[str]:
+    """Each GEMM's under-load clock record, with the DRIFT verdict its own
+    block carries. Until 2026-09-21 the page printed the median and the spread
+    and no verdict, so session 4's operator read `1395 MHz median of [1395,
+    1350, 1395, 1410, 1320], spread 6.4%` beside a `clock_drift_ok: false` the
+    file recorded and nothing displayed. The verdict is a printed fact and not
+    a gate: no RESULT line changes, and the fp8 block says out loud that no
+    gate scores it (`UNDER_LOAD_BLOCKS`)."""
+    out = []
+    for label, rec in (("bf16 GEMM", cal.gemm_clock),
+                       ("fp8 GEMM", cal.fp8_gemm_clock)):
+        if not rec:
+            continue
+        drift = rec.get("clock_drift_ok")
+        verdict = ("" if drift is None else
+                   f", DRIFT {'PASS' if drift else 'FAIL'} "
+                   f"({rec.get('sm_clock_start_mhz')} -> "
+                   f"{rec.get('sm_clock_end_mhz')} MHz)")
+        if drift is False and label == "fp8 GEMM":
+            verdict += (" -- scored by no gate: this block is not in "
+                        "UNDER_LOAD_BLOCKS, and the fp8 ceiling beside it is "
+                        "published as measured")
+        out.append(f"  clock, {label:<10}{rec['median_mhz']:>5} MHz median of "
+                   f"{rec['samples']}, spread {rec['spread_pct']:.1f}%{verdict}")
+        out.append(f"  {'':<17}post-hoc idle sample {rec['after_idle_mhz']} MHz "
+                   f"(what this field used to be)"
+                   + (f", {rec['power_w']:.0f} W" if rec.get("power_w") else ""))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -871,15 +912,8 @@ def main(argv: list[str] | None = None) -> int:
     # H200 calibrations it moved 30% (1485-1935 MHz) while the achieved rate
     # moved 12%. The line below is the whole reason this run can be believed:
     # samples taken under load, their spread, and the idle sample beside them.
-    for label, rec in (("bf16 GEMM", cal.gemm_clock),
-                       ("fp8 GEMM", cal.fp8_gemm_clock)):
-        if not rec:
-            continue
-        print(f"  clock, {label:<10}{rec['median_mhz']:>5} MHz median of "
-              f"{rec['samples']}, spread {rec['spread_pct']:.1f}%")
-        print(f"  {'':<17}post-hoc idle sample {rec['after_idle_mhz']} MHz "
-              f"(what this field used to be)"
-              + (f", {rec['power_w']:.0f} W" if rec.get("power_w") else ""))
+    for line in clock_lines(cal):
+        print(line)
     established = cal.clock_established
     if established is False:
         print("  CLOCK NOT ESTABLISHED: the samples disagree with each other or "

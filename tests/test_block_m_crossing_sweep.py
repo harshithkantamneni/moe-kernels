@@ -2479,7 +2479,8 @@ def test_the_printed_w_line_carries_the_rate_condition_and_says_routed_only():
     THE WEIGHTS REALLY STREAM AT. The report line said it flatly, against a
     denominator built from the card's TRIAD calibration, while a weight stream
     is a pure read and this card's own read_stream pattern is 5.4% faster: the
-    published tile_cap ladder reads 1.0514 at triad and 1.1085 at read_stream,
+    published tile_cap ladder reads 1.0514 at triad and 1.1085 at the 2026-09-10
+    file's read_stream (1.1087 at the 2026-09-21 one),
     so the unqualified sentence can be false.
 
     And the denominator is the ROUTED expert set. `weights.layer_weight_bytes`

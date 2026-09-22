@@ -2049,9 +2049,11 @@ step3_group_m() {
   # group_m_alpha_sweep.py deliberately refuses that instruction, because one batch
   # cannot identify alpha under this estimator -- the token count IS the intercept,
   # so a single x-level is absorbed exactly and only curvature is left. On the
-  # design's own x values at 0.5% noise the top rung alone gives a 90% band of
-  # 0.373-0.756 against the seven-rung ladder's 0.552-0.580, 14x narrower against an
-  # effect size of 0.082. The ladder is identical across every GROUP_SIZE_M, so the
+  # design's own x values at the median measured spread of 0.77% the top rung alone
+  # gives a 90% band of 0.395-2.310 against the seven-rung ladder's 0.550-0.593, 44x
+  # narrower against an effect size of 0.082 (top rung 384 since 2026-09-21, when the
+  # fourth H200 calibration put 448's worst realisation over the preflight line). The
+  # ladder is identical across every GROUP_SIZE_M, so the
   # cross-setting comparison is still at fixed design.
 
   PREDICTION: alpha continues to fall monotonically at 32 and 64, and the fall

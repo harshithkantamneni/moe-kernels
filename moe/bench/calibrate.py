@@ -1144,6 +1144,12 @@ def calibrate(target_bytes: int = DEFAULT_BUFFER_BYTES, gemm_n: int = 8192,
     # whether fp8 reaches the same fraction of ITS peak that bf16 reaches of its
     # own. The bf16 figure is already 701.6 against a 989.4 headline, so the
     # datasheet ratio surviving to the achieved numbers is a claim, not a given.
+    #
+    # The fp8 GEMM's own clock block is written beside it
+    # (detail.fp8_gemm_clock); calibrate_hardware prints its DRIFT verdict and
+    # no gate scores it. On 2026-09-21 it read 1395 -> 1320 MHz at 689 W and
+    # the ceiling was published as measured. Withholding a drifted fp8 ceiling
+    # is an open decision, not a rule this writer applies.
     fp8_gemm = measure_fp8_gemm(gemm_n, refusals=refusals)
     torch.cuda.empty_cache()
 

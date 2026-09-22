@@ -56,13 +56,15 @@ single token count is a single intercept, and everything a single x-level says
 about the LEVEL of the traffic ratio is absorbed exactly. What is left is
 curvature: log(1 + alpha x) has to be consistent across cells at DIFFERENT x, and
 x is set by the tile count, which is set by the batch. Simulated on this design's
-own x values at 0.5% timing noise, the top rung alone returns a 90% band of
-0.373-0.756 and the seven-rung ladder returns 0.552-0.580, a fourteenfold
-difference in width against a published GROUP_SIZE_M effect of 0.082. The ladder
-is held IDENTICAL across every GROUP_SIZE_M setting, so the comparison across
-settings is still at fixed design; `--tokens 448` collapses it to one rung for
-anyone who wants to watch the band blow up. That power simulation runs, and
-prints, before a cent is spent.
+own x values at the median measured timing spread of 0.77% (over the 26
+published reports), the top rung alone returns a 90% band of 0.395-2.310 and
+the seven-rung ladder returns 0.550-0.593, a forty-fold difference in width
+against a published GROUP_SIZE_M effect of 0.082. The ladder is held IDENTICAL
+across every GROUP_SIZE_M setting, so the comparison across settings is still
+at fixed design; `--tokens 384` alone is REFUSED at preflight, because a ladder
+of one rung has no single-tile control, which is the same fact stated as a
+gate. That power simulation runs, and prints both bands, before a cent is
+spent.
 
 WHAT WOULD CONFOUND THE FIT, checked where it can be:
 
@@ -190,19 +192,19 @@ FIXED_TILE = {"BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 256, "num_warps": 4, "num_stag
 FIXED_TILE_SOURCE = "E=8,N=14336,device_name=NVIDIA_H200.json key 16"
 
 #: The batch ladder. rows per expert is T*k/E, so on mixtral these are
-#: 4, 8, 16, 32, 64, 96, 112 rows per expert, i.e. 1 to 7 M-tiles per expert at
+#: 4, 8, 16, 32, 64, 80, 96 rows per expert, i.e. 1 to 6 M-tiles per expert at
 #: BLOCK_M=16. The bottom rungs are the SINGLE-TILE CONTROL for P4 and the top
 #: rung is the one the swizzle should help most.
 #:
-#: THE TOP IS CAPPED BY THE RIDGE, and the cap is tighter than the mean says.
-#: T=512 looks safe on a uniform draw at 127.6 FLOP/byte, but a dirichlet draw
-#: that leaves an expert empty cuts the compulsory weight bytes by an eighth and
-#: pushes that same cell to 145.8, over the 90% of either card's own ridge that
-#: the preflight allows (H200 162.8 -> 146.5, A100 145.8 -> 131.2). The ladder
-#: is set by the WORST realisation it contains, not by the mean, and the
-#: preflight recomputes that, against the attached card's calibration, rather
-#: than trusting this comment.
-DEFAULT_TOKENS = (16, 32, 64, 128, 256, 384, 448)
+#: THE TOP IS CAPPED BY THE RIDGE, and the cap is tighter than the mean says:
+#: the ladder is set by the WORST routing realisation it contains, and the
+#: preflight recomputes that against the attached card's own band low end
+#: (MEMORY_BOUND_MARGIN x the lowest ridge_by_pattern). The top rung read 448
+#: until 2026-09-21, when a fourth H200 calibration put the band low end at
+#: 141.6 and 448's worst realisation (127.6) 0.1% OVER the 90% line; the H200
+#: ridge has read 162.8, 152.8, 155.9 and 151.4 across four rentals, so the top
+#: rung is chosen to clear the line by two of those moves, not by one.
+DEFAULT_TOKENS = (16, 32, 64, 128, 256, 320, 384)
 
 #: Routing realisations per token count. They are the ONLY thing that varies the
 #: tile count inside an intercept group, so they are what identifies alpha at
@@ -2202,7 +2204,7 @@ def parse_args(argv: list[str] | None = None):
                         dest="warmup", metavar="MS",
                         help="MILLISECONDS of delivered GPU load to warm up "
                              "for, not a call count. UNITS CHANGED 2026-09-02: "
-                             "this sweep's cells span 16 to 448 tokens, so a "
+                             "this sweep's cells span 16 to 384 tokens, so a "
                              "fixed count of 10 calls delivered two orders of "
                              "magnitude of different warmup across the grid "
                              "whose LEVELS the fit compares")

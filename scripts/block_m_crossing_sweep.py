@@ -4066,7 +4066,8 @@ def analyse(cells, cfg, *, block_sizes, alpha: float, ridge: float,
     # carrying this paragraph's H200 figure into every report: on the committed
     # A100 profile the read pattern is 3.06% BELOW its triad, so the typed
     # guidance pointed backwards there. Divided by the faster
-    # rate, tile_cap's BM=16 ladder reads 1.1085 where this line prints 1.0514,
+    # rate, tile_cap's BM=16 ladder reads 1.1085 (at the 2026-09-10 file's read
+    # rate; 1.1087 at the 2026-09-21 one) where this line prints 1.0514,
     # so calling the printed number an upper bound on alpha_b can be FALSE by
     # more than the gap it is bounding. `weights.py`, `ai_model.py` and
     # `LadderFit.weight_streams` all carried the clause; the one place a reader

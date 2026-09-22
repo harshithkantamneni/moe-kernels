@@ -629,6 +629,36 @@ dominant, and the two model-free results above (95.4% of the wall clock, and
 
 ---
 
+## The 2026-09-21 H200 calibration: the ruler moved a fourth time
+
+Session 4 (pod 74osfqvrxtewaw, tree 81f80b7, published on `pod-h200-session4`)
+recalibrated the card before its arms ran. Dense bf16 8192^3 delivered
+**663.0 TFLOP/s at 1455 MHz** under the 700 W cap (bf16 GEMM clock 1455 -> 1470
+across the run, DRIFT PASS); triad **4378.0 GB/s**, read_stream 4612.9; ridge
+**151.4 FLOP/byte, band 143.7-151.4** (read_stream..triad, `calibrate.py`'s
+band; the sweeps' all-pattern band the rescored reports carry is 141.6-154.1).
+The fp8 GEMM read 1437.0 TFLOP/s at a 1395 MHz median whose own clock fell
+1395 -> 1320 MHz during the measurement, 5.4% first-to-last against the 5%
+DRIFT rule: that verdict is printed on the calibrate page and scored by no gate
+(`fp8_gemm_clock` is not in `UNDER_LOAD_BLOCKS`), so the fp8 ceiling is
+published as measured, and whether a drifted fp8 ceiling should be withheld
+at the writer is an open decision, not a rule.
+
+Committed readings of this one card's ridge now number five: 162.8
+(2026-09-02), 152.8 (2026-09-09), 155.9 (2026-09-10), 152.9 (2026-09-14, on
+`pod-h200-session3`, never adopted on this branch and superseded by this
+file), and 151.4. The 2026-09-21 file was adopted as the committed ruler on
+the day (commit "H200 calibration 2026-09-21: session 4"); the 19 H200 ladder
+reports were rescored to it by `scripts/rescore_published_reports.py --write`
+(shift 2.9%, ABOVE the tool's 2.7% MDE, the first time since 2026-09-09), and
+the planted worlds that had baked the old ridge into their expected verdicts
+(`group_m_alpha_sweep`'s top rung, `bm128_roofline`'s capped worlds) now plant
+fractions of whatever ruler the tree ships. Nothing was re-timed. Bandwidth
+reproduced to 0.09% across seven calibrations; the compute term is what moves,
+which is this file's standing result about the ruler.
+
+---
+
 ## The evidence base
 
 100,144 measured rows on two cards. 72,760 of them are current; the rest are

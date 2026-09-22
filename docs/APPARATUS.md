@@ -466,8 +466,10 @@ which is the best-determined thing on the page (over the occupancy arm's nine
 settings the median replicate CV of the slope is 0.72%, against 23.35% for the
 intercept it would otherwise be divided by). The denominator is a measurement:
 on mixtral-8x7b bf16 the weight set is 2.8186 GB and one stream is **0.6443 ms**
-at the H200's calibrated triad rate of 4374.3 GB/s, or 0.6111 ms at its
-measured `read_stream` rate of 4612.3. Across the 2026-09-10 session's 23
+at the 2026-09-10 calibration's triad rate of 4374.3 GB/s (0.6438 ms at the
+2026-09-21 one, 4378.0), or 0.6111 ms at that file's measured `read_stream`
+rate of 4612.3; every w names the rate it was divided by. Across the
+2026-09-10 session's 23
 ladders, `w` runs **0.68 to 1.37** at the subject heights BLOCK_M 16 to 64,
 with a per-repeat sd of 0.002 to 0.005 over 17 repeats. The BLOCK_M=128 and
 256 reference ladders run 1.15 to 4.42 on the same statistic, which is what a
