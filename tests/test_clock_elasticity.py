@@ -881,6 +881,76 @@ def test_a_measuring_run_without_a_card_is_refused():
 
 
 # --------------------------------------------------------------------------
+# 11b. the claim is the per-M-tile cost's elasticity (2026-09-22)
+# --------------------------------------------------------------------------
+
+def test_the_gated_reading_is_the_per_tile_costs_and_the_per_call_one_is_beside_it():
+    """One elasticity for the whole planted call: both readings agree, and the
+    new fields carry the per-call one with its own interval."""
+    est = CE.fit(CE.plant_rows(eps=0.60, jitter=0.0), draws=50)
+    assert est.value == pytest.approx(0.60, abs=1e-6)
+    assert est.fixed_tread == pytest.approx(0.60, abs=1e-6)
+    assert est.per_tile_from2 == pytest.approx(0.60, abs=1e-6)
+    assert est.per_tile_treads == CE.DEFAULT_TREADS
+    assert est.lo is not None and est.fixed_tread_lo is not None
+    assert est.lo <= est.value <= est.hi
+    assert est.fixed_tread_lo <= est.fixed_tread <= est.fixed_tread_hi
+
+
+def test_an_intercept_with_its_own_elasticity_does_not_enter_the_claim():
+    """THE 2026-09-21 CARD, PLANTED: the one-tile call at 0.17 and the per-tile
+    cost at 1.00. The per-call pooled reading blends them (session 4 read
+    0.74); the claim is the per-tile cost's and comes back 1.00."""
+    rows = CE.plant_rows(eps=1.00, eps_a=0.17, jitter=0.0)
+    est = CE.fit(rows, draws=0)
+    assert est.value == pytest.approx(1.00, abs=0.02), est.value
+    assert est.per_tile_from2 == pytest.approx(1.00, abs=0.02)
+    assert est.fixed_tread is not None and 0.5 < est.fixed_tread < 0.95
+    # And the per-tread readings show the blend rising with depth, as the
+    # additive law says they must: shallow treads carry more intercept.
+    per = est.per_tread
+    assert per[1] < per[CE.DEFAULT_TREADS]
+    # The old world with one elasticity still plants one number everywhere.
+    one = CE.fit(CE.plant_rows(eps=0.30, jitter=0.0), draws=0)
+    assert one.value == pytest.approx(one.fixed_tread, abs=1e-6)
+
+
+def test_the_page_names_the_claim_and_prints_the_per_call_reading_beside_it():
+    rows = CE.plant_rows(eps=0.30, jitter=0.0)
+    est = CE.fit(rows, draws=20)
+    text = "\n".join(CE.report_lines(rows, est, parsed(["--self-test"])))
+    assert "THE FIT: eta of the per-M-tile cost, -d log b / d log f" in text
+    assert "over treads 2 and deeper" in text
+    assert "PRINTED BESIDE IT, not the claim: eta of the per-CALL time" in text
+    assert "eta, fixed tread, pooled            0.3000" in text
+    assert "COMPANION: the elasticity of the ladder SLOPE" in text
+    gate = CE.gate_c2_registered_reading(est)
+    assert "per-M-tile cost" in gate.claim
+    assert gate.verdict == exit_codes.FAIL          # 0.30 is in the gap
+
+
+def test_group_m_pins_the_swizzle_and_enters_the_run_id():
+    base = CE.default_run_id(parsed(["--dry-run"]))
+    assert CE.default_run_id(parsed(["--dry-run", "--group-m", "16"])) == base
+    assert CE.default_run_id(parsed(["--dry-run", "--group-m", "1"])) != base
+    assert CE.pinned_for(1)["GROUP_SIZE_M"] == 1
+    assert CE.pinned_for(1)["BLOCK_SIZE_M"] == CE.PINNED["BLOCK_SIZE_M"]
+    assert CE.observed_tile(None, CE.pinned_for(1))["GROUP_SIZE_M"] == 1
+    assert CE.observed_tile(None)["GROUP_SIZE_M"] == 16
+    got = run(["--dry-run", "--group-m", "1"])
+    assert re.search(r"GROUP_SIZE_M=1\b", got.stdout), got.stdout[-800:]
+    assert "GROUP_SIZE_M=16" not in got.stdout
+
+
+def test_the_session_tag_enters_the_run_id_only_when_given():
+    bare = CE.default_run_id(parsed(["--dry-run"]))
+    assert CE.default_run_id(parsed(["--dry-run", "--session-tag", ""])) == bare
+    assert CE.default_run_id(parsed(["--dry-run", "--session-tag", "gaps-x"])) != bare
+    got = run(["--dry-run", "--session-tag", "gaps-x"])
+    assert "session     gaps-x" in got.stdout
+
+
+# --------------------------------------------------------------------------
 # 12. the self-test's own gates can fail
 # --------------------------------------------------------------------------
 

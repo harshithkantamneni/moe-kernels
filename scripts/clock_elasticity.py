@@ -128,12 +128,19 @@ NO_CARD = "no-card-nothing-measured"
 
 #: BLOCK_SIZE_N, BLOCK_SIZE_K, num_warps and num_stages are `SWEEP.FIXED`'s,
 #: taken from there rather than retyped so this arm's tile and the ladder arms'
-#: tile cannot drift apart. GROUP_SIZE_M is 16 and NOT `FIXED`'s 1: 16 is the
-#: swizzle the bn_decomposition arm ran and the swizzle every published alpha
-#: this arm exists to qualify was fitted at, and `project_moe_kernels_alpha_
-#: surface` records that alpha is a swizzle x footprint surface, so a G=1
-#: elasticity would qualify an alpha nobody quoted.
+#: tile cannot drift apart. GROUP_SIZE_M is 16 by DEFAULT and NOT `FIXED`'s 1:
+#: 16 is the swizzle the bn_decomposition arm ran and the swizzle every
+#: published alpha this arm exists to qualify was fitted at. Since 2026-09-22
+#: `--group-m` moves it: the private-weight ratio arm read alpha 0.955/0.978 at
+#: G=1 and 0.748 at G=16 on the same card, and the elasticity that says which
+#: of those is a traffic quantity is the elasticity AT THAT ORDER, so the arm
+#: runs once per geometry the ratio table quotes (`pinned_for`).
 PINNED = dict(SWEEP.FIXED, BLOCK_SIZE_M=32, GROUP_SIZE_M=16)
+
+
+def pinned_for(group_m: int) -> dict:
+    """The tile THIS RUN pins: `PINNED` with GROUP_SIZE_M from --group-m."""
+    return dict(PINNED, GROUP_SIZE_M=int(group_m))
 
 DEFAULT_MODEL = "mixtral-8x7b"
 DEFAULT_DTYPE = "bf16"
@@ -348,9 +355,10 @@ PREDICTIONS = (
         "nothing, and the honest reading is that this container's governor does "
         "not respond to duty at this kernel -- not that the elasticity is zero."),
     Prediction(
-        2, "the measured per-call time is BELOW 0.25 in elasticity: most of a "
-           "millisecond at this cell is traffic, not issue rate",
-        f"the 95% interval on d log ms / d log f lies wholly below {BAND_LOW}, "
+        2, "the measured PER-M-TILE cost is BELOW 0.25 in elasticity: most of "
+           "what one more tile adds at this cell is traffic, not issue rate",
+        f"the 95% interval on -d log b / d log f, b the ladder slope, lies "
+        f"wholly below {BAND_LOW}, "
         "which is the band in which the study's raw readings stand and pooled "
         "EXA alpha_b is near 0.974 with the BLOCK_M ladder monotone",
         f"a FAIL is a RESULT and not a retry. Above {BAND_HIGH} the BLOCK_M "
@@ -640,6 +648,61 @@ def within_tread_slope(cells) -> tuple[float | None, dict[int, float], float, in
     return sxy / sxx, per_tread, sxx, used
 
 
+def _line_slope(xs, ys) -> float | None:
+    """Centred least-squares slope of ys on xs; None when xs has no spread."""
+    if len(xs) < 2:
+        return None
+    xbar = statistics.fmean(xs)
+    ybar = statistics.fmean(ys)
+    sxx = sum((x - xbar) ** 2 for x in xs)
+    if sxx <= 0:
+        return None
+    return sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys, strict=True)) / sxx
+
+
+def per_tile_slope(cells, min_tread: int = 1) -> tuple[float | None, int]:
+    """SIGNED d log b / d log f of the per-M-tile cost b = d ms / d n: THE CLAIM,
+    built from the fixed-tread slopes and nothing else.
+
+    At tread n the fixed-tread slope s_n = d log ms_n / d log f times the tread's
+    own level ms_n is d ms_n / d log f. Under ms = a(f) + b(f) n that
+    sensitivity is a' + b' n, so its rise per tread is b' = d b / d log f, and
+    b' / b is the elasticity of the per-M-tile cost. NO CLOCK IS EVER ASSIGNED
+    TO A STATE: every contrast is taken inside one tread, at one kernel over one
+    set of bytes, which is the estimator's own principle. The intercept's
+    elasticity, whatever it is, cancels: it is the same number at every tread
+    and a line through the sensitivities has no use for it.
+
+    Why this and not the pooled fixed-tread reading. The pooled reading is an
+    Sxx-weighted blend of every tread's per-call elasticity, intercept
+    included; on the 2026-09-21 cells the one-tile call read 0.17, every
+    deeper tread 1.04-1.11, and the blend 0.74. The ratio arm's correction
+    and the model's traffic term are about the per-tile cost, not the call.
+
+    `min_tread` drops shallow treads from the line (2 excludes the one-tile
+    call, which on a swizzled ladder is a different regime: one group, an
+    N-outer stream); both readings are printed, neither is hidden.
+
+    Returns (signed elasticity, treads used); None when fewer than two treads
+    carry a fixed-tread slope or the ladder has no positive slope.
+    """
+    _pooled, per_tread, _sxx, _used = within_tread_slope(cells)
+    logs: dict[int, list[float]] = {}
+    for (tread, _duty), (ms, mhz, _n) in cells.items():
+        if ms > 0 and mhz > 0 and tread in per_tread and tread >= min_tread:
+            logs.setdefault(tread, []).append(math.log(ms))
+    treads = sorted(logs)
+    if len(treads) < 2:
+        return None, len(treads)
+    level = {t: math.exp(statistics.fmean(logs[t])) for t in treads}
+    sens = {t: per_tread[t] * level[t] for t in treads}
+    b = _line_slope(treads, [level[t] for t in treads])
+    db = _line_slope(treads, [sens[t] for t in treads])
+    if b is None or b <= 0 or db is None:
+        return None, len(treads)
+    return db / b, len(treads)
+
+
 def ladder_slope_elasticity(cells) -> tuple[float | None, int]:
     """THE COMPANION READING: how the per-M-tile cost itself responds to the clock.
 
@@ -694,10 +757,13 @@ def _percentile(values: list[float], q: float) -> float:
 class Elasticity:
     """The fit, its interval, and everything a reader needs to check it.
 
-    `value` is ETA: the positive magnitude the registered bands are about,
-    `-d log ms / d log f`. `slope` is the signed regression slope the estimator
-    actually computed. Both are carried so a reader never has to infer which
-    convention a number is in.
+    `value` is ETA of the PER-M-TILE cost: the positive magnitude the registered
+    bands are about, `-d log b / d log f` (`per_tile_slope`). `slope` is the
+    signed regression slope the estimator actually computed. `fixed_tread` is
+    eta of the per-CALL time at fixed tread, the reading this arm gated until
+    2026-09-22, carried and printed beside the claim; `per_tile_from2` is the
+    claim over treads 2 and deeper. All are carried so a reader never has to
+    infer which convention, or which quantity, a number is in.
     """
 
     value: float | None
@@ -714,6 +780,11 @@ class Elasticity:
     resampled: int
     ladder_slope: float | None
     ladder_states: int
+    fixed_tread: float | None = None
+    fixed_tread_lo: float | None = None
+    fixed_tread_hi: float | None = None
+    per_tile_from2: float | None = None
+    per_tile_treads: int = 0
 
     @property
     def half_width(self) -> float | None:
@@ -737,6 +808,8 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
     cells = collapse(keep)
     slope, per_tread, sxx, used = within_tread_slope(cells)
     ladder, ladder_states = ladder_slope_elasticity(cells)
+    tile, tile_treads = per_tile_slope(cells)
+    tile2, _from2 = per_tile_slope(cells, min_tread=2)
     # COUNTED OFF THE CELLS THAT ENTERED THE SLOPE, not off the labels present
     # somewhere in the file. A tread that lost every state but one contributes
     # nothing to Sxx, and the report line that read "24 (8 treads x 4 states)"
@@ -744,27 +817,39 @@ def fit(rows, *, draws: int = DEFAULT_DRAWS, seed: int = 0) -> Elasticity:
     fitted = set(per_tread)
     states = len({d for t, d in cells if t in fitted})
     treads = len(fitted)
-    lo = hi = None
+    lo = hi = fixed_lo = fixed_hi = None
     drawn = 0
-    if slope is not None and draws > 0 and len(repeats) >= 2:
+    if (slope is not None or tile is not None) and draws > 0 and len(repeats) >= 2:
         rng = random.Random(seed)
-        values = []
+        values: list[float] = []
+        totals: list[float] = []
         for _ in range(draws):
             sample = [rng.choice(repeats) for _ in repeats]
-            got, _pt, _xx, _n = within_tread_slope(collapse(keep, sample))
+            drawn_cells = collapse(keep, sample)
+            got, _pt, _xx, _n = within_tread_slope(drawn_cells)
             if got is not None:
-                values.append(ETA_SIGN * got)
+                totals.append(ETA_SIGN * got)
+            got_tile, _t = per_tile_slope(drawn_cells)
+            if got_tile is not None:
+                values.append(ETA_SIGN * got_tile)
         if values:
             lo = _percentile(values, 0.025)
             hi = _percentile(values, 0.975)
             drawn = len(values)
-    return Elasticity(value=None if slope is None else ETA_SIGN * slope,
-                      slope=slope, lo=lo, hi=hi,
+        if totals:
+            fixed_lo = _percentile(totals, 0.025)
+            fixed_hi = _percentile(totals, 0.975)
+    return Elasticity(value=None if tile is None else ETA_SIGN * tile,
+                      slope=tile, lo=lo, hi=hi,
                       per_tread={t: ETA_SIGN * v for t, v in per_tread.items()},
                       sxx=sxx, cells=used, states=states, treads=treads,
                       repeats=len(repeats), draws=draws, resampled=drawn,
                       ladder_slope=None if ladder is None else ETA_SIGN * ladder,
-                      ladder_states=ladder_states)
+                      ladder_states=ladder_states,
+                      fixed_tread=None if slope is None else ETA_SIGN * slope,
+                      fixed_tread_lo=fixed_lo, fixed_tread_hi=fixed_hi,
+                      per_tile_from2=None if tile2 is None else ETA_SIGN * tile2,
+                      per_tile_treads=tile_treads)
 
 
 def band_of(lo: float | None, hi: float | None) -> tuple[str, str] | None:
@@ -1203,7 +1288,8 @@ def gate_c2_registered_reading(est: Elasticity) -> Gate:
         lines.append("the interval straddles a boundary (C1), so this FAIL is "
                      "'not shown' and not 'shown false'.")
     return Gate(
-        CLAIM, "2", f"eta = -d log ms / d log f is below {BAND_LOW} at this cell",
+        CLAIM, "2", f"eta of the per-M-tile cost, -d log b / d log f, is below "
+        f"{BAND_LOW} at this cell",
         PASS if ok else FAIL,
         (f"{est.value:.4f} [{est.lo:.4f}, {est.hi:.4f}]"
          if est.value is not None and est.lo is not None
@@ -1337,6 +1423,9 @@ def mde_lines(args) -> list[str]:
         f"  so the states must span            {need:.4f}x in clock at every "
         f"tread ({source})",
         f"  at exactly that span the interval  half-width ~{2 * se:.4f}",
+        "  the per-M-tile fit's own resolution is scored by S4 over the planted "
+        "design, not derived here; its interval is wider than the pooled "
+        "per-call one (2.5-3x on the 2026-09-21 cells)",
         "  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. "
         "The same arithmetic gates an A100 without being told which part is "
         "attached, and a shallower run is held to a WIDER separation rather "
@@ -1379,7 +1468,9 @@ def plan_lines(args, run_id: str, out_dir: Path, card: str,
         f"model       {args.model} {args.dtype}: E={cfg.num_experts} "
         f"k={cfg.top_k} H={cfg.hidden_size} F={cfg.intermediate_size}, "
         f"rows per expert must be a multiple of {quantum}",
-        "pinned      " + ", ".join(f"{k}={v}" for k, v in sorted(PINNED.items())),
+        "pinned      " + ", ".join(f"{k}={v}" for k, v in sorted(pinned_for(args.group_m).items())),
+        "session     " + (args.session_tag or "(none: a bare run, keyed on its "
+                                              "arguments and card alone)"),
         f"ladder      {args.treads} exactly-full tile stacks, rows per expert "
         f"{treads[0]}..{treads[-1]}, tokens "
         f"{SWEEP.tokens_for_rows(cfg, treads[0])}.."
@@ -1837,7 +1928,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
     for tread in treads:
         _rows, tokens, x, weights, ids, w, kw = built[tread]
         call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
-        with FC.forcing_tile_config(dict(PINNED)):
+        with FC.forcing_tile_config(pinned_for(args.group_m)):
             # WHAT vLLM SAYS IT WILL HAND THE KERNEL, read back INSIDE the
             # context and carried onto every row. Until this line the tile
             # columns were copies of `PINNED`, so V2 "read off the rows" was
@@ -1893,7 +1984,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                                                mid[5], mid[4], mid[6])
                 print(f"\nrepeat {repeat} state duty={duty:g}: settling "
                       f"{args.settle_seconds:.0f} s at this cadence")
-                with FC.forcing_tile_config(dict(PINNED)):
+                with FC.forcing_tile_config(pinned_for(args.group_m)):
                     _settle(settle_call, duty=duty, calls=calls,
                             per_call_ms=per_call, seconds=args.settle_seconds,
                             flusher=flusher)
@@ -1904,7 +1995,7 @@ def run_arm(args, cfg, csv_path: Path, cache_root: Path, prov=None) -> list[Row]
                     calls, bursts, per_call = shape[tread]
                     call = SWEEP._make_call(fused_experts, x, weights, w, ids, kw)
                     try:
-                        with FC.forcing_tile_config(dict(PINNED)):
+                        with FC.forcing_tile_config(pinned_for(args.group_m)):
                             t = time_duty(
                                 call, duty=duty, calls_per_burst=calls,
                                 bursts=bursts, trials=args.trials,
@@ -1968,7 +2059,7 @@ def _settle(fn, *, duty: float, calls: int, per_call_ms: float, seconds: float,
             time.sleep(gap_s)
 
 
-def observed_tile(observed: dict | None) -> dict:
+def observed_tile(observed: dict | None, pinned: dict | None = None) -> dict:
     """The tile the ROWS carry: what `get_config()` reported, key by key.
 
     THE ONE PLACE the row's tile columns are decided, so the difference between
@@ -1979,7 +2070,7 @@ def observed_tile(observed: dict | None) -> dict:
     when a forced key comes back changed or missing.
     """
     seen = dict(observed or {})
-    return {k: seen.get(k, v) for k, v in PINNED.items()}
+    return {k: seen.get(k, v) for k, v in (pinned or PINNED).items()}
 
 
 def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
@@ -1991,7 +2082,7 @@ def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
 
     `observed` is what `get_config()` reported inside the pin, so V2 reads a
     kernel's tile back off the rows rather than reading back `PINNED`."""
-    tile = observed_tile(observed)
+    tile = observed_tile(observed, pinned_for(args.group_m))
     return Row(
         duty_requested=duty, duty_achieved=t.duty_achieved,
         state_index=list(args.duty).index(duty),
@@ -2021,7 +2112,7 @@ def _row_from(t: DutyTiming, args, duty, index, repeat, tread,
 
 def _failed_row(args, duty, index, repeat, tread, rows_per_expert, tokens,
                 detail: str, observed: dict | None = None) -> Row:
-    tile = observed_tile(observed)
+    tile = observed_tile(observed, pinned_for(args.group_m))
     return Row(
         duty_requested=duty, duty_achieved=0.0,
         state_index=list(args.duty).index(duty), repeat=repeat,
@@ -2159,11 +2250,16 @@ PLANTED_MEM_MHZ = 2619.0
 def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
                treads: int = DEFAULT_TREADS, repeats: int = DEFAULT_REPEATS,
                a_ms: float = 0.1936, b_ms: float = 0.5559,
+               eps_a: float | None = None,
                jitter: float = 0.0, seed: int = 7,
                block_m_at=None, drift_at=(), host_at=(),
                level_at=None, mem_at=None, burst_moves_at=(),
                calls_per_burst: int = 24) -> list[Row]:
-    """Rows from a stated law: `ms(n, f) = (a + b n) (f_ref / f) ** eps`.
+    """Rows from a stated law: `ms(n, f) = a (f_ref / f) ** eps_a + b n (f_ref / f) ** eps`,
+    `eps_a` defaulting to `eps` (one elasticity for the whole call). Two
+    elasticities is the 2026-09-21 card: the one-tile call at 0.17, every
+    deeper tread at ~1.05, and the estimator has to return `eps`, the
+    per-tile cost's, whatever the intercept does.
 
     THE LAW IS THE ONLY SOURCE OF TIME IN THESE ROWS, which is what makes the
     self-test a recovery test rather than a smoke test: the estimator either
@@ -2182,7 +2278,9 @@ def plant_rows(*, eps: float, duties=DUTY_LEVELS, mhz=PLANTED_STATE_MHZ,
         for index, duty in enumerate(duties):
             f = mhz[index % len(mhz)]
             for tread in range(1, treads + 1):
-                base = (a_ms + b_ms * tread) * (PLANTED_REFERENCE_MHZ / f) ** eps
+                scale_b = (PLANTED_REFERENCE_MHZ / f) ** eps
+                scale_a = (PLANTED_REFERENCE_MHZ / f) ** (eps if eps_a is None else eps_a)
+                base = a_ms * scale_a + b_ms * tread * scale_b
                 ms = base * (1.0 + rng.gauss(0.0, jitter) if jitter else 1.0)
                 key = (index, tread, repeat)
                 drift = (key in drift_at)
@@ -2546,12 +2644,16 @@ def default_run_id(args) -> str:
     return PV.run_id(
         card=resolve_card(args),
         model=args.model, dtype=args.dtype,
-        tile="_".join(f"{k}{v}" for k, v in sorted(PINNED.items())),
+        tile="_".join(f"{k}{v}" for k, v in sorted(pinned_for(args.group_m).items())),
         treads=int(args.treads), duty=[float(d) for d in args.duty],
         repeats=int(args.repeats), burstms=float(args.burst_ms),
         targetms=float(args.target_ms), trials=int(args.trials),
         warmms=float(args.warm_ms), settle=float(args.settle_seconds),
-        l2flush=not bool(args.no_l2_flush), seed=int(args.seed))
+        l2flush=not bool(args.no_l2_flush), seed=int(args.seed),
+        # The session tag is in the key WHEN GIVEN, as the ratio arm's is, so
+        # a new session measures fresh and a resumed one resumes; a bare run's
+        # id is the id the same command produced before the knob existed.
+        **({"session": args.session_tag} if args.session_tag else {}))
 
 
 def results_root() -> Path:
@@ -2591,27 +2693,45 @@ def report_lines(rows, est: Elasticity, args) -> list[str]:
         f"{sides['undetermined']} undetermined. NEITHER SIDE EXCLUDES ANYTHING "
         "HERE.",
         "",
-        "THE FIT",
-        "  eta = -d log ms / d log f, fixed tread "
-        + (f"{est.value:.4f}" if est.value is not None else "no slope"),
+        "THE FIT: eta of the per-M-tile cost, -d log b / d log f, from the "
+        "fixed-tread slopes",
+        "  eta                                 "
+        + (f"{est.value:.4f} over treads 1..{est.per_tile_treads}"
+           if est.value is not None else "no slope"),
+        "  over treads 2 and deeper            "
+        + (f"{est.per_tile_from2:.4f}" if est.per_tile_from2 is not None
+           else "not determined")
+        + "  (the one-tile call is its own regime on a swizzled ladder: "
+        "one group, an N-outer stream; both readings are printed)",
         f"  95% interval over {est.repeats} repeats     "
         + (f"[{est.lo:.4f}, {est.hi:.4f}]  half-width {est.half_width:.4f}"
            if est.lo is not None else "none"),
         f"  bootstrap draws                     {est.resampled} of {est.draws}",
         f"  cells in the fit                    {est.cells} "
         f"({est.treads} treads x {est.states} states)",
+        "",
+        "  PRINTED BESIDE IT, not the claim: eta of the per-CALL time at fixed "
+        "tread, intercept included (what this arm gated until 2026-09-22)",
+        "  eta, fixed tread, pooled            "
+        + (f"{est.fixed_tread:.4f}" if est.fixed_tread is not None else "no slope")
+        + (f"  [{est.fixed_tread_lo:.4f}, {est.fixed_tread_hi:.4f}]"
+           if est.fixed_tread_lo is not None else ""),
         "  per tread                           "
         + ", ".join(f"n{t}={v:+.4f}" for t, v in sorted(est.per_tread.items())),
+        "  A per-tread reading that jumps between tread 1 and tread 2 and is "
+        "flat after it is the",
+        "  swizzle engaging, not the card; the pooled figure blends the two "
+        "regimes by their clock spread.",
         "",
-        "  COMPANION, not the claim: the elasticity of the ladder SLOPE, the "
-        "per-M-tile cost",
+        "  COMPANION: the elasticity of the ladder SLOPE with a clock assigned "
+        "to each state",
         "  eta of the per-M-tile cost           "
         + (f"{est.ladder_slope:.4f} over {est.ladder_states} states"
            if est.ladder_slope is not None else "not determined"),
         "  The clock is not constant across the treads of one state, so the "
         "'clock of a slope'",
-        "  is a summary and this number is read as one. The claim is the "
-        "fixed-tread quantity.",
+        "  is a summary and this number is read as one. The claim above needs "
+        "no such clock.",
     ]
     return out
 
@@ -2682,6 +2802,15 @@ def build_parser() -> argparse.ArgumentParser:
                          "make_inputs: a dtype this repository does not know is "
                          "an argparse 2 before the weights are drawn, not a "
                          "traceback after 2.82 GB of them")
+    ap.add_argument("--group-m", type=int, default=PINNED["GROUP_SIZE_M"],
+                    help="GROUP_SIZE_M this run pins (the swizzle). 16 is the "
+                         "swizzle every published alpha was fitted at; the "
+                         "ratio arm's table needs the elasticity at EACH order "
+                         "it quotes, so this runs once per --group-m. In the "
+                         "run id through the tile")
+    ap.add_argument("--session-tag", default="",
+                    help="the driving session's name; in the run id when "
+                         "given, so a new session measures fresh")
     ap.add_argument("--treads", type=int, default=DEFAULT_TREADS,
                     help="exactly-full tile stacks on the ladder, r = n x "
                          f"BLOCK_M at BLOCK_M={PINNED['BLOCK_SIZE_M']}")
@@ -2876,7 +3005,7 @@ def _main(argv=None) -> int:
     (out_dir / "report.txt").write_text("\n".join(header + tail) + "\n")
     payload = prov.stamp({
         "run_id": run_id, "card": card,
-        "pinned": dict(PINNED), "duty": list(args.duty),
+        "pinned": pinned_for(args.group_m), "duty": list(args.duty),
         "predictions": [asdict(p) for p in PREDICTIONS],
         "bands": [{"name": n, "lo": lo, "hi": hi, "consequence": c}
                   for n, lo, hi, c in BANDS],
