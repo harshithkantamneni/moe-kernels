@@ -1,0 +1,7 @@
+00:01:15 START g16
+00:04:40 END   g16 rc=3
+00:04:40 START r2-r1
+00:44:00 END   r2-r1 rc=0
+00:44:00 START pytest
+pytest interpreter: /workspace/venvs/base/bin/python
+01:08:33 END   pytest rc=1

@@ -1,0 +1,4 @@
+The current user does not have permission to change clocks for GPU 00000000:BB:00.0.
+Terminating early due to previous errors.
+clocks.current.sm [MHz], clocks.applications.graphics [MHz], clocks_event_reasons.active
+345 MHz, [Requested functionality has been deprecated], 0x0000000000000001
