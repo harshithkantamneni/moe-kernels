@@ -33,10 +33,12 @@ The script is loaded by path, because `scripts/` is not a package.
 """
 from __future__ import annotations
 
+import collections
 import importlib.util
 import json
 import math
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -722,6 +724,96 @@ def test_kernel_probe_reports_rather_than_raises_without_vllm():
     probe.record("s3w8g1")
     assert probe.by_setting == {}
     assert probe.note, "a probe that found nothing must say why"
+
+
+FUSED_MOE_MODULE = "vllm.model_executor.layers.fused_moe.fused_moe"
+
+
+def _compiled_kernel(shared: int, n_regs: int = 40, n_spills: int = 0):
+    """What `record` reads off a Triton CompiledKernel: `metadata.shared`,
+    `n_regs`, `n_spills`."""
+    return types.SimpleNamespace(metadata=types.SimpleNamespace(shared=shared),
+                                 n_regs=n_regs, n_spills=n_spills)
+
+
+def _plant_fused_moe_kernel(monkeypatch, **attrs):
+    """A fake `fused_moe_kernel` under vLLM's dotted module path, carrying
+    EXACTLY the attributes given and no other cache attribute.
+    `importlib.import_module` returns whatever `sys.modules` holds, so the
+    probe's own import path is exercised, not bypassed."""
+    fn = types.SimpleNamespace(**attrs)
+    mod = types.ModuleType(FUSED_MOE_MODULE)
+    mod.fused_moe_kernel = fn
+    monkeypatch.setitem(sys.modules, FUSED_MOE_MODULE, mod)
+    return fn
+
+
+@pytest.mark.parametrize("layout", ["triton-3.5+-5-tuple", "triton-3.3-3.4-4-tuple"])
+def test_kernel_probe_reads_triton_3_device_caches_without_a_cache_attribute(
+        monkeypatch, layout):
+    """THE 2026-09-21 REFUSAL. Triton >= 3.3 renamed `JITFunction.cache` to
+    `device_caches` and wrapped each device's kernels in a tuple whose arity
+    has changed since (4 on 3.3-3.4, 5 on >= 3.5, the extra dict holding
+    cache-key STRINGS). The probe required `hasattr(fn, "cache")`, read
+    nothing on vLLM 0.27.1 / Triton 3.7.1, and blockk_diagonal REFUSED all
+    eight cells at plan time. It now reads whichever attribute is there and
+    recognises a compiled kernel by its `metadata`, never by tuple position.
+    """
+    kernels = {"k1": _compiled_kernel(3 * 16384, n_regs=64, n_spills=2)}
+    per_device = ((kernels, {"k1": "a-cache-key-string"}, "target", "backend",
+                   "binder") if layout.startswith("triton-3.5")
+                  else (kernels, "target", "backend", "binder"))
+    _plant_fused_moe_kernel(monkeypatch, device_caches={0: per_device})
+    probe = OVS.KernelProbe()
+    probe.record("s3w8g1")
+    assert probe.by_setting == {
+        "s3w8g1": {"shared": 3 * 16384, "n_regs": 64, "n_spills": 2}}, probe.note
+    assert probe.note == ""
+
+
+def test_kernel_probe_never_indexes_device_caches(monkeypatch):
+    """`device_caches` is a defaultdict whose factory BINDS A DEVICE; indexing
+    a device that never compiled would create an entry as a side effect of
+    looking. The probe iterates `.values()` only."""
+    def factory():
+        raise AssertionError("the probe indexed device_caches by device")
+    caches = collections.defaultdict(factory)
+    caches[0] = ({"k": _compiled_kernel(16384)}, {}, "t", "b", "binder")
+    _plant_fused_moe_kernel(monkeypatch, device_caches=caches)
+    probe = OVS.KernelProbe()
+    probe.record("x")
+    assert probe.by_setting["x"]["shared"] == 16384
+    assert list(caches) == [0]
+
+
+def test_kernel_probe_still_reads_triton_3_2_cache(monkeypatch):
+    """The layout it was written against, kept: `fn.cache` is
+    {device: {key: CompiledKernel}} on Triton <= 3.2."""
+    _plant_fused_moe_kernel(monkeypatch,
+                            cache={0: {"k": _compiled_kernel(2 * 16384)}})
+    probe = OVS.KernelProbe()
+    probe.record("s2")
+    assert probe.by_setting["s2"]["shared"] == 2 * 16384
+    assert probe.note == ""
+
+
+def test_kernel_probe_note_names_what_it_found_when_the_shape_is_unknown(
+        monkeypatch):
+    """A layout the probe does not recognise is REPORTED with what it saw,
+    so the next pod log diagnoses itself instead of saying 'no cache'."""
+    _plant_fused_moe_kernel(monkeypatch, device_caches={0: ({"k": object()}, {},
+                                                            "t", "b", "binder")})
+    probe = OVS.KernelProbe()
+    probe.record("x")
+    assert probe.by_setting == {}
+    assert "holds 1 device entry but no compiled kernel with metadata was " \
+        "recognised in tuple" in probe.note, probe.note
+    # And a kernel object with neither attribute names what it IS.
+    _plant_fused_moe_kernel(monkeypatch, cache_key="abc", run=lambda: None)
+    probe = OVS.KernelProbe()
+    probe.record("y")
+    assert "SimpleNamespace with none of device_caches/cache" in probe.note
+    assert "attributes: cache_key, run" in probe.note
 
 
 def test_compiled_smem_gate_is_unknown_when_nothing_was_probed():

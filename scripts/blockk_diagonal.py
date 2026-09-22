@@ -238,8 +238,8 @@ SWEEP = _load("block_m_crossing_sweep",
 #: resource tables, `CardLimits` and `residency` -- is IMPORTED and not copied,
 #: because a residency ladder computed here against a different per-SM shared
 #: memory would be a ladder with the wrong rungs and it would still plot. Its
-#: `KernelProbe` is imported for the same reason: it already knows both vLLM
-#: attribute paths to the compiled kernel's metadata.
+#: `KernelProbe` is imported for the same reason: it already knows where vLLM
+#: keeps the kernel and where each Triton version keeps its compiled cache.
 OCC = _load("occupancy_vs_swizzle",
             ("SMEM_PER_SM_BYTES", "MAX_THREADS_PER_SM", "MAX_BLOCKS_PER_SM",
              "RESERVED_SMEM_PER_BLOCK", "HYPOTHESIS_L2_BYTES",

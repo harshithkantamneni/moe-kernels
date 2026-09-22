@@ -513,7 +513,7 @@ class Residency:
     THE REGISTER LIMIT IS NOT MODELLED and its absence is a stated bound, not an
     oversight: the per-thread register count is decided by ptxas and is not
     knowable from the pinned constants. It can only LOWER residency, so every
-    number here is an UPPER BOUND, and `--probe-kernel` reads Triton's own
+    number here is an UPPER BOUND, and `KernelProbe` reads Triton's own
     reported shared memory and register count back off the compiled kernel to
     check the bound where the platform allows it. A run that cannot probe says
     so and its residency column is labelled a bound.
@@ -1526,12 +1526,36 @@ class KernelProbe:
     compiled kernel, so it is read rather than trusted.
 
     IT CAN ONLY REPORT, NEVER RAISE. This runs inside the metered loop, the
-    attribute path has moved between vLLM versions, and a probe that threw would
-    cost a pod session to learn nothing. Every failure returns a NOTE that names
-    what was missing, and the gate that consumes it says UNKNOWN rather than
+    MODULE path has moved between vLLM versions and the CACHE attribute between
+    Triton versions, and a probe that threw would cost a pod session to learn
+    nothing. Every failure returns a NOTE that names what was found and what
+    was looked for, and the gate that consumes it says UNKNOWN rather than
     PASS -- because a probe that examined nothing also reports zero
     disagreements.
+
+    WHERE TRITON KEEPS THE COMPILED KERNELS, by version, read off
+    `python/triton/runtime/jit.py` on each release branch:
+      <= 3.2   `fn.cache`          {device: {key: CompiledKernel}}
+      3.3-3.4  `fn.device_caches`  {device: ({key: CompiledKernel}, target,
+                                             backend, binder)}
+      >= 3.5   `fn.device_caches`  {device: ({key: CompiledKernel},
+                                             {key: cache_key str}, target,
+                                             backend, binder)}
+    The 2026-09-21 H200 session (vLLM 0.27.1, Triton 3.7.1) is where this was
+    learned: `hasattr(fn, "cache")` was False on every Triton >= 3.3, so the
+    probe read nothing and blockk_diagonal REFUSED all eight cells at plan time.
+    A compiled kernel is recognised by carrying `metadata`, which is what
+    `record` reads, so the >= 3.5 sibling dict of strings drops out on its own.
+    The per-device entry is NEVER indexed by position: Triton has changed the
+    tuple's arity twice, and a probe that assumed one would break silently on
+    the next.
     """
+
+    #: Where vLLM has kept `fused_moe_kernel`, newest first.
+    MODULE_PATHS = ("vllm.model_executor.layers.fused_moe.fused_moe",
+                    "vllm.model_executor.layers.fused_moe")
+    #: Where Triton has kept the compiled kernels on a JITFunction, newest first.
+    CACHE_ATTRS = ("device_caches", "cache")
 
     def __init__(self) -> None:
         self.seen: set = set()
@@ -1539,30 +1563,76 @@ class KernelProbe:
         self.by_setting: dict[str, dict] = {}
 
     def _kernel(self):
+        """The JITFunction, or None with `self.note` saying what WAS found."""
         import importlib
-        for name in ("vllm.model_executor.layers.fused_moe.fused_moe",
-                     "vllm.model_executor.layers.fused_moe"):
+        found = []
+        for name in self.MODULE_PATHS:
             try:
                 mod = importlib.import_module(name)
-            except ImportError:
+            except ImportError as exc:
+                found.append(f"{name}: {type(exc).__name__}")
                 continue
             fn = getattr(mod, "fused_moe_kernel", None)
-            if fn is not None and hasattr(fn, "cache"):
+            if fn is None:
+                found.append(f"{name}: importable, no fused_moe_kernel")
+                continue
+            if any(hasattr(fn, a) for a in self.CACHE_ATTRS):
                 return fn
+            public = sorted(a for a in dir(fn) if not a.startswith("_"))[:12]
+            found.append(
+                f"{name}.fused_moe_kernel is a {type(fn).__name__} with none "
+                f"of {'/'.join(self.CACHE_ATTRS)} (attributes: "
+                + ", ".join(public) + ")")
+        self.note = ("vLLM exposes no fused_moe_kernel with a Triton cache the "
+                     "probe recognises, so the compiled shared memory could "
+                     "not be read: " + "; ".join(found))
         return None
+
+    @staticmethod
+    def _compiled(per_device) -> dict:
+        """`{key: CompiledKernel}` out of one device's entry, whatever Triton
+        wrapped it in: the dict itself (<= 3.2) or a tuple holding it (>= 3.3).
+        A kernel is recognised by carrying `metadata`; the >= 3.5 sibling dict
+        of cache-key strings drops out here. Nothing is indexed by position."""
+        parts = ((per_device,) if isinstance(per_device, dict)
+                 else tuple(per_device) if isinstance(per_device, (tuple, list))
+                 else ())
+        out = {}
+        for part in parts:
+            if isinstance(part, dict):
+                out.update({k: v for k, v in part.items()
+                            if getattr(v, "metadata", None) is not None})
+        return out
 
     def _entries(self) -> dict:
         fn = self._kernel()
         if fn is None:
-            self.note = ("vLLM exposes no fused_moe_kernel with a Triton cache "
-                         "under either known path, so the compiled shared "
-                         "memory could not be read")
             return {}
-        out = {}
-        for device in list(fn.cache.values()):
-            if isinstance(device, dict):
-                out.update(device)
-        return out
+        for attr in self.CACHE_ATTRS:
+            caches = getattr(fn, attr, None)
+            if caches is None:
+                continue
+            # `.values()` and never `[device]`: on >= 3.3 it is a defaultdict
+            # whose factory BINDS A DEVICE, and indexing a device that never
+            # compiled would create an empty entry as a side effect.
+            devices = list(caches.values())
+            if not devices:
+                self.note = (f"fused_moe_kernel.{attr} holds no device entry "
+                             "yet: nothing has compiled")
+                return {}
+            out = {}
+            for per_device in devices:
+                out.update(self._compiled(per_device))
+            if out:
+                return out
+            kinds = sorted({type(d).__name__ for d in devices})
+            self.note = (f"fused_moe_kernel.{attr} holds {len(devices)} device "
+                         f"entr{'y' if len(devices) == 1 else 'ies'} but no "
+                         "compiled kernel with metadata was recognised in "
+                         f"{', '.join(kinds)}, so the compiled shared memory "
+                         "could not be read")
+            return {}
+        return {}
 
     def record(self, key: str) -> None:
         """Attribute whatever compiled since the last call to `key`."""
