@@ -842,7 +842,7 @@ def test_every_knob_that_moves_a_millisecond_is_in_the_run_id():
                         ("--warmup", 500.0), ("--cell-budget-ms", 400.0),
                         ("--trials", 5), ("--model", "qwen2-57b-a14b"),
                         ("--num-stages", 3), ("--block-n", 128),
-                        ("--group-m", 16), ("--seed", 3),
+                        ("--group-m", 16), ("--seed", 3), ("--duty", 0.5),
                         ("--session-tag", "gaps-nvidia_h200-20260918"),
                         ("--declared-copies", 9)):
         other = PW.default_run_id(_args(**{flag: value}), "NVIDIA H200")
@@ -3198,6 +3198,157 @@ def test_a_run_that_formed_no_interval_still_prints_the_replicates_it_was_given(
     assert any("this run enters no reading" in ln for ln in c1.lines)
     assert any(ln.startswith("REPLICATES: 1 run(s)") for ln in c1.lines)
     assert report.payload["replicates"]["n"] == 1
+
+
+
+# --------------------------------------------------------------------------
+# 20. the duty cycle: both arms off the power cap (DESIGN DECISION 15)
+# --------------------------------------------------------------------------
+
+class _CellTiming:
+    def __init__(self, **kw):
+        defaults = dict(ms_p50=0.5, ms_min=0.49, ms_std=0.01, iters=40, trials=3,
+                        warmup_ms=300.0, instrument="fake/time_kernel",
+                        sm_clock_load_mhz=1455.0, clock_level_ok=True,
+                        clock_level_side="", clock_drift_ok=True, l2_flush=True)
+        defaults.update(kw)
+        self.__dict__.update(defaults)
+
+
+class _CellDutyTiming(_CellTiming):
+    def __init__(self, **kw):
+        super().__init__(samples=400, power_w=480.0, host_bound=False,
+                         clock_note="LEVEL HIGH (recorded)",
+                         instrument="fake/time_duty", sm_clock_load_mhz=1965.0,
+                         **kw)
+
+
+def test_the_duty_knob_keeps_every_full_duty_run_id_and_moves_the_others():
+    base = PW.default_run_id(_args(), "NVIDIA H200")
+    assert PW.default_run_id(_args(**{"--duty": 1.0}), "NVIDIA H200") == base
+    assert PW.default_run_id(_args(**{"--duty": 0.5}), "NVIDIA H200") != base
+
+
+def test_a_duty_outside_the_unit_interval_is_refused_before_anything():
+    for bad in ("0", "1.5", "-0.5"):
+        got = run(["--dry-run", "--device-memory-gb", "140", "--duty", bad])
+        assert got.returncode == exit_codes.REFUSED
+        assert "REFUSED: --duty" in got.stdout, got.stdout[-400:]
+        assert "unrecognized arguments" not in got.stderr
+
+
+def test_the_plan_page_prices_the_duty_and_says_what_it_buys():
+    full = run(["--dry-run", "--device-memory-gb", "140"])
+    half = run(["--dry-run", "--device-memory-gb", "140", "--duty", "0.5"])
+    assert "duty        1.00: the queue kept full" in full.stdout
+    assert "WALL CLOCK" not in full.stdout
+    assert "duty        0.50: every cell timed as bursts of ~40 ms" in half.stdout
+    assert "idle gaps of 40 ms" in half.stdout
+    assert "V7 holds by construction" in half.stdout
+    m = re.search(r"the ladder's (\d+) s of kernel time takes about (\d+) s", half.stdout)
+    assert m, half.stdout[-1500:]
+    assert int(m.group(2)) == pytest.approx(2 * int(m.group(1)), abs=2)
+    # The kernel estimate itself does not move: the same calls, the same bytes.
+    est = lambda s: int(re.search(r"estimated GPU time (\d+) s", s).group(1))  # noqa: E731
+    assert est(full.stdout) == est(half.stdout)
+
+
+def test_time_cell_at_a_duty_sizes_the_bursts_off_a_short_reading_and_records_power():
+    calls = []
+
+    def timer(fn, **kw):
+        calls.append(("timer", kw))
+        fn()
+        return _CellTiming(ms_p50=0.5)
+
+    def duty_timer(fn, **kw):
+        calls.append(("duty", kw))
+        fn()
+        return _CellDutyTiming(ms_p50=0.52)
+    ran = []
+    ct = PW.time_cell(lambda: ran.append(1), duty=0.5, warmup_ms=300.0,
+                      cell_budget_ms=200.0, trials=3, l2_flush=True,
+                      reference_clock_mhz=1455.0, timer=timer,
+                      duty_timer=duty_timer)
+    assert [c[0] for c in calls] == ["timer", "duty"]
+    sizing = calls[0][1]
+    assert sizing["target_ms"] == PW.DUTY_SIZING_MS and sizing["trials"] == 1
+    assert sizing["warmup_ms"] == PW.DUTY_SIZING_MS      # min(300, 20)
+    kw = calls[1][1]
+    assert kw["duty"] == 0.5
+    assert kw["calls_per_burst"] == round(PW.DUTY_BURST_MS / 0.5)     # 80
+    assert kw["bursts"] == round(200.0 / PW.DUTY_BURST_MS)          # 5
+    assert kw["per_call_ms"] == 0.5 and kw["trials"] == 3
+    assert kw["warm_ms"] == 300.0 and kw["l2_flush"] is True
+    assert kw["reference_clock_mhz"] == 1455.0
+    assert ct.duty == 0.5 and ct.power_w == 480.0 and ct.ms_p50 == 0.52
+    assert ct.iters == 400 and ct.instrument == "fake/time_duty"
+    assert ct.sm_clock_load_mhz == 1965.0 and ct.host_bound is False
+    assert ct.note.startswith("LEVEL HIGH")
+    # Full duty never touches the duty timer and records no power.
+    calls.clear()
+    ct = PW.time_cell(lambda: None, duty=1.0, warmup_ms=300.0,
+                      cell_budget_ms=200.0, trials=3, l2_flush=True,
+                      reference_clock_mhz=1455.0, timer=timer,
+                      duty_timer=duty_timer)
+    assert [c[0] for c in calls] == ["timer"]
+    assert calls[0][1]["target_ms"] == 200.0 and calls[0][1]["warmup_ms"] == 300.0
+    assert ct.duty == 1.0 and ct.power_w is None and ct.instrument == "fake/time_kernel"
+    assert ct.iters == 40 and ct.note == ""
+
+
+def test_the_duty_and_the_power_travel_through_the_csv(tmp_path):
+    path = tmp_path / "cells.csv"
+    store = PW.Store(path, PW.CSV_FIELDS)
+    store.append(_sample(PW.SHARED, 2, 0, 1.0, load=1965.0))
+    a = PW.replace(_sample(PW.PRIVATE, 2, 0, 1.1, load=1960.0), duty=0.5, power_w=480.0)
+    store.append(a)
+    back = PW.read_samples(path)
+    assert [s.duty for s in back] == [1.0, 0.5]
+    assert [s.power_w for s in back] == [None, 480.0]
+    assert PW.duty_of(back) == 0.5
+    # A file written before the column reads back as full duty.
+    text = path.read_text().splitlines()
+    header = text[0].split(",")
+    keep = [i for i, h in enumerate(header) if h not in ("duty", "power_w")]
+    (tmp_path / "old.csv").write_text("\n".join(
+        ",".join(ln.split(",")[i] for i in keep) for ln in text) + "\n")
+    old = PW.read_samples(tmp_path / "old.csv")
+    assert [s.duty for s in old] == [1.0, 1.0] and all(s.power_w is None for s in old)
+
+
+def test_v7_names_the_duty_remedy_only_on_a_split_at_full_duty():
+    treads = [1, 2, 3]
+    split = _pair_world(private_clock=1425.0, shared_clock=1740.0)
+    gate = PW.gate_v7_clock_parity(split, treads=treads)
+    assert gate.verdict == exit_codes.FAIL
+    assert any("the remedy is --duty 0.5" in ln for ln in gate.lines), gate.lines
+    at_half = [PW.replace(s, duty=0.5) for s in split]
+    gate = PW.gate_v7_clock_parity(at_half, treads=treads)
+    assert gate.verdict == exit_codes.FAIL
+    assert not any("the remedy is --duty 0.5" in ln for ln in gate.lines)
+    ok = PW.gate_v7_clock_parity(_pair_world(private_clock=1965.0, shared_clock=1965.0),
+                                 treads=treads)
+    assert ok.verdict == exit_codes.PASS
+    assert not any("remedy" in ln for ln in ok.lines)
+
+
+def test_a_replicate_at_another_duty_is_refused_and_a_pre_duty_report_is_full_duty(tmp_path):
+    treads = [1, 2, 3, 4, 5, 6]
+    pa, payload_a = _measured_shaped_report(tmp_path, "run-a", PW.ALPHA, treads)
+    assert payload_a["duty"] == 1.0
+    design = {k: payload_a.get(k, PW.DESIGN_KEY_DEFAULTS.get(k)) for k in PW.DESIGN_KEYS}
+    half = dict(payload_a, duty=0.5)
+    ph = tmp_path / "half.json"
+    ph.write_text(json.dumps(half))
+    with pytest.raises(PW.PrivateWeightRefusal, match="differs in duty"):
+        PW.load_replicates([ph], design=design, card_known=True)
+    old = dict(payload_a)
+    del old["duty"]
+    po = tmp_path / "old.json"
+    po.write_text(json.dumps(old))
+    assert len(PW.load_replicates([po], design=design, card_known=True)) == 1
+    assert "duty" in PW.DESIGN_KEYS
 
 
 # --------------------------------------------------------------------------

@@ -5,6 +5,7 @@
     python scripts/private_weight_reference.py --self-test refit
     python scripts/private_weight_reference.py --self-test issue-bound
     python scripts/private_weight_reference.py                # the pod run
+    python scripts/private_weight_reference.py --duty 0.5     # both arms off the power cap
     python scripts/private_weight_reference.py --seed 1 --replicate-of RUN0/report.json
                                        # a second run; C1 scored WITH the first
     python scripts/private_weight_reference.py --read RUN1/report.json \
@@ -197,6 +198,20 @@ kernel under test with no triad benchmark in it. C2 scores the relation
 between that and the card's own calibrated ceiling. A kernel cannot beat its
 card's measured ceiling, so a violation says the copies were not all read (and
 V2 says they were) or the calibration is not a ceiling.
+
+WHY THE CLOCK SPLIT EXISTS AND HOW IT IS REMOVED (DESIGN DECISION 15). Session
+4's pages were INVALID on V7 because a power-capped card boosts whichever arm
+reads fewer bytes: both arms ran flat out against the 700 W cap and the shared
+arm sat 2% (G=1) to 18% (G=16) above the private one. Session 4's clock arm
+showed the cap binds ONLY at full duty: every state at or below 50% duty sat at
+the boost ceiling (1905-1980 MHz) at every tread, at 180-500 W. `--duty 0.5`
+times every cell as bursts of kernel time separated by idle gaps of equal
+length, the mechanism `clock_elasticity.time_duty` already has, so the same
+kernel moves the same bytes with board power under the cap and both arms at
+one clock. V7 then holds by construction, the raw ratio is quotable, and no
+elasticity model enters the number. The cost is wall clock, about 1/duty x
+the kernel time. Board power is recorded per cell (`power_w`): the one traffic
+signal on the page that does not go through the clock.
 
 WHAT ONE RUN'S INTERVAL IS NOT. The bootstrap is over repeats WITHIN a run. Two
 runs of this arm on one card at two seeds, 77 minutes apart (session 4), sat
@@ -391,7 +406,9 @@ INTERVAL_PCT = 90.0
 #: bytes: `--seed` draws the weights and the inputs as well as the bootstrap.
 DESIGN_KEYS: tuple[str, ...] = ("experiment", "card", "model", "dtype",
                                 "block_m", "pinned", "treads", "repeats",
-                                "copies_declared", "alpha_band")
+                                "copies_declared", "alpha_band", "duty")
+#: What a report written before a design key existed is read as carrying.
+DESIGN_KEY_DEFAULTS: dict[str, object] = {"duty": 1.0}
 
 #: DESIGN DECISION 6. V5's bound on the declaration. `|slope(NATIVE) -
 #: slope(SHARED)|` must be under this fraction of `slope(PRIVATE)`, which is
@@ -1949,6 +1966,15 @@ class Sample:
     l2_flush: bool = False
     status: str = "ok"
     detail: str = ""
+    #: The duty cycle this cell was timed at (DESIGN DECISION 15): 1.0 is the
+    #: driver's instrument with the queue kept full; below 1.0 the cell was
+    #: bursts of kernel time with idle gaps, board power under the cap. A row
+    #: written before the column reads back as 1.0, which is what it was.
+    duty: float = 1.0
+    #: Median board power over the cell's clock samples, W, when the
+    #: instrument read it (the duty timer does; the full-duty timer does not).
+    #: A RECORD: the traffic signal that does not go through the clock.
+    power_w: float | None = None
 
     def __post_init__(self) -> None:
         # The sweep owns the rule that a failed LEVEL without a side is not a
@@ -2030,6 +2056,93 @@ def _opt_bool(text: str):
     return text == "True"
 
 
+#: Bursts of about this much KERNEL time at a duty cycle below 1, the size the
+#: clock arm settled on: long enough that one NVML read per burst is a clock
+#: under load, short enough that the governor cannot ramp inside one.
+DUTY_BURST_MS = 40.0
+#: The short full-duty reading that sizes the bursts (calls per burst) before
+#: a duty-cycled cell is timed; not a measurement, never written.
+DUTY_SIZING_MS = 20.0
+
+
+@dataclass(frozen=True)
+class CellTiming:
+    """What one ladder cell's timing contributes to its `Sample`, whichever
+    instrument produced it. `iters` is `time_kernel`'s iterations per trial
+    at full duty and the duty timer's KEPT calls in total below it; `note`
+    is the duty timer's clock note (empty at full duty)."""
+    ms_p50: float
+    ms_min: float
+    ms_stdev: float
+    iters: int
+    trials: int
+    warmup_ms: float
+    instrument: str
+    sm_clock_load_mhz: float | None
+    clock_level_ok: bool | None
+    clock_level_side: str
+    clock_drift_ok: bool | None
+    l2_flush: bool
+    duty: float
+    power_w: float | None
+    host_bound: bool | None
+    note: str
+
+
+def time_cell(call, *, duty: float, warmup_ms: float, cell_budget_ms: float,
+              trials: int, l2_flush: bool, reference_clock_mhz: float | None,
+              timer=None, duty_timer=None) -> CellTiming:
+    """ONE ladder cell on the instrument the duty selects.
+
+    `duty >= 1`: `timing.time_kernel`, the driver's instrument, the queue kept
+    full; what every page before 2026-09-22 was timed with. `duty < 1`:
+    `clock_elasticity.time_duty` (IMPORTED, not copied), `DUTY_BURST_MS` of
+    kernel time per burst with an idle gap of `burst x (1/duty - 1)` after
+    each, the burst sized off a `DUTY_SIZING_MS` full-duty reading of the same
+    call, the same warmup and trials and L2 flush. The kernel, its bytes and
+    its launch shape do not change between the two; what changes is board
+    power, and with it the clock the cap allows. Pure plumbing: the off-GPU
+    tests drive it with fake timers.
+    """
+    if timer is None:
+        from moe.bench import timing
+        timer = timing.time_kernel
+    if duty >= 1.0:
+        t = timer(call, warmup_ms=warmup_ms, target_ms=cell_budget_ms,
+                  trials=trials, l2_flush=l2_flush,
+                  reference_clock_mhz=reference_clock_mhz)
+        return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.iters, t.trials,
+                          t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
+                          t.clock_level_ok, t.clock_level_side,
+                          t.clock_drift_ok, t.l2_flush, 1.0,
+                          getattr(t, "power_w", None),
+                          getattr(t, "host_bound", None), "")
+    if duty_timer is None:
+        import clock_elasticity as CE  # scripts/ is on sys.path, as SWEEP is
+        duty_timer = CE.time_duty
+    sizing = timer(call, warmup_ms=min(warmup_ms, DUTY_SIZING_MS),
+                   target_ms=DUTY_SIZING_MS, trials=1, l2_flush=l2_flush,
+                   reference_clock_mhz=reference_clock_mhz)
+    per_call = max(float(sizing.ms_p50), 1e-4)
+    calls_per_burst = max(2, round(DUTY_BURST_MS / per_call))
+    bursts = max(1, round(cell_budget_ms / DUTY_BURST_MS))
+    t = duty_timer(call, duty=duty, calls_per_burst=calls_per_burst,
+                   bursts=bursts, trials=trials, warm_ms=warmup_ms,
+                   l2_flush=l2_flush, per_call_ms=per_call,
+                   reference_clock_mhz=reference_clock_mhz)
+    return CellTiming(t.ms_p50, t.ms_min, t.ms_std, t.samples, t.trials,
+                      t.warmup_ms, t.instrument, t.sm_clock_load_mhz,
+                      t.clock_level_ok, t.clock_level_side, t.clock_drift_ok,
+                      t.l2_flush, duty, t.power_w, t.host_bound,
+                      t.clock_note or "")
+
+
+def duty_of(samples) -> float:
+    """The duty the ladder was timed at, off the rows (the smallest, so a
+    resumed ladder that mixed two is named by the one that mattered)."""
+    return min((s.duty for s in samples if s.status == "ok"), default=1.0)
+
+
 def read_samples(path: Path) -> list[Sample]:
     """Every row back, BY HEADER NAME, with optional fields absent rather than
     defaulted. A pre-column file reads back as None, never as 0 or False."""
@@ -2056,7 +2169,9 @@ def read_samples(path: Path) -> list[Sample]:
                 clock_level_side=row.get("clock_level_side", "") or "",
                 clock_drift_ok=_opt_bool(row.get("clock_drift_ok", "")),
                 l2_flush=(row.get("l2_flush", "") == "True"),
-                status=row.get("status", "ok"), detail=row.get("detail", "")))
+                status=row.get("status", "ok"), detail=row.get("detail", ""),
+                duty=float(row.get("duty") or 1.0),
+                power_w=_opt_float(row.get("power_w", ""))))
     return out
 
 
@@ -3023,6 +3138,12 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
         verdict = UNKNOWN
     else:
         verdict = PASS if not over else FAIL
+    if over and duty_of(samples) >= 1.0:
+        detail.append(
+            "the remedy is --duty 0.5: bursts of kernel time with idle gaps "
+            "hold board power under the cap so both arms sit at the boost "
+            "ceiling (session 4's clock arm: 1905-1980 MHz at every tread at "
+            "or below duty 0.5, against 1425-1792 MHz at full duty)")
     return Gate("V7", VALIDITY,
                 "shared and private ran at the same clock at every tread",
                 verdict,
@@ -3724,7 +3845,8 @@ def load_replicates(paths, *, design: dict, card_known: bool,
                 f"--replicate-of {p}: a planted (--self-test) report; a "
                 "replicate is a measured run")
         differ = [k for k in DESIGN_KEYS
-                  if (k != "card" or card_known) and payload.get(k) != design.get(k)]
+                  if (k != "card" or card_known)
+                  and payload.get(k, DESIGN_KEY_DEFAULTS.get(k)) != design.get(k)]
         if differ:
             raise PrivateWeightRefusal(
                 f"--replicate-of {p}: not a replicate of this design; it "
@@ -4137,6 +4259,17 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         f"tread order REVERSED on odd repeats so no tread is always first",
         f"cells       {len(treads)} treads x {len(ARMS)} arms x "
         f"{args.repeats} repeats = {len(treads) * len(ARMS) * args.repeats}",
+        f"duty        {args.duty:.2f}"
+        + (f": every cell timed as bursts of ~{DUTY_BURST_MS:.0f} ms of kernel "
+           f"time with idle gaps of {DUTY_BURST_MS * (1 / args.duty - 1):.0f} ms, "
+           "so board power sits under the cap and both ratio arms run at the "
+           "boost ceiling; V7 holds by construction rather than by luck "
+           "(session 4 at full duty: the arm reading less boosted 2-18%); "
+           f"wall clock over the ladder ~{1 / args.duty:.1f}x the kernel time"
+           if args.duty < 1.0 else
+           ": the queue kept full, the driver's instrument; on a power-capped "
+           "card the two ratio arms then draw different power and V7 decides "
+           "whether their clocks agreed (--duty 0.5 is what holds them equal)"),
         f"experts     native declares E={cfg.num_experts}; shared and private "
         f"declare E x n_decl = {expert_space(cfg.num_experts, copies_declared)} "
         "at EVERY tread, copy c of expert e at slot e x n_decl + c",
@@ -4526,6 +4659,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "pinned": dict(pinned),
         "treads": list(treads),
         "repeats": repeats,
+        "duty": duty_of(samples),
         "alpha_refit": alpha,
         "alpha_band": list(ALPHA_BAND),
         "ridge": ridge,
@@ -5485,16 +5619,17 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                     with override_config(conf):
                         call()
                         torch.cuda.synchronize()
-                        t = timing.time_kernel(
-                            call, warmup_ms=args.warmup,
-                            target_ms=args.cell_budget_ms, trials=args.trials,
-                            l2_flush=not args.no_l2_flush,
-                            reference_clock_mhz=reference_clock)
+                        t = time_cell(call, duty=args.duty,
+                                      warmup_ms=args.warmup,
+                                      cell_budget_ms=args.cell_budget_ms,
+                                      trials=args.trials,
+                                      l2_flush=not args.no_l2_flush,
+                                      reference_clock_mhz=reference_clock)
                     sample = Sample(
                         arm=arm, repeat=rep, block_m=block_m, tiles=n,
                         rows_per_expert=n * block_m, tokens=tokens,
                         copies=copies, experts_declared=experts,
-                        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_std,
+                        ms_p50=t.ms_p50, ms_min=t.ms_min, ms_stdev=t.ms_stdev,
                         iters=t.iters, trials=t.trials, warmup_ms=t.warmup_ms,
                         instrument=t.instrument,
                         sm_clock_load_mhz=t.sm_clock_load_mhz,
@@ -5505,7 +5640,8 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
                         # side excludes here, DRIFT alone does.
                         clock_level_side=t.clock_level_side,
                         clock_drift_ok=t.clock_drift_ok,
-                        l2_flush=t.l2_flush)
+                        l2_flush=t.l2_flush, duty=t.duty, power_w=t.power_w,
+                        detail=t.note)
                     if t.clock_level_side:
                         print(f"  ^ LEVEL {t.clock_level_side.upper()}: kept in "
                               "every fit, side recorded; its fraction of the "
@@ -5737,6 +5873,11 @@ def default_run_id(args, card: str) -> str:
         # asked; a planted world is a different resolved value.
         "planted": "measured" if args.self_test is None else args.self_test,
         "plantnoise": args.plant_noise,
+        # The duty moves board power and so the clock every cell is timed at;
+        # in the key WHEN IT IS NOT 1.0, so every run id written before the
+        # knob existed (all of them at full duty) is the id the same command
+        # still produces, and a resumed session-4 directory resumes.
+        **({"duty": args.duty} if args.duty != 1.0 else {}),
     }
     prefix = "synthetic-" if args.self_test is not None else ""
     return prefix + PV.run_id(card=card, **swept)
@@ -5774,6 +5915,14 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--warmup", type=float, default=300.0,
                     help="MILLISECONDS of delivered GPU load, not a call count")
     ap.add_argument("--cell-budget-ms", type=float, default=200.0)
+    ap.add_argument("--duty", type=float, default=1.0,
+                    help="duty cycle every ladder cell is timed at (DESIGN "
+                         "DECISION 15). 1.0 keeps the queue full, the "
+                         "driver's instrument; 0.5 times bursts of ~40 ms of "
+                         "kernel time with equal idle gaps, so board power "
+                         "sits under the cap and both ratio arms run at the "
+                         "boost ceiling: V7 by construction. Wall clock "
+                         "~1/duty x. In the run id")
     ap.add_argument("--trials", type=int, default=3)
     ap.add_argument("--no-l2-flush", action="store_true")
     ap.add_argument("--capability", default="",
@@ -5880,6 +6029,11 @@ def _main(argv=None) -> int:
     b = dtype_bytes(args.dtype)
     block_m = args.block_m
     synthetic = args.self_test is not None
+    if not 0.0 < args.duty <= 1.0:
+        print(f"REFUSED: --duty {args.duty} is not in (0, 1]: a duty cycle is "
+              "the fraction of wall clock the kernel is busy, 1.0 is the "
+              "queue kept full and 0 is no measurement at all")
+        return exit_codes.REFUSED
 
     gap = partition_is_total()
     if gap:
@@ -6020,7 +6174,7 @@ def _main(argv=None) -> int:
                     "block_m": block_m, "pinned": pinned,
                     "treads": list(treads), "repeats": args.repeats,
                     "copies_declared": copies_declared,
-                    "alpha_band": list(ALPHA_BAND)})
+                    "alpha_band": list(ALPHA_BAND), "duty": args.duty})
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
@@ -6106,6 +6260,12 @@ def _main(argv=None) -> int:
         print(f"\nestimated GPU time {secs:.0f} s at the model's own timings, "
               "excluding compiles and allocation; that includes the alignment "
               f"probe's {probe_seconds(treads, PROBE_LABELS, args.probe_repeats):.0f} s")
+        if args.duty < 1.0:
+            ladder_secs = secs - probe_seconds(treads, PROBE_LABELS, args.probe_repeats)
+            print(f"WALL CLOCK at duty {args.duty:.2f}: the ladder's {ladder_secs:.0f} s "
+                  f"of kernel time takes about {ladder_secs / args.duty:.0f} s, "
+                  "the idle gaps between bursts being the point; the probe is "
+                  "timed at full duty")
         print("NOT IN THAT FIGURE: the Triton compiles, and the private weight "
               f"build, which copies {mem.weight_bytes / 1e9:.2f} GB "
               "device-to-device once, and the five-part buffer proof's "
@@ -6296,7 +6456,8 @@ def _read_mode(args) -> int:
         this = run_reading(payload, path)
         replicates = load_replicates(
             args.replicate_of, card_known=True, this=this,
-            design={k: payload.get(k) for k in DESIGN_KEYS})
+            design={k: payload.get(k, DESIGN_KEY_DEFAULTS.get(k))
+                    for k in DESIGN_KEYS})
     except PrivateWeightRefusal as exc:
         print(f"REFUSED: {exc}")
         return exit_codes.REFUSED
@@ -6306,8 +6467,8 @@ def _read_mode(args) -> int:
           f"from {path}")
     print(f"experiment  private_weight_reference / {this.name}")
     for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
-                "repeats", "copies_declared"):
-        print(f"{key:<12}{payload.get(key)}")
+                "repeats", "copies_declared", "duty"):
+        print(f"{key:<12}{payload.get(key, DESIGN_KEY_DEFAULTS.get(key))}")
     print(f"session     {payload.get('session_tag') or '(unrecorded)'}")
     print(f"measured    {prov.get('utc') or 'utc unrecorded'} on "
           f"{prov.get('hostname') or 'an unrecorded host'}, tree "

@@ -289,6 +289,13 @@ it after the sweep: the installed vLLM's `fused_moe.py` must cast
 `off_experts` to int64 (slot 71 x 117 MB is past 2^31 bytes from the weight
 base).
 
+**Run it at `--duty 0.5`.** Session 4's pages were INVALID on V7 because the
+power cap boosts whichever arm reads less; its clock arm showed the cap binds
+only at full duty (every state at or below 50% duty sat at 1905-1980 MHz at
+every tread). `--duty 0.5` times each cell as bursts with idle gaps, so both
+arms run at the boost ceiling and V7 holds by construction; wall clock about
+doubles (~7 min a run) and board power is recorded per cell.
+
 **Book this arm as a PAIR.** The interval on C1 is a bootstrap over repeats
 within one run; on 2026-09-21 two G=1 runs at seeds 0 and 1, 77 minutes apart
 on one pod, read ratios whose intervals did not overlap. The driver runs seed
