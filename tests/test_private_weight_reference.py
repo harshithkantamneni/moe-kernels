@@ -853,7 +853,7 @@ def test_an_analysis_knob_is_not_in_the_run_id():
     base = PW.default_run_id(_args(), "NVIDIA H200")
     for flag, value in (("--ridge", 145.8), ("--bandwidth-gbps", 1799.4),
                         ("--draws", 500), ("--device-memory-gb", 80.0),
-                        ("--alpha", 0.3)):
+                        ("--alpha", 0.3), ("--replicate-of", "x/report.json")):
         assert PW.default_run_id(_args(**{flag: value}),
                                  "NVIDIA H200") == base, flag
 
@@ -2987,6 +2987,216 @@ def test_analyse_names_the_gpu_time_bound_when_the_graph_probe_resolves_no_nativ
         4, "the cited hypothesis (tread 4)")
 
 
+
+# --------------------------------------------------------------------------
+# 19. the cross-run spread: C1 over the envelope of several runs
+# --------------------------------------------------------------------------
+
+def _reading(ratio, half=0.002, **kw):
+    return PW.RunReading(ratio, (ratio - half, ratio + half), **kw)
+
+
+def _measured_shaped_report(tmp_path, name, alpha_shared, treads, seed=0):
+    """A report.json a MEASURED run would have written, from planted cells at
+    a stated alpha: the payload `analyse` hands the writer, with `synthetic`
+    cleared. The ratio is moved through the planted samples, never by editing
+    the number."""
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=seed,
+              copies_declared=9, native_switch=4)
+    samples = PW.planted_samples(PW.WORLDS["refit"], CFG,
+                                 alpha_shared=alpha_shared, **kw)
+    # The pinned dict a real run writes, from the parser's own defaults, so
+    # the dry run's design comparison sees a replicate and not a stranger.
+    defaults = PW.build_parser().parse_args([])
+    pinned = dict(PW.SWEEP.FIXED, num_stages=defaults.num_stages,
+                  GROUP_SIZE_M=defaults.group_m, BLOCK_SIZE_N=defaults.block_n)
+    report = _analyse(samples, treads, draws=50, run_id=name, pinned=pinned,
+                      seed=seed)
+    payload = dict(report.payload)
+    payload["synthetic"] = False
+    payload["provenance"] = {"utc": f"2026-09-21T2{seed}:00:00Z",
+                             "hostname": "planted", "git_sha": "0" * 7,
+                             "git_dirty": False}
+    p = tmp_path / name / "report.json"
+    p.parent.mkdir()
+    p.write_text(json.dumps(payload, indent=2))
+    return p, payload
+
+
+def test_c1_over_two_runs_is_scored_on_the_envelope_and_names_the_spread():
+    hi_edge = PW.ALPHA_BAND[1]
+    a = _reading(hi_edge - 0.005)
+    b = _reading(a.ratio + 0.022)
+    assert PW.c1_verdict(a.ratio, a.interval) == exit_codes.PASS
+    assert PW.c1_verdict(b.ratio, b.interval) == exit_codes.FAIL
+    cross = PW.cross_run([a, b])
+    assert cross.spread == pytest.approx(0.022)
+    assert cross.envelope == (a.interval[0], b.interval[1])
+    assert cross.verdict == exit_codes.UNKNOWN       # one in, one past the edge
+    assert cross.disjoint_pairs() == [(0, 1)]
+    assert cross.sd is None
+    assert PW.cross_run([a]).verdict == PW.c1_verdict(a.ratio, a.interval)
+    # Both past the edge: the envelope misses the band and the joint is FAIL.
+    c = _reading(hi_edge + 0.01)
+    assert PW.cross_run([b, c]).verdict == exit_codes.FAIL
+    # Three points give an sd; the lines carry every quantity the page needs.
+    three = PW.cross_run([a, _reading(a.ratio + 0.001), _reading(a.ratio - 0.001)])
+    assert three.sd is not None and three.verdict == exit_codes.PASS
+    joined = "\n".join(three.lines())
+    assert "spread of the points" in joined and "envelope" in joined
+    assert "does not cover the run-to-run spread" in joined
+    d = three.as_dict()
+    assert d["n"] == 3 and d["verdict"] == exit_codes.PASS and len(d["runs"]) == 3
+
+
+def test_a_lone_run_says_it_was_scored_alone():
+    """OPT-IN, said out loud: a run with no replicate is scored on its own
+    interval, and the page says that is a within-run statement. The sentence
+    is absent on the parent."""
+    got = run(["--self-test", "refit"])
+    assert "scored on this run's within-run interval alone" in got.stdout
+    assert "no replicate was named (--replicate-of)" in got.stdout
+    assert "replicates  (none: this run is scored ALONE" in got.stdout
+
+
+def test_the_page_names_the_cross_run_spread_and_the_verdict_it_implies(tmp_path):
+    treads = [1, 2, 3, 4, 5, 6]
+    pa, payload_a = _measured_shaped_report(tmp_path, "run-a", PW.ALPHA, treads)
+    pb, payload_b = _measured_shaped_report(tmp_path, "run-b", 0.605, treads, seed=1)
+    assert PW.c1_verdict(payload_a["ratio"], tuple(payload_a["ratio_interval"])) \
+        == exit_codes.PASS
+    assert PW.c1_verdict(payload_b["ratio"], tuple(payload_b["ratio_interval"])) \
+        == exit_codes.FAIL
+    design = {k: payload_a[k] for k in PW.DESIGN_KEYS}
+    readings = PW.load_replicates([pb], design=design, card_known=True,
+                                  this_run_id="run-a")
+    assert len(readings) == 1 and readings[0].run_id == "run-b"
+    assert readings[0].seed == 1 and readings[0].slopes[PW.SHARED] > 0
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
+              copies_declared=9, native_switch=4)
+    samples = PW.planted_samples(PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)
+    report = _analyse(samples, treads, draws=50, replicates=tuple(readings),
+                      run_id="run-a")
+    text = report.text()
+    this = PW.run_reading(report.payload, None)
+    cross = PW.cross_run([this, *readings])
+    assert f"spread of the points {cross.spread:.4f}" in text
+    assert "within-run intervals that do not overlap: runs 0 and 1" in text
+    c1 = next(g for g in report.gates if g.tag == "C1")
+    assert c1.verdict == cross.verdict == exit_codes.UNKNOWN
+    assert report.payload["c1_verdict_alone"] == exit_codes.PASS
+    assert "this run alone would read PASS" in text
+    assert "over 2 runs: spread" in c1.measured
+    assert "ENVELOPE" in c1.threshold
+    assert report.payload["replicates"]["spread"] == pytest.approx(cross.spread)
+    assert report.payload["replicates"]["runs"][1]["run_id"] == "run-b"
+    assert report.payload["run_id"] == "run-a"
+    json.loads(json.dumps(report.payload), parse_constant=_no_json_constants)
+
+
+def test_a_replicate_of_another_design_or_a_duplicate_is_refused_before_the_card(tmp_path):
+    """Every refusal is asserted on its SENTENCE: argparse's unknown-flag exit
+    is also 2 == REFUSED, so a return code alone is green on the parent."""
+    treads = [1, 2, 3, 4, 5, 6]
+    pa, payload_a = _measured_shaped_report(tmp_path, "run-a", PW.ALPHA, treads)
+    g16 = dict(payload_a)
+    g16["pinned"] = dict(payload_a["pinned"], GROUP_SIZE_M=16)
+    pg = tmp_path / "g16.json"
+    pg.write_text(json.dumps(g16))
+    base = ["--dry-run", "--device-memory-gb", "140", "--repeats", "3"]
+    got = run(base + ["--replicate-of", str(pg)])
+    assert "REFUSED: --replicate-of" in got.stdout and "differs in pinned" in got.stdout
+    assert "unrecognized arguments" not in got.stderr
+    got = run(base + ["--replicate-of", str(pa), str(pa)])
+    assert "REFUSED" in got.stdout and "named twice" in got.stdout
+    planted = dict(payload_a, synthetic=True)
+    pp = tmp_path / "planted.json"
+    pp.write_text(json.dumps(planted))
+    got = run(base + ["--replicate-of", str(pp)])
+    assert "REFUSED" in got.stdout and "planted (--self-test) report" in got.stdout
+    got = run(base + ["--replicate-of", str(tmp_path / "nope.json")])
+    assert "REFUSED" in got.stdout and "no such report" in got.stdout
+    # A matching one is ADMITTED on the plan page before the dry run's own
+    # refusal, and named with its ratio.
+    got = run(base + ["--replicate-of", str(pa)])
+    assert got.returncode == exit_codes.REFUSED
+    assert "replicates  1 earlier run(s) of this design" in got.stdout
+    assert f"ratio {payload_a['ratio']:.4f}" in got.stdout
+    assert "REFUSED: --replicate-of" not in got.stdout
+
+
+def test_a_planted_world_refuses_a_measured_replicate(tmp_path):
+    p = tmp_path / "x.json"
+    p.write_text("{}")
+    got = run(["--self-test", "refit", "--replicate-of", str(p)])
+    assert "REFUSED" in got.stdout
+    assert "a planted world has no measured replicate" in got.stdout
+    assert exit_codes.parse_result_lines(got.stdout) == []
+
+
+def test_the_payload_carries_the_run_id_the_seed_and_the_session_tag():
+    argv = ["--self-test", "refit", "--draws", "5", "--seed", "3",
+            "--session-tag", "t"]
+    rc, payload, _ = _payload_for(argv)
+    assert payload["seed"] == 3 and payload["session_tag"] == "t"
+    expect = PW.default_run_id(PW.build_parser().parse_args(argv),
+                               PW.detect_card_slug())
+    assert payload["run_id"] == expect and payload["run_id"].startswith("synthetic-")
+    assert payload["replicates"] is None
+    c1 = next(g for g in payload["gates"] if g["tag"] == "C1")
+    assert payload["c1_verdict_alone"] == c1["verdict"]
+
+
+def test_read_mode_rescores_a_stored_pair_without_measuring_or_writing(tmp_path):
+    treads = [1, 2, 3, 4, 5, 6]
+    pa, payload_a = _measured_shaped_report(tmp_path, "run-a", PW.ALPHA, treads)
+    pb, payload_b = _measured_shaped_report(tmp_path, "run-b", 0.605, treads, seed=1)
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    got = run(["--read", str(pa), "--replicate-of", str(pb)])
+    assert "READ MODE: nothing measured, nothing written" in got.stdout, got.stdout[-800:]
+    assert "experiment  private_weight_reference / run-a" in got.stdout
+    lines = exit_codes.parse_result_lines(got.stdout)
+    stored = [g["tag"] for g in payload_a["gates"]]
+    assert [ln.name for ln in lines] == stored and "C1" in stored
+    a = PW.run_reading(payload_a, pa)
+    b = PW.run_reading(payload_b, pb)
+    cross = PW.cross_run([a, b])
+    c1 = next(ln for ln in lines if ln.name == "C1")
+    assert c1.verdict == cross.verdict == exit_codes.UNKNOWN
+    assert f"spread of the points {cross.spread:.4f}" in got.stdout
+    assert exit_codes.classify_text(got.stdout) == got.returncode
+    assert sorted(str(p) for p in tmp_path.rglob("*")) == before
+    # Alone there is nothing to read it against.
+    got = run(["--read", str(pa)])
+    assert "REFUSED" in got.stdout and "nothing to read it against" in got.stdout
+    # The two files are the same run twice: refused, not averaged.
+    got = run(["--read", str(pa), "--replicate-of", str(pa)])
+    assert "REFUSED" in got.stdout and "this run's own report" in got.stdout
+
+
+def test_a_run_that_formed_no_interval_still_prints_the_replicates_it_was_given(tmp_path):
+    """The second C1 construction site: `--draws 1` forms no interval, so this
+    run enters no reading; the replicates are read together anyway and C1
+    stays UNKNOWN for this run."""
+    treads = [1, 2, 3, 4, 5, 6]
+    pb, payload_b = _measured_shaped_report(tmp_path, "run-b", PW.ALPHA, treads, seed=1)
+    design = {k: payload_b[k] for k in PW.DESIGN_KEYS}
+    readings = PW.load_replicates([pb], design=design, card_known=True)
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0,
+              copies_declared=9, native_switch=4)
+    samples = PW.planted_samples(PW.WORLDS["refit"], CFG, alpha_shared=PW.ALPHA, **kw)
+    report = _analyse(samples, treads, draws=1, replicates=tuple(readings))
+    c1 = next(g for g in report.gates if g.tag == "C1")
+    assert c1.verdict == exit_codes.UNKNOWN
+    assert "no interval was formed" in c1.measured
+    assert any("this run enters no reading" in ln for ln in c1.lines)
+    assert any(ln.startswith("REPLICATES: 1 run(s)") for ln in c1.lines)
+    assert report.payload["replicates"]["n"] == 1
+
+
 # --------------------------------------------------------------------------
 # 14. the bias bound on the side the denominator shrinks
 # --------------------------------------------------------------------------
@@ -3544,7 +3754,8 @@ def _payload_for(argv: list[str]) -> tuple[int, dict, str]:
 
 
 def _analyse(samples, treads: list[int], *, block_m: int = 32,
-             draws: int = 10, copies: int = 9):
+             draws: int = 10, copies: int = 9, replicates=(), run_id="",
+             pinned=None, seed: int = 0):
     """`PW.analyse` over planted cells, with what a planted run hands it.
 
     The memory plan and the buffer proof `_main` builds for a synthetic world,
@@ -3562,9 +3773,10 @@ def _analyse(samples, treads: list[int], *, block_m: int = 32,
         roof_tflops=989.0, roof_source="this test", reference_mhz=None,
         reference_grade="", reference_source="this test", mem=mem,
         proof=PW.planted_proof(True), weight_delta_bytes=mem.weight_bytes,
-        high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=0,
+        high_water_bytes=mem.predicted_peak_bytes, draws=draws, seed=seed,
         header=[], card="no card", synthetic=True,
-        model_name=PW.DEFAULT_MODEL, pinned={}, copies_declared=copies)
+        model_name=PW.DEFAULT_MODEL, pinned=(pinned or {}), copies_declared=copies,
+        run_id=run_id, replicates=tuple(replicates))
 
 
 def test_an_interval_that_was_not_formed_is_null_in_the_payload_and_not_nan():

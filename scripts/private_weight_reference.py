@@ -5,6 +5,11 @@
     python scripts/private_weight_reference.py --self-test refit
     python scripts/private_weight_reference.py --self-test issue-bound
     python scripts/private_weight_reference.py                # the pod run
+    python scripts/private_weight_reference.py --seed 1 --replicate-of RUN0/report.json
+                                       # a second run; C1 scored WITH the first
+    python scripts/private_weight_reference.py --read RUN1/report.json \
+                                               --replicate-of RUN0/report.json
+                                       # off GPU: a stored pair re-read, nothing measured
 
 WHY THIS ARM EXISTS. `alpha` is defined in this study as the fraction of the
 routed expert weight set that is re-read per extra M-tile. Every estimate of it
@@ -193,6 +198,13 @@ between that and the card's own calibrated ceiling. A kernel cannot beat its
 card's measured ceiling, so a violation says the copies were not all read (and
 V2 says they were) or the calibration is not a ceiling.
 
+WHAT ONE RUN'S INTERVAL IS NOT. The bootstrap is over repeats WITHIN a run. Two
+runs of this arm on one card at two seeds, 77 minutes apart (session 4), sat
+further apart than either interval was wide, so a single run's C1 PASS is a
+within-run statement and the page says so until a second run is read beside
+it with `--replicate-of`, when C1 is scored on the ENVELOPE of the runs'
+intervals (DESIGN DECISION 14).
+
 WHAT THIS ARM DOES NOT DO. It does not fit `alpha_a`, it does not separate the
 activation term from the weight term, and it does not decide anything about
 BLOCK_M other than the one it is run at. The ratio is scored RAW -- both slopes
@@ -359,6 +371,28 @@ DEFAULT_REPEATS = 9
 DEFAULT_DRAWS = 2000
 INTERVAL_PCT = 90.0
 
+#: DESIGN DECISION 14. THE INTERVAL ABOVE IS WITHIN ONE RUN AND IS NOT THE
+#: RUN-TO-RUN SPREAD. Two G=1 runs of this arm on one H200, one tree, 77
+#: minutes apart, differing only in --seed (the session-4 pair under
+#: results/published/2026-09-21-nvidia_h200-session4/, on its own branch),
+#: read ratios whose within-run intervals do not overlap and whose points sit
+#: further apart than either interval is wide; the seed-0 point also sat at
+#: the 5th-percentile edge of its own interval, which is that bootstrap
+#: flagging itself as skewed. So `--replicate-of` reads one or more earlier
+#: report.json files of the SAME design (`DESIGN_KEYS`), prints the cross-run
+#: spread and the ENVELOPE of the intervals beside this run's own, and C1 is
+#: then scored on the envelope (`CrossRun.verdict`, built on `c1_verdict`):
+#: PASS needs every run's point in ALPHA_BAND and the whole envelope inside
+#: it. OPT-IN: a run with no replicate named is scored alone, as before, and
+#: the page says so. `--read` re-scores a stored report the same way with
+#: nothing measured and nothing written, so a pair's spread has a committed,
+#: recomputable source. The spread itself is NOT typed here: `--read` over the
+#: committed pair prints it. A replicate is the same DESIGN, not the same
+#: bytes: `--seed` draws the weights and the inputs as well as the bootstrap.
+DESIGN_KEYS: tuple[str, ...] = ("experiment", "card", "model", "dtype",
+                                "block_m", "pinned", "treads", "repeats",
+                                "copies_declared", "alpha_band")
+
 #: DESIGN DECISION 6. V5's bound on the declaration. `|slope(NATIVE) -
 #: slope(SHARED)|` must be under this fraction of `slope(PRIVATE)`, which is
 #: the denominator the ratio is formed against, so the number bounds how far
@@ -391,7 +425,9 @@ MACHINERY_WANT = (f"PASS: the FAR edge of b's {INTERVAL_PCT:.0f}% band < "
 #: boundary is 0.18 wide). The "0.115% cold-replicate" and "0.37% cross-
 #: session" figures this line used to name are the session-3 analysis's, hold
 #: in no committed file, and are spreads of a FITTED SLOPE, not of the
-#: per-call median V6 compares.
+#: per-call median V6 compares. The run-to-run spread of the RATIO itself is
+#: DESIGN DECISION 14's and is read from committed reports by --read; it is a
+#: spread of a different quantity and the two are never compared.
 IDENTITY_SPREAD = 0.02
 
 #: DESIGN DECISION 11. V7's bound on the clock. At every fitted tread the
@@ -2418,6 +2454,13 @@ class Gate:
                 "gate": self.threshold, "consequence": self.consequence,
                 "detail": list(self.lines)}
 
+    @classmethod
+    def from_dict(cls, d: dict) -> Gate:
+        """The inverse of `as_dict`, for `--read`: a stored gate re-rendered
+        as it was scored, from the one document the writer serialised."""
+        return cls(d["tag"], d["kind"], d["claim"], d["verdict"], d["measured"],
+                   d["gate"], d["consequence"], list(d.get("detail") or []))
+
 
 def gate_v0_non_vacuity(samples, *, planned: int, treads: list[int],
                         repeats: int) -> Gate:
@@ -3473,14 +3516,274 @@ def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
     return PASS if (in_band and inside) else UNKNOWN
 
 
+@dataclass(frozen=True)
+class RunReading:
+    """One run's C1 inputs as a report.json stores them, with what the page
+    prints beside them. `run_id`, `seed`, `utc` are None for a report written
+    before DESIGN DECISION 14 (the session-4 pair)."""
+    ratio: float
+    interval: tuple[float, float]
+    path: str | None = None
+    run_id: str | None = None
+    seed: int | None = None
+    utc: str | None = None
+    hostname: str | None = None
+    exit_code: int | None = None
+    slopes: dict = field(default_factory=dict)
+    excluded: dict = field(default_factory=dict)
+    git_dirty: bool | None = None
+
+    @property
+    def name(self) -> str:
+        if self.run_id:
+            return self.run_id
+        if self.path:
+            return Path(self.path).parent.name or self.path
+        return "this run"
+
+    @property
+    def stamp(self) -> str | None:
+        return f"{self.utc}@{self.hostname}" if self.utc and self.hostname else None
+
+    @property
+    def position(self) -> float:
+        """Where the point sits in its own interval, 0 at the low end."""
+        lo, hi = self.interval
+        return (self.ratio - lo) / (hi - lo) if hi > lo else math.nan
+
+
+@dataclass(frozen=True)
+class CrossRun:
+    """Several runs of one design read together. Built on `c1_verdict` so the
+    band rule is written once: PASS iff every run's point PASSes against the
+    ENVELOPE of all intervals; FAIL iff the envelope misses the band (which
+    every point then agrees on); otherwise UNKNOWN. With one reading it is
+    exactly `c1_verdict(ratio, interval)`."""
+    readings: tuple[RunReading, ...]
+
+    @property
+    def points(self) -> list[float]:
+        return [r.ratio for r in self.readings]
+
+    @property
+    def envelope(self) -> tuple[float, float]:
+        return (min(r.interval[0] for r in self.readings),
+                max(r.interval[1] for r in self.readings))
+
+    @property
+    def spread(self) -> float:
+        return max(self.points) - min(self.points)
+
+    @property
+    def relative_spread(self) -> float:
+        med = statistics.median(self.points)
+        return self.spread / med if med else math.nan
+
+    @property
+    def sd(self) -> float | None:
+        return statistics.stdev(self.points) if len(self.points) >= 3 else None
+
+    def disjoint_pairs(self) -> list[tuple[int, int]]:
+        out = []
+        for i, a in enumerate(self.readings):
+            for j in range(i + 1, len(self.readings)):
+                b = self.readings[j]
+                if a.interval[1] < b.interval[0] or b.interval[1] < a.interval[0]:
+                    out.append((i, j))
+        return out
+
+    @property
+    def verdict(self) -> str:
+        got = {c1_verdict(p, self.envelope) for p in self.points}
+        if got == {PASS}:
+            return PASS
+        if FAIL in got:
+            return FAIL
+        return UNKNOWN
+
+    def lines(self) -> list[str]:
+        n = len(self.readings)
+        lo, hi = self.envelope
+        out = [f"REPLICATES: {n} run(s) of this design read together; C1 is "
+               "scored on the ENVELOPE of their intervals"]
+        for k, r in enumerate(self.readings):
+            word = (exit_codes.CODE_NAMES[r.exit_code]
+                    if r.exit_code is not None else "unscored")
+            out.append(
+                f"  run {k}: {r.name}; seed "
+                + (str(r.seed) if r.seed is not None
+                   else "unrecorded (pre-DD14 report)")
+                + f"; {r.utc or 'utc unrecorded'}; ratio {r.ratio:.4f} "
+                f"[{r.interval[0]:.4f}, {r.interval[1]:.4f}], the point at "
+                f"{r.position:.2f} of its own interval; own exit {word}")
+            if r.slopes:
+                out.append(
+                    "         slopes ms per M-tile: "
+                    + ", ".join(f"{arm} {v:.4f}" for arm, v in r.slopes.items())
+                    + ("; drift-excluded cells: "
+                       + ", ".join(f"{arm} {c}" for arm, c in r.excluded.items())
+                       if r.excluded else "")
+                    + (f"; git_dirty {r.git_dirty}" if r.git_dirty is not None
+                       else ""))
+        widths = [r.interval[1] - r.interval[0] for r in self.readings]
+        med_w = statistics.median(widths)
+        out.append(
+            f"  spread of the points {self.spread:.4f} "
+            f"({self.relative_spread:.2%} of the median), envelope "
+            f"[{lo:.4f}, {hi:.4f}]"
+            + (f", sd {self.sd:.4f} over {n} points" if self.sd is not None
+               else " (an sd needs three points)"))
+        out.append(
+            f"  the spread is {self.spread / med_w:.1f}x the median within-run "
+            f"interval width ({med_w:.4f})" if med_w > 0 else
+            "  the within-run intervals have no width")
+        pairs = self.disjoint_pairs()
+        out.append("  within-run intervals that do not overlap: "
+                   + (", ".join(f"runs {i} and {j}" for i, j in pairs)
+                      if pairs else "none"))
+        out.append("  the within-run interval is a bootstrap over repeats and "
+                   "does not cover the run-to-run spread; a point at an edge of "
+                   "its own interval is that bootstrap flagging itself as skewed")
+        out.append(f"  joint C1 over the envelope: {self.verdict} (PASS needs "
+                   "every point in ALPHA_BAND and the whole envelope inside it; "
+                   "FAIL needs the envelope to miss the band)")
+        return out
+
+    def as_dict(self) -> dict:
+        return {"n": len(self.readings), "points": self.points,
+                "spread": self.spread, "relative_spread": self.relative_spread,
+                "sd": self.sd, "envelope": list(self.envelope),
+                "disjoint_pairs": [list(p) for p in self.disjoint_pairs()],
+                "verdict": self.verdict,
+                "runs": [asdict(r) for r in self.readings]}
+
+
+def cross_run(readings) -> CrossRun:
+    return CrossRun(tuple(readings))
+
+
+def run_reading(payload: dict, path: Path | None) -> RunReading:
+    """A stored report's C1 inputs. Refuses a payload that formed no ratio or
+    no interval: it is not a replicate READING, whatever else it recorded."""
+    ratio = payload.get("ratio")
+    iv = payload.get("ratio_interval") or [None, None]
+    if ratio is None or iv[0] is None or iv[1] is None:
+        raise PrivateWeightRefusal(
+            f"{path}: formed no ratio or no interval, so it is not a replicate "
+            "reading")
+    prov = payload.get("provenance") or {}
+    ladders = payload.get("ladders") or {}
+    gates = payload.get("gates") or []
+    code = (exit_codes.classify((g["kind"], g["tag"], g["verdict"]) for g in gates)
+            if gates else None)
+    return RunReading(
+        float(ratio), (float(iv[0]), float(iv[1])),
+        path=(str(path) if path is not None else None),
+        run_id=payload.get("run_id"), seed=payload.get("seed"),
+        utc=prov.get("utc"), hostname=prov.get("hostname"), exit_code=code,
+        slopes={arm: lad["slope_ms"] for arm, lad in ladders.items()
+                if lad.get("slope_ms") is not None},
+        excluded={arm: lad.get("excluded_drifted") for arm, lad in ladders.items()},
+        git_dirty=prov.get("git_dirty"))
+
+
+def load_replicates(paths, *, design: dict, card_known: bool,
+                    this: RunReading | None = None, this_run_id: str = ""
+                    ) -> list[RunReading]:
+    """The replicates named on the command line, or a refusal that names the
+    path and what differs. Refused BEFORE the card is touched: a file that is
+    missing or not JSON, another experiment's report, a planted (--self-test)
+    report, a design that differs in any of `DESIGN_KEYS` (card only when this
+    run has one), a report that formed no ratio, and a duplicate of another
+    replicate or of this run (same file, same run id, or same provenance
+    stamp). A replicate whose own gates classify to INVALID or CLAIM_FAIL is
+    ADMITTED with its exit word printed: its spread is the information, its
+    ratio is not quotable on its own."""
+    seen_paths = {Path(this.path).resolve()} if this and this.path else set()
+    seen_ids = {x for x in (this.run_id if this else None, this_run_id) if x}
+    seen_stamps = {this.stamp} if this and this.stamp else set()
+    out: list[RunReading] = []
+    for raw in paths:
+        p = Path(raw)
+        if p.is_dir():
+            p = p / "report.json"
+        if not p.is_file():
+            raise PrivateWeightRefusal(f"--replicate-of {p}: no such report")
+        try:
+            payload = json.loads(p.read_text())
+        except ValueError as exc:
+            raise PrivateWeightRefusal(f"--replicate-of {p}: not JSON ({exc})") from None
+        if not isinstance(payload, dict):
+            raise PrivateWeightRefusal(f"--replicate-of {p}: not a report")
+        if payload.get("experiment") != "private_weight_reference":
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p}: a {payload.get('experiment')!r} report, "
+                "not this arm's")
+        if payload.get("synthetic"):
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p}: a planted (--self-test) report; a "
+                "replicate is a measured run")
+        differ = [k for k in DESIGN_KEYS
+                  if (k != "card" or card_known) and payload.get(k) != design.get(k)]
+        if differ:
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p}: not a replicate of this design; it "
+                f"differs in {', '.join(differ)}: "
+                + "; ".join(f"{k} {payload.get(k)!r} against {design.get(k)!r}"
+                            for k in differ))
+        r = run_reading(payload, p)
+        resolved = p.resolve()
+        if resolved in seen_paths:
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p} is named twice, or is this run's own report")
+        if r.run_id and r.run_id in seen_ids:
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p}: run id {r.run_id} is already read (twice, "
+                "or it is this run)")
+        if r.stamp and r.stamp in seen_stamps:
+            raise PrivateWeightRefusal(
+                f"--replicate-of {p}: the same provenance stamp ({r.stamp}) as "
+                "a report already read; one run, one reading")
+        seen_paths.add(resolved)
+        if r.run_id:
+            seen_ids.add(r.run_id)
+        if r.stamp:
+            seen_stamps.add(r.stamp)
+        out.append(r)
+    return out
+
+
+def replicate_plan_lines(replicates) -> list[str]:
+    """The plan page's replicate rows: the second call site beside the report."""
+    if not replicates:
+        return ["replicates  (none: this run is scored ALONE; its interval is "
+                "over repeats within one run and is not the run-to-run spread; "
+                "a second --seed run read back through --replicate-of is what "
+                "puts one on this page)"]
+    out = [f"replicates  {len(replicates)} earlier run(s) of this design; C1 "
+           "will be scored on the envelope of every interval"]
+    for r in replicates:
+        word = (exit_codes.CODE_NAMES[r.exit_code]
+                if r.exit_code is not None else "unscored")
+        out.append(f"            {r.path}: {r.name}, seed "
+                   + (str(r.seed) if r.seed is not None else "unrecorded")
+                   + f", {r.utc or 'utc unrecorded'}, ratio {r.ratio:.4f} "
+                   f"[{r.interval[0]:.4f}, {r.interval[1]:.4f}], own exit {word}")
+    return out
+
+
 def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
                   *, corrected: float | None,
-                  clock: ClockCorrection | None = None) -> Gate:
+                  clock: ClockCorrection | None = None,
+                  cross: CrossRun | None = None) -> Gate:
     """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit.
 
     THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
     (0.529-0.588, 90%). `c1_verdict` scores it from the point and the interval
-    together. Both registered alternatives -- a ratio near 1.0, meaning the
+    together; with replicates (`cross`) the same rule is applied to every
+    run's point against the ENVELOPE of the runs' intervals, and the page
+    keeps what this run alone said beside it (DESIGN DECISION 14). Both
+    registered alternatives -- a ratio near 1.0, meaning the
     whole set is re-read, and a ratio near 0.3, meaning the per-M-tile cost is
     not traffic -- FAIL it, and that is the point: a CLAIM that does not pass
     is a result, and this is the arm where either of those results is worth
@@ -3495,7 +3798,8 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
     """
     lo, hi = interval
     name, meaning = outcome_for(ratio)
-    verdict = c1_verdict(ratio, interval)
+    alone = c1_verdict(ratio, interval)
+    verdict = cross.verdict if cross is not None else alone
     detail = [
         f"ratio = slope(shared) / slope(private) = {ratio:.4f}",
         f"{INTERVAL_PCT:.0f}% percentile bootstrap interval "
@@ -3516,19 +3820,36 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
         "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured "
         "slope over another, taken minutes apart on one card at one tile in "
         "one kernel.")
+    if cross is not None:
+        detail.append(f"this run alone would read {alone}; the verdict above "
+                      "is the JOINT one over the runs below")
+        detail += cross.lines()
+    else:
+        detail.append(
+            "scored on this run's within-run interval alone: no replicate was "
+            "named (--replicate-of), and a bootstrap over repeats is not the "
+            "run-to-run spread (DESIGN DECISION 14)")
     if verdict == UNKNOWN:
         detail.append(
             "UNKNOWN, NOT A RESULT: the interval touches ALPHA_BAND but does "
             "not sit inside it, or the point is outside it, so the claim is "
-            "unresolved at this precision")
+            "unresolved at this precision"
+            + (" (over the ENVELOPE of every run's interval)"
+               if cross is not None else ""))
     return Gate("C1", CLAIM,
                 "the re-read fraction, measured against a no-reuse reference, "
                 "is the study's refit alpha",
                 verdict,
-                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}",
+                f"{ratio:.4f} [{lo:.4f}, {hi:.4f}], {name}"
+                + (f"; over {len(cross.readings)} runs: spread "
+                   f"{cross.spread:.4f}, envelope [{cross.envelope[0]:.4f}, "
+                   f"{cross.envelope[1]:.4f}]" if cross is not None else ""),
                 f"PASS: point and whole interval inside ALPHA_BAND "
                 f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]}); FAIL: interval misses "
-                "ALPHA_BAND; otherwise UNKNOWN",
+                "ALPHA_BAND; otherwise UNKNOWN"
+                + ("; with replicates: every run's point in the band and the "
+                   "ENVELOPE of their intervals inside it"
+                   if cross is not None else ""),
                 "the refit alpha is not the traffic fraction it is quoted as, "
                 "and the page names which of the registered worlds it is "
                 "instead",
@@ -3796,7 +4117,7 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
                pinned: dict, run_id: str, resources, card: str, git_note: str,
                mem: MemoryPlan, tokens: dict[int, int], ridge: float,
                alpha: float, copies_declared: int, declared_reason: str,
-               census: PathCensus) -> list[str]:
+               census: PathCensus, replicates: tuple = ()) -> list[str]:
     deepest = treads[-1]
     return [
         f"experiment  private_weight_reference / {run_id}",
@@ -3824,6 +4145,7 @@ def plan_lines(cfg, args, *, block_m: int, treads: list[int], b: int,
         *census.lines(),
         "session     " + (args.session_tag or "(none: a bare run, keyed on its "
                                               "arguments and card alone)"),
+        *replicate_plan_lines(replicates),
         f"bandwidth   {bandwidth_gbps:.1f} GB/s, {bw_source}",
         f"card        {card}"
         + ("   (no CUDA device: this is a plan or a replay, not a measurement)"
@@ -3988,7 +4310,9 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             synthetic: bool, model_name: str, pinned: dict, prov=None,
             probe: AlignProbe | None = None, census: PathCensus | None = None,
             copies_declared: int | None = None,
-            clock_elasticity: ClockElasticity | None = None) -> Report:
+            clock_elasticity: ClockElasticity | None = None,
+            run_id: str = "", session_tag: str = "",
+            replicates: tuple = ()) -> Report:
     planned = len(treads) * len(ARMS) * repeats
     if census is None:
         census = path_census(cfg, treads, block_m, {
@@ -4138,19 +4462,39 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
     gates.append(gate_v7_clock_parity(samples, treads=treads))
     gates.append(gate_v8_alignment(probe, treads=treads, census=census,
                                    weight_stream_ms=stream_ms))
-    if ratio is None:
+    # THIS RUN IS THE FIRST READING when replicates were named. A run whose
+    # interval was not formed contributes no reading; the replicates are still
+    # printed together so the page carries their spread, and C1 stays UNKNOWN.
+    this_reading = (RunReading(ratio, tuple(interval), run_id=run_id or None,
+                               seed=seed,
+                               slopes={arm: lad.slope_ms
+                                       for arm, lad in ladders.items()},
+                               excluded={arm: lad.excluded
+                                         for arm, lad in ladders.items()})
+                    if ratio is not None and all(math.isfinite(v) for v in interval)
+                    else None)
+    cross = (cross_run(([this_reading] if this_reading else []) + list(replicates))
+             if replicates else None)
+    if ratio is None or this_reading is None:
         gates.append(Gate("C1", CLAIM,
                           "the re-read fraction, measured against a no-reuse "
                           "reference, is the study's refit alpha",
-                          UNKNOWN, "no ratio was formed",
+                          UNKNOWN,
+                          "no ratio was formed" if ratio is None
+                          else f"{ratio:.4f}, no interval was formed",
                           "point and whole interval inside ALPHA_BAND "
                           f"[{ALPHA_BAND[0]}, {ALPHA_BAND[1]})",
                           "the refit alpha is not the traffic fraction it is "
                           "quoted as",
-                          [unmeasurable] if unmeasurable else []))
+                          ([unmeasurable] if unmeasurable else [])
+                          + (["this run enters no reading; the replicates "
+                              "named are read together below and C1 stays "
+                              "UNKNOWN for this run"] + cross.lines()
+                             if cross is not None else [])))
     else:
         gates.append(gate_c1_ratio(ratio, interval, got_draws,
-                                   corrected=corrected, clock=clock_correction))
+                                   corrected=corrected, clock=clock_correction,
+                                   cross=cross))
     if ladders.get(PRIVATE):
         gates.append(gate_c2_achieved_rate(
             ladders[PRIVATE],
@@ -4223,6 +4567,9 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                              "points": [list(p) for p in decl_fit.points],
                              "dof": decl_fit.dof}
                             if decl_fit is not None else None),
+        "run_id": run_id or None,
+        "seed": seed,
+        "session_tag": session_tag or None,
         "ratio": ratio,
         # NaN IS NOT JSON. `json.dumps` writes a bare `NaN` token, which is
         # valid for Python's own loader and invalid for every strict parser
@@ -4233,6 +4580,11 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "ratio_interval_pct": INTERVAL_PCT,
         "ratio_draws": got_draws,
         "ratio_corrected": corrected,
+        # WHAT THIS RUN ALONE SAID, beside the joint verdict in gates[C1]: a
+        # reader of the document can tell which rule produced the verdict.
+        "c1_verdict_alone": (c1_verdict(ratio, tuple(interval))
+                             if ratio is not None else None),
+        "replicates": (cross.as_dict() if cross is not None else None),
         "clock_correction": (clock_correction.as_dict()
                              if clock_correction is not None else None),
         "outcome": (outcome_for(ratio)[0] if ratio is not None else None),
@@ -5341,8 +5693,10 @@ def default_run_id(args, card: str) -> str:
     and a resume on a DIFFERENT pod with the same card slug mixed two cards'
     timings in one ladder (see `device_guard`).
 
-    OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`. They re-analyse
-    one set of cells, and two analyses of one sweep belong in one directory.
+    OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`, `--replicate-of`
+    (and `--read`, which forms no id). They re-analyse one set of cells, and
+    two analyses of one sweep belong in one directory; a replicate read beside
+    this run moves C1's verdict and not one measured millisecond.
     `--device-memory-gb` is out for the same reason: it gates a plan, it does
     not move a millisecond. AND `--clock-elasticity`, which is admissible out
     of the key ONLY because it changes no verdict: it prints a corrected ratio
@@ -5409,7 +5763,11 @@ def build_parser() -> argparse.ArgumentParser:
                          "these")
     ap.add_argument("--draws", type=int, default=DEFAULT_DRAWS,
                     help="bootstrap draws for the interval on the ratio")
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", type=int, default=0,
+                    help="draws the weights, the inputs and the bootstrap; in "
+                         "the run id. A second run at another seed is a "
+                         "REPLICATE: read it back with --replicate-of "
+                         "(DESIGN DECISION 14)")
     ap.add_argument("--block-n", type=int, default=SWEEP.FIXED["BLOCK_SIZE_N"])
     ap.add_argument("--group-m", type=int, default=SWEEP.FIXED["GROUP_SIZE_M"])
     ap.add_argument("--num-stages", type=int, default=SWEEP.FIXED["num_stages"])
@@ -5446,6 +5804,17 @@ def build_parser() -> argparse.ArgumentParser:
                          "scores nothing")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--run-id", default="")
+    ap.add_argument("--replicate-of", type=Path, nargs="+", default=(),
+                    metavar="REPORT",
+                    help="earlier report.json files (or run directories) of "
+                         "the SAME design; C1 is then scored on the envelope "
+                         "of every run's interval and the page prints the "
+                         "cross-run spread. Out of the run id. Refused under "
+                         "--self-test")
+    ap.add_argument("--read", type=Path, default=None, metavar="REPORT",
+                    help="score THIS stored report.json together with "
+                         "--replicate-of, off GPU: nothing is measured, "
+                         "nothing is written")
     ap.add_argument("--session-tag", default="",
                     help="the driving session's name; in the run id, so a new "
                          "session measures fresh and a resumed one resumes")
@@ -5503,6 +5872,10 @@ def _main(argv=None) -> int:
     which the ledger already reads as a finished result.
     """
     args = build_parser().parse_args(argv)
+    if args.read is not None:
+        # BEFORE the partition check, the ridge and the card: a stored pair is
+        # re-read on a laptop with none of them.
+        return _read_mode(args)
     cfg = MODEL_CONFIGS[args.model]
     b = dtype_bytes(args.dtype)
     block_m = args.block_m
@@ -5631,6 +6004,27 @@ def _main(argv=None) -> int:
     csv_path = out_dir / "cells.csv"
     cache_root = out_dir / "triton-cache"
 
+    # THE REPLICATES, refused before the card is touched. The design dict is
+    # built from the SAME variables that fill the payload, so a payload key
+    # and a comparison key cannot drift apart.
+    if args.replicate_of and synthetic:
+        print("REFUSED: --replicate-of names a measured run and --self-test "
+              "plants one; a planted world has no measured replicate")
+        return exit_codes.REFUSED
+    try:
+        replicates = load_replicates(
+            args.replicate_of, card_known=(card != NO_CARD_SLUG),
+            this_run_id=run_id,
+            design={"experiment": "private_weight_reference", "card": card,
+                    "model": args.model, "dtype": args.dtype,
+                    "block_m": block_m, "pinned": pinned,
+                    "treads": list(treads), "repeats": args.repeats,
+                    "copies_declared": copies_declared,
+                    "alpha_band": list(ALPHA_BAND)})
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+
     capability = SWEEP.resolve_capability(args, synthetic=synthetic or args.dry_run)
     resources, refused = SWEEP.tile_resource_plan(pinned, (block_m,), b,
                                                  capability)
@@ -5643,7 +6037,8 @@ def _main(argv=None) -> int:
                         git_note=git_visibility(out_dir), mem=mem,
                         tokens=tokens, ridge=ridge, alpha=args.alpha,
                         copies_declared=copies_declared,
-                        declared_reason=declared_reason, census=census)
+                        declared_reason=declared_reason, census=census,
+                        replicates=tuple(replicates))
     header += prediction_lines(cfg, block_m=block_m, treads=treads,
                                alpha=args.alpha, bandwidth_gbps=bandwidth,
                                bw_source=bw_source, dtype=args.dtype,
@@ -5831,7 +6226,9 @@ def _main(argv=None) -> int:
         draws=args.draws, seed=args.seed, header=header, card=card,
         synthetic=synthetic, model_name=args.model, pinned=pinned,
         prov=_observed_iters(prov, samples), probe=probe, census=census,
-        copies_declared=copies_declared, clock_elasticity=clock_elasticity)
+        copies_declared=copies_declared, clock_elasticity=clock_elasticity,
+        run_id=run_id, session_tag=args.session_tag,
+        replicates=tuple(replicates))
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
@@ -5866,6 +6263,73 @@ def _main(argv=None) -> int:
     if rc == exit_codes.CLAIM_FAIL:
         print("         a claim that did not pass is a RESULT and the arm is "
               "FINISHED, not broken.")
+    return rc
+
+
+def _read_mode(args) -> int:
+    """READ MODE: this run IS the stored report at --read; --replicate-of
+    names the others; nothing is measured and nothing is written. The plan
+    header's identity lines are rendered from the payload (the one document
+    the writer serialised), every stored gate is re-rendered as it was scored,
+    and C1 alone is rebuilt through `gate_c1_ratio` with the CrossRun, so the
+    joint rule has one home. The exit is `classify` over that set, which is
+    what the pair's page would have exited with."""
+    path = Path(args.read)
+    if path.is_dir():
+        path = path / "report.json"
+    if not args.replicate_of:
+        print(f"REFUSED: --read {path} names one stored report and nothing to "
+              "read it against; give --replicate-of")
+        return exit_codes.REFUSED
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"REFUSED: --read {path}: {exc}")
+        return exit_codes.REFUSED
+    if not isinstance(payload, dict) or payload.get("experiment") != "private_weight_reference":
+        print(f"REFUSED: --read {path} is not a private_weight_reference report")
+        return exit_codes.REFUSED
+    if payload.get("synthetic"):
+        print(f"REFUSED: --read {path} is a planted (--self-test) report")
+        return exit_codes.REFUSED
+    try:
+        this = run_reading(payload, path)
+        replicates = load_replicates(
+            args.replicate_of, card_known=True, this=this,
+            design={k: payload.get(k) for k in DESIGN_KEYS})
+    except PrivateWeightRefusal as exc:
+        print(f"REFUSED: {exc}")
+        return exit_codes.REFUSED
+    cross = cross_run([this, *replicates])
+    prov = payload.get("provenance") or {}
+    print(f"READ MODE: nothing measured, nothing written; gates re-rendered "
+          f"from {path}")
+    print(f"experiment  private_weight_reference / {this.name}")
+    for key in ("card", "model", "dtype", "block_m", "pinned", "treads",
+                "repeats", "copies_declared"):
+        print(f"{key:<12}{payload.get(key)}")
+    print(f"session     {payload.get('session_tag') or '(unrecorded)'}")
+    print(f"measured    {prov.get('utc') or 'utc unrecorded'} on "
+          f"{prov.get('hostname') or 'an unrecorded host'}, tree "
+          f"{prov.get('git_sha') or 'unrecorded'}")
+    print("\n".join(cross.lines()))
+    print()
+    gates = []
+    for d in payload.get("gates") or []:
+        g = Gate.from_dict(d)
+        if g.tag == "C1":
+            g = gate_c1_ratio(this.ratio, this.interval,
+                              payload.get("ratio_draws") or 0,
+                              corrected=payload.get("ratio_corrected"),
+                              clock=None, cross=cross)
+        gates.append(g)
+        print("\n".join(g.render()))
+        print()
+    if not gates:
+        print("REFUSED: the stored report carries no gates")
+        return exit_codes.REFUSED
+    rc = exit_codes.classify(g.scored() for g in gates)
+    print(f"exit     {exit_codes.describe(rc)}")
     return rc
 
 

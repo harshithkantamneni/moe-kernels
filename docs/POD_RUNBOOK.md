@@ -289,6 +289,22 @@ it after the sweep: the installed vLLM's `fused_moe.py` must cast
 `off_experts` to int64 (slot 71 x 117 MB is past 2^31 bytes from the weight
 base).
 
+**Book this arm as a PAIR.** The interval on C1 is a bootstrap over repeats
+within one run; on 2026-09-21 two G=1 runs at seeds 0 and 1, 77 minutes apart
+on one pod, read ratios whose intervals did not overlap. The driver runs seed
+0; the second run is by hand after it, the same measuring line with
+`--seed 1 --replicate-of <seed-0 run dir>/report.json` added (the arm's line is
+in the session's own `arms.sh`; keep `--session-tag`). C1 is then scored on
+the envelope of both runs' intervals and the page prints the cross-run
+spread; a lone run's page says it was scored alone. A pair already on disk is
+re-read on the laptop with
+
+```
+.venv/bin/python scripts/private_weight_reference.py --read RUN1/report.json --replicate-of RUN0/report.json
+```
+
+and that output, not a hand-computed difference, is the figure to quote.
+
 ---
 
 ## Before you rent anything
