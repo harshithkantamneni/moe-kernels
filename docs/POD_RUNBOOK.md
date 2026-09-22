@@ -253,13 +253,18 @@ arm times the alignment op alone along the ladder, once per arm (NATIVE's
 declaration, and SHARED's and PRIVATE's id sets at the ratio arms'); V8
 refuses the design on that measurement and SKIPS the sweep when it comes back
 FAIL (a step over budget, resolved against its own standard error), and ONLY
-then. An UNKNOWN (over budget but unresolved, or a host-bound probe that did
-not resolve NATIVE's own switch at the census tread) is a statement about the
-instrument, not the design: the ladder still runs, and the page latches
+then. An UNKNOWN (over budget but unresolved, or an eager host-bound probe that
+did not resolve NATIVE's own switch at the census tread) is a statement about
+the instrument, not the design: the ladder still runs, and the page latches
 INVALID on V8, a VALIDITY gate, with every other gate's number beside it. The
-H200 is expected to give a host-bound probe; NATIVE's switch is the positive
-control that lets such a probe earn PASS. NATIVE keeps the switch, and V5
-fits it out.
+probe times the op under a CUDA graph (`PROBE_CALLS_PER_REPLAY` calls per
+replay), so its cells are GPU time on the H200 too: session 4's eager probe
+was host-bound 36 of 36 (32-36 us of host per call against a kernel of a few
+us) and read UNKNOWN. NATIVE's switch is read beside the ratio series:
+resolved at the census tread it confirms the cited source on this build;
+unresolved it bounds the switch under the printed threshold per call. Only the
+eager fallback (capture refused, named on the page) needs the control to earn
+PASS. NATIVE keeps the switch, and V5 fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
 V7 (the two arms' clocks agree at every tread -- on a pod that cannot lock its

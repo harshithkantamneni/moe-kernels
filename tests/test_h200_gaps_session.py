@@ -4830,7 +4830,8 @@ _RUNBOOK = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
 #: count ran off the end, which is the shape of the defect being tested.
 _COUNT_WORDS = dict(_NUMBER_WORDS)
 _COUNT_WORDS.update({15: "fifteen", 16: "sixteen", 17: "seventeen",
-                     18: "eighteen", 19: "nineteen", 20: "twenty"})
+                     18: "eighteen", 19: "nineteen", 20: "twenty",
+                     21: "twenty-one"})
 
 
 def _count_word(n: int) -> str:

@@ -130,7 +130,10 @@ exactly, because the pieces are not equally covered:
     every tread, and the census REFUSES a plan where they do not); the switch
     is MEASURED on the attached build by `probe_alignment`, timing the
     alignment op alone along the ladder once per ARM (NATIVE's declaration,
-    and SHARED's and PRIVATE's id sets at the ratio arms'), and V8 refuses
+    and SHARED's and PRIVATE's id sets at the ratio arms') UNDER A CUDA
+    GRAPH (`PROBE_CALLS_PER_REPLAY` calls per replay, so each cell is GPU
+    time and no host enqueue sits in it; session 4's eager probe on the H200
+    was host-bound 36 of 36 and read UNKNOWN), and V8 refuses
     the design if the ratio arms' own series carries a step worth more than
     `ALIGN_STEP_RATIO_BUDGET` of the ratio; and NATIVE, which keeps the
     study's declaration and so keeps the switch, has its ladder difference
@@ -1232,6 +1235,28 @@ MIN_PROBE_REPEATS = 2
 PROBE_WARMUP_MS = 50.0
 PROBE_TARGET_MS = 30.0
 PROBE_TRIALS = 3
+#: DESIGN DECISION 13. The probe times the op UNDER A CUDA GRAPH: this many
+#: calls are captured into one graph and one replay is the timed callable, so
+#: the interval is GPU time and a cell's `ms` is the replay's p50 over this
+#: count. One cudaGraphLaunch per replay against N calls of GPU work keeps the
+#: queue deep (session 4's EAGER probe on the H200 was host-bound 36 of 36:
+#: 32-36 us of host per call against a kernel of a few us, and read UNKNOWN),
+#: and the replay's own launch gap lands in every cell of every series at the
+#: same 1/N, an intercept and never a step. What the interval DOES carry is
+#: the per-node launch latency inside the graph, which scales with the kernel
+#: count of the path taken: that is GPU time, the same the queue-deep sweep
+#: pays, and it is the quantity the ratio arms' slopes are about. A CONSTANT
+#: and not an adaptive count, because it is recorded on every cell and
+#: identical across arms and treads, which is what makes the residual an
+#: intercept; if a pod shows host_bound True at this count, it is doubled
+#: once, not fitted. Recorded on every cell as `graph_calls`; 0 there means
+#: the cell was timed eagerly (capture refused, or a pre-2026-09-22 row).
+PROBE_CALLS_PER_REPLAY = 16
+#: `torch.cuda.graph` synchronises, collects and empties the cache before each
+#: capture; the per-cell allowance `probe_seconds` books for that. A guess
+#: until a pod measures it; the estimate prints it and the session driver's
+#: booking row quotes the printed estimate, so both move together.
+PROBE_CAPTURE_MS = 20.0
 #: A step is REAL, for the record and for choosing the split the V5 fit uses,
 #: when it exceeds this many STANDARD ERRORS of its own fitted coefficient,
 #: widened for the fact that the split was CHOSEN by minimum residual over
@@ -1282,11 +1307,18 @@ class ProbeCell:
     repeat: int
     ms: float
     #: `time_kernel`'s own host-bound verdict for this cell. An alignment call
-    #: is tens of microseconds, which is the region where the host's enqueue
-    #: cost and the kernel's are the same size, and a host-bound cell times the
-    #: HOST. None is "not determinable", which is not the same as False.
+    #: is a few microseconds of GPU against tens of host, so an EAGER cell that
+    #: is host-bound timed the HOST; a GRAPH-timed cell (`graph_calls` > 0)
+    #: that is host-bound means cudaGraphLaunch outran `graph_calls` calls of
+    #: GPU work, an anomaly the page names rather than a host time. None is
+    #: "not determinable", which is not the same as False.
     host_bound: bool | None = None
     host_note: str = ""
+    #: Calls captured per graph replay when this cell was graph-timed; `ms` is
+    #: then the replay's p50 divided by it. 0 means timed eagerly.
+    graph_calls: int = 0
+    #: The undivided replay p50 in ms when graph-timed, None when eager.
+    replay_ms: float | None = None
 
 
 @dataclass(frozen=True)
@@ -1319,15 +1351,29 @@ class AlignProbe:
         """`(cells the instrument called host-bound, cells with a verdict, a
         note from one of them)` for one declaration.
 
-        A host-bound probe cell is a measurement of the HOST's enqueue cost,
-        and a step in that is not a step in the alignment kernel. V8 reads
-        this rather than scoring a number about the wrong machine.
+        An EAGER host-bound probe cell is a measurement of the HOST's enqueue
+        cost, and a step in that is not a step in the alignment kernel; a
+        GRAPH-timed cell the instrument called host-bound is an anomaly
+        (`ProbeCell.graph_calls`). V8 reads this rather than scoring a number
+        about the wrong machine.
         """
         mine = [c for c in self.cells if c.label == label]
         verdicts = [c for c in mine if c.host_bound is not None]
         hot = [c for c in verdicts if c.host_bound]
         note = hot[0].host_note if hot else ""
         return len(hot), len(verdicts), note
+
+    def graph_calls(self, label: str) -> int:
+        """The ONE `graph_calls` every cell of this declaration carries; 0 is
+        eager. A series that mixes eager and graph-timed cells, or two counts,
+        has two intercepts and would hand `step_fit` a step that belongs to the
+        instrument, so it is refused rather than fitted."""
+        got = {c.graph_calls for c in self.cells if c.label == label}
+        if len(got) > 1:
+            raise Unmeasurable(
+                f"{label}'s probe series was timed on more than one instrument "
+                f"(graph_calls {sorted(got)}); one series, one instrument")
+        return got.pop() if got else 0
 
     def as_dict(self) -> dict:
         return {"synthetic": self.synthetic, "note": self.note,
@@ -1613,12 +1659,109 @@ def pair_step_bias(shared: tuple[float, int] | None,
     return max(abs(a), abs(a - c)) / denom
 
 
+def time_probe_cell(call, *, arm: str, tread: int, numel: int, declared: int,
+                    repeat: int, reference_clock: float | None,
+                    calls_per_replay: int, graph_timer, eager_timer) -> ProbeCell:
+    """ONE probe cell on the instrument. `calls_per_replay` > 0: capture that
+    many calls in one graph (`graph_timer` is `driver.time_kernel_graph`, the
+    same capture the sweep's graph rows use), time the replay, divide. 0: the
+    eager path (`eager_timer` is `timing.time_kernel`), kept for the capture
+    refusal and for reproducing pre-2026-09-22 rows. Pure plumbing: the
+    off-GPU tests drive it with fake timers. `NotCapturable` propagates."""
+    kw = dict(warmup_ms=PROBE_WARMUP_MS, target_ms=PROBE_TARGET_MS,
+              trials=PROBE_TRIALS, l2_flush=False,
+              reference_clock_mhz=reference_clock)
+    if calls_per_replay <= 0:
+        t = eager_timer(call, **kw)
+        return ProbeCell(arm, tread, numel, declared, repeat, t.ms_p50,
+                         host_bound=getattr(t, "host_bound", None),
+                         host_note=getattr(t, "host_note", ""))
+
+    def batch():
+        for _ in range(calls_per_replay):
+            call()
+    t = graph_timer(batch, **kw)
+    return ProbeCell(arm, tread, numel, declared, repeat,
+                     t.ms_p50 / calls_per_replay,
+                     host_bound=getattr(t, "host_bound", None),
+                     host_note=getattr(t, "host_note", ""),
+                     graph_calls=calls_per_replay, replay_ms=t.ms_p50)
+
+
+def probe_cells(cfg, *, block_m: int, treads: list[int],
+                declared_by_arm: dict[str, int], copies_declared: int,
+                reference_clock: float | None, repeats: int,
+                calls_per_replay: int, op, sync, graph_timer, eager_timer,
+                device: str = "cuda") -> AlignProbe:
+    """The probe's loop with its op and instrument injected, so the plumbing
+    runs off-GPU with fakes: `op(ids, block_m, declared)` is the alignment
+    call, `sync` the device synchronise.
+
+    ONE SERIES, ONE INSTRUMENT. Every cell is tried under the graph; a
+    `NotCapturable` on ANY cell, first or later, discards what was collected
+    and re-runs the WHOLE probe eagerly with the reason on the probe's note.
+    A refusal on a later cell used to be the alternative worth stating: it
+    would have escaped to main's catch-all as ERROR with the graph cells
+    lost, and a mix that was merely recorded is what `AlignProbe.graph_calls`
+    refuses at fit time. The eager instrument plus NATIVE's control is still
+    a probe, which is why the fallback is a fallback and not a refusal."""
+    from moe.bench.timing import NotCapturable
+
+    def collect(mode: int) -> list[ProbeCell]:
+        cells = []
+        for rep_ in range(repeats):
+            for n in treads:
+                tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
+                ids = SWEEP.balanced_ids(cfg, tokens, device)
+                # ONE LABEL PER ARM, at that arm's declaration and on that
+                # arm's own ids. SHARED and PRIVATE share a declaration and
+                # differ in the id SET: PRIVATE spreads each expert's rows
+                # over n copies, so the alignment's per-expert counters see
+                # different contention. Probing both is what measures that
+                # asymmetry and what checks the "common to both arms" premise
+                # of `step_bias`.
+                use_by_arm = {
+                    NATIVE: ids,
+                    SHARED: shared_topk_ids(ids, copies_declared),
+                    PRIVATE: private_topk_ids(ids, cfg.num_experts, block_m,
+                                              n * block_m, copies_declared),
+                }
+                for arm in ARMS:
+                    d = declared_by_arm[arm]
+                    use = use_by_arm[arm]
+
+                    def call(use=use, d=d):
+                        op(use, block_m, d)
+                    call()
+                    sync()
+                    cells.append(time_probe_cell(
+                        call, arm=arm, tread=n, numel=tokens * cfg.top_k,
+                        declared=d, repeat=rep_,
+                        reference_clock=reference_clock,
+                        calls_per_replay=mode, graph_timer=graph_timer,
+                        eager_timer=eager_timer))
+        return cells
+
+    note = ""
+    try:
+        cells = collect(calls_per_replay)
+    except NotCapturable as exc:
+        note = (f"capture refused ({str(exc)[:160]}); the WHOLE probe was "
+                "re-run EAGERLY, so a host-bound cell timed the host")
+        cells = collect(0)
+    return AlignProbe(tuple(cells), synthetic=False, note=note)
+
+
 def probe_alignment(cfg, *, block_m: int, treads: list[int],
                     declared_by_arm: dict[str, int], copies_declared: int,
                     reference_clock: float | None,
-                    repeats: int = PROBE_REPEATS) -> AlignProbe:
+                    repeats: int = PROBE_REPEATS,
+                    calls_per_replay: int = PROBE_CALLS_PER_REPLAY,
+                    graph_timer=None, eager_timer=None) -> AlignProbe:
     """Time vLLM's alignment op ALONE, once per ARM, along the ladder, on the
-    attached build.
+    attached build, UNDER A CUDA GRAPH (`PROBE_CALLS_PER_REPLAY` calls per
+    replay, so each cell is GPU time; eager is the fallback when the capture
+    is refused, and the probe's note says so).
 
     Three series: NATIVE's own declaration, and SHARED's and PRIVATE's ID
     SETS at the ratio arms' shared declaration. The two id sets are timed
@@ -1635,41 +1778,19 @@ def probe_alignment(cfg, *, block_m: int, treads: list[int],
     from vllm.model_executor.layers.fused_moe.moe_align_block_size import moe_align_block_size
 
     from moe.bench import timing
-
-    cells = []
-    for rep_ in range(repeats):
-        for n in treads:
-            tokens = SWEEP.tokens_for_rows(cfg, n * block_m)
-            ids = SWEEP.balanced_ids(cfg, tokens, "cuda")
-            # ONE LABEL PER ARM, at that arm's declaration and on that arm's
-            # own ids. SHARED and PRIVATE share a declaration and differ in
-            # the id SET: PRIVATE spreads each expert's rows over n copies,
-            # so the alignment's per-expert counters see different
-            # contention. Probing both is what measures that asymmetry and
-            # what checks the "common to both arms" premise of `step_bias`.
-            use_by_arm = {
-                NATIVE: ids,
-                SHARED: shared_topk_ids(ids, copies_declared),
-                PRIVATE: private_topk_ids(ids, cfg.num_experts, block_m,
-                                          n * block_m, copies_declared),
-            }
-            for arm in ARMS:
-                d = declared_by_arm[arm]
-                use = use_by_arm[arm]
-
-                def call(use=use, d=d):
-                    moe_align_block_size(use, block_m, d)
-                call()
-                torch.cuda.synchronize()
-                t = timing.time_kernel(call, warmup_ms=PROBE_WARMUP_MS,
-                                       target_ms=PROBE_TARGET_MS,
-                                       trials=PROBE_TRIALS, l2_flush=False,
-                                       reference_clock_mhz=reference_clock)
-                cells.append(ProbeCell(arm, n, tokens * cfg.top_k, d, rep_,
-                                       t.ms_p50,
-                                       host_bound=getattr(t, "host_bound", None),
-                                       host_note=getattr(t, "host_note", "")))
-    return AlignProbe(tuple(cells), synthetic=False)
+    if graph_timer is None:
+        # IMPORTED, not copied: the capture the sweep's graph rows use
+        # (`timing.time_graph` is the RETIRED timer and is not this).
+        from moe.bench.driver import time_kernel_graph as graph_timer
+    if eager_timer is None:
+        eager_timer = timing.time_kernel
+    return probe_cells(cfg, block_m=block_m, treads=treads,
+                       declared_by_arm=declared_by_arm,
+                       copies_declared=copies_declared,
+                       reference_clock=reference_clock, repeats=repeats,
+                       calls_per_replay=calls_per_replay,
+                       op=moe_align_block_size, sync=torch.cuda.synchronize,
+                       graph_timer=graph_timer, eager_timer=eager_timer)
 
 
 #: What the probe times per tread and repeat: one series per ARM (NATIVE's
@@ -1680,7 +1801,8 @@ PROBE_LABELS = len(ARMS)
 def probe_seconds(treads: list[int], declarations: int,
                   repeats: int = PROBE_REPEATS) -> float:
     return (declarations * len(treads) * repeats
-            * (PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_TARGET_MS) * 1e-3)
+            * (PROBE_CAPTURE_MS + PROBE_WARMUP_MS + PROBE_TRIALS * PROBE_TARGET_MS)
+            * 1e-3)
 
 
 @dataclass(frozen=True)
@@ -1693,6 +1815,9 @@ class ProbeReading:
     spread_ms: float | None
     real: bool
     hypothesis_split: int | None
+    #: The instrument every cell of the series was timed on: calls per graph
+    #: replay, 0 for eager. `AlignProbe.graph_calls` refuses a mix.
+    graph_calls: int = 0
 
     def lines(self) -> list[str]:
         f = self.fit
@@ -1709,7 +1834,9 @@ class ProbeReading:
                f"against {PROBE_STEP_SIGMA:.0f} se widened by "
                f"{selection_penalty(f.splits_tried):.2f} for the "
                f"{f.splits_tried} split(s) the minimum was taken over, i.e. "
-               f"{f.threshold_ms() * 1e3:.2f} us"]
+               f"{f.threshold_ms() * 1e3:.2f} us"
+               + (f" [GPU time: {self.graph_calls} calls per graph replay]"
+                  if self.graph_calls else " [eager]")]
         if self.hypothesis_split:
             out.append(f"         the hypothesis puts this declaration's switch at "
                        f"tread {self.hypothesis_split}: "
@@ -1728,9 +1855,10 @@ class ProbeReading:
 
 def read_probe(probe: AlignProbe, label: str, census: PathCensus
                ) -> ProbeReading:
+    graph_calls = probe.graph_calls(label)   # refuses a two-instrument series
     fit = step_fit(probe.series(label))
     return ProbeReading(label, fit, probe.spread_ms(label), fit.resolved(),
-                        census.switch_tread(label))
+                        census.switch_tread(label), graph_calls)
 
 
 # --------------------------------------------------------------------------
@@ -2887,17 +3015,25 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     that enters the bias, not SHARED's alone.
 
     NATIVE's declaration is read beside it. It is never scored as a design
-    fault -- NATIVE is allowed its switch, and the V5 fit takes it out -- but
-    it IS the probe's POSITIVE CONTROL when the cells came back host-bound
-    (`native_control`). A host-bound cell times the host's enqueue cost, which
-    on an H200 is expected to be several times the alignment kernel's own, so a
-    flat ratio series from such a probe is not by itself evidence that nothing
-    stepped. NATIVE declares E, under the expert bound, and the census puts
-    its switch at `census.switch_tread(NATIVE)`: if the probe resolves NATIVE's
-    step AT that tread, it has shown it can see a kernel switch of this op at
-    this size through whatever host cost is present, and the ratio series is
-    scored exactly as a GPU-bound one would be. If it does not, UNKNOWN, and
-    the page says it means "the probe could not see the switch it was shown".
+    fault -- NATIVE is allowed its switch, and the V5 fit takes it out. The
+    probe times the op UNDER A CUDA GRAPH (`PROBE_CALLS_PER_REPLAY` calls per
+    replay), so its cells are GPU time by construction and NATIVE's switch
+    beside them CONFIRMS the cited source on this build or BOUNDS its cost
+    under the fit's own threshold (`gpu_time_control`); it never withholds
+    the verdict, because the reason a control ever gated was host blindness,
+    which the graph removes, and the threshold prices the noise. On the EAGER
+    fallback (capture refused, named on the page), or on cells the instrument
+    called host-bound anyway, NATIVE IS the probe's POSITIVE CONTROL
+    (`native_control`): an eager host-bound cell times the host's enqueue
+    cost, which on an H200 is several times the alignment kernel's own
+    (session 4: 32-36 us against a few), so a flat ratio series from such a
+    probe is not by itself evidence that nothing stepped. NATIVE declares E,
+    under the expert bound, and the census puts its switch at
+    `census.switch_tread(NATIVE)`: if the probe resolves NATIVE's step AT that
+    tread, it has shown it can see a kernel switch of this op at this size
+    through whatever host cost is present, and the ratio series is scored
+    exactly as a GPU-bound one would be. If it does not, UNKNOWN, and the
+    page says it means "the probe could not see the switch it was shown".
     """
     if probe is None:
         return Gate("V8", VALIDITY,
@@ -2925,6 +3061,8 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
                     "ratio slopes", detail)
     r = readings[ratio_label]
     rp = readings.get(PRIVATE) if ratio_label == SHARED else None
+    graph_calls = r.graph_calls
+    detail.append(instrument_line(graph_calls, probe))
 
     def step_of(reading, resolved_only: bool = False):
         """`(step_ms, split)` for the bound, or None for "no step here".
@@ -2990,6 +3128,11 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
     hot = sum(c[0] for c in counts.values())
     judged = sum(c[1] for c in counts.values())
     note = next((c[2] for c in counts.values() if c[2]), "")
+    if graph_calls and hot:
+        # The instrument's own remedy is "time the callable as a graph
+        # replay", which is what these cells already were: name the anomaly.
+        note = (f"the replay's launch outran {graph_calls} calls of GPU work, "
+                "an anomaly on this op; raise PROBE_CALLS_PER_REPLAY")
     if not judged:
         detail.append("the instrument returned no host-bound verdict for any "
                       "probed cell")
@@ -3009,13 +3152,21 @@ def gate_v8_alignment(probe: AlignProbe | None, *, treads: list[int],
             + (f": {note}" if note else ""))
     control = None
     if judged == 0 or hot:
-        # A HOST-BOUND PROBE TIMES THE HOST, so on its own it is not evidence
-        # either way. NATIVE's switch is the positive control that decides
-        # whether it became evidence anyway.
+        # AN EAGER HOST-BOUND PROBE TIMES THE HOST; a graph-timed one the
+        # instrument still called host-bound is an anomaly (the replay's
+        # launch outran N calls). Either way it is not evidence on its own,
+        # and NATIVE's switch is the positive control that decides whether it
+        # became evidence anyway.
         control, control_lines = native_control(readings, census, hot=hot,
                                                 judged=judged,
-                                                native=probe.host_bound(NATIVE))
+                                                native=probe.host_bound(NATIVE),
+                                                graph_calls=graph_calls)
         detail += control_lines
+    elif graph_calls:
+        # GPU TIME BY CONSTRUCTION: the control confirms or bounds NATIVE's
+        # switch and never withholds the verdict; the threshold prices noise.
+        detail += gpu_time_control(readings, census, treads=treads,
+                                   weight_stream_ms=weight_stream_ms)
     if control is False:
         verdict = UNKNOWN
     elif bias <= ALIGN_STEP_RATIO_BUDGET:
@@ -3129,18 +3280,31 @@ def native_step_is_admissible(reading, probe: AlignProbe | None
                        "native's own cells, so what they timed is not "
                        "established")
     if hot:
+        g = probe.graph_calls(NATIVE)
+        if g:
+            return False, (f"{hot} of {judged} of native's own cells came back "
+                           f"host-bound UNDER A CUDA GRAPH of {g} calls per "
+                           "replay: the replay's launch outran that much GPU "
+                           "work, an anomaly on this op, so what they timed "
+                           "is not established; raise PROBE_CALLS_PER_REPLAY")
         return False, (f"{hot} of {judged} of native's own cells were "
                        "HOST-BOUND, so the step in them is a step in the "
                        "host's enqueue cost and not in the kernel")
     return True, (f"native's own {judged} cells were judged and none was "
-                  "host-bound, so its step was read in GPU time")
+                  "host-bound, so its step was read in GPU time"
+                  + (f" under a CUDA graph of {probe.graph_calls(NATIVE)} calls "
+                     "per replay, GPU time by construction"
+                     if probe.graph_calls(NATIVE) else ""))
 
 
 def native_control(readings: dict, census: PathCensus, *, hot: int,
-                   judged: int, native: tuple[int, int, str]
-                   ) -> tuple[bool, list[str]]:
+                   judged: int, native: tuple[int, int, str],
+                   graph_calls: int = 0) -> tuple[bool, list[str]]:
     """Did the probe resolve NATIVE's kernel switch at the tread the census
-    puts it: `(confirmed, the lines that say so)`.
+    puts it: `(confirmed, the lines that say so)`. Reached on the EAGER
+    fallback and on graph-timed cells the instrument still called host-bound;
+    `graph_calls` says which, so the state names the instrument and the
+    remedy does not prescribe what was already done.
 
     `hot`/`judged` are the ratio series' own host-bound counts and `native`
     is NATIVE's, so the lines say which case they are in instead of asserting
@@ -3164,7 +3328,10 @@ def native_control(readings: dict, census: PathCensus, *, hot: int,
             "alignment kernel throughout this ladder, so there is no switch "
             "to show the host-bound probe; UNKNOWN means the instrument was "
             "not demonstrated, not that the design is doubted"]
-    state = (f"the probe's ratio cells were host-bound ({hot} of {judged})"
+    graph = (f" under a CUDA graph with {graph_calls} calls per replay -- the "
+             f"replay's launch outran {graph_calls} calls of GPU work, an "
+             "anomaly on this op" if graph_calls else ", timed eagerly")
+    state = (f"the probe's ratio cells were host-bound ({hot} of {judged}){graph}"
              if hot else
              "the instrument returned no host-bound verdict for the ratio "
              "cells, so what they timed is not established")
@@ -3201,8 +3368,80 @@ def native_control(readings: dict, census: PathCensus, *, hot: int,
         "shown, so a flat ratio series from it certifies nothing, and a step "
         "in it is not evidence of a kernel switch either. What would close "
         "it is a timing that excludes the host: read the step from a "
-        "profiler, or time the op under a CUDA graph",
+        + ("profiler, or raise PROBE_CALLS_PER_REPLAY so the replay outlasts "
+           "its own launch" if graph_calls else
+           "profiler, or time the op under a CUDA graph (the probe's default; "
+           "this probe ran eagerly, see the instrument line above)"),
         f"  {assumption}"]
+
+
+def instrument_line(graph_calls: int, probe: AlignProbe) -> str:
+    """What timed the probe's cells, on the page: nothing printed
+    `AlignProbe.note` before this, so a refused capture reached report.json
+    and never the pod log."""
+    if graph_calls:
+        return (f"the probe timed the op under a CUDA graph, {graph_calls} "
+                "calls per replay: each cell is GPU time (the replay's p50 "
+                "over that count) and no host enqueue sits in it")
+    return ("the probe timed the op EAGERLY, so a host-bound cell timed the "
+            "host" + (f" ({probe.note})" if probe.note and not probe.synthetic
+                      else ""))
+
+
+def gpu_time_control(readings: dict, census: PathCensus, *, treads: list[int],
+                     weight_stream_ms: float) -> list[str]:
+    """NATIVE's switch read beside a GRAPH-TIMED ratio series: informational,
+    never a verdict.
+
+    The ratio series are GPU time by construction, so V8 rests on them and
+    NATIVE's reading is a statement about the BUILD and the INSTRUMENT's
+    resolution, not a licence: resolved at the census tread, the cited
+    source's switch is where it says on this build and the instrument
+    resolves a step of that size at this geometry; resolved elsewhere, a
+    finding about the build (`analyse` fits V5 at the probe's tread, since
+    `native_step_is_admissible` is True); NOT resolved, a BOUND: whatever
+    switch NATIVE makes at the census tread costs under the fit's threshold
+    per call, which is a fact about the kernel and not a blind spot, because
+    no host cost sits in a graph replay. The lever on a loose bound is a
+    denser probe ladder (its treads need not be the arms'), not more
+    --probe-repeats: at six treads the threshold is 16.5 standard errors and
+    session 4's eager cells spread 0.04-0.12 us across repeats, so at that
+    depth a 2 us switch resolves or not on the noise, which the pod decides.
+    """
+    want = census.switch_tread(NATIVE)
+    r = readings.get(NATIVE)
+    if want is None:
+        return ["POSITIVE CONTROL UNAVAILABLE, and not needed: the census puts "
+                "NATIVE on one alignment kernel throughout this ladder, so "
+                "there is no switch to read; the ratio series are GPU time by "
+                "construction and V8 rests on them"]
+    if r is None:
+        return ["NATIVE's declaration was not probed; the ratio series are GPU "
+                "time by construction and V8 rests on them"]
+    f = r.fit
+    thr_us = f.threshold_ms() * 1e3
+    step = f"{f.step_ms * 1e3:+.2f} us +/- {f.step_se * 1e3:.2f} us"
+    if r.real and f.split_tread == want:
+        return [f"POSITIVE CONTROL CONFIRMED IN GPU TIME: the probe resolved "
+                f"NATIVE's step at tread {want}, where the census puts its "
+                f"kernel switch ({step} against a threshold of {thr_us:.2f} "
+                "us): the cited source's switch is where it says on this "
+                "build, and the instrument resolves a step of that size at "
+                "this geometry"]
+    if r.real:
+        return [f"NATIVE's switch resolved at tread {f.split_tread} in GPU "
+                f"time, not the census tread {want} ({step}): a finding about "
+                "the build; V5 is fitted at the probe's tread"]
+    worth = step_bias(f.threshold_ms(), treads, want, weight_stream_ms)
+    return [f"NATIVE's switch NOT RESOLVED IN GPU TIME: best split at tread "
+            f"{f.split_tread if f.split_tread else '-'}, step {step}, "
+            f"threshold {thr_us:.2f} us at {f.dof} dof over {f.splits_tried} "
+            f"split(s), so whatever switch NATIVE makes at tread {want} costs "
+            f"under {thr_us:.2f} us per call -- a bound on the KERNEL, not a "
+            "blind spot: no host cost sits in a graph replay. A step that size "
+            f"in a ratio arm at that tread would be worth {worth:.5f} of the "
+            "ratio; a denser probe ladder is what tightens it, not more "
+            "--probe-repeats"]
 
 
 def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
@@ -3441,8 +3680,12 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
     out.append(f"    V8 the probed alignment steps in SHARED's and PRIVATE's id "
                f"sets are worth <= {ALIGN_STEP_RATIO_BUDGET} of the ratio "
                "together; FAIL needs it over budget AND resolved, and a FAIL "
-               "alone skips the sweep; a host-bound probe is scored only if it "
-               "resolves NATIVE's switch at the census tread")
+               "alone skips the sweep; the probe is timed under a CUDA graph "
+               f"({PROBE_CALLS_PER_REPLAY} calls per replay) so its cells are "
+               "GPU time and NATIVE's switch beside them confirms or bounds, "
+               "never withholds; an EAGER fallback that comes back host-bound "
+               "is scored only if it resolves NATIVE's switch at the census "
+               "tread")
     out.append("    C1 PASS: point and whole interval inside ALPHA_BAND; "
                "FAIL: interval misses ALPHA_BAND; otherwise UNKNOWN")
     out.append(f"    C2 the delivered weight-read rate is at or under the "
@@ -3492,24 +3735,28 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
                "printed with an interval.")
     if census is not None and census.switch_tread(NATIVE) is None:
         # REGISTERED BEFORE A POD IS RENTED, because it decides what V8 can
-        # say. The positive control is NATIVE's own kernel switch: with none
-        # in this ladder there is nothing to show a host-bound probe, and an
-        # H200's probe is EXPECTED to be host-bound (the alignment call is
-        # tens of microseconds, the size of the host's own enqueue cost). V8
-        # can then reach PASS only on a probe the instrument judged and
-        # cleared; otherwise UNKNOWN, which latches the page INVALID after
-        # the ladder has been paid for -- the skip is FAIL-only.
+        # say. The positive control is NATIVE's own kernel switch, and with
+        # none in this ladder it is UNAVAILABLE. Under the graph that is
+        # informational: the ratio series are GPU time by construction and
+        # V8 rests on them. It binds only on the EAGER fallback, whose cells
+        # an H200 makes host-bound (the alignment call is a few microseconds
+        # against tens of host enqueue): V8 can then reach PASS only on a
+        # probe the instrument judged and cleared; otherwise UNKNOWN, which
+        # latches the page INVALID after the ladder has been paid for -- the
+        # skip is FAIL-only.
         out.append("  AND THIS LADDER GIVES V8 NO POSITIVE CONTROL: its id "
                    f"count runs {ids_for_tread(cfg, treads[0], block_m)}.."
                    f"{ids_for_tread(cfg, treads[-1], block_m)} and stays on "
                    f"one side of the {ALIGN_SMALL_BATCH_MAX_IDS}-id bound, so "
                    "NATIVE switches kernel nowhere in it and there is no "
-                   "switch to show the probe. If the probe comes back "
-                   "host-bound, which is what this op's size makes likely, V8 "
-                   "can only read UNKNOWN -- the page latches INVALID and the "
-                   "ladder is still paid for, because the sweep is skipped on "
-                   "a FAIL alone. A tile whose ladder CROSSES that bound "
-                   "supplies the control; the booked tile does.")
+                   "switch to read beside the ratio series. Under the CUDA "
+                   "graph that is informational and V8 rests on the GPU-timed "
+                   "ratio series; on the EAGER fallback, which an H200 makes "
+                   "host-bound, V8 can only read UNKNOWN -- the page latches "
+                   "INVALID and the ladder is still paid for, because the "
+                   "sweep is skipped on a FAIL alone. A tile whose ladder "
+                   "CROSSES that bound supplies the control; the booked tile "
+                   "does.")
     slot_elems = max(2 * cfg.intermediate_size * cfg.hidden_size,
                      cfg.hidden_size * cfg.intermediate_size)
     top_slot = expert_space(cfg.num_experts, copies_declared) - 1
@@ -3676,6 +3923,59 @@ def tread_rows(samples, cfg, *, block_m: int, roof_tflops: float,
     return rows
 
 
+def native_switch_source(probe: AlignProbe | None, census: PathCensus
+                         ) -> tuple[int | None, str]:
+    """`(the tread V5's declaration fit puts NATIVE's step at, why)`: the
+    probe when it resolved a step there in GPU time, else the cited
+    hypothesis. ONE HOME, read by `analyse` and testable without a page.
+
+    The tread logic is `native_step_is_admissible`'s; what this adds is the
+    sentence for a GRAPH-timed probe that resolved no step: that is a BOUND
+    on the switch (under the fit's threshold per call), not an unconfirmed
+    hypothesis, because no host cost sits in a graph replay.
+    """
+    native_switch = census.switch_tread(NATIVE)
+    switch_source = (f"the cited hypothesis (tread {native_switch})"
+                     if native_switch else "the cited hypothesis (no switch)")
+    if probe is not None and NATIVE in probe.labels():
+        try:
+            reading = read_probe(probe, NATIVE, census)
+            ok, why = native_step_is_admissible(reading, probe)
+            if ok:
+                native_switch = reading.fit.split_tread
+                switch_source = (f"the probe, which resolved native's step at "
+                                 f"tread {native_switch} ({why})")
+            elif reading.real and reading.fit.split_tread != native_switch:
+                # A STEP THE PROBE COULD NOT TIME ON THE GPU DOES NOT GET TO
+                # CHOOSE THE TREAD V5 IS FITTED AT. b is what V5 scores at
+                # MACHINERY_BOUND, and the tread the step term sits at moves
+                # it; a host-timed split would put a step in the host's time
+                # into the declaration's own per-M-tile cost.
+                switch_source += (
+                    f"; the probe put native's step at tread "
+                    f"{reading.fit.split_tread} instead, and that reading is "
+                    f"REFUSED as the fit's tread because {why}")
+            elif reading.real:
+                # Resolved AT the census tread but not on the GPU: the tread
+                # is the same either way, and the sentence used to say "no
+                # step" here.
+                switch_source += (
+                    f"; the probe resolved native's step at that tread too, "
+                    f"but not as the fit's reading, because {why}")
+            elif reading.graph_calls:
+                switch_source += (
+                    "; the probe resolved no step for native IN GPU TIME "
+                    f"(threshold {reading.fit.threshold_ms() * 1e3:.2f} us at "
+                    f"{reading.fit.dof} dof), so the hypothesis stands as the "
+                    "fit's tread and the step it names is under that per call")
+            else:
+                switch_source += ("; the probe resolved no step for native, so "
+                                  "the hypothesis stands unconfirmed")
+        except Unmeasurable as exc:
+            switch_source += f"; the probe's native series was not fitted ({exc})"
+    return native_switch, switch_source
+
+
 def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             alpha: float, dtype: str, b: int, bandwidth_gbps: float,
             bandwidth_source: str, ridge: float, ridge_source: str,
@@ -3779,32 +4079,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
 
     # WHERE NATIVE'S SWITCH IS TAKEN FROM: the probe when it resolved a step
     # there, else the cited hypothesis. Said on the page either way.
-    native_switch = census.switch_tread(NATIVE)
-    switch_source = (f"the cited hypothesis (tread {native_switch})"
-                     if native_switch else "the cited hypothesis (no switch)")
-    if probe is not None and NATIVE in probe.labels():
-        try:
-            reading = read_probe(probe, NATIVE, census)
-            ok, why = native_step_is_admissible(reading, probe)
-            if ok:
-                native_switch = reading.fit.split_tread
-                switch_source = (f"the probe, which resolved native's step at "
-                                 f"tread {native_switch} ({why})")
-            elif reading.real and reading.fit.split_tread != native_switch:
-                # A STEP THE PROBE COULD NOT TIME ON THE GPU DOES NOT GET TO
-                # CHOOSE THE TREAD V5 IS FITTED AT. b is what V5 scores at
-                # MACHINERY_BOUND, and the tread the step term sits at moves
-                # it; a host-timed split would put a step in the host's time
-                # into the declaration's own per-M-tile cost.
-                switch_source += (
-                    f"; the probe put native's step at tread "
-                    f"{reading.fit.split_tread} instead, and that reading is "
-                    f"REFUSED as the fit's tread because {why}")
-            else:
-                switch_source += ("; the probe resolved no step for native, so "
-                                  "the hypothesis stands unconfirmed")
-        except Unmeasurable as exc:
-            switch_source += f"; the probe's native series was not fitted ({exc})"
+    native_switch, switch_source = native_switch_source(probe, census)
     decl_fit = None
     decl_bands: tuple = (None, None)
     band_absence = ""
@@ -4042,6 +4317,10 @@ class World:
     #: What the instrument said about the planted probe's cells. A world that
     #: plants no verdict would leave V8 UNKNOWN on every page.
     probe_host_bound: bool = False
+    #: The instrument the planted probe was timed on, mirroring the real one:
+    #: `PROBE_CALLS_PER_REPLAY` (graph, GPU time) unless a world plants the
+    #: eager fallback, which is what the two host-bound worlds are.
+    probe_graph_calls: int = PROBE_CALLS_PER_REPLAY
     #: The buffer proof's planted verdict.
     proof_ok: bool = True
     #: Planted allocation observations, as a multiple of the prediction.
@@ -4184,16 +4463,27 @@ WORLDS: dict[str, World] = {
         "sweep still runs: the page latches INVALID on V8 and carries every "
         "other gate's number",
         dict(ALL_PASS, V8=UNKNOWN), probe_host_bound=True,
-        native_probe_step_ms=0.0),
+        probe_graph_calls=0, native_probe_step_ms=0.0),
+    "graph-probe-unresolved": World(
+        "graph-probe-unresolved",
+        "the probe timed the op under a CUDA graph and resolved no NATIVE step "
+        "in GPU time: the switch the census names costs less than the printed "
+        "threshold per call, a bound on the kernel and not a blind instrument, "
+        "so V8 PASSES on the GPU-timed ratio series. The same planted cells "
+        "timed EAGERLY and host-bound are the host-bound-probe world, which "
+        "reads UNKNOWN: the two differ in the instrument and in the verdict "
+        "the instrument gave, nothing else",
+        dict(ALL_PASS), native_probe_step_ms=0.0),
     "host-bound-controlled": World(
         "host-bound-controlled",
-        "the probe's cells came back HOST-BOUND, as they are expected to on "
-        "an H200, but it resolved NATIVE's kernel switch at the tread the "
+        "the probe's cells came back HOST-BOUND, as an EAGER probe's do on an "
+        "H200 (the pre-2026-09-22 probe, and the fallback when the capture is "
+        "refused), but it resolved NATIVE's kernel switch at the tread the "
         "census puts it: the positive control shows the probe sees a switch "
         "of this op at this size through the host cost, so the ratio arms' "
         "flat series is evidence and V8 PASSES. Without the control this "
-        "world, which is the one a rented card is in, produced no ladder",
-        dict(ALL_PASS), probe_host_bound=True),
+        "world, which is the one a rented card WAS in, produced no ladder",
+        dict(ALL_PASS), probe_host_bound=True, probe_graph_calls=0),
     "ratio-path-split": World(
         "ratio-path-split",
         "the probe finds a step at the RATIO arms' own declaration: on this "
@@ -4387,11 +4677,14 @@ def planted_probe(world: World, cfg, *, block_m: int, treads: list[int],
                     ms += private_step
                 if noise:
                     ms *= (1.0 + rng.gauss(0.0, noise))
+                g = world.probe_graph_calls
                 cells.append(ProbeCell(arm, n, numel, d, rep_, ms,
                                        host_bound=world.probe_host_bound,
                                        host_note=("planted host-bound"
                                                   if world.probe_host_bound
-                                                  else "")))
+                                                  else ""),
+                                       graph_calls=g,
+                                       replay_ms=(ms * g if g else None)))
     return AlignProbe(tuple(cells), synthetic=True,
                       note=f"planted for the {world.name!r} world")
 
@@ -4743,8 +5036,10 @@ def run_sweep(args, cfg, *, block_m: int, treads: list[int], pinned: dict,
         # ON FAIL ONLY. A FAIL is a statement about the BUILD: it switches
         # alignment kernel inside the ratio arms' ladder, and no slope
         # measured here would be free of it. An UNKNOWN is a statement about
-        # the INSTRUMENT -- with NATIVE's switch as the positive control it
-        # means the probe could not see a switch it was shown -- and the
+        # the INSTRUMENT -- on the eager fallback, with NATIVE's switch as the
+        # positive control, it means the probe could not see a switch it was
+        # shown; under the graph, that a step is over budget and unresolved
+        # or that the replay's launch outran its calls -- and the
         # page still latches INVALID on it, but throwing away the ladder and
         # every other gate's number over an inconclusive probe is the wrong
         # trade on a rented card. So the sweep runs and V8 stays on the page.

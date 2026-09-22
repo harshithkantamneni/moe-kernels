@@ -58,6 +58,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "ratio-step-under-budget"), True),
     (("--self-test", "private-step-alone"), True),
     (("--self-test", "clock-split-elastic"), True),
+    (("--self-test", "graph-probe-unresolved"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -1360,7 +1361,10 @@ def test_step_fit_recovers_a_planted_step_and_finds_none_on_a_line():
         PW.step_fit(_series(0.0, 4)[:2])
 
 
-def _probe_from(series_by_label, spread=0.0, host_bound=False):
+def _probe_from(series_by_label, spread=0.0, host_bound=False, graph_calls=0,
+                note=""):
+    """`graph_calls` 0 plants an EAGER probe (the pre-2026-09-22 instrument
+    and the capture-refused fallback); N plants the graph-timed one."""
     cells = []
     for label, series in series_by_label.items():
         for rep in range(3):
@@ -1368,8 +1372,11 @@ def _probe_from(series_by_label, spread=0.0, host_bound=False):
                 jitter = (rep - 1) * spread
                 cells.append(PW.ProbeCell(label, n, numel, 72, rep,
                                           ms * (1.0 + jitter),
-                                          host_bound=host_bound))
-    return PW.AlignProbe(tuple(cells), synthetic=True)
+                                          host_bound=host_bound,
+                                          graph_calls=graph_calls,
+                                          replay_ms=(ms * graph_calls
+                                                     if graph_calls else None)))
+    return PW.AlignProbe(tuple(cells), synthetic=True, note=note)
 
 
 def _census():
@@ -1777,10 +1784,10 @@ def test_v8_passes_a_flat_ratio_series_fails_a_real_step_and_doubts_a_noisy_one(
 
 
 # --------------------------------------------------------------------------
-# 13. a host-bound probe times the HOST, so V8 says UNKNOWN
+# 13. an EAGER host-bound probe times the HOST, so V8 says UNKNOWN
 # --------------------------------------------------------------------------
 
-def _verdict_probe(verdicts_by_label):
+def _verdict_probe(verdicts_by_label, graph_calls=0):
     """An `AlignProbe` whose cells carry EXACTLY the named `(host_bound,
     host_note)` per tread, repeated three times like `_probe_from`.
 
@@ -1795,7 +1802,8 @@ def _verdict_probe(verdicts_by_label):
         for rep in range(3):
             for (n, numel, ms), (hot, note) in zip(series, verdicts, strict=True):
                 cells.append(PW.ProbeCell(label, n, numel, 72, rep, ms,
-                                          host_bound=hot, host_note=note))
+                                          host_bound=hot, host_note=note,
+                                          graph_calls=graph_calls))
     return PW.AlignProbe(tuple(cells), synthetic=True)
 
 
@@ -2013,7 +2021,8 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
     # instead, and the page would name the wrong reason for the UNKNOWN.
     assert not any(_UNJUDGED_NOTE in ln for ln in gate.lines), gate.lines
     assert any(ln.startswith("POSITIVE CONTROL NOT CONFIRMED: the probe's "
-                             "ratio cells were host-bound (6 of 15); NATIVE's "
+                             "ratio cells were host-bound (6 of 15), timed "
+                             "eagerly; NATIVE's "
                              "switch is due at tread 4 and the probe resolved "
                              "no step") for ln in gate.lines), gate.lines
     # And a cleared probe says so on the same line rather than staying silent,
@@ -2026,14 +2035,16 @@ def test_the_v8_page_names_how_many_cells_were_host_bound_and_the_remedy_for_it(
 
 
 # --------------------------------------------------------------------------
-# 13b. NATIVE as the host-bound probe's POSITIVE CONTROL
+# 13b. NATIVE as the EAGER host-bound probe's POSITIVE CONTROL
 # --------------------------------------------------------------------------
 
 def test_v8_passes_a_host_bound_flat_series_when_natives_switch_resolves_at_the_census_tread():
-    """THE RENTED-CARD CASE. On an H200 the probe is expected to be host-bound
-    (~30-45 us host against ~6-10 us GPU per call), and V8 used to return
-    UNKNOWN for every host-bound probe -- which skipped the sweep, so a rented
-    pod produced no ladder at all. NATIVE declares E=8, under the expert
+    """THE EAGER-FALLBACK CASE (the rented-card case until 2026-09-22, when
+    the probe moved under a CUDA graph). On an H200 an EAGER probe is
+    host-bound (session 4: 32-36 us of host against a few us of GPU per
+    call), and V8 used to return UNKNOWN for every host-bound probe -- which
+    skipped the sweep, so a rented pod produced no ladder at all. NATIVE
+    declares E=8, under the expert
     bound, and the ladder crosses the id bound between treads 3 and 4, so its
     kernel switches at `census.switch_tread(NATIVE)` == 4. A probe that
     RESOLVES that step at tread 4 has shown it can see a kernel switch of this
@@ -2184,7 +2195,7 @@ def test_three_treads_are_refused_and_four_still_fail_a_real_step():
 #      cells the instrument judged
 # --------------------------------------------------------------------------
 
-def _per_label_probe(series_by_label, hot_by_label=None):
+def _per_label_probe(series_by_label, hot_by_label=None, graph_calls=0):
     """An `AlignProbe` whose per-label host-bound verdict is set per LABEL.
 
     `_probe_from` stamps one verdict on every cell of every label, so it
@@ -2198,7 +2209,8 @@ def _per_label_probe(series_by_label, hot_by_label=None):
         for rep in range(3):
             for n, numel, ms in series:
                 cells.append(PW.ProbeCell(label, n, numel, 72, rep, ms,
-                                          host_bound=hot_by_label.get(label)))
+                                          host_bound=hot_by_label.get(label),
+                                          graph_calls=graph_calls))
     return PW.AlignProbe(tuple(cells), synthetic=True)
 
 
@@ -2710,6 +2722,271 @@ def test_no_standing_prose_calls_the_elasticity_unknown():
     assert "clock_elasticity" in PW.__doc__ or "clock-elasticity" in PW.__doc__
 
 
+
+# --------------------------------------------------------------------------
+# 13e. the probe under a CUDA graph: GPU time, and NATIVE as a bound
+# --------------------------------------------------------------------------
+
+class _Timing:
+    def __init__(self, ms_p50, host_bound=False, host_note=""):
+        self.ms_p50, self.host_bound, self.host_note = ms_p50, host_bound, host_note
+
+
+def _fake_timer(ms_p50, log, **fields):
+    """A `time_kernel`-shaped timer: records the callable and kw, runs the
+    callable ONCE, returns a KernelTiming-shaped object."""
+    def timer(fn, **kw):
+        log.append((fn, kw))
+        fn()
+        return _Timing(ms_p50, **fields)
+    return timer
+
+
+def test_a_probe_cell_is_graph_timed_with_n_calls_per_replay_and_its_ms_is_per_call():
+    graph_log, eager_log, ran = [], [], []
+    cell = PW.time_probe_cell(
+        lambda: ran.append(1), arm=PW.SHARED, tread=3, numel=768, declared=72,
+        repeat=1, reference_clock=1485.0,
+        calls_per_replay=PW.PROBE_CALLS_PER_REPLAY,
+        graph_timer=_fake_timer(0.16, graph_log),
+        eager_timer=_fake_timer(9.9, eager_log))
+    assert len(ran) == PW.PROBE_CALLS_PER_REPLAY        # one replay = N calls
+    assert cell.ms == pytest.approx(0.16 / PW.PROBE_CALLS_PER_REPLAY)
+    assert cell.graph_calls == PW.PROBE_CALLS_PER_REPLAY
+    assert cell.replay_ms == 0.16
+    assert cell.host_bound is False
+    assert graph_log[0][1] == dict(warmup_ms=PW.PROBE_WARMUP_MS,
+                                   target_ms=PW.PROBE_TARGET_MS,
+                                   trials=PW.PROBE_TRIALS, l2_flush=False,
+                                   reference_clock_mhz=1485.0)
+    assert eager_log == []
+    # The eager path: one call per timing, no replay fields.
+    ran.clear()
+    cell = PW.time_probe_cell(
+        lambda: ran.append(1), arm=PW.SHARED, tread=3, numel=768, declared=72,
+        repeat=1, reference_clock=None, calls_per_replay=0,
+        graph_timer=_fake_timer(0.16, graph_log),
+        eager_timer=_fake_timer(0.03, eager_log, host_bound=True, host_note="h"))
+    assert len(ran) == 1 and cell.ms == 0.03
+    assert cell.graph_calls == 0 and cell.replay_ms is None
+    assert cell.host_bound is True and cell.host_note == "h"
+
+
+def test_a_refused_capture_on_any_cell_reruns_the_whole_probe_eagerly_and_the_note_says_so():
+    """ONE SERIES, ONE INSTRUMENT. The refusal lands on the FOURTH cell, not
+    the first: the three graph cells already collected are discarded and
+    every cell is re-timed eagerly, so no series carries two instruments and
+    nothing escapes to main as an ERROR."""
+    from moe.bench.timing import NotCapturable
+    graph_calls_made, eager_log = [], []
+
+    def graph_timer(fn, **kw):
+        graph_calls_made.append(fn)
+        if len(graph_calls_made) == 4:
+            raise NotCapturable("operation not permitted when stream is capturing")
+        fn()
+        return _Timing(0.16)
+    treads = [1, 2]
+    probe = PW.probe_cells(
+        CFG, block_m=32, treads=treads,
+        declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72},
+        copies_declared=9, reference_clock=None, repeats=2,
+        calls_per_replay=PW.PROBE_CALLS_PER_REPLAY,
+        op=lambda ids, bm, d: None, sync=lambda: None,
+        graph_timer=graph_timer, eager_timer=_fake_timer(0.03, eager_log),
+        device="cpu")
+    assert len(probe.cells) == 2 * 2 * 3
+    assert {c.graph_calls for c in probe.cells} == {0}
+    assert all(c.replay_ms is None for c in probe.cells)
+    assert len(eager_log) == 2 * 2 * 3
+    assert len(graph_calls_made) == 4
+    assert "capture refused" in probe.note and "not permitted" in probe.note
+    assert "EAGERLY" in probe.note
+    for label in PW.ARMS:
+        assert probe.graph_calls(label) == 0
+    # And the graph path, unrefused, stamps every cell with the count.
+    ok = PW.probe_cells(
+        CFG, block_m=32, treads=treads,
+        declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72},
+        copies_declared=9, reference_clock=None, repeats=2,
+        calls_per_replay=PW.PROBE_CALLS_PER_REPLAY,
+        op=lambda ids, bm, d: None, sync=lambda: None,
+        graph_timer=_fake_timer(0.16, []), eager_timer=_fake_timer(0.03, []),
+        device="cpu")
+    assert {c.graph_calls for c in ok.cells} == {PW.PROBE_CALLS_PER_REPLAY}
+    assert ok.note == ""
+    assert ok.graph_calls(PW.PRIVATE) == PW.PROBE_CALLS_PER_REPLAY
+
+
+def test_a_series_timed_on_two_instruments_is_refused_not_fitted():
+    series = _series(0.0, 4)
+    cells = []
+    for rep in range(3):
+        for n, numel, ms in series:
+            g = 16 if rep < 2 else 0
+            cells.append(PW.ProbeCell(PW.SHARED, n, numel, 72, rep, ms,
+                                      host_bound=False, graph_calls=g))
+            cells.append(PW.ProbeCell(PW.NATIVE, n, numel, 8, rep, ms,
+                                      host_bound=False, graph_calls=16))
+    probe = PW.AlignProbe(tuple(cells), synthetic=True)
+    with pytest.raises(PW.Unmeasurable, match="one series, one instrument"):
+        probe.graph_calls(PW.SHARED)
+    assert probe.graph_calls(PW.NATIVE) == 16
+    assert probe.graph_calls("nobody") == 0
+    gate = PW.gate_v8_alignment(probe, treads=[1, 2, 3, 4, 5, 6],
+                                census=_census(), weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN
+    assert gate.measured == "the ratio declaration was not probed"
+    assert any(ln.startswith("shared: series not fitted") for ln in gate.lines)
+
+
+def test_v8_passes_a_graph_timed_flat_series_and_bounds_natives_switch_in_gpu_time():
+    """THE PAGE SESSION 4 WOULD HAVE PRINTED under the graph: every series
+    flat, host_bound False. PASS on the ratio series; NATIVE's unresolved
+    step is a BOUND, no ASSUMED line, no graph remedy."""
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4,
+                        graph_calls=16)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    joined = "\n".join(gate.lines)
+    bound = next(ln for ln in gate.lines
+                 if ln.startswith("NATIVE's switch NOT RESOLVED IN GPU TIME"))
+    assert "us per call" in bound and "a bound on the KERNEL" in bound
+    reading = PW.read_probe(probe, PW.NATIVE, _census())
+    assert f"threshold {reading.fit.threshold_ms() * 1e3:.2f} us" in bound
+    assert "ASSUMED: the host's enqueue cost" not in joined
+    assert "time the op under a CUDA graph" not in joined
+    assert "under a CUDA graph, 16 calls per replay" in joined
+    native_line = next(ln for ln in gate.lines if ln.startswith("native "))
+    assert native_line.endswith("[GPU time: 16 calls per graph replay]")
+    # The eager instrument says so on its own line.
+    eager = PW.gate_v8_alignment(
+        _probe_from({PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4)},
+                    spread=1e-4), treads=treads, census=_census(),
+        weight_stream_ms=0.64)
+    assert any(ln.startswith("the probe timed the op EAGERLY") for ln in eager.lines)
+    assert any(ln.endswith("[eager]") for ln in eager.lines)
+
+
+def test_v8_confirms_the_control_in_gpu_time_when_natives_step_resolves_at_the_census_tread():
+    treads = [1, 2, 3, 4, 5, 6]
+    probe = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4,
+                        graph_calls=16)
+    gate = PW.gate_v8_alignment(probe, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS, gate.lines
+    line = next(ln for ln in gate.lines
+                if ln.startswith("POSITIVE CONTROL CONFIRMED IN GPU TIME"))
+    assert "tread 4" in line
+    # The host-cost assumption is moot inside a graph and is not printed (the
+    # bias bound's own "ASSUMED ratio <= 1" line is a different assumption).
+    assert not any("ASSUMED: the host's enqueue cost" in ln for ln in gate.lines)
+    # Resolved elsewhere: informational, still PASS, V5's tread is the probe's.
+    other = _probe_from({PW.NATIVE: _series(0.02, 3), PW.SHARED: _series(0.0, 4),
+                         PW.PRIVATE: _series(0.0, 4)}, spread=1e-4,
+                        graph_calls=16)
+    gate = PW.gate_v8_alignment(other, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.PASS
+    assert any("resolved at tread 3 in GPU time, not the census tread 4" in ln
+               for ln in gate.lines), gate.lines
+    tread, why = PW.native_switch_source(other, _census())
+    assert tread == 3 and "GPU time by construction" in why
+
+
+def test_a_graph_timed_probe_called_host_bound_names_the_graph_and_the_right_remedy():
+    """Branch (b): the replay's launch outran N calls. UNKNOWN as the eager
+    hot case, but the page names the graph, the anomaly and the RIGHT remedy,
+    and the ASSUMED line stays (host time IS in these cells)."""
+    treads = [1, 2, 3, 4, 5, 6]
+    flat = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4),
+            PW.PRIVATE: _series(0.0, 4)}
+    hot = _probe_from(flat, spread=1e-4, host_bound=True, graph_calls=16)
+    gate = PW.gate_v8_alignment(hot, treads=treads, census=_census(),
+                                weight_stream_ms=0.64)
+    assert gate.verdict == exit_codes.UNKNOWN
+    joined = "\n".join(gate.lines)
+    nc = next(ln for ln in gate.lines if ln.startswith("POSITIVE CONTROL NOT CONFIRMED"))
+    assert "under a CUDA graph with 16 calls per replay" in nc and "anomaly" in nc
+    assert "raise PROBE_CALLS_PER_REPLAY" in nc
+    assert "time the op under a CUDA graph" not in joined
+    assert "ASSUMED: the host's enqueue cost" in joined
+    assert "the replay's launch outran 16 calls" in joined
+    # The same cells timed eagerly keep the eager remedy, now naming the default.
+    eager = PW.gate_v8_alignment(
+        _probe_from(flat, spread=1e-4, host_bound=True,
+                    note="capture refused (x); the WHOLE probe was re-run EAGERLY"),
+        treads=treads, census=_census(), weight_stream_ms=0.64)
+    joined = "\n".join(eager.lines)
+    assert "time the op under a CUDA graph (the probe's default; this probe ran eagerly" in joined
+    assert "timed eagerly" in joined
+    # NATIVE's own graph-timed hot cells are not admissible even when they
+    # resolve a step, with the anomaly named.
+    stepped = _probe_from({PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)},
+                          spread=1e-4, host_bound=True, graph_calls=16)
+    reading = PW.read_probe(stepped, PW.NATIVE, _census())
+    assert reading.real
+    ok, why = PW.native_step_is_admissible(reading, stepped)
+    assert ok is False and "UNDER A CUDA GRAPH of 16 calls" in why
+
+
+def test_the_planted_probe_is_graph_timed_like_the_real_one_except_in_the_eager_worlds():
+    treads = [1, 2, 3, 4, 5, 6]
+    kw = dict(block_m=32, treads=treads,
+              declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72, PW.PRIVATE: 72},
+              census=_census(), noise=0.0, seed=0, weight_stream_ms=0.64)
+    refit = PW.planted_probe(PW.WORLDS["refit"], CFG, **kw)
+    assert {c.graph_calls for c in refit.cells} == {PW.PROBE_CALLS_PER_REPLAY}
+    assert all(c.replay_ms == pytest.approx(c.ms * PW.PROBE_CALLS_PER_REPLAY)
+               for c in refit.cells)
+    for name in ("host-bound-probe", "host-bound-controlled"):
+        eager = PW.planted_probe(PW.WORLDS[name], CFG, **kw)
+        assert {c.graph_calls for c in eager.cells} == {0}, name
+        assert all(c.replay_ms is None for c in eager.cells), name
+    first = refit.as_dict()["cells"][0]
+    assert "graph_calls" in first and "replay_ms" in first
+
+
+def test_the_graph_probe_world_differs_from_the_host_bound_world_in_instrument_and_verdict():
+    a, b = PW.WORLDS["host-bound-probe"], PW.WORLDS["graph-probe-unresolved"]
+    assert a.native_probe_step_ms == b.native_probe_step_ms == 0.0
+    assert a.probe_graph_calls == 0 and b.probe_graph_calls == PW.PROBE_CALLS_PER_REPLAY
+    assert a.probe_host_bound is True and b.probe_host_bound is False
+    assert a.expect["V8"] == exit_codes.UNKNOWN and b.expect["V8"] == exit_codes.PASS
+    got = run(["--self-test", "graph-probe-unresolved"])
+    assert got.returncode == exit_codes.DONE, got.stdout[-1500:]
+    assert "RESULT: VALIDITY V8 PASS" in got.stdout
+    assert "NOT RESOLVED IN GPU TIME" in got.stdout
+    assert "SELF-TEST OK" in got.stdout
+
+
+def test_analyse_names_the_gpu_time_bound_when_the_graph_probe_resolves_no_native_step():
+    flat = {PW.NATIVE: _series(0.0, 4), PW.SHARED: _series(0.0, 4)}
+    tread, text = PW.native_switch_source(
+        _probe_from(flat, spread=1e-4, graph_calls=16), _census())
+    assert tread == 4
+    assert "IN GPU TIME" in text and "threshold" in text and "under that per call" in text
+    tread, text = PW.native_switch_source(_probe_from(flat, spread=1e-4), _census())
+    assert tread == 4
+    assert "the hypothesis stands unconfirmed" in text and "IN GPU TIME" not in text
+    stepped = {PW.NATIVE: _series(0.02, 3), PW.SHARED: _series(0.0, 4)}
+    tread, text = PW.native_switch_source(
+        _probe_from(stepped, spread=1e-4, graph_calls=16), _census())
+    assert tread == 3 and "the probe, which resolved native's step at tread 3" in text
+    # Resolved AT the census tread but host-timed: the tread is the census's,
+    # and the sentence no longer says "no step".
+    at4 = {PW.NATIVE: _series(0.02, 4), PW.SHARED: _series(0.0, 4)}
+    tread, text = PW.native_switch_source(
+        _probe_from(at4, spread=1e-4, host_bound=True), _census())
+    assert tread == 4 and "resolved native's step at that tread too" in text
+    assert PW.native_switch_source(None, _census()) == (
+        4, "the cited hypothesis (tread 4)")
+
+
 # --------------------------------------------------------------------------
 # 14. the bias bound on the side the denominator shrinks
 # --------------------------------------------------------------------------
@@ -3057,16 +3334,17 @@ def test_two_probe_repeats_clear_the_floor_and_are_priced_into_the_plan():
     run is not refused by its own floor and the operator keeps one step of
     room below it. `--probe-repeats 2` must therefore reach the plan, and the
     plan must PRICE it: `probe_seconds(treads, PROBE_LABELS, repeats)` is `3
-    series (one per arm) x 6 treads x repeats x (PROBE_WARMUP_MS + PROBE_TRIALS
-    x PROBE_TARGET_MS)` = `3 x 6 x repeats x 140 ms`, which is 5.04 s at two
-    repeats and 7.56 s at three.
+    series (one per arm) x 6 treads x repeats x (PROBE_CAPTURE_MS +
+    PROBE_WARMUP_MS + PROBE_TRIALS x PROBE_TARGET_MS)` = `3 x 6 x repeats x
+    160 ms`, which is 5.76 s at two repeats and 8.64 s at three (5.04 and 7.56
+    before the capture was booked on 2026-09-22).
 
     THE TWO FIGURES ARE ASSERTED AS FIGURES, not re-derived from the same
     constants the function multiplies, because a test that recomputes
     `probe_seconds`' one line and compares cannot notice the budget constants
-    moving underneath the prose above. If PROBE_WARMUP_MS, PROBE_TRIALS or
-    PROBE_TARGET_MS changes, 5.04 and 7.56 are what has to be re-derived and
-    this docstring is what has to be rewritten.
+    moving underneath the prose above. If PROBE_CAPTURE_MS, PROBE_WARMUP_MS,
+    PROBE_TRIALS or PROBE_TARGET_MS changes, 5.76 and 8.64 are what has to be
+    re-derived and this docstring is what has to be rewritten.
     """
     assert PW.MIN_PROBE_REPEATS == 2
     assert PW.MIN_PROBE_REPEATS < PW.PROBE_REPEATS
@@ -3075,8 +3353,9 @@ def test_two_probe_repeats_clear_the_floor_and_are_priced_into_the_plan():
     assert len(treads) == 6, treads
     at_two = PW.probe_seconds(treads, PW.PROBE_LABELS, PW.MIN_PROBE_REPEATS)
     at_default = PW.probe_seconds(treads, PW.PROBE_LABELS, PW.PROBE_REPEATS)
-    assert at_two == pytest.approx(5.04), at_two
-    assert at_default == pytest.approx(7.56), at_default
+    assert at_two == pytest.approx(5.76), at_two
+    assert at_default == pytest.approx(8.64), at_default
+    assert PW.PROBE_CAPTURE_MS > 0
     # A floor on a knob that changed nothing downstream would show up as one
     # figure twice on the plan page.
     assert f"{at_two:.0f}" != f"{at_default:.0f}", (at_two, at_default)
@@ -3806,12 +4085,12 @@ def test_c1_passes_only_an_interval_inside_the_band_and_fails_one_starting_at_it
 
 
 def test_the_probe_times_private_ids_as_a_third_series_and_prices_it():
-    """PRIVATE's ids are probed at the shared declaration: ~2.5 s more on
-    the pod, and the only measurement of the counter asymmetry the plan page
-    registers."""
+    """PRIVATE's ids are probed at the shared declaration: ~2.9 s more on
+    the pod (2.5 before the capture was booked), and the only measurement of
+    the counter asymmetry the plan page registers."""
     assert PW.PROBE_LABELS == len(PW.ARMS) == 3
     treads = [1, 2, 3, 4, 5, 6]
-    assert PW.probe_seconds(treads, 1) == pytest.approx(2.52)
+    assert PW.probe_seconds(treads, 1) == pytest.approx(2.88)
     probe = PW.planted_probe(PW.WORLDS["refit"], CFG, block_m=32, treads=treads,
                              declared_by_arm={PW.NATIVE: 8, PW.SHARED: 72,
                                               PW.PRIVATE: 72},
