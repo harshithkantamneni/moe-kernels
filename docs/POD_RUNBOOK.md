@@ -262,7 +262,12 @@ control that lets such a probe earn PASS. NATIVE keeps the switch, and V5
 fits it out.
 
 Read, in this order: V8 (one kernel along the ratio arms' ladder, measured),
-V7 (the two arms' clocks agree at every tread), V2 (each copy read by exactly
+V7 (the two arms' clocks agree at every tread -- on a pod that cannot lock its
+clock this FAILS by construction whenever the arms draw different power, and
+the page is INVALID; pass `--clock-elasticity ETA LO HI
+--clock-elasticity-source '<report>@<sha>'` from a committed clock_elasticity
+report and C1 PRINTS a clock-corrected ratio beside the raw one, scored by
+nothing), V2 (each copy read by exactly
 its own tiles, one copy zeroed at a time), V5 (the declaration's per-tile
 cost with native's step out; the step itself is printed with an interval),
 V6 (shared and private agree at n=1, where they are the same call), then C1,

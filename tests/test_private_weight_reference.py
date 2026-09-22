@@ -57,6 +57,7 @@ OFF_GPU_MODES: tuple[tuple[tuple[str, ...], bool], ...] = (
     (("--self-test", "ratio-step-over-budget"), True),
     (("--self-test", "ratio-step-under-budget"), True),
     (("--self-test", "private-step-alone"), True),
+    (("--self-test", "clock-split-elastic"), True),
     (("--self-test", "over-allocated"), True),
     (("--self-test", "holes"), True),
     (("--self-test", "ragged"), True),
@@ -2553,6 +2554,160 @@ def test_the_control_says_which_case_it_is_in_and_whether_native_was_host_bound(
         treads=treads, census=_census(), weight_stream_ms=0.64)
     assert any("NATIVE's own cells were host-bound in 18 of 18" in ln
                for ln in hot_native.lines), hot_native.lines
+
+
+# --------------------------------------------------------------------------
+# 18. the clock-corrected ratio: printed beside the raw one, scored by nothing
+# --------------------------------------------------------------------------
+
+def test_clock_corrected_carries_each_cell_by_its_own_clock_to_the_power_eta():
+    """`ms x (f_cell / f_ref) ** eta`, per RATIO-ARM cell; NATIVE untouched."""
+    cells = [_sample(PW.PRIVATE, 2, 0, 2.0, load=1444.0),
+             _sample(PW.SHARED, 2, 0, 1.0, load=1600.0),
+             _sample(PW.NATIVE, 2, 0, 3.0, load=1444.0)]
+    out = PW.clock_corrected(cells, 0.5, 1600.0)
+    by = {s.arm: s for s in out}
+    assert by[PW.PRIVATE].ms_p50 == pytest.approx(2.0 * (1444.0 / 1600.0) ** 0.5)
+    assert by[PW.SHARED].ms_p50 == pytest.approx(1.0)
+    assert by[PW.NATIVE].ms_p50 == 3.0
+    # The originals are not mutated: the raw ratio is still formed from them.
+    assert cells[0].ms_p50 == 2.0
+
+
+def test_the_clock_corrected_ratio_does_not_depend_on_the_reference_clock():
+    """Both arms carry `f_ref ** -eta`, which cancels in the ratio; f_ref only
+    names the clock the corrected CELLS sit at."""
+    samples = _pair_world(private_clock=1425.0, shared_clock=1455.0)
+    eta = PW.ClockElasticity(0.7436, 0.7277, 0.7559, "x")
+    a = PW.clock_corrected_ratio(samples, eta, f_ref=1455.0, f_ref_source="a",
+                                 draws=50, seed=0)
+    b = PW.clock_corrected_ratio(samples, eta, f_ref=1000.0, f_ref_source="b",
+                                 draws=50, seed=0)
+    assert a.ratio == pytest.approx(b.ratio, rel=1e-12)
+    assert a.at_unit == pytest.approx(b.at_unit, rel=1e-12)
+
+
+def test_a_planted_clock_split_with_a_known_eta_corrects_back_to_the_planted_alpha():
+    """THE EXACT IDENTITY the new world registers. The world plants a 2%
+    private clock deficit AND the law `ms x (1 + skew) ** -eta`; the
+    correction inverts that law cell by cell, so corrected / raw is
+    (1 + skew) ** -eta to rounding and the corrected ratio IS the refit
+    world's raw ratio at the same seed and noise. Pre-change neither the
+    world nor `clock_corrected_ratio` exists.
+    """
+    treads = [1, 2, 3, 4, 5, 6]
+    kw = dict(block_m=32, treads=treads, repeats=3, ridge=160.0,
+              bandwidth_gbps=4000.0, b=2, noise=0.0, seed=0, copies_declared=9,
+              native_switch=4)
+    world = PW.WORLDS["clock-split-elastic"]
+    assert world.planted_eta == 0.75 and world.private_clock_skew == -0.02
+    elastic = PW.planted_samples(world, CFG, alpha_shared=world.alpha, **kw)
+    refit = PW.WORLDS["refit"]
+    plain = PW.planted_samples(refit, CFG, alpha_shared=refit.alpha, **kw)
+    raw = (PW.ladder_for(elastic, PW.SHARED).slope_ms
+           / PW.ladder_for(elastic, PW.PRIVATE).slope_ms)
+    refit_raw = (PW.ladder_for(plain, PW.SHARED).slope_ms
+                 / PW.ladder_for(plain, PW.PRIVATE).slope_ms)
+    cc = PW.clock_corrected_ratio(
+        elastic, PW.ClockElasticity(0.75, 0.75, 0.75, "PLANTED"),
+        f_ref=1500.0, f_ref_source="planted", draws=50, seed=0)
+    assert cc.ratio / raw == pytest.approx((1 - 0.02) ** -0.75, abs=1e-12)
+    assert cc.ratio == pytest.approx(refit_raw, abs=1e-9)
+    # V7 still fails: the correction is printed, the gate is unmoved.
+    assert PW.gate_v7_clock_parity(elastic, treads=treads).verdict == exit_codes.FAIL
+
+
+def test_the_corrected_envelope_covers_the_interval_and_collapses_without_one():
+    samples = _pair_world(private_clock=1425.0, shared_clock=1455.0)
+    wide = PW.clock_corrected_ratio(samples, PW.ClockElasticity(0.74, 0.70, 0.78, "x"),
+                                    f_ref=1455.0, f_ref_source="a", draws=50, seed=0)
+    assert wide.interval is not None and wide.envelope is not None
+    assert wide.envelope[0] <= wide.interval[0] and wide.interval[1] <= wide.envelope[1]
+    fixed = PW.clock_corrected_ratio(samples, PW.ClockElasticity(0.74, 0.74, 0.74, "x"),
+                                     f_ref=1455.0, f_ref_source="a", draws=50, seed=0)
+    assert fixed.envelope == pytest.approx(fixed.interval)
+
+
+def test_a_corrected_ratio_is_not_formed_when_a_ratio_arm_cell_has_no_clock():
+    samples = _pair_world()
+    victim = next(s for s in samples if s.arm == PW.PRIVATE)
+    samples[samples.index(victim)] = PW.replace(victim, sm_clock_load_mhz=None)
+    with pytest.raises(PW.Unmeasurable, match="1 usable ratio-arm cell"):
+        PW.clock_corrected(samples, 0.7, 1455.0)
+
+
+def test_c1_prints_the_clock_corrected_ratio_and_scores_the_raw_one():
+    eta = PW.ClockElasticity(0.7436, 0.7277, 0.7559, "R1 report.json @81f80b7")
+    clock = PW.ClockCorrection(eta, 1455.0, "the calibration's reference clock",
+                               0.9743, (0.9700, 0.9790), (0.9679, 0.9829),
+                               0.9809, 0.9551)
+    gate = PW.gate_c1_ratio(0.9551, (0.9544, 0.9695), 2000, corrected=None,
+                            clock=clock)
+    assert gate.verdict == exit_codes.FAIL          # NO-REUSE, scored RAW
+    assert gate.measured.startswith("0.9551 [0.9544, 0.9695]")
+    joined = "\n".join(gate.lines)
+    assert ("clock-corrected ratio 0.9743 at eta = 0.7436 [0.7277, 0.7559] "
+            "(R1 report.json @81f80b7)") in joined
+    assert "PRINTED ONLY" in joined and "moved +0.0192" in joined
+    assert "at eta = 1, the bound DD11 argues from, it would read 0.9809" in joined
+    assert "ONE estimator's bootstrap carried across eta" in joined
+
+
+def test_the_elasticity_flag_needs_a_source_and_one_or_three_numbers():
+    got = run(["--self-test", "clock-split-elastic", "--clock-elasticity", "0.7"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "needs a SOURCE" in got.stdout and "unrecognized arguments" not in got.stdout
+    got = run(["--self-test", "clock-split-elastic", "--clock-elasticity", "0.7",
+               "0.6", "--clock-elasticity-source", "x"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "takes ETA or ETA LO HI, got 2 number(s)" in got.stdout
+    # A world that plants no elasticity refuses one: its registration is about
+    # its own plants.
+    got = run(["--self-test", "refit", "--clock-elasticity", "0.7",
+               "--clock-elasticity-source", "x"])
+    assert got.returncode == exit_codes.REFUSED
+    assert "a planted world's registration is about its own planted eta" in got.stdout
+
+
+def test_the_clock_correction_is_out_of_the_run_id():
+    """It changes no verdict, which is the only reason a re-analysis knob may
+    sit outside the key; the docstring says so where the OUT list lives."""
+    base = ["--device-memory-gb", "140"]
+    a = PW.build_parser().parse_args(base)
+    b = PW.build_parser().parse_args(base + ["--clock-elasticity", "0.7436",
+                                             "0.7277", "0.7559",
+                                             "--clock-elasticity-source", "x"])
+    assert PW.default_run_id(a, "nvidia_h200") == PW.default_run_id(b, "nvidia_h200")
+    assert "--clock-elasticity" in " ".join(PW.default_run_id.__doc__.split())
+
+
+def test_the_elastic_world_prints_recovers_and_stays_invalid_end_to_end():
+    """The whole page, through the CLI: --self-test supplies the planted eta
+    itself, the payload carries the block with its provenance, World.check
+    holds the exact identity, and the exit is 3 INVALID because V7 FAILs."""
+    got = run(["--self-test", "clock-split-elastic"])
+    assert got.returncode == exit_codes.INVALID, got.stdout[-2000:]
+    assert "SELF-TEST OK" in got.stdout
+    assert "clock-corrected ratio" in got.stdout and "PLANTED by --self-test" in got.stdout
+    results = {r.name: r.verdict for r in exit_codes.parse_result_lines(got.stdout)}
+    assert results["V7"] == exit_codes.FAIL and results["C1"] == exit_codes.PASS
+    # And a planted eta that the report does not recover is a mismatch.
+    world = PW.WORLDS["clock-split-elastic"]
+    report = types.SimpleNamespace(
+        gates=[types.SimpleNamespace(tag=k, verdict=v) for k, v in world.expect.items()],
+        payload={"clock_correction": {"ratio": 1.0, "ratio_raw": 1.0}})
+    bad = world.check(report)
+    assert any("clock_correction: corrected / raw = 1.0" in b for b in bad), bad
+
+
+def test_no_standing_prose_calls_the_elasticity_unknown():
+    """Session 4 measured it. A description left standing after the behaviour
+    changed is this repository's recurring defect."""
+    samples = _pair_world(private_clock=1400.0)
+    gate = PW.gate_v7_clock_parity(samples, treads=[1, 2, 3])
+    assert "unknown elasticity" not in gate.consequence
+    assert "unknown elasticity" not in PW.__doc__
+    assert "clock_elasticity" in PW.__doc__ or "clock-elasticity" in PW.__doc__
 
 
 # --------------------------------------------------------------------------

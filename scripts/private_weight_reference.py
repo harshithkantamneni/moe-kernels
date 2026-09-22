@@ -195,12 +195,20 @@ activation term from the weight term, and it does not decide anything about
 BLOCK_M other than the one it is run at. The ratio is scored RAW -- both slopes
 carry the same activation and compute terms, and dividing them subtracts
 nothing -- because being model-free is the entire reason this ladder was worth
-renting a card for. The activation-corrected ratio is PRINTED beside it, under
-the model that correction assumes, and is scored by nothing.
+renting a card for. Two corrected ratios are PRINTED beside it, each under the
+model it assumes, and both are scored by nothing: the activation-corrected
+ratio, and -- when `--clock-elasticity` names a measured elasticity and its
+source -- the CLOCK-corrected ratio, every ratio-arm cell carried to one
+reference clock by `(f_cell / f_ref) ** eta` before the fit. V7 still refuses a
+clock split of more than CLOCK_PARITY: on a pod that cannot lock its clock
+(RunPod refuses `nvidia-smi -lgc`) the arm reading less draws less power and
+clocks higher, so V7 fails by construction and the page says so while it
+prints what the correction would read.
 
 EXIT CODES are `moe/bench/exit_codes.py`'s table and nothing is folded into
 DONE. There is deliberately no gate-softening flag: a CLAIM that did not pass
-returns 1, which the ledger already reads as a finished result.
+returns 1, which the ledger already reads as a finished result, and the
+clock correction is not one either -- it changes no verdict.
 """
 from __future__ import annotations
 
@@ -386,10 +394,16 @@ IDENTITY_SPREAD = 0.02
 #: DESIGN DECISION 11. V7's bound on the clock. At every fitted tread the
 #: median under-load SM clock of PRIVATE must sit within this fraction of
 #: SHARED's. CHOSEN, and the reason is arithmetic rather than a calibration:
-#: the elasticity of the per-call time to the clock is unmeasured (that is
-#: what `clock_elasticity` is for) and is bounded above by 1, so a 1% clock
-#: gap moves one slope by at most 1% and the ratio by at most ~0.01 -- a sixth
-#: of ALPHA_BAND's width. A tolerance, not a quantity derived from any card.
+#: the elasticity of the per-call time to the clock is bounded above by 1, so
+#: a 1% clock gap moves one slope by at most 1% and the ratio by at most
+#: ~0.01 -- a sixth of ALPHA_BAND's width. A tolerance, not a quantity derived
+#: from any card. `clock_elasticity` MEASURES the elasticity (session 4 read
+#: 0.74 at one cell; the per-tread record runs above it, so the pooled figure
+#: is the one with an interval, not the largest), and `--clock-elasticity`
+#: lets this page PRINT a clock-corrected ratio beside the raw one. It never
+#: scores it, and it never moves this bound: on a card that cannot lock its
+#: clock the two arms draw different power and V7 refuses by construction,
+#: which is a fact about the platform the page should state, not soften.
 CLOCK_PARITY = 0.01
 
 #: DESIGN DECISION 8. V3's two tolerances. The weight allocation is an exact
@@ -1979,6 +1993,136 @@ def ladder_for(samples, arm: str, repeats: list[int] | None = None) -> Ladder:
                   excluded=dropped)
 
 
+@dataclass(frozen=True)
+class ClockElasticity:
+    """`eta = -d log ms / d log f`, with the interval it was measured with and
+    where it came from. `scripts/clock_elasticity.py` is the arm that measures
+    it; nothing here does."""
+    eta: float
+    lo: float
+    hi: float
+    source: str
+
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.lo <= self.eta <= self.hi <= 1.5):
+            raise Unmeasurable(
+                f"an elasticity of {self.eta} [{self.lo}, {self.hi}] is not "
+                "admissible: it must sit in [0, 1.5] with lo <= eta <= hi")
+        if not self.source.strip():
+            raise Unmeasurable("a clock elasticity needs a SOURCE, the report "
+                               "or file it was read from")
+
+
+def clock_corrected(samples, eta: float, f_ref: float) -> list:
+    """Every RATIO-ARM cell carried to `f_ref` under `eta`: `ms x (f / f_ref)
+    ** eta`. NATIVE is untouched (the ratio never reads it), an excluded cell
+    is untouched (nothing reads it), and a usable ratio-arm cell WITHOUT a
+    clock refuses the whole correction rather than leaving that cell raw.
+
+    THE RATIO DOES NOT DEPEND ON f_ref: both arms carry the same factor
+    `f_ref ** -eta`, which cancels. It is here so the corrected CELLS are at a
+    named clock, and it is the calibration's reference clock when one was
+    resolved, else the private arm's own median.
+    """
+    if f_ref <= 0:
+        raise Unmeasurable(f"f_ref = {f_ref} MHz is not a clock")
+    out = []
+    missing = 0
+    for s in samples:
+        if s.arm not in RATIO_ARMS or s.status != "ok" or s.ms_p50 <= 0 \
+                or s.excluded:
+            out.append(s)
+            continue
+        if not s.sm_clock_load_mhz:
+            missing += 1
+            out.append(s)
+            continue
+        k = (s.sm_clock_load_mhz / f_ref) ** eta
+        out.append(replace(s, ms_p50=s.ms_p50 * k, ms_min=s.ms_min * k))
+    if missing:
+        raise Unmeasurable(f"{missing} usable ratio-arm cell(s) carry no "
+                           "under-load clock, so they cannot be carried to "
+                           f"{f_ref:.0f} MHz and no corrected ratio is formed")
+    return out
+
+
+@dataclass(frozen=True)
+class ClockCorrection:
+    """The clock-corrected ratio, PRINTED beside the raw one and scored by
+    nothing. `interval` is the same paired bootstrap over the corrected cells
+    at `eta`; `envelope` is the union of the corrected intervals at `lo` and
+    `hi`, i.e. ONE estimator's bootstrap carried across eta's own interval,
+    not a between-estimator spread; `at_unit` is the ratio at eta = 1, DD11's
+    bound, printed as the bracket the correction cannot exceed."""
+    elasticity: ClockElasticity
+    f_ref: float
+    f_ref_source: str
+    ratio: float
+    interval: tuple[float, float] | None
+    envelope: tuple[float, float] | None
+    at_unit: float
+    raw: float
+
+    def as_dict(self) -> dict:
+        return {"eta": self.elasticity.eta, "eta_lo": self.elasticity.lo,
+                "eta_hi": self.elasticity.hi,
+                "eta_source": self.elasticity.source,
+                "f_ref_mhz": self.f_ref, "f_ref_source": self.f_ref_source,
+                "ratio": self.ratio,
+                "interval": list(self.interval) if self.interval else None,
+                "envelope": list(self.envelope) if self.envelope else None,
+                "ratio_at_eta_1": self.at_unit, "ratio_raw": self.raw,
+                "scored": False}
+
+    def lines(self) -> list[str]:
+        e = self.elasticity
+        return [
+            f"clock-corrected ratio {self.ratio:.4f} at eta = {e.eta:.4f} "
+            f"[{e.lo:.4f}, {e.hi:.4f}] ({e.source}), every ratio-arm cell "
+            f"carried to {self.f_ref:.0f} MHz ({self.f_ref_source}) by "
+            "(f / f_ref) ** eta before the fit; PRINTED ONLY, the raw ratio "
+            f"above is the one this arm was built to produce (moved "
+            f"{self.ratio - self.raw:+.4f})",
+            "  " + (f"its own {INTERVAL_PCT:.0f}% paired bootstrap "
+                    f"[{self.interval[0]:.4f}, {self.interval[1]:.4f}]"
+                    if self.interval else "its bootstrap was NOT FORMED")
+            + (f"; over eta's interval the envelope is [{self.envelope[0]:.4f}, "
+               f"{self.envelope[1]:.4f}] -- ONE estimator's bootstrap carried "
+               "across eta, not a between-estimator spread"
+               if self.envelope else ""),
+            f"  at eta = 1, the bound DD11 argues from, it would read "
+            f"{self.at_unit:.4f}: the correction cannot exceed that",
+        ]
+
+
+def clock_corrected_ratio(samples, elasticity: ClockElasticity, *,
+                          f_ref: float, f_ref_source: str, draws: int,
+                          seed: int) -> ClockCorrection:
+    """Form the corrected ratio at `eta`, its interval, the envelope over
+    [lo, hi], and the eta = 1 bracket, from the same samples and the same
+    paired bootstrap the raw ratio uses."""
+    def ratio_at(eta: float) -> float:
+        cells = clock_corrected(samples, eta, f_ref)
+        return ladder_for(cells, SHARED).slope_ms / ladder_for(cells, PRIVATE).slope_ms
+
+    def interval_at(eta: float) -> tuple[float, float] | None:
+        try:
+            lo, hi, _n = ratio_interval(clock_corrected(samples, eta, f_ref),
+                                        draws, seed)
+        except Unmeasurable:
+            return None
+        return (lo, hi)
+
+    raw = ladder_for(samples, SHARED).slope_ms / ladder_for(samples, PRIVATE).slope_ms
+    point = ratio_at(elasticity.eta)
+    interval = interval_at(elasticity.eta)
+    ends = [interval_at(elasticity.lo), interval_at(elasticity.hi)]
+    envelope = ((min(i[0] for i in ends), max(i[1] for i in ends))
+                if all(ends) else None)
+    return ClockCorrection(elasticity, f_ref, f_ref_source, point, interval,
+                           envelope, ratio_at(1.0), raw)
+
+
 def ratio_interval(samples, draws: int, seed: int, pct: float = INTERVAL_PCT
                    ) -> tuple[float, float, int]:
     """`(lo, hi, draws that produced a ratio)` by percentile bootstrap.
@@ -2716,8 +2860,10 @@ def gate_v7_clock_parity(samples, *, treads: list[int]) -> Gate:
                 + (f", unread at treads {unread}" if unread else ""),
                 f"<= {CLOCK_PARITY:.0%} at every tread, clock read in both arms",
                 "the two slopes were taken at different clocks on a card whose "
-                "time moves with its clock, so the ratio carries a clock "
-                "difference of unknown elasticity and may not be quoted",
+                "time moves with its clock, so the raw ratio carries a clock "
+                "difference and may not be quoted; the clock-corrected ratio "
+                "this page may print beside it is a model's number, scored by "
+                "nothing",
                 detail)
 
 
@@ -3089,7 +3235,8 @@ def c1_verdict(ratio: float, interval: tuple[float, float]) -> str:
 
 
 def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
-                  *, corrected: float | None) -> Gate:
+                  *, corrected: float | None,
+                  clock: ClockCorrection | None = None) -> Gate:
     """The measurement: `slope(SHARED) / slope(PRIVATE)`, against the refit.
 
     THE PRE-REGISTERED CLAIM is the study's own refit band, `ALPHA_BAND`
@@ -3102,9 +3249,10 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
 
     SCORED RAW. Both slopes carry the same activation and compute terms and
     dividing them subtracts nothing, so the raw ratio owes nothing to a model.
-    The activation-corrected value is printed beside it under the model that
-    correction assumes and is scored by nothing, because being model-free is
-    the entire reason this ladder exists.
+    Two corrected values are printed beside it, each under the model it
+    assumes, and both are scored by nothing, because being model-free is the
+    entire reason this ladder exists: the activation-corrected ratio, and the
+    CLOCK-corrected ratio when an elasticity was given (`clock`).
     """
     lo, hi = interval
     name, meaning = outcome_for(ratio)
@@ -3123,6 +3271,8 @@ def gate_c1_ratio(ratio: float, interval: tuple[float, float], draws: int,
             f"activation-corrected ratio {corrected:.4f}, printed only: it "
             "subtracts a MODELLED activation slope from both terms, and the "
             "raw number above is the one this arm was built to produce")
+    if clock is not None:
+        detail += clock.lines()
     detail.append(
         "NO BANDWIDTH AND NO INTERCEPT ENTER THIS NUMBER. It is one measured "
         "slope over another, taken minutes apart on one card at one tile in "
@@ -3284,7 +3434,10 @@ def prediction_lines(cfg, *, block_m: int, treads: list[int], alpha: float,
     out.append(f"    V6 shared and private within {IDENTITY_SPREAD:.1%} at n=1, "
                "where they are the same call")
     out.append(f"    V7 shared and private under-load clocks within "
-               f"{CLOCK_PARITY:.0%} at every tread")
+               f"{CLOCK_PARITY:.0%} at every tread; a card that cannot lock "
+               "its clock fails this by construction whenever the arms draw "
+               "different power, and --clock-elasticity then PRINTS a "
+               "corrected ratio beside the raw one, scored by nothing")
     out.append(f"    V8 the probed alignment steps in SHARED's and PRIVATE's id "
                f"sets are worth <= {ALIGN_STEP_RATIO_BUDGET} of the ratio "
                "together; FAIL needs it over budget AND resolved, and a FAIL "
@@ -3534,7 +3687,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             draws: int, seed: int, header: list[str], card: str,
             synthetic: bool, model_name: str, pinned: dict, prov=None,
             probe: AlignProbe | None = None, census: PathCensus | None = None,
-            copies_declared: int | None = None) -> Report:
+            copies_declared: int | None = None,
+            clock_elasticity: ClockElasticity | None = None) -> Report:
     planned = len(treads) * len(ARMS) * repeats
     if census is None:
         census = path_census(cfg, treads, block_m, {
@@ -3602,6 +3756,24 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
             interval = (lo, hi)
         except Unmeasurable as exc:
             lines.append(f"  interval NOT FORMED: {exc}")
+    clock_correction = None
+    if ratio is not None and clock_elasticity is not None:
+        # f_ref is cosmetic for the RATIO (it cancels) and named for the
+        # CELLS: the calibration's reference clock when one was resolved,
+        # else the private arm's own median under load.
+        if reference_mhz:
+            f_ref, f_ref_source = float(reference_mhz), "the calibration's reference clock"
+        else:
+            clocks = [s.sm_clock_load_mhz for s in samples
+                      if s.arm == PRIVATE and s.sm_clock_load_mhz]
+            f_ref = statistics.median(clocks) if clocks else 0.0
+            f_ref_source = "the private arm's median under-load clock"
+        try:
+            clock_correction = clock_corrected_ratio(
+                samples, clock_elasticity, f_ref=f_ref,
+                f_ref_source=f_ref_source, draws=draws, seed=seed)
+        except Unmeasurable as exc:
+            lines.append(f"  clock-corrected ratio NOT FORMED: {exc}")
 
     stream_ms = WEIGHTS.weight_stream_ms(cfg, dtype, bandwidth_gbps)
 
@@ -3703,7 +3875,7 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
                           [unmeasurable] if unmeasurable else []))
     else:
         gates.append(gate_c1_ratio(ratio, interval, got_draws,
-                                   corrected=corrected))
+                                   corrected=corrected, clock=clock_correction))
     if ladders.get(PRIVATE):
         gates.append(gate_c2_achieved_rate(
             ladders[PRIVATE],
@@ -3786,6 +3958,8 @@ def analyse(samples, cfg, *, block_m: int, treads: list[int], repeats: int,
         "ratio_interval_pct": INTERVAL_PCT,
         "ratio_draws": got_draws,
         "ratio_corrected": corrected,
+        "clock_correction": (clock_correction.as_dict()
+                             if clock_correction is not None else None),
         "outcome": (outcome_for(ratio)[0] if ratio is not None else None),
         "outcomes_partition": [[n, lo, (None if hi == math.inf else hi), m]
                                for n, lo, hi, m in OUTCOMES],
@@ -3835,6 +4009,14 @@ class World:
     #: Relative offset of the private arm's planted clock, which is what V7
     #: measures.
     private_clock_skew: float = 0.0
+    #: The elasticity the planted private cells OBEY: their time is inflated
+    #: by `(1 + private_clock_skew) ** -planted_eta`, the law the clock
+    #: correction inverts, so a self-test run with `--clock-elasticity` at
+    #: this eta must recover the refit world's raw ratio EXACTLY (to 1e-12 at
+    #: zero noise) and its corrected/raw ratio must be
+    #: `(1 + private_clock_skew) ** -planted_eta`. None means the split is
+    #: planted with no time effect, which is what `clock-split` plants.
+    planted_eta: float | None = None
     #: NATIVE's alignment step in the SWEEP, planted from the tread the census
     #: hypothesis says its kernel switches: the thing `declaration_fit` takes
     #: out of V5's number.
@@ -3891,6 +4073,22 @@ class World:
                            f"gate {tag}")
             elif got[tag] != want:
                 bad.append(f"{tag}: registered {want}, got {got[tag]}")
+        if self.planted_eta is not None:
+            # THE EXACT IDENTITY, not a tolerance on alpha: the correction
+            # inverts the planted law cell by cell, so corrected / raw is
+            # (1 + skew) ** -eta to rounding at ANY noise.
+            block = report.payload.get("clock_correction")
+            if not block:
+                bad.append("clock_correction: this world plants an elasticity "
+                           "and the page carries no clock-corrected ratio; "
+                           f"run it with --clock-elasticity {self.planted_eta}")
+            else:
+                want_factor = (1.0 + self.private_clock_skew) ** -self.planted_eta
+                got_factor = block["ratio"] / block["ratio_raw"]
+                if abs(got_factor - want_factor) > 1e-9:
+                    bad.append(f"clock_correction: corrected / raw = "
+                               f"{got_factor:.12f}, the planted law says "
+                               f"{want_factor:.12f}")
         return bad
 
 
@@ -3946,6 +4144,19 @@ WORLDS: dict[str, World] = {
         "ALONE: the skew sits on a ratio arm and tilts its slope, so what C1 "
         "reads in this world is not what the world is about",
         {"V6": FAIL}, identity_skew=0.08),
+    "clock-split-elastic": World(
+        "clock-split-elastic",
+        "the private arm settled 2% below the shared arm's clock, the split "
+        "session 4 read at G=1, AND its time obeys a planted elasticity of "
+        "0.75: PRIVATE's slope is inflated by 0.98 ** -0.75, the raw ratio "
+        "deflated by the same factor, and V7 fails while V6 still passes at "
+        "n=1 (a 1.5% gap is under IDENTITY_SPREAD; clock-split's 3% at this "
+        "elasticity would not be, and would fail V6 too); run with "
+        "--clock-elasticity 0.75 the page prints a clock-corrected ratio "
+        "that recovers the refit world's raw ratio exactly, and still scores "
+        "the raw one: the correction is printed, V7 is unmoved, and the page "
+        "is INVALID as it should be",
+        dict(ALL_PASS, V7=FAIL), private_clock_skew=-0.02, planted_eta=0.75),
     "clock-split": World(
         "clock-split",
         "the private arm settled 3% below the shared arm's clock on a power "
@@ -4081,6 +4292,10 @@ def planted_samples(world: World, cfg, *, block_m: int, treads: list[int],
                         ms += world.alignment_step_ms
                 if arm == PRIVATE and n == treads[0]:
                     ms *= (1.0 + world.identity_skew)
+                if arm == PRIVATE and world.planted_eta is not None:
+                    # THE LAW THE CORRECTION INVERTS: a slower clock makes a
+                    # longer call, by the planted elasticity.
+                    ms *= (1.0 + world.private_clock_skew) ** -world.planted_eta
                 ms *= world.speedup
                 if noise:
                     ms *= (1.0 + rng.gauss(0.0, noise))
@@ -4834,7 +5049,11 @@ def default_run_id(args, card: str) -> str:
     OUT OF THE KEY: `--ridge`, `--bandwidth-gbps`, `--draws`. They re-analyse
     one set of cells, and two analyses of one sweep belong in one directory.
     `--device-memory-gb` is out for the same reason: it gates a plan, it does
-    not move a millisecond.
+    not move a millisecond. AND `--clock-elasticity`, which is admissible out
+    of the key ONLY because it changes no verdict: it prints a corrected ratio
+    beside the raw one. Were it ever scored, a re-run at another eta would
+    re-score the cells on disk into the same directory and overwrite a page
+    that read INVALID, which is the reason it never will be.
 
     AND `--probe-repeats`, WHICH IS OUT ON PURPOSE AND IS THE ONE THAT LOOKS
     LIKE IT SHOULD BE IN. It changes the probe's cells and so can change V8's
@@ -4911,6 +5130,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="operator's assertion; otherwise the attached card's "
                          "own calibration")
     ap.add_argument("--ridge-band", default="")
+    ap.add_argument("--clock-elasticity", type=float, nargs="+", default=None,
+                    metavar="ETA",
+                    help="a MEASURED clock elasticity, eta or eta lo hi, from "
+                         "scripts/clock_elasticity.py: the page then PRINTS a "
+                         "clock-corrected ratio beside the raw one. Scores "
+                         "nothing and moves no gate; needs "
+                         "--clock-elasticity-source")
+    ap.add_argument("--clock-elasticity-source", default="",
+                    help="where --clock-elasticity was read from (a report "
+                         "path and commit), recorded on the page and in "
+                         "report.json")
     ap.add_argument("--bandwidth-gbps", type=float, default=0.0)
     ap.add_argument("--device-memory-gb", type=float, default=0.0,
                     help="a HYPOTHETICAL card's memory, for checking the plan "
@@ -4973,7 +5203,8 @@ def _main(argv=None) -> int:
     before anything is measured, `--dry-run` included, because a plan scores no
     gate; ERROR (4) for a planted world that came out other than registered;
     and otherwise `classify` over the scored gates with NOTHING FOLDED. There
-    is deliberately no gate-softening flag: a CLAIM_FAIL is returned as 1,
+    is deliberately no gate-softening flag (--clock-elasticity prints and
+    scores nothing): a CLAIM_FAIL is returned as 1,
     which the ledger already reads as a finished result.
     """
     args = build_parser().parse_args(argv)
@@ -5270,6 +5501,30 @@ def _main(argv=None) -> int:
             dtype=args.dtype, copies_declared=copies_declared, census=census,
             stream_ms=stream_ms)
 
+    clock_elasticity = None
+    if args.clock_elasticity is not None:
+        vals = args.clock_elasticity
+        if len(vals) not in (1, 3):
+            print("REFUSED: --clock-elasticity takes ETA or ETA LO HI, got "
+                  f"{len(vals)} number(s)")
+            return exit_codes.REFUSED
+        eta, lo, hi = (vals[0], vals[0], vals[0]) if len(vals) == 1 else vals
+        try:
+            clock_elasticity = ClockElasticity(eta, lo, hi,
+                                               args.clock_elasticity_source)
+        except Unmeasurable as exc:
+            print(f"REFUSED: {exc}")
+            return exit_codes.REFUSED
+    if synthetic:
+        world_eta = WORLDS[args.self_test].planted_eta
+        if world_eta is not None and clock_elasticity is None:
+            clock_elasticity = ClockElasticity(world_eta, world_eta, world_eta,
+                                               "PLANTED by --self-test")
+        elif world_eta is None and clock_elasticity is not None:
+            print("REFUSED: a planted world's registration is about its own "
+                  f"planted eta, and {args.self_test!r} plants none; the "
+                  "clock-split-elastic world is the one that takes one")
+            return exit_codes.REFUSED
     report = analyse(
         samples, cfg, block_m=block_m, treads=treads, repeats=args.repeats,
         alpha=args.alpha, dtype=args.dtype, b=b, bandwidth_gbps=bandwidth,
@@ -5281,7 +5536,7 @@ def _main(argv=None) -> int:
         draws=args.draws, seed=args.seed, header=header, card=card,
         synthetic=synthetic, model_name=args.model, pinned=pinned,
         prov=_observed_iters(prov, samples), probe=probe, census=census,
-        copies_declared=copies_declared)
+        copies_declared=copies_declared, clock_elasticity=clock_elasticity)
 
     print("\n".join(report.lines[len(header):]))
     print(_iters_line(samples))
