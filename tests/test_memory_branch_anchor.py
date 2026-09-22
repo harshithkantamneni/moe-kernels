@@ -45,6 +45,8 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 mba = pytest.importorskip("memory_branch_anchor")
 
+from _hermetic import laptop_env  # noqa: E402
+
 from moe.spec import MODEL_CONFIGS  # noqa: E402
 
 MIXTRAL = MODEL_CONFIGS["mixtral-8x7b"]
@@ -528,7 +530,7 @@ def test_every_plan_field_is_in_the_run_id_key():
     assert named == set(mba.ID_KNOBS), named ^ set(mba.ID_KNOBS)
 
 
-def test_a_dry_run_with_no_device_says_its_path_is_not_the_pods(capsys):
+def test_a_dry_run_with_no_device_says_its_path_is_not_the_pods(capsys, no_cuda):
     """A dry run on a laptop must not print a path a pod will never write to.
 
     The placeholder card is visible in the id AND called out in words, because
@@ -936,7 +938,7 @@ def test_the_measure_mode_refuses_with_two_when_there_is_no_device():
     proc = subprocess.run(
         [sys.executable, str(REPO / "scripts" / "memory_branch_anchor.py"),
          "--measure", "--card", "nonexistent"],
-        cwd=REPO, capture_output=True, text=True, timeout=300)
+        cwd=REPO, capture_output=True, text=True, timeout=300, env=laptop_env())
     assert proc.returncode == mba.exit_codes.REFUSED, proc.stdout[-2000:]
     assert "REFUSED" in proc.stdout
 

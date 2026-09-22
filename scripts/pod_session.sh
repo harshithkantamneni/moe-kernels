@@ -1124,6 +1124,15 @@ PYEOF
     skipped P12 "test suite" "--skip-tests"
   else
     local tlog="$SESSION/logs/pytest.log"
+    # THE SUITE INTERPRETER HAS NO vLLM. Session 4 ran pytest from the base
+    # venv, and even so a test's --run went past its door; from the vllm venv
+    # an unplanted bare invocation would MEASURE. Soft, not fatal: a base venv
+    # that happens to carry vLLM is an interpreter fact, not a card fact.
+    ! "$PY_BASE" -c "import vllm" 2>/dev/null; verdict P11c "suite interpreter carries no vLLM" $? \
+      "$PY_BASE" "vllm not importable" soft \
+      "Run the suite from a venv without vLLM (the tests plant every refusal door; the arms themselves exercise the vLLM paths)."
+    [[ -z "$(git -C "$REPO" status --porcelain results/published)" ]] \
+      || echo "P12: results/published is not clean; the arm-count and provenance tests read the directory, not git" | tee -a "$tlog"
     "$PY_BASE" -m pytest tests/ -q > "$tlog" 2>&1
     local trc=$? tline
     tline="$(tail -3 "$tlog" | grep -E '[0-9]+ (passed|failed)' | tail -1)"

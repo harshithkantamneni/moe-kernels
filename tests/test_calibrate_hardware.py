@@ -35,6 +35,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import calibrate_hardware as CH  # noqa: E402
+from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes as EX  # noqa: E402
 from moe.bench import timing as T  # noqa: E402
@@ -464,13 +465,15 @@ def test_a_run_without_publish_leaves_the_tree_clean(tmp_path):
 
     Off a GPU it refuses before measuring, which is the only branch a laptop can
     take; the assertion that matters is the same one either way, that nothing
-    was written into the checkout.
+    was written into the checkout. Since 2026-09-22 the child is a laptop on
+    every box (`laptop_env`), so the refusing branch is the one taken.
     """
     before = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain"],
                             capture_output=True, text=True).stdout
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "calibrate_hardware.py"),
                         "--results-root", str(tmp_path)],
-                       capture_output=True, text=True, cwd=REPO)
+                       capture_output=True, text=True, cwd=REPO,
+                       env=laptop_env())
     assert r.returncode in (EX.REFUSED, EX.DONE, EX.CLAIM_FAIL, EX.INVALID)
     after = subprocess.run(["git", "-C", str(REPO), "status", "--porcelain"],
                            capture_output=True, text=True).stdout
@@ -478,20 +481,23 @@ def test_a_run_without_publish_leaves_the_tree_clean(tmp_path):
 
 
 def test_without_a_gpu_it_refuses_rather_than_inventing_a_ceiling(tmp_path):
+    """The child is a laptop on every box, so this refuses on the pod too
+    (until 2026-09-22 it ran a three-minute calibration there and THEN
+    skipped)."""
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "calibrate_hardware.py"),
                         "--results-root", str(tmp_path)],
-                       capture_output=True, text=True, cwd=REPO)
-    if r.returncode == EX.REFUSED:
-        assert "REFUSED" in r.stderr
-    else:                                       # pragma: no cover - needs a card
-        pytest.skip("a GPU is present, so the refusal branch cannot be taken")
+                       capture_output=True, text=True, cwd=REPO,
+                       env=laptop_env())
+    assert r.returncode == EX.REFUSED, r.stdout + r.stderr
+    assert "REFUSED" in r.stderr
 
 
 def test_the_dry_run_prints_the_plan_the_paths_and_an_mde(tmp_path):
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "calibrate_hardware.py"),
                         "--dry-run", "--card", "NVIDIA H200",
                         "--results-root", str(tmp_path)],
-                       capture_output=True, text=True, cwd=REPO)
+                       capture_output=True, text=True, cwd=REPO,
+                       env=laptop_env())
     assert r.returncode == EX.REFUSED, r.stdout + r.stderr
     assert "would write" in r.stdout
     assert "measured_nvidia_h200.yaml" in r.stdout
@@ -501,13 +507,12 @@ def test_the_dry_run_prints_the_plan_the_paths_and_an_mde(tmp_path):
 
 def test_the_dry_run_says_the_run_id_cannot_be_formed_without_a_card(tmp_path):
     """`provenance.run_id` raises `NoCard` rather than naming a run after a
-    machine it cannot identify, and the plan says so instead of guessing."""
-    import torch
-    if torch.cuda.is_available():               # pragma: no cover - needs no card
-        pytest.skip("a GPU is present, so the card is always visible here")
+    machine it cannot identify, and the plan says so instead of guessing. The
+    child is a laptop on every box (`laptop_env`), so no skip."""
     r = subprocess.run([sys.executable, str(REPO / "scripts" / "calibrate_hardware.py"),
                         "--dry-run", "--results-root", str(tmp_path)],
-                       capture_output=True, text=True, cwd=REPO)
+                       capture_output=True, text=True, cwd=REPO,
+                       env=laptop_env())
     assert "NoCard" in r.stdout, r.stdout
 
 

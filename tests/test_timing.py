@@ -499,12 +499,6 @@ def test_kernel_timing_and_time_eager_share_one_percentile_definition():
 
 # --- (7) refusal off-GPU, planted everywhere by taking CUDA away ------------------
 
-@pytest.fixture
-def no_cuda(monkeypatch):
-    """Make the refuse branch run on the GPU box too, not only where CUDA is absent."""
-    monkeypatch.setattr(T.torch.cuda, "is_available", lambda: False)
-
-
 def test_refuses_off_gpu_without_fakes(no_cuda):
     with pytest.raises(T.TimingRefused, match="events, clock_sampler, flusher"):
         T.time_kernel(lambda: None, warmup_ms=10.0)

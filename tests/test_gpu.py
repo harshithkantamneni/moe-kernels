@@ -279,13 +279,20 @@ def test_graph_policy_skips_a_long_kernel(tmp_path):
 
     The policy triggers on PREDICTED time, so a toy cell on real H200 bandwidth
     is predicted to be microseconds and the policy correctly says "measure it".
-    A deliberately slow hardware profile is what forces the skip branch.
+    THIS CARD'S OWN PROFILE with its bandwidth forced to 1 B/s is what forces
+    the skip branch. A profile named "slow" carried no reference clock, so the
+    driver resolved the attached card's clock, found it belonged to another
+    profile, dropped it, and refused the whole sweep (ReferenceClockRefused,
+    session 4): the clock and the roof must come out of ONE file, and the only
+    file on the box is the card's.
     """
-    from moe.bench.roofline import Hardware
-    slow = Hardware(name="slow", bandwidth_bytes_s=1.0,
-                    peak_flops={"bf16": 1e12, "fp32": 1e12}, source="test")
+    from dataclasses import replace
+    slow = replace(device_reference(), bandwidth_bytes_s=1.0,
+                   source="test: bandwidth forced to 1 B/s so the PREDICTED "
+                          "time dwarfs a launch")
     cfg = make_cfg(tmp_path, graph_modes=(True,), graph_min_launch_share=0.5,
                    hardware=slow)
+    assert cfg.reference_clock_mhz is not None, "the card's own clock was kept"
     D.run_sweep([(toy(), NAMES, "gpu_ref_up_gemm")], cfg, routing=lambda s: None)
     r = SC.read_csv(cfg.csv_path)[0]
     assert r["capture_status"] == "skipped"
@@ -525,12 +532,19 @@ def test_bf16_gemm_ceiling_is_plausible():
 
 @pytest.mark.slow
 def test_full_calibration_runs(tmp_path):
-    from moe.bench.calibrate import calibrate
+    from moe.bench.calibrate import READ_PATTERNS, calibrate
     cal = calibrate(target_bytes=1 << 30, gemm_n=2048, settle=False)
     assert cal.achieved_bandwidth_gbps > 0
     assert cal.achieved_bf16_tflops > 0
     assert cal.gpu_name
-    assert len(cal.bandwidth_patterns) == 4
+    # The four unconditional patterns, plus the Triton read probe when it ran.
+    # `== 4` pinned the count from before read_stream existed and failed the
+    # moment a box had Triton (session 4: 5 == 4).
+    names = {p.pattern for p in cal.bandwidth_patterns}
+    assert ALWAYS_MEASURED <= names <= (ALWAYS_MEASURED | set(READ_PATTERNS))
+    # Present OR refused in writing; never silently absent, never a zero.
+    assert ("read_stream" in names) ^ any(r.startswith("read_stream")
+                                          for r in cal.refusals)
     assert cal.ridge_point() > 0
 
 

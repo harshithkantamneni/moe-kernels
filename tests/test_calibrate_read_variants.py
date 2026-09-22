@@ -22,7 +22,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import torch
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
@@ -265,7 +264,7 @@ def test_a_planted_world_never_carries_the_instrument_name():
                for r in readings)
 
 
-@pytest.mark.skipif(torch.cuda.is_available(), reason="needs a machine with no GPU")
+@pytest.mark.no_gpu
 def test_no_card_is_REFUSED_and_not_a_crash(capsys):
     """REFUSED (2) is free and retryable-by-hand; ERROR would be a crash and
     CLAIM_FAIL would be a measured refutation of C4 from a run that timed

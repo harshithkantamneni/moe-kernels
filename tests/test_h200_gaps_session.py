@@ -8,7 +8,10 @@ pipeline that recorded `tee`'s exit status, a flag the sibling script renamed, a
 summary that prints an imported constant out of a refused log as if this session
 had measured it. None of those raise.
 
-So this file checks what can be checked off GPU:
+So this file checks what can be checked off GPU, and makes every child it
+spawns a laptop on any box (`_spawn`: CUDA hidden, the driver's interpreters
+pinned to this one), so a pod's pytest never plans an arm under the vllm venv
+for a minute per test and never starts a measurement from a test:
 
   1. THE SHELL ITSELF -- syntax, and the three habits this project has already
      been burned by (`set -e` aborting a long run, a pipeline masking an exit
@@ -85,6 +88,7 @@ from __future__ import annotations
 
 import importlib.util
 import math
+import os
 import re
 import shlex
 import subprocess
@@ -104,6 +108,8 @@ TEXT = DRIVER.read_text()
 CODE = "\n".join(ln for ln in TEXT.splitlines() if not ln.lstrip().startswith("#"))
 
 sys.path.insert(0, str(ROOT))
+from _hermetic import LAPTOP_ENV  # noqa: E402
+
 from moe.bench import exit_codes  # noqa: E402
 
 # The twenty arms, in the order their results are READ. Rewritten 2026-09-02
@@ -164,12 +170,24 @@ COUNTER_BLOCK_M = 64
 COUNTER_BLOCK_NS = (32, 128)
 
 
+def _spawn(cmd, **kw):
+    """EVERY CHILD THIS FILE STARTS IS A LAPTOP ON EVERY BOX. `LAPTOP_ENV` is
+    laid over whatever environment the caller built (or the process's own):
+    CUDA hidden, PY_BASE and PY_VLLM pinned to this interpreter. Without it,
+    on a pod a bare `run([])` starts the whole session from inside pytest and
+    every --dry-run plans for real under /workspace/venvs/vllm (~55 s a test,
+    session 4). The file's structural test refuses any other spawn."""
+    env = dict(kw.pop("env", None) or os.environ)
+    env.update(LAPTOP_ENV)
+    return subprocess.run(cmd, env=env, **kw)
+
+
 def run(args, cwd=None, session=None, env_extra=None):
     env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home())}
     if session:
         env["SESSION"] = str(session)
     env.update(env_extra or {})
-    return subprocess.run(["bash", str(DRIVER), *args], cwd=str(cwd or ROOT),
+    return _spawn(["bash", str(DRIVER), *args], cwd=str(cwd or ROOT),
                           capture_output=True, text=True, timeout=900, env=env)
 
 
@@ -184,7 +202,7 @@ def lift(script: str, **variables):
     body = (f"set -uo pipefail\n{setup}\n"
             f'eval "$(sed -n \'/^# >>> LIFTABLE/,/^# <<< LIFTABLE/p\' "{DRIVER}")"\n'
             f"{script}\n")
-    return subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+    return _spawn(["bash", "-c", body], capture_output=True, text=True,
                           timeout=120)
 
 
@@ -193,7 +211,7 @@ def lift(script: str, **variables):
 # --------------------------------------------------------------------------
 
 def test_the_driver_parses():
-    done = subprocess.run(["bash", "-n", str(DRIVER)], capture_output=True,
+    done = _spawn(["bash", "-n", str(DRIVER)], capture_output=True,
                           text=True, timeout=60)
     assert done.returncode == 0, done.stderr
 
@@ -739,13 +757,13 @@ def test_the_downgrade_this_flag_closes_is_real_and_not_remembered():
     moe/bench/exit_codes.py's docstring names as itself a defect. With the flag
     both are 1."""
     script = str(ROOT / "scripts" / "occupancy_vs_swizzle.py")
-    without = subprocess.run([sys.executable, script, "--audit"],
+    without = _spawn([sys.executable, script, "--audit"],
                              capture_output=True, text=True, timeout=900,
                              cwd=str(ROOT))
     assert "RESULT: CLAIM" in without.stdout and "FAIL" in without.stdout
     assert exit_codes.classify_text(without.stdout) == exit_codes.CLAIM_FAIL
     assert without.returncode == exit_codes.DONE, "the downgrade is gone; drop this test"
-    with_flag = subprocess.run([sys.executable, script, "--audit",
+    with_flag = _spawn([sys.executable, script, "--audit",
                                 "--fail-on-gate"],
                                capture_output=True, text=True, timeout=900,
                                cwd=str(ROOT))
@@ -772,12 +790,12 @@ def test_the_advertised_off_gpu_gates_can_actually_fail():
         assert flag in advertised, (arm_name, advertised)
     script = str(ROOT / "scripts" / "span_extent_separation.py")
     for world in ("kernel", "extent", "neither"):
-        bare = subprocess.run(
+        bare = _spawn(
             [sys.executable, script, "--self-test", world, "--densify"],
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
         assert bare.returncode == exit_codes.REFUSED
         assert "RESULT: " not in bare.stdout, world
-        scored = subprocess.run(
+        scored = _spawn(
             [sys.executable, script, "--self-test", world, "--densify",
              "--fail-on-world"],
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
@@ -804,14 +822,14 @@ def test_the_dtype_gate_needs_the_card_the_dry_run_branch_was_already_given():
     for world, verdict, tilt in (("2.033", "PASS", "1.023"),
                                  ("2.400", "FAIL", "1.208"),
                                  ("1.000", "FAIL", "0.503")):
-        bare = subprocess.run(
+        bare = _spawn(
             [sys.executable, script, "--self-test", world,
              "--self-test-alpha", "0.2"],
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
         assert bare.returncode == exit_codes.REFUSED, world
         assert "RESULT: " not in bare.stdout, world
         assert "NoCardToLabel" in bare.stdout, world
-        carded = subprocess.run(
+        carded = _spawn(
             [sys.executable, script, "--self-test", world,
              "--self-test-alpha", "0.2", "--card", "NVIDIA H200"],
             capture_output=True, text=True, timeout=900, cwd=str(ROOT))
@@ -862,7 +880,7 @@ def test_every_advertised_off_gpu_command_is_run_by_this_guard_and_scores():
             cmd = re.sub(r"<[^>]*>", tmp, cmd)
             words = shlex.split(cmd)
             assert (ROOT / words[0]).exists(), (name, cmd)
-            got = subprocess.run([sys.executable, *words], capture_output=True,
+            got = _spawn([sys.executable, *words], capture_output=True,
                                  text=True, timeout=900, cwd=str(ROOT))
             # --synthetic is alias_ablation.py's planted-world mode and is a
             # SCORING one: it generates timings from a stated law, runs every
@@ -930,7 +948,7 @@ def test_the_noise_floor_is_bounded_published_and_booked_at_its_own_plan():
             "C3 is a swizzle contrast and needs G=1 AND G=16 of the SAME "
             f"model; {model} has only one of them, so its C3 row would read "
             "G=1 against G=1")
-    plan = subprocess.run(
+    plan = _spawn(
         [sys.executable, str(ROOT / "scripts" / "replicate_noise_floor.py"),
          "--dry-run", "--replicates", "3", "--arms", named],
         capture_output=True, text=True, timeout=900, cwd=str(ROOT))
@@ -1080,7 +1098,7 @@ def test_no_arm_is_skipped_in_a_dry_run_with_a_reason_that_is_false(tmp_path):
     """The skip that stood over calibrate said "calibrate_hardware.py is a
     measurement and has no --dry-run". It has one. This asks the script."""
     assert "has no --dry-run" not in TEXT
-    plan = subprocess.run(
+    plan = _spawn(
         [sys.executable, str(ROOT / "scripts" / "calibrate_hardware.py"),
          "--dry-run"], capture_output=True, text=True, timeout=900,
         cwd=str(ROOT))
@@ -1123,7 +1141,7 @@ def test_the_pin_is_probed_at_the_configurations_the_arms_run():
     assert '"BLOCK_SIZE_M":128,"BLOCK_SIZE_N":256' in CODE
     assert '"GROUP_SIZE_M":16' in CODE
     # ...and the two probes together still cost what the one probe cost.
-    minutes = subprocess.run(
+    minutes = _spawn(
         ["bash", "-c",
          f'eval "$(sed -n \'/^arm_minutes()/,/^esac; }}/p\' "{DRIVER}")"; '
          f'arm_minutes pin_probe-n64-g1; arm_minutes pin_probe-n256-g16'],
@@ -1675,7 +1693,7 @@ def test_no_arm_is_scheduled_at_a_pinning_its_own_design_gate_calls_invalid():
     assert "--group-m 1 " not in body
     runbook = (ROOT / "docs" / "POD_RUNBOOK.md").read_text()
     for pinning, want in ((["--group-m", "1"], 3), (["--group-m", "16"], 0)):
-        done = subprocess.run(
+        done = _spawn(
             [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
              "--self-test", "--capability", "9.0", *pinning,
              "--reps", "17", "--plant-noise", "0.008"],
@@ -1762,7 +1780,7 @@ def read_probe(line):
     body = (f'set -uo pipefail\n{READ_FIELDS} '
             f'< <(printf "%s\\n" {shlex.quote(line)})\n'
             'printf "%s\\n%s\\n%s\\n" "$CARD" "$CAPABILITY" "$CARD_REASON"\n')
-    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
                           timeout=60)
     assert done.returncode == 0, done.stderr
     return done.stdout.split("\n")[:3]
@@ -1801,7 +1819,7 @@ def test_the_capability_major_is_taken_only_from_a_number(capability, major):
     else."""
     body = (f"set -uo pipefail\nCAPABILITY={shlex.quote(capability)}\n"
             f'{PARSE}printf "%s\\n" "$SM_MAJOR"\n')
-    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
                           timeout=60)
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == major
@@ -2641,7 +2659,7 @@ def test_the_two_span_arms_do_not_derive_one_run_id():
         assert "--max-minutes" not in line, line
     ids = {}
     for flag in ("--densify", "--no-densify"):
-        done = subprocess.run(
+        done = _spawn(
             [sys.executable, str(ROOT / "scripts" / "span_extent_separation.py"),
              "--dry-run", flag], capture_output=True, text=True, timeout=600,
             cwd=str(ROOT))
@@ -2705,17 +2723,6 @@ ALIAS_POD_PLAN = (
     "--dot-fallback refuse --run")
 
 
-def _no_cuda():
-    try:
-        import torch
-    except Exception:                                             # noqa: BLE001
-        return True
-    try:
-        return not torch.cuda.is_available()
-    except Exception:                                             # noqa: BLE001
-        return True
-
-
 def _wall_minutes(stdout):
     found = re.search(r"^  WALL\s+([\d.]+) min", stdout, re.M)
     assert found, stdout[-2500:]
@@ -2754,7 +2761,6 @@ def test_the_arm_that_tests_the_first_inferential_link_is_in_the_session():
     assert "ARM 0" in closes and "DOES NOT REFUSE WITHOUT IT" in closes
 
 
-@pytest.mark.skipif(not _no_cuda(), reason="the booking command measures on a GPU")
 def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
     """THE PLAN THE DRY BRANCH PREVIEWS IS THE POD'S OWN FIGURE. That script
     does not take a --dry-run flag at all: a bare invocation is its plan and
@@ -2771,14 +2777,14 @@ def test_the_alias_arm_is_booked_at_what_its_plan_prints_for_the_POD():
     The dry branch is still bare, deliberately: a --dry-run carrying --run would
     MEASURE on a pod, and this file's rule is that a plan is free in every
     sense. Nothing needs disclosing because nothing differs."""
-    pod = subprocess.run([sys.executable, *shlex.split(ALIAS_POD_PLAN)],
+    pod = _spawn([sys.executable, *shlex.split(ALIAS_POD_PLAN)],
                          capture_output=True, text=True, timeout=900,
                          cwd=str(ROOT))
     assert pod.returncode == exit_codes.REFUSED, pod.stdout[-2000:]
     assert "BOOK THIS ONE" in pod.stdout
     pod_wall = _wall_minutes(pod.stdout)
     plan_words = [w for w in shlex.split(ALIAS_POD_PLAN) if w != "--run"]
-    plan = subprocess.run([sys.executable, *plan_words], capture_output=True,
+    plan = _spawn([sys.executable, *plan_words], capture_output=True,
                           text=True, timeout=900, cwd=str(ROOT))
     plan_wall = _wall_minutes(plan.stdout)
     assert plan_wall == pod_wall, (plan_wall, pod_wall)
@@ -2837,7 +2843,7 @@ def test_the_alias_planted_worlds_separate_and_the_fail_branch_is_planted():
                         ("retracted", exit_codes.CLAIM_FAIL),
                         ("tempo", exit_codes.CLAIM_FAIL),
                         ("alias-blind", exit_codes.INVALID)):
-        got = subprocess.run([sys.executable, script, "--synthetic", world],
+        got = _spawn([sys.executable, script, "--synthetic", world],
                              capture_output=True, text=True, timeout=900,
                              cwd=str(ROOT))
         assert got.stdout.count("RESULT: ") > 0, world
@@ -2855,7 +2861,7 @@ def test_the_alias_planted_worlds_separate_and_the_fail_branch_is_planted():
     assert seen["retracted"] == ("FAIL", exit_codes.CLAIM_FAIL)
     assert seen["tempo"] == ("FAIL", exit_codes.CLAIM_FAIL)
     assert seen["alias-blind"][1] == exit_codes.INVALID
-    blind = subprocess.run([sys.executable, script, "--synthetic", "alias-blind"],
+    blind = _spawn([sys.executable, script, "--synthetic", "alias-blind"],
                            capture_output=True, text=True, timeout=900,
                            cwd=str(ROOT))
     for gate in ("headroom", "attribution", "signal", "bracket"):
@@ -3066,6 +3072,37 @@ def arm_lift(script, repo, ledger, logs, **extra):
     return lift(script, REPO=str(repo), LEDGER=str(ledger), LOGS=str(logs),
                 ONLY="", DRY=0, BROKEN_ARMS=0, RETRY_ARMS=0,
                 PY_BASE=sys.executable, **extra)
+
+
+def test_every_child_this_file_spawns_is_a_laptop():
+    """STRUCTURAL: every process this file starts goes through `_spawn`, which
+    lays `LAPTOP_ENV` over the caller's environment. A `subprocess.run` anywhere
+    else in this file is a child that inherits the box, which on a pod planned
+    under the vllm venv for a minute per test and could measure."""
+    import ast
+    tree = ast.parse(Path(__file__).read_text())
+    direct = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_spawn":
+            continue
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "run"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subprocess"):
+            direct.append(node.lineno)
+    spawn = next(n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "_spawn")
+    inside = {n.lineno for n in ast.walk(spawn) if hasattr(n, "lineno")}
+    assert all(ln in inside for ln in direct), direct
+    assert LAPTOP_ENV["CUDA_VISIBLE_DEVICES"] == ""
+    assert LAPTOP_ENV["PY_VLLM"] == sys.executable
+    # And the merge is a merge: the caller's own variables survive.
+    probe = _spawn([sys.executable, "-c",
+                    "import os; print(os.environ['KEEP'], "
+                    "os.environ['CUDA_VISIBLE_DEVICES'] == '')"],
+                   capture_output=True, text=True,
+                   env={"KEEP": "yes", "PATH": os.environ["PATH"]})
+    assert probe.stdout.strip() == "yes True"
 
 
 def test_the_second_opinion_is_actually_called_and_not_only_described():
@@ -3286,7 +3323,7 @@ def test_an_import_time_crash_is_retry_not_a_refuted_claim(tmp_path):
 
     tracked = ["git", "-C", str(ROOT), "status", "--porcelain", "--",
                "moe/bench/hardware", "results/published"]
-    before = subprocess.run(tracked, capture_output=True, text=True, timeout=60).stdout
+    before = _spawn(tracked, capture_output=True, text=True, timeout=60).stdout
     for arm_name in ("alias_ablation", "pin_probe-n64-g1", "calibrate", "dtype"):
         words = [expand(w) for w in measuring_invocation(arm_name)]
         assert words[0] == "arm" and words[1] == arm_name, words
@@ -3304,7 +3341,7 @@ def test_an_import_time_crash_is_retry_not_a_refuted_claim(tmp_path):
         assert "planted ABI drift" in got.stdout, "the tail of the log is printed"
         again = arm_lift(f"arm {arm_name} {shlex.join(command)}", ROOT, ledger, logs)
         assert f"SKIP {arm_name}" not in again.stdout, "a crash is not latched"
-    after = subprocess.run(tracked, capture_output=True, text=True, timeout=60).stdout
+    after = _spawn(tracked, capture_output=True, text=True, timeout=60).stdout
     assert before == after, "an import-time crash wrote into the tracked tree"
     # And the calibration gate no longer blocks every resume: the row is RETRY,
     # the gate refuses THIS pass (arm 0 did not stand behind a ruler) and the
@@ -3951,19 +3988,19 @@ def test_the_empty_stage_array_is_guarded_for_bash_3():
     3.2: the guard expands to nothing, the bare form dies."""
     assert '${STAGES[@]+"${STAGES[@]}"}' in CODE
     assert '"${STAGES[@]}"' not in CODE.replace('${STAGES[@]+"${STAGES[@]}"}', "")
-    guarded = subprocess.run(
+    guarded = _spawn(
         ["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a ${STAGES[@]+"${STAGES[@]}"} b'],
         capture_output=True, text=True)
     assert guarded.returncode == 0 and guarded.stdout == "[a][b]", guarded
-    filled = subprocess.run(
+    filled = _spawn(
         ["/bin/bash", "-uc",
          'STAGES=(--num-stages 3); printf "[%s]" a ${STAGES[@]+"${STAGES[@]}"} b'],
         capture_output=True, text=True)
     assert filled.stdout == "[a][--num-stages][3][b]", filled
-    version = subprocess.run(["/bin/bash", "-c", 'echo "${BASH_VERSINFO[0]}"'],
+    version = _spawn(["/bin/bash", "-c", 'echo "${BASH_VERSINFO[0]}"'],
                              capture_output=True, text=True).stdout.strip()
     if version and int(version) < 4:
-        bare = subprocess.run(["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a "${STAGES[@]}" b'],
+        bare = _spawn(["/bin/bash", "-uc", 'STAGES=(); printf "[%s]" a "${STAGES[@]}" b'],
                               capture_output=True, text=True)
         assert bare.returncode != 0 and "unbound variable" in bare.stderr, bare
 
@@ -4067,7 +4104,7 @@ def test_the_clock_probe_checks_what_it_says_and_survives_pipefail():
         'else echo SHIPPED_MISSED; fi\n'
         'if big | grep -qE "Graphics[[:space:]]*:[[:space:]]*[0-9]+ MHz"; '
         'then echo PIPE_OK; else echo "PIPE_MISSED $?"; fi\n')
-    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True,
+    done = _spawn(["bash", "-c", body], capture_output=True, text=True,
                           timeout=120)
     assert "SHIPPED_OK" in done.stdout, done.stdout
     assert "PIPE_MISSED 141" in done.stdout, (
@@ -4334,7 +4371,7 @@ def test_the_counter_arms_are_booked_at_the_figure_their_own_plan_prints():
     # 64 is on this list and is NOT an arm: it is the control that shows the
     # COST block does not vary with the cell, which is why it cannot price one.
     for bn in (*COUNTER_BLOCK_NS, 64):
-        plan = subprocess.run(
+        plan = _spawn(
             [sys.executable, str(ROOT / "scripts" / "dram_counter_route.py"),
              "--dry-run", "--card", "nvidia_h200",
              "--block-m", str(COUNTER_BLOCK_M), "--block-n", str(bn)],
@@ -4506,7 +4543,7 @@ def test_bn_g16_is_booked_at_the_plan_its_own_arm_line_prints():
     assert len(lines) == 2, lines
     for ln in lines:
         assert "--tiles 16,32,64,128" in ln, ln
-    plan = subprocess.run(
+    plan = _spawn(
         [sys.executable, str(ROOT / "scripts" / "bn_decomposition.py"),
          "--dry-run", "--capability", "9.0", "--group-m", "16", "--reps", "17",
          "--tiles", "16,32,64,128"],
@@ -4867,7 +4904,7 @@ def _private_plan() -> str:
     this file checks the prose against are the numbers an operator reads off
     the advertised command and not a second parameterisation of it.
     """
-    done = subprocess.run(
+    done = _spawn(
         [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
          "--dry-run", "--device-memory-gb", "140"],
         capture_output=True, text=True, timeout=300, cwd=str(ROOT),
@@ -5026,7 +5063,7 @@ def test_the_world_that_reaches_a_validity_gates_unknown_branch_is_named_and_run
     assert advertised, line
 
     for name in unknown_worlds:
-        done = subprocess.run(
+        done = _spawn(
             [sys.executable, str(ROOT / "scripts" / "private_weight_reference.py"),
              "--self-test", name],
             capture_output=True, text=True, timeout=600, cwd=str(ROOT),
@@ -5102,7 +5139,7 @@ def test_the_exfil_line_archives_the_results_root_and_not_only_the_session(tmp_p
     (results / "private_weight_reference").mkdir(parents=True)
     (results / "private_weight_reference" / "cells.csv").write_text("arm\n")
     planted = line.replace("/workspace/", f"{tmp_path}/")
-    done = subprocess.run(
+    done = _spawn(
         ["bash", "-c", "set -euo pipefail\n" + planted],
         capture_output=True, text=True, timeout=120,
         env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CARD": "h200",
@@ -5110,7 +5147,7 @@ def test_the_exfil_line_archives_the_results_root_and_not_only_the_session(tmp_p
     assert done.returncode == 0, done.stderr
     tarball = tmp_path / "exfil-gaps-h200.tar.gz"
     assert tarball.exists(), sorted(p.name for p in tmp_path.iterdir())
-    listing = subprocess.run(["tar", "tzf", str(tarball)],
+    listing = _spawn(["tar", "tzf", str(tarball)],
                              capture_output=True, text=True, timeout=120)
     assert listing.returncode == 0, listing.stderr
     members = listing.stdout.split()

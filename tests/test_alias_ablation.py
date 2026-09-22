@@ -2642,6 +2642,24 @@ def test_a_crash_exits_error_and_not_the_claim_fail_the_ledger_latches(
     assert AB._guarded([]) == exit_codes.CLAIM_FAIL
 
 
+def test_a_plan_less_replay_is_not_rescored_against_the_attached_card(
+        tmp_path, monkeypatch, capsys):
+    """On a calibrated box the attached card's file stood in for a missing
+    plan.json and a plan-less --replay of a synthetic run came back DONE
+    (session 4). A replay's ruler is the plan's or nothing: empty facts make
+    the headroom gates UNKNOWN and the exit INVALID."""
+    monkeypatch.setenv("MOE_RESULTS_DIR", str(tmp_path))
+    monkeypatch.setattr(AB, "measured_card",
+                        lambda card: {"roof_bytes_s": 4.377e12, "l2_bytes": 62914560,
+                                      "ridge": 151.4, "ridge_source": "planted"})
+    AB.main(["--synthetic", "refit"])
+    capsys.readouterr()
+    out_dir = next((tmp_path / "alias_ablation").glob("*synthetic-refit"))
+    (out_dir / "plan.json").unlink()
+    code, out = run_report(["--replay", str(out_dir)], tmp_path, monkeypatch, capsys)
+    assert code == exit_codes.INVALID, out[-800:]
+
+
 def test_a_replay_is_scored_against_the_ruler_the_run_was_measured_with(
         tmp_path, monkeypatch, capsys):
     """`--replay` carries no card, and both new gates divide by one.

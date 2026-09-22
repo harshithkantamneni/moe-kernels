@@ -773,13 +773,11 @@ def test_the_dry_run_needs_no_gpu_and_writes_nothing(tmp_path, capsys):
     assert "estimated GPU time" in printed
 
 
-def test_it_names_the_missing_half_of_the_stack_instead_of_crashing(tmp_path, capsys):
+def test_it_names_the_missing_half_of_the_stack_instead_of_crashing(
+        tmp_path, capsys, no_cuda):
     """Off GPU the script has to say which of torch, CUDA and vLLM is absent and
-    what to run instead. This test runs on a laptop, which is the case it is
-    about."""
-    import torch
-    if torch.cuda.is_available():                      # pragma: no cover - pod
-        pytest.skip("this asserts the laptop path")
+    what to run instead. The no-CUDA world is PLANTED (`no_cuda`), so a pod
+    checks this door too."""
     assert BM.main(["--out", str(tmp_path)]) == 2
     printed = capsys.readouterr().out
     assert "--self-test" in printed

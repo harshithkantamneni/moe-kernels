@@ -5780,7 +5780,11 @@ def _main(argv=None) -> int:                                    # noqa: C901
 
     detected = detect_card_slug()
     card = args.card or detected or NO_CARD_SLUG
-    if args.card and detected and args.card != detected:
+    # --card takes a NAME ('NVIDIA H200', as nvidia-smi and the driver's
+    # dtype line spell it) or a slug; `detected` is a slug. Compared as
+    # slugs, or the pod refused a test's --card 'NVIDIA H200' as
+    # contradicting 'nvidia_h200' (session 4).
+    if args.card and detected and PV.card_slug(args.card) != detected:
         print(f"REFUSED: --card {args.card!r} but the attached device is "
               f"{detected!r}. --card may name a card that is ABSENT, so a "
               "laptop can print the pod's real path; it may never contradict "

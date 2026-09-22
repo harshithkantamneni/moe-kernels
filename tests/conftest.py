@@ -4,6 +4,10 @@ The two fused spans below are real torch implementations, not stubs. They exist
 so that the fusion accounting in bytes_model and the numerical equivalence of
 fused vs unfused tilings can both be tested on a laptop, without CUDA.
 """
+import os
+import pathlib
+import shutil
+
 import pytest
 import torch
 
@@ -64,17 +68,68 @@ def toy_spec():
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "gpu: requires a CUDA device")
+    config.addinivalue_line(
+        "markers",
+        "no_gpu: asserts the laptop path; skipped when a CUDA device is attached")
 
 
 def pytest_collection_modifyitems(config, items):
-    """Auto-skip GPU tests off the box, so `pytest tests/` works everywhere.
+    """Auto-skip `gpu` tests off the box and `no_gpu` tests on it.
 
-    On the H200 these run for real and are the only verification the CUDA
-    timing paths ever get.
+    On the H200 the `gpu` tests run for real and are the only verification the
+    CUDA timing paths ever get. `no_gpu` is the mirror: a test whose SUBJECT is
+    the machine fact "no card is attached" (the real resolver's no-card answer,
+    or a door behind an absent PACKAGE such as pynvml, which hiding CUDA does
+    not close) and that cannot plant it. A test whose subject is a script's
+    refusal logic does not take this marker: it plants the world with the
+    `no_cuda` fixture below, or spawns its child under `_hermetic.LAPTOP_ENV`,
+    so the pod checks the door too. Session 4's pod suite failed 23 tests that
+    asserted the laptop path on a box with a card, and STARTED a measurement
+    from one of them.
     """
-    if torch.cuda.is_available():
-        return
-    skip = pytest.mark.skip(reason="no CUDA device")
+    has_cuda = torch.cuda.is_available()
+    skip_gpu = pytest.mark.skip(reason="no CUDA device")
+    skip_no_gpu = pytest.mark.skip(
+        reason="a CUDA device is attached; this test asserts the laptop path")
     for item in items:
-        if "gpu" in item.keywords:
-            item.add_marker(skip)
+        wants_gpu = "gpu" in item.keywords
+        wants_no_gpu = "no_gpu" in item.keywords
+        if wants_gpu and wants_no_gpu:
+            raise pytest.UsageError(f"{item.nodeid}: marked both gpu and no_gpu")
+        if wants_gpu and not has_cuda:
+            item.add_marker(skip_gpu)
+        if wants_no_gpu and has_cuda:
+            item.add_marker(skip_no_gpu)
+
+
+@pytest.fixture
+def no_cuda(monkeypatch):
+    """Plant the no-card world in THIS process. Every detector in the repo asks
+    `torch.cuda.is_available()` first (roofline.current_gpu_name,
+    timing.require_cuda, provenance's gpu_name, each script's detect_card_slug
+    / missing_gpu_stack / resolve_card), so one attribute makes a box with a
+    card walk the laptop path. Moved here from tests/test_timing.py so every
+    file plants it the same way. It hides CUDA, not NVML or an absent package:
+    a door behind those takes the `no_gpu` marker instead."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _results_root_sandbox(tmp_path_factory):
+    """The pod exports MOE_RESULTS_DIR=/workspace/results/gaps-<card> to every
+    arm, and pytest inherited it: in-process dry runs and self-tests printed
+    and wrote under the session's real results root (session 4). Sandbox it
+    INSIDE the repo, under results/* which .gitignore excludes, so every
+    `IGNORED by git` line the dry runs print stays true. Tests that assert the
+    default-root branch already delenv/setenv it themselves."""
+    root = (pathlib.Path(__file__).resolve().parents[1] / "results" / "_pytest"
+            / tmp_path_factory.getbasetemp().name)
+    root.mkdir(parents=True, exist_ok=True)
+    previous = os.environ.get("MOE_RESULTS_DIR")
+    os.environ["MOE_RESULTS_DIR"] = str(root)
+    yield root
+    if previous is None:
+        os.environ.pop("MOE_RESULTS_DIR", None)
+    else:
+        os.environ["MOE_RESULTS_DIR"] = previous
+    shutil.rmtree(root, ignore_errors=True)

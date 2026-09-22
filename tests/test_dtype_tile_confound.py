@@ -1298,8 +1298,8 @@ def test_v1_passes_only_with_a_float8_dtype_and_a_quant_config(planned,
 # the fp8 preflight, which is the refusal the brief asked for by name
 # --------------------------------------------------------------------------
 
-def test_preflight_refuses_fp8_on_a_machine_with_no_fp8_silicon():
-    """On this laptop there is no CUDA device at all, which is the None branch
+def test_preflight_refuses_fp8_on_a_machine_with_no_fp8_silicon(no_cuda):
+    """The no-CUDA world is PLANTED (`no_cuda`): the None branch
     of `fp8_hardware_support` and must raise rather than degrade to bf16."""
     with pytest.raises(DTC.Fp8PathUnavailable) as excinfo:
         DTC.preflight_fp8(list(DTC.DTYPES))
@@ -1780,14 +1780,14 @@ def test_the_level_side_folds_low_dominant_and_refuses_a_foreign_word():
 
 
 def test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200(
-        tmp_path, capsys):
+        tmp_path, capsys, no_cuda):
     """R6. The literal "NVIDIA H200" was the fallback, and it did two jobs.
 
     It named the plan for a card the machine might not be, and, because the
     lookup device decides which of vLLM's tuned files `resolve_tile` reads, it
     chose the tuned half of the confound for a card that may ship no tuned file
-    at all. There is no CUDA device in this test process, which is the live
-    case.
+    at all. The no-CUDA world is PLANTED (`no_cuda`), so a pod checks this
+    door too.
     """
     code = DTC.main(["--dry-run", "--out-dir", str(tmp_path)])
     assert code == exit_codes.REFUSED
@@ -1797,7 +1797,7 @@ def test_a_run_off_gpu_refuses_rather_than_labelling_itself_an_h200(
     assert not list(tmp_path.glob("*/plan.json")), "it planned anyway"
 
 
-def test_the_named_flag_is_what_makes_the_refused_run_go(tmp_path, capsys):
+def test_the_named_flag_is_what_makes_the_refused_run_go(tmp_path, capsys, no_cuda):
     """The refusal above points at --card, so --card had better be enough."""
     assert DTC.main(["--dry-run", "--card", H200,
                      "--out-dir", str(tmp_path)]) == exit_codes.REFUSED
@@ -1905,7 +1905,7 @@ OFF_GPU_MODES = [
 @pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
                          ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
 def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
-        argv, code, tmp_path, capsys):
+        argv, code, tmp_path, capsys, no_cuda):
     """The whole repair, stated as one property instead of as prose.
 
     For every mode this file can reach on a laptop, the RESULT lines it printed

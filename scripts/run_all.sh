@@ -507,8 +507,10 @@ PY="$VENVS/base/bin/python"
 
 if [[ -z "$SKIP_TESTS" ]]; then
   log "test suite (a failure here stops the session before it costs anything)"
-  # tests/test_gpu.py auto-skips off a device, so on the box this is the first
-  # and only verification the CUDA timing paths get.
+  # tests/test_gpu.py auto-skips off a device (and the no_gpu tests skip ON
+  # it), so on the box this is the first and only verification the CUDA
+  # timing paths get. From the base venv: the suite interpreter has no vLLM.
+  "$PY" -c "import vllm" 2>/dev/null && log "WARNING: $PY imports vllm; the suite plants its refusal doors and must run from a venv without it"
   "$PY" -m pytest tests/ -q -x
 fi
 

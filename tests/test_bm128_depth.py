@@ -438,7 +438,22 @@ def test_the_card_is_a_swept_knob_and_is_visible_in_the_run_id(bm):
     assert h200.startswith("nvidia_h200-")
 
 
-def test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods(bm, capsys):
+def test_a_card_named_as_nvidia_smi_spells_it_does_not_contradict_its_own_slug(
+        bm, capsys, monkeypatch):
+    """The pod refused `--card 'NVIDIA H200'` as contradicting the attached
+    'nvidia_h200' (session 4): a NAME compared to a SLUG with `!=`. Compared
+    as slugs, the name is the card; a different card still refuses."""
+    monkeypatch.setattr(bm, "detect_card_slug", lambda: "nvidia_h200")
+    code = bm.main(["--dry-run", "--card", "NVIDIA H200"])
+    out = capsys.readouterr().out
+    assert "may never contradict" not in out, out[-600:]
+    assert code != 2 or "REFUSED: --card" not in out
+    code = bm.main(["--dry-run", "--card", "not_this_card"])
+    out = capsys.readouterr().out
+    assert code == 2 and "may never contradict" in out
+
+
+def test_a_dry_run_with_no_device_marks_its_path_as_not_the_pods(bm, capsys, no_cuda):
     """A laptop dry run must not print a path a pod will never write to: the
     next thing the operator does with that path is `git check-ignore` it."""
     assert bm.main(["--dry-run"]) == exit_codes.REFUSED

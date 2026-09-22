@@ -750,7 +750,7 @@ OFF_GPU_MODES = [
 @pytest.mark.parametrize("argv,code", OFF_GPU_MODES,
                          ids=[" ".join(a) or "bare" for a, _ in OFF_GPU_MODES])
 def test_the_log_and_the_exit_code_agree_in_every_off_gpu_mode(
-        argv, code, tmp_path, capsys):
+        argv, code, tmp_path, capsys, no_cuda):
     """The whole repair, stated as one property instead of as prose.
 
     For every mode this file can reach on a laptop, the RESULT lines it printed

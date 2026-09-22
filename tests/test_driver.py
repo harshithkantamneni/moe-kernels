@@ -133,6 +133,14 @@ def cfg_for(tmp_path, **kw):
         timer=fake_timer,
         graph_timer=fake_graph_timer,
         clock_sampler=lambda: T.ClockState(1980, 45),
+        # THE LAPTOP WORLD, PLANTED. These tests time with fakes on device="cpu";
+        # the default resolver reads the ATTACHED card, and on the H200 it found
+        # 1455 MHz for profile 'NVIDIA H200 (measured)', dropped it because the
+        # roof here is `fake_hw`, and refuse_unreferenced_clock then refused two
+        # graph-policy tests over a machine fact (session 4).
+        reference_clock_resolver=lambda: RF.ReferenceClock(
+            None, "planted: no CUDA device in the laptop world these tests model",
+            card=""),
     )
     base.update(kw)
     return D.RunConfig(**base)
@@ -620,6 +628,23 @@ def test_policy_errs_toward_measuring_when_hardware_is_unknown():
     """No calibration means no prediction, so measure rather than guess."""
     cfg = D.RunConfig(hardware=None, graph_min_launch_share=0.01)
     assert D.should_time_graph(cost_for(1e12), cfg)[0] is True
+
+
+def test_the_laptop_config_plants_its_own_no_card_world(tmp_path, monkeypatch):
+    """`cfg_for` used to leave the default resolver in place, which reads the
+    ATTACHED card: on the H200 it resolved 1455 MHz for the card's profile,
+    dropped it against `fake_hw`, and run_sweep raised ReferenceClockRefused
+    in two graph-policy tests (session 4). The laptop world these tests model
+    has no card, and the config says so itself, whatever the box has."""
+    monkeypatch.setattr(RF, "reference_clock",
+                        lambda: RF.ReferenceClock(1455.0, "a card with a profile",
+                                                  card="NVIDIA H200",
+                                                  profile="NVIDIA H200 (measured)"))
+    cfg = cfg_for(tmp_path)
+    assert cfg.reference_clock_card == ""
+    assert cfg.reference_clock_mhz is None
+    assert "planted" in cfg.missing["reference_clock_mhz"]
+    assert D.unreferenced_clock(cfg) == []
 
 
 def test_skipped_graph_row_is_written_not_dropped(tmp_path):
@@ -1301,6 +1326,7 @@ def test_the_refusal_exits_REFUSED_and_not_ERROR():
     assert EC.ledger_state(EC.REFUSED) != "RESULT"
 
 
+@pytest.mark.no_gpu
 def test_no_card_attached_records_the_reason_and_measures_anyway(tmp_path):
     """The other world, and why the refusal turns on the CARD rather than on
     the clock alone. Off a GPU there is nothing to be level against: the

@@ -846,7 +846,7 @@ def test_dry_run_and_run_contradict_each_other():
     assert OVS.main(["--dry-run", "--run"]) == OVS.exit_codes.REFUSED
 
 
-def test_dry_run_works_off_gpu_and_refuses_rather_than_reporting_done(capsys):
+def test_dry_run_works_off_gpu_and_refuses_rather_than_reporting_done(capsys, no_cuda):
     """The pod session reads this on a laptop before spending anything.
 
     A PLAN IS NOT A RESULT. It exits REFUSED and prints no RESULT line, so the

@@ -341,7 +341,7 @@ def test_a_synthetic_group_m_run_prints_result_lines_the_driver_can_read(
 # A5: provenance in every report these scripts write
 # --------------------------------------------------------------------------
 
-def test_the_tuned_plan_carries_the_provenance_block(tmp_path):
+def test_the_tuned_plan_carries_the_provenance_block(tmp_path, no_cuda):
     TVF.main(["--plan-only", "--card", H200, "--tokens", "1,32",
               "--out-dir", str(tmp_path)])
     plan = json.loads(next(tmp_path.rglob("plan.json")).read_text())

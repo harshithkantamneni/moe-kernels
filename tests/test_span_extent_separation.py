@@ -1844,8 +1844,9 @@ def test_a_find_pieces_refusal_exits_REFUSED_and_not_INVALID(tmp_path, capsys,
 
 
 def test_the_missing_stack_refusal_exits_REFUSED_and_names_which_half(tmp_path,
-                                                                      capsys):
-    """No CUDA here, so this is the real path rather than a planted one.
+                                                                      capsys,
+                                                                      no_cuda):
+    """The no-CUDA world is PLANTED (`no_cuda`), so a pod checks this door too.
 
     The full published grid, for the reason above: restricted to one model the
     script refuses earlier, for grid power, and never reaches the missing

@@ -38,6 +38,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from _hermetic import laptop_env  # noqa: E402
+
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import timing as T  # noqa: E402
 
@@ -57,9 +59,13 @@ CE = _load()
 
 
 def run(args, timeout=900):
+    # Laptop path on every box: the bare and --duty rows of OFF_GPU_MODES and
+    # the measuring-run refusal would otherwise MEASURE a 40-minute ladder on
+    # a pod with vLLM, and on session 4's base venv they crashed to ERROR 4
+    # instead of REFUSED 2 (the script's stack door, this change).
     return subprocess.run([sys.executable, str(SCRIPT), *args],
                           capture_output=True, text=True, timeout=timeout,
-                          cwd=str(ROOT))
+                          cwd=str(ROOT), env=laptop_env())
 
 
 def parsed(args):
@@ -576,7 +582,24 @@ def _drive(duty=0.25, calls=8, bursts=3, trials=2, clocks=(1800,) * 12,
     return got, slept
 
 
-def test_time_duty_refuses_off_gpu_unless_every_seam_is_injected():
+def test_a_box_with_a_card_and_no_vllm_is_refused_not_crashed(tmp_path, monkeypatch, capsys):
+    """Session 4's base venv: a card, no vLLM. The bare run got past the device
+    door and crashed to ERROR 4 (the driver's retryable code) with a traceback;
+    the stack door now refuses with the missing half named and writes nothing."""
+    monkeypatch.setattr(CE, "resolve_card", lambda args: "NVIDIA H200")
+    monkeypatch.setattr(CE.SWEEP, "missing_gpu_stack",
+                        lambda: "vLLM is not importable from this interpreter; "
+                                "source the vllm venv")
+    monkeypatch.setattr(CE.T, "require_cuda", lambda: None)
+    rc = CE.main(["--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == exit_codes.REFUSED, out[-800:]
+    assert "vLLM is not importable" in out
+    assert "Traceback" not in out
+    assert not list(tmp_path.rglob("CARD")), "the refused run wrote a CARD file"
+
+
+def test_time_duty_refuses_off_gpu_unless_every_seam_is_injected(no_cuda):
     """`time_kernel`'s own terms, for its own reason: an instrument that invents
     numbers when its device is missing is worse than one that stops."""
     with pytest.raises(T.TimingRefused) as caught:

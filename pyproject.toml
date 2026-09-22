@@ -18,10 +18,11 @@ include = ["moe*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "gpu: requires a CUDA device (deselect on a laptop with -m 'not gpu')",
+  "gpu: requires a CUDA device (auto-skipped off the box by tests/conftest.py)",
+  "no_gpu: asserts the laptop path (auto-skipped when a CUDA device is attached)",
   "slow: full-size geometry, minutes not seconds",
 ]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
 
 [tool.ruff]
 line-length = 100

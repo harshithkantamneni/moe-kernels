@@ -315,6 +315,11 @@ otherwise be discovered on the meter.
 ```bash
 bash scripts/pod_session.sh --dry-run          # every step, printed not run
 .venv/bin/python -m pytest tests/ -q           # must be green; the count moves
+# On the box the same command is P12 of pod_session.sh and runs from PY_BASE,
+# the venv WITHOUT vLLM: `no_gpu` tests skip there (the -ra tail counts them),
+# the gaps-session tests hide the card from every child they spawn, and a
+# `--run`/bare invocation in a test is planted, never inherited from the box.
+# Never run the suite from the vllm venv: an unplanted --run would MEASURE.
 bash scripts/run_all.sh --dry-run --profile crossing-uniform
 .venv/bin/python scripts/alias_ablation.py --synthetic refit   # step 2b, no GPU
 .venv/bin/python scripts/nsys_dram_probe.py --explain          # P-nsys, no GPU
@@ -377,6 +382,7 @@ Run it alone with `bash scripts/pod_session.sh --preflight-only`.
 | P10 | which profiler exists | informational. `ncu` fails on a rented pod with `ERR_NVGPUCTRPERM`; `nsys` traces CUDA and usually works, but tracing kernels is not counting bytes and P-nsys below asks the harder question. |
 | P11a | the step scripts exist and parse | several are written concurrently by other people. |
 | P11b | those scripts accept the flags this session passes | a renamed flag should cost a line here, not an argparse error forty minutes in. |
+| P11c | the suite interpreter carries no vLLM | soft: the tests plant every refusal door and hide the card from every child they spawn, so the suite runs from the venv WITHOUT vLLM (P12 does); an interpreter that imports vllm would let an unplanted bare invocation MEASURE, and the pod's own session 4 saw a `--run` go past its door |
 | P12 | the test suite | a failure here costs seconds; the same failure found after an hour of benchmarking costs an hour, and every row in between is suspect. **FATAL.** |
 | P13 | no active throttle, card under 60 C | thermal state is the largest source of run-to-run disagreement on rented hardware, and the harness records the symptom rather than controlling it. |
 | P14 | the session directory is on a different mount from `/` | a Network Volume at `/workspace` survives termination; the container filesystem does not, and `/workspace` on a pod without a volume attached looks identical. **FATAL.** |

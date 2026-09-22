@@ -799,7 +799,7 @@ def test_the_plan_says_the_residency_column_is_a_bound_off_gpu(bk, capsys):
 
 
 def test_the_ridge_is_labelled_a_hypothesis_off_gpu_and_is_used_only_by_v4(
-        bk, capsys):
+        bk, capsys, no_cuda):
     """A calibration-derived quantity is never an asserted literal. Off GPU the
     ridge is the module's HYPOTHESIS band and the page says so; no claim is
     scored against it."""

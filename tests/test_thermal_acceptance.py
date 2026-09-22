@@ -29,6 +29,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import thermal_acceptance as TA  # noqa: E402
+from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes as EX  # noqa: E402
 from moe.bench import timing as T  # noqa: E402
@@ -44,9 +45,12 @@ H200_MAX_SM = 1980.0
 
 
 def run_script(*args, cwd=None):
+    # Laptop path on every box: the bare pod line would measure 160 s on a
+    # card. NVML is NOT hidden by this, which is why the no-maximum test
+    # below is a `no_gpu` test and not a hermetic one.
     return subprocess.run([sys.executable, str(SCRIPT), *args],
                           capture_output=True, text=True, timeout=300,
-                          cwd=str(cwd or REPO))
+                          cwd=str(cwd or REPO), env=laptop_env())
 
 
 # --------------------------------------------------------------------------
@@ -301,10 +305,14 @@ def test_the_measuring_path_refuses_without_a_card_and_says_why():
     assert TA.NO_CARD in got.stdout
 
 
+@pytest.mark.no_gpu
 def test_the_measuring_path_refuses_when_no_maximum_can_be_read():
     """REFUSED and not measured-then-UNKNOWN. Without a maximum there is no
     floor, so two minutes of load would be bought to answer nothing, and a
-    refusal is decided BEFORE anything is spent."""
+    refusal is decided BEFORE anything is spent. `no_gpu`, not hermetic: the
+    maximum is read through pynvml / nvidia-smi, which CUDA_VISIBLE_DEVICES
+    does not hide, so on a pod this door opens and the run refuses one door
+    later with a different sentence."""
     got = run_script("--card", "NVIDIA H200")
     assert got.returncode == EX.REFUSED, got.stdout[-2000:]
     assert "maximum SM clock could not be read" in got.stdout

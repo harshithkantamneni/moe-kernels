@@ -877,6 +877,7 @@ def test_no_publish_path_can_write_an_unstamped_floor(monkeypatch, capsys):
         assert doc["replicate_floor"] is None
 
 
+@pytest.mark.no_gpu
 def test_a_refused_pod_line_leaves_the_tracked_floor_untouched(monkeypatch, capsys):
     """F8, RUN AS THE POD LINE MINUS THE GPU. `replicate_noise_floor.py
     --replicates 3 --arms mixtral_g1,mixtral_g16,qwen2_g1,qwen2_g16 --publish`
@@ -888,13 +889,8 @@ def test_a_refused_pod_line_leaves_the_tracked_floor_untouched(monkeypatch, caps
     ` M results/published/NOISE_FLOOR.json`, reproduced twice). Planted in both
     directions: the pod line calls the writer zero times, `--control-only
     --publish` still calls it once, and the tracked file's bytes are unchanged
-    across the refused run."""
-    try:
-        import torch
-        if torch.cuda.is_available():
-            pytest.skip("a CUDA device is attached: this line IS the arm and would measure")
-    except ImportError:
-        pass
+    across the refused run. `no_gpu`: on a box with a card this line IS the
+    arm and would measure."""
     before = NF.NOISE_FLOOR_JSON.read_bytes() if NF.NOISE_FLOOR_JSON.exists() else None
     calls: list[dict] = []
     monkeypatch.setattr(NF, "write_published",

@@ -734,7 +734,7 @@ def test_the_design_power_gate_fails_at_the_swizzle_that_cannot_resolve(capsys):
     assert "RESULT: VALIDITY S4 FAIL" in out
 
 
-def test_dry_run_needs_no_gpu_and_prints_the_predictions(capsys):
+def test_dry_run_needs_no_gpu_and_prints_the_predictions(capsys, no_cuda):
     assert BND.main(["--dry-run", "--capability", "9.0"]) == 0
     out = capsys.readouterr().out
     assert "Predictions, registered before anything is measured" in out

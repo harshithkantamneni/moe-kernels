@@ -178,7 +178,7 @@ def planted_reference():
 # --------------------------------------------------------------------------
 
 def test_a_stated_ridge_with_no_bandwidth_refuses_instead_of_building_a_hybrid_roof(
-        tmp_path, capsys):
+        tmp_path, capsys, no_cuda):
     """THE DEFECT IN ONE COMMAND.
 
     `--ridge 145.8` is the A100's own contemporaneous figure. On a box with no
@@ -223,7 +223,7 @@ def test_the_report_records_both_ruler_sources_as_cli(tmp_path):
 
 
 def test_the_hypothesis_bandwidth_is_only_reachable_beside_the_hypothesis_ridge(
-        tmp_path):
+        tmp_path, no_cuda):
     """A laptop plan may assume the H200 pair, because BOTH halves then come
     from the same 2026-08-26 calibration and nothing was measured to mislabel.
     Asserting a ridge closes that escape, which is what the first test above
@@ -237,7 +237,7 @@ def test_the_hypothesis_bandwidth_is_only_reachable_beside_the_hypothesis_ridge(
         BM.resolve_bandwidth(args)
 
 
-def test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return():
+def test_resolve_bandwidth_still_unpacks_as_the_pair_it_used_to_return(no_cuda):
     """THE COMPATIBLE PATH. `scripts/tile_cap_test.py:1760` does
     `bandwidth, bw_source = SWEEP.resolve_bandwidth(args)` outside a try, and
     that script is not this one's to edit."""
@@ -754,7 +754,7 @@ def test_an_undecided_gate_counts_against_the_gate_not_for_it():
     assert name == BM.GATE_NAMES[3]
 
 
-def test_a_refusal_exits_refused_and_measures_nothing(tmp_path, capsys):
+def test_a_refusal_exits_refused_and_measures_nothing(tmp_path, capsys, no_cuda):
     rc = BM.main(["--ridge", "145.8", "--out", str(tmp_path)])
     assert rc == exit_codes.REFUSED
     assert "REFUSED" in capsys.readouterr().out
@@ -868,7 +868,7 @@ def test_an_undecided_gate_is_never_counted_as_a_pass_by_the_pod_session_grep(
 
 
 def test_a_refused_log_offers_neither_channel_a_verdict_to_count(
-        tmp_path, capsys):
+        tmp_path, capsys, no_cuda):
     """The planted FAIL branch of the test above. `replicate_noise_floor`'s
     refused log matched the driver's free-text grep 18 times and put a
     pre-registered expectation into the session summary as measured output. A
@@ -1165,7 +1165,7 @@ def test_the_lowest_run_wins_a_tie_and_a_clean_prefix_is_unchanged():
         xs, ys_from(none_above), c, overhead, 0.042)[:2] == (0, 0)
 
 
-def test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it():
+def test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it(no_cuda):
     """`scripts/tile_cap_test.py:1760` calls `resolve_bandwidth` OUTSIDE any
     try, so a plain `RuntimeError` arrived there as a traceback and exit 1 --
     and 1 is CLAIM_FAIL in the very table this study adopted, so a driver would
@@ -1186,7 +1186,7 @@ def test_the_bandwidth_refusal_reaches_a_caller_that_cannot_catch_it():
         raise AssertionError("it must still refuse")
 
 
-def test_the_bandwidth_refusal_is_printed_once_at_the_raise_site(capsys):
+def test_the_bandwidth_refusal_is_printed_once_at_the_raise_site(capsys, no_cuda):
     """An unhandled `SystemExit` whose code is an int prints NOTHING, so the
     reason has to be emitted where the refusal happens. And exactly once:
     `main` deliberately does not re-print it, or one refusal would look like

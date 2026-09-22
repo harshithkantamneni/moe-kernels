@@ -535,19 +535,14 @@ def test_the_modal_clock_is_a_median_of_under_load_samples(rf):
 # The denominator.
 # --------------------------------------------------------------------------
 
-def test_a_measured_run_with_no_calibration_for_its_device_refuses(rf):
-    """The failure that put a stale H200 ridge into seven A100 reports."""
-    import torch
-    if torch.cuda.is_available():                       # pragma: no cover
-        pytest.skip("this box has a device; the refusal is the off-GPU path")
+def test_a_measured_run_with_no_calibration_for_its_device_refuses(rf, no_cuda):
+    """The failure that put a stale H200 ridge into seven A100 reports. The
+    no-card world is PLANTED, so the pod checks this door too."""
     with pytest.raises(rf.RoofUnavailable, match="no calibration for this device"):
         rf.resolve_roof("bf16", synthetic=False)
 
 
-def test_the_hypothesis_roof_is_reachable_only_for_a_synthetic_run(rf):
-    import torch
-    if torch.cuda.is_available():                       # pragma: no cover
-        pytest.skip("this box has a device")
+def test_the_hypothesis_roof_is_reachable_only_for_a_synthetic_run(rf, no_cuda):
     got = rf.resolve_roof("bf16", synthetic=True)
     assert got.attached is False
     assert "HYPOTHESIS" in got.source
@@ -1040,7 +1035,7 @@ def test_there_is_no_block_m_flag(rf):
         rf.build_parser().parse_args(["--block-m", "64"])
 
 
-def test_dry_run_prints_the_predictions_with_numbers_before_the_plan(rf, capsys):
+def test_dry_run_prints_the_predictions_with_numbers_before_the_plan(rf, capsys, no_cuda):
     code = rf.main(["--dry-run"])
     out = capsys.readouterr().out
     assert code == 0
@@ -1106,20 +1101,15 @@ def test_every_planted_world_reaches_a_different_verdict(rf, cfg, roof):
         [g.name for g in gates if g.passed is not True]
 
 
+@pytest.mark.gpu
 def test_a_card_flag_may_not_contradict_an_attached_device(rf, capsys):
-    import torch
-    if not torch.cuda.is_available():
-        pytest.skip("the contradiction is only detectable with a device attached")
     code = rf.main(["--dry-run", "--card", "not_this_card"])  # pragma: no cover
     assert code == 2
     assert "may never contradict" in capsys.readouterr().out
 
 
 def test_off_gpu_the_run_path_stops_before_measuring_and_says_where_to_look(
-        rf, capsys):
-    import torch
-    if torch.cuda.is_available():                       # pragma: no cover
-        pytest.skip("this box has a device")
+        rf, capsys, no_cuda):
     code = rf.main([])
     out = capsys.readouterr().out
     assert code == 2

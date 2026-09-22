@@ -3285,7 +3285,8 @@ def run_measure(args) -> int:
     # print one path and write another.
     detected = detect_card()
     card = args.card or (detected[1] if detected else UNKNOWN_CARD_SLUG)
-    if args.card and detected and args.card != detected[1]:
+    # Compared as SLUGS: --card may spell the card as nvidia-smi does.
+    if args.card and detected and PV.card_slug(args.card) != detected[1]:
         # REFUSE rather than trust the flag. --card exists so a laptop dry run
         # can print the path the pod will really use; letting it override an
         # ATTACHED device would let one card write into another's directory,

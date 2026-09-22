@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import private_weight_reference as PW  # noqa: E402
+from _hermetic import laptop_env  # noqa: E402
 
 from moe.bench import exit_codes  # noqa: E402
 from moe.bench import timing as TIMING  # noqa: E402
@@ -82,9 +83,11 @@ def test_the_off_gpu_mode_list_covers_every_planted_world():
 
 
 def run(args):
+    # Laptop path on every box: a --self-test or --dry-run child must not
+    # find a card, and a bare argv must not measure from inside pytest.
     return subprocess.run([sys.executable, str(SCRIPT), *args],
                           capture_output=True, text=True, timeout=900,
-                          cwd=str(ROOT))
+                          cwd=str(ROOT), env=laptop_env())
 
 
 # --------------------------------------------------------------------------

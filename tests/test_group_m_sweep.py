@@ -430,7 +430,15 @@ def test_a_run_without_a_gpu_says_so_and_is_refused_not_invalid(
     Nothing was measured, there is no directory, and the arm is free to retry on
     a box that has a GPU. The two codes are treated oppositely, which is why
     they are two codes.
+
+    FORCED, not inherited from the host: on the pod (session 4) this line
+    reached the `_save` footer with no CANNOT RUN HERE in its stdout, i.e. a
+    `--run` from inside pytest went past the door. The sibling in
+    OFF_GPU_MODES plants the same seam.
     """
+    def _no_gpu(*a, **kw):
+        raise GM.CannotRunHere("no CUDA device; --run needs the pod")
+    monkeypatch.setattr(GM, "measure", _no_gpu)
     code, out = run_report(["--run"], tmp_path, monkeypatch, capsys)
     assert "CANNOT RUN HERE" in out
     assert code == exit_codes.REFUSED

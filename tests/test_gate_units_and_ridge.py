@@ -471,7 +471,7 @@ def test_the_report_carries_the_ridge_and_its_source_into_the_json():
     assert "ridge source:" in report_from(cells_at(REFIT), alpha=REFIT).text()
 
 
-def test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time(capsys):
+def test_the_dry_run_prints_the_ridge_and_its_source_before_any_gpu_time(capsys, no_cuda):
     """A plan that does not say which card's ceiling it is planning against is
     the plan that produced seven hybrid reports. `--dry-run` has to run off GPU
     and has to print the ridge, its band and where both came from."""

@@ -2821,11 +2821,21 @@ def _main(argv=None) -> int:
               "silicon's governor.")
         return exit_codes.REFUSED
 
+    # THE WHOLE STACK, NOT ONLY THE DEVICE. `build_ladder` imports vLLM; on a
+    # box with a card and no vLLM (session 4's base venv) the bare run got past
+    # this door, and the ImportError reached `main`'s catch-all as ERROR 4, the
+    # one code the driver RETRIES, with a traceback and no remedy (consistent
+    # with the pod log, which carries the exit-4 sentence and no more). Every
+    # sibling asks `missing_gpu_stack` first, and it names which half is absent.
+    missing = SWEEP.missing_gpu_stack()
+    if missing:
+        print("\nREFUSED. Nothing was measured.")
+        print("  " + missing)
+        return exit_codes.REFUSED
     try:
         T.require_cuda()
     except Exception as exc:                            # noqa: BLE001
         print(f"\nREFUSED. Nothing was measured: {exc}")
-        print("  " + SWEEP.missing_gpu_stack())
         return exit_codes.REFUSED
     try:
         T.nvml_clock_reader()

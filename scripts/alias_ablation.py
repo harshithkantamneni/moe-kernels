@@ -5017,7 +5017,15 @@ def main(argv: list[str] | None = None) -> int:
             setattr(args, knob, want)
             design = build_design(args)
     card = planned.get("card") or card
-    facts = {} if args.synthetic else measured_card(card)
+    # A REPLAY IS SCORED AGAINST THE RULER THE RUN WAS MEASURED WITH, which is
+    # plan.json's, and against NOTHING when plan.json is gone. On a box with a
+    # calibration the attached card's file stood in and a plan-less --replay
+    # of a synthetic run came back DONE (session 4); only a fresh run may read
+    # the attached card's file. Empty facts make the headroom gates UNKNOWN,
+    # which is INVALID, and that is the right answer. (`l2_bytes_here()` two
+    # lines down has the same shape and is left: older plans lack l2_bytes.)
+    facts = ({} if (args.synthetic or (args.replay and not planned))
+             else measured_card(card))
     if planned.get("roof_bytes_s") and not facts.get("roof_bytes_s"):
         facts = dict(facts, source=f"{out_dir.name}/plan.json",
                      roof_pattern=planned.get("roof_pattern", ROOF_PATTERN))

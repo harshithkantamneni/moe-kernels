@@ -113,7 +113,7 @@ def test_the_ruler_run_id_is_stable_when_nothing_moves():
             == RULER.default_run_id(_ruler_args(card=H200)))
 
 
-def test_a_run_that_measures_nothing_is_labelled_as_having_no_card():
+def test_a_run_that_measures_nothing_is_labelled_as_having_no_card(no_cuda):
     """`--corpus-only` prices published rows from several devices at once.
 
     There is no card, and `provenance.run_id` refuses an id without one, so the
@@ -125,7 +125,7 @@ def test_a_run_that_measures_nothing_is_labelled_as_having_no_card():
     assert RULER.NO_CARD not in {H200, A100}
 
 
-def test_the_ruler_refuses_to_measure_without_a_card(tmp_path, capsys):
+def test_the_ruler_refuses_to_measure_without_a_card(tmp_path, capsys, no_cuda):
     """The FAIL branch: gates 1 to 3 score a fresh calibration against THIS
     card's registered constants, so an unnamed card makes them meaningless."""
     from moe.bench import exit_codes
@@ -333,8 +333,8 @@ def test_the_tile_sweep_refuses_a_run_with_no_card():
         TILE.default_run_id(_tile(), "")
 
 
-def test_the_tile_sweep_refuses_off_gpu_rather_than_naming_a_card(capsys):
-    """R6. There is no CUDA device in this process, which is the live case."""
+def test_the_tile_sweep_refuses_off_gpu_rather_than_naming_a_card(capsys, no_cuda):
+    """R6. The no-CUDA world is PLANTED, so a pod checks this door too."""
     from moe.bench import exit_codes
     with pytest.raises(TILE.NoCardToLabel):
         TILE.resolve_card(_tile())
