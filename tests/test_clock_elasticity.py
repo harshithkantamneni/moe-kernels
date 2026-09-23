@@ -1021,6 +1021,28 @@ def test_the_module_says_what_is_gated_and_what_is_printed_beside_it():
     assert "Every gate reads `eta`;" not in sign
 
 
+def test_a_passing_page_reads_the_per_tile_cost_and_not_the_whole_millisecond():
+    """Two more of finding 19's sites: with every gate passed the page's reading
+    said 'the measured millisecond is traffic', and C2's docstring said a FAIL
+    means the clock carries 'a measured millisecond'. The claim is the per-M-tile
+    cost over treads 2 and deeper, and tread 1 is left out of it because it sits
+    off the law, so a PASS says nothing about the whole per-call millisecond."""
+    rows = CE.plant_rows(eps=0.05, jitter=0.004)
+    args = CE._self_test_args(CE.build_parser().parse_args(["--dry-run"]))
+    threshold, source = CE.registered_clock_ratio(args)
+    gates = CE.gates_for(rows, args, threshold, source,
+                         CE.fit(rows, draws=400, seed=0))
+    assert all(g.verdict == CE.PASS for g in gates), {
+        g.token: g.verdict for g in gates}
+    reading = "\n".join(CE.report_tail([], gates)).split("READING IT.")[1]
+    assert ("at this cell the per-M-tile cost, over treads 2 and deeper, is "
+            "traffic, not issue rate") in reading
+    assert "millisecond" not in reading
+    c2 = " ".join(CE.gate_c2_registered_reading.__doc__.split())
+    assert "millisecond" not in c2
+    assert "the per-M-tile cost over treads 2 and deeper" in c2
+
+
 # --------------------------------------------------------------------------
 # 11c. the claim's tread set, pinned on the cells that motivated it
 # --------------------------------------------------------------------------

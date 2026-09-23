@@ -1439,10 +1439,12 @@ def gate_c2_registered_reading(est: Elasticity) -> Gate:
     """THE PRE-REGISTERED CLAIM: the elasticity is below the RAW-STANDS edge.
 
     Registered in P2 before the run. A FAIL is a finding, not a retry: it says
-    the clock carries enough of a measured millisecond that the study's C3
-    direction is in question, and the page prints the registered consequence of
-    whichever band the interval actually landed in rather than a sentence
-    written afterwards.
+    the clock carries enough of the per-M-tile cost over treads 2 and deeper
+    that the study's C3 direction is in question, and the page prints the
+    registered consequence of whichever band the interval actually landed in
+    rather than a sentence written afterwards. Tread 1 is not in the claim (on
+    the 2026-09-21 card its call sat off the law), so neither verdict is a
+    statement about the whole per-call time.
     """
     band = band_of(est.lo, est.hi)
     ok = band is not None and band[0] == BANDS[0][0]
@@ -3073,10 +3075,12 @@ def report_tail(body: list[str], gates: list[Gate]) -> list[str]:
                        "registered worlds, and the C2 line for the registered "
                        "consequence of the band it landed in.")
         else:
-            out.append("The interval lies wholly below the RAW-STANDS edge: at "
-                       "this cell the measured millisecond is traffic, not "
-                       "issue rate, and the clock is not what is wrong with "
-                       "alpha.")
+            out.append(f"The interval lies wholly below the RAW-STANDS edge: "
+                       f"at this cell the per-M-tile cost, over treads "
+                       f"{CLAIM_MIN_TREAD} and deeper, is traffic, not issue "
+                       f"rate, and the clock is not what is wrong with alpha. "
+                       f"Tread 1's call is not in this reading; its "
+                       f"departure from the claim's line is printed above.")
     return out
 
 
