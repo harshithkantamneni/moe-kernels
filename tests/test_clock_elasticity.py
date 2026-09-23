@@ -29,6 +29,7 @@ import dataclasses
 import importlib.util
 import inspect
 import json
+import math
 import re
 import statistics
 import subprocess
@@ -1392,6 +1393,68 @@ def test_a_resume_on_the_same_card_measures_and_the_report_names_it(tmp_path, mo
     rc, calls = _measuring_run(monkeypatch, tmp_path, identity="GPU-aaaa",
                                rows=rows)
     assert rc == exit_codes.DONE and len(calls) == 1
+
+
+# --------------------------------------------------------------------------
+# 13c. the plan page says what V1 is sized for
+# --------------------------------------------------------------------------
+
+def test_the_plan_prints_the_claims_own_resolution_at_the_design_requested():
+    """V1's threshold comes from the pooled per-call estimator's standard
+    error, and the gated claim fits one slope per tread over treads 2 and
+    deeper, so at V1's span its interval is several times wider. The page says
+    so for the design actually requested, the chain's three states included,
+    and V1 does not move."""
+    chain = CHAIN_R1 + ["--duty", "1.0", "0.7", "0.5"]
+    args = parsed(chain)
+    threshold, _source = CE.registered_clock_ratio(args)
+    factor = CE.per_tile_se_factor(8, min_tread=CE.CLAIM_MIN_TREAD)
+    assert factor > 1.0
+    assert CE.per_tile_se_factor(8, min_tread=1) < factor, (
+        "dropping the shallowest tread costs leverage")
+    need = CE.required_clock_ratio(repeats=13, treads=8, states=3,
+                                   se_factor=factor)
+    assert need > threshold, "the claim needs more span than V1 asks for"
+    assert CE.required_clock_ratio(repeats=13, treads=8, states=3) == \
+        CE.required_clock_ratio(repeats=13, treads=8, states=3, se_factor=1.0)
+    page = run(["--dry-run", *chain]).stdout
+    assert f"V1 THRESHOLD {threshold:.3f}x" in page
+    assert "V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE" in page
+    assert "(13 repeats x 8 treads x 3 states)" in page
+    assert f"a span of {need:.4f}x at every tread" in page
+    assert f"its interval is {factor:.2f}x wider" in page
+    # A ladder too shallow to hold two treads from tread 2 says so, rather
+    # than printing a span of inf.
+    assert CE.per_tile_se_factor(2, min_tread=CE.CLAIM_MIN_TREAD) == float("inf")
+    shallow = "\n".join(CE.mde_lines(parsed(["--treads", "2"])))
+    assert "cannot be formed at all" in shallow and "inf" not in shallow
+
+
+def test_the_claims_predicted_resolution_is_what_the_estimator_delivers():
+    """The printed factor is arithmetic, so it is checked against the
+    estimator: a planted 3-state design at V1's own span, with the corpus
+    spread as its jitter, bootstraps to a claim interval near the predicted
+    one and several times the pooled one."""
+    states, repeats = 3, 13
+    need = CE.required_clock_ratio(repeats=repeats, treads=8, states=states)
+    span = math.log(need)
+    mhz = tuple(1500.0 * math.exp(span * i / (states - 1)) for i in range(states))
+    xs = list(range(1, 9))
+    b = CE._line_slope(xs, list(CE.CORPUS_LADDER_MS))
+    a = statistics.fmean(CE.CORPUS_LADDER_MS) - b * statistics.fmean(xs)
+    claim, pooled = [], []
+    for seed in range(4):
+        est = CE.fit(CE.plant_rows(eps=0.5, duties=CE.DUTY_LEVELS[:states],
+                                   mhz=mhz, repeats=repeats, a_ms=a, b_ms=b,
+                                   jitter=CE.CORPUS_REPEAT_SPREAD, seed=seed),
+                     draws=400, seed=1)
+        claim.append(est.half_width)
+        pooled.append((est.fixed_tread_hi - est.fixed_tread_lo) / 2.0)
+    factor = CE.per_tile_se_factor(8, min_tread=CE.CLAIM_MIN_TREAD)
+    seen = statistics.median(claim) / statistics.median(pooled)
+    assert 0.75 * factor < seen < 1.33 * factor, (seen, factor)
+    predicted = CE.RESOLUTION_TARGET * factor
+    assert 0.75 * predicted < statistics.median(claim) < 1.5 * predicted
 
 
 # --------------------------------------------------------------------------

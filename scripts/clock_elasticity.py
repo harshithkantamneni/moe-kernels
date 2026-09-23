@@ -324,7 +324,9 @@ ADMISSIBLE_MARGIN = RESOLUTION_TARGET
 #:
 #: USED ONLY TO PRICE THE RUN. It sizes the burst, the iteration count and the
 #: wall clock on the plan page so an operator buys pod time against a figure
-#: derived the way the runner derives it. No gate reads it, no fit reads it, and
+#: derived the way the runner derives it, and its SHAPE (intercept against
+#: slope) weights the claim's resolution line in `mde_lines` through
+#: `per_tile_se_factor`. No gate reads it, no fit reads it, and
 #: `tests/test_clock_elasticity.py` recomputes it from that committed file so it
 #: cannot drift away from what was actually measured.
 CORPUS_LADDER_MS = (0.7738, 1.3252, 1.8911, 2.4154, 3.0127, 3.5662, 4.1618,
@@ -1004,7 +1006,8 @@ def clock_ratio_by_tread(cells) -> dict[int, float]:
 
 def required_clock_ratio(*, repeats: int, treads: int, states: int,
                          spread: float = CORPUS_REPEAT_SPREAD,
-                         target: float = RESOLUTION_TARGET) -> float:
+                         target: float = RESOLUTION_TARGET,
+                         se_factor: float = 1.0) -> float:
     """The clock separation this design needs, COMPUTED and never typed.
 
     The arithmetic, which `mde_lines` prints in full:
@@ -1019,13 +1022,48 @@ def required_clock_ratio(*, repeats: int, treads: int, states: int,
     `exp(L)`. Nothing here is a clock: it is a RATIO of two clocks on one card,
     which is why the same number governs an H200 and an A100 without being told
     which is attached.
+
+    THAT se(eps) IS THE POOLED PER-CALL ESTIMATOR'S, and at the default
+    `se_factor` of 1 this is V1's threshold. `se_factor` scales it to another
+    estimator's standard error at the same design: `per_tile_se_factor` is the
+    gated claim's, and the plan page prints the span the claim needs beside
+    V1's without moving V1.
     """
-    if repeats < 1 or treads < 1 or states < 2 or target <= 0 or spread <= 0:
+    if (repeats < 1 or treads < 1 or states < 2 or target <= 0 or spread <= 0
+            or se_factor <= 0):
         return float("inf")
     sigma_cell = MEDIAN_SE_PENALTY * spread / math.sqrt(repeats)
-    sd_needed = 2.0 * sigma_cell / (math.sqrt(treads * states) * target)
+    sd_needed = 2.0 * sigma_cell * se_factor / (math.sqrt(treads * states) * target)
     shape = math.sqrt((states + 1) / (12.0 * (states - 1)))
     return math.exp(sd_needed / shape)
+
+
+def per_tile_se_factor(treads: int, *, min_tread: int) -> float:
+    """se of the per-M-tile claim over the pooled per-call se, at one design.
+
+    Each tread's fixed-tread slope s_n holds 1/treads of the pooled slope's
+    Sxx, so se(s_n) = sqrt(treads) se(pooled). The claim is b'/b, b' the
+    least-squares slope of s_n L_n over treads `min_tread`..`treads` and b
+    that of the levels L_n, so se(b') = se(s_n) sqrt(sum w_n^2 L_n^2) with
+    w_n = (n - nbar) / sum (n - nbar)^2, and the factor is
+    sqrt(treads) sqrt(sum w_n^2 L_n^2) / b. Only the ladder's SHAPE enters it,
+    a against b, so it is priced off `corpus_call_ms` as the burst is. Left out:
+    the levels' own noise and the draw-to-draw coupling of the treads, which
+    is why S4 scores the estimator itself over the planted design. inf when
+    fewer than two treads remain or the ladder does not rise.
+    """
+    ns = list(range(max(1, min_tread), treads + 1))
+    if len(ns) < 2:
+        return float("inf")
+    levels = [corpus_call_ms(n) for n in ns]
+    b = _line_slope(ns, levels)
+    if b is None or b <= 0:
+        return float("inf")
+    nbar = statistics.fmean(ns)
+    snn = sum((n - nbar) ** 2 for n in ns)
+    spread = math.sqrt(sum(((n - nbar) / snn * level) ** 2
+                           for n, level in zip(ns, levels, strict=True)))
+    return math.sqrt(treads) * spread / b
 
 
 def loosening_refusal(args) -> str:
@@ -1526,6 +1564,12 @@ def mde_lines(args) -> list[str]:
 
     Printed on the plan page and not in the post-mortem: a resolution discovered
     after the run is a description of the run.
+
+    V1'S THRESHOLD IS SIZED FOR THE POOLED PER-CALL ESTIMATOR, and the page says
+    so: the gated claim's interval is `per_tile_se_factor` times wider at the
+    same span, so this prints the claim's predicted half-width at V1's
+    threshold for the design actually requested, and the span the claim needs
+    to reach the target. V1 itself is unchanged.
     """
     states = len(args.duty)
     sigma_cell = MEDIAN_SE_PENALTY * CORPUS_REPEAT_SPREAD / math.sqrt(args.repeats)
@@ -1534,6 +1578,26 @@ def mde_lines(args) -> list[str]:
     sd_at_need = math.log(need) * shape
     se = (sigma_cell / (math.sqrt(args.treads * states) * sd_at_need)
           if sd_at_need > 0 else float("inf"))
+    factor = per_tile_se_factor(args.treads, min_tread=CLAIM_MIN_TREAD)
+    claim_need = required_clock_ratio(repeats=args.repeats, treads=args.treads,
+                                      states=states, se_factor=factor)
+    if math.isfinite(factor):
+        claim = [
+            f"  fits one slope per tread and its interval is {factor:.2f}x "
+            f"wider at this design ({args.repeats} repeats x {args.treads} "
+            f"treads x {states} states):",
+            f"  the claim at exactly V1's span     half-width "
+            f"~{2 * se * factor:.4f}",
+            f"  the claim reaches the target at    a span of {claim_need:.4f}x "
+            "at every tread",
+            "  A run that passes V1 below that span can still straddle a "
+            "registered edge (C1 FAIL); S4 scores the estimator itself over "
+            "the planted design.",
+        ]
+    else:
+        claim = [f"  cannot be formed at all: it needs two treads from tread "
+                 f"{CLAIM_MIN_TREAD}, and --treads {args.treads} gives it "
+                 f"{max(0, args.treads - CLAIM_MIN_TREAD + 1)}."]
     return [
         "RESOLUTION, computed from the design and not from the result.",
         f"  across-repeat spread of one cell   {CORPUS_REPEAT_SPREAD:.5f} of log ms, "
@@ -1549,10 +1613,11 @@ def mde_lines(args) -> list[str]:
         f"width of the unregistered gap [{BAND_LOW}, {BAND_HIGH}]",
         f"  so the states must span            {need:.4f}x in clock at every "
         f"tread ({source})",
-        f"  at exactly that span the interval  half-width ~{2 * se:.4f}",
-        "  the per-M-tile fit's own resolution is scored by S4 over the planted "
-        "design, not derived here; its interval is wider than the pooled "
-        "per-call one",
+        f"  at exactly that span the interval  half-width ~{2 * se:.4f}, of the "
+        "POOLED PER-CALL estimator",
+        "  V1'S THRESHOLD IS SIZED FOR THAT ESTIMATOR AND NOT FOR THE GATED ONE. "
+        f"The claim, over treads {CLAIM_MIN_TREAD}..{args.treads},",
+        *claim,
         "  THE THRESHOLD IS A RATIO OF TWO CLOCKS ON ONE CARD, never a clock. "
         "The same arithmetic gates an A100 without being told which part is "
         "attached, and a shallower run is held to a WIDER separation rather "
