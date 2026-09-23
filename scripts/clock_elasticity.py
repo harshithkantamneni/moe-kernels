@@ -3044,6 +3044,8 @@ def report_lines(rows, est: Elasticity, args) -> list[str]:
         "'clock of a slope'",
         "  is a summary and this number is read as one. The claim above needs "
         "no such clock.",
+        "  Fitted over EVERY tread, tread 1 included, which the claim leaves out "
+        "as off the law.",
     ]
     return out
 

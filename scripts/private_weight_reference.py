@@ -5,7 +5,7 @@
     python scripts/private_weight_reference.py --self-test refit
     python scripts/private_weight_reference.py --self-test issue-bound
     python scripts/private_weight_reference.py                # the pod run
-    python scripts/private_weight_reference.py --duty 0.25    # both arms off the power cap
+    python scripts/private_weight_reference.py --duty 0.25    # the pod setting (V7 checks it)
     python scripts/private_weight_reference.py --seed 1 --replicate-of RUN0/report.json
                                        # a second run; C1 scored WITH the first
     python scripts/private_weight_reference.py --read RUN1/report.json \

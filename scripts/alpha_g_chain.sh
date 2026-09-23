@@ -648,9 +648,20 @@ chain_lock() {
   host="$(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown-host)"
   LOCK_OWNER="$$ $host"
   if [[ "$LOCK_TOOL" == flock ]]; then
-    local file="$dir/chain.lock"
+    local file="$dir/chain.lock" frc=0
     exec 9>>"$file" || { echo "REFUSED: cannot open $file"; return 2; }
-    if ! flock -n 9; then
+    flock -n 9 || frc=$?
+    # util-linux flock exits 1 on a CONFLICT (its -E default) and an EX_* code
+    # (64 and up) when it could not lock at all, which is what a network
+    # filesystem without flock support answers. Only 1 means a holder; any
+    # other failure falls back to the mkdir lock and says so, rather than
+    # refusing every measuring run on a volume that cannot flock.
+    if (( frc != 0 && frc != 1 )); then
+      exec 9>&-
+      echo "  flock could not lock $file (exit $frc: this filesystem does not flock);"
+      echo "  falling back to the mkdir lock, which cannot see an orphaned arm"
+      LOCK_TOOL=mkdir
+    elif (( frc == 1 )); then
       owner="$(cat "$file" 2>/dev/null)"
       exec 9>&-
       echo "REFUSED: another chain holds $file (it recorded ${owner:-no holder}); two chains"
@@ -661,9 +672,10 @@ chain_lock() {
       echo "      fuser -v $file     (or: lsof $file)"
       echo "  If neither names a process here, it is on another pod sharing this volume."
       return 2
+    else
+      printf '%s\n' "$LOCK_OWNER" > "$file"
+      return 0
     fi
-    printf '%s\n' "$LOCK_OWNER" > "$file"
-    return 0
   fi
   local ldir="$dir/chain.lock.d"
   if ! mkdir "$ldir" 2>/dev/null; then

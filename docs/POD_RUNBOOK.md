@@ -322,8 +322,10 @@ clock arm, the same native kernel under the same `time_duty` R3 imports: at
 duty 0.5 the clock still tracked board power (-1.09 MHz/W over 1882-1965 MHz,
 13 of the 78 cells at treads 1-6 drifting, 16.7%); at duty 0.25 every tread's
 median sat at 1965 MHz, at 277-317 W, and no cell drifted. So V7 is expected
-to hold at 0.25, not guaranteed: the private arm draws more power than the
-kernel that was measured, and its V7 line is the measurement. The price is
+to hold at 0.25, not guaranteed: the private arm is inferred to draw more
+power than the kernel that was measured (on session 4's cap it held 1425 MHz
+where the shared arm held up to 1740 at G=16), and its V7 line, which now
+prints each arm's power, is the measurement. The price is
 wall clock, about 1/0.25 = 4 times the kernel time: the plan prices the
 ladder's 145 s of kernel time at about 581 s, so a run is about 10 minutes
 before its compiles and the 25.4 GB weight build. The duty is in the run id,

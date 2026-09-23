@@ -12,7 +12,8 @@ card, the elasticity it needed, and two smokes"):
 
     results/published/2026-09-21-nvidia_h200-session4/results/gaps-nvidia_h200/clock_elasticity/nvidia_h200-burstms40.0-dtypebf16-duty1.0_0.5_0.25_0.1-l2flushtrue-modelmixtral_8x7b-repeats13-s-9f91fa91/cells.csv
 
-Measured by the code at `81f80b7` (the rows' `prov_git_sha`) on one NVIDIA
+Measured by the code at `81f80b7` (the rows' `prov_git_sha`) over a tree git
+called dirty (every row's `prov_git_dirty` is True), on one NVIDIA
 H200, card stamp `NVIDIA H200`, with `--treads 8 --duty 1.0 0.5 0.25 0.1
 --repeats 13 --burst-ms 40 --target-ms 200 --trials 3 --warm-ms 200
 --settle-seconds 10` and the default pin, GROUP_SIZE_M=16.

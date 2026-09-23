@@ -94,6 +94,18 @@ def test_the_chain_parses_and_avoids_the_three_habits():
     assert "| tee" not in body
 
 
+def test_the_registered_duty_is_one_number_in_its_three_homes():
+    """The owner's decision D1 (2026-09-22) lives in the chain's R3_DUTY
+    default, the driver's standalone R3 arm (`private_duty`) and R3's own
+    FLAT_DUTY, which its V7 remedy names. Three literals, so a relation."""
+    import private_weight_reference as PW
+    chain = re.search(r'^R3_DUTY="\$\{R3_DUTY:-([0-9.]+)\}"$', CODE, re.M)
+    driver = re.search(r"^private_duty\(\) \{ echo ([0-9.]+); \}$",
+                       (ROOT / "scripts" / "h200_gaps_session.sh").read_text(), re.M)
+    assert chain and driver
+    assert float(chain.group(1)) == float(driver.group(1)) == PW.FLAT_DUTY
+
+
 def test_the_state_word_mirrors_the_exit_code_table():
     for rc, word in exit_codes.CODE_NAMES.items():
         got = lift(f"state_word {rc}")
@@ -624,6 +636,27 @@ def test_a_held_flock_is_refused_and_never_taken_over(tmp_path, recorded):
     assert got.stdout.strip().endswith("rc=0"), got.stdout + got.stderr
     assert "took over" not in got.stdout, "a released lock is taken, not taken over"
     assert (s / "chain.lock").read_text().split()[1] == _hostname()
+
+
+@pytest.mark.parametrize("code", [64, 65, 71])
+def test_a_filesystem_that_cannot_flock_falls_back_to_mkdir_not_to_refusal(tmp_path, code):
+    """util-linux flock exits 1 on a conflict and an EX_* code when it could
+    not lock at all (ENOLCK, EOPNOTSUPP), which a network volume can answer.
+    Until 2026-09-22 any nonzero exit read as 'another chain holds it', so a
+    session root on such a volume refused every measuring run on the meter."""
+    s = tmp_path / "s"
+    s.mkdir()
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "flock").write_text(f"#!/bin/sh\nexit {code}\n")
+    (shim / "flock").chmod(0o755)
+    path = f"{shim}{os.pathsep}{os.environ['PATH']}"
+    got = lift(f'chain_lock {s!s} 0; echo "rc=$? tool=$LOCK_TOOL held=$LOCK_DIR"',
+               LOCK_TOOL="flock", PATH=path)
+    assert f"rc=0 tool=mkdir held={s / 'chain.lock.d'}" in got.stdout, got.stdout + got.stderr
+    assert f"exit {code}: this filesystem does not flock" in got.stdout
+    assert "another chain holds" not in got.stdout
+    assert (s / "chain.lock.d" / "owner").read_text().split()[0].isdigit()
 
 
 # --------------------------------------------------------------------------

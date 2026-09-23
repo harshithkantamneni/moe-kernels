@@ -3203,7 +3203,7 @@ def test_a_run_that_formed_no_interval_still_prints_the_replicates_it_was_given(
 
 
 # --------------------------------------------------------------------------
-# 20. the duty cycle: both arms off the power cap (DESIGN DECISION 15)
+# 20. the duty cycle: bursts sized to keep both arms off the power cap (DESIGN DECISION 15)
 # --------------------------------------------------------------------------
 
 class _CellTiming:
@@ -3794,7 +3794,8 @@ def test_no_description_promises_v7_by_construction_below_full_duty():
     assert "V7 then holds by construction" not in doc
     assert "boost ceiling" not in doc
     assert f"SO THE POD SETTING IS `--duty {PW.FLAT_DUTY}`" in doc
-    assert f"--duty {PW.FLAT_DUTY}    # both arms off the power cap" in PW.__doc__
+    assert f"--duty {PW.FLAT_DUTY}    # the pod setting (V7 checks it)" in PW.__doc__
+    assert "both arms off the power cap" not in PW.__doc__, "a fact about neither arm"
     assert "9f91fa91" in doc and "2026-09-21" in doc
     assert "V7 fails by construction there" in doc and "At FULL duty" in doc
     # The default stays 1.0 (the owner's decision D1), and says why.

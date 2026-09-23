@@ -1506,6 +1506,7 @@ def test_the_booked_minutes_are_above_this_plan_and_never_at_it():
     quoted = re.search(r"'estimated wall time (\d+) s \(([\d.]+) min\)'", words)
     assert quoted, words[:400]
     plan = run(["--dry-run", "--model", "mixtral-8x7b", "--dtype", "bf16",
+                "--group-m", "16",
                 "--treads", "8", "--duty", "1.0", "0.5", "0.25", "0.1",
                 "--repeats", "13", "--burst-ms", "40", "--target-ms", "200",
                 "--trials", "3", "--warm-ms", "200", "--settle-seconds", "10"])
