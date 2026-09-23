@@ -885,9 +885,15 @@ def test_a_refused_log_offers_neither_channel_a_verdict_to_count(
 # R7. Provenance.
 # --------------------------------------------------------------------------
 
-def test_every_report_carries_a_provenance_block_with_the_audited_keys(tmp_path):
+def test_every_report_carries_a_provenance_block_with_the_audited_keys(
+        tmp_path, no_cuda):
     """The gate the audit wrote: none of the 26 published reports carries a
-    commit, a card, a ruler source or an instrument."""
+    commit, a card, a ruler source or an instrument.
+
+    THE NO-CARD WORLD IS PLANTED (`no_cuda`), because what is asserted last is
+    the no-card answer: session 5's pod ran this with its H200 attached, the
+    block named the card, and the test failed on "there is no card on this
+    box". The card-attached half is the test below."""
     _, payload = run(["--self-test", str(REFIT)], tmp_path)
     assert {"git_sha", "gpu_name", "ridge_source", "bandwidth_source",
             "instrument"} <= set(payload)
@@ -897,7 +903,16 @@ def test_every_report_carries_a_provenance_block_with_the_audited_keys(tmp_path)
     assert block["python"]
     assert block["target_ms"] == pytest.approx(400.0)
     # And what it could NOT determine is named rather than guessed.
-    assert "gpu_name" in block["missing"], "there is no card on this box"
+    assert "gpu_name" in block["missing"], "the no-card world is planted"
+
+
+def test_a_report_made_with_a_card_attached_names_the_card(tmp_path, an_h200):
+    """The other half, which only a pod used to reach: with a device attached
+    the block carries its name and does not list it as missing."""
+    _, payload = run(["--self-test", str(REFIT)], tmp_path)
+    block = payload["provenance"]
+    assert block["gpu_name"] == an_h200.name
+    assert "gpu_name" not in block["missing"]
 
 
 def test_every_cells_csv_row_carries_the_provenance_columns(tmp_path):

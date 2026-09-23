@@ -65,6 +65,21 @@ def test_the_shared_no_cuda_plant_hides_the_device_from_every_detector(no_cuda):
         timing.require_cuda()
 
 
+def test_the_shared_card_plant_shows_every_detector_the_same_h200(an_h200):
+    """The mirror of the plant above: one fixture, and every detector in the
+    repo reads the same card from it, so a test can walk the pod's detection
+    path on a laptop. Session 5's pod suite failed ten tests on paths no laptop
+    had walked."""
+    from moe.bench import provenance, roofline
+    assert torch.cuda.is_available() is True
+    assert roofline.current_gpu_name() == an_h200.name
+    name, _, reason = provenance._gpu(torch)
+    assert name == an_h200.name and reason is None
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import block_m_crossing_sweep as SWEEP
+    assert SWEEP.detect_card_slug() == "nvidia_h200"
+
+
 def test_the_suite_sandboxes_its_results_root_inside_the_repo():
     root = Path(os.environ["MOE_RESULTS_DIR"])
     assert root.is_relative_to(ROOT / "results" / "_pytest"), root

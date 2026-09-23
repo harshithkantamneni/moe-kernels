@@ -7,6 +7,7 @@ fused vs unfused tilings can both be tested on a laptop, without CUDA.
 import os
 import pathlib
 import shutil
+import types
 
 import pytest
 import torch
@@ -112,6 +113,39 @@ def no_cuda(monkeypatch):
     file plants it the same way. It hides CUDA, not NVML or an absent package:
     a door behind those takes the `no_gpu` marker instead."""
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+
+#: What `an_h200` reports for device 0: the pod's own card as torch describes
+#: it, so a detector that reads the name, the capability or the SM count on a
+#: pod reads the same values here.
+PLANTED_H200 = types.SimpleNamespace(
+    name="NVIDIA H200", major=9, minor=0, multi_processor_count=132,
+    total_memory=150_121_644_032, L2_cache_size=50_331_648)
+
+
+@pytest.fixture
+def an_h200(monkeypatch):
+    """Plant the attached-card world in THIS process: the mirror of `no_cuda`.
+
+    torch.cuda answers every DETECTOR question the way the session-5 pod did
+    (available, one device, 'NVIDIA H200', sm_90, 132 SMs), so a test can walk
+    the pod's detection path on a laptop and fail there first. Session 5's pod
+    suite failed ten tests on paths no laptop could reach: a self-test whose
+    planted worlds stood on the ATTACHED card's roof, and tests asserting the
+    no-card answer on a box with a card. It plants detection only. Nothing
+    here can launch a kernel, and code that goes past the detectors to time
+    something fails in the test, which is where it should.
+    """
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_name",
+                        lambda *a, **k: PLANTED_H200.name)
+    monkeypatch.setattr(torch.cuda, "get_device_properties",
+                        lambda *a, **k: PLANTED_H200)
+    monkeypatch.setattr(torch.cuda, "get_device_capability",
+                        lambda *a, **k: (PLANTED_H200.major, PLANTED_H200.minor))
+    return PLANTED_H200
 
 
 @pytest.fixture(autouse=True, scope="session")
