@@ -69,6 +69,13 @@ proves the FAIL branch of every gate by planting it.
 Off-GPU, like everything else in this slice: it reads two YAML calibrations and
 26 JSON files, and refuses per report rather than defaulting when a card cannot
 be resolved.
+
+WHAT IT WALKS. Inside a git work tree, only the reports git tracks: this tool
+edits committed evidence, and a pod's checkout can carry a published directory
+nobody committed. The reports it leaves out are counted in the plan's header,
+and a root that holds only untracked reports is REFUSED with that count and
+the instruction to `git add` them. A root outside any work tree is walked
+whole.
 """
 from __future__ import annotations
 
@@ -387,12 +394,35 @@ def report_paths(root: Path) -> list[Path]:
     counted ten arms of three. This tool edits COMMITTED evidence, so a file
     git does not track is not one of its inputs. A root outside any work tree
     (`tracked_under` returns None) is walked whole, as before.
+
+    The files this drops are not dropped silently: `untracked_reports` names
+    them, and `main` says how many it left out, or refuses with that count
+    when they were all there was.
     """
-    found = {*root.rglob("report.json"), *root.rglob("*.report.json")}
+    return _partition(root)[0]
+
+
+def untracked_reports(root: Path) -> list[Path]:
+    """The reports `report_paths` leaves out because git does not track them.
+
+    Empty outside a work tree, where nothing is left out. Kept apart so a root
+    holding only untracked reports (an arm published but not yet `git add`ed,
+    or a git-ignored run directory) is refused as exactly that, rather than as
+    a directory with no reports in it, which is false.
+    """
+    return _partition(root)[1]
+
+
+def _partition(root: Path) -> tuple[list[Path], list[Path]]:
+    """(walked, untracked) over both layouts, sessions excluded from both."""
+    found = sorted(p for p in {*root.rglob("report.json"),
+                               *root.rglob("*.report.json")}
+                   if not PUB.is_session(p.parent))
     tracked = tracked_under(root)
-    if tracked is not None:
-        found = {p for p in found if p.resolve() in tracked}
-    return sorted(p for p in found if not PUB.is_session(p.parent))
+    if tracked is None:
+        return found, []
+    return ([p for p in found if p.resolve() in tracked],
+            [p for p in found if p.resolve() not in tracked])
 
 
 class Outcome:
@@ -543,7 +573,9 @@ def _slug(path: Path) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("root", nargs="?", type=Path, default=PUBLISHED,
-                    help="directory to walk (default results/published)")
+                    help="directory to walk (default results/published). "
+                         "Inside a git work tree only the reports git tracks "
+                         "are walked; the rest are counted and left alone")
     ap.add_argument("--write", action="store_true",
                     help="write the rescored reports. Without it the run is a "
                          "plan and touches nothing")
@@ -569,7 +601,12 @@ def main(argv: list[str] | None = None) -> int:
 
     sweep = load_sweep()
     now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    paths = report_paths(args.root)
+    paths, untracked = _partition(args.root)
+    if not paths and untracked:
+        print(f"REFUSED: {len(untracked)} report(s) under {args.root} are not "
+              "tracked by git; this tool rescores committed evidence only: "
+              "git add them first")
+        return exit_codes.REFUSED
     if not paths:
         print(f"REFUSED: no report.json or *.report.json under {args.root}")
         return exit_codes.REFUSED
@@ -577,6 +614,10 @@ def main(argv: list[str] | None = None) -> int:
     outcomes = plan(paths, sweep, now)
     print(f"# rescoring {len(paths)} published report(s) under "
           f"{_relative(args.root)}")
+    if untracked:
+        print(f"# left alone: {len(untracked)} report(s) under "
+              f"{_relative(args.root)} that git does not track; this tool "
+              "rescores committed evidence only")
     print()
     print("## the plan")
     print()

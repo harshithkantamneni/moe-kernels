@@ -178,6 +178,39 @@ def test_a_report_git_does_not_track_is_not_one_this_tool_rescores(tmp_path):
     assert len(RS.report_paths(copy)) == 2
 
 
+def test_a_root_of_only_untracked_reports_is_refused_as_untracked(tmp_path):
+    """A root inside a work tree whose reports git does not track (an arm
+    published but not yet added, a git-ignored run directory) used to be
+    refused as "no report.json ... under ROOT", which is false: the reports
+    are there and the walk left them out. The refusal now says how many, why,
+    and what to do, and a root with tracked reports beside untracked ones
+    rescores the tracked ones and says how many it left alone."""
+    root = tmp_path / "repo"
+    arm = root / "results" / "published" / A100_ARM.name
+    shutil.copytree(A100_ARM, arm)
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True,
+                   capture_output=True)
+    reports = sorted(arm.glob("*.report.json"))
+    assert len(reports) >= 2
+
+    got = _run(["--dry-run", str(arm)])
+    assert got.returncode == X.REFUSED, got.stdout + got.stderr
+    assert (f"REFUSED: {len(reports)} report(s) under {arm} are not tracked "
+            "by git") in got.stdout
+    assert "git add them first" in got.stdout
+    assert "no report.json" not in got.stdout
+    assert RS.report_paths(arm) == []
+    assert RS.untracked_reports(arm) == reports
+
+    subprocess.run(["git", "-C", str(root), "add", "--", str(reports[0])],
+                   check=True, capture_output=True)
+    got = _run(["--dry-run", str(arm)])
+    assert "REFUSED" not in got.stdout.splitlines()[0], got.stdout
+    assert "# rescoring 1 published report(s)" in got.stdout
+    assert (f"# left alone: {len(reports) - 1} report(s) under "
+            f"{RS._relative(arm)} that git does not track") in got.stdout
+
+
 def _rescored_arms() -> dict[Path, list[Path]]:
     arms: dict[Path, list[Path]] = {}
     for path in RS.report_paths(PUBLISHED):
