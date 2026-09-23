@@ -424,34 +424,65 @@ git -C /workspace/moe-kernels log -1 --format=%h    # must print the head that w
 Compare that hash with `git log -1 --format=%h origin/r3-align` on the laptop;
 do not type one from memory.
 
-**Launch it detached.** A dropped ssh session kills a foreground chain and the
-arm in flight. Watch the log and the ledger:
+**Launch it detached, appending.** A dropped ssh session kills a foreground
+chain and the arm in flight. The console APPENDS (`>>`): a `--resume`
+launched the same way keeps the earlier passes' lines (the lock's fallback
+notice, the STOP explanations, the per-run lines, which no ledger holds), and
+the exfil line carries the file. Watch the log and the ledger:
 
 ```
 cd /workspace/moe-kernels
 bash scripts/alpha_g_chain.sh --dry-run       # plan and price; nothing measured
-nohup setsid bash scripts/alpha_g_chain.sh > /workspace/alpha_g_chain.out 2>&1 < /dev/null &
+nohup setsid bash scripts/alpha_g_chain.sh >> /workspace/alpha_g_chain.out 2>&1 < /dev/null &
 tail -f /workspace/alpha_g_chain.out          # and $SESSION/CHAIN.tsv, one row per step
 ```
 
 Continuing is `--resume` (the newest `alpha_g-<card>-*` directory that holds
-`CHAIN.tsv`, never a dry run's) or `SESSION=<dir>`, launched the same detached
-way. A bare run refuses when a chain session for the card already holds
-`CHAIN.tsv`, and prints both commands; `--new` opens a fresh one on purpose.
-`--dry-run` with `--resume` or `SESSION=` is refused: it would overwrite that
-session's step logs, and the driver's `logs/thermal.log`, with plan pages. A
-measuring run is refused on a box whose card torch cannot name, with the
-probe's reason and nvidia-smi's name, driver version and power limit printed.
-It holds a lock on the session for the whole run, and a second chain on it is
-refused. On the pod the lock is a `flock`, and a held one is never taken
-over, whatever pid it records: when the recorded chain is dead, the holder is
-the arm it left running (`pkill -f alpha_g_chain.sh` kills the shell, not its
-python), still timing the card. The refusal prints `fuser -v` and `lsof` for
-the lock file; stop that process, then `--resume`. Only the `mkdir` fallback,
-on a box without `flock`, lets `--resume` take over a lock whose pid is dead
-or whose host differs. It records the card's UUID in `$SESSION/DEVICE` and refuses a resume
-on another card, because R1 resumes by card name and would pool two cards'
-cells into one elasticity; after a pod is lost, the replacement pod is `--new`.
+`CHAIN.tsv`, never a dry run's) or `SESSION=<dir>`, launched the same
+detached, appending way. A bare run refuses when a chain session for the card
+already holds `CHAIN.tsv`, and prints both commands; `--new` opens a fresh one
+on purpose. `--dry-run` with `--resume` or `SESSION=` is refused: it would
+overwrite that session's step logs, and the driver's `logs/thermal.log`, with
+plan pages. A measuring run is refused on a box whose card torch cannot name,
+with the probe's reason and nvidia-smi's name, driver version and power limit
+printed. It holds a lock on the session for the whole run, and a second chain
+on it is refused. On the pod the lock is a `flock`, and a held one is never
+taken over, whatever pid it records: when the recorded chain is dead, the
+holder is the arm it left running (`pkill -f alpha_g_chain.sh` kills the
+shell, not its python), still timing the card. The refusal prints `fuser -v`
+and `lsof` for the lock file, and a line that needs neither, since the image
+may carry neither:
+
+```
+ps -eo pid,etime,args | grep -E '[a]lpha_g_chain|[p]rivate_weight_reference|[c]lock_elasticity|[h]200_gaps_session'
+```
+
+Stop what it names, then `--resume`. Only when that line names nothing on this
+pod is the holder on another pod sharing the volume; do not open a `--new`
+session meanwhile, since its arms would time the card beside whatever holds
+the lock. Only the `mkdir` fallback, on a box without `flock`, lets `--resume`
+take over a lock whose pid is dead or whose host differs. On its first
+measuring pass the chain records the card's UUID in `$SESSION/DEVICE` and R3's
+duty in `$SESSION/R3_DUTY`, and refuses a resume on another card or at another
+`R3_DUTY` (a session at another duty is `R3_DUTY=<d> ... --new`). The DEVICE
+check refuses before any step runs; R3's DEVICE file and R1's `device_guard`
+each refuse a run directory measured on another card as well, so either layer
+alone refuses a replacement pod's card. After a pod is lost, the replacement
+pod is `--new`.
+
+**An override holds.** `--past-gpu-tests` and `--past-v8` write the decision to
+the ledger as an OVERRIDDEN row (`gpu-tests-override`, `probe-check-override`,
+`v8-override`), and it holds for every later pass of the session: a plain
+`--resume` after it goes on past the same gate without the flag, says so on
+the console, and runs neither `tests/test_gpu.py` nor the probe check again.
+
+**Every arm step is capped.** The probe check, R1 and R3 each run under
+`timeout --signal=INT --kill-after=60`, as the pytest steps do, at max(3 x the
+arm's own `--dry-run` price, 30 min), the plan run again just before the step
+(the probe check prints no plan: its 120 s allowance puts it at the 30-minute
+floor). A timed-out arm is ERROR with TIMED OUT in its note, not latched: both
+arms resume per cell, so `--resume` re-runs it. A process parked inside the
+volume's FUSE request cannot be signalled, by this or by anything.
 
 It runs, in order:
 
@@ -467,25 +498,70 @@ It runs, in order:
    pin_probe-n64-g1 runs for the record and is not gated: it asks whether
    `MOE_FORCE_TILE` reaches the kernel, and R1 and R3 both pin through vLLM's
    `override_config` and never read `MOE_FORCE_TILE`.
-3. `tests/test_gpu.py` on the card, from PY_BASE: the timing, clock and graph
-   primitives both arms stand on. Not green stops the chain, and an exit 0 in
-   which no test passed is not green (off a card every one of them skips).
+3. `tests/test_gpu.py` on the card, from PY_BASE: the timing and clock
+   primitives both arms stand on. It does NOT cover the graph probe R3's V8
+   stands on: that one test imports vLLM and skips from PY_BASE, which is why
+   step 4 exists. Not green stops the chain, and an exit 0 in which no test
+   passed is not green (off a card every one of them skips).
    `--resume --past-gpu-tests` goes on after you have read the failures, and
    the ledger records that decision as its own row.
-4. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
+4. The probe check, `private_weight_reference.py --probe-check --model
+   mixtral-8x7b --block-m 32` from the vLLM venv: that skipped test's on-card
+   check alone (`moe_align_block_size` captured under a CUDA graph,
+   `PROBE_CALLS_PER_REPLAY` calls per replay, not host-bound, the graph's
+   per-call time under the eager p50), about a minute and one RESULT line,
+   before the pilot spends a ten-minute ladder finding the same thing. Not
+   DONE stops the chain and quotes the page's RESULT or REFUSED line, and it
+   runs again on every pass until it is DONE. After INVALID, UNKNOWN or ERROR
+   the remedy is a code change (`PROBE_CALLS_PER_REPLAY`, or the capture)
+   brought to the pod's checkout, then `--resume`; `--resume --past-v8`, the
+   same instrument as the pilot's V8, goes on, recorded. REFUSED timed
+   nothing: the check found no card, no vLLM, or a vLLM op that did not
+   import, so the interpreter or the card is wrong, not the probe. The STOP
+   names the `PY_VLLM` in use (it falls back to PY_BASE when the vLLM venv's
+   python is missing); check that it imports vllm and that its torch wheel
+   matches the driver, then `--resume`. It does not offer `--past-v8` there:
+   R1 and R3 run from the same interpreter, and the ledger would hold that
+   override for every later pass.
+5. `private_weight_reference` at `--duty 0.25`, seed 0, at every G of
    {1, 4, 16, 64}. On session 4's clock arm duty 0.25 sat flat at 1965 MHz
    with no drift, and duty 0.5 still tracked board power (-1.09 MHz/W over
    1882-1965 MHz). The chain stops after `r3-g1-s0` unless its V8 is PASS,
    and a missing report.json stops it too: V8 is the alignment probe under
-   the graph, it describes the instrument and not G, and every later page
-   would repeat it. `--resume --past-v8` goes on, recorded.
-5. `clock_elasticity` at each G with the three cap-binding duty states (1.0,
+   the graph, it describes the instrument and not G. The STOP prints the
+   pilot's `align_probe` note and `graph_calls`, and says what going on buys,
+   priced off the arms' own plans: V8 UNKNOWN or FAIL makes every later ratio
+   page INVALID (the probe re-runs on every page); `--resume --past-v8` buys
+   R1's four regime words (about 59 min) and eleven ratio pages that cannot
+   be quoted (about 120 min); `SEEDS=0 bash scripts/alpha_g_chain.sh --resume
+   --past-v8` limits the ratio pages to seed 0 (three, about 33 min). The
+   ledger records `--past-v8`, and later passes hold to it.
+6. `clock_elasticity` at each G with the three cap-binding duty states (1.0,
    0.7, 0.5), the per-M-tile elasticity gated.
-6. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
-   through `--replicate-of`; with R1 between seed 0 and seed 1, a G's seeds
-   are an hour or more apart. A G whose seed-0 page read V7 not PASS gets a
-   SKIPPED row for seeds 1 and 2 (not latched), which are not run.
-7. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
+7. Seeds 1 and 2 at every G, each scored with the earlier seeds of its G
+   through `--replicate-of`. With R1 between seed 0 and seed 1, a G's seed 0
+   and seed 1 start about 102 min apart and its seed 1 and seed 2 about 43
+   min apart at the dry run's prices of 2026-09-22; the dry run prints the
+   spacing off its own prices. A G whose seed-0 page did not read V7 PASS gets
+   a SKIPPED row for seeds 1 and 2 (not latched), which are not run, and the
+   note is worded by that verdict:
+   - V7 FAIL: the two ratio arms ran at different clocks at duty 0.25 (the
+     power state), so a later seed at 0.25 would buy the same split. A V7
+     FAIL at 0.25 means that duty is not yet flat for that arm on this card;
+     the page names a lower duty; the chain skips the G's later seeds and
+     prints the follow-up command. The follow-up is that G's three seeds at
+     `--duty 0.1` with the chain's own R3 flags and session tag, seed 0 first
+     and seeds 1 and 2 with `--replicate-of` its report, written to
+     `$SESSION/followup-g<G>.txt` and printed once on the console, priced off
+     R3's own plan at 0.1 (about 77 min a G at 2026-09-22's prices). Run it
+     AFTER the chain has finished, never beside it. It is a new design key
+     and its own runs, outside the ledger and `PAIRS.tsv`, read with `--read`
+     on the laptop. The chain does not act on a V7 FAIL by itself.
+   - V7 UNKNOWN, absent or unreadable: seed 0's V7 could not be scored
+     (nothing timed, e.g. the sweep was skipped on V8, or a clock was
+     unread), so a later seed would read the same; the note names the seed-0
+     log.
+8. The whole suite, uncapped, from PY_BASE (`-rfE --durations=25`), after
    every arm: a record of the box that gates nothing. `END_SUITE=skip` writes
    a SKIPPED row instead, for a resume that owes one arm. A suite that already
    ran to its tally, green or red (pytest exit 1), is not bought again, and
@@ -503,39 +579,64 @@ consequence is licensed, so quote the interval and no word); CLOCK-CARRIES
 (wholly above 0.40: a time ratio, a blend of traffic and clock); STRADDLES
 (the interval crosses an edge: no word); `withheld:<EXIT>` (R1's page exited
 INVALID, REFUSED, ERROR or unscored: no word is read off a page its own gates
-did not stand behind); `unmeasured` (no R1 report for that G yet). The word is
-a secant between the capped clock at duty 1.0 and the clock at 0.7 and 0.5,
-and R3 runs at 0.25, at the ceiling. For a per-tile cost A + B/f the local
-elasticity falls as f rises, so RAW-STANDS carries over to R3's operating
-point and CLOCK-CARRIES is only an upper bound there.
+did not stand behind); `unmeasured` (no R1 report for that G yet). Expect
+STRADDLES: session 4's G=16 claim over treads 2 and deeper read a half-width
+of 0.084 over its states 1.0, 0.5 and 0.25 (0.092 over all four; the
+all-tread reading's was 0.076) against R1's 0.075 target, half the gap band's
+width, so an interval within about its half-width of 0.25 or 0.40 straddles,
+and UNREGISTERED-GAP is hard to reach at three states. The word is a secant
+between the capped clock at duty 1.0 and the clock at 0.7 and 0.5, and R3 runs
+at 0.25, at the ceiling. To first order, for a per-tile cost A + B/f with A and
+B not negative, the local elasticity B/(Af + B) lies in [0, 1] and falls as f
+rises, so RAW-STANDS carries over to R3's operating point and CLOCK-CARRIES is
+only an upper bound there. That form cannot produce an elasticity above 1,
+which session 4's G=16 claim read at every subset of its states: where R1's
+point is above 1 the A + B/f reading does not apply, and the interval is quoted
+without it.
 
-**What it leaves.** `$SESSION/CHAIN.tsv` is the ledger. `$SESSION/PAIRS.tsv` is
-the table, one row per ratio run, rebuilt from the reports on disk at the end
-of every pass and before every STOP, so a resume never duplicates a row and an
-R1 that lands on a later pass is joined: G, seed, ratio, within-run interval,
-exit word, duty, run id; the joint reading over the seeds so far (`rep_n`,
-spread, sd, envelope, joint verdict; `none` for a run scored alone, which is
-also how its own C1 was scored); each arm's median clock over the ladder and
-the count of LEVEL LOW (arm, tread) cells; and R1's eta, interval, word and
-exit. Quote the joint columns: the within-run interval is a bootstrap over
-repeats and understates the cross-run spread. `$SESSION/PAIRS-fixed.tsv` holds
-the coordinates every row shares (model, tile, pinned config, treads, repeats,
-duty) and where each was read. Logs are under `$SESSION/chain-logs/`.
+**What it leaves.** `$SESSION/CHAIN.tsv` is the ledger. The tables are rebuilt
+from the reports on disk at the end of every pass and before every STOP, so a
+resume never duplicates a row and an R1 that lands on a later pass is joined;
+`$SESSION/PAIRS-README.txt` is their legend. `$SESSION/PAIRS.tsv` has one row
+per ratio run: G, seed, ratio, within-run interval (R3's 90% bootstrap over
+repeats), exit word, `exit_scope` (`alone` when C1 was scored on the run's own
+interval, `envelope` when on the envelope with the earlier seeds, so seed 0
+and seed 1 of one G can differ in exit by scope, not by result), duty, run
+id; the joint reading on that run's page (`rep_n`, spread, sd, envelope,
+`joint`), filled only where the run formed a ratio and is in the reading;
+each arm's median clock over the ladder and the count of LEVEL LOW (arm,
+tread) cells; and R1's eta, 95% interval, word and exit. `joint` is C1's
+verdict against the refit band, not a quotability flag: NO-REUSE, expected at
+G=1, reads FAIL. `$SESSION/PAIRS-by-G.tsv` has one row per G: every seed of it
+that formed a ratio, read together by R3's own cross-run machinery whatever
+order the seeds ran in (n, seeds, mean, sd, envelope, joint verdict, any seed
+inside the envelope whose own page exited INVALID), beside R1's columns. Quote
+PAIRS-by-G.tsv: PAIRS.tsv's joint columns are what each page said when it
+ran, over the seeds before it. `$SESSION/PAIRS-fixed.tsv` holds the
+coordinates every row shares (model, tile, pinned config, treads, repeats,
+duty) and where each was read. Logs are under `$SESSION/chain-logs/`, and a
+V7 FAIL's follow-up under `$SESSION/followup-g<G>.txt`.
 
-**The price.** The laptop dry run prices about 175 min of arms (four R1 runs
-at 876 s, twelve R3 runs at 581 s each at duty 0.25), under a minute of
-`tests/test_gpu.py`, about 54 min of end suite (the tree's count at session
-4's pod rate of 0.66 s a test, 2.5x the laptop's) and 21 min of overhead:
-about 250 min, about $19 at $4.59/h, and it says book 6 h. A V7 failure at
-seed 0 skips that G's two later seeds (about 21 min), and `END_SUITE=skip`
-drops the 54 min of suite.
+**The price.** The laptop dry run prices about 176 min of arms (four R1 runs
+at 876 s; twelve R3 runs at 590 s each at duty 0.25, the plan's 581 s wall
+line plus the alignment probe's 9 s it leaves out), under a minute of
+`tests/test_gpu.py`, about 55 min of end suite (the tree's count at session
+4's pod rate of 0.66 s a test, 2.5x the laptop's), 8 min of preconditions (the
+driver's own `arm_minutes`: thermal 3, calibrate 3, pin_probe-n64-g1 2), 2 min
+for the probe check and 17 min of allowances (60 s of compiles and weight
+build a ratio run, 5 min of exfil): about 260 min, about $20 at $4.59/h, and it
+says book 6 h. A V7 FAIL at seed 0 skips that G's two later seeds (about 22
+min) and prints a follow-up that costs about 77 min a G after the chain;
+`END_SUITE=skip` drops the 55 min of suite.
 
 **Before releasing the pod.** The chain's calibrate re-dirties
 `moe/bench/hardware/measured_nvidia_h200.yaml`, and every row measured after it
 carries `git_dirty`: commit that yaml with the results. The exfil line printed
-at the end carries the session directory, the results directory, that yaml and
-calibrate's own run directory under `results/calibration/`; copy it off before
-releasing the pod.
+at the end carries the session directory, the results directory, that yaml,
+calibrate's own run directory under `results/calibration/` and the console
+`/workspace/alpha_g_chain.out`; copy it off before releasing the pod. A
+follow-up run after the chain lands under the same session and results
+directories, so the same line, run after it, carries that too.
 
 ## Before you rent anything
 
