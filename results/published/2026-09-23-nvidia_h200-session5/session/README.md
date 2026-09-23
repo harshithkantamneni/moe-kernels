@@ -142,9 +142,22 @@ The 10 failures, as the log names them:
   `test_a_working_self_test_exits_done`,
   `test_both_directions_of_the_uncontrolled_mode_are_planted`) and
   `test_bn_decomposition.py::test_the_four_height_self_test_still_separates_its_planted_worlds`:
-  each self-test exits 3. The tree's ruler at the time was the one calibrate had
-  just written (`logs/calibrate.log`: `published_to`
-  `moe/bench/hardware/measured_nvidia_h200.yaml`).
+  each self-test exits 3 (`INVALID`). The failing gate of each, as the log
+  prints it:
+  - `bm128_roofline --self-test`, "11 PASS, 1 FAIL, 0 UNKNOWN": gate
+    `S_hypothesis_roof_refused`, "a run on a roof no attached device measured
+    reaches no verdict", gate "every world's real verdict is 'NOT SETTLED'",
+    saw real verdicts in all five worlds (suite.log line 422, in the captured
+    stdout of `test_a_working_self_test_exits_done`; the other two tests print
+    the summary line or `assert 3 == 0` only).
+  - `bn_decomposition --self-test`, "4 PASS, 1 FAIL, 0 UNKNOWN": gate `S4`, "the
+    design resolves alpha_a", gate `sd(alpha_a) <= 0.025` in the TRUTH world,
+    saw `sd = 0.0440 at GROUP_SIZE_M=16, 17 reps` (suite.log line 694).
+
+  At 33d2833, on a laptop with no CUDA device (torch 2.13.0 CPU), with
+  `../calibration/measured_nvidia_h200.yaml` copied over the committed
+  `moe/bench/hardware/measured_nvidia_h200.yaml`, the same four tests pass (4
+  passed).
 
 ## Provenance of these files
 

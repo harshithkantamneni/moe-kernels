@@ -16,7 +16,8 @@ all read PASS (`../session/alpha_g-nvidia_h200-20260923T163248Z/logs/calibrate.l
 | triad bandwidth | 4378.2 GB/s | 4378.0 GB/s |
 | dense bf16 | 669.6 TFLOP/s, GEMM clock median 1470 MHz | 663.0 TFLOP/s, 1455 MHz |
 | ridge (triad) | 152.9 | 151.4 |
-| ridge band over the five patterns | 145.2 to 152.9 | 143.7 to 151.4 |
+| ridge band (triad to the matched `read_stream` ceiling) | 145.2 to 152.9 | 143.7 to 151.4 |
+| ridge over the five patterns (`write` lowest, `copy` highest) | 142.9 to 155.7 | 141.6 to 154.1 |
 | fp8 | 1424.3 TFLOP/s, clock median 1380 MHz, `clock_drift_ok: true` | 1437.0 TFLOP/s, 1395 MHz, `clock_drift_ok: false` |
 
 The two triad bandwidths are 0.12 GB/s apart; the ridge moved by 1.0% because the
